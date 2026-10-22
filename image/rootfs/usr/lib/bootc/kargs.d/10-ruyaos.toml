@@ -1,2 +1,1 @@
-# Boot splash (plymouth) is deferred to Phase 1: it needs the initramfs regenerated with dracut.
-kargs = ["quiet", "loglevel=3", "rd.udev.log_level=3"]
+kargs = ["quiet", "splash", "loglevel=3", "rd.udev.log_level=3"]

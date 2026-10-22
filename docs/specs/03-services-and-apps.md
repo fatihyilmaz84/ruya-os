@@ -118,12 +118,12 @@ Install, launch, update, roll back and uninstall (with "also delete data" option
 | IPTV | Kodi PVR IPTV Simple client (M3U/XMLTV) instead of building our own player |
 | Commercial streaming | Browser Flatpak (Chromium-based, Widevine L3) in kiosk mode. Resolution is limited by the service, which we state in docs. |
 | Local files | Kodi or VLC from USB or the network |
-| HW decode | Requires ADR-009 (codecs). Verify VA-API in Flatpak (`org.freedesktop.Platform.ffmpeg-full`/`codecs-extra`, plus `mesa-freeworld` on the host or the GL extension). |
+| HW decode | Host side is solved by ADR-009 (`mesa-va-drivers-freeworld`, `intel-media-driver`, `libva-nvidia-driver`). Flatpak apps need `org.freedesktop.Platform.ffmpeg-full`/`codecs-extra` and the GL/VA-API extensions, which `ruya-store` installs on first boot. Verify with `vainfo` inside the Flatpak sandbox. |
 
 **Acceptance (Phase 4):** a 4K HEVC 10-bit file plays with HW decode on the mid tier (verified with `intel_gpu_top`/`radeontop`), audio switches to a BT headset mid-playback without stopping, and controller navigation works in Kodi and Jellyfin.
 
 ## 7. Licence compliance
 - An SBOM (SPDX via `syft`) for every image and for our Flatpaks, generated in CI.
 - A licence scan of our code and dependencies (`cargo deny`, REUSE/SPDX headers).
-- An allow-list for firmware, codecs and NVIDIA blobs, with redistribution terms recorded per variant (ADR-009, `ruyaos-nvidia`).
-- Qt: LGPLv3 modules dynamically linked. QtWaylandCompositor and Qt AM are GPLv3, so this ties to ADR-008.
+- An allow-list for firmware, codecs and NVIDIA blobs, with redistribution terms recorded (ADR-009). `LICENSE.md` points users at the SBOM.
+- Qt: LGPLv3 modules dynamically linked. The shell is GPL-3.0-or-later (ADR-008), so linking QtWaylandCompositor (GPLv3) is fine.

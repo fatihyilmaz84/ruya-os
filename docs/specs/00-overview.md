@@ -127,11 +127,17 @@ bootc images signed with cosign, served from an OCI registry, verified via `cont
 ### ADR-007 — UI toolkit — *Accepted*
 Qt 6 (Fedora's version, currently ≥ 6.8) with Qt Quick and QML. Effects use `MultiEffect` and precompiled `.qsb` shaders. Not Qt 5 or `Qt5Compat`.
 
-### ADR-008 — Project licence — *Open*
-This must be decided before Phase 1. GPLv3 for the shell makes ADR-002 option A free of friction. Rust services can be MIT/Apache-2.0.
+### ADR-008 — Project licence — *Accepted (2026-10-22, owner)*
+Fully open source. Shell, image and scripts are **GPL-3.0-or-later**, which makes ADR-002 option A (QtWaylandCompositor, GPLv3) free of licensing friction. Rust services are **MIT OR Apache-2.0**, docs are CC-BY-4.0. See `LICENSE.md`.
 
-### ADR-009 — Codecs — *Open*
-Hardware H.264/HEVC decode on AMD/Intel needs RPM Fusion `mesa-freeworld` (Fedora's Mesa disables it). Options: ship it in the image (redistribution risk depends on jurisdiction), offer an opt-in "codec pack" layer/image variant, or rely on Flatpak runtimes' codec extensions (`org.freedesktop.Platform.codecs-extra`, which covers only in-app software/VA-API paths). **Recommendation:** an image variant `ruyaos-full` with RPM Fusion, and `ruyaos` stays pure Fedora.
+### ADR-009 — Codecs & drivers — *Accepted (2026-10-22, owner)*
+**Ship everything in one image**: RPM Fusion free + nonfree, full `ffmpeg`, `mesa-va-drivers-freeworld`, Intel `intel-media-driver`/`libva-intel-driver`, GStreamer freeworld/ugly/libav, and the **NVIDIA proprietary driver** with modules prebuilt for the image kernel (`image/build/30-codecs.sh`, `40-nvidia.sh`). A single image covers every hardware tier, so there are no `-full`/`-nvidia` variants.
+
+Consequences:
+- **Patent exposure** for H.264/HEVC/AAC etc. lands on whoever distributes the image in jurisdictions that enforce software patents. This is accepted by the owner. Mirrors and downstream redistributors should be told.
+- **NVIDIA:** GPUs dropped by the current driver branch are unsupported (nouveau is blacklisted by the driver package). Secure Boot needs MOK enrollment of our module-signing cert (01 §2.3). A stable signing key from CI secrets is a Phase 6 task. Until then each build uses an ephemeral key, and its private half is deleted from the image.
+- **Not included:** `libdvdcss` and AACS keys (rpmfusion-free-tainted). These are copy-protection circumvention, not codecs, and remain a separate owner decision.
+- **Flatpak apps** don't see host codecs. First boot must install `org.freedesktop.Platform.ffmpeg-full`/`codecs-extra` and the matching `GL.nvidia` extension (Phase 3, `ruya-store`).
 
 ## 6. Roadmap
 

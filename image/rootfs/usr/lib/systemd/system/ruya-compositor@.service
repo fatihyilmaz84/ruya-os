@@ -2,7 +2,7 @@
 # Pattern from cage's "start on boot with systemd" guide; profile selection happens in the shell.
 [Unit]
 Description=RuyaOS compositor and shell on %I
-After=systemd-user-sessions.service
+After=systemd-user-sessions.service plymouth-quit-wait.service
 Wants=dbus.socket systemd-logind.service
 After=dbus.socket systemd-logind.service
 Conflicts=getty@%i.service

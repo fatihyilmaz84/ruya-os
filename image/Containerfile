@@ -1,4 +1,4 @@
-# RuyaOS bootc image (Phase 0). Build context = repository root:
+# RuyaOS bootc image. Build context = repository root:
 #   podman build -f image/Containerfile -t localhost/ruyaos:dev .
 ARG FEDORA_VERSION=44
 
@@ -25,33 +25,29 @@ RUN cd /src/services \
 FROM quay.io/fedora/fedora-bootc:${FEDORA_VERSION}
 ARG RUYA_VERSION=0.0.0-dev
 
-# Package names: docs/specs/01-platform.md §1.2. No DE, no display manager, and no
-# pulseaudio/jack-audio-connection-kit (they conflict with the pipewire-* replacements).
-RUN dnf -y install --setopt=install_weak_deps=False \
-        cage \
-        qt6-qtbase qt6-qtbase-gui qt6-qtdeclarative qt6-qtwayland qt6-qtmultimedia \
-        mesa-dri-drivers mesa-vulkan-drivers \
-        pipewire pipewire-pulseaudio pipewire-alsa wireplumber \
-        NetworkManager-wifi bluez \
-        udisks2 exfatprogs ntfs-3g \
-        flatpak \
-        greenboot greenboot-default-health-checks \
-        google-noto-sans-fonts \
-    && dnf clean all
+# Ordered build steps (image/build/NN-*.sh). Bind-mounted, so the scripts are not shipped.
+RUN --mount=type=bind,source=image/build,target=/ctx/build \
+    /ctx/build/10-repos.sh \
+    && /ctx/build/20-base.sh \
+    && /ctx/build/30-codecs.sh \
+    && /ctx/build/40-nvidia.sh
 
 COPY image/rootfs/ /
 COPY --from=shell-build /out/ /
 COPY --from=services-build /out/ /
 
-RUN mkdir -p /usr/lib/ruyaos \
+RUN --mount=type=bind,source=image/build,target=/ctx/build \
+    mkdir -p /usr/lib/ruyaos \
     && echo "${RUYA_VERSION}" > /usr/lib/ruyaos/version \
     && chmod 0755 /usr/libexec/ruyaos/wait-shell-ready /usr/lib/greenboot/check/required.d/*.sh \
     && systemctl enable ruya-compositor@tty1.service ruya-inputd.service ruya-boot-marker.service \
     && systemctl set-default graphical.target \
-    && rm -rf /var/cache/* /var/log/* /var/lib/dnf
+    && /ctx/build/90-initramfs.sh \
+    && /ctx/build/99-cleanup.sh
 
 LABEL containers.bootc=1 \
       org.opencontainers.image.title="RuyaOS" \
-      org.opencontainers.image.version="${RUYA_VERSION}"
+      org.opencontainers.image.version="${RUYA_VERSION}" \
+      org.opencontainers.image.licenses="GPL-3.0-or-later AND (MIT OR Apache-2.0)"
 
 RUN bootc container lint
