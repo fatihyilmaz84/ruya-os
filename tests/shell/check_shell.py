@@ -31,8 +31,7 @@ def stage_module(tmp: Path) -> None:
     for qml in (REPO / "shell" / "qml").glob("*.qml"):
         text = qml.read_text(encoding="utf-8")
         if qml.name == "Main.qml":
-            # Windowed for the test; resources resolved from disk instead of qrc.
-            text = text.replace("    visibility: Window.FullScreen", "    // fullscreen disabled by check_shell.py")
+            # Resources resolved from disk instead of qrc.
             text = text.replace("qrc:/qt/qml/RuyaShell/sounds/", "sounds/")
         (mod / qml.name).write_text(text, encoding="utf-8")
     for wav in (REPO / "shell" / "sounds").glob("*.wav"):
@@ -59,7 +58,7 @@ def main() -> int:
 
     engine = QQmlApplicationEngine()
     engine.addImportPath(str(tmp))
-    engine.setInitialProperties({"version": "0.0.0-hostcheck"})
+    engine.setInitialProperties({"version": "0.0.0-hostcheck", "windowed": True})
     engine.loadFromModule("RuyaShell", "Main")
     if not engine.rootObjects():
         print("FAIL: shell did not load\n  " + "\n  ".join(warnings))

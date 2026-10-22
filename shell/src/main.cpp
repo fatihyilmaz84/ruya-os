@@ -1,3 +1,4 @@
+#include <QCommandLineParser>
 #include <QFile>
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
@@ -21,8 +22,18 @@ int main(int argc, char *argv[])
     app.setApplicationName(QStringLiteral("ruya-shell"));
     app.setOrganizationDomain(QStringLiteral("ruyaos.org"));
 
+    QCommandLineParser parser;
+    parser.addHelpOption();
+    const QCommandLineOption windowed(QStringLiteral("windowed"),
+                                      QStringLiteral("Run in a window instead of fullscreen (development)."));
+    parser.addOption(windowed);
+    parser.process(app);
+
     QQmlApplicationEngine engine;
-    engine.setInitialProperties({{QStringLiteral("version"), imageVersion()}});
+    engine.setInitialProperties({
+        {QStringLiteral("version"), imageVersion()},
+        {QStringLiteral("windowed"), parser.isSet(windowed)},
+    });
     QObject::connect(
         &engine, &QQmlApplicationEngine::objectCreationFailed, &app,
         [] { QCoreApplication::exit(1); }, Qt::QueuedConnection);

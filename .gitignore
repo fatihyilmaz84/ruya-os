@@ -8,3 +8,5 @@ image/bib/config.toml
 *.raw
 *.iso
 .vscode/
+aqtinstall.log
+shell/build-*/
