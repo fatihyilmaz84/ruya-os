@@ -78,7 +78,7 @@ An orange "mock services" tag in the corner shows when the mock is active. The m
 
 **Display flags (session-only, never saved).** `--reduced-motion` forces reduced motion; `--effects high|balanced|performance` forces the effects quality tier. They are for perf testing, e.g. `ruya-shell.exe --windowed --effects performance --reduced-motion`. The saved values (`DeviceSettings`: reduced motion, effects quality, overscan) live in `QSettings` (org `ruyaos`, app `shell`); set `RUYA_SETTINGS_EPHEMERAL=1` to keep them in memory only (the tests do).
 
-**Tests.** Qt Quick Tests drive the whole shell with the keys a controller produces. They cover sign-in with and without a PIN, D-pad-only PIN entry, lockout, the overlay's modality, and switching profiles. A test window opens for a few seconds.
+**Tests.** Qt Quick Tests drive the whole shell with the keys a controller produces. `dev.ps1 test` runs them offscreen: no window appears, and a locked screen or other windows can't disturb them.
 
 ```powershell
 $env:PATH = "D:\dev\Qt\6.10.3\msvc2022_64\bin;$env:PATH"
@@ -87,7 +87,7 @@ $env:RUYA_SHOTS_DIR = "$PWD\output\shell-shots"; shell\build-win\Release\tst_ruy
 cmake --build shell\build-win --config Release --target all_qmllint
 ```
 
-Run the tests in a real window when you want effects rendered. `QT_QPA_PLATFORM=offscreen` (used in CI) silently switches to the software renderer, where `MultiEffect` draws nothing.
+`dev.ps1 shots` runs the same tests in real GPU windows and saves screenshots. Keep the desktop unlocked and leave the windows alone while it runs. Offscreen is the software renderer, where `MultiEffect` draws nothing, so effects only show up in `shots`.
 
 **Against the real profiles service (Linux):** in `--session` mode the service uses the session bus and creates no Unix users, so it runs fine without root.
 

@@ -82,11 +82,21 @@ function Do-Rust {
 
 function Run-QmlTests([string]$ShotsDir) {
     $log = Join-Path $env:TEMP "ruya-qmltest.txt"
-    if ($ShotsDir) { New-Item -ItemType Directory -Force $ShotsDir | Out-Null; $env:RUYA_SHOTS_DIR = $ShotsDir }
+    if ($ShotsDir) {
+        # Screenshots need a real GPU window (offscreen = software renderer, no MultiEffect).
+        # Real windows depend on the desktop: keep it unlocked and don't click other windows.
+        New-Item -ItemType Directory -Force $ShotsDir | Out-Null
+        $env:RUYA_SHOTS_DIR = $ShotsDir
+    } else {
+        # The gate runs offscreen: immune to a locked screen, OS focus changes and other
+        # windows, same as CI. Logic and focus are tested; visuals are checked by `shots`.
+        $env:QT_QPA_PLATFORM = "offscreen"
+    }
     # -o <file>,txt: the runner's stdout is unreliable under PowerShell.
     & (Join-Path $ShellBuild "Release\tst_ruyashell.exe") -o "$log,txt" | Out-Null
     $code = $LASTEXITCODE
     Remove-Item Env:\RUYA_SHOTS_DIR -ErrorAction SilentlyContinue
+    Remove-Item Env:\QT_QPA_PLATFORM -ErrorAction SilentlyContinue
     Get-Content $log | Where-Object { $_ -match '^(FAIL|XPASS|SKIP|Totals)|failure location|QWARN|QCRITICAL' } | ForEach-Object { Write-Host "    $_" }
     Record "Qt Quick tests" ($code -eq 0)
 }
@@ -96,7 +106,7 @@ function Do-Shell {
     Step "qmllint (module context)"
     # --max-warnings 0: without it qmllint exits 0 even when it reports warnings.
     Invoke-Native "qmllint" { qmllint --max-warnings 0 "@$ShellBuild\.rcc\qmllint\ruyashell.rsp" }
-    Step "Qt Quick tests"
+    Step "Qt Quick tests (offscreen)"
     Run-QmlTests $null
 }
 

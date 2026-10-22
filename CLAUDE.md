@@ -25,7 +25,11 @@ RuyaOS is an open-source, immutable (Fedora bootc) console OS for living-room PC
    - **Every follow-up you mention** (in the Outcome or the log): debt you noticed, a flaky build, a missing feature, a spec gap. Add it as one line to the **Inbox** in `docs/STATUS.md`. A follow-up that exists only in prose is lost.
    - Write a full task file yourself only when your current task can't be finished without it (see `docs/tasks/README.md`).
    - If the work crosses the shell/service boundary, **write or extend the D-Bus XML contract first**. The mock backend, the D-Bus backend and the Rust service all follow it.
-5. **Verify.** Run `.\scripts\dev.ps1 test`; it must end with `ALL GREEN`. For any UI change, also run `.\scripts\dev.ps1 shots`, open the PNGs in `output\shell-shots\` with the Read tool, and check them against the task's acceptance criteria (layout, overlap, focus ring visible, text readable). Fix what you see.
+   - **Contracts are drafts until the first release.** If the task can't be done cleanly within the existing contract (a reply lacks a field you need, say), **extend the contract**. In the same commit, update the XML, the Rust service and its tests, the mock, and the D-Bus client, and explain the change in the Outcome. Don't build workarounds such as extra calls to recover missing data. This applies even if the task says "don't change the contract"; that wording means "no unnecessary changes". Never break existing behaviour that other code relies on.
+5. **Verify.**
+   - Run `.\scripts\dev.ps1 test`; it must end with `ALL GREEN`. Its Qt Quick tests run **offscreen**, so they don't depend on the desktop (lock screen, focus, other windows). A red `test` is a real failure.
+   - For any UI change, also run `.\scripts\dev.ps1 shots`. It uses real GPU windows, so open the PNGs in `output\shell-shots\` with the Read tool and check them against the task's acceptance criteria (layout, overlap, focus ring visible, text readable). Fix what you see.
+   - **`shots` depends on the desktop.** If it fails while `test` is green, suspect a locked screen or a window that stole focus, and re-run before changing anything. Never edit a test to suit the desktop.
 6. **Document.**
    - Fill in the task file's **Outcome** section: what was built, the files involved, how it was verified, and deviations.
    - Update every spec section whose described behaviour changed. Specs must describe what the code does.
@@ -80,7 +84,7 @@ Areas: `shell`, `services`, `image`, `api`, `docs`, `scripts`, `ci`. Add the att
 - **Backslashes get mangled** when text goes through Bash heredocs, `sed` or Python string literals: `\b`, `\n` and `\r` turn into control characters. **Write any text containing backslashes (Windows paths, line continuations, regex) with the Write/Edit tools.** Before committing, make sure no file gained stray control characters.
 - **Qt** 6.10.3 for MSVC lives at `D:\dev\Qt\6.10.3\msvc2022_64`. The production image uses Fedora's Qt (≥ 6.8), so don't use APIs newer than 6.8.
 - **MSVC compiles C++17.** C++20-only syntax such as `[=, this]` captures fails.
-- **Rendering.** `QT_QPA_PLATFORM=offscreen` switches to the software renderer, where `MultiEffect` draws nothing. Visual checks need real windows, and `dev.ps1 shots` uses real windows.
+- **Rendering.** Offscreen (used by `dev.ps1 test` and CI) is the software renderer, where `MultiEffect` draws nothing. So tests must assert properties (`visible`, `blurMax`, focus), never pixels. Only `dev.ps1 shots` renders on the GPU.
 - **qmllint** only means anything with the module response file and `--max-warnings 0`. `dev.ps1` already does that.
 - **Line endings.** Files that end up in the Linux image must stay LF (enforced by `.gitattributes`). Shell scripts need the exec bit in git: `git update-index --chmod=+x <file>`.
 - **New C++ QML type "is not defined" in tests** right after you add it: run `dev.ps1 shell` once more (stale incremental type registration has been seen once). If it persists, delete `shell\build-win` and rebuild. Never "fix" it by changing tests.

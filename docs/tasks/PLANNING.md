@@ -43,6 +43,12 @@ Run one when any of these is true. Builders check this at session start and stop
 6. **Never** plan around an owner-level question (legal, licence, product scope, publishing, spending). Add it to "Open owner decisions" with options and a recommendation instead.
 7. **Log and commit.** Add a session-log entry "Planning" (tasks added, Inbox items handled or dropped and why, decisions escalated), then commit as `docs: plan <short summary>`. Run `dev.ps1 test` before committing; it must stay green, even though planning touches docs only.
 
+## Lessons from past sessions (apply when writing tasks)
+
+- **Split shared infrastructure from features.** T-105 had to invent a page modal layer and scrollable settings panes on the way, and grew to about 1,500 lines. When a feature needs new shared plumbing, make the plumbing its own small task that the feature depends on.
+- **Don't freeze contracts in task text.** Write "extend the contract if needed", not "do not change the contract". Contracts are drafts until release (`CLAUDE.md`).
+- **Prefer visible-behaviour criteria over implementation details.** A criterion like "signal X has args (a, b)" forced a deviation in T-105. State what the user sees, and leave the signatures to the builder.
+
 ## Quality bar for a task (the planner checks every task against this)
 
 - A builder who has never seen the conversation that produced it can finish it from the file and the linked docs alone.
