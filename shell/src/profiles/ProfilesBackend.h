@@ -36,9 +36,8 @@ signals:
     void listed(const QList<ProfileInfo> &profiles);
     void activeChanged(const QString &id);
     void switchFinished(const QString &id, const QString &status, int attemptsLeft, int retryAfterSecs);
-    // `id` is the new profile's id on "ok". The contract's replies carry no attempt counts;
-    // after "wrong-pin" or "locked-out" the backend fills attemptsLeft / retryAfterSecs in
-    // (the mock knows them; the D-Bus backend probes SwitchTo with an empty PIN). 0 = unknown.
+    // `id` is the new profile's id on "ok". attemptsLeft / retryAfterSecs come from the reply
+    // and matter for "wrong-pin" / "locked-out" (0 otherwise), like switchFinished.
     void createFinished(const QString &status, const QString &id, int attemptsLeft, int retryAfterSecs);
     void setPinFinished(const QString &id, const QString &status, int attemptsLeft, int retryAfterSecs);
     void availabilityChanged(bool available);

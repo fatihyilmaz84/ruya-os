@@ -4,8 +4,6 @@
 
 #include <QDBusConnection>
 
-#include <functional>
-
 // Client of org.ruyaos.Profiles1 (api/dbus/org.ruyaos.Profiles1.xml) on the system bus,
 // or the session bus when RUYA_DBUS=session (for running ruya-profiles --session in dev).
 class DBusProfilesBackend final : public ProfilesBackend
@@ -29,11 +27,6 @@ private slots:
 
 private:
     void fetchActive();
-    // The CreateProfile/SetPin replies carry no attempt counts. After a "wrong-pin" or
-    // "locked-out" status, ask SwitchTo(id, "") (side-effect free for a PIN-protected
-    // profile: "pin-required" + attempts_left, or "locked-out" + retry_after) and hand the
-    // numbers to `done`. If the probe fails, done gets zeros.
-    void probeAttempts(const QString &id, std::function<void(int attemptsLeft, int retryAfterSecs)> done);
 
     QDBusConnection m_bus;
 };

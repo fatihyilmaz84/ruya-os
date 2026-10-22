@@ -1,6 +1,6 @@
 //! org.ruyaos.Profiles1 on D-Bus. Thin adapter: all rules live in `service.rs`.
 
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use zbus::interface;
 use zbus::object_server::SignalEmitter;
@@ -13,6 +13,13 @@ pub type DynAccounts = Box<dyn Accounts + Send + Sync>;
 
 pub const BUS_NAME: &str = "org.ruyaos.Profiles1";
 pub const OBJECT_PATH: &str = "/org/ruyaos/Profiles1";
+
+/// Whole seconds for the wire, rounded up so the shell never shows "retry in 0 s" while the
+/// profile is still locked.
+fn retry_secs(retry_after: Duration) -> u32 {
+    let secs = retry_after.as_secs() + u64::from(retry_after.subsec_nanos() > 0);
+    secs.min(u64::from(u32::MAX)) as u32
+}
 
 pub struct ProfilesIface {
     svc: ProfileService<DynAccounts>,
@@ -53,13 +60,10 @@ impl ProfilesIface {
         if self.svc.active().map(str::to_owned) != before {
             let _ = self.active_profile_changed(&emitter).await;
         }
-        // Round up so the shell never shows "retry in 0 s" while still locked.
-        let retry =
-            outcome.retry_after.as_secs() + u64::from(outcome.retry_after.subsec_nanos() > 0);
         (
             outcome.status.as_str().to_owned(),
             outcome.attempts_left,
-            retry.min(u64::from(u32::MAX)) as u32,
+            retry_secs(outcome.retry_after),
         )
     }
 
@@ -78,14 +82,19 @@ impl ProfilesIface {
         role: &str,
         pin: &str,
         #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
-    ) -> (String, String) {
-        let (status, id) =
+    ) -> (String, String, u32, u32) {
+        let (outcome, id) =
             self.svc
                 .create_profile(admin_id, admin_pin, name, role, pin, Instant::now());
         if id.is_some() {
             let _ = Self::profiles_changed(&emitter).await;
         }
-        (status.as_str().to_owned(), id.unwrap_or_default())
+        (
+            outcome.status.as_str().to_owned(),
+            id.unwrap_or_default(),
+            outcome.attempts_left,
+            retry_secs(outcome.retry_after),
+        )
     }
 
     async fn set_pin(
@@ -94,12 +103,16 @@ impl ProfilesIface {
         old_pin: &str,
         new_pin: &str,
         #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
-    ) -> String {
-        let status = self.svc.set_pin(id, old_pin, new_pin, Instant::now());
-        if status == crate::Status::Ok {
+    ) -> (String, u32, u32) {
+        let outcome = self.svc.set_pin(id, old_pin, new_pin, Instant::now());
+        if outcome.status == crate::Status::Ok {
             let _ = Self::profiles_changed(&emitter).await; // has_pin may have changed
         }
-        status.as_str().to_owned()
+        (
+            outcome.status.as_str().to_owned(),
+            outcome.attempts_left,
+            retry_secs(outcome.retry_after),
+        )
     }
 
     #[zbus(property)]

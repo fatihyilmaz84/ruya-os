@@ -136,6 +136,8 @@ impl<A: Accounts> ProfileService<A> {
         self.active = None;
     }
 
+    /// Returns the outcome (status plus attempts left / retry time after a failed admin PIN)
+    /// and the new id on success.
     pub fn create_profile(
         &mut self,
         admin_id: &str,
@@ -144,17 +146,17 @@ impl<A: Accounts> ProfileService<A> {
         role: &str,
         new_pin: &str,
         now: Instant,
-    ) -> (Status, Option<String>) {
+    ) -> (Outcome, Option<String>) {
         let first_boot = self.store.profiles().is_empty();
         let Some(role) = Role::parse(role) else {
-            return (Status::Invalid, None);
+            return (Outcome::of(Status::Invalid), None);
         };
         let name = name.trim();
         if name.is_empty()
             || name.chars().count() > MAX_NAME_CHARS
             || name.chars().any(char::is_control)
         {
-            return (Status::Invalid, None);
+            return (Outcome::of(Status::Invalid), None);
         }
         // Admins must have a PIN; guests never have one; others may.
         let pin_ok = match role {
@@ -163,20 +165,20 @@ impl<A: Accounts> ProfileService<A> {
             Role::Standard => new_pin.is_empty() || pin::is_valid(new_pin),
         };
         if !pin_ok {
-            return (Status::Invalid, None);
+            return (Outcome::of(Status::Invalid), None);
         }
 
         if first_boot {
             if role != Role::Admin {
-                return (Status::NotAllowed, None);
+                return (Outcome::of(Status::NotAllowed), None);
             }
         } else {
             if self.store.get(admin_id).map(|p| p.role) != Some(Role::Admin) {
-                return (Status::NotAllowed, None);
+                return (Outcome::of(Status::NotAllowed), None);
             }
             let auth = self.authenticate(admin_id, admin_pin, now);
             if auth.status != Status::Ok {
-                return (auth.status, None);
+                return (auth, None);
             }
         }
 
@@ -185,13 +187,13 @@ impl<A: Accounts> ProfileService<A> {
         } else {
             match pin::hash(new_pin) {
                 Ok(h) => Some(h),
-                Err(_) => return (Status::Failed, None),
+                Err(_) => return (Outcome::of(Status::Failed), None),
             }
         };
 
         let id = self.store.peek_next_id();
         if self.accounts.create(&id).is_err() {
-            return (Status::Failed, None);
+            return (Outcome::of(Status::Failed), None);
         }
         let avatar = AVATAR_COLOURS[self.store.profiles().len() % AVATAR_COLOURS.len()].to_owned();
         self.store.insert(Profile {
@@ -202,14 +204,15 @@ impl<A: Accounts> ProfileService<A> {
             pin_hash,
         });
         if self.store.save().is_err() {
-            return (Status::Failed, None);
+            return (Outcome::of(Status::Failed), None);
         }
-        (Status::Ok, Some(id))
+        (Outcome::of(Status::Ok), Some(id))
     }
 
-    pub fn set_pin(&mut self, id: &str, old_pin: &str, new_pin: &str, now: Instant) -> Status {
+    /// Like `create_profile`, the outcome carries attempts left / retry time for a wrong old PIN.
+    pub fn set_pin(&mut self, id: &str, old_pin: &str, new_pin: &str, now: Instant) -> Outcome {
         let Some(role) = self.store.get(id).map(|p| p.role) else {
-            return Status::UnknownProfile;
+            return Outcome::of(Status::UnknownProfile);
         };
         let allowed = match role {
             Role::Admin => pin::is_valid(new_pin),
@@ -217,24 +220,24 @@ impl<A: Accounts> ProfileService<A> {
             Role::Standard => new_pin.is_empty() || pin::is_valid(new_pin),
         };
         if !allowed {
-            return Status::Invalid;
+            return Outcome::of(Status::Invalid);
         }
         let auth = self.authenticate(id, old_pin, now);
         if auth.status != Status::Ok {
-            return auth.status;
+            return auth;
         }
         let hash = if new_pin.is_empty() {
             None
         } else {
             match pin::hash(new_pin) {
                 Ok(h) => Some(h),
-                Err(_) => return Status::Failed,
+                Err(_) => return Outcome::of(Status::Failed),
             }
         };
         self.store.get_mut(id).expect("checked above").pin_hash = hash;
         match self.store.save() {
-            Ok(()) => Status::Ok,
-            Err(_) => Status::Failed,
+            Ok(()) => Outcome::of(Status::Ok),
+            Err(_) => Outcome::of(Status::Failed),
         }
     }
 }
@@ -257,14 +260,10 @@ mod tests {
         let store = Store::open(dir.path().join("profiles.toml")).unwrap();
         let mut svc = ProfileService::new(store, NoAccounts);
         let now = Instant::now();
-        assert_eq!(
-            svc.create_profile("", "", "Admin", "admin", "1234", now),
-            (Status::Ok, Some("p1".into()))
-        );
-        assert_eq!(
-            svc.create_profile("p1", "1234", "Kid", "standard", "", now),
-            (Status::Ok, Some("p2".into()))
-        );
+        let (o, id) = svc.create_profile("", "", "Admin", "admin", "1234", now);
+        assert_eq!((o.status, id), (Status::Ok, Some("p1".into())));
+        let (o, id) = svc.create_profile("p1", "1234", "Kid", "standard", "", now);
+        assert_eq!((o.status, id), (Status::Ok, Some("p2".into())));
         Fixture { dir, svc, now }
     }
 
@@ -275,15 +274,21 @@ mod tests {
             ProfileService::new(Store::open(dir.path().join("p.toml")).unwrap(), NoAccounts);
         let now = Instant::now();
         assert_eq!(
-            svc.create_profile("", "", "Kid", "standard", "", now).0,
+            svc.create_profile("", "", "Kid", "standard", "", now)
+                .0
+                .status,
             Status::NotAllowed
         );
         assert_eq!(
-            svc.create_profile("", "", "Admin", "admin", "", now).0,
+            svc.create_profile("", "", "Admin", "admin", "", now)
+                .0
+                .status,
             Status::Invalid
         );
         assert_eq!(
-            svc.create_profile("", "", "Admin", "admin", "1234", now).0,
+            svc.create_profile("", "", "Admin", "admin", "1234", now)
+                .0
+                .status,
             Status::Ok
         );
     }
@@ -292,31 +297,39 @@ mod tests {
     fn creating_more_profiles_needs_admin_credentials() {
         let Fixture { mut svc, now, .. } = fixture();
         assert_eq!(
-            svc.create_profile("p1", "9999", "X", "standard", "", now).0,
+            svc.create_profile("p1", "9999", "X", "standard", "", now)
+                .0
+                .status,
             Status::WrongPin
         );
         assert_eq!(
-            svc.create_profile("p2", "", "X", "standard", "", now).0,
+            svc.create_profile("p2", "", "X", "standard", "", now)
+                .0
+                .status,
             Status::NotAllowed
         );
         assert_eq!(
             svc.create_profile("p1", "1234", "Guest", "guest", "", now)
-                .0,
+                .0
+                .status,
             Status::Ok
         );
         assert_eq!(
             svc.create_profile("p1", "1234", "G2", "guest", "1111", now)
-                .0,
+                .0
+                .status,
             Status::Invalid
         );
         assert_eq!(
             svc.create_profile("p1", "1234", "  ", "standard", "", now)
-                .0,
+                .0
+                .status,
             Status::Invalid
         );
         assert_eq!(
             svc.create_profile("p1", "1234", "X", "superuser", "", now)
-                .0,
+                .0
+                .status,
             Status::Invalid
         );
     }
@@ -357,7 +370,9 @@ mod tests {
         // Even the right PIN and admin actions are refused while locked out.
         assert_eq!(svc.switch_to("p1", "1234", now).status, Status::LockedOut);
         assert_eq!(
-            svc.create_profile("p1", "1234", "X", "standard", "", now).0,
+            svc.create_profile("p1", "1234", "X", "standard", "", now)
+                .0
+                .status,
             Status::LockedOut
         );
         assert_eq!(
@@ -367,19 +382,78 @@ mod tests {
     }
 
     #[test]
+    fn create_profile_reports_attempts_and_retry_time() {
+        let Fixture { mut svc, now, .. } = fixture();
+        for expected in (1..FREE_ATTEMPTS).rev() {
+            let (o, id) = svc.create_profile("p1", "0000", "X", "standard", "", now);
+            assert_eq!((o.status, o.attempts_left), (Status::WrongPin, expected));
+            assert_eq!(o.retry_after, Duration::ZERO);
+            assert_eq!(id, None);
+        }
+        let (o, id) = svc.create_profile("p1", "0000", "X", "standard", "", now);
+        assert_eq!(
+            (o.status, o.attempts_left, o.retry_after),
+            (Status::LockedOut, 0, FIRST_LOCKOUT)
+        );
+        assert_eq!(id, None);
+        // Still locked: the right PIN reports the remaining time, not success.
+        let (o, _) = svc.create_profile("p1", "1234", "X", "standard", "", now);
+        assert_eq!(
+            (o.status, o.retry_after),
+            (Status::LockedOut, FIRST_LOCKOUT)
+        );
+        // Success carries zeros.
+        let later = now + FIRST_LOCKOUT;
+        let (o, id) = svc.create_profile("p1", "1234", "X", "standard", "", later);
+        assert_eq!(
+            (o.status, o.attempts_left, o.retry_after),
+            (Status::Ok, 0, Duration::ZERO)
+        );
+        assert_eq!(id.as_deref(), Some("p3"));
+    }
+
+    #[test]
+    fn set_pin_reports_attempts_and_retry_time() {
+        let Fixture { mut svc, now, .. } = fixture();
+        for expected in (1..FREE_ATTEMPTS).rev() {
+            let o = svc.set_pin("p1", "0000", "5678", now);
+            assert_eq!((o.status, o.attempts_left), (Status::WrongPin, expected));
+            assert_eq!(o.retry_after, Duration::ZERO);
+        }
+        let o = svc.set_pin("p1", "0000", "5678", now);
+        assert_eq!(
+            (o.status, o.attempts_left, o.retry_after),
+            (Status::LockedOut, 0, FIRST_LOCKOUT)
+        );
+        let o = svc.set_pin("p1", "1234", "5678", now + FIRST_LOCKOUT);
+        assert_eq!(
+            (o.status, o.attempts_left, o.retry_after),
+            (Status::Ok, 0, Duration::ZERO)
+        );
+        // Rule failures are not PIN failures: no counts, and they do not touch the counter.
+        let o = svc.set_pin("p1", "5678", "", now + FIRST_LOCKOUT);
+        assert_eq!((o.status, o.attempts_left), (Status::Invalid, 0));
+        let o = svc.set_pin("nope", "", "1234", now);
+        assert_eq!(o.status, Status::UnknownProfile);
+    }
+
+    #[test]
     fn pin_rules_for_set_pin() {
         let Fixture { mut svc, now, .. } = fixture();
         assert_eq!(
-            svc.set_pin("p1", "1234", "", now),
+            svc.set_pin("p1", "1234", "", now).status,
             Status::Invalid,
             "admins keep a PIN"
         );
-        assert_eq!(svc.set_pin("p1", "0000", "5678", now), Status::WrongPin);
-        assert_eq!(svc.set_pin("p1", "1234", "5678", now), Status::Ok);
+        assert_eq!(
+            svc.set_pin("p1", "0000", "5678", now).status,
+            Status::WrongPin
+        );
+        assert_eq!(svc.set_pin("p1", "1234", "5678", now).status, Status::Ok);
         assert_eq!(svc.switch_to("p1", "5678", now).status, Status::Ok);
-        assert_eq!(svc.set_pin("p2", "", "4321", now), Status::Ok);
+        assert_eq!(svc.set_pin("p2", "", "4321", now).status, Status::Ok);
         assert_eq!(svc.switch_to("p2", "", now).status, Status::PinRequired);
-        assert_eq!(svc.set_pin("p2", "4321", "", now), Status::Ok);
+        assert_eq!(svc.set_pin("p2", "4321", "", now).status, Status::Ok);
         assert_eq!(svc.switch_to("p2", "", now).status, Status::Ok);
     }
 

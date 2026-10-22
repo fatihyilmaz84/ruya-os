@@ -14,6 +14,11 @@
     "not-allowed"      caller lacks the rights (e.g. admin check failed)
     "invalid"          malformed argument (e.g. PIN not 4-6 digits, empty name)
     "failed"           internal error (e.g. could not write the store or create the Unix user)
+
+  Methods that check a PIN (SwitchTo, CreateProfile, SetPin) also return attempts_left and
+  retry_after_secs. They matter only for "wrong-pin" (attempts_left = tries before lockout) and
+  "locked-out" (retry_after_secs = seconds until the next try is accepted, rounded up); they are 0
+  otherwise. SwitchTo additionally reports attempts_left with "pin-required".
 -->
 <node>
   <interface name="org.ruyaos.Profiles1">
@@ -48,6 +53,8 @@
       <arg name="pin" type="s" direction="in"/>
       <arg name="status" type="s" direction="out"/>
       <arg name="id" type="s" direction="out"/>
+      <arg name="attempts_left" type="u" direction="out"/>
+      <arg name="retry_after_secs" type="u" direction="out"/>
     </method>
 
     <!-- Change or remove (new_pin = "") a PIN. Admin profiles cannot remove their PIN. -->
@@ -56,6 +63,8 @@
       <arg name="old_pin" type="s" direction="in"/>
       <arg name="new_pin" type="s" direction="in"/>
       <arg name="status" type="s" direction="out"/>
+      <arg name="attempts_left" type="u" direction="out"/>
+      <arg name="retry_after_secs" type="u" direction="out"/>
     </method>
 
     <!-- Id of the active profile, "" when locked. -->

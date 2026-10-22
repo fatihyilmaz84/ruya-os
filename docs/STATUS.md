@@ -14,11 +14,10 @@ Verification legend: **host** = built and tested on the Windows host · **unveri
 
 ## Board
 
-**NEXT → T-115**
+**NEXT → T-116**
 
 | ID | Title | Status | Depends | Verified |
 |---|---|---|---|---|
-| [T-115](tasks/T-115-profiles-attempts-in-replies.md) | Profiles1: attempts left / retry time in CreateProfile and SetPin replies (removes the SwitchTo probe) | todo | — | |
 | [T-116](tasks/T-116-first-build-registration-flake.md) | Fix "type X is not defined" on the first build after adding a C++ QML type | todo | — | |
 | [T-106](tasks/T-106-first-boot-setup.md) | First-boot setup (OOBE) | todo | T-102, T-104, T-105 (after T-115) | |
 | [T-117](tasks/T-117-motion-and-colour-tokens.md) | Reduced motion for the shake/pulse; literal durations and colours into Theme tokens; token lint | todo | — | |
@@ -60,6 +59,7 @@ A session can't know its own commit hash before committing, so new rows put the 
 | T-103 | Settings page (two panes), reusable controls, Display & motion and About panes, `SystemInfo` | host (`dev.ps1 test` green, new `tst_settings.qml` + 2 screenshots reviewed) | T-103 |
 | T-104 | On-screen keyboard (`TextEntry`: D-pad typing, shift, symbols, email/url layouts, mask, max length) | host (`dev.ps1 test` green, new `tst_textentry.qml` + screenshot reviewed) | T-104 |
 | T-105 | Settings → Profiles: add profile, change/remove PIN; mock mirrors `service.rs`; PinPad collect modes | mock path: host (`dev.ps1 test` green, new `tst_profile_admin.qml` + screenshot reviewed) · D-Bus `CreateProfile`/`SetPin` + attempts probe: **unverified** | T-105 |
+| T-115 | Profiles1: `CreateProfile`/`SetPin` replies carry `attempts_left` and `retry_after_secs`; `SwitchTo` probe removed | service + adapter types: host (`dev.ps1 rust` green, 2 new tests) · shell mock path: host (`dev.ps1 test` green) · D-Bus reply parsing: **unverified** | T-115 |
 
 ## Blocked (need something this host doesn't have)
 
@@ -84,6 +84,15 @@ A session can't know its own commit hash before committing, so new rows put the 
 ## Session log (newest first)
 
 Each entry: date · model · tasks · what happened · verification · follow-ups. Keep entries short and factual.
+
+### 2026-10-22 · Sonnet 5.5 · T-115
+Profiles1 contract extension:
+- `CreateProfile` and `SetPin` return `attempts_left` and `retry_after_secs` (XML, `service.rs` returning `Outcome`, `dbus.rs` with a shared `retry_secs` helper, shell D-Bus client);
+- `DBusProfilesBackend::probeAttempts` (the `SwitchTo(id, "")` workaround) deleted.
+
+Verification: `dev.ps1 rust` and `dev.ps1 test` → ALL GREEN; two new service tests for attempts and retry time. D-Bus reply parsing unverified (no bus here).
+
+Follow-ups: none. NEXT is T-116.
 
 ### 2026-10-22 · Sonnet 5.5 · Planning
 Planner session (`docs/tasks/PLANNING.md`). Inbox had 10 items; now empty. No product code written.
