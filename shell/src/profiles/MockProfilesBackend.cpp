@@ -50,7 +50,11 @@ int lockoutSecsFor(int failures)
 MockProfilesBackend::MockProfilesBackend(QObject *parent)
     : ProfilesBackend(parent)
 {
-    seed();
+    // RUYA_MOCK_PROFILES=empty starts in the first-boot state (shows the setup wizard).
+    if (qEnvironmentVariable("RUYA_MOCK_PROFILES") == QLatin1String("empty"))
+        m_nextId = 1;
+    else
+        seed();
 }
 
 void MockProfilesBackend::seed()

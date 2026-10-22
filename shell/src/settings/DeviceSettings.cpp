@@ -19,6 +19,9 @@ DeviceSettings::DeviceSettings(bool persistent, QObject *parent)
         const qreal overscan = m_store->value(QStringLiteral("display/overscan"), m_overscan).toReal(&ok);
         if (ok && overscan >= 0.0 && overscan <= kMaxOverscan)
             m_overscan = overscan;
+        const QString language = m_store->value(QStringLiteral("general/language"), m_language).toString();
+        if (isValidLanguage(language))
+            m_language = language;
     }
 
     if (qEnvironmentVariableIntValue("RUYA_FORCE_REDUCED_MOTION") != 0)
@@ -43,6 +46,11 @@ bool DeviceSettings::isValidQuality(const QString &value)
 {
     return value == QLatin1String("high") || value == QLatin1String("balanced")
         || value == QLatin1String("performance");
+}
+
+bool DeviceSettings::isValidLanguage(const QString &value)
+{
+    return value == QLatin1String("en") || value == QLatin1String("tr");
 }
 
 bool DeviceSettings::reducedMotion() const
@@ -95,4 +103,18 @@ void DeviceSettings::setOverscan(qreal value)
     if (m_store)
         m_store->setValue(QStringLiteral("display/overscan"), value);
     emit overscanChanged();
+}
+
+void DeviceSettings::setLanguage(const QString &value)
+{
+    if (!isValidLanguage(value)) {
+        qWarning("ruya-shell: rejecting invalid language '%s'", qPrintable(value));
+        return;
+    }
+    if (value == m_language)
+        return;
+    m_language = value;
+    if (m_store)
+        m_store->setValue(QStringLiteral("general/language"), value);
+    emit languageChanged();
 }

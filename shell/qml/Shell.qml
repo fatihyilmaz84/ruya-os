@@ -50,22 +50,44 @@ FocusScope {
             tiles.forceActiveFocus()
     }
 
+    // First boot: no profile exists, so the setup wizard replaces the picker. It stays up
+    // until its Done step (setupActive), even though the list is no longer empty by then.
+    readonly property bool setupNeeded: Profiles.available && Profiles.profiles.length === 0
+    property bool setupActive: false
+
     // The single place that decides where focus goes after a state change.
     function routeFocus() {
         systemPanel.open = false
-        if (signedIn) {
+        if (setupActive) {
+            setup.focusStep()
+        } else if (signedIn) {
             focusCurrent()
         } else {
             picker.reset()
         }
     }
 
+    onSetupNeededChanged: {
+        if (setupNeeded && !setupActive) {
+            setupActive = true
+            setup.start()
+        } else if (!setupNeeded && setupActive && !setup.committed) {
+            setupActive = false      // a profile appeared some other way: nothing left to set up
+        }
+        routeFocus()
+    }
     onSignedInChanged: {
         if (!signedIn)
             pageStack = []       // the next sign-in starts at home
         routeFocus()
     }
-    Component.onCompleted: routeFocus()
+    Component.onCompleted: {
+        if (setupNeeded) {
+            setupActive = true
+            setup.start()
+        }
+        routeFocus()
+    }
 
     // The Guide button opens the overlay from home or from any page; pages and tiles leave
     // it unhandled. (The overlay itself and the PIN pad are modal and accept every key.)
@@ -157,10 +179,25 @@ FocusScope {
         anchors.fill: parent
         u: root.u
         z: 20                              // modal: above the toasts
-        opacity: root.signedIn ? 0 : 1
-        visible: opacity > 0
-        enabled: !root.signedIn
+        readonly property bool shown: !root.signedIn && !root.setupActive
+        opacity: shown ? 1 : 0
+        visible: shown || opacity > 0      // visible at once, so focus can be given in the same step
+        enabled: shown
         Behavior on opacity { NumberAnimation { duration: Theme.pageMs; easing.type: Easing.OutCubic } }
+    }
+
+    Setup {
+        id: setup
+        objectName: "setup"
+        anchors.fill: parent
+        u: root.u
+        z: 20                              // modal, like the picker
+        visible: root.setupActive
+        enabled: root.setupActive
+        onFinished: {
+            root.setupActive = false
+            root.routeFocus()
+        }
     }
 
     Item {

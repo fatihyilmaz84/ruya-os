@@ -15,7 +15,7 @@ The shell (`ruya-shell`) is the only UI the user sees. It's written in Qt 6 Quic
 | **Settings** | Profiles, Network, Bluetooth & controllers, Display (resolution, refresh, HDR later), Audio (output, volumes per channel), Storage & devices, Parental (later), Accessibility, System (update, channel, rollback, factory reset, about). Built so far (T-103, T-105, §1.2): the two-pane page, **Profiles**, **Display & motion** and **About**; the other categories show "Coming soon". |
 | **Overlay** (Guide button over a running app) | Return to home, close app, switch app, volume, notifications, power, screenshot (later) |
 | **System UI** | Volume OSD, toasts (both built, T-108: see §5.1), device-inserted prompt, update-ready prompt, low-battery controller warning |
-| **OOBE / Installer** | 01 §5 |
+| **OOBE / Installer** | 01 §5. OOBE as built (T-106): see §1.3. |
 | **Safe mode** | 01 §2.1 |
 
 Each surface is a separate QML module loaded with `Loader { asynchronous: true }`. Home stays resident.
@@ -35,6 +35,13 @@ Each surface is a separate QML module loaded with `Loader { asynchronous: true }
 - **Display & motion** writes live to `DeviceSettings`: Effects quality (High/Balanced/Performance, cycling), Reduced motion (toggle), Screen edge (overscan, 0-10 % in 1 % steps). The rows follow the setting, including changes made elsewhere.
 - **About** (read-only): image version (the `version` the shell was started with), Qt version (runtime, from the `SystemInfo` singleton), services mode (mock or D-Bus), and the licence line.
 - Reusable controls live in `shell/qml/controls/` (`SettingControl` base, `SettingRow`, `ToggleRow`, `ChoiceRow`, `SliderRow`); see `shell/CLAUDE.md`.
+
+### 1.3 First-boot setup (as built, T-106)
+- `Setup.qml` is a full-screen modal (z 20, like the picker). The shell shows it when `Profiles.available && Profiles.profiles.length === 0` and keeps it up until its Done step, so the picker never flashes in between "profile created" and "all set". If a profile appears some other way before the account is being created, the shell drops setup.
+- Five steps with a progress indicator ("Step n of 5"): Welcome, Language, Network (placeholder), Create admin, Done. Accept (Return) continues, Back (Escape) goes to the previous step with its state kept; there is no Back on the first step, or once the account exists (Done).
+- Create admin: a Name row (opens the on-screen keyboard, 32 characters) and a "Choose a PIN and finish" row (PIN pad in collect-and-confirm mode, then `Profiles.createProfile("", "", name, "admin", pin)`). A missing name or a service refusal is shown as a message on the step (messages come from the shared `ProfileStatus` singleton, also used by Settings → Profiles) and the user can retry. Cancelling the PIN pad creates nothing.
+- After Done the shell shows the picker with the new profile; nobody is signed in automatically.
+- For development, `RUYA_MOCK_PROFILES=empty` starts the mock services without profiles (see `docs/dev-setup.md`).
 
 ## 2. Visual language
 - Dark theme, large type (TV 10-foot UI: min 24 px body at 1080p, scaled by display DPI and the user's text-scale setting).

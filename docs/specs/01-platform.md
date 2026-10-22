@@ -80,6 +80,8 @@ The build excludes any desktop environment, display manager, `kdeconnect` and `p
 ### 5.2 First-boot setup (OOBE), run by the shell
 Language/region → controller pairing (if no wired pad) → network → time zone → create the admin profile + PIN → optional extra profiles → updates check → home.
 
+**Built so far (T-106, `shell/qml/Setup.qml`)**, shown instead of the profile picker whenever the profiles service reports no profile: welcome → **language** (English/Türkçe; stored in `DeviceSettings.language`, translation itself is T-109) → **network** (placeholder text only) → **create the admin** (name via the on-screen keyboard, PIN entered twice, `CreateProfile` with no admin credentials) → done → profile picker. Not built yet: controller pairing, time zone, region, extra profiles, update check. Setup does not sign the new admin in; they pick their profile and enter the PIN like any later boot.
+
 ### 5.3 Factory reset
 Because `/etc` and `/var` persist, reset is explicit. It removes `/var/home/*`, `/var/lib/ruyaos`, `/var/lib/flatpak` (optionally keeping system apps), and local `/etc` diffs (restored from `/usr/etc`), then deletes profile users and reboots into OOBE. It requires the admin PIN and a confirmation hold. **Open:** whether to implement this as a fresh `bootc install` re-deploy from the currently booted image, which is cleaner. Spike in Phase 6.
 

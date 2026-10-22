@@ -14,11 +14,10 @@ Verification legend: **host** = built and tested on the Windows host · **vm** =
 
 ## Board
 
-**NEXT → T-106**
+**NEXT → T-117**
 
 | ID | Title | Status | Depends | Verified |
 |---|---|---|---|---|
-| [T-106](tasks/T-106-first-boot-setup.md) | First-boot setup (OOBE) | todo | T-102, T-104, T-105 (after T-115) | |
 | [T-117](tasks/T-117-motion-and-colour-tokens.md) | Reduced motion for the shake/pulse; literal durations and colours into Theme tokens; token lint | todo | — | |
 | [T-107](tasks/T-107-power-actions.md) | Power actions (suspend/restart/off) | todo | T-101 | |
 | [T-114](tasks/T-114-audio-contract-and-settings.md) | Audio contract and Settings → Audio | todo | T-103, T-108 | |
@@ -36,7 +35,7 @@ The order above is the recommended order. When the NEXT task is blocked, take th
 
 Follow-ups, debt and ideas waiting for a planner session. Builders: add one line per item, `- (source) what, and why it matters`. Don't write task files for these unless your own task needs one. A planner session turns them into tasks, drops them with a reason, or escalates them. **Run a planner when this list has 5+ items.**
 
-- (B-001) **B-005 is unblocked.** The VM runs the real shell against the real `ruya-profiles` over the system bus, with an empty profile store, so it shows an empty picker until T-106 (OOBE) lands. Plan a task to verify Profiles over D-Bus in the VM (picker, PIN, lockout, CreateProfile, SetPin) and fix what breaks.
+- (B-001) **B-005 is unblocked.** The VM runs the real shell against the real `ruya-profiles` over the system bus, with an empty profile store, so it now shows the first-boot wizard (T-106 landed; its D-Bus path is unverified). Plan a task to verify Profiles over D-Bus in the VM (picker, PIN, lockout, CreateProfile, SetPin) and fix what breaks.
 - (B-001) A failed boot takes about 100 s (90 s greenboot check + 120 s VM marker), so automatic rollback takes about 7 minutes. Consider a shorter required-check timeout once real-hardware boot times are known (spec 02 §8 KPI: shell < 15 s on the low tier).
 - (B-001) The image is 4.7 GB. A switch reuses layers (0.0.3→broken needed 931 bytes; 0.0.3→0.0.4 about 2 minutes because the NVIDIA layer was rebuilt). Measure real update sizes and plan chunked images (spec 01 §4) before release.
 - (B-001) The VM has no audio device, so UI sound (PipeWire, QSoundEffect formats) is unverified on Linux. Add an `-audiodev` to a VM profile, or test on hardware.
@@ -65,6 +64,7 @@ A session can't know its own commit hash before committing, so new rows put the 
 | T-104 | On-screen keyboard (`TextEntry`: D-pad typing, shift, symbols, email/url layouts, mask, max length) | host (`dev.ps1 test` green, new `tst_textentry.qml` + screenshot reviewed) | T-104 |
 | T-105 | Settings → Profiles: add profile, change/remove PIN; mock mirrors `service.rs`; PinPad collect modes | mock path: host (`dev.ps1 test` green, new `tst_profile_admin.qml` + screenshot reviewed) · D-Bus `CreateProfile`/`SetPin` + attempts probe: **unverified** | T-105 |
 | T-115 | Profiles1: `CreateProfile`/`SetPin` replies carry `attempts_left` and `retry_after_secs`; `SwitchTo` probe removed | service + adapter types: host (`dev.ps1 rust` green, 2 new tests) · shell mock path: host (`dev.ps1 test` green) · D-Bus reply parsing: **unverified** | T-115 |
+| T-106 | First-boot setup wizard (`Setup.qml`: welcome, language, network placeholder, create admin, done); `DeviceSettings.language`; `RUYA_MOCK_PROFILES=empty`; shared `ProfileStatus` messages | mock path: host (`dev.ps1 test` green, new `tst_setup.qml` with 8 tests + 2 screenshots reviewed) · real `ruya-profiles` over D-Bus: **unverified** | T-106 |
 | T-116 | First build after adding or removing a C++ QML type is green (stale `qmltyperegistrar` under the Visual Studio generator; build step `InvalidateStaleQmlTypes.cmake`) | host (`dev.ps1 test` green; 3 add/remove probe cycles via `scripts\repro-first-build.ps1`, all green on the first run) · Linux/Ninja: not run | T-116 |
 
 ## Blocked (need something this host doesn't have)
@@ -90,6 +90,15 @@ A session can't know its own commit hash before committing, so new rows put the 
 ## Session log (newest first)
 
 Each entry: date · model · tasks · what happened · verification · follow-ups. Keep entries short and factual.
+
+### 2026-10-23 · Sonnet 5.5 · T-106
+First-boot setup:
+- `Setup.qml`: five steps (welcome, language, network placeholder, create admin with keyboard + PIN pad, done), progress dots, Back keeps state. The shell shows it while no profile exists and keeps it up until Done, so the picker never flashes.
+- `DeviceSettings.language` (`en`/`tr`, validated, persisted); `RUYA_MOCK_PROFILES=empty` for a human run; the status-to-message mapping moved to a `ProfileStatus` singleton shared with Settings → Profiles.
+
+Verification: `dev.ps1 test` → ALL GREEN (8 new tests); `dev.ps1 shots` reviewed (`11-setup-welcome.png`, `12-setup-admin.png`). The new QML singleton built green on the first run (T-116). Unverified: the wizard against the real service over D-Bus, a real controller.
+
+Follow-ups: none new. The Inbox has 5 items, so a planning session is due (B-005 now has something to verify). NEXT is T-117.
 
 ### 2026-10-23 · Sonnet 5.5 · T-116
 Fixed the "type X is not defined" first-build failure:
