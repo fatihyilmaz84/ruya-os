@@ -1,6 +1,6 @@
 # T-101 — Page navigation framework
 
-Status: todo · Phase: 1 · Depends: — · Area: shell · Size: M
+Status: done · Phase: 1 · Depends: — · Area: shell · Size: M
 
 ## Goal
 Selecting a home tile (Games, Media, Store, Settings, Power) opens that section as a full page. Back returns to home with focus on the same tile. This gives every later feature a place to live.
@@ -53,4 +53,19 @@ Selecting a home tile (Games, Media, Store, Settings, Power) opens that section 
 - Keep `routeFocus()` in `Shell.qml` as the single place that decides where focus goes after state changes. Extend it rather than adding a second mechanism.
 
 ## Outcome
-_Filled in by the implementer._
+**Built** (2026-10-22, Sonnet 5.5):
+- `Shell.qml`: `pageStack` / `currentPage` / `pageOpen`, `openPage(key)`, `closePage()`, `focusCurrent()`; `routeFocus()` extended to use it. Pages are created by a `Loader` from `pageComponents`, in a `pageHost` that fades and slides in while `home` fades and slides out (`Theme.pageMs`, new token `Theme.pageSlide`). `home` is disabled while a page is open.
+- Tiles have a `key` role (`Tile.qml`, `ListModel`). Accept pulses, plays `Sfx.select()`, then opens the page.
+- New `Page.qml` (title, content area in the safe area, Back), `ComingSoon.qml` (placeholder body with one focusable element) and `GamesPage/MediaPage/StorePage/SettingsPage/PowerPage.qml`. All listed in `CMakeLists.txt`.
+- New `tests/tst_pages.qml`: the 5 acceptance tests plus the `5-page-settings.png` screenshot.
+- Docs: `02-shell.md` §1.1 (page model), `shell/CLAUDE.md` "How to add a page".
+
+**Verification:** `dev.ps1 test` → ALL GREEN (23 passed, 2 skipped without `RUYA_SHOTS_DIR`); `dev.ps1 shots` → ALL GREEN (25 passed). Reviewed `5-page-settings.png` (title, header intact, focus ring on the placeholder, nothing overlapping) and `4-overlay.png` (unchanged). Existing tests are untouched and pass.
+
+**Deviations / choices:**
+- The Guide key handler moved from the tiles' `Keys.onPressed` to the `Shell` root, so it also fires from pages (pages leave Guide unhandled; the overlay and PIN pad are modal and accept everything). It is guarded by `signedIn`.
+- `home` and `pageHost` use `visible: shown || opacity > 0` so they are visible in the same step they are enabled, which lets `focusCurrent()` work synchronously.
+- A `Loader` plus per-page `Component`s were used rather than `Loader { source: "…" }`, so qmllint can check the types.
+- Not verified: the transition motion itself (only end states are asserted; screenshots are static).
+
+**Follow-ups:** none. The "Switch profile" test found that the picker keeps its `currentIndex` across a lock; that is existing behaviour and unchanged.

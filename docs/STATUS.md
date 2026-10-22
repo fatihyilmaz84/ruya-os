@@ -2,7 +2,7 @@
 
 **Read this first in every session; update it last.** The rules are in the root `CLAUDE.md`, the task format in `docs/tasks/README.md`.
 
-Last updated: 2026-10-22 (Opus 5.5, handoff to Sonnet)
+Last updated: 2026-10-22 (Sonnet 5.5)
 
 ## Where we are
 
@@ -14,11 +14,10 @@ Verification legend: **host** = built and tested on the Windows host · **unveri
 
 ## Board
 
-**NEXT → T-101**
+**NEXT → T-102**
 
 | ID | Title | Status | Depends | Verified |
 |---|---|---|---|---|
-| [T-101](tasks/T-101-page-navigation.md) | Page navigation framework | todo | — | |
 | [T-102](tasks/T-102-motion-and-quality.md) | Reduced motion and effects quality tiers | todo | — | |
 | [T-108](tasks/T-108-toasts-and-volume-osd.md) | Toast notifications and volume OSD | todo | — | |
 | [T-103](tasks/T-103-settings-screen.md) | Settings screen and reusable controls | todo | T-101, T-102 | |
@@ -46,6 +45,7 @@ The order above is the recommended order. When the NEXT task is blocked, take th
 | T-005 | `ruya-profiles` service + `org.ruyaos.Profiles1` contract | core: host (15 tests) · D-Bus serving, `useradd`, unit, policy: **unverified** | 717b039 |
 | T-006 | Shell profile picker, PIN pad, Profiles client (mock + D-Bus), Qt Quick tests | mock path: host (13 tests) · D-Bus client: **unverified** | eb0b28d |
 | T-007 | AI contributor workflow: `CLAUDE.md` files, `scripts/dev.ps1`, task backlog, this board | host (`dev.ps1 test` green) | handoff commit |
+| T-101 | Page navigation framework (`Shell.openPage`, `Page.qml`, five placeholder pages) | host (`dev.ps1 test` green, new `tst_pages.qml` + screenshot reviewed) | (this commit) |
 
 ## Blocked (need something this host doesn't have)
 
@@ -69,6 +69,16 @@ The order above is the recommended order. When the NEXT task is blocked, take th
 ## Session log (newest first)
 
 Each entry: date · model · tasks · what happened · verification · follow-ups. Keep entries short and factual.
+
+### 2026-10-22 · Sonnet 5.5 · T-101
+Page navigation framework:
+- `Shell.openPage/closePage` over a `pageStack`; `Page.qml` base and five placeholder pages;
+- home tiles carry keys; Back restores tile focus; the Guide overlay works over pages and "Switch profile" clears the stack;
+- the Guide key handler moved to the `Shell` root so pages need not handle it.
+
+Verification: `dev.ps1 test` → ALL GREEN; `dev.ps1 shots` reviewed (`5-page-settings.png`, `4-overlay.png`). Transition motion itself is not asserted.
+
+Follow-ups: none. NEXT is T-102.
 
 ### 2026-10-22 · Opus 5.5 · T-007
 Set up the AI handoff:

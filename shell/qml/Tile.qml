@@ -4,6 +4,7 @@ Item {
     id: tile
 
     required property int index
+    required property string key      // stable id of the page this tile opens
     required property string title
     required property color accent
     property real u: 1

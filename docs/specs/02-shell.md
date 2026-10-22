@@ -20,6 +20,14 @@ The shell (`ruya-shell`) is the only UI the user sees. It's written in Qt 6 Quic
 
 Each surface is a separate QML module loaded with `Loader { asynchronous: true }`. Home stays resident.
 
+### 1.1 Page model (as built, T-101)
+- The home tiles carry stable keys: `games`, `media`, `store`, `settings`, `power`. Accept on a tile calls `Shell.openPage(key)`, which pushes the key onto `pageStack` (stack-shaped so detail pages can nest; the tiles only ever push one). `closePage()` pops it.
+- A page extends `Page.qml`: title below the header, a content area inside the safe area, and Back (`Escape`/`Back`), which plays `Sfx.back()` and closes the page. The page's `focus: true` element gets focus when it opens. Pages are instantiated by a `Loader` and destroyed after the fade-out.
+- Transition: home fades out and slides left, the page fades in and slides in from the right, over `Theme.pageMs` (`Theme.pageSlide` px); reversed on close. The backdrop stays. While a page is open, home is disabled, so arrow keys cannot reach the tiles.
+- Closing a page restores focus to the tile that opened it (same `currentIndex`). `Shell.routeFocus()`/`focusCurrent()` is the single place that decides where focus goes.
+- The Guide overlay opens from home or from any page (the shell handles `HomePage`/`Menu` when nothing under focus does). Closing it returns focus to the page. "Switch profile" clears the page stack, so the next sign-in lands on home.
+- The five pages are placeholders ("Coming soon" plus one focusable element) until their tasks land.
+
 ## 2. Visual language
 - Dark theme, large type (TV 10-foot UI: min 24 px body at 1080p, scaled by display DPI and the user's text-scale setting).
 - Safe-area margin of 5% (overscan) by default, adjustable in Settings → Display.

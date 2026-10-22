@@ -18,5 +18,7 @@ QtObject {
     readonly property int pageMs: 300
     readonly property int tintMs: 700
 
+    readonly property real pageSlide: 60       // design px the shelf/page slide during a page transition
+
     readonly property real blurMax: 64
 }

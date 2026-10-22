@@ -45,6 +45,13 @@ Read `docs/specs/02-shell.md` for the UX spec. This file covers how the code is 
 - **Focus restoration:** when a modal or page closes, return focus to where it was. Guard any re-focus with a check that the target is still enabled; otherwise you will steal focus after state changes (see `ProfilePicker.onClosed`).
 - Use `Sfx.navigate()` on focus moves, `Sfx.select()` on Accept, and `Sfx.back()` on Back or errors.
 
+## How to add a page
+
+1. Create `XxxPage.qml` as a `Page { id: page; title: qsTr("Xxx") … }` (see `Page.qml`, `ComingSoon.qml`). Put one `focus: true` element in it; size from `page.u`.
+2. Add the file to `CMakeLists.txt`, and a `Component { id: xxxPage; XxxPage {} }` plus an entry in `pageComponents` in `Shell.qml`.
+3. Open it with `Shell.openPage("xxx")` (home tiles do this with their `key` role). Back is handled by `Page`; never steal the Guide keys in a page, so the overlay still works.
+4. Test in a `tst_*.qml`: open, assert focus, Back, assert focus restored (see `tst_pages.qml`).
+
 ## Tests (required for every behaviour you add)
 
 - Drive the UI with `keyClick()` using only the keys listed above, unless a test is specifically about keyboard input.

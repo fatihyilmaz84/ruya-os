@@ -31,6 +31,13 @@ qt_add_qml_module(ruyashell
         qml/ProfilePicker.qml
         qml/ProfileCard.qml
         qml/PinPad.qml
+        qml/Page.qml
+        qml/ComingSoon.qml
+        qml/GamesPage.qml
+        qml/MediaPage.qml
+        qml/StorePage.qml
+        qml/SettingsPage.qml
+        qml/PowerPage.qml
     RESOURCES
         sounds/navigate.wav
         sounds/select.wav

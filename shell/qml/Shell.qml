@@ -16,17 +16,74 @@ FocusScope {
     readonly property bool signedIn: Profiles.activeProfile !== ""
     readonly property Tile currentTile: tiles.currentItem as Tile
 
+    // Open pages, oldest first; only the last one is shown. Stack-shaped so detail pages
+    // can nest later, though the home tiles only ever push one.
+    property var pageStack: []
+    readonly property string currentPage: pageStack.length > 0 ? pageStack[pageStack.length - 1] : ""
+    readonly property bool pageOpen: currentPage !== ""
+    // Key of the page the host is displaying; kept after a close until the fade-out ends.
+    property string shownPage: ""
+
+    function openPage(key) {
+        if (!signedIn || !pageComponents[key] || systemPanel.open)
+            return
+        shownPage = key
+        pageStack = pageStack.concat([key])
+        focusCurrent()
+    }
+
+    function closePage() {
+        if (!pageOpen)
+            return
+        pageStack = pageStack.slice(0, -1)
+        shownPage = currentPage !== "" ? currentPage : shownPage
+        focusCurrent()
+    }
+
+    // Gives focus to whatever is on top: the open page, else the home tiles.
+    function focusCurrent() {
+        if (!signedIn)
+            return
+        if (pageOpen && pageLoader.item)
+            (pageLoader.item as Item).forceActiveFocus()
+        else
+            tiles.forceActiveFocus()
+    }
+
+    // The single place that decides where focus goes after a state change.
     function routeFocus() {
         systemPanel.open = false
         if (signedIn) {
-            tiles.forceActiveFocus()
+            focusCurrent()
         } else {
             picker.reset()
         }
     }
 
-    onSignedInChanged: routeFocus()
+    onSignedInChanged: {
+        if (!signedIn)
+            pageStack = []       // the next sign-in starts at home
+        routeFocus()
+    }
     Component.onCompleted: routeFocus()
+
+    // The Guide button opens the overlay from home or from any page; pages and tiles leave
+    // it unhandled. (The overlay itself and the PIN pad are modal and accept every key.)
+    Keys.onPressed: event => {
+        if (signedIn && !systemPanel.open && (event.key === Qt.Key_HomePage || event.key === Qt.Key_Menu)) {
+            systemPanel.open = true
+            Sfx.select()
+            event.accepted = true
+        }
+    }
+
+    readonly property var pageComponents: ({
+        games: gamesPage,
+        media: mediaPage,
+        store: storePage,
+        settings: settingsPage,
+        power: powerPage
+    })
 
     Backdrop {
         id: backdrop
@@ -101,10 +158,15 @@ FocusScope {
         id: home
         objectName: "home"
         anchors.fill: parent
-        opacity: root.signedIn ? 1 : 0
-        visible: opacity > 0
-        enabled: root.signedIn
+        readonly property bool shown: root.signedIn && !root.pageOpen
+        opacity: shown ? 1 : 0
+        visible: shown || opacity > 0      // visible at once, so focus can be given in the same step
+        enabled: shown                     // disabled while a page is open: no focus, no keys
         Behavior on opacity { NumberAnimation { duration: Theme.pageMs; easing.type: Easing.OutCubic } }
+        transform: Translate {
+            x: home.shown ? 0 : -Theme.pageSlide * root.u
+            Behavior on x { NumberAnimation { duration: Theme.pageMs; easing.type: Easing.OutCubic } }
+        }
 
         // Frosted shelf: blurs only the backdrop region behind it (one shared source, no
         // second render of the scene).
@@ -166,11 +228,11 @@ FocusScope {
             clip: false
 
             model: ListModel {
-                ListElement { title: "Games"; accent: "#3a5bd9" }
-                ListElement { title: "Media"; accent: "#d9483a" }
-                ListElement { title: "Store"; accent: "#2fa37a" }
-                ListElement { title: "Settings"; accent: "#7a5bd9" }
-                ListElement { title: "Power"; accent: "#5a6478" }
+                ListElement { key: "games"; title: "Games"; accent: "#3a5bd9" }
+                ListElement { key: "media"; title: "Media"; accent: "#d9483a" }
+                ListElement { key: "store"; title: "Store"; accent: "#2fa37a" }
+                ListElement { key: "settings"; title: "Settings"; accent: "#7a5bd9" }
+                ListElement { key: "power"; title: "Power"; accent: "#5a6478" }
             }
 
             delegate: Tile {
@@ -180,18 +242,58 @@ FocusScope {
             }
 
             onCurrentIndexChanged: Sfx.navigate()
-            Keys.onReturnPressed: { root.currentTile.pulse(); Sfx.select() }
-            Keys.onEnterPressed: { root.currentTile.pulse(); Sfx.select() }
+            function accept() {
+                root.currentTile.pulse()
+                Sfx.select()
+                root.openPage(root.currentTile.key)
+            }
+            Keys.onReturnPressed: accept()
+            Keys.onEnterPressed: accept()
             Keys.onPressed: event => {
-                if (event.key === Qt.Key_HomePage || event.key === Qt.Key_Menu) {
-                    systemPanel.open = true
-                    Sfx.select()
-                    event.accepted = true
-                } else if (event.key === Qt.Key_Escape || event.key === Qt.Key_Back) {
+                if (event.key === Qt.Key_Escape || event.key === Qt.Key_Back) {
                     Sfx.back()
                     event.accepted = true
                 }
             }
+        }
+    }
+
+    Component { id: gamesPage; GamesPage {} }
+    Component { id: mediaPage; MediaPage {} }
+    Component { id: storePage; StorePage {} }
+    Component { id: settingsPage; SettingsPage {} }
+    Component { id: powerPage; PowerPage {} }
+
+    // Hosts the open page. Fades and slides in while the shelf slides out.
+    Item {
+        id: pageHost
+        objectName: "pageHost"
+        anchors.fill: parent
+        opacity: root.pageOpen ? 1 : 0
+        visible: root.pageOpen || opacity > 0
+        enabled: root.pageOpen
+        Behavior on opacity { NumberAnimation { duration: Theme.pageMs; easing.type: Easing.OutCubic } }
+        transform: Translate {
+            x: root.pageOpen ? 0 : Theme.pageSlide * root.u
+            Behavior on x { NumberAnimation { duration: Theme.pageMs; easing.type: Easing.OutCubic } }
+        }
+        onVisibleChanged: if (!visible) root.shownPage = ""
+
+        Loader {
+            id: pageLoader
+            anchors.fill: parent
+            sourceComponent: root.pageComponents[root.shownPage] ?? null
+            onLoaded: {
+                const page = item as Page
+                page.objectName = "page_" + root.shownPage
+                page.u = Qt.binding(() => root.u)
+                page.marginX = Qt.binding(() => root.marginX)
+                page.marginY = Qt.binding(() => root.marginY)
+            }
+        }
+        Connections {
+            target: pageLoader.item as Page
+            function onBackRequested() { root.closePage() }
         }
     }
 
@@ -211,8 +313,8 @@ FocusScope {
             if (open) {
                 actions.currentIndex = 0
                 actions.forceActiveFocus()
-            } else if (root.signedIn) {
-                tiles.forceActiveFocus()
+            } else {
+                root.focusCurrent()      // the page if one is open, else the tiles
             }
         }
 
