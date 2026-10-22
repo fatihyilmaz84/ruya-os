@@ -31,7 +31,14 @@ Verification legend: **host** = built and tested on the Windows host · **unveri
 | [T-112](tasks/T-112-library-service-core.md) | ruya-library discovery core (Rust) | todo | — | |
 | [T-113](tasks/T-113-games-page.md) | Games page and recent row | todo | T-101, T-112 | |
 
-The order above is the recommended order. When the NEXT task is blocked, take the first `todo` row whose dependencies are all `done`.
+The order above is the recommended order. When the NEXT task is blocked, take the first `todo` row whose dependencies are all `done`. If no row qualifies, **stop and ask for a planning session** (`docs/tasks/PLANNING.md`); never invent work.
+
+## Inbox
+
+Follow-ups, debt and ideas waiting for a planner session. Builders: add one line per item, `- (source) what, and why it matters`. Don't write task files for these unless your own task needs one. A planner session turns them into tasks, drops them with a reason, or escalates them. **Run a planner when this list has 5+ items.**
+
+- (T-102) The PIN-pad shake and tile pulse use literal durations and ignore reduced motion. Move them to Theme tokens that honour `DeviceSettings.reducedMotion`.
+- (T-102) Once, after adding a new C++ `QML_ELEMENT` type, the tests failed with "DeviceSettings is not defined" and passed on the next build (stale incremental registration). Investigate the CMake dependency between `tst_ruyashell` and the module's type registration; at least document the workaround.
 
 ### Done
 

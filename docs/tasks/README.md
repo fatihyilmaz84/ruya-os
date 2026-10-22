@@ -19,7 +19,13 @@ Each work item is one file, `T-<nnn>-<slug>.md`, and holds everything an impleme
 | `T-2xx` | Phase 3+ work that can be built and tested on the Windows host |
 | `B-xxx` | Blocked on a Linux machine, CI or hardware. Kept in STATUS with what they need. |
 
-## Writing a new task (when you discover work outside your current scope)
+## Who creates tasks
+
+- **Planner sessions** create almost all tasks. They turn the Inbox (in `docs/STATUS.md`) and spec gaps into task files, and keep the queue full. The procedure is in [`PLANNING.md`](PLANNING.md).
+- **Builder sessions** add one-line Inbox items for anything they discover. They write a task file only when their current task can't be finished without it, using the steps below.
+- **The owner** adds Inbox items or asks a planner for features at any time.
+
+## Writing a new task
 
 1. Copy `TEMPLATE.md` to the next free number.
 2. Fill in every section. Acceptance criteria must be **observable** (a test assertion or a screenshot check), not vague ("works well").

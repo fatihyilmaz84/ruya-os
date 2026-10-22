@@ -15,10 +15,15 @@ RuyaOS is an open-source, immutable (Fedora bootc) console OS for living-room PC
 
 ## Session workflow (do every step, in order)
 
+0. **Planning session?** If you were asked to run a planning session, follow `docs/tasks/PLANNING.md` instead of the steps below. Planner sessions create tasks; builder sessions (everything else) don't.
 1. **Orient.** Read `docs/STATUS.md`. Take the task marked **NEXT**, or else the first `todo` whose dependencies are all `done`. **One task per session**, unless the task file says it is small enough to pair.
+   - **Nothing qualifies?** Stop. Tell the user the backlog needs a planning session (`docs/tasks/PLANNING.md`). Don't invent work.
+   - **The Inbox has 5 or more items?** Still do your task, but end your reply by recommending a planning session.
 2. **Read before coding.** Read the whole task file, every spec section it links, and the `CLAUDE.md` of each area you will touch. Read the existing code you will change.
 3. **Claim it.** In `docs/STATUS.md`, set the task to `in-progress`.
-4. **Build within scope.** Implement exactly the task's requirements. Anything outside "Scope" becomes a note in the task's Outcome section or a new task (see `docs/tasks/README.md`), never a silent extra.
+4. **Build within scope.** Implement exactly the task's requirements. Anything outside "Scope" is never a silent extra:
+   - **Every follow-up you mention** (in the Outcome or the log): debt you noticed, a flaky build, a missing feature, a spec gap. Add it as one line to the **Inbox** in `docs/STATUS.md`. A follow-up that exists only in prose is lost.
+   - Write a full task file yourself only when your current task can't be finished without it (see `docs/tasks/README.md`).
    - If the work crosses the shell/service boundary, **write or extend the D-Bus XML contract first**. The mock backend, the D-Bus backend and the Rust service all follow it.
 5. **Verify.** Run `.\scripts\dev.ps1 test`; it must end with `ALL GREEN`. For any UI change, also run `.\scripts\dev.ps1 shots`, open the PNGs in `output\shell-shots\` with the Read tool, and check them against the task's acceptance criteria (layout, overlap, focus ring visible, text readable). Fix what you see.
 6. **Document.**
@@ -78,4 +83,5 @@ Areas: `shell`, `services`, `image`, `api`, `docs`, `scripts`, `ci`. Add the att
 - **Rendering.** `QT_QPA_PLATFORM=offscreen` switches to the software renderer, where `MultiEffect` draws nothing. Visual checks need real windows, and `dev.ps1 shots` uses real windows.
 - **qmllint** only means anything with the module response file and `--max-warnings 0`. `dev.ps1` already does that.
 - **Line endings.** Files that end up in the Linux image must stay LF (enforced by `.gitattributes`). Shell scripts need the exec bit in git: `git update-index --chmod=+x <file>`.
+- **New C++ QML type "is not defined" in tests** right after you add it: run `dev.ps1 shell` once more (stale incremental type registration has been seen once). If it persists, delete `shell\build-win` and rebuild. Never "fix" it by changing tests.
 - **Mock services.** Off Linux, the shell uses mock services. The mock profiles are Player One (admin, PIN 1234), Ada (no PIN) and Guest.
