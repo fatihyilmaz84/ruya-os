@@ -2,7 +2,7 @@
 
 **Read this first in every session; update it last.** The rules are in the root `CLAUDE.md`, the task format in `docs/tasks/README.md`.
 
-Last updated: 2026-10-22 (Sonnet 5.5)
+Last updated: 2026-10-22 (Sonnet 5.5, planning)
 
 ## Where we are
 
@@ -14,16 +14,21 @@ Verification legend: **host** = built and tested on the Windows host · **unveri
 
 ## Board
 
-**NEXT → T-106**
+**NEXT → T-115**
 
 | ID | Title | Status | Depends | Verified |
 |---|---|---|---|---|
-| [T-106](tasks/T-106-first-boot-setup.md) | First-boot setup (OOBE) | todo | T-102, T-104, T-105 | |
+| [T-115](tasks/T-115-profiles-attempts-in-replies.md) | Profiles1: attempts left / retry time in CreateProfile and SetPin replies (removes the SwitchTo probe) | todo | — | |
+| [T-116](tasks/T-116-first-build-registration-flake.md) | Fix "type X is not defined" on the first build after adding a C++ QML type | todo | — | |
+| [T-106](tasks/T-106-first-boot-setup.md) | First-boot setup (OOBE) | todo | T-102, T-104, T-105 (after T-115) | |
+| [T-117](tasks/T-117-motion-and-colour-tokens.md) | Reduced motion for the shake/pulse; literal durations and colours into Theme tokens; token lint | todo | — | |
 | [T-107](tasks/T-107-power-actions.md) | Power actions (suspend/restart/off) | todo | T-101 | |
-| [T-109](tasks/T-109-translations.md) | Translations en/tr, live switching | todo | T-103 | |
 | [T-114](tasks/T-114-audio-contract-and-settings.md) | Audio contract and Settings → Audio | todo | T-103, T-108 | |
+| [T-109](tasks/T-109-translations.md) | Translations en/tr, live switching, Turkish keyboard layout | todo | T-103, T-106 | |
+| [T-118](tasks/T-118-profile-rename-delete.md) | Profiles1: RenameProfile and DeleteProfile (contract, service, mock; no UI) | todo | T-115 | |
+| [T-119](tasks/T-119-nested-pages.md) | Page host: nested pages that keep their state | todo | T-101 | |
 | [T-110](tasks/T-110-store-contract-and-mock.md) | Store contract and mock backend | todo | — | |
-| [T-111](tasks/T-111-store-ui.md) | Store UI | todo | T-101, T-110 | |
+| [T-111](tasks/T-111-store-ui.md) | Store UI | todo | T-110, T-119 | |
 | [T-112](tasks/T-112-library-service-core.md) | ruya-library discovery core (Rust) | todo | — | |
 | [T-113](tasks/T-113-games-page.md) | Games page and recent row | todo | T-101, T-112 | |
 
@@ -33,16 +38,8 @@ The order above is the recommended order. When the NEXT task is blocked, take th
 
 Follow-ups, debt and ideas waiting for a planner session. Builders: add one line per item, `- (source) what, and why it matters`. Don't write task files for these unless your own task needs one. A planner session turns them into tasks, drops them with a reason, or escalates them. **Run a planner when this list has 5+ items.**
 
-- (T-102) The PIN-pad shake and tile pulse use literal durations and ignore reduced motion. Move them to Theme tokens that honour `DeviceSettings.reducedMotion`.
-- (T-102) Once, after adding a new C++ `QML_ELEMENT` type, the tests failed with "DeviceSettings is not defined" and passed on the next build (stale incremental registration). Investigate the CMake dependency between `tst_ruyashell` and the module's type registration; at least document the workaround. Happened again in T-108 (`Audio`); the workaround (build twice) is now in `shell/CLAUDE.md`.
-- (T-108) Tests that wait a second or more can fail on `activeFocus` when another window takes OS focus from the test window (confirmed: `Window.active` false, item `focus` still true). `tst_system_ui.qml` now falls back to `focus` in that case for its two late checks (`hasFocus`). Other test files have only short waits; if one flakes the same way, reuse that helper, and run `dev.ps1 test` without touching other windows. *Update (review): `dev.ps1 test` now runs offscreen, which removes this class of flake from the gate; the helper only matters for `shots`. A planner may simplify it.*
-- (T-108) The volume-key `Shortcut`s are verified only in a QtQuickTest window on Windows; check them under the real compositor (B-003) with an app focused.
-- (review of T-105) **Priority.** `DBusProfilesBackend::probeAttempts` calls `SwitchTo(id, "")` after a failed `CreateProfile`/`SetPin`, only to learn the attempts left and the retry time. It's safe today (only reached for profiles that have a PIN), but it's a workaround for a contract gap. Extend `CreateProfile` and `SetPin` replies with `attempts_left`/`retry_after_secs` (XML, `ruya-profiles` + tests, mock, D-Bus client) and delete the probe. Contracts are drafts until release (`CLAUDE.md`).
-- (T-105) No way to delete or rename a profile, or to create another admin, from the UI: the contract has no such methods. Needs a contract change (planner).
-- (T-105) Toasts (top right) can cover the right-hand values of Settings rows for 4 s; consider moving toasts or shifting rows if it proves annoying on a real TV.
-- (T-104) `TextEntry` has no mouse/touch support and no non-Latin layouts (out of scope for T-104); revisit with i18n (T-109) and if pointer input becomes a requirement.
-- (T-103) Key repeat acceleration and long-press (spec 4.3) are not implemented; holding Left/Right on a SliderRow steps at the OS repeat rate.
-- (T-108) Stepping volume while muted does not unmute; decide the UX when T-114 builds the audio settings.
+
+_(empty: handled in the 2026-10-22 planning session; see its log entry)_
 
 ### Done
 
@@ -70,10 +67,10 @@ A session can't know its own commit hash before committing, so new rows put the 
 |---|---|---|---|
 | B-001 | Build the image, boot it in QEMU, run the update/rollback drill (01-platform §8 items 1–7) | Linux builder (WSL2 + Podman, a Linux VM, or CI with a GitHub remote) | `scripts/*.sh`, `docs/dev-setup.md`. Highest-value unblock. |
 | B-002 | Install on a real low-tier machine; first frame-time numbers (§8 item 8) | Hardware + B-001 | |
-| B-003 | Compositor spike: shell as QtWaylandCompositor, overlay over a running game (ADR-002) | Linux with a GPU | Decides the product architecture; do it as soon as Linux is available |
+| B-003 | Compositor spike: shell as QtWaylandCompositor, overlay over a running game (ADR-002) | Linux with a GPU | Decides the product architecture; do it as soon as Linux is available. Also check there: the volume-key `Shortcut`s (T-108) work with an app focused. |
 | B-004 | `ruya-store` Rust service over libflatpak/AppStream | Linux | Contract from T-110 |
 | B-005 | Shell ↔ services over a real D-Bus (Profiles first) | Linux | Recipe in `docs/dev-setup.md` ("Against the real profiles service") |
-| B-006 | Replace the `ruya-inputd` stopgap with InputPlumber (ADR-003), with grab/re-emit | Linux + controllers | |
+| B-006 | Replace the `ruya-inputd` stopgap with InputPlumber (ADR-003), with grab/re-emit | Linux + controllers | Also owns the key-repeat model (400 ms delay then accelerating repeat, stick repeat speed) and Accept long-press / context menu from spec 02 §4.3; the shell only sees key events. |
 | B-007 | `ruya-devices` service (PipeWire, NetworkManager, BlueZ) | Linux | Audio contract from T-114 |
 | B-008 | Verify greenboot auto-rollback on bootc and the NVIDIA kmod build step | B-001 | Known risk: greenboot vs greenboot-rs packaging on the target Fedora |
 
@@ -81,11 +78,37 @@ A session can't know its own commit hash before committing, so new rows put the 
 
 - **ADR-002** (compositor): recommendation A, pending spike B-003.
 - **libdvdcss / AACS** (DVD/Blu-ray decryption): not included; needs an explicit owner decision.
+- **One admin or several?** `00-overview` §2 (MVP) says "one admin", `03` §1.1 says "Admin (one or more)". The service supports several; the UI offers only Standard and Guest when adding a profile (T-105). Options: (a) keep one admin in the UI for the MVP, as the overview says; (b) let an admin create more admins and fix the overview. Recommendation: (a), and revisit after the first user test. Not blocking: T-118 does not depend on it.
 - **Publishing:** no git remote yet. Pushing or creating a GitHub repo is the owner's call (it would unblock CI → B-001).
 
 ## Session log (newest first)
 
 Each entry: date · model · tasks · what happened · verification · follow-ups. Keep entries short and factual.
+
+### 2026-10-22 · Sonnet 5.5 · Planning
+Planner session (`docs/tasks/PLANNING.md`). Inbox had 10 items; now empty. No product code written.
+
+New tasks: T-115 (contract: attempts in replies; the reviewer's priority item), T-116 (first-build registration failure), T-117 (reduced motion for feedback animations plus a token lint), T-118 (profile rename/delete: contract, service, mock), T-119 (nested pages in the page host; shared infrastructure split out of T-111 per the planning lessons).
+
+Inbox items handled:
+- PIN shake / tile pulse ignoring reduced motion → T-117.
+- First-build "type not defined" (T-102, T-108) → T-116 (and the pitfall note in `shell/CLAUDE.md` stays until it lands).
+- Late `activeFocus` checks flaking when the window is inactive → **dropped**: `dev.ps1 test` is offscreen now, so the class of failure is gone from the gate; the `hasFocus` helper in `tst_system_ui.qml` is harmless and may be deleted whenever that file is edited.
+- Volume `Shortcut`s unverified under a compositor → noted on blocker B-003.
+- Priority: replace the `SwitchTo` probe by a contract extension → T-115, ordered first because T-106 reuses the same error handling.
+- No delete/rename/second admin in the UI → T-118 covers rename and delete (contract, service, mock); the UI for them is left for the next planning session, once T-118 lands. A second admin is **escalated** (Open owner decisions: the overview says one admin, 03 §1.1 says one or more).
+- Toasts covering Settings row values → **dropped**: they last 4 s and sit in the safe area; revisit only after seeing them on a real TV.
+- `TextEntry` mouse/touch → **dropped** (pointer input is a "Later" item; spec 02 §4.3 pointer rules are unimplemented by design). Non-Latin layouts → merged into T-109 (Turkish letters, which also needs the keyboard layout to follow the language).
+- Key-repeat acceleration and long-press → noted on blocker B-006 (it belongs to the input daemon replacement).
+- Stepping volume while muted → merged into T-114.
+
+Existing tasks corrected against what was built: T-106 (mock reset API exists, `DeviceSettings.language` added there, uses `collect-confirm` and `TextEntry`), T-107 (modal and Guide-press timing notes), T-109 (depends on T-106, audit list, Turkish keyboard layout, System pane, ephemeral default language `en` for tests), T-111 (depends on T-119; TextEntry exists; stale page-host hint replaced), T-113 (mock reset), T-114 (mute semantics, Audio pane).
+
+Queue: 13 `todo` tasks, 9 of them with all dependencies done today (T-115, T-116, T-106, T-117, T-107, T-114, T-119, T-110, T-112), the rest one step behind. That is above the 8–12 target on purpose: four are S-sized and two are chain links.
+
+Candidates for the next planning session (not written yet, because each needs a pattern first): Settings → Network and Bluetooth & controllers (contract `Devices1` network/bluetooth parts after T-114 sets the pattern), Storage settings and the device-inserted toast, the profile rename/delete UI after T-118, the controller button-test screen, focus restore per profile (spec 02 §4.3), Accessibility settings (text scale, high contrast, focus-ring size), pointer visibility, FPS/KPI capture scripts.
+
+Verification: docs only; `dev.ps1 test` run before the commit.
 
 ### 2026-10-22 · Sonnet 5.5 · T-105
 Manage profiles from Settings:

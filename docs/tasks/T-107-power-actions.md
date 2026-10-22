@@ -7,7 +7,8 @@ The Power page and the Guide overlay offer Suspend, Restart and Power off with a
 
 ## Read first
 - `docs/specs/01-platform.md` §2.2 (suspend/power)
-- `shell/src/profiles/` (backend pattern), `shell/CLAUDE.md`
+- `shell/src/profiles/` (backend pattern), `shell/CLAUDE.md` ("Modals from pages": the confirmation is a page-owned modal parented to `page.overlay`)
+- `shell/qml/Shell.qml`: the Guide key is handled on the root and opens the overlay on **press**; a long-press needs the decision to wait for the release
 - logind D-Bus API: `org.freedesktop.login1.Manager` methods `Suspend(b interactive)`, `Reboot(b)` and `PowerOff(b)` on `/org/freedesktop/login1` (system bus). There's no RuyaOS contract file for this; it's an upstream API.
 
 ## Scope
@@ -42,6 +43,7 @@ The Power page and the Guide overlay offer Suspend, Restart and Power off with a
 
 ## Hints
 - Holding a key on a real controller produces autorepeat key events (`event.isAutoRepeat`). Ignore those when timing the long press.
+- Today a Guide press opens the overlay immediately and `tst_shell.qml`/`tst_pages.qml` rely on that. Keep a short press feeling instant: open the overlay on press, and if the key is still held after 2 s, switch the overlay to the power choices (do not wait for release).
 
 ## Outcome
 _Filled in by the implementer._

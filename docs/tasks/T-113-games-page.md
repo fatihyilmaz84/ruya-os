@@ -29,7 +29,7 @@ The Games tile opens a grid of installed games, and home gains a "Recently playe
 - [ ] Accept on a game emits `launchRequested` with that id (test `test_launch_request`).
 - [ ] The home recent row is sorted by `last_played` and limited to 8 (test `test_recent_row`).
 - [ ] Up/Down moves between the recent row and the section tiles; Back from a page restores focus to the row and item it came from (test `test_home_two_rows_focus`).
-- [ ] An empty library shows the empty state, and its button opens the Store (test `test_empty_state`; use a test-only mock reset).
+- [ ] An empty library shows the empty state, and its button opens the Store (test `test_empty_state`; give `Library` a test-only `resetMockForTests("empty")` like `Profiles` has).
 - [ ] Screenshots `20-home-recent.png` and `21-games-grid.png`.
 
 ## Verification

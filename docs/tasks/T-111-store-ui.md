@@ -1,6 +1,6 @@
 # T-111 — Store UI: browse, detail page, install with progress
 
-Status: todo · Phase: 3 · Depends: T-101, T-110 (T-104 optional, for search) · Area: shell · Size: M
+Status: todo · Phase: 3 · Depends: T-110, T-119 (nested pages), T-104 (done) · Area: shell · Size: M
 
 ## Goal
 From the Store tile, the user browses apps, opens a detail page that explains the source and permissions plainly, and installs or uninstalls with visible progress, entirely by controller.
@@ -15,8 +15,8 @@ From the Store tile, the user browses apps, opens a detail page that explains th
    - rows "Featured" (official apps), "Games", "Apps & media", and "Installed";
    - Up/Down between rows, Left/Right within a row.
 2. Controller filter: apps with controller support `none` are hidden by default. A "Show all apps" toggle at the top (or in a row header) reveals them.
-3. Search: if T-104 is `done`, a Search row opens `TextEntry`, and the results replace the rows until Back. Otherwise show the row disabled and add a follow-up task.
-4. `AppDetailPage.qml`, opened with Accept on any app (nested page, using T-101's push/pop):
+3. Search: a Search row opens `TextEntry` (T-104, done; parent it to `page.overlay`), and the results replace the rows until Back.
+4. `AppDetailPage.qml`, opened with Accept on any app (`Shell.openPage("appDetail", {appId})`, using T-119's nested pages; register it in `pageComponents`):
    - hero area (generated art), name, developer;
    - **source badge**: Official / Community / Developer, with distinct colours (new Theme tokens);
    - controller support line and age rating;
@@ -27,7 +27,7 @@ From the Store tile, the user browses apps, opens a detail page that explains th
 
 ## Out of scope
 - Launching apps (needs the session service).
-- Admin PIN gating of high-risk installs (create a follow-up task referencing T-105).
+- Admin PIN gating of high-risk installs (add an Inbox line; the `PinPad` `collect` mode and `Profiles` admin flow from T-105 are the building blocks).
 
 ## Acceptance criteria
 - [ ] Rows render from the mock catalogue; the controller-filter toggle changes the visible count (test `tst_store_ui.qml::test_controller_filter`).
@@ -48,7 +48,9 @@ From the Store tile, the user browses apps, opens a detail page that explains th
 - `docs/specs/02-shell.md` §1 Store row; `docs/specs/03-services-and-apps.md` §4.4: what the UI shows.
 
 ## Hints
-- **The T-101 page host shows only the top page.** `Shell.qml` has one `Loader` driven by `shownPage`, so pushing `AppDetailPage` destroys `StorePage`, and popping recreates it from scratch: focused row and tile index are lost. To meet "Back restores focus to the same tile", first extend the host so lower pages stay alive while hidden, for example by instantiating one item per `pageStack` entry and disabling all but the top one. Keep `focusCurrent()` as the single focus authority, and add a test to `tst_pages.qml` that pushes two pages and pops back. Saving and restoring an index by hand is the weaker fallback; if you use it, explain why in the Outcome.
+- Nested pages, `params` and state keeping come from T-119; do not re-solve them here. Back from the detail page must return to the Store page with the same row and item focused (`test_detail_back_restores_focus` relies on it).
+- Reuse the Settings controls (`ToggleRow` for "Also delete my data") and the generated-art idea from `ProfileCard`.
+- Use `Notifications.show` for "Installed" / "Update available"-style messages if useful, never for errors the user must act on (show those inline).
 
 ## Outcome
 _Filled in by the implementer._
