@@ -33,7 +33,7 @@ Builds take 3–30 minutes (the NVIDIA step is cached unless `image/build/` or e
 - Fast checks before a full build:
   - `bash -n` on scripts;
   - `podman run --rm localhost/ruyaos:dev systemd-analyze verify <unit>` against the last built image, for units.
-  The full build plus smoke test above is the real check. CI (`.github/workflows/ci.yml`) repeats it once the repo has a remote.
+  The full build plus smoke test above is the real check. CI (`.github/workflows/ci.yml`) repeats it on GitHub (the repo has a remote since 2026-10-23; the workflow is stale, see the STATUS Inbox).
 - **Known VM quirks**, so you don't chase them:
   - WHPX hangs on guest reset, so QEMU runs with `-no-reboot` and `vm-reboot-check.ps1` cold-starts it;
   - use `127.0.0.1`, not `localhost`, for SSH;

@@ -39,7 +39,7 @@ Follow-ups, debt and ideas waiting for a planner session. Builders: add one line
 - (B-001) A failed boot takes about 100 s (90 s greenboot check + 120 s VM marker), so automatic rollback takes about 7 minutes. Consider a shorter required-check timeout once real-hardware boot times are known (spec 02 §8 KPI: shell < 15 s on the low tier).
 - (B-001) The image is 4.7 GB. A switch reuses layers (0.0.3→broken needed 931 bytes; 0.0.3→0.0.4 about 2 minutes because the NVIDIA layer was rebuilt). Measure real update sizes and plan chunked images (spec 01 §4) before release.
 - (B-001) The VM has no audio device, so UI sound (PipeWire, QSoundEffect formats) is unverified on Linux. Add an `-audiodev` to a VM profile, or test on hardware.
-- (B-001) CI (`.github/workflows/ci.yml`) predates today's fixes: it never ran, still uses `scripts/smoke-test.sh` (Linux/KVM), and doesn't run the update/greenboot drill. Review it when the repo gets a remote.
+- (B-001) CI (`.github/workflows/ci.yml`) predates today's fixes: it never ran, still uses `scripts/smoke-test.sh` (Linux/KVM), and doesn't run the update/greenboot drill. The repo now has a remote (2026-10-23), so the workflow runs on every push to `main`; its first results were not looked at. Review it.
 
 
 _(empty: handled in the 2026-10-22 planning session; see its log entry)_
@@ -85,7 +85,7 @@ A session can't know its own commit hash before committing, so new rows put the 
 - **ADR-002** (compositor): recommendation A, pending spike B-003.
 - **libdvdcss / AACS** (DVD/Blu-ray decryption): not included; needs an explicit owner decision.
 - **One admin or several?** `00-overview` §2 (MVP) says "one admin", `03` §1.1 says "Admin (one or more)". The service supports several; the UI offers only Standard and Guest when adding a profile (T-105). Options: (a) keep one admin in the UI for the MVP, as the overview says; (b) let an admin create more admins and fix the overview. Recommendation: (a), and revisit after the first user test. Not blocking: T-118 does not depend on it.
-- **Publishing:** no git remote yet. Pushing or creating a GitHub repo is the owner's call (it would unblock CI → B-001).
+- **Publishing:** decided. The owner pushed `main` to https://github.com/fatihyilmaz84/ruya-os.git on 2026-10-23 (history scanned for secrets first; the dev SSH key in `image/bib/config.toml` is git-ignored). Whether the repo is public and which licence file it carries (ADR-008) were not checked in that session. Later pushes still need the owner's go-ahead.
 
 ## Session log (newest first)
 

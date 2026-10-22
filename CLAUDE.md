@@ -35,7 +35,7 @@ RuyaOS is an open-source, immutable (Fedora bootc) console OS for living-room PC
    - Update every spec section whose described behaviour changed. Specs must describe what the code does.
    - Update `docs/dev-setup.md` if the workflow or commands changed.
    - In `docs/STATUS.md`: set the task to `done` (or `blocked`, with the reason), move **NEXT** to the next task, and add a session-log entry at the top.
-7. **Commit.** One commit per task (a small series is fine). Use the format below. **Never push**; there is no remote, and publishing is the owner's decision.
+7. **Commit.** One commit per task (a small series is fine). Use the format below. **Never push on your own**: the remote is `origin` (https://github.com/fatihyilmaz84/ruya-os.git, created 2026-10-23), and publishing is the owner's decision. Push only when the owner asks, and before any push scan tracked files and history for secrets (`image/bib/config.toml` holds the dev SSH key and must stay git-ignored).
 
 ## Definition of done (all must hold)
 
