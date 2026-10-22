@@ -66,6 +66,7 @@ In the VM, the shell's own log is `journalctl -b _UID=$(id -u ruya-shell)`. pam_
 | `.\scripts\dev.ps1 shots` | Qt Quick tests plus screenshots into `output\shell-shots\` |
 | `.\scripts\dev.ps1 run` | The shell in a window with mock services |
 | `.\scripts\dev.ps1 rust` / `shell` | Half of `test` |
+| `.\scripts\repro-first-build.ps1 [-Name X]` | Adds a scratch C++ QML type, runs `dev.ps1 shell` once, removes the type, rebuilds. Exit 0 means adding and removing a type works on the first run (T-116). Takes about 3 minutes; run it only if "X is not defined" ever comes back. |
 
 The raw commands follow, for reference.
 
@@ -80,6 +81,8 @@ $env:PATH = "D:\dev\Qt\6.10.3\msvc2022_64\bin;$env:PATH"; shell\build-win\Releas
 ```
 
 Without `--windowed` the shell takes the whole screen; quit with Alt+F4.
+
+**Adding C++ QML types.** The Visual Studio generator puts "collect metatypes JSON" and "run `qmltyperegistrar`" in one MSBuild batch, and MSBuild decides what is stale before the batch runs. Without help, the first incremental build after adding, editing or removing a `QML_ELEMENT` header would reuse the old registration ("X is not defined", qmllint "Member not found", or a compile error for a removed type). `shell/CMakeLists.txt` therefore adds a target, `ruyashell_invalidate_stale_qmltypes` (script: `shell/cmake/InvalidateStaleQmlTypes.cmake`), that deletes the registrar outputs when `CMakeLists.txt` or a module header is newer than them. It is only added for Visual Studio generators. It costs well under a second per build.
 
 **Mock services.** Off Linux, the shell uses in-memory stand-ins for the system services automatically. On Linux, pass `--mock-services`, or set `RUYA_SERVICES=mock`. The mock profiles are:
 - Player One (admin, PIN `1234`)

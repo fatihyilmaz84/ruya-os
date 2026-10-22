@@ -68,6 +68,28 @@ qt_add_qml_module(ruyashell
 target_include_directories(ruyashell PUBLIC src/profiles src/settings src/audio src/system)
 target_link_libraries(ruyashell PRIVATE Qt6::Quick Qt6::Multimedia Qt6::DBus)
 
+# Visual Studio generators skip qmltyperegistrar on the first build after a header changed, so a
+# new QML_ELEMENT type is "not defined" until the second build, and a removed one breaks the
+# compile (T-116). Other generators order these steps correctly.
+# See cmake/InvalidateStaleQmlTypes.cmake.
+if(CMAKE_GENERATOR MATCHES "Visual Studio")
+    get_target_property(ruya_module_sources ruyashell SOURCES)
+    set(ruya_registrar_inputs "${CMAKE_CURRENT_LIST_FILE}")   # a type added/removed/renamed
+    foreach(source IN LISTS ruya_module_sources)              # a type's header edited
+        if(source MATCHES "\\.h$" AND NOT IS_ABSOLUTE "${source}")   # skip generated headers
+            list(APPEND ruya_registrar_inputs "${CMAKE_CURRENT_SOURCE_DIR}/${source}")
+        endif()
+    endforeach()
+    list(JOIN ruya_registrar_inputs "|" ruya_registrar_inputs)
+    set(ruya_registrar_outputs
+        "${CMAKE_CURRENT_BINARY_DIR}/ruyashell_qmltyperegistrations.cpp|${CMAKE_CURRENT_BINARY_DIR}/RuyaShell/ruyashell.qmltypes")
+    add_custom_target(ruyashell_invalidate_stale_qmltypes
+        COMMAND ${CMAKE_COMMAND} "-DINPUTS=${ruya_registrar_inputs}" "-DOUTPUTS=${ruya_registrar_outputs}"
+                -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/InvalidateStaleQmlTypes.cmake"
+        VERBATIM)
+    add_dependencies(ruyashell ruyashell_invalidate_stale_qmltypes)
+endif()
+
 qt_add_executable(ruya-shell src/main.cpp)
 target_link_libraries(ruya-shell PRIVATE Qt6::Gui Qt6::Quick ruyashellplugin)
 

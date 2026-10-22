@@ -14,7 +14,7 @@ Read `docs/specs/02-shell.md` for the UX spec. This file covers how the code is 
   - `Xxx`: a `QML_ELEMENT QML_SINGLETON` facade. `create()` picks the backend from `RUYA_SERVICES` (`mock`/`dbus`; the default is D-Bus on Linux, the mock elsewhere). Expose `bool mock`.
   - Follow `src/profiles/` exactly as the reference implementation.
 - `tests/`: Qt Quick Test. `tst_main.cpp` forces `RUYA_SERVICES=mock`; each `tst_*.qml` gets a fresh engine (and so fresh singletons).
-- Everything except `main.cpp` is the static QML module `RuyaShell` (`ruyashell` target). **Add every new `.qml`, `.h` and `.cpp` to `CMakeLists.txt`.** Singletons need `QT_QML_SINGLETON_TYPE` set in CMake **and** `pragma Singleton` in the file.
+- Everything except `main.cpp` is the static QML module `RuyaShell` (`ruyashell` target). **Add every new `.qml`, `.h` and `.cpp` to `CMakeLists.txt`.** Singletons need `QT_QML_SINGLETON_TYPE` set in CMake **and** `pragma Singleton` in the file. Adding, editing or removing a `QML_ELEMENT` type is safe on the first `dev.ps1` run: a build step (`cmake/InvalidateStaleQmlTypes.cmake`) works around the Visual Studio generator skipping `qmltyperegistrar` (T-116). If you ever see "X is not defined" again, that step is the first suspect, not the tests.
 
 ## QML rules
 
@@ -86,7 +86,3 @@ Use `TextEntry` (`qml/TextEntry.qml`, spec 02-shell §4.4) for any text input; n
 
 - C++17 (MSVC). Qt APIs up to 6.8. Use `QStringLiteral` for literals. Use `qWarning("ruya-shell: …")` for failures.
 - QtDBus code compiles on Windows but can only run on Linux. Keep it a thin translation of the XML contract, and mark it unverified in STATUS.
-
-## Build pitfall
-
-- After adding a new C++ `QML_ELEMENT` type (new `.h`/`.cpp` in `SOURCES`), the first `dev.ps1 shell`/`test` run can fail with "X is not defined" (ReferenceError in the tests, qmllint failing). Run it again: the second build is clean. This happened for `DeviceSettings` (T-102) and `Audio` (T-108); the cause is not understood.

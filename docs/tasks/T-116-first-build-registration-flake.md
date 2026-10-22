@@ -1,6 +1,6 @@
 # T-116 — Fix the "type X is not defined" failure on the first build after adding a C++ QML type
 
-Status: todo · Phase: 1 · Depends: — · Area: shell (build) · Size: M
+Status: done · Phase: 1 · Depends: — · Area: shell (build) · Size: M
 
 ## Goal
 After a builder adds a new `QML_ELEMENT` C++ class (new `.h`/`.cpp` in the CMake `SOURCES`), the **first** `.\scripts\dev.ps1 test` run is green. Today it fails ("`DeviceSettings` / `Audio` / `SystemInfo` is not defined", qmllint "Member not found") and passes on the second run. It has cost a rerun in T-102, T-103, T-105 and T-108, and each time the cause was a guess.
@@ -45,4 +45,38 @@ plus the repeated probe procedure above.
 - `dev.ps1 test` now runs the tests offscreen; the failure has nothing to do with the desktop.
 
 ## Outcome
-_Filled in by the implementer: what was built, files, how it was verified, deviations, follow-ups._
+**Result:** fixed with a small build step; verified on this host. Adding or removing a `QML_ELEMENT` type is green on the first `dev.ps1` run.
+
+### Reproduction
+`scripts\repro-first-build.ps1 -Name Probe` (new). It adds `src/probe/Probe.h/.cpp` (a singleton with one property), lists it in `SOURCES`, uses it from a module QML file (`ProbeUser.qml`, so qmllint sees it) and from a test, runs `dev.ps1 shell` once, then reverts and rebuilds.
+
+Before the fix, the first run failed every time (82 s): `qmllint: Unqualified access ... Probe.answer` and `FAIL! Probe::test_answer() Uncaught exception: Probe is not defined`. A second run was green. Removing a type had the mirror failure: `ruyashell_qmltyperegistrations.cpp: error C2065: 'Delta': undeclared identifier`, also gone on the next run.
+
+### Root cause
+Evidence from an MSBuild `-v:detailed` log and file timestamps:
+- After the failing run, `ruyashell_qmltyperegistrations.cpp` and `RuyaShell/ruyashell.qmltypes` were **older** than `meta_types/qt6ruyashell_metatypes.json` (23:39 against 23:45), and the registration `.obj` was recompiled from the stale `.cpp`.
+- In `ruyashell.vcxproj`, the rule that produces `qt6ruyashell_metatypes.json` (`moc --collect-json`) and the `qmltyperegistrar` rule are two `CustomBuild` items of the **same project**. The registrar rule lists the JSON as an `AdditionalInput`.
+- MSBuild's `GetOutOfDateItems` decides which rules to run once, **before** the `CustomBuild` task starts. The log shows only the JSON rule as "will be compiled" (`...RUYASHELL_JSON_FILE_LIST.TXT was modified`) and no line at all for the registrar rule. The JSON is refreshed later inside that same batch, so the registrar sees an up-to-date, stale-input state. The next build compares against the new JSON and regenerates.
+- A fresh build is unaffected, because missing outputs are always out of date. Only incremental builds after a type was added, changed or removed hit it. Property changes on an existing class would hit the stale `.qmltypes` the same way.
+
+The other candidates were ruled out: qmllint reads `ruyashell.rsp`, which is regenerated correctly; there is no missing target dependency (the JSON-producing targets are built first); a parallelism race is unlikely because the decision is made inside one project before its batch runs (I did not run a single-node build to prove it). This is a limitation of how CMake's Visual Studio generator lays out chained custom commands, not of our CMake code, but it can be fixed from our side.
+
+### Fix
+- `shell/cmake/InvalidateStaleQmlTypes.cmake` (new): deletes `ruyashell_qmltyperegistrations.cpp` and `ruyashell.qmltypes` when `CMakeLists.txt` or any module header is newer than the `.cpp`. A missing output is always stale, so MSBuild then schedules the registrar rule, in the same batch and after the JSON rule.
+- `shell/CMakeLists.txt`: custom target `ruyashell_invalidate_stale_qmltypes` running that script, as a dependency of `ruyashell`. Only for `Visual Studio` generators (Ninja/Makefiles order these steps correctly; the Linux CI/image build uses a fresh directory and was not run or changed here).
+- The header list is built from the target's relative `.h` sources. First attempt included the generated `ddf_ruyashell.h` and a nonexistent path, and `IS_NEWER_THAN` is true for a missing file, so every build deleted the outputs (a 5 s run became 51–61 s). The script now skips missing files and the CMake code skips generated headers.
+- First version missed the removal case; `CMakeLists.txt` itself is now an input, since adding, removing or renaming a type always edits it.
+- No "build twice" fallback was needed.
+- `shell/CLAUDE.md`: the "Build pitfall" section is gone, replaced by one sentence next to the "add every file to CMakeLists" rule. The matching note in the root `CLAUDE.md` pitfalls list is updated. `docs/dev-setup.md` documents the step and the repro script.
+
+### Verification
+- Probe cycles with the final fix, each = add type, `dev.ps1 shell` once, remove type, `dev.ps1 build` once: `Echo`, `Foxtrot`, `Golf`. All six runs green on the first try (`Totals: 80 passed, 0 failed`; the three extra tests are the probe's). Earlier, with the header-only version of the fix, `Alpha`, `Bravo`, `Charlie` were also green on adding, but their removal rebuild failed, which is how the `CMakeLists.txt` input was found. No existing test was edited.
+- Unchanged tree: `dev.ps1 shell` takes 5.8 s before and 5 s after the fix (two runs). `.\scripts\dev.ps1 test` (full): ALL GREEN, 77 passed, 11 s.
+- The scratch files are not in the commit; `git status` was clean apart from the intended changes after each cycle.
+
+### Not verified
+- Editing a property of an *existing* class (header change only, no `CMakeLists.txt` change) was not probed separately; it takes the header-newer path of the same script, which the add cases exercise.
+- Linux/Ninja: untouched and not run here.
+
+### Follow-ups
+None.

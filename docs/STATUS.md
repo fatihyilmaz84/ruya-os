@@ -2,7 +2,7 @@
 
 **Read this first in every session; update it last.** The rules are in the root `CLAUDE.md`, the task format in `docs/tasks/README.md`.
 
-Last updated: 2026-10-22 (Sonnet 5.5, planning)
+Last updated: 2026-10-23 (Sonnet 5.5, T-116)
 
 ## Where we are
 
@@ -14,11 +14,10 @@ Verification legend: **host** = built and tested on the Windows host · **vm** =
 
 ## Board
 
-**NEXT → T-116**
+**NEXT → T-106**
 
 | ID | Title | Status | Depends | Verified |
 |---|---|---|---|---|
-| [T-116](tasks/T-116-first-build-registration-flake.md) | Fix "type X is not defined" on the first build after adding a C++ QML type | todo | — | |
 | [T-106](tasks/T-106-first-boot-setup.md) | First-boot setup (OOBE) | todo | T-102, T-104, T-105 (after T-115) | |
 | [T-117](tasks/T-117-motion-and-colour-tokens.md) | Reduced motion for the shake/pulse; literal durations and colours into Theme tokens; token lint | todo | — | |
 | [T-107](tasks/T-107-power-actions.md) | Power actions (suspend/restart/off) | todo | T-101 | |
@@ -66,6 +65,7 @@ A session can't know its own commit hash before committing, so new rows put the 
 | T-104 | On-screen keyboard (`TextEntry`: D-pad typing, shift, symbols, email/url layouts, mask, max length) | host (`dev.ps1 test` green, new `tst_textentry.qml` + screenshot reviewed) | T-104 |
 | T-105 | Settings → Profiles: add profile, change/remove PIN; mock mirrors `service.rs`; PinPad collect modes | mock path: host (`dev.ps1 test` green, new `tst_profile_admin.qml` + screenshot reviewed) · D-Bus `CreateProfile`/`SetPin` + attempts probe: **unverified** | T-105 |
 | T-115 | Profiles1: `CreateProfile`/`SetPin` replies carry `attempts_left` and `retry_after_secs`; `SwitchTo` probe removed | service + adapter types: host (`dev.ps1 rust` green, 2 new tests) · shell mock path: host (`dev.ps1 test` green) · D-Bus reply parsing: **unverified** | T-115 |
+| T-116 | First build after adding or removing a C++ QML type is green (stale `qmltyperegistrar` under the Visual Studio generator; build step `InvalidateStaleQmlTypes.cmake`) | host (`dev.ps1 test` green; 3 add/remove probe cycles via `scripts\repro-first-build.ps1`, all green on the first run) · Linux/Ninja: not run | T-116 |
 
 ## Blocked (need something this host doesn't have)
 
@@ -90,6 +90,16 @@ A session can't know its own commit hash before committing, so new rows put the 
 ## Session log (newest first)
 
 Each entry: date · model · tasks · what happened · verification · follow-ups. Keep entries short and factual.
+
+### 2026-10-23 · Sonnet 5.5 · T-116
+Fixed the "type X is not defined" first-build failure:
+- **Cause.** In the Visual Studio generator, the rule that collects the metatypes JSON and the `qmltyperegistrar` rule are in one MSBuild `CustomBuild` batch. MSBuild decides what is stale before the batch runs, so the registrar was skipped on the first incremental build and the stale registration/`.qmltypes` were used. The mirror case, removing a type, broke the compile.
+- **Fix.** The `ruyashell_invalidate_stale_qmltypes` target (`shell/cmake/InvalidateStaleQmlTypes.cmake`) deletes the registrar outputs when `CMakeLists.txt` or a module header is newer. Visual Studio generators only. `scripts\repro-first-build.ps1` reproduces and guards it.
+- Pitfall notes in `shell/CLAUDE.md` and root `CLAUDE.md` updated.
+
+Verification: `dev.ps1 test` → ALL GREEN; 3 add/remove probe cycles green on the first run; an unchanged tree still takes about 5 s. Two false starts are recorded in the task Outcome (a guard that deleted the outputs on every build, and one that missed removal). Unverified: Linux/Ninja (untouched).
+
+Follow-ups: none. NEXT is T-106 (first-boot setup).
 
 ### 2026-10-22 · Opus 5.5 · B-001, B-008 (first real image builds and boots)
 The owner installed WSL and QEMU. Set up a Fedora 44 WSL distribution (Podman, no Podman Machine), WHPX QEMU, a dev SSH key, and a git-ignored `image/bib/config.toml`.
