@@ -47,5 +47,8 @@ From the Store tile, the user browses apps, opens a detail page that explains th
 ## Docs to update
 - `docs/specs/02-shell.md` §1 Store row; `docs/specs/03-services-and-apps.md` §4.4: what the UI shows.
 
+## Hints
+- **The T-101 page host shows only the top page.** `Shell.qml` has one `Loader` driven by `shownPage`, so pushing `AppDetailPage` destroys `StorePage`, and popping recreates it from scratch: focused row and tile index are lost. To meet "Back restores focus to the same tile", first extend the host so lower pages stay alive while hidden, for example by instantiating one item per `pageStack` entry and disabling all but the top one. Keep `focusCurrent()` as the single focus authority, and add a test to `tst_pages.qml` that pushes two pages and pops back. Saving and restoring an index by hand is the weaker fallback; if you use it, explain why in the Outcome.
+
 ## Outcome
 _Filled in by the implementer._
