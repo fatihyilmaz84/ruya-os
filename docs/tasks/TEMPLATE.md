@@ -1,6 +1,6 @@
 # T-nnn — <title>
 
-Status: todo · Phase: n · Depends: T-xxx, … · Area: shell | services | api | image | docs · Size: S | M
+Status: todo · Phase: n · Depends: T-xxx, … · Area: shell | services | api | image | docs · Size: S | M · Owner: builder | lead
 
 ## Goal
 <One or two sentences: the user-visible result.>

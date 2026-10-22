@@ -21,7 +21,7 @@ Each work item is one file, `T-<nnn>-<slug>.md`, and holds everything an impleme
 
 ## Who creates tasks
 
-- **Planner sessions** create almost all tasks. They turn the Inbox (in `docs/STATUS.md`) and spec gaps into task files, and keep the queue full. The procedure is in [`PLANNING.md`](PLANNING.md).
+- **Lead sessions** (Opus, `docs/LEAD.md`) and **planner sessions** create almost all tasks. They turn the Inbox (in `docs/STATUS.md`) and spec gaps into task files, and keep the queue full. The procedure is in [`PLANNING.md`](PLANNING.md).
 - **Builder sessions** add one-line Inbox items for anything they discover. They write a task file only when their current task can't be finished without it, using the steps below.
 - **The owner** adds Inbox items or asks a planner for features at any time.
 
@@ -36,7 +36,7 @@ Each work item is one file, `T-<nnn>-<slug>.md`, and holds everything an impleme
 
 | Section | Contents |
 |---|---|
-| Header line | `Status · Phase · Depends · Area · Size` |
+| Header line | `Status · Phase · Depends · Area · Size`, plus `· Owner: lead` for tasks builders must skip (default: builder) |
 | Goal | One or two sentences: the user-visible result |
 | Read first | Spec sections and files to read before starting |
 | Scope | Numbered, concrete requirements |

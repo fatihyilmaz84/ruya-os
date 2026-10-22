@@ -7,6 +7,7 @@ RuyaOS is an open-source, immutable (Fedora bootc) console OS for living-room PC
 | What | File |
 |---|---|
 | Progress board, blockers, session log | `docs/STATUS.md`. **Read first, update last.** |
+| Roles (owner, Opus lead, Sonnet builder) and the lead procedure | `docs/LEAD.md`; lead handoff in `docs/LEAD-NOTES.md` |
 | Work items with acceptance criteria | `docs/tasks/T-*.md` (format: `docs/tasks/README.md`) |
 | Product, architecture, decisions (ADRs) | `docs/specs/00-overview.md` |
 | Platform/image, shell UX, services/apps | `docs/specs/01-platform.md`, `02-shell.md`, `03-services-and-apps.md` |
@@ -15,8 +16,12 @@ RuyaOS is an open-source, immutable (Fedora bootc) console OS for living-room PC
 
 ## Session workflow (do every step, in order)
 
-0. **Planning session?** If you were asked to run a planning session, follow `docs/tasks/PLANNING.md` instead of the steps below. Planner sessions create tasks; builder sessions (everything else) don't.
-1. **Orient.** Read `docs/STATUS.md`. Take the task marked **NEXT**, or else the first `todo` whose dependencies are all `done`. **One task per session**, unless the task file says it is small enough to pair.
+0. **Which session is this?**
+   - Asked to run a **lead session**: follow `docs/LEAD.md` (it includes these rules plus review, planning and direction).
+   - Asked to run a **planning session**: follow `docs/tasks/PLANNING.md`.
+   - Anything else is a **builder session**: the steps below. Builders don't create tasks; they add Inbox lines.
+1. **Orient.** Read `docs/STATUS.md`. Take the task marked **NEXT**, or else the first `todo` whose dependencies are all `done`. **Skip tasks marked `Owner: lead`** (board titles prefixed **[lead]**); those are for lead sessions. **One task per session**, unless the task file says it is small enough to pair.
+   - **Uncommitted changes you didn't make** (`git status`)? Another session may be running. Stop and tell the user; don't touch them.
    - **Nothing qualifies?** Stop. Tell the user the backlog needs a planning session (`docs/tasks/PLANNING.md`). Don't invent work.
    - **The Inbox has 5 or more items?** Still do your task, but end your reply by recommending a planning session.
 2. **Read before coding.** Read the whole task file, every spec section it links, and the `CLAUDE.md` of each area you will touch. Read the existing code you will change.

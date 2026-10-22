@@ -1,9 +1,10 @@
 # Planning sessions: who creates tasks
 
-There are two kinds of session. Both follow the root `CLAUDE.md`.
+Roles are defined in [`docs/LEAD.md`](../LEAD.md). **The Opus lead is the default planner**: planning is step 4 of every lead session. A standalone planning session (any model) is fine for a routine refill; the next lead re-checks its tasks.
 
 | Role | Started with | Creates tasks? |
 |---|---|---|
+| **Lead** (Opus) | "Run a lead session following docs/LEAD.md." | Yes. It also reviews, verifies, decides technical questions and marks tasks `Owner: lead`. |
 | **Builder** (normal) | "Do the next task from docs/STATUS.md, following CLAUDE.md." | No. It only adds one-line items to the **Inbox** in `docs/STATUS.md`, except when a new task is required to finish its own (see `README.md`). |
 | **Planner** | "Run a planning session following docs/tasks/PLANNING.md." | Yes. It turns Inbox items and spec gaps into task files and orders the board. It writes no product code. |
 | **Owner** (you) | Anything | Can add Inbox items, ask the planner for features, change priorities, and answer open decisions |

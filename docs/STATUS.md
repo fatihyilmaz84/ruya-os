@@ -1,6 +1,6 @@
 # RuyaOS — Status
 
-**Read this first in every session; update it last.** The rules are in the root `CLAUDE.md`, the task format in `docs/tasks/README.md`.
+**Read this first in every session; update it last.** The rules are in the root `CLAUDE.md`, the roles (Opus lead, Sonnet builders) in `docs/LEAD.md`, the task format in `docs/tasks/README.md`.
 
 Last updated: 2026-10-23 (Sonnet 5.5, planning)
 
@@ -15,6 +15,8 @@ Verification legend: **host** = built and tested on the Windows host · **vm** =
 ## Board
 
 **NEXT → T-122**
+
+**Lead review due:** after 3 more builder tasks, or now. The range `9ca4b25..HEAD` is unreviewed (see `docs/LEAD-NOTES.md`). Builders: when your task makes this condition true, end your reply by recommending a lead session.
 
 | ID | Title | Status | Depends | Verified |
 |---|---|---|---|---|
@@ -86,6 +88,22 @@ A session can't know its own commit hash before committing, so new rows put the 
 ## Session log (newest first)
 
 Each entry: date · model · tasks · what happened · verification · follow-ups. Keep entries short and factual.
+
+### 2026-10-23 · Opus 5.5 · Lead role set up
+The owner asked for Opus sessions to lead and Sonnet sessions to build. Added:
+- `docs/LEAD.md`: roles and authority, plus the lead procedure (orient, verify independently, review each commit against a checklist, plan, direction and ADRs, one lead-only task, handoff, owner report);
+- `docs/LEAD-NOTES.md`: handoff between lead sessions, with the review range, ranked concerns and quality signals;
+- the `Owner: lead` task marker; builders skip such tasks;
+- a "Lead review due" line on the board;
+- builders stop when they find uncommitted work they didn't make (concurrent sessions).
+
+`CLAUDE.md`, `PLANNING.md`, the task README and template, `README.md` and `AGENTS.md` were updated to match.
+
+The ISO from the previous session was built: `output/bootiso/install.iso` (3.5 GB, image 0.0.4, dev SSH key, test machines only).
+
+Verification: `dev.ps1 test` ALL GREEN.
+
+Follow-ups: the first lead session has an agenda in `LEAD-NOTES.md` (review `9ca4b25..HEAD`, secret scan of the public history, VM rebuild, ADR-002 spike).
 
 ### 2026-10-23 · Sonnet 5.5 · Planning
 Planner session (`docs/tasks/PLANNING.md`). The Inbox had 5 items; now empty. No product code written.
