@@ -1,6 +1,6 @@
 # T-103 — Settings screen and reusable controller controls
 
-Status: todo · Phase: 1 · Depends: T-101, T-102 · Area: shell · Size: M
+Status: done · Phase: 1 · Depends: T-101, T-102 · Area: shell · Size: M
 
 ## Goal
 The Settings page has a two-pane layout: categories on the left, the selected category's options on the right. A set of reusable controller-friendly controls covers every later settings page. "Display & motion" and "About" are fully working.
@@ -34,12 +34,12 @@ The Settings page has a two-pane layout: categories on the left, the selected ca
 - Per-profile settings.
 
 ## Acceptance criteria
-- [ ] Navigating categories with Up/Down updates the right pane; Right enters, Left exits (test `tst_settings.qml::test_two_pane_navigation`).
-- [ ] ToggleRow/ChoiceRow/SliderRow change their value only with the expected keys, clamp at the bounds, and play the navigate sound path (test `test_controls`; instantiate the controls standalone).
-- [ ] On a ChoiceRow, Left/Right cycles the value and focus stays in the pane (test `test_choice_row_keeps_focus`).
-- [ ] Changing effects quality in Settings changes `DeviceSettings.effectsQuality` and the shelf blur immediately (test `test_display_settings_apply_live`).
-- [ ] The About pane shows the version string passed to Shell (test `test_about_shows_version`).
-- [ ] Screenshots `7-settings-display.png` and `8-settings-about.png`: both panes readable, focus ring visible, nothing clipped at 1280×720.
+- [x] Navigating categories with Up/Down updates the right pane; Right enters, Left exits (test `tst_settings.qml::test_two_pane_navigation`).
+- [x] ToggleRow/ChoiceRow/SliderRow change their value only with the expected keys, clamp at the bounds, and play the navigate sound path (test `test_controls`; instantiate the controls standalone).
+- [x] On a ChoiceRow, Left/Right cycles the value and focus stays in the pane (test `test_choice_row_keeps_focus`).
+- [x] Changing effects quality in Settings changes `DeviceSettings.effectsQuality` and the shelf blur immediately (test `test_display_settings_apply_live`).
+- [x] The About pane shows the version string passed to Shell (test `test_about_shows_version`).
+- [x] Screenshots `7-settings-display.png` and `8-settings-about.png`: both panes readable, focus ring visible, nothing clipped at 1280×720.
 
 ## Verification
 ```powershell
@@ -56,4 +56,25 @@ The Settings page has a two-pane layout: categories on the left, the selected ca
 - A pane is a `FocusScope` holding a vertical `ListView` or `Column` of rows. With `Column`, wire `KeyNavigation.up/down` or handle Up/Down yourself.
 
 ## Outcome
-_Filled in by the implementer._
+Built the Settings page, the reusable controls and the Display & motion and About panes.
+
+- `qml/SettingsPage.qml`: category list (9 entries) plus panes. Panes are created once and shown/hidden, so each keeps its last focused row. Categories with no pane show "Coming soon" and Right/Accept does nothing there.
+- `qml/SettingsPane.qml`: row container (Up/Down clamped, Left/Back emit `exitRequested`, Right swallowed). It is a `FocusScope`, so `forceActiveFocus()` on it re-enters at the remembered row.
+- `qml/controls/`: `SettingControl` (base), `SettingRow`, `ToggleRow`, `ChoiceRow` (wraps), `SliderRow` (clamps, no signal at a bound).
+- `qml/DisplayPane.qml`: effects quality, reduced motion, screen edge, bound to `DeviceSettings`. `qml/AboutPane.qml`: image version, Qt version, services mode, licence.
+- `src/system/SystemInfo.{h,cpp}`: `QML_SINGLETON` exposing the runtime `qtVersion` (the task allowed C++ or a context property).
+- `Page.qml` gained a `version` property that `Shell` binds for every page (so About reads the version passed to Shell). `Sfx.qml` gained cue counters.
+- `tests/tst_settings.qml` (11 tests): `test_two_pane_navigation`, `test_pane_rows_navigate_and_clamp`, `test_pane_remembers_last_row`, `test_controls` (standalone controls), `test_choice_row_keeps_focus`, `test_display_settings_apply_live`, `test_rows_follow_external_changes`, `test_about_shows_version`, `test_guide_overlay_over_settings_pane`, `test_zz_screenshots` (`7-settings-display.png`, `8-settings-about.png`).
+- Docs: `02-shell.md` §1 and new §1.2; `shell/CLAUDE.md` "Controls" section.
+
+Verification: `dev.ps1 test` → ALL GREEN (49 passed, 5 screenshot tests skipped without `RUYA_SHOTS_DIR`); `dev.ps1 shots` → 54 passed, three runs in a row. Both screenshots reviewed: focus ring visible, text readable, nothing clipped at the 1280x720 test window; the About category sits just above the bottom safe-area edge.
+
+Changes to existing tests (explained, nothing weakened):
+- `tst_pages.qml`: Settings is no longer a placeholder, so the generic "page focuses its first element" check takes a per-page `focusName` (`categoryList` for Settings, `pagePlaceholder` for the rest). `test_back_restores_tile_focus` and the screenshot test used the Settings tile only because it was a placeholder; they now use the Media tile, and the shot is `5-page-placeholder.png` (was `5-page-settings.png`). Same assertions otherwise.
+
+Deviations and notes:
+- The "navigate sound path" is asserted through new `Sfx` cue counters (real playback can't be observed): ChoiceRow/SliderRow changes count a navigate cue, Accept on a toggle/row a select cue.
+- Left on a ChoiceRow or SliderRow cycles/steps the value; it does not leave the pane (required by the task). The first Display row is a ChoiceRow, so Back is the way out there; Left leaves from ToggleRow/SettingRow rows (e.g. About).
+- ChoiceRow wraps at the ends (the task says "cycles"); SliderRow clamps.
+- One run of `tst_system_ui.qml::test_toast_queue` (the final `verify(tiles.activeFocus)`, T-108) failed right after a rebuild on a loaded machine and passed in 8 later runs; not reproduced, logged in the Inbox.
+- The "SystemInfo is not defined" first-build failure happened again (see `shell/CLAUDE.md`).

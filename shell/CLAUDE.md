@@ -52,6 +52,19 @@ Read `docs/specs/02-shell.md` for the UX spec. This file covers how the code is 
 3. Open it with `Shell.openPage("xxx")` (home tiles do this with their `key` role). Back is handled by `Page`; never steal the Guide keys in a page, so the overlay still works.
 4. Test in a `tst_*.qml`: open, assert focus, Back, assert focus restored (see `tst_pages.qml`).
 
+## Controls (`qml/controls/`)
+
+Reusable settings rows. All extend `SettingControl` (a `FocusScope` with the label, the glass bar and a focus ring; pass `u` and `label`). Put rows in a `SettingsPane` (`qml/SettingsPane.qml`): it moves between rows with Up/Down, and Left/Back leave it (`exitRequested`). Rows handle only their own keys and let everything else bubble.
+
+| Control | Keys it consumes | Value and signal |
+|---|---|---|
+| `SettingRow` | Accept | `value` (text); `activated()` |
+| `ToggleRow` | Accept toggles | `checked`; `toggled(checked)` |
+| `ChoiceRow` | Left/Right cycle `options` (`[{value, label}]`), wrapping | `value`; `edited(value)` |
+| `SliderRow` | Left/Right step by `stepSize` within `from`..`to`, clamped | `value`; `edited(value)` |
+
+A control changes its own value, then emits the signal; the owner writes the setting, resyncs the control, and keeps a `Binding` on it so external changes show (see `DisplayPane.qml`). `Sfx.navigateCount`/`selectCount`/`backCount` count cue requests so tests can check the sound path.
+
 ## Tests (required for every behaviour you add)
 
 - Drive the UI with `keyClick()` using only the keys listed above, unless a test is specifically about keyboard input.

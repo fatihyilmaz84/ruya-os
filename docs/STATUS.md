@@ -14,11 +14,10 @@ Verification legend: **host** = built and tested on the Windows host · **unveri
 
 ## Board
 
-**NEXT → T-103**
+**NEXT → T-104**
 
 | ID | Title | Status | Depends | Verified |
 |---|---|---|---|---|
-| [T-103](tasks/T-103-settings-screen.md) | Settings screen and reusable controls | todo | T-101, T-102 | |
 | [T-104](tasks/T-104-on-screen-keyboard.md) | On-screen keyboard | todo | — | |
 | [T-105](tasks/T-105-profile-management.md) | Manage profiles from Settings | todo | T-103, T-104 | |
 | [T-106](tasks/T-106-first-boot-setup.md) | First-boot setup (OOBE) | todo | T-102, T-104, T-105 | |
@@ -38,7 +37,9 @@ Follow-ups, debt and ideas waiting for a planner session. Builders: add one line
 
 - (T-102) The PIN-pad shake and tile pulse use literal durations and ignore reduced motion. Move them to Theme tokens that honour `DeviceSettings.reducedMotion`.
 - (T-102) Once, after adding a new C++ `QML_ELEMENT` type, the tests failed with "DeviceSettings is not defined" and passed on the next build (stale incremental registration). Investigate the CMake dependency between `tst_ruyashell` and the module's type registration; at least document the workaround. Happened again in T-108 (`Audio`); the workaround (build twice) is now in `shell/CLAUDE.md`.
+- (T-108) `tst_system_ui.qml::test_toast_queue` failed once (final `verify(tiles.activeFocus)`) on a loaded machine right after a rebuild, then passed 8 times. If it recurs, make that check a `tryVerify` and find out why focus was late.
 - (T-108) The volume-key `Shortcut`s are verified only in a QtQuickTest window on Windows; check them under the real compositor (B-003) with an app focused.
+- (T-103) Key repeat acceleration and long-press (spec 4.3) are not implemented; holding Left/Right on a SliderRow steps at the OS repeat rate.
 - (T-108) Stepping volume while muted does not unmute; decide the UX when T-114 builds the audio settings.
 
 ### Done
@@ -57,6 +58,7 @@ A session can't know its own commit hash before committing, so new rows put the 
 | T-101 | Page navigation framework (`Shell.openPage`, `Page.qml`, five placeholder pages) | host (`dev.ps1 test` green, new `tst_pages.qml` + screenshot reviewed) | ac93198 |
 | T-102 | Reduced motion and effects quality tiers (`DeviceSettings`, `--reduced-motion`, `--effects`) | host (`dev.ps1 test` green, new `tst_motion.qml` + screenshot reviewed) | T-102 |
 | T-108 | Toasts (`Notifications`, `ToastLayer`), volume OSD, mock `Audio` singleton, volume keys | host (`dev.ps1 test` green, new `tst_system_ui.qml` + screenshot reviewed) | T-108 |
+| T-103 | Settings page (two panes), reusable controls, Display & motion and About panes, `SystemInfo` | host (`dev.ps1 test` green, new `tst_settings.qml` + 2 screenshots reviewed) | T-103 |
 
 ## Blocked (need something this host doesn't have)
 
@@ -80,6 +82,17 @@ A session can't know its own commit hash before committing, so new rows put the 
 ## Session log (newest first)
 
 Each entry: date · model · tasks · what happened · verification · follow-ups. Keep entries short and factual.
+
+### 2026-10-22 · Sonnet 5.5 · T-103
+Settings page:
+- two-pane `SettingsPage` (9 categories, Coming soon for those without content), `SettingsPane` row container;
+- reusable controls in `qml/controls/` (`SettingRow`, `ToggleRow`, `ChoiceRow`, `SliderRow`) on a `SettingControl` base;
+- Display & motion bound live to `DeviceSettings`; About with a new `SystemInfo` singleton (Qt version);
+- `Page.version`, `Sfx` cue counters; `tst_pages.qml` adjusted because Settings is no longer a placeholder.
+
+Verification: `dev.ps1 test` → ALL GREEN; `dev.ps1 shots` reviewed (`7-settings-display.png`, `8-settings-about.png`).
+
+Follow-ups: see Inbox. NEXT is T-104.
 
 ### 2026-10-22 · Sonnet 5.5 · T-108
 Toasts and volume OSD:

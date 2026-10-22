@@ -51,11 +51,11 @@ Item {
 
         function test_each_tile_opens_its_page_data() {
             return [
-                { tag: "games", index: 0 },
-                { tag: "media", index: 1 },
-                { tag: "store", index: 2 },
-                { tag: "settings", index: 3 },
-                { tag: "power", index: 4 },
+                { tag: "games", index: 0, focusName: "pagePlaceholder" },
+                { tag: "media", index: 1, focusName: "pagePlaceholder" },
+                { tag: "store", index: 2, focusName: "pagePlaceholder" },
+                { tag: "settings", index: 3, focusName: "categoryList" },   // T-103: real page
+                { tag: "power", index: 4, focusName: "pagePlaceholder" },
             ]
         }
 
@@ -63,18 +63,18 @@ Item {
             openTile(data.index)
             tryCompare(tc.shell, "currentPage", data.tag)
             tryVerify(() => find("page_" + data.tag) !== null, 2000, "page is loaded")
-            tryVerify(() => find("pagePlaceholder").activeFocus, 2000, "page focuses its first element")
+            tryVerify(() => find(data.focusName).activeFocus, 2000, "page focuses its first element")
             tryVerify(() => find("page_" + data.tag).visible)
             tryVerify(() => !find("home").visible, 2000, "home fades away")
         }
 
         function test_back_restores_tile_focus() {
-            openTile(3)
+            openTile(1)
             tryVerify(() => find("pagePlaceholder") && find("pagePlaceholder").activeFocus)
             keyClick(Qt.Key_Escape)
             tryCompare(tc.shell, "currentPage", "")
             tryVerify(() => find("tiles").activeFocus, 2000, "tiles regain focus")
-            compare(find("tiles").currentIndex, 3)
+            compare(find("tiles").currentIndex, 1)
             tryVerify(() => find("home").visible)
             tryVerify(() => !find("pageHost").visible, 2000, "page fades out")
         }
@@ -123,10 +123,10 @@ Item {
         function test_zz_screenshots() {
             if (!shotsDir)
                 skip("set RUYA_SHOTS_DIR to save screenshots")
-            openTile(3)
+            openTile(1)
             tryVerify(() => find("pagePlaceholder") && find("pagePlaceholder").activeFocus)
             wait(800)
-            grabImage(tc.shell).save(shotsDir + "/5-page-settings.png")
+            grabImage(tc.shell).save(shotsDir + "/5-page-placeholder.png")
         }
     }
 }

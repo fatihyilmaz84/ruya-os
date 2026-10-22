@@ -9,6 +9,7 @@ FocusScope {
 
     property real u: 1
     property string title
+    property string version      // image version, set by the shell
 
     // Safe-area insets, set by the shell.
     property real marginX: 0

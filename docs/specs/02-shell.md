@@ -12,7 +12,7 @@ The shell (`ruya-shell`) is the only UI the user sees. It's written in Qt 6 Quic
 | **Home** | Row of recent/pinned apps and games with hero background art; "Media" and "Games" rows; notifications badge |
 | **Library** | All installed apps and games; filter (Games/Media/Apps/Source) and sort |
 | **Store** | Featured, categories, search, app page (art, screenshots, rating, permissions, source badge Official/Community/Dev), install/update queue |
-| **Settings** | Profiles, Network, Bluetooth & controllers, Display (resolution, refresh, HDR later), Audio (output, volumes per channel), Storage & devices, Parental (later), Accessibility, System (update, channel, rollback, factory reset, about) |
+| **Settings** | Profiles, Network, Bluetooth & controllers, Display (resolution, refresh, HDR later), Audio (output, volumes per channel), Storage & devices, Parental (later), Accessibility, System (update, channel, rollback, factory reset, about). Built so far (T-103, §1.2): the two-pane page, **Display & motion** and **About**; the other categories show "Coming soon". |
 | **Overlay** (Guide button over a running app) | Return to home, close app, switch app, volume, notifications, power, screenshot (later) |
 | **System UI** | Volume OSD, toasts (both built, T-108: see §5.1), device-inserted prompt, update-ready prompt, low-battery controller warning |
 | **OOBE / Installer** | 01 §5 |
@@ -27,6 +27,13 @@ Each surface is a separate QML module loaded with `Loader { asynchronous: true }
 - Closing a page restores focus to the tile that opened it (same `currentIndex`). `Shell.routeFocus()`/`focusCurrent()` is the single place that decides where focus goes.
 - The Guide overlay opens from home or from any page (the shell handles `HomePage`/`Menu` when nothing under focus does). Closing it returns focus to the page. "Switch profile" clears the page stack, so the next sign-in lands on home.
 - The five pages are placeholders ("Coming soon" plus one focusable element) until their tasks land.
+
+### 1.2 Settings page (as built, T-103)
+- Two panes. Left: the category list (Profiles, Network, Bluetooth & controllers, Display & motion, Audio, Storage, Accessibility, System, About). Right: the selected category's pane. Up/Down choose a category and swap the pane at once; Right or Accept enters the pane (only if it has content); Left or Back returns to the list; Back on the list closes the page. Panes stay alive, and each remembers its last focused row.
+- Inside a pane, Up/Down move between rows (clamped, no wrap). A row keeps the keys it uses: a ChoiceRow or SliderRow consumes Left/Right, so those never leave the pane (leave with Back); ToggleRow and SettingRow leave Left to the pane, which returns to the list.
+- **Display & motion** writes live to `DeviceSettings`: Effects quality (High/Balanced/Performance, cycling), Reduced motion (toggle), Screen edge (overscan, 0-10 % in 1 % steps). The rows follow the setting, including changes made elsewhere.
+- **About** (read-only): image version (the `version` the shell was started with), Qt version (runtime, from the `SystemInfo` singleton), services mode (mock or D-Bus), and the licence line.
+- Reusable controls live in `shell/qml/controls/` (`SettingControl` base, `SettingRow`, `ToggleRow`, `ChoiceRow`, `SliderRow`); see `shell/CLAUDE.md`.
 
 ## 2. Visual language
 - Dark theme, large type (TV 10-foot UI: min 24 px body at 1080p, scaled by display DPI and the user's text-scale setting).

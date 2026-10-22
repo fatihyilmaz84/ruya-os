@@ -8,7 +8,12 @@ QtObject {
     readonly property SoundEffect selectEffect: SoundEffect { source: "qrc:/qt/qml/RuyaShell/sounds/select.wav" }
     readonly property SoundEffect backEffect: SoundEffect { source: "qrc:/qt/qml/RuyaShell/sounds/back.wav" }
 
-    function navigate() { navigateEffect.play() }
-    function select() { selectEffect.play() }
-    function back() { backEffect.play() }
+    // Cues requested so far; lets tests check that a control takes the sound path.
+    property int navigateCount: 0
+    property int selectCount: 0
+    property int backCount: 0
+
+    function navigate() { navigateCount++; navigateEffect.play() }
+    function select() { selectCount++; selectEffect.play() }
+    function back() { backCount++; backEffect.play() }
 }

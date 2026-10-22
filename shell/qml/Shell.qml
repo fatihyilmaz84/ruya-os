@@ -298,6 +298,7 @@ FocusScope {
                 const page = item as Page
                 page.objectName = "page_" + root.shownPage
                 page.u = Qt.binding(() => root.u)
+                page.version = Qt.binding(() => root.version)
                 page.marginX = Qt.binding(() => root.marginX)
                 page.marginY = Qt.binding(() => root.marginY)
             }

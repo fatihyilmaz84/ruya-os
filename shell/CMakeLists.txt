@@ -21,6 +21,7 @@ qt_add_qml_module(ruyashell
         src/profiles/DBusProfilesBackend.h src/profiles/DBusProfilesBackend.cpp
         src/profiles/Profiles.h src/profiles/Profiles.cpp
         src/settings/DeviceSettings.h src/settings/DeviceSettings.cpp
+        src/system/SystemInfo.h src/system/SystemInfo.cpp
         src/audio/AudioBackend.h
         src/audio/MockAudioBackend.h src/audio/MockAudioBackend.cpp
         src/audio/Audio.h src/audio/Audio.cpp
@@ -45,6 +46,14 @@ qt_add_qml_module(ruyashell
         qml/StorePage.qml
         qml/SettingsPage.qml
         qml/PowerPage.qml
+        qml/SettingsPane.qml
+        qml/DisplayPane.qml
+        qml/AboutPane.qml
+        qml/controls/SettingControl.qml
+        qml/controls/SettingRow.qml
+        qml/controls/ToggleRow.qml
+        qml/controls/ChoiceRow.qml
+        qml/controls/SliderRow.qml
     RESOURCES
         sounds/navigate.wav
         sounds/select.wav
@@ -52,7 +61,7 @@ qt_add_qml_module(ruyashell
 )
 
 # qmltyperegistrar includes the QML_ELEMENT headers by file name.
-target_include_directories(ruyashell PUBLIC src/profiles src/settings src/audio)
+target_include_directories(ruyashell PUBLIC src/profiles src/settings src/audio src/system)
 target_link_libraries(ruyashell PRIVATE Qt6::Quick Qt6::Multimedia Qt6::DBus)
 
 qt_add_executable(ruya-shell src/main.cpp)
