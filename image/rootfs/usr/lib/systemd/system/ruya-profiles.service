@@ -1,0 +1,29 @@
+[Unit]
+Description=RuyaOS profiles service (org.ruyaos.Profiles1)
+Before=ruya-compositor@tty1.service
+
+[Service]
+Type=dbus
+BusName=org.ruyaos.Profiles1
+ExecStart=/usr/bin/ruya-profiles
+Restart=on-failure
+# /var/lib/ruyaos/profiles.toml (0600) and new profile users in /etc + /var/home.
+StateDirectory=ruyaos
+StateDirectoryMode=0755
+ReadWritePaths=/etc /var/home
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=yes
+PrivateNetwork=yes
+NoNewPrivileges=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

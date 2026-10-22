@@ -1,0 +1,66 @@
+<!DOCTYPE node PUBLIC "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
+ "http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
+<!--
+  org.ruyaos.Profiles1 — profile list, PIN checks and the active profile.
+  Served by ruya-profiles on the system bus at /org/ruyaos/Profiles1.
+  Contract between shell (Qt/QML) and services (Rust); see docs/specs/03-services-and-apps.md §1.
+
+  Status strings are stable API:
+    "ok"               success
+    "wrong-pin"        PIN did not match; attempts_left says how many tries remain before lockout
+    "locked-out"       too many failures; retry_after_secs says when the next try is accepted
+    "pin-required"     profile has a PIN and none was given
+    "unknown-profile"  no such id
+    "not-allowed"      caller lacks the rights (e.g. admin check failed)
+    "invalid"          malformed argument (e.g. PIN not 4-6 digits, empty name)
+    "failed"           internal error (e.g. could not write the store or create the Unix user)
+-->
+<node>
+  <interface name="org.ruyaos.Profiles1">
+
+    <!-- (id, display name, avatar colour "#rrggbb", role "admin"|"standard"|"guest", has PIN) -->
+    <method name="ListProfiles">
+      <arg name="profiles" type="a(ssssb)" direction="out"/>
+    </method>
+
+    <!-- Make a profile the active one. pin may be "" for profiles without a PIN. -->
+    <method name="SwitchTo">
+      <arg name="id" type="s" direction="in"/>
+      <arg name="pin" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+      <arg name="attempts_left" type="u" direction="out"/>
+      <arg name="retry_after_secs" type="u" direction="out"/>
+    </method>
+
+    <!-- Lock the active profile (back to the picker). -->
+    <method name="Lock"/>
+
+    <!--
+      Create a profile. When no profiles exist (first boot) the admin arguments are ignored and
+      role must be "admin". Otherwise admin_id/admin_pin must identify an admin.
+      v1 passes admin credentials explicitly; polkit-based authorisation replaces this in Phase 2.
+    -->
+    <method name="CreateProfile">
+      <arg name="admin_id" type="s" direction="in"/>
+      <arg name="admin_pin" type="s" direction="in"/>
+      <arg name="name" type="s" direction="in"/>
+      <arg name="role" type="s" direction="in"/>
+      <arg name="pin" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+      <arg name="id" type="s" direction="out"/>
+    </method>
+
+    <!-- Change or remove (new_pin = "") a PIN. Admin profiles cannot remove their PIN. -->
+    <method name="SetPin">
+      <arg name="id" type="s" direction="in"/>
+      <arg name="old_pin" type="s" direction="in"/>
+      <arg name="new_pin" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <!-- Id of the active profile, "" when locked. -->
+    <property name="ActiveProfile" type="s" access="read"/>
+
+    <signal name="ProfilesChanged"/>
+  </interface>
+</node>

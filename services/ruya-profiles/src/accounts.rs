@@ -1,0 +1,51 @@
+//! Unix accounts backing each profile (ADR-004: one Unix user per profile).
+
+use std::io;
+
+pub trait Accounts {
+    fn create(&self, profile_id: &str) -> io::Result<()>;
+}
+
+/// Unix user name for a profile id ("p3" -> "ruya-p3").
+pub fn unix_user(profile_id: &str) -> String {
+    format!("ruya-{profile_id}")
+}
+
+/// For tests and non-Linux development hosts.
+#[derive(Debug, Default)]
+pub struct NoAccounts;
+
+impl Accounts for NoAccounts {
+    fn create(&self, _profile_id: &str) -> io::Result<()> {
+        Ok(())
+    }
+}
+
+/// Creates real users with `useradd`. Homes live in /var/home (persistent on bootc).
+#[cfg(target_os = "linux")]
+#[derive(Debug, Default)]
+pub struct UnixAccounts;
+
+#[cfg(target_os = "linux")]
+impl Accounts for UnixAccounts {
+    fn create(&self, profile_id: &str) -> io::Result<()> {
+        let user = unix_user(profile_id);
+        let status = std::process::Command::new("useradd")
+            .args(["--create-home", "--home-dir"])
+            .arg(format!("/var/home/{user}"))
+            .args([
+                "--user-group",
+                "--shell",
+                "/usr/sbin/nologin",
+                "--comment",
+                "RuyaOS profile",
+            ])
+            .arg(&user)
+            .status()?;
+        if status.success() {
+            Ok(())
+        } else {
+            Err(io::Error::other(format!("useradd {user} failed: {status}")))
+        }
+    }
+}
