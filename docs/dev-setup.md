@@ -50,9 +50,9 @@ To log into the VM, copy `image/bib/config.toml.example` to `image/bib/config.to
 ```powershell
 python -m pip install aqtinstall
 aqt install-qt windows desktop 6.10.3 win64_msvc2022_64 -m qtmultimedia qtshadertools --outputdir D:\dev\Qt
-cmake -S shell -B shelluild-win -G "Visual Studio 18 2026" -A x64 -DCMAKE_PREFIX_PATH=D:/dev/Qt/6.10.3/msvc2022_64
-cmake --build shelluild-win --config Release
-$env:PATH = "D:\dev\Qt.10.3\msvc2022_64in;$env:PATH"; shelluild-win\Releaseuya-shell.exe --windowed
+cmake -S shell -B shell\build-win -G "Visual Studio 18 2026" -A x64 -DCMAKE_PREFIX_PATH=D:/dev/Qt/6.10.3/msvc2022_64
+cmake --build shell\build-win --config Release
+$env:PATH = "D:\dev\Qt\6.10.3\msvc2022_64\bin;$env:PATH"; shell\build-win\Release\ruya-shell.exe --windowed
 ```
 
 Without `--windowed` the shell takes the whole screen; quit with Alt+F4.
