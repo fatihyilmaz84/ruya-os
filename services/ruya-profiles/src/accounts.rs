@@ -6,6 +6,12 @@ pub trait Accounts {
     fn create(&self, profile_id: &str) -> io::Result<()>;
 }
 
+impl<T: Accounts + ?Sized> Accounts for Box<T> {
+    fn create(&self, profile_id: &str) -> io::Result<()> {
+        (**self).create(profile_id)
+    }
+}
+
 /// Unix user name for a profile id ("p3" -> "ruya-p3").
 pub fn unix_user(profile_id: &str) -> String {
     format!("ruya-{profile_id}")

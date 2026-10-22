@@ -1,10 +1,11 @@
-//! ruya-profiles: serves org.ruyaos.Profiles1 on the system bus (or the session bus with
-//! `--session`, for development).
+//! ruya-profiles: serves org.ruyaos.Profiles1 on the system bus. With `--session` (development)
+//! it serves on the session bus instead and creates no Unix users.
 
 use std::error::Error;
 use std::path::PathBuf;
 
-use ruya_profiles::dbus::{ProfilesIface, SystemAccounts, BUS_NAME, OBJECT_PATH};
+use ruya_profiles::accounts::NoAccounts;
+use ruya_profiles::dbus::{DynAccounts, ProfilesIface, BUS_NAME, OBJECT_PATH};
 use ruya_profiles::service::ProfileService;
 use ruya_profiles::store::Store;
 
@@ -17,6 +18,15 @@ fn main() {
     }
 }
 
+fn system_accounts(session: bool) -> DynAccounts {
+    #[cfg(target_os = "linux")]
+    if !session {
+        return Box::new(ruya_profiles::accounts::UnixAccounts);
+    }
+    let _ = session;
+    Box::new(NoAccounts)
+}
+
 fn run() -> Result<(), Box<dyn Error>> {
     let session = std::env::args().any(|a| a == "--session");
     let path = std::env::var_os("RUYA_PROFILES_FILE")
@@ -27,7 +37,7 @@ fn run() -> Result<(), Box<dyn Error>> {
         store.profiles().len(),
         path.display()
     );
-    let iface = ProfilesIface::new(ProfileService::new(store, SystemAccounts::default()));
+    let iface = ProfilesIface::new(ProfileService::new(store, system_accounts(session)));
 
     futures_lite::future::block_on(async {
         let builder = if session {

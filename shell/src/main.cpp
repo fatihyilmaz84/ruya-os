@@ -3,8 +3,11 @@
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
 #include <QQuickWindow>
+#include <QtQml/qqmlextensionplugin.h>
 
 #include <cstdio>
+
+Q_IMPORT_QML_PLUGIN(RuyaShellPlugin)
 
 // Written into the image at build time (image/Containerfile); lets update/rollback tests
 // see which deployment is running.
@@ -27,7 +30,12 @@ int main(int argc, char *argv[])
     const QCommandLineOption windowed(QStringLiteral("windowed"),
                                       QStringLiteral("Run in a window instead of fullscreen (development)."));
     parser.addOption(windowed);
+    const QCommandLineOption mockServices(QStringLiteral("mock-services"),
+                                          QStringLiteral("Use in-memory system services instead of D-Bus."));
+    parser.addOption(mockServices);
     parser.process(app);
+    if (parser.isSet(mockServices))
+        qputenv("RUYA_SERVICES", "mock"); // read when the Profiles singleton is created
 
     QQmlApplicationEngine engine;
     engine.setInitialProperties({

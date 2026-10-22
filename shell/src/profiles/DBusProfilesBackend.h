@@ -1,0 +1,29 @@
+#pragma once
+
+#include "ProfilesBackend.h"
+
+#include <QDBusConnection>
+
+// Client of org.ruyaos.Profiles1 (api/dbus/org.ruyaos.Profiles1.xml) on the system bus,
+// or the session bus when RUYA_DBUS=session (for running ruya-profiles --session in dev).
+class DBusProfilesBackend final : public ProfilesBackend
+{
+    Q_OBJECT
+
+public:
+    explicit DBusProfilesBackend(QObject *parent = nullptr);
+
+    bool isMock() const override { return false; }
+    void refresh() override;
+    void switchTo(const QString &id, const QString &pin) override;
+    void lock() override;
+
+private slots:
+    void onProfilesChanged();
+    void onPropertiesChanged(const QString &interface, const QVariantMap &changed, const QStringList &invalidated);
+
+private:
+    void fetchActive();
+
+    QDBusConnection m_bus;
+};

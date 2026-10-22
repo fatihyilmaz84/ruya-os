@@ -5,9 +5,9 @@ Status: **Draft v1** · Parent: [00-overview](00-overview.md)
 ## 1. Profiles & security (ADR-004)
 
 ### 1.1 Model
-- A profile is a Unix user `ruya-p<N>` with home `/var/home/ruya-p<N>`. Its display name and avatar live in `/var/lib/ruyaos/profiles/<uid>.toml`.
+- A profile is a Unix user `ruya-p<N>` with home `/var/home/ruya-p<N>` (0700). Display name, avatar, role and PIN hash live in one root-only file, `/var/lib/ruyaos/profiles.toml` (0600, written atomically). Ids are never reused. Implemented in `services/ruya-profiles`; the contract is `api/dbus/org.ruyaos.Profiles1.xml`.
 - Roles: **Admin** (one or more; the first profile created in OOBE) and **Standard**. There's also **Guest**, whose user is created on demand and whose home is wiped at logout.
-- PIN: optional for Standard, mandatory for Admin. 4–6 digits, stored as an argon2id hash in `/var/lib/ruyaos/profiles/` (root:root 0600) and verified only by `ruya-profiles`. After 5 failures, exponential back-off starting at 30 s.
+- PIN: optional for Standard, mandatory for Admin, never for Guest. 4–6 ASCII digits, stored as an argon2id hash and verified only by `ruya-profiles`. After 5 failures, exponential back-off from 30 s up to 1 h. The counter is shared by every PIN check (sign-in, admin authorisation, PIN change) and lives in memory, so a service restart resets it. The first profile (OOBE) must be an admin. Later profiles need admin credentials, passed explicitly in v1 and via polkit from Phase 2.
 - Admin-only actions (polkit `org.ruyaos.admin`): OS update/rollback/channel, add/remove remotes, install system-wide apps, create/delete profiles, factory reset. The shell asks for the admin PIN, which `ruya-profiles` turns into a short-lived polkit authorization.
 - Locking: on profile switch, on idle timeout (configurable), and on resume from suspend if the profile has a PIN.
 

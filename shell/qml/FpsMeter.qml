@@ -8,7 +8,7 @@ Text {
     property int frames: 0
     property real elapsed: 0
 
-    text: Math.round(fps) + " FPS"
+    text: fps > 0 ? Math.round(fps) + " FPS" : "– FPS"   // no sample yet right after showing
     color: Theme.textDim
 
     FrameAnimation {

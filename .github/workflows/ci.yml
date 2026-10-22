@@ -17,9 +17,26 @@ jobs:
       - run: cargo clippy --all-targets --locked -- -D warnings
       - run: cargo test --locked
 
+  shell:
+    runs-on: ubuntu-24.04
+    container: registry.fedoraproject.org/fedora:44
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Qt
+        run: dnf -y install --setopt=install_weak_deps=False cmake ninja-build gcc-c++ qt6-qtbase-devel qt6-qtdeclarative-devel qt6-qtmultimedia-devel
+      - name: Build
+        run: cmake -S shell -B shell/build -G Ninja -DCMAKE_BUILD_TYPE=Release && cmake --build shell/build
+      - name: qmllint
+        run: cmake --build shell/build --target all_qmllint
+      - name: Qt Quick tests
+        # offscreen uses the software renderer: effects are skipped, focus/flow logic is tested.
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: ctest --test-dir shell/build --output-on-failure
+
   image:
     runs-on: ubuntu-24.04
-    needs: services
+    needs: [services, shell]
     steps:
       - uses: actions/checkout@v4
 

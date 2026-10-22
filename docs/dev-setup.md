@@ -57,19 +57,37 @@ $env:PATH = "D:\dev\Qt\6.10.3\msvc2022_64\bin;$env:PATH"; shell\build-win\Releas
 
 Without `--windowed` the shell takes the whole screen; quit with Alt+F4.
 
-**On Windows, without Qt or a VM:** run the scripted shell check with PySide6. It opens a GPU window for about 10 s, drives navigation and the overlay, asserts the focus rules, and saves screenshots to `output/shell-shots/`.
+**Mock services.** Off Linux, the shell uses in-memory stand-ins for the system services automatically. On Linux, pass `--mock-services`, or set `RUYA_SERVICES=mock`. The mock profiles are:
+- Player One (admin, PIN `1234`)
+- Ada (no PIN)
+- Guest
+
+An orange "mock services" tag in the corner shows when the mock is active.
+
+**Tests.** Qt Quick Tests drive the whole shell with the keys a controller produces. They cover sign-in with and without a PIN, D-pad-only PIN entry, lockout, the overlay's modality, and switching profiles. A test window opens for a few seconds.
 
 ```powershell
-python -m pip install PySide6==6.8.1
-python tests\shell\check_shell.py
+$env:PATH = "D:\dev\Qt\6.10.3\msvc2022_64\bin;$env:PATH"
+ctest --test-dir shell\build-win -C Release --output-on-failure
+$env:RUYA_SHOTS_DIR = "$PWD\output\shell-shots"; shell\build-win\Release\tst_ruyashell.exe   # also saves screenshots
+cmake --build shell\build-win --config Release --target all_qmllint
 ```
 
-Don't use `QT_QPA_PLATFORM=offscreen` for this. It silently switches to the software renderer, where `MultiEffect` draws nothing.
+Run the tests in a real window when you want effects rendered. `QT_QPA_PLATFORM=offscreen` (used in CI) silently switches to the software renderer, where `MultiEffect` draws nothing.
 
-**On Linux:** you don't have to reflash for QML changes. On any Linux machine or VM with Qt ≥ 6.5 (`qt6-qtdeclarative-devel qt6-qtmultimedia-devel`):
+**Against the real profiles service (Linux):** in `--session` mode the service uses the session bus and creates no Unix users, so it runs fine without root.
 
 ```bash
-cmake -S shell -B shell/build -G Ninja && cmake --build shell/build && shell/build/ruya-shell
+RUYA_PROFILES_FILE=/tmp/profiles.toml cargo run --manifest-path services/Cargo.toml -p ruya-profiles -- --session &
+# first profile: no admin credentials needed, must be an admin with a PIN
+busctl --user call org.ruyaos.Profiles1 /org/ruyaos/Profiles1 org.ruyaos.Profiles1 CreateProfile sssss "" "" Me admin 1234
+RUYA_DBUS=session RUYA_SERVICES=dbus shell/build/ruya-shell --windowed
+```
+
+**On Linux:** you don't have to reflash for QML changes. On any Linux machine or VM with Qt ≥ 6.8 (`qt6-qtdeclarative-devel qt6-qtmultimedia-devel`):
+
+```bash
+cmake -S shell -B shell/build -G Ninja && cmake --build shell/build && shell/build/ruya-shell --mock-services
 ```
 
 ## Known limits on this host

@@ -1,0 +1,307 @@
+pragma ComponentBehavior: Bound
+import QtQuick
+import QtQuick.Effects
+import RuyaShell
+
+// The whole console UI as one Item, so tests can host it in their own window.
+// Flow: profile picker -> home shelf; Guide/Menu opens the system overlay from home.
+FocusScope {
+    id: root
+
+    required property string version
+
+    readonly property real u: height / 1080
+    readonly property real marginX: width * Theme.safeArea
+    readonly property real marginY: height * Theme.safeArea
+    readonly property bool signedIn: Profiles.activeProfile !== ""
+    readonly property Tile currentTile: tiles.currentItem as Tile
+
+    function routeFocus() {
+        systemPanel.open = false
+        if (signedIn) {
+            tiles.forceActiveFocus()
+        } else {
+            picker.reset()
+        }
+    }
+
+    onSignedInChanged: routeFocus()
+    Component.onCompleted: routeFocus()
+
+    Backdrop {
+        id: backdrop
+        anchors.fill: parent
+        tint: root.signedIn && root.currentTile ? root.currentTile.accent
+                                                : (Profiles.active.avatar ?? "#3a5bd9")
+    }
+
+    // Header
+    Text {
+        id: brand
+        x: root.marginX
+        y: root.marginY
+        text: "RuyaOS"
+        color: Theme.text
+        font.pixelSize: 44 * root.u
+        font.weight: Font.Bold
+    }
+    Row {
+        anchors { right: parent.right; rightMargin: root.marginX; verticalCenter: brand.verticalCenter }
+        spacing: 28 * root.u
+
+        Row {
+            visible: root.signedIn
+            spacing: 14 * root.u
+            anchors.verticalCenter: parent.verticalCenter
+            Rectangle {
+                width: 48 * root.u
+                height: width
+                radius: width / 2
+                color: Profiles.active.avatar ?? Theme.glass
+                Text {
+                    anchors.centerIn: parent
+                    text: (Profiles.active.name ?? "?").charAt(0).toUpperCase()
+                    color: Theme.text
+                    font.pixelSize: 26 * root.u
+                }
+            }
+            Text {
+                objectName: "activeProfileName"
+                anchors.verticalCenter: parent.verticalCenter
+                text: Profiles.active.name ?? ""
+                color: Theme.text
+                font.pixelSize: 30 * root.u
+            }
+        }
+        Text {
+            id: clock
+            anchors.verticalCenter: parent.verticalCenter
+            color: Theme.text
+            font.pixelSize: 36 * root.u
+            text: Qt.formatTime(new Date(), "HH:mm")
+            Timer {
+                interval: 10000; running: true; repeat: true
+                onTriggered: clock.text = Qt.formatTime(new Date(), "HH:mm")
+            }
+        }
+    }
+
+    ProfilePicker {
+        id: picker
+        objectName: "profilePicker"
+        anchors.fill: parent
+        u: root.u
+        opacity: root.signedIn ? 0 : 1
+        visible: opacity > 0
+        enabled: !root.signedIn
+        Behavior on opacity { NumberAnimation { duration: Theme.pageMs; easing.type: Easing.OutCubic } }
+    }
+
+    Item {
+        id: home
+        objectName: "home"
+        anchors.fill: parent
+        opacity: root.signedIn ? 1 : 0
+        visible: opacity > 0
+        enabled: root.signedIn
+        Behavior on opacity { NumberAnimation { duration: Theme.pageMs; easing.type: Easing.OutCubic } }
+
+        // Frosted shelf: blurs only the backdrop region behind it (one shared source, no
+        // second render of the scene).
+        Item {
+            id: shelf
+            anchors {
+                left: parent.left; right: parent.right
+                bottom: parent.bottom; bottomMargin: root.marginY + 60 * root.u
+            }
+            height: 380 * root.u
+            clip: true
+
+            MultiEffect {
+                x: -shelf.x
+                y: -shelf.y
+                width: root.width
+                height: root.height
+                source: backdrop
+                autoPaddingEnabled: false
+                blurEnabled: true
+                blur: 1.0
+                blurMax: Theme.blurMax
+                brightness: -0.08
+                saturation: 0.15
+            }
+            Rectangle {
+                anchors.fill: parent
+                color: Theme.glass
+                Rectangle { anchors { left: parent.left; right: parent.right; top: parent.top } height: Math.max(1, root.u); color: Theme.glassBorder }
+                Rectangle { anchors { left: parent.left; right: parent.right; bottom: parent.bottom } height: Math.max(1, root.u); color: Theme.glassBorder }
+            }
+        }
+
+        Text {
+            anchors { left: shelf.left; leftMargin: root.marginX; bottom: shelf.top; bottomMargin: 20 * root.u }
+            text: root.currentTile ? root.currentTile.title : ""
+            color: Theme.text
+            font.pixelSize: 64 * root.u
+            font.weight: Font.Light
+        }
+
+        ListView {
+            id: tiles
+            objectName: "tiles"
+
+            anchors { left: shelf.left; right: shelf.right; verticalCenter: shelf.verticalCenter }
+            leftMargin: root.marginX
+            rightMargin: root.marginX
+            height: 260 * root.u
+            orientation: ListView.Horizontal
+            spacing: 36 * root.u
+            keyNavigationWraps: false
+            highlightMoveDuration: Theme.focusMs
+            highlightRangeMode: ListView.ApplyRange
+            preferredHighlightBegin: root.marginX
+            preferredHighlightEnd: width - root.marginX
+            interactive: false           // no flicking...
+            keyNavigationEnabled: true   // ...but keys still navigate (defaults to `interactive`)
+            clip: false
+
+            model: ListModel {
+                ListElement { title: "Games"; accent: "#3a5bd9" }
+                ListElement { title: "Media"; accent: "#d9483a" }
+                ListElement { title: "Store"; accent: "#2fa37a" }
+                ListElement { title: "Settings"; accent: "#7a5bd9" }
+                ListElement { title: "Power"; accent: "#5a6478" }
+            }
+
+            delegate: Tile {
+                u: root.u
+                width: 400 * root.u
+                height: tiles.height
+            }
+
+            onCurrentIndexChanged: Sfx.navigate()
+            Keys.onReturnPressed: { root.currentTile.pulse(); Sfx.select() }
+            Keys.onEnterPressed: { root.currentTile.pulse(); Sfx.select() }
+            Keys.onPressed: event => {
+                if (event.key === Qt.Key_HomePage || event.key === Qt.Key_Menu) {
+                    systemPanel.open = true
+                    Sfx.select()
+                    event.accepted = true
+                } else if (event.key === Qt.Key_Escape || event.key === Qt.Key_Back) {
+                    Sfx.back()
+                    event.accepted = true
+                }
+            }
+        }
+    }
+
+    // Placeholder for the Guide overlay; also shows build info used by the update tests.
+    Rectangle {
+        id: systemPanel
+        objectName: "systemPanel"
+
+        property bool open: false
+
+        anchors.fill: parent
+        color: "#d8000000"
+        opacity: open ? 1 : 0
+        visible: opacity > 0
+        Behavior on opacity { NumberAnimation { duration: Theme.pageMs; easing.type: Easing.OutCubic } }
+        onOpenChanged: {
+            if (open) {
+                actions.currentIndex = 0
+                actions.forceActiveFocus()
+            } else if (root.signedIn) {
+                tiles.forceActiveFocus()
+            }
+        }
+
+        Rectangle {
+            anchors.centerIn: parent
+            width: panelColumn.width + 96 * root.u
+            height: panelColumn.height + 96 * root.u
+            radius: 32 * root.u
+            color: "#1a1d26"
+            border.color: Theme.glassBorder
+        }
+
+        Column {
+            id: panelColumn
+            anchors.centerIn: parent
+            spacing: 18 * root.u
+            Text { text: qsTr("System"); color: Theme.text; font.pixelSize: 56 * root.u; anchors.horizontalCenter: parent.horizontalCenter }
+            Text { text: qsTr("Image version %1").arg(root.version); color: Theme.textDim; font.pixelSize: 30 * root.u; anchors.horizontalCenter: parent.horizontalCenter }
+            FpsMeter { font.pixelSize: 30 * root.u; anchors.horizontalCenter: parent.horizontalCenter; visible: systemPanel.visible }
+
+            ListView {
+                id: actions
+                objectName: "systemActions"
+
+                anchors.horizontalCenter: parent.horizontalCenter
+                width: 520 * root.u
+                height: contentHeight
+                spacing: 14 * root.u
+                interactive: false
+                keyNavigationEnabled: true
+                model: [
+                    { key: "switch", label: qsTr("Switch profile") },
+                    { key: "close", label: qsTr("Close") },
+                ]
+
+                function activate(key) {
+                    Sfx.select()
+                    if (key === "switch")
+                        Profiles.lock()        // signedIn -> false; routeFocus() shows the picker
+                    systemPanel.open = false
+                }
+
+                onCurrentIndexChanged: if (systemPanel.open) Sfx.navigate()
+                Keys.onReturnPressed: activate(model[currentIndex].key)
+                Keys.onEnterPressed: activate(model[currentIndex].key)
+                Keys.onPressed: event => {
+                    if ([Qt.Key_Escape, Qt.Key_Back, Qt.Key_HomePage, Qt.Key_Menu].includes(event.key)) {
+                        systemPanel.open = false
+                        Sfx.back()
+                    }
+                    event.accepted = true      // modal: nothing leaks to the shelf underneath
+                }
+
+                delegate: Rectangle {
+                    id: action
+                    required property int index
+                    required property var modelData
+                    readonly property bool focused: ListView.isCurrentItem && actions.activeFocus
+
+                    width: actions.width
+                    height: 76 * root.u
+                    radius: height / 2
+                    color: focused ? Qt.rgba(1, 1, 1, 0.2) : Theme.glass
+                    border.width: focused ? 4 * root.u : 1
+                    border.color: focused ? Theme.focusRing : Theme.glassBorder
+                    Text {
+                        anchors.centerIn: parent
+                        text: action.modelData.label
+                        color: Theme.text
+                        font.pixelSize: 32 * root.u
+                    }
+                }
+            }
+        }
+    }
+
+    // Always-on version tag: the update/rollback checks read it off the screen.
+    Text {
+        anchors { right: parent.right; bottom: parent.bottom; margins: root.marginY / 2 }
+        text: root.version
+        color: Theme.textDim
+        font.pixelSize: 20 * root.u
+    }
+
+    Text {
+        visible: Profiles.mock
+        anchors { left: parent.left; bottom: parent.bottom; margins: root.marginY / 2 }
+        text: qsTr("mock services")
+        color: "#ffb74d"
+        font.pixelSize: 20 * root.u
+    }
+}

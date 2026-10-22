@@ -5,22 +5,21 @@ use std::time::Instant;
 use zbus::interface;
 use zbus::object_server::SignalEmitter;
 
+use crate::accounts::Accounts;
 use crate::service::ProfileService;
 
-#[cfg(target_os = "linux")]
-pub type SystemAccounts = crate::accounts::UnixAccounts;
-#[cfg(not(target_os = "linux"))]
-pub type SystemAccounts = crate::accounts::NoAccounts;
+/// Chosen at runtime: real Unix users on the system bus, none in `--session` dev mode.
+pub type DynAccounts = Box<dyn Accounts + Send + Sync>;
 
 pub const BUS_NAME: &str = "org.ruyaos.Profiles1";
 pub const OBJECT_PATH: &str = "/org/ruyaos/Profiles1";
 
 pub struct ProfilesIface {
-    svc: ProfileService<SystemAccounts>,
+    svc: ProfileService<DynAccounts>,
 }
 
 impl ProfilesIface {
-    pub fn new(svc: ProfileService<SystemAccounts>) -> Self {
+    pub fn new(svc: ProfileService<DynAccounts>) -> Self {
         ProfilesIface { svc }
     }
 }
