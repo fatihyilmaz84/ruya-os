@@ -22,6 +22,15 @@ QtObject {
     readonly property int pageMs: reducedMotion ? 0 : 300
     readonly property int tintMs: reducedMotion ? 0 : 700
 
+    readonly property int toastMs: 4000      // how long a toast stays on screen
+    readonly property int osdMs: 1500        // how long the volume OSD stays after the last change
+
+    readonly property color toastInfo: "#6ea8ff"
+    readonly property color toastSuccess: "#4cc38a"
+    readonly property color toastWarning: "#ffb74d"
+    readonly property color toastError: "#ff6b6b"
+    readonly property color toastBackground: "#f0161a24"
+
     readonly property real pageSlide: reducedMotion ? 0 : 60   // design px the shelf/page slide during a page transition
 
     // Effects tier: high 64, balanced 32, performance 0 (no blur at all).

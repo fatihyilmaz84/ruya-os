@@ -14,7 +14,7 @@ The shell (`ruya-shell`) is the only UI the user sees. It's written in Qt 6 Quic
 | **Store** | Featured, categories, search, app page (art, screenshots, rating, permissions, source badge Official/Community/Dev), install/update queue |
 | **Settings** | Profiles, Network, Bluetooth & controllers, Display (resolution, refresh, HDR later), Audio (output, volumes per channel), Storage & devices, Parental (later), Accessibility, System (update, channel, rollback, factory reset, about) |
 | **Overlay** (Guide button over a running app) | Return to home, close app, switch app, volume, notifications, power, screenshot (later) |
-| **System UI** | Volume OSD, toasts, device-inserted prompt, update-ready prompt, low-battery controller warning |
+| **System UI** | Volume OSD, toasts (both built, T-108: see §5.1), device-inserted prompt, update-ready prompt, low-battery controller warning |
 | **OOBE / Installer** | 01 §5 |
 | **Safe mode** | 01 §2.1 |
 
@@ -96,6 +96,13 @@ Physical pad → input daemon (ADR-003) → shell. While the shell has input foc
 - Separate volume sliders for UI, Ambient and Master. The volume OSD appears on any volume change, including controller or keyboard media keys.
 - Mild stereo panning of navigation SFX by focus x-position (on in High, off otherwise).
 - Output switching (HDMI / analog / USB / Bluetooth) follows WirePlumber defaults with a "prefer most recently connected" rule. The shell shows a toast. Covered in 03 §2.3.
+
+### 5.1 Toasts and volume OSD (as built, T-108)
+- `Notifications.show(text, kind, iconText)` (QML singleton; kind `info|success|warning|error`, unknown kinds become `info`) queues a toast. `ToastLayer` shows at most 3 at the top right, below the header and inside the safe area; the rest wait in order. Each toast dismisses itself after `Theme.toastMs` (4000 ms), fading and sliding with `Theme.pageMs`/`pageSlide` (so reduced motion removes the movement).
+- `Audio` (C++ singleton; mock backend only, the D-Bus backend follows the audio contract in T-114) holds the master `volume` (0-100) and `muted`, with `setVolume`, `stepVolume(delta)` and `toggleMute()`. `adjusted()` fires after every command, even a clamped one.
+- `VolumeOsd` (bottom centre) appears on `Audio.adjusted` and hides `Theme.osdMs` (1500 ms) after the last one. It shows the level and a "Muted" state.
+- Volume Up/Down/Mute are `Shortcut`s (application context) at the `Shell` root, so they work in every state, modals included, step by 5, and never move focus. Toasts and the OSD are display-only and never take focus.
+- Stacking: toasts (z 10) sit above pages and below the modals (profile picker, Guide overlay: z 20); the OSD is on top (z 30).
 
 ## 6. Asset pipeline
 - Per app, the art set (from AppStream/`x-ruya-*` keys, or our fallback generator) is icon (SVG or 256 px), tile (16:9), hero (16:9, ≥ 1920 px), logo (transparent), and an optional background.

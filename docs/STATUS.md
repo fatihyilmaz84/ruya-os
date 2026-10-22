@@ -14,11 +14,10 @@ Verification legend: **host** = built and tested on the Windows host · **unveri
 
 ## Board
 
-**NEXT → T-108**
+**NEXT → T-103**
 
 | ID | Title | Status | Depends | Verified |
 |---|---|---|---|---|
-| [T-108](tasks/T-108-toasts-and-volume-osd.md) | Toast notifications and volume OSD | todo | — | |
 | [T-103](tasks/T-103-settings-screen.md) | Settings screen and reusable controls | todo | T-101, T-102 | |
 | [T-104](tasks/T-104-on-screen-keyboard.md) | On-screen keyboard | todo | — | |
 | [T-105](tasks/T-105-profile-management.md) | Manage profiles from Settings | todo | T-103, T-104 | |
@@ -55,6 +54,7 @@ A session can't know its own commit hash before committing, so new rows put the 
 | T-007 | AI contributor workflow: `CLAUDE.md` files, `scripts/dev.ps1`, task backlog, this board | host (`dev.ps1 test` green) | handoff commit |
 | T-101 | Page navigation framework (`Shell.openPage`, `Page.qml`, five placeholder pages) | host (`dev.ps1 test` green, new `tst_pages.qml` + screenshot reviewed) | ac93198 |
 | T-102 | Reduced motion and effects quality tiers (`DeviceSettings`, `--reduced-motion`, `--effects`) | host (`dev.ps1 test` green, new `tst_motion.qml` + screenshot reviewed) | T-102 |
+| T-108 | Toasts (`Notifications`, `ToastLayer`), volume OSD, mock `Audio` singleton, volume keys | host (`dev.ps1 test` green, new `tst_system_ui.qml` + screenshot reviewed) | T-108 |
 
 ## Blocked (need something this host doesn't have)
 
@@ -78,6 +78,16 @@ A session can't know its own commit hash before committing, so new rows put the 
 ## Session log (newest first)
 
 Each entry: date · model · tasks · what happened · verification · follow-ups. Keep entries short and factual.
+
+### 2026-10-22 · Sonnet 5.5 · T-108
+Toasts and volume OSD:
+- `Notifications` queue (max 3 visible, auto-dismiss) and `ToastLayer`; `VolumeOsd`; mock `Audio` singleton;
+- volume keys are application `Shortcut`s at the `Shell` root, so modals cannot swallow them and focus never moves;
+- picker and Guide overlay are z 20, toasts z 10, OSD z 30.
+
+Verification: `dev.ps1 test` → ALL GREEN; `dev.ps1 shots` reviewed (`14-toast-and-osd.png`). `Shortcut` behaviour under a real compositor is unverified.
+
+Follow-ups: new C++ QML types need a second build before the first run is clean (recorded in `shell/CLAUDE.md`, cause unknown). NEXT is T-103.
 
 ### 2026-10-22 · Sonnet 5.5 · T-102
 Reduced motion and effects quality tiers:

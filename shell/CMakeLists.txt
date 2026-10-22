@@ -9,7 +9,7 @@ qt_standard_project_setup(REQUIRES 6.8)
 # Everything except main() is a static QML module, so the app and the tests share it.
 qt_add_library(ruyashell STATIC)
 
-set_source_files_properties(qml/Theme.qml qml/Sfx.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
+set_source_files_properties(qml/Theme.qml qml/Sfx.qml qml/Notifications.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 
 qt_add_qml_module(ruyashell
     URI RuyaShell
@@ -21,11 +21,17 @@ qt_add_qml_module(ruyashell
         src/profiles/DBusProfilesBackend.h src/profiles/DBusProfilesBackend.cpp
         src/profiles/Profiles.h src/profiles/Profiles.cpp
         src/settings/DeviceSettings.h src/settings/DeviceSettings.cpp
+        src/audio/AudioBackend.h
+        src/audio/MockAudioBackend.h src/audio/MockAudioBackend.cpp
+        src/audio/Audio.h src/audio/Audio.cpp
     QML_FILES
         qml/Main.qml
         qml/Shell.qml
         qml/Theme.qml
         qml/Sfx.qml
+        qml/Notifications.qml
+        qml/ToastLayer.qml
+        qml/VolumeOsd.qml
         qml/Tile.qml
         qml/Backdrop.qml
         qml/FpsMeter.qml
@@ -46,7 +52,7 @@ qt_add_qml_module(ruyashell
 )
 
 # qmltyperegistrar includes the QML_ELEMENT headers by file name.
-target_include_directories(ruyashell PUBLIC src/profiles src/settings)
+target_include_directories(ruyashell PUBLIC src/profiles src/settings src/audio)
 target_link_libraries(ruyashell PRIVATE Qt6::Quick Qt6::Multimedia Qt6::DBus)
 
 qt_add_executable(ruya-shell src/main.cpp)

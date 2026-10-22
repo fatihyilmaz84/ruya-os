@@ -77,6 +77,12 @@ FocusScope {
         }
     }
 
+    // Volume keys work in every state, modals included. A Shortcut is matched before key
+    // events reach the focus item, so no modal can swallow them and focus never moves.
+    Shortcut { sequences: ["Volume Up"]; context: Qt.ApplicationShortcut; onActivated: Audio.stepVolume(5) }
+    Shortcut { sequences: ["Volume Down"]; context: Qt.ApplicationShortcut; onActivated: Audio.stepVolume(-5) }
+    Shortcut { sequences: ["Volume Mute"]; context: Qt.ApplicationShortcut; onActivated: Audio.toggleMute() }
+
     readonly property var pageComponents: ({
         games: gamesPage,
         media: mediaPage,
@@ -150,6 +156,7 @@ FocusScope {
         objectName: "profilePicker"
         anchors.fill: parent
         u: root.u
+        z: 20                              // modal: above the toasts
         opacity: root.signedIn ? 0 : 1
         visible: opacity > 0
         enabled: !root.signedIn
@@ -301,10 +308,22 @@ FocusScope {
         }
     }
 
+    // Toasts sit above pages and below the modals (picker, overlay); the volume OSD is above all.
+    ToastLayer {
+        id: toasts
+        objectName: "toastLayer"
+        anchors.fill: parent
+        z: 10
+        u: root.u
+        marginX: root.marginX
+        marginY: root.marginY
+    }
+
     // Placeholder for the Guide overlay; also shows build info used by the update tests.
     Rectangle {
         id: systemPanel
         objectName: "systemPanel"
+        z: 20
 
         property bool open: false
 
@@ -409,5 +428,12 @@ FocusScope {
         text: qsTr("mock services")
         color: "#ffb74d"
         font.pixelSize: 20 * root.u
+    }
+
+    VolumeOsd {
+        objectName: "volumeOsd"
+        z: 30
+        u: root.u
+        marginY: root.marginY
     }
 }

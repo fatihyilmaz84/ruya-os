@@ -65,3 +65,7 @@ Read `docs/specs/02-shell.md` for the UX spec. This file covers how the code is 
 
 - C++17 (MSVC). Qt APIs up to 6.8. Use `QStringLiteral` for literals. Use `qWarning("ruya-shell: …")` for failures.
 - QtDBus code compiles on Windows but can only run on Linux. Keep it a thin translation of the XML contract, and mark it unverified in STATUS.
+
+## Build pitfall
+
+- After adding a new C++ `QML_ELEMENT` type (new `.h`/`.cpp` in `SOURCES`), the first `dev.ps1 shell`/`test` run can fail with "X is not defined" (ReferenceError in the tests, qmllint failing). Run it again: the second build is clean. This happened for `DeviceSettings` (T-102) and `Audio` (T-108); the cause is not understood.
