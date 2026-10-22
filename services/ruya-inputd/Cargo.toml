@@ -1,0 +1,10 @@
+[package]
+name = "ruya-inputd"
+description = "Phase 0 bridge: gamepad buttons/sticks -> navigation key events for the RuyaOS shell"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+evdev = "=0.12.2"

@@ -1,0 +1,13 @@
+# VM-only: tells the CI boot test (via the serial port) that the shell presented a frame.
+[Unit]
+Description=Report RuyaOS shell readiness on the serial console (VMs only)
+ConditionVirtualization=vm
+ConditionPathExists=/dev/ttyS0
+After=ruya-compositor@tty1.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c 'if /usr/libexec/ruyaos/wait-shell-ready 120; then echo "RUYA_BOOT_OK $(cat /usr/lib/ruyaos/version)" > /dev/ttyS0; else echo "RUYA_BOOT_FAIL $(cat /usr/lib/ruyaos/version)" > /dev/ttyS0; fi'
+
+[Install]
+WantedBy=graphical.target

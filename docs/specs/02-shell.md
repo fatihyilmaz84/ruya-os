@@ -1,0 +1,133 @@
+# RuyaOS — Shell UI/UX
+
+Status: **Draft v1** · Parent: [00-overview](00-overview.md)
+
+The shell (`ruya-shell`) is the only UI the user sees. It's written in Qt 6 Quick/QML with C++ glue. Per ADR-002 it is expected to also be the Wayland compositor. It holds no business logic: state and side effects live in the Rust services, which it reaches over D-Bus.
+
+## 1. Information architecture
+
+| Surface | Contents |
+|---|---|
+| **Profile picker** | Avatars and a guest tile; PIN pad (modal, numeric focus only) |
+| **Home** | Row of recent/pinned apps and games with hero background art; "Media" and "Games" rows; notifications badge |
+| **Library** | All installed apps and games; filter (Games/Media/Apps/Source) and sort |
+| **Store** | Featured, categories, search, app page (art, screenshots, rating, permissions, source badge Official/Community/Dev), install/update queue |
+| **Settings** | Profiles, Network, Bluetooth & controllers, Display (resolution, refresh, HDR later), Audio (output, volumes per channel), Storage & devices, Parental (later), Accessibility, System (update, channel, rollback, factory reset, about) |
+| **Overlay** (Guide button over a running app) | Return to home, close app, switch app, volume, notifications, power, screenshot (later) |
+| **System UI** | Volume OSD, toasts, device-inserted prompt, update-ready prompt, low-battery controller warning |
+| **OOBE / Installer** | 01 §5 |
+| **Safe mode** | 01 §2.1 |
+
+Each surface is a separate QML module loaded with `Loader { asynchronous: true }`. Home stays resident.
+
+## 2. Visual language
+- Dark theme, large type (TV 10-foot UI: min 24 px body at 1080p, scaled by display DPI and the user's text-scale setting).
+- Safe-area margin of 5% (overscan) by default, adjustable in Settings → Display.
+- Translucent "frosted glass" panels over blurred, dimmed hero art.
+- The focused item scales up (1.0 → 1.08) with a glow/outline ring. The focus ring is never hidden.
+- Design tokens (colours, spacing, durations, easing) live in one `Theme` QML singleton. No literals in components.
+
+## 3. Motion & effects
+
+### 3.1 Techniques
+| Technique | Use | Caveats |
+|---|---|---|
+| `Behavior on x/opacity/scale` | Implicit motion for focus, cards | Don't combine with an explicit animation on the same property |
+| `states` + `transitions` | Page and panel layouts | Keep the state count small and named |
+| `Sequential/ParallelAnimation` | Choreographed sequences (launch, boot-in) | Must be interruptible: a new input cancels and settles |
+| Animate `opacity`, `scale`, `x/y`, `rotation` only | GPU-cheap | Avoid animating `width/height`, layout or text |
+| `layer.enabled` / `ShaderEffectSource` | Cache static subtrees and the **single shared blurred backdrop** | Costs VRAM; invalidate rarely |
+| `MultiEffect` (blur, shadow, colourise) | Frosted panels, glow | Keep `blurMax` low on low tier; blur a downscaled source |
+| Custom `ShaderEffect` | Special effects | Shaders precompiled to `.qsb` via `qt_add_shaders()` in CMake; **no inline GLSL in Qt 6** |
+
+Blur pattern: render the backdrop (hero art) once to a quarter-resolution `ShaderEffectSource`, apply `MultiEffect` blur to that, and share the result among all panels. Re-blur only when the hero art changes, with a crossfade.
+
+### 3.2 Durations
+Focus move 120–160 ms, page transition 250–350 ms, overlay open 200 ms, all ease-out. These are defined as tokens. **Reduced motion** sets durations to 0 (or 60 ms crossfades) and disables parallax.
+
+### 3.3 Quality tiers
+`Effects = High | Balanced | Performance`, chosen automatically at first boot from the GPU (renderer string plus a quick benchmark) and overridable in Settings.
+
+| | High | Balanced | Performance |
+|---|---|---|---|
+| Backdrop blur | Full, ½-res source | ¼-res source | None (dim + static pre-blurred image) |
+| Parallax / ambient motion | On | Reduced | Off |
+| Art resolution | 4K variants | 1080p | 720p |
+
+## 4. Input & focus model
+
+### 4.1 Event path
+Physical pad → input daemon (ADR-003) → shell. While the shell has input focus, the daemon emits navigation as key events (Up/Down/Left/Right, Accept, Back, Menu, Guide, LB/RB, LT/RT) to the compositor's seat. While an app is focused, only **Guide** reaches the shell. Keyboard and mouse go through libinput and the compositor as normal.
+
+### 4.2 Mapping
+| Action | Xbox | PlayStation | Keyboard |
+|---|---|---|---|
+| Accept | A | ✕ (configurable to ○ for JP layout) | Enter |
+| Back | B | ○ | Esc / Backspace |
+| Context menu | Menu (☰) | Options | `M` / context key |
+| Guide / overlay | Xbox | PS | `Super` / `Home` |
+| Tab switch | LB/RB | L1/R1 | `Q`/`E`, PgUp/PgDn |
+| Fast scroll | LT/RT, stick held | L2/R2 | Home/End |
+
+### 4.3 Rules
+- Every screen has exactly one `FocusScope` root, and every interactive item is reachable with the D-pad. Directional navigation uses `KeyNavigation` or a small spatial-navigation helper (nearest item in the direction pressed).
+- Focus is never lost. When the focused item disappears, focus moves to the nearest sibling, else to the scope's default.
+- Focus is restored per surface and per profile (returning to Home focuses the last-launched tile).
+- Key repeat on hold: 400 ms delay, then accelerating repeat. The analog stick maps to the same, with speed proportional to deflection.
+- Long-press (≥ 500 ms) on Accept opens the context menu, with a visible progress ring.
+- Modal dialogs trap focus. The PIN pad accepts only digits, Back and Accept.
+- On the profile picker, any controller may act. After login, the logged-in profile's controller is "player 1".
+- The pointer is shown only after mouse movement and hidden after 3 s idle.
+
+## 5. Audio (UI side)
+- Channels: **UI SFX** (navigate, select, back, error, notification), **Ambient** (optional loop; default on/off is an open UX question), **Media/App** (everything else).
+- These are implemented as PipeWire stream roles (`media.role = Notification|Music|Game|Movie`). WirePlumber policy does **ducking**: Ambient is lowered by about 8 dB while a UI cue or app audio plays, and Ambient is muted whenever an app is in the foreground.
+- SFX playback uses `QSoundEffect` with preloaded WAVs. Configure a low PipeWire quantum for the SFX stream to hit the latency KPI.
+- Separate volume sliders for UI, Ambient and Master. The volume OSD appears on any volume change, including controller or keyboard media keys.
+- Mild stereo panning of navigation SFX by focus x-position (on in High, off otherwise).
+- Output switching (HDMI / analog / USB / Bluetooth) follows WirePlumber defaults with a "prefer most recently connected" rule. The shell shows a toast. Covered in 03 §2.3.
+
+## 6. Asset pipeline
+- Per app, the art set (from AppStream/`x-ruya-*` keys, or our fallback generator) is icon (SVG or 256 px), tile (16:9), hero (16:9, ≥ 1920 px), logo (transparent), and an optional background.
+- On install, `ruya-store` produces resized variants (720p/1080p/2160p) in WebP into `/var/cache/ruyaos/art/`. The shell loads only the variant matching the quality tier and display, via a `QQuickImageProvider` (`image://art/<appid>/<kind>`).
+- `Image { asynchronous: true; cache: true; sourceSize: … }` always. Show a placeholder or blurhash while loading.
+- **Budget:** ≤ 100 MB of textures on the low tier and ≤ 300 MB on mid/high. Off-screen rows unload their art. One shared blurred backdrop.
+- Shell-owned assets (sounds, icons, fonts) are compiled into the binary as Qt resources.
+
+## 7. Accessibility & internationalisation
+- Text scale (100–200%), high-contrast theme, reduced motion, mono audio, focus-ring size.
+- Screen reader: expose `Accessible.*` properties everywhere. Orca support on a custom compositor is **unknown**, so spike it in Phase 2 and record the result.
+- Subtitles are app-owned. The shell only offers a system-wide preference that it passes to apps where a standard exists.
+- All strings use `qsTr()`. Translations are Qt `.ts` files managed in a translation platform. Layouts use anchors/`LayoutMirroring` so RTL works (tested with a pseudo-RTL locale). Initial locales: en, tr (others later).
+
+## 8. KPIs (measured on real hardware; QEMU numbers don't count)
+
+| KPI | Target (mid tier) | Low tier | How measured |
+|---|---|---|---|
+| Frame rate in shell scenarios (home scroll, page transition, overlay open) | 60 FPS, p99 frame time < 20 ms | ≥ 30 FPS, no hitch > 50 ms | `QSG_RENDER_TIMING`/custom frame-swap timestamps → CSV, scripted input |
+| Input → photon (in our stack) | < 50 ms, evdev timestamp → page flip | < 70 ms | Timestamp the evdev event and the presentation feedback |
+| UI SFX latency | < 30 ms action → audio | same | Loopback capture |
+| Shell visible after kernel start | < 8 s | < 15 s | `systemd-analyze` + shell "ready" mark |
+| Resume from suspend → interactive | < 3 s | < 5 s | Scripted |
+| App launch → first frame (simple Flatpak) | < 2 s | < 4 s | Compositor surface-map timestamp |
+| Idle RSS, shell + ruya services | < 250 MB | < 250 MB | `smem` |
+| Shell GPU memory | < 300 MB | < 100 MB | `radeontop` / `intel_gpu_top` / `nvidia-smi` |
+| Memory growth in 24 h soak | < 5% | < 5% | Soak test |
+
+The UX gate is a moderated test with ≥ 5 people who rate "smooth / modern / immersive" ≥ 4/5 and can complete the core tasks (launch a game, switch profile, install an app) with the controller alone and no help.
+
+## 9. Performance rules
+1. Never block the GUI thread. All I/O goes over async D-Bus calls. `WorkerScript` is for pure CPU work only.
+2. Bindings and JavaScript should take ≤ 2 ms per frame. Profile with the QML Profiler, GammaRay and `perf` after each feature.
+3. Hide off-screen items (`visible: false`). Don't put alpha on fullscreen layers except the one backdrop.
+4. Keep V-Sync on. Never set a custom render loop frame rate.
+5. Test every effect change on the low tier before merging (CI KPI job on the reference box).
+
+## 10. Risks
+| Risk | Mitigation |
+|---|---|
+| Building a compositor (ADR-002 A) costs more than expected | Phase 1 spike with a timebox; fallback is option B (gamescope + shell client) |
+| Blur cost on the low tier | Quality tiers; pre-blurred static fallback |
+| Focus bugs in nested scopes and popups | Spatial nav helper plus QML tests that walk every screen with key events and assert `activeFocusItem` is never null |
+| Controller double input (shell and game, or Steam Input) | ADR-003 grab/re-emit; Steam Input configuration (03 §5) |
+| VRAM pressure from art | Budgets, tiered variants, unload off-screen |

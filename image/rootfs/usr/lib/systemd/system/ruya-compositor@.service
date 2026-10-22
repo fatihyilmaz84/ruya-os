@@ -1,0 +1,38 @@
+# Starts the compositor + shell directly on a VT, without a display manager or greeter.
+# Pattern from cage's "start on boot with systemd" guide; profile selection happens in the shell.
+[Unit]
+Description=RuyaOS compositor and shell on %I
+After=systemd-user-sessions.service
+Wants=dbus.socket systemd-logind.service
+After=dbus.socket systemd-logind.service
+Conflicts=getty@%i.service
+After=getty@%i.service
+Before=graphical.target
+ConditionPathExists=/dev/tty0
+StartLimitIntervalSec=120
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=ruya-shell
+PAMName=ruya-shell
+WorkingDirectory=~
+TTYPath=/dev/%I
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+StandardInput=tty-fail
+StandardOutput=journal
+StandardError=journal
+UtmpIdentifier=%I
+UtmpMode=user
+Environment=XDG_SESSION_TYPE=wayland
+Environment=QT_QPA_PLATFORM=wayland
+# Phase 0: -s keeps VT switching on for debugging. Production images drop it (01-platform §2.1).
+ExecStart=/usr/bin/cage -d -s -- /usr/bin/ruya-shell
+Restart=always
+RestartSec=1
+
+[Install]
+WantedBy=graphical.target
+DefaultInstance=tty1

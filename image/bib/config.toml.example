@@ -1,0 +1,7 @@
+# Copy to image/bib/config.toml (git-ignored) for DEV disk images only.
+# Gives you an SSH/console login into the VM; release images get no users here.
+[[customizations.user]]
+name = "dev"
+password = "change-me"
+key = "ssh-ed25519 AAAA... you@host"
+groups = ["wheel"]

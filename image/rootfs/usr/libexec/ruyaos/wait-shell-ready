@@ -1,0 +1,14 @@
+#!/bin/sh
+# Usage: wait-shell-ready [timeout-seconds]
+# Succeeds once ruya-shell has presented its first frame in the current boot.
+timeout="${1:-90}"
+elapsed=0
+while [ "$elapsed" -lt "$timeout" ]; do
+    if journalctl -b -q -o cat -u ruya-compositor@tty1.service | grep -q '^ruya-shell: ready$'; then
+        exit 0
+    fi
+    sleep 2
+    elapsed=$((elapsed + 2))
+done
+echo "ruya-shell did not report ready within ${timeout}s" >&2
+exit 1

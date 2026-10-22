@@ -1,0 +1,10 @@
+/output/
+/target/
+/build/
+services/target/
+shell/build/
+image/bib/config.toml
+*.qcow2
+*.raw
+*.iso
+.vscode/

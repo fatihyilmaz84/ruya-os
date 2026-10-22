@@ -1,0 +1,7 @@
+#%PAM-1.0
+# Used only by ruya-compositor@.service (systemd runs account + session, never auth).
+auth       required   pam_deny.so
+account    required   pam_unix.so
+session    required   pam_loginuid.so
+session    required   pam_unix.so
+session    required   pam_systemd.so

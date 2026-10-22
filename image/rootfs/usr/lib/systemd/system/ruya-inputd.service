@@ -1,0 +1,30 @@
+[Unit]
+Description=RuyaOS gamepad navigation bridge
+Documentation=file:///usr/share/doc/ruyaos/
+Before=ruya-compositor@tty1.service
+
+[Service]
+ExecStart=/usr/bin/ruya-inputd
+Restart=always
+RestartSec=2
+# Root only for owner access to /dev/input/event* and /dev/uinput; no capabilities.
+CapabilityBoundingSet=
+NoNewPrivileges=yes
+DevicePolicy=closed
+DeviceAllow=char-input r
+DeviceAllow=/dev/uinput rw
+PrivateNetwork=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

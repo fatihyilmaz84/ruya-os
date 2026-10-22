@@ -1,0 +1,57 @@
+# RuyaOS bootc image (Phase 0). Build context = repository root:
+#   podman build -f image/Containerfile -t localhost/ruyaos:dev .
+ARG FEDORA_VERSION=44
+
+# ---- shell (Qt 6 / QML) -------------------------------------------------------------
+FROM registry.fedoraproject.org/fedora:${FEDORA_VERSION} AS shell-build
+RUN dnf -y install --setopt=install_weak_deps=False \
+        cmake ninja-build gcc-c++ \
+        qt6-qtbase-devel qt6-qtdeclarative-devel qt6-qtmultimedia-devel \
+    && dnf clean all
+COPY shell /src/shell
+RUN cmake -S /src/shell -B /build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr \
+    && cmake --build /build \
+    && DESTDIR=/out cmake --install /build
+
+# ---- Rust services ------------------------------------------------------------------
+FROM registry.fedoraproject.org/fedora:${FEDORA_VERSION} AS services-build
+RUN dnf -y install --setopt=install_weak_deps=False cargo rust && dnf clean all
+COPY services /src/services
+RUN cd /src/services \
+    && cargo build --release --locked \
+    && install -Dm755 target/release/ruya-inputd /out/usr/bin/ruya-inputd
+
+# ---- OS image -----------------------------------------------------------------------
+FROM quay.io/fedora/fedora-bootc:${FEDORA_VERSION}
+ARG RUYA_VERSION=0.0.0-dev
+
+# Package names: docs/specs/01-platform.md §1.2. No DE, no display manager, and no
+# pulseaudio/jack-audio-connection-kit (they conflict with the pipewire-* replacements).
+RUN dnf -y install --setopt=install_weak_deps=False \
+        cage \
+        qt6-qtbase qt6-qtbase-gui qt6-qtdeclarative qt6-qtwayland qt6-qtmultimedia \
+        mesa-dri-drivers mesa-vulkan-drivers \
+        pipewire pipewire-pulseaudio pipewire-alsa wireplumber \
+        NetworkManager-wifi bluez \
+        udisks2 exfatprogs ntfs-3g \
+        flatpak \
+        greenboot greenboot-default-health-checks \
+        google-noto-sans-fonts \
+    && dnf clean all
+
+COPY image/rootfs/ /
+COPY --from=shell-build /out/ /
+COPY --from=services-build /out/ /
+
+RUN mkdir -p /usr/lib/ruyaos \
+    && echo "${RUYA_VERSION}" > /usr/lib/ruyaos/version \
+    && chmod 0755 /usr/libexec/ruyaos/wait-shell-ready /usr/lib/greenboot/check/required.d/*.sh \
+    && systemctl enable ruya-compositor@tty1.service ruya-inputd.service ruya-boot-marker.service \
+    && systemctl set-default graphical.target \
+    && rm -rf /var/cache/* /var/log/* /var/lib/dnf
+
+LABEL containers.bootc=1 \
+      org.opencontainers.image.title="RuyaOS" \
+      org.opencontainers.image.version="${RUYA_VERSION}"
+
+RUN bootc container lint
