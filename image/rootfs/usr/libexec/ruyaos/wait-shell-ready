@@ -1,10 +1,16 @@
 #!/bin/sh
 # Usage: wait-shell-ready [timeout-seconds]
 # Succeeds once ruya-shell has presented its first frame in the current boot.
+#
+# Match by the shell user's UID, not by unit: pam_systemd moves the compositor into a login
+# session scope (session-N.scope), so its output is not attributed to
+# ruya-compositor@tty1.service. _UID is set by journald and cannot be spoofed by other
+# users writing to the journal.
 timeout="${1:-90}"
+uid="$(id -u ruya-shell 2>/dev/null)" || { echo "user ruya-shell does not exist" >&2; exit 1; }
 elapsed=0
 while [ "$elapsed" -lt "$timeout" ]; do
-    if journalctl -b -q -o cat -u ruya-compositor@tty1.service | grep -q '^ruya-shell: ready$'; then
+    if journalctl -b -q -o cat _UID="$uid" | grep -q '^ruya-shell: ready$'; then
         exit 0
     fi
     sleep 2

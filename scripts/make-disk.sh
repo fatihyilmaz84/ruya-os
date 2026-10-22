@@ -11,8 +11,11 @@ bib="${BIB_IMAGE:-quay.io/centos-bootc/bootc-image-builder:latest}"
 
 mkdir -p output
 config_args=()
+# Local dev config (SSH access, git-ignored) wins; otherwise the committed defaults (disk size).
 if [[ -f image/bib/config.toml ]]; then
     config_args=(-v "$PWD/image/bib/config.toml:/config.toml:ro")
+else
+    config_args=(-v "$PWD/image/bib/disk.toml:/config.toml:ro")
 fi
 
 # bootc-image-builder needs a rootful podman and the image in root's storage.

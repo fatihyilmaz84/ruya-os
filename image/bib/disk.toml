@@ -1,0 +1,7 @@
+# Default bootc-image-builder config for test disks (used when image/bib/config.toml is absent).
+# The image is ~4.7 GB; an A/B update stages a second deployment next to the booted one, so the
+# default ~10 GB root is too small (found in the first update drill). 40 GiB is a sparse qcow2:
+# it costs only what is written.
+[[customizations.filesystem]]
+mountpoint = "/"
+minsize = "40 GiB"

@@ -48,7 +48,9 @@ RuyaOS is an open-source, immutable (Fedora bootc) console OS for living-room PC
 ## Hard rules
 
 - **Decisions.** ADRs marked *Accepted* in `00-overview.md` are binding. If a task seems to need a different decision, or a new owner-level one (legal, licensing, product scope, spending, publishing), do not decide it yourself. Add a *Proposed* ADR, mark the task `blocked` with the question, and stop.
-- **This machine is Windows with no Linux VM.** Never install system software, enable WSL/Hyper-V, or change system settings. Linux-only code (image, systemd units, `#[cfg(target_os = "linux")]` paths, QtDBus against a live bus) can only be type-checked and syntax-checked here. Say so; never claim it works.
+- **This machine is Windows, with a Fedora 44 WSL distribution for image builds and QEMU (WHPX) for boot tests** (`docs/dev-setup.md`). Never install system software or change system settings yourself; installing packages *inside* the WSL distribution with `dnf` is fine.
+  - **Image changes** (Containerfile, `image/`, systemd units, services as packaged) can now be **built and boot-tested**: `scripts/build.sh` + `make-disk.sh` in WSL, then `scripts\smoke-test.ps1`. A task that changes the image is not `done` until it boots with `RUYA_BOOT_OK`. Image builds take 3–30 minutes, so run them in the background.
+  - **Still unverifiable here** (say so, never claim it works): real GPU/KPI numbers, controllers in the VM, audio in the VM (no sound device), and the shell talking to services over D-Bus *unless* you test it inside the VM over SSH.
 - **Tests are the spec's teeth.** Never weaken an assertion, add `skip()`, or delete a test to get green. If a test is wrong, fix it and explain why in the Outcome.
 - **Security invariants**:
   - PIN hashes never leave `ruya-profiles`.

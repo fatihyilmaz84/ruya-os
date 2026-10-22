@@ -1,47 +1,59 @@
 # Developer setup (Windows host)
 
-Matches setup **A** in [01-platform §6.1](specs/01-platform.md): edit on Windows, build in a Linux VM, test functionally in QEMU, and measure KPIs on real hardware.
+Edit on Windows, build in a Fedora WSL distribution, boot in QEMU for Windows (WHPX), and measure KPIs on real hardware ([01-platform §6.1](specs/01-platform.md)). This is the setup actually in use since 2026-10-22.
 
-## One-time setup
+## One-time setup (done on the main dev machine)
 
-1. **Enable WSL2.** This needs an elevated PowerShell and a reboot:
-   ```powershell
-   wsl --install --no-distribution
-   ```
-2. **Install Podman Desktop** (≥ 1.10) from podman-desktop.io. Create a Podman Machine that is **rootful**, with **≥ 6 GB RAM** and ≥ 60 GB disk. bootc-image-builder needs rootful mode.
-   ```powershell
-   podman machine init --rootful --memory 8192 --disk-size 80 --cpus 6
-   podman machine start
-   ```
-3. **Install QEMU for Windows** (qemu.weilnetz.de) to the default path `C:\Program Files\qemu`, and turn on the Windows feature *Windows Hypervisor Platform* so QEMU can use WHPX.
-4. Optional but recommended: a spare **low-tier mini-PC** (Intel NUC class) for hardware checks. Flash it from `output/anaconda-iso/` with Fedora Media Writer or Rufus (DD mode).
+1. **WSL2** (admin + reboot): `wsl --install --no-distribution`.
+2. **Fedora 44 WSL distribution** (no admin): `wsl --install FedoraLinux-44 --no-launch`. Use it as root (`wsl -d FedoraLinux-44 -u root`), then install the tools: `dnf -y install podman git qemu-img`. No Podman Desktop or Podman Machine is needed.
+3. **QEMU for Windows** at `C:\Program Files\qemu`, with the *Windows Hypervisor Platform* feature on (WHPX acceleration, verified working).
+4. **`%USERPROFILE%\.wslconfig`**: `memory=20GB` (the build uses a lot of memory). `nestedVirtualization=true` is also set but has no effect on this AMD host (`/dev/kvm` stays absent in WSL), so VMs run in Windows QEMU, not inside WSL.
+5. **Dev VM access:**
+   - an SSH key at `%USERPROFILE%\.ssh\ruyaos_dev` (`ssh-keygen -t ed25519 -N "" -f ...`);
+   - `image/bib/config.toml` (git-ignored, copied from `config.toml.example`), which puts that key on `root` in test disks.
+6. Optional but recommended: a spare **low-tier mini-PC** for hardware checks. Flash it from `output/anaconda-iso/` with Fedora Media Writer or Rufus (DD mode).
 
 ## Build → disk → boot
 
-Run the build steps inside the Podman Machine (`podman machine ssh`), from the repo, which is mounted at `/mnt/d/dev/RuyaOS` on the WSL backend:
+In WSL (`wsl -d FedoraLinux-44 -u root`; the repo is at `/mnt/d/dev/RuyaOS`):
 
 ```bash
-scripts/build.sh                 # -> localhost/ruyaos:dev
-scripts/make-disk.sh qcow2       # -> output/qcow2/disk.qcow2
-scripts/make-disk.sh anaconda-iso
+cd /mnt/d/dev/RuyaOS
+scripts/build.sh 0.0.5        # -> localhost/ruyaos:dev; first build ~30 min, later ~3-10 min (layer cache)
+scripts/make-disk.sh qcow2    # -> output/qcow2/disk.qcow2, ~9 min, 40 GiB sparse root
 ```
 
-Then boot the qcow2 on Windows:
+The build runs `bootc container lint --fatal-warnings`: any lint warning fails it.
+
+Then, on Windows:
 
 ```powershell
-.\scripts\run-vm.ps1
+.\scripts\smoke-test.ps1                # headless boot; prints RUYA_BOOT_OK <version> when the shell has drawn a frame (~1 min)
+.\scripts\smoke-test.ps1 -Keep          # same, but leave the VM running
+ssh -i $env:USERPROFILE\.ssh\ruyaos_dev -p 2222 root@127.0.0.1   # use 127.0.0.1, not localhost (IPv6)
+.\scripts\run-vm.ps1                    # with a window, to look at the shell (software rendering)
 ```
 
-On a Linux host with KVM, use `scripts/run-vm.sh` instead. For a headless check, run `scripts/smoke-test.sh`. It prints `RUYA_BOOT_OK <version>` once the shell has presented a frame.
+In the VM, the shell's own log is `journalctl -b _UID=$(id -u ruya-shell)`. pam_systemd moves the compositor into `session-N.scope`, so `journalctl -u ruya-compositor@tty1` shows only the unit's start.
 
-To log into the VM, copy `image/bib/config.toml.example` to `image/bib/config.toml`, fill in your SSH key, and rebuild the disk. Then connect with `ssh -p 2222 dev@localhost`. In the VM, `journalctl -u ruya-compositor@tty1` shows the shell log.
+## Update / rollback drill (Phase 0 items 6–7; passed 2026-10-22)
 
-## Update / rollback drill (Phase 0 items 6–7)
-
-1. `scripts/build.sh 0.0.1` → `make-disk.sh qcow2` → boot. The corner of the screen shows `0.0.1`.
-2. `scripts/build.sh 0.0.2`, push it to a registry the VM can reach (e.g. `podman push localhost/ruyaos:dev 10.0.2.2:5000/ruyaos:dev --tls-verify=false` with a local `registry:2` container). In the VM: `sudo bootc switch --transport registry 10.0.2.2:5000/ruyaos:dev` (configure an insecure registry first), then reboot. The screen shows `0.0.2`.
-3. `sudo bootc rollback && sudo reboot`. The screen shows `0.0.1`.
-4. Greenboot: build an image whose shell fails to start (e.g. `ExecStart=/bin/false`), switch to it, and confirm the VM rolls itself back after 3 boots.
+1. Put a persistent copy of the disk in place: `Copy-Item output\qcow2\disk.qcow2 output\qcow2\drill.qcow2`. Boot it with `.\scripts\smoke-test.ps1 -Disk output\qcow2\drill.qcow2 -Persistent -Keep`.
+2. **Registry**, in WSL:
+   ```bash
+   podman run -d --name registry --network host docker.io/library/registry:2
+   podman tag localhost/ruyaos:dev localhost:5000/ruyaos:<ver>
+   podman push --tls-verify=false localhost:5000/ruyaos:<ver>
+   ```
+   **The VM must use WSL's IP, not 10.0.2.2.** WSL localhost forwarding doesn't work on this host. Get the IP with `wsl -d FedoraLinux-44 -- ip -4 addr show eth0`; it changes when WSL restarts. In the VM, mark that registry as insecure in `/etc/containers/registries.conf.d/50-ruyaos-dev.conf`:
+   ```toml
+   [[registry]]
+   location = "<wsl-ip>:5000"
+   insecure = true
+   ```
+3. **Update:** in the VM, `bootc switch <wsl-ip>:5000/ruyaos:<ver>` (about 2 minutes). Then `.\scripts\vm-reboot-check.ps1`, which reboots, waits for the shell, and prints the deployments and greenboot's verdict.
+4. **Manual rollback:** `bootc rollback`, then `.\scripts\vm-reboot-check.ps1`.
+5. **Automatic rollback (greenboot):** build an image whose compositor is `ExecStart=/bin/false`, `bootc switch` to it, and reboot. Every boot fails the shell health check and greenboot reboots; after 3 failed boots GRUB falls back to the previous deployment. Results are in `docs/STATUS.md`, session log 2026-10-22.
 
 ## Shell-only iteration
 
@@ -105,8 +117,21 @@ cmake -S shell -B shell/build -G Ninja && cmake --build shell/build && shell/bui
 ```
 
 ## Known limits on this host
-- QEMU on Windows renders through software, so FPS numbers there mean nothing.
+- QEMU on Windows renders through software (`MESA-EGL: failed to create dri2 screen` is expected), so FPS numbers there mean nothing.
 - Gamepad passthrough into QEMU on Windows is unreliable. Test controllers on hardware or a Linux host (`-device usb-host,...`).
+- The test VM has no audio device. The shell logs `QSoundEffect: playback of this format is not supported` against PipeWire's dummy output; UI sound is unverified in VMs.
 
-## Problems hit
-_Log problems here as they come up (Phase 0 exit item 9)._
+## Problems hit (Phase 0 exit item 9)
+
+| Problem | Cause | Fix / workaround |
+|---|---|---|
+| Shell never reported ready, though it was running | pam_systemd moves the compositor into `session-N.scope`; the check searched the unit's log | `wait-shell-ready` matches `_UID` of `ruya-shell` (also used by greenboot) |
+| No automatic rollback at all | greenboot units are preset-disabled in Fedora | Enabled in the Containerfile; stock DNS check disabled (would roll back offline boots) |
+| `bootc switch` failed to stage | default bib root (~10 GB) can't hold two 4.7 GB deployments | `image/bib/disk.toml`: 40 GiB minimum root; `bootc-generic-growpart` grows existing disks after `qemu-img resize` |
+| VM couldn't reach the registry | WSL localhost forwarding doesn't work here; Podman port NAT is invisible to it anyway | Registry on `--network host`, VM uses WSL's IP |
+| QEMU hangs at "reboot: Restarting system" (0% CPU) | WHPX reset bug | QEMU runs with `-no-reboot`; `vm-reboot-check.ps1` cold-starts it again |
+| `Start-Process` split `C:\Program Files\...` | PS 5.1 doesn't quote array arguments | `smoke-test.ps1` quotes arguments that contain spaces |
+| `ssh localhost` refused | `localhost` resolves to IPv6 first; QEMU listens on IPv4 only | Use `127.0.0.1` |
+| Lint warnings: `/run` content, the `akmods` user, `/var` without tmpfiles | Build leftovers | `99-cleanup.sh`, `40-nvidia.sh` (`userdel`), `95-var-tmpfiles.sh` (generated entries) |
+| `ruya-shell` not in `video`/`render` | Those groups live in `/usr/lib/group` on bootc; sysusers can't edit them | Not needed: logind grants seat0 device ACLs. Lines removed. |
+| Quoting through PowerShell → `wsl`/`ssh` → shell mangles `$?`, `|`, quotes | Several layers of quoting | Put multi-step commands in script files (`output/*.sh`) and run them |

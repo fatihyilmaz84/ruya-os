@@ -151,19 +151,19 @@ docs/         specs, ADRs, archive
 
 ## 8. Phase 0 checklist (exit criteria)
 
-Legend: ✅ verified · 🟡 implemented, not yet run on Linux · ⬜ not started
+Legend: ✅ verified · 🟡 implemented, partly verified · ⬜ not started. Verified in QEMU/WHPX on 2026-10-22 unless noted.
 
 | # | Item | Status | Where |
 |---|---|---|---|
-| 1 | `image/Containerfile` builds from `fedora-bootc:<N>`; `bootc container lint` clean | 🟡 lint runs in the build | `image/Containerfile` |
-| 2 | bootc-image-builder → qcow2 + anaconda-iso | 🟡 | `scripts/make-disk.sh` |
-| 3 | qcow2 boots in QEMU (UEFI, virtio); cage starts the QML shell fullscreen with animation + `MultiEffect` blur; no login prompt or desktop | 🟡 shell itself ✅ on host (native build + Qt Quick tests) | `ruya-compositor@.service`, `shell/` |
-| 4 | Keyboard arrows move focus; a USB gamepad does the same | 🟡 keys ✅ on host; gamepad mapping unit-tested | `services/ruya-inputd` |
-| 5 | A UI click plays through PipeWire | 🟡 | `shell/sounds`, `SoundEffect` |
-| 6 | Update N → N+1 and rollback, visible version change | 🟡 version shown bottom-right | `docs/dev-setup.md` drill |
-| 7 | greenboot rolls back a broken image automatically | 🟡 check script written; **greenboot behaviour on bootc unverified** (classic greenboot vs greenboot-rs) | `usr/lib/greenboot/check/required.d/` |
+| 1 | `image/Containerfile` builds from `fedora-bootc:<N>`; `bootc container lint` clean | ✅ Fedora 44, 14 checks, `--fatal-warnings` | `image/Containerfile` |
+| 2 | bootc-image-builder → qcow2 + anaconda-iso | ✅ qcow2 (40 GiB root) · ISO: see STATUS | `scripts/make-disk.sh`, `image/bib/disk.toml` |
+| 3 | qcow2 boots in QEMU (UEFI, virtio); cage starts the QML shell fullscreen with animation + `MultiEffect` blur; no login prompt or desktop | ✅ `RUYA_BOOT_OK` about 4 s after the compositor starts (software rendering in the VM; blur only judged on host/GPU) | `ruya-compositor@.service`, `scripts/smoke-test.ps1` |
+| 4 | Keyboard arrows move focus; a USB gamepad does the same | 🟡 keys ✅ on host; `ruya-inputd` runs in the VM; a gamepad needs hardware | `services/ruya-inputd` |
+| 5 | A UI click plays through PipeWire | 🟡 the VM has no audio device (dummy sink); needs hardware or an `-audiodev` | `shell/sounds`, `SoundEffect` |
+| 6 | Update N → N+1 and rollback, visible version change | ✅ 0.0.3 → 0.0.4 via `bootc switch` (about 2 min), `bootc rollback` → 0.0.3 | `docs/dev-setup.md` drill, `scripts/vm-reboot-check.ps1` |
+| 7 | greenboot rolls back a broken image automatically | ✅ greenboot 0.16 (Rust) once its units are enabled: 4 failed boots, then GRUB fell back to the previous deployment | `/usr/lib/greenboot/check/required.d/`, `/etc/greenboot/greenboot.conf` |
 | 8 | ISO installs on one real low-tier machine; frame time recorded | ⬜ needs hardware | — |
-| 9 | `docs/dev-setup.md` reflects the setup actually used, including problems | 🟡 written; problems section empty until first build | `docs/dev-setup.md` |
+| 9 | `docs/dev-setup.md` reflects the setup actually used, including problems | ✅ setup, drill recipe and a 10-row problem log | `docs/dev-setup.md` |
 
 CI (`.github/workflows/ci.yml`) covers 1–3 automatically once the repo is on GitHub. It runs Rust lint and tests, the shell build with qmllint and Qt Quick tests (Fedora container), the image build, the qcow2, and a headless QEMU boot that waits for `RUYA_BOOT_OK` on the serial port.
 

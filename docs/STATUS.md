@@ -6,11 +6,11 @@ Last updated: 2026-10-22 (Sonnet 5.5, planning)
 
 ## Where we are
 
-- **Phase 0 (foundation):** scaffolded, but the image has **never been built or booted**, because this host has no Linux. See blockers B-001, B-002 and B-008.
+- **Phase 0 (foundation):** **verified in a VM on 2026-10-22.** The image builds, passes lint, boots to the shell, updates, and rolls back both manually and automatically (greenboot). Only the real-hardware item is left (B-002).
 - **Phase 1–2 (shell core, profiles):** in progress on the Windows host against mock services.
-- **Host constraints:** Windows-only development. The owner has said to continue on this machine. Linux-only work waits in the Blocked table.
+- **Host:** Windows, plus a Fedora 44 WSL distribution for image builds and QEMU/WHPX for boot tests (`docs/dev-setup.md`). Work that needs a GPU, controllers or audio still waits in the Blocked table.
 
-Verification legend: **host** = built and tested on the Windows host · **unverified** = written, but cannot run here (Linux/image/D-Bus) · **hw** = verified on real hardware.
+Verification legend: **host** = built and tested on the Windows host · **vm** = built into the image and verified booted in QEMU · **unverified** = written, but not run · **hw** = verified on real hardware.
 
 ## Board
 
@@ -36,6 +36,12 @@ The order above is the recommended order. When the NEXT task is blocked, take th
 ## Inbox
 
 Follow-ups, debt and ideas waiting for a planner session. Builders: add one line per item, `- (source) what, and why it matters`. Don't write task files for these unless your own task needs one. A planner session turns them into tasks, drops them with a reason, or escalates them. **Run a planner when this list has 5+ items.**
+
+- (B-001) **B-005 is unblocked.** The VM runs the real shell against the real `ruya-profiles` over the system bus, with an empty profile store, so it shows an empty picker until T-106 (OOBE) lands. Plan a task to verify Profiles over D-Bus in the VM (picker, PIN, lockout, CreateProfile, SetPin) and fix what breaks.
+- (B-001) A failed boot takes about 100 s (90 s greenboot check + 120 s VM marker), so automatic rollback takes about 7 minutes. Consider a shorter required-check timeout once real-hardware boot times are known (spec 02 §8 KPI: shell < 15 s on the low tier).
+- (B-001) The image is 4.7 GB. A switch reuses layers (0.0.3→broken needed 931 bytes; 0.0.3→0.0.4 about 2 minutes because the NVIDIA layer was rebuilt). Measure real update sizes and plan chunked images (spec 01 §4) before release.
+- (B-001) The VM has no audio device, so UI sound (PipeWire, QSoundEffect formats) is unverified on Linux. Add an `-audiodev` to a VM profile, or test on hardware.
+- (B-001) CI (`.github/workflows/ci.yml`) predates today's fixes: it never ran, still uses `scripts/smoke-test.sh` (Linux/KVM), and doesn't run the update/greenboot drill. Review it when the repo gets a remote.
 
 
 _(empty: handled in the 2026-10-22 planning session; see its log entry)_
@@ -65,14 +71,14 @@ A session can't know its own commit hash before committing, so new rows put the 
 
 | ID | What | Needs | Notes |
 |---|---|---|---|
-| B-001 | Build the image, boot it in QEMU, run the update/rollback drill (01-platform §8 items 1–7) | Linux builder (WSL2 + Podman, a Linux VM, or CI with a GitHub remote) | `scripts/*.sh`, `docs/dev-setup.md`. Highest-value unblock. |
-| B-002 | Install on a real low-tier machine; first frame-time numbers (§8 item 8) | Hardware + B-001 | |
+| ~~B-001~~ | **Done 2026-10-22 (vm).** Image built (lint clean, fatal warnings), booted to the shell, update 0.0.3→0.0.4, manual rollback, and greenboot automatic rollback from a broken image | — | Session log 2026-10-22 (Opus); recipe in `docs/dev-setup.md` |
+| B-002 | Install on a real low-tier machine; first frame-time numbers (§8 item 8) | Hardware | A dev installer ISO now exists (`output/bootiso/`, contains the dev SSH key; for test machines only) |
 | B-003 | Compositor spike: shell as QtWaylandCompositor, overlay over a running game (ADR-002) | Linux with a GPU | Decides the product architecture; do it as soon as Linux is available. Also check there: the volume-key `Shortcut`s (T-108) work with an app focused. |
 | B-004 | `ruya-store` Rust service over libflatpak/AppStream | Linux | Contract from T-110 |
-| B-005 | Shell ↔ services over a real D-Bus (Profiles first) | Linux | Recipe in `docs/dev-setup.md` ("Against the real profiles service") |
+| B-005 | Shell ↔ services over a real D-Bus (Profiles first) | **Unblocked:** the VM runs the real shell, `ruya-profiles` and the system bus | Can be done in the VM over SSH now; needs a task (planner) |
 | B-006 | Replace the `ruya-inputd` stopgap with InputPlumber (ADR-003), with grab/re-emit | Linux + controllers | Also owns the key-repeat model (400 ms delay then accelerating repeat, stick repeat speed) and Accept long-press / context menu from spec 02 §4.3; the shell only sees key events. |
 | B-007 | `ruya-devices` service (PipeWire, NetworkManager, BlueZ) | Linux | Audio contract from T-114 |
-| B-008 | Verify greenboot auto-rollback on bootc and the NVIDIA kmod build step | B-001 | Known risk: greenboot vs greenboot-rs packaging on the target Fedora |
+| ~~B-008~~ | **Done 2026-10-22 (vm).** greenboot (0.16, Rust) works on bootc once its units are enabled: 4 failed boots of a broken image, then GRUB fell back. The NVIDIA 615.78 kmod builds and is signed in the image; the private key is removed | — | Loading on real NVIDIA hardware and Secure Boot/MOK are still unverified (needs hardware) |
 
 ## Open owner decisions
 
@@ -84,6 +90,30 @@ A session can't know its own commit hash before committing, so new rows put the 
 ## Session log (newest first)
 
 Each entry: date · model · tasks · what happened · verification · follow-ups. Keep entries short and factual.
+
+### 2026-10-22 · Opus 5.5 · B-001, B-008 (first real image builds and boots)
+The owner installed WSL and QEMU. Set up a Fedora 44 WSL distribution (Podman, no Podman Machine), WHPX QEMU, a dev SSH key, and a git-ignored `image/bib/config.toml`.
+
+Results:
+- The **first build** passed (31 min).
+- **Smoke test:** first `RUYA_BOOT_FAIL`, although the shell was running; fixed, now `RUYA_BOOT_OK`.
+- **Update** 0.0.3→0.0.4: OK.
+- **Manual rollback:** OK.
+- **greenboot automatic rollback:** 4 failed boots of a broken image, then GRUB fell back to 0.0.3 by itself.
+
+Found and fixed:
+- **Readiness check.** `wait-shell-ready` searched the unit's log, but pam_systemd moves the compositor to `session-N.scope`. It now matches `_UID` of `ruya-shell`. Unfixed, greenboot would have rolled back every healthy boot.
+- **greenboot was installed but disabled.** Its units are now enabled, and its DNS check is disabled because offline boots would roll back.
+- **Test disks too small for an A/B update.** `image/bib/disk.toml` sets a 40 GiB root.
+- **Lint warnings** fixed (`/run` leftovers, the `akmods` user, `/var` without tmpfiles). Lint now runs with `--fatal-warnings`.
+- **Dead sysusers lines** for `video`/`render` removed (bootc keeps those groups in `/usr/lib/group`; logind ACLs suffice).
+- **Host quirks** worked around and documented: WHPX hangs on guest reset (QEMU uses `-no-reboot`), WSL localhost forwarding doesn't work (the registry is reached via WSL's IP), and PS 5.1 argument quoting.
+
+New scripts: `scripts/smoke-test.ps1`, `scripts/vm-reboot-check.ps1`. The full recipe and a problem log are in `docs/dev-setup.md`. `CLAUDE.md` and `image/CLAUDE.md` now require image changes to boot-test.
+
+Verification: vm (as above). `dev.ps1 test` ALL GREEN.
+
+Unverified: real hardware, NVIDIA loading, Secure Boot/MOK, audio, controllers.
 
 ### 2026-10-22 · Sonnet 5.5 · T-115
 Profiles1 contract extension:

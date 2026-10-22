@@ -1,6 +1,16 @@
 # image/ — rules for the bootc OS image
 
-**This machine cannot build or boot the image** (no Linux, no Podman). Every change here is unverified until it runs in CI or on Linux. Say so in STATUS and the task Outcome.
+**Build and boot-test every change here** (setup and commands in `docs/dev-setup.md`):
+
+1. In WSL (`wsl -d FedoraLinux-44 -u root`, repo at `/mnt/d/dev/RuyaOS`): `scripts/build.sh <version>`. It must pass `bootc container lint --fatal-warnings`. Then `scripts/make-disk.sh qcow2`.
+2. On Windows: `.\scripts\smoke-test.ps1`. It must print `RUYA_BOOT_OK <version>`. For anything touching updates, boot health or greenboot, also run the update/rollback drill from `dev-setup.md`.
+3. To debug a VM:
+   - run `smoke-test.ps1 -Keep`, then `ssh -i $env:USERPROFILE\.ssh\ruyaos_dev -p 2222 root@127.0.0.1`;
+   - `output\serial.log` holds the full boot console;
+   - the shell's log is `journalctl -b _UID=$(id -u ruya-shell)`.
+   Put multi-line diagnostics in a script file and `scp` it over; inline quoting through PowerShell → ssh breaks `$?`, `|` and quotes.
+
+Builds take 3–30 minutes (the NVIDIA step is cached unless `image/build/` or earlier layers change); run them in the background.
 
 ## Layout
 
@@ -20,8 +30,12 @@
   - must not contain Windows-mangled backslashes. Write them with the Write/Edit tools.
 - A new service or unit has to be enabled in the Containerfile's `systemctl enable` line (see `services/CLAUDE.md`).
 - Keep `RUN bootc container lint` as the last instruction.
-- Validation available here:
+- Fast checks before a full build:
   - `bash -n` on scripts;
-  - reading the Containerfile carefully;
-  - `systemd-analyze verify` is **not** available.
-  CI (`.github/workflows/ci.yml`) does the real build once the repo has a remote.
+  - `podman run --rm localhost/ruyaos:dev systemd-analyze verify <unit>` against the last built image, for units.
+  The full build plus smoke test above is the real check. CI (`.github/workflows/ci.yml`) repeats it once the repo has a remote.
+- **Known VM quirks**, so you don't chase them:
+  - WHPX hangs on guest reset, so QEMU runs with `-no-reboot` and `vm-reboot-check.ps1` cold-starts it;
+  - use `127.0.0.1`, not `localhost`, for SSH;
+  - the VM reaches a WSL registry only through WSL's IP;
+  - software rendering and no audio device in the VM are expected.

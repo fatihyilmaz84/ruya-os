@@ -32,6 +32,10 @@ install -Dm644 /etc/pki/akmods/certs/public_key.der /usr/share/ruyaos/secureboot
 systemctl enable nvidia-suspend.service nvidia-resume.service nvidia-hibernate.service || true
 
 dnf -y remove "kernel-devel-${kver}" akmods akmod-nvidia || true
+# The akmods build user outlives its package; drop it so /etc/passwd only holds accounts that
+# sysusers.d declares (`bootc container lint`: sysusers).
+userdel akmods 2>/dev/null || true
+groupdel akmods 2>/dev/null || true
 
 # Never ship the private signing key: anyone holding it could sign modules that
 # MOK-enrolled machines would trust.

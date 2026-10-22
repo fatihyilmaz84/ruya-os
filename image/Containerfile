@@ -42,8 +42,10 @@ RUN --mount=type=bind,source=image/build,target=/ctx/build \
     && echo "${RUYA_VERSION}" > /usr/lib/ruyaos/version \
     && chmod 0755 /usr/libexec/ruyaos/wait-shell-ready /usr/lib/greenboot/check/required.d/*.sh \
     && systemctl enable ruya-compositor@tty1.service ruya-inputd.service ruya-profiles.service ruya-boot-marker.service \
+    && systemctl enable greenboot-healthcheck.service greenboot-set-rollback-trigger.service \
     && systemctl set-default graphical.target \
     && /ctx/build/90-initramfs.sh \
+    && /ctx/build/95-var-tmpfiles.sh \
     && /ctx/build/99-cleanup.sh
 
 LABEL containers.bootc=1 \
@@ -51,4 +53,5 @@ LABEL containers.bootc=1 \
       org.opencontainers.image.version="${RUYA_VERSION}" \
       org.opencontainers.image.licenses="GPL-3.0-or-later AND (MIT OR Apache-2.0)"
 
-RUN bootc container lint
+# Warnings are fatal: the image was warning-free as of 0.0.2, keep it that way.
+RUN bootc container lint --fatal-warnings
