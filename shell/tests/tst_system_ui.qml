@@ -46,6 +46,13 @@ Item {
             Notifications.pending = []
         }
 
+        // activeFocus is false everywhere when the OS deactivates the test window (another
+        // window grabbing focus during a long test). The item's own `focus` flag still shows
+        // that the shell kept focus where it belongs, so fall back to it only in that case.
+        function hasFocus(item) {
+            return item.activeFocus || (!host.Window.window.active && item.focus)
+        }
+
         function signInAsAda() {
             keyClick(Qt.Key_Right)
             keyClick(Qt.Key_Return)
@@ -88,7 +95,7 @@ Item {
             verify(Notifications.model.count <= 3)
             tryCompare(Notifications.model, "count", 0, 5000, "and each goes away by itself")
             compare(Notifications.pendingCount, 0)
-            verify(find("tiles").activeFocus)
+            verify(tc.hasFocus(find("tiles")))
         }
 
         function test_toast_kind_falls_back_to_info() {
@@ -115,7 +122,7 @@ Item {
             tryCompare(Audio, "muted", false)
 
             tryCompare(osd, "shown", false, 4000, "the OSD hides by itself")
-            verify(find("tiles").activeFocus)
+            verify(tc.hasFocus(find("tiles")))
         }
 
         function test_volume_keys_in_modal() {

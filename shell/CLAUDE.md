@@ -65,6 +65,10 @@ Reusable settings rows. All extend `SettingControl` (a `FocusScope` with the lab
 
 A control changes its own value, then emits the signal; the owner writes the setting, resyncs the control, and keeps a `Binding` on it so external changes show (see `DisplayPane.qml`). `Sfx.navigateCount`/`selectCount`/`backCount` count cue requests so tests can check the sound path.
 
+## Text input
+
+Use `TextEntry` (`qml/TextEntry.qml`, spec 02-shell §4.4) for any text input; never a raw `TextInput` without it. Host it as a full-screen child of the screen that needs it, call `open(title, initial, options)`, and handle `accepted(text)`/`cancelled()`. It restores focus to the item that opened it.
+
 ## Tests (required for every behaviour you add)
 
 - Drive the UI with `keyClick()` using only the keys listed above, unless a test is specifically about keyboard input.

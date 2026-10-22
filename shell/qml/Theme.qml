@@ -23,6 +23,7 @@ QtObject {
     readonly property int tintMs: reducedMotion ? 0 : 700
 
     readonly property int toastMs: 4000      // how long a toast stays on screen
+    readonly property int caretMs: 530       // text caret blink half-period
     readonly property int osdMs: 1500        // how long the volume OSD stays after the last change
 
     readonly property color toastInfo: "#6ea8ff"

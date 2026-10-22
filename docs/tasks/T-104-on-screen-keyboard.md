@@ -1,6 +1,6 @@
 # T-104 — On-screen keyboard for controller text entry
 
-Status: todo · Phase: 2 · Depends: — · Area: shell · Size: M
+Status: done · Phase: 2 · Depends: — · Area: shell · Size: M
 
 ## Goal
 Any flow that needs text (profile name, Wi-Fi password, store search) can open a modal on-screen keyboard that is fully usable with a D-pad. Physical keyboards still work in it.
@@ -34,14 +34,14 @@ Any flow that needs text (profile name, Wi-Fi password, store search) can open a
 - Text cursor movement within the field (append/delete at end only).
 
 ## Acceptance criteria
-- [ ] Typing "Ada 2" with only arrows + Accept, then Done, emits `accepted("Ada 2")` (test `tst_textentry.qml::test_dpad_typing`).
-- [ ] Back deletes, then cancels when empty: `cancelled()` is emitted exactly once (test `test_back_semantics`).
-- [ ] Shift makes the next letter uppercase, then turns itself off (test `test_shift_one_shot`).
-- [ ] `maxLength` is enforced from both the grid and the physical keyboard (test `test_max_length`).
-- [ ] `mask: true` shows dots, but `accepted` carries the real text (test `test_mask`).
-- [ ] Down from any key in the top row lands on the geometrically nearest key below (test `test_vertical_navigation_nearest`).
-- [ ] The modal swallows all keys: the underlying page's focus item is unchanged after the keyboard closes (test `test_modal_and_focus_restore`).
-- [ ] Screenshot `9-text-entry.png`: the keyboard fits at 1280×720 inside the safe area, with the focus ring visible.
+- [x] Typing "Ada 2" with only arrows + Accept, then Done, emits `accepted("Ada 2")` (test `tst_textentry.qml::test_dpad_typing`).
+- [x] Back deletes, then cancels when empty: `cancelled()` is emitted exactly once (test `test_back_semantics`).
+- [x] Shift makes the next letter uppercase, then turns itself off (test `test_shift_one_shot`).
+- [x] `maxLength` is enforced from both the grid and the physical keyboard (test `test_max_length`).
+- [x] `mask: true` shows dots, but `accepted` carries the real text (test `test_mask`).
+- [x] Down from any key in the top row lands on the geometrically nearest key below (test `test_vertical_navigation_nearest`).
+- [x] The modal swallows all keys: the underlying page's focus item is unchanged after the keyboard closes (test `test_modal_and_focus_restore`).
+- [x] Screenshot `9-text-entry.png`: the keyboard fits at 1280×720 inside the safe area, with the focus ring visible.
 
 ## Verification
 ```powershell
@@ -58,4 +58,21 @@ Any flow that needs text (profile name, Wi-Fi password, store search) can open a
 - For the tests, host `TextEntry` directly in the test window, not inside `Shell`.
 
 ## Outcome
-_Filled in by the implementer._
+Built the modal on-screen keyboard.
+
+- `shell/qml/TextEntry.qml`: `open(title, initialText, {maxLength, mask, layout})`, `accepted(text)`, `cancelled()`. The layout is data (`layoutFor(symbols, kind)`): five rows on a letters page and a symbols page, each key `{kind, label, value, w, x, cx}` in key units. Kinds: `char`, `shift`, `symbols`, `space`, `back`, `done`. `email` and `url` add `@`/`/`, `.` and `.com`.
+- Navigation: Left/Right wrap within the row; Up/Down pick the nearest key by centre x (ties go left; no vertical wrap); PageUp/PageDown jump to Del/Space; Accept presses; Back deletes then cancels on empty; Menu/Enter = Done (no-op while empty, key dimmed); Shift is one-shot.
+- The keyboard swallows every key and, on close, returns focus to the item that had it (`Window.activeFocusItem` at open time, if still visible and enabled).
+- Keys scale down briefly when pressed (`Theme.focusMs`); the caret blinks only when `Theme.ambientMotion` (new token `Theme.caretMs`).
+- `CMakeLists.txt`, `Theme.qml`.
+- `tests/tst_textentry.qml` (12 tests): `test_dpad_typing`, `test_back_semantics`, `test_shift_one_shot`, `test_max_length`, `test_mask`, `test_vertical_navigation_nearest` (hand-checked cases plus a brute-force check of every top-row key), `test_modal_and_focus_restore`, `test_controller_shortcuts`, `test_done_disabled_when_empty`, `test_physical_keyboard`, `test_layouts_and_symbols`, `test_zz_screenshots` (`9-text-entry.png`). The tests host `TextEntry` directly over a "page" item that counts keys.
+- Docs: `02-shell.md` new §4.4; `shell/CLAUDE.md` "Text input".
+
+Verification: `dev.ps1 test` → ALL GREEN; `dev.ps1 shots` → 68 passed. `9-text-entry.png` reviewed: the keyboard (1070 x ~460 design px) is centred and well inside the safe area at 1280x720, the focus ring is clear, labels readable.
+
+Deviations and notes:
+- **Return/Escape ambiguity.** The task says physical Enter = Done and Escape = cancel, but a controller's Accept/Back are the same keys (`Return`/`Escape`). Resolved with a mode: after a printable key or `Backspace` from a physical keyboard, `Return` = Done and `Escape` = Cancel; any D-pad key returns to controller behaviour. Keypad `Enter` is always Done. Documented in the spec.
+- Not wired into any screen yet (no consumer until T-105); tested standalone as the task directed.
+- Key labels `Del`, `Shift`, `Space`, `Done` use `qsTr()`; there are no glyph icons, to avoid font coverage problems.
+- Mouse/touch is not supported on the keys (out of scope).
+- Test hardening outside this task's files: `tst_system_ui.qml` (T-108) failed intermittently (4 of ~25 runs) at two late `verify(tiles.activeFocus)` checks. Instrumenting showed the OS had deactivated the test window (`Window.active` false, `tiles.focus` still true), not a shell bug. The two checks now use a `hasFocus()` helper that accepts the item's `focus` flag only while the window is inactive; with an active window the assertion is unchanged.

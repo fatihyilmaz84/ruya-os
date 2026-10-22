@@ -96,6 +96,21 @@ Physical pad → input daemon (ADR-003) → shell. While the shell has input foc
 - On the profile picker, any controller may act. After login, the logged-in profile's controller is "player 1".
 - The pointer is shown only after mouse movement and hidden after 3 s idle.
 
+### 4.4 Text entry (as built, T-104)
+`TextEntry.qml` is the modal on-screen keyboard; every flow that needs text uses it. `open(title, initialText, { maxLength, mask, layout })`, signals `accepted(text)` and `cancelled()`. `layout` is `text`, `email` (adds `@`, `.`, `.com`) or `url` (adds `/`, `.`, `.com`); `mask` shows dots but `accepted` carries the real text; `maxLength` 0 means unlimited. The layout is data (`layoutFor`): rows of keys with a width in key units, on a letters page and a symbols page (the `#+=`/`ABC` key switches).
+
+| Input | Action |
+|---|---|
+| D-pad / stick | Move over the keys. Left/Right wrap within a row; Up/Down go to the key whose centre is nearest in x (ties go left; no wrap vertically) |
+| Accept (A, `Return`) | Press the focused key |
+| Back (B, `Escape`) | Delete one character; cancel when the field is empty |
+| Start (`Menu`) / keypad `Enter` | Done (does nothing while the field is empty) |
+| LB / RB (`PageUp` / `PageDown`) | Jump to Del / Space |
+| Shift key | One-shot capital for the next character |
+| Physical keyboard | Printable characters insert; `Backspace` deletes |
+
+A controller's A and B arrive as `Return` and `Escape`, the same keys a keyboard sends. So once the user types on a physical keyboard (a printable key or `Backspace`), `Return` means Done and `Escape` means Cancel, until the next D-pad key switches back to controller behaviour. The field is append/delete at the end only. The component swallows every key (including Guide and volume keys' key events) and returns focus to the item that had it when it opened. Not yet used by any flow (T-105 is the first).
+
 ## 5. Audio (UI side)
 - Channels: **UI SFX** (navigate, select, back, error, notification), **Ambient** (optional loop; default on/off is an open UX question), **Media/App** (everything else).
 - These are implemented as PipeWire stream roles (`media.role = Notification|Music|Game|Movie`). WirePlumber policy does **ducking**: Ambient is lowered by about 8 dB while a UI cue or app audio plays, and Ambient is muted whenever an app is in the foreground.

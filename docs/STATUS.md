@@ -14,11 +14,10 @@ Verification legend: **host** = built and tested on the Windows host · **unveri
 
 ## Board
 
-**NEXT → T-104**
+**NEXT → T-105**
 
 | ID | Title | Status | Depends | Verified |
 |---|---|---|---|---|
-| [T-104](tasks/T-104-on-screen-keyboard.md) | On-screen keyboard | todo | — | |
 | [T-105](tasks/T-105-profile-management.md) | Manage profiles from Settings | todo | T-103, T-104 | |
 | [T-106](tasks/T-106-first-boot-setup.md) | First-boot setup (OOBE) | todo | T-102, T-104, T-105 | |
 | [T-107](tasks/T-107-power-actions.md) | Power actions (suspend/restart/off) | todo | T-101 | |
@@ -37,8 +36,9 @@ Follow-ups, debt and ideas waiting for a planner session. Builders: add one line
 
 - (T-102) The PIN-pad shake and tile pulse use literal durations and ignore reduced motion. Move them to Theme tokens that honour `DeviceSettings.reducedMotion`.
 - (T-102) Once, after adding a new C++ `QML_ELEMENT` type, the tests failed with "DeviceSettings is not defined" and passed on the next build (stale incremental registration). Investigate the CMake dependency between `tst_ruyashell` and the module's type registration; at least document the workaround. Happened again in T-108 (`Audio`); the workaround (build twice) is now in `shell/CLAUDE.md`.
-- (T-108) `tst_system_ui.qml::test_toast_queue` failed once (final `verify(tiles.activeFocus)`) on a loaded machine right after a rebuild, then passed 8 times. If it recurs, make that check a `tryVerify` and find out why focus was late.
+- (T-108) Tests that wait a second or more can fail on `activeFocus` when another window takes OS focus from the test window (confirmed: `Window.active` false, item `focus` still true). `tst_system_ui.qml` now falls back to `focus` in that case for its two late checks (`hasFocus`). Other test files have only short waits; if one flakes the same way, reuse that helper, and run `dev.ps1 test` without touching other windows.
 - (T-108) The volume-key `Shortcut`s are verified only in a QtQuickTest window on Windows; check them under the real compositor (B-003) with an app focused.
+- (T-104) `TextEntry` has no mouse/touch support and no non-Latin layouts (out of scope for T-104); revisit with i18n (T-109) and if pointer input becomes a requirement.
 - (T-103) Key repeat acceleration and long-press (spec 4.3) are not implemented; holding Left/Right on a SliderRow steps at the OS repeat rate.
 - (T-108) Stepping volume while muted does not unmute; decide the UX when T-114 builds the audio settings.
 
@@ -59,6 +59,7 @@ A session can't know its own commit hash before committing, so new rows put the 
 | T-102 | Reduced motion and effects quality tiers (`DeviceSettings`, `--reduced-motion`, `--effects`) | host (`dev.ps1 test` green, new `tst_motion.qml` + screenshot reviewed) | T-102 |
 | T-108 | Toasts (`Notifications`, `ToastLayer`), volume OSD, mock `Audio` singleton, volume keys | host (`dev.ps1 test` green, new `tst_system_ui.qml` + screenshot reviewed) | T-108 |
 | T-103 | Settings page (two panes), reusable controls, Display & motion and About panes, `SystemInfo` | host (`dev.ps1 test` green, new `tst_settings.qml` + 2 screenshots reviewed) | T-103 |
+| T-104 | On-screen keyboard (`TextEntry`: D-pad typing, shift, symbols, email/url layouts, mask, max length) | host (`dev.ps1 test` green, new `tst_textentry.qml` + screenshot reviewed) | T-104 |
 
 ## Blocked (need something this host doesn't have)
 
@@ -82,6 +83,15 @@ A session can't know its own commit hash before committing, so new rows put the 
 ## Session log (newest first)
 
 Each entry: date · model · tasks · what happened · verification · follow-ups. Keep entries short and factual.
+
+### 2026-10-22 · Sonnet 5.5 · T-104
+On-screen keyboard:
+- `TextEntry.qml`: data-driven layout (letters and symbols pages, text/email/url), nearest-key vertical navigation, one-shot Shift, mask, `maxLength`, modal with focus restore;
+- Return/Escape are the same keys for a controller and a keyboard, so a "typed on a physical keyboard" mode makes Return = Done and Escape = Cancel (see the Outcome).
+
+Verification: `dev.ps1 test` → ALL GREEN; `dev.ps1 shots` reviewed (`9-text-entry.png`).
+
+Follow-ups: see Inbox. NEXT is T-105 (first consumer of `TextEntry`).
 
 ### 2026-10-22 · Sonnet 5.5 · T-103
 Settings page:

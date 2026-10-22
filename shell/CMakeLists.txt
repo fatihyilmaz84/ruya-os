@@ -39,6 +39,7 @@ qt_add_qml_module(ruyashell
         qml/ProfilePicker.qml
         qml/ProfileCard.qml
         qml/PinPad.qml
+        qml/TextEntry.qml
         qml/Page.qml
         qml/ComingSoon.qml
         qml/GamesPage.qml
