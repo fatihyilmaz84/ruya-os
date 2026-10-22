@@ -14,11 +14,10 @@ Verification legend: **host** = built and tested on the Windows host · **unveri
 
 ## Board
 
-**NEXT → T-102**
+**NEXT → T-108**
 
 | ID | Title | Status | Depends | Verified |
 |---|---|---|---|---|
-| [T-102](tasks/T-102-motion-and-quality.md) | Reduced motion and effects quality tiers | todo | — | |
 | [T-108](tasks/T-108-toasts-and-volume-osd.md) | Toast notifications and volume OSD | todo | — | |
 | [T-103](tasks/T-103-settings-screen.md) | Settings screen and reusable controls | todo | T-101, T-102 | |
 | [T-104](tasks/T-104-on-screen-keyboard.md) | On-screen keyboard | todo | — | |
@@ -48,6 +47,7 @@ A session can't know its own commit hash before committing, so new rows put the 
 | T-006 | Shell profile picker, PIN pad, Profiles client (mock + D-Bus), Qt Quick tests | mock path: host (13 tests) · D-Bus client: **unverified** | eb0b28d |
 | T-007 | AI contributor workflow: `CLAUDE.md` files, `scripts/dev.ps1`, task backlog, this board | host (`dev.ps1 test` green) | handoff commit |
 | T-101 | Page navigation framework (`Shell.openPage`, `Page.qml`, five placeholder pages) | host (`dev.ps1 test` green, new `tst_pages.qml` + screenshot reviewed) | ac93198 |
+| T-102 | Reduced motion and effects quality tiers (`DeviceSettings`, `--reduced-motion`, `--effects`) | host (`dev.ps1 test` green, new `tst_motion.qml` + screenshot reviewed) | T-102 |
 
 ## Blocked (need something this host doesn't have)
 
@@ -71,6 +71,16 @@ A session can't know its own commit hash before committing, so new rows put the 
 ## Session log (newest first)
 
 Each entry: date · model · tasks · what happened · verification · follow-ups. Keep entries short and factual.
+
+### 2026-10-22 · Sonnet 5.5 · T-102
+Reduced motion and effects quality tiers:
+- `DeviceSettings` C++ singleton (reduced motion, effects tier, overscan; `QSettings`, in-memory under test);
+- `Theme` tokens follow it (durations 0, `blurMax` 64/32/0, `glassOpaque`, `safeArea`); backdrop drift stops with reduced motion or on the performance tier; the shelf blur is hidden at tier 0;
+- `--reduced-motion` and `--effects <tier>` session-only flags.
+
+Verification: `dev.ps1 test` → ALL GREEN; `dev.ps1 shots` reviewed (`6-performance-tier.png`). The flags were smoke-run by hand.
+
+Follow-ups: the PIN-pad shake and tile pulse still use literal durations and ignore reduced motion (noted in the task Outcome). NEXT is T-108; T-103 is now unblocked too.
 
 ### 2026-10-22 · Sonnet 5.5 · T-101
 Page navigation framework:

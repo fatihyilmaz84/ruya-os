@@ -76,6 +76,8 @@ Without `--windowed` the shell takes the whole screen; quit with Alt+F4.
 
 An orange "mock services" tag in the corner shows when the mock is active.
 
+**Display flags (session-only, never saved).** `--reduced-motion` forces reduced motion; `--effects high|balanced|performance` forces the effects quality tier. They are for perf testing, e.g. `ruya-shell.exe --windowed --effects performance --reduced-motion`. The saved values (`DeviceSettings`: reduced motion, effects quality, overscan) live in `QSettings` (org `ruyaos`, app `shell`); set `RUYA_SETTINGS_EPHEMERAL=1` to keep them in memory only (the tests do).
+
 **Tests.** Qt Quick Tests drive the whole shell with the keys a controller produces. They cover sign-in with and without a PIN, D-pad-only PIN entry, lockout, the overlay's modality, and switching profiles. A test window opens for a few seconds.
 
 ```powershell

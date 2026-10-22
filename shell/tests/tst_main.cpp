@@ -14,6 +14,8 @@ public:
     {
         // Tests always run against the in-memory profiles service.
         qputenv("RUYA_SERVICES", "mock");
+        // ...and device settings stay in memory, so tests never touch the real store.
+        qputenv("RUYA_SETTINGS_EPHEMERAL", "1");
     }
 
 public slots:

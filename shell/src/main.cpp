@@ -33,9 +33,21 @@ int main(int argc, char *argv[])
     const QCommandLineOption mockServices(QStringLiteral("mock-services"),
                                           QStringLiteral("Use in-memory system services instead of D-Bus."));
     parser.addOption(mockServices);
+    const QCommandLineOption reducedMotion(QStringLiteral("reduced-motion"),
+                                           QStringLiteral("Force reduced motion for this session (not saved)."));
+    parser.addOption(reducedMotion);
+    const QCommandLineOption effects(QStringLiteral("effects"),
+                                     QStringLiteral("Force the effects quality tier for this session (not saved)."),
+                                     QStringLiteral("high|balanced|performance"));
+    parser.addOption(effects);
     parser.process(app);
     if (parser.isSet(mockServices))
         qputenv("RUYA_SERVICES", "mock"); // read when the Profiles singleton is created
+    // Read when the DeviceSettings singleton is created; session-only, never persisted.
+    if (parser.isSet(reducedMotion))
+        qputenv("RUYA_FORCE_REDUCED_MOTION", "1");
+    if (parser.isSet(effects))
+        qputenv("RUYA_FORCE_EFFECTS", parser.value(effects).toUtf8());
 
     QQmlApplicationEngine engine;
     engine.setInitialProperties({

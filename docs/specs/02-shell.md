@@ -51,10 +51,12 @@ Each surface is a separate QML module loaded with `Loader { asynchronous: true }
 Blur pattern: render the backdrop (hero art) once to a quarter-resolution `ShaderEffectSource`, apply `MultiEffect` blur to that, and share the result among all panels. Re-blur only when the hero art changes, with a crossfade.
 
 ### 3.2 Durations
-Focus move 120–160 ms, page transition 250–350 ms, overlay open 200 ms, all ease-out. These are defined as tokens. **Reduced motion** sets durations to 0 (or 60 ms crossfades) and disables parallax.
+Focus move 120–160 ms, page transition 250–350 ms, overlay open 200 ms, all ease-out. These are defined as tokens. **Reduced motion** sets the `focusMs`, `pageMs` and `tintMs` tokens to 0, removes the page slide (`pageSlide` = 0) and stops the backdrop drift. (Implemented as 0, not 60 ms crossfades. The PIN-pad shake and tile pulse feedback animations are not yet tied to it.) The setting is per device (`DeviceSettings`), and `--reduced-motion` forces it for a session.
 
 ### 3.3 Quality tiers
-`Effects = High | Balanced | Performance`, chosen automatically at first boot from the GPU (renderer string plus a quick benchmark) and overridable in Settings.
+`Effects = High | Balanced | Performance`, chosen automatically at first boot from the GPU (renderer string plus a quick benchmark) and overridable in Settings. **Implemented so far:** the per-device `effectsQuality` setting and the `--effects` flag; automatic detection is still open (needs real hardware).
+
+Token values per tier (`Theme.qml`): `blurMax` is 64 / 32 / 0, and the shelf `MultiEffect` is hidden at 0, where the panel uses the more opaque `glassOpaque` token. Ambient drift of the backdrop runs on High and Balanced, and stops on Performance. Overscan (`safeArea`) is a per-device fraction 0.0 to 0.10, default 0.05.
 
 | | High | Balanced | Performance |
 |---|---|---|---|

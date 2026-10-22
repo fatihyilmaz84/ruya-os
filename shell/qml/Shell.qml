@@ -87,6 +87,7 @@ FocusScope {
 
     Backdrop {
         id: backdrop
+        objectName: "backdrop"
         anchors.fill: parent
         tint: root.signedIn && root.currentTile ? root.currentTile.accent
                                                 : (Profiles.active.avatar ?? "#3a5bd9")
@@ -95,6 +96,7 @@ FocusScope {
     // Header
     Text {
         id: brand
+        objectName: "brand"
         x: root.marginX
         y: root.marginY
         text: "RuyaOS"
@@ -180,6 +182,8 @@ FocusScope {
             clip: true
 
             MultiEffect {
+                objectName: "shelfBlur"
+                visible: Theme.blurMax > 0     // performance tier: no blur, opaque panel below
                 x: -shelf.x
                 y: -shelf.y
                 width: root.width
@@ -194,7 +198,7 @@ FocusScope {
             }
             Rectangle {
                 anchors.fill: parent
-                color: Theme.glass
+                color: Theme.blurMax > 0 ? Theme.glass : Theme.glassOpaque
                 Rectangle { anchors { left: parent.left; right: parent.right; top: parent.top } height: Math.max(1, root.u); color: Theme.glassBorder }
                 Rectangle { anchors { left: parent.left; right: parent.right; bottom: parent.bottom } height: Math.max(1, root.u); color: Theme.glassBorder }
             }

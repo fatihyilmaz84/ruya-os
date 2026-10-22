@@ -20,6 +20,7 @@ qt_add_qml_module(ruyashell
         src/profiles/MockProfilesBackend.h src/profiles/MockProfilesBackend.cpp
         src/profiles/DBusProfilesBackend.h src/profiles/DBusProfilesBackend.cpp
         src/profiles/Profiles.h src/profiles/Profiles.cpp
+        src/settings/DeviceSettings.h src/settings/DeviceSettings.cpp
     QML_FILES
         qml/Main.qml
         qml/Shell.qml
@@ -45,7 +46,7 @@ qt_add_qml_module(ruyashell
 )
 
 # qmltyperegistrar includes the QML_ELEMENT headers by file name.
-target_include_directories(ruyashell PUBLIC src/profiles)
+target_include_directories(ruyashell PUBLIC src/profiles src/settings)
 target_link_libraries(ruyashell PRIVATE Qt6::Quick Qt6::Multimedia Qt6::DBus)
 
 qt_add_executable(ruya-shell src/main.cpp)

@@ -1,0 +1,134 @@
+import QtQuick
+import QtTest
+import RuyaShell
+
+// Device display settings: reduced motion, effects quality tiers, overscan. Signs in as
+// "Ada" (p2, no PIN) with controller keys. DeviceSettings is in-memory under test
+// (RUYA_SETTINGS_EPHEMERAL=1) and restored to defaults after every test.
+Item {
+    id: host
+    width: 1280
+    height: 720
+
+    Component {
+        id: shellComponent
+        Shell { anchors.fill: parent; version: "test"; focus: true }
+    }
+
+    TestCase {
+        id: tc
+        name: "Motion"
+        when: windowShown
+
+        property Item shell: null
+
+        function find(name) { return findChild(tc.shell, name) }
+
+        function init() {
+            Profiles.lock()
+            tryCompare(Profiles, "activeProfile", "")
+            tc.shell = createTemporaryObject(shellComponent, host)
+            verify(tc.shell)
+            tc.shell.forceActiveFocus()
+            tryVerify(() => Profiles.profiles.length === 3)
+            tryVerify(() => find("profileList").activeFocus, 2000, "picker has focus on start")
+            keyClick(Qt.Key_Right)
+            keyClick(Qt.Key_Return)
+            tryCompare(Profiles, "activeProfile", "p2")
+            tryVerify(() => find("tiles").activeFocus, 2000, "home shelf takes focus after sign-in")
+        }
+
+        function cleanup() {
+            DeviceSettings.reducedMotion = false
+            DeviceSettings.effectsQuality = "high"
+            DeviceSettings.overscan = 0.05
+        }
+
+        function test_defaults() {
+            compare(DeviceSettings.reducedMotion, false)
+            compare(DeviceSettings.effectsQuality, "high")
+            compare(DeviceSettings.overscan, 0.05)
+            compare(Theme.focusMs, 140)
+            compare(Theme.pageMs, 300)
+            compare(Theme.tintMs, 700)
+            compare(Theme.blurMax, 64)
+            verify(find("backdrop").drifting, "ambient drift runs by default")
+            verify(find("shelfBlur").visible)
+        }
+
+        function test_reduced_motion() {
+            DeviceSettings.reducedMotion = true
+            compare(Theme.focusMs, 0)
+            compare(Theme.pageMs, 0)
+            compare(Theme.tintMs, 0)
+            tryVerify(() => !find("backdrop").drifting, 2000, "backdrop animations stop")
+
+            // Navigation still works and is not left half-way.
+            keyClick(Qt.Key_Right)
+            keyClick(Qt.Key_Right)
+            keyClick(Qt.Key_Right)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("page_settings") !== null && find("page_settings").activeFocus, 2000)
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => find("tiles").activeFocus, 2000)
+
+            DeviceSettings.reducedMotion = false
+            compare(Theme.focusMs, 140)
+            tryVerify(() => find("backdrop").drifting, 2000, "drift resumes")
+        }
+
+        function test_quality_tiers() {
+            DeviceSettings.effectsQuality = "balanced"
+            compare(Theme.blurMax, 32)
+            verify(find("shelfBlur").visible)
+            verify(find("backdrop").drifting, "balanced keeps ambient drift")
+
+            DeviceSettings.effectsQuality = "performance"
+            compare(Theme.blurMax, 0)
+            verify(!find("shelfBlur").visible, "performance hides the blur effect")
+            tryVerify(() => !find("backdrop").drifting, 2000, "performance stops ambient drift")
+
+            DeviceSettings.effectsQuality = "high"
+            compare(Theme.blurMax, 64)
+            verify(find("shelfBlur").visible)
+        }
+
+        function test_invalid_values_rejected() {
+            ignoreWarning(/rejecting invalid effectsQuality/)
+            DeviceSettings.effectsQuality = "ultra"
+            compare(DeviceSettings.effectsQuality, "high")
+
+            ignoreWarning(/rejecting out-of-range overscan/)
+            DeviceSettings.overscan = 0.5
+            compare(DeviceSettings.overscan, 0.05)
+            ignoreWarning(/rejecting out-of-range overscan/)
+            DeviceSettings.overscan = -0.01
+            compare(DeviceSettings.overscan, 0.05)
+
+            // The limits themselves are valid.
+            DeviceSettings.overscan = 0.0
+            compare(DeviceSettings.overscan, 0.0)
+            DeviceSettings.overscan = 0.10
+            compare(DeviceSettings.overscan, 0.10)
+        }
+
+        function test_overscan_moves_header() {
+            const before = find("brand").x
+            compare(before, tc.shell.width * 0.05)
+            DeviceSettings.overscan = 0.10
+            verify(find("brand").x > before, "header moves inward with more overscan")
+            compare(find("brand").x, tc.shell.width * 0.10)
+            DeviceSettings.overscan = 0.0
+            compare(find("brand").x, 0)
+        }
+
+        function test_zz_screenshots() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            DeviceSettings.effectsQuality = "performance"
+            DeviceSettings.reducedMotion = true
+            wait(500)   // lets the sign-in fade (started at the old duration) finish
+            grabImage(tc.shell).save(shotsDir + "/6-performance-tier.png")
+        }
+    }
+}

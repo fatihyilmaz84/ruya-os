@@ -9,6 +9,9 @@ Item {
     property color tint: "#3a5bd9"
     Behavior on tint { ColorAnimation { duration: Theme.tintMs; easing.type: Easing.InOutQuad } }
 
+    // True while any blob is drifting; stops with reduced motion or the performance tier.
+    readonly property bool drifting: blobA.drifting || blobB.drifting || blobC.drifting
+
     Rectangle {
         anchors.fill: parent
         gradient: Gradient {
@@ -26,13 +29,18 @@ Item {
         height: width
         radius: width / 2
         opacity: 0.55
+        readonly property bool drifting: xAnim.running || yAnim.running
 
         SequentialAnimation on driftX {
+            id: xAnim
+            running: Theme.ambientMotion
             loops: Animation.Infinite
             NumberAnimation { to: 1; duration: blob.period; easing.type: Easing.InOutSine }
             NumberAnimation { to: 0; duration: blob.period; easing.type: Easing.InOutSine }
         }
         SequentialAnimation on driftY {
+            id: yAnim
+            running: Theme.ambientMotion
             loops: Animation.Infinite
             NumberAnimation { to: 1; duration: blob.period * 1.3; easing.type: Easing.InOutSine }
             NumberAnimation { to: 0; duration: blob.period * 1.3; easing.type: Easing.InOutSine }
@@ -40,11 +48,13 @@ Item {
     }
 
     Blob {
+        id: blobA
         color: backdrop.tint
         x: backdrop.width * (-0.1 + 0.25 * driftX)
         y: backdrop.height * (-0.3 + 0.2 * driftY)
     }
     Blob {
+        id: blobB
         color: Qt.lighter(backdrop.tint, 1.4)
         period: 23000
         opacity: 0.35
@@ -52,6 +62,7 @@ Item {
         y: backdrop.height * (0.1 + 0.25 * driftY)
     }
     Blob {
+        id: blobC
         color: Qt.rgba(1, 1, 1, 1)
         period: 29000
         opacity: 0.08
