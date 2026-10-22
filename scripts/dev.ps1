@@ -7,7 +7,7 @@
 #   .\scripts\dev.ps1 run       # start the shell in a window with mock services
 #   .\scripts\dev.ps1 shots     # run the QML tests and save screenshots to output\shell-shots
 #   .\scripts\dev.ps1 rust      # Rust checks only (fmt, clippy for Windows + Linux, tests)
-#   .\scripts\dev.ps1 shell     # shell checks only (build, qmllint, Qt Quick tests)
+#   .\scripts\dev.ps1 shell     # shell checks only (build, token lint, qmllint, Qt Quick tests)
 #
 # Qt location: $env:RUYA_QT_DIR, default D:\dev\Qt\6.10.3\msvc2022_64.
 param(
@@ -101,8 +101,27 @@ function Run-QmlTests([string]$ShotsDir) {
     Record "Qt Quick tests" ($code -eq 0)
 }
 
+# Components take durations and colours from Theme tokens (shell/CLAUDE.md). Flags, outside
+# Theme.qml: a literal "duration: <non-zero number>", a quoted hex colour, Qt.rgba(...).
+# A line opts out with a trailing "// token-ok: <reason>".
+function Test-Tokens {
+    Step "token lint (no literal durations or colours outside Theme.qml)"
+    $patterns = 'duration\s*:\s*\d*[1-9]', '["'']#[0-9a-fA-F]{3,8}["'']', 'Qt\.rgba\('
+    $hits = @(Get-ChildItem (Join-Path $Repo "shell\qml") -Recurse -Filter *.qml |
+        Where-Object { $_.Name -ne "Theme.qml" } |
+        Select-String -Pattern $patterns |
+        Where-Object { $_.Line -notmatch 'token-ok:' })
+    foreach ($h in $hits) {
+        $rel = $h.Path.Substring($Repo.Length + 1)
+        Write-Host "    ${rel}:$($h.LineNumber): $($h.Line.Trim())" -ForegroundColor Yellow
+    }
+    if ($hits.Count -gt 0) { Write-Host "    Move these into Theme.qml tokens, or add '// token-ok: <reason>'." }
+    Record "token lint" ($hits.Count -eq 0)
+}
+
 function Do-Shell {
     Do-Build
+    Test-Tokens
     Step "qmllint (module context)"
     # --max-warnings 0: without it qmllint exits 0 even when it reports warnings.
     Invoke-Native "qmllint" { qmllint --max-warnings 0 "@$ShellBuild\.rcc\qmllint\ruyashell.rsp" }

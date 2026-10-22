@@ -254,7 +254,7 @@ FocusScope {
 
     Rectangle {
         anchors.fill: parent
-        color: "#d0000000"
+        color: Theme.scrim
     }
 
     Column {
@@ -352,8 +352,8 @@ FocusScope {
                             Rectangle {
                                 anchors.fill: parent
                                 radius: 16 * entry.u
-                                color: keyItem.focused ? Qt.rgba(1, 1, 1, 0.24)
-                                     : keyItem.active ? Qt.rgba(1, 1, 1, 0.3) : Theme.glass
+                                color: keyItem.focused ? Theme.entryKeyFocusFill
+                                     : keyItem.active ? Theme.entryKeyActiveFill : Theme.glass
                                 border.width: keyItem.focused ? 4 * entry.u : Math.max(1, entry.u)
                                 border.color: keyItem.focused ? Theme.focusRing : Theme.glassBorder
                                 opacity: keyItem.dimmed ? 0.4 : 1

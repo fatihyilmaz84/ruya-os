@@ -115,7 +115,7 @@ FocusScope {
         implicitWidth: pillText.implicitWidth + 96 * setup.u
         implicitHeight: 84 * setup.u
         radius: height / 2
-        color: Qt.rgba(1, 1, 1, 0.2)
+        color: Theme.focusFill
         border.width: 4 * setup.u
         border.color: Theme.focusRing
         Text {
@@ -294,7 +294,7 @@ FocusScope {
             height: 40 * setup.u
             horizontalAlignment: Text.AlignHCenter
             text: setup.message
-            color: "#ff8a80"
+            color: Theme.errorText
             font.pixelSize: 28 * setup.u
             wrapMode: Text.Wrap
         }

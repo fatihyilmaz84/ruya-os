@@ -14,11 +14,10 @@ Verification legend: **host** = built and tested on the Windows host · **vm** =
 
 ## Board
 
-**NEXT → T-117**
+**NEXT → T-107**
 
 | ID | Title | Status | Depends | Verified |
 |---|---|---|---|---|
-| [T-117](tasks/T-117-motion-and-colour-tokens.md) | Reduced motion for the shake/pulse; literal durations and colours into Theme tokens; token lint | todo | — | |
 | [T-107](tasks/T-107-power-actions.md) | Power actions (suspend/restart/off) | todo | T-101 | |
 | [T-114](tasks/T-114-audio-contract-and-settings.md) | Audio contract and Settings → Audio | todo | T-103, T-108 | |
 | [T-109](tasks/T-109-translations.md) | Translations en/tr, live switching, Turkish keyboard layout | todo | T-103, T-106 | |
@@ -65,6 +64,7 @@ A session can't know its own commit hash before committing, so new rows put the 
 | T-105 | Settings → Profiles: add profile, change/remove PIN; mock mirrors `service.rs`; PinPad collect modes | mock path: host (`dev.ps1 test` green, new `tst_profile_admin.qml` + screenshot reviewed) · D-Bus `CreateProfile`/`SetPin` + attempts probe: **unverified** | T-105 |
 | T-115 | Profiles1: `CreateProfile`/`SetPin` replies carry `attempts_left` and `retry_after_secs`; `SwitchTo` probe removed | service + adapter types: host (`dev.ps1 rust` green, 2 new tests) · shell mock path: host (`dev.ps1 test` green) · D-Bus reply parsing: **unverified** | T-115 |
 | T-106 | First-boot setup wizard (`Setup.qml`: welcome, language, network placeholder, create admin, done); `DeviceSettings.language`; `RUYA_MOCK_PROFILES=empty`; shared `ProfileStatus` messages | mock path: host (`dev.ps1 test` green, new `tst_setup.qml` with 8 tests + 2 screenshots reviewed) · real `ruya-profiles` over D-Bus: **unverified** | T-106 |
+| T-117 | Reduced motion honoured by the PIN-pad shake and tile pulse; literal durations/colours moved into `Theme` tokens; token lint in `dev.ps1 shell` | host (`dev.ps1 test` green, new test fails without the guard, lint failure demonstrated; 3 screenshots reviewed by eye) | T-117 |
 | T-116 | First build after adding or removing a C++ QML type is green (stale `qmltyperegistrar` under the Visual Studio generator; build step `InvalidateStaleQmlTypes.cmake`) | host (`dev.ps1 test` green; 3 add/remove probe cycles via `scripts\repro-first-build.ps1`, all green on the first run) · Linux/Ninja: not run | T-116 |
 
 ## Blocked (need something this host doesn't have)
@@ -90,6 +90,16 @@ A session can't know its own commit hash before committing, so new rows put the 
 ## Session log (newest first)
 
 Each entry: date · model · tasks · what happened · verification · follow-ups. Keep entries short and factual.
+
+### 2026-10-23 · Sonnet 5.5 · T-117
+Reduced motion and tokens:
+- The PIN-pad shake and the tile pulse do not run under reduced motion (guards at the call sites, `objectName`s for tests); their sizes and durations are `Theme` tokens.
+- All other literal durations and colours outside `Theme.qml` became tokens (scrims, panel, error/warning text, white fills, default tint, tile accents via `Theme.tileAccent(key)`); values unchanged.
+- `Test-Tokens` in `dev.ps1 shell` fails on a literal non-zero `duration:`, a quoted hex colour or `Qt.rgba(`; `// token-ok: <reason>` opts out (none used).
+
+Verification: `dev.ps1 test` → ALL GREEN (88 tests); the new test was shown to fail without the guard and the lint was shown to fail on `duration: 120`; `dev.ps1 shots` reviewed by eye. Easing types and backdrop drift periods are still literals (not in scope).
+
+Follow-ups: none. NEXT is T-107 (power actions). Planning session still due (Inbox: 5 items).
 
 ### 2026-10-23 · Sonnet 5.5 · T-106
 First-boot setup:

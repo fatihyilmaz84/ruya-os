@@ -62,7 +62,7 @@ In the VM, the shell's own log is `journalctl -b _UID=$(id -u ruya-shell)`. pam_
 | Command | Does |
 |---|---|
 | `.\scripts\dev.ps1 check` | Prerequisites present? |
-| `.\scripts\dev.ps1 test` | Rust fmt, clippy (Windows + Linux target) and tests; shell build; qmllint (zero warnings); Qt Quick tests. **Must be ALL GREEN before any commit.** |
+| `.\scripts\dev.ps1 test` | Rust fmt, clippy (Windows + Linux target) and tests; shell build; token lint (no literal durations or colours outside `Theme.qml`); qmllint (zero warnings); Qt Quick tests. **Must be ALL GREEN before any commit.** |
 | `.\scripts\dev.ps1 shots` | Qt Quick tests plus screenshots into `output\shell-shots\` |
 | `.\scripts\dev.ps1 run` | The shell in a window with mock services |
 | `.\scripts\dev.ps1 rust` / `shell` | Half of `test` |

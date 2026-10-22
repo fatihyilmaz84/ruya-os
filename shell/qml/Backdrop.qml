@@ -6,7 +6,7 @@ import QtQuick
 Item {
     id: backdrop
 
-    property color tint: "#3a5bd9"
+    property color tint: Theme.defaultTint
     Behavior on tint { ColorAnimation { duration: Theme.tintMs; easing.type: Easing.InOutQuad } }
 
     // True while any blob is drifting; stops with reduced motion or the performance tier.
@@ -63,7 +63,7 @@ Item {
     }
     Blob {
         id: blobC
-        color: Qt.rgba(1, 1, 1, 1)
+        color: Theme.blobHighlight
         period: 29000
         opacity: 0.08
         width: backdrop.width * 0.35

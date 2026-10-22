@@ -15,6 +15,9 @@ Item {
         Shell { anchors.fill: parent; version: "test"; focus: true }
     }
 
+    Component { id: spyComponent; SignalSpy {} }
+    SignalSpy { id: switchSpy; target: Profiles; signalName: "switchFinished" }
+
     TestCase {
         id: tc
         name: "Motion"
@@ -75,6 +78,59 @@ Item {
             DeviceSettings.reducedMotion = false
             compare(Theme.focusMs, 140)
             tryVerify(() => find("backdrop").drifting, 2000, "drift resumes")
+        }
+
+        // Types a wrong PIN on the open PIN pad and waits for the service's answer.
+        function submitWrongPin(pad) {
+            const before = switchSpy.count
+            for (const d of "0000")
+                keyClick(d)
+            keyClick(Qt.Key_Enter)
+            tryCompare(switchSpy, "count", before + 1)
+            tryVerify(() => pad.message.indexOf("attempt") >= 0, 2000, "the error message is shown")
+        }
+
+        // The PIN-pad shake and the tile pulse are feedback animations: they run normally and
+        // do not run at all under reduced motion (the message/sound and the page change remain).
+        function test_feedback_animations_respect_reduced_motion() {
+            // Tile pulse (home shelf is showing, Ada is signed in).
+            const tile = find("tiles").currentItem
+            const pulse = findChild(tile, "pulseAnimation")
+            verify(pulse, "the tile has a pulse animation")
+            const pulseSpy = createTemporaryObject(spyComponent, host, { target: pulse, signalName: "runningChanged" })
+            verify(pulseSpy.valid)
+
+            DeviceSettings.reducedMotion = true
+            tile.pulse()
+            wait(150)
+            compare(pulseSpy.count, 0, "no pulse under reduced motion")
+            verify(!pulse.running)
+
+            DeviceSettings.reducedMotion = false
+            tile.pulse()
+            tryVerify(() => pulseSpy.count > 0, 2000, "the pulse runs with motion on")
+
+            // PIN-pad shake: wrong PIN for Player One (p1, PIN 1234; 2 of the 5 free attempts).
+            Profiles.lock()
+            tryCompare(Profiles, "activeProfile", "")
+            tryVerify(() => find("profilePicker").enabled)
+            const pad = find("pinPad")
+            const shake = findChild(pad, "pinShake")
+            verify(shake, "the PIN pad has a shake animation")
+            const shakeSpy = createTemporaryObject(spyComponent, host, { target: shake, signalName: "runningChanged" })
+            verify(shakeSpy.valid)
+            pad.open(Profiles.profiles[0])
+            tryVerify(() => pad.shown)
+
+            DeviceSettings.reducedMotion = true
+            submitWrongPin(pad)
+            wait(150)
+            compare(shakeSpy.count, 0, "no shake under reduced motion")
+            verify(!shake.running)
+
+            DeviceSettings.reducedMotion = false
+            submitWrongPin(pad)
+            tryVerify(() => shakeSpy.count > 0, 2000, "the shake runs with motion on")
         }
 
         function test_quality_tiers() {

@@ -65,7 +65,7 @@ Page {
             width: categoryList.width
             height: 72 * page.u
             radius: height / 2
-            color: focused ? Qt.rgba(1, 1, 1, 0.2) : selected ? Qt.rgba(1, 1, 1, 0.1) : "transparent"
+            color: focused ? Theme.focusFill : selected ? Theme.selectedFill : "transparent"
             border.width: focused ? 4 * page.u : selected ? Math.max(1, page.u) : 0
             border.color: focused ? Theme.focusRing : Theme.glassBorder
             Behavior on color { ColorAnimation { duration: Theme.focusMs } }

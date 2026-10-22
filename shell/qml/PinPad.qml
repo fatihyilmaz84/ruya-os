@@ -95,6 +95,12 @@ FocusScope {
         collected(pin)
     }
 
+    // Error feedback for the dots; skipped under reduced motion (the message and sound remain).
+    function shakeDots() {
+        if (!Theme.reducedMotion)
+            shake.restart()
+    }
+
     function submit() {
         if (busy || lockSecs > 0 || entered.length < minDigits)
             return
@@ -116,7 +122,7 @@ FocusScope {
         } else {
             message = qsTr("PINs don't match")
             Sfx.back()
-            shake.restart()
+            shakeDots()
             entered = ""
             firstEntry = ""
             stage = 0
@@ -141,11 +147,11 @@ FocusScope {
             } else if (status === "locked-out") {
                 pad.lockSecs = retryAfterSecs
                 Sfx.back()
-                shake.restart()
+                pad.shakeDots()
             } else if (status === "wrong-pin") {
                 pad.message = qsTr("Wrong PIN. %n attempt(s) left.", "", attemptsLeft)
                 Sfx.back()
-                shake.restart()
+                pad.shakeDots()
             } else {
                 pad.message = qsTr("Could not sign in (%1).").arg(status)
             }
@@ -161,7 +167,7 @@ FocusScope {
 
     Rectangle {
         anchors.fill: parent
-        color: "#d0000000"
+        color: Theme.scrim
     }
 
     Column {
@@ -195,10 +201,11 @@ FocusScope {
             }
             SequentialAnimation {
                 id: shake
+                objectName: "pinShake"
                 loops: 2
-                NumberAnimation { target: dots; property: "anchors.horizontalCenterOffset"; to: 18 * pad.u; duration: 45 }
-                NumberAnimation { target: dots; property: "anchors.horizontalCenterOffset"; to: -18 * pad.u; duration: 90 }
-                NumberAnimation { target: dots; property: "anchors.horizontalCenterOffset"; to: 0; duration: 45 }
+                NumberAnimation { target: dots; property: "anchors.horizontalCenterOffset"; to: Theme.shakeDistance * pad.u; duration: Theme.shakeQuickMs }
+                NumberAnimation { target: dots; property: "anchors.horizontalCenterOffset"; to: -Theme.shakeDistance * pad.u; duration: Theme.shakeSlowMs }
+                NumberAnimation { target: dots; property: "anchors.horizontalCenterOffset"; to: 0; duration: Theme.shakeQuickMs }
             }
         }
 
@@ -207,7 +214,7 @@ FocusScope {
             anchors.horizontalCenter: parent.horizontalCenter
             height: 36 * pad.u
             text: pad.lockSecs > 0 ? qsTr("Too many attempts. Try again in %1 s.").arg(pad.lockSecs) : pad.message
-            color: "#ff8a80"
+            color: Theme.errorText
             font.pixelSize: 26 * pad.u
         }
 
@@ -247,7 +254,7 @@ FocusScope {
                     radius: width / 2
                     scale: keyCell.focused ? 1.1 : 1.0
                     Behavior on scale { NumberAnimation { duration: Theme.focusMs } }
-                    color: keyCell.focused ? Qt.rgba(1, 1, 1, 0.22) : Theme.glass
+                    color: keyCell.focused ? Theme.keyFocusFill : Theme.glass
                     border.width: keyCell.focused ? 4 * pad.u : 1
                     border.color: keyCell.focused ? Theme.focusRing : Theme.glassBorder
                     opacity: keyCell.modelData === "ok" && pad.entered.length < pad.minDigits ? 0.4 : 1

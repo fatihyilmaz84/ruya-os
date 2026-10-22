@@ -20,7 +20,7 @@ Read `docs/specs/02-shell.md` for the UX spec. This file covers how the code is 
 
 - Start files with `pragma ComponentBehavior: Bound` when they have delegates or inline components. Delegates use `required property`. qmllint runs with zero warnings allowed.
 - **Sizes are design pixels at 1080p × `u`** (`u = height / 1080`), passed down as a `u` property. Respect the safe area (`Theme.safeArea`).
-- **No literal colours, durations or easing values in components.** Add a token to `Theme.qml` instead.
+- **No literal colours, durations or easing values in components.** Add a token to `Theme.qml` instead. `dev.ps1 shell` (so `test`) runs a token lint that fails on `duration: <non-zero number>`, a quoted hex colour or `Qt.rgba(` anywhere but `Theme.qml`; for a rare exception end the line with `// token-ok: <reason>`. (Easing types are still a convention, not linted.) A feedback animation (shake, pulse) must also not run under reduced motion: guard its start on `Theme.reducedMotion`.
 - All user-visible strings go through `qsTr()`; use `%n` plurals where counts appear.
 - Effects: `MultiEffect` or precompiled `.qsb` shaders only. Never inline GLSL. Blur the shared backdrop; never stack more fullscreen blurs.
 - Never block the GUI thread. Service calls are asynchronous: invoke them, then react to a signal.

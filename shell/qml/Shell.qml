@@ -118,7 +118,7 @@ FocusScope {
         objectName: "backdrop"
         anchors.fill: parent
         tint: root.signedIn && root.currentTile ? root.currentTile.accent
-                                                : (Profiles.active.avatar ?? "#3a5bd9")
+                                                : (Profiles.active.avatar ?? Theme.defaultTint)
     }
 
     // Header
@@ -276,11 +276,11 @@ FocusScope {
             clip: false
 
             model: ListModel {
-                ListElement { key: "games"; title: "Games"; accent: "#3a5bd9" }
-                ListElement { key: "media"; title: "Media"; accent: "#d9483a" }
-                ListElement { key: "store"; title: "Store"; accent: "#2fa37a" }
-                ListElement { key: "settings"; title: "Settings"; accent: "#7a5bd9" }
-                ListElement { key: "power"; title: "Power"; accent: "#5a6478" }
+                ListElement { key: "games"; title: "Games" }
+                ListElement { key: "media"; title: "Media" }
+                ListElement { key: "store"; title: "Store" }
+                ListElement { key: "settings"; title: "Settings" }
+                ListElement { key: "power"; title: "Power" }
             }
 
             delegate: Tile {
@@ -376,7 +376,7 @@ FocusScope {
         property bool open: false
 
         anchors.fill: parent
-        color: "#d8000000"
+        color: Theme.scrimOverlay
         opacity: open ? 1 : 0
         visible: opacity > 0
         Behavior on opacity { NumberAnimation { duration: Theme.pageMs; easing.type: Easing.OutCubic } }
@@ -394,7 +394,7 @@ FocusScope {
             width: panelColumn.width + 96 * root.u
             height: panelColumn.height + 96 * root.u
             radius: 32 * root.u
-            color: "#1a1d26"
+            color: Theme.panel
             border.color: Theme.glassBorder
         }
 
@@ -448,7 +448,7 @@ FocusScope {
                     width: actions.width
                     height: 76 * root.u
                     radius: height / 2
-                    color: focused ? Qt.rgba(1, 1, 1, 0.2) : Theme.glass
+                    color: focused ? Theme.focusFill : Theme.glass
                     border.width: focused ? 4 * root.u : 1
                     border.color: focused ? Theme.focusRing : Theme.glassBorder
                     Text {
@@ -474,7 +474,7 @@ FocusScope {
         visible: Profiles.mock
         anchors { left: parent.left; bottom: parent.bottom; margins: root.marginY / 2 }
         text: qsTr("mock services")
-        color: "#ffb74d"
+        color: Theme.warningText
         font.pixelSize: 20 * root.u
     }
 

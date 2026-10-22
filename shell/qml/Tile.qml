@@ -6,12 +6,16 @@ Item {
     required property int index
     required property string key      // stable id of the page this tile opens
     required property string title
-    required property color accent
     property real u: 1
 
+    readonly property color accent: Theme.tileAccent(key)
     readonly property bool focused: ListView.isCurrentItem && ListView.view.activeFocus
 
-    function pulse() { pulseAnimation.restart() }
+    // Accept feedback; skipped under reduced motion (the page change that follows is the feedback).
+    function pulse() {
+        if (!Theme.reducedMotion)
+            pulseAnimation.restart()
+    }
 
     scale: focused ? Theme.focusScale : 1.0
     z: focused ? 1 : 0
@@ -49,7 +53,8 @@ Item {
 
     SequentialAnimation {
         id: pulseAnimation
-        NumberAnimation { target: card; property: "scale"; to: 0.94; duration: 70; easing.type: Easing.OutQuad }
-        NumberAnimation { target: card; property: "scale"; to: 1.0; duration: 180; easing.type: Easing.OutBack }
+        objectName: "pulseAnimation"
+        NumberAnimation { target: card; property: "scale"; to: Theme.pulseScale; duration: Theme.pulseDownMs; easing.type: Easing.OutQuad }
+        NumberAnimation { target: card; property: "scale"; to: 1.0; duration: Theme.pulseUpMs; easing.type: Easing.OutBack }
     }
 }

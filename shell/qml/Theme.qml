@@ -14,6 +14,31 @@ QtObject {
     readonly property color glassBorder: "#33ffffff"
     readonly property color focusRing: "#ffffff"
 
+    // Fills and overlays. White at a given alpha marks focus, selection and key caps.
+    readonly property color focusFill: Qt.rgba(1, 1, 1, 0.2)        // focused row, pill, action
+    readonly property color selectedFill: Qt.rgba(1, 1, 1, 0.1)     // selected but not focused
+    readonly property color keyFocusFill: Qt.rgba(1, 1, 1, 0.22)    // focused PIN-pad key
+    readonly property color entryKeyFocusFill: Qt.rgba(1, 1, 1, 0.24)   // focused on-screen-keyboard key
+    readonly property color entryKeyActiveFill: Qt.rgba(1, 1, 1, 0.3)   // latched key (Shift, symbols)
+    readonly property color scrim: "#d0000000"                      // behind PIN pad and keyboard
+    readonly property color scrimOverlay: "#d8000000"               // behind the Guide overlay
+    readonly property color panel: "#1a1d26"                        // card of the Guide overlay
+    readonly property color errorText: "#ff8a80"
+    readonly property color warningText: "#ffb74d"
+    readonly property color blobHighlight: "#ffffff"                // faint third backdrop blob
+
+    // Accent colours: the backdrop default (also the fallback avatar colour) and the home tiles.
+    readonly property color defaultTint: "#3a5bd9"
+    function tileAccent(key) {
+        switch (key) {
+        case "games": return "#3a5bd9"
+        case "media": return "#d9483a"
+        case "store": return "#2fa37a"
+        case "settings": return "#7a5bd9"
+        default: return "#5a6478"      // power
+        }
+    }
+
     readonly property real safeArea: DeviceSettings.overscan   // fraction of width/height
     readonly property real focusScale: 1.08
 
@@ -21,6 +46,16 @@ QtObject {
     readonly property int focusMs: reducedMotion ? 0 : 140
     readonly property int pageMs: reducedMotion ? 0 : 300
     readonly property int tintMs: reducedMotion ? 0 : 700
+
+    // Feedback animations. Under reduced motion the PIN-pad shake and the tile pulse do not run
+    // at all (their call sites check `reducedMotion`); the error text/sound or the page change
+    // that follows is the feedback.
+    readonly property real shakeDistance: 18     // design px
+    readonly property int shakeQuickMs: reducedMotion ? 0 : 45
+    readonly property int shakeSlowMs: reducedMotion ? 0 : 90
+    readonly property real pulseScale: 0.94
+    readonly property int pulseDownMs: reducedMotion ? 0 : 70
+    readonly property int pulseUpMs: reducedMotion ? 0 : 180
 
     readonly property int toastMs: 4000      // how long a toast stays on screen
     readonly property int caretMs: 530       // text caret blink half-period

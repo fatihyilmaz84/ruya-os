@@ -24,7 +24,7 @@ FocusScope {
         id: background
         anchors.fill: parent
         radius: height / 2
-        color: control.activeFocus ? Qt.rgba(1, 1, 1, 0.2) : Theme.glass
+        color: control.activeFocus ? Theme.focusFill : Theme.glass
         border.width: control.activeFocus ? 4 * control.u : Math.max(1, control.u)
         border.color: control.activeFocus ? Theme.focusRing : Theme.glassBorder
         Behavior on color { ColorAnimation { duration: Theme.focusMs } }
