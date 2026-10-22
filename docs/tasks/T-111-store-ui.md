@@ -48,6 +48,7 @@ From the Store tile, the user browses apps, opens a detail page that explains th
 - `docs/specs/02-shell.md` §1 Store row; `docs/specs/03-services-and-apps.md` §4.4: what the UI shows.
 
 ## Hints
+- **UI rules since T-117:** every colour and duration comes from `Theme`; the new badge and warning colours are new tokens, and the token lint in `dev.ps1 shell` fails on literals (quoted hex, `Qt.rgba(`, `duration: 120`). Generated art colours can come from `Qt.hsla(...)` of the id hash, which the lint does not flag. A new feedback animation must not run under reduced motion.
 - Nested pages, `params` and state keeping come from T-119; do not re-solve them here. Back from the detail page must return to the Store page with the same row and item focused (`test_detail_back_restores_focus` relies on it).
 - Reuse the Settings controls (`ToggleRow` for "Also delete my data") and the generated-art idea from `ProfileCard`.
 - Use `Notifications.show` for "Installed" / "Update available"-style messages if useful, never for errors the user must act on (show those inline).

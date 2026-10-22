@@ -3,7 +3,7 @@
 Status: todo · Phase: 3 · Depends: — · Area: api, shell · Size: M
 
 ## Goal
-A written `org.ruyaos.Store1` contract, plus a shell-side `Store` singleton with a mock backend (fake catalogue, simulated installs) and a D-Bus client, so the store UI (T-111) can be built and tested on Windows. The real Rust service needs Linux and libflatpak (blocked item B-4).
+A written `org.ruyaos.Store1` contract, plus a shell-side `Store` singleton with a mock backend (fake catalogue, simulated installs) and a D-Bus client, so the store UI (T-111) can be built and tested on Windows. The real Rust service needs Linux and libflatpak (blocked item B-004).
 
 ## Read first
 - `docs/specs/03-services-and-apps.md` §4, especially §4.2 (sources), §4.3 (method list) and §4.4 (permissions)
@@ -37,7 +37,7 @@ A written `org.ruyaos.Store1` contract, plus a shell-side `Store` singleton with
 
 ## Out of scope
 - Any UI beyond what a test needs (T-111).
-- The Rust service (B-4).
+- The Rust service (B-004).
 
 ## Acceptance criteria
 - [ ] `Store1.xml` covers every method listed in spec §4.3. The Outcome contains a table mapping spec item → XML member.
@@ -54,9 +54,10 @@ A written `org.ruyaos.Store1` contract, plus a shell-side `Store` singleton with
 
 ## Docs to update
 - `docs/specs/03-services-and-apps.md` §4.3: point to the XML and note any naming differences.
-- `docs/STATUS.md`: D-Bus client unverified; B-4 is still blocked.
+- `docs/STATUS.md`: D-Bus client unverified; B-004 is still blocked.
 
 ## Hints
+- Adding the new C++ `QML_ELEMENT` types is safe on the first `dev.ps1` run since T-116 (the stale type-registration step is handled in CMake); you do not need to build twice.
 - Make the mock's progress timer interval injectable (e.g. `RUYA_MOCK_FAST=1` → 10 ms steps) so tests stay fast.
 
 ## Outcome

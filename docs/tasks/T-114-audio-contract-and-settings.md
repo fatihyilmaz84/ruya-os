@@ -53,5 +53,10 @@ Settings → Audio lists the output devices (HDMI, headset, Bluetooth…), lets 
 - `docs/specs/03-services-and-apps.md` §2.3: reference the contract.
 - `docs/STATUS.md`: add or confirm blocked item "ruya-devices (PipeWire) service".
 
+## Hints
+- Copy the pattern of `DisplayPane.qml` (a `SettingsPane` with controls kept in sync through `Binding`) and register the pane in `SettingsPage.qml`; `ProfilesPane.qml` shows how messages and focus restoration are handled.
+- **UI rules since T-117:** colours and durations come from `Theme` tokens; the token lint in `dev.ps1 shell` fails on literals. The OSD and toasts already use tokens.
+- The PipeWire side is only checkable in the VM (T-121 checks that the sound path exists at all); this task stays on the mock.
+
 ## Outcome
 _Filled in by the implementer._

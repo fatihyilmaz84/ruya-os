@@ -42,6 +42,9 @@ A page can open a detail page on top of itself (store app → app detail, later 
 - `docs/specs/02-shell.md` §1.1; `shell/CLAUDE.md` "How to add a page" (nested pages, `params`, `extraPages`).
 
 ## Hints
+- Today the single `Loader`'s `onLoaded` hands every page its `objectName` (`"page_" + key`), `u`, `version`, `overlay` (the shell's `modalLayer`), `marginX` and `marginY`. Each stack entry needs the same wiring (for example in the delegate's `Component.onCompleted` with bindings); keep the `page_<key>` object names, tests rely on them (`find("page_settings")`).
+- Setup (T-106) is not a page: `signedIn` is false while it shows, so `openPage` is already a no-op then.
+- UI rules since T-117: the token lint fails on literal colours/durations in QML; use `Theme` tokens.
 - Keep `pageStack` a plain array of objects and reassign it (QML change notification).
 - The old code resets `shownPage` after the fade-out; with one item per entry, destroy the popped item when its opacity animation ends (or when it has been hidden), not before, or the fade-out disappears.
 - A test page is a small `Page { … }` component in the test file; give it an `objectName` and one `focus: true` element.

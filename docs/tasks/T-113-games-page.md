@@ -15,7 +15,7 @@ The Games tile opens a grid of installed games, and home gains a "Recently playe
    - `launch` only emits `launchRequested(id, launchSpec)` in this task; the mock records it. Actual launching belongs to the future session service.
 2. `GamesPage.qml`:
    - a grid of game tiles with generated art (title initials plus a colour from the id hash), 5 columns at 1080p, D-pad navigation, and a filter ChoiceRow (All / Steam / Flatpak);
-   - Accept on a tile → `Library.launch(id)` plus a toast "Starting <title>…" if T-108 is done.
+   - Accept on a tile → `Library.launch(id)` plus a toast "Starting <title>…" (`Notifications.show`, T-108 is done).
 3. Home: add a "Recently played" row above the section tiles. Up/Down moves between the two rows, and focus restoration covers both rows.
    - Keep the existing section tiles and the T-101 behaviour intact.
 4. Empty states: no games → "No games yet — visit the Store" with a button that opens the Store page.
@@ -40,6 +40,11 @@ The Games tile opens a grid of installed games, and home gains a "Recently playe
 
 ## Docs to update
 - `docs/specs/02-shell.md` §1: Home and Library rows reflect what exists.
+
+## Hints
+- **UI rules since T-117:** colours and durations come from `Theme` tokens (the token lint in `dev.ps1 shell` fails on quoted hex colours, `Qt.rgba(` and literal non-zero `duration:`). Generated tile colours can use `Qt.hsla(hash, …)`, which the lint does not flag.
+- The home `Tile` takes its accent from `Theme.tileAccent(key)` (since T-117), so it is not a fit for game tiles; build a small game-tile component (copy the focus ring and scale from `Tile.qml`, and respect `Theme.reducedMotion` for any pulse).
+- Home focus is routed by `Shell.focusCurrent()`/`routeFocus()`; adding a second row means extending that single place, not adding another `forceActiveFocus` elsewhere.
 
 ## Outcome
 _Filled in by the implementer._

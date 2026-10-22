@@ -2,23 +2,26 @@
 
 **Read this first in every session; update it last.** The rules are in the root `CLAUDE.md`, the task format in `docs/tasks/README.md`.
 
-Last updated: 2026-10-23 (Sonnet 5.5, T-116)
+Last updated: 2026-10-23 (Sonnet 5.5, planning)
 
 ## Where we are
 
 - **Phase 0 (foundation):** **verified in a VM on 2026-10-22.** The image builds, passes lint, boots to the shell, updates, and rolls back both manually and automatically (greenboot). Only the real-hardware item is left (B-002).
-- **Phase 1–2 (shell core, profiles):** in progress on the Windows host against mock services.
+- **Phase 1–2 (shell core, profiles):** in progress on the Windows host against mock services. Done: pages, motion, toasts/OSD, settings, on-screen keyboard, profile management, first-boot wizard, token lint. The repo is public on GitHub; on its first push the `services` and `shell` CI jobs (Fedora's Qt, Linux) passed, the `image` job's result was not yet known (T-122 reads it). Next: CI, power actions, and verifying Profiles over the real bus in the VM (T-120).
 - **Host:** Windows, plus a Fedora 44 WSL distribution for image builds and QEMU/WHPX for boot tests (`docs/dev-setup.md`). Work that needs a GPU, controllers or audio still waits in the Blocked table.
 
 Verification legend: **host** = built and tested on the Windows host · **vm** = built into the image and verified booted in QEMU · **unverified** = written, but not run · **hw** = verified on real hardware.
 
 ## Board
 
-**NEXT → T-107**
+**NEXT → T-122**
 
 | ID | Title | Status | Depends | Verified |
 |---|---|---|---|---|
-| [T-107](tasks/T-107-power-actions.md) | Power actions (suspend/restart/off) | todo | T-101 | |
+| [T-122](tasks/T-122-ci-refresh.md) | CI on GitHub: read the first results, make it green, same gates as `dev.ps1 test` (token lint) | todo | — | |
+| [T-107](tasks/T-107-power-actions.md) | Power actions (suspend/restart/off), polkit rule verified in the VM | todo | T-101 | |
+| [T-120](tasks/T-120-vm-profiles-and-oobe.md) | Verify Profiles and the first-boot wizard in the VM over the real bus (VM screenshot/keys scripts); closes B-005 | todo | — | |
+| [T-121](tasks/T-121-vm-audio.md) | Audio in the VM: sound device, PipeWire for the shell session, UI cues load | todo | T-120 | |
 | [T-114](tasks/T-114-audio-contract-and-settings.md) | Audio contract and Settings → Audio | todo | T-103, T-108 | |
 | [T-109](tasks/T-109-translations.md) | Translations en/tr, live switching, Turkish keyboard layout | todo | T-103, T-106 | |
 | [T-118](tasks/T-118-profile-rename-delete.md) | Profiles1: RenameProfile and DeleteProfile (contract, service, mock; no UI) | todo | T-115 | |
@@ -34,14 +37,7 @@ The order above is the recommended order. When the NEXT task is blocked, take th
 
 Follow-ups, debt and ideas waiting for a planner session. Builders: add one line per item, `- (source) what, and why it matters`. Don't write task files for these unless your own task needs one. A planner session turns them into tasks, drops them with a reason, or escalates them. **Run a planner when this list has 5+ items.**
 
-- (B-001) **B-005 is unblocked.** The VM runs the real shell against the real `ruya-profiles` over the system bus, with an empty profile store, so it now shows the first-boot wizard (T-106 landed; its D-Bus path is unverified). Plan a task to verify Profiles over D-Bus in the VM (picker, PIN, lockout, CreateProfile, SetPin) and fix what breaks.
-- (B-001) A failed boot takes about 100 s (90 s greenboot check + 120 s VM marker), so automatic rollback takes about 7 minutes. Consider a shorter required-check timeout once real-hardware boot times are known (spec 02 §8 KPI: shell < 15 s on the low tier).
-- (B-001) The image is 4.7 GB. A switch reuses layers (0.0.3→broken needed 931 bytes; 0.0.3→0.0.4 about 2 minutes because the NVIDIA layer was rebuilt). Measure real update sizes and plan chunked images (spec 01 §4) before release.
-- (B-001) The VM has no audio device, so UI sound (PipeWire, QSoundEffect formats) is unverified on Linux. Add an `-audiodev` to a VM profile, or test on hardware.
-- (B-001) CI (`.github/workflows/ci.yml`) predates today's fixes: it never ran, still uses `scripts/smoke-test.sh` (Linux/KVM), and doesn't run the update/greenboot drill. The repo now has a remote (2026-10-23), so the workflow runs on every push to `main`; its first results were not looked at. Review it.
-
-
-_(empty: handled in the 2026-10-22 planning session; see its log entry)_
+_(empty: handled in the 2026-10-23 planning session; see its log entry)_
 
 ### Done
 
@@ -72,10 +68,10 @@ A session can't know its own commit hash before committing, so new rows put the 
 | ID | What | Needs | Notes |
 |---|---|---|---|
 | ~~B-001~~ | **Done 2026-10-22 (vm).** Image built (lint clean, fatal warnings), booted to the shell, update 0.0.3→0.0.4, manual rollback, and greenboot automatic rollback from a broken image | — | Session log 2026-10-22 (Opus); recipe in `docs/dev-setup.md` |
-| B-002 | Install on a real low-tier machine; first frame-time numbers (§8 item 8) | Hardware | A dev installer ISO now exists (`output/bootiso/`, contains the dev SSH key; for test machines only) |
+| B-002 | Install on a real low-tier machine; first frame-time numbers (§8 item 8) | Hardware | A dev installer ISO now exists (`output/bootiso/`, contains the dev SSH key; for test machines only). Also decide there: a failed boot takes about 100 s (90 s greenboot check + 120 s VM marker), so automatic rollback takes about 7 minutes; consider a shorter required-check timeout once real boot times are known (spec 02 §8 KPI: shell < 15 s on the low tier). |
 | B-003 | Compositor spike: shell as QtWaylandCompositor, overlay over a running game (ADR-002) | Linux with a GPU | Decides the product architecture; do it as soon as Linux is available. Also check there: the volume-key `Shortcut`s (T-108) work with an app focused. |
 | B-004 | `ruya-store` Rust service over libflatpak/AppStream | Linux | Contract from T-110 |
-| B-005 | Shell ↔ services over a real D-Bus (Profiles first) | **Unblocked:** the VM runs the real shell, `ruya-profiles` and the system bus | Can be done in the VM over SSH now; needs a task (planner) |
+| B-005 | Shell ↔ services over a real D-Bus (Profiles first) | **Unblocked:** the VM runs the real shell, `ruya-profiles` and the system bus | Planned as **T-120** (Profiles, OOBE, lockout, Settings → Profiles in the VM, with VM screenshot/keys scripts). Other services follow the same way once they exist. |
 | B-006 | Replace the `ruya-inputd` stopgap with InputPlumber (ADR-003), with grab/re-emit | Linux + controllers | Also owns the key-repeat model (400 ms delay then accelerating repeat, stick repeat speed) and Accept long-press / context menu from spec 02 §4.3; the shell only sees key events. |
 | B-007 | `ruya-devices` service (PipeWire, NetworkManager, BlueZ) | Linux | Audio contract from T-114 |
 | ~~B-008~~ | **Done 2026-10-22 (vm).** greenboot (0.16, Rust) works on bootc once its units are enabled: 4 failed boots of a broken image, then GRUB fell back. The NVIDIA 615.78 kmod builds and is signed in the image; the private key is removed | — | Loading on real NVIDIA hardware and Secure Boot/MOK are still unverified (needs hardware) |
@@ -85,11 +81,37 @@ A session can't know its own commit hash before committing, so new rows put the 
 - **ADR-002** (compositor): recommendation A, pending spike B-003.
 - **libdvdcss / AACS** (DVD/Blu-ray decryption): not included; needs an explicit owner decision.
 - **One admin or several?** `00-overview` §2 (MVP) says "one admin", `03` §1.1 says "Admin (one or more)". The service supports several; the UI offers only Standard and Guest when adding a profile (T-105). Options: (a) keep one admin in the UI for the MVP, as the overview says; (b) let an admin create more admins and fix the overview. Recommendation: (a), and revisit after the first user test. Not blocking: T-118 does not depend on it.
-- **Publishing:** decided. The owner pushed `main` to https://github.com/fatihyilmaz84/ruya-os.git on 2026-10-23 (history scanned for secrets first; the dev SSH key in `image/bib/config.toml` is git-ignored). Whether the repo is public and which licence file it carries (ADR-008) were not checked in that session. Later pushes still need the owner's go-ahead.
+- **Publishing:** decided. The owner pushed `main` to https://github.com/fatihyilmaz84/ruya-os.git on 2026-10-23 (history scanned for secrets first; the dev SSH key in `image/bib/config.toml` is git-ignored). The repo is **public** (its Actions API answers without login) and carries `LICENSE.md` and `LICENSES/` per ADR-008. Later pushes still need the owner's go-ahead. At planning time, T-117 was committed locally but not pushed.
 
 ## Session log (newest first)
 
 Each entry: date · model · tasks · what happened · verification · follow-ups. Keep entries short and factual.
+
+### 2026-10-23 · Sonnet 5.5 · Planning
+Planner session (`docs/tasks/PLANNING.md`). The Inbox had 5 items; now empty. No product code written.
+
+New tasks: **T-120** (verify Profiles, the wizard, lockout and Settings → Profiles in the VM over the real bus; adds VM screenshot and key-sending scripts through the QEMU monitor; closes B-005), **T-121** (audio in the VM: sound device, PipeWire for the shell session, UI cues load), **T-122** (CI: read the first GitHub results, make it green, add the token lint).
+
+Inbox items handled:
+- B-005 unblocked, verify Profiles over D-Bus in the VM → **T-120** (it also verifies the T-105, T-106 and T-115 D-Bus paths).
+- VM has no audio device → **T-121**. Partly stale: `run-vm.ps1` already has `-audiodev dsound` and the image ships PipeWire; only the headless `smoke-test.ps1` has no sound card, and nobody had checked the session's PipeWire.
+- CI predates the fixes → **T-122**. First data point: the `services` and `shell` jobs passed on the first push (which is also the first Linux build and offscreen test run of the shell on Fedora's Qt); the `image` job was still building.
+- Slow failed-boot rollback (about 100 s per failed boot) → **merged into B-002** (hardware boot times first), dropped from the Inbox.
+- Image size and update sizes (4.7 GB, chunked images) → **dropped as a task for now**: it is a release topic (Phase 6, spec 01 §4); listed in the candidates below so it is not lost.
+
+Existing tasks re-checked against what was built (T-106, T-115, T-116, T-117 landed since the last planning):
+- T-107: the polkit rule can be verified in the VM now (acceptance criteria added: boot with `RUYA_BOOT_OK`, `pkcheck`, `CanPowerOff`), hints on tokens and the overlay's inline action model.
+- T-109: `DeviceSettings.language` and the wizard exist; added a live-switch criterion for the wizard, the audit list (Setup, `ProfileStatus`), the "stored text does not retranslate" pitfall, and the endonym rule.
+- T-119: hint about the `Loader.onLoaded` wiring (objectName, `u`, `overlay`, margins) that every stack entry needs.
+- T-110: `B-4` → `B-004`; the build-twice note is gone since T-116.
+- T-111, T-113, T-114: token-lint hints; T-113 no longer conditional on T-108; T-113 notes that `Tile` now derives its accent from `Theme.tileAccent(key)`.
+- T-112, T-118: still accurate.
+
+Queue: 12 `todo` tasks (T-122, T-107, T-120, T-121, T-114, T-109, T-118, T-119, T-110, T-111, T-112, T-113). Ready now: 9 (all but T-111, T-113, T-121). NEXT is T-122 (cheap, and the repo is public), then T-107 and T-120, which both need an image build, so they can share one.
+
+Candidates for the next planning session (each wants a pattern first or is not urgent): Settings → Network and Bluetooth & controllers (after T-114 sets the `Devices1` pattern); profile rename/delete UI (after T-118 lands); Storage settings and the device-inserted toast; controller button-test screen; focus restore per profile (spec 02 §4.3); Accessibility settings (text scale, high contrast, focus-ring size); pointer visibility; FPS/KPI capture scripts; **update sizes and chunked images** (spec 01 §4; measure with two builds in WSL, release topic); guest user handling and the session service (needs T-120's VM workflow).
+
+Verification: docs only; `dev.ps1 test` run before the commit.
 
 ### 2026-10-23 · Sonnet 5.5 · T-117
 Reduced motion and tokens:
