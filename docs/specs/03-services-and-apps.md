@@ -11,6 +11,14 @@ Status: **Draft v1** · Parent: [00-overview](00-overview.md)
 - Admin-only actions (polkit `org.ruyaos.admin`): OS update/rollback/channel, add/remove remotes, install system-wide apps, create/delete profiles, factory reset. The shell asks for the admin PIN, which `ruya-profiles` turns into a short-lived polkit authorization.
 - Locking: on profile switch, on idle timeout (configurable), and on resume from suspend if the profile has a PIN.
 
+#### UI flows (as built, T-105)
+Settings -> Profiles lists the profiles (colour, name, role, PIN yes/no, "You" for the active one) and offers:
+- **Add profile** (admins only): an inline form with Name (the on-screen keyboard), Role (Standard or Guest) and, for Standard, "Protect with a PIN". "Create profile" then collects the new PIN twice (only for a Standard profile with a PIN) and the admin's own PIN, and calls `CreateProfile` with the active admin's id and that PIN.
+- **Change my PIN / Set a PIN** (Admin and Standard): the current PIN (only if there is one), then the new PIN twice, then `SetPin`.
+- **Remove my PIN** (Standard with a PIN only; an Admin cannot remove theirs, so the row is hidden): the current PIN, then `SetPin` with an empty new PIN.
+
+PINs are collected by the PIN pad in `collect` / `collect-confirm` mode (it calls no service); a mismatched confirmation shows "PINs don't match" and starts over. Every contract status maps to a message in the pane: `wrong-pin` ("%n attempt(s) left"), `locked-out` ("Try again in N s"), `invalid`, `not-allowed`, `failed`, plus `pin-required` and `unknown-profile`. The contract's replies carry no attempt counts, so the D-Bus backend asks `SwitchTo(id, "")` after a `wrong-pin` or `locked-out` (a side-effect-free probe for a profile that has a PIN) to fill them in; the mock knows them. The mock enforces the same rules as `service.rs` (name 1-32 characters after trimming and no control characters, role, PIN format, admin check, the shared lockout counter with doubling back-off).
+
 ### 1.2 Isolation guarantees (acceptance)
 - A profile can't read another profile's home (0700 homes, verified by test).
 - Apps run as the profile's user inside Flatpak. Nothing third-party runs as root or as `ruya-shell`.

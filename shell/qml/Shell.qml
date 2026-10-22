@@ -299,6 +299,7 @@ FocusScope {
                 page.objectName = "page_" + root.shownPage
                 page.u = Qt.binding(() => root.u)
                 page.version = Qt.binding(() => root.version)
+                page.overlay = modalLayer
                 page.marginX = Qt.binding(() => root.marginX)
                 page.marginY = Qt.binding(() => root.marginY)
             }
@@ -307,6 +308,15 @@ FocusScope {
             target: pageLoader.item as Page
             function onBackRequested() { root.closePage() }
         }
+    }
+
+    // Pages parent their modals (PinPad, TextEntry) here: full screen, above pages and toasts,
+    // below the picker and the Guide overlay.
+    Item {
+        id: modalLayer
+        objectName: "modalLayer"
+        anchors.fill: parent
+        z: 15
     }
 
     // Toasts sit above pages and below the modals (picker, overlay); the volume OSD is above all.

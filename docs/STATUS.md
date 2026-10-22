@@ -14,11 +14,10 @@ Verification legend: **host** = built and tested on the Windows host · **unveri
 
 ## Board
 
-**NEXT → T-105**
+**NEXT → T-106**
 
 | ID | Title | Status | Depends | Verified |
 |---|---|---|---|---|
-| [T-105](tasks/T-105-profile-management.md) | Manage profiles from Settings | todo | T-103, T-104 | |
 | [T-106](tasks/T-106-first-boot-setup.md) | First-boot setup (OOBE) | todo | T-102, T-104, T-105 | |
 | [T-107](tasks/T-107-power-actions.md) | Power actions (suspend/restart/off) | todo | T-101 | |
 | [T-109](tasks/T-109-translations.md) | Translations en/tr, live switching | todo | T-103 | |
@@ -38,6 +37,8 @@ Follow-ups, debt and ideas waiting for a planner session. Builders: add one line
 - (T-102) Once, after adding a new C++ `QML_ELEMENT` type, the tests failed with "DeviceSettings is not defined" and passed on the next build (stale incremental registration). Investigate the CMake dependency between `tst_ruyashell` and the module's type registration; at least document the workaround. Happened again in T-108 (`Audio`); the workaround (build twice) is now in `shell/CLAUDE.md`.
 - (T-108) Tests that wait a second or more can fail on `activeFocus` when another window takes OS focus from the test window (confirmed: `Window.active` false, item `focus` still true). `tst_system_ui.qml` now falls back to `focus` in that case for its two late checks (`hasFocus`). Other test files have only short waits; if one flakes the same way, reuse that helper, and run `dev.ps1 test` without touching other windows.
 - (T-108) The volume-key `Shortcut`s are verified only in a QtQuickTest window on Windows; check them under the real compositor (B-003) with an app focused.
+- (T-105) No way to delete or rename a profile, or to create another admin, from the UI: the contract has no such methods. Needs a contract change (planner).
+- (T-105) Toasts (top right) can cover the right-hand values of Settings rows for 4 s; consider moving toasts or shifting rows if it proves annoying on a real TV.
 - (T-104) `TextEntry` has no mouse/touch support and no non-Latin layouts (out of scope for T-104); revisit with i18n (T-109) and if pointer input becomes a requirement.
 - (T-103) Key repeat acceleration and long-press (spec 4.3) are not implemented; holding Left/Right on a SliderRow steps at the OS repeat rate.
 - (T-108) Stepping volume while muted does not unmute; decide the UX when T-114 builds the audio settings.
@@ -60,6 +61,7 @@ A session can't know its own commit hash before committing, so new rows put the 
 | T-108 | Toasts (`Notifications`, `ToastLayer`), volume OSD, mock `Audio` singleton, volume keys | host (`dev.ps1 test` green, new `tst_system_ui.qml` + screenshot reviewed) | T-108 |
 | T-103 | Settings page (two panes), reusable controls, Display & motion and About panes, `SystemInfo` | host (`dev.ps1 test` green, new `tst_settings.qml` + 2 screenshots reviewed) | T-103 |
 | T-104 | On-screen keyboard (`TextEntry`: D-pad typing, shift, symbols, email/url layouts, mask, max length) | host (`dev.ps1 test` green, new `tst_textentry.qml` + screenshot reviewed) | T-104 |
+| T-105 | Settings → Profiles: add profile, change/remove PIN; mock mirrors `service.rs`; PinPad collect modes | mock path: host (`dev.ps1 test` green, new `tst_profile_admin.qml` + screenshot reviewed) · D-Bus `CreateProfile`/`SetPin` + attempts probe: **unverified** | T-105 |
 
 ## Blocked (need something this host doesn't have)
 
@@ -83,6 +85,16 @@ A session can't know its own commit hash before committing, so new rows put the 
 ## Session log (newest first)
 
 Each entry: date · model · tasks · what happened · verification · follow-ups. Keep entries short and factual.
+
+### 2026-10-22 · Sonnet 5.5 · T-105
+Manage profiles from Settings:
+- `createProfile`/`setPin` through the backend interface, mock (rules mirror `service.rs` and `lockout.rs`), D-Bus backend and `Profiles`; `Profiles.resetMockForTests` for tests (and T-106);
+- `PinPad` modes `collect` / `collect-confirm`; `ProfilesPane` with `ProfileAddFlow` and `ChangePinFlow`; `Page.overlay` + `modalLayer` for page-owned modals; scrollable `SettingsPane` that keeps focus;
+- signals carry attempts left / retry seconds (the contract replies don't, so the D-Bus backend probes `SwitchTo(id, "")`).
+
+Verification: `dev.ps1 test` → ALL GREEN; `dev.ps1 shots` reviewed (`10-settings-profiles.png`). D-Bus paths unverified. One red run was caused by a locked Windows session, not code (QML timers stall without rendering): check `Get-Process LogonUI` before debugging timing failures.
+
+Follow-ups: see Inbox. NEXT is T-106 (first-boot setup).
 
 ### 2026-10-22 · Sonnet 5.5 · T-104
 On-screen keyboard:

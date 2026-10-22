@@ -10,6 +10,7 @@ FocusScope {
     property real u: 1
     property string title
     property string version      // image version, set by the shell
+    property Item overlay        // full-screen layer above pages, for modals (PIN pad, keyboard)
 
     // Safe-area insets, set by the shell.
     property real marginX: 0

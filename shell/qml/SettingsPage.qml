@@ -23,7 +23,8 @@ Page {
         { key: "about", label: qsTr("About") },
     ]
     readonly property var current: categories[categoryList.currentIndex]
-    readonly property SettingsPane currentPane: current.key === "display" ? displayPane
+    readonly property SettingsPane currentPane: current.key === "profiles" ? profilesPane
+                                              : current.key === "display" ? displayPane
                                               : current.key === "about" ? aboutPane : null
 
     function enterPane() {
@@ -83,10 +84,20 @@ Page {
         id: paneArea
         anchors { left: categoryList.right; leftMargin: 60 * page.u; right: parent.right; top: parent.top; bottom: parent.bottom }
 
+        ProfilesPane {
+            id: profilesPane
+            objectName: "paneProfiles"
+            anchors.fill: parent
+            u: page.u
+            overlay: page.overlay
+            visible: page.current.key === "profiles"
+            enabled: visible
+            onExitRequested: page.leavePane()
+        }
         DisplayPane {
             id: displayPane
             objectName: "paneDisplay"
-            anchors { left: parent.left; right: parent.right; top: parent.top }
+            anchors.fill: parent
             u: page.u
             visible: page.current.key === "display"
             enabled: visible
@@ -95,7 +106,7 @@ Page {
         AboutPane {
             id: aboutPane
             objectName: "paneAbout"
-            anchors { left: parent.left; right: parent.right; top: parent.top }
+            anchors.fill: parent
             u: page.u
             version: page.version
             visible: page.current.key === "about"

@@ -1,6 +1,6 @@
 # T-105 — Manage profiles from Settings
 
-Status: todo · Phase: 2 · Depends: T-103, T-104 · Area: shell · Size: M
+Status: done · Phase: 2 · Depends: T-103, T-104 · Area: shell · Size: M
 
 ## Goal
 From Settings → Profiles, an admin can add a profile (name, role, optional PIN). Any profile can change its own PIN. Everything goes through `org.ruyaos.Profiles1`, using the existing contract.
@@ -32,13 +32,13 @@ From Settings → Profiles, an admin can add a profile (name, role, optional PIN
 - polkit (Phase 2 service work).
 
 ## Acceptance criteria
-- [ ] The mock's `createProfile` rejects exactly what `service.rs` rejects. Mirror the cases from `service.rs::tests::creating_more_profiles_needs_admin_credentials` and `first_profile_must_be_admin_with_pin` (test `tst_profile_admin.qml::test_mock_rules_match_service`).
-- [ ] An admin adds "Kid" (standard, no PIN) entirely by controller; the picker then lists 4 profiles (test `test_add_profile_flow`).
-- [ ] A wrong admin PIN shows "attempt(s) left" and creates nothing (test `test_add_profile_wrong_admin_pin`).
-- [ ] A Standard profile does not see "Add profile" (test `test_add_hidden_for_standard`).
-- [ ] Changing a PIN with a mismatched confirmation restarts collection; a matching one calls `setPin` and the new PIN works at the picker (test `test_change_pin`).
-- [ ] Existing PinPad tests still pass unmodified.
-- [ ] Screenshot `10-settings-profiles.png`.
+- [x] The mock's `createProfile` rejects exactly what `service.rs` rejects. Mirror the cases from `service.rs::tests::creating_more_profiles_needs_admin_credentials` and `first_profile_must_be_admin_with_pin` (test `tst_profile_admin.qml::test_mock_rules_match_service`).
+- [x] An admin adds "Kid" (standard, no PIN) entirely by controller; the picker then lists 4 profiles (test `test_add_profile_flow`).
+- [x] A wrong admin PIN shows "attempt(s) left" and creates nothing (test `test_add_profile_wrong_admin_pin`).
+- [x] A Standard profile does not see "Add profile" (test `test_add_hidden_for_standard`).
+- [x] Changing a PIN with a mismatched confirmation restarts collection; a matching one calls `setPin` and the new PIN works at the picker (test `test_change_pin`).
+- [x] Existing PinPad tests still pass unmodified.
+- [x] Screenshot `10-settings-profiles.png`.
 
 ## Verification
 ```powershell
@@ -55,4 +55,19 @@ From Settings → Profiles, an admin can add a profile (name, role, optional PIN
 - The D-Bus backend reply for `CreateProfile` is `(s status, s id)`; for `SetPin` it is `s status`.
 
 ## Outcome
-_Filled in by the implementer._
+Settings -> Profiles works end to end against the mock; the D-Bus path is written but unverified.
+
+- **Backend API** (`ProfilesBackend`, `MockProfilesBackend`, `DBusProfilesBackend`, `Profiles`): `createProfile(adminId, adminPin, name, role, pin)` and `setPin(id, oldPin, newPin)`; signals `createFinished(status, id, attemptsLeft, retryAfterSecs)` and `setPinFinished(id, status, attemptsLeft, retryAfterSecs)`. The XML contract is unchanged.
+- **Mock rules** now mirror `service.rs`/`lockout.rs`: one `authenticate()` used by sign-in, admin authorisation and PIN change; name trimmed and 1-32 characters without control characters; role must be admin/standard/guest; PIN 4-6 digits; admins need a PIN, guests never have one; first-boot creation needs an admin with a PIN and no credentials; otherwise the admin id must be an admin and authenticate; ids are never reused; the lockout back-off doubles (30 s, 60 s, ... capped at 1 h) and is shared. `resetForTests("seeded"|"empty")` (exposed as `Profiles.resetMockForTests`) gives tests a known state and is also what T-106 will need for first boot.
+- **PinPad modes**: `verify` (unchanged), `collect`, `collect-confirm`, with `collected(pin)` and `cancelled()`. The existing PinPad tests pass unmodified.
+- **Settings -> Profiles** (`ProfilesPane.qml`, `ProfileAddFlow.qml`, `ChangePinFlow.qml`): profile list (new `swatch` colour dot on `SettingControl`), inline Add form, Change/Set/Remove my PIN, one status message per contract status plus a success toast. Add is hidden unless the active profile is an admin; Remove is hidden for admins and for profiles without a PIN; Change is hidden for guests.
+- **Shell plumbing**: `Page.overlay` and a `modalLayer` in `Shell` (z 15) for page-owned modals; `SettingsPane` is now scrollable (Flickable that follows focus) and repairs focus when the focused row disappears; Settings panes fill the pane area.
+- **Tests**: `tst_profile_admin.qml` (15): `test_mock_rules_match_service`, `test_mock_set_pin_rules_match_service`, `test_add_profile_flow` (all with D-pad keys: keyboard, PIN pad; the picker then lists 4 profiles), `test_add_profile_with_pin`, `test_add_profile_wrong_admin_pin`, `test_add_profile_locked_out_message`, `test_add_needs_a_name`, `test_cancel_pin_pad_aborts_the_flow`, `test_add_hidden_for_standard`, `test_admin_cannot_remove_pin`, `test_change_pin` (mismatch restarts; the new PIN works at the picker), `test_change_pin_wrong_current_pin`, `test_remove_own_pin`, `test_zz_screenshots` (`10-settings-profiles.png`). `tst_settings.qml::test_two_pane_navigation` was updated because Profiles is no longer a "Coming soon" category (the Coming-soon check now uses Network).
+- **Docs**: 03 §1.1 "UI flows", 02 §1 and §1.2, `shell/CLAUDE.md` ("Modals from pages"), `dev-setup.md`.
+
+Verification: `dev.ps1 test` → ALL GREEN (77 passed, 7 screenshot tests skipped without `RUYA_SHOTS_DIR`); `dev.ps1 shots` → 84 passed. `10-settings-profiles.png` reviewed: profile rows with avatar dots and role/PIN values, the Add form open with the focus ring on Role, readable, and the pane stops at the safe-area edge while scrolling follows focus. Unverified: the D-Bus `createProfile`/`setPin` and the `SwitchTo` probe (need a live bus). A mid-session run was red only because the Windows session was locked (QML timers stall without rendering); after unlocking, the same code was green.
+
+Deviations and notes:
+- **Signals carry attempt counts.** The task lists `createFinished(status, id)` / `setPinFinished(id, status)`, but it also wants "attempt(s) left" and seconds in the messages, and the contract replies have no such numbers. I added `attemptsLeft` and `retryAfterSecs` to both signals; the mock fills them in, and the D-Bus backend probes `SwitchTo(id, "")` after `wrong-pin`/`locked-out` (unverified: needs a live bus). No contract change.
+- Role choices in the form are Standard and Guest only (as the task says); creating more admins is not offered.
+- Found while testing: the pane's deferred focus settling stole focus from a PIN pad that reopened for the next step (fixed: it does nothing unless the pane still has focus), and focus was lost when the focused row (Remove my PIN) disappeared (fixed, with a test).

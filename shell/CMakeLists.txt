@@ -48,6 +48,9 @@ qt_add_qml_module(ruyashell
         qml/SettingsPage.qml
         qml/PowerPage.qml
         qml/SettingsPane.qml
+        qml/ProfilesPane.qml
+        qml/ProfileAddFlow.qml
+        qml/ChangePinFlow.qml
         qml/DisplayPane.qml
         qml/AboutPane.qml
         qml/controls/SettingControl.qml

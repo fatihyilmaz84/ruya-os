@@ -74,7 +74,7 @@ Without `--windowed` the shell takes the whole screen; quit with Alt+F4.
 - Ada (no PIN)
 - Guest
 
-An orange "mock services" tag in the corner shows when the mock is active.
+An orange "mock services" tag in the corner shows when the mock is active. The mock implements `CreateProfile` and `SetPin` with the service's rules, so adding profiles and changing PINs works in Settings -> Profiles (state lives in memory until restart). Tests reset it with `Profiles.resetMockForTests("seeded" | "empty")` (mock only).
 
 **Display flags (session-only, never saved).** `--reduced-motion` forces reduced motion; `--effects high|balanced|performance` forces the effects quality tier. They are for perf testing, e.g. `ruya-shell.exe --windowed --effects performance --reduced-motion`. The saved values (`DeviceSettings`: reduced motion, effects quality, overscan) live in `QSettings` (org `ruyaos`, app `shell`); set `RUYA_SETTINGS_EPHEMERAL=1` to keep them in memory only (the tests do).
 

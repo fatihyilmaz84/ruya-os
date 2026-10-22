@@ -37,6 +37,14 @@ public:
     Q_INVOKABLE void refresh();
     Q_INVOKABLE void switchTo(const QString &id, const QString &pin = {});
     Q_INVOKABLE void lock();
+    // Admin-gated create (contract: CreateProfile) and PIN change/removal (SetPin; newPin ""
+    // removes). Results arrive as createFinished / setPinFinished.
+    Q_INVOKABLE void createProfile(const QString &adminId, const QString &adminPin, const QString &name,
+                                   const QString &role, const QString &pin);
+    Q_INVOKABLE void setPin(const QString &id, const QString &oldPin, const QString &newPin);
+    // Tests only, and only with the mock backend (otherwise a no-op that returns false):
+    // "seeded" (the three default profiles) or "empty" (first boot).
+    Q_INVOKABLE bool resetMockForTests(const QString &state);
 
 signals:
     void profilesChanged();
@@ -44,6 +52,10 @@ signals:
     void availableChanged();
     // status: see api/dbus/org.ruyaos.Profiles1.xml
     void switchFinished(const QString &id, const QString &status, int attemptsLeft, int retryAfterSecs);
+    // status: see the XML; `id` is the new profile on "ok". attemptsLeft / retryAfterSecs
+    // accompany "wrong-pin" / "locked-out" (0 when unknown).
+    void createFinished(const QString &status, const QString &id, int attemptsLeft, int retryAfterSecs);
+    void setPinFinished(const QString &id, const QString &status, int attemptsLeft, int retryAfterSecs);
 
 private:
     std::unique_ptr<ProfilesBackend> m_backend;

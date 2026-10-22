@@ -5,7 +5,8 @@ import RuyaShell
 // rows (clamped), Left/Back hand focus back to the category list (exitRequested). Rows keep
 // the keys they use (Left/Right on a ChoiceRow or SliderRow never reach this pane).
 // Being a FocusScope, the pane remembers its last focused row: forceActiveFocus() on it
-// re-enters at that row.
+// re-enters at that row. Rows live in a Flickable that follows focus, so a pane may have
+// more rows than fit on the screen.
 FocusScope {
     id: pane
 
@@ -14,6 +15,29 @@ FocusScope {
     default property alias rows: column.data
 
     signal exitRequested()
+
+    // Scrolls so the focused row is fully visible. Called after every move and when the
+    // pane gains focus; call it after changing focus from code.
+    function ensureFocusedVisible() {
+        const row = focusableRows().find(r => r.activeFocus)
+        if (!row)
+            return
+        if (row.y < flick.contentY)
+            flick.contentY = row.y
+        else if (row.y + row.height > flick.contentY + flick.height)
+            flick.contentY = Math.min(row.y + row.height - flick.height, Math.max(0, flick.contentHeight - flick.height))
+    }
+    // On entering the pane: if no row holds focus (the remembered row is hidden, or there is
+    // none yet), take the first visible one; then scroll it into view.
+    function settleFocus() {
+        if (!activeFocus)
+            return                     // focus moved on meanwhile (e.g. to a modal opened by a row)
+        const list = focusableRows()
+        if (list.length > 0 && !list.some(r => r.activeFocus))
+            list[0].forceActiveFocus()
+        ensureFocusedVisible()
+    }
+    onActiveFocusChanged: if (activeFocus) Qt.callLater(settleFocus)
 
     function focusableRows() {
         const found = []
@@ -37,13 +61,24 @@ FocusScope {
             list[next].forceActiveFocus()
             if (next !== current)
                 Sfx.navigate()
+            ensureFocusedVisible()
         }
     }
 
-    Column {
-        id: column
-        width: parent.width
-        spacing: 16 * pane.u
+    Flickable {
+        id: flick
+        anchors.fill: parent
+        contentWidth: width
+        contentHeight: column.height
+        clip: true
+        interactive: false                 // focus drives the scrolling, not touch
+        boundsBehavior: Flickable.StopAtBounds
+
+        Column {
+            id: column
+            width: flick.width
+            spacing: 16 * pane.u
+        }
     }
 
     Component.onCompleted: {
@@ -59,6 +94,9 @@ FocusScope {
     }
 
     Keys.onPressed: event => {
+        // A hidden row cannot keep focus; if that left no row focused, repair it first.
+        if (!focusableRows().some(r => r.activeFocus))
+            settleFocus()
         switch (event.key) {
         case Qt.Key_Up:
             move(-1)

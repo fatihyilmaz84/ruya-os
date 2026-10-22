@@ -5,6 +5,14 @@ import RuyaShell
 // Modal PIN entry, fully controller-driven: D-pad moves over the keypad, Accept presses the
 // focused key, Back deletes a digit (or closes when empty), Menu/Start submits.
 // Keyboards can also type digits, Backspace, and Enter (keypad) to submit.
+//
+// Modes:
+//   "verify"           open(profile): checks the PIN with Profiles.switchTo (sign-in).
+//   "collect"          collect(prompt, false): hands the PIN to the caller (collected(pin)),
+//                      calls no service.
+//   "collect-confirm"  collect(prompt, true): asks twice; on a mismatch shows "PINs don't
+//                      match" and starts over.
+// In the collect modes Back on an empty pad also emits cancelled() (after closed()).
 FocusScope {
     id: pad
 
@@ -15,14 +23,38 @@ FocusScope {
     property bool busy: false
     property int lockSecs: 0
     property bool shown: false
+    property string mode: "verify"     // "verify" | "collect" | "collect-confirm"
+    property string prompt: ""         // title in the collect modes
+    property int stage: 0              // collect-confirm: 0 = first entry, 1 = confirmation
+    property string firstEntry: ""
 
     readonly property int minDigits: 4
     readonly property int maxDigits: 6
 
     signal closed()
+    signal collected(string pin)        // collect modes: the PIN the user entered (and confirmed)
+    signal cancelled()                  // collect modes: closed without a PIN
+
+    function collect(promptText, confirm) {
+        mode = confirm ? "collect-confirm" : "collect"
+        prompt = promptText
+        profile = {}
+        stage = 0
+        firstEntry = ""
+        entered = ""
+        message = ""
+        lockSecs = 0
+        busy = false
+        shown = true
+        keys.currentIndex = 0
+        keys.forceActiveFocus()
+    }
 
     function open(p) {
+        mode = "verify"
         profile = p
+        stage = 0
+        firstEntry = ""
         entered = ""
         message = ""
         busy = false
@@ -49,11 +81,46 @@ FocusScope {
         }
     }
 
+    function cancel() {
+        const wasCollecting = mode !== "verify"
+        close()
+        if (wasCollecting)
+            cancelled()
+    }
+
+    function finishCollect() {
+        const pin = entered
+        entered = ""
+        close()                        // first: the caller may open the pad again from collected()
+        collected(pin)
+    }
+
     function submit() {
         if (busy || lockSecs > 0 || entered.length < minDigits)
             return
-        busy = true
-        Profiles.switchTo(profile.id, entered)
+        if (mode === "verify") {
+            busy = true
+            Profiles.switchTo(profile.id, entered)
+        } else if (mode === "collect") {
+            Sfx.select()
+            finishCollect()
+        } else if (stage === 0) {
+            Sfx.select()
+            firstEntry = entered
+            entered = ""
+            message = ""
+            stage = 1
+        } else if (entered === firstEntry) {
+            Sfx.select()
+            finishCollect()
+        } else {
+            message = qsTr("PINs don't match")
+            Sfx.back()
+            shake.restart()
+            entered = ""
+            firstEntry = ""
+            stage = 0
+        }
     }
 
     visible: opacity > 0
@@ -64,7 +131,7 @@ FocusScope {
     Connections {
         target: Profiles
         function onSwitchFinished(id, status, attemptsLeft, retryAfterSecs) {
-            if (!pad.shown || id !== pad.profile.id)
+            if (!pad.shown || pad.mode !== "verify" || id !== pad.profile.id)
                 return
             pad.busy = false
             pad.entered = ""
@@ -104,7 +171,8 @@ FocusScope {
 
         Text {
             anchors.horizontalCenter: parent.horizontalCenter
-            text: qsTr("Enter PIN for %1").arg(pad.profile.name ?? "")
+            text: pad.mode === "verify" ? qsTr("Enter PIN for %1").arg(pad.profile.name ?? "")
+                : pad.stage === 1 ? qsTr("Confirm PIN") : pad.prompt
             color: Theme.text
             font.pixelSize: 44 * pad.u
         }
@@ -207,7 +275,7 @@ FocusScope {
             if (entered.length > 0)
                 press("del")
             else
-                close()
+                cancel()
         }
         event.accepted = true   // modal: nothing reaches the picker underneath
     }

@@ -83,7 +83,13 @@ Item {
             openSettings()
             const list = find("categoryList")
             compare(list.currentIndex, 0)
-            verify(find("paneComingSoon").visible, "Profiles has no content yet")
+            verify(find("paneProfiles").visible, "Profiles has a pane (T-105)")
+            verify(!find("paneComingSoon").visible)
+            keyClick(Qt.Key_Down)                        // Network: no content yet
+            compare(list.currentIndex, 1)
+            verify(find("paneComingSoon").visible)
+            verify(!find("paneProfiles").visible)
+            keyClick(Qt.Key_Up)
 
             selectCategory(tc.displayIndex)
             verify(find("paneDisplay").visible)

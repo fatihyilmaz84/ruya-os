@@ -96,6 +96,67 @@ void DBusProfilesBackend::lock()
     m_bus.asyncCall(QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("Lock")));
 }
 
+void DBusProfilesBackend::probeAttempts(const QString &id, std::function<void(int, int)> done)
+{
+    auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("SwitchTo"));
+    msg << id << QString();
+    auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [done](QDBusPendingCallWatcher *w) {
+        w->deleteLater();
+        QDBusPendingReply<QString, uint, uint> reply = *w;
+        if (reply.isValid())
+            done(int(reply.argumentAt<1>()), int(reply.argumentAt<2>()));
+        else
+            done(0, 0);
+    });
+}
+
+void DBusProfilesBackend::createProfile(const QString &adminId, const QString &adminPin, const QString &name,
+                                        const QString &role, const QString &pin)
+{
+    auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("CreateProfile"));
+    msg << adminId << adminPin << name << role << pin;
+    auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, adminId](QDBusPendingCallWatcher *w) {
+        w->deleteLater();
+        QDBusPendingReply<QString, QString> reply = *w;
+        if (!reply.isValid()) {
+            emit createFinished(QStringLiteral("failed"), {}, 0, 0);
+            return;
+        }
+        const QString status = reply.argumentAt<0>();
+        const QString id = reply.argumentAt<1>();
+        if (status == QLatin1String("wrong-pin") || status == QLatin1String("locked-out")) {
+            probeAttempts(adminId, [this, status](int left, int retry) { emit createFinished(status, {}, left, retry); });
+            return;
+        }
+        emit createFinished(status, id, 0, 0);   // the list refreshes via ProfilesChanged
+    });
+}
+
+void DBusProfilesBackend::setPin(const QString &id, const QString &oldPin, const QString &newPin)
+{
+    auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("SetPin"));
+    msg << id << oldPin << newPin;
+    auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, id](QDBusPendingCallWatcher *w) {
+        w->deleteLater();
+        QDBusPendingReply<QString> reply = *w;
+        if (!reply.isValid()) {
+            emit setPinFinished(id, QStringLiteral("failed"), 0, 0);
+            return;
+        }
+        const QString status = reply.argumentAt<0>();
+        if (status == QLatin1String("wrong-pin") || status == QLatin1String("locked-out")) {
+            probeAttempts(id, [this, id, status](int left, int retry) { emit setPinFinished(id, status, left, retry); });
+            return;
+        }
+        emit setPinFinished(id, status, 0, 0);
+        if (status == QLatin1String("ok"))
+            refresh();                            // hasPin changed
+    });
+}
+
 void DBusProfilesBackend::onProfilesChanged()
 {
     refresh();

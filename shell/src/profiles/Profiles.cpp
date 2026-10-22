@@ -35,6 +35,8 @@ Profiles::Profiles(std::unique_ptr<ProfilesBackend> backend, QObject *parent)
         }
     });
     connect(m_backend.get(), &ProfilesBackend::switchFinished, this, &Profiles::switchFinished);
+    connect(m_backend.get(), &ProfilesBackend::createFinished, this, &Profiles::createFinished);
+    connect(m_backend.get(), &ProfilesBackend::setPinFinished, this, &Profiles::setPinFinished);
     m_backend->refresh();
 }
 
@@ -79,4 +81,24 @@ void Profiles::switchTo(const QString &id, const QString &pin)
 void Profiles::lock()
 {
     m_backend->lock();
+}
+
+void Profiles::createProfile(const QString &adminId, const QString &adminPin, const QString &name,
+                             const QString &role, const QString &pin)
+{
+    m_backend->createProfile(adminId, adminPin, name, role, pin);
+}
+
+void Profiles::setPin(const QString &id, const QString &oldPin, const QString &newPin)
+{
+    m_backend->setPin(id, oldPin, newPin);
+}
+
+bool Profiles::resetMockForTests(const QString &state)
+{
+    auto *mock = qobject_cast<MockProfilesBackend *>(m_backend.get());
+    if (!mock)
+        return false;
+    mock->resetForTests(state == QLatin1String("empty"));
+    return true;
 }

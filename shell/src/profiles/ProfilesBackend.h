@@ -27,10 +27,19 @@ public:
     virtual void refresh() = 0;
     virtual void switchTo(const QString &id, const QString &pin) = 0;
     virtual void lock() = 0;
+    // Mirror CreateProfile / SetPin of the contract (status strings: see the XML).
+    virtual void createProfile(const QString &adminId, const QString &adminPin, const QString &name,
+                               const QString &role, const QString &pin) = 0;
+    virtual void setPin(const QString &id, const QString &oldPin, const QString &newPin) = 0;
 
 signals:
     void listed(const QList<ProfileInfo> &profiles);
     void activeChanged(const QString &id);
     void switchFinished(const QString &id, const QString &status, int attemptsLeft, int retryAfterSecs);
+    // `id` is the new profile's id on "ok". The contract's replies carry no attempt counts;
+    // after "wrong-pin" or "locked-out" the backend fills attemptsLeft / retryAfterSecs in
+    // (the mock knows them; the D-Bus backend probes SwitchTo with an empty PIN). 0 = unknown.
+    void createFinished(const QString &status, const QString &id, int attemptsLeft, int retryAfterSecs);
+    void setPinFinished(const QString &id, const QString &status, int attemptsLeft, int retryAfterSecs);
     void availabilityChanged(bool available);
 };
