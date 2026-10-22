@@ -27,7 +27,8 @@ jobs:
       - name: Build
         run: cmake -S shell -B shell/build -G Ninja -DCMAKE_BUILD_TYPE=Release && cmake --build shell/build
       - name: qmllint
-        run: cmake --build shell/build --target all_qmllint
+        # Direct call: the all_qmllint target does not fail on warnings; --max-warnings 0 does.
+        run: /usr/lib64/qt6/bin/qmllint --max-warnings 0 @shell/build/.rcc/qmllint/ruyashell.rsp
       - name: Qt Quick tests
         # offscreen uses the software renderer: effects are skipped, focus/flow logic is tested.
         env:

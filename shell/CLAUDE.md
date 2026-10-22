@@ -1,0 +1,60 @@
+# shell/ — rules for the Qt Quick console UI
+
+Read `docs/specs/02-shell.md` for the UX spec. This file covers how the code is built.
+
+## Structure
+
+- `qml/Main.qml`: the window only (fullscreen, or `--windowed`). It hosts `Shell`.
+- `qml/Shell.qml`: the whole UI as one `FocusScope`, so tests can host it in their own window. It owns top-level flow: picker → home → overlay, and later pages.
+- `qml/*.qml`: components. `Theme` (design tokens) and `Sfx` (UI sounds) are singletons.
+- `src/<area>/`: C++ for QML-exposed services. For each system service:
+  - `XxxBackend.h`: an abstract `QObject` with virtual methods and result **signals**.
+  - `MockXxxBackend`: in-memory, deterministic, asynchronous (results delivered via `QTimer::singleShot(0, …)`), so QML behaves as it will over D-Bus.
+  - `DBusXxxBackend`: a QtDBus client of `api/dbus/org.ruyaos.Xxx1.xml`.
+  - `Xxx`: a `QML_ELEMENT QML_SINGLETON` facade. `create()` picks the backend from `RUYA_SERVICES` (`mock`/`dbus`; the default is D-Bus on Linux, the mock elsewhere). Expose `bool mock`.
+  - Follow `src/profiles/` exactly as the reference implementation.
+- `tests/`: Qt Quick Test. `tst_main.cpp` forces `RUYA_SERVICES=mock`; each `tst_*.qml` gets a fresh engine (and so fresh singletons).
+- Everything except `main.cpp` is the static QML module `RuyaShell` (`ruyashell` target). **Add every new `.qml`, `.h` and `.cpp` to `CMakeLists.txt`.** Singletons need `QT_QML_SINGLETON_TYPE` set in CMake **and** `pragma Singleton` in the file.
+
+## QML rules
+
+- Start files with `pragma ComponentBehavior: Bound` when they have delegates or inline components. Delegates use `required property`. qmllint runs with zero warnings allowed.
+- **Sizes are design pixels at 1080p × `u`** (`u = height / 1080`), passed down as a `u` property. Respect the safe area (`Theme.safeArea`).
+- **No literal colours, durations or easing values in components.** Add a token to `Theme.qml` instead.
+- All user-visible strings go through `qsTr()`; use `%n` plurals where counts appear.
+- Effects: `MultiEffect` or precompiled `.qsb` shaders only. Never inline GLSL. Blur the shared backdrop; never stack more fullscreen blurs.
+- Never block the GUI thread. Service calls are asynchronous: invoke them, then react to a signal.
+
+## Focus and input rules (the most common source of bugs)
+
+- **Controller → key mapping** (from `ruya-inputd`):
+
+  | Controller | Key |
+  |---|---|
+  | D-pad / left stick | Arrow keys |
+  | A | `Key_Return` |
+  | B | `Key_Escape` |
+  | Start | `Key_Menu` |
+  | Guide | `Key_HomePage` |
+  | LB / RB | `Key_PageUp` / `Key_PageDown` |
+
+  Keyboards also send `Key_Enter` (keypad), digits and `Key_Backspace`. Every flow must be completable with the controller keys alone.
+- Each screen or modal is a `FocusScope`. Exactly one item has active focus, and the focused item always shows a visible focus ring or scale.
+- `ListView`/`GridView` with `interactive: false` **also turns off key navigation**, so set `keyNavigationEnabled: true` explicitly.
+- **Modals** (PIN pad, overlay, dialogs) accept *every* key in their `Keys.onPressed` (`event.accepted = true`), so nothing leaks underneath.
+- **Focus restoration:** when a modal or page closes, return focus to where it was. Guard any re-focus with a check that the target is still enabled; otherwise you will steal focus after state changes (see `ProfilePicker.onClosed`).
+- Use `Sfx.navigate()` on focus moves, `Sfx.select()` on Accept, and `Sfx.back()` on Back or errors.
+
+## Tests (required for every behaviour you add)
+
+- Drive the UI with `keyClick()` using only the keys listed above, unless a test is specifically about keyboard input.
+- Give an `objectName` to every element a test needs to find, and find it with `findChild(shell, "name")`.
+- To wait on asynchronous results use `tryCompare(obj, "prop", value)` or `tryVerify(() => …)`. **Never** use `tryCompare` on a `QVariantList` property's `length`: that polls a frozen copy.
+- Assert focus explicitly (`find("x").activeFocus`) after every navigation step that matters. A missing focus assertion let a real bug through once.
+- State that would leak between tests (lockouts, created profiles) gets its own `tst_*.qml` file.
+- UI tasks: extend `test_zz_screenshots` (or add a similar test) so `dev.ps1 shots` captures the new screens, then review the PNGs.
+
+## C++ rules
+
+- C++17 (MSVC). Qt APIs up to 6.8. Use `QStringLiteral` for literals. Use `qWarning("ruya-shell: …")` for failures.
+- QtDBus code compiles on Windows but can only run on Linux. Keep it a thin translation of the XML contract, and mark it unverified in STATUS.

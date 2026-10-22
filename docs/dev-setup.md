@@ -45,6 +45,18 @@ To log into the VM, copy `image/bib/config.toml.example` to `image/bib/config.to
 
 ## Shell-only iteration
 
+**Use `scripts\dev.ps1` for everything below.** It wraps these commands with the right flags and PATH:
+
+| Command | Does |
+|---|---|
+| `.\scripts\dev.ps1 check` | Prerequisites present? |
+| `.\scripts\dev.ps1 test` | Rust fmt, clippy (Windows + Linux target) and tests; shell build; qmllint (zero warnings); Qt Quick tests. **Must be ALL GREEN before any commit.** |
+| `.\scripts\dev.ps1 shots` | Qt Quick tests plus screenshots into `output\shell-shots\` |
+| `.\scripts\dev.ps1 run` | The shell in a window with mock services |
+| `.\scripts\dev.ps1 rust` / `shell` | Half of `test` |
+
+The raw commands follow, for reference.
+
 **Native Windows build (preferred).** Uses Visual Studio 2026 (C++ workload) and Qt 6.10.3 for MSVC, installed without admin rights by aqtinstall:
 
 ```powershell
