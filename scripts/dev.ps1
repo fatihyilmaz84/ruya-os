@@ -101,22 +101,11 @@ function Run-QmlTests([string]$ShotsDir) {
     Record "Qt Quick tests" ($code -eq 0)
 }
 
-# Components take durations and colours from Theme tokens (shell/CLAUDE.md). Flags, outside
-# Theme.qml: a literal "duration: <non-zero number>", a quoted hex colour, Qt.rgba(...).
-# A line opts out with a trailing "// token-ok: <reason>".
+# The rules live in scripts\lint-tokens.ps1 (shared with CI).
 function Test-Tokens {
     Step "token lint (no literal durations or colours outside Theme.qml)"
-    $patterns = 'duration\s*:\s*\d*[1-9]', '["'']#[0-9a-fA-F]{3,8}["'']', 'Qt\.rgba\('
-    $hits = @(Get-ChildItem (Join-Path $Repo "shell\qml") -Recurse -Filter *.qml |
-        Where-Object { $_.Name -ne "Theme.qml" } |
-        Select-String -Pattern $patterns |
-        Where-Object { $_.Line -notmatch 'token-ok:' })
-    foreach ($h in $hits) {
-        $rel = $h.Path.Substring($Repo.Length + 1)
-        Write-Host "    ${rel}:$($h.LineNumber): $($h.Line.Trim())" -ForegroundColor Yellow
-    }
-    if ($hits.Count -gt 0) { Write-Host "    Move these into Theme.qml tokens, or add '// token-ok: <reason>'." }
-    Record "token lint" ($hits.Count -eq 0)
+    & (Join-Path $PSScriptRoot "lint-tokens.ps1")
+    Record "token lint" ($LASTEXITCODE -eq 0)
 }
 
 function Do-Shell {

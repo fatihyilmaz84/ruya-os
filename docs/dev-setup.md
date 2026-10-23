@@ -66,7 +66,23 @@ In the VM, the shell's own log is `journalctl -b _UID=$(id -u ruya-shell)`. pam_
 | `.\scripts\dev.ps1 shots` | Qt Quick tests plus screenshots into `output\shell-shots\` |
 | `.\scripts\dev.ps1 run` | The shell in a window with mock services |
 | `.\scripts\dev.ps1 rust` / `shell` | Half of `test` |
+| `.\scripts\lint-tokens.ps1` | The token lint alone (also called by `dev.ps1 shell` and by CI). Exit 1 and a list of `file:line` on findings. |
 | `.\scripts\repro-first-build.ps1 [-Name X]` | Adds a scratch C++ QML type, runs `dev.ps1 shell` once, removes the type, rebuilds. Exit 0 means adding and removing a type works on the first run (T-116). Takes about 3 minutes; run it only if "X is not defined" ever comes back. |
+
+### Local checks and CI
+
+`.github/workflows/ci.yml` (workflow `ci`) runs on every push to `main`, every pull request and by hand (`workflow_dispatch`). It needs no secrets and has `contents: read` only; a newer push to the same ref cancels the run in progress.
+
+| CI job | Runs | Local equivalent |
+|---|---|---|
+| `lint` | `pwsh scripts/lint-tokens.ps1` | the "token lint" step of `dev.ps1 shell` |
+| `services` | `cargo fmt --check`, `clippy -D warnings`, `cargo test` (Ubuntu) | `dev.ps1 rust` |
+| `shell` | build with Fedora's Qt (Fedora 44 container), `qmllint --max-warnings 0`, Qt Quick tests offscreen | `dev.ps1 shell` (Qt 6.10.3 on MSVC here; CI also proves that no API newer than Qt 6.8 crept in) |
+| `image` | needs the three jobs above; `scripts/build.sh`, `make-disk.sh qcow2`, `smoke-test.sh` under KVM (about 20 minutes); uploads `serial.log` | the WSL build and `smoke-test.ps1` (image section above) |
+
+The `image` job has no local equivalent in `dev.ps1 test`; run the WSL recipe for image changes.
+
+**Reading a failed run.** Open the run from the Actions tab (or `https://api.github.com/repos/fatihyilmaz84/ruya-os/actions/runs`, readable without login), find the red job and its first red step, and reproduce it locally with the equivalent above. For `image`, download the `serial-log` artifact: it is the full boot console, and `RUYA_BOOT_OK` / `RUYA_BOOT_FAIL` mark the verdict. A red `shell` job with a green local `test` usually means an API newer than Qt 6.8 or a difference between Fedora's and the MSVC build.
 
 The raw commands follow, for reference.
 

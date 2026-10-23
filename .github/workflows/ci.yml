@@ -4,10 +4,30 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+
+# Nothing here needs a secret or write access.
+permissions:
+  contents: read
+
+# A newer push to the same ref supersedes the run in progress.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
+  # Mirrors `dev.ps1 shell` step "token lint". Outside the Fedora container: pwsh is on the runner.
+  lint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Token lint
+        run: pwsh -NoProfile -File scripts/lint-tokens.ps1
+
   services:
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: services
@@ -20,6 +40,7 @@ jobs:
   shell:
     runs-on: ubuntu-24.04
     container: registry.fedoraproject.org/fedora:44
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - name: Install Qt
@@ -35,9 +56,13 @@ jobs:
           QT_QPA_PLATFORM: offscreen
         run: ctest --test-dir shell/build --output-on-failure
 
+  # A full bootc build, a qcow2 and a boot under KVM: 16-22 minutes in the first runs. It runs on
+  # every push and pull request: it is free on a public repository, the concurrency group cancels
+  # superseded runs, and it is the only check that the image still boots with RUYA_BOOT_OK.
   image:
     runs-on: ubuntu-24.04
-    needs: [services, shell]
+    needs: [lint, services, shell]
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
 

@@ -2,7 +2,7 @@
 
 **Read this first in every session; update it last.** The rules are in the root `CLAUDE.md`, the roles (Opus lead, Sonnet builders) in `docs/LEAD.md`, the task format in `docs/tasks/README.md`.
 
-Last updated: 2026-10-23 (Sonnet 5.5, planning)
+Last updated: 2026-10-23 (Sonnet 5.5, T-122)
 
 ## Where we are
 
@@ -14,13 +14,13 @@ Verification legend: **host** = built and tested on the Windows host · **vm** =
 
 ## Board
 
-**NEXT → T-122**
+**NEXT → T-107** (T-122 is committed and waits for the owner's push to confirm the new CI run is green; a builder or lead closes it after reading that run)
 
 **Lead review due:** after 3 more builder tasks, or now. The range `9ca4b25..HEAD` is unreviewed (see `docs/LEAD-NOTES.md`). Builders: when your task makes this condition true, end your reply by recommending a lead session.
 
 | ID | Title | Status | Depends | Verified |
 |---|---|---|---|---|
-| [T-122](tasks/T-122-ci-refresh.md) | CI on GitHub: read the first results, make it green, same gates as `dev.ps1 test` (token lint) | todo | — | |
+| [T-122](tasks/T-122-ci-refresh.md) | CI on GitHub: read the first results, make it green, same gates as `dev.ps1 test` (token lint) | in-progress (awaiting push) | — | local: host (`dev.ps1 test` green, lint probe failed as expected) · new workflow on GitHub: **unverified** |
 | [T-107](tasks/T-107-power-actions.md) | Power actions (suspend/restart/off), polkit rule verified in the VM | todo | T-101 | |
 | [T-120](tasks/T-120-vm-profiles-and-oobe.md) | Verify Profiles and the first-boot wizard in the VM over the real bus (VM screenshot/keys scripts); closes B-005 | todo | — | |
 | [T-121](tasks/T-121-vm-audio.md) | Audio in the VM: sound device, PipeWire for the shell session, UI cues load | todo | T-120 | |
@@ -88,6 +88,15 @@ A session can't know its own commit hash before committing, so new rows put the 
 ## Session log (newest first)
 
 Each entry: date · model · tasks · what happened · verification · follow-ups. Keep entries short and factual.
+
+### 2026-10-23 · Sonnet 5.5 · T-122
+CI refresh:
+- Read the three runs on `main` through the public API: `shell`, `services` and `image` were green in all of them (image 16–23 min); nothing to fix. This is the first Linux/Fedora-Qt run of the shell, so no API newer than Qt 6.8 is in use.
+- Token lint extracted to `scripts/lint-tokens.ps1` (called by `dev.ps1` and by a new `lint` CI job); workflow got `permissions: contents: read`, a cancelling `concurrency` group, `workflow_dispatch`, timeouts. `image` stays on every push (reasoning in the task Outcome). `dev-setup.md` has the local-check-to-CI table.
+
+Verification: `dev.ps1 test` → ALL GREEN; a `duration: 120` probe made the lint exit 1. **Unverified:** the changed workflow on GitHub and the lint script under Linux `pwsh`; nothing was pushed (owner's call).
+
+Follow-ups: after the push, read the new run and close T-122. NEXT is T-107. The lead review is due (range `9ca4b25..HEAD`): recommend a lead session.
 
 ### 2026-10-23 · Opus 5.5 · Lead role set up
 The owner asked for Opus sessions to lead and Sonnet sessions to build. Added:

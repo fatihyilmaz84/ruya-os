@@ -1,6 +1,6 @@
 # T-122 — CI on GitHub: read the first results, make it green, and run the same gates as `dev.ps1 test`
 
-Status: todo · Phase: 1 · Depends: — · Area: ci, scripts · Size: S
+Status: in-progress (committed, awaiting push to verify) · Phase: 1 · Depends: — · Area: ci, scripts · Size: S
 
 ## Goal
 The `ci` workflow on GitHub runs the same checks as the local gate, passes, and stays understandable. The repository is public, so a red or stale workflow is visible to everyone.
@@ -45,4 +45,30 @@ plus the Actions page for the pushed commit (pushing is the owner's call: ask in
 - Reading runs needs no login: `WebFetch` works on the public API; `gh` is not installed on this machine.
 
 ## Outcome
-_Filled in by the implementer: what was built, files, how it was verified, deviations, follow-ups._
+**State: committed locally, not pushed. The new `lint` job and the changed workflow have not run on GitHub yet; the "latest run is green" criterion needs the owner's go-ahead to push.**
+
+**Runs seen** (public API, 2026-10-23; all workflow `ci`, event `push`, branch `main`):
+
+| Run | Commit | `shell` | `services` | `image` |
+|---|---|---|---|---|
+| [39864834470](https://github.com/fatihyilmaz84/ruya-os/actions/runs/39864834470) | 22e8c4a (T-106) | success, 2 min | success, 1 min | success, about 23 min |
+| [39864940064](https://github.com/fatihyilmaz84/ruya-os/actions/runs/39864940064) | 37e9711 (docs) | run `success`; per-job detail not read (the jobs endpoint answered 502 twice) | same | same |
+| [39866431326](https://github.com/fatihyilmaz84/ruya-os/actions/runs/39866431326) | de6112e (docs) | success, 2 min | success, 1 min | success, 16 min (build, qcow2, smoke test, serial-log upload all green) |
+
+Nothing was red, so there was nothing to fix. This also means the first Fedora/Linux build and offscreen test run of the shell passed (no API newer than Qt 6.8 in use), and the image job's `lint --fatal-warnings`, readiness marker and disk size from the Windows drill hold on GitHub's runners with KVM.
+
+**Built:**
+- `scripts/lint-tokens.ps1`: the token lint extracted from `dev.ps1`, same patterns and `// token-ok:` opt-out. It prints `file:line` for each finding and exits 1. It builds paths with nested `Join-Path` and trims either separator, so it also runs under `pwsh` on Linux. `dev.ps1`'s `Test-Tokens` now calls it and records the exit code.
+- `.github/workflows/ci.yml`: new `lint` job (Ubuntu runner, `pwsh scripts/lint-tokens.ps1`, outside the Fedora container); `permissions: contents: read`; a `concurrency` group that cancels superseded runs on the same ref; `workflow_dispatch`; `timeout-minutes` on every job; `image` now also waits for `lint`. Actions stay pinned to `@v4`; no secrets.
+- Docs: `docs/dev-setup.md` ("Local checks and CI": job-to-command table and how to read a failed run), `image/CLAUDE.md`, `shell/CLAUDE.md`, and the CI paragraph in `docs/specs/01-platform.md`.
+
+**Decision on the `image` job:** it stays on every push and pull request. It took 16–23 minutes in the runs above, it is free on a public repository, superseded runs are cancelled, and it is the only check that the image still boots with `RUYA_BOOT_OK`. If it turns into a bottleneck, the fallback is `main` plus `workflow_dispatch`; that is a one-line `if:` change.
+
+**Verification:**
+- Probe: a scratch `shell/qml/LintProbe.qml` containing `Behavior on x { NumberAnimation { duration: 120 } }` made `scripts/lint-tokens.ps1` print `shell\qml\LintProbe.qml:3: Behavior on x { NumberAnimation { duration: 120 } }` and `Move these into Theme.qml tokens, or add '// token-ok: <reason>'.`, exit 1. The file was removed and the next run exited 0.
+- `.\scripts\dev.ps1 test` → ALL GREEN (88 passed, 8 skipped screenshot tests); the token lint step prints `ok: token lint` as before.
+- **Unverified:** the workflow YAML on GitHub, and `lint-tokens.ps1` under Linux `pwsh` (no `pwsh` on this machine; the runner image has it). If the `lint` job fails on its first run, suspect path handling in that script.
+
+**Deviations:** the second run's per-job results were not read (API 502); its run-level conclusion was `success`, which requires every job to have succeeded. No UI change, so no screenshots.
+
+**Follow-up:** after the owner pushes, read the new run; when `lint`, `services`, `shell` and `image` are all green, set T-122 to `done` and add the run link here.
