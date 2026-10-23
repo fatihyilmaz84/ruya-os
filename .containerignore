@@ -1,0 +1,7 @@
+# Build context of image/Containerfile (the repository root). Host build trees and outputs are
+# large, and a Windows build running at the same time changes them under podman (T-123: a COPY of
+# shell/ failed on a vanishing build-win temp file).
+.git
+output
+shell/build*
+services/target

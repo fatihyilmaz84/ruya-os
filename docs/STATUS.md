@@ -2,12 +2,12 @@
 
 **Read this first in every session; update it last.** The rules are in the root `CLAUDE.md`, the roles (Opus lead, Sonnet builders) in `docs/LEAD.md`, the task format in `docs/tasks/README.md`.
 
-Last updated: 2026-10-23 (Opus 5.5, lead)
+Last updated: 2026-10-23 (Opus 5.5, lead, T-123)
 
 ## Where we are
 
 - **Phase 0 (foundation):** **verified in a VM on 2026-10-22.** The image builds, passes lint, boots to the shell, updates, and rolls back both manually and automatically (greenboot). Only the real-hardware item is left (B-002).
-- **Phase 1–2 (shell core, profiles):** in progress on the Windows host against mock services. Done: pages, motion, toasts/OSD, settings, on-screen keyboard, profile management, first-boot wizard, token lint. The repo is public on GitHub and CI (`lint`, `services`, `shell`, `image`) is green on `main` (T-122). Profiles, the wizard and Settings → Profiles are **vm-verified** over the real bus (T-120), and power actions (T-107) work in the VM. The sound path is **vm-verified** (T-121). `ruya-profiles` is hardened to exposure 1.6 (T-126). The audio contract and Settings → Audio are built against a mock (T-114); audio ownership is decided (ADR-010) and the `ruya-devices` audio service is T-128. The keyboard Guide key (Super) works (T-124, vm). The PIN pad shows a locked-out state (T-125, host). The shell is translated into Turkish with live switching (T-109, host). Next: the compositor spike (T-123, lead) for the Phase 1 exit criterion "overlay over a running app".
+- **Phase 1–2 (shell core, profiles):** in progress on the Windows host against mock services. Done: pages, motion, toasts/OSD, settings, on-screen keyboard, profile management, first-boot wizard, token lint. The repo is public on GitHub and CI (`lint`, `services`, `shell`, `image`) is green on `main` (T-122). Profiles, the wizard and Settings → Profiles are **vm-verified** over the real bus (T-120), and power actions (T-107) work in the VM. The sound path is **vm-verified** (T-121). `ruya-profiles` is hardened to exposure 1.6 (T-126). The audio contract and Settings → Audio are built against a mock (T-114); audio ownership is decided (ADR-010) and the `ruya-devices` audio service is T-128. The keyboard Guide key (Super) works (T-124, vm). The PIN pad shows a locked-out state (T-125, host). The shell is translated into Turkish with live switching (T-109, host). The compositor spike (T-123, lead) showed ADR-002 option A working in the VM: `ruya-shell` as the Wayland compositor on KMS, the Guide overlay over a running client, input returned on close; the default session is still cage, and the performance half waits for hardware.
 - **Host:** Windows, plus a Fedora 44 WSL distribution for image builds and QEMU/WHPX for boot tests (`docs/dev-setup.md`). Work that needs a GPU, controllers or real audio output still waits in the Blocked table. The VM can be driven by keys and screenshots, and given a sound card (`docs/dev-setup.md`).
 
 Verification legend: **host** = built and tested on the Windows host · **vm** = built into the image and verified booted in QEMU · **unverified** = written, but not run · **hw** = verified on real hardware.
@@ -20,7 +20,6 @@ Verification legend: **host** = built and tested on the Windows host · **vm** =
 
 | ID | Title | Status | Depends | Verified |
 |---|---|---|---|---|
-| [T-123](tasks/T-123-compositor-spike.md) | **[lead]** Compositor spike in the VM: shell as QtWaylandCompositor, overlay over a client (ADR-002) | todo | — | |
 | [T-118](tasks/T-118-profile-rename-delete.md) | Profiles1: RenameProfile and DeleteProfile (contract, service, mock; no UI) | todo | T-115, T-126 | |
 | [T-127](tasks/T-127-shots-window-focus.md) | `dev.ps1 shots`: focus failures caused by the desktop say so, and recover | todo | — | |
 | [T-128](tasks/T-128-devices-audio-service.md) | `ruya-devices`: audio part of `Devices1` over PipeWire, in the VM (ADR-010) | todo | T-114, T-121 | |
@@ -69,6 +68,7 @@ A session can't know its own commit hash before committing, so new rows put the 
 | T-125 | PIN pad: locked-out state (`locked`: keys and digits dimmed with `Theme.disabledOpacity`, input ignored, countdown is the only message), screenshot `15-pin-locked.png` | host (`dev.ps1 test` green, extended `Lockout` test, `shots` green, screenshot reviewed) | T-125 |
 | T-109 | Translations: `qt_add_translations` (en, tr), live switching through `DeviceSettings.language`, Settings -> System language row, Turkish on-screen keyboard, `--reverse` RTL check, translation lint | host (`dev.ps1 test` and `shots` green, `tst_i18n.qml` + `test_turkish_layout`, 3 screenshots reviewed) · **vm** (image `0.0.7-t109`: `RUYA_BOOT_OK`) · language switching in the VM: unverified | T-109 |
 | T-126 | `ruya-profiles.service` hardened: minimal `CapabilityBoundingSet`, `SystemCallFilter=@system-service`, `UMask=0077`, `ProtectProc=invisible` and more; `vm-profiles-check.sh create` | **vm** (image `0.0.6-lead2`, fresh disk: `RUYA_BOOT_OK`, both profiles created over the bus, account file modes intact, exposure 6.0 → 1.6) · `userdel`: not exercised yet (T-118) | T-126 |
+| T-123 | Compositor spike (ADR-002 A): `shell/spike/Compositor.qml` (shell as QtWaylandCompositor, Guide overlay over a client, key routing), `ruya-shell --load`, `ruya-compositor-spike@.service` (not enabled), `scripts/vm-compositor-spike.sh`, `.containerignore` | **vm** (image `0.0.8-t123`: `RUYA_BOOT_OK` with cage; spike: client fullscreen, overlay over it, keys to client / overlay / client again, client exit, back to cage; screenshots and log in the Outcome) · performance, real GPUs, Flatpak apps: **unverified** | T-123 |
 
 ## Blocked (need something this host doesn't have)
 
@@ -76,7 +76,7 @@ A session can't know its own commit hash before committing, so new rows put the 
 |---|---|---|---|
 | ~~B-001~~ | **Done 2026-10-22 (vm).** Image built (lint clean, fatal warnings), booted to the shell, update 0.0.3→0.0.4, manual rollback, and greenboot automatic rollback from a broken image | — | Session log 2026-10-22 (Opus); recipe in `docs/dev-setup.md` |
 | B-002 | Install on a real low-tier machine; first frame-time numbers (§8 item 8) | Hardware | A dev installer ISO now exists (`output/bootiso/`, contains the dev SSH key; for test machines only). Also decide there: a failed boot takes about 100 s (90 s greenboot check + 120 s VM marker), so automatic rollback takes about 7 minutes; consider a shorter required-check timeout once real boot times are known (spec 02 §8 KPI: shell < 15 s on the low tier). |
-| B-003 | Compositor spike: shell as QtWaylandCompositor, overlay over a running game (ADR-002) | Linux with a GPU | Decides the product architecture; do it as soon as Linux is available. Also check there: the volume-key `Shortcut`s (T-108) work with an app focused. |
+| B-003 | Compositor performance: the Guide overlay (blurred) over a running game at ≥ 55 FPS on the mid tier (ADR-002) | Hardware with a GPU | **Functional part done in the VM (T-123):** option A works. Left here: frame rates, dmabuf clients on a real GPU, blur over a client surface, gamescope nesting. Also check there: the volume-key `Shortcut`s (T-108) work with an app focused. |
 | B-004 | `ruya-store` Rust service over libflatpak/AppStream | ~~Linux~~ nothing: WSL builds and the VM can run it now | Contract from T-110. **Becomes a task once T-110 lands** (VM-verified, like T-120). |
 | ~~B-005~~ | **Done 2026-10-23 (vm).** Profiles, the first-boot wizard, lockout and Settings → Profiles work against the real `ruya-profiles` over the system bus (T-120) | — | Other services follow the same way once they exist; the VM drive scripts are in `docs/dev-setup.md` ("Seeing and driving the VM"). |
 | B-006 | Replace the `ruya-inputd` stopgap with InputPlumber (ADR-003), with grab/re-emit | Linux + controllers | Also owns the key-repeat model (400 ms delay then accelerating repeat, stick repeat speed) and Accept long-press / context menu from spec 02 §4.3; the shell only sees key events. |
@@ -85,7 +85,7 @@ A session can't know its own commit hash before committing, so new rows put the 
 
 ## Open owner decisions
 
-- **ADR-002** (compositor): recommendation A. The functional part of the spike is now T-123 (lead, in the VM); the performance part still needs hardware (B-003).
+- **ADR-002** (compositor): the functional spike passed (T-123: shell as compositor, overlay over a running client, input handed back). **Question: accept option A now as the product direction**, so the next lead can plan the compositor session (an M task: layers inside `Shell`, C++ key routing, device access, greenboot) and `ruya-session`'s per-profile sockets on top, with performance confirmed later on hardware (B-003) and option B (gamescope + shell client) as the fallback if it fails? Recommendation: yes. Until then the shell keeps growing on cage, and `ruya-session` cannot be designed.
 - **Real hardware (B-002):** is a spare low-tier PC available to install the dev ISO on? It unblocks the Phase 0 hardware item, the first KPI numbers and later the ADR-002 performance check. Recommendation: yes, any x86-64 mini-PC with an Intel or AMD iGPU; it must be a test machine (the ISO has the dev SSH key).
 - **libdvdcss / AACS** (DVD/Blu-ray decryption): not included; needs an explicit owner decision.
 - **One admin or several?** `00-overview` §2 (MVP) says "one admin", `03` §1.1 says "Admin (one or more)". The service supports several; the UI offers only Standard and Guest when adding a profile (T-105). Options: (a) keep one admin in the UI for the MVP, as the overview says; (b) let an admin create more admins and fix the overview. Recommendation: (a), and revisit after the first user test. Not blocking: T-118 does not depend on it.
@@ -95,6 +95,17 @@ A session can't know its own commit hash before committing, so new rows put the 
 ## Session log (newest first)
 
 Each entry: date · model · tasks · what happened · verification · follow-ups. Keep entries short and factual.
+
+### 2026-10-23 · Opus 5.5 · T-123 (lead task)
+Compositor spike, ADR-002 option A, in the VM:
+- `ruya-shell --load shell/spike/Compositor.qml` is a QtWaylandCompositor on KMS (eglfs, llvmpipe) hosting the unchanged `Shell`, client toplevels fullscreen above it, and the Shell's Guide overlay moved above the clients. A `Keys` handler on the client item takes Guide (Super, `KEY_HOMEPAGE`) before the client sees it.
+- Image `0.0.8-t123`: `RUYA_BOOT_OK` with cage (the spike unit is not enabled). Then, via `scripts/vm-compositor-spike.sh`: keys reach the test client; Guide opens the overlay over it; keys while open don't reach it; closing returns them; client exit gives the shell back; `stop` restores cage and the device ACLs.
+- Product-path findings in ADR-002: eglfs opens input devices itself (needs a `uaccess` rule or logind device opening; `input` is an altfiles group on bootc); llvmpipe clients must use shm; key routing should move to C++.
+- Also: `.containerignore` (a podman `COPY shell` raced with a Windows build in `shell/build-win`).
+
+Verification: `dev.ps1 test` ALL GREEN; VM screenshots and log in the T-123 Outcome. Unverified: performance, real GPUs, Flatpak clients, blur over a client.
+
+Escalated: accept ADR-002 option A as the product direction (Open owner decisions).
 
 ### 2026-10-23 · Opus 5.5 · Lead
 Lead review of `beafbc6..da2d1be` (T-114, T-124, T-125, T-109, the lead's worker-cost change), and planning.
@@ -139,13 +150,5 @@ PIN-pad lockout state:
 Verification: `dev.ps1 test` ALL GREEN; `shots` green on the re-run (the first runs hit the known focus flakes, see Inbox); `15-pin-locked.png` reviewed.
 
 Follow-ups: one Inbox line. NEXT is T-109 (T-123 is lead's). The lead review is due now.
-
-### 2026-10-23 · Sonnet 5.5 · T-124
-Keyboard Guide key:
-- `Shell.isGuideKey` (`HomePage`, `Super_L`, `Super_R`, `Meta`) feeds the one Guide code path: open on press, hold for the power choices, close from the overlay. `Key_Menu` stopped being Guide (it was a stand-in from the first scaffold; nothing depended on it); spec 02 4.2 now says Super.
-
-Verification: `dev.ps1 test` ALL GREEN (7 new test rows), `shots` green. Image `0.0.6-t124` built in WSL, `RUYA_BOOT_OK`; in the VM `meta_l` opened and closed the overlay (screenshots `output/vm-shots/t124-*.png`). Unverified: holding Super in the VM, the Windows key on the host.
-
-Follow-ups: none. NEXT is T-125. The lead review is due after 1 more builder task.
 
 Older entries: [`STATUS-log.md`](STATUS-log.md).

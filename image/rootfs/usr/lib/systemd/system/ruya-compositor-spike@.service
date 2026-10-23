@@ -1,0 +1,34 @@
+# T-123 compositor spike (ADR-002 option A): ruya-shell is the Wayland compositor itself, directly
+# on KMS (eglfs), instead of running as a client of cage. Not enabled; the default session stays
+# ruya-compositor@tty1 (cage). Start it with scripts/vm-compositor-spike.sh start, which also gives
+# the session access to the input devices (eglfs opens them itself) for as long as the spike runs.
+# Clients connect to /run/user/<ruya-shell uid>/ruya-0 (see docs/tasks/T-123-compositor-spike.md).
+[Unit]
+Description=RuyaOS compositor spike (shell as QtWaylandCompositor) on %I
+After=systemd-user-sessions.service plymouth-quit-wait.service
+Wants=dbus.socket systemd-logind.service
+After=dbus.socket systemd-logind.service
+Conflicts=getty@%i.service ruya-compositor@%i.service
+After=getty@%i.service ruya-compositor@%i.service
+ConditionPathExists=/dev/tty0
+
+[Service]
+Type=simple
+User=ruya-shell
+PAMName=ruya-shell
+WorkingDirectory=~
+TTYPath=/dev/%I
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+StandardInput=tty-fail
+StandardOutput=journal
+StandardError=journal
+UtmpIdentifier=%I
+UtmpMode=user
+Environment=XDG_SESSION_TYPE=wayland
+Environment=QT_QPA_PLATFORM=eglfs
+Environment=QT_QPA_EGLFS_INTEGRATION=eglfs_kms
+Environment=QT_QPA_EGLFS_ALWAYS_SET_MODE=1
+ExecStart=/usr/bin/ruya-shell --mock-services --load /usr/share/ruya-shell/spike/Compositor.qml
+Restart=no

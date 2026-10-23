@@ -1,0 +1,7 @@
+# T-123 compositor spike: Qt's eglfs backend opens /dev/input/event* itself (it has no logind
+# TakeDevice support), so give the active seat session (the compositor's) access to them, as logind
+# already does for the DRM card. cage does not need this (it opens devices through libseat).
+#
+# Shipped inert: scripts/vm-compositor-spike.sh copies it to /run/udev/rules.d (tmpfs) while the
+# spike runs and removes it on stop, so the default cage session never gets raw input access.
+SUBSYSTEM=="input", KERNEL=="event*", TAG+="uaccess"

@@ -38,6 +38,7 @@ The build excludes any desktop environment, display manager, `kdeconnect` and `p
 ### 2.1 Startup chain
 `systemd` → `graphical.target` → `ruya-compositor@tty1.service` (implemented in `image/rootfs/usr/lib/systemd/system/`). This unit has `User=ruya-shell`, `PAMName=ruya-shell` (dedicated PAM stack: auth denied, account + session only), `TTYPath=/dev/tty1`, `StandardInput=tty`, and `Conflicts=getty@tty1`. It gets a logind session on seat0 with DRM and input access. The Rust services are ordinary system services with `Before=ruya-compositor.service`.
 
+- Today the unit runs `cage`, with `ruya-shell` as its Wayland client (ADR-002 option C). The image also ships `ruya-compositor-spike@.service`, **not enabled**: the same session with `ruya-shell` itself as the compositor on KMS (option A, T-123). It is started only by `scripts/vm-compositor-spike.sh`, which also installs a temporary `uaccess` rule for input devices in `/run/udev/rules.d` (eglfs opens them itself).
 - No display manager and no greeter. Profile selection happens inside the shell.
 - `Restart=always` with `StartLimitBurst` on the compositor. After N fast failures, start `ruya-safe-mode.service`: a minimal QML screen offering Restart, Roll back OS, or Factory reset.
 - Plymouth boot splash with the RuyaOS theme. `quiet loglevel=3` on the kernel command line.

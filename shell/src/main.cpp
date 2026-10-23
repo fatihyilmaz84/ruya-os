@@ -43,6 +43,10 @@ int main(int argc, char *argv[])
     const QCommandLineOption reverse(QStringLiteral("reverse"),
                                      QStringLiteral("Lay the UI out right-to-left (RTL readiness check)."));
     parser.addOption(reverse);
+    const QCommandLineOption load(QStringLiteral("load"),
+                                  QStringLiteral("Load this QML file instead of the shell (spikes, development)."),
+                                  QStringLiteral("file"));
+    parser.addOption(load);
     parser.process(app);
     if (parser.isSet(reverse))
         QGuiApplication::setLayoutDirection(Qt::RightToLeft);
@@ -55,18 +59,29 @@ int main(int argc, char *argv[])
         qputenv("RUYA_FORCE_EFFECTS", parser.value(effects).toUtf8());
 
     QQmlApplicationEngine engine;
-    engine.setInitialProperties({
-        {QStringLiteral("version"), imageVersion()},
-        {QStringLiteral("windowed"), parser.isSet(windowed)},
-    });
     QObject::connect(
         &engine, &QQmlApplicationEngine::objectCreationFailed, &app,
         [] { QCoreApplication::exit(1); }, Qt::QueuedConnection);
-    engine.loadFromModule("RuyaShell", "Main");
+    if (parser.isSet(load)) {
+        // A file outside the RuyaShell module (shell/spike, T-123); it can still import RuyaShell.
+        engine.load(parser.value(load));
+    } else {
+        engine.setInitialProperties({
+            {QStringLiteral("version"), imageVersion()},
+            {QStringLiteral("windowed"), parser.isSet(windowed)},
+        });
+        engine.loadFromModule("RuyaShell", "Main");
+    }
 
-    auto *window = qobject_cast<QQuickWindow *>(engine.rootObjects().value(0));
-    if (!window)
+    QObject *root = engine.rootObjects().value(0);
+    if (!root)
         return 1;
+    // The root is the window, or (a compositor) owns one.
+    auto *window = qobject_cast<QQuickWindow *>(root);
+    if (!window)
+        window = root->findChild<QQuickWindow *>();
+    if (!window)
+        return app.exec();
 
     // The greenboot health check and the CI boot test wait for this line: it means the
     // first frame was actually presented, not just that the process started.

@@ -116,6 +116,8 @@ target_link_libraries(ruya-shell PRIVATE Qt6::Gui Qt6::Quick ruyashellplugin)
 
 include(GNUInstallDirs)
 install(TARGETS ruya-shell RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+# T-123 compositor spike: loaded from disk with --load, outside the module and its tests.
+install(DIRECTORY spike/ DESTINATION ${CMAKE_INSTALL_DATADIR}/ruya-shell/spike FILES_MATCHING PATTERN "*.qml")
 
 if(RUYA_BUILD_TESTS)
     find_package(Qt6 REQUIRED COMPONENTS QuickTest)

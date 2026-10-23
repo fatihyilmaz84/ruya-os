@@ -2,6 +2,14 @@
 
 Older entries of the `docs/STATUS.md` session log, newest first. STATUS keeps only the latest five; the lead moves the rest here at each review. Nobody needs to read this file to start a task.
 
+### 2026-10-23 · Sonnet 5.5 · T-124
+Keyboard Guide key:
+- `Shell.isGuideKey` (`HomePage`, `Super_L`, `Super_R`, `Meta`) feeds the one Guide code path: open on press, hold for the power choices, close from the overlay. `Key_Menu` stopped being Guide (it was a stand-in from the first scaffold; nothing depended on it); spec 02 4.2 now says Super.
+
+Verification: `dev.ps1 test` ALL GREEN (7 new test rows), `shots` green. Image `0.0.6-t124` built in WSL, `RUYA_BOOT_OK`; in the VM `meta_l` opened and closed the overlay (screenshots `output/vm-shots/t124-*.png`). Unverified: holding Super in the VM, the Windows key on the host.
+
+Follow-ups: none. NEXT is T-125. The lead review is due after 1 more builder task.
+
 ### 2026-10-23 · Sonnet 5.5 · T-114
 Audio contract and Settings → Audio:
 - `api/dbus/org.ruyaos.Devices1.xml` (interface `org.ruyaos.Devices1.Audio`: `ListSinks`, `SetDefaultSink`, `SetChannelVolume`, `MasterVolume`, `Muted`, `ChannelVolumes`, two signals); shell `Audio` extended over a mock (HDMI + Analog, hot-plug policy of 03 §2.3) and a new D-Bus client; `AudioPane.qml`; "Audio output: <name>" toast; `Sfx` volume follows the UI channel; Volume Up unmutes, Volume Down stays muted.

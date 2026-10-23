@@ -93,6 +93,20 @@ python scripts\vm-audio-bursts.py                                               
 
 `scripts/vm-audio-check.sh` (guest) shows the sound card, the `ruya-shell` user's PipeWire, WirePlumber and pipewire-pulse (pam_systemd gives the compositor session a user manager), `wpctl status` with the sink and the shell's stream, and the shell's audio log lines. `scripts/vm-audio-bursts.py` (host) lists the sounds in the recording (QEMU leaves the wav header sizes at zero, so `wave` cannot open it). The image has no `pw-cli`, `pw-top` or `pw-dump` (the `pipewire-utils` package): use `wpctl`.
 
+## Compositor spike (T-123)
+
+The image ships `ruya-shell` as a Wayland compositor (`shell/spike/Compositor.qml`, loaded with `ruya-shell --load`), off by default. In a booted VM (`smoke-test.ps1 -Keep`, then `scp scripts/vm-compositor-spike.sh scripts/vm-inject-key.py root@127.0.0.1:/root/`):
+
+```powershell
+ssh ... root@127.0.0.1 bash /root/vm-compositor-spike.sh start    # cage stops; the spike compositor owns ruya-0
+ssh ... root@127.0.0.1 bash /root/vm-compositor-spike.sh client   # the key-logging test client, fullscreen
+.\scripts\vm-keys.ps1 a b c; .\scripts\vm-keys.ps1 meta_l          # keys reach the client; Super opens the overlay over it
+ssh ... root@127.0.0.1 bash /root/vm-compositor-spike.sh log      # what the compositor and the client saw
+ssh ... root@127.0.0.1 bash /root/vm-compositor-spike.sh stop     # back to cage
+```
+
+`lupdate`, `qmllint` and the Qt Quick tests never see `shell/spike/` (it is not in the `RuyaShell` module; the Windows Qt kit has no QtWaylandCompositor). A fresh disk copy has new SSH host keys: use `-o StrictHostKeyChecking=no -o UserKnownHostsFile=NUL -o BatchMode=yes`, or `ssh` waits for a host-key prompt that never shows.
+
 ## Power-policy check (T-107)
 
 After any change to the polkit rule or to how `image/rootfs` is installed, boot the disk (`.\scripts\smoke-test.ps1 -Keep`) and run, from the repo root:
