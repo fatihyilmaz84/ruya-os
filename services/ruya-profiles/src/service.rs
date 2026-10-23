@@ -311,14 +311,19 @@ impl<A: Accounts> ProfileService<A> {
         if self.active.as_deref() == Some(id) || (target_role == Role::Admin && admins <= 1) {
             return Outcome::of(Status::NotAllowed);
         }
-        if self.accounts.remove(id).is_err() {
-            return Outcome::of(Status::Failed);
-        }
+        // The store is saved before `userdel`: if saving fails nothing has changed; if `userdel`
+        // fails the profile is put back. A Unix user left over after a double failure is harmless
+        // (ids are never reused, its shell is nologin).
         let Some((index, profile)) = self.store.remove(id) else {
             return Outcome::of(Status::UnknownProfile);
         };
         if self.store.save().is_err() {
             self.store.restore(index, profile);
+            return Outcome::of(Status::Failed);
+        }
+        if self.accounts.remove(id).is_err() {
+            self.store.restore(index, profile);
+            let _ = self.store.save();
             return Outcome::of(Status::Failed);
         }
         self.lockout.succeed(id);
@@ -715,6 +720,22 @@ mod tests {
         assert_eq!(svc.profiles().len(), 2);
         let store = Store::open(dir.path().join("profiles.toml")).unwrap();
         assert_eq!(store.profiles().len(), 2);
+    }
+
+    #[test]
+    fn failing_store_write_keeps_the_unix_user() {
+        let accounts = Recording::default();
+        let (dir, mut svc, now) = recording_fixture(accounts.clone());
+        // A directory where the file should be makes the atomic rename fail.
+        let path = dir.path().join("profiles.toml");
+        std::fs::remove_file(&path).unwrap();
+        std::fs::create_dir(&path).unwrap();
+        assert_eq!(
+            svc.delete_profile("p1", "1234", "p2", now).status,
+            Status::Failed
+        );
+        assert_eq!(svc.profiles().len(), 2);
+        assert!(accounts.removed.lock().unwrap().is_empty());
     }
 
     #[test]
