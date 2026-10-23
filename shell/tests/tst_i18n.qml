@@ -36,6 +36,7 @@ Item {
         function find(name) { return findChild(tc.shell, name) }
 
         function init() {
+            verify(windowGuard.ensureActive() === "", windowGuard.ensureActive())
             Profiles.lock()
             Profiles.resetMockForTests("seeded")
             tryVerify(() => Profiles.profiles.length === 3)

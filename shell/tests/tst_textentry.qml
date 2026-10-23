@@ -38,6 +38,7 @@ Item {
         when: windowShown
 
         function init() {
+            verify(windowGuard.ensureActive() === "", windowGuard.ensureActive())
             DeviceSettings.language = "en"
             entry.shown = false
             entry.text = ""

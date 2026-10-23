@@ -39,6 +39,7 @@ Item {
         }
 
         function init() {
+            verify(windowGuard.ensureActive() === "", windowGuard.ensureActive())
             Profiles.lock()
             tryCompare(Profiles, "activeProfile", "")
             tc.shell = createTemporaryObject(shellComponent, host)

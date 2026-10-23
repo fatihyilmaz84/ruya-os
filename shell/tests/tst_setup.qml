@@ -29,6 +29,7 @@ Item {
         function setup() { return find("setup") }
 
         function init() {
+            verify(windowGuard.ensureActive() === "", windowGuard.ensureActive())
             Profiles.lock()
             Profiles.resetMockForTests("empty")
             tryVerify(() => Profiles.profiles.length === 0)

@@ -25,6 +25,7 @@ Item {
         function find(name) { return findChild(tc.shell, name) }
 
         function init() {
+            verify(windowGuard.ensureActive() === "", windowGuard.ensureActive())
             Audio.mockReset()
             tryCompare(Audio, "defaultSink", "hdmi-0")
             tryCompare(Audio, "volume", 50)

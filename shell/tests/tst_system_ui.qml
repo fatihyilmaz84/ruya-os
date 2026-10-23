@@ -25,6 +25,7 @@ Item {
         function find(name) { return findChild(tc.shell, name) }
 
         function init() {
+            verify(windowGuard.ensureActive() === "", windowGuard.ensureActive())
             Profiles.lock()
             tryCompare(Profiles, "activeProfile", "")
             Audio.setVolume(50)

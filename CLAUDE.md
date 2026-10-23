@@ -34,7 +34,7 @@ RuyaOS is an open-source, immutable (Fedora bootc) console OS for living-room PC
 5. **Verify.**
    - Run `.\scripts\dev.ps1 test`; it must end with `ALL GREEN`. Its Qt Quick tests run **offscreen**, so they don't depend on the desktop (lock screen, focus, other windows). A red `test` is a real failure.
    - For any UI change, also run `.\scripts\dev.ps1 shots`. It uses real GPU windows. Open the screenshots your task changed from `output\shell-shots\review\` (half size, a quarter of the image tokens) with the Read tool and check them against the task's acceptance criteria (layout, overlap, focus ring visible, text readable); open the full-size PNG only when small text needs a closer look. Fix what you see.
-   - **`shots` depends on the desktop.** If it fails while `test` is green, suspect a locked screen or a window that stole focus, and re-run before changing anything. Never edit a test to suit the desktop.
+   - **`shots` depends on the desktop.** If it fails while `test` is green, suspect a locked screen or a window that stole focus, and re-run before changing anything. Never edit a test to suit the desktop. The test host (`WindowGuard` in `shell/tests/tst_main.cpp`) re-activates the test window and prints `TEST WINDOW LOST ACTIVATION` when the desktop takes focus; an `activeFocus` failure right below that line is the desktop, not the product: re-run.
 6. **Document.**
    - Fill in the task file's **Outcome** section: what was built, the files involved, how it was verified, and deviations.
    - Update every spec section whose described behaviour changed. Specs must describe what the code does.

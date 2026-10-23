@@ -32,6 +32,7 @@ Item {
         function padKeys() { return findChild(find("profilesPinPad"), "pinKeys") }
 
         function init() {
+            verify(windowGuard.ensureActive() === "", windowGuard.ensureActive())
             Profiles.lock()
             Profiles.resetMockForTests("seeded")
             tryVerify(() => Profiles.profiles.length === 3)

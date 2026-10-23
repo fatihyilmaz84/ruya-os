@@ -2,7 +2,7 @@
 
 **Read this first in every session; update it last.** The rules are in the root `CLAUDE.md`, the roles (Opus lead, Sonnet builders) in `docs/LEAD.md`, the task format in `docs/tasks/README.md`.
 
-Last updated: 2026-10-23 (Sonnet 5.5, T-118)
+Last updated: 2026-10-24 (Sonnet 5.5, T-127)
 
 ## Where we are
 
@@ -14,14 +14,14 @@ Verification legend: **host** = built and tested on the Windows host · **vm** =
 
 ## Board
 
-**NEXT → T-127**
+**NEXT → T-128**
 
 **Lead review due: after 3 more builder tasks** (reviewed up to the lead commit of 2026-10-23 "lead review beafbc6..da2d1be", see `docs/LEAD-NOTES.md`). Builders: when your task makes this condition true, end your reply by recommending a lead session.
 
 | ID | Title | Status | Depends | Verified |
 |---|---|---|---|---|
 | [T-130](tasks/T-130-compositor-session.md) | **[lead]** Compositor session: `ruya-shell` replaces cage (ADR-002 A), app layer and key routing | todo | T-123 | |
-| [T-127](tasks/T-127-shots-window-focus.md) | `dev.ps1 shots`: focus failures caused by the desktop say so, and recover | todo | — | |
+| [T-127](tasks/T-127-shots-window-focus.md) | `dev.ps1 shots`: focus failures caused by the desktop say so, and recover | done | — | host |
 | [T-128](tasks/T-128-devices-audio-service.md) | `ruya-devices`: audio part of `Devices1` over PipeWire, in the VM (ADR-010) | todo | T-114, T-121 | |
 | [T-119](tasks/T-119-nested-pages.md) | Page host: nested pages that keep their state | todo | T-101 | |
 | [T-110](tasks/T-110-store-contract-and-mock.md) | Store contract and mock backend | todo | — | |
@@ -99,6 +99,8 @@ A session can't know its own commit hash before committing, so new rows put the 
 ## Session log (newest first)
 
 Each entry: date · model · tasks · what happened · verification · follow-ups. Keep entries short and factual.
+
+- 2026-10-24 · Sonnet 5.5 · T-127 · `WindowGuard` in `tst_main.cpp`, called first in every `init()`: re-activates the test window or fails with a clear message; also logs `TEST WINDOW LOST ACTIVATION` and re-activates the moment focus goes. `test` ALL GREEN (133 passed, same count); `shots` green twice (144 passed), losses logged and recovered in both. One earlier run failed `Power::test_guide_short_press_opens_overlay` mid-test before the loss logging existed. Manual "click another window" check not done (**unverified**).
 
 ### 2026-10-23 · Sonnet 5.5 · T-118
 Profiles1 rename and delete:

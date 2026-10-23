@@ -25,6 +25,7 @@ Item {
         function find(name) { return findChild(tc.shell, name) }
 
         function init() {
+            verify(windowGuard.ensureActive() === "", windowGuard.ensureActive())
             Power.mockReset()
             Profiles.lock()
             tryCompare(Profiles, "activeProfile", "")

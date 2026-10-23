@@ -97,6 +97,8 @@ Use `TextEntry` (`qml/TextEntry.qml`, spec 02-shell §4.4) for any text input; n
 
 ## Tests (required for every behaviour you add)
 
+- Every `init()` starts with `verify(windowGuard.ensureActive() === "", windowGuard.ensureActive())` (T-127): it re-activates the test window, or fails with "test window is not active" instead of a later `activeFocus` assertion. Copy it into new test files.
+
 - Drive the UI with `keyClick()` using only the keys listed above, unless a test is specifically about keyboard input.
 - Give an `objectName` to every element a test needs to find, and find it with `findChild(shell, "name")`.
 - To wait on asynchronous results use `tryCompare(obj, "prop", value)` or `tryVerify(() => …)`. **Never** use `tryCompare` on a `QVariantList` property's `length`: that polls a frozen copy.
