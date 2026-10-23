@@ -42,7 +42,7 @@ Use `malcontent` with AppStream OARS ratings: per-profile age limit for store an
 - Optical (stretch): audio CD and data-disc detection only. Video DVD/Blu-ray playback is delegated to an app (e.g. VLC/Kodi Flatpak). We don't ship libdvdcss or AACS keys.
 
 ### 2.3 Audio
-- PipeWire + WirePlumber. `ruya-devices` exposes sinks (HDMI/DP per port, analog, USB, Bluetooth), the default sink, and per-role volumes.
+- PipeWire + WirePlumber. `ruya-devices` exposes sinks (HDMI/DP per port, analog, USB, Bluetooth), the default sink, and per-role volumes. Contract: `api/dbus/org.ruyaos.Devices1.xml`, interface `org.ruyaos.Devices1.Audio` (`ListSinks`, `SetDefaultSink`, `SetChannelVolume`, properties `MasterVolume`, `Muted`, `ChannelVolumes`; network and Bluetooth become sibling interfaces on the same object). The shell side (mock and D-Bus client, Settings -> Audio) is built (T-114); the service is not (B-007).
 - Policy: the most recently connected headset or BT device becomes the default. On disconnect, fall back to the previous one. Never interrupt playback; streams move.
 - HDMI passthrough (AC3/DTS/TrueHD) is enabled per sink in Settings → Audio (Phase 4).
 

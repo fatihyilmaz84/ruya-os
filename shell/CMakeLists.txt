@@ -24,6 +24,7 @@ qt_add_qml_module(ruyashell
         src/system/SystemInfo.h src/system/SystemInfo.cpp
         src/audio/AudioBackend.h
         src/audio/MockAudioBackend.h src/audio/MockAudioBackend.cpp
+        src/audio/DBusAudioBackend.h src/audio/DBusAudioBackend.cpp
         src/audio/Audio.h src/audio/Audio.cpp
         src/power/PowerBackend.h
         src/power/MockPowerBackend.h src/power/MockPowerBackend.cpp
@@ -59,6 +60,7 @@ qt_add_qml_module(ruyashell
         qml/ProfileAddFlow.qml
         qml/ChangePinFlow.qml
         qml/DisplayPane.qml
+        qml/AudioPane.qml
         qml/AboutPane.qml
         qml/controls/SettingControl.qml
         qml/controls/SettingRow.qml

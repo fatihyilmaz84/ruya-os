@@ -12,7 +12,7 @@ The shell (`ruya-shell`) is the only UI the user sees. It's written in Qt 6 Quic
 | **Home** | Row of recent/pinned apps and games with hero background art; "Media" and "Games" rows; notifications badge |
 | **Library** | All installed apps and games; filter (Games/Media/Apps/Source) and sort |
 | **Store** | Featured, categories, search, app page (art, screenshots, rating, permissions, source badge Official/Community/Dev), install/update queue |
-| **Settings** | Profiles, Network, Bluetooth & controllers, Display (resolution, refresh, HDR later), Audio (output, volumes per channel), Storage & devices, Parental (later), Accessibility, System (update, channel, rollback, factory reset, about). Built so far (T-103, T-105, §1.2): the two-pane page, **Profiles**, **Display & motion** and **About**; the other categories show "Coming soon". |
+| **Settings** | Profiles, Network, Bluetooth & controllers, Display (resolution, refresh, HDR later), Audio (output, volumes per channel), Storage & devices, Parental (later), Accessibility, System (update, channel, rollback, factory reset, about). Built so far (T-103, T-105, T-114, §1.2): the two-pane page, **Profiles**, **Display & motion**, **Audio** and **About**; the other categories show "Coming soon". |
 | **Overlay** (Guide button over a running app) | Return to home, close app, switch app, volume, notifications, power, screenshot (later) |
 | **System UI** | Volume OSD, toasts (both built, T-108: see §5.1), device-inserted prompt, update-ready prompt, low-battery controller warning |
 | **OOBE / Installer** | 01 §5. OOBE as built (T-106): see §1.3. |
@@ -135,7 +135,8 @@ A controller's A and B arrive as `Return` and `Escape`, the same keys a keyboard
 
 ### 5.1 Toasts and volume OSD (as built, T-108)
 - `Notifications.show(text, kind, iconText)` (QML singleton; kind `info|success|warning|error`, unknown kinds become `info`) queues a toast. `ToastLayer` shows at most 3 at the top right, below the header and inside the safe area; the rest wait in order. Each toast dismisses itself after `Theme.toastMs` (4000 ms), fading and sliding with `Theme.pageMs`/`pageSlide` (so reduced motion removes the movement).
-- `Audio` (C++ singleton; mock backend only, the D-Bus backend follows the audio contract in T-114) holds the master `volume` (0-100) and `muted`, with `setVolume`, `stepVolume(delta)` and `toggleMute()`. `adjusted()` fires after every command, even a clamped one.
+- `Audio` (C++ singleton over `org.ruyaos.Devices1.Audio`, see §5.2) holds the master `volume` (0-100) and `muted`, with `setVolume`, `stepVolume(delta)`, `toggleMute()` and `setMuted()`. `adjusted()` fires after every master command, even a clamped one (and when the master level or mute changes from outside), but not for a channel volume alone.
+- **Volume keys while muted** (T-114): Volume Up unmutes and raises; Volume Down stays muted and changes nothing (the OSD shows "Muted"); Mute toggles only the mute.
 - `VolumeOsd` (bottom centre) appears on `Audio.adjusted` and hides `Theme.osdMs` (1500 ms) after the last one. It shows the level and a "Muted" state.
 - Volume Up/Down/Mute are `Shortcut`s (application context) at the `Shell` root, so they work in every state, modals included, step by 5, and never move focus. Toasts and the OSD are display-only and never take focus.
 - Stacking: toasts (z 10) sit above pages and below the modals (profile picker, Guide overlay: z 20); the OSD is on top (z 30).
@@ -184,3 +185,10 @@ The UX gate is a moderated test with ≥ 5 people who rate "smooth / modern / im
 | Focus bugs in nested scopes and popups | Spatial nav helper plus QML tests that walk every screen with key events and assert `activeFocusItem` is never null |
 | Controller double input (shell and game, or Steam Input) | ADR-003 grab/re-emit; Steam Input configuration (03 §5) |
 | VRAM pressure from art | Budgets, tiered variants, unload off-screen |
+
+### 5.2 Settings -> Audio and output switching (as built, T-114)
+- `Audio` also exposes `channelVolumes` (`ui`, `ambient`, `media`, 0-100, all always present), `sinks` (`[{id, name, kind, isDefault}]`), `defaultSink`/`defaultSinkName`, and `setChannelVolume(channel, value)` (clamped; an unknown channel is ignored) and `setDefaultSink(id)` (result: `setDefaultSinkFinished(id, status)`). Backend: the mock by default on every OS, `RUYA_SERVICES=dbus` for the D-Bus client (the service `ruya-devices` does not exist yet, blocker B-007).
+- **Settings -> Audio** (`AudioPane.qml`): one row per output (Accept makes it the default; the default shows "Default"; rows follow hot-plug in place, so focus stays on the row), then sliders for Master volume, UI sounds, Ambient and Media (step 5), then a Mute switch. Changes apply live and the rows follow changes made elsewhere (volume keys, hot-plug).
+- `Sfx` scales every cue by the **UI sounds** channel (`Sfx.gain`, navigate keeps its 0.6 base).
+- When the default output changes after start-up (a headset plugged in or removed, or the user's choice), `Shell` shows the toast "Audio output: <name>" (the name comes from the service and is not translated).
+- The mock mirrors the policy of 03 §2.3: a plugged-in USB or Bluetooth headset becomes the default; when the default disappears the previous default returns. Tests use `Audio.mockPlug("usb-headset" | "bt-headphones")`, `mockUnplug(id)` and `mockReset()`.

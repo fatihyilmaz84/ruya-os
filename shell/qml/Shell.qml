@@ -138,6 +138,15 @@ FocusScope {
         }
     }
 
+    // The default output changed after start-up: by policy (a headset was plugged in or
+    // removed) or by the user. The name comes from the service and is not translated.
+    Connections {
+        target: Audio
+        function onOutputSwitched() {
+            Notifications.show(qsTr("Audio output: %1").arg(Audio.defaultSinkName), "info")
+        }
+    }
+
     // Volume keys work in every state, modals included. A Shortcut is matched before key
     // events reach the focus item, so no modal can swallow them and focus never moves.
     Shortcut { sequences: ["Volume Up"]; context: Qt.ApplicationShortcut; onActivated: Audio.stepVolume(5) }

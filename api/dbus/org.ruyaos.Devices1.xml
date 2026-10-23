@@ -1,0 +1,78 @@
+<!DOCTYPE node PUBLIC "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
+ "http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
+<!--
+  org.ruyaos.Devices1 — audio outputs and volumes (network and Bluetooth follow later).
+  Served by ruya-devices on the system bus at /org/ruyaos/Devices1 (blocker B-007: the service
+  does not exist yet; the shell's mock backend follows this contract).
+  Contract between shell (Qt/QML) and services (Rust); see docs/specs/03-services-and-apps.md §2.3.
+
+  One bus name and one object, one interface per device class: org.ruyaos.Devices1.Audio now,
+  org.ruyaos.Devices1.Network and org.ruyaos.Devices1.Bluetooth added next to it later. A new
+  class is a new interface, so existing clients and their PropertiesChanged filters (which match
+  the interface name) are not touched, and each class can be mocked, implemented and tested on
+  its own. Shared rules for every interface of this object:
+  - status strings are stable API (listed per interface);
+  - lists are re-read after a "...Changed" signal; signals carry no payload except what is said.
+
+  org.ruyaos.Devices1.Audio status strings:
+    "ok"            success
+    "unknown-sink"  no output with that id (SetDefaultSink)
+    "invalid"       malformed argument (unknown channel name)
+    "failed"        internal error (e.g. PipeWire refused)
+-->
+<node>
+  <interface name="org.ruyaos.Devices1.Audio">
+
+    <!--
+      Audio outputs, in a stable order. One dictionary per output:
+        id          s   stable id, opaque to the shell (e.g. a PipeWire node name)
+        name        s   display name, already localised/readable ("TV (HDMI)")
+        kind        s   "hdmi" | "analog" | "usb" | "bluetooth"
+        is_default  b   true for exactly one output, unless there are none
+    -->
+    <method name="ListSinks">
+      <arg name="sinks" type="aa{sv}" direction="out"/>
+    </method>
+
+    <!--
+      Make an output the default; running streams move to it. Policy (spec §2.3), applied by the
+      service on its own too: a newly connected headset (usb, bluetooth) becomes the default, and
+      when the default disappears the previous default comes back. SetDefaultSink records the
+      old default as that "previous" one.
+    -->
+    <method name="SetDefaultSink">
+      <arg name="id" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <!-- Level of one channel, 0-100 (values above 100 are clamped). channel: "ui" | "ambient" | "media". -->
+    <method name="SetChannelVolume">
+      <arg name="channel" type="s" direction="in"/>
+      <arg name="value" type="u" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <!-- Master volume of the default output, 0-100 (writes above 100 are clamped). -->
+    <property name="MasterVolume" type="u" access="readwrite">
+      <annotation name="org.freedesktop.DBus.Property.EmitsChangedSignal" value="true"/>
+    </property>
+
+    <property name="Muted" type="b" access="readwrite">
+      <annotation name="org.freedesktop.DBus.Property.EmitsChangedSignal" value="true"/>
+    </property>
+
+    <!-- Per-channel levels, 0-100: keys "ui", "ambient", "media", all always present. Set with SetChannelVolume. -->
+    <property name="ChannelVolumes" type="a{su}" access="read">
+      <annotation name="org.freedesktop.DBus.Property.EmitsChangedSignal" value="true"/>
+    </property>
+
+    <!-- An output appeared, disappeared or changed; call ListSinks again. -->
+    <signal name="SinksChanged"/>
+
+    <!-- The default output changed (by policy, by SetDefaultSink or from outside). -->
+    <signal name="DefaultSinkChanged">
+      <arg name="id" type="s"/>
+    </signal>
+
+  </interface>
+</node>

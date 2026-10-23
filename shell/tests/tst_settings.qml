@@ -77,6 +77,7 @@ Item {
         }
 
         readonly property int displayIndex: 3
+        readonly property int storageIndex: 5
         readonly property int aboutIndex: 8
 
         function test_two_pane_navigation() {
@@ -111,7 +112,7 @@ Item {
             tryVerify(() => list.activeFocus)
             compare(tc.shell.currentPage, "settings")
 
-            keyClick(Qt.Key_Down)                        // Audio: nothing to enter
+            selectCategory(tc.storageIndex)              // Storage: nothing to enter yet
             verify(find("paneComingSoon").visible)
             keyClick(Qt.Key_Right)
             verify(list.activeFocus, "Right on an empty category stays on the list")

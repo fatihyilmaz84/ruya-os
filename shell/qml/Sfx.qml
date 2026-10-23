@@ -1,12 +1,18 @@
 pragma Singleton
 import QtQuick
 import QtMultimedia
+import RuyaShell
 
 // UI sound cues, preloaded once and shared by every component.
 QtObject {
-    readonly property SoundEffect navigateEffect: SoundEffect { source: "qrc:/qt/qml/RuyaShell/sounds/navigate.wav"; volume: 0.6 }
-    readonly property SoundEffect selectEffect: SoundEffect { source: "qrc:/qt/qml/RuyaShell/sounds/select.wav" }
-    readonly property SoundEffect backEffect: SoundEffect { source: "qrc:/qt/qml/RuyaShell/sounds/back.wav" }
+    id: sfx
+
+    // The "UI sounds" channel (Settings -> Audio), 0..1; scales every cue.
+    readonly property real gain: (Audio.channelVolumes.ui ?? 100) / 100
+
+    readonly property SoundEffect navigateEffect: SoundEffect { source: "qrc:/qt/qml/RuyaShell/sounds/navigate.wav"; volume: 0.6 * sfx.gain }
+    readonly property SoundEffect selectEffect: SoundEffect { source: "qrc:/qt/qml/RuyaShell/sounds/select.wav"; volume: sfx.gain }
+    readonly property SoundEffect backEffect: SoundEffect { source: "qrc:/qt/qml/RuyaShell/sounds/back.wav"; volume: sfx.gain }
 
     // Cues requested so far; lets tests check that a control takes the sound path.
     property int navigateCount: 0
