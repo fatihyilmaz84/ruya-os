@@ -25,7 +25,7 @@ Each surface is a separate QML module loaded with `Loader { asynchronous: true }
 - A page extends `Page.qml`: title below the header, a content area inside the safe area, and Back (`Escape`/`Back`), which plays `Sfx.back()` and closes the page. The page's `focus: true` element gets focus when it opens. Pages are instantiated by a `Loader` and destroyed after the fade-out.
 - Transition: home fades out and slides left, the page fades in and slides in from the right, over `Theme.pageMs` (`Theme.pageSlide` px); reversed on close. The backdrop stays. While a page is open, home is disabled, so arrow keys cannot reach the tiles.
 - Closing a page restores focus to the tile that opened it (same `currentIndex`). `Shell.routeFocus()`/`focusCurrent()` is the single place that decides where focus goes.
-- The Guide overlay opens from home or from any page (the shell handles `HomePage`/`Menu` when nothing under focus does). Closing it returns focus to the page. "Switch profile" clears the page stack, so the next sign-in lands on home.
+- The Guide overlay opens from home or from any page (the shell handles `HomePage` and `Super` when nothing under focus does; `Menu` is the context-menu key, not Guide). Closing it returns focus to the page. "Switch profile" clears the page stack, so the next sign-in lands on home.
 - Games, Media and Store are placeholders ("Coming soon" plus one focusable element) until their tasks land; Settings (§1.2) and Power (§1.4) are real.
 
 ### 1.2 Settings page (as built, T-103)
@@ -39,7 +39,7 @@ Each surface is a separate QML module loaded with `Loader { asynchronous: true }
 ### 1.4 Power (as built, T-107)
 - The **Power page** has three rows: Suspend, Restart, Power off. Accept opens `PowerConfirm` ("Restart now?", Cancel and Confirm). **Cancel has focus when it opens**; Left/Right move between the buttons, Back cancels, and the dialog swallows every other key. Only Confirm reaches the `Power` singleton (`suspend()`, `restart()`, `powerOff()`). A row whose action logind does not allow (`CanSuspend` etc. is not `yes`) shows "Not available" and opens nothing.
 - The **Guide overlay** has "Switch profile", **Power** and "Close". "Power" switches the overlay to the power choices (Suspend, Restart, Power off, Back; actions logind refuses are hidden), and a choice opens the same `PowerConfirm` above the overlay. Cancel returns to the choices; Back in the choices returns to the system actions; Confirm closes the overlay.
-- **Holding Guide** for `Theme.guideHoldMs` (2 s) switches the open overlay to the power choices. A short press still opens the overlay at once (on press); the hold is timed from that press, and the release cancels it. Autorepeat events of a held key are ignored (they used to close the overlay: the overlay treated them as a second Guide press). Only Guide holds; Start/Menu does not.
+- **Holding Guide** for `Theme.guideHoldMs` (2 s) switches the open overlay to the power choices. A short press still opens the overlay at once (on press); the hold is timed from that press, and the release cancels it. Autorepeat events of a held key are ignored (they used to close the overlay: the overlay treated them as a second Guide press). Only Guide holds (the controller button or Super); Start/Menu is not Guide at all (T-124).
 - A refused or failed action shows an error toast ("Could not restart."). Idle auto-suspend and wake sources are not part of this task (01 §2.2).
 
 ### 1.3 First-boot setup (as built, T-106)
@@ -96,7 +96,7 @@ Physical pad → input daemon (ADR-003) → shell. While the shell has input foc
 | Accept | A | ✕ (configurable to ○ for JP layout) | Enter |
 | Back | B | ○ | Esc / Backspace |
 | Context menu | Menu (☰) | Options | `M` / context key |
-| Guide / overlay | Xbox | PS | `Super` / `Home` |
+| Guide / overlay | Xbox | PS | `Super` (left or right; holding it opens the power choices) |
 | Tab switch | LB/RB | L1/R1 | `Q`/`E`, PgUp/PgDn |
 | Fast scroll | LT/RT, stick held | L2/R2 | Home/End |
 

@@ -99,21 +99,26 @@ FocusScope {
     // same physical press.
     property bool guideHeld: false
 
+    // The controller's Guide button arrives as HomePage (ruya-inputd); on a keyboard it is
+    // Super, left or right (Qt reports the Windows key as Meta on the Windows host). Menu is
+    // the context-menu key (spec 02 4.2), not Guide.
+    function isGuideKey(key) {
+        return key === Qt.Key_HomePage || key === Qt.Key_Super_L || key === Qt.Key_Super_R || key === Qt.Key_Meta
+    }
+
     Keys.onPressed: event => {
-        if (signedIn && !systemPanel.open && (event.key === Qt.Key_HomePage || event.key === Qt.Key_Menu)) {
+        if (signedIn && !systemPanel.open && isGuideKey(event.key)) {
             if (!event.isAutoRepeat) {
                 systemPanel.open = true
                 Sfx.select()
-                if (event.key === Qt.Key_HomePage) {
-                    guideHeld = true
-                    guideHoldTimer.restart()
-                }
+                guideHeld = true
+                guideHoldTimer.restart()
             }
             event.accepted = true
         }
     }
     Keys.onReleased: event => {
-        if (event.key === Qt.Key_HomePage && !event.isAutoRepeat) {
+        if (isGuideKey(event.key) && !event.isAutoRepeat) {
             guideHeld = false
             guideHoldTimer.stop()
         }
@@ -520,7 +525,7 @@ FocusScope {
                     } else if (systemPanel.powerMode && (event.key === Qt.Key_Escape || event.key === Qt.Key_Back)) {
                         Sfx.back()
                         activate("back")
-                    } else if ([Qt.Key_Escape, Qt.Key_Back, Qt.Key_HomePage, Qt.Key_Menu].includes(event.key)) {
+                    } else if (event.key === Qt.Key_Escape || event.key === Qt.Key_Back || root.isGuideKey(event.key)) {
                         systemPanel.open = false
                         Sfx.back()
                     }

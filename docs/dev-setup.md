@@ -77,7 +77,7 @@ scp -i $env:USERPROFILE\.ssh\ruyaos_dev -P 2222 scripts\vm-*.sh scripts\vm-injec
 ssh -i $env:USERPROFILE\.ssh\ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-profiles-check.sh state
 ```
 
-**Pitfalls.** The shell is software-rendered and CPU-bound in the VM (about 94 % of a core), so the screen can lag the keys by several seconds and the shell's own timers run slowly (the PIN lock countdown, for instance). Wait before a screenshot and before judging "nothing happened"; take a second screenshot first. PowerShell 5.1 binds extra arguments to later positional parameters: `vm-keys.ps1` sets `PositionalBinding = $false` for that reason. `sendkey menu` and `home` did not open the Guide overlay (see STATUS Inbox); use `vm-inject-key.py guide`.
+**Pitfalls.** The shell is software-rendered and CPU-bound in the VM (about 94 % of a core), so the screen can lag the keys by several seconds and the shell's own timers run slowly (the PIN lock countdown, for instance). Wait before a screenshot and before judging "nothing happened"; take a second screenshot first. PowerShell 5.1 binds extra arguments to later positional parameters: `vm-keys.ps1` sets `PositionalBinding = $false` for that reason. On a keyboard the Guide is **Super** (T-124): `vm-keys.ps1 meta_l` opens and closes the overlay. `sendkey menu` does nothing in the shell (Menu is the context-menu key, not Guide) and `home` is not a Guide key; to send the controller's Guide use `vm-inject-key.py guide`.
 
 ## Audio in the VM (T-121)
 

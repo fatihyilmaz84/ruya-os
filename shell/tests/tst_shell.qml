@@ -107,6 +107,40 @@ Item {
             compare(find("pinKeys").currentIndex, 1)
         }
 
+        function test_super_toggles_overlay_data() {
+            return [
+                { tag: "Super_L", key: Qt.Key_Super_L },
+                { tag: "Super_R", key: Qt.Key_Super_R },
+                { tag: "Meta", key: Qt.Key_Meta },        // the Windows key on the Windows host
+            ]
+        }
+
+        function test_super_toggles_overlay(data) {
+            signInAsAda()
+            keyClick(data.key)
+            tryVerify(() => find("systemActions").activeFocus, 2000, "Super opens the overlay")
+            keyClick(Qt.Key_Right)                     // modal: swallowed
+            compare(find("tiles").currentIndex, 0)
+            keyClick(data.key)
+            tryCompare(find("systemPanel"), "open", false)
+            tryVerify(() => find("tiles").activeFocus, 2000, "and closes it again, focus back on the shelf")
+        }
+
+        function test_menu_is_not_guide() {
+            signInAsAda()
+            keyClick(Qt.Key_Menu)                      // the context-menu key (T-124)
+            wait(200)
+            compare(find("systemPanel").open, false)
+            verify(find("tiles").activeFocus)
+            keyClick(Qt.Key_HomePage)                  // Guide still opens it
+            tryVerify(() => find("systemActions").activeFocus)
+            keyClick(Qt.Key_Menu)                      // and Menu does not close it
+            wait(200)
+            compare(find("systemPanel").open, true)
+            keyClick(Qt.Key_HomePage)
+            tryCompare(find("systemPanel"), "open", false)
+        }
+
         function test_guide_overlay_and_switch_profile() {
             signInAsAda()
             keyClick(Qt.Key_HomePage)

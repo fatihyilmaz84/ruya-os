@@ -160,6 +160,33 @@ Item {
             verify(find("systemActions").activeFocus)
         }
 
+        function test_super_long_press_data() {
+            return [
+                { tag: "Super_L", key: Qt.Key_Super_L },
+                { tag: "Meta", key: Qt.Key_Meta },
+            ]
+        }
+
+        // A held Super is a held Guide: the same code path (T-124).
+        function test_super_long_press(data) {
+            keyPress(data.key)
+            tryVerify(() => find("systemActions").activeFocus, 2000, "the overlay opens on press")
+            compare(find("systemPanel").powerMode, false)
+            tryCompare(find("systemPanel"), "powerMode", true, Theme.guideHoldMs + 2000)
+            keyRelease(data.key)
+            wait(100)
+            verify(find("systemPanel").open, "releasing after the hold does not close it")
+            compare(find("systemActions").count, 4)
+        }
+
+        function test_super_short_press_does_not_open_power_choices() {
+            keyPress(Qt.Key_Super_L)
+            keyRelease(Qt.Key_Super_L)
+            tryVerify(() => find("systemActions").activeFocus)
+            wait(Theme.guideHoldMs + 400)
+            compare(find("systemPanel").powerMode, false, "released before the hold time")
+        }
+
         function test_guide_long_press() {
             keyPress(Qt.Key_HomePage)
             tryVerify(() => find("systemActions").activeFocus, 2000, "the overlay opens on press")
