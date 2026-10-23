@@ -23,6 +23,7 @@ QtObject {
     readonly property color scrim: "#d0000000"                      // behind PIN pad and keyboard
     readonly property color scrimOverlay: "#d8000000"               // behind the Guide overlay
     readonly property color panel: "#1a1d26"                        // card of the Guide overlay
+    readonly property color dangerFill: "#8f2d2d"                   // confirm button of restart / power off
     readonly property color errorText: "#ff8a80"
     readonly property color warningText: "#ffb74d"
     readonly property color blobHighlight: "#ffffff"                // faint third backdrop blob
@@ -60,6 +61,7 @@ QtObject {
     readonly property int toastMs: 4000      // how long a toast stays on screen
     readonly property int caretMs: 530       // text caret blink half-period
     readonly property int osdMs: 1500        // how long the volume OSD stays after the last change
+    readonly property int guideHoldMs: 2000  // holding Guide this long opens the power menu (spec 01 §2.2)
 
     readonly property color toastInfo: "#6ea8ff"
     readonly property color toastSuccess: "#4cc38a"

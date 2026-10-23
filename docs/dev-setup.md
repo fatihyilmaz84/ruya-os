@@ -55,6 +55,17 @@ In the VM, the shell's own log is `journalctl -b _UID=$(id -u ruya-shell)`. pam_
 4. **Manual rollback:** `bootc rollback`, then `.\scripts\vm-reboot-check.ps1`.
 5. **Automatic rollback (greenboot):** build an image whose compositor is `ExecStart=/bin/false`, `bootc switch` to it, and reboot. Every boot fails the shell health check and greenboot reboots; after 3 failed boots GRUB falls back to the previous deployment. Results are in `docs/STATUS.md`, session log 2026-10-22.
 
+## Power-policy check (T-107)
+
+After any change to the polkit rule or to how `image/rootfs` is installed, boot the disk (`.\scripts\smoke-test.ps1 -Keep`) and run, from the repo root:
+
+```bash
+scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-power-check.sh root@127.0.0.1:/root/
+ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-power-check.sh --power-off
+```
+
+It prints `pkcheck` verdicts for the six `login1` actions for the `ruya-shell` process (all must be `exit 0`) and for an ordinary user (none may be), logind's `CanPowerOff` for both, what the shell's Power backend read at start-up, the modes of what the image ships (nothing group- or world-writable), and, with `--power-off`, a refused `PowerOff` as the ordinary user followed by the real one as `ruya-shell` (QEMU exits). Without `--power-off` the VM stays up.
+
 ## Shell-only iteration
 
 **Use `scripts\dev.ps1` for everything below.** It wraps these commands with the right flags and PATH:

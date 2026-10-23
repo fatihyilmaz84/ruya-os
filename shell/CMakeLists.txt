@@ -25,6 +25,10 @@ qt_add_qml_module(ruyashell
         src/audio/AudioBackend.h
         src/audio/MockAudioBackend.h src/audio/MockAudioBackend.cpp
         src/audio/Audio.h src/audio/Audio.cpp
+        src/power/PowerBackend.h
+        src/power/MockPowerBackend.h src/power/MockPowerBackend.cpp
+        src/power/DBusPowerBackend.h src/power/DBusPowerBackend.cpp
+        src/power/Power.h src/power/Power.cpp
     QML_FILES
         qml/Main.qml
         qml/Shell.qml
@@ -49,6 +53,7 @@ qt_add_qml_module(ruyashell
         qml/StorePage.qml
         qml/SettingsPage.qml
         qml/PowerPage.qml
+        qml/PowerConfirm.qml
         qml/SettingsPane.qml
         qml/ProfilesPane.qml
         qml/ProfileAddFlow.qml
@@ -67,7 +72,7 @@ qt_add_qml_module(ruyashell
 )
 
 # qmltyperegistrar includes the QML_ELEMENT headers by file name.
-target_include_directories(ruyashell PUBLIC src/profiles src/settings src/audio src/system)
+target_include_directories(ruyashell PUBLIC src/profiles src/settings src/audio src/system src/power)
 target_link_libraries(ruyashell PRIVATE Qt6::Quick Qt6::Multimedia Qt6::DBus)
 
 # Visual Studio generators skip qmltyperegistrar on the first build after a header changed, so a

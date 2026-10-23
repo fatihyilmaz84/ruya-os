@@ -42,6 +42,8 @@ Read `docs/specs/02-shell.md` for the UX spec. This file covers how the code is 
 - Each screen or modal is a `FocusScope`. Exactly one item has active focus, and the focused item always shows a visible focus ring or scale.
 - `ListView`/`GridView` with `interactive: false` **also turns off key navigation**, so set `keyNavigationEnabled: true` explicitly.
 - **Modals** (PIN pad, overlay, dialogs) accept *every* key in their `Keys.onPressed` (`event.accepted = true`), so nothing leaks underneath.
+  Accepting every key also skips a `ListView`'s own key navigation, so a modal list handles Up/Down itself (`incrementCurrentIndex()`), as the Guide overlay does.
+- **A held key repeats** (`event.isAutoRepeat`). Ignore repeats in handlers that toggle or close (a held Guide used to close the overlay it had just opened); time long presses from the first press and the release (`Shell.qml`, `guideHoldTimer`).
 - **Focus restoration:** when a modal or page closes, return focus to where it was. Guard any re-focus with a check that the target is still enabled; otherwise you will steal focus after state changes (see `ProfilePicker.onClosed`).
 - Use `Sfx.navigate()` on focus moves, `Sfx.select()` on Accept, and `Sfx.back()` on Back or errors.
 

@@ -55,7 +55,7 @@ Item {
                 { tag: "media", index: 1, focusName: "pagePlaceholder" },
                 { tag: "store", index: 2, focusName: "pagePlaceholder" },
                 { tag: "settings", index: 3, focusName: "categoryList" },   // T-103: real page
-                { tag: "power", index: 4, focusName: "pagePlaceholder" },
+                { tag: "power", index: 4, focusName: "powerSuspend" },      // T-107: real page
             ]
         }
 

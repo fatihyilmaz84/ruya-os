@@ -33,14 +33,23 @@ RUN --mount=type=bind,source=image/build,target=/ctx/build \
     && /ctx/build/30-codecs.sh \
     && /ctx/build/40-nvidia.sh
 
-COPY image/rootfs/ /
 COPY --from=shell-build /out/ /
 COPY --from=services-build /out/ /
 
+# image/rootfs is installed with cp, not COPY: a checkout on Windows has every file and directory
+# at mode 0777, COPY keeps that, and for a directory that a layer introduces (/usr/libexec/ruyaos)
+# a later chmod does not survive into the deployed disk (found in T-107). cp --no-preserve=mode
+# creates files 0644 and directories 0755 (umask 022); the scripts are made executable right after.
+# The last check fails the build if anything we ship is group- or world-writable: a polkit rule,
+# PAM file or unit that anyone can edit is a root hole.
 RUN --mount=type=bind,source=image/build,target=/ctx/build \
-    mkdir -p /usr/lib/ruyaos \
+    --mount=type=bind,source=image/rootfs,target=/ctx/rootfs \
+    cp -r --no-preserve=mode,ownership /ctx/rootfs/. / \
+    && mkdir -p /usr/lib/ruyaos \
     && echo "${RUYA_VERSION}" > /usr/lib/ruyaos/version \
     && chmod 0755 /usr/libexec/ruyaos/wait-shell-ready /usr/lib/greenboot/check/required.d/*.sh \
+    && (cd /ctx/rootfs && find . -mindepth 1 ! -type l -print0 | xargs -0 -I{} find "/{}" -maxdepth 0 -perm /022 > /tmp/writable \
+        && test ! -s /tmp/writable || { echo "group/world-writable files shipped from image/rootfs:"; cat /tmp/writable; exit 1; }) \
     && systemctl enable ruya-compositor@tty1.service ruya-inputd.service ruya-profiles.service ruya-boot-marker.service \
     && systemctl enable greenboot-healthcheck.service greenboot-set-rollback-trigger.service \
     && systemctl set-default graphical.target \

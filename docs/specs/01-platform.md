@@ -46,7 +46,7 @@ The build excludes any desktop environment, display manager, `kdeconnect` and `p
 ### 2.2 Suspend / power
 - Idle → dim → suspend (s2idle/S3) after configurable timeouts. Apps keep running across suspend.
 - Wake sources: power button, USB controller/keyboard (`/sys/.../power/wakeup`), Bluetooth (adapter-dependent, best effort).
-- The Guide button held for 2 s opens the power menu.
+- The Guide button held for 2 s opens the power menu. **Built (T-107):** the shell's Power page and Guide overlay call `org.freedesktop.login1.Manager` (`Suspend`, `Reboot`, `PowerOff`, with `interactive=false`; `CanSuspend`, `CanReboot` and `CanPowerOff` decide what is offered). The image ships `/usr/share/polkit-1/rules.d/50-ruyaos-power.rules`, which lets exactly the user `ruya-shell` do those three actions (and their `-multiple-sessions` variants) without authentication. Idle timers and wake sources are not built yet. UI: 02 �1.4.
 
 ### 2.3 Drivers & Secure Boot
 - Fedora kernel and shim are signed, so Secure Boot works out of the box on AMD/Intel. NVIDIA systems need the MOK step below.

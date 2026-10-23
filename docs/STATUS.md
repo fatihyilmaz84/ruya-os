@@ -2,7 +2,7 @@
 
 **Read this first in every session; update it last.** The rules are in the root `CLAUDE.md`, the roles (Opus lead, Sonnet builders) in `docs/LEAD.md`, the task format in `docs/tasks/README.md`.
 
-Last updated: 2026-10-23 (Sonnet 5.5, T-122)
+Last updated: 2026-10-23 (Sonnet 5.5, T-107)
 
 ## Where we are
 
@@ -14,14 +14,13 @@ Verification legend: **host** = built and tested on the Windows host · **vm** =
 
 ## Board
 
-**NEXT → T-107** (T-122 is committed and waits for the owner's push to confirm the new CI run is green; a builder or lead closes it after reading that run)
+**NEXT → T-120** (T-122 is committed and waits for the owner's push to confirm the new CI run is green; a builder or lead closes it after reading that run)
 
 **Lead review due:** after 3 more builder tasks, or now. The range `9ca4b25..HEAD` is unreviewed (see `docs/LEAD-NOTES.md`). Builders: when your task makes this condition true, end your reply by recommending a lead session.
 
 | ID | Title | Status | Depends | Verified |
 |---|---|---|---|---|
 | [T-122](tasks/T-122-ci-refresh.md) | CI on GitHub: read the first results, make it green, same gates as `dev.ps1 test` (token lint) | in-progress (awaiting push) | — | local: host (`dev.ps1 test` green, lint probe failed as expected) · new workflow on GitHub: **unverified** |
-| [T-107](tasks/T-107-power-actions.md) | Power actions (suspend/restart/off), polkit rule verified in the VM | todo | T-101 | |
 | [T-120](tasks/T-120-vm-profiles-and-oobe.md) | Verify Profiles and the first-boot wizard in the VM over the real bus (VM screenshot/keys scripts); closes B-005 | todo | — | |
 | [T-121](tasks/T-121-vm-audio.md) | Audio in the VM: sound device, PipeWire for the shell session, UI cues load | todo | T-120 | |
 | [T-114](tasks/T-114-audio-contract-and-settings.md) | Audio contract and Settings → Audio | todo | T-103, T-108 | |
@@ -39,7 +38,7 @@ The order above is the recommended order. When the NEXT task is blocked, take th
 
 Follow-ups, debt and ideas waiting for a planner session. Builders: add one line per item, `- (source) what, and why it matters`. Don't write task files for these unless your own task needs one. A planner session turns them into tasks, drops them with a reason, or escalates them. **Run a planner when this list has 5+ items.**
 
-_(empty: handled in the 2026-10-23 planning session; see its log entry)_
+- (T-107) T-120 should drive Power → Power off from the shell with its key scripts (QEMU exits), to verify the shell → `DBusPowerBackend` → logind hop that T-107 could only check with `busctl` as `ruya-shell`.
 
 ### Done
 
@@ -64,6 +63,7 @@ A session can't know its own commit hash before committing, so new rows put the 
 | T-106 | First-boot setup wizard (`Setup.qml`: welcome, language, network placeholder, create admin, done); `DeviceSettings.language`; `RUYA_MOCK_PROFILES=empty`; shared `ProfileStatus` messages | mock path: host (`dev.ps1 test` green, new `tst_setup.qml` with 8 tests + 2 screenshots reviewed) · real `ruya-profiles` over D-Bus: **unverified** | T-106 |
 | T-117 | Reduced motion honoured by the PIN-pad shake and tile pulse; literal durations/colours moved into `Theme` tokens; token lint in `dev.ps1 shell` | host (`dev.ps1 test` green, new test fails without the guard, lint failure demonstrated; 3 screenshots reviewed by eye) | T-117 |
 | T-116 | First build after adding or removing a C++ QML type is green (stale `qmltyperegistrar` under the Visual Studio generator; build step `InvalidateStaleQmlTypes.cmake`) | host (`dev.ps1 test` green; 3 add/remove probe cycles via `scripts\repro-first-build.ps1`, all green on the first run) · Linux/Ninja: not run | T-116 |
+| T-107 | Power actions: `Power` singleton (mock + logind D-Bus), Power page, `PowerConfirm`, Guide overlay power choices, Guide long-press; polkit rule for `ruya-shell`; `image/rootfs` installed with safe modes | mock path: host (`dev.ps1 test` green, new `tst_power.qml`, 2 screenshots reviewed) · polkit rule, logind `Can*` and `PowerOff` as `ruya-shell`, refusal for another user, `RUYA_BOOT_OK`: **vm** (`scripts/vm-power-check.sh`) · the running shell's D-Bus call to logind: **unverified** | T-107 |
 
 ## Blocked (need something this host doesn't have)
 
@@ -88,6 +88,16 @@ A session can't know its own commit hash before committing, so new rows put the 
 ## Session log (newest first)
 
 Each entry: date · model · tasks · what happened · verification · follow-ups. Keep entries short and factual.
+
+### 2026-10-23 · Sonnet 5.5 · T-107
+Power actions:
+- `Power` singleton over a mock and a logind D-Bus backend; Power page (three rows), shared `PowerConfirm` (Cancel focused first), Guide overlay with a power choice list; holding Guide for 2 s opens it; refusals toast.
+- Image: polkit rule `50-ruyaos-power.rules` (user `ruya-shell`, six `login1` action ids) and `scripts/vm-power-check.sh`.
+- Found and fixed: the overlay's accept-all key handler had disabled Up/Down in its list, and a held Guide's autorepeat closed the overlay; **every file shipped from `image/rootfs` was mode 0777 in the image** (Windows checkout + `COPY`), which also made the new polkit rule world-writable. `rootfs` is now installed with `cp --no-preserve=mode` in a `RUN` that fails the build on anything group/world-writable (a later-layer `chmod` was not enough for directories).
+
+Verification: `dev.ps1 test` → ALL GREEN (11 new tests); `shots` reviewed. Image `0.0.5-t107d`: lint clean, `RUYA_BOOT_OK`; in the VM the shell's user is authorized for all six actions, an ordinary user is refused, `CanPowerOff` is `yes` / `challenge`, and a real `PowerOff` as `ruya-shell` ended QEMU. Unverified: the running shell calling logind (no key scripts yet), a real suspend/wake.
+
+Follow-ups: Inbox line for T-120. NEXT is T-120. T-122 still waits for the owner's push. The lead review is due (range `9ca4b25..HEAD`): recommend a lead session.
 
 ### 2026-10-23 · Sonnet 5.5 · T-122
 CI refresh:

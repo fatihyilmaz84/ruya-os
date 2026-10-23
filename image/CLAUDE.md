@@ -16,7 +16,7 @@ Builds take 3–30 minutes (the NVIDIA step is cached unless `image/build/` or e
 
 - `Containerfile`: a multi-stage build. Shell and services are built in Fedora containers, then copied onto `quay.io/fedora/fedora-bootc`.
 - `build/NN-*.sh`: ordered build steps, bind-mounted (not shipped): repos → base packages → codecs → NVIDIA → initramfs → cleanup. Add steps by number; keep each idempotent and `set -euo pipefail`.
-- `rootfs/`: files copied into the image as they are. **Prefer `/usr` over `/etc`** (`/usr/lib/systemd/system`, `/usr/lib/sysusers.d`, `/usr/lib/tmpfiles.d`, `/usr/share/dbus-1/system.d`). `/etc` is persistent and 3-way-merged on update. Never put files in `/var`; create them with `tmpfiles.d`.
+- `rootfs/`: files installed into the image by a `cp --no-preserve=mode` in the Containerfile (not `COPY`: a Windows checkout is all 0777, and a directory a layer introduces keeps that mode on the deployed disk). Files end up 0644, directories 0755; make a script executable with a `chmod 0755` in the same `RUN`. The build fails if anything from `rootfs/` is group- or world-writable. **Prefer `/usr` over `/etc`** (`/usr/lib/systemd/system`, `/usr/lib/sysusers.d`, `/usr/lib/tmpfiles.d`, `/usr/share/dbus-1/system.d`). `/etc` is persistent and 3-way-merged on update. Never put files in `/var`; create them with `tmpfiles.d`.
 - `bib/`: bootc-image-builder config. `config.toml` is git-ignored because it holds dev credentials.
 
 ## Rules

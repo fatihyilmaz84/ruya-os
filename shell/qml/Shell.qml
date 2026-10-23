@@ -82,6 +82,7 @@ FocusScope {
         routeFocus()
     }
     Component.onCompleted: {
+        Power.refresh()          // creates the singleton early, so the rows know what is allowed
         if (setupNeeded) {
             setupActive = true
             setup.start()
@@ -91,11 +92,49 @@ FocusScope {
 
     // The Guide button opens the overlay from home or from any page; pages and tiles leave
     // it unhandled. (The overlay itself and the PIN pad are modal and accept every key.)
+    //
+    // Holding Guide for Theme.guideHoldMs switches the open overlay to the power choices
+    // (spec 01 §2.2). A short press still opens the overlay at once; the hold is timed from
+    // that press and cancelled by the release. Autorepeat events are ignored: they are the
+    // same physical press.
+    property bool guideHeld: false
+
     Keys.onPressed: event => {
         if (signedIn && !systemPanel.open && (event.key === Qt.Key_HomePage || event.key === Qt.Key_Menu)) {
-            systemPanel.open = true
-            Sfx.select()
+            if (!event.isAutoRepeat) {
+                systemPanel.open = true
+                Sfx.select()
+                if (event.key === Qt.Key_HomePage) {
+                    guideHeld = true
+                    guideHoldTimer.restart()
+                }
+            }
             event.accepted = true
+        }
+    }
+    Keys.onReleased: event => {
+        if (event.key === Qt.Key_HomePage && !event.isAutoRepeat) {
+            guideHeld = false
+            guideHoldTimer.stop()
+        }
+    }
+    Timer {
+        id: guideHoldTimer
+        interval: Theme.guideHoldMs
+        onTriggered: {
+            if (root.guideHeld && systemPanel.open && !systemPanel.powerMode)
+                systemPanel.showPower()
+        }
+    }
+
+    // A refused or failed action (polkit, no support) is the only result the user sees; a
+    // successful one ends the session or suspends the machine.
+    Connections {
+        target: Power
+        function onDone(action, ok) {
+            if (!ok)
+                Notifications.show(qsTr("Could not %1.").arg(action === "suspend" ? qsTr("suspend")
+                                   : action === "restart" ? qsTr("restart") : qsTr("power off")), "error")
         }
     }
 
@@ -374,6 +413,14 @@ FocusScope {
         z: 20
 
         property bool open: false
+        // The overlay shows the power choices instead of the system actions.
+        property bool powerMode: false
+
+        function showPower() {
+            powerMode = true
+            actions.currentIndex = 0
+            Sfx.navigate()
+        }
 
         anchors.fill: parent
         color: Theme.scrimOverlay
@@ -381,10 +428,13 @@ FocusScope {
         visible: opacity > 0
         Behavior on opacity { NumberAnimation { duration: Theme.pageMs; easing.type: Easing.OutCubic } }
         onOpenChanged: {
+            powerMode = false
             if (open) {
+                Power.refresh()
                 actions.currentIndex = 0
                 actions.forceActiveFocus()
             } else {
+                guideHoldTimer.stop()
                 root.focusCurrent()      // the page if one is open, else the tiles
             }
         }
@@ -416,23 +466,52 @@ FocusScope {
                 spacing: 14 * root.u
                 interactive: false
                 keyNavigationEnabled: true
-                model: [
+                readonly property var systemItems: [
                     { key: "switch", label: qsTr("Switch profile") },
+                    { key: "power", label: qsTr("Power") },
                     { key: "close", label: qsTr("Close") },
                 ]
+                // Only what logind allows; "Back" returns to the system actions.
+                readonly property var powerItems: [
+                    ...(Power.canSuspend ? [{ key: "suspend", label: qsTr("Suspend") }] : []),
+                    ...(Power.canRestart ? [{ key: "restart", label: qsTr("Restart") }] : []),
+                    ...(Power.canPowerOff ? [{ key: "poweroff", label: qsTr("Power off") }] : []),
+                    { key: "back", label: qsTr("Back") },
+                ]
+                model: systemPanel.powerMode ? powerItems : systemItems
 
                 function activate(key) {
                     Sfx.select()
-                    if (key === "switch")
-                        Profiles.lock()        // signedIn -> false; routeFocus() shows the picker
-                    systemPanel.open = false
+                    if (key === "power") {
+                        systemPanel.showPower()
+                    } else if (key === "back") {
+                        systemPanel.powerMode = false
+                        currentIndex = 1                       // on "Power"
+                    } else if (key === "suspend" || key === "restart" || key === "poweroff") {
+                        powerConfirm.open(key)                 // focus returns here if cancelled
+                    } else {
+                        if (key === "switch")
+                            Profiles.lock()    // signedIn -> false; routeFocus() shows the picker
+                        systemPanel.open = false
+                    }
                 }
 
                 onCurrentIndexChanged: if (systemPanel.open) Sfx.navigate()
                 Keys.onReturnPressed: activate(model[currentIndex].key)
                 Keys.onEnterPressed: activate(model[currentIndex].key)
                 Keys.onPressed: event => {
-                    if ([Qt.Key_Escape, Qt.Key_Back, Qt.Key_HomePage, Qt.Key_Menu].includes(event.key)) {
+                    // Accepting every key (below) also skips the list's own key navigation, so
+                    // Up/Down are handled here.
+                    if (event.key === Qt.Key_Down) {
+                        incrementCurrentIndex()
+                    } else if (event.key === Qt.Key_Up) {
+                        decrementCurrentIndex()
+                    } else if (event.isAutoRepeat) {
+                        // Holding Guide repeats the key: not a second press that would close us.
+                    } else if (systemPanel.powerMode && (event.key === Qt.Key_Escape || event.key === Qt.Key_Back)) {
+                        Sfx.back()
+                        activate("back")
+                    } else if ([Qt.Key_Escape, Qt.Key_Back, Qt.Key_HomePage, Qt.Key_Menu].includes(event.key)) {
                         systemPanel.open = false
                         Sfx.back()
                     }
@@ -460,6 +539,20 @@ FocusScope {
                 }
             }
         }
+    }
+
+    // Confirmation for the overlay's power choices (the Power page has its own instance in
+    // the modal layer). Above the overlay, below the volume OSD.
+    PowerConfirm {
+        id: powerConfirm
+        objectName: "overlayPowerConfirm"
+        anchors.fill: parent
+        z: 25
+        u: root.u
+        onConfirmed: systemPanel.open = false
+        // Cancelled: back to the choices. (The dialog's own restore would land on a list
+        // delegate that may be gone, so name the list.)
+        onClosed: if (systemPanel.open) actions.forceActiveFocus()
     }
 
     // Always-on version tag: the update/rollback checks read it off the screen.

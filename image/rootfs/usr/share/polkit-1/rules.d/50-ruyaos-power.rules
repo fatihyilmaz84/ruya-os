@@ -1,0 +1,25 @@
+// The shell (user ruya-shell) may suspend, restart and power off the machine through
+// systemd-logind without a prompt: nobody is there to type a password on a TV. The shell asks
+// for a confirmation itself (PowerConfirm.qml) and calls logind with interactive=false.
+//
+// Exactly these action ids, only for exactly this user. Other users (profile users, running
+// Flatpak apps) keep the default policy, which refuses them or asks for admin authentication.
+// The "-multiple-sessions" variants apply when another user is logged in, e.g. a profile
+// session; the "-ignore-inhibit" variants are deliberately not listed (the shell passes no flag
+// to skip inhibitors, so an app that blocks shutdown still gets its say).
+polkit.addRule(function(action, subject) {
+    if (subject.user !== "ruya-shell")
+        return polkit.Result.NOT_HANDLED;
+
+    var allowed = [
+        "org.freedesktop.login1.suspend",
+        "org.freedesktop.login1.suspend-multiple-sessions",
+        "org.freedesktop.login1.reboot",
+        "org.freedesktop.login1.reboot-multiple-sessions",
+        "org.freedesktop.login1.power-off",
+        "org.freedesktop.login1.power-off-multiple-sessions"
+    ];
+    if (allowed.indexOf(action.id) >= 0)
+        return polkit.Result.YES;
+    return polkit.Result.NOT_HANDLED;
+});
