@@ -75,6 +75,7 @@ If time remains, take **one** `Owner: lead` task and do it with the full builder
   - current concerns, ranked;
   - what the next lead should check first;
   - the quality-signal table row for this session.
+- STATUS: move session-log entries beyond the newest five to `docs/STATUS-log.md` (top of its list), so builders read a short STATUS.
 - STATUS: a session-log entry `· Opus · Lead` with: verification numbers, review findings (count, and what was fixed or filed), planning changes, decisions taken or escalated.
 - Commit, as `docs: lead review <range>; plan …` plus any `review:` fix commits. **Do not push** unless the owner asks in this session (`CLAUDE.md` push rule, including the secret scan).
 

@@ -101,6 +101,25 @@ function Run-QmlTests([string]$ShotsDir) {
     Record "Qt Quick tests" ($code -eq 0)
 }
 
+# Half-size copies (960x540) in <dir>\review: an AI reviewer reads these instead of the full
+# 1920x1080 PNGs, at about a quarter of the image tokens, for every turn they stay in context.
+function Save-ReviewCopies([string]$Dir) {
+    Add-Type -AssemblyName System.Drawing
+    $out = Join-Path $Dir "review"
+    New-Item -ItemType Directory -Force $out | Out-Null
+    Remove-Item (Join-Path $out "*.png") -ErrorAction SilentlyContinue
+    foreach ($f in Get-ChildItem $Dir -Filter *.png) {
+        $src = [System.Drawing.Image]::FromFile($f.FullName)
+        $w = [int]($src.Width / 2); $h = [int]($src.Height / 2)
+        $dst = New-Object System.Drawing.Bitmap $w, $h
+        $g = [System.Drawing.Graphics]::FromImage($dst)
+        $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+        $g.DrawImage($src, 0, 0, $w, $h)
+        $dst.Save((Join-Path $out $f.Name), [System.Drawing.Imaging.ImageFormat]::Png)
+        $g.Dispose(); $dst.Dispose(); $src.Dispose()
+    }
+}
+
 # The rules live in scripts\lint-tokens.ps1 (shared with CI).
 function Test-Tokens {
     Step "token lint (no literal durations or colours outside Theme.qml)"
@@ -137,7 +156,8 @@ switch ($Command) {
         Remove-Item (Join-Path $Repo "output\shell-shots\*.png") -ErrorAction SilentlyContinue
         Step "Qt Quick tests with screenshots"
         Run-QmlTests (Join-Path $Repo "output\shell-shots")
-        Write-Host "    screenshots: $(Join-Path $Repo 'output\shell-shots')"
+        Save-ReviewCopies (Join-Path $Repo "output\shell-shots")
+        Write-Host "    screenshots: $(Join-Path $Repo 'output\shell-shots') (half size for review: review\)"
     }
     "run" {
         Do-Build

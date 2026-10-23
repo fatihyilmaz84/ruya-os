@@ -112,7 +112,7 @@ It prints `pkcheck` verdicts for the six `login1` actions for the `ruya-shell` p
 |---|---|
 | `.\scripts\dev.ps1 check` | Prerequisites present? |
 | `.\scripts\dev.ps1 test` | Text lint (tracked text files are UTF-8 with no stray control characters or tabs); Rust fmt, clippy (Windows + Linux target) and tests; shell build; token lint (no literal durations or colours outside `Theme.qml`); qmllint (zero warnings); Qt Quick tests. **Must be ALL GREEN before any commit.** |
-| `.\scripts\dev.ps1 shots` | Qt Quick tests plus screenshots into `output\shell-shots\` |
+| `.\scripts\dev.ps1 shots` | Qt Quick tests plus screenshots into `output\shell-shots\` (cleared first), and half-size copies in `output\shell-shots\review\` for reviewing at a quarter of the image tokens |
 | `.\scripts\dev.ps1 run` | The shell in a window with mock services |
 | `.\scripts\dev.ps1 rust` / `shell` | Half of `test` |
 | `.\scripts\lint-tokens.ps1` | The token lint alone (also called by `dev.ps1 shell` and by CI). Exit 1 and a list of `file:line` on findings. |

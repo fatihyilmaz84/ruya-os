@@ -6,7 +6,7 @@ RuyaOS is an open-source, immutable (Fedora bootc) console OS for living-room PC
 
 | What | File |
 |---|---|
-| Progress board, blockers, session log | `docs/STATUS.md`. **Read first, update last.** |
+| Progress board, blockers, session log | `docs/STATUS.md`. **Read first, update last.** (Older log entries: `docs/STATUS-log.md`, not needed for a task.) |
 | Roles (owner, Opus lead, Sonnet builder) and the lead procedure | `docs/LEAD.md`; lead handoff in `docs/LEAD-NOTES.md` |
 | Work items with acceptance criteria | `docs/tasks/T-*.md` (format: `docs/tasks/README.md`) |
 | Product, architecture, decisions (ADRs) | `docs/specs/00-overview.md` |
@@ -20,7 +20,7 @@ RuyaOS is an open-source, immutable (Fedora bootc) console OS for living-room PC
    - Asked to run a **lead session**: follow `docs/LEAD.md` (it includes these rules plus review, planning and direction).
    - Asked to run a **planning session**: follow `docs/tasks/PLANNING.md`.
    - Anything else is a **builder session**: the steps below. Builders don't create tasks; they add Inbox lines.
-1. **Orient.** Read `docs/STATUS.md`. Take the task marked **NEXT**, or else the first `todo` whose dependencies are all `done`. **Skip tasks marked `Owner: lead`** (board titles prefixed **[lead]**); those are for lead sessions. **One task per session**, unless the task file says it is small enough to pair.
+1. **Orient.** Read `docs/STATUS.md`. Take the task marked **NEXT**, or else the first `todo` whose dependencies are all `done`. **Skip tasks marked `Owner: lead`** (board titles prefixed **[lead]**); those are for lead sessions. **One task per session**, unless the task file says it is small enough to pair. If the owner asks for the next task in the same session, do it, but say once that a fresh session is cheaper: every turn re-reads the whole conversation, so a second task in one session costs several times the tokens of a new session.
    - **Uncommitted changes you didn't make** (`git status`)? Another session may be running. Stop and tell the user; don't touch them.
    - **Nothing qualifies?** Stop. Tell the user the backlog needs a planning session (`docs/tasks/PLANNING.md`). Don't invent work.
    - **The Inbox has 5 or more items?** Still do your task, but end your reply by recommending a planning session.
@@ -33,7 +33,7 @@ RuyaOS is an open-source, immutable (Fedora bootc) console OS for living-room PC
    - **Contracts are drafts until the first release.** If the task can't be done cleanly within the existing contract (a reply lacks a field you need, say), **extend the contract**. In the same commit, update the XML, the Rust service and its tests, the mock, and the D-Bus client, and explain the change in the Outcome. Don't build workarounds such as extra calls to recover missing data. This applies even if the task says "don't change the contract"; that wording means "no unnecessary changes". Never break existing behaviour that other code relies on.
 5. **Verify.**
    - Run `.\scripts\dev.ps1 test`; it must end with `ALL GREEN`. Its Qt Quick tests run **offscreen**, so they don't depend on the desktop (lock screen, focus, other windows). A red `test` is a real failure.
-   - For any UI change, also run `.\scripts\dev.ps1 shots`. It uses real GPU windows, so open the PNGs in `output\shell-shots\` with the Read tool and check them against the task's acceptance criteria (layout, overlap, focus ring visible, text readable). Fix what you see.
+   - For any UI change, also run `.\scripts\dev.ps1 shots`. It uses real GPU windows. Open the screenshots your task changed from `output\shell-shots\review\` (half size, a quarter of the image tokens) with the Read tool and check them against the task's acceptance criteria (layout, overlap, focus ring visible, text readable); open the full-size PNG only when small text needs a closer look. Fix what you see.
    - **`shots` depends on the desktop.** If it fails while `test` is green, suspect a locked screen or a window that stole focus, and re-run before changing anything. Never edit a test to suit the desktop.
 6. **Document.**
    - Fill in the task file's **Outcome** section: what was built, the files involved, how it was verified, and deviations.
@@ -68,6 +68,7 @@ RuyaOS is an open-source, immutable (Fedora bootc) console OS for living-room PC
 
 ## Working style
 
+- **Read lean.** Everything you read stays in context and is paid for again on every later turn. Read the line ranges you need (`Read` with offset/limit, `grep -n`), don't re-read a file that is already in context, don't `cat` whole directories, filter long command output (`dev.ps1 ... | Select-String`), and read only the screenshots your task changed. The STATUS session log keeps only the latest entries; don't open `docs/STATUS-log.md` to start a task.
 - **Small steps.** Build and run the relevant checks (`dev.ps1 shell` or `dev.ps1 rust`) after each meaningful change, not only at the end.
 - **Copy existing patterns.** `ruya-profiles` (Rust) and `shell/src/profiles` + `PinPad.qml` (shell) are the reference implementations. Read them before writing a new service, backend or modal.
 - **Ambiguity.** When an acceptance criterion can be read two ways, choose the reading closest to the spec and write the choice in the Outcome. Don't ask for routine technical choices.
