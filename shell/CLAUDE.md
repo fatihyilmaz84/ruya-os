@@ -88,12 +88,12 @@ Use `TextEntry` (`qml/TextEntry.qml`, spec 02-shell §4.4) for any text input; n
   .\scripts\lint-translations.ps1
   ```
 
-  `lint-translations.ps1` (also run by `dev.ps1 shell` and CI) fails on any `type="unfinished"` entry. Look for entries `lupdate` marked `vanished`/`obsolete` after a refactor and delete them.
+  `lint-translations.ps1` fails on any `type="unfinished"` entry. In `dev.ps1 shell`/`test` it first refreshes temporary copies from the current sources, so a forgotten refresh or a leftover `vanished`/`obsolete` entry fails too (delete those); CI's `lint` job checks the committed files only.
 - **Bindings re-translate; stored values don't.** `retranslate()` re-evaluates bindings that call `qsTr`. A message written into a property at event time (`message = qsTr(...)`, `ProfileStatus.describe(...)` results kept in `Setup`, `ProfilesPane`, `PinPad`; toast text in `Notifications`) keeps its language until the next event. That is accepted for transient messages; for anything long-lived derive the text in a binding.
 - **A model must not change with the language.** Assigning a new array to a `ListView`/`Repeater` model resets `currentIndex` (and so focus). Models hold keys only (`Shell.tiles`, `SettingsPage.categories`); the visible text is a binding in the delegate (`Shell.tileTitle`, `SettingsPage.labelFor`). Add new translated lists the same way.
 - **Do not translate** the brand "RuyaOS" and the language names ("English", "Türkçe", each shown in its own language).
 - **Add a language:** add `i18n/ruyashell_<code>.ts` to `qt_add_translations` in `CMakeLists.txt`; add the code to `DeviceSettings::isValidLanguage`; add an option to the language `ChoiceRow`s (`SystemPane.qml`, `Setup.qml`); add a `letterSets` entry in `TextEntry.qml` if its letters differ from a-z.
-- **RTL check:** `ruya-shell --reverse` lays the UI out right-to-left (`Main.qml` sets `LayoutMirroring` from `Application.layoutDirection`). Left/Right then mean the visual direction on horizontal lists.
+- **RTL check:** `ruya-shell --reverse` lays the UI out right-to-left (`Main.qml` sets `LayoutMirroring` from `Application.layoutDirection`). Left/Right then mean the visual direction on horizontal lists. It is a readiness check only: before an RTL language ships, review RTL screenshots of every screen (the PIN pad's digit grid must stay left to right; the toast layer, sliders and `ProfileCard` badges were never examined).
 
 ## Tests (required for every behaviour you add)
 

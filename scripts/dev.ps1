@@ -129,8 +129,8 @@ function Test-Tokens {
 
 # The rules live in scripts\lint-translations.ps1 (shared with CI).
 function Test-Translations {
-    Step "translation lint (no unfinished entries in shell\i18n)"
-    & (Join-Path $PSScriptRoot "lint-translations.ps1")
+    Step "translation lint (shell\i18n is current with the sources and complete)"
+    & (Join-Path $PSScriptRoot "lint-translations.ps1") -LUpdateProject (Join-Path $ShellBuild ".lupdate\ruya-shell_lupdate_project.json")
     Record "translation lint" ($LASTEXITCODE -eq 0)
 }
 
