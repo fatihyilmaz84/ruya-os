@@ -101,6 +101,8 @@ A session can't know its own commit hash before committing, so new rows put the 
 
 Each entry: date · model · tasks · what happened · verification · follow-ups. Keep entries short and factual.
 
+- 2026-10-24 · Opus 5.5 · Lead (disk space, owner report) · Every image build left the previous image untagged (WSL: 163 images, 70 GB reclaimable, `ext4.vhdx` 88 GB on C:) and every task made its own `tNNN.qcow2` (21 GB on D:). `build.sh` now removes untagged images its build did not use (one run: 29 removed, WSL use 78 → 30 GB, cache kept); `smoke-test.ps1 -Work` gives one shared persistent `work.qcow2` and warns about other copies; `dev-setup.md` and `image/CLAUDE.md` say so. Also fixed: `smoke-test.ps1` could report the previous run's `RUYA_BOOT_OK` when the old QEMU still held `serial.log` (seen once with `-TimeoutSec 5`). Verified: `-Work` fresh and reuse boots `RUYA_BOOT_OK`, 5 s timeout now fails. The `.vhdx` does not shrink by itself (owner step in `dev-setup.md`).
+
 ### 2026-10-24 · Opus 5.5 · Lead
 Lead review of `1e5ae5e..4b811c6` (T-123 lead, T-118, T-127, T-128), and planning.
 

@@ -3,7 +3,7 @@
 **Build and boot-test every change here** (setup and commands in `docs/dev-setup.md`):
 
 1. In WSL (`wsl -d FedoraLinux-44 -u root`, repo at `/mnt/d/dev/RuyaOS`): `scripts/build.sh <version>`. It must pass `bootc container lint --fatal-warnings`. Then `scripts/make-disk.sh qcow2`.
-2. On Windows: `.\scripts\smoke-test.ps1`. It must print `RUYA_BOOT_OK <version>`. For anything touching updates, boot health or greenboot, also run the update/rollback drill from `dev-setup.md`.
+2. On Windows: `.\scripts\smoke-test.ps1`. It must print `RUYA_BOOT_OK <version>`. When the VM must keep state across boots, use `-Work` (one shared `work.qcow2`); **never copy the disk per task** (`dev-setup.md` "Disk space"). For anything touching updates, boot health or greenboot, also run the update/rollback drill from `dev-setup.md`.
 3. To debug a VM:
    - run `smoke-test.ps1 -Keep`, then `ssh -i $env:USERPROFILE\.ssh\ruyaos_dev -p 2222 root@127.0.0.1`;
    - `output\serial.log` holds the full boot console;

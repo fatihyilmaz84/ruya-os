@@ -34,11 +34,19 @@ ssh -i $env:USERPROFILE\.ssh\ruyaos_dev -p 2222 root@127.0.0.1   # use 127.0.0.1
 .\scripts\run-vm.ps1                    # with a window, to look at the shell (software rendering)
 ```
 
+### Disk space: one working VM disk, no stale images
+
+Image builds and VM disks are big (an image is ~4.7 GB, a qcow2 ~2.6 GB), and the WSL disk file lives on **C:** (`%LOCALAPPDATA%\wsl\{…}\ext4.vhdx`). Before 2026-10-24 every build left the previous image behind (70 GB of untagged images after two days) and every task made its own `tNNN.qcow2` copy. Now:
+- `scripts/build.sh` removes, after a successful build, the untagged images that build did not use (it keeps the layers it used, so the cache still works). `RUYA_KEEP_IMAGES=1` skips it.
+- **Use `smoke-test.ps1 -Work`** whenever the VM must keep state across boots (profiles, drives, the drill). It boots `output\qcow2\work.qcow2`, made fresh from `disk.qcow2` after every `make-disk.sh` and reused otherwise; delete it to start over. Never make a per-task copy. `smoke-test.ps1` warns about any other `.qcow2` in `output\qcow2`.
+- Plain `smoke-test.ps1` (no `-Work`) boots `disk.qcow2` on a snapshot and writes nothing.
+- The `.vhdx` does not shrink by itself when files inside WSL are deleted. One-time owner step: `wsl --manage FedoraLinux-44 --set-sparse true` after `wsl --shutdown`, so freed space goes back to C:.
+
 In the VM, the shell's own log is `journalctl -b _UID=$(id -u ruya-shell)`. pam_systemd moves the compositor into `session-N.scope`, so `journalctl -u ruya-compositor@tty1` shows only the unit's start.
 
 ## Update / rollback drill (Phase 0 items 6–7; passed 2026-10-22)
 
-1. Put a persistent copy of the disk in place: `Copy-Item output\qcow2\disk.qcow2 output\qcow2\drill.qcow2`. Boot it with `.\scripts\smoke-test.ps1 -Disk output\qcow2\drill.qcow2 -Persistent -Keep`.
+1. Boot the working disk: `.\scripts\smoke-test.ps1 -Work -Keep` (delete `output\qcow2\work.qcow2` first for a fresh one). `vm-reboot-check.ps1` needs `-Disk output\qcow2\work.qcow2` then.
 2. **Registry**, in WSL:
    ```bash
    podman run -d --name registry --network host docker.io/library/registry:2
@@ -54,6 +62,7 @@ In the VM, the shell's own log is `journalctl -b _UID=$(id -u ruya-shell)`. pam_
 3. **Update:** in the VM, `bootc switch <wsl-ip>:5000/ruyaos:<ver>` (about 2 minutes). Then `.\scripts\vm-reboot-check.ps1`, which reboots, waits for the shell, and prints the deployments and greenboot's verdict.
 4. **Manual rollback:** `bootc rollback`, then `.\scripts\vm-reboot-check.ps1`.
 5. **Automatic rollback (greenboot):** build an image whose compositor is `ExecStart=/bin/false`, `bootc switch` to it, and reboot. Every boot fails the shell health check and greenboot reboots; after 3 failed boots GRUB falls back to the previous deployment. Results are in `docs/STATUS.md`, session log 2026-10-22.
+6. **Clean up** in WSL: `podman rm -f registry; podman rmi localhost:5000/ruyaos:<ver>` for every tag you pushed (each pins a ~4.7 GB image that `build.sh` never removes, because it is tagged).
 
 ## Seeing and driving the VM (T-120)
 
@@ -69,8 +78,7 @@ In the VM, the shell's own log is `journalctl -b _UID=$(id -u ruya-shell)`. pam_
 Typical session (a persistent copy, so profiles survive reboots; `Enter` on a PIN pad is `kp_enter`, since `ret` presses the focused key):
 
 ```powershell
-Copy-Item output\qcow2\disk.qcow2 output\qcow2\t120.qcow2
-.\scripts\smoke-test.ps1 -Disk output\qcow2\t120.qcow2 -Persistent -Keep
+.\scripts\smoke-test.ps1 -Work -Keep
 .\scripts\vm-screenshot.ps1 wizard-welcome
 .\scripts\vm-keys.ps1 ret -DelayMs 1500
 scp -i $env:USERPROFILE\.ssh\ruyaos_dev -P 2222 scripts\vm-*.sh scripts\vm-inject-key.py root@127.0.0.1:/root/
@@ -84,7 +92,7 @@ ssh -i $env:USERPROFILE\.ssh\ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-pro
 `smoke-test.ps1 -Audio` adds an Intel HDA sound card. `-AudioBackend dsound` (default) plays on the host's default output; `-AudioBackend wav` records everything the guest plays to `output\vm-audio.wav` (written as the VM runs, complete after it powers off), so a check needs no ears:
 
 ```powershell
-.\scripts\smoke-test.ps1 -Disk output\qcow2\t121.qcow2 -Persistent -Keep -Audio -AudioBackend wav
+.\scripts\smoke-test.ps1 -Work -Keep -Audio -AudioBackend wav
 .\scripts\vm-keys.ps1 ret -DelayMs 2000; .\scripts\vm-keys.ps1 right left esc ret -DelayMs 1500
 ssh -i $env:USERPROFILE\.ssh\ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-audio-check.sh   # copy it with scp first
 ssh -i $env:USERPROFILE\.ssh\ruyaos_dev -p 2222 root@127.0.0.1 systemctl poweroff
