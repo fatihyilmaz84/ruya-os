@@ -31,6 +31,8 @@ $qemuArgs = @(
     "-device", "qemu-xhci", "-device", "usb-kbd",
     "-nic", "user,model=virtio-net-pci,hostfwd=tcp::2222-:22",
     "-serial", "file:$serial",
+    # Human monitor on a local port: vm-screenshot.ps1 and vm-keys.ps1 use it (never a public address).
+    "-monitor", "tcp:127.0.0.1:4444,server,nowait",
     # QEMU on WHPX hangs on guest reset (0% CPU after "reboot: Restarting system"), so a guest
     # reboot makes QEMU exit instead; vm-reboot-check.ps1 relaunches it on the same disk.
     "-no-reboot"

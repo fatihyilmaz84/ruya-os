@@ -19,4 +19,5 @@ if (-not (Test-Path $Disk)) { throw "Disk image not found: $Disk (build it with 
     -device qemu-xhci -device usb-tablet -device usb-kbd `
     -audiodev dsound,id=snd0 -device intel-hda -device hda-output,audiodev=snd0 `
     -nic user,model=virtio-net-pci,hostfwd=tcp::2222-:22 `
-    -serial file:output\serial.log
+    -serial file:output\serial.log `
+    -monitor tcp:127.0.0.1:4444,server,nowait

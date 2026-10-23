@@ -7,21 +7,20 @@ Last updated: 2026-10-23 (Sonnet 5.5, T-107)
 ## Where we are
 
 - **Phase 0 (foundation):** **verified in a VM on 2026-10-22.** The image builds, passes lint, boots to the shell, updates, and rolls back both manually and automatically (greenboot). Only the real-hardware item is left (B-002).
-- **Phase 1–2 (shell core, profiles):** in progress on the Windows host against mock services. Done: pages, motion, toasts/OSD, settings, on-screen keyboard, profile management, first-boot wizard, token lint. The repo is public on GitHub; on its first push the `services` and `shell` CI jobs (Fedora's Qt, Linux) passed, the `image` job's result was not yet known (T-122 reads it). Next: CI, power actions, and verifying Profiles over the real bus in the VM (T-120).
+- **Phase 1–2 (shell core, profiles):** in progress on the Windows host against mock services. Done: pages, motion, toasts/OSD, settings, on-screen keyboard, profile management, first-boot wizard, token lint. The repo is public on GitHub; on its first push the `services` and `shell` CI jobs (Fedora's Qt, Linux) passed, the `image` job's result was not yet known (T-122 reads it). Profiles, the wizard and Settings → Profiles are **vm-verified** over the real bus (T-120), and power actions (T-107) work in the VM. Next: audio in the VM (T-121), then the audio contract, translations and the Store/Games pages.
 - **Host:** Windows, plus a Fedora 44 WSL distribution for image builds and QEMU/WHPX for boot tests (`docs/dev-setup.md`). Work that needs a GPU, controllers or audio still waits in the Blocked table.
 
 Verification legend: **host** = built and tested on the Windows host · **vm** = built into the image and verified booted in QEMU · **unverified** = written, but not run · **hw** = verified on real hardware.
 
 ## Board
 
-**NEXT → T-120** (T-122 is committed and waits for the owner's push to confirm the new CI run is green; a builder or lead closes it after reading that run)
+**NEXT → T-121**
 
 **Lead review due:** after 3 more builder tasks, or now. The range `9ca4b25..HEAD` is unreviewed (see `docs/LEAD-NOTES.md`). Builders: when your task makes this condition true, end your reply by recommending a lead session.
 
 | ID | Title | Status | Depends | Verified |
 |---|---|---|---|---|
 | [T-122](tasks/T-122-ci-refresh.md) | CI on GitHub: read the first results, make it green, same gates as `dev.ps1 test` (token lint) | in-progress (awaiting push) | — | local: host (`dev.ps1 test` green, lint probe failed as expected) · new workflow on GitHub: **unverified** |
-| [T-120](tasks/T-120-vm-profiles-and-oobe.md) | Verify Profiles and the first-boot wizard in the VM over the real bus (VM screenshot/keys scripts); closes B-005 | todo | — | |
 | [T-121](tasks/T-121-vm-audio.md) | Audio in the VM: sound device, PipeWire for the shell session, UI cues load | todo | T-120 | |
 | [T-114](tasks/T-114-audio-contract-and-settings.md) | Audio contract and Settings → Audio | todo | T-103, T-108 | |
 | [T-109](tasks/T-109-translations.md) | Translations en/tr, live switching, Turkish keyboard layout | todo | T-103, T-106 | |
@@ -38,7 +37,9 @@ The order above is the recommended order. When the NEXT task is blocked, take th
 
 Follow-ups, debt and ideas waiting for a planner session. Builders: add one line per item, `- (source) what, and why it matters`. Don't write task files for these unless your own task needs one. A planner session turns them into tasks, drops them with a reason, or escalates them. **Run a planner when this list has 5+ items.**
 
-- (T-107) T-120 should drive Power → Power off from the shell with its key scripts (QEMU exits), to verify the shell → `DBusPowerBackend` → logind hop that T-107 could only check with `busctl` as `ruya-shell`.
+- (T-120) Keyboard Guide: spec 02 §4.2 says `Super`/`Home`, but the shell handles only `Key_HomePage` and `Key_Menu`; in the VM `sendkey menu` did not open the overlay (cause not investigated, `home` not tried). A keyboard-only user may be unable to open the overlay; decide whether the shell or `ruya-inputd` maps keyboard keys, and test it with `vm-inject-key.py`.
+- (T-120) PIN pad while locked out: digits are accepted and OK silently does nothing until the countdown ends, with no disabled look; reads as "wrong PIN". Small UX fix in `PinPad.qml`.
+- (T-120) `ruya-profiles.service` exposure is 6.0 MEDIUM (`systemd-analyze security`): it runs as root with all capabilities and no syscall filter. Add a `CapabilityBoundingSet` for what `useradd` needs, `SystemCallFilter=@system-service`, `UMask=0077`, `ProtectProc=invisible`, and re-run the Profiles VM check (`scripts/vm-profiles-check.sh`).
 
 ### Done
 
@@ -58,12 +59,13 @@ A session can't know its own commit hash before committing, so new rows put the 
 | T-108 | Toasts (`Notifications`, `ToastLayer`), volume OSD, mock `Audio` singleton, volume keys | host (`dev.ps1 test` green, new `tst_system_ui.qml` + screenshot reviewed) | T-108 |
 | T-103 | Settings page (two panes), reusable controls, Display & motion and About panes, `SystemInfo` | host (`dev.ps1 test` green, new `tst_settings.qml` + 2 screenshots reviewed) | T-103 |
 | T-104 | On-screen keyboard (`TextEntry`: D-pad typing, shift, symbols, email/url layouts, mask, max length) | host (`dev.ps1 test` green, new `tst_textentry.qml` + screenshot reviewed) | T-104 |
-| T-105 | Settings → Profiles: add profile, change/remove PIN; mock mirrors `service.rs`; PinPad collect modes | mock path: host (`dev.ps1 test` green, new `tst_profile_admin.qml` + screenshot reviewed) · D-Bus `CreateProfile`/`SetPin` + attempts probe: **unverified** | T-105 |
-| T-115 | Profiles1: `CreateProfile`/`SetPin` replies carry `attempts_left` and `retry_after_secs`; `SwitchTo` probe removed | service + adapter types: host (`dev.ps1 rust` green, 2 new tests) · shell mock path: host (`dev.ps1 test` green) · D-Bus reply parsing: **unverified** | T-115 |
-| T-106 | First-boot setup wizard (`Setup.qml`: welcome, language, network placeholder, create admin, done); `DeviceSettings.language`; `RUYA_MOCK_PROFILES=empty`; shared `ProfileStatus` messages | mock path: host (`dev.ps1 test` green, new `tst_setup.qml` with 8 tests + 2 screenshots reviewed) · real `ruya-profiles` over D-Bus: **unverified** | T-106 |
+| T-105 | Settings → Profiles: add profile, change/remove PIN; mock mirrors `service.rs`; PinPad collect modes | mock path: host (`dev.ps1 test` green, new `tst_profile_admin.qml` + screenshot reviewed) · D-Bus `CreateProfile`/`SetPin`: **vm** (T-120; the attempts probe was replaced in T-115) | T-105 |
+| T-115 | Profiles1: `CreateProfile`/`SetPin` replies carry `attempts_left` and `retry_after_secs`; `SwitchTo` probe removed | service + adapter types: host (`dev.ps1 rust` green, 2 new tests) · shell mock path: host (`dev.ps1 test` green) · D-Bus reply parsing: **vm** (T-120: attempts left and retry time shown from `SwitchTo` and `CreateProfile` replies) | T-115 |
+| T-106 | First-boot setup wizard (`Setup.qml`: welcome, language, network placeholder, create admin, done); `DeviceSettings.language`; `RUYA_MOCK_PROFILES=empty`; shared `ProfileStatus` messages | mock path: host (`dev.ps1 test` green, new `tst_setup.qml` with 8 tests + 2 screenshots reviewed) · real `ruya-profiles` over D-Bus: **vm** (T-120: wizard by keys creates the admin, profile and Unix user checked) | T-106 |
+| T-120 | Profiles, wizard, lockout and Settings → Profiles verified in the VM over the real system bus; VM screenshot/keys scripts (QEMU monitor, guest-side uinput Guide key); closes B-005 | **vm** (39 screenshots, D-Bus and on-disk state pasted in the task Outcome); no shell, service or image change needed | T-120 |
 | T-117 | Reduced motion honoured by the PIN-pad shake and tile pulse; literal durations/colours moved into `Theme` tokens; token lint in `dev.ps1 shell` | host (`dev.ps1 test` green, new test fails without the guard, lint failure demonstrated; 3 screenshots reviewed by eye) | T-117 |
 | T-116 | First build after adding or removing a C++ QML type is green (stale `qmltyperegistrar` under the Visual Studio generator; build step `InvalidateStaleQmlTypes.cmake`) | host (`dev.ps1 test` green; 3 add/remove probe cycles via `scripts\repro-first-build.ps1`, all green on the first run) · Linux/Ninja: not run | T-116 |
-| T-107 | Power actions: `Power` singleton (mock + logind D-Bus), Power page, `PowerConfirm`, Guide overlay power choices, Guide long-press; polkit rule for `ruya-shell`; `image/rootfs` installed with safe modes | mock path: host (`dev.ps1 test` green, new `tst_power.qml`, 2 screenshots reviewed) · polkit rule, logind `Can*` and `PowerOff` as `ruya-shell`, refusal for another user, `RUYA_BOOT_OK`: **vm** (`scripts/vm-power-check.sh`) · the running shell's D-Bus call to logind: **unverified** | T-107 |
+| T-107 | Power actions: `Power` singleton (mock + logind D-Bus), Power page, `PowerConfirm`, Guide overlay power choices, Guide long-press; polkit rule for `ruya-shell`; `image/rootfs` installed with safe modes | mock path: host (`dev.ps1 test` green, new `tst_power.qml`, 2 screenshots reviewed) · polkit rule, logind `Can*` and `PowerOff` as `ruya-shell`, refusal for another user, `RUYA_BOOT_OK`: **vm** (`scripts/vm-power-check.sh`) · the running shell's Power off through logind, and the Guide long press: **vm** (T-120 session) · a real suspend/wake: **unverified** | T-107 |
 
 ## Blocked (need something this host doesn't have)
 
@@ -73,7 +75,7 @@ A session can't know its own commit hash before committing, so new rows put the 
 | B-002 | Install on a real low-tier machine; first frame-time numbers (§8 item 8) | Hardware | A dev installer ISO now exists (`output/bootiso/`, contains the dev SSH key; for test machines only). Also decide there: a failed boot takes about 100 s (90 s greenboot check + 120 s VM marker), so automatic rollback takes about 7 minutes; consider a shorter required-check timeout once real boot times are known (spec 02 §8 KPI: shell < 15 s on the low tier). |
 | B-003 | Compositor spike: shell as QtWaylandCompositor, overlay over a running game (ADR-002) | Linux with a GPU | Decides the product architecture; do it as soon as Linux is available. Also check there: the volume-key `Shortcut`s (T-108) work with an app focused. |
 | B-004 | `ruya-store` Rust service over libflatpak/AppStream | Linux | Contract from T-110 |
-| B-005 | Shell ↔ services over a real D-Bus (Profiles first) | **Unblocked:** the VM runs the real shell, `ruya-profiles` and the system bus | Planned as **T-120** (Profiles, OOBE, lockout, Settings → Profiles in the VM, with VM screenshot/keys scripts). Other services follow the same way once they exist. |
+| ~~B-005~~ | **Done 2026-10-23 (vm).** Profiles, the first-boot wizard, lockout and Settings → Profiles work against the real `ruya-profiles` over the system bus (T-120) | — | Other services follow the same way once they exist; the VM drive scripts are in `docs/dev-setup.md` ("Seeing and driving the VM"). |
 | B-006 | Replace the `ruya-inputd` stopgap with InputPlumber (ADR-003), with grab/re-emit | Linux + controllers | Also owns the key-repeat model (400 ms delay then accelerating repeat, stick repeat speed) and Accept long-press / context menu from spec 02 §4.3; the shell only sees key events. |
 | B-007 | `ruya-devices` service (PipeWire, NetworkManager, BlueZ) | Linux | Audio contract from T-114 |
 | ~~B-008~~ | **Done 2026-10-22 (vm).** greenboot (0.16, Rust) works on bootc once its units are enabled: 4 failed boots of a broken image, then GRUB fell back. The NVIDIA 615.78 kmod builds and is signed in the image; the private key is removed | — | Loading on real NVIDIA hardware and Secure Boot/MOK are still unverified (needs hardware) |
@@ -88,6 +90,17 @@ A session can't know its own commit hash before committing, so new rows put the 
 ## Session log (newest first)
 
 Each entry: date · model · tasks · what happened · verification · follow-ups. Keep entries short and factual.
+
+### 2026-10-23 · Sonnet 5.5 · T-120
+Profiles and the wizard in the VM, over the real bus:
+- New scripts: QEMU monitor port on `smoke-test.ps1`/`run-vm.ps1`; `vm-screenshot.ps1`, `vm-keys.ps1`, `vm-lib.ps1`; guest-side `vm-inject-key.py` (uinput `KEY_HOMEPAGE`, with hold) and `vm-profiles-check.sh`.
+- Driven by keys in the T-107 image on a persistent disk: wizard (name via the physical keyboard path, PIN twice) → admin created (D-Bus listing, `profiles.toml` 0600 with a hash only, Unix user and home) → reboot → picker → wrong PINs (attempts left) → lockout (retry time) → sign-in → Settings → Profiles: add profile (with a wrong admin PIN first: attempts left from `CreateProfile`), change PIN, remove PIN, each confirmed over D-Bus.
+- Also verified the T-107 hops that were open: a 3.2 s Guide hold opens the power choices, and Power off → Confirm made QEMU exit.
+- Nothing needed fixing. Findings in the Inbox: keyboard Guide mapping, PIN pad feedback while locked, `ruya-profiles` exposure 6.0 MEDIUM.
+
+Verification: **vm** (screenshots reviewed; no code changed, so no new host test). B-005 closed; T-105/T-106/T-115 D-Bus notes now **vm**.
+
+Follow-ups: three Inbox lines. NEXT is T-121 (audio in the VM). The lead review is due.
 
 ### 2026-10-23 · Sonnet 5.5 · T-107
 Power actions:

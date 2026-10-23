@@ -55,6 +55,30 @@ In the VM, the shell's own log is `journalctl -b _UID=$(id -u ruya-shell)`. pam_
 4. **Manual rollback:** `bootc rollback`, then `.\scripts\vm-reboot-check.ps1`.
 5. **Automatic rollback (greenboot):** build an image whose compositor is `ExecStart=/bin/false`, `bootc switch` to it, and reboot. Every boot fails the shell health check and greenboot reboots; after 3 failed boots GRUB falls back to the previous deployment. Results are in `docs/STATUS.md`, session log 2026-10-22.
 
+## Seeing and driving the VM (T-120)
+
+`smoke-test.ps1` and `run-vm.ps1` open QEMU's human monitor on `127.0.0.1:4444` (local only), and three scripts use it or the guest:
+
+| Script | Does |
+|---|---|
+| `.\scripts\vm-screenshot.ps1 <name>` | `screendump` through the monitor, converted to `output\vm-shots\<name>.png` (System.Drawing only). |
+| `.\scripts\vm-keys.ps1 right right ret` / `-Text Owner` / `-Text 2468 kp_enter` | `sendkey` per key; the guest sees a USB keyboard, so the shell gets the keys a controller produces. Digits and letters via `-Text` (capitals use shift). `-DelayMs` (default 250) is the pause per key; use 1500-3000 before steps that animate or open a modal. |
+| `scripts/vm-inject-key.py guide [--hold 3]` (run in the guest) | Presses a key a USB keyboard cannot send: `guide` is `KEY_HOMEPAGE`, what `ruya-inputd` emits for the controller's Guide button; also `menu`, `home`, `meta`. Creates a throw-away uinput device, so cage and the shell see a real key event, held keys auto-repeat. |
+| `scripts/vm-profiles-check.sh [state\|introspect\|security]` (run in the guest) | What `ruya-profiles` lists over the system bus, `profiles.toml` (mode, hashes cut off), the `ruya-p*` Unix users and homes. |
+
+Typical session (a persistent copy, so profiles survive reboots; `Enter` on a PIN pad is `kp_enter`, since `ret` presses the focused key):
+
+```powershell
+Copy-Item output\qcow2\disk.qcow2 output\qcow2\t120.qcow2
+.\scripts\smoke-test.ps1 -Disk output\qcow2\t120.qcow2 -Persistent -Keep
+.\scripts\vm-screenshot.ps1 wizard-welcome
+.\scripts\vm-keys.ps1 ret -DelayMs 1500
+scp -i $env:USERPROFILE\.ssh\ruyaos_dev -P 2222 scripts\vm-*.sh scripts\vm-inject-key.py root@127.0.0.1:/root/
+ssh -i $env:USERPROFILE\.ssh\ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-profiles-check.sh state
+```
+
+**Pitfalls.** The shell is software-rendered and CPU-bound in the VM (about 94 % of a core), so the screen can lag the keys by several seconds and the shell's own timers run slowly (the PIN lock countdown, for instance). Wait before a screenshot and before judging "nothing happened"; take a second screenshot first. PowerShell 5.1 binds extra arguments to later positional parameters: `vm-keys.ps1` sets `PositionalBinding = $false` for that reason. `sendkey menu` and `home` did not open the Guide overlay (see STATUS Inbox); use `vm-inject-key.py guide`.
+
 ## Power-policy check (T-107)
 
 After any change to the polkit rule or to how `image/rootfs` is installed, boot the disk (`.\scripts\smoke-test.ps1 -Keep`) and run, from the repo root:
