@@ -55,7 +55,7 @@ The build excludes any desktop environment, display manager, `kdeconnect` and `p
 
 ## 3. Security baseline
 1. SELinux enforcing. We write custom policy modules for our services when needed.
-2. Rust services run with systemd hardening (`ProtectSystem=strict`, `NoNewPrivileges`, `DynamicUser` where possible).
+2. Rust services run with systemd hardening (`ProtectSystem=strict`, `NoNewPrivileges`, `DynamicUser` where possible). A service that must run as root gets a `CapabilityBoundingSet` limited to what it needs, `SystemCallFilter=@system-service` and `UMask=0077`; `ruya-profiles` (root for `useradd`) scores 1.6 OK in `systemd-analyze security` (T-126).
 3. Third-party code runs only in Flatpak sandboxes, as the profile's user, never as root.
 4. **Full-disk encryption (Phase 6):** LUKS2 with TPM2 auto-unlock (`systemd-cryptenroll --tpm2-pcrs=7`) as an installer option that's on by default when a TPM2 is present. Without it, profile PINs only protect against casual access.
 5. Image signature enforcement via `/etc/containers/policy.json` (`sigstoreSigned` for our registry).

@@ -15,15 +15,31 @@ ProtectSystem=strict
 ProtectHome=read-only
 PrivateTmp=yes
 PrivateNetwork=yes
+PrivateDevices=yes
+PrivateIPC=yes
 NoNewPrivileges=yes
+# Root only for useradd: write /etc/passwd, /etc/shadow (mode 0000), create and chown the home
+# and copy /etc/skel. Nothing else (T-126; checked with scripts/vm-profiles-check.sh create).
+CapabilityBoundingSet=CAP_CHOWN CAP_DAC_OVERRIDE CAP_DAC_READ_SEARCH CAP_FOWNER CAP_FSETID
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+SystemCallArchitectures=native
+# useradd sets the modes of what it writes explicitly; the store is written 0600 anyway.
+UMask=0077
+ProtectProc=invisible
+ProcSubset=pid
+ProtectClock=yes
+ProtectHostname=yes
+ProtectKernelLogs=yes
 ProtectKernelTunables=yes
 ProtectKernelModules=yes
 ProtectControlGroups=yes
 RestrictAddressFamilies=AF_UNIX
 RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
 LockPersonality=yes
 MemoryDenyWriteExecute=yes
-SystemCallArchitectures=native
 
 [Install]
 WantedBy=multi-user.target
