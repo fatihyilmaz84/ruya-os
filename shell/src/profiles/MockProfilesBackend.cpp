@@ -241,3 +241,57 @@ void MockProfilesBackend::setPin(const QString &id, const QString &oldPin, const
     e->info.hasPin = !newPin.isEmpty();
     reply(QStringLiteral("ok"));
 }
+
+void MockProfilesBackend::renameProfile(const QString &actorId, const QString &actorPin, const QString &id,
+                                        const QString &name)
+{
+    auto reply = [this, id](const QString &status, int attemptsLeft = 0, int retryAfterSecs = 0) {
+        QTimer::singleShot(0, this, [this, id, status, attemptsLeft, retryAfterSecs] {
+            if (status == QLatin1String("ok"))
+                publishList();
+            emit renameFinished(id, status, attemptsLeft, retryAfterSecs);
+        });
+    };
+
+    Entry *target = find(id);
+    if (!target)
+        return reply(QStringLiteral("unknown-profile"));
+    const QString trimmed = name.trimmed();
+    if (!isValidName(trimmed))
+        return reply(QStringLiteral("invalid"));
+    const Entry *actor = find(actorId);
+    if (!actor || (actor->info.role != QLatin1String("admin") && actorId != id))
+        return reply(QStringLiteral("not-allowed"));
+    const Outcome auth = authenticate(actorId, actorPin);
+    if (auth.status != QLatin1String("ok"))
+        return reply(auth.status, auth.attemptsLeft, auth.retryAfterSecs);
+    target->info.name = trimmed;
+    reply(QStringLiteral("ok"));
+}
+
+void MockProfilesBackend::deleteProfile(const QString &adminId, const QString &adminPin, const QString &id)
+{
+    auto reply = [this, id](const QString &status, int attemptsLeft = 0, int retryAfterSecs = 0) {
+        QTimer::singleShot(0, this, [this, id, status, attemptsLeft, retryAfterSecs] {
+            if (status == QLatin1String("ok"))
+                publishList();
+            emit deleteFinished(id, status, attemptsLeft, retryAfterSecs);
+        });
+    };
+
+    const Entry *target = find(id);
+    if (!target)
+        return reply(QStringLiteral("unknown-profile"));
+    const Entry *admin = find(adminId);
+    if (!admin || admin->info.role != QLatin1String("admin"))
+        return reply(QStringLiteral("not-allowed"));
+    const Outcome auth = authenticate(adminId, adminPin);
+    if (auth.status != QLatin1String("ok"))
+        return reply(auth.status, auth.attemptsLeft, auth.retryAfterSecs);
+    const auto admins = std::count_if(m_entries.cbegin(), m_entries.cend(),
+                                      [](const Entry &e) { return e.info.role == QLatin1String("admin"); });
+    if (m_active == id || (target->info.role == QLatin1String("admin") && admins <= 1))
+        return reply(QStringLiteral("not-allowed"));
+    m_entries.removeIf([&](const Entry &e) { return e.info.id == id; });
+    reply(QStringLiteral("ok"));
+}

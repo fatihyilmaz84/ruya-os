@@ -2,7 +2,7 @@
 
 **Read this first in every session; update it last.** The rules are in the root `CLAUDE.md`, the roles (Opus lead, Sonnet builders) in `docs/LEAD.md`, the task format in `docs/tasks/README.md`.
 
-Last updated: 2026-10-23 (Opus 5.5, lead, T-123)
+Last updated: 2026-10-23 (Sonnet 5.5, T-118)
 
 ## Where we are
 
@@ -14,14 +14,13 @@ Verification legend: **host** = built and tested on the Windows host · **vm** =
 
 ## Board
 
-**NEXT → T-118**
+**NEXT → T-127**
 
-**Lead review due: after 4 more builder tasks** (reviewed up to the lead commit of 2026-10-23 "lead review beafbc6..da2d1be", see `docs/LEAD-NOTES.md`). Builders: when your task makes this condition true, end your reply by recommending a lead session.
+**Lead review due: after 3 more builder tasks** (reviewed up to the lead commit of 2026-10-23 "lead review beafbc6..da2d1be", see `docs/LEAD-NOTES.md`). Builders: when your task makes this condition true, end your reply by recommending a lead session.
 
 | ID | Title | Status | Depends | Verified |
 |---|---|---|---|---|
 | [T-130](tasks/T-130-compositor-session.md) | **[lead]** Compositor session: `ruya-shell` replaces cage (ADR-002 A), app layer and key routing | todo | T-123 | |
-| [T-118](tasks/T-118-profile-rename-delete.md) | Profiles1: RenameProfile and DeleteProfile (contract, service, mock; no UI) | todo | T-115, T-126 | |
 | [T-127](tasks/T-127-shots-window-focus.md) | `dev.ps1 shots`: focus failures caused by the desktop say so, and recover | todo | — | |
 | [T-128](tasks/T-128-devices-audio-service.md) | `ruya-devices`: audio part of `Devices1` over PipeWire, in the VM (ADR-010) | todo | T-114, T-121 | |
 | [T-119](tasks/T-119-nested-pages.md) | Page host: nested pages that keep their state | todo | T-101 | |
@@ -70,6 +69,7 @@ A session can't know its own commit hash before committing, so new rows put the 
 | T-109 | Translations: `qt_add_translations` (en, tr), live switching through `DeviceSettings.language`, Settings -> System language row, Turkish on-screen keyboard, `--reverse` RTL check, translation lint | host (`dev.ps1 test` and `shots` green, `tst_i18n.qml` + `test_turkish_layout`, 3 screenshots reviewed) · **vm** (image `0.0.7-t109`: `RUYA_BOOT_OK`) · language switching in the VM: unverified | T-109 |
 | T-126 | `ruya-profiles.service` hardened: minimal `CapabilityBoundingSet`, `SystemCallFilter=@system-service`, `UMask=0077`, `ProtectProc=invisible` and more; `vm-profiles-check.sh create` | **vm** (image `0.0.6-lead2`, fresh disk: `RUYA_BOOT_OK`, both profiles created over the bus, account file modes intact, exposure 6.0 → 1.6) · `userdel`: not exercised yet (T-118) | T-126 |
 | T-123 | Compositor spike (ADR-002 A): `shell/spike/Compositor.qml` (shell as QtWaylandCompositor, Guide overlay over a client, key routing), `ruya-shell --load`, `ruya-compositor-spike@.service` (not enabled), `scripts/vm-compositor-spike.sh`, `.containerignore` | **vm** (image `0.0.8-t123`: `RUYA_BOOT_OK` with cage; spike: client fullscreen, overlay over it, keys to client / overlay / client again, client exit, back to cage; screenshots and log in the Outcome) · performance, real GPUs, Flatpak apps: **unverified** | T-123 |
+| T-118 | Profiles1: `RenameProfile` and `DeleteProfile` (contract, service rules, `Accounts::remove` with `userdel --remove`, mock, shell backend and facade; no UI) | service + mock: host (`dev.ps1 rust` and `test` green, 6 service tests, `test_mock_lifecycle_rules_match_service`) · **vm** (image `0.0.9-t118`: `RUYA_BOOT_OK`, rename and delete over the bus, user and home removed, ids not reused; `userdel` needs no extra capability) · the shell's `DBusProfilesBackend` calls: **unverified** (compiled only) | T-118 |
 
 ## Blocked (need something this host doesn't have)
 
@@ -96,6 +96,15 @@ A session can't know its own commit hash before committing, so new rows put the 
 ## Session log (newest first)
 
 Each entry: date · model · tasks · what happened · verification · follow-ups. Keep entries short and factual.
+
+### 2026-10-23 · Sonnet 5.5 · T-118
+Profiles1 rename and delete:
+- `RenameProfile` (admin or self) and `DeleteProfile` (admin only; refuses the last admin and the active profile) in the contract, `service.rs`, `dbus.rs`, mock, `DBusProfilesBackend` and `Profiles`. `Accounts::remove` runs `userdel --remove` before the store changes; failure leaves the store alone. Ids are never reused; a deleted profile's lockout state is dropped.
+- Known gap: if the store write fails after `userdel` succeeded, the profile is restored in memory but its Unix user is gone (see the Outcome).
+
+Verification: `dev.ps1 rust` and `test` ALL GREEN (133 QML tests); image `0.0.9-t118` `RUYA_BOOT_OK`; `vm-profiles-check.sh lifecycle` output in the Outcome. Unverified: the shell's D-Bus client calls at runtime. No screenshots (no UI).
+
+Follow-ups: UI for rename/delete needs a planning session (no task yet). NEXT is T-127. Lead review due after 3 more builder tasks.
 
 ### 2026-10-23 · Opus 5.5 · T-123 (lead task)
 Compositor spike, ADR-002 option A, in the VM:

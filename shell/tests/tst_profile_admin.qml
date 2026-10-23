@@ -18,6 +18,8 @@ Item {
 
     SignalSpy { id: createSpy; target: Profiles; signalName: "createFinished" }
     SignalSpy { id: pinSpy; target: Profiles; signalName: "setPinFinished" }
+    SignalSpy { id: renameSpy; target: Profiles; signalName: "renameFinished" }
+    SignalSpy { id: deleteSpy; target: Profiles; signalName: "deleteFinished" }
 
     TestCase {
         id: tc
@@ -36,6 +38,22 @@ Item {
             tryCompare(Profiles, "activeProfile", "")
             createSpy.clear()
             pinSpy.clear()
+            renameSpy.clear()
+            deleteSpy.clear()
+        }
+
+        function rename(actorId, actorPin, id, name) {
+            const before = renameSpy.count
+            Profiles.renameProfile(actorId, actorPin, id, name)
+            tryCompare(renameSpy, "count", before + 1)
+            return renameSpy.signalArguments[before]      // [id, status, attemptsLeft, retryAfterSecs]
+        }
+
+        function remove(adminId, adminPin, id) {
+            const before = deleteSpy.count
+            Profiles.deleteProfile(adminId, adminPin, id)
+            tryCompare(deleteSpy, "count", before + 1)
+            return deleteSpy.signalArguments[before]      // [id, status, attemptsLeft, retryAfterSecs]
         }
 
         // ---- service-level helpers (no UI) ----
@@ -240,6 +258,54 @@ Item {
             compare(changePin("p2", "9999", "")[1], "wrong-pin", "removing needs the current PIN")
             compare(changePin("p2", "4321", "")[1], "ok")
             tryVerify(() => !Profiles.profiles[1].hasPin)
+        }
+
+        // Mirrors rename_rules, delete_rules_and_effects and the lockout tests in service.rs.
+        function test_mock_lifecycle_rules_match_service() {
+            // rename_rules
+            for (const bad of ["", "   ", "a\tb", "x".repeat(33)])
+                compare(rename("p1", "1234", "p2", bad)[1], "invalid", JSON.stringify(bad))
+            compare(rename("p1", "1234", "p9", "X")[1], "unknown-profile")
+            compare(rename("p2", "", "p1", "Boss")[1], "not-allowed", "a non-admin renames only itself")
+            compare(rename("p9", "", "p2", "X")[1], "not-allowed")
+            let r = rename("p1", "0000", "p2", "X")
+            compare(r[1], "wrong-pin")
+            compare(r[2], 4)
+            compare(rename("p2", "", "p2", "  Ada2  ")[1], "ok")
+            tryVerify(() => Profiles.profiles[1].name === "Ada2")
+            compare(rename("p1", "1234", "p2", "Bo")[1], "ok")
+            compare(rename("p1", "", "p1", "Root")[1], "pin-required")
+            compare(rename("p1", "1234", "p1", "Root")[1], "ok")
+            tryVerify(() => Profiles.profiles[0].name === "Root")
+
+            // delete_rules_and_effects
+            compare(remove("p1", "1234", "p9")[1], "unknown-profile")
+            compare(remove("p2", "", "p3")[1], "not-allowed", "only admins delete")
+            compare(remove("p1", "1234", "p1")[1], "not-allowed", "the last admin stays")
+            Profiles.switchTo("p2", "")
+            tryCompare(Profiles, "activeProfile", "p2")
+            compare(remove("p1", "1234", "p2")[1], "not-allowed", "the active profile stays")
+            Profiles.lock()
+            tryCompare(Profiles, "activeProfile", "")
+            r = remove("p1", "0000", "p2")
+            compare(r[1], "wrong-pin")
+            compare(r[2], 4, "a successful check reset the counter")
+            compare(remove("p1", "1234", "p2")[1], "ok")
+            tryVerify(() => Profiles.profiles.length === 2)
+            r = create("p1", "1234", "Again", "standard", "")
+            compare(r[1], "p4", "ids are never reused")
+
+            // a second admin can be deleted
+            r = create("p1", "1234", "Admin2", "admin", "4321")
+            compare(remove("p1", "1234", r[1])[1], "ok")
+
+            // lockout is shared with the other operations
+            for (let i = 0; i < 5; ++i)
+                remove("p1", "0000", "p3")
+            r = remove("p1", "1234", "p3")
+            compare(r[1], "locked-out")
+            compare(r[3], 30)
+            compare(rename("p1", "1234", "p3", "X")[1], "locked-out")
         }
 
         // ---- Settings -> Profiles ----

@@ -31,6 +31,10 @@ public:
     virtual void createProfile(const QString &adminId, const QString &adminPin, const QString &name,
                                const QString &role, const QString &pin) = 0;
     virtual void setPin(const QString &id, const QString &oldPin, const QString &newPin) = 0;
+    // Mirror RenameProfile / DeleteProfile of the contract.
+    virtual void renameProfile(const QString &actorId, const QString &actorPin, const QString &id,
+                               const QString &name) = 0;
+    virtual void deleteProfile(const QString &adminId, const QString &adminPin, const QString &id) = 0;
 
 signals:
     void listed(const QList<ProfileInfo> &profiles);
@@ -40,5 +44,8 @@ signals:
     // and matter for "wrong-pin" / "locked-out" (0 otherwise), like switchFinished.
     void createFinished(const QString &status, const QString &id, int attemptsLeft, int retryAfterSecs);
     void setPinFinished(const QString &id, const QString &status, int attemptsLeft, int retryAfterSecs);
+    // `id` is the profile that was renamed / deleted; the rest is shaped like setPinFinished.
+    void renameFinished(const QString &id, const QString &status, int attemptsLeft, int retryAfterSecs);
+    void deleteFinished(const QString &id, const QString &status, int attemptsLeft, int retryAfterSecs);
     void availabilityChanged(bool available);
 };

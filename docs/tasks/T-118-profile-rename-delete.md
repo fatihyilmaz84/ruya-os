@@ -1,6 +1,6 @@
 # T-118 — Profiles1: RenameProfile and DeleteProfile (contract, service, mock, shell backend)
 
-Status: todo · Phase: 2 · Depends: T-115, T-126 · Area: api, services, shell · Size: M
+Status: done · Phase: 2 · Depends: T-115, T-126 · Area: api, services, shell · Size: M
 
 ## Goal
 An admin can rename and delete profiles through `org.ruyaos.Profiles1`, with the safety rules enforced by the service, and the mock and the shell backend follow the same contract. This task has no UI: the Settings → Profiles screens for it come from a later planning session, once this lands.
@@ -50,4 +50,22 @@ An admin can rename and delete profiles through `org.ruyaos.Profiles1`, with the
 - Never `unwrap()` on D-Bus-reachable paths (`services/CLAUDE.md`).
 
 ## Outcome
-_Filled in by the implementer: what was built, files, how it was verified, deviations, follow-ups._
+**Built.** `RenameProfile` and `DeleteProfile` in the contract, the service core, the D-Bus adapter, the mock, and the shell backend interface, `DBusProfilesBackend` and `Profiles` facade (no UI).
+
+- Contract: `api/dbus/org.ruyaos.Profiles1.xml` (both methods return `status, attempts_left, retry_after_secs`; rules in the comments).
+- Service: `service.rs` (`rename_profile`, `delete_profile`), `store.rs` (`remove`, `restore`), `accounts.rs` (`Accounts::remove`; Linux runs `userdel --remove`, exit 6 "no such user" counts as removed), `dbus.rs` (thin wrappers, `ProfilesChanged` on success).
+- Shell: `ProfilesBackend.h`, `MockProfilesBackend`, `DBusProfilesBackend`, `Profiles` (`renameProfile`/`deleteProfile`, signals `renameFinished`/`deleteFinished(id, status, attemptsLeft, retryAfterSecs)`).
+- Docs: spec 03 §1.1; `scripts/vm-profiles-check.sh lifecycle`.
+
+Method names, side by side (XML / Rust / D-Bus client): `RenameProfile` / `rename_profile` / `"RenameProfile"`; `DeleteProfile` / `delete_profile` / `"DeleteProfile"`; argument order `actor_id, actor_pin, id, name` and `admin_id, admin_pin, id`.
+
+**Order of checks.** Rename: unknown id, name, actor rights, authenticate. Delete: unknown id, admin role, authenticate, then the last-admin / active-profile rule (so a wrong PIN counts before the rule is revealed). A successful PIN check resets the counter, as everywhere.
+
+**Failure handling.** `Accounts::remove` runs before the store changes; if it fails the answer is `failed` and nothing changed. If the store write fails after the Unix user is gone, the profile is restored in memory and `failed` returned; the user is already deleted then (cannot be rolled back). Recorded as a known gap, not a task: the next start would list a profile whose user is missing.
+
+**Verified.**
+- host: `dev.ps1 rust` green (6 new service tests: rename rules, rename lockout, delete rules and effects with a recording fake, delete lockout, second admin deletable, failing fake leaves the profile); `dev.ps1 test` ALL GREEN, 133 QML tests including the new `tst_profile_admin.qml::test_mock_lifecycle_rules_match_service`.
+- vm (image `0.0.9-t118`, fresh disk copy): `RUYA_BOOT_OK 0.0.9-t118`. After `vm-profiles-check.sh create` then `lifecycle`: `RenameProfile p1 1234 p2 "Renamed Kid"` -> `ok`, `ListProfiles` shows the new name; `DeleteProfile` of the last admin -> `not-allowed`; `DeleteProfile p2` -> `ok`; `ListProfiles` has only `p1`; `profiles.toml` keeps `next_id = 2` (so the next profile is `p3`); `getent passwd` shows only `ruya-p1`, `/var/home/ruya-p2` is gone (home removed by `userdel --remove`; the journal shows `userdel` removing the group, and a harmless "mail spool not found"); `/etc/passwd` 644, `/etc/shadow` 0. The hardened unit needed no extra capability for `userdel`.
+- Not verified: the shell's `DBusProfilesBackend` calls (compiled in the image build, never exercised); no UI exists yet.
+
+**Deviations.** None. The mock test asserts attempts-left 4 (not 3) in one place because a successful PIN check resets the counter, same as the service.

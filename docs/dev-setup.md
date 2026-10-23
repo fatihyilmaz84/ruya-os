@@ -64,7 +64,7 @@ In the VM, the shell's own log is `journalctl -b _UID=$(id -u ruya-shell)`. pam_
 | `.\scripts\vm-screenshot.ps1 <name>` | `screendump` through the monitor, converted to `output\vm-shots\<name>.png` (System.Drawing only). |
 | `.\scripts\vm-keys.ps1 right right ret` / `-Text Owner` / `-Text 2468 kp_enter` | `sendkey` per key; the guest sees a USB keyboard, so the shell gets the keys a controller produces. Digits and letters via `-Text` (capitals use shift). `-DelayMs` (default 250) is the pause per key; use 1500-3000 before steps that animate or open a modal. |
 | `scripts/vm-inject-key.py guide [--hold 3]` (run in the guest) | Presses a key a USB keyboard cannot send: `guide` is `KEY_HOMEPAGE`, what `ruya-inputd` emits for the controller's Guide button; also `menu`, `home`, `meta`. Creates a throw-away uinput device, so cage and the shell see a real key event, held keys auto-repeat. |
-| `scripts/vm-profiles-check.sh [state\|introspect\|security]` (run in the guest) | What `ruya-profiles` lists over the system bus, `profiles.toml` (mode, hashes cut off), the `ruya-p*` Unix users and homes. |
+| `scripts/vm-profiles-check.sh [state\|introspect\|security\|create\|lifecycle]` (run in the guest; `lifecycle` renames and deletes the profile `create` made, T-118) | What `ruya-profiles` lists over the system bus, `profiles.toml` (mode, hashes cut off), the `ruya-p*` Unix users and homes. |
 
 Typical session (a persistent copy, so profiles survive reboots; `Enter` on a PIN pad is `kp_enter`, since `ret` presses the focused key):
 

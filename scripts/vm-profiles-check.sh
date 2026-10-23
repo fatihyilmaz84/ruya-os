@@ -28,6 +28,20 @@ create)
     echo "--- account files (expect 644 passwd/group, 0 shadow/gshadow)"
     stat -c '%a %U:%G %n' /etc/passwd /etc/group /etc/shadow /etc/gshadow
     ;;
+lifecycle)
+    # T-118: after `create`, rename and delete the standard profile (p2) as the admin (p1, PIN 1234),
+    # then show that the admin is refused for its own deletion and that the Unix user and home are gone.
+    echo "--- RenameProfile p2 -> 'Renamed Kid'"
+    busctl --system call "$svc" "$path" "$svc" RenameProfile ssss p1 1234 p2 "Renamed Kid"
+    busctl --system call "$svc" "$path" "$svc" ListProfiles
+    echo "--- DeleteProfile p1 (last admin): expect not-allowed"
+    busctl --system call "$svc" "$path" "$svc" DeleteProfile sss p1 1234 p1
+    echo "--- DeleteProfile p2"
+    busctl --system call "$svc" "$path" "$svc" DeleteProfile sss p1 1234 p2
+    bash "$0" state
+    echo "--- account files (expect 644 passwd/group, 0 shadow/gshadow)"
+    stat -c '%a %U:%G %n' /etc/passwd /etc/group /etc/shadow /etc/gshadow
+    ;;
 state)
     echo "--- ListProfiles"
     busctl --system call "$svc" "$path" "$svc" ListProfiles
@@ -46,7 +60,7 @@ state)
     ls -ld /var/home/ruya-p* 2>/dev/null || echo "(no /var/home/ruya-p*)"
     ;;
 *)
-    echo "usage: $0 [introspect|state|security|create]" >&2
+    echo "usage: $0 [introspect|state|security|create|lifecycle]" >&2
     exit 2
     ;;
 esac

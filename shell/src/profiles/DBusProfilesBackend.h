@@ -20,6 +20,9 @@ public:
     void createProfile(const QString &adminId, const QString &adminPin, const QString &name,
                        const QString &role, const QString &pin) override;
     void setPin(const QString &id, const QString &oldPin, const QString &newPin) override;
+    void renameProfile(const QString &actorId, const QString &actorPin, const QString &id,
+                       const QString &name) override;
+    void deleteProfile(const QString &adminId, const QString &adminPin, const QString &id) override;
 
 private slots:
     void onProfilesChanged();

@@ -15,7 +15,7 @@
     "invalid"          malformed argument (e.g. PIN not 4-6 digits, empty name)
     "failed"           internal error (e.g. could not write the store or create the Unix user)
 
-  Methods that check a PIN (SwitchTo, CreateProfile, SetPin) also return attempts_left and
+  Methods that check a PIN (SwitchTo, CreateProfile, SetPin, RenameProfile, DeleteProfile) also return attempts_left and
   retry_after_secs. They matter only for "wrong-pin" (attempts_left = tries before lockout) and
   "locked-out" (retry_after_secs = seconds until the next try is accepted, rounded up); they are 0
   otherwise. SwitchTo additionally reports attempts_left with "pin-required".
@@ -62,6 +62,36 @@
       <arg name="id" type="s" direction="in"/>
       <arg name="old_pin" type="s" direction="in"/>
       <arg name="new_pin" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+      <arg name="attempts_left" type="u" direction="out"/>
+      <arg name="retry_after_secs" type="u" direction="out"/>
+    </method>
+
+    <!--
+      Rename a profile. The actor (actor_id, authenticated with actor_pin) must be an admin or the
+      profile itself. The name follows the CreateProfile rules (trimmed, 1-32 characters, no
+      control characters), else "invalid". A non-admin renaming another profile: "not-allowed".
+    -->
+    <method name="RenameProfile">
+      <arg name="actor_id" type="s" direction="in"/>
+      <arg name="actor_pin" type="s" direction="in"/>
+      <arg name="id" type="s" direction="in"/>
+      <arg name="name" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+      <arg name="attempts_left" type="u" direction="out"/>
+      <arg name="retry_after_secs" type="u" direction="out"/>
+    </method>
+
+    <!--
+      Delete a profile, its Unix user and its home directory (no "keep data" option). Admin only.
+      "not-allowed" for the last remaining admin and for the currently active profile; unknown id:
+      "unknown-profile". "failed" (store unchanged) when the Unix user cannot be removed. Ids are
+      never reused. Emits ProfilesChanged on success.
+    -->
+    <method name="DeleteProfile">
+      <arg name="admin_id" type="s" direction="in"/>
+      <arg name="admin_pin" type="s" direction="in"/>
+      <arg name="id" type="s" direction="in"/>
       <arg name="status" type="s" direction="out"/>
       <arg name="attempts_left" type="u" direction="out"/>
       <arg name="retry_after_secs" type="u" direction="out"/>

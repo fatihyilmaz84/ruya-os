@@ -115,6 +115,47 @@ impl ProfilesIface {
         )
     }
 
+    async fn rename_profile(
+        &mut self,
+        actor_id: &str,
+        actor_pin: &str,
+        id: &str,
+        name: &str,
+        #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
+    ) -> (String, u32, u32) {
+        let outcome = self
+            .svc
+            .rename_profile(actor_id, actor_pin, id, name, Instant::now());
+        if outcome.status == crate::Status::Ok {
+            let _ = Self::profiles_changed(&emitter).await;
+        }
+        (
+            outcome.status.as_str().to_owned(),
+            outcome.attempts_left,
+            retry_secs(outcome.retry_after),
+        )
+    }
+
+    async fn delete_profile(
+        &mut self,
+        admin_id: &str,
+        admin_pin: &str,
+        id: &str,
+        #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
+    ) -> (String, u32, u32) {
+        let outcome = self
+            .svc
+            .delete_profile(admin_id, admin_pin, id, Instant::now());
+        if outcome.status == crate::Status::Ok {
+            let _ = Self::profiles_changed(&emitter).await;
+        }
+        (
+            outcome.status.as_str().to_owned(),
+            outcome.attempts_left,
+            retry_secs(outcome.retry_after),
+        )
+    }
+
     #[zbus(property)]
     fn active_profile(&self) -> String {
         self.svc.active().unwrap_or_default().to_owned()

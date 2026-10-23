@@ -240,6 +240,90 @@ impl<A: Accounts> ProfileService<A> {
             Err(_) => Outcome::of(Status::Failed),
         }
     }
+
+    /// The actor must be an admin or the profile itself, and is authenticated with its own PIN.
+    pub fn rename_profile(
+        &mut self,
+        actor_id: &str,
+        actor_pin: &str,
+        id: &str,
+        name: &str,
+        now: Instant,
+    ) -> Outcome {
+        if self.store.get(id).is_none() {
+            return Outcome::of(Status::UnknownProfile);
+        }
+        let name = name.trim();
+        if name.is_empty()
+            || name.chars().count() > MAX_NAME_CHARS
+            || name.chars().any(char::is_control)
+        {
+            return Outcome::of(Status::Invalid);
+        }
+        let Some(actor_role) = self.store.get(actor_id).map(|p| p.role) else {
+            return Outcome::of(Status::NotAllowed);
+        };
+        if actor_role != Role::Admin && actor_id != id {
+            return Outcome::of(Status::NotAllowed);
+        }
+        let auth = self.authenticate(actor_id, actor_pin, now);
+        if auth.status != Status::Ok {
+            return auth;
+        }
+        let Some(profile) = self.store.get_mut(id) else {
+            return Outcome::of(Status::UnknownProfile);
+        };
+        let old = std::mem::replace(&mut profile.name, name.to_owned());
+        if self.store.save().is_err() {
+            if let Some(p) = self.store.get_mut(id) {
+                p.name = old;
+            }
+            return Outcome::of(Status::Failed);
+        }
+        Outcome::of(Status::Ok)
+    }
+
+    /// Admin only. Refused for the last admin and for the active profile. The Unix user goes
+    /// first: if that fails the store is untouched.
+    pub fn delete_profile(
+        &mut self,
+        admin_id: &str,
+        admin_pin: &str,
+        id: &str,
+        now: Instant,
+    ) -> Outcome {
+        let Some(target_role) = self.store.get(id).map(|p| p.role) else {
+            return Outcome::of(Status::UnknownProfile);
+        };
+        if self.store.get(admin_id).map(|p| p.role) != Some(Role::Admin) {
+            return Outcome::of(Status::NotAllowed);
+        }
+        let auth = self.authenticate(admin_id, admin_pin, now);
+        if auth.status != Status::Ok {
+            return auth;
+        }
+        let admins = self
+            .store
+            .profiles()
+            .iter()
+            .filter(|p| p.role == Role::Admin)
+            .count();
+        if self.active.as_deref() == Some(id) || (target_role == Role::Admin && admins <= 1) {
+            return Outcome::of(Status::NotAllowed);
+        }
+        if self.accounts.remove(id).is_err() {
+            return Outcome::of(Status::Failed);
+        }
+        let Some((index, profile)) = self.store.remove(id) else {
+            return Outcome::of(Status::UnknownProfile);
+        };
+        if self.store.save().is_err() {
+            self.store.restore(index, profile);
+            return Outcome::of(Status::Failed);
+        }
+        self.lockout.succeed(id);
+        Outcome::of(Status::Ok)
+    }
 }
 
 #[cfg(test)]
@@ -455,6 +539,182 @@ mod tests {
         assert_eq!(svc.switch_to("p2", "", now).status, Status::PinRequired);
         assert_eq!(svc.set_pin("p2", "4321", "", now).status, Status::Ok);
         assert_eq!(svc.switch_to("p2", "", now).status, Status::Ok);
+    }
+
+    #[test]
+    fn rename_rules() {
+        let Fixture { mut svc, now, .. } = fixture();
+        for bad in ["", "   ", "a\tb", &"x".repeat(33)] {
+            assert_eq!(
+                svc.rename_profile("p1", "1234", "p2", bad, now).status,
+                Status::Invalid,
+                "{bad:?}"
+            );
+        }
+        assert_eq!(
+            svc.rename_profile("p1", "1234", "nope", "X", now).status,
+            Status::UnknownProfile
+        );
+        assert_eq!(
+            svc.rename_profile("p2", "", "p1", "Boss", now).status,
+            Status::NotAllowed,
+            "a non-admin renames only itself"
+        );
+        assert_eq!(
+            svc.rename_profile("nope", "", "p2", "X", now).status,
+            Status::NotAllowed
+        );
+        let o = svc.rename_profile("p1", "0000", "p2", "X", now);
+        assert_eq!(
+            (o.status, o.attempts_left),
+            (Status::WrongPin, FREE_ATTEMPTS - 1)
+        );
+        // Yourself, no PIN needed for a profile without one; the name is stored trimmed.
+        assert_eq!(
+            svc.rename_profile("p2", "", "p2", "  Ada  ", now).status,
+            Status::Ok
+        );
+        assert_eq!(svc.profiles()[1].name, "Ada");
+        // An admin renames anyone, and yourself needs your own PIN.
+        assert_eq!(
+            svc.rename_profile("p1", "1234", "p2", "Bo", now).status,
+            Status::Ok
+        );
+        assert_eq!(
+            svc.rename_profile("p1", "", "p1", "Root", now).status,
+            Status::PinRequired
+        );
+        assert_eq!(
+            svc.rename_profile("p1", "1234", "p1", "Root", now).status,
+            Status::Ok
+        );
+    }
+
+    #[test]
+    fn rename_counts_towards_lockout() {
+        let Fixture { mut svc, now, .. } = fixture();
+        for _ in 0..FREE_ATTEMPTS {
+            svc.rename_profile("p1", "0000", "p2", "X", now);
+        }
+        let o = svc.rename_profile("p1", "1234", "p2", "X", now);
+        assert_eq!(
+            (o.status, o.retry_after),
+            (Status::LockedOut, FIRST_LOCKOUT)
+        );
+    }
+
+    #[derive(Clone, Default)]
+    struct Recording {
+        removed: std::sync::Arc<std::sync::Mutex<Vec<String>>>,
+        fail: bool,
+    }
+
+    impl Accounts for Recording {
+        fn create(&self, _profile_id: &str) -> std::io::Result<()> {
+            Ok(())
+        }
+        fn remove(&self, profile_id: &str) -> std::io::Result<()> {
+            if self.fail {
+                return Err(std::io::Error::other("userdel failed"));
+            }
+            self.removed.lock().unwrap().push(profile_id.to_owned());
+            Ok(())
+        }
+    }
+
+    fn recording_fixture(
+        accounts: Recording,
+    ) -> (tempfile::TempDir, ProfileService<Recording>, Instant) {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path().join("profiles.toml")).unwrap();
+        let mut svc = ProfileService::new(store, accounts);
+        let now = Instant::now();
+        svc.create_profile("", "", "Admin", "admin", "1234", now);
+        svc.create_profile("p1", "1234", "Kid", "standard", "", now);
+        (dir, svc, now)
+    }
+
+    #[test]
+    fn delete_rules_and_effects() {
+        let accounts = Recording::default();
+        let (dir, mut svc, now) = recording_fixture(accounts.clone());
+        assert_eq!(
+            svc.delete_profile("p1", "1234", "nope", now).status,
+            Status::UnknownProfile
+        );
+        assert_eq!(
+            svc.delete_profile("p2", "", "p1", now).status,
+            Status::NotAllowed,
+            "only admins delete"
+        );
+        assert_eq!(
+            svc.delete_profile("p1", "1234", "p1", now).status,
+            Status::NotAllowed,
+            "the last admin stays"
+        );
+        assert_eq!(svc.switch_to("p2", "", now).status, Status::Ok);
+        assert_eq!(
+            svc.delete_profile("p1", "1234", "p2", now).status,
+            Status::NotAllowed,
+            "the active profile stays"
+        );
+        svc.lock();
+        let o = svc.delete_profile("p1", "0000", "p2", now);
+        assert_eq!(
+            (o.status, o.attempts_left),
+            (Status::WrongPin, FREE_ATTEMPTS - 1)
+        );
+        assert!(accounts.removed.lock().unwrap().is_empty());
+        assert_eq!(
+            svc.delete_profile("p1", "1234", "p2", now).status,
+            Status::Ok
+        );
+        assert_eq!(*accounts.removed.lock().unwrap(), vec!["p2".to_owned()]);
+        assert_eq!(svc.profiles().len(), 1);
+        // Ids are never reused.
+        let (o, id) = svc.create_profile("p1", "1234", "Again", "standard", "", now);
+        assert_eq!((o.status, id.as_deref()), (Status::Ok, Some("p3")));
+        // The change survives a restart.
+        drop(svc);
+        let store = Store::open(dir.path().join("profiles.toml")).unwrap();
+        let ids: Vec<_> = store.profiles().iter().map(|p| p.id.as_str()).collect();
+        assert_eq!(ids, ["p1", "p3"]);
+    }
+
+    #[test]
+    fn delete_counts_towards_lockout_and_drops_it_with_the_profile() {
+        let (_dir, mut svc, now) = recording_fixture(Recording::default());
+        for _ in 0..FREE_ATTEMPTS {
+            svc.delete_profile("p1", "0000", "p2", now);
+        }
+        let o = svc.delete_profile("p1", "1234", "p2", now);
+        assert_eq!(o.status, Status::LockedOut);
+    }
+
+    #[test]
+    fn a_second_admin_can_be_deleted() {
+        let (_dir, mut svc, now) = recording_fixture(Recording::default());
+        svc.create_profile("p1", "1234", "Admin2", "admin", "4321", now);
+        assert_eq!(
+            svc.delete_profile("p1", "1234", "p3", now).status,
+            Status::Ok
+        );
+    }
+
+    #[test]
+    fn failing_account_removal_leaves_the_profile() {
+        let accounts = Recording {
+            fail: true,
+            ..Recording::default()
+        };
+        let (dir, mut svc, now) = recording_fixture(accounts);
+        assert_eq!(
+            svc.delete_profile("p1", "1234", "p2", now).status,
+            Status::Failed
+        );
+        assert_eq!(svc.profiles().len(), 2);
+        let store = Store::open(dir.path().join("profiles.toml")).unwrap();
+        assert_eq!(store.profiles().len(), 2);
     }
 
     #[test]

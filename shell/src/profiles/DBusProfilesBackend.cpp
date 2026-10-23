@@ -134,6 +134,40 @@ void DBusProfilesBackend::setPin(const QString &id, const QString &oldPin, const
     });
 }
 
+void DBusProfilesBackend::renameProfile(const QString &actorId, const QString &actorPin, const QString &id,
+                                        const QString &name)
+{
+    auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("RenameProfile"));
+    msg << actorId << actorPin << id << name;
+    auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, id](QDBusPendingCallWatcher *w) {
+        w->deleteLater();
+        QDBusPendingReply<QString, uint, uint> reply = *w;   // status, attempts_left, retry_after_secs
+        if (!reply.isValid()) {
+            emit renameFinished(id, QStringLiteral("failed"), 0, 0);
+            return;
+        }
+        // The list refreshes via ProfilesChanged.
+        emit renameFinished(id, reply.argumentAt<0>(), int(reply.argumentAt<1>()), int(reply.argumentAt<2>()));
+    });
+}
+
+void DBusProfilesBackend::deleteProfile(const QString &adminId, const QString &adminPin, const QString &id)
+{
+    auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("DeleteProfile"));
+    msg << adminId << adminPin << id;
+    auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, id](QDBusPendingCallWatcher *w) {
+        w->deleteLater();
+        QDBusPendingReply<QString, uint, uint> reply = *w;   // status, attempts_left, retry_after_secs
+        if (!reply.isValid()) {
+            emit deleteFinished(id, QStringLiteral("failed"), 0, 0);
+            return;
+        }
+        emit deleteFinished(id, reply.argumentAt<0>(), int(reply.argumentAt<1>()), int(reply.argumentAt<2>()));
+    });
+}
+
 void DBusProfilesBackend::onProfilesChanged()
 {
     refresh();

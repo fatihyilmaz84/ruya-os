@@ -42,6 +42,11 @@ public:
     Q_INVOKABLE void createProfile(const QString &adminId, const QString &adminPin, const QString &name,
                                    const QString &role, const QString &pin);
     Q_INVOKABLE void setPin(const QString &id, const QString &oldPin, const QString &newPin);
+    // Contract: RenameProfile (admin or the profile itself) and DeleteProfile (admin only).
+    // Results arrive as renameFinished / deleteFinished.
+    Q_INVOKABLE void renameProfile(const QString &actorId, const QString &actorPin, const QString &id,
+                                   const QString &name);
+    Q_INVOKABLE void deleteProfile(const QString &adminId, const QString &adminPin, const QString &id);
     // Tests only, and only with the mock backend (otherwise a no-op that returns false):
     // "seeded" (the three default profiles) or "empty" (first boot).
     Q_INVOKABLE bool resetMockForTests(const QString &state);
@@ -56,6 +61,8 @@ signals:
     // accompany "wrong-pin" / "locked-out" (0 when unknown).
     void createFinished(const QString &status, const QString &id, int attemptsLeft, int retryAfterSecs);
     void setPinFinished(const QString &id, const QString &status, int attemptsLeft, int retryAfterSecs);
+    void renameFinished(const QString &id, const QString &status, int attemptsLeft, int retryAfterSecs);
+    void deleteFinished(const QString &id, const QString &status, int attemptsLeft, int retryAfterSecs);
 
 private:
     std::unique_ptr<ProfilesBackend> m_backend;

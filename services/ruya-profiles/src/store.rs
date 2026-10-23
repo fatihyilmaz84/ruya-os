@@ -104,6 +104,19 @@ impl Store {
         self.data.profiles.last().unwrap()
     }
 
+    /// Removes a profile from memory; `next_id` is untouched so ids are never reused.
+    pub fn remove(&mut self, id: &str) -> Option<(usize, Profile)> {
+        let index = self.data.profiles.iter().position(|p| p.id == id)?;
+        Some((index, self.data.profiles.remove(index)))
+    }
+
+    /// Puts a profile taken out with `remove` back (used when saving failed).
+    pub fn restore(&mut self, index: usize, profile: Profile) {
+        self.data
+            .profiles
+            .insert(index.min(self.data.profiles.len()), profile);
+    }
+
     pub fn save(&self) -> io::Result<()> {
         let text = toml::to_string_pretty(&self.data)
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
