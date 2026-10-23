@@ -1,0 +1,18 @@
+[package]
+name = "ruya-devices"
+description = "RuyaOS audio outputs and volumes over PipeWire (org.ruyaos.Devices1.Audio)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"  # pw-dump output (wpctl/pw-dump child processes, no PipeWire bindings)
+toml = "0.8"
+zbus = { version = "5", default-features = false, features = ["async-io"] }
+futures-lite = "2"
+async-io = "2"  # the poll timer; already in the tree through zbus
+
+[dev-dependencies]
+tempfile = "3"

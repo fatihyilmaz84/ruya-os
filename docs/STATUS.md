@@ -2,7 +2,7 @@
 
 **Read this first in every session; update it last.** The rules are in the root `CLAUDE.md`, the roles (Opus lead, Sonnet builders) in `docs/LEAD.md`, the task format in `docs/tasks/README.md`.
 
-Last updated: 2026-10-24 (Sonnet 5.5, T-127)
+Last updated: 2026-10-24 (Sonnet 5.5, T-128)
 
 ## Where we are
 
@@ -14,15 +14,15 @@ Verification legend: **host** = built and tested on the Windows host · **vm** =
 
 ## Board
 
-**NEXT → T-128**
+**NEXT → T-119**
 
-**Lead review due: after 3 more builder tasks** (reviewed up to the lead commit of 2026-10-23 "lead review beafbc6..da2d1be", see `docs/LEAD-NOTES.md`). Builders: when your task makes this condition true, end your reply by recommending a lead session.
+**Lead review due: after 1 more builder task** (reviewed up to the lead commit of 2026-10-23 "lead review beafbc6..da2d1be", see `docs/LEAD-NOTES.md`). Builders: when your task makes this condition true, end your reply by recommending a lead session.
 
 | ID | Title | Status | Depends | Verified |
 |---|---|---|---|---|
 | [T-130](tasks/T-130-compositor-session.md) | **[lead]** Compositor session: `ruya-shell` replaces cage (ADR-002 A), app layer and key routing | todo | T-123 | |
 | [T-127](tasks/T-127-shots-window-focus.md) | `dev.ps1 shots`: focus failures caused by the desktop say so, and recover | done | — | host |
-| [T-128](tasks/T-128-devices-audio-service.md) | `ruya-devices`: audio part of `Devices1` over PipeWire, in the VM (ADR-010) | todo | T-114, T-121 | |
+| [T-128](tasks/T-128-devices-audio-service.md) | `ruya-devices`: audio part of `Devices1` over PipeWire, in the VM (ADR-010) | done | T-114, T-121 | vm |
 | [T-119](tasks/T-119-nested-pages.md) | Page host: nested pages that keep their state | todo | T-101 | |
 | [T-110](tasks/T-110-store-contract-and-mock.md) | Store contract and mock backend | todo | — | |
 | [T-129](tasks/T-129-network-contract-and-settings.md) | Network: `Devices1` network contract, mock, Settings → Network | todo | T-114 | |
@@ -38,6 +38,8 @@ Follow-ups, debt and ideas waiting for a planner session. Builders: add one line
 
 - (T-118) Settings -> Profiles UI for rename and delete (confirmation, admin PIN) has no task; the service and `Profiles` facade are ready.
 - (T-118) `delete_profile`: if the store write fails after `userdel` succeeded, the profile stays listed without a Unix user; decide whether to reorder (save first) or reconcile on start.
+
+- (T-128) Network/Bluetooth parts of `ruya-devices`, applying `ambient`/`media` levels to app streams, and an `Sfx` start-up deferral (QSoundEffect warnings) are open; B-007 tracks the first two.
 
 ### Done
 
@@ -72,6 +74,7 @@ A session can't know its own commit hash before committing, so new rows put the 
 | T-109 | Translations: `qt_add_translations` (en, tr), live switching through `DeviceSettings.language`, Settings -> System language row, Turkish on-screen keyboard, `--reverse` RTL check, translation lint | host (`dev.ps1 test` and `shots` green, `tst_i18n.qml` + `test_turkish_layout`, 3 screenshots reviewed) · **vm** (image `0.0.7-t109`: `RUYA_BOOT_OK`) · language switching in the VM: unverified | T-109 |
 | T-126 | `ruya-profiles.service` hardened: minimal `CapabilityBoundingSet`, `SystemCallFilter=@system-service`, `UMask=0077`, `ProtectProc=invisible` and more; `vm-profiles-check.sh create` | **vm** (image `0.0.6-lead2`, fresh disk: `RUYA_BOOT_OK`, both profiles created over the bus, account file modes intact, exposure 6.0 → 1.6) · `userdel`: not exercised yet (T-118) | T-126 |
 | T-123 | Compositor spike (ADR-002 A): `shell/spike/Compositor.qml` (shell as QtWaylandCompositor, Guide overlay over a client, key routing), `ruya-shell --load`, `ruya-compositor-spike@.service` (not enabled), `scripts/vm-compositor-spike.sh`, `.containerignore` | **vm** (image `0.0.8-t123`: `RUYA_BOOT_OK` with cage; spike: client fullscreen, overlay over it, keys to client / overlay / client again, client exit, back to cage; screenshots and log in the Outcome) · performance, real GPUs, Flatpak apps: **unverified** | T-123 |
+| T-128 | `ruya-devices` audio service (`Devices1.Audio` over `pw-dump`/`wpctl`), user unit of `ruya-shell`, D-Bus policy, shell uses D-Bus by default on Linux, `vm-devices-check.sh` | host (`dev.ps1 test` green, 24 new Rust tests) · **vm** (image `0.0.10-t128`: `RUYA_BOOT_OK`, check script all pass, Settings -> Audio lists the HDA sink, Master slider moves `wpctl`, exposure 3.4) · hot-plug in the VM: unverified | T-128 |
 | T-118 | Profiles1: `RenameProfile` and `DeleteProfile` (contract, service rules, `Accounts::remove` with `userdel --remove`, mock, shell backend and facade; no UI) | service + mock: host (`dev.ps1 rust` and `test` green, 6 service tests, `test_mock_lifecycle_rules_match_service`) · **vm** (image `0.0.9-t118`: `RUYA_BOOT_OK`, rename and delete over the bus, user and home removed, ids not reused; `userdel` needs no extra capability) · the shell's `DBusProfilesBackend` calls: **unverified** (compiled only) | T-118 |
 
 ## Blocked (need something this host doesn't have)
@@ -84,7 +87,7 @@ A session can't know its own commit hash before committing, so new rows put the 
 | B-004 | `ruya-store` Rust service over libflatpak/AppStream | ~~Linux~~ nothing: WSL builds and the VM can run it now | Contract from T-110. **Becomes a task once T-110 lands** (VM-verified, like T-120). |
 | ~~B-005~~ | **Done 2026-10-23 (vm).** Profiles, the first-boot wizard, lockout and Settings → Profiles work against the real `ruya-profiles` over the system bus (T-120) | — | Other services follow the same way once they exist; the VM drive scripts are in `docs/dev-setup.md` ("Seeing and driving the VM"). |
 | B-006 | Replace the `ruya-inputd` stopgap with InputPlumber (ADR-003), with grab/re-emit | Linux + controllers | Also owns the key-repeat model (400 ms delay then accelerating repeat, stick repeat speed) and Accept long-press / context menu from spec 02 §4.3; the shell only sees key events. |
-| B-007 | `ruya-devices` service (PipeWire, NetworkManager, BlueZ) | ~~a design decision~~ decided: ADR-010 (lead, 2026-10-23) | Audio part is now **T-128** (one PipeWire in `ruya-shell`'s session; `ruya-devices` is a user unit of `ruya-shell`; it flips `Audio::create` to D-Bus on Linux and covers the `QSoundEffect` start-up warnings and `pipewire-utils`). Network contract and UI: T-129. Left here: the NetworkManager and BlueZ parts of the service, and exposing PipeWire to profile apps (`ruya-session`). |
+| B-007 | `ruya-devices` service (NetworkManager, BlueZ; the **audio part is done**, T-128) | ~~a design decision~~ decided: ADR-010 (lead, 2026-10-23) | Audio part is now **T-128** (one PipeWire in `ruya-shell`'s session; `ruya-devices` is a user unit of `ruya-shell`; it flips `Audio::create` to D-Bus on Linux and covers the `QSoundEffect` start-up warnings and `pipewire-utils`). Network contract and UI: T-129. Left here: the NetworkManager and BlueZ parts of the service, and exposing PipeWire to profile apps (`ruya-session`). |
 | ~~B-008~~ | **Done 2026-10-22 (vm).** greenboot (0.16, Rust) works on bootc once its units are enabled: 4 failed boots of a broken image, then GRUB fell back. The NVIDIA 615.78 kmod builds and is signed in the image; the private key is removed | — | Loading on real NVIDIA hardware and Secure Boot/MOK are still unverified (needs hardware) |
 
 ## Open owner decisions
@@ -99,6 +102,8 @@ A session can't know its own commit hash before committing, so new rows put the 
 ## Session log (newest first)
 
 Each entry: date · model · tasks · what happened · verification · follow-ups. Keep entries short and factual.
+
+- 2026-10-24 · Sonnet 5.5 · T-128 · `ruya-devices` audio service (core + `wpctl`/`pw-dump` + zbus), user unit, bus policy, shell D-Bus by default on Linux with a name watcher. `test` ALL GREEN; image `0.0.10-t128` `RUYA_BOOT_OK`; `vm-devices-check.sh` all pass; Settings -> Audio drives `wpctl` in the VM; exposure 3.4. Sfx deferral not done; hot-plug unverified. Lead review due after 1 more builder task.
 
 - 2026-10-24 · Sonnet 5.5 · T-127 · `WindowGuard` in `tst_main.cpp`, called first in every `init()`: re-activates the test window or fails with a clear message; also logs `TEST WINDOW LOST ACTIVATION` and re-activates the moment focus goes. `test` ALL GREEN (133 passed, same count); `shots` green twice (144 passed), losses logged and recovered in both. One earlier run failed `Power::test_guide_short_press_opens_overlay` mid-test before the loss logging existed. Manual "click another window" check not done (**unverified**).
 

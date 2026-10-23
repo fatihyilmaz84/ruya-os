@@ -20,7 +20,8 @@ COPY services /src/services
 RUN cd /src/services \
     && cargo build --release --locked \
     && install -Dm755 target/release/ruya-inputd /out/usr/bin/ruya-inputd \
-    && install -Dm755 target/release/ruya-profiles /out/usr/bin/ruya-profiles
+    && install -Dm755 target/release/ruya-profiles /out/usr/bin/ruya-profiles \
+    && install -Dm755 target/release/ruya-devices /out/usr/bin/ruya-devices
 
 # ---- OS image -----------------------------------------------------------------------
 FROM quay.io/fedora/fedora-bootc:${FEDORA_VERSION}
@@ -51,6 +52,7 @@ RUN --mount=type=bind,source=image/build,target=/ctx/build \
     && (cd /ctx/rootfs && find . -mindepth 1 ! -type l -print0 | xargs -0 -I{} find "/{}" -maxdepth 0 -perm /022 > /tmp/writable \
         && test ! -s /tmp/writable || { echo "group/world-writable files shipped from image/rootfs:"; cat /tmp/writable; exit 1; }) \
     && systemctl enable ruya-compositor@tty1.service ruya-inputd.service ruya-profiles.service ruya-boot-marker.service \
+    && systemctl --global enable ruya-devices.service \
     && systemctl enable greenboot-healthcheck.service greenboot-set-rollback-trigger.service \
     && systemctl set-default graphical.target \
     && /ctx/build/90-initramfs.sh \

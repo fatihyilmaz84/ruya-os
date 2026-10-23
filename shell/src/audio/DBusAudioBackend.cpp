@@ -90,7 +90,9 @@ void parseState(const QVariantMap &props, int *volume, bool *muted, QVariantMap 
 DBusAudioBackend::DBusAudioBackend(QObject *parent)
     : AudioBackend(parent)
     , m_bus(chooseBus())
+    , m_watcher(Service, m_bus, QDBusServiceWatcher::WatchForRegistration, this)
 {
+    connect(&m_watcher, &QDBusServiceWatcher::serviceRegistered, this, [this] { refresh(); });
     m_bus.connect(Service, Path, Interface, QStringLiteral("SinksChanged"), this, SLOT(onSinksChanged()));
     m_bus.connect(Service, Path, Interface, QStringLiteral("DefaultSinkChanged"), this, SLOT(onSinksChanged()));
     m_bus.connect(Service, Path, PropertiesInterface, QStringLiteral("PropertiesChanged"), this,

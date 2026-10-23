@@ -91,7 +91,7 @@ ssh -i $env:USERPROFILE\.ssh\ruyaos_dev -p 2222 root@127.0.0.1 systemctl powerof
 python scripts\vm-audio-bursts.py                                                             # one burst per cue
 ```
 
-`scripts/vm-audio-check.sh` (guest) shows the sound card, the `ruya-shell` user's PipeWire, WirePlumber and pipewire-pulse (pam_systemd gives the compositor session a user manager), `wpctl status` with the sink and the shell's stream, and the shell's audio log lines. `scripts/vm-audio-bursts.py` (host) lists the sounds in the recording (QEMU leaves the wav header sizes at zero, so `wave` cannot open it). The image has no `pw-cli`, `pw-top` or `pw-dump` (the `pipewire-utils` package): use `wpctl`.
+`scripts/vm-audio-check.sh` (guest) shows the sound card, the `ruya-shell` user's PipeWire, WirePlumber and pipewire-pulse (pam_systemd gives the compositor session a user manager), `wpctl status` with the sink and the shell's stream, and the shell's audio log lines. `scripts/vm-audio-bursts.py` (host) lists the sounds in the recording (QEMU leaves the wav header sizes at zero, so `wave` cannot open it). The image has `pipewire-utils` since T-128 (`pw-dump`, which `ruya-devices` reads). `scripts/vm-devices-check.sh` (guest, run as root in a VM booted with `-Audio`, copy it with scp first) checks the `ruya-devices` user unit, the bus name owner, `ListSinks`, that a `MasterVolume`/`Muted` write reaches `wpctl`, and that another user is refused; `vm-devices-check.sh security` prints `systemd-analyze --user security`.
 
 ## Compositor spike (T-123)
 

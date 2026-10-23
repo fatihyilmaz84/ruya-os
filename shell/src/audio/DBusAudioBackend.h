@@ -3,10 +3,11 @@
 #include "AudioBackend.h"
 
 #include <QDBusConnection>
+#include <QDBusServiceWatcher>
 
 // Client of org.ruyaos.Devices1.Audio (api/dbus/org.ruyaos.Devices1.xml) on the system bus,
-// or the session bus when RUYA_DBUS=session. Unverified: the service (ruya-devices, blocker
-// B-007) does not exist yet.
+// or the session bus when RUYA_DBUS=session. The service starts after the shell, so the state
+// is read again whenever the name appears.
 class DBusAudioBackend final : public AudioBackend
 {
     Q_OBJECT
@@ -31,4 +32,5 @@ private:
     void setProperty(const QString &name, const QVariant &value);
 
     QDBusConnection m_bus;
+    QDBusServiceWatcher m_watcher;
 };

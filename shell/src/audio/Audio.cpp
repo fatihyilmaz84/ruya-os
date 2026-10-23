@@ -74,10 +74,17 @@ Audio::~Audio() = default;
 Audio *Audio::create(QQmlEngine *, QJSEngine *)
 {
     std::unique_ptr<AudioBackend> backend;
-    if (qEnvironmentVariable("RUYA_SERVICES") == QLatin1String("dbus"))
-        backend = std::make_unique<DBusAudioBackend>();
-    else
+    // Like Profiles: D-Bus on Linux unless RUYA_SERVICES=mock, the mock elsewhere.
+    const QString choice = qEnvironmentVariable("RUYA_SERVICES");
+#ifdef Q_OS_LINUX
+    const bool mock = choice == QLatin1String("mock");
+#else
+    const bool mock = choice != QLatin1String("dbus");
+#endif
+    if (mock)
         backend = std::make_unique<MockAudioBackend>();
+    else
+        backend = std::make_unique<DBusAudioBackend>();
     return new Audio(std::move(backend));
 }
 

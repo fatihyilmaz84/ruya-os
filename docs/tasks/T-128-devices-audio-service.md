@@ -1,6 +1,6 @@
 # T-128 — `ruya-devices`: the audio part of `org.ruyaos.Devices1` over PipeWire, in the VM
 
-Status: todo · Phase: 2 · Depends: T-114, T-121 · Area: services, image, shell · Size: M
+Status: done · Phase: 2 · Depends: T-114, T-121 · Area: services, image, shell · Size: M
 
 ## Goal
 Settings → Audio and the volume keys control real PipeWire outputs in the VM: the new Rust service `ruya-devices` implements `org.ruyaos.Devices1.Audio` (contract from T-114), and the shell uses it over D-Bus on Linux instead of the mock.
@@ -51,4 +51,10 @@ Settings → Audio and the volume keys control real PipeWire outputs in the VM: 
 - Owning a system-bus name from a user unit: `Type=dbus` + `BusName=` work in user units only for the *user* bus; for the system bus use `Type=simple` (or `notify`) and request the name in code, or `Type=exec` and let the shell retry. Check which you need and record it.
 
 ## Outcome
-_Filled in by the implementer: what was built, files, how it was verified, deviations, follow-ups._
+**Built.** Crate `services/ruya-devices` (pure core `audio.rs`: sinks, default + "previous" stack, hot-plug policy, master/mute, channels, status strings, `PipeWire` trait + `FakePipeWire`; `pipewire.rs`: `pw-dump` JSON and `wpctl` output parsing, Linux-only `WpCtl` running the tools; `store.rs`: channel levels, atomic TOML, corrupt file = error; `dbus.rs`: thin zbus adapter, a 1 s poll task emits `SinksChanged`, `DefaultSinkChanged`, `PropertiesChanged`; `main.rs`: `--session` uses the fake). Image: user unit `image/rootfs/usr/lib/systemd/user/ruya-devices.service` (enabled with `systemctl --global`), D-Bus policy `org.ruyaos.Devices1.conf`, binary in `services-build`, `pipewire-utils` in `20-base.sh`. Shell: `Audio::create` is D-Bus on Linux (`RUYA_SERVICES=mock` for the mock, like `Profiles`); `DBusAudioBackend` re-reads the state when the bus name appears (the user service starts after the shell). `scripts/vm-devices-check.sh`. Contract unchanged.
+
+**Decisions.** `wpctl`/`pw-dump` child processes with `serde_json` (new dependency: parses `pw-dump`; no PipeWire binding to build against). `Type=simple` and the name requested in code (a user unit has no `BusName=` for the system bus). The poll (1 s) also catches changes from outside. Kind is `analog` when nothing says otherwise. `Cargo.lock` also moved two unrelated patch versions when regenerated (a `memchr`-class bump and one more), nothing else.
+
+**Verified.** `dev.ps1 test` ALL GREEN (Rust: 24 `ruya-devices` tests, both clippy targets; 133 QML tests). Image `0.0.10-t128` (WSL build, lint clean): `RUYA_BOOT_OK` with `-Audio`. `vm-devices-check.sh` in the VM, ALL CHECKS PASSED: unit active (`user@972`, `/usr/bin/ruya-devices`), name owned by uid 972 (ruya-shell), `ListSinks` = the HDA sink "Built-in Audio Analog Stereo" default, `MasterVolume` 37 -> `wpctl` `Volume: 0.37`, mute reaches `wpctl`, `SetChannelVolume` ok/invalid, `SetDefaultSink nope` -> `unknown-sink`, `ChannelVolumes` `media 40`, a call as `nobody` -> `Access denied`. `systemd-analyze --user security ruya-devices`: **3.4 OK**. In the running shell (Settings -> Audio, screenshots `output/vm-shots/t128-d.png`, `t128-e.png`): lists the HDA output as Default, shows the persisted Media 40 %, and Left x3 on Master took it 50 % -> 35 % with `wpctl get-volume` = `0.35`.
+
+**Not done / unverified.** Deferring `Sfx` loading until a default sink exists was not attempted. The boot journal of this run had no `QSoundEffect` line at all, which may just be the race going the other way; not proven. Real hot-plug in the VM (the policy is covered by unit tests only). `ruya-devices` restart behaviour with PipeWire down at start: the first read is retried by the poll, not exercised in the VM. Master volume set by the shell while the default is a Bluetooth sink: unverified.
