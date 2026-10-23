@@ -191,6 +191,7 @@ FocusScope {
         width: 1000 * setup.u
         spacing: 28 * setup.u
         Text {
+            objectName: "setupLanguageTitle"
             width: parent.width
             horizontalAlignment: Text.AlignHCenter
             text: qsTr("Language")
@@ -229,6 +230,7 @@ FocusScope {
         width: 1000 * setup.u
         spacing: 28 * setup.u
         Text {
+            objectName: "setupNetworkTitle"
             width: parent.width
             horizontalAlignment: Text.AlignHCenter
             text: qsTr("Network")

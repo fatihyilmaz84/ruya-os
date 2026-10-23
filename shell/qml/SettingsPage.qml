@@ -11,21 +11,32 @@ Page {
 
     title: qsTr("Settings")
 
+    // Keys only: the list's model must not change with the language (that would reset its
+    // currentIndex); the labels are bindings through labelFor().
     readonly property var categories: [
-        { key: "profiles", label: qsTr("Profiles") },
-        { key: "network", label: qsTr("Network") },
-        { key: "bluetooth", label: qsTr("Bluetooth & controllers") },
-        { key: "display", label: qsTr("Display & motion") },
-        { key: "audio", label: qsTr("Audio") },
-        { key: "storage", label: qsTr("Storage") },
-        { key: "accessibility", label: qsTr("Accessibility") },
-        { key: "system", label: qsTr("System") },
-        { key: "about", label: qsTr("About") },
+        { key: "profiles" }, { key: "network" }, { key: "bluetooth" }, { key: "display" },
+        { key: "audio" }, { key: "storage" }, { key: "accessibility" }, { key: "system" }, { key: "about" },
     ]
+
+    function labelFor(key) {
+        switch (key) {
+        case "profiles": return qsTr("Profiles")
+        case "network": return qsTr("Network")
+        case "bluetooth": return qsTr("Bluetooth & controllers")
+        case "display": return qsTr("Display & motion")
+        case "audio": return qsTr("Audio")
+        case "storage": return qsTr("Storage")
+        case "accessibility": return qsTr("Accessibility")
+        case "system": return qsTr("System")
+        case "about": return qsTr("About")
+        }
+        return key
+    }
     readonly property var current: categories[categoryList.currentIndex]
     readonly property SettingsPane currentPane: current.key === "profiles" ? profilesPane
                                               : current.key === "display" ? displayPane
                                               : current.key === "audio" ? audioPane
+                                              : current.key === "system" ? systemPane
                                               : current.key === "about" ? aboutPane : null
 
     function enterPane() {
@@ -73,7 +84,7 @@ Page {
 
             Text {
                 anchors { left: parent.left; leftMargin: 32 * page.u; right: parent.right; rightMargin: 24 * page.u; verticalCenter: parent.verticalCenter }
-                text: category.modelData.label
+                text: page.labelFor(category.modelData.key)
                 color: category.selected ? Theme.text : Theme.textDim
                 font.pixelSize: 30 * page.u
                 elide: Text.ElideRight
@@ -113,6 +124,15 @@ Page {
             enabled: visible
             onExitRequested: page.leavePane()
         }
+        SystemPane {
+            id: systemPane
+            objectName: "paneSystem"
+            anchors.fill: parent
+            u: page.u
+            visible: page.current.key === "system"
+            enabled: visible
+            onExitRequested: page.leavePane()
+        }
         AboutPane {
             id: aboutPane
             objectName: "paneAbout"
@@ -128,7 +148,7 @@ Page {
             visible: page.currentPane === null
             spacing: 16 * page.u
             Text {
-                text: page.current.label
+                text: page.labelFor(page.current.key)
                 color: Theme.text
                 font.pixelSize: 44 * page.u
                 font.weight: Font.Light

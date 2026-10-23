@@ -40,6 +40,17 @@ FocusScope {
         focusCurrent()
     }
 
+    function tileTitle(key) {
+        switch (key) {
+        case "games": return qsTr("Games")
+        case "media": return qsTr("Media")
+        case "store": return qsTr("Store")
+        case "settings": return qsTr("Settings")
+        case "power": return qsTr("Power")
+        }
+        return key
+    }
+
     // Gives focus to whatever is on top: the open page, else the home tiles.
     function focusCurrent() {
         if (!signedIn)
@@ -328,15 +339,14 @@ FocusScope {
             keyNavigationEnabled: true   // ...but keys still navigate (defaults to `interactive`)
             clip: false
 
-            model: ListModel {
-                ListElement { key: "games"; title: "Games" }
-                ListElement { key: "media"; title: "Media" }
-                ListElement { key: "store"; title: "Store" }
-                ListElement { key: "settings"; title: "Settings" }
-                ListElement { key: "power"; title: "Power" }
-            }
+            // Keys only: a model whose contents change (e.g. translated titles) would reset
+            // currentIndex when the language changes. The title is a binding in the delegate.
+            model: ["games", "media", "store", "settings", "power"]
 
             delegate: Tile {
+                required property string modelData
+                key: modelData
+                title: root.tileTitle(modelData)
                 u: root.u
                 width: 400 * root.u
                 height: tiles.height

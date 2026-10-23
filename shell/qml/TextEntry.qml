@@ -34,7 +34,7 @@ FocusScope {
     property int focusCol: 0
     property bool keyboardMode: false     // last input came from a physical keyboard
 
-    readonly property var rows: layoutFor(symbols, layout)
+    readonly property var rows: layoutFor(symbols, layout, DeviceSettings.language)
     readonly property var focusedKey: rows[focusRow].keys[focusCol]
     readonly property string displayText: mask ? "•".repeat(text.length) : text
     readonly property bool canFinish: text.length > 0
@@ -106,13 +106,33 @@ FocusScope {
 
     // Rows of keys with geometry in key units: x (left edge) and cx (centre). The row
     // widths are 10 units on every page, so the columns line up across rows.
-    function layoutFor(onSymbols, kind) {
+    //
+    // Letters per language: a language is one data entry (add one for each in DeviceSettings.isValidLanguage).
+    // Rows with more keys than fit are narrowed so every row stays 10 units; `upper` lists the
+    // shift mappings that toUpperCase() gets wrong (Turkish dotted/dotless i).
+    readonly property var letterSets: ({
+        en: { top: "qwertyuiop", home: "asdfghjkl", bottom: "zxcvbnm", upper: {} },
+        tr: { top: "qwertyuıopğü", home: "asdfghjklşi", bottom: "zxcvbnmöç", upper: { "i": "İ", "ı": "I" } },
+    })
+
+    function layoutFor(onSymbols, kind, lang) {
         const chr = (label, w) => ({ kind: "char", label: label, value: label, w: w ?? 1 })
         const chars = s => Array.from(s).map(c => chr(c))
         const act = (type, label, w) => ({ kind: type, label: label, value: type, w: w })
         const space = w => act("space", qsTr("Space"), w)
         const done = act("done", qsTr("Done"), 2)
         const back = act("back", qsTr("Del"), 1.5)
+        const set = letterSets[lang] ?? letterSets.en
+        // A row of letters filling 10 units: keys are 1 unit wide, narrower when there are more
+        // than fit; a short row is centred. `sides` is the number of action keys around it.
+        const fitted = (letters, sides, before, after) => {
+            const n = letters.length
+            const actW = n > 7 ? 1.25 : 1.5
+            const w = Math.min(1, (10 - (sides ? 2 * actW : 0)) / n)
+            const indent = sides ? 0 : (10 - n * w) / 2
+            const keys = Array.from(letters).map(c => chr(c, w))
+            return { indent: indent, keys: sides ? before(actW).concat(keys, after(actW)) : keys }
+        }
 
         let bottom
         if (kind === "email")
@@ -130,9 +150,9 @@ FocusScope {
             { indent: 0, keys: bottom },
         ] : [
             { indent: 0, keys: chars("1234567890") },
-            { indent: 0, keys: chars("qwertyuiop") },
-            { indent: 0.5, keys: chars("asdfghjkl") },
-            { indent: 0, keys: [act("shift", qsTr("Shift"), 1.5)].concat(chars("zxcvbnm"), [back]) },
+            fitted(set.top, 0),
+            fitted(set.home, 0),
+            fitted(set.bottom, 2, w => [act("shift", qsTr("Shift"), w)], w => [act("back", qsTr("Del"), w)]),
             { indent: 0, keys: bottom },
         ]
         return spec.map(r => {
@@ -146,8 +166,13 @@ FocusScope {
         })
     }
 
+    function upper(c) {
+        const set = letterSets[DeviceSettings.language] ?? letterSets.en
+        return set.upper[c] ?? c.toUpperCase()
+    }
+
     function labelFor(key) {
-        return key.kind === "char" && shift && key.label.length === 1 ? key.label.toUpperCase() : key.label
+        return key.kind === "char" && shift && key.label.length === 1 ? upper(key.label) : key.label
     }
 
     function clampFocus() {

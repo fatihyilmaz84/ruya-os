@@ -116,6 +116,7 @@ It prints `pkcheck` verdicts for the six `login1` actions for the `ruya-shell` p
 | `.\scripts\dev.ps1 run` | The shell in a window with mock services |
 | `.\scripts\dev.ps1 rust` / `shell` | Half of `test` |
 | `.\scripts\lint-tokens.ps1` | The token lint alone (also called by `dev.ps1 shell` and by CI). Exit 1 and a list of `file:line` on findings. |
+| `.\scripts\lint-translations.ps1` | The translation lint alone (also called by `dev.ps1 shell` and by CI): fails on any `type="unfinished"` entry in `shell/i18n/*.ts`. Refresh the files first with `cmake --build shell\build-win --config Release --target update_translations` (needs `lupdate`, in the Qt `bin`). |
 | `.\scripts\lint-text.ps1` | The text lint alone (also called by `dev.ps1 test` and by CI). Checks the files `git ls-files` lists, so `git add` a new file before relying on it. Exit 1 and a list of `file:line` on findings. |
 | `.\scripts\repro-first-build.ps1 [-Name X]` | Adds a scratch C++ QML type, runs `dev.ps1 shell` once, removes the type, rebuilds. Exit 0 means adding and removing a type works on the first run (T-116). Takes about 3 minutes; run it only if "X is not defined" ever comes back. |
 
@@ -125,7 +126,7 @@ It prints `pkcheck` verdicts for the six `login1` actions for the `ruya-shell` p
 
 | CI job | Runs | Local equivalent |
 |---|---|---|
-| `lint` | `pwsh scripts/lint-text.ps1`, `pwsh scripts/lint-tokens.ps1` | the "text lint" step of `dev.ps1 test` and the "token lint" step of `dev.ps1 shell` |
+| `lint` | `pwsh scripts/lint-text.ps1`, `pwsh scripts/lint-tokens.ps1`, `pwsh scripts/lint-translations.ps1` | the "text lint" step of `dev.ps1 test` and the "token lint" and "translation lint" steps of `dev.ps1 shell` |
 | `services` | `cargo fmt --check`, `clippy -D warnings`, `cargo test` (Ubuntu) | `dev.ps1 rust` |
 | `shell` | build with Fedora's Qt (Fedora 44 container), `qmllint --max-warnings 0`, Qt Quick tests offscreen | `dev.ps1 shell` (Qt 6.10.3 on MSVC here; CI also proves that no API newer than Qt 6.8 crept in) |
 | `image` | needs the three jobs above; `scripts/build.sh`, `make-disk.sh qcow2`, `smoke-test.sh` under KVM (about 20 minutes); uploads `serial.log` | the WSL build and `smoke-test.ps1` (image section above) |
@@ -181,7 +182,7 @@ busctl --user call org.ruyaos.Profiles1 /org/ruyaos/Profiles1 org.ruyaos.Profile
 RUYA_DBUS=session RUYA_SERVICES=dbus shell/build/ruya-shell --windowed
 ```
 
-**On Linux:** you don't have to reflash for QML changes. On any Linux machine or VM with Qt ≥ 6.8 (`qt6-qtdeclarative-devel qt6-qtmultimedia-devel`):
+**On Linux:** you don't have to reflash for QML changes. On any Linux machine or VM with Qt ≥ 6.8 (`qt6-qtdeclarative-devel qt6-qtmultimedia-devel qt6-qttools-devel qt6-linguist`):
 
 ```bash
 cmake -S shell -B shell/build -G Ninja && cmake --build shell/build && shell/build/ruya-shell --mock-services

@@ -22,6 +22,7 @@ FocusScope {
     }
 
     Text {
+        objectName: "pickerTitle"
         anchors { horizontalCenter: parent.horizontalCenter; bottom: list.top; bottomMargin: 80 * picker.u }
         text: qsTr("Who's playing?")
         opacity: pinPad.shown ? 0 : 1      // the PIN pad replaces the chooser, not overlays it

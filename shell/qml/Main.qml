@@ -17,5 +17,8 @@ Window {
         anchors.fill: parent
         version: window.version
         focus: true
+        // --reverse (RTL readiness check): mirror anchors and horizontal lists for a right-to-left layout.
+        LayoutMirroring.enabled: Application.layoutDirection === Qt.RightToLeft
+        LayoutMirroring.childrenInherit: true
     }
 }

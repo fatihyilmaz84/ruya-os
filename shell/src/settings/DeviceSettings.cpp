@@ -1,5 +1,8 @@
 #include "DeviceSettings.h"
 
+#include <QCoreApplication>
+#include <QLocale>
+#include <QMetaObject>
 #include <QtMath>
 
 namespace {
@@ -19,9 +22,14 @@ DeviceSettings::DeviceSettings(bool persistent, QObject *parent)
         const qreal overscan = m_store->value(QStringLiteral("display/overscan"), m_overscan).toReal(&ok);
         if (ok && overscan >= 0.0 && overscan <= kMaxOverscan)
             m_overscan = overscan;
-        const QString language = m_store->value(QStringLiteral("general/language"), m_language).toString();
-        if (isValidLanguage(language))
+        const QString language = m_store->value(QStringLiteral("general/language")).toString();
+        if (isValidLanguage(language)) {
             m_language = language;
+        } else {
+            const QString system = QLocale::system().name().section(QLatin1Char('_'), 0, 0);
+            if (isValidLanguage(system))
+                m_language = system;
+        }
     }
 
     if (qEnvironmentVariableIntValue("RUYA_FORCE_REDUCED_MOTION") != 0)
@@ -35,11 +43,32 @@ DeviceSettings::DeviceSettings(bool persistent, QObject *parent)
     }
 }
 
-DeviceSettings::~DeviceSettings() = default;
-
-DeviceSettings *DeviceSettings::create(QQmlEngine *, QJSEngine *)
+DeviceSettings::~DeviceSettings()
 {
-    return new DeviceSettings(qEnvironmentVariableIntValue("RUYA_SETTINGS_EPHEMERAL") == 0);
+    QCoreApplication::removeTranslator(&m_translator);
+}
+
+DeviceSettings *DeviceSettings::create(QQmlEngine *qmlEngine, QJSEngine *)
+{
+    auto *settings = new DeviceSettings(qEnvironmentVariableIntValue("RUYA_SETTINGS_EPHEMERAL") == 0);
+    settings->m_engine = qmlEngine;
+    settings->applyLanguage(false);
+    // Bindings evaluated before this singleton existed used the source (English) strings.
+    if (qmlEngine)
+        QMetaObject::invokeMethod(qmlEngine, [qmlEngine] { qmlEngine->retranslate(); }, Qt::QueuedConnection);
+    return settings;
+}
+
+// English is the source language; its .qm only adds the plural forms, so it is installed too.
+void DeviceSettings::applyLanguage(bool retranslate)
+{
+    QCoreApplication::removeTranslator(&m_translator);
+    if (!m_translator.load(QStringLiteral("ruyashell_%1").arg(m_language), QStringLiteral(":/i18n")))
+        qWarning("ruya-shell: no translation for '%s'", qPrintable(m_language));
+    else
+        QCoreApplication::installTranslator(&m_translator);
+    if (retranslate && m_engine)
+        m_engine->retranslate();
 }
 
 bool DeviceSettings::isValidQuality(const QString &value)
@@ -116,5 +145,6 @@ void DeviceSettings::setLanguage(const QString &value)
     m_language = value;
     if (m_store)
         m_store->setValue(QStringLiteral("general/language"), value);
+    applyLanguage(true);
     emit languageChanged();
 }

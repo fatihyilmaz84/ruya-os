@@ -3,7 +3,7 @@ project(ruya-shell VERSION 0.1.0 LANGUAGES CXX)
 
 option(RUYA_BUILD_TESTS "Build the Qt Quick tests" ON)
 
-find_package(Qt6 6.8 REQUIRED COMPONENTS Gui Quick Multimedia DBus)
+find_package(Qt6 6.8 REQUIRED COMPONENTS Gui Quick Multimedia DBus LinguistTools)
 qt_standard_project_setup(REQUIRES 6.8)
 
 # Everything except main() is a static QML module, so the app and the tests share it.
@@ -61,6 +61,7 @@ qt_add_qml_module(ruyashell
         qml/ChangePinFlow.qml
         qml/DisplayPane.qml
         qml/AudioPane.qml
+        qml/SystemPane.qml
         qml/AboutPane.qml
         qml/controls/SettingControl.qml
         qml/controls/SettingRow.qml
@@ -76,6 +77,17 @@ qt_add_qml_module(ruyashell
 # qmltyperegistrar includes the QML_ELEMENT headers by file name.
 target_include_directories(ruyashell PUBLIC src/profiles src/settings src/audio src/system src/power)
 target_link_libraries(ruyashell PRIVATE Qt6::Quick Qt6::Multimedia Qt6::DBus)
+
+# Translations: the .ts files in i18n/ are compiled to .qm and embedded as :/i18n/ruyashell_<lang>.qm.
+# English is the source language, but its .ts carries the plural forms ("1 attempt left").
+# To add a language: add i18n/ruyashell_<code>.ts here, add the code to DeviceSettings::isValidLanguage
+# and to the language rows (SystemPane.qml, Setup.qml). Refresh the .ts files with:
+#   cmake --build build-win --config Release --target update_translations
+qt_add_translations(ruyashell
+    TS_FILES i18n/ruyashell_en.ts i18n/ruyashell_tr.ts
+    RESOURCE_PREFIX /i18n
+    LUPDATE_OPTIONS -locations relative
+)
 
 # Visual Studio generators skip qmltyperegistrar on the first build after a header changed, so a
 # new QML_ELEMENT type is "not defined" until the second build, and a removed one breaks the

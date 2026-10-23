@@ -1,6 +1,6 @@
 # T-109 — Translations (English, Turkish) with live switching
 
-Status: todo · Phase: 2 · Depends: T-103, T-106 (done: `DeviceSettings.language` and the Setup wizard exist) · Area: shell · Size: M
+Status: done · Phase: 2 · Depends: T-103, T-106 (done: `DeviceSettings.language` and the Setup wizard exist) · Area: shell · Size: M
 
 ## Goal
 Every shell string is translatable. A Turkish translation ships, and switching language in Settings re-translates the UI immediately, without a restart.
@@ -52,4 +52,25 @@ Every shell string is translatable. A Turkish translation ships, and switching l
 - `lupdate` lives next to the other Qt tools in `D:\dev\Qt\6.10.3\msvc2022_64\bin`. With `qt_add_translations`, the `update_translations` CMake target runs it: `cmake --build shell\build-win --config Release --target update_translations`.
 
 ## Outcome
-_Filled in by the implementer._
+**Built.**
+- **Translations:** `shell/i18n/ruyashell_en.ts` and `ruyashell_tr.ts` (140 messages each), `qt_add_translations` in `CMakeLists.txt` (resource prefix `/i18n`; `LinguistTools` is now a build dependency: `qt6-qttools-devel qt6-linguist` added to the CI `shell` job, the image's `shell-build` stage and `dev-setup.md`). The `.ts` files are refreshed with the `update_translations` target. The English file is only there for the `%n` plural forms ("1 attempt left" / "3 attempts left"); every English entry's translation is its own source, so a source string is never "unfinished".
+- **Language handling:** `DeviceSettings` owns it (no second setting). `setLanguage` installs the `QTranslator` (`:/i18n/ruyashell_<lang>.qm`) and calls `QQmlEngine::retranslate()`; the engine is taken in `create()`, which also installs the startup translator and queues one `retranslate()` (bindings evaluated before the singleton existed used English). Startup default: stored value, else system locale (`tr_*` gives `tr`), else `en`; ephemeral mode (tests) is always `en`.
+- **UI:** `SystemPane.qml` (Settings -> System, one "Language" `ChoiceRow`, registered in `SettingsPage.qml`); the Setup wizard's language step uses the same property.
+- **Turkish keyboard:** `TextEntry.letterSets` is data per language; with `tr` the letters page has `qwertyuıopğü` / `asdfghjklşi` / `zxcvbnmöç`, the rows are narrowed so each stays 10 key units, and Shift maps i -> İ and ı -> I (an explicit `upper` table, because the QML engine's `toUpperCase()` is not locale aware; the task hinted `toLocaleUpperCase`).
+- **RTL check:** `--reverse` (`main.cpp`, `QGuiApplication::setLayoutDirection`) and `Main.qml` sets `LayoutMirroring` from `Application.layoutDirection`.
+- **Lint:** `scripts/lint-translations.ps1` (no `type="unfinished"` in `shell/i18n`), called by `dev.ps1 shell` and the CI `lint` job. Result: **0 unfinished in both files**.
+
+**Bugs found on the way (fixed).** A live language change must not rebuild a list model: `SettingsPage.categories` and the home tiles' `ListModel` carried the translated labels, so `retranslate()` replaced the model and reset `currentIndex` (focus left the language row; the home tiles would have jumped back to "Games"). Both models are now key lists with the label as a binding (`SettingsPage.labelFor`, `Shell.tileTitle`); `shell/CLAUDE.md` records the rule. Tested (`test_settings_language_row`, `test_home_tiles_follow_language`).
+
+**Audit** (every user-visible string goes through `qsTr`; checked by grepping all `text:`/`title:`/`label:` literals and by the `lupdate` count): AboutPane, AudioPane, ChangePinFlow, ComingSoon, DisplayPane, GamesPage, MediaPage, StorePage, PinPad, PowerConfirm, PowerPage, ProfileAddFlow, ProfileCard, ProfilePicker, ProfileStatus, ProfilesPane, SettingsPage, Setup, Shell (tiles, overlay, toasts), SystemPane, TextEntry, VolumeOsd, plus `main.cpp` (no user-visible text). Not translated on purpose: "RuyaOS", the language names, the `FpsMeter` unit "FPS" (debug). The tile titles in `Shell.qml` were plain `ListElement` strings, now `qsTr`.
+
+**Verification.** `dev.ps1 test` ALL GREEN and `dev.ps1 shots` ALL GREEN (143 tests; the first `shots` run hit the known `Power` guide-key flake and passed on the re-run). New: `tst_i18n.qml` (`test_default_is_english`, `test_switch_to_turkish`, `test_switch_back`, `test_plurals`, `test_settings_language_row`, `test_setup_follows_language`, `test_home_tiles_follow_language`, `test_rtl_navigation`), `tst_textentry.qml::test_turkish_layout`. Screenshots `15-picker-tr.png`, `16-settings-tr.png`, `16b-keyboard-tr.png` reviewed: no clipped or overlapping text, keyboard rows fit (the letter keys are narrower, labels stay legible).
+
+**Image.** Built in WSL as `0.0.7-t109` (`bootc container lint --fatal-warnings` clean; the first attempt failed in the shell stage because Fedora's `Qt6LinguistTools` CMake config is in `qt6-qttools-devel`, so both `qt6-qttools-devel` and `qt6-linguist` are installed), disk made, `smoke-test.ps1` printed `RUYA_BOOT_OK 0.0.7-t109`. **Unverified:** switching the language inside the VM and the shell journal's absence of `no translation for` warnings (the VM boots in `en`; I did not open an SSH session), Turkish rendering with the image's fonts.
+
+**Deviations and known gaps.**
+- **Stored messages keep their language** until the next event (as the task allowed): `PinPad.message` ("Wrong PIN..."), `Setup.message`, the Profiles pane status line, and toast text. The lockout countdown and all labels are bindings and do change at once.
+- **RTL is a readiness check, not finished work.** Tested: sign-in (mirrored picker), home tiles and Settings navigation. Not checked by eye (no RTL screenshots reviewed) and likely wrong: the PIN pad's `GridView` mirrors, so the digits would appear reversed (digits should stay left to right); the on-screen keyboard positions keys with explicit `x`, so it stays left to right (acceptable). Slider/toggle rows, the toast layer and `ProfileCard` badges were not examined. One Inbox line added.
+- `qt_add_translations` also hands `sounds/*.wav` to `lupdate`, which prints a harmless "Excess closing parenthesis" warning per file.
+- Turkish text is mine (natural, short console-UI wording); it has not had a native review. One Inbox line.
+

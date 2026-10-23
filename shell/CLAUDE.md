@@ -77,6 +77,24 @@ Messages for Profiles1 statuses (`invalid`, `wrong-pin`, ...) come from the `Pro
 
 Use `TextEntry` (`qml/TextEntry.qml`, spec 02-shell §4.4) for any text input; never a raw `TextInput` without it. Host it as a full-screen child of the screen that needs it, call `open(title, initial, options)`, and handle `accepted(text)`/`cancelled()`. It restores focus to the item that opened it.
 
+## Translations
+
+- Strings are translated with Qt `.ts` files in `shell/i18n/` (`ruyashell_en.ts`, `ruyashell_tr.ts`), compiled by `qt_add_translations` into resources `:/i18n/ruyashell_<lang>.qm`. English is the source language; its `.ts` only exists for the plural forms (`%n`), so every English entry's translation is its own source text.
+- `DeviceSettings.language` is the one place the language lives. Setting it installs the `QTranslator` and calls `QQmlEngine::retranslate()`, so the UI changes live. Defaults: the stored value, else the system locale, else `en`; with `RUYA_SETTINGS_EPHEMERAL=1` (tests) always `en`.
+- **After adding or changing a `qsTr` string**, refresh the files and translate the new entries (Turkish and the English copy), then check:
+
+  ```powershell
+  cmake --build shell\build-win --config Release --target update_translations
+  .\scripts\lint-translations.ps1
+  ```
+
+  `lint-translations.ps1` (also run by `dev.ps1 shell` and CI) fails on any `type="unfinished"` entry. Look for entries `lupdate` marked `vanished`/`obsolete` after a refactor and delete them.
+- **Bindings re-translate; stored values don't.** `retranslate()` re-evaluates bindings that call `qsTr`. A message written into a property at event time (`message = qsTr(...)`, `ProfileStatus.describe(...)` results kept in `Setup`, `ProfilesPane`, `PinPad`; toast text in `Notifications`) keeps its language until the next event. That is accepted for transient messages; for anything long-lived derive the text in a binding.
+- **A model must not change with the language.** Assigning a new array to a `ListView`/`Repeater` model resets `currentIndex` (and so focus). Models hold keys only (`Shell.tiles`, `SettingsPage.categories`); the visible text is a binding in the delegate (`Shell.tileTitle`, `SettingsPage.labelFor`). Add new translated lists the same way.
+- **Do not translate** the brand "RuyaOS" and the language names ("English", "Türkçe", each shown in its own language).
+- **Add a language:** add `i18n/ruyashell_<code>.ts` to `qt_add_translations` in `CMakeLists.txt`; add the code to `DeviceSettings::isValidLanguage`; add an option to the language `ChoiceRow`s (`SystemPane.qml`, `Setup.qml`); add a `letterSets` entry in `TextEntry.qml` if its letters differ from a-z.
+- **RTL check:** `ruya-shell --reverse` lays the UI out right-to-left (`Main.qml` sets `LayoutMirroring` from `Application.layoutDirection`). Left/Right then mean the visual direction on horizontal lists.
+
 ## Tests (required for every behaviour you add)
 
 - Drive the UI with `keyClick()` using only the keys listed above, unless a test is specifically about keyboard input.

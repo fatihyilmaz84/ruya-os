@@ -1,15 +1,18 @@
 #pragma once
 
 #include <QObject>
+#include <QPointer>
 #include <QQmlEngine>
 #include <QSettings>
 #include <QString>
+#include <QTranslator>
 
 #include <memory>
 #include <optional>
 
 // Per-device settings (not per profile): reduced motion, effects quality tier, the
-// overscan-safe margin and the UI language. Persisted with QSettings (ruyaos/shell). With
+// overscan-safe margin and the UI language (setting it installs the matching QTranslator and
+// retranslates the QML engine, so the UI follows live). Persisted with QSettings (ruyaos/shell). With
 // RUYA_SETTINGS_EPHEMERAL=1 values live in memory only (tests).
 //
 // Command-line overrides (--reduced-motion, --effects) are session-only: main.cpp passes
@@ -26,7 +29,8 @@ class DeviceSettings : public QObject
     Q_PROPERTY(QString effectsQuality READ effectsQuality WRITE setEffectsQuality NOTIFY effectsQualityChanged)
     // Safe-area margin as a fraction of the screen, 0.0 - 0.10.
     Q_PROPERTY(qreal overscan READ overscan WRITE setOverscan NOTIFY overscanChanged)
-    // UI language: "en" | "tr". Chosen in first-boot setup; T-109 makes the UI follow it.
+    // UI language: "en" | "tr". Chosen in first-boot setup or Settings -> System.
+    // Default: the stored value, else the system locale (persistent mode), else "en"; ephemeral = "en".
     Q_PROPERTY(QString language READ language WRITE setLanguage NOTIFY languageChanged)
 
 public:
@@ -47,6 +51,9 @@ public:
     void setOverscan(qreal value);
     void setLanguage(const QString &value);
 
+    // Installs the translator for m_language and, when `retranslate`, refreshes the engine's bindings.
+    void applyLanguage(bool retranslate);
+
     static bool isValidQuality(const QString &value);
     static bool isValidLanguage(const QString &value);
 
@@ -58,6 +65,8 @@ signals:
 
 private:
     std::unique_ptr<QSettings> m_store; // null when ephemeral
+    QPointer<QQmlEngine> m_engine;
+    QTranslator m_translator;
     bool m_reducedMotion = false;
     QString m_quality = QStringLiteral("high");
     qreal m_overscan = 0.05;

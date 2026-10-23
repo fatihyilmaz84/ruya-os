@@ -38,6 +38,7 @@ Item {
         when: windowShown
 
         function init() {
+            DeviceSettings.language = "en"
             entry.shown = false
             entry.text = ""
             acceptedSpy.clear()
@@ -349,6 +350,31 @@ Item {
             verify(find("q") !== null)
         }
 
+        function test_turkish_layout() {
+            openEntry("Ad", "")
+            verify(find("ç") === null, "English layout has no Turkish letters")
+            DeviceSettings.language = "tr"
+            for (const c of "çğıöşü")
+                verify(find(c) !== null, "Turkish layout has " + c)
+            for (const row of entry.rows) {
+                let width = 0
+                for (const k of row.keys)
+                    width += k.w
+                const lead = row.keys[0].x
+                compare(Math.round((width + 2 * lead) * 1000) / 1000, 10, "every row stays 10 key units")
+            }
+            pressKey("ç")
+            pressKey("ı")
+            pressKey("shift")
+            pressKey("i")                              // Shift + i -> İ
+            pressKey("shift")
+            pressKey("ı")                              // Shift + ı -> I
+            compare(entry.text, "çıİI")
+            DeviceSettings.language = "en"
+            verify(find("ç") === null, "back to the English layout")
+            verify(find("q") !== null)
+        }
+
         function test_zz_screenshots() {
             if (!shotsDir)
                 skip("set RUYA_SHOTS_DIR to save screenshots")
@@ -357,6 +383,9 @@ Item {
             keyClick(Qt.Key_Right)
             wait(600)
             grabImage(host).save(shotsDir + "/9-text-entry.png")
+            DeviceSettings.language = "tr"
+            wait(600)
+            grabImage(host).save(shotsDir + "/16b-keyboard-tr.png")
         }
     }
 }

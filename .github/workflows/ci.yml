@@ -26,6 +26,8 @@ jobs:
         run: pwsh -NoProfile -File scripts/lint-text.ps1
       - name: Token lint
         run: pwsh -NoProfile -File scripts/lint-tokens.ps1
+      - name: Translation lint
+        run: pwsh -NoProfile -File scripts/lint-translations.ps1
 
   services:
     runs-on: ubuntu-24.04
@@ -46,7 +48,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install Qt
-        run: dnf -y install --setopt=install_weak_deps=False cmake ninja-build gcc-c++ qt6-qtbase-devel qt6-qtdeclarative-devel qt6-qtmultimedia-devel
+        run: dnf -y install --setopt=install_weak_deps=False cmake ninja-build gcc-c++ qt6-qtbase-devel qt6-qtdeclarative-devel qt6-qtmultimedia-devel qt6-qttools-devel qt6-linguist
       - name: Build
         run: cmake -S shell -B shell/build -G Ninja -DCMAKE_BUILD_TYPE=Release && cmake --build shell/build
       - name: qmllint

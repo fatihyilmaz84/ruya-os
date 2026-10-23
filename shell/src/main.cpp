@@ -40,7 +40,12 @@ int main(int argc, char *argv[])
                                      QStringLiteral("Force the effects quality tier for this session (not saved)."),
                                      QStringLiteral("high|balanced|performance"));
     parser.addOption(effects);
+    const QCommandLineOption reverse(QStringLiteral("reverse"),
+                                     QStringLiteral("Lay the UI out right-to-left (RTL readiness check)."));
+    parser.addOption(reverse);
     parser.process(app);
+    if (parser.isSet(reverse))
+        QGuiApplication::setLayoutDirection(Qt::RightToLeft);
     if (parser.isSet(mockServices))
         qputenv("RUYA_SERVICES", "mock"); // read when the Profiles singleton is created
     // Read when the DeviceSettings singleton is created; session-only, never persisted.

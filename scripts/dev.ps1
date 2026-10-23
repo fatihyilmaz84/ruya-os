@@ -127,6 +127,13 @@ function Test-Tokens {
     Record "token lint" ($LASTEXITCODE -eq 0)
 }
 
+# The rules live in scripts\lint-translations.ps1 (shared with CI).
+function Test-Translations {
+    Step "translation lint (no unfinished entries in shell\i18n)"
+    & (Join-Path $PSScriptRoot "lint-translations.ps1")
+    Record "translation lint" ($LASTEXITCODE -eq 0)
+}
+
 # The rules live in scripts\lint-text.ps1 (shared with CI).
 function Test-Text {
     Step "text lint (tracked files are UTF-8, no stray control characters)"
@@ -137,6 +144,7 @@ function Test-Text {
 function Do-Shell {
     Do-Build
     Test-Tokens
+    Test-Translations
     Step "qmllint (module context)"
     # --max-warnings 0: without it qmllint exits 0 even when it reports warnings.
     Invoke-Native "qmllint" { qmllint --max-warnings 0 "@$ShellBuild\.rcc\qmllint\ruyashell.rsp" }
