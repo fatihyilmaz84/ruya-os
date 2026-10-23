@@ -11,6 +11,7 @@ FocusScope {
     property string title
     property string version      // image version, set by the shell
     property Item overlay        // full-screen layer above pages, for modals (PIN pad, keyboard)
+    property var params: ({})    // plain object given to Shell.openPage(key, params)
 
     // Safe-area insets, set by the shell.
     property real marginX: 0

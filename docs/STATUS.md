@@ -2,7 +2,7 @@
 
 **Read this first in every session; update it last.** The rules are in the root `CLAUDE.md`, the roles (Opus lead, Sonnet builders) in `docs/LEAD.md`, the task format in `docs/tasks/README.md`.
 
-Last updated: 2026-10-24 (Opus 5.5, lead review)
+Last updated: 2026-10-24 (Sonnet 5.5, T-119)
 
 ## Where we are
 
@@ -14,14 +14,13 @@ Verification legend: **host** = built and tested on the Windows host · **vm** =
 
 ## Board
 
-**NEXT → T-119**
+**NEXT → T-131**
 
-**Lead review due: after 4 more builder tasks** (reviewed up to the lead commit of 2026-10-24 "lead review 1e5ae5e..4b811c6", see `docs/LEAD-NOTES.md`). Builders: when your task makes this condition true, end your reply by recommending a lead session.
+**Lead review due: after 3 more builder tasks** (reviewed up to the lead commit of 2026-10-24 "lead review 1e5ae5e..4b811c6", see `docs/LEAD-NOTES.md`). Builders: when your task makes this condition true, end your reply by recommending a lead session.
 
 | ID | Title | Status | Depends | Verified |
 |---|---|---|---|---|
 | [T-130](tasks/T-130-compositor-session.md) | **[lead]** Compositor session: `ruya-shell` replaces cage (ADR-002 A), app layer and key routing | todo | T-123 | |
-| [T-119](tasks/T-119-nested-pages.md) | Page host: nested pages that keep their state | todo | T-101 | |
 | [T-131](tasks/T-131-profile-rename-delete-ui.md) | Settings → Profiles: rename and delete a profile (mock + VM) | todo | T-118, T-105 | |
 | [T-110](tasks/T-110-store-contract-and-mock.md) | Store contract and mock backend | todo | — | |
 | [T-129](tasks/T-129-network-contract-and-settings.md) | Network: `Devices1` network contract, mock, Settings → Network | todo | T-114 | |
@@ -74,6 +73,7 @@ A session can't know its own commit hash before committing, so new rows put the 
 | T-128 | `ruya-devices` audio service (`Devices1.Audio` over `pw-dump`/`wpctl`), user unit of `ruya-shell`, D-Bus policy, shell uses D-Bus by default on Linux, `vm-devices-check.sh` | host (`dev.ps1 test` green, 24 new Rust tests) · **vm** (image `0.0.10-t128`: `RUYA_BOOT_OK`, check script all pass, Settings -> Audio lists the HDA sink, Master slider moves `wpctl`, exposure 3.4) · hot-plug in the VM: unverified | T-128 |
 | T-127 | `dev.ps1 shots`: `WindowGuard` in the test host re-activates the test window before each test and logs `TEST WINDOW LOST ACTIVATION` when the desktop takes focus | host (`test` and `shots` green; lead `shots` 144 passed, no loss) · manual click-away: unverified | T-127 |
 | T-118 | Profiles1: `RenameProfile` and `DeleteProfile` (contract, service rules, `Accounts::remove` with `userdel --remove`, mock, shell backend and facade; no UI) | service + mock: host (`dev.ps1 rust` and `test` green, 6 service tests, `test_mock_lifecycle_rules_match_service`) · **vm** (image `0.0.9-t118`: `RUYA_BOOT_OK`, rename and delete over the bus, user and home removed, ids not reused; `userdel` needs no extra capability) · the shell's `DBusProfilesBackend` calls: **unverified** (compiled only) | T-118 |
+| T-119 | Page host: one live page item per stack entry, `openPage(key, params)`, `currentParams`, `Shell.extraPages`; lower pages keep state and focus | host (`dev.ps1 test` and `shots` green, 5 new tests in `tst_pages.qml`) | T-119 |
 
 ## Blocked (need something this host doesn't have)
 
@@ -100,6 +100,8 @@ A session can't know its own commit hash before committing, so new rows put the 
 ## Session log (newest first)
 
 Each entry: date · model · tasks · what happened · verification · follow-ups. Keep entries short and factual.
+
+- 2026-10-24 · Sonnet 5.5 · T-119 · Nested pages: `pageStack` entries `{key, params}`, one slot with a live page per entry (replaces the `Loader`), lower pages hidden/disabled but kept, focus item restored on pop, `extraPages`, sign-out destroys all. `test` ALL GREEN (138), `shots` ALL GREEN (149, one earlier run lost desktop focus). No visual change. Lead review due after 3 more builder tasks.
 
 - 2026-10-24 · Opus 5.5 · Lead (disk space, owner report) · Every image build left the previous image untagged (WSL: 163 images, 70 GB reclaimable, `ext4.vhdx` 88 GB on C:) and every task made its own `tNNN.qcow2` (21 GB on D:). `build.sh` now removes untagged images its build did not use (one run: 29 removed, WSL use 78 → 30 GB, cache kept); `smoke-test.ps1 -Work` gives one shared persistent `work.qcow2` and warns about other copies; `dev-setup.md` and `image/CLAUDE.md` say so. Also fixed: `smoke-test.ps1` could report the previous run's `RUYA_BOOT_OK` when the old QEMU still held `serial.log` (seen once with `-TimeoutSec 5`). Verified: `-Work` fresh and reuse boots `RUYA_BOOT_OK`, 5 s timeout now fails. The `.vhdx` does not shrink by itself (owner step in `dev-setup.md`).
 

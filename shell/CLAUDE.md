@@ -53,6 +53,7 @@ Read `docs/specs/02-shell.md` for the UX spec. This file covers how the code is 
 2. Add the file to `CMakeLists.txt`, and a `Component { id: xxxPage; XxxPage {} }` plus an entry in `pageComponents` in `Shell.qml`.
 3. Open it with `Shell.openPage("xxx")` (home tiles do this with their `key` role). Back is handled by `Page`; never steal the Guide keys in a page, so the overlay still works.
 4. Test in a `tst_*.qml`: open, assert focus, Back, assert focus restored (see `tst_pages.qml`).
+5. **Nested pages:** `Shell.openPage(key, params)` pushes a page over the current one (`params` is a plain object, available as `page.params`; `Shell.currentParams` is the top entry's). The page below stays alive, hidden and disabled, and gets its focus item back on Back. A test or module registers a page without editing `Shell.qml` through `Shell.extraPages = ({ key: component })` (see `tst_pages.qml`, `detailPage`). Keep `pageStack` a plain array and reassign it.
 
 ## Controls (`qml/controls/`)
 

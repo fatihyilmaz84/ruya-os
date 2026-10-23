@@ -1,6 +1,6 @@
 # T-119 — Page host: nested pages that keep their state
 
-Status: todo · Phase: 3 · Depends: T-101 · Area: shell · Size: M
+Status: done · Phase: 3 · Depends: T-101 · Area: shell · Size: M
 
 ## Goal
 A page can open a detail page on top of itself (store app → app detail, later game → detail), and Back returns to the page below exactly as it was left: same scroll position, same focused item, same state. This is shared infrastructure; T-111 builds on it.
@@ -50,4 +50,17 @@ A page can open a detail page on top of itself (store app → app detail, later 
 - A test page is a small `Page { … }` component in the test file; give it an `objectName` and one `focus: true` element.
 
 ## Outcome
-_Filled in by the implementer: what was built, files, how it was verified, deviations, follow-ups._
+Built:
+- `Shell.qml`: the single `Loader` is gone. Each `pageStack` entry (`{key, params}`) has a slot (`pageSlot` component, a `FocusScope` child of `pageHost`) holding its page. Only the top slot is `shown` (visible, enabled, opacity 1, no slide); others fade out and stay alive. A popped slot (`closing`) destroys itself when its opacity reaches 0. `openPage(key, params)`, `currentParams`, `extraPages` (merged with `builtinPages` into `pageComponents`), `dropAllPages()` on sign-out. Page items keep the `page_<key>` object names; slots are `pageSlot_<key>`.
+- `Page.qml`: `params` property.
+- Focus: `focusCurrent()` calls the top slot's `restoreFocus()`. Because disabling a slot drops its active focus, the slot below notes `Window.activeFocusItem` in `rememberFocus()` on push and refocuses it on pop (falls back to the page).
+- Tests in `tst_pages.qml`: `test_nested_page_keeps_state`, `test_back_walks_the_stack`, `test_overlay_over_nested_page`, `test_params_reach_the_page`, `test_sign_out_leaves_no_pages`. Existing tests unmodified.
+- Docs: spec 02 §1.1, `shell/CLAUDE.md` "How to add a page".
+
+Verification: `dev.ps1 test` ALL GREEN (138 passed); `dev.ps1 shots` ALL GREEN (149 passed; first run hit `TEST WINDOW LOST ACTIVATION` in a Power test, second run clean). No screenshot changed by design, so none re-reviewed.
+
+Deviations / notes:
+- `pageHost` no longer fades itself; the slots do (so the first page's fade is the same as before). `pageHost.visible` is now `slotCount > 0`.
+- The lower page's `visible` turns false only after its fade-out (criterion "not visible" is checked with `tryCompare`), `enabled` is false at once.
+- A slot popped before its fade-in progressed (opacity still 0) is destroyed straight away; the first version waited for an opacity change that never came.
+- A QML slot property named `top` is a FINAL `Item` property; the flag is called `shown`.

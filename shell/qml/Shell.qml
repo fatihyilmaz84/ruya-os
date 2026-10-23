@@ -16,28 +16,79 @@ FocusScope {
     readonly property bool signedIn: Profiles.activeProfile !== ""
     readonly property Tile currentTile: tiles.currentItem as Tile
 
-    // Open pages, oldest first; only the last one is shown. Stack-shaped so detail pages
-    // can nest later, though the home tiles only ever push one.
+    // Open pages, oldest first, as {key, params}; only the last one is shown. Every entry
+    // keeps its own live page item (in `slots`), so a page below keeps its state.
+    // Reassign, never mutate (QML change notification).
     property var pageStack: []
-    readonly property string currentPage: pageStack.length > 0 ? pageStack[pageStack.length - 1] : ""
+    readonly property string currentPage: pageStack.length > 0 ? pageStack[pageStack.length - 1].key : ""
+    readonly property var currentParams: pageStack.length > 0 ? pageStack[pageStack.length - 1].params : ({})
     readonly property bool pageOpen: currentPage !== ""
-    // Key of the page the host is displaying; kept after a close until the fade-out ends.
-    property string shownPage: ""
+    // Pages a test or a later module registers without editing this file: key -> Component.
+    property var extraPages: ({})
+    // Slot items of the live stack entries (same order as pageStack), and how many slot
+    // items exist including those still fading out after a pop.
+    property var slots: []
+    property int slotCount: 0
 
-    function openPage(key) {
-        if (!signedIn || !pageComponents[key] || systemPanel.open)
+    function openPage(key, params) {
+        const component = pageComponents[key]
+        if (!signedIn || !component || systemPanel.open)
             return
-        shownPage = key
-        pageStack = pageStack.concat([key])
+        const below = slots.length > 0 ? slots[slots.length - 1] : null
+        if (below)
+            below.rememberFocus()
+        const entry = { key: key, params: params ?? ({}) }
+        const slot = pageSlot.createObject(pageHost, { key: key })
+        if (!slot) {
+            console.warn("ruya-shell: could not create the slot for page", key)
+            return
+        }
+        const page = component.createObject(slot, {
+            objectName: "page_" + key,
+            params: entry.params,
+            overlay: modalLayer
+        }) as Page
+        if (!page) {
+            console.warn("ruya-shell: could not create page", key)
+            slot.destroy()
+            return
+        }
+        page.u = Qt.binding(() => root.u)
+        page.version = Qt.binding(() => root.version)
+        page.marginX = Qt.binding(() => root.marginX)
+        page.marginY = Qt.binding(() => root.marginY)
+        page.anchors.fill = slot
+        page.backRequested.connect(root.closePage)
+        slot.page = page
+        slotCount += 1
+        if (below)
+            below.shown = false
+        slots = slots.concat([slot])
+        pageStack = pageStack.concat([entry])
+        slot.shown = true
         focusCurrent()
     }
 
     function closePage() {
         if (!pageOpen)
             return
+        const gone = slots[slots.length - 1]
+        slots = slots.slice(0, -1)
         pageStack = pageStack.slice(0, -1)
-        shownPage = currentPage !== "" ? currentPage : shownPage
+        gone.closing = true          // destroyed once its fade-out has ended
+        gone.shown = false
+        if (slots.length > 0)
+            slots[slots.length - 1].shown = true
         focusCurrent()
+    }
+
+    function dropAllPages() {
+        const all = Array.from(pageHost.children)
+        slots = []
+        pageStack = []
+        slotCount = 0
+        for (const s of all)
+            s.destroy()
     }
 
     function tileTitle(key) {
@@ -55,8 +106,8 @@ FocusScope {
     function focusCurrent() {
         if (!signedIn)
             return
-        if (pageOpen && pageLoader.item)
-            (pageLoader.item as Item).forceActiveFocus()
+        if (pageOpen)
+            slots[slots.length - 1].restoreFocus()
         else
             tiles.forceActiveFocus()
     }
@@ -89,7 +140,7 @@ FocusScope {
     }
     onSignedInChanged: {
         if (!signedIn)
-            pageStack = []       // the next sign-in starts at home
+            dropAllPages()       // the next sign-in starts at home
         routeFocus()
     }
     Component.onCompleted: {
@@ -169,13 +220,14 @@ FocusScope {
     Shortcut { sequences: ["Volume Down"]; context: Qt.ApplicationShortcut; onActivated: Audio.stepVolume(-5) }
     Shortcut { sequences: ["Volume Mute"]; context: Qt.ApplicationShortcut; onActivated: Audio.toggleMute() }
 
-    readonly property var pageComponents: ({
+    readonly property var builtinPages: ({
         games: gamesPage,
         media: mediaPage,
         store: storePage,
         settings: settingsPage,
         power: powerPage
     })
+    readonly property var pageComponents: Object.assign({}, builtinPages, extraPages)
 
     Backdrop {
         id: backdrop
@@ -375,38 +427,69 @@ FocusScope {
     Component { id: settingsPage; SettingsPage {} }
     Component { id: powerPage; PowerPage {} }
 
-    // Hosts the open page. Fades and slides in while the shelf slides out.
+    // Hosts the page slots, one per open page (plus any still fading out). Its only
+    // children are slots, which are destroyed after their fade-out.
     Item {
         id: pageHost
         objectName: "pageHost"
         anchors.fill: parent
-        opacity: root.pageOpen ? 1 : 0
-        visible: root.pageOpen || opacity > 0
+        visible: root.slotCount > 0
         enabled: root.pageOpen
-        Behavior on opacity { NumberAnimation { duration: Theme.pageMs; easing.type: Easing.OutCubic } }
-        transform: Translate {
-            x: root.pageOpen ? 0 : Theme.pageSlide * root.u
-            Behavior on x { NumberAnimation { duration: Theme.pageMs; easing.type: Easing.OutCubic } }
-        }
-        onVisibleChanged: if (!visible) root.shownPage = ""
+    }
 
-        Loader {
-            id: pageLoader
+    // One per stack entry. The top slot is shown and enabled (it fades and slides in while
+    // the shelf slides out); lower ones stay alive but hidden and disabled, so their state is
+    // kept. A popped slot fades out, then is destroyed.
+    Component {
+        id: pageSlot
+        FocusScope {
+            id: slot
+            objectName: "pageSlot_" + key
+
+            property string key
+            property Item page
+            property bool shown: false
+            property bool closing: false
+            property bool reaped: false
+            property Item savedFocus: null
+
             anchors.fill: parent
-            sourceComponent: root.pageComponents[root.shownPage] ?? null
-            onLoaded: {
-                const page = item as Page
-                page.objectName = "page_" + root.shownPage
-                page.u = Qt.binding(() => root.u)
-                page.version = Qt.binding(() => root.version)
-                page.overlay = modalLayer
-                page.marginX = Qt.binding(() => root.marginX)
-                page.marginY = Qt.binding(() => root.marginY)
+            opacity: shown ? 1 : 0
+            visible: shown || opacity > 0
+            enabled: shown
+            Behavior on opacity { NumberAnimation { duration: Theme.pageMs; easing.type: Easing.OutCubic } }
+            transform: Translate {
+                x: slot.shown ? 0 : Theme.pageSlide * root.u
+                Behavior on x { NumberAnimation { duration: Theme.pageMs; easing.type: Easing.OutCubic } }
             }
-        }
-        Connections {
-            target: pageLoader.item as Page
-            function onBackRequested() { root.closePage() }
+            onOpacityChanged: reapIfDone()
+            onClosingChanged: reapIfDone()
+
+            // A page popped before its fade-in has progressed is already at opacity 0.
+            function reapIfDone() {
+                if (closing && opacity === 0 && !reaped) {
+                    reaped = true
+                    root.slotCount -= 1
+                    destroy()
+                }
+            }
+
+            // Disabling a slot drops its focus, so the focused item is noted when a page
+            // is pushed over it and given focus again when it is on top once more.
+            function rememberFocus() {
+                const f = Window.activeFocusItem
+                let p = f
+                while (p && p !== page)
+                    p = p.parent
+                savedFocus = p ? f : null
+            }
+            function restoreFocus() {
+                if (savedFocus && savedFocus.enabled)
+                    savedFocus.forceActiveFocus()
+                else if (page)
+                    page.forceActiveFocus()
+                savedFocus = null
+            }
         }
     }
 
