@@ -36,6 +36,9 @@ The order above is the recommended order. When the NEXT task is blocked, take th
 
 Follow-ups, debt and ideas waiting for a planner session. Builders: add one line per item, `- (source) what, and why it matters`. Don't write task files for these unless your own task needs one. A planner session turns them into tasks, drops them with a reason, or escalates them. **Run a planner when this list has 5+ items.**
 
+- (T-118) Settings -> Profiles UI for rename and delete (confirmation, admin PIN) has no task; the service and `Profiles` facade are ready.
+- (T-118) `delete_profile`: if the store write fails after `userdel` succeeded, the profile stays listed without a Unix user; decide whether to reorder (save first) or reconcile on start.
+
 ### Done
 
 A session can't know its own commit hash before committing, so new rows put the task id in the Commit column; find the commit with `git log --grep=T-xxx`. Every commit message names its task.
