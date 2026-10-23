@@ -1,6 +1,6 @@
 # T-122 — CI on GitHub: read the first results, make it green, and run the same gates as `dev.ps1 test`
 
-Status: in-progress (committed, awaiting push to verify) · Phase: 1 · Depends: — · Area: ci, scripts · Size: S
+Status: done · Phase: 1 · Depends: — · Area: ci, scripts · Size: S
 
 ## Goal
 The `ci` workflow on GitHub runs the same checks as the local gate, passes, and stays understandable. The repository is public, so a red or stale workflow is visible to everyone.
@@ -45,7 +45,7 @@ plus the Actions page for the pushed commit (pushing is the owner's call: ask in
 - Reading runs needs no login: `WebFetch` works on the public API; `gh` is not installed on this machine.
 
 ## Outcome
-**State: committed locally, not pushed. The new `lint` job and the changed workflow have not run on GitHub yet; the "latest run is green" criterion needs the owner's go-ahead to push.**
+**State: done. The owner approved the push (2026-10-23); the first run of the new workflow, [39935813084](https://github.com/fatihyilmaz84/ruya-os/actions/runs/39935813084) on `c63590e` (T-107, which also carries this task's workflow), is green in every job: `lint` 8 s, `services` 1 min, `shell` 2 min, `image` 14 min (09:59-10:15 UTC). So the token lint script works under Linux `pwsh`, the `image` job still boots with `RUYA_BOOT_OK` after the T-107 rootfs change (`cp` install plus the writable-file check), and the workflow needs no secrets.**
 
 **Runs seen** (public API, 2026-10-23; all workflow `ci`, event `push`, branch `main`):
 
@@ -71,4 +71,4 @@ Nothing was red, so there was nothing to fix. This also means the first Fedora/L
 
 **Deviations:** the second run's per-job results were not read (API 502); its run-level conclusion was `success`, which requires every job to have succeeded. No UI change, so no screenshots.
 
-**Follow-up:** after the owner pushes, read the new run; when `lint`, `services`, `shell` and `image` are all green, set T-122 to `done` and add the run link here.
+**Follow-up:** none.

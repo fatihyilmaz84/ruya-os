@@ -7,7 +7,7 @@ Last updated: 2026-10-23 (Sonnet 5.5, T-107)
 ## Where we are
 
 - **Phase 0 (foundation):** **verified in a VM on 2026-10-22.** The image builds, passes lint, boots to the shell, updates, and rolls back both manually and automatically (greenboot). Only the real-hardware item is left (B-002).
-- **Phase 1–2 (shell core, profiles):** in progress on the Windows host against mock services. Done: pages, motion, toasts/OSD, settings, on-screen keyboard, profile management, first-boot wizard, token lint. The repo is public on GitHub; on its first push the `services` and `shell` CI jobs (Fedora's Qt, Linux) passed, the `image` job's result was not yet known (T-122 reads it). Profiles, the wizard and Settings → Profiles are **vm-verified** over the real bus (T-120), and power actions (T-107) work in the VM. Next: audio in the VM (T-121), then the audio contract, translations and the Store/Games pages.
+- **Phase 1–2 (shell core, profiles):** in progress on the Windows host against mock services. Done: pages, motion, toasts/OSD, settings, on-screen keyboard, profile management, first-boot wizard, token lint. The repo is public on GitHub and CI (`lint`, `services`, `shell`, `image`) is green on `main` (T-122). Profiles, the wizard and Settings → Profiles are **vm-verified** over the real bus (T-120), and power actions (T-107) work in the VM. Next: audio in the VM (T-121), then the audio contract, translations and the Store/Games pages.
 - **Host:** Windows, plus a Fedora 44 WSL distribution for image builds and QEMU/WHPX for boot tests (`docs/dev-setup.md`). Work that needs a GPU, controllers or audio still waits in the Blocked table.
 
 Verification legend: **host** = built and tested on the Windows host · **vm** = built into the image and verified booted in QEMU · **unverified** = written, but not run · **hw** = verified on real hardware.
@@ -20,7 +20,6 @@ Verification legend: **host** = built and tested on the Windows host · **vm** =
 
 | ID | Title | Status | Depends | Verified |
 |---|---|---|---|---|
-| [T-122](tasks/T-122-ci-refresh.md) | CI on GitHub: read the first results, make it green, same gates as `dev.ps1 test` (token lint) | in-progress (awaiting push) | — | local: host (`dev.ps1 test` green, lint probe failed as expected) · new workflow on GitHub: **unverified** |
 | [T-121](tasks/T-121-vm-audio.md) | Audio in the VM: sound device, PipeWire for the shell session, UI cues load | todo | T-120 | |
 | [T-114](tasks/T-114-audio-contract-and-settings.md) | Audio contract and Settings → Audio | todo | T-103, T-108 | |
 | [T-109](tasks/T-109-translations.md) | Translations en/tr, live switching, Turkish keyboard layout | todo | T-103, T-106 | |
@@ -62,6 +61,7 @@ A session can't know its own commit hash before committing, so new rows put the 
 | T-105 | Settings → Profiles: add profile, change/remove PIN; mock mirrors `service.rs`; PinPad collect modes | mock path: host (`dev.ps1 test` green, new `tst_profile_admin.qml` + screenshot reviewed) · D-Bus `CreateProfile`/`SetPin`: **vm** (T-120; the attempts probe was replaced in T-115) | T-105 |
 | T-115 | Profiles1: `CreateProfile`/`SetPin` replies carry `attempts_left` and `retry_after_secs`; `SwitchTo` probe removed | service + adapter types: host (`dev.ps1 rust` green, 2 new tests) · shell mock path: host (`dev.ps1 test` green) · D-Bus reply parsing: **vm** (T-120: attempts left and retry time shown from `SwitchTo` and `CreateProfile` replies) | T-115 |
 | T-106 | First-boot setup wizard (`Setup.qml`: welcome, language, network placeholder, create admin, done); `DeviceSettings.language`; `RUYA_MOCK_PROFILES=empty`; shared `ProfileStatus` messages | mock path: host (`dev.ps1 test` green, new `tst_setup.qml` with 8 tests + 2 screenshots reviewed) · real `ruya-profiles` over D-Bus: **vm** (T-120: wizard by keys creates the admin, profile and Unix user checked) | T-106 |
+| T-122 | CI: token lint extracted to `scripts/lint-tokens.ps1` and run as a `lint` job; `permissions: contents: read`, cancelling `concurrency`, `workflow_dispatch`, timeouts; local-check-to-CI table in `dev-setup.md` | host (`dev.ps1 test` green, lint probe failed as expected) · GitHub run 39935813084: `lint`, `services`, `shell`, `image` all green | T-122 |
 | T-120 | Profiles, wizard, lockout and Settings → Profiles verified in the VM over the real system bus; VM screenshot/keys scripts (QEMU monitor, guest-side uinput Guide key); closes B-005 | **vm** (39 screenshots, D-Bus and on-disk state pasted in the task Outcome); no shell, service or image change needed | T-120 |
 | T-117 | Reduced motion honoured by the PIN-pad shake and tile pulse; literal durations/colours moved into `Theme` tokens; token lint in `dev.ps1 shell` | host (`dev.ps1 test` green, new test fails without the guard, lint failure demonstrated; 3 screenshots reviewed by eye) | T-117 |
 | T-116 | First build after adding or removing a C++ QML type is green (stale `qmltyperegistrar` under the Visual Studio generator; build step `InvalidateStaleQmlTypes.cmake`) | host (`dev.ps1 test` green; 3 add/remove probe cycles via `scripts\repro-first-build.ps1`, all green on the first run) · Linux/Ninja: not run | T-116 |
@@ -102,6 +102,8 @@ Verification: **vm** (screenshots reviewed; no code changed, so no new host test
 
 Follow-ups: three Inbox lines. NEXT is T-121 (audio in the VM). The lead review is due.
 
+Later the same day, after the owner approved the push (history scanned for secrets first): `main` pushed (`de6112e..c63590e`), and the first run of the new workflow, [39935813084](https://github.com/fatihyilmaz84/ruya-os/actions/runs/39935813084), was green in all four jobs (`image` 14 min), so **T-122 is closed**. `688b613` (T-120) is committed but not pushed yet.
+
 ### 2026-10-23 · Sonnet 5.5 · T-107
 Power actions:
 - `Power` singleton over a mock and a logind D-Bus backend; Power page (three rows), shared `PowerConfirm` (Cancel focused first), Guide overlay with a power choice list; holding Guide for 2 s opens it; refusals toast.
@@ -110,7 +112,7 @@ Power actions:
 
 Verification: `dev.ps1 test` → ALL GREEN (11 new tests); `shots` reviewed. Image `0.0.5-t107d`: lint clean, `RUYA_BOOT_OK`; in the VM the shell's user is authorized for all six actions, an ordinary user is refused, `CanPowerOff` is `yes` / `challenge`, and a real `PowerOff` as `ruya-shell` ended QEMU. Unverified: the running shell calling logind (no key scripts yet), a real suspend/wake.
 
-Follow-ups: Inbox line for T-120. NEXT is T-120. T-122 still waits for the owner's push. The lead review is due (range `9ca4b25..HEAD`): recommend a lead session.
+Follow-ups: Inbox line for T-120. NEXT is T-120. The lead review is due (range `9ca4b25..HEAD`): recommend a lead session.
 
 ### 2026-10-23 · Sonnet 5.5 · T-122
 CI refresh:
