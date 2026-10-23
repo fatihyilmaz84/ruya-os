@@ -7,7 +7,7 @@ Last updated: 2026-10-23 (Opus 5.5, lead, T-123)
 ## Where we are
 
 - **Phase 0 (foundation):** **verified in a VM on 2026-10-22.** The image builds, passes lint, boots to the shell, updates, and rolls back both manually and automatically (greenboot). Only the real-hardware item is left (B-002).
-- **Phase 1–2 (shell core, profiles):** in progress on the Windows host against mock services. Done: pages, motion, toasts/OSD, settings, on-screen keyboard, profile management, first-boot wizard, token lint. The repo is public on GitHub and CI (`lint`, `services`, `shell`, `image`) is green on `main` (T-122). Profiles, the wizard and Settings → Profiles are **vm-verified** over the real bus (T-120), and power actions (T-107) work in the VM. The sound path is **vm-verified** (T-121). `ruya-profiles` is hardened to exposure 1.6 (T-126). The audio contract and Settings → Audio are built against a mock (T-114); audio ownership is decided (ADR-010) and the `ruya-devices` audio service is T-128. The keyboard Guide key (Super) works (T-124, vm). The PIN pad shows a locked-out state (T-125, host). The shell is translated into Turkish with live switching (T-109, host). The compositor spike (T-123, lead) showed ADR-002 option A working in the VM: `ruya-shell` as the Wayland compositor on KMS, the Guide overlay over a running client, input returned on close; the default session is still cage, and the performance half waits for hardware.
+- **Phase 1–2 (shell core, profiles):** in progress on the Windows host against mock services. Done: pages, motion, toasts/OSD, settings, on-screen keyboard, profile management, first-boot wizard, token lint. The repo is public on GitHub and CI (`lint`, `services`, `shell`, `image`) is green on `main` (T-122). Profiles, the wizard and Settings → Profiles are **vm-verified** over the real bus (T-120), and power actions (T-107) work in the VM. The sound path is **vm-verified** (T-121). `ruya-profiles` is hardened to exposure 1.6 (T-126). The audio contract and Settings → Audio are built against a mock (T-114); audio ownership is decided (ADR-010) and the `ruya-devices` audio service is T-128. The keyboard Guide key (Super) works (T-124, vm). The PIN pad shows a locked-out state (T-125, host). The shell is translated into Turkish with live switching (T-109, host). The compositor spike (T-123, lead) showed ADR-002 option A working in the VM: `ruya-shell` as the Wayland compositor on KMS, the Guide overlay over a running client, input returned on close; the owner accepted A as the product direction (performance on hardware later, B as the fallback); T-130 (lead) replaces cage next.
 - **Host:** Windows, plus a Fedora 44 WSL distribution for image builds and QEMU/WHPX for boot tests (`docs/dev-setup.md`). Work that needs a GPU, controllers or real audio output still waits in the Blocked table. The VM can be driven by keys and screenshots, and given a sound card (`docs/dev-setup.md`).
 
 Verification legend: **host** = built and tested on the Windows host · **vm** = built into the image and verified booted in QEMU · **unverified** = written, but not run · **hw** = verified on real hardware.
@@ -20,6 +20,7 @@ Verification legend: **host** = built and tested on the Windows host · **vm** =
 
 | ID | Title | Status | Depends | Verified |
 |---|---|---|---|---|
+| [T-130](tasks/T-130-compositor-session.md) | **[lead]** Compositor session: `ruya-shell` replaces cage (ADR-002 A), app layer and key routing | todo | T-123 | |
 | [T-118](tasks/T-118-profile-rename-delete.md) | Profiles1: RenameProfile and DeleteProfile (contract, service, mock; no UI) | todo | T-115, T-126 | |
 | [T-127](tasks/T-127-shots-window-focus.md) | `dev.ps1 shots`: focus failures caused by the desktop say so, and recover | todo | — | |
 | [T-128](tasks/T-128-devices-audio-service.md) | `ruya-devices`: audio part of `Devices1` over PipeWire, in the VM (ADR-010) | todo | T-114, T-121 | |
@@ -85,7 +86,7 @@ A session can't know its own commit hash before committing, so new rows put the 
 
 ## Open owner decisions
 
-- **ADR-002** (compositor): the functional spike passed (T-123: shell as compositor, overlay over a running client, input handed back). **Question: accept option A now as the product direction**, so the next lead can plan the compositor session (an M task: layers inside `Shell`, C++ key routing, device access, greenboot) and `ruya-session`'s per-profile sockets on top, with performance confirmed later on hardware (B-003) and option B (gamescope + shell client) as the fallback if it fails? Recommendation: yes. Until then the shell keeps growing on cage, and `ruya-session` cannot be designed.
+- **ADR-002** (compositor): **decided 2026-10-23 by the owner: option A** is the product direction; performance is confirmed later on hardware (B-003), with option B (gamescope + shell client) as the fallback. Follow-up: T-130 (lead).
 - **Real hardware (B-002):** is a spare low-tier PC available to install the dev ISO on? It unblocks the Phase 0 hardware item, the first KPI numbers and later the ADR-002 performance check. Recommendation: yes, any x86-64 mini-PC with an Intel or AMD iGPU; it must be a test machine (the ISO has the dev SSH key).
 - **libdvdcss / AACS** (DVD/Blu-ray decryption): not included; needs an explicit owner decision.
 - **One admin or several?** `00-overview` §2 (MVP) says "one admin", `03` §1.1 says "Admin (one or more)". The service supports several; the UI offers only Standard and Guest when adding a profile (T-105). Options: (a) keep one admin in the UI for the MVP, as the overview says; (b) let an admin create more admins and fix the overview. Recommendation: (a), and revisit after the first user test. Not blocking: T-118 does not depend on it.
@@ -105,7 +106,7 @@ Compositor spike, ADR-002 option A, in the VM:
 
 Verification: `dev.ps1 test` ALL GREEN; VM screenshots and log in the T-123 Outcome. Unverified: performance, real GPUs, Flatpak clients, blur over a client.
 
-Escalated: accept ADR-002 option A as the product direction (Open owner decisions).
+Escalated: accept ADR-002 option A as the product direction. **The owner accepted it the same day** (performance on hardware later, option B as the fallback); the lead wrote **T-130** (compositor session replaces cage, `Owner: lead`).
 
 ### 2026-10-23 · Opus 5.5 · Lead
 Lead review of `beafbc6..da2d1be` (T-114, T-124, T-125, T-109, the lead's worker-cost change), and planning.

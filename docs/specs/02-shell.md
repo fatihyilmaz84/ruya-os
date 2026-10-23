@@ -2,7 +2,7 @@
 
 Status: **Draft v1** · Parent: [00-overview](00-overview.md)
 
-The shell (`ruya-shell`) is the only UI the user sees. It's written in Qt 6 Quick/QML with C++ glue. Per ADR-002 it is expected to also be the Wayland compositor. It holds no business logic: state and side effects live in the Rust services, which it reaches over D-Bus.
+The shell (`ruya-shell`) is the only UI the user sees. It's written in Qt 6 Quick/QML with C++ glue. Per ADR-002 (option A, accepted) it is also the Wayland compositor; until T-130 lands it still runs under cage. It holds no business logic: state and side effects live in the Rust services, which it reaches over D-Bus.
 
 ## 1. Information architecture
 

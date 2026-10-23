@@ -11,7 +11,7 @@ The procedure is in [`LEAD.md`](LEAD.md). **Rewrite this file at the end of ever
 
 ## Concerns (ranked)
 
-1. **ADR-002: the functional spike passed (T-123, image `0.0.8-t123`), and the owner is asked to accept option A.** On a yes, write the compositor-session task first (`[lead]` or a carefully scoped M): app and overlay layers *inside* `Shell` instead of the spike's re-parenting, key routing in C++, the input-device decision (`uaccess` rule vs logind device opening), greenboot/`wait-shell-ready`, the Guide hold while an app has focus. Then `ruya-session` (per-profile Wayland and PipeWire sockets, ADR-004/010). Until then the Phase 1 exit is only half met (no hardware numbers).
+1. **ADR-002 option A accepted by the owner (2026-10-23)**; performance on hardware later (B-003), option B is the fallback. **T-130 `[lead]`** (compositor session replaces cage; layers inside `Shell`, key routing in C++, input-device decision, greenboot) is the next lead task. Then `ruya-session` (per-profile Wayland and PipeWire sockets, ADR-004/010). Until T-130 lands, shell UI keeps landing on cage; keep builder UI tasks away from focus and window plumbing meanwhile.
 2. **ADR-010 is decided on paper only.** The risky parts: owning a *system*-bus name from a *user* unit (T-128 hints), and giving profile apps a socket to the shell's PipeWire (not designed until `ruya-session`). If T-128 finds the user-unit model unworkable, revisit the ADR rather than letting the builder improvise.
 3. **`shots` focus flakes** (three in a day). T-127 should make them self-explaining. If they persist after T-127, consider running `shots` only on an idle desktop and saying so in `CLAUDE.md`.
 4. **Integration still lags UI.** Two of the next five tasks are service/VM work (T-118, T-128). Keep that ratio: every mock-only UI task (T-129, T-111) should have its service task on the board soon after.
@@ -22,7 +22,7 @@ The procedure is in [`LEAD.md`](LEAD.md). **Rewrite this file at the end of ever
 ## First things the next lead should do
 
 1. Steps 1–3 of `LEAD.md` over the range above (expect T-118, T-127, T-128, T-119).
-2. If the owner accepted ADR-002 A: write the compositor-session task (concern 1) and take it as the lead task.
+2. T-130 (compositor session) as the lead task.
 3. Check T-128 against ADR-010 (unit type, D-Bus policy, hardening score).
 4. If T-110 is done: write the `ruya-store` service task.
 

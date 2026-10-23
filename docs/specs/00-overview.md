@@ -93,7 +93,7 @@ Status: **Accepted** · **Proposed** (recommendation, needs owner sign-off) · *
 ### ADR-001 — Base: plain `fedora-bootc` vs Universal Blue / Bazzite components — *Accepted (2026-10-22)*
 Bazzite already ships Fedora-bootc images with NVIDIA variants, a gamescope console session, Steam and controller tooling. **Recommendation:** start from `quay.io/fedora/fedora-bootc` so the image stays minimal and understandable. Borrow specific, proven pieces (NVIDIA akmods layer, udev rules, InputPlumber packaging) from Universal Blue rather than rebasing on Bazzite. Revisit if Phase 0–1 effort runs high.
 
-### ADR-002 — Compositor ownership — *Open (Phase 1 spike)*
+### ADR-002 — Compositor ownership — *Accepted: option A (owner, 2026-10-23); performance to be confirmed on hardware, option B is the fallback*
 The shell must draw over running apps (Guide overlay, OSD, toasts), switch between apps, and control focus. Options:
 
 | Option | Overlay over games | App switching | Effort | Licence |
@@ -110,7 +110,7 @@ The shell must draw over running apps (Guide overlay, OSD, toasts), switch betwe
 - **Client buffers.** llvmpipe has no `EGL_WL_bind_wayland_display`, so clients in the VM must use shm (software rendering); real GPUs use dmabuf/`linux-dmabuf`, untested here.
 - **Key routing** belongs in C++ (an event filter in front of the client item) rather than QML `Keys`, so modifier-only keys and future InputPlumber routing (ADR-003) have one place.
 - Not tested: Flatpak apps, gamescope nesting, Xwayland, blur over a client surface, per-profile sockets (ADR-004), frame rates.
-ADR-002 stays **Open** until the performance half is measured on hardware (B-003); the functional risk of A is retired.
+**Decision (owner, 2026-10-23): option A is the product direction**, on the strength of this functional result. The performance half (≥ 55 FPS with the blurred overlay over a game on the mid tier) is still to be measured on hardware (B-003); if A fails it there, fall back to **option B** (gamescope with the shell as a client). Until the compositor session (T-130) replaces it, the image keeps booting cage.
 
 ### ADR-003 — Controller input arbitration — *Accepted (2026-10-22); Phase 0 uses a non-grabbing stopgap*
 Wayland has no gamepad protocol, so games read evdev/hidraw directly. **Recommendation:** use **InputPlumber**, already used by ChimeraOS and handheld distros. It grabs physical devices, exposes virtual controllers to games, and exposes a keyboard/D-Bus target to the shell. When the overlay opens, the shell tells it to route input to the shell. Fallback: our own `ruya-inputd` in Rust (evdev `EVIOCGRAB` + uinput + SDL mapping DB). Steam Input must be configured so it doesn't double-handle controllers (see 03 §5).

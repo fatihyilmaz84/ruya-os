@@ -22,10 +22,10 @@ Answer the *functional* half of ADR-002 in the QEMU VM: can `ruya-shell` be the 
 - Making the compositor session the default boot path; that is a follow-up task if the spike says yes.
 
 ## Acceptance criteria
-- [ ] In the VM, a VM screenshot shows the client app fullscreen with the shell's Guide overlay over it (`vm-screenshot.ps1`, path in the Outcome).
-- [ ] Keys sent while the overlay is closed reach the client; while open they don't; after closing they do again (evidence: screenshots or the client's log, in the Outcome).
-- [ ] The normal cage image still boots with `RUYA_BOOT_OK` (the spike does not change the default session).
-- [ ] ADR-002 in `00-overview.md` is updated with the functional result and a recommendation; it stays *Open* for the owner (or *Proposed*) until performance is measured on hardware.
+- [x] In the VM, a VM screenshot shows the client app fullscreen with the shell's Guide overlay over it (`vm-screenshot.ps1`, path in the Outcome).
+- [x] Keys sent while the overlay is closed reach the client; while open they don't; after closing they do again (evidence: screenshots or the client's log, in the Outcome).
+- [x] The normal cage image still boots with `RUYA_BOOT_OK` (the spike does not change the default session).
+- [x] ADR-002 in `00-overview.md` is updated with the functional result and a recommendation; it stays *Open* for the owner (or *Proposed*) until performance is measured on hardware.
 
 ## Verification
 ```powershell
@@ -78,6 +78,6 @@ Deviations and notes:
 - The Guide **hold** (2 s for the power choices) is not wired while a client has focus; the Shell's own hold logic runs only when the Shell has focus. Expected for the spike.
 - A `ShellSurfaceItem` handler for `surfaceDestroyed` ran with a dead context ("compositor is null") and left the last frame on screen; connecting the signal from the compositor's scope fixed it. Neither `autoDestroy` nor `autoDestroyOnSurfaceDestruction` exists on Qt 6.11's `ShellSurfaceItem`.
 - Fresh disk copies have new SSH host keys and `ssh` blocks on the prompt; the batch options are now in `dev-setup.md`.
-- ADR-002 stays **Open**: the performance half (≥ 55 FPS on the mid tier, blur over a game) needs hardware (B-003).
+- ADR-002 was left **Open** by this task: the performance half (≥ 55 FPS on the mid tier, blur over a game) needs hardware (B-003). Later the same day the owner accepted option A as the product direction, performance to be confirmed on hardware, option B as the fallback; the follow-up is T-130.
 
 Follow-ups: making A the product session is an owner decision first (Open owner decisions in STATUS), then a task.
