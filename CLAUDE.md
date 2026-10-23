@@ -88,12 +88,15 @@ Areas: `shell`, `services`, `image`, `api`, `docs`, `scripts`, `ci`. Add the att
 ## Environment facts and pitfalls (learned the hard way)
 
 - **Shells.** Windows 11. The PowerShell tool is **5.1**, which has no `&&` and no ternary. Git Bash is also available. `scripts\dev.ps1` already works around PowerShell's quirks, so use it instead of ad-hoc commands.
-- **Backslashes get mangled** when text goes through Bash heredocs, `sed` or Python string literals: `\b`, `\n` and `\r` turn into control characters. **Write any text containing backslashes (Windows paths, line continuations, regex) with the Write/Edit tools.** Before committing, make sure no file gained stray control characters.
+- **Files get corrupted by host tools**, and it reached `main` twice (T-107, T-121):
+  - backslashes in text sent through Bash heredocs, `sed` or Python string literals become control characters (`\v`, `\t`, `\r`). **Write any text containing backslashes (Windows paths, line continuations, regex) with the Write/Edit tools;**
+  - Python on this host reads and writes **cp1252** by default, so `open(p)` turns `§` into a lone `0xA7` byte. Pass `encoding="utf-8"` to every `open`, or use the Edit tool.
+
+  `dev.ps1 test` and CI run `scripts/lint-text.ps1`, which fails on invalid UTF-8, control characters and tabs in any tracked text file (new files count once `git add`ed).
 - **Qt** 6.10.3 for MSVC lives at `D:\dev\Qt\6.10.3\msvc2022_64`. The production image uses Fedora's Qt (≥ 6.8), so don't use APIs newer than 6.8.
 - **MSVC compiles C++17.** C++20-only syntax such as `[=, this]` captures fails.
 - **Rendering.** Offscreen (used by `dev.ps1 test` and CI) is the software renderer, where `MultiEffect` draws nothing. So tests must assert properties (`visible`, `blurMax`, focus), never pixels. Only `dev.ps1 shots` renders on the GPU.
 - **qmllint** only means anything with the module response file and `--max-warnings 0`. `dev.ps1` already does that.
-- **Python on this host reads and writes cp1252 by default.** A script that edits a file with `open(p)` turns `§` into a lone `0xA7` byte (invalid UTF-8; this happened in T-107 and reached `main`). Pass `encoding="utf-8"` to every `open`, or edit with the Edit tool. Before committing, a one-liner that decodes every tracked text file as UTF-8 catches it.
 - **Line endings.** Files that end up in the Linux image must stay LF (enforced by `.gitattributes`). Shell scripts need the exec bit in git: `git update-index --chmod=+x <file>`.
 - **New C++ QML type "is not defined" in tests** right after you add it: this was fixed in T-116 (a build step regenerates the stale type registration, `shell/cmake/InvalidateStaleQmlTypes.cmake`), so it should not happen. If it does, run `scripts\repro-first-build.ps1` to see whether the step still works; as a last resort delete `shell\build-win` and rebuild. Never "fix" it by changing tests.
 - **Mock services.** Off Linux, the shell uses mock services. The mock profiles are Player One (admin, PIN 1234), Ada (no PIN) and Guest.

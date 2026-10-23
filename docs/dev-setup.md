@@ -81,14 +81,14 @@ ssh -i $env:USERPROFILE\.ssh\ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-pro
 
 ## Audio in the VM (T-121)
 
-`smoke-test.ps1 -Audio` adds an Intel HDA sound card. `-AudioBackend dsound` (default) plays on the host's default output; `-AudioBackend wav` records everything the guest plays to `outputm-audio.wav` (written as the VM runs, complete after it powers off), so a check needs no ears:
+`smoke-test.ps1 -Audio` adds an Intel HDA sound card. `-AudioBackend dsound` (default) plays on the host's default output; `-AudioBackend wav` records everything the guest plays to `output\vm-audio.wav` (written as the VM runs, complete after it powers off), so a check needs no ears:
 
 ```powershell
-.\scripts\smoke-test.ps1 -Disk output\qcow2	121.qcow2 -Persistent -Keep -Audio -AudioBackend wav
-.\scriptsm-keys.ps1 ret -DelayMs 2000; .\scriptsm-keys.ps1 right left esc ret -DelayMs 1500
-ssh -i $env:USERPROFILE\.sshuyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-audio-check.sh   # copy it with scp first
-ssh -i $env:USERPROFILE\.sshuyaos_dev -p 2222 root@127.0.0.1 systemctl poweroff
-python scriptsm-audio-bursts.py                                                             # one burst per cue
+.\scripts\smoke-test.ps1 -Disk output\qcow2\t121.qcow2 -Persistent -Keep -Audio -AudioBackend wav
+.\scripts\vm-keys.ps1 ret -DelayMs 2000; .\scripts\vm-keys.ps1 right left esc ret -DelayMs 1500
+ssh -i $env:USERPROFILE\.ssh\ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-audio-check.sh   # copy it with scp first
+ssh -i $env:USERPROFILE\.ssh\ruyaos_dev -p 2222 root@127.0.0.1 systemctl poweroff
+python scripts\vm-audio-bursts.py                                                             # one burst per cue
 ```
 
 `scripts/vm-audio-check.sh` (guest) shows the sound card, the `ruya-shell` user's PipeWire, WirePlumber and pipewire-pulse (pam_systemd gives the compositor session a user manager), `wpctl status` with the sink and the shell's stream, and the shell's audio log lines. `scripts/vm-audio-bursts.py` (host) lists the sounds in the recording (QEMU leaves the wav header sizes at zero, so `wave` cannot open it). The image has no `pw-cli`, `pw-top` or `pw-dump` (the `pipewire-utils` package): use `wpctl`.
@@ -111,11 +111,12 @@ It prints `pkcheck` verdicts for the six `login1` actions for the `ruya-shell` p
 | Command | Does |
 |---|---|
 | `.\scripts\dev.ps1 check` | Prerequisites present? |
-| `.\scripts\dev.ps1 test` | Rust fmt, clippy (Windows + Linux target) and tests; shell build; token lint (no literal durations or colours outside `Theme.qml`); qmllint (zero warnings); Qt Quick tests. **Must be ALL GREEN before any commit.** |
+| `.\scripts\dev.ps1 test` | Text lint (tracked text files are UTF-8 with no stray control characters or tabs); Rust fmt, clippy (Windows + Linux target) and tests; shell build; token lint (no literal durations or colours outside `Theme.qml`); qmllint (zero warnings); Qt Quick tests. **Must be ALL GREEN before any commit.** |
 | `.\scripts\dev.ps1 shots` | Qt Quick tests plus screenshots into `output\shell-shots\` |
 | `.\scripts\dev.ps1 run` | The shell in a window with mock services |
 | `.\scripts\dev.ps1 rust` / `shell` | Half of `test` |
 | `.\scripts\lint-tokens.ps1` | The token lint alone (also called by `dev.ps1 shell` and by CI). Exit 1 and a list of `file:line` on findings. |
+| `.\scripts\lint-text.ps1` | The text lint alone (also called by `dev.ps1 test` and by CI). Checks the files `git ls-files` lists, so `git add` a new file before relying on it. Exit 1 and a list of `file:line` on findings. |
 | `.\scripts\repro-first-build.ps1 [-Name X]` | Adds a scratch C++ QML type, runs `dev.ps1 shell` once, removes the type, rebuilds. Exit 0 means adding and removing a type works on the first run (T-116). Takes about 3 minutes; run it only if "X is not defined" ever comes back. |
 
 ### Local checks and CI
@@ -124,7 +125,7 @@ It prints `pkcheck` verdicts for the six `login1` actions for the `ruya-shell` p
 
 | CI job | Runs | Local equivalent |
 |---|---|---|
-| `lint` | `pwsh scripts/lint-tokens.ps1` | the "token lint" step of `dev.ps1 shell` |
+| `lint` | `pwsh scripts/lint-text.ps1`, `pwsh scripts/lint-tokens.ps1` | the "text lint" step of `dev.ps1 test` and the "token lint" step of `dev.ps1 shell` |
 | `services` | `cargo fmt --check`, `clippy -D warnings`, `cargo test` (Ubuntu) | `dev.ps1 rust` |
 | `shell` | build with Fedora's Qt (Fedora 44 container), `qmllint --max-warnings 0`, Qt Quick tests offscreen | `dev.ps1 shell` (Qt 6.10.3 on MSVC here; CI also proves that no API newer than Qt 6.8 crept in) |
 | `image` | needs the three jobs above; `scripts/build.sh`, `make-disk.sh qcow2`, `smoke-test.sh` under KVM (about 20 minutes); uploads `serial.log` | the WSL build and `smoke-test.ps1` (image section above) |

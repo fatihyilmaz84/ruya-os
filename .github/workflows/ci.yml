@@ -16,12 +16,14 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Mirrors `dev.ps1 shell` step "token lint". Outside the Fedora container: pwsh is on the runner.
+  # Mirrors the `dev.ps1` steps "text lint" and "token lint". Outside the Fedora container: pwsh is on the runner.
   lint:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
+      - name: Text lint
+        run: pwsh -NoProfile -File scripts/lint-text.ps1
       - name: Token lint
         run: pwsh -NoProfile -File scripts/lint-tokens.ps1
 

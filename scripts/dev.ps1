@@ -3,7 +3,7 @@
 #
 #   .\scripts\dev.ps1 check     # prerequisites present?
 #   .\scripts\dev.ps1 build     # configure (first time) + build the shell
-#   .\scripts\dev.ps1 test      # EVERYTHING that must pass before a commit
+#   .\scripts\dev.ps1 test      # EVERYTHING that must pass before a commit (text lint, rust, shell)
 #   .\scripts\dev.ps1 run       # start the shell in a window with mock services
 #   .\scripts\dev.ps1 shots     # run the QML tests and save screenshots to output\shell-shots
 #   .\scripts\dev.ps1 rust      # Rust checks only (fmt, clippy for Windows + Linux, tests)
@@ -108,6 +108,13 @@ function Test-Tokens {
     Record "token lint" ($LASTEXITCODE -eq 0)
 }
 
+# The rules live in scripts\lint-text.ps1 (shared with CI).
+function Test-Text {
+    Step "text lint (tracked files are UTF-8, no stray control characters)"
+    & (Join-Path $PSScriptRoot "lint-text.ps1")
+    Record "text lint" ($LASTEXITCODE -eq 0)
+}
+
 function Do-Shell {
     Do-Build
     Test-Tokens
@@ -123,9 +130,11 @@ switch ($Command) {
     "build" { Do-Build }
     "rust" { Do-Rust }
     "shell" { Do-Shell }
-    "test" { Do-Rust; Do-Shell }
+    "test" { Test-Text; Do-Rust; Do-Shell }
     "shots" {
         Do-Build
+        # Start empty: a screenshot no test writes any more must not be reviewed as current.
+        Remove-Item (Join-Path $Repo "output\shell-shots\*.png") -ErrorAction SilentlyContinue
         Step "Qt Quick tests with screenshots"
         Run-QmlTests (Join-Path $Repo "output\shell-shots")
         Write-Host "    screenshots: $(Join-Path $Repo 'output\shell-shots')"
