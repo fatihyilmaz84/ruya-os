@@ -30,6 +30,8 @@ FocusScope {
 
     readonly property int minDigits: 4
     readonly property int maxDigits: 6
+    // Locked out by the service (verify mode): the keys look disabled and take no input.
+    readonly property bool locked: lockSecs > 0
 
     signal closed()
     signal collected(string pin)        // collect modes: the PIN the user entered (and confirmed)
@@ -52,6 +54,8 @@ FocusScope {
 
     function open(p) {
         mode = "verify"
+        if (p.id !== profile.id)
+            lockSecs = 0                // the countdown belongs to the profile that was locked
         profile = p
         stage = 0
         firstEntry = ""
@@ -69,7 +73,7 @@ FocusScope {
     }
 
     function press(key) {
-        if (busy)
+        if (busy || locked)
             return
         if (key === "del") {
             entered = entered.slice(0, -1)
@@ -77,7 +81,7 @@ FocusScope {
             submit()
         } else if (entered.length < maxDigits) {
             entered += key
-            message = lockSecs > 0 ? message : ""
+            message = ""
         }
     }
 
@@ -102,7 +106,7 @@ FocusScope {
     }
 
     function submit() {
-        if (busy || lockSecs > 0 || entered.length < minDigits)
+        if (busy || locked || entered.length < minDigits)
             return
         if (mode === "verify") {
             busy = true
@@ -146,6 +150,7 @@ FocusScope {
                 pad.close()
             } else if (status === "locked-out") {
                 pad.lockSecs = retryAfterSecs
+                pad.message = ""
                 Sfx.back()
                 pad.shakeDots()
             } else if (status === "wrong-pin") {
@@ -159,7 +164,7 @@ FocusScope {
     }
 
     Timer {
-        running: pad.lockSecs > 0
+        running: pad.locked
         interval: 1000
         repeat: true
         onTriggered: pad.lockSecs -= 1
@@ -185,8 +190,10 @@ FocusScope {
 
         Row {
             id: dots
+            objectName: "pinDots"
             anchors.horizontalCenter: parent.horizontalCenter
             spacing: 18 * pad.u
+            opacity: pad.locked ? Theme.disabledOpacity : 1
             Repeater {
                 model: Math.max(pad.minDigits, pad.entered.length)
                 Rectangle {
@@ -213,7 +220,7 @@ FocusScope {
             objectName: "pinMessage"
             anchors.horizontalCenter: parent.horizontalCenter
             height: 36 * pad.u
-            text: pad.lockSecs > 0 ? qsTr("Too many attempts. Try again in %1 s.").arg(pad.lockSecs) : pad.message
+            text: pad.locked ? qsTr("Too many attempts. Try again in %1 s.").arg(pad.lockSecs) : pad.message
             color: Theme.errorText
             font.pixelSize: 26 * pad.u
         }
@@ -257,7 +264,8 @@ FocusScope {
                     color: keyCell.focused ? Theme.keyFocusFill : Theme.glass
                     border.width: keyCell.focused ? 4 * pad.u : 1
                     border.color: keyCell.focused ? Theme.focusRing : Theme.glassBorder
-                    opacity: keyCell.modelData === "ok" && pad.entered.length < pad.minDigits ? 0.4 : 1
+                    opacity: pad.locked || (keyCell.modelData === "ok" && pad.entered.length < pad.minDigits)
+                        ? Theme.disabledOpacity : 1
 
                     Text {
                         anchors.centerIn: parent

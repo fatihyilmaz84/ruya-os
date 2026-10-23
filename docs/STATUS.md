@@ -2,25 +2,24 @@
 
 **Read this first in every session; update it last.** The rules are in the root `CLAUDE.md`, the roles (Opus lead, Sonnet builders) in `docs/LEAD.md`, the task format in `docs/tasks/README.md`.
 
-Last updated: 2026-10-23 (Sonnet 5.5, T-124)
+Last updated: 2026-10-23 (Sonnet 5.5, T-125)
 
 ## Where we are
 
 - **Phase 0 (foundation):** **verified in a VM on 2026-10-22.** The image builds, passes lint, boots to the shell, updates, and rolls back both manually and automatically (greenboot). Only the real-hardware item is left (B-002).
-- **Phase 1–2 (shell core, profiles):** in progress on the Windows host against mock services. Done: pages, motion, toasts/OSD, settings, on-screen keyboard, profile management, first-boot wizard, token lint. The repo is public on GitHub and CI (`lint`, `services`, `shell`, `image`) is green on `main` (T-122). Profiles, the wizard and Settings → Profiles are **vm-verified** over the real bus (T-120), and power actions (T-107) work in the VM. The sound path is **vm-verified** (T-121). `ruya-profiles` is hardened to exposure 1.6 (T-126). The audio contract and Settings → Audio are built against a mock (T-114; the `ruya-devices` service is B-007). The keyboard Guide key (Super) works (T-124, vm). Next: the PIN-pad lockout state (T-125), then the compositor spike (T-123, lead) for the Phase 1 exit criterion "overlay over a running app".
+- **Phase 1–2 (shell core, profiles):** in progress on the Windows host against mock services. Done: pages, motion, toasts/OSD, settings, on-screen keyboard, profile management, first-boot wizard, token lint. The repo is public on GitHub and CI (`lint`, `services`, `shell`, `image`) is green on `main` (T-122). Profiles, the wizard and Settings → Profiles are **vm-verified** over the real bus (T-120), and power actions (T-107) work in the VM. The sound path is **vm-verified** (T-121). `ruya-profiles` is hardened to exposure 1.6 (T-126). The audio contract and Settings → Audio are built against a mock (T-114; the `ruya-devices` service is B-007). The keyboard Guide key (Super) works (T-124, vm). The PIN pad shows a locked-out state (T-125, host). Next: the compositor spike (T-123, lead) for the Phase 1 exit criterion "overlay over a running app".
 - **Host:** Windows, plus a Fedora 44 WSL distribution for image builds and QEMU/WHPX for boot tests (`docs/dev-setup.md`). Work that needs a GPU, controllers or real audio output still waits in the Blocked table. The VM can be driven by keys and screenshots, and given a sound card (`docs/dev-setup.md`).
 
 Verification legend: **host** = built and tested on the Windows host · **vm** = built into the image and verified booted in QEMU · **unverified** = written, but not run · **hw** = verified on real hardware.
 
 ## Board
 
-**NEXT → T-125**
+**NEXT → T-109**
 
-**Lead review due:** after 1 more builder task (reviewed up to the lead commit of 2026-10-23, see `docs/LEAD-NOTES.md`). Builders: when your task makes this condition true, end your reply by recommending a lead session.
+**Lead review due: now** (T-125 was the last task before it; reviewed up to the lead commit of 2026-10-23, see `docs/LEAD-NOTES.md`). Builders: when your task makes this condition true, end your reply by recommending a lead session.
 
 | ID | Title | Status | Depends | Verified |
 |---|---|---|---|---|
-| [T-125](tasks/T-125-pinpad-lockout-state.md) | PIN pad: a visible locked-out state | todo | — | |
 | [T-123](tasks/T-123-compositor-spike.md) | **[lead]** Compositor spike in the VM: shell as QtWaylandCompositor, overlay over a client (ADR-002) | todo | — | |
 | [T-109](tasks/T-109-translations.md) | Translations en/tr, live switching, Turkish keyboard layout | todo | T-103, T-106 | |
 | [T-118](tasks/T-118-profile-rename-delete.md) | Profiles1: RenameProfile and DeleteProfile (contract, service, mock; no UI) | todo | T-115, T-126 | |
@@ -35,6 +34,7 @@ The order above is the recommended order. When the NEXT task is blocked, take th
 ## Inbox
 
 Follow-ups, debt and ideas waiting for a planner session. Builders: add one line per item, `- (source) what, and why it matters`. Don't write task files for these unless your own task needs one. A planner session turns them into tasks, drops them with a reason, or escalates them. **Run a planner when this list has 5+ items.**
+- (T-125) `Lockout::test_wrong_pins_lock_the_profile` failed once in `shots` on `pinKeys.activeFocus` (passed on the re-run, together with the `Power` flake below): `shots` real windows lose focus when the desktop is in use; consider a helper that waits for `Window.active` before focus asserts.
 - (T-114) `Power::test_guide_long_press` failed once in `dev.ps1 shots` (real window, 3.2 s timer) and passed on the re-run: a possible flake under window/focus load; if it recurs, look at how the test waits for the hold timer.
 
 ### Done
@@ -66,6 +66,7 @@ A session can't know its own commit hash before committing, so new rows put the 
 | T-107 | Power actions: `Power` singleton (mock + logind D-Bus), Power page, `PowerConfirm`, Guide overlay power choices, Guide long-press; polkit rule for `ruya-shell`; `image/rootfs` installed with safe modes | mock path: host (`dev.ps1 test` green, new `tst_power.qml`, 2 screenshots reviewed) · polkit rule, logind `Can*` and `PowerOff` as `ruya-shell`, refusal for another user, `RUYA_BOOT_OK`: **vm** (`scripts/vm-power-check.sh`) · the running shell's Power off through logind, and the Guide long press: **vm** (T-120 session) · a real suspend/wake: **unverified** | T-107 |
 | T-114 | Audio: `org.ruyaos.Devices1.Audio` contract; mock and D-Bus backends; Settings → Audio (outputs, master, UI/Ambient/Media, mute); hot-plug policy and "Audio output" toast; `Sfx` follows the UI channel; volume keys while muted | mock path: host (`dev.ps1 test` green, new `tst_audio.qml` with 11 tests, `22-settings-audio.png` reviewed) · `DBusAudioBackend` and the contract against a real service: **unverified** (no `ruya-devices` yet, B-007) | T-114 |
 | T-124 | Keyboard Guide key: Super (left, right, Meta) opens/closes the overlay and its hold opens the power choices, one shared `isGuideKey` path; `Key_Menu` is no longer Guide; spec 02 4.2 fixed | host (`dev.ps1 test` green, 7 new test rows, `shots` green) · **vm** (image `0.0.6-t124`: `RUYA_BOOT_OK`, `vm-keys.ps1 meta_l` opens and closes the overlay, screenshots in the Outcome) · holding Super in the VM: unverified | T-124 |
+| T-125 | PIN pad: locked-out state (`locked`: keys and digits dimmed with `Theme.disabledOpacity`, input ignored, countdown is the only message), screenshot `15-pin-locked.png` | host (`dev.ps1 test` green, extended `Lockout` test, `shots` green, screenshot reviewed) | T-125 |
 | T-126 | `ruya-profiles.service` hardened: minimal `CapabilityBoundingSet`, `SystemCallFilter=@system-service`, `UMask=0077`, `ProtectProc=invisible` and more; `vm-profiles-check.sh create` | **vm** (image `0.0.6-lead2`, fresh disk: `RUYA_BOOT_OK`, both profiles created over the bus, account file modes intact, exposure 6.0 → 1.6) · `userdel`: not exercised yet (T-118) | T-126 |
 
 ## Blocked (need something this host doesn't have)
@@ -101,6 +102,15 @@ The owner asked whether builder sessions need speed and token optimizations. Fro
 Changes: old log entries moved to `docs/STATUS-log.md` (STATUS now 23 KB; the lead keeps the newest five); `dev.ps1 shots` writes half-size review copies to `output\shell-shots\review\`, and builders review those; `CLAUDE.md` has a "Read lean" rule and says a fresh session per task is cheaper. Recommendation to the owner: start a new session for each task instead of "continue with next task".
 
 Verification: `dev.ps1 test` ALL GREEN; `dev.ps1 shots` 131 passed and wrote 16 review copies (legible at 960×540). T-114 and T-124 (committed meanwhile) are not reviewed yet.
+
+### 2026-10-23 · Sonnet 5.5 · T-125
+PIN-pad lockout state:
+- `PinPad.locked` (`lockSecs > 0`): `press()` ignores digits, Del and OK while locked; the dots and all keys use the new `Theme.disabledOpacity` (0.4, also used by the OK key when too few digits); the message is only the countdown. When the timer reaches 0 the pad works again with no other action (focus never leaves the key grid). `open()` resets the countdown when a different profile opens (it belongs to the profile that was locked).
+- Collect modes (Change PIN old PIN, admin PIN) close the pad before the service replies, so they cannot show a locked pad; their `locked-out` reply is reported by `ProfilesPane` with the countdown, as before. Nothing to change there.
+
+Verification: `dev.ps1 test` ALL GREEN; `shots` green on the re-run (the first runs hit the known focus flakes, see Inbox); `15-pin-locked.png` reviewed.
+
+Follow-ups: one Inbox line. NEXT is T-109 (T-123 is lead's). The lead review is due now.
 
 ### 2026-10-23 · Sonnet 5.5 · T-124
 Keyboard Guide key:

@@ -106,7 +106,7 @@ Physical pad → input daemon (ADR-003) → shell. While the shell has input foc
 - Focus is restored per surface and per profile (returning to Home focuses the last-launched tile).
 - Key repeat on hold: 400 ms delay, then accelerating repeat. The analog stick maps to the same, with speed proportional to deflection.
 - Long-press (≥ 500 ms) on Accept opens the context menu, with a visible progress ring.
-- Modal dialogs trap focus. The PIN pad accepts only digits, Back and Accept.
+- Modal dialogs trap focus. The PIN pad accepts only digits, Back and Accept. While its profile is locked out the digits, Del and OK are dimmed and ignored, and the only message is the countdown; the pad works again when it reaches 0.
 - On the profile picker, any controller may act. After login, the logged-in profile's controller is "player 1".
 - The pointer is shown only after mouse movement and hidden after 3 s idle.
 

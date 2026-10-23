@@ -1,6 +1,6 @@
 # T-125 — PIN pad: a visible locked-out state
 
-Status: todo · Phase: 2 · Depends: — · Area: shell · Size: S
+Status: done · Phase: 2 · Depends: — · Area: shell · Size: S
 
 ## Goal
 While a profile is locked out, the PIN pad clearly looks and behaves locked: digits are not accepted, OK is visibly disabled, and the countdown is the only message. Today (found in the VM, T-120) digits are still entered and OK silently does nothing until the countdown ends, which reads as "wrong PIN".
@@ -39,4 +39,12 @@ While a profile is locked out, the PIN pad clearly looks and behaves locked: dig
 - Tests must not wait the real 30 s lockout; see how the existing `Lockout` test drives `retryAfterSecs`.
 
 ## Outcome
-_Filled in by the implementer: what was built, files, how it was verified, deviations, follow-ups._
+**Built.** `PinPad.qml`: `locked` property; `press()`/`submit()` return early while locked; the dots (`objectName: "pinDots"`) and every key use `Theme.disabledOpacity` while locked; the lock reply clears `message` so the countdown is the only text; the countdown `Timer` (existing) re-enables the pad at 0, and focus never leaves `pinKeys`. `open()` resets `lockSecs` when a different profile opens. `Theme.qml`: new token `disabledOpacity` (the OK key's former literal 0.4 uses it too).
+
+**Tests.** `tst_lockout.qml` (`Lockout`) extended: while locked, digits leave `entered` empty, Enter/Accept send nothing (a `SignalSpy` on `Profiles.switchFinished` counts calls, so the mock needed no counter), the dots opacity is < 1; after the countdown the opacity is 1, focus is on `pinKeys`, digits are accepted. Screenshot `15-pin-locked.png` (reviewed: dimmed keys, countdown message, focus ring on key 1).
+
+**Deviations.**
+- Criterion "after the countdown the right PIN signs in" is not tested end to end: the mock's own lock is a real 30 s and cannot be shortened per test file. The test shortens the pad's visible countdown (`pad.lockSecs = 1`), checks the pad is usable again, submits and sees the service refuse (still locked) and the pad lock again. Signing in after a real lock expiry is therefore **unverified** (the pad logic is the same path as a normal sign-in).
+- Scope item 3 (other pad modes): the collect modes close the pad before the service call, so the locked pad cannot occur there; their `locked-out` replies are shown by `ProfilesPane` (unchanged).
+
+**Follow-ups.** One Inbox line (focus flake in `shots`).

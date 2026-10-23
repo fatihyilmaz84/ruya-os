@@ -25,6 +25,7 @@ QtObject {
     readonly property color panel: "#1a1d26"                        // card of the Guide overlay
     readonly property color dangerFill: "#8f2d2d"                   // confirm button of restart / power off
     readonly property color errorText: "#ff8a80"
+    readonly property real disabledOpacity: 0.4                     // unavailable controls (PIN-pad OK, locked pad)
     readonly property color warningText: "#ffb74d"
     readonly property color blobHighlight: "#ffffff"                // faint third backdrop blob
 
