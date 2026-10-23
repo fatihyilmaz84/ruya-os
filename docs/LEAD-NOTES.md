@@ -4,27 +4,25 @@ The procedure is in [`LEAD.md`](LEAD.md). **Rewrite this file at the end of ever
 
 ## Review range
 
-- **Last reviewed commit: the lead commit of 2026-10-23 "lead review beafbc6..da2d1be"** (find it with `git log --grep="lead review beafbc6"`). Everything up to T-109 is reviewed.
+- **Last reviewed commit: the lead commit of 2026-10-24 "lead review 1e5ae5e..4b811c6"** (find it with `git log --grep="lead review 1e5ae5e"`). Everything up to T-128 is reviewed, including the `review:` fix for T-118.
 - **Next lead reviews:** `git log --oneline <that commit>..HEAD`.
-- Last VM verification: by the lead, image `0.0.8-t123` (`RUYA_BOOT_OK` with cage, plus the compositor spike).
-- The review range above includes the lead's own T-123 commit; the next lead should read its diff like a builder's.
+- Last VM verification: by the lead, image `0.0.11-lead` (see the STATUS log entry of 2026-10-24 for the result); before that T-128's `0.0.10-t128`.
 
 ## Concerns (ranked)
 
-1. **ADR-002 option A accepted by the owner (2026-10-23)**; performance on hardware later (B-003), option B is the fallback. **T-130 `[lead]`** (compositor session replaces cage; layers inside `Shell`, key routing in C++, input-device decision, greenboot) is the next lead task. Then `ruya-session` (per-profile Wayland and PipeWire sockets, ADR-004/010). Until T-130 lands, shell UI keeps landing on cage; keep builder UI tasks away from focus and window plumbing meanwhile.
-2. **ADR-010 is decided on paper only.** The risky parts: owning a *system*-bus name from a *user* unit (T-128 hints), and giving profile apps a socket to the shell's PipeWire (not designed until `ruya-session`). If T-128 finds the user-unit model unworkable, revisit the ADR rather than letting the builder improvise.
-3. **`shots` focus flakes** (three in a day). T-127 should make them self-explaining. If they persist after T-127, consider running `shots` only on an idle desktop and saying so in `CLAUDE.md`.
-4. **Integration still lags UI.** Two of the next five tasks are service/VM work (T-118, T-128). Keep that ratio: every mock-only UI task (T-129, T-111) should have its service task on the board soon after.
-5. **`ruya-store` service (B-004)** becomes a task once T-110 lands (VM-verified, like T-128).
-6. **CI** not checked since the T-122 run; the text and translation lints added later have not run on GitHub yet. Read the first run after the owner's next push.
-7. **Image size (4.7 GB), update sizes, real hardware (B-002)**: unplanned; the owner hasn't said whether a spare PC exists.
+1. **T-130 `[lead]` is the critical path** (compositor session replaces cage). Phase 1's exit criterion "overlay over a running app" and everything app-related (`ruya-session`, store installs that launch, games) wait on it. Do it as the lead task next session if nothing is on fire. After it: write the `ruya-session` task (per-profile Wayland and PipeWire sockets, ADR-004/010; also where `ambient`/`media` levels get applied).
+2. **`ruya-store` (B-004) needs a design call before it's a task:** libflatpak through gir bindings is not pure Rust and won't build on Windows; driving the `flatpak` CLI is the T-128-style alternative. Decide (lead, inside ADR-005) once T-110's contract exists, then write the task with a VM criterion that installs something small (a local test repo, not a Flathub runtime download).
+3. **`ruya-devices` cost and growth.** T-133 removes the 1 s `pw-dump` poll; T-132 adds NetworkManager to the same binary and a polkit rule. Check that rule is narrow, and the hardening score stays "OK".
+4. **Integration vs UI ratio is good now:** T-131 (VM criterion), T-132, T-133 are integration. Keep every new mock-only UI task paired with its service task.
+5. **`shots` focus flakes:** T-127's guard; the lead's run was clean (144, no loss logged). If `TEST WINDOW LOST ACTIVATION` keeps appearing, look at what the desktop does, not the tests.
+6. **CI** not checked since the T-122 run; nothing pushed since. Read the first run after the owner's next push (text/translation lints, the new crate).
+7. **Image size, real hardware (B-002)**: unchanged, owner question open.
 
 ## First things the next lead should do
 
-1. Steps 1–3 of `LEAD.md` over the range above (expect T-118, T-127, T-128, T-119).
-2. T-130 (compositor session) as the lead task.
-3. Check T-128 against ADR-010 (unit type, D-Bus policy, hardening score).
-4. If T-110 is done: write the `ruya-store` service task.
+1. Steps 1–3 of `LEAD.md` over the range above (expect T-119, T-131, T-110, T-129).
+2. T-130 as the lead task.
+3. The `ruya-store` design call (concern 2), then its task.
 
 ## Quality signals (one row per lead session)
 
@@ -36,3 +34,4 @@ The procedure is in [`LEAD.md`](LEAD.md). **Rewrite this file at the end of ever
 | 2026-10-22 | image work | B-001, B-008 | 9 fixed (see dev-setup problem log) | 77 + 7 skipped | boot, update, rollback, greenboot ✅ |
 | 2026-10-23 | 9ca4b25..c06c77a | T-115, T-116, T-106, T-117, T-122, T-107, T-120, T-121 + 2 plannings | 2 / 0 (mangled bytes + text lint, stale screenshots) | 101 + 9 skipped QML, 23 Rust | `0.0.6-lead1` and `-lead2` boot ✅, profiles over the bus ✅ |
 | 2026-10-23 | beafbc6..da2d1be | T-114, T-124, T-125, T-109 (+ lead task T-123) | 2 / 1 (translation lint gap, stale services rule / shots focus → T-127) | 132 + 11 skipped QML, 23 Rust; shots 143 on re-run | `0.0.8-t123` boot ✅, compositor spike ✅ |
+| 2026-10-24 | 1e5ae5e..4b811c6 | T-123 (lead), T-118, T-127, T-128 | 1 / 1 (T-118 delete order / pw-dump poll → T-133) | 133 + 11 skipped QML, 53 Rust (54 after the review test); shots 144 first run | see STATUS log |

@@ -2,6 +2,50 @@
 
 Older entries of the `docs/STATUS.md` session log, newest first. STATUS keeps only the latest five; the lead moves the rest here at each review. Nobody needs to read this file to start a task.
 
+### 2026-10-23 · Opus 5.5 · Lead
+Lead review of `beafbc6..da2d1be` (T-114, T-124, T-125, T-109, the lead's worker-cost change), and planning.
+
+Verification:
+- `dev.ps1 test` ALL GREEN: Rust 23 tests, clippy both targets, 132 QML tests + 11 screenshot tests skipped offscreen.
+- `dev.ps1 shots`: first run 141 passed, 2 failed (`Power::test_confirm_and_cancel`, `test_guide_short_press_opens_overlay`, both on `activeFocus`), re-run 143 passed. Third such desktop-focus failure in a day, each in a different test: now **T-127**. Reviewed `22-settings-audio`, `15-pin-locked`, `16-settings-tr`, `16b-keyboard-tr`: layout, focus ring and text fine (the Audio pane's Mute row is cut at the bottom until focused, which scrolls it in: acceptable).
+- VM: not re-run by the lead. T-124 and T-109 booted their own images (`0.0.6-t124`, `0.0.7-t109`, `RUYA_BOOT_OK`); T-114 and T-125 changed no image file. CI not checked.
+
+Review findings (1 fixed, 0 filed): contracts, mock and client agree (T-114); no test weakened; Outcomes honest.
+- **Fixed:** the translation lint only caught `unfinished` entries, so a new `qsTr` string without an `lupdate` refresh would have shipped untranslated with every check green. `lint-translations.ps1 -LUpdateProject` (used by `dev.ps1`) now refreshes temporary copies from the sources first and also fails on `vanished`/`obsolete` entries; shown to fail on a probe, tracked files untouched. CI's `lint` job (no build) still checks the committed files only.
+- **Fixed (docs):** `services/CLAUDE.md` still said image steps can't be built here; it now requires the VM check.
+
+Decision: **ADR-010 audio ownership** (lead, Accepted): one PipeWire in `ruya-shell`'s session; profile apps get a socket to it via `ruya-session`; `ruya-devices` is a user unit of `ruya-shell`. Unblocks B-007's audio part.
+
+Planning (Inbox 4 → 0): the two `shots` focus flakes → **T-127**; the RTL item → dropped as a task (no RTL language in the MVP), kept as a rule in `shell/CLAUDE.md` "RTL check"; the Turkish review → escalated (Open owner decisions). New: **T-128** `ruya-devices` audio service (VM-verified), **T-129** network contract, mock and Settings → Network. Queue: 10 `todo` + T-123 (lead), 7 ready now. NEXT stays T-118.
+
+### 2026-10-23 · Opus 5.5 · Lead (worker cost)
+The owner asked whether builder sessions need speed and token optimizations. From the transcripts of the last four sessions:
+- Almost all cost is **cache reads of a growing context**: sessions that took several tasks in a row ended at 250k–470k tokens of context, and one 4-task session read 158M cached tokens, against 25M for a 2-task one. Wall time goes mostly to image builds and VM runs (required) and to waiting for approvals.
+- Smaller items: `STATUS.md` was 44 KB and read whole by every builder (most of it old log); each full-HD screenshot Read stays in context for the rest of the session.
+
+Changes: old log entries moved to `docs/STATUS-log.md` (STATUS now 23 KB; the lead keeps the newest five); `dev.ps1 shots` writes half-size review copies to `output\shell-shots\review\`, and builders review those; `CLAUDE.md` has a "Read lean" rule and says a fresh session per task is cheaper. Recommendation to the owner: start a new session for each task instead of "continue with next task".
+
+Verification: `dev.ps1 test` ALL GREEN; `dev.ps1 shots` 131 passed and wrote 16 review copies (legible at 960×540). T-114 and T-124 (committed meanwhile) are not reviewed yet.
+
+### 2026-10-23 · Sonnet 5.5 · T-109
+Translations (en, tr) with live switching:
+- `qt_add_translations` + `shell/i18n/*.ts` (140 messages, 0 unfinished, enforced by the new `scripts/lint-translations.ps1`); `DeviceSettings.language` installs the translator and calls `retranslate()`; Settings -> System has the Language row; the Turkish on-screen keyboard (ç ğ ı ö ş ü, Shift i -> İ); `--reverse` RTL check.
+- Found and fixed: models carrying translated text reset `currentIndex` on a language change (Settings categories, home tiles); they now hold keys and the label is a binding (rule in `shell/CLAUDE.md`).
+- Build dependency: `qt6-qttools-devel qt6-linguist` in CI, the image's shell stage and `dev-setup.md`.
+
+Verification: `dev.ps1 test` ALL GREEN; `shots` green (the first run hit the known `Power` flake); 3 screenshots reviewed. Image `0.0.7-t109` built in WSL, `RUYA_BOOT_OK` (language switching in the VM unverified).
+
+Follow-ups: two Inbox lines. NEXT is T-118. The lead review is due now.
+
+### 2026-10-23 · Sonnet 5.5 · T-125
+PIN-pad lockout state:
+- `PinPad.locked` (`lockSecs > 0`): `press()` ignores digits, Del and OK while locked; the dots and all keys use the new `Theme.disabledOpacity` (0.4, also used by the OK key when too few digits); the message is only the countdown. When the timer reaches 0 the pad works again with no other action (focus never leaves the key grid). `open()` resets the countdown when a different profile opens (it belongs to the profile that was locked).
+- Collect modes (Change PIN old PIN, admin PIN) close the pad before the service replies, so they cannot show a locked pad; their `locked-out` reply is reported by `ProfilesPane` with the countdown, as before. Nothing to change there.
+
+Verification: `dev.ps1 test` ALL GREEN; `shots` green on the re-run (the first runs hit the known focus flakes, see Inbox); `15-pin-locked.png` reviewed.
+
+Follow-ups: one Inbox line. NEXT is T-109 (T-123 is lead's). The lead review is due now.
+
 ### 2026-10-23 · Sonnet 5.5 · T-124
 Keyboard Guide key:
 - `Shell.isGuideKey` (`HomePage`, `Super_L`, `Super_R`, `Meta`) feeds the one Guide code path: open on press, hold for the power choices, close from the overlay. `Key_Menu` stopped being Guide (it was a stand-in from the first scaffold; nothing depended on it); spec 02 4.2 now says Super.

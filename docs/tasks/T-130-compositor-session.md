@@ -50,6 +50,7 @@ Plus the VM checks above and the update/rollback drill.
 - `input` is an altfiles group on bootc, so `usermod -aG input` does nothing; logind does not remove an ACL when a device loses its `uaccess` tag.
 - A fresh disk copy has new SSH host keys: use the batch SSH options in `docs/dev-setup.md`.
 - Split the work into a host-tested commit (layers, key router) and an image commit if that keeps each reviewable.
+- Start-up order changes here (no cage; `ruya-devices` is a user unit that starts after the shell). Check the boot journal for the `QSoundEffect ... not supported` lines of T-121; if they appear, defer `Sfx` loading until `Audio` reports a default sink (the item was dropped from T-128's Inbox for this reason).
 
 ## Outcome
 _Filled in by the implementer: what was built, files, how it was verified, deviations, follow-ups._
