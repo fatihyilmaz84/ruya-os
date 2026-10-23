@@ -1,6 +1,6 @@
 # T-121 — Audio in the VM: a sound device, PipeWire up, UI cues load without errors
 
-Status: todo · Phase: 2 · Depends: T-120 (VM screenshot/keys scripts, monitor port) · Area: image, scripts, shell · Size: S
+Status: done · Phase: 2 · Depends: T-120 (VM screenshot/keys scripts, monitor port) · Area: image, scripts, shell · Size: S
 
 ## Goal
 The sound path that was never run on Linux is checked in the booted image: the VM has a sound card, PipeWire and WirePlumber run for the shell's session and expose an output, and the shell's UI cues (`Sfx`, T-108's volume OSD) load and play without errors. This does not prove how it sounds; it proves nothing in the chain is missing or broken.
@@ -47,4 +47,33 @@ ssh -i $env:USERPROFILE\.ssh\ruyaos_dev -p 2222 root@127.0.0.1 "sh /root/audio-c
 - Keep the check in a script file (quoting through PowerShell to ssh breaks `$` and pipes).
 
 ## Outcome
-_Filled in by the implementer: what was built, files, how it was verified, deviations, follow-ups._
+**Result: the sound path works in the VM. Nothing in the image or the shell needed fixing.** The image was `0.0.5-t107d` (no image change in this task); a second image with stereo cues (`0.0.5-t121`) was built to test a hypothesis, did not change the result, and was dropped (the wavs are as committed).
+
+**Built:**
+- `smoke-test.ps1 -Audio` adds an Intel HDA card; `-AudioBackend dsound` (default, host speakers) or `wav` (records what the guest plays to `output\vm-audio.wav`, so no ears are needed). It still prints `RUYA_BOOT_OK` with the card (`RUYA_BOOT_OK 0.0.5-t107d` and `0.0.5-t121`).
+- `scripts/vm-audio-check.sh` (guest): sound card, the shell user's PipeWire units and processes, `wpctl status`, default sink, the shell's audio log lines. `scripts/vm-audio-bursts.py` (host): lists the sounds in the recording (QEMU leaves the wav header sizes at zero, so `wave` cannot open it). Docs: `dev-setup.md` ("Audio in the VM"), `image/CLAUDE.md`, spec 01 §8 row 5.
+
+**PipeWire runs for `ruya-shell` and exposes the HDA sink** (`vm-audio-check.sh`, abridged):
+```
+ 0 [Intel          ]: HDA-Intel - HDA Intel                  (kernel sound card)
+user@972.service: active      /run/user/972 (ruya-shell)     (pam_systemd gives the compositor session a user manager)
+pipewire-pulse.service / pipewire.service / wireplumber.service  loaded active running
+1223 /usr/bin/pipewire   1224 /usr/bin/wireplumber   1225 /usr/bin/pipewire-pulse
+Audio
+ ├─ Devices:  49. Built-in Audio                      [alsa]
+ ├─ Sinks:    * 56. Built-in Audio Analog Stereo      [vol: 0.40]
+ └─ Streams:  57. ruya-shell
+                 58. output_FL > Generic Analog:playback_FL   [init] / [paused]
+default sink: node.name = "alsa_output.pci-0000_00_04.0.analog-stereo", media.class = "Audio/Sink"
+```
+No unit wiring was needed: the user units (`pipewire`, `wireplumber`, `pipewire-pulse`) start through the user manager that pam_systemd creates.
+
+**The cues are played.** With `-Audio -AudioBackend wav`, six arrow keys in the picker (1.2 s apart) gave six 45 ms bursts at 0.06, 1.22, 2.43, 3.63, 4.84 and 6.06 s (peak 4393). On the fresh disk, `ret`, `right`, `left`, `esc`, `ret` in the wizard gave five bursts of 120, 45, 45, 110 and 120 ms: the select (about 0.12 s), navigate (0.04 s) and back (0.11 s) cues, matching the wav lengths. The shell's stream is visible in `wpctl status` as above. The stream is persistent (it flips between `[init]`, `[paused]` and streaming), so no polling of a short-lived stream was needed.
+
+**One warning, explained:** the shell's journal has three `QSoundEffect: playback of this format is not supported on the selected audio device` lines (one per cue) right after Qt's `Ignoring dummy output`, at the first shell start of a session. It is a **start-up race**: the shell loads the cues before WirePlumber has created the HDA sink, so Qt sees only PipeWire's dummy output. Evidence: (1) when the compositor was restarted in the same session (sink already present) the lines did not appear; (2) the cues are played in both cases (recordings above). The wav format is not the cause: I converted the cues from mono to stereo (the sink is stereo) in a test image and the warning stayed, so that change was reverted. Left as it is (Inbox line); nothing waits for audio before showing the shell, which is right.
+
+**Other findings:** the image has no `pw-cli`, `pw-top`, `pw-dump` or `pw-mon` (`pipewire-utils` is not installed), so the task's suggested stream view is `wpctl status`. A first version of `vm-audio-check.sh` used `pw-mon` and was replaced.
+
+**Found outside this task's scope and fixed:** three lone `0xA7` bytes (a `§` written in the wrong encoding by my Python edit in T-107: two specs and a comment in `Shell.qml`) had reached `main`. Python on this host writes cp1252 by default. Repaired to UTF-8; the pitfall is now in the root `CLAUDE.md`, and a scan of every tracked text file as UTF-8 is clean.
+
+**Verification:** `.\scripts\dev.ps1 test` → ALL GREEN (also after the stereo test; run again at the end). The VM boot is `RUYA_BOOT_OK` with and without `-Audio`. **Unverified:** how it sounds, a real HDMI/analog output, Bluetooth, volume control reaching PipeWire (the `Audio` singleton is still a mock until T-114).

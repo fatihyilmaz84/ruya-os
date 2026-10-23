@@ -46,7 +46,7 @@ The build excludes any desktop environment, display manager, `kdeconnect` and `p
 ### 2.2 Suspend / power
 - Idle → dim → suspend (s2idle/S3) after configurable timeouts. Apps keep running across suspend.
 - Wake sources: power button, USB controller/keyboard (`/sys/.../power/wakeup`), Bluetooth (adapter-dependent, best effort).
-- The Guide button held for 2 s opens the power menu. **Built (T-107):** the shell's Power page and Guide overlay call `org.freedesktop.login1.Manager` (`Suspend`, `Reboot`, `PowerOff`, with `interactive=false`; `CanSuspend`, `CanReboot` and `CanPowerOff` decide what is offered). The image ships `/usr/share/polkit-1/rules.d/50-ruyaos-power.rules`, which lets exactly the user `ruya-shell` do those three actions (and their `-multiple-sessions` variants) without authentication. Idle timers and wake sources are not built yet. UI: 02 �1.4.
+- The Guide button held for 2 s opens the power menu. **Built (T-107):** the shell's Power page and Guide overlay call `org.freedesktop.login1.Manager` (`Suspend`, `Reboot`, `PowerOff`, with `interactive=false`; `CanSuspend`, `CanReboot` and `CanPowerOff` decide what is offered). The image ships `/usr/share/polkit-1/rules.d/50-ruyaos-power.rules`, which lets exactly the user `ruya-shell` do those three actions (and their `-multiple-sessions` variants) without authentication. Idle timers and wake sources are not built yet. UI: 02 §1.4.
 
 ### 2.3 Drivers & Secure Boot
 - Fedora kernel and shim are signed, so Secure Boot works out of the box on AMD/Intel. NVIDIA systems need the MOK step below.
@@ -161,7 +161,7 @@ Legend: ✅ verified · 🟡 implemented, partly verified · ⬜ not started. Ve
 | 2 | bootc-image-builder → qcow2 + anaconda-iso | ✅ qcow2 (40 GiB root) · ISO: see STATUS | `scripts/make-disk.sh`, `image/bib/disk.toml` |
 | 3 | qcow2 boots in QEMU (UEFI, virtio); cage starts the QML shell fullscreen with animation + `MultiEffect` blur; no login prompt or desktop | ✅ `RUYA_BOOT_OK` about 4 s after the compositor starts (software rendering in the VM; blur only judged on host/GPU) | `ruya-compositor@.service`, `scripts/smoke-test.ps1` |
 | 4 | Keyboard arrows move focus; a USB gamepad does the same | 🟡 keys ✅ on host; `ruya-inputd` runs in the VM; a gamepad needs hardware | `services/ruya-inputd` |
-| 5 | A UI click plays through PipeWire | 🟡 the VM has no audio device (dummy sink); needs hardware or an `-audiodev` | `shell/sounds`, `SoundEffect` |
+| 5 | A UI click plays through PipeWire | ✅ in the VM with a sound card (`smoke-test.ps1 -Audio`): PipeWire, WirePlumber and pipewire-pulse run for `ruya-shell`, `wpctl` lists the HDA sink and the shell's stream, and a recording shows one burst per cue (T-121). Not heard on real hardware | `shell/sounds`, `SoundEffect`, `scripts/vm-audio-check.sh` |
 | 6 | Update N → N+1 and rollback, visible version change | ✅ 0.0.3 → 0.0.4 via `bootc switch` (about 2 min), `bootc rollback` → 0.0.3 | `docs/dev-setup.md` drill, `scripts/vm-reboot-check.ps1` |
 | 7 | greenboot rolls back a broken image automatically | ✅ greenboot 0.16 (Rust) once its units are enabled: 4 failed boots, then GRUB fell back to the previous deployment | `/usr/lib/greenboot/check/required.d/`, `/etc/greenboot/greenboot.conf` |
 | 8 | ISO installs on one real low-tier machine; frame time recorded | ⬜ needs hardware | — |

@@ -79,6 +79,20 @@ ssh -i $env:USERPROFILE\.ssh\ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-pro
 
 **Pitfalls.** The shell is software-rendered and CPU-bound in the VM (about 94 % of a core), so the screen can lag the keys by several seconds and the shell's own timers run slowly (the PIN lock countdown, for instance). Wait before a screenshot and before judging "nothing happened"; take a second screenshot first. PowerShell 5.1 binds extra arguments to later positional parameters: `vm-keys.ps1` sets `PositionalBinding = $false` for that reason. `sendkey menu` and `home` did not open the Guide overlay (see STATUS Inbox); use `vm-inject-key.py guide`.
 
+## Audio in the VM (T-121)
+
+`smoke-test.ps1 -Audio` adds an Intel HDA sound card. `-AudioBackend dsound` (default) plays on the host's default output; `-AudioBackend wav` records everything the guest plays to `outputm-audio.wav` (written as the VM runs, complete after it powers off), so a check needs no ears:
+
+```powershell
+.\scripts\smoke-test.ps1 -Disk output\qcow2	121.qcow2 -Persistent -Keep -Audio -AudioBackend wav
+.\scriptsm-keys.ps1 ret -DelayMs 2000; .\scriptsm-keys.ps1 right left esc ret -DelayMs 1500
+ssh -i $env:USERPROFILE\.sshuyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-audio-check.sh   # copy it with scp first
+ssh -i $env:USERPROFILE\.sshuyaos_dev -p 2222 root@127.0.0.1 systemctl poweroff
+python scriptsm-audio-bursts.py                                                             # one burst per cue
+```
+
+`scripts/vm-audio-check.sh` (guest) shows the sound card, the `ruya-shell` user's PipeWire, WirePlumber and pipewire-pulse (pam_systemd gives the compositor session a user manager), `wpctl status` with the sink and the shell's stream, and the shell's audio log lines. `scripts/vm-audio-bursts.py` (host) lists the sounds in the recording (QEMU leaves the wav header sizes at zero, so `wave` cannot open it). The image has no `pw-cli`, `pw-top` or `pw-dump` (the `pipewire-utils` package): use `wpctl`.
+
 ## Power-policy check (T-107)
 
 After any change to the polkit rule or to how `image/rootfs` is installed, boot the disk (`.\scripts\smoke-test.ps1 -Keep`) and run, from the repo root:
@@ -175,7 +189,7 @@ cmake -S shell -B shell/build -G Ninja && cmake --build shell/build && shell/bui
 ## Known limits on this host
 - QEMU on Windows renders through software (`MESA-EGL: failed to create dri2 screen` is expected), so FPS numbers there mean nothing.
 - Gamepad passthrough into QEMU on Windows is unreliable. Test controllers on hardware or a Linux host (`-device usb-host,...`).
-- The test VM has no audio device. The shell logs `QSoundEffect: playback of this format is not supported` against PipeWire's dummy output; UI sound is unverified in VMs.
+- `smoke-test.ps1` boots without a sound card unless asked (`-Audio`, see "Audio in the VM"). Without one the shell logs `QSoundEffect: playback of this format is not supported` once per cue and nothing plays. With one, the same three lines still appear at the first shell start of a session (a start-up race, benign: the cues play), but not when the shell restarts later.
 
 ## Problems hit (Phase 0 exit item 9)
 

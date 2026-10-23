@@ -26,7 +26,7 @@ Each surface is a separate QML module loaded with `Loader { asynchronous: true }
 - Transition: home fades out and slides left, the page fades in and slides in from the right, over `Theme.pageMs` (`Theme.pageSlide` px); reversed on close. The backdrop stays. While a page is open, home is disabled, so arrow keys cannot reach the tiles.
 - Closing a page restores focus to the tile that opened it (same `currentIndex`). `Shell.routeFocus()`/`focusCurrent()` is the single place that decides where focus goes.
 - The Guide overlay opens from home or from any page (the shell handles `HomePage`/`Menu` when nothing under focus does). Closing it returns focus to the page. "Switch profile" clears the page stack, so the next sign-in lands on home.
-- Games, Media and Store are placeholders ("Coming soon" plus one focusable element) until their tasks land; Settings (ง1.2) and Power (ง1.4) are real.
+- Games, Media and Store are placeholders ("Coming soon" plus one focusable element) until their tasks land; Settings (ยง1.2) and Power (ยง1.4) are real.
 
 ### 1.2 Settings page (as built, T-103)
 - Two panes. Left: the category list (Profiles, Network, Bluetooth & controllers, Display & motion, Audio, Storage, Accessibility, System, About). Right: the selected category's pane. Up/Down choose a category and swap the pane at once; Right or Accept enters the pane (only if it has content); Left or Back returns to the list; Back on the list closes the page. Panes stay alive, and each remembers its last focused row.
@@ -40,7 +40,7 @@ Each surface is a separate QML module loaded with `Loader { asynchronous: true }
 - The **Power page** has three rows: Suspend, Restart, Power off. Accept opens `PowerConfirm` ("Restart now?", Cancel and Confirm). **Cancel has focus when it opens**; Left/Right move between the buttons, Back cancels, and the dialog swallows every other key. Only Confirm reaches the `Power` singleton (`suspend()`, `restart()`, `powerOff()`). A row whose action logind does not allow (`CanSuspend` etc. is not `yes`) shows "Not available" and opens nothing.
 - The **Guide overlay** has "Switch profile", **Power** and "Close". "Power" switches the overlay to the power choices (Suspend, Restart, Power off, Back; actions logind refuses are hidden), and a choice opens the same `PowerConfirm` above the overlay. Cancel returns to the choices; Back in the choices returns to the system actions; Confirm closes the overlay.
 - **Holding Guide** for `Theme.guideHoldMs` (2 s) switches the open overlay to the power choices. A short press still opens the overlay at once (on press); the hold is timed from that press, and the release cancels it. Autorepeat events of a held key are ignored (they used to close the overlay: the overlay treated them as a second Guide press). Only Guide holds; Start/Menu does not.
-- A refused or failed action shows an error toast ("Could not restart."). Idle auto-suspend and wake sources are not part of this task (01 ง2.2).
+- A refused or failed action shows an error toast ("Could not restart."). Idle auto-suspend and wake sources are not part of this task (01 ยง2.2).
 
 ### 1.3 First-boot setup (as built, T-106)
 - `Setup.qml` is a full-screen modal (z 20, like the picker). The shell shows it when `Profiles.available && Profiles.profiles.length === 0` and keeps it up until its Done step, so the picker never flashes in between "profile created" and "all set". If a profile appears some other way before the account is being created, the shell drops setup.

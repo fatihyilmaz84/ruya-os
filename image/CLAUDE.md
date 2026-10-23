@@ -38,4 +38,4 @@ Builds take 3–30 minutes (the NVIDIA step is cached unless `image/build/` or e
   - WHPX hangs on guest reset, so QEMU runs with `-no-reboot` and `vm-reboot-check.ps1` cold-starts it;
   - use `127.0.0.1`, not `localhost`, for SSH;
   - the VM reaches a WSL registry only through WSL's IP;
-  - software rendering and no audio device in the VM are expected.
+  - software rendering is expected, and the VM has no sound card unless you boot with `smoke-test.ps1 -Audio` (`dev-setup.md`, "Audio in the VM"); the three `QSoundEffect: playback of this format is not supported` lines at the first shell start are a benign race with WirePlumber.

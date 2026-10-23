@@ -94,7 +94,7 @@ FocusScope {
     // it unhandled. (The overlay itself and the PIN pad are modal and accept every key.)
     //
     // Holding Guide for Theme.guideHoldMs switches the open overlay to the power choices
-    // (spec 01 ง2.2). A short press still opens the overlay at once; the hold is timed from
+    // (spec 01 ยง2.2). A short press still opens the overlay at once; the hold is timed from
     // that press and cancelled by the release. Autorepeat events are ignored: they are the
     // same physical press.
     property bool guideHeld: false

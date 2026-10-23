@@ -1,6 +1,6 @@
 # Headless boot test on Windows (QEMU + WHPX): boots the qcow2 and waits for the shell's
 # readiness marker on the serial port (written by ruya-boot-marker.service in VMs).
-#   .\scripts\smoke-test.ps1 [-Disk output\qcow2\disk.qcow2] [-TimeoutSec 600] [-Keep]
+#   .\scripts\smoke-test.ps1 [-Disk output\qcow2\disk.qcow2] [-TimeoutSec 600] [-Keep] [-Audio [-AudioBackend wav]]
 # -Keep leaves the VM running (SSH on localhost:2222) instead of stopping it after the result.
 # Runs on a snapshot (the disk image is never modified) unless -Persistent is given, which the
 # update/rollback drill needs so deployments survive reboots. Use it on a copy of the disk.
@@ -9,7 +9,11 @@ param(
     [int]$TimeoutSec = 600,
     [string]$QemuDir = "C:\Program Files\qemu",
     [switch]$Keep,
-    [switch]$Persistent
+    [switch]$Persistent,
+    # Adds an Intel HDA sound card. dsound plays on the host's default output; wav records what the
+    # guest plays to output\vm-audio.wav (written when QEMU exits), so a check needs no ears.
+    [switch]$Audio,
+    [ValidateSet("dsound", "wav")][string]$AudioBackend = "dsound"
 )
 $snapshot = if ($Persistent) { "off" } else { "on" }
 
@@ -37,6 +41,10 @@ $qemuArgs = @(
     # reboot makes QEMU exit instead; vm-reboot-check.ps1 relaunches it on the same disk.
     "-no-reboot"
 )
+if ($Audio) {
+    $audiodev = if ($AudioBackend -eq "wav") { "wav,id=snd0,path=$(Join-Path $Repo 'output\vm-audio.wav')" } else { "dsound,id=snd0" }
+    $qemuArgs += @("-audiodev", $audiodev, "-device", "intel-hda", "-device", "hda-output,audiodev=snd0")
+}
 # PS 5.1 Start-Process does not quote array elements: wrap any with spaces ("C:\Program Files").
 $qemuArgs = $qemuArgs | ForEach-Object { if ($_ -match ' ') { '"' + $_ + '"' } else { $_ } }
 $vm = Start-Process -FilePath $qemu -ArgumentList $qemuArgs -PassThru -WindowStyle Hidden

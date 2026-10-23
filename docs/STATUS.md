@@ -7,20 +7,19 @@ Last updated: 2026-10-23 (Sonnet 5.5, T-107)
 ## Where we are
 
 - **Phase 0 (foundation):** **verified in a VM on 2026-10-22.** The image builds, passes lint, boots to the shell, updates, and rolls back both manually and automatically (greenboot). Only the real-hardware item is left (B-002).
-- **Phase 1–2 (shell core, profiles):** in progress on the Windows host against mock services. Done: pages, motion, toasts/OSD, settings, on-screen keyboard, profile management, first-boot wizard, token lint. The repo is public on GitHub and CI (`lint`, `services`, `shell`, `image`) is green on `main` (T-122). Profiles, the wizard and Settings → Profiles are **vm-verified** over the real bus (T-120), and power actions (T-107) work in the VM. Next: audio in the VM (T-121), then the audio contract, translations and the Store/Games pages.
-- **Host:** Windows, plus a Fedora 44 WSL distribution for image builds and QEMU/WHPX for boot tests (`docs/dev-setup.md`). Work that needs a GPU, controllers or audio still waits in the Blocked table.
+- **Phase 1–2 (shell core, profiles):** in progress on the Windows host against mock services. Done: pages, motion, toasts/OSD, settings, on-screen keyboard, profile management, first-boot wizard, token lint. The repo is public on GitHub and CI (`lint`, `services`, `shell`, `image`) is green on `main` (T-122). Profiles, the wizard and Settings → Profiles are **vm-verified** over the real bus (T-120), and power actions (T-107) work in the VM. The sound path is **vm-verified** (T-121). Next: the audio contract and Settings → Audio (T-114), translations (T-109), then the Store/Games pages.
+- **Host:** Windows, plus a Fedora 44 WSL distribution for image builds and QEMU/WHPX for boot tests (`docs/dev-setup.md`). Work that needs a GPU, controllers or real audio output still waits in the Blocked table. The VM can be driven by keys and screenshots, and given a sound card (`docs/dev-setup.md`).
 
 Verification legend: **host** = built and tested on the Windows host · **vm** = built into the image and verified booted in QEMU · **unverified** = written, but not run · **hw** = verified on real hardware.
 
 ## Board
 
-**NEXT → T-121**
+**NEXT → T-114**
 
 **Lead review due:** after 3 more builder tasks, or now. The range `9ca4b25..HEAD` is unreviewed (see `docs/LEAD-NOTES.md`). Builders: when your task makes this condition true, end your reply by recommending a lead session.
 
 | ID | Title | Status | Depends | Verified |
 |---|---|---|---|---|
-| [T-121](tasks/T-121-vm-audio.md) | Audio in the VM: sound device, PipeWire for the shell session, UI cues load | todo | T-120 | |
 | [T-114](tasks/T-114-audio-contract-and-settings.md) | Audio contract and Settings → Audio | todo | T-103, T-108 | |
 | [T-109](tasks/T-109-translations.md) | Translations en/tr, live switching, Turkish keyboard layout | todo | T-103, T-106 | |
 | [T-118](tasks/T-118-profile-rename-delete.md) | Profiles1: RenameProfile and DeleteProfile (contract, service, mock; no UI) | todo | T-115 | |
@@ -38,6 +37,7 @@ Follow-ups, debt and ideas waiting for a planner session. Builders: add one line
 
 - (T-120) Keyboard Guide: spec 02 §4.2 says `Super`/`Home`, but the shell handles only `Key_HomePage` and `Key_Menu`; in the VM `sendkey menu` did not open the overlay (cause not investigated, `home` not tried). A keyboard-only user may be unable to open the overlay; decide whether the shell or `ruya-inputd` maps keyboard keys, and test it with `vm-inject-key.py`.
 - (T-120) PIN pad while locked out: digits are accepted and OK silently does nothing until the countdown ends, with no disabled look; reads as "wrong PIN". Small UX fix in `PinPad.qml`.
+- (T-121) Start-up race: the shell loads its UI cues before WirePlumber has created the sink, so the first start of a session logs three `QSoundEffect: playback of this format is not supported` lines (benign, the cues play). Cleaning it up means deferring the `Sfx` effects until an output exists. Also: the image lacks `pipewire-utils` (`pw-top`, `pw-dump`); consider it for dev-channel images.
 - (T-120) `ruya-profiles.service` exposure is 6.0 MEDIUM (`systemd-analyze security`): it runs as root with all capabilities and no syscall filter. Add a `CapabilityBoundingSet` for what `useradd` needs, `SystemCallFilter=@system-service`, `UMask=0077`, `ProtectProc=invisible`, and re-run the Profiles VM check (`scripts/vm-profiles-check.sh`).
 
 ### Done
@@ -61,6 +61,7 @@ A session can't know its own commit hash before committing, so new rows put the 
 | T-105 | Settings → Profiles: add profile, change/remove PIN; mock mirrors `service.rs`; PinPad collect modes | mock path: host (`dev.ps1 test` green, new `tst_profile_admin.qml` + screenshot reviewed) · D-Bus `CreateProfile`/`SetPin`: **vm** (T-120; the attempts probe was replaced in T-115) | T-105 |
 | T-115 | Profiles1: `CreateProfile`/`SetPin` replies carry `attempts_left` and `retry_after_secs`; `SwitchTo` probe removed | service + adapter types: host (`dev.ps1 rust` green, 2 new tests) · shell mock path: host (`dev.ps1 test` green) · D-Bus reply parsing: **vm** (T-120: attempts left and retry time shown from `SwitchTo` and `CreateProfile` replies) | T-115 |
 | T-106 | First-boot setup wizard (`Setup.qml`: welcome, language, network placeholder, create admin, done); `DeviceSettings.language`; `RUYA_MOCK_PROFILES=empty`; shared `ProfileStatus` messages | mock path: host (`dev.ps1 test` green, new `tst_setup.qml` with 8 tests + 2 screenshots reviewed) · real `ruya-profiles` over D-Bus: **vm** (T-120: wizard by keys creates the admin, profile and Unix user checked) | T-106 |
+| T-121 | Audio in the VM: `smoke-test.ps1 -Audio` (HDA card; dsound or wav capture), `vm-audio-check.sh`, `vm-audio-bursts.py`; PipeWire, WirePlumber and pipewire-pulse run for `ruya-shell`, the HDA sink and the shell's stream are listed by `wpctl`, one recorded burst per UI cue | **vm** (recording analysed; the start-up `QSoundEffect` warning is explained, not removed) · how it sounds, real outputs, volume control reaching PipeWire: **unverified** | T-121 |
 | T-122 | CI: token lint extracted to `scripts/lint-tokens.ps1` and run as a `lint` job; `permissions: contents: read`, cancelling `concurrency`, `workflow_dispatch`, timeouts; local-check-to-CI table in `dev-setup.md` | host (`dev.ps1 test` green, lint probe failed as expected) · GitHub run 39935813084: `lint`, `services`, `shell`, `image` all green | T-122 |
 | T-120 | Profiles, wizard, lockout and Settings → Profiles verified in the VM over the real system bus; VM screenshot/keys scripts (QEMU monitor, guest-side uinput Guide key); closes B-005 | **vm** (39 screenshots, D-Bus and on-disk state pasted in the task Outcome); no shell, service or image change needed | T-120 |
 | T-117 | Reduced motion honoured by the PIN-pad shake and tile pulse; literal durations/colours moved into `Theme` tokens; token lint in `dev.ps1 shell` | host (`dev.ps1 test` green, new test fails without the guard, lint failure demonstrated; 3 screenshots reviewed by eye) | T-117 |
@@ -90,6 +91,17 @@ A session can't know its own commit hash before committing, so new rows put the 
 ## Session log (newest first)
 
 Each entry: date · model · tasks · what happened · verification · follow-ups. Keep entries short and factual.
+
+### 2026-10-23 · Sonnet 5.5 · T-121
+Audio in the VM:
+- `smoke-test.ps1 -Audio [-AudioBackend dsound|wav]` adds an HDA card; `vm-audio-check.sh` (guest) and `vm-audio-bursts.py` (host, analyses the recorded wav).
+- PipeWire, WirePlumber and pipewire-pulse run for `ruya-shell` with no image change; `wpctl` lists the HDA sink and the shell's stream; the recording shows one burst per cue (select 120 ms, navigate 45 ms, back 110 ms).
+- The three `QSoundEffect ... not supported` lines at the first start are a race with WirePlumber (absent when the shell restarts in the same session); a mono-to-stereo cue test did not change them and was reverted.
+- Found and fixed: three lone `0xA7` bytes (`§` written as cp1252 by my T-107 Python edit) had reached `main` in two specs and `Shell.qml`; repaired, pitfall added to `CLAUDE.md`.
+
+Verification: `dev.ps1 test` ALL GREEN; VM `RUYA_BOOT_OK` with and without `-Audio`. Unverified: how it sounds, real outputs, volume control into PipeWire (T-114).
+
+Follow-ups: one Inbox line. NEXT is T-114. The lead review is due; the Inbox has 4 items.
 
 ### 2026-10-23 · Sonnet 5.5 · T-120
 Profiles and the wizard in the VM, over the real bus:
