@@ -48,6 +48,7 @@ Run one when any of these is true. Builders check this at session start and stop
 
 - **Split shared infrastructure from features.** T-105 had to invent a page modal layer and scrollable settings panes on the way, and grew to about 1,500 lines. When a feature needs new shared plumbing, make the plumbing its own small task that the feature depends on.
 - **Don't freeze contracts in task text.** Write "extend the contract if needed", not "do not change the contract". Contracts are drafts until release (`CLAUDE.md`).
+- **Service-facing work gets a VM criterion.** Since T-120 the VM can be driven by keys and checked over SSH, so "unverified (no bus here)" is no longer acceptable for a task that changes a service, a unit, the image or a D-Bus client: add an acceptance criterion that names the VM check (`smoke-test.ps1`, a `scripts/vm-*` script, a VM screenshot). Mock-only UI tasks don't need one.
 - **Prefer visible-behaviour criteria over implementation details.** A criterion like "signal X has args (a, b)" forced a deviation in T-105. State what the user sees, and leave the signatures to the builder.
 
 ## Quality bar for a task (the planner checks every task against this)

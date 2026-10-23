@@ -1,6 +1,6 @@
 # T-118 — Profiles1: RenameProfile and DeleteProfile (contract, service, mock, shell backend)
 
-Status: todo · Phase: 2 · Depends: T-115 · Area: api, services, shell · Size: M
+Status: todo · Phase: 2 · Depends: T-115, T-126 · Area: api, services, shell · Size: M
 
 ## Goal
 An admin can rename and delete profiles through `org.ruyaos.Profiles1`, with the safety rules enforced by the service, and the mock and the shell backend follow the same contract. This task has no UI: the Settings → Profiles screens for it come from a later planning session, once this lands.
@@ -32,6 +32,7 @@ An admin can rename and delete profiles through `org.ruyaos.Profiles1`, with the
 - [ ] A failing `Accounts::remove` returns `failed` and the profile is still listed (test with a failing fake).
 - [ ] The mock gives the same status for the same inputs (test `tst_profile_admin.qml::test_mock_lifecycle_rules_match_service`, mirroring the Rust cases).
 - [ ] `.\scripts\dev.ps1 rust` and `.\scripts\dev.ps1 test` are green; the D-Bus client compiles and its method names match the XML (list them side by side in the Outcome).
+- [ ] In the VM (rebuilt image, `RUYA_BOOT_OK`): after `scripts/vm-profiles-check.sh create`, rename and delete the standard profile with `busctl` as root; `state` shows the new name, then no profile, no `ruya-p2` Unix user and the home handled as the Outcome describes (output in the Outcome). Extend the script with `rename`/`delete` modes if that is simpler. The unit is hardened since T-126: if `userdel` needs a capability the unit lacks, add it and say so.
 
 ## Verification
 ```powershell

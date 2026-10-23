@@ -30,7 +30,7 @@ Settings → Audio lists the output devices (HDMI, headset, Bluetooth…), lets 
 6. `Sfx` volume follows the `ui` channel volume (`SoundEffect.volume`).
 
 ## Out of scope
-- The Rust `ruya-devices` service and PipeWire integration (needs Linux; add it to the blocked list if it isn't there).
+- The Rust `ruya-devices` service and PipeWire integration (blocker B-007: waits for a lead decision on whose PipeWire owns the outputs).
 - Ducking (handled in WirePlumber policy later).
 - HDMI passthrough settings.
 
@@ -51,7 +51,7 @@ Settings → Audio lists the output devices (HDMI, headset, Bluetooth…), lets 
 
 ## Docs to update
 - `docs/specs/03-services-and-apps.md` §2.3: reference the contract.
-- `docs/STATUS.md`: add or confirm blocked item "ruya-devices (PipeWire) service".
+- `docs/STATUS.md`: blocker B-007 already covers the `ruya-devices` service; add anything this task learns about it there.
 
 ## Hints
 - Copy the pattern of `DisplayPane.qml` (a `SettingsPane` with controls kept in sync through `Binding`) and register the pane in `SettingsPage.qml`; `ProfilesPane.qml` shows how messages and focus restoration are handled.

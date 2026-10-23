@@ -4,34 +4,26 @@ The procedure is in [`LEAD.md`](LEAD.md). **Rewrite this file at the end of ever
 
 ## Review range
 
-- **Last reviewed commit: `9ca4b25`** (2026-10-22; builder tasks T-101–T-105, T-108 reviewed).
-- **Next lead reviews:** `git log --oneline 9ca4b25..HEAD`. At handoff that was:
-  - 8637579 (planning by Sonnet);
-  - 93391d8 T-115;
-  - fc76d7f (image boot work, by the lead; self-reviewed only);
-  - ac1650d T-116;
-  - 22e8c4a T-106;
-  - 37e9711 (docs: GitHub remote);
-  - 438ad9d T-117;
-  - de6112e (planning by Sonnet).
-- Last VM verification: 2026-10-22 on image 0.0.3/0.0.4 (boot, update, manual and automatic rollback). Everything image- or service-facing merged since then is **not** VM-verified.
+- **Last reviewed commit: the lead commit of 2026-10-23** (`docs: lead review 9ca4b25..c06c77a; …`, find it with `git log --grep="lead review 9ca4b25"`). Everything from T-115 to T-122 is reviewed.
+- **Next lead reviews:** `git log --oneline <that commit>..HEAD`.
+- Last VM verification: 2026-10-23 by the lead, image `0.0.6-lead1` built from `c06c77a` (see the STATUS log entry), then T-126's hardened unit.
 
 ## Concerns (ranked)
 
-1. **ADR-002 (compositor) is still open, and it is the largest architecture risk.** The overlay over running apps, app switching and focus control depend on it. A *functional* spike is now possible in the VM (software rendering): shell as a QtWaylandCompositor hosting a client app, with a Guide overlay above it. Performance needs hardware later. **Suggest: create it as an `Owner: lead` task and do it in an early lead session.**
-2. **Integration lags behind UI.** Most features run only against mocks. T-120 (Profiles and first-boot setup over the real bus in the VM) is the first real integration. Review it closely, and consider making "verified in VM" an acceptance criterion for every service-facing task.
-3. **Two planning sessions were run by Sonnet** (8637579, de6112e). Check their tasks against the quality bar in `PLANNING.md` (observable criteria, reference patterns, sizes, no frozen contracts).
-4. **The repo is public on GitHub** (since 2026-10-23). Run a secret scan over the whole history: `image/bib/config.toml` (dev SSH key) must never have been committed, and no keys or tokens may appear anywhere. Report the result to the owner.
-5. **CI has never been green end to end** (T-122). Until it is, the owner's pushes aren't protected by CI.
-6. **Image size is 4.7 GB.** Update sizes and chunking need a plan before any release (Inbox history, spec 01 §4).
-7. **Real hardware (B-002) is untouched.** A dev ISO exists (`output/bootiso/install.iso`; it contains the dev SSH key, so it's for test machines only). Ask the owner whether a spare PC is available.
+1. **ADR-002 (compositor) is still open and blocks the Phase 1 exit** ("overlay over a running app"). It is now **T-123 `[lead]`**: a functional spike in the VM. Do it in the next lead session, before more shell UI piles up on cage assumptions.
+2. **Audio ownership across users (B-007).** PipeWire runs per user; the shell's session has one, profile apps will run as other users (`ruya-session`, not yet designed). Decide whose PipeWire owns the outputs before the `ruya-devices` audio task is written. Ties into how `ruya-session` launches apps, so think about both together (maybe one ADR).
+3. **Integration still lags UI**, but the gap is closing: T-120/T-121 proved the VM workflow. New rule in `PLANNING.md`: every service-facing task gets a VM acceptance criterion. B-004 (`ruya-store` service) can become a task as soon as T-110 lands.
+4. **File corruption by host tools reached `main` twice** (T-107 cp1252, T-121 backslash escapes in `dev-setup.md`). Fixed by an automated check (`scripts/lint-text.ps1` in `dev.ps1 test` and CI). If anything similar slips through, extend that lint rather than adding prose.
+5. **CI after this push.** `lint` gained a step (text lint under `pwsh` on Linux, never run there yet). Read the first run after the owner pushes.
+6. **Image size (4.7 GB) and update sizes**: release topic, still unplanned (candidate list in the 2026-10-23 planning entry).
+7. **Real hardware (B-002) untouched.** The owner has not said whether a spare PC exists.
 
 ## First things the next lead should do
 
-1. Steps 1–3 of `LEAD.md` over the range above (7 commits).
-2. Secret scan (concern 4).
-3. Rebuild the image from HEAD and run the smoke test (T-106 added a Setup screen that the VM shows on an empty profile store; does it render and accept keys over the real bus?).
-4. Plan: is ADR-002 a lead task? Is T-120's scope right?
+1. Steps 1–3 of `LEAD.md` over the range above (expect T-114, T-124, T-125).
+2. T-123 (compositor spike) as the lead task.
+3. Decide concern 2 (audio/session ownership); then write the `ruya-devices` audio task.
+4. If T-110 is done: write the `ruya-store` service task (VM-verified).
 
 ## Quality signals (one row per lead session)
 
@@ -41,3 +33,4 @@ The procedure is in [`LEAD.md`](LEAD.md). **Rewrite this file at the end of ever
 | 2026-10-22 | ..ffd79bf | T-102 | 0 / 2 (Inbox) | 30 + 3 skipped | — |
 | 2026-10-22 | ..b75bf66 | T-108, T-103, T-104, T-105 | 3 / 1 (offscreen gate, contract rule, planning lessons / probe → T-115) | 77 + 7 skipped | — |
 | 2026-10-22 | image work | B-001, B-008 | 9 fixed (see dev-setup problem log) | 77 + 7 skipped | boot, update, rollback, greenboot ✅ |
+| 2026-10-23 | 9ca4b25..c06c77a | T-115, T-116, T-106, T-117, T-122, T-107, T-120, T-121 + 2 plannings | 2 / 0 (mangled bytes + text lint, stale screenshots) | 101 + 9 skipped QML, 23 Rust | `0.0.6-lead1` and `-lead2` boot ✅, profiles over the bus ✅ |
