@@ -28,4 +28,6 @@ Cargo workspace. Each service is a crate named `ruya-<name>` that serves `org.ru
 2. A D-Bus policy in `image/rootfs/usr/share/dbus-1/system.d/org.ruyaos.<Name>1.conf`: only root owns the name, and only `ruya-shell` and root may call it.
 3. `image/Containerfile`: install the binary in the `services-build` stage and add it to `systemctl enable`.
 
-These steps are image changes that can't be built on this machine. Mark them **unverified** in STATUS.
+These are image changes: build the image and check them in the VM (`docs/dev-setup.md`; a `scripts/vm-<name>-check.sh` like `vm-profiles-check.sh`). A task is not `done` until the service runs there.
+
+**Exception, `ruya-devices` (ADR-010):** it runs as a systemd *user* unit of `ruya-shell` (`image/rootfs/usr/lib/systemd/user/`, `ConditionUser=ruya-shell`) so it can reach the shell's PipeWire, and its D-Bus policy lets `ruya-shell` own the name instead of root. Use every hardening option a user manager accepts.

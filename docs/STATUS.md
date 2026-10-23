@@ -2,12 +2,12 @@
 
 **Read this first in every session; update it last.** The rules are in the root `CLAUDE.md`, the roles (Opus lead, Sonnet builders) in `docs/LEAD.md`, the task format in `docs/tasks/README.md`.
 
-Last updated: 2026-10-23 (Sonnet 5.5, T-109)
+Last updated: 2026-10-23 (Opus 5.5, lead)
 
 ## Where we are
 
 - **Phase 0 (foundation):** **verified in a VM on 2026-10-22.** The image builds, passes lint, boots to the shell, updates, and rolls back both manually and automatically (greenboot). Only the real-hardware item is left (B-002).
-- **Phase 1–2 (shell core, profiles):** in progress on the Windows host against mock services. Done: pages, motion, toasts/OSD, settings, on-screen keyboard, profile management, first-boot wizard, token lint. The repo is public on GitHub and CI (`lint`, `services`, `shell`, `image`) is green on `main` (T-122). Profiles, the wizard and Settings → Profiles are **vm-verified** over the real bus (T-120), and power actions (T-107) work in the VM. The sound path is **vm-verified** (T-121). `ruya-profiles` is hardened to exposure 1.6 (T-126). The audio contract and Settings → Audio are built against a mock (T-114; the `ruya-devices` service is B-007). The keyboard Guide key (Super) works (T-124, vm). The PIN pad shows a locked-out state (T-125, host). The shell is translated into Turkish with live switching (T-109, host). Next: the compositor spike (T-123, lead) for the Phase 1 exit criterion "overlay over a running app".
+- **Phase 1–2 (shell core, profiles):** in progress on the Windows host against mock services. Done: pages, motion, toasts/OSD, settings, on-screen keyboard, profile management, first-boot wizard, token lint. The repo is public on GitHub and CI (`lint`, `services`, `shell`, `image`) is green on `main` (T-122). Profiles, the wizard and Settings → Profiles are **vm-verified** over the real bus (T-120), and power actions (T-107) work in the VM. The sound path is **vm-verified** (T-121). `ruya-profiles` is hardened to exposure 1.6 (T-126). The audio contract and Settings → Audio are built against a mock (T-114); audio ownership is decided (ADR-010) and the `ruya-devices` audio service is T-128. The keyboard Guide key (Super) works (T-124, vm). The PIN pad shows a locked-out state (T-125, host). The shell is translated into Turkish with live switching (T-109, host). Next: the compositor spike (T-123, lead) for the Phase 1 exit criterion "overlay over a running app".
 - **Host:** Windows, plus a Fedora 44 WSL distribution for image builds and QEMU/WHPX for boot tests (`docs/dev-setup.md`). Work that needs a GPU, controllers or real audio output still waits in the Blocked table. The VM can be driven by keys and screenshots, and given a sound card (`docs/dev-setup.md`).
 
 Verification legend: **host** = built and tested on the Windows host · **vm** = built into the image and verified booted in QEMU · **unverified** = written, but not run · **hw** = verified on real hardware.
@@ -16,16 +16,19 @@ Verification legend: **host** = built and tested on the Windows host · **vm** =
 
 **NEXT → T-118**
 
-**Lead review due: now** (T-125 was the last task before it; reviewed up to the lead commit of 2026-10-23, see `docs/LEAD-NOTES.md`). Builders: when your task makes this condition true, end your reply by recommending a lead session.
+**Lead review due: after 4 more builder tasks** (reviewed up to the lead commit of 2026-10-23 "lead review beafbc6..da2d1be", see `docs/LEAD-NOTES.md`). Builders: when your task makes this condition true, end your reply by recommending a lead session.
 
 | ID | Title | Status | Depends | Verified |
 |---|---|---|---|---|
 | [T-123](tasks/T-123-compositor-spike.md) | **[lead]** Compositor spike in the VM: shell as QtWaylandCompositor, overlay over a client (ADR-002) | todo | — | |
 | [T-118](tasks/T-118-profile-rename-delete.md) | Profiles1: RenameProfile and DeleteProfile (contract, service, mock; no UI) | todo | T-115, T-126 | |
+| [T-127](tasks/T-127-shots-window-focus.md) | `dev.ps1 shots`: focus failures caused by the desktop say so, and recover | todo | — | |
+| [T-128](tasks/T-128-devices-audio-service.md) | `ruya-devices`: audio part of `Devices1` over PipeWire, in the VM (ADR-010) | todo | T-114, T-121 | |
 | [T-119](tasks/T-119-nested-pages.md) | Page host: nested pages that keep their state | todo | T-101 | |
 | [T-110](tasks/T-110-store-contract-and-mock.md) | Store contract and mock backend | todo | — | |
-| [T-111](tasks/T-111-store-ui.md) | Store UI | todo | T-110, T-119 | |
+| [T-129](tasks/T-129-network-contract-and-settings.md) | Network: `Devices1` network contract, mock, Settings → Network | todo | T-114 | |
 | [T-112](tasks/T-112-library-service-core.md) | ruya-library discovery core (Rust) | todo | — | |
+| [T-111](tasks/T-111-store-ui.md) | Store UI | todo | T-110, T-119 | |
 | [T-113](tasks/T-113-games-page.md) | Games page and recent row | todo | T-101, T-112 | |
 
 The order above is the recommended order. When the NEXT task is blocked, take the first `todo` row whose dependencies are all `done`. If no row qualifies, **stop and ask for a planning session** (`docs/tasks/PLANNING.md`); never invent work.
@@ -33,10 +36,6 @@ The order above is the recommended order. When the NEXT task is blocked, take th
 ## Inbox
 
 Follow-ups, debt and ideas waiting for a planner session. Builders: add one line per item, `- (source) what, and why it matters`. Don't write task files for these unless your own task needs one. A planner session turns them into tasks, drops them with a reason, or escalates them. **Run a planner when this list has 5+ items.**
-- (T-109) RTL (`ruya-shell --reverse`) is only a readiness check: the PIN pad's digit grid should stay left to right under a mirrored layout, and the toast layer, sliders and `ProfileCard` badges were not examined; needs a pass with RTL screenshots before an RTL language ships.
-- (T-109) The Turkish strings are mine; a native speaker should review `shell/i18n/ruyashell_tr.ts` before release (tone, "kontrolcüler", "askıya al").
-- (T-125) `Lockout::test_wrong_pins_lock_the_profile` failed once in `shots` on `pinKeys.activeFocus` (passed on the re-run, together with the `Power` flake below): `shots` real windows lose focus when the desktop is in use; consider a helper that waits for `Window.active` before focus asserts.
-- (T-114) `Power::test_guide_long_press` failed once in `dev.ps1 shots` (real window, 3.2 s timer) and passed on the re-run: a possible flake under window/focus load; if it recurs, look at how the test waits for the hold timer.
 
 ### Done
 
@@ -81,7 +80,7 @@ A session can't know its own commit hash before committing, so new rows put the 
 | B-004 | `ruya-store` Rust service over libflatpak/AppStream | ~~Linux~~ nothing: WSL builds and the VM can run it now | Contract from T-110. **Becomes a task once T-110 lands** (VM-verified, like T-120). |
 | ~~B-005~~ | **Done 2026-10-23 (vm).** Profiles, the first-boot wizard, lockout and Settings → Profiles work against the real `ruya-profiles` over the system bus (T-120) | — | Other services follow the same way once they exist; the VM drive scripts are in `docs/dev-setup.md` ("Seeing and driving the VM"). |
 | B-006 | Replace the `ruya-inputd` stopgap with InputPlumber (ADR-003), with grab/re-emit | Linux + controllers | Also owns the key-repeat model (400 ms delay then accelerating repeat, stick repeat speed) and Accept long-press / context menu from spec 02 §4.3; the shell only sees key events. |
-| B-007 | `ruya-devices` service (PipeWire, NetworkManager, BlueZ) | A design decision (lead), no longer Linux: the VM has PipeWire (T-121) | Audio contract from T-114. **Open design question:** PipeWire runs per user (today `ruya-shell`'s session); apps will run as profile users (`ruya-session`). Decide whose PipeWire owns the outputs (system-wide PipeWire, per-user with a shared sink, or a user service in the shell session) before writing the task. Contract: `api/dbus/org.ruyaos.Devices1.xml` (T-114); the shell's `Audio` defaults to the mock on every OS until the service exists, so **flip the default in `Audio::create` to D-Bus on Linux** (like `Profiles`) in the same task. Include then: defer `Sfx` loading until a sink exists (the start-up `QSoundEffect` warnings, T-121) and add `pipewire-utils` for debugging. |
+| B-007 | `ruya-devices` service (PipeWire, NetworkManager, BlueZ) | ~~a design decision~~ decided: ADR-010 (lead, 2026-10-23) | Audio part is now **T-128** (one PipeWire in `ruya-shell`'s session; `ruya-devices` is a user unit of `ruya-shell`; it flips `Audio::create` to D-Bus on Linux and covers the `QSoundEffect` start-up warnings and `pipewire-utils`). Network contract and UI: T-129. Left here: the NetworkManager and BlueZ parts of the service, and exposing PipeWire to profile apps (`ruya-session`). |
 | ~~B-008~~ | **Done 2026-10-22 (vm).** greenboot (0.16, Rust) works on bootc once its units are enabled: 4 failed boots of a broken image, then GRUB fell back. The NVIDIA 615.78 kmod builds and is signed in the image; the private key is removed | — | Loading on real NVIDIA hardware and Secure Boot/MOK are still unverified (needs hardware) |
 
 ## Open owner decisions
@@ -90,11 +89,28 @@ A session can't know its own commit hash before committing, so new rows put the 
 - **Real hardware (B-002):** is a spare low-tier PC available to install the dev ISO on? It unblocks the Phase 0 hardware item, the first KPI numbers and later the ADR-002 performance check. Recommendation: yes, any x86-64 mini-PC with an Intel or AMD iGPU; it must be a test machine (the ISO has the dev SSH key).
 - **libdvdcss / AACS** (DVD/Blu-ray decryption): not included; needs an explicit owner decision.
 - **One admin or several?** `00-overview` §2 (MVP) says "one admin", `03` §1.1 says "Admin (one or more)". The service supports several; the UI offers only Standard and Guest when adding a profile (T-105). Options: (a) keep one admin in the UI for the MVP, as the overview says; (b) let an admin create more admins and fix the overview. Recommendation: (a), and revisit after the first user test. Not blocking: T-118 does not depend on it.
+- **Turkish wording review:** the Turkish UI strings (`shell/i18n/ruyashell_tr.ts`, 140 messages, T-109) were written by an AI builder. Can you, or a native speaker you trust, review them before the first release (tone; terms such as "kontrolcüler", "askıya al")? Not blocking any task. Recommendation: review once the Settings panes settle (after T-129), so it's done once.
 - **Publishing:** decided. The owner pushed `main` to https://github.com/fatihyilmaz84/ruya-os.git on 2026-10-23 (history scanned for secrets first; the dev SSH key in `image/bib/config.toml` is git-ignored). The repo is **public** (its Actions API answers without login) and carries `LICENSE.md` and `LICENSES/` per ADR-008. Later pushes still need the owner's go-ahead. At planning time, T-117 was committed locally but not pushed.
 
 ## Session log (newest first)
 
 Each entry: date · model · tasks · what happened · verification · follow-ups. Keep entries short and factual.
+
+### 2026-10-23 · Opus 5.5 · Lead
+Lead review of `beafbc6..da2d1be` (T-114, T-124, T-125, T-109, the lead's worker-cost change), and planning.
+
+Verification:
+- `dev.ps1 test` ALL GREEN: Rust 23 tests, clippy both targets, 132 QML tests + 11 screenshot tests skipped offscreen.
+- `dev.ps1 shots`: first run 141 passed, 2 failed (`Power::test_confirm_and_cancel`, `test_guide_short_press_opens_overlay`, both on `activeFocus`), re-run 143 passed. Third such desktop-focus failure in a day, each in a different test: now **T-127**. Reviewed `22-settings-audio`, `15-pin-locked`, `16-settings-tr`, `16b-keyboard-tr`: layout, focus ring and text fine (the Audio pane's Mute row is cut at the bottom until focused, which scrolls it in: acceptable).
+- VM: not re-run by the lead. T-124 and T-109 booted their own images (`0.0.6-t124`, `0.0.7-t109`, `RUYA_BOOT_OK`); T-114 and T-125 changed no image file. CI not checked.
+
+Review findings (1 fixed, 0 filed): contracts, mock and client agree (T-114); no test weakened; Outcomes honest.
+- **Fixed:** the translation lint only caught `unfinished` entries, so a new `qsTr` string without an `lupdate` refresh would have shipped untranslated with every check green. `lint-translations.ps1 -LUpdateProject` (used by `dev.ps1`) now refreshes temporary copies from the sources first and also fails on `vanished`/`obsolete` entries; shown to fail on a probe, tracked files untouched. CI's `lint` job (no build) still checks the committed files only.
+- **Fixed (docs):** `services/CLAUDE.md` still said image steps can't be built here; it now requires the VM check.
+
+Decision: **ADR-010 audio ownership** (lead, Accepted): one PipeWire in `ruya-shell`'s session; profile apps get a socket to it via `ruya-session`; `ruya-devices` is a user unit of `ruya-shell`. Unblocks B-007's audio part.
+
+Planning (Inbox 4 → 0): the two `shots` focus flakes → **T-127**; the RTL item → dropped as a task (no RTL language in the MVP), kept as a rule in `shell/CLAUDE.md` "RTL check"; the Turkish review → escalated (Open owner decisions). New: **T-128** `ruya-devices` audio service (VM-verified), **T-129** network contract, mock and Settings → Network. Queue: 10 `todo` + T-123 (lead), 7 ready now. NEXT stays T-118.
 
 ### 2026-10-23 · Opus 5.5 · Lead (worker cost)
 The owner asked whether builder sessions need speed and token optimizations. From the transcripts of the last four sessions:
@@ -131,67 +147,5 @@ Keyboard Guide key:
 Verification: `dev.ps1 test` ALL GREEN (7 new test rows), `shots` green. Image `0.0.6-t124` built in WSL, `RUYA_BOOT_OK`; in the VM `meta_l` opened and closed the overlay (screenshots `output/vm-shots/t124-*.png`). Unverified: holding Super in the VM, the Windows key on the host.
 
 Follow-ups: none. NEXT is T-125. The lead review is due after 1 more builder task.
-
-### 2026-10-23 · Sonnet 5.5 · T-114
-Audio contract and Settings → Audio:
-- `api/dbus/org.ruyaos.Devices1.xml` (interface `org.ruyaos.Devices1.Audio`: `ListSinks`, `SetDefaultSink`, `SetChannelVolume`, `MasterVolume`, `Muted`, `ChannelVolumes`, two signals); shell `Audio` extended over a mock (HDMI + Analog, hot-plug policy of 03 §2.3) and a new D-Bus client; `AudioPane.qml`; "Audio output: <name>" toast; `Sfx` volume follows the UI channel; Volume Up unmutes, Volume Down stays muted.
-- The Volume OSD now reacts to master changes only (a channel slider must not show it).
-- `Audio` defaults to the mock on Linux too, because `ruya-devices` does not exist (B-007 says to flip it with the service).
-
-Verification: `dev.ps1 test` ALL GREEN (11 new tests in `tst_audio.qml`); `dev.ps1 shots` green on the second run (the first had one red timer-based `Power::test_guide_long_press`, unrelated; Inbox line), `22-settings-audio.png` reviewed. Unverified: the D-Bus client against a service, PipeWire, how the cues sound.
-
-Follow-ups: one Inbox line. NEXT is T-124. The lead review is due after 2 more builder tasks.
-
-### 2026-10-23 · Opus 5.5 · Lead
-Lead review of `9ca4b25..c06c77a` (T-115, T-116, T-106, T-117, T-122, T-107, T-120, T-121, two Sonnet plannings, the lead's image work), planning, and T-126.
-
-Verification:
-- `dev.ps1 test` ALL GREEN: Rust 23 tests, clippy Windows + Linux, 101 QML tests + 9 screenshot tests skipped offscreen; `dev.ps1 shots` 110 passed, screenshots of the changed screens reviewed (setup welcome and admin, power confirm, power choices, Guide overlay).
-- Image `0.0.6-lead1` from HEAD: lint clean, `RUYA_BOOT_OK`; profile creation over the real bus works.
-- Secret scan of all 31 commits: no private keys, tokens or the dev public key; `image/bib/config.toml` never committed (git-ignored); only placeholders in `config.toml.example`.
-- CI: not checked this session (last known run 39935813084 green; this commit adds a `lint` step that has not run on GitHub yet).
-
-Review findings (2 fixed, 0 filed):
-- **Fixed:** `dev-setup.md` "Audio in the VM" (T-121) had backslash escapes turned into control characters (`\v`, a tab, `\r`) in six commands; repaired. This is the second byte-corruption on `main` (after T-107's cp1252), so per `LEAD.md` it became an automated check: `scripts/lint-text.ps1` (invalid UTF-8, control characters, tabs) runs first in `dev.ps1 test` and in the CI `lint` job; shown to fail on probes. The two `CLAUDE.md` pitfalls were merged into one.
-- **Fixed:** `dev.ps1 shots` left screenshots that no test writes any more (four stale PNGs from T-101/T-103); it now clears the folder first.
-- Otherwise the range is sound: contracts, service, mock and client agree (T-115); no test weakened; T-107's polkit rule is narrow (one user, six action ids, no `-ignore-inhibit`) and its builder found and fixed a real hole (every `rootfs` file was 0777 in the image).
-
-Planning (Inbox 4 → 0):
-- Keyboard Guide → **T-124** (lead decision recorded there: the shell maps keyboard keys; Super, not Home, which spec 02 also gives to fast scroll).
-- PIN pad while locked out → **T-125**.
-- `ruya-profiles` exposure 6.0 → **T-126**, done by the lead this session.
-- `QSoundEffect` start-up race and `pipewire-utils` → moved to blocker **B-007**, which now waits on a lead design decision (whose PipeWire owns the outputs once apps run as profile users) instead of on "Linux".
-- New **T-123 [lead]**: ADR-002 compositor spike, functional part in the VM.
-- B-004 (`ruya-store` service) is no longer blocked by the host; it becomes a task after T-110.
-- New lesson in `PLANNING.md`: service-facing tasks get a VM acceptance criterion; T-118 got one.
-Queue: 11 `todo` tasks, 9 ready now. NEXT stays T-114.
-
-T-126 (lead task): see its row in Done and its Outcome. Image `0.0.6-lead2`: `RUYA_BOOT_OK`, exposure 6.0 → 1.6.
-
-Escalated: real hardware (B-002), in Open owner decisions.
-
-### 2026-10-23 · Sonnet 5.5 · T-121
-Audio in the VM:
-- `smoke-test.ps1 -Audio [-AudioBackend dsound|wav]` adds an HDA card; `vm-audio-check.sh` (guest) and `vm-audio-bursts.py` (host, analyses the recorded wav).
-- PipeWire, WirePlumber and pipewire-pulse run for `ruya-shell` with no image change; `wpctl` lists the HDA sink and the shell's stream; the recording shows one burst per cue (select 120 ms, navigate 45 ms, back 110 ms).
-- The three `QSoundEffect ... not supported` lines at the first start are a race with WirePlumber (absent when the shell restarts in the same session); a mono-to-stereo cue test did not change them and was reverted.
-- Found and fixed: three lone `0xA7` bytes (`§` written as cp1252 by my T-107 Python edit) had reached `main` in two specs and `Shell.qml`; repaired, pitfall added to `CLAUDE.md`.
-
-Verification: `dev.ps1 test` ALL GREEN; VM `RUYA_BOOT_OK` with and without `-Audio`. Unverified: how it sounds, real outputs, volume control into PipeWire (T-114).
-
-Follow-ups: one Inbox line. NEXT is T-114. The lead review is due; the Inbox has 4 items.
-
-### 2026-10-23 · Sonnet 5.5 · T-120
-Profiles and the wizard in the VM, over the real bus:
-- New scripts: QEMU monitor port on `smoke-test.ps1`/`run-vm.ps1`; `vm-screenshot.ps1`, `vm-keys.ps1`, `vm-lib.ps1`; guest-side `vm-inject-key.py` (uinput `KEY_HOMEPAGE`, with hold) and `vm-profiles-check.sh`.
-- Driven by keys in the T-107 image on a persistent disk: wizard (name via the physical keyboard path, PIN twice) → admin created (D-Bus listing, `profiles.toml` 0600 with a hash only, Unix user and home) → reboot → picker → wrong PINs (attempts left) → lockout (retry time) → sign-in → Settings → Profiles: add profile (with a wrong admin PIN first: attempts left from `CreateProfile`), change PIN, remove PIN, each confirmed over D-Bus.
-- Also verified the T-107 hops that were open: a 3.2 s Guide hold opens the power choices, and Power off → Confirm made QEMU exit.
-- Nothing needed fixing. Findings in the Inbox: keyboard Guide mapping, PIN pad feedback while locked, `ruya-profiles` exposure 6.0 MEDIUM.
-
-Verification: **vm** (screenshots reviewed; no code changed, so no new host test). B-005 closed; T-105/T-106/T-115 D-Bus notes now **vm**.
-
-Follow-ups: three Inbox lines. NEXT is T-121 (audio in the VM). The lead review is due.
-
-Later the same day, after the owner approved the push (history scanned for secrets first): `main` pushed (`de6112e..c63590e`), and the first run of the new workflow, [39935813084](https://github.com/fatihyilmaz84/ruya-os/actions/runs/39935813084), was green in all four jobs (`image` 14 min), so **T-122 is closed**. `688b613` (T-120) is committed but not pushed yet.
 
 Older entries: [`STATUS-log.md`](STATUS-log.md).

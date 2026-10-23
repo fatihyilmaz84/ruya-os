@@ -139,6 +139,14 @@ Consequences:
 - **Not included:** `libdvdcss` and AACS keys (rpmfusion-free-tainted). These are copy-protection circumvention, not codecs, and remain a separate owner decision.
 - **Flatpak apps** don't see host codecs. First boot must install `org.freedesktop.Platform.ffmpeg-full`/`codecs-extra` and the matching `GL.nvidia` extension (Phase 3, `ruya-store`).
 
+### ADR-010 — Audio ownership — *Accepted (lead, 2026-10-23)*
+PipeWire runs per user, and profile apps run as other Unix users (ADR-004), so exactly one instance must own the outputs.
+- **One PipeWire, in the shell's session.** PipeWire, WirePlumber and pipewire-pulse run in `ruya-shell`'s user manager, as they already do (T-121). That session is the active one on seat0, so logind gives it the sound devices. Profile users run no PipeWire of their own against hardware; their user units are masked.
+- **Apps reach it through a per-profile socket**, the same way they reach the compositor (ADR-004): `ruya-session` exposes the shell's PipeWire (pulse protocol, which Flatpak's `--socket=pulseaudio` uses) to the profile's runtime directory, and access stays limited to the active profile. Designed and verified in the `ruya-session` work, not before.
+- **`ruya-devices` runs as a systemd *user* service of `ruya-shell`** (`/usr/lib/systemd/user`, `ConditionUser=ruya-shell`, after `wireplumber.service`). It talks to that PipeWire directly and owns `org.ruyaos.Devices1` on the system bus; its D-Bus policy lets only `ruya-shell` own the name and only `ruya-shell` and root call it. Network and Bluetooth go through NetworkManager and BlueZ as the active session's user (polkit), so the service needs no root at all.
+- Rejected: a system-wide PipeWire (unsupported upstream, and Flatpak and WirePlumber assume the per-user model); one PipeWire per profile (they would fight over the devices at every profile switch, and the shell's own sounds would need a second path).
+- Cost: user units take less hardening than system units. Acceptable, because the service has exactly the shell's privileges and no more; it still gets every option a user manager supports (`NoNewPrivileges`, `RestrictAddressFamilies`, `SystemCallFilter`, ...).
+
 ## 6. Roadmap
 
 Phases are gated by their exit criteria. Durations are rough estimates for a small team assisted by LLMs.
