@@ -92,6 +92,8 @@ Every app page shows its source badge. Unsigned remotes are refused.
 ### 4.3 Store service (`ruya-store`)
 Wraps libflatpak and libappstream. D-Bus `org.ruyaos.Store1`: `Search`, `GetApp`, `Install`, `Update`, `Uninstall`, `Rollback(id, commit)`, `ListRemotes`, `AddRemote` (admin), plus progress and error signals. There's a single transaction queue, and updates run when idle. Errors (signature, missing runtime, disk full, network) map to user-facing messages.
 
+The contract is `api/dbus/org.ruyaos.Store1.xml`. Differences from the list above: `Install`/`Uninstall`/`Update`/`Rollback` answer `(status, job)`; progress and errors are the `JobProgress` and `JobFinished` signals (error kinds are `JobFinished` statuses `network`, `signature`, `missing-runtime`, `disk-full`); `ListInstalled` and `InstalledChanged` were added. The shell side is `shell/src/store` (the `Store` singleton, mock by default on every OS until `ruya-store` exists, B-004); its D-Bus client does not call `GetApp`, `Rollback`, `ListRemotes` or `AddRemote` yet.
+
 ### 4.4 Permissions
 - Flatpak permissions are **static**. The app page shows them in plain language before install ("Uses network", "Reads your Downloads folder", "Accesses all devices"). High-risk permissions (`--device=all`, `--filesystem=host`, `--talk-name=org.freedesktop.Flatpak`) get a warning and, for Standard profiles, need the admin PIN.
 - Runtime prompts exist only for portal-mediated access (file chooser, camera, screenshot). We need a **portal backend** (`xdg-desktop-portal-ruya` or a QML-themed reuse of an existing backend) so portal dialogs render in the shell, controller-navigable. **Gap to spike in Phase 3.**

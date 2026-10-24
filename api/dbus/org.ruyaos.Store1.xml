@@ -1,0 +1,138 @@
+<!DOCTYPE node PUBLIC "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
+ "http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
+<!--
+  org.ruyaos.Store1 — the app store: search, install, update, uninstall Flatpak apps.
+  Served by ruya-store on the system bus at /org/ruyaos/Store1 (blocker B-004: the service does
+  not exist yet; the shell's mock backend follows this contract).
+  Contract between shell (Qt/QML) and services (Rust); see docs/specs/03-services-and-apps.md §4.
+
+  Status strings are stable API:
+    "ok"                success (for Install/Uninstall/Update: the job was queued, its result
+                        arrives with JobFinished)
+    "unknown-app"       no app with that id
+    "already-installed" Install of an installed app
+    "not-installed"     Uninstall/Update/Rollback of an app that is not installed
+    "no-update"         Update of an app with no update available
+    "busy"              a job for that app is already queued or running
+    "forbidden"         the caller is not allowed (AddRemote needs an admin; high-risk
+                        permissions need the admin PIN, which the shell checks via Profiles1)
+    "invalid"           malformed argument
+    "failed"            internal error
+
+  JobFinished statuses (a job is a queued transaction; there is one transaction queue):
+    "ok"                done
+    "failed"            internal error
+    "network"           the remote could not be reached
+    "signature"         a commit or remote failed signature verification
+    "missing-runtime"   a runtime the app needs could not be installed
+    "disk-full"         not enough space
+
+  Jobs are named by an opaque string returned from Install/Uninstall/Update/Rollback.
+
+  Every list is a plain array and every record an a{sv} dictionary, so fields can be added later
+  without breaking clients (unknown keys are ignored). Lists are re-read after InstalledChanged.
+
+  App record (a{sv}), keys:
+    id              s    Flatpak application id, e.g. "org.example.Racer"
+    name            s    display name
+    summary         s    one line
+    description     s    long text, plain
+    developer       s    developer or publisher name
+    source          s    "official" | "community" | "developer" (spec §4.2: the remote's trust level)
+    controller      s    "full" | "partial" | "none" (x-ruya-controller / <control>gamepad)
+    age_rating      s    OARS summary: "all" | "7+" | "12+" | "16+" | "18+"
+    permissions     as   stable keys, in plain-language order: "network", "home-files",
+                         "host-files", "all-devices", "audio", "gamepad", "session-bus", ...
+                         (unknown keys are shown by the shell as-is)
+    installed_size  t    bytes on disk when installed (download size is not exposed)
+    icon            s    URL (https: or file:) or "" - the shell draws a generated tile then
+    tile            s    URL or ""
+    hero            s    URL or ""
+    installed       b
+    update_available b   only ever true when installed
+-->
+<node>
+  <interface name="org.ruyaos.Store1">
+
+    <!-- Apps whose name, summary or id contains the query (case-insensitive). "" returns the whole catalogue. -->
+    <method name="Search">
+      <arg name="query" type="s" direction="in"/>
+      <arg name="apps" type="aa{sv}" direction="out"/>
+    </method>
+
+    <!-- One app. status "unknown-app" returns an empty dictionary. -->
+    <method name="GetApp">
+      <arg name="id" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+      <arg name="app" type="a{sv}" direction="out"/>
+    </method>
+
+    <method name="ListInstalled">
+      <arg name="apps" type="aa{sv}" direction="out"/>
+    </method>
+
+    <!-- Queue an installation. job is "" unless status is "ok". -->
+    <method name="Install">
+      <arg name="id" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+      <arg name="job" type="s" direction="out"/>
+    </method>
+
+    <!-- Queue an uninstall; delete_data also removes ~/.var/app/<id> of every profile. -->
+    <method name="Uninstall">
+      <arg name="id" type="s" direction="in"/>
+      <arg name="delete_data" type="b" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+      <arg name="job" type="s" direction="out"/>
+    </method>
+
+    <method name="Update">
+      <arg name="id" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+      <arg name="job" type="s" direction="out"/>
+    </method>
+
+    <!-- Go back to an earlier commit of an installed app (no UI yet). -->
+    <method name="Rollback">
+      <arg name="id" type="s" direction="in"/>
+      <arg name="commit" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+      <arg name="job" type="s" direction="out"/>
+    </method>
+
+    <!--
+      Software sources (spec §4.2), one dictionary each:
+        name     s   remote name ("ruyaos", "flathub")
+        title    s   display name
+        trust    s   "official" | "community" | "developer"
+        enabled  b
+    -->
+    <method name="ListRemotes">
+      <arg name="remotes" type="aa{sv}" direction="out"/>
+    </method>
+
+    <!-- Admin only (no UI yet). Unsigned remotes are refused with status "invalid". -->
+    <method name="AddRemote">
+      <arg name="name" type="s" direction="in"/>
+      <arg name="url" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <!-- phase: "download" | "install" | "update" | "remove"; percent 0-100, never decreasing within a job. -->
+    <signal name="JobProgress">
+      <arg name="job" type="s"/>
+      <arg name="percent" type="u"/>
+      <arg name="phase" type="s"/>
+    </signal>
+
+    <!-- Always sent once per job; InstalledChanged for a successful job comes first. -->
+    <signal name="JobFinished">
+      <arg name="job" type="s"/>
+      <arg name="status" type="s"/>
+    </signal>
+
+    <!-- The set of installed apps, or an app's update flag, changed; call ListInstalled again. -->
+    <signal name="InstalledChanged"/>
+
+  </interface>
+</node>

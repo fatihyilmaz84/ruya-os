@@ -1,6 +1,6 @@
 # T-110 — Store: D-Bus contract and mock backend
 
-Status: todo · Phase: 3 · Depends: — · Area: api, shell · Size: M
+Status: done · Phase: 3 · Depends: — · Area: api, shell · Size: M
 
 ## Goal
 A written `org.ruyaos.Store1` contract, plus a shell-side `Store` singleton with a mock backend (fake catalogue, simulated installs) and a D-Bus client, so the store UI (T-111) can be built and tested on Windows. The real Rust service needs Linux and libflatpak (blocked item B-004).
@@ -61,4 +61,14 @@ A written `org.ruyaos.Store1` contract, plus a shell-side `Store` singleton with
 - Make the mock's progress timer interval injectable (e.g. `RUYA_MOCK_FAST=1` → 10 ms steps) so tests stay fast.
 
 ## Outcome
-_Filled in by the implementer._
+Built `api/dbus/org.ruyaos.Store1.xml` and `shell/src/store/` (`StoreBackend`, `MockStoreBackend`, `DBusStoreBackend`, `Store` singleton, listed in `CMakeLists.txt`), and `tests/tst_store_backend.qml` (7 tests: search, install lifecycle, failure, refused requests, update, uninstall). `tst_main.cpp` sets `RUYA_MOCK_FAST=1` (10 ms mock steps; 100 ms normally, so an install takes about 2 s). `dev.ps1 test`: ALL GREEN.
+
+Spec §4.3 item -> XML member: Search -> `Search`; GetApp -> `GetApp`; Install -> `Install`; Update -> `Update`; Uninstall -> `Uninstall`; Rollback -> `Rollback`; ListRemotes -> `ListRemotes`; AddRemote -> `AddRemote`; progress/error signals -> `JobProgress`, `JobFinished` (error kinds are statuses); `ListInstalled`/`InstalledChanged` come from the task.
+
+D-Bus client vs XML: `search` -> `Search`, `refresh` -> `ListInstalled`, `install` -> `Install`, `uninstall` -> `Uninstall`, `update` -> `Update`; signals `JobProgress`, `JobFinished`, `InstalledChanged`. No client method for `GetApp`, `Rollback`, `ListRemotes`, `AddRemote` (no caller yet). **Runtime unverified.**
+
+Deviations and choices:
+- `Install`/`Uninstall`/`Update` return `(status, job)` rather than just `job`, to match the status-string style of Profiles1 (contract extension, allowed for drafts). Rollback and AddRemote are in the XML because spec §4.3 lists them and the criterion says to cover every method.
+- The backend maps job ids to app ids, so QML sees `jobProgress(appId, ...)` and `jobFinished(appId, status)`. Requests the service refuses (`unknown-app`, `busy`, `already-installed`, ...) also arrive as `jobFinished`.
+- `Store` defaults to the mock on every OS (like `Audio`), since no service exists. Extra facade members: `results`, `searchFinished`, `app(id)`, `mockDataDeleted`, `mockReset`.
+- The mock runs one job at a time (the spec's single queue); `org.example.Broken` fails at 60%.

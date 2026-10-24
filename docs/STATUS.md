@@ -2,7 +2,7 @@
 
 **Read this first in every session; update it last.** The rules are in the root `CLAUDE.md`, the roles (Opus lead, Sonnet builders) in `docs/LEAD.md`, the task format in `docs/tasks/README.md`.
 
-Last updated: 2026-10-24 (Sonnet 5.5, T-131)
+Last updated: 2026-10-24 (Sonnet 5.5, T-110)
 
 ## Where we are
 
@@ -14,14 +14,14 @@ Verification legend: **host** = built and tested on the Windows host · **vm** =
 
 ## Board
 
-**NEXT → T-110**
+**NEXT → T-129**
 
-**Lead review due: after 2 more builder tasks** (reviewed up to the lead commit of 2026-10-24 "lead review 1e5ae5e..4b811c6", see `docs/LEAD-NOTES.md`). Builders: when your task makes this condition true, end your reply by recommending a lead session.
+**Lead review due: after 1 more builder task** (reviewed up to the lead commit of 2026-10-24 "lead review 1e5ae5e..4b811c6", see `docs/LEAD-NOTES.md`). Builders: when your task makes this condition true, end your reply by recommending a lead session.
 
 | ID | Title | Status | Depends | Verified |
 |---|---|---|---|---|
 | [T-130](tasks/T-130-compositor-session.md) | **[lead]** Compositor session: `ruya-shell` replaces cage (ADR-002 A), app layer and key routing | todo | T-123 | |
-| [T-110](tasks/T-110-store-contract-and-mock.md) | Store contract and mock backend | todo | — | |
+| [T-110](tasks/T-110-store-contract-and-mock.md) | Store contract and mock backend | done | — | host (D-Bus client **unverified**) |
 | [T-129](tasks/T-129-network-contract-and-settings.md) | Network: `Devices1` network contract, mock, Settings → Network | todo | T-114 | |
 | [T-132](tasks/T-132-devices-network-service.md) | `ruya-devices`: network part over NetworkManager, in the VM | todo | T-129, T-128 | |
 | [T-133](tasks/T-133-devices-pipewire-events.md) | `ruya-devices`: follow PipeWire by events, no 1 s poll | todo | T-128 | |
@@ -101,7 +101,9 @@ A session can't know its own commit hash before committing, so new rows put the 
 
 ## Session log (newest first)
 
+
 Each entry: date · model · tasks · what happened · verification · follow-ups. Keep entries short and factual.
+- 2026-10-24 · Sonnet 5.5 · T-110 · `org.ruyaos.Store1` contract (all §4.3 methods, `(status, job)` replies, job signals), `Store` singleton with mock (12 apps, simulated installs, `RUYA_MOCK_FAST`) and D-Bus client, 7 new tests. `test` ALL GREEN (152). D-Bus client unverified (B-004 service not built). Lead review due after 1 more builder task.
 
 - 2026-10-24 · Sonnet 5.5 · T-131 · Rename and delete in Settings → Profiles: Accept on a row shows Rename/Delete rows; `ProfileManageFlow` (name entry or confirm, then PIN, then service); `PowerConfirm` got a custom-title mode; focus follows the list update. `test` ALL GREEN (144), `shots` ALL GREEN (156), `24-profile-delete-confirm.png` reviewed. **VM criterion not run:** three image builds died when the WSL ext4 disk went read-only (checksum errors); logged in the Inbox. Lead review due after 2 more builder tasks.
 

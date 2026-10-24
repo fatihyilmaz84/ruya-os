@@ -77,6 +77,8 @@ public:
         qputenv("RUYA_SERVICES", "mock");
         // ...and device settings stay in memory, so tests never touch the real store.
         qputenv("RUYA_SETTINGS_EPHEMERAL", "1");
+        // ...and the mock store installs in milliseconds.
+        qputenv("RUYA_MOCK_FAST", "1");
     }
 
 public slots:
