@@ -166,8 +166,8 @@ Item {
             fail("could not reach '" + value + "'")
         }
 
-        function typeName(text) {
-            const entry = find("profileNameEntry")
+        function typeName(text, entryName) {
+            const entry = find(entryName ?? "profileNameEntry")
             for (const ch of text) {
                 if (ch !== ch.toLowerCase()) {
                     keyboardGoTo(entry, "shift")
@@ -546,6 +546,118 @@ Item {
             tryVerify(() => find("rowChangePin").activeFocus, 2000, "focus is not lost when the focused row disappears")
         }
 
+        // ---- rename and delete ----
+
+        function selectRow(id) {
+            goToRow("profileRow_" + id)
+            keyClick(Qt.Key_Return)
+        }
+
+        function openConfirmFor(id, exists) {
+            if (!exists)
+                create("p1", "1234", "Kid", "standard", "")
+            tryVerify(() => find("profileRow_" + id) !== null)
+            selectRow(id)
+            tryVerify(() => find("rowDelete").visible && find("rowRename").activeFocus, 2000, "actions open on Rename")
+            keyClick(Qt.Key_Down)
+            tryVerify(() => find("rowDelete").activeFocus)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("profileDeleteConfirm").shown)
+        }
+
+        function test_rename_other() {
+            startShell()
+            signIn("p1", "1234")
+            openProfilesPane()
+            selectRow("p2")
+            tryVerify(() => find("rowRename").activeFocus, 2000, "Rename is focused")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("profileRenameEntry").shown)
+            compare(find("profileRenameEntry").text, "Ada", "pre-filled with the current name")
+            typeName("m", "profileRenameEntry")
+            tryVerify(() => find("profilesPinPad").shown, 2000, "the admin PIN is asked")
+            enterPin("1234")
+            tryVerify(() => Profiles.profiles[1].name === "Adam", 3000)
+            tryVerify(() => find("profileRow_p2") !== null && find("profileRow_p2").activeFocus, 2000, "focus stays on the row")
+            compare(findChild(find("profileRow_p2"), "label").text, "Adam")
+        }
+
+        function test_rename_self_standard() {
+            startShell()
+            signIn("p2", "")
+            openProfilesPane()
+            selectRow("p2")
+            tryVerify(() => find("rowRename").activeFocus)
+            verify(!find("rowDelete").visible, "a standard profile cannot delete")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("profileRenameEntry").shown)
+            typeName("m", "profileRenameEntry")
+            tryVerify(() => Profiles.profiles[1].name === "Adam", 3000)   // Ada has no PIN: none asked
+            verify(!find("profilesPinPad").shown)
+            tryVerify(() => find("profileRow_p2").activeFocus, 2000)
+        }
+
+        function test_delete_cancel() {
+            startShell()
+            signIn("p1", "1234")
+            openProfilesPane()
+            openConfirmFor("p4")
+            verify(find("powerCancel").activeFocus, "Cancel is focused first")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => !find("profileDeleteConfirm").shown)
+            compare(Profiles.profiles.length, 4)
+            compare(deleteSpy.count, 0)
+            tryVerify(() => find("rowDelete").activeFocus, 2000, "focus is back on Delete")
+        }
+
+        function test_delete_confirm() {
+            startShell()
+            signIn("p1", "1234")
+            openProfilesPane()
+            openConfirmFor("p4")
+            keyClick(Qt.Key_Right)
+            verify(find("powerConfirm").activeFocus)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("profilesPinPad").shown)
+            enterPin("1234")
+            tryVerify(() => Profiles.profiles.length === 3, 3000)
+            tryVerify(() => find("profileRow_p4") === null)
+            tryVerify(() => find("profileRow_p3") !== null && find("profileRow_p3").activeFocus, 2000,
+                      "focus goes to the previous row at the end of the list: "
+                      + (Window.activeFocusItem ? Window.activeFocusItem.objectName : "none"))
+        }
+
+        function test_delete_not_offered() {
+            startShell()
+            signIn("p1", "1234")
+            openProfilesPane()
+            selectRow("p1")                               // the active profile and the last admin
+            tryVerify(() => find("rowRename").activeFocus)
+            verify(!find("rowDelete").visible)
+            keyClick(Qt.Key_Up)                           // back up the list to the Guest entry
+            tryVerify(() => find("profileRow_p3").activeFocus)
+            keyClick(Qt.Key_Return)
+            verify(!find("rowRename").visible)
+            verify(!find("rowDelete").visible)
+            keyClick(Qt.Key_Up)
+            tryVerify(() => find("profileRow_p2").activeFocus)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("rowDelete").visible)
+        }
+
+        function test_delete_wrong_pin() {
+            startShell()
+            signIn("p1", "1234")
+            openProfilesPane()
+            openConfirmFor("p4")
+            keyClick(Qt.Key_Right)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("profilesPinPad").shown)
+            enterPin("0000")
+            tryVerify(() => find("profilesMessage").text.indexOf("4 attempt") >= 0, 3000)
+            compare(Profiles.profiles.length, 4, "nothing was deleted")
+        }
+
         function test_zz_screenshots() {
             if (!shotsDir)
                 skip("set RUYA_SHOTS_DIR to save screenshots")
@@ -560,6 +672,20 @@ Item {
             goToRow("rowNewRole")
             wait(600)
             grabImage(tc.shell).save(shotsDir + "/10-settings-profiles.png")
+        }
+
+        function test_zz_screenshots_delete() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            Notifications.pending = []
+            while (Notifications.model.count > 0)
+                Notifications.dismiss(Notifications.model.get(0).toastId)
+            startShell()
+            signIn("p1", "1234")
+            openProfilesPane()
+            openConfirmFor("p4")
+            wait(600)
+            grabImage(tc.shell).save(shotsDir + "/24-profile-delete-confirm.png")
         }
     }
 }

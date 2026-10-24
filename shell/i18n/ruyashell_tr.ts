@@ -200,7 +200,7 @@
 <context>
     <name>PowerConfirm</name>
     <message>
-        <location filename="../qml/PowerConfirm.qml" line="+22"/>
+        <location filename="../qml/PowerConfirm.qml" line="+26"/>
         <source>Suspend now?</source>
         <translation>Şimdi askıya alınsın mı?</translation>
     </message>
@@ -215,7 +215,7 @@
         <translation>Şimdi kapatılsın mı?</translation>
     </message>
     <message>
-        <location line="+86"/>
+        <location line="+98"/>
         <source>Cancel</source>
         <translation>İptal</translation>
     </message>
@@ -277,9 +277,32 @@
     </message>
 </context>
 <context>
+    <name>ProfileManageFlow</name>
+    <message>
+        <location filename="../qml/ProfileManageFlow.qml" line="+40"/>
+        <source>Profile name</source>
+        <translation>Profil adı</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Delete %1?</source>
+        <translation>%1 silinsin mi?</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Their saved data and settings are removed. This can&apos;t be undone.</source>
+        <translation>Kayıtlı verileri ve ayarları silinir. Bu geri alınamaz.</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Enter your PIN</source>
+        <translation>PIN kodunu gir</translation>
+    </message>
+</context>
+<context>
     <name>ProfilePicker</name>
     <message>
-        <location filename="../qml/ProfilePicker.qml" line="+26"/>
+        <location filename="../qml/ProfilePicker.qml" line="+27"/>
         <source>Who&apos;s playing?</source>
         <translation>Kim oynuyor?</translation>
     </message>
@@ -342,24 +365,24 @@
 <context>
     <name>ProfilesPane</name>
     <message>
-        <location filename="../qml/ProfilesPane.qml" line="+35"/>
+        <location filename="../qml/ProfilesPane.qml" line="+48"/>
         <source>Admin</source>
         <translation>Yönetici</translation>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+161"/>
+        <location line="+278"/>
         <source>Guest</source>
         <translation>Misafir</translation>
     </message>
     <message>
-        <location line="-161"/>
-        <location line="+160"/>
+        <location line="-278"/>
+        <location line="+277"/>
         <source>Standard</source>
         <translation>Standart</translation>
     </message>
     <message>
-        <location line="-125"/>
+        <location line="-189"/>
         <source>Enter a name first.</source>
         <translation>Önce bir ad girin.</translation>
     </message>
@@ -374,7 +397,27 @@
         <translation>“%1” profili oluşturuldu</translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+39"/>
+        <source>Profile renamed.</source>
+        <translation>Profil yeniden adlandırıldı.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Profile renamed</source>
+        <translation>Profil yeniden adlandırıldı</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Profile “%1” deleted.</source>
+        <translation>“%1” profili silindi.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Profile “%1” deleted</source>
+        <translation>“%1” profili silindi</translation>
+    </message>
+    <message>
+        <location line="+16"/>
         <source>PIN removed.</source>
         <translation>PIN kaldırıldı.</translation>
     </message>
@@ -384,7 +427,7 @@
         <translation>PIN değiştirildi.</translation>
     </message>
     <message>
-        <location line="+23"/>
+        <location line="+24"/>
         <source>PIN</source>
         <translation>PIN</translation>
     </message>
@@ -392,6 +435,16 @@
         <location line="+1"/>
         <source>You</source>
         <translation>Siz</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Rename %1</source>
+        <translation>%1 profilini yeniden adlandır</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Delete %1</source>
+        <translation>%1 profilini sil</translation>
     </message>
     <message>
         <location line="+9"/>
@@ -457,7 +510,7 @@
         <translation>Ayarlar</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+11"/>
         <source>Profiles</source>
         <translation>Profiller</translation>
     </message>
@@ -502,7 +555,7 @@
         <translation>Hakkında</translation>
     </message>
     <message>
-        <location line="+124"/>
+        <location line="+126"/>
         <source>Coming soon</source>
         <translation>Yakında</translation>
     </message>
@@ -540,7 +593,7 @@
         <translation>Başlamak için A&apos;ya basın</translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+14"/>
         <location line="+17"/>
         <source>Language</source>
         <translation>Dil</translation>
@@ -552,7 +605,7 @@
     </message>
     <message>
         <location line="+16"/>
-        <location line="+26"/>
+        <location line="+27"/>
         <location line="+79"/>
         <source>Press A to continue</source>
         <translation>Devam etmek için A&apos;ya basın</translation>
@@ -621,7 +674,7 @@
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+141"/>
+        <location filename="../qml/Shell.qml" line="+203"/>
         <source>Could not %1.</source>
         <translation>%1 işlemi yapılamadı.</translation>
     </message>
@@ -646,7 +699,7 @@
         <translation>Ses çıkışı: %1</translation>
     </message>
     <message>
-        <location line="+182"/>
+        <location line="-117"/>
         <source>Games</source>
         <translation>Oyunlar</translation>
     </message>
@@ -667,7 +720,7 @@
     </message>
     <message>
         <location line="+1"/>
-        <location line="+152"/>
+        <location line="+478"/>
         <source>Power</source>
         <translation>Güç</translation>
     </message>

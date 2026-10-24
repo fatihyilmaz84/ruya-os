@@ -201,7 +201,7 @@
 <context>
     <name>PowerConfirm</name>
     <message>
-        <location filename="../qml/PowerConfirm.qml" line="+22"/>
+        <location filename="../qml/PowerConfirm.qml" line="+26"/>
         <source>Suspend now?</source>
         <translation>Suspend now?</translation>
     </message>
@@ -216,7 +216,7 @@
         <translation>Power off now?</translation>
     </message>
     <message>
-        <location line="+86"/>
+        <location line="+98"/>
         <source>Cancel</source>
         <translation>Cancel</translation>
     </message>
@@ -278,9 +278,32 @@
     </message>
 </context>
 <context>
+    <name>ProfileManageFlow</name>
+    <message>
+        <location filename="../qml/ProfileManageFlow.qml" line="+40"/>
+        <source>Profile name</source>
+        <translation>Profile name</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Delete %1?</source>
+        <translation>Delete %1?</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Their saved data and settings are removed. This can&apos;t be undone.</source>
+        <translation>Their saved data and settings are removed. This can&apos;t be undone.</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Enter your PIN</source>
+        <translation>Enter your PIN</translation>
+    </message>
+</context>
+<context>
     <name>ProfilePicker</name>
     <message>
-        <location filename="../qml/ProfilePicker.qml" line="+26"/>
+        <location filename="../qml/ProfilePicker.qml" line="+27"/>
         <source>Who&apos;s playing?</source>
         <translation>Who&apos;s playing?</translation>
     </message>
@@ -344,24 +367,24 @@
 <context>
     <name>ProfilesPane</name>
     <message>
-        <location filename="../qml/ProfilesPane.qml" line="+35"/>
+        <location filename="../qml/ProfilesPane.qml" line="+48"/>
         <source>Admin</source>
         <translation>Admin</translation>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+161"/>
+        <location line="+278"/>
         <source>Guest</source>
         <translation>Guest</translation>
     </message>
     <message>
-        <location line="-161"/>
-        <location line="+160"/>
+        <location line="-278"/>
+        <location line="+277"/>
         <source>Standard</source>
         <translation>Standard</translation>
     </message>
     <message>
-        <location line="-125"/>
+        <location line="-189"/>
         <source>Enter a name first.</source>
         <translation>Enter a name first.</translation>
     </message>
@@ -376,7 +399,27 @@
         <translation>Profile “%1” created</translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+39"/>
+        <source>Profile renamed.</source>
+        <translation>Profile renamed.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Profile renamed</source>
+        <translation>Profile renamed</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Profile “%1” deleted.</source>
+        <translation>Profile “%1” deleted.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Profile “%1” deleted</source>
+        <translation>Profile “%1” deleted</translation>
+    </message>
+    <message>
+        <location line="+16"/>
         <source>PIN removed.</source>
         <translation>PIN removed.</translation>
     </message>
@@ -386,7 +429,7 @@
         <translation>PIN changed.</translation>
     </message>
     <message>
-        <location line="+23"/>
+        <location line="+24"/>
         <source>PIN</source>
         <translation>PIN</translation>
     </message>
@@ -394,6 +437,16 @@
         <location line="+1"/>
         <source>You</source>
         <translation>You</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Rename %1</source>
+        <translation>Rename %1</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Delete %1</source>
+        <translation>Delete %1</translation>
     </message>
     <message>
         <location line="+9"/>
@@ -459,7 +512,7 @@
         <translation>Settings</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+11"/>
         <source>Profiles</source>
         <translation>Profiles</translation>
     </message>
@@ -504,7 +557,7 @@
         <translation>About</translation>
     </message>
     <message>
-        <location line="+124"/>
+        <location line="+126"/>
         <source>Coming soon</source>
         <translation>Coming soon</translation>
     </message>
@@ -542,7 +595,7 @@
         <translation>Press A to start</translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+14"/>
         <location line="+17"/>
         <source>Language</source>
         <translation>Language</translation>
@@ -554,7 +607,7 @@
     </message>
     <message>
         <location line="+16"/>
-        <location line="+26"/>
+        <location line="+27"/>
         <location line="+79"/>
         <source>Press A to continue</source>
         <translation>Press A to continue</translation>
@@ -623,7 +676,7 @@
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+141"/>
+        <location filename="../qml/Shell.qml" line="+203"/>
         <source>Could not %1.</source>
         <translation>Could not %1.</translation>
     </message>
@@ -648,7 +701,7 @@
         <translation>Audio output: %1</translation>
     </message>
     <message>
-        <location line="+182"/>
+        <location line="-117"/>
         <source>Games</source>
         <translation>Games</translation>
     </message>
@@ -669,7 +722,7 @@
     </message>
     <message>
         <location line="+1"/>
-        <location line="+152"/>
+        <location line="+478"/>
         <source>Power</source>
         <translation>Power</translation>
     </message>

@@ -1,6 +1,6 @@
 # T-131 — Settings → Profiles: rename and delete a profile
 
-Status: todo · Phase: 2 · Depends: T-118, T-105 · Area: shell · Size: M
+Status: done (VM criterion unverified) · Phase: 2 · Depends: T-118, T-105 · Area: shell · Size: M
 
 ## Goal
 From Settings → Profiles an admin can rename any profile and delete any other profile; a standard profile can rename itself. Each action is confirmed with the actor's PIN, and the list updates at once. Verified against the mock on the host and against the real `ruya-profiles` in the VM.
@@ -48,4 +48,12 @@ From Settings → Profiles an admin can rename any profile and delete any other 
 - In the VM, create the profile to delete first with `vm-profiles-check.sh create` (it makes a standard profile over the bus), so the shell has something to delete.
 
 ## Outcome
-_Filled in by the implementer: what was built, files, how it was verified, deviations, follow-ups._
+**Built.** Accept on a profile row selects it and shows two rows after the list (`rowRename`, `rowDelete`, labelled with the name). Rename: `TextEntry` pre-filled -> actor PIN (skipped without a PIN) -> `renameProfile`. Delete: `PowerConfirm` in a new `custom` mode (title and detail set by the caller; Cancel focused first) -> admin PIN -> `deleteProfile`. The flow is `qml/ProfileManageFlow.qml`; the pane (`qml/ProfilesPane.qml`) owns the rows, a second `TextEntry` for rename (the add form's entry writes `newName`), and the post-reply focus (`pendingFocus`, applied once the list shows the outcome, so reply and list may arrive in either order). Rules hidden in the UI: no Rename/Delete for the Guest entry; Delete not for the active profile or the last admin; Rename only for admins or the profile itself. Statuses go through `ProfileStatus`.
+
+**Files.** `shell/qml/ProfileManageFlow.qml` (new, in CMake), `ProfilesPane.qml`, `PowerConfirm.qml`, `tests/tst_profile_admin.qml`, `i18n/*.ts` (Turkish added), `docs/specs/03-services-and-apps.md` §1.1.
+
+**Verified (host).** `dev.ps1 test` ALL GREEN (144 passed); `shots` ALL GREEN (156). New tests: `test_rename_other`, `test_rename_self_standard`, `test_delete_cancel`, `test_delete_confirm`, `test_delete_not_offered`, `test_delete_wrong_pin`, plus `test_zz_screenshots_delete` (`24-profile-delete-confirm.png`, focus ring on Cancel, reviewed).
+
+**Unverified: the VM criterion.** Not run. Image builds failed three times because the Fedora WSL `ext4` disk remounts read-only (`ext4_dirblock_csum_verify ... Directory block failed checksum`, then `Aborting journal`), so no image with this commit exists. Whether `DBusProfilesBackend::renameProfile/deleteProfile` work at runtime is therefore still unknown. See the Inbox.
+
+**Deviations.** The action rows sit after the whole list, not directly under the selected row (rows are siblings in the pane's column). Guest entries get neither action (the task allowed this). The screenshot test is a separate `test_zz_screenshots_delete`.

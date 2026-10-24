@@ -2,7 +2,7 @@
 
 **Read this first in every session; update it last.** The rules are in the root `CLAUDE.md`, the roles (Opus lead, Sonnet builders) in `docs/LEAD.md`, the task format in `docs/tasks/README.md`.
 
-Last updated: 2026-10-24 (Sonnet 5.5, T-119)
+Last updated: 2026-10-24 (Sonnet 5.5, T-131)
 
 ## Where we are
 
@@ -14,14 +14,13 @@ Verification legend: **host** = built and tested on the Windows host · **vm** =
 
 ## Board
 
-**NEXT → T-131**
+**NEXT → T-110**
 
-**Lead review due: after 3 more builder tasks** (reviewed up to the lead commit of 2026-10-24 "lead review 1e5ae5e..4b811c6", see `docs/LEAD-NOTES.md`). Builders: when your task makes this condition true, end your reply by recommending a lead session.
+**Lead review due: after 2 more builder tasks** (reviewed up to the lead commit of 2026-10-24 "lead review 1e5ae5e..4b811c6", see `docs/LEAD-NOTES.md`). Builders: when your task makes this condition true, end your reply by recommending a lead session.
 
 | ID | Title | Status | Depends | Verified |
 |---|---|---|---|---|
 | [T-130](tasks/T-130-compositor-session.md) | **[lead]** Compositor session: `ruya-shell` replaces cage (ADR-002 A), app layer and key routing | todo | T-123 | |
-| [T-131](tasks/T-131-profile-rename-delete-ui.md) | Settings → Profiles: rename and delete a profile (mock + VM) | todo | T-118, T-105 | |
 | [T-110](tasks/T-110-store-contract-and-mock.md) | Store contract and mock backend | todo | — | |
 | [T-129](tasks/T-129-network-contract-and-settings.md) | Network: `Devices1` network contract, mock, Settings → Network | todo | T-114 | |
 | [T-132](tasks/T-132-devices-network-service.md) | `ruya-devices`: network part over NetworkManager, in the VM | todo | T-129, T-128 | |
@@ -36,6 +35,8 @@ The order above is the recommended order. When the NEXT task is blocked, take th
 
 Follow-ups, debt and ideas waiting for a planner session. Builders: add one line per item, `- (source) what, and why it matters`. Don't write task files for these unless your own task needs one. A planner session turns them into tasks, drops them with a reason, or escalates them. **Run a planner when this list has 5+ items.**
 
+- (T-131) **WSL disk corruption blocks image builds and VM checks.** The Fedora WSL `ext4` disk logs `ext4_dirblock_csum_verify` / `Directory block failed checksum` (inodes under `depmod`) and remounts read-only during `build.sh` (nvidia-kmod step); `wsl --shutdown` helps only until the next build. Needs an owner-approved `e2fsck` repair (or a fresh Fedora 44 WSL distro and `dnf install podman git qemu-img`) before any image task can be verified.
+- (T-131) VM criterion of T-131 is **unverified**: rename and delete through the running shell with `vm-keys.ps1`, then `vm-profiles-check.sh state`; first runtime check of `DBusProfilesBackend::renameProfile/deleteProfile`. Redo after the WSL disk is repaired.
 
 ### Done
 
@@ -74,6 +75,7 @@ A session can't know its own commit hash before committing, so new rows put the 
 | T-127 | `dev.ps1 shots`: `WindowGuard` in the test host re-activates the test window before each test and logs `TEST WINDOW LOST ACTIVATION` when the desktop takes focus | host (`test` and `shots` green; lead `shots` 144 passed, no loss) · manual click-away: unverified | T-127 |
 | T-118 | Profiles1: `RenameProfile` and `DeleteProfile` (contract, service rules, `Accounts::remove` with `userdel --remove`, mock, shell backend and facade; no UI) | service + mock: host (`dev.ps1 rust` and `test` green, 6 service tests, `test_mock_lifecycle_rules_match_service`) · **vm** (image `0.0.9-t118`: `RUYA_BOOT_OK`, rename and delete over the bus, user and home removed, ids not reused; `userdel` needs no extra capability) · the shell's `DBusProfilesBackend` calls: **unverified** (compiled only) | T-118 |
 | T-119 | Page host: one live page item per stack entry, `openPage(key, params)`, `currentParams`, `Shell.extraPages`; lower pages keep state and focus | host (`dev.ps1 test` and `shots` green, 5 new tests in `tst_pages.qml`) | T-119 |
+| T-131 | Settings → Profiles: rename and delete (action rows, `ProfileManageFlow`, delete confirm reusing `PowerConfirm`) | host (`test` and `shots` green, 6 new tests in `tst_profile_admin.qml`); **VM criterion unverified** (WSL disk corrupt, see Inbox) | T-131 |
 
 ## Blocked (need something this host doesn't have)
 
@@ -100,6 +102,8 @@ A session can't know its own commit hash before committing, so new rows put the 
 ## Session log (newest first)
 
 Each entry: date · model · tasks · what happened · verification · follow-ups. Keep entries short and factual.
+
+- 2026-10-24 · Sonnet 5.5 · T-131 · Rename and delete in Settings → Profiles: Accept on a row shows Rename/Delete rows; `ProfileManageFlow` (name entry or confirm, then PIN, then service); `PowerConfirm` got a custom-title mode; focus follows the list update. `test` ALL GREEN (144), `shots` ALL GREEN (156), `24-profile-delete-confirm.png` reviewed. **VM criterion not run:** three image builds died when the WSL ext4 disk went read-only (checksum errors); logged in the Inbox. Lead review due after 2 more builder tasks.
 
 - 2026-10-24 · Sonnet 5.5 · T-119 · Nested pages: `pageStack` entries `{key, params}`, one slot with a live page per entry (replaces the `Loader`), lower pages hidden/disabled but kept, focus item restored on pop, `extraPages`, sign-out destroys all. `test` ALL GREEN (138), `shots` ALL GREEN (149, one earlier run lost desktop focus). No visual change. Lead review due after 3 more builder tasks.
 

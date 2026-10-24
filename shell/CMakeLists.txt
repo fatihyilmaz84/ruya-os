@@ -58,6 +58,7 @@ qt_add_qml_module(ruyashell
         qml/SettingsPane.qml
         qml/ProfilesPane.qml
         qml/ProfileAddFlow.qml
+        qml/ProfileManageFlow.qml
         qml/ChangePinFlow.qml
         qml/DisplayPane.qml
         qml/AudioPane.qml

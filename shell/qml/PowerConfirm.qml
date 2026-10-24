@@ -10,7 +10,11 @@ FocusScope {
     id: dialog
 
     property real u: 1
-    property string action: ""         // "suspend" | "restart" | "poweroff"
+    property string action: ""         // "suspend" | "restart" | "poweroff" | "custom"
+    // For action "custom" (e.g. deleting a profile): the caller's own title and explanation;
+    // Confirm then only emits confirmed("custom") and the caller does the work.
+    property string customTitle: ""
+    property string detail: ""
     property bool shown: false
     property Item returnTo: null
 
@@ -86,9 +90,21 @@ FocusScope {
             id: titleText
             objectName: "powerConfirmTitle"
             anchors.horizontalCenter: parent.horizontalCenter
-            text: dialog.titles[dialog.action] ?? ""
+            text: dialog.action === "custom" ? dialog.customTitle : (dialog.titles[dialog.action] ?? "")
             color: Theme.text
             font.pixelSize: 52 * dialog.u
+        }
+
+        Text {
+            objectName: "powerConfirmDetail"
+            anchors.horizontalCenter: parent.horizontalCenter
+            visible: dialog.detail.length > 0
+            width: Math.min(implicitWidth, 1100 * dialog.u)
+            text: dialog.detail
+            color: Theme.textDim
+            font.pixelSize: 30 * dialog.u
+            wrapMode: Text.Wrap
+            horizontalAlignment: Text.AlignHCenter
         }
 
         Row {
