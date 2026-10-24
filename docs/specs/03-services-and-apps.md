@@ -56,6 +56,8 @@ Use `malcontent` with AppStream OARS ratings: per-profile age limit for store an
 ### 2.5 Network
 NetworkManager over D-Bus: Ethernet status, Wi-Fi scan/connect (WPA2/3-Personal; Enterprise is out of MVP), captive-portal detection (NM connectivity check → open a portal page in a minimal web view, Phase 3+), proxy (later).
 
+**As built (T-129, shell side only):** the contract is the `org.ruyaos.Devices1.Network` interface in `api/dbus/org.ruyaos.Devices1.xml` (`State`, `Primary`, `ListWifi`, `Scan`, `Connect`, `Forget`, `NetworksChanged`; statuses `ok`, `unknown-network`, `wrong-password`, `unsupported`, `invalid`, `failed`). The shell has the `Network` singleton (`shell/src/network`, mock by default on every OS, D-Bus client unverified) and Settings → Network (`NetworkPane.qml`): status row, Wi-Fi list, rescan, a Forget row per saved network, masked password entry. The NetworkManager service is T-132.
+
 ### 2.6 HDMI-CEC (stretch)
 Most PC GPUs don't expose CEC. Supported only with a USB-CEC adapter (Pulse-Eight) via `libcec`: TV remote D-pad → input daemon; standby/power sync.
 

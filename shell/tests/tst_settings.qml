@@ -87,10 +87,16 @@ Item {
             compare(list.currentIndex, 0)
             verify(find("paneProfiles").visible, "Profiles has a pane (T-105)")
             verify(!find("paneComingSoon").visible)
-            keyClick(Qt.Key_Down)                        // Network: no content yet
+            keyClick(Qt.Key_Down)                        // Network has a pane (T-129)
             compare(list.currentIndex, 1)
-            verify(find("paneComingSoon").visible)
+            verify(find("paneNetwork").visible)
+            verify(!find("paneComingSoon").visible)
             verify(!find("paneProfiles").visible)
+            keyClick(Qt.Key_Down)                        // Bluetooth: no content yet
+            compare(list.currentIndex, 2)
+            verify(find("paneComingSoon").visible)
+            verify(!find("paneNetwork").visible)
+            keyClick(Qt.Key_Up)
             keyClick(Qt.Key_Up)
 
             selectCategory(tc.displayIndex)

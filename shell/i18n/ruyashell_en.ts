@@ -153,6 +153,110 @@
     </message>
 </context>
 <context>
+    <name>NetworkPane</name>
+    <message>
+        <location filename="../qml/NetworkPane.qml" line="+64"/>
+        <source>Wrong password.</source>
+        <translation>Wrong password.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Enterprise networks are not supported.</source>
+        <translation>Enterprise networks are not supported.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>That network is no longer available.</source>
+        <translation>That network is no longer available.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Enter the password.</source>
+        <translation>Enter the password.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Could not connect.</source>
+        <translation>Could not connect.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <location line="+14"/>
+        <source>Connected</source>
+        <translation>Connected</translation>
+    </message>
+    <message>
+        <location line="-13"/>
+        <source>Connecting</source>
+        <translation>Connecting</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>No internet</source>
+        <translation>No internet</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Not connected</source>
+        <translation>Not connected</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Open</source>
+        <translation>Open</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Enterprise</source>
+        <translation>Enterprise</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Secured</source>
+        <translation>Secured</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Saved</source>
+        <translation>Saved</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>%1%</source>
+        <translation>%1%</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Password for %1</source>
+        <translation>Password for %1</translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>Could not forget the network.</source>
+        <translation>Could not forget the network.</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Wired connection</source>
+        <translation>Wired connection</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Network</source>
+        <translation>Network</translation>
+    </message>
+    <message>
+        <location line="+25"/>
+        <source>Scan for networks</source>
+        <translation>Scan for networks</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Forget %1</source>
+        <translation>Forget %1</translation>
+    </message>
+</context>
+<context>
     <name>PinPad</name>
     <message>
         <location filename="../qml/PinPad.qml" line="+127"/>
@@ -557,7 +661,7 @@
         <translation>About</translation>
     </message>
     <message>
-        <location line="+126"/>
+        <location line="+137"/>
         <source>Coming soon</source>
         <translation>Coming soon</translation>
     </message>

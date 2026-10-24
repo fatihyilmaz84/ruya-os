@@ -153,6 +153,110 @@
     </message>
 </context>
 <context>
+    <name>NetworkPane</name>
+    <message>
+        <location filename="../qml/NetworkPane.qml" line="+64"/>
+        <source>Wrong password.</source>
+        <translation>Yanlış parola.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Enterprise networks are not supported.</source>
+        <translation>Kurumsal ağlar desteklenmiyor.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>That network is no longer available.</source>
+        <translation>Bu ağ artık kullanılamıyor.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Enter the password.</source>
+        <translation>Parolayı girin.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Could not connect.</source>
+        <translation>Bağlanılamadı.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <location line="+14"/>
+        <source>Connected</source>
+        <translation>Bağlı</translation>
+    </message>
+    <message>
+        <location line="-13"/>
+        <source>Connecting</source>
+        <translation>Bağlanıyor</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>No internet</source>
+        <translation>İnternet yok</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Not connected</source>
+        <translation>Bağlı değil</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Open</source>
+        <translation>Açık</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Enterprise</source>
+        <translation>Kurumsal</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Secured</source>
+        <translation>Korumalı</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Saved</source>
+        <translation>Kayıtlı</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>%1%</source>
+        <translation>%1%</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Password for %1</source>
+        <translation>%1 parolası</translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>Could not forget the network.</source>
+        <translation>Ağ unutulamadı.</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Wired connection</source>
+        <translation>Kablolu bağlantı</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Network</source>
+        <translation>Ağ</translation>
+    </message>
+    <message>
+        <location line="+25"/>
+        <source>Scan for networks</source>
+        <translation>Ağları tara</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Forget %1</source>
+        <translation>%1 ağını unut</translation>
+    </message>
+</context>
+<context>
     <name>PinPad</name>
     <message>
         <location filename="../qml/PinPad.qml" line="+127"/>
@@ -555,7 +659,7 @@
         <translation>Hakkında</translation>
     </message>
     <message>
-        <location line="+126"/>
+        <location line="+137"/>
         <source>Coming soon</source>
         <translation>Yakında</translation>
     </message>

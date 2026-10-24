@@ -35,6 +35,7 @@ Page {
     readonly property var current: categories[categoryList.currentIndex]
     readonly property SettingsPane currentPane: current.key === "profiles" ? profilesPane
                                               : current.key === "display" ? displayPane
+                                              : current.key === "network" ? networkPane
                                               : current.key === "audio" ? audioPane
                                               : current.key === "system" ? systemPane
                                               : current.key === "about" ? aboutPane : null
@@ -112,6 +113,16 @@ Page {
             anchors.fill: parent
             u: page.u
             visible: page.current.key === "display"
+            enabled: visible
+            onExitRequested: page.leavePane()
+        }
+        NetworkPane {
+            id: networkPane
+            objectName: "paneNetwork"
+            anchors.fill: parent
+            u: page.u
+            overlay: page.overlay
+            visible: page.current.key === "network"
             enabled: visible
             onExitRequested: page.leavePane()
         }

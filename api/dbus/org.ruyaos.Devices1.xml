@@ -1,7 +1,7 @@
 <!DOCTYPE node PUBLIC "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
  "http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
 <!--
-  org.ruyaos.Devices1 — audio outputs and volumes (network and Bluetooth follow later).
+  org.ruyaos.Devices1 — audio outputs and volumes, and the network (Bluetooth follows later).
   Served by ruya-devices on the system bus at /org/ruyaos/Devices1 (blocker B-007: the service
   does not exist yet; the shell's mock backend follows this contract).
   Contract between shell (Qt/QML) and services (Rust); see docs/specs/03-services-and-apps.md §2.3.
@@ -19,6 +19,15 @@
     "unknown-sink"  no output with that id (SetDefaultSink)
     "invalid"       malformed argument (unknown channel name)
     "failed"        internal error (e.g. PipeWire refused)
+
+  org.ruyaos.Devices1.Network status strings (NetworkManager behind it; WPA2/3-Personal only):
+    "ok"               success (Connect: the network is active, State follows by PropertiesChanged)
+    "unknown-network"  no network with that id (Connect, Forget)
+    "wrong-password"   the key was rejected (or a saved key no longer works)
+    "unsupported"      enterprise (802.1X) networks cannot be joined
+    "invalid"          malformed argument (e.g. a password for an open network is ignored, but
+                       an empty password for a secured network that is not known is invalid)
+    "failed"           internal error
 -->
 <node>
   <interface name="org.ruyaos.Devices1.Audio">
@@ -75,4 +84,64 @@
     </signal>
 
   </interface>
+  <interface name="org.ruyaos.Devices1.Network">
+
+    <!--
+      Overall connectivity: "disconnected" | "connecting" | "connected" | "limited"
+      ("limited" = linked but no internet).
+    -->
+    <property name="State" type="s" access="read">
+      <annotation name="org.freedesktop.DBus.Property.EmitsChangedSignal" value="true"/>
+    </property>
+
+    <!--
+      The connection the console uses, empty when disconnected:
+        kind    s   "ethernet" | "wifi"
+        name    s   "Wired" or the SSID
+        ip      s   IPv4 address, "" if none yet
+        signal  u   0-100, Wi-Fi only (absent for ethernet)
+    -->
+    <property name="Primary" type="a{sv}" access="read">
+      <annotation name="org.freedesktop.DBus.Property.EmitsChangedSignal" value="true"/>
+    </property>
+
+    <!--
+      Wi-Fi networks in range plus saved ones, strongest first. One dictionary per network:
+        id        s   stable id, opaque to the shell
+        ssid      s   display name
+        signal    u   0-100
+        security  s   "open" | "wpa-psk" | "enterprise"
+        known     b   a saved connection exists (Connect works without a password)
+        active    b   this is the connected network
+    -->
+    <method name="ListWifi">
+      <arg name="networks" type="aa{sv}" direction="out"/>
+    </method>
+
+    <!-- Ask for a new scan; the result arrives as NetworksChanged. -->
+    <method name="Scan">
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <!--
+      Join a network. password is used for a secured network that is not known and ignored
+      otherwise ("" for open or known ones). A successful join saves the network.
+    -->
+    <method name="Connect">
+      <arg name="id" type="s" direction="in"/>
+      <arg name="password" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <!-- Remove a saved network (disconnects it when active). -->
+    <method name="Forget">
+      <arg name="id" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <!-- Networks appeared, disappeared or changed (signal, known, active); call ListWifi again. -->
+    <signal name="NetworksChanged"/>
+
+  </interface>
+
 </node>

@@ -26,6 +26,10 @@ qt_add_qml_module(ruyashell
         src/audio/MockAudioBackend.h src/audio/MockAudioBackend.cpp
         src/audio/DBusAudioBackend.h src/audio/DBusAudioBackend.cpp
         src/audio/Audio.h src/audio/Audio.cpp
+        src/network/NetworkBackend.h
+        src/network/MockNetworkBackend.h src/network/MockNetworkBackend.cpp
+        src/network/DBusNetworkBackend.h src/network/DBusNetworkBackend.cpp
+        src/network/Network.h src/network/Network.cpp
         src/store/StoreBackend.h
         src/store/MockStoreBackend.h src/store/MockStoreBackend.cpp
         src/store/DBusStoreBackend.h src/store/DBusStoreBackend.cpp
@@ -66,6 +70,7 @@ qt_add_qml_module(ruyashell
         qml/ChangePinFlow.qml
         qml/DisplayPane.qml
         qml/AudioPane.qml
+        qml/NetworkPane.qml
         qml/SystemPane.qml
         qml/AboutPane.qml
         qml/controls/SettingControl.qml
@@ -80,7 +85,7 @@ qt_add_qml_module(ruyashell
 )
 
 # qmltyperegistrar includes the QML_ELEMENT headers by file name.
-target_include_directories(ruyashell PUBLIC src/profiles src/settings src/audio src/system src/power src/store)
+target_include_directories(ruyashell PUBLIC src/profiles src/settings src/audio src/network src/system src/power src/store)
 target_link_libraries(ruyashell PRIVATE Qt6::Quick Qt6::Multimedia Qt6::DBus)
 
 # Translations: the .ts files in i18n/ are compiled to .qm and embedded as :/i18n/ruyashell_<lang>.qm.

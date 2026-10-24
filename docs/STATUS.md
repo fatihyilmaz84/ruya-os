@@ -2,7 +2,7 @@
 
 **Read this first in every session; update it last.** The rules are in the root `CLAUDE.md`, the roles (Opus lead, Sonnet builders) in `docs/LEAD.md`, the task format in `docs/tasks/README.md`.
 
-Last updated: 2026-10-24 (Opus 5.5, lead)
+Last updated: 2026-10-24 (Opus 5.5, lead; T-129)
 
 ## Where we are
 
@@ -14,15 +14,15 @@ Verification legend: **host** = built and tested on the Windows host · **vm** =
 
 ## Board
 
-**NEXT → T-129**
+**NEXT → T-112**
 
-**Lead review due: after 3 more builder tasks** (reviewed up to the lead commit of 2026-10-24 "lead review 2aab79e..64b7e3f", see `docs/LEAD-NOTES.md`). Builders: when your task makes this condition true, end your reply by recommending a lead session.
+**Lead review due: after 2 more builder tasks** (reviewed up to the lead commit of 2026-10-24 "lead review 2aab79e..64b7e3f", see `docs/LEAD-NOTES.md`). Builders: when your task makes this condition true, end your reply by recommending a lead session.
 
 | ID | Title | Status | Depends | Verified |
 |---|---|---|---|---|
 | [T-130](tasks/T-130-compositor-session.md) | **[lead]** Compositor session: `ruya-shell` replaces cage (ADR-002 A), app layer and key routing | todo | T-123 | |
 | [T-110](tasks/T-110-store-contract-and-mock.md) | Store contract and mock backend | done | — | host (D-Bus client **unverified**) |
-| [T-129](tasks/T-129-network-contract-and-settings.md) | Network: `Devices1` network contract, mock, Settings → Network | todo | T-114 | |
+| [T-129](tasks/T-129-network-contract-and-settings.md) | Network: `Devices1` network contract, mock, Settings → Network | done | T-114 | host (D-Bus client **unverified**) |
 | [T-132](tasks/T-132-devices-network-service.md) | `ruya-devices`: network part over NetworkManager, in the VM | todo | T-129, T-128 | |
 | [T-133](tasks/T-133-devices-pipewire-events.md) | `ruya-devices`: follow PipeWire by events, no 1 s poll | todo | T-128 | |
 | [T-112](tasks/T-112-library-service-core.md) | ruya-library discovery core (Rust) | todo | — | |
@@ -76,6 +76,7 @@ A session can't know its own commit hash before committing, so new rows put the 
 | T-127 | `dev.ps1 shots`: `WindowGuard` in the test host re-activates the test window before each test and logs `TEST WINDOW LOST ACTIVATION` when the desktop takes focus | host (`test` and `shots` green; lead `shots` 144 passed, no loss) · manual click-away: unverified | T-127 |
 | T-118 | Profiles1: `RenameProfile` and `DeleteProfile` (contract, service rules, `Accounts::remove` with `userdel --remove`, mock, shell backend and facade; no UI) | service + mock: host (`dev.ps1 rust` and `test` green, 6 service tests, `test_mock_lifecycle_rules_match_service`) · **vm** (image `0.0.9-t118`: `RUYA_BOOT_OK`, rename and delete over the bus, user and home removed, ids not reused; `userdel` needs no extra capability) · the shell's `DBusProfilesBackend` calls: **unverified** (compiled only) | T-118 |
 | T-119 | Page host: one live page item per stack entry, `openPage(key, params)`, `currentParams`, `Shell.extraPages`; lower pages keep state and focus | host (`dev.ps1 test` and `shots` green, 5 new tests in `tst_pages.qml`) | T-119 |
+| T-129 | `Devices1.Network` contract, `Network` singleton (mock + D-Bus client), Settings → Network (join WPA/open, wrong password, enterprise refused, cable status, forget, rescan) | host (`test` 164 and `shots` 177 green, new `tst_network.qml`, `23-settings-network.png` reviewed) · D-Bus client: **unverified** (no service, T-132) | T-129 |
 | T-131 | Settings → Profiles: rename and delete (action rows, `ProfileManageFlow`, delete confirm reusing `PowerConfirm`) | host (`test` and `shots` green, 6 new tests in `tst_profile_admin.qml`); **VM criterion unverified** (WSL disk corrupt, see Inbox) | T-131 |
 
 ## Blocked (need something this host doesn't have)
@@ -93,7 +94,7 @@ A session can't know its own commit hash before committing, so new rows put the 
 
 ## Open owner decisions
 
-- **WSL disk repair (blocks every image/VM task: T-130, T-131 VM check, T-132, T-133, T-134):** the Fedora WSL `ext4` disk has recorded errors ("Marked fs in need of filesystem check") and goes read-only during builds. Options: (a) `wsl --shutdown`, then `e2fsck -f` on the distro disk from a rescue distro or `wsl --mount` (keeps everything, may not fix it); (b) `wsl --unregister` and a fresh Fedora 44 distro plus `dnf install podman git qemu-img` (clean, loses the podman cache, first build is slow). Recommendation: (b), after copying out nothing (the repo is on D:). Everything image-related waits on this; host-only tasks (T-129) continue.
+- **WSL disk repair (blocks every image/VM task: T-130, T-131 VM check, T-132, T-133, T-134):** the Fedora WSL `ext4` disk has recorded errors ("Marked fs in need of filesystem check") and goes read-only during builds. Options: (a) `wsl --shutdown`, then `e2fsck -f` on the distro disk from a rescue distro or `wsl --mount` (keeps everything, may not fix it); (b) `wsl --unregister` and a fresh Fedora 44 distro plus `dnf install podman git qemu-img` (clean, loses the podman cache, first build is slow). Recommendation: (b), after copying out nothing (the repo is on D:). Everything image-related waits on this; host-only tasks (T-112, T-111, T-113) continue.
 
 - **ADR-002** (compositor): **decided 2026-10-23 by the owner: option A** is the product direction; performance is confirmed later on hardware (B-003), with option B (gamescope + shell client) as the fallback. Follow-up: T-130 (lead).
 - **Real hardware (B-002):** is a spare low-tier PC available to install the dev ISO on? It unblocks the Phase 0 hardware item, the first KPI numbers and later the ADR-002 performance check. Recommendation: yes, any x86-64 mini-PC with an Intel or AMD iGPU; it must be a test machine (the ISO has the dev SSH key).
@@ -113,6 +114,8 @@ Each entry: date · model · tasks · what happened · verification · follow-up
 - 2026-10-24 · Sonnet 5.5 · T-119 · Nested pages: `pageStack` entries `{key, params}`, one slot with a live page per entry (replaces the `Loader`), lower pages hidden/disabled but kept, focus item restored on pop, `extraPages`, sign-out destroys all. `test` ALL GREEN (138), `shots` ALL GREEN (149, one earlier run lost desktop focus). No visual change. Lead review due after 3 more builder tasks.
 
 - 2026-10-24 · Opus 5.5 · Lead (disk space, owner report) · Every image build left the previous image untagged (WSL: 163 images, 70 GB reclaimable, `ext4.vhdx` 88 GB on C:) and every task made its own `tNNN.qcow2` (21 GB on D:). `build.sh` now removes untagged images its build did not use (one run: 29 removed, WSL use 78 → 30 GB, cache kept); `smoke-test.ps1 -Work` gives one shared persistent `work.qcow2` and warns about other copies; `dev-setup.md` and `image/CLAUDE.md` say so. Also fixed: `smoke-test.ps1` could report the previous run's `RUYA_BOOT_OK` when the old QEMU still held `serial.log` (seen once with `-TimeoutSec 5`). Verified: `-Work` fresh and reuse boots `RUYA_BOOT_OK`, 5 s timeout now fails. The `.vhdx` does not shrink by itself (owner step in `dev-setup.md`).
+
+- 2026-10-24 · Opus 5.5 · T-129 (done by the lead as host-only work while the WSL disk is unrepaired) · Network contract, mock, D-Bus client and Settings → Network. `test` ALL GREEN (164), `shots` ALL GREEN (177). D-Bus client unverified. Settings test updated: Network is no longer the "Coming soon" example.
 
 ### 2026-10-24 · Opus 5.5 · Lead
 Lead review of `2aab79e..64b7e3f` (disk-space scripts, T-119, T-131, T-110), and planning.
