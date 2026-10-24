@@ -2,7 +2,7 @@
 
 **Read this first in every session; update it last.** The rules are in the root `CLAUDE.md`, the roles (Opus lead, Sonnet builders) in `docs/LEAD.md`, the task format in `docs/tasks/README.md`.
 
-Last updated: 2026-10-24 (Sonnet 5.5, T-110)
+Last updated: 2026-10-24 (Opus 5.5, lead)
 
 ## Where we are
 
@@ -16,7 +16,7 @@ Verification legend: **host** = built and tested on the Windows host · **vm** =
 
 **NEXT → T-129**
 
-**Lead review due: after 1 more builder task** (reviewed up to the lead commit of 2026-10-24 "lead review 1e5ae5e..4b811c6", see `docs/LEAD-NOTES.md`). Builders: when your task makes this condition true, end your reply by recommending a lead session.
+**Lead review due: after 3 more builder tasks** (reviewed up to the lead commit of 2026-10-24 "lead review 2aab79e..64b7e3f", see `docs/LEAD-NOTES.md`). Builders: when your task makes this condition true, end your reply by recommending a lead session.
 
 | ID | Title | Status | Depends | Verified |
 |---|---|---|---|---|
@@ -26,6 +26,7 @@ Verification legend: **host** = built and tested on the Windows host · **vm** =
 | [T-132](tasks/T-132-devices-network-service.md) | `ruya-devices`: network part over NetworkManager, in the VM | todo | T-129, T-128 | |
 | [T-133](tasks/T-133-devices-pipewire-events.md) | `ruya-devices`: follow PipeWire by events, no 1 s poll | todo | T-128 | |
 | [T-112](tasks/T-112-library-service-core.md) | ruya-library discovery core (Rust) | todo | — | |
+| [T-134](tasks/T-134-store-service-core.md) | `ruya-store` service over the `flatpak` CLI, in the VM (needs the WSL disk repaired) | todo | T-110 | |
 | [T-111](tasks/T-111-store-ui.md) | Store UI | todo | T-110, T-119 | |
 | [T-113](tasks/T-113-games-page.md) | Games page and recent row | todo | T-101, T-112 | |
 
@@ -92,6 +93,8 @@ A session can't know its own commit hash before committing, so new rows put the 
 
 ## Open owner decisions
 
+- **WSL disk repair (blocks every image/VM task: T-130, T-131 VM check, T-132, T-133, T-134):** the Fedora WSL `ext4` disk has recorded errors ("Marked fs in need of filesystem check") and goes read-only during builds. Options: (a) `wsl --shutdown`, then `e2fsck -f` on the distro disk from a rescue distro or `wsl --mount` (keeps everything, may not fix it); (b) `wsl --unregister` and a fresh Fedora 44 distro plus `dnf install podman git qemu-img` (clean, loses the podman cache, first build is slow). Recommendation: (b), after copying out nothing (the repo is on D:). Everything image-related waits on this; host-only tasks (T-129) continue.
+
 - **ADR-002** (compositor): **decided 2026-10-23 by the owner: option A** is the product direction; performance is confirmed later on hardware (B-003), with option B (gamescope + shell client) as the fallback. Follow-up: T-130 (lead).
 - **Real hardware (B-002):** is a spare low-tier PC available to install the dev ISO on? It unblocks the Phase 0 hardware item, the first KPI numbers and later the ADR-002 performance check. Recommendation: yes, any x86-64 mini-PC with an Intel or AMD iGPU; it must be a test machine (the ISO has the dev SSH key).
 - **libdvdcss / AACS** (DVD/Blu-ray decryption): not included; needs an explicit owner decision.
@@ -112,42 +115,12 @@ Each entry: date · model · tasks · what happened · verification · follow-up
 - 2026-10-24 · Opus 5.5 · Lead (disk space, owner report) · Every image build left the previous image untagged (WSL: 163 images, 70 GB reclaimable, `ext4.vhdx` 88 GB on C:) and every task made its own `tNNN.qcow2` (21 GB on D:). `build.sh` now removes untagged images its build did not use (one run: 29 removed, WSL use 78 → 30 GB, cache kept); `smoke-test.ps1 -Work` gives one shared persistent `work.qcow2` and warns about other copies; `dev-setup.md` and `image/CLAUDE.md` say so. Also fixed: `smoke-test.ps1` could report the previous run's `RUYA_BOOT_OK` when the old QEMU still held `serial.log` (seen once with `-TimeoutSec 5`). Verified: `-Work` fresh and reuse boots `RUYA_BOOT_OK`, 5 s timeout now fails. The `.vhdx` does not shrink by itself (owner step in `dev-setup.md`).
 
 ### 2026-10-24 · Opus 5.5 · Lead
-Lead review of `1e5ae5e..4b811c6` (T-123 lead, T-118, T-127, T-128), and planning.
+Lead review of `2aab79e..64b7e3f` (disk-space scripts, T-119, T-131, T-110), and planning.
 
-Verification:
-- `dev.ps1 test` ALL GREEN: Rust 53 tests (54 with the review test), clippy both targets; 133 QML tests + 11 screenshot tests skipped offscreen.
-- `dev.ps1 shots`: 144 passed on the first run, no `TEST WINDOW LOST ACTIVATION`. No screen changed in the range (T-128's Settings -> Audio change is Linux-only and was checked by its builder in the VM), so no screenshot re-reviewed.
-- VM: image `0.0.11-lead` (HEAD + the review fix), fresh disk: `RUYA_BOOT_OK`; `vm-profiles-check.sh create`, `lifecycle`, `state`: rename and delete over the bus, `ruya-p2` and its home removed, `profiles.toml` 0600, `next_id` kept. CI not checked (nothing pushed).
+Verification: `dev.ps1 test` ALL GREEN (152 QML passed, 12 skipped offscreen; Rust unchanged). `dev.ps1 shots` ALL GREEN (164; one `TEST WINDOW LOST ACTIVATION` logged and recovered by the guard); `24-profile-delete-confirm.png` reviewed: fine. VM: **not run**, the WSL disk is still marked as needing fsck (dmesg), so no image build was attempted. CI not checked (nothing pushed).
 
-Review findings (1 fixed, 1 filed): contracts, mocks and clients agree; no test weakened; Outcomes honest (T-128 says plainly the `Sfx` deferral was not tried).
-- **Fixed (`review:` T-118):** `DeleteProfile` ran `userdel` before saving the store, so a failed save left a listed profile without its Unix user (the gap T-118 recorded). Now the store is saved first and a failed `userdel` puts the profile back; new test `failing_store_write_keeps_the_unix_user` fails on the old order. Spec 03 §1.1 updated.
-- **Filed:** `ruya-devices` starts `pw-dump` every second forever (idle CPU on a console) → **T-133** (event-driven, `pw-dump --monitor`).
-- Checked and fine: T-128's user unit hardening (3.4), the policy (only `ruya-shell` owns and calls, root calls), `Type=simple` with the name requested in code; T-127's guard only changes the test host; T-123's spike rule is inert by default.
+Review findings (0 fixed, 1 filed): no test weakened, contracts and the mock agree, Outcomes honest about the unverified VM criterion and D-Bus client. Note for T-134: `DBusStoreBackend::startJob` records the job id only when the reply is handled, so a `JobFinished` that is dispatched before the reply watcher fires would be dropped; check against the real service and, if seen, buffer unknown-job signals.
 
-Planning (Inbox 3 → 0): T-118 UI → **T-131** (rename/delete in Settings → Profiles, with a VM criterion that exercises `DBusProfilesBackend` for the first time); T-118 delete order → fixed above; T-128's open items → network part **T-132** (`ruya-devices` over NetworkManager's D-Bus API, polkit rule, VM link up/down), Bluetooth and app-stream levels stay in B-007 (the latter needs `ruya-session`), the `Sfx` deferral dropped as a task (no warning in T-128's boot; it moves into T-130's hints because start-up order changes there). New **T-133** (above). Queue: 9 builder `todo` + T-130 (lead); 6 ready now. NEXT stays T-119. `ruya-store` (B-004) needs a lead design call first (libflatpak bindings vs the `flatpak` CLI), recorded in `LEAD-NOTES.md`.
-
-- 2026-10-24 · Sonnet 5.5 · T-128 · `ruya-devices` audio service (core + `wpctl`/`pw-dump` + zbus), user unit, bus policy, shell D-Bus by default on Linux with a name watcher. `test` ALL GREEN; image `0.0.10-t128` `RUYA_BOOT_OK`; `vm-devices-check.sh` all pass; Settings -> Audio drives `wpctl` in the VM; exposure 3.4. Sfx deferral not done; hot-plug unverified. Lead review due after 1 more builder task.
-
-- 2026-10-24 · Sonnet 5.5 · T-127 · `WindowGuard` in `tst_main.cpp`, called first in every `init()`: re-activates the test window or fails with a clear message; also logs `TEST WINDOW LOST ACTIVATION` and re-activates the moment focus goes. `test` ALL GREEN (133 passed, same count); `shots` green twice (144 passed), losses logged and recovered in both. One earlier run failed `Power::test_guide_short_press_opens_overlay` mid-test before the loss logging existed. Manual "click another window" check not done (**unverified**).
-
-### 2026-10-23 · Sonnet 5.5 · T-118
-Profiles1 rename and delete:
-- `RenameProfile` (admin or self) and `DeleteProfile` (admin only; refuses the last admin and the active profile) in the contract, `service.rs`, `dbus.rs`, mock, `DBusProfilesBackend` and `Profiles`. `Accounts::remove` runs `userdel --remove` before the store changes; failure leaves the store alone. Ids are never reused; a deleted profile's lockout state is dropped.
-- Known gap: if the store write fails after `userdel` succeeded, the profile is restored in memory but its Unix user is gone (see the Outcome).
-
-Verification: `dev.ps1 rust` and `test` ALL GREEN (133 QML tests); image `0.0.9-t118` `RUYA_BOOT_OK`; `vm-profiles-check.sh lifecycle` output in the Outcome. Unverified: the shell's D-Bus client calls at runtime. No screenshots (no UI).
-
-Follow-ups: UI for rename/delete needs a planning session (no task yet). NEXT is T-127. Lead review due after 3 more builder tasks.
-
-### 2026-10-23 · Opus 5.5 · T-123 (lead task)
-Compositor spike, ADR-002 option A, in the VM:
-- `ruya-shell --load shell/spike/Compositor.qml` is a QtWaylandCompositor on KMS (eglfs, llvmpipe) hosting the unchanged `Shell`, client toplevels fullscreen above it, and the Shell's Guide overlay moved above the clients. A `Keys` handler on the client item takes Guide (Super, `KEY_HOMEPAGE`) before the client sees it.
-- Image `0.0.8-t123`: `RUYA_BOOT_OK` with cage (the spike unit is not enabled). Then, via `scripts/vm-compositor-spike.sh`: keys reach the test client; Guide opens the overlay over it; keys while open don't reach it; closing returns them; client exit gives the shell back; `stop` restores cage and the device ACLs.
-- Product-path findings in ADR-002: eglfs opens input devices itself (needs a `uaccess` rule or logind device opening; `input` is an altfiles group on bootc); llvmpipe clients must use shm; key routing should move to C++.
-- Also: `.containerignore` (a podman `COPY shell` raced with a Windows build in `shell/build-win`).
-
-Verification: `dev.ps1 test` ALL GREEN; VM screenshots and log in the T-123 Outcome. Unverified: performance, real GPUs, Flatpak clients, blur over a client.
-
-Escalated: accept ADR-002 option A as the product direction. **The owner accepted it the same day** (performance on hardware later, option B as the fallback); the lead wrote **T-130** (compositor session replaces cage, `Owner: lead`).
+Planning: Inbox 2 (both WSL) became an owner decision (disk repair, blocks all image tasks). ADR-011 accepted: `ruya-store` drives the `flatpak` CLI, pure Rust. New **T-134** (store service in the VM). T-130 stays lead, waiting on the disk. NEXT stays T-129 (host only).
 
 Older entries: [`STATUS-log.md`](STATUS-log.md).

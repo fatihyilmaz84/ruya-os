@@ -171,3 +171,6 @@ Phases are gated by their exit criteria. Durations are rough estimates for a sma
 
 ## 7. Glossary
 **bootc**: tool that boots and updates an OS from an OCI container image. **greenboot**: health checks that trigger rollback. **OOBE**: out-of-box (first-boot) experience. **OARS**: Open Age Ratings Service, the content-rating vocabulary used in AppStream. **Overlay**: the shell UI drawn over a running app (Guide menu).
+
+### ADR-011 — `ruya-store` drives the `flatpak` CLI — *Accepted (lead, 2026-10-24)*
+`ruya-store` is a pure-Rust service (like the other services, it builds on Windows for its core) that drives the `flatpak` command line (`install`, `uninstall`, `update`, `remote-ls`, `remote-add`, `info`, `list`), with machine-readable output where the CLI offers it, and reads catalogue metadata (AppStream XML/YAML from the remote's appstream directory) with a Rust XML parser. It does not link libflatpak or libappstream (GObject bindings are not pure Rust and would not build on the Windows host). Progress comes from the CLI's output, parsed in the pure core. The service runs as root with hardening (it installs system-wide on behalf of the shell), sits behind the same restrictive bus policy, and refuses unsigned remotes itself. Revisit if CLI parsing proves brittle (then libflatpak through a small helper).
