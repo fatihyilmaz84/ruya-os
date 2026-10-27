@@ -1,6 +1,6 @@
 # T-131 — Settings → Profiles: rename and delete a profile
 
-Status: done (VM criterion unverified) · Phase: 2 · Depends: T-118, T-105 · Area: shell · Size: M
+Status: done · Phase: 2 · Depends: T-118, T-105 · Area: shell · Size: M
 
 ## Goal
 From Settings → Profiles an admin can rename any profile and delete any other profile; a standard profile can rename itself. Each action is confirmed with the actor's PIN, and the list updates at once. Verified against the mock on the host and against the real `ruya-profiles` in the VM.
@@ -11,7 +11,7 @@ From Settings → Profiles an admin can rename any profile and delete any other 
 - `shell/qml/ProfilesPane.qml`, `ProfileAddFlow.qml`, `ChangePinFlow.qml`, `ProfileStatus.qml`, `PowerConfirm.qml` (the confirm pattern), `PinPad.qml` collect modes
 - `shell/src/profiles/Profiles.{h,cpp}` (`renameProfile`, `deleteProfile` facade from T-118), `MockProfilesBackend.cpp`
 - `shell/tests/tst_profile_admin.qml` (existing tests; copy their style)
-- `shell/CLAUDE.md` ("Modals from pages", focus rules, translation rule)
+- `shell/PATTERNS.md` ("Modals from pages"), `shell/CLAUDE.md` (focus rules, translations)
 - `docs/dev-setup.md` "Seeing and driving the VM", `scripts/vm-profiles-check.sh`
 
 ## Scope

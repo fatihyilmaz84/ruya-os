@@ -33,4 +33,4 @@ Status: todo · Phase: n · Depends: T-xxx, … · Area: shell | services | api 
 - …
 
 ## Outcome
-_Filled in by the implementer: what was built, files, how it was verified, deviations, follow-ups._
+_Filled in by the implementer. First line: `Verified: host | vm | unverified | hw` (say what ran where). Then: what was built, files, deviations, follow-ups (each also an Inbox line)._

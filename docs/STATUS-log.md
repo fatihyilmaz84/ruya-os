@@ -3,6 +3,17 @@
 Older entries of the `docs/STATUS.md` session log, newest first. STATUS keeps only the latest five; the lead moves the rest here at each review. Nobody needs to read this file to start a task.
 
 ### 2026-10-24 · Opus 5.5 · Lead
+Lead review of `2aab79e..64b7e3f` (disk-space scripts, T-119, T-131, T-110), and planning.
+
+Verification: `dev.ps1 test` ALL GREEN (152 QML passed, 12 skipped offscreen; Rust unchanged). `dev.ps1 shots` ALL GREEN (164; one `TEST WINDOW LOST ACTIVATION` logged and recovered by the guard); `24-profile-delete-confirm.png` reviewed: fine. VM: **not run**, the WSL disk is still marked as needing fsck (dmesg), so no image build was attempted. CI not checked (nothing pushed).
+
+Review findings (0 fixed, 1 filed): no test weakened, contracts and the mock agree, Outcomes honest about the unverified VM criterion and D-Bus client. Note for T-134: `DBusStoreBackend::startJob` records the job id only when the reply is handled, so a `JobFinished` that is dispatched before the reply watcher fires would be dropped; check against the real service and, if seen, buffer unknown-job signals.
+
+Planning: Inbox 2 (both WSL) became an owner decision (disk repair, blocks all image tasks). ADR-011 accepted: `ruya-store` drives the `flatpak` CLI, pure Rust. New **T-134** (store service in the VM). T-130 stays lead, waiting on the disk. NEXT stays T-129 (host only).
+
+- 2026-10-24 · Sonnet 5.5 · T-119 · Nested pages: `pageStack` entries `{key, params}`, one slot with a live page per entry (replaces the `Loader`), lower pages hidden/disabled but kept, focus item restored on pop, `extraPages`, sign-out destroys all. `test` ALL GREEN (138), `shots` ALL GREEN (149, one earlier run lost desktop focus). No visual change. Lead review due after 3 more builder tasks.
+
+### 2026-10-24 · Opus 5.5 · Lead
 Lead review of `1e5ae5e..4b811c6` (T-123 lead, T-118, T-127, T-128), and planning.
 
 Verification:

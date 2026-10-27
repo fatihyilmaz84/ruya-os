@@ -1,59 +1,36 @@
-# Planning sessions: who creates tasks
+# Planning: how tasks are created
 
-Roles are defined in [`docs/LEAD.md`](../LEAD.md). **The Opus lead is the default planner**: planning is step 4 of every lead session. A standalone planning session (any model) is fine for a routine refill; the next lead re-checks its tasks.
+Roles are in [`docs/LEAD.md`](../LEAD.md). **The Opus lead is the default planner** (step 4 of every lead session). A standalone planning session ("Run a planning session following docs/tasks/PLANNING.md.", any model) is fine for a routine refill; the next lead re-checks its tasks. A planner writes no product code.
 
-| Role | Started with | Creates tasks? |
-|---|---|---|
-| **Lead** (Opus) | "Run a lead session following docs/LEAD.md." | Yes. It also reviews, verifies, decides technical questions and marks tasks `Owner: lead`. |
-| **Builder** (normal) | "Do the next task from docs/STATUS.md, following CLAUDE.md." | No. It only adds one-line items to the **Inbox** in `docs/STATUS.md`, except when a new task is required to finish its own (see `README.md`). |
-| **Planner** | "Run a planning session following docs/tasks/PLANNING.md." | Yes. It turns Inbox items and spec gaps into task files and orders the board. It writes no product code. |
-| **Owner** (you) | Anything | Can add Inbox items, ask the planner for features, change priorities, and answer open decisions |
+## When to plan
 
-## When to run a planner session
+Any of these is true (builders check at session start and stop if they find nothing to do):
+- fewer than **3** `todo` tasks have all dependencies `done`;
+- the Inbox has **5 or more** items;
+- every task of the current roadmap phase (`docs/specs/00-overview.md` §6) is `done`;
+- the owner asks, or answers a decision that unlocks work.
 
-Run one when any of these is true. Builders check this at session start and stop if they find nothing to do.
-- Fewer than **3** `todo` tasks have all their dependencies `done`.
-- The Inbox has **5 or more** items.
-- Every task of the current roadmap phase (`docs/specs/00-overview.md` §6) is `done`.
-- The owner asks, or answers an open decision that unlocks new work.
+## Procedure
 
-## Planner procedure
+1. **Read:** `docs/STATUS.md` (all of it is short now), the Outcomes of tasks finished since the last planning entry, `00-overview.md` §2 (MVP) and §6 (roadmap, exit criteria), and the spec sections of the current phase.
+2. **Empty the Inbox.** Each item becomes a task, is merged into a `todo` task's Scope, is dropped (one-line reason in the log entry), or is escalated to "Open owner decisions". Remove it from the Inbox.
+3. **Fill the queue** to **8–12 ready or nearly ready `todo` tasks** by comparing the phase exit criteria with what exists. Prefer work that can be built **and verified on this host**, contracts before the UI that depends on them, and small debt that upcoming tasks build on. Keep every mock-only UI task paired with the task that builds its real service.
+4. **Write each task from `TEMPLATE.md`** (quality bar below), numbered from the next free id.
+5. **Order the board** (dependencies first, then value), set **NEXT**, and re-check every existing `todo` task against what was actually built; fix stale scope and hints. Board rows list open tasks only (`scripts/lint-board.ps1`).
+6. **Never plan around an owner-level question** (legal, licence, product scope, publishing, spending): add it to "Open owner decisions" with options and a recommendation.
+7. **Log and commit:** a session-log entry (at most 4 lines: tasks added, Inbox items handled or dropped, decisions escalated), commit as `docs: plan <summary>`, `dev.ps1 test` green first.
 
-1. **Read:**
-   - `docs/STATUS.md` (board, Inbox, blockers, open decisions, last ~5 log entries);
-   - the Outcomes of tasks done since the last planning entry;
-   - `docs/specs/00-overview.md` §2 (scope/MVP) and §6 (roadmap, exit criteria);
-   - the spec sections for the current phase.
-2. **Empty the Inbox.** For every item:
-   - **turn it into a task**, or merge it into an existing `todo` task's Scope;
-   - or **drop it**, with a one-line reason in the planning log entry;
-   - or **escalate** it to "Open owner decisions" when it needs one.
-   Remove each item from the Inbox once it is handled.
-3. **Fill the queue.** Compare the phase exit criteria with what exists. Write tasks for the missing pieces until there are **8–12 ready-or-nearly-ready `todo` tasks**. Prefer:
-   - work that **can be built and tested on this host** (see `CLAUDE.md`);
-   - contracts (`api/dbus`) before UI that depends on them;
-   - small fixes and debt from the Inbox before new features, when they touch code that upcoming tasks will build on.
-4. **Write each task with `TEMPLATE.md`:**
-   - concrete Scope;
-   - acceptance criteria that each name a test or a screenshot;
-   - "Read first" pointing at the exact spec sections and existing code;
-   - Hints carrying lessons from previous Outcomes (pitfalls found, patterns established);
-   - size S or M (split anything bigger).
-   Number tasks from the next free id in their range (`README.md`).
-5. **Order the board:** dependencies first, then value. Set **NEXT**. Re-check that every existing `todo` task is still accurate against what was actually built, and fix stale scope or hints.
-6. **Never** plan around an owner-level question (legal, licence, product scope, publishing, spending). Add it to "Open owner decisions" with options and a recommendation instead.
-7. **Log and commit.** Add a session-log entry "Planning" (tasks added, Inbox items handled or dropped and why, decisions escalated), then commit as `docs: plan <short summary>`. Run `dev.ps1 test` before committing; it must stay green, even though planning touches docs only.
+## Quality bar for a task
+
+- A builder who never saw the conversation can finish it from the file and the linked docs alone.
+- Every acceptance criterion is observable by a named test or screenshot ("works", "looks good", "is robust" are not criteria).
+- It names the reference pattern to copy (`shell/src/network`, `ruya-profiles`, `PinPad.qml`, …) and what is out of scope, especially the tempting next step.
+- Size S or M.
 
 ## Lessons from past sessions (apply when writing tasks)
 
-- **Split shared infrastructure from features.** T-105 had to invent a page modal layer and scrollable settings panes on the way, and grew to about 1,500 lines. When a feature needs new shared plumbing, make the plumbing its own small task that the feature depends on.
-- **Don't freeze contracts in task text.** Write "extend the contract if needed", not "do not change the contract". Contracts are drafts until release (`CLAUDE.md`).
-- **Service-facing work gets a VM criterion.** Since T-120 the VM can be driven by keys and checked over SSH, so "unverified (no bus here)" is no longer acceptable for a task that changes a service, a unit, the image or a D-Bus client: add an acceptance criterion that names the VM check (`smoke-test.ps1`, a `scripts/vm-*` script, a VM screenshot). Mock-only UI tasks don't need one.
-- **Prefer visible-behaviour criteria over implementation details.** A criterion like "signal X has args (a, b)" forced a deviation in T-105. State what the user sees, and leave the signatures to the builder.
-
-## Quality bar for a task (the planner checks every task against this)
-
-- A builder who has never seen the conversation that produced it can finish it from the file and the linked docs alone.
-- Every acceptance criterion is observable by a test or screenshot. "Works", "looks good" and "is robust" are not criteria.
-- It names the reference pattern to copy (e.g. `shell/src/profiles`, `ruya-profiles`, `PinPad.qml`).
-- It says what's out of scope, especially the tempting next step.
+- **Split shared infrastructure from features.** T-105 invented a modal layer and scrollable panes on the way and grew to ~1,500 lines.
+- **Don't freeze contracts in task text.** Write "extend the contract if needed" (contracts are drafts until release).
+- **Service-facing work gets a VM criterion** naming the check (`smoke-test.ps1`, a `scripts/vm-*` script, a VM screenshot): a task that changes a service, a unit, the image or a D-Bus client is not verified by mocks. Pure mock-only UI tasks don't need one.
+- **Prefer visible-behaviour criteria** over signatures: state what the user sees, leave the signatures to the builder.
+- **Host-only is a phase, not a plan.** When the VM is unavailable, keep real-service tasks queued behind the blocker and fill the gap with contract + mock + UI tasks, but each contract task should name its service task so the mock can't drift unnoticed.

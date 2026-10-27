@@ -1,79 +1,76 @@
 # RuyaOS — instructions for AI contributors
 
-RuyaOS is an open-source, immutable (Fedora bootc) console OS for living-room PCs. It boots straight into a controller-first Qt Quick shell. You are continuing an existing codebase with recorded decisions. **Follow this file exactly.** Area-specific rules live in `shell/CLAUDE.md`, `services/CLAUDE.md` and `image/CLAUDE.md`, and are loaded when you work there.
+RuyaOS is an open-source, immutable (Fedora bootc) console OS for living-room PCs. It boots straight into a controller-first Qt Quick shell. You are continuing an existing codebase with recorded decisions. **Follow this file exactly.** Area rules live in `shell/CLAUDE.md`, `services/CLAUDE.md` and `image/CLAUDE.md` and load when you work there.
 
 ## Where the truth lives
 
 | What | File |
 |---|---|
-| Progress board, blockers, session log | `docs/STATUS.md`. **Read first, update last.** (Older log entries: `docs/STATUS-log.md`, not needed for a task.) |
-| Roles (owner, Opus lead, Sonnet builder) and the lead procedure | `docs/LEAD.md`; lead handoff in `docs/LEAD-NOTES.md` |
-| Work items with acceptance criteria | `docs/tasks/T-*.md` (format: `docs/tasks/README.md`) |
-| Product, architecture, decisions (ADRs) | `docs/specs/00-overview.md` |
-| Platform/image, shell UX, services/apps | `docs/specs/01-platform.md`, `02-shell.md`, `03-services-and-apps.md` |
+| Board (open tasks, NEXT), Inbox, blockers, owner decisions, last five sessions. **Read first, update last.** | `docs/STATUS.md` |
+| Work items with acceptance criteria; a finished task is recorded in its own file | `docs/tasks/T-*.md` (format: `docs/tasks/README.md`) |
+| Roles (owner, Opus lead, Sonnet builder), the lead procedure, lead handoff | `docs/LEAD.md`, `docs/LEAD-NOTES.md` |
+| Product, architecture, decisions (ADRs) | `docs/specs/00-overview.md`; platform/image `01`, shell UX `02`, services/apps `03` |
 | Shell ↔ service contracts | `api/dbus/*.xml` |
 | How to build/run on this machine | `docs/dev-setup.md`, `scripts/dev.ps1` |
+| Shell how-tos (pages, settings rows, modals, text input, translations) | `shell/PATTERNS.md` |
+| Archives, **never needed to start a task** | `docs/STATUS-done.md` (work before T-132), `docs/STATUS-log.md` (old sessions) |
 
 ## Session workflow (do every step, in order)
 
-0. **Which session is this?**
-   - Asked to run a **lead session**: follow `docs/LEAD.md` (it includes these rules plus review, planning and direction).
-   - Asked to run a **planning session**: follow `docs/tasks/PLANNING.md`.
-   - Anything else is a **builder session**: the steps below. Builders don't create tasks; they add Inbox lines.
-1. **Orient.** Read `docs/STATUS.md`. Take the task marked **NEXT**, or else the first `todo` whose dependencies are all `done`. **Skip tasks marked `Owner: lead`** (board titles prefixed **[lead]**); those are for lead sessions. **One task per session**, unless the task file says it is small enough to pair. If the owner asks for the next task in the same session, do it, but say once that a fresh session is cheaper: every turn re-reads the whole conversation, so a second task in one session costs several times the tokens of a new session.
-   - **Uncommitted changes you didn't make** (`git status`)? Another session may be running. Stop and tell the user; don't touch them.
-   - **Nothing qualifies?** Stop. Tell the user the backlog needs a planning session (`docs/tasks/PLANNING.md`). Don't invent work.
-   - **The Inbox has 5 or more items?** Still do your task, but end your reply by recommending a planning session.
-2. **Read before coding.** Read the whole task file, every spec section it links, and the `CLAUDE.md` of each area you will touch. Read the existing code you will change.
-3. **Claim it.** In `docs/STATUS.md`, set the task to `in-progress`.
-4. **Build within scope.** Implement exactly the task's requirements. Anything outside "Scope" is never a silent extra:
-   - **Every follow-up you mention** (in the Outcome or the log): debt you noticed, a flaky build, a missing feature, a spec gap. Add it as one line to the **Inbox** in `docs/STATUS.md`. A follow-up that exists only in prose is lost.
-   - Write a full task file yourself only when your current task can't be finished without it (see `docs/tasks/README.md`).
-   - If the work crosses the shell/service boundary, **write or extend the D-Bus XML contract first**. The mock backend, the D-Bus backend and the Rust service all follow it.
-   - **Contracts are drafts until the first release.** If the task can't be done cleanly within the existing contract (a reply lacks a field you need, say), **extend the contract**. In the same commit, update the XML, the Rust service and its tests, the mock, and the D-Bus client, and explain the change in the Outcome. Don't build workarounds such as extra calls to recover missing data. This applies even if the task says "don't change the contract"; that wording means "no unnecessary changes". Never break existing behaviour that other code relies on.
+0. **Which session?** Asked for a **lead session**: follow `docs/LEAD.md`. A **planning session**: `docs/tasks/PLANNING.md`. Anything else is a **builder session**: the steps below. Builders don't create tasks; they add Inbox lines.
+1. **Orient.** Read `docs/STATUS.md`. Take **NEXT**, or else the first `todo` whose dependencies are all `done`. Skip **[lead]** tasks. **One task per session**, unless its file says it is small enough to pair. If asked for another task in the same session, do it but say once that a fresh session is cheaper (every turn re-reads the whole conversation).
+   - `git status` shows changes you didn't make? Another session may be running: stop and tell the user.
+   - Nothing qualifies? Stop and say the backlog needs a planning session. Don't invent work.
+   - Inbox has 5+ items? Do your task, then recommend a planning session. Lead review due (see the board)? Recommend a lead session.
+2. **Read before coding.** The whole task file, every spec section it links, the `CLAUDE.md` of each area you touch, and the existing code you will change. Read the Outcome of a dependency only when the task's Hints point to it.
+3. **Claim it.** Set `Status: in-progress` in the task file header **and** on the `docs/STATUS.md` board (`scripts/lint-board.ps1` fails if they differ).
+4. **Build within scope.** Implement exactly the task's Scope.
+   - **Every follow-up** you notice (debt, flaky build, missing feature, spec gap) is one line in the **Inbox**. A follow-up that exists only in prose is lost.
+   - Write a task file yourself only if your task can't finish without it.
+   - Crossing the shell/service boundary: **write or extend the D-Bus XML first**; the mock, the D-Bus client and the Rust service all follow it.
+   - **Contracts are drafts until the first release.** If the task can't be done cleanly within the contract, extend it: in the same commit update the XML, the Rust service and its tests, the mock and the D-Bus client, and explain it in the Outcome. No workarounds such as extra calls to recover missing data. This applies even if a task says "don't change the contract" (that means "no unnecessary changes"). Never break behaviour other code relies on.
 5. **Verify.**
-   - Run `.\scripts\dev.ps1 test`; it must end with `ALL GREEN`. Its Qt Quick tests run **offscreen**, so they don't depend on the desktop (lock screen, focus, other windows). A red `test` is a real failure.
-   - For any UI change, also run `.\scripts\dev.ps1 shots`. It uses real GPU windows. Open the screenshots your task changed from `output\shell-shots\review\` (half size, a quarter of the image tokens) with the Read tool and check them against the task's acceptance criteria (layout, overlap, focus ring visible, text readable); open the full-size PNG only when small text needs a closer look. Fix what you see.
-   - **`shots` depends on the desktop.** If it fails while `test` is green, suspect a locked screen or a window that stole focus, and re-run before changing anything. Never edit a test to suit the desktop. The test host (`WindowGuard` in `shell/tests/tst_main.cpp`) re-activates the test window and prints `TEST WINDOW LOST ACTIVATION` when the desktop takes focus; an `activeFocus` failure right below that line is the desktop, not the product: re-run.
+   - `.\scripts\dev.ps1 test` must end with `ALL GREEN`. Its Qt Quick tests run **offscreen**, independent of the desktop. A red `test` is a real failure.
+   - UI change: also `.\scripts\dev.ps1 shots` (real GPU windows). Read the screenshots your task changed from `output\shell-shots\review\` (half size) and check them against the criteria; open a full-size PNG only for small text. Fix what you see.
+   - `shots` depends on the desktop: if it fails while `test` is green, suspect a locked screen or a window that stole focus, and re-run before changing anything (`TEST WINDOW LOST ACTIVATION` followed by an `activeFocus` failure is the desktop, not the product). Never edit a test to suit the desktop.
 6. **Document.**
-   - Fill in the task file's **Outcome** section: what was built, the files involved, how it was verified, and deviations.
-   - Update every spec section whose described behaviour changed. Specs must describe what the code does.
-   - Update `docs/dev-setup.md` if the workflow or commands changed.
-   - In `docs/STATUS.md`: set the task to `done` (or `blocked`, with the reason), move **NEXT** to the next task, and add a session-log entry at the top.
-7. **Commit.** One commit per task (a small series is fine). Use the format below. **Never push on your own**: the remote is `origin` (https://github.com/fatihyilmaz84/ruya-os.git, created 2026-10-23), and publishing is the owner's decision. Push only when the owner asks, and before any push scan tracked files and history for secrets (`image/bib/config.toml` holds the dev SSH key and must stay git-ignored).
+   - Task file: fill **Outcome**, starting with a `Verified:` line (host / vm / unverified / hw, see the legend in STATUS), then what was built, files, deviations. Set `Status: done` (or `blocked`, with the reason).
+   - Update every spec section whose behaviour changed (specs describe what the code does) and `docs/dev-setup.md` if commands changed.
+   - `docs/STATUS.md`: **delete the task's board row** (done work leaves the board; there is no Done table), move **NEXT**, add a session-log entry of at most 4 lines at the top.
+7. **Commit.** One commit per task (a small series is fine), format below. **Never push on your own** (remote `origin`, https://github.com/fatihyilmaz84/ruya-os.git): the owner decides. Before any push, scan tracked files and history for secrets (`image/bib/config.toml` holds the dev SSH key and stays git-ignored).
 
 ## Definition of done (all must hold)
 
-- [ ] Every acceptance criterion in the task file is met **and** checked by a test or by a reviewed screenshot.
+- [ ] Every acceptance criterion is met **and** checked by a test or a reviewed screenshot.
 - [ ] `.\scripts\dev.ps1 test` → `ALL GREEN`. No test was weakened, skipped or deleted to get there.
-- [ ] New QML files are listed in `shell/CMakeLists.txt`; new user-visible strings use `qsTr()`.
-- [ ] Contracts, mocks, D-Bus clients and services agree (same method names, argument order, status strings).
-- [ ] Specs, the task Outcome, and STATUS are updated. Anything that couldn't run on this machine is marked **unverified**.
+- [ ] New QML/C++ files are in `shell/CMakeLists.txt`; new strings use `qsTr()`.
+- [ ] Contracts, mocks, D-Bus clients and services agree (method names, argument order, status strings).
+- [ ] Task Outcome, specs and STATUS are updated. Whatever couldn't run on this machine is marked **unverified**.
 
 ## Hard rules
 
-- **Decisions.** ADRs marked *Accepted* in `00-overview.md` are binding. If a task seems to need a different decision, or a new owner-level one (legal, licensing, product scope, spending, publishing), do not decide it yourself. Add a *Proposed* ADR, mark the task `blocked` with the question, and stop.
-- **This machine is Windows, with a Fedora 44 WSL distribution for image builds and QEMU (WHPX) for boot tests** (`docs/dev-setup.md`). Never install system software or change system settings yourself; installing packages *inside* the WSL distribution with `dnf` is fine.
-  - **Image changes** (Containerfile, `image/`, systemd units, services as packaged) can now be **built and boot-tested**: `scripts/build.sh` + `make-disk.sh` in WSL, then `scripts\smoke-test.ps1`. A task that changes the image is not `done` until it boots with `RUYA_BOOT_OK`. Image builds take 3–30 minutes, so run them in the background.
-  - **Still unverifiable here** (say so, never claim it works): real GPU/KPI numbers, controllers in the VM, audio in the VM (no sound device), and the shell talking to services over D-Bus *unless* you test it inside the VM over SSH.
-- **Tests are the spec's teeth.** Never weaken an assertion, add `skip()`, or delete a test to get green. If a test is wrong, fix it and explain why in the Outcome.
-- **Security invariants**:
+- **Decisions.** ADRs marked *Accepted* in `00-overview.md` are binding. If a task seems to need a different decision, or a new owner-level one (legal, licensing, product scope, spending, publishing), don't decide: add a *Proposed* ADR, mark the task `blocked` with the question, and stop.
+- **Host.** Windows, with a Fedora 44 WSL distribution for image builds and QEMU (WHPX) for boot tests (`docs/dev-setup.md`). Never install system software or change system settings; `dnf` inside the WSL distribution is fine.
+  - **Image changes** (Containerfile, `image/`, units, services as packaged) are built and boot-tested: `scripts/build.sh` + `make-disk.sh` in WSL, then `scripts\smoke-test.ps1`. Such a task is not `done` until it boots with `RUYA_BOOT_OK`. Builds take 3–30 minutes: run them in the background.
+  - **Unverifiable here** (say so, never claim it works): real GPU/KPI numbers, controllers in the VM, audio output in the VM (no sound device unless `-Audio`), and the shell talking to services over D-Bus unless you test inside the VM over SSH.
+- **Tests are the spec's teeth.** Never weaken an assertion, add `skip()`, or delete a test to get green. If a test is wrong, fix it and say why in the Outcome.
+- **Security invariants:**
   - PIN hashes never leave `ruya-profiles`.
   - No private keys or secrets in the repo or the image.
   - Nothing auto-runs from removable media.
   - Third-party apps run only in Flatpak sandboxes, never as root or as `ruya-shell`.
   - Services keep their systemd hardening.
   - D-Bus policies stay restrictive: the shell and root only.
-- **Honesty in the log.** STATUS and Outcome sections report what actually happened, including failures and anything left undone.
+- **Honesty in the log.** STATUS and Outcomes report what actually happened, including failures and anything left undone.
 
 ## Working style
 
-- **Read lean.** Everything you read stays in context and is paid for again on every later turn. Read the line ranges you need (`Read` with offset/limit, `grep -n`), don't re-read a file that is already in context, don't `cat` whole directories, filter long command output (`dev.ps1 ... | Select-String`), and read only the screenshots your task changed. The STATUS session log keeps only the latest entries; don't open `docs/STATUS-log.md` to start a task.
-- **Small steps.** Build and run the relevant checks (`dev.ps1 shell` or `dev.ps1 rust`) after each meaningful change, not only at the end.
-- **Copy existing patterns.** `ruya-profiles` (Rust) and `shell/src/profiles` + `PinPad.qml` (shell) are the reference implementations. Read them before writing a new service, backend or modal.
-- **Ambiguity.** When an acceptance criterion can be read two ways, choose the reading closest to the spec and write the choice in the Outcome. Don't ask for routine technical choices.
-- **Stuck** (the same failure after about 3 genuinely different attempts): get back to a green tree (`git stash`, or revert your change), describe the problem and what you tried in the task's Outcome, set it to `blocked` in STATUS, and commit only the docs. Never commit a red tree.
-- **Stay in scope.** No refactors of unrelated code, no dependency upgrades, no reformatting of files you didn't otherwise change.
+- **Read lean.** Everything you read is paid for again on every later turn. Read line ranges (`Read` with offset/limit, `grep -n`), don't re-read what is in context, don't dump directories, filter long output (`dev.ps1 ... | Select-String`), read only the screenshots your task changed. Don't open the archives.
+- **Small steps.** Build and run the relevant check (`dev.ps1 shell` or `rust`) after each meaningful change.
+- **Copy existing patterns.** `ruya-profiles` (Rust), `shell/src/profiles` and `PinPad.qml` (shell) are the reference implementations; `shell/src/network` is the newest complete backend with a pane.
+- **Ambiguity.** If a criterion reads two ways, take the reading closest to the spec and say so in the Outcome. Don't ask for routine technical choices.
+- **Stuck** (the same failure after about 3 genuinely different attempts): get back to a green tree (`git stash` or revert), describe what you tried in the Outcome, set `blocked`, and commit only the docs. Never commit a red tree.
+- **Stay in scope.** No unrelated refactors, dependency upgrades or reformatting.
 
 ## Commit messages
 
@@ -86,18 +83,13 @@ Unverified: <anything Linux-only>, or "none".
 ```
 Areas: `shell`, `services`, `image`, `api`, `docs`, `scripts`, `ci`. Add the attribution trailer your harness specifies.
 
-## Environment facts and pitfalls (learned the hard way)
+## Environment pitfalls (learned the hard way)
 
-- **Shells.** Windows 11. The PowerShell tool is **5.1**, which has no `&&` and no ternary. Git Bash is also available. `scripts\dev.ps1` already works around PowerShell's quirks, so use it instead of ad-hoc commands.
-- **Files get corrupted by host tools**, and it reached `main` twice (T-107, T-121):
-  - backslashes in text sent through Bash heredocs, `sed` or Python string literals become control characters (`\v`, `\t`, `\r`). **Write any text containing backslashes (Windows paths, line continuations, regex) with the Write/Edit tools;**
-  - Python on this host reads and writes **cp1252** by default, so `open(p)` turns `§` into a lone `0xA7` byte. Pass `encoding="utf-8"` to every `open`, or use the Edit tool.
-
-  `dev.ps1 test` and CI run `scripts/lint-text.ps1`, which fails on invalid UTF-8, control characters and tabs in any tracked text file (new files count once `git add`ed).
-- **Qt** 6.10.3 for MSVC lives at `D:\dev\Qt\6.10.3\msvc2022_64`. The production image uses Fedora's Qt (≥ 6.8), so don't use APIs newer than 6.8.
-- **MSVC compiles C++17.** C++20-only syntax such as `[=, this]` captures fails.
-- **Rendering.** Offscreen (used by `dev.ps1 test` and CI) is the software renderer, where `MultiEffect` draws nothing. So tests must assert properties (`visible`, `blurMax`, focus), never pixels. Only `dev.ps1 shots` renders on the GPU.
-- **qmllint** only means anything with the module response file and `--max-warnings 0`. `dev.ps1` already does that.
-- **Line endings.** Files that end up in the Linux image must stay LF (enforced by `.gitattributes`). Shell scripts need the exec bit in git: `git update-index --chmod=+x <file>`.
-- **New C++ QML type "is not defined" in tests** right after you add it: this was fixed in T-116 (a build step regenerates the stale type registration, `shell/cmake/InvalidateStaleQmlTypes.cmake`), so it should not happen. If it does, run `scripts\repro-first-build.ps1` to see whether the step still works; as a last resort delete `shell\build-win` and rebuild. Never "fix" it by changing tests.
-- **Mock services.** Off Linux, the shell uses mock services. The mock profiles are Player One (admin, PIN 1234), Ada (no PIN) and Guest.
+- **Shells.** The PowerShell tool is **5.1** (no `&&`, no ternary); Git Bash is also available. `scripts\dev.ps1` already works around the quirks: use it.
+- **Files get corrupted by host tools** (it reached `main` twice). Backslashes in text sent through Bash heredocs, `sed` or Python string literals become control characters: **write text containing backslashes (Windows paths, line continuations, regex) with the Write/Edit tools.** Python here reads and writes **cp1252**: pass `encoding="utf-8"` to every `open`, or use Edit. `scripts/lint-text.ps1` (in `dev.ps1 test` and CI) fails on invalid UTF-8, control characters and tabs in tracked text files (new files count once `git add`ed).
+- **Qt** 6.10.3 (MSVC) at `D:\dev\Qt\6.10.3\msvc2022_64`; the image uses Fedora's Qt (≥ 6.8), so use no newer APIs. MSVC compiles C++17 (no `[=, this]`).
+- **Rendering.** Offscreen (tests, CI) is the software renderer, where `MultiEffect` draws nothing: assert properties (`visible`, `blurMax`, focus), never pixels. Only `shots` renders on the GPU.
+- **qmllint** needs the module response file and `--max-warnings 0`; `dev.ps1` does that.
+- **Line endings.** Files that reach the Linux image stay LF (`.gitattributes`). Shell scripts need the exec bit: `git update-index --chmod=+x <file>`.
+- **"X is not defined" for a new C++ QML type** should not happen (a build step regenerates the type registration, T-116); if it does, run `scripts\repro-first-build.ps1`, and as a last resort delete `shell\build-win`. Never "fix" it by changing tests.
+- **Mock services.** Off Linux the shell uses mocks. Mock profiles: Player One (admin, PIN 1234), Ada (no PIN), Guest.

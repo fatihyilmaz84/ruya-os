@@ -21,7 +21,7 @@ Read `docs/specs/02-shell.md` for the UX spec. This file covers how the code is 
 - Start files with `pragma ComponentBehavior: Bound` when they have delegates or inline components. Delegates use `required property`. qmllint runs with zero warnings allowed.
 - **Sizes are design pixels at 1080p × `u`** (`u = height / 1080`), passed down as a `u` property. Respect the safe area (`Theme.safeArea`).
 - **No literal colours, durations or easing values in components.** Add a token to `Theme.qml` instead. `dev.ps1 shell` (so `test`) and CI run a token lint (`scripts/lint-tokens.ps1`) that fails on `duration: <non-zero number>`, a quoted hex colour or `Qt.rgba(` anywhere but `Theme.qml`; for a rare exception end the line with `// token-ok: <reason>`. (Easing types are still a convention, not linted.) A feedback animation (shake, pulse) must also not run under reduced motion: guard its start on `Theme.reducedMotion`.
-- All user-visible strings go through `qsTr()`; use `%n` plurals where counts appear.
+- User-visible strings: `qsTr()`, with `%n` plurals where counts appear (see Translations below).
 - Effects: `MultiEffect` or precompiled `.qsb` shaders only. Never inline GLSL. Blur the shared backdrop; never stack more fullscreen blurs.
 - Never block the GUI thread. Service calls are asynchronous: invoke them, then react to a signal.
 
@@ -47,59 +47,24 @@ Read `docs/specs/02-shell.md` for the UX spec. This file covers how the code is 
 - **Focus restoration:** when a modal or page closes, return focus to where it was. Guard any re-focus with a check that the target is still enabled; otherwise you will steal focus after state changes (see `ProfilePicker.onClosed`).
 - Use `Sfx.navigate()` on focus moves, `Sfx.select()` on Accept, and `Sfx.back()` on Back or errors.
 
-## How to add a page
+## Patterns (read `shell/PATTERNS.md` when your task touches one)
 
-1. Create `XxxPage.qml` as a `Page { id: page; title: qsTr("Xxx") … }` (see `Page.qml`, `ComingSoon.qml`). Put one `focus: true` element in it; size from `page.u`.
-2. Add the file to `CMakeLists.txt`, and a `Component { id: xxxPage; XxxPage {} }` plus an entry in `pageComponents` in `Shell.qml`.
-3. Open it with `Shell.openPage("xxx")` (home tiles do this with their `key` role). Back is handled by `Page`; never steal the Guide keys in a page, so the overlay still works.
-4. Test in a `tst_*.qml`: open, assert focus, Back, assert focus restored (see `tst_pages.qml`).
-5. **Nested pages:** `Shell.openPage(key, params)` pushes a page over the current one (`params` is a plain object, available as `page.params`; `Shell.currentParams` is the top entry's). The page below stays alive, hidden and disabled, and gets its focus item back on Back. A test or module registers a page without editing `Shell.qml` through `Shell.extraPages = ({ key: component })` (see `tst_pages.qml`, `detailPage`). Keep `pageStack` a plain array and reassign it.
+`PATTERNS.md` has the how-to for: **adding a page** (and nested pages), the **settings controls** (`SettingRow`, `ToggleRow`, `ChoiceRow`, `SliderRow`), **modals from pages** (PIN pad modes, flows), **text input** (`TextEntry`, never a raw `TextInput`) and the **translation details** (live switching, models that must not change with the language, adding a language, RTL check).
 
-## Controls (`qml/controls/`)
+## Translations (every UI task)
 
-Reusable settings rows. All extend `SettingControl` (a `FocusScope` with the label, the glass bar and a focus ring; pass `u` and `label`). Put rows in a `SettingsPane` (`qml/SettingsPane.qml`): it moves between rows with Up/Down, and Left/Back leave it (`exitRequested`). Rows handle only their own keys and let everything else bubble.
+All user-visible strings use `qsTr()`. After adding or changing one, refresh the `.ts` files, translate the new entries (Turkish for real, and the English copy), then check:
 
-| Control | Keys it consumes | Value and signal |
-|---|---|---|
-| `SettingRow` | Accept | `value` (text); `activated()` |
-| `ToggleRow` | Accept toggles | `checked`; `toggled(checked)` |
-| `ChoiceRow` | Left/Right cycle `options` (`[{value, label}]`), wrapping | `value`; `edited(value)` |
-| `SliderRow` | Left/Right step by `stepSize` within `from`..`to`, clamped | `value`; `edited(value)` |
+```powershell
+cmake --build shell\build-win --config Release --target update_translations
+.\scripts\lint-translations.ps1
+```
 
-A control changes its own value, then emits the signal; the owner writes the setting, resyncs the control, and keeps a `Binding` on it so external changes show (see `DisplayPane.qml`). `Sfx.navigateCount`/`selectCount`/`backCount` count cue requests so tests can check the sound path.
-
-## Modals from pages
-
-A page that needs a full-screen modal (PIN pad, `TextEntry`) declares it as `parent: page.overlay` (the shell's `modalLayer`) with `width/height` taken from that parent, not as a child of the page, so it covers the whole screen and sits above toasts. Save `Window.activeFocusItem` before opening and refocus it when the modal closes (see `ProfilesPane.qml`); `TextEntry` does this itself. `PinPad` has three modes: `open(profile)` verifies with `Profiles.switchTo`; `collect(prompt, confirm)` hands the PIN back through `collected(pin)` (and `cancelled()`), calling no service. Multi-step flows are small state machines in their own non-visual file (`ProfileAddFlow.qml`, `ChangePinFlow.qml`).
-
-Messages for Profiles1 statuses (`invalid`, `wrong-pin`, ...) come from the `ProfileStatus` singleton (`ProfileStatus.describe`); don't write a second mapping. The first-boot wizard (`Setup.qml`, not a page) hosts its own modals in an inner full-screen layer and is shown by `Shell` while no profile exists.
-
-## Text input
-
-Use `TextEntry` (`qml/TextEntry.qml`, spec 02-shell §4.4) for any text input; never a raw `TextInput` without it. Host it as a full-screen child of the screen that needs it, call `open(title, initial, options)`, and handle `accepted(text)`/`cancelled()`. It restores focus to the item that opened it.
-
-## Translations
-
-- Strings are translated with Qt `.ts` files in `shell/i18n/` (`ruyashell_en.ts`, `ruyashell_tr.ts`), compiled by `qt_add_translations` into resources `:/i18n/ruyashell_<lang>.qm`. English is the source language; its `.ts` only exists for the plural forms (`%n`), so every English entry's translation is its own source text.
-- `DeviceSettings.language` is the one place the language lives. Setting it installs the `QTranslator` and calls `QQmlEngine::retranslate()`, so the UI changes live. Defaults: the stored value, else the system locale, else `en`; with `RUYA_SETTINGS_EPHEMERAL=1` (tests) always `en`.
-- **After adding or changing a `qsTr` string**, refresh the files and translate the new entries (Turkish and the English copy), then check:
-
-  ```powershell
-  cmake --build shell\build-win --config Release --target update_translations
-  .\scripts\lint-translations.ps1
-  ```
-
-  `lint-translations.ps1` fails on any `type="unfinished"` entry. In `dev.ps1 shell`/`test` it first refreshes temporary copies from the current sources, so a forgotten refresh or a leftover `vanished`/`obsolete` entry fails too (delete those); CI's `lint` job checks the committed files only.
-- **Bindings re-translate; stored values don't.** `retranslate()` re-evaluates bindings that call `qsTr`. A message written into a property at event time (`message = qsTr(...)`, `ProfileStatus.describe(...)` results kept in `Setup`, `ProfilesPane`, `PinPad`; toast text in `Notifications`) keeps its language until the next event. That is accepted for transient messages; for anything long-lived derive the text in a binding.
-- **A model must not change with the language.** Assigning a new array to a `ListView`/`Repeater` model resets `currentIndex` (and so focus). Models hold keys only (`Shell.tiles`, `SettingsPage.categories`); the visible text is a binding in the delegate (`Shell.tileTitle`, `SettingsPage.labelFor`). Add new translated lists the same way.
-- **Do not translate** the brand "RuyaOS" and the language names ("English", "Türkçe", each shown in its own language).
-- **Add a language:** add `i18n/ruyashell_<code>.ts` to `qt_add_translations` in `CMakeLists.txt`; add the code to `DeviceSettings::isValidLanguage`; add an option to the language `ChoiceRow`s (`SystemPane.qml`, `Setup.qml`); add a `letterSets` entry in `TextEntry.qml` if its letters differ from a-z.
-- **RTL check:** `ruya-shell --reverse` lays the UI out right-to-left (`Main.qml` sets `LayoutMirroring` from `Application.layoutDirection`). Left/Right then mean the visual direction on horizontal lists. It is a readiness check only: before an RTL language ships, review RTL screenshots of every screen (the PIN pad's digit grid must stay left to right; the toast layer, sliders and `ProfileCard` badges were never examined).
+`dev.ps1 shell` and `test` also fail on an unfinished, `vanished` or `obsolete` entry (delete those).
 
 ## Tests (required for every behaviour you add)
 
 - Every `init()` starts with `verify(windowGuard.ensureActive() === "", windowGuard.ensureActive())` (T-127): it re-activates the test window, or fails with "test window is not active" instead of a later `activeFocus` assertion. Copy it into new test files.
-
 - Drive the UI with `keyClick()` using only the keys listed above, unless a test is specifically about keyboard input.
 - Give an `objectName` to every element a test needs to find, and find it with `findChild(shell, "name")`.
 - To wait on asynchronous results use `tryCompare(obj, "prop", value)` or `tryVerify(() => …)`. **Never** use `tryCompare` on a `QVariantList` property's `length`: that polls a frozen copy.

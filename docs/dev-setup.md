@@ -133,7 +133,7 @@ It prints `pkcheck` verdicts for the six `login1` actions for the `ruya-shell` p
 | Command | Does |
 |---|---|
 | `.\scripts\dev.ps1 check` | Prerequisites present? |
-| `.\scripts\dev.ps1 test` | Text lint (tracked text files are UTF-8 with no stray control characters or tabs); Rust fmt, clippy (Windows + Linux target) and tests; shell build; token lint (no literal durations or colours outside `Theme.qml`); qmllint (zero warnings); Qt Quick tests. **Must be ALL GREEN before any commit.** |
+| `.\scripts\dev.ps1 test` | Text lint (tracked text files are UTF-8 with no stray control characters or tabs); board lint (`docs/STATUS.md` and the task files agree, `scripts/lint-board.ps1`); Rust fmt, clippy (Windows + Linux target) and tests; shell build; token lint (no literal durations or colours outside `Theme.qml`); qmllint (zero warnings); Qt Quick tests. **Must be ALL GREEN before any commit.** |
 | `.\scripts\dev.ps1 shots` | Qt Quick tests plus screenshots into `output\shell-shots\` (cleared first), and half-size copies in `output\shell-shots\review\` for reviewing at a quarter of the image tokens |
 | `.\scripts\dev.ps1 run` | The shell in a window with mock services |
 | `.\scripts\dev.ps1 rust` / `shell` | Half of `test` |
@@ -148,7 +148,7 @@ It prints `pkcheck` verdicts for the six `login1` actions for the `ruya-shell` p
 
 | CI job | Runs | Local equivalent |
 |---|---|---|
-| `lint` | `pwsh scripts/lint-text.ps1`, `pwsh scripts/lint-tokens.ps1`, `pwsh scripts/lint-translations.ps1` | the "text lint" step of `dev.ps1 test` and the "token lint" and "translation lint" steps of `dev.ps1 shell` |
+| `lint` | `pwsh scripts/lint-text.ps1`, `lint-board.ps1`, `lint-tokens.ps1`, `lint-translations.ps1` | the "text lint" and "board lint" steps of `dev.ps1 test` and the "token lint" and "translation lint" steps of `dev.ps1 shell` |
 | `services` | `cargo fmt --check`, `clippy -D warnings`, `cargo test` (Ubuntu) | `dev.ps1 rust` |
 | `shell` | build with Fedora's Qt (Fedora 44 container), `qmllint --max-warnings 0`, Qt Quick tests offscreen | `dev.ps1 shell` (Qt 6.10.3 on MSVC here; CI also proves that no API newer than Qt 6.8 crept in) |
 | `image` | needs the three jobs above; `scripts/build.sh`, `make-disk.sh qcow2`, `smoke-test.sh` under KVM (about 20 minutes); uploads `serial.log` | the WSL build and `smoke-test.ps1` (image section above) |

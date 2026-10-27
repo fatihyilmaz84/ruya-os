@@ -50,6 +50,18 @@ Act on findings:
 - **Larger:** add a task, or reopen the task with a "Review findings" section, and put it on the board.
 - **Repeated mistake** (seen twice): change the system so it can't recur. Prefer an **automated check** (in `dev.ps1`, a test, a lint) over a new rule. If it has to be a rule, add it to the right `CLAUDE.md` and to `docs/tasks/PLANNING.md` "Lessons". Don't let instruction files grow without pruning: when you add a rule, look for one to merge or delete.
 
+### 3b. Keep the instructions lean (every lead session, five minutes)
+Every builder session pays to read these files again on every turn, so they have size budgets. Check them (`wc -c`) and prune when over:
+
+| File | Budget |
+|---|---|
+| root `CLAUDE.md` | about 10 KB |
+| area `CLAUDE.md` (`shell/`, `services/`, `image/`) | about 7 KB each |
+| `docs/STATUS.md` | about 10 KB (the log keeps five entries of at most 4 lines; everything older goes to `STATUS-log.md`; no Done table) |
+| a task file | about 8 KB; split bigger |
+
+How-tos and catalogues belong in a reference file that a task links (`shell/PATTERNS.md`, `docs/dev-setup.md`), rules belong in `CLAUDE.md`, and a rule that a script can enforce belongs in a script (`scripts/lint-*.ps1`), not in prose. When you add a rule, delete or merge one.
+
 ### 4. Plan
 Run the planner procedure in [`docs/tasks/PLANNING.md`](tasks/PLANNING.md): empty the Inbox, fill the queue to 8–12 ready tasks, order the board, set NEXT. The lead is the default planner. A builder-run planning session is acceptable for routine refills, but the lead re-checks its tasks at the next review.
 
