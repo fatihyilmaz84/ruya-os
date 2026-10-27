@@ -141,6 +141,13 @@ function Test-Text {
     Record "text lint" ($LASTEXITCODE -eq 0)
 }
 
+# The rules live in scripts\lint-board.ps1 (shared with CI).
+function Test-Board {
+    Step "board lint (docs\STATUS.md and the task files agree)"
+    & (Join-Path $PSScriptRoot "lint-board.ps1")
+    Record "board lint" ($LASTEXITCODE -eq 0)
+}
+
 function Do-Shell {
     Do-Build
     Test-Tokens
@@ -157,7 +164,7 @@ switch ($Command) {
     "build" { Do-Build }
     "rust" { Do-Rust }
     "shell" { Do-Shell }
-    "test" { Test-Text; Do-Rust; Do-Shell }
+    "test" { Test-Text; Test-Board; Do-Rust; Do-Shell }
     "shots" {
         Do-Build
         # Start empty: a screenshot no test writes any more must not be reviewed as current.

@@ -28,6 +28,8 @@ jobs:
         run: pwsh -NoProfile -File scripts/lint-tokens.ps1
       - name: Translation lint
         run: pwsh -NoProfile -File scripts/lint-translations.ps1
+      - name: Board lint
+        run: pwsh -NoProfile -File scripts/lint-board.ps1
 
   services:
     runs-on: ubuntu-24.04
