@@ -1,0 +1,27 @@
+// ruya-devices (a user unit of ruya-shell, ADR-010) manages Wi-Fi through NetworkManager's D-Bus
+// API on behalf of the shell. NetworkManager asks polkit for every such call, and nobody is
+// there to type a password on a TV, so these actions are allowed for the user ruya-shell:
+//
+//   wifi.scan                  RequestScan
+//   network-control            ActivateConnection, AddAndActivateConnection
+//   settings.modify.system     AddAndActivateConnection (a saved network is system-wide), Delete
+//   settings.modify.own        the same for a connection owned by the user
+//
+// Nothing else: not hostname changes, enabling or disabling networking or Wi-Fi, Wi-Fi sharing,
+// reloading, checkpoints. polkit cannot tell connection types apart, so the service itself only
+// ever touches Wi-Fi connections (ruya-devices, network.rs). Other users (profile users,
+// Flatpak apps) keep the default policy.
+polkit.addRule(function(action, subject) {
+    if (subject.user !== "ruya-shell")
+        return polkit.Result.NOT_HANDLED;
+
+    var allowed = [
+        "org.freedesktop.NetworkManager.wifi.scan",
+        "org.freedesktop.NetworkManager.network-control",
+        "org.freedesktop.NetworkManager.settings.modify.system",
+        "org.freedesktop.NetworkManager.settings.modify.own"
+    ];
+    if (allowed.indexOf(action.id) >= 0)
+        return polkit.Result.YES;
+    return polkit.Result.NOT_HANDLED;
+});

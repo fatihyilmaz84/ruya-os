@@ -1,14 +1,18 @@
-//! org.ruyaos.Devices1.Audio on D-Bus. Thin adapter: all rules live in `audio.rs`.
+//! org.ruyaos.Devices1.Audio and .Network on D-Bus. Thin adapter: the rules live in `audio.rs`
+//! and `network.rs`.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
+use blocking::unblock;
+use futures_lite::{future, StreamExt};
 use zbus::object_server::SignalEmitter;
 use zbus::zvariant::{OwnedValue, Value};
-use zbus::{interface, Connection};
+use zbus::{interface, Connection, MatchRule, MessageStream};
 
 use crate::audio::{Audio, Changes};
+use crate::network::{self, Network, NetworkManager};
 
 /// Chosen at runtime: `wpctl` on Linux, a fake in `--session` development.
 pub type DynPipeWire = Box<dyn crate::audio::PipeWire>;
@@ -174,5 +178,185 @@ async fn announce(connection: &Connection, changes: &Changes) -> zbus::Result<()
         this.master_volume_changed(emitter).await?;
         this.muted_changed(emitter).await?;
     }
+    Ok(())
+}
+
+/// Chosen at runtime: NetworkManager on Linux, a fake in `--session` development.
+pub type DynNm = Box<dyn NetworkManager>;
+
+impl NetworkManager for DynNm {
+    fn snapshot(&self) -> Result<network::Raw, String> {
+        (**self).snapshot()
+    }
+    fn scan(&self) -> Result<(), String> {
+        (**self).scan()
+    }
+    fn connect(&self, ssid: &str, password: Option<&str>) -> Result<(), network::ConnectError> {
+        (**self).connect(ssid, password)
+    }
+    fn forget(&self, ssid: &str) -> Result<(), String> {
+        (**self).forget(ssid)
+    }
+}
+
+pub type SharedNet = Arc<Network<DynNm>>;
+
+/// Quiet time after the last NetworkManager signal before the state is read again: a scan or a
+/// join is a burst of dozens of them.
+const DEBOUNCE: Duration = Duration::from_millis(300);
+
+const NM_BUS_NAME: &str = "org.freedesktop.NetworkManager";
+
+pub struct NetworkIface {
+    net: SharedNet,
+}
+
+impl NetworkIface {
+    pub fn new(net: SharedNet) -> Self {
+        NetworkIface { net }
+    }
+
+    async fn emit(&self, emitter: &SignalEmitter<'_>, changes: &network::Changes) {
+        let result = async {
+            if changes.networks {
+                Self::networks_changed(emitter).await?;
+            }
+            if changes.state {
+                self.state_changed(emitter).await?;
+                self.primary_changed(emitter).await?;
+            }
+            Ok::<(), zbus::Error>(())
+        }
+        .await;
+        if let Err(err) = result {
+            eprintln!("ruya-devices: emitting network signals failed: {err}");
+        }
+    }
+
+    /// Reads NetworkManager again (off the executor: it blocks) and announces what changed.
+    async fn settle(&self, emitter: &SignalEmitter<'_>) {
+        let net = self.net.clone();
+        match unblock(move || net.refresh()).await {
+            Ok(changes) => self.emit(emitter, &changes).await,
+            Err(err) => eprintln!("ruya-devices: reading NetworkManager failed: {err}"),
+        }
+    }
+}
+
+#[interface(name = "org.ruyaos.Devices1.Network")]
+impl NetworkIface {
+    #[zbus(property)]
+    fn state(&self) -> String {
+        self.net.state().as_str().to_owned()
+    }
+
+    #[zbus(property)]
+    fn primary(&self) -> HashMap<String, OwnedValue> {
+        let Some(p) = self.net.primary() else {
+            return HashMap::new();
+        };
+        let own = |v: Value<'_>| OwnedValue::try_from(v).ok();
+        [
+            ("kind", own(Value::from(p.kind.as_str()))),
+            ("name", own(Value::from(p.name.clone()))),
+            ("ip", own(Value::from(p.ip.clone()))),
+            ("signal", p.signal.and_then(|s| own(Value::from(s)))),
+        ]
+        .into_iter()
+        .filter_map(|(k, v)| v.map(|v| (k.to_owned(), v)))
+        .collect()
+    }
+
+    fn list_wifi(&self) -> Vec<HashMap<String, OwnedValue>> {
+        self.net
+            .list_wifi()
+            .into_iter()
+            .map(|w| {
+                let own = |v: Value<'_>| OwnedValue::try_from(v).ok();
+                [
+                    ("id", own(Value::from(w.id().to_owned()))),
+                    ("ssid", own(Value::from(w.ssid.clone()))),
+                    ("signal", own(Value::from(w.signal))),
+                    ("security", own(Value::from(w.security.as_str()))),
+                    ("known", own(Value::from(w.known))),
+                    ("active", own(Value::from(w.active))),
+                ]
+                .into_iter()
+                .filter_map(|(k, v)| v.map(|v| (k.to_owned(), v)))
+                .collect()
+            })
+            .collect()
+    }
+
+    async fn scan(&self) -> String {
+        let net = self.net.clone();
+        unblock(move || net.scan()).await.as_str().to_owned()
+    }
+
+    async fn connect(
+        &self,
+        id: &str,
+        password: &str,
+        #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
+    ) -> String {
+        let (net, id, password) = (self.net.clone(), id.to_owned(), password.to_owned());
+        let status = unblock(move || net.connect(&id, &password)).await;
+        self.settle(&emitter).await;
+        status.as_str().to_owned()
+    }
+
+    async fn forget(&self, id: &str, #[zbus(signal_emitter)] emitter: SignalEmitter<'_>) -> String {
+        let (net, id) = (self.net.clone(), id.to_owned());
+        let status = unblock(move || net.forget(&id)).await;
+        self.settle(&emitter).await;
+        status.as_str().to_owned()
+    }
+
+    #[zbus(signal)]
+    async fn networks_changed(emitter: &SignalEmitter<'_>) -> zbus::Result<()>;
+}
+
+/// Follows NetworkManager's signals (any of them: state, devices, access points, connections)
+/// and, after a quiet moment, reads the state again and announces what changed. No polling.
+/// Runs forever.
+pub async fn watch_network(connection: Connection, net: SharedNet) {
+    let rule = MatchRule::builder()
+        .msg_type(zbus::message::Type::Signal)
+        .sender(NM_BUS_NAME)
+        .map(|b| b.build());
+    let mut stream = match rule {
+        Ok(rule) => match MessageStream::for_match_rule(rule, &connection, None).await {
+            Ok(stream) => stream,
+            Err(err) => return eprintln!("ruya-devices: cannot follow NetworkManager: {err}"),
+        },
+        Err(err) => return eprintln!("ruya-devices: cannot follow NetworkManager: {err}"),
+    };
+    while stream.next().await.is_some() {
+        while future::or(async { stream.next().await.is_some() }, async {
+            async_io::Timer::after(DEBOUNCE).await;
+            false
+        })
+        .await
+        {}
+        let net = net.clone();
+        match unblock(move || net.refresh()).await {
+            Ok(changes) if changes.any() => {
+                if let Err(err) = announce_network(&connection, &changes).await {
+                    eprintln!("ruya-devices: emitting network signals failed: {err}");
+                }
+            }
+            Ok(_) => {}
+            Err(err) => eprintln!("ruya-devices: reading NetworkManager failed: {err}"),
+        }
+    }
+}
+
+async fn announce_network(connection: &Connection, changes: &network::Changes) -> zbus::Result<()> {
+    let iface = connection
+        .object_server()
+        .interface::<_, NetworkIface>(OBJECT_PATH)
+        .await?;
+    let this = iface.get().await;
+    this.emit(iface.signal_emitter(), changes).await;
     Ok(())
 }

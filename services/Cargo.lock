@@ -684,6 +684,7 @@ name = "ruya-devices"
 version = "0.1.0"
 dependencies = [
  "async-io",
+ "blocking",
  "futures-lite",
  "serde",
  "serde_json",

@@ -1,13 +1,16 @@
-//! ruya-devices: serves org.ruyaos.Devices1.Audio on the system bus, as a systemd user unit of
-//! `ruya-shell` (ADR-010). With `--session` (development) it serves on the session bus over a
-//! fake PipeWire.
+//! ruya-devices: serves org.ruyaos.Devices1.Audio and .Network on the system bus, as a systemd
+//! user unit of `ruya-shell` (ADR-010). With `--session` (development) it serves on the session
+//! bus over a fake PipeWire and a fake NetworkManager.
 
 use std::error::Error;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use ruya_devices::audio::{Audio, FakePipeWire};
-use ruya_devices::dbus::{watch, AudioIface, DynPipeWire, BUS_NAME, OBJECT_PATH};
+use ruya_devices::dbus::{
+    watch, watch_network, AudioIface, DynNm, DynPipeWire, NetworkIface, BUS_NAME, OBJECT_PATH,
+};
+use ruya_devices::network::{FakeNetworkManager, Network};
 use ruya_devices::store::Store;
 
 fn main() {
@@ -24,6 +27,16 @@ fn pipewire(session: bool) -> DynPipeWire {
     }
     let _ = session;
     Box::new(FakePipeWire::new())
+}
+
+fn network_manager(session: bool) -> Result<DynNm, Box<dyn Error>> {
+    #[cfg(target_os = "linux")]
+    if !session {
+        return Ok(Box::new(ruya_devices::networkmanager::NmClient::connect()?));
+    }
+    let _ = session;
+    // The password of the fake networks is the one the shell's own mock accepts.
+    Ok(Box::new(FakeNetworkManager::new("ruya-wifi-pass")))
 }
 
 /// `RUYA_DEVICES_FILE`, else `$STATE_DIRECTORY/audio.toml` (systemd's StateDirectory=), else none.
@@ -48,6 +61,12 @@ fn run() -> Result<(), Box<dyn Error>> {
     }
     let audio = Arc::new(Mutex::new(audio));
 
+    let net = Arc::new(Network::new(network_manager(session)?));
+    // Same rule as for PipeWire: NetworkManager not up yet is retried by its signals.
+    if let Err(err) = net.refresh() {
+        eprintln!("ruya-devices: NetworkManager not readable yet: {err}");
+    }
+
     futures_lite::future::block_on(async {
         let builder = if session {
             zbus::connection::Builder::session()?
@@ -57,9 +76,19 @@ fn run() -> Result<(), Box<dyn Error>> {
         let connection = builder
             .name(BUS_NAME)?
             .serve_at(OBJECT_PATH, AudioIface::new(audio.clone()))?
+            .serve_at(OBJECT_PATH, NetworkIface::new(net.clone()))?
             .build()
             .await?;
-        watch(connection, audio).await;
+        // The fake NetworkManager has no signals to follow (it changes only through calls).
+        if session {
+            watch(connection, audio).await;
+        } else {
+            futures_lite::future::zip(
+                watch(connection.clone(), audio),
+                watch_network(connection, net),
+            )
+            .await;
+        }
         Ok::<(), Box<dyn Error>>(())
     })
 }

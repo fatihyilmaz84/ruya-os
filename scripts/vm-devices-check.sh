@@ -1,13 +1,17 @@
 #!/usr/bin/env bash
-# Checks the Devices service (audio) inside a running VM booted with sound (T-128). Copy and run as root:
+# Checks the Devices service (audio T-128, network T-132) inside a running VM booted with sound. Copy and run as root:
 #   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-devices-check.sh root@127.0.0.1:/root/
-#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-devices-check.sh [check|security]
+#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-devices-check.sh [check|security|state]
 # check (default): unit active, name owned by ruya-shell, ListSinks, a MasterVolume write reaches
-# PipeWire, a call from another user is refused. Needs the shell logged in (VM booted with -Audio).
+# PipeWire, a call from another user is refused; then the network part: State is connected, Primary is
+# the ethernet link with an IPv4 address, ListWifi and Scan answer, unknown ids are refused, another
+# user is refused. Needs the shell logged in (VM booted with -Audio).
+# state: prints State and Primary (for the link test, see docs/dev-setup.md).
 set -u
 svc=org.ruyaos.Devices1
 path=/org/ruyaos/Devices1
 ifc=org.ruyaos.Devices1.Audio
+net=org.ruyaos.Devices1.Network
 uid="$(id -u ruya-shell)"
 as_shell() { runuser -u ruya-shell -- env XDG_RUNTIME_DIR="/run/user/$uid" "$@"; }
 fail=0
@@ -60,6 +64,39 @@ check)
     else
         echo "$out"; ok "call from nobody refused"
     fi
+
+    echo "--- network (T-132): NetworkManager behind Devices1.Network"
+    if systemctl is-active NetworkManager; then ok "NetworkManager is active"; else bad "NetworkManager not active"; fi
+    state="$(busctl --system get-property "$svc" "$path" "$net" State)"
+    echo "State: $state"
+    case "$state" in 's "connected"') ok "State is connected";; *) bad "State is not connected";; esac
+    primary="$(busctl --system get-property "$svc" "$path" "$net" Primary)"
+    echo "Primary: $primary"
+    case "$primary" in *'"kind" s "ethernet"'*) ok "Primary is ethernet";; *) bad "Primary is not ethernet";; esac
+    echo "$primary" | grep -Eq '"ip" s "[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+"' && ok "Primary has an IPv4 address" || bad "Primary has no IPv4 address"
+    echo "nmcli says:"
+    nmcli -t -f DEVICE,TYPE,STATE,CONNECTION device | head -5
+    wifi="$(busctl --system call "$svc" "$path" "$net" ListWifi)"
+    echo "ListWifi: $wifi"
+    case "$wifi" in "aa{sv} "*) ok "ListWifi answers (empty is fine in the VM)";; *) bad "ListWifi did not answer aa{sv}";; esac
+    scan="$(busctl --system call "$svc" "$path" "$net" Scan)"
+    echo "Scan: $scan"
+    case "$scan" in 's "ok"') ok "Scan answers ok";; *) bad "Scan did not answer ok";; esac
+    unknown="$(busctl --system call "$svc" "$path" "$net" Connect ss nowhere secret)"
+    echo "Connect(nowhere): $unknown"
+    case "$unknown" in 's "unknown-network"') ok "Connect to an unknown network is refused";; *) bad "unexpected Connect status";; esac
+    unknown="$(busctl --system call "$svc" "$path" "$net" Forget s nowhere)"
+    case "$unknown" in 's "unknown-network"') ok "Forget of an unknown network is refused";; *) bad "unexpected Forget status";; esac
+    if out="$(runuser -u nobody -- busctl --system call "$svc" "$path" "$net" ListWifi 2>&1)"; then
+        bad "nobody could call ListWifi: $out"
+    else
+        echo "$out"; ok "network call from nobody refused"
+    fi
+    ;;
+state)
+    # For the link test: the host runs `set_link <name> off|on` in the QEMU monitor, this shows the result.
+    busctl --system get-property "$svc" "$path" "$net" State
+    busctl --system get-property "$svc" "$path" "$net" Primary
     ;;
 esac
 [ "$fail" = 0 ] && echo "ALL CHECKS PASSED" || echo "SOME CHECKS FAILED"
