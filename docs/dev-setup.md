@@ -7,7 +7,7 @@ Edit on Windows, build in a Fedora WSL distribution, boot in QEMU for Windows (W
 1. **WSL2** (admin + reboot): `wsl --install --no-distribution`.
 2. **Fedora 44 WSL distribution** (no admin): `wsl --install FedoraLinux-44 --no-launch`. Use it as root (`wsl -d FedoraLinux-44 -u root`), then install the tools: `dnf -y install podman git qemu-img`. No Podman Desktop or Podman Machine is needed.
 3. **QEMU for Windows** at `C:\Program Files\qemu`, with the *Windows Hypervisor Platform* feature on (WHPX acceleration, verified working).
-4. **`%USERPROFILE%\.wslconfig`**: `memory=20GB` (the build uses a lot of memory). `nestedVirtualization=true` is also set but has no effect on this AMD host (`/dev/kvm` stays absent in WSL), so VMs run in Windows QEMU, not inside WSL.
+4. **`%USERPROFILE%\.wslconfig`**: `memory=8GB` and `nestedVirtualization=false`. (It was 20 GB with nested virtualization on until 2026-10-27, when WSL's `ext4` kept going read-only during builds; after lowering it and recreating the distro, builds ran clean. Nested virtualization has no effect on this AMD host anyway: `/dev/kvm` stays absent in WSL, so VMs run in Windows QEMU, not inside WSL.) If `dmesg` in WSL shows `ext4` errors, recreate the distro (`wsl --unregister FedoraLinux-44`, step 2 again; it holds only packages).
 5. **Dev VM access:**
    - an SSH key at `%USERPROFILE%\.ssh\ruyaos_dev` (`ssh-keygen -t ed25519 -N "" -f ...`);
    - `image/bib/config.toml` (git-ignored, copied from `config.toml.example`), which puts that key on `root` in test disks.

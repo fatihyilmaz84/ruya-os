@@ -9,13 +9,13 @@ Last updated: 2026-10-27 (Opus 5.5, lead)
 - **Phase 0 (foundation): vm-verified 2026-10-22.** Image builds, boots to the shell, updates, rolls back by hand and by greenboot. Left: real hardware (B-002).
 - **Phases 1–2 (shell core, profiles, devices):** the shell has pages, motion, toasts/OSD, Settings (Profiles, Network, Audio, Display, System, About), on-screen keyboard, first-boot wizard, Turkish translation. Profiles, power, audio (`ruya-devices`) and the Guide key are **vm-verified** over the real bus. Network and Store exist only as contract, mock and UI (host); their services are T-132 and T-134. The compositor spike (T-123) proved ADR-002 option A (shell as Wayland compositor on KMS); T-130 (lead) makes it the session.
 - **Not started:** `ruya-session` (launch apps; T-138, T-139), `ruya-update` (T-135 is its UI contract), Bluetooth, USB storage, InputPlumber (B-006), installer. No app has ever been launched from the shell.
-- **Host:** Windows plus a Fedora 44 WSL distribution (image builds) and QEMU/WHPX (boot tests): `docs/dev-setup.md`. **The WSL disk corrupts on this machine, so no image or VM work can be verified until the owner acts** (Open owner decisions). Host-only tasks continue.
+- **Host:** Windows plus a Fedora 44 WSL distribution (image builds) and QEMU/WHPX (boot tests): `docs/dev-setup.md`. **Image and VM work works again since 2026-10-27** (fresh WSL distro, `.wslconfig` `memory=8GB`; image `0.0.13-lead` built, made into a disk and booted `RUYA_BOOT_OK`, T-131 VM-verified). If `ext4` errors return, see the WSL note under Open owner decisions.
 
 Verification legend: **host** = built and tested on Windows · **vm** = built into the image and verified booted in QEMU · **unverified** = written, not run · **hw** = real hardware.
 
 ## Board
 
-**NEXT → T-138**
+**NEXT → T-132**
 
 **Lead review due: after 3 more builder tasks** (reviewed up to the lead commit "lead review 2f2f1e1..f7574e9", see `docs/LEAD-NOTES.md`). Builders: when your task makes this true, end your reply by recommending a lead session.
 
@@ -23,6 +23,10 @@ Open work only (todo, in-progress, blocked). The order is the recommended order;
 
 | ID | Title | Status | Depends |
 |---|---|---|---|
+| [T-130](tasks/T-130-compositor-session.md) | **[lead]** Compositor session: `ruya-shell` replaces cage  | todo | T-123 |
+| [T-132](tasks/T-132-devices-network-service.md) | `ruya-devices`: network over NetworkManager, in the VM | todo | T-129, T-128 |
+| [T-134](tasks/T-134-store-service-core.md) | `ruya-store` service over the `flatpak` CLI, in the VM | todo | T-110 |
+| [T-133](tasks/T-133-devices-pipewire-events.md) | `ruya-devices`: follow PipeWire by events, no 1 s poll | todo | T-128 |
 | [T-138](tasks/T-138-session-contract-and-mock.md) | `Session1` contract and shell `Session` singleton with a mock | todo | — |
 | [T-139](tasks/T-139-session-service-core.md) | `ruya-session`: pure core and D-Bus adapter (dev mode) | todo | T-138 |
 | [T-112](tasks/T-112-library-service-core.md) | ruya-library discovery core (Rust) | todo | — |
@@ -31,16 +35,13 @@ Open work only (todo, in-progress, blocked). The order is the recommended order;
 | [T-113](tasks/T-113-games-page.md) | Games page and recent row | todo | T-101, T-112 |
 | [T-136](tasks/T-136-bluetooth-contract-and-settings.md) | `Devices1.Bluetooth` contract, mock, Settings pane | todo | — |
 | [T-137](tasks/T-137-storage-contract-and-settings.md) | `Devices1.Storage` contract, mock, Settings → Storage | todo | — |
-| [T-130](tasks/T-130-compositor-session.md) | **[lead]** Compositor session: `ruya-shell` replaces cage (needs the VM) | todo | T-123 |
-| [T-132](tasks/T-132-devices-network-service.md) | `ruya-devices`: network over NetworkManager, in the VM | todo | T-129, T-128 |
-| [T-133](tasks/T-133-devices-pipewire-events.md) | `ruya-devices`: follow PipeWire by events, no 1 s poll | todo | T-128 |
-| [T-134](tasks/T-134-store-service-core.md) | `ruya-store` service over the `flatpak` CLI, in the VM | todo | T-110 |
 
 ## Inbox
 
 Follow-ups and debt for the next planner. Builders: add one line per item, `- (source) what, and why it matters`; write a task file only if your own task needs one. Run a planner at 5+ items.
 
-- (T-131) VM criterion unverified: rename and delete through the running shell with `vm-keys.ps1`, then `vm-profiles-check.sh state` (first runtime check of `DBusProfilesBackend::renameProfile/deleteProfile`). Redo once the WSL disk works.
+- (empty)
+
 
 ## Blocked (need something this host doesn't have)
 
@@ -53,7 +54,7 @@ Follow-ups and debt for the next planner. Builders: add one line per item, `- (s
 
 ## Open owner decisions
 
-- **WSL ext4 corrupts on this host, even on a fresh distro. It blocks every image/VM task (T-130, T-131 VM check, T-132, T-133, T-134).** On 2026-10-24 a fresh `FedoraLinux-44` went read-only 18 minutes into `build.sh` (`ext4_lookup: iget: checksum invalid`). Suspects: host RAM, or the C: SSD (Samsung 870 QVO) holding the VHD. **Not a suspect any more:** the Windows `disk` event 154 errors (block 0x0, "disk 3") belong to an empty JMicron card reader (0 GB), not to an SSD. 2026-10-27: `.wslconfig` is now `memory=8GB`, `nestedVirtualization=false` (backup `.wslconfig.bak-2026-10-27`), but the existing distro still has the earlier error state (it mounted "with errors" and went read-only again at boot), so it has to be **recreated** (`wsl --unregister FedoraLinux-44`, `wsl --install FedoraLinux-44 --no-launch`, `dnf -y install podman git qemu-img`; it holds nothing but packages) before the 8 GB test build means anything; the session's auto-mode classifier refused the unregister, so the owner runs it. If a build then fails the same way, try (1) Windows Memory Diagnostic or memtest86, and (2) the VHD on the D: SSD (Samsung 990 PRO; only about 63 GB free, a build needs about 40 GB, so clear `output/` first).
+- **WSL ext4 corruption: apparently fixed 2026-10-27, watch it.** After recreating the distro with `memory=8GB` and `nestedVirtualization=false` (backup `.wslconfig.bak-2026-10-27`; the earlier "disk 3" Windows errors belong to an empty card reader, not an SSD), a full `build.sh`, `make-disk.sh qcow2` and a VM session ran with no `ext4` error in `dmesg`. Not proven whether RAM pressure at 20 GB or the old distro was the cause. If it returns: Windows Memory Diagnostic or memtest86, then move the VHD to the D: SSD (about 63 GB free; clear `output/` first). Claude recreates the distro itself (owner said so).
 - **Pushed 2026-10-27** (secret scan clean; `image/bib/config.toml` stays git-ignored). CI has not been read yet: check the first run (it exercises the new board lint) before the next lead review.
 - **Real hardware (B-002):** is a spare low-tier x86-64 PC (Intel/AMD iGPU) available for the dev ISO? It unblocks the Phase 0 hardware item, the first KPIs and the ADR-002 performance check. Recommendation: yes, a test machine only.
 - **One admin or several?** Overview §2 says one admin, `03` §1.1 says one or more. The service supports several; the UI offers Standard and Guest. Recommendation: one admin in the UI for the MVP (as the overview says); revisit after the first user test. Not blocking.
@@ -66,7 +67,7 @@ Follow-ups and debt for the next planner. Builders: add one line per item, `- (s
 One entry per session, at most 4 lines: date · model · tasks · what happened · numbers · follow-ups. Detail belongs in the task Outcome.
 
 ### 2026-10-27 · Opus 5.5 · Lead (owner: "take the lead, optimise docs and rules")
-Review of `2f2f1e1..f7574e9` (T-129 was lead work; docs only otherwise) and planning. `dev.ps1 test` ALL GREEN (164 QML passed, 13 skipped offscreen; Rust 54), `shots` ALL GREEN (177; one `TEST WINDOW LOST ACTIVATION`, recovered); `23-settings-network.png` reviewed: fine. VM not run (WSL disk). CI not checked; 6 commits unpushed. **Docs and rules slimmed** (STATUS 25 KB → about 9 KB, Done table archived, board lists open work only, `lint-board.ps1`, `shell/PATTERNS.md` split out, duplicated role text removed; see `LEAD-NOTES.md`). Planned T-135..T-139 (update, Bluetooth, storage, session contract and core).
+Review of `2f2f1e1..f7574e9` (T-129 was lead work; docs only otherwise) and planning. `dev.ps1 test` ALL GREEN (164 QML passed, 13 skipped offscreen; Rust 54), `shots` ALL GREEN (177; one `TEST WINDOW LOST ACTIVATION`, recovered); `23-settings-network.png` reviewed: fine. VM not run (WSL disk). CI not checked; 6 commits unpushed. **Docs and rules slimmed** (STATUS 25 KB → about 9 KB, Done table archived, board lists open work only, `lint-board.ps1`, `shell/PATTERNS.md` split out, duplicated role text removed; see `LEAD-NOTES.md`). Planned T-135..T-139 (update, Bluetooth, storage, session contract and core). **Later the same day (owner: do the WSL steps and the push):** `main` pushed after a clean secret scan; the owner recreated the WSL distro with `memory=8GB`; `build.sh` 0.0.13-lead, `make-disk.sh` and `smoke-test.ps1 -Work -Keep` all passed (`RUYA_BOOT_OK`, no ext4 errors); T-131's VM criterion done (rename and delete by keys, service state checked). CI not read yet.
 
 - 2026-10-24 · Sonnet 5.5 · T-110 · `org.ruyaos.Store1` contract, `Store` singleton with mock (12 apps, simulated installs) and D-Bus client, 7 tests. `test` ALL GREEN (152). D-Bus client unverified.
 

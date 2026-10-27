@@ -6,11 +6,11 @@ The procedure is in [`LEAD.md`](LEAD.md). **Rewrite this file at the end of ever
 
 - **Last reviewed commit: the lead commit of 2026-10-27 "lead review 2f2f1e1..f7574e9"** (`git log --grep="lead review 2f2f1e1"`). Everything up to T-129 is reviewed.
 - Next review: `git log --oneline <that commit>..HEAD`. Due after 3 builder tasks (the board says so).
-- Last VM verification: lead image `0.0.11-lead` (2026-10-24). **No VM since: the WSL disk is broken (owner decision open in STATUS).**
+- Last VM verification: image `0.0.13-lead` (2026-10-27): `RUYA_BOOT_OK`, T-131 rename and delete by keys over the real bus. The WSL disk works again (fresh distro, `memory=8GB`); if `ext4` errors return see STATUS, Open owner decisions.
 
 ## Concerns (ranked)
 
-0. **WSL disk (owner).** Blocks T-130, T-132, T-133, T-134 and the T-131 VM check. Ask first each session. Until fixed, the board is host-only work: T-138, T-139, T-112, T-135, T-136, T-137, T-111, T-113 (8 tasks).
+0. **The VM works again (2026-10-27).** T-130, T-132, T-133, T-134 are unblocked and are the priority over more mock-only UI: do T-130 (lead) next, and let builders take T-132 and T-134 before T-135..T-137. Check `dmesg` for `ext4` errors at the start of each image session.
 1. **T-130 `[lead]` is the critical path** (compositor session replaces cage). Phase 1's exit "overlay over a running app" and everything with apps wait on it. Do it as the lead task as soon as the VM works. Right after it write the **VM tasks that are reserved but not yet written** (they need the VM to be specified well):
    - `ruya-session` in the image: unit, polkit/policy, per-profile Wayland and PipeWire sockets (ADR-004/010), the real spawner, `ambient`/`media` levels; Store "Open" and tile launch; overlay switch/close app (after T-138/T-139);
    - `ruya-update` service over `bootc` (contract T-135), including showing greenboot's rollback event;
@@ -30,7 +30,7 @@ STATUS 25 KB → about 9 KB (Done table archived in `STATUS-done.md`, board show
 
 ## First things the next lead should do
 
-1. Ask the owner about the disk; if fixed, run the VM drill (`docs/dev-setup.md`) and redo T-131's VM check.
+1. Run the VM drill (`docs/dev-setup.md`) on the newest image; the disk works again, so verify T-132/T-134 in the VM as they land.
 2. Steps 1–3 of `LEAD.md` over the range above (T-138/T-139 are the interesting ones: the `Session1` contract is the base of the app launch story).
 3. T-130 as the lead task when the VM works; then write the reserved VM tasks above.
 4. Check the size budgets (`LEAD.md` 3b).
