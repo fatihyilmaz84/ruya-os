@@ -1,6 +1,6 @@
 # T-139 — `ruya-session`: pure core and D-Bus adapter (dev mode, not yet in the image)
 
-Status: todo · Phase: 3 · Depends: T-138 · Area: services · Size: M
+Status: done · Phase: 3 · Depends: T-138 · Area: services · Size: M
 
 ## Goal
 A new crate `services/ruya-session` implements `org.ruyaos.Session1` (T-138) with all rules in a pure, unit-tested core and the OS calls behind a trait, so the later VM task only adds the real spawner, the unit and the policy. It runs on this host with `--session` and a fake spawner.
@@ -42,4 +42,19 @@ A new crate `services/ruya-session` implements `org.ruyaos.Session1` (T-138) wit
 - Keep the event stream a channel the adapter drains, so the core stays synchronous and testable.
 
 ## Outcome
-_Filled in by the implementer. Start with a `Verified:` line._
+Verified: host (core and command builder unit-tested; the D-Bus adapter compiles for Windows and Linux but was not run over a bus). Not in the image.
+
+Built `services/ruya-session` (workspace member, `Cargo.lock` updated; no new external crate: zbus, futures-lite, async-io, async-channel were already in the tree).
+- `session.rs`: pure core. `Session<S: Spawner, D: ProfileDirectory>`; `launch`, `stop`, `list`, `on_event(UnitEvent) -> Option<Notice>`, `tick(now)` (kills after `STOP_GRACE` = 5 s). Time (`Instant`, unix seconds) is passed in. 18 tests: every status string, every exit reason, double launch, stop of an unknown instance, `root`/`ruya-shell`/`ruya-p1`/`nobody` refused as `unknown-profile`, app ending by itself, kill escalation, stop while starting.
+- `spawner.rs`: `Spawner` trait, `UnitEvent`, `FakeSpawner` (records calls, emits events on a channel), the id grammars and `launch_command`, the exact `systemd-run` argument list (tested for the exact list and for rejecting spaces, quotes, `;`, `--`, `$`, bad users and bad env). The real spawner that runs it is NOT written.
+- `directory.rs`: `ProfileDirectory` + `ProfileSnapshot`.
+- `dbus.rs` / `main.rs`: thin adapter on the session bus with `--session` only; without it the binary exits with a message. `forward` turns events into `AppStarted`/`AppExited` and ticks once a second.
+- `tests/flow.rs`: Launch, AppStarted, Stop, AppExited through the core and the fake.
+
+Decisions:
+- **ProfileDirectory via `Profiles1.ListProfiles`, not by reading the store.** `profiles.toml` is root-only and holds PIN hashes, which must never leave `ruya-profiles`. The adapter fetches the ids before each Launch (system mode) into a snapshot the sync core reads; `--session` uses a fixed `p1`, `p2`, `guest`. The fetch is untested (no bus here).
+- `exited` is not a listed state: an exited instance is reported once and removed.
+- After `Stop`, a non-zero exit that is not a signal is still `quit` (apps answer SIGTERM with 143).
+- Contract XML unchanged.
+
+Deviations: criterion 3 uses the allowed fallback: Windows has no session bus, so the Launch, AppStarted, Stop, AppExited sequence is proven by `tests/flow.rs` over the core with the fake, not by `busctl`. Unverified: the zbus adapter at runtime (also the shell's D-Bus client from T-138), `fetch_profile_ids`, and everything about the real spawner (does `systemd-run --machine=<user>@.host` work from the service's user, where the Wayland socket lives, how exits and `signaled` are read from the unit). Left for the VM task after T-130: unit, policy, hardening, Containerfile, `vm-session-check.sh`, the real spawner.

@@ -8,23 +8,22 @@ Last updated: 2026-10-28 (Opus 5.5, lead review f5b1a90..198e9ab)
 
 - **Phase 0 (foundation): vm-verified 2026-10-22.** Image builds, boots to the shell, updates, rolls back by hand and by greenboot. Left: real hardware (B-002).
 - **Phases 1–2 (shell core, profiles, devices):** the shell has pages, motion, toasts/OSD, Settings (Profiles, Network, Audio, Display, System, About), on-screen keyboard, first-boot wizard, Turkish translation. Profiles, power, audio (`ruya-devices`, event-driven since T-133), network (`ruya-devices` over NetworkManager, T-132), the store service (`ruya-store` over `flatpak`, T-134) and the Guide key are **vm-verified** over the real bus; the Store UI is T-111. The compositor spike (T-123) proved ADR-002 option A (shell as Wayland compositor on KMS); T-130 (lead) makes it the session.
-- **Not started:** `ruya-session` (launch apps; T-138, T-139), `ruya-update` (T-135 is its UI contract), Bluetooth, USB storage, InputPlumber (B-006), installer. No app has ever been launched from the shell.
+- **Not started:** `ruya-session` in the image (T-139 built the core, dev mode only; unit, policy and the real spawner follow T-130), `ruya-update` (T-135 is its UI contract), Bluetooth, USB storage, InputPlumber (B-006), installer. No app has ever been launched from the shell.
 - **Host:** Windows plus a Fedora 44 WSL distribution (image builds) and QEMU/WHPX (boot tests): `docs/dev-setup.md`. **Image and VM work works again since 2026-10-27** (fresh WSL distro, `.wslconfig` `memory=8GB`; image `0.0.13-lead` built, made into a disk and booted `RUYA_BOOT_OK`, T-131 VM-verified). If `ext4` errors return, see the WSL note under Open owner decisions.
 
 Verification legend: **host** = built and tested on Windows · **vm** = built into the image and verified booted in QEMU · **unverified** = written, not run · **hw** = real hardware.
 
 ## Board
 
-**NEXT → T-139**
+**NEXT → T-141**
 
-**Lead review due: after 3 more builder tasks** (reviewed up to the lead commit "lead review f5b1a90..198e9ab", see `docs/LEAD-NOTES.md`). **One builder session at a time, one task per session:** two builders in one checkout mixed three tasks' work on 2026-10-28. Builders: when your task makes this true, end your reply by recommending a lead session.
+**Lead review due: after 2 more builder tasks** (reviewed up to the lead commit "lead review f5b1a90..198e9ab", see `docs/LEAD-NOTES.md`). **One builder session at a time, one task per session:** two builders in one checkout mixed three tasks' work on 2026-10-28. Builders: when your task makes this true, end your reply by recommending a lead session.
 
 Open work only (todo, in-progress, blocked). The order is the recommended order; when NEXT is blocked take the first `todo` whose dependencies are `done` (a task's status is in its file header). `[lead]` tasks are skipped by builders. If nothing qualifies, **stop and ask for a planning session** (`docs/tasks/PLANNING.md`).
 
 | ID | Title | Status | Depends |
 |---|---|---|---|
 | [T-130](tasks/T-130-compositor-session.md) | **[lead]** Compositor session: `ruya-shell` replaces cage  | todo | T-123 |
-| [T-139](tasks/T-139-session-service-core.md) | `ruya-session`: pure core and D-Bus adapter (dev mode) | todo | T-138 |
 | [T-141](tasks/T-141-vm-goto-page.md) | `vm-goto.ps1`: a VM past the wizard to a named page | todo | — |
 | [T-142](tasks/T-142-type-scale-tokens.md) | Design tokens v2: type scale, `overlayMs`, size lint | todo | — |
 | [T-143](tasks/T-143-space-shape-tokens-and-badge.md) | Design tokens v2: spacing, radius, sizes, `Badge` | todo | T-142 |
@@ -71,6 +70,7 @@ Follow-ups and debt for the next planner. Builders: add one line per item, `- (s
 
 One entry per session, at most 4 lines: date · model · tasks · what happened · numbers · follow-ups. Detail belongs in the task Outcome.
 
+- 2026-10-28 · Sonnet 5.5 · T-139 · New crate `ruya-session`: pure core, `Spawner` and `ProfileDirectory` traits, fake, `systemd-run` command builder, zbus adapter (`--session` only). `test` ALL GREEN (169 QML, Rust +25). Not in the image; adapter and bus flow unverified (no session bus on Windows, flow test over the core instead).
 - 2026-10-28 · Opus 5.5 · Lead (review `f5b1a90..198e9ab`: T-138, the design-system docs) · `test` ALL GREEN (169 QML + 13 skipped, 117 Rust); `shots`/VM not run (no screen, no image change). CI was red since `81ce23e` (runner clippy 1.99 > host 1.92): fixed the lint (T-134) and pinned CI to 1.92.0. T-138: mock `nolaunch` + launch-failed toast test, frozen-copy `tryCompare` fixed. Design docs committed (ADR-012, `04`, T-142..T-147). A zeroed `zbus` source in the host's cargo registry was re-extracted (owner note). NEXT T-139.
 
 - 2026-10-28 · Sonnet 5.5 · T-138 · `Session1` contract, `Session` singleton with mock and D-Bus client, crash toast, `tst_session.qml`. `test` ALL GREEN (169). D-Bus client unverified (T-139).

@@ -1,0 +1,13 @@
+[package]
+name = "ruya-session"
+description = "RuyaOS session: launch installed apps as a profile (org.ruyaos.Session1); dev mode only, not in the image yet"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+zbus = { version = "5", default-features = false, features = ["async-io"] }
+futures-lite = "2"
+async-io = "2"  # the stop-grace timer; already in the tree through zbus
+async-channel = "2"  # unit events from the spawner to the adapter; already in the tree through zbus
