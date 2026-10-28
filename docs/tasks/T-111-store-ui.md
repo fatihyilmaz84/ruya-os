@@ -7,7 +7,7 @@ From the Store tile, the user browses apps, opens a detail page that explains th
 
 ## Read first
 - `docs/specs/03-services-and-apps.md` §4.2 (source badges, controller filter) and §4.4 (permission language, high risk)
-- `docs/specs/02-shell.md` §1 (Store row), §2 (visual language)
+- `docs/specs/02-shell.md` §1 (Store row); `docs/specs/04-design-system.md` §3, §5 (source badges use `Badge` from T-143 if it has landed; new components allowed: none without the lead, §8)
 - `docs/tasks/T-110-store-contract-and-mock.md` Outcome (what the `Store` singleton actually exposes)
 
 ## Scope

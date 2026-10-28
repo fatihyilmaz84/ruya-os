@@ -7,6 +7,7 @@ Status: todo · Phase: n · Depends: T-xxx, … · Area: shell | services | api 
 
 ## Read first
 - `docs/specs/…` §…
+- UI task: `docs/specs/04-design-system.md` §… (tokens/components used; new ones allowed: none | …)
 - `<existing files to read>`
 
 ## Scope

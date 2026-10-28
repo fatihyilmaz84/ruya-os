@@ -25,6 +25,7 @@ Any of these is true (builders check at session start and stop if they find noth
 - A builder who never saw the conversation can finish it from the file and the linked docs alone.
 - Every acceptance criterion is observable by a named test or screenshot ("works", "looks good", "is robust" are not criteria).
 - It names the reference pattern to copy (`shell/src/network`, `ruya-profiles`, `PinPad.qml`, …) and what is out of scope, especially the tempting next step.
+- **UI tasks** link the `04-design-system.md` sections and components they use, and say which tokens or components (if any) the task may add. A screen that needs a component not in `04` §5 gets a design step first (lead or a `design:` task), not an improvised one.
 - Size S or M.
 
 ## Lessons from past sessions (apply when writing tasks)

@@ -1,7 +1,7 @@
 # RuyaOS — Overview, Architecture & Decisions
 
 Status: **Draft v1** (consolidated 2026-10-22 from the three research docs; see `docs/REVIEW.md`).
-Companion specs: [01-platform](01-platform.md) · [02-shell](02-shell.md) · [03-services-and-apps](03-services-and-apps.md)
+Companion specs: [01-platform](01-platform.md) · [02-shell](02-shell.md) · [03-services-and-apps](03-services-and-apps.md) · [04-design-system](04-design-system.md)
 
 ## 1. Vision
 
@@ -174,3 +174,6 @@ Phases are gated by their exit criteria. Durations are rough estimates for a sma
 
 ### ADR-011 — `ruya-store` drives the `flatpak` CLI — *Accepted (lead, 2026-10-24)*
 `ruya-store` is a pure-Rust service (like the other services, it builds on Windows for its core) that drives the `flatpak` command line (`install`, `uninstall`, `update`, `remote-ls`, `remote-add`, `info`, `list`), with machine-readable output where the CLI offers it, and reads catalogue metadata (AppStream XML/YAML from the remote's appstream directory) with a Rust XML parser. It does not link libflatpak or libappstream (GObject bindings are not pure Rust and would not build on the Windows host). Progress comes from the CLI's output, parsed in the pure core. The service runs as root with hardening (it installs system-wide on behalf of the shell), sits behind the same restrictive bus policy, and refuses unsigned remotes itself. Revisit if CLI parsing proves brittle (then libflatpak through a small helper).
+
+### ADR-012 — Design language "Dreamglass" and its governance — *Accepted (owner, 2026-10-28)*
+The shell's look is defined by one design system, [`04-design-system.md`](04-design-system.md): dark ground, frosted glass over a tinted, drifting backdrop, white chrome, a white focus ring with 1.08 scale, category tints as the only accent colours, a seven-step type scale and an 8 px spacing grid, all as `Theme` tokens. It formalises what Phases 1–2 built (T-102, T-117) rather than restyling it. Builders use existing tokens and components; the lead adds or changes them, updating the spec and `Theme.qml` together (§8). The typeface is Inter (OFL-1.1), bundled as a Qt resource (owner, 2026-10-28). **Amended (owner, 2026-10-28):** the main UI is gaming-first: an art-led Home with large key art and Gaussian-blurred glass chrome, and apps and games run full screen with the shell drawing nothing over them but the Guide quick menu, the volume OSD and critical toasts (02-shell §1.5, 04 §5.1); this relies on ADR-002 option A.

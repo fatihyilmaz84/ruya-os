@@ -9,11 +9,11 @@ The shell (`ruya-shell`) is the only UI the user sees. It's written in Qt 6 Quic
 | Surface | Contents |
 |---|---|
 | **Profile picker** | Avatars and a guest tile; PIN pad (modal, numeric focus only) |
-| **Home** | Row of recent/pinned apps and games with hero background art; "Media" and "Games" rows; notifications badge |
+| **Home** | Art-led (owner, 2026-10-28; planned T-146, look in 04 §2): full-bleed hero art of the focused game, hero block with Play, a Recent row of art cards, section nav (Home, Games, Media, Store, Settings) in a top bar; notifications badge. Today's five tiles (§1.1) are replaced by the section nav. |
 | **Library** | All installed apps and games; filter (Games/Media/Apps/Source) and sort |
 | **Store** | Featured, categories, search, app page (art, screenshots, rating, permissions, source badge Official/Community/Dev), install/update queue |
 | **Settings** | Profiles, Network, Bluetooth & controllers, Display (resolution, refresh, HDR later), Audio (output, volumes per channel), Storage & devices, Parental (later), Accessibility, System (update, channel, rollback, factory reset, about). Built so far (T-103, T-105, T-114, §1.2): the two-pane page, **Profiles**, **Display & motion**, **Audio**, **System** (so far only the Language row, T-109) and **About**; the other categories show "Coming soon". |
-| **Overlay** (Guide button over a running app) | Return to home, close app, switch app, volume, notifications, power, screenshot (later) |
+| **Overlay** (Guide button) | Quick menu (planned T-147): over a running app Resume, Home, Close app, Switch to, volume, profile, power, screenshot (later); without an app the same panel minus the app part. Today: the centred system card (§1.4). |
 | **System UI** | Volume OSD, toasts (both built, T-108: see §5.1), device-inserted prompt, update-ready prompt, low-battery controller warning |
 | **OOBE / Installer** | 01 §5. OOBE as built (T-106): see §1.3. |
 | **Safe mode** | 01 §2.1 |
@@ -27,6 +27,11 @@ Each surface is a separate QML module loaded with `Loader { asynchronous: true }
 - Closing a page restores focus to the tile that opened it (same `currentIndex`). `Shell.routeFocus()`/`focusCurrent()` is the single place that decides where focus goes.
 - The Guide overlay opens from home or from any page (the shell handles `HomePage` and `Super` when nothing under focus does; `Menu` is the context-menu key, not Guide). Closing it returns focus to the page. "Switch profile" clears the page stack, so the next sign-in lands on home.
 - Games, Media and Store are placeholders ("Coming soon" plus one focusable element) until their tasks land; Settings (§1.2) and Power (§1.4) are real.
+
+### 1.5 Full-screen apps (target; owner 2026-10-28; T-130, T-138, T-147)
+- Every app and game runs full screen in the shell's app layer (ADR-002 A, T-130). While an app is in front the shell draws nothing over it except the quick menu, the volume OSD and critical toasts (errors, low controller battery); other toasts wait until the user is back in the shell.
+- Launch (Play on Home, a card, or the Store's Open): input to the shell locks, the launch transition and splash run (04 §5.1) until the app maps its first window, then the app gets focus. Failure: error toast, focus back where Play was. After 20 s without a window the splash offers Close.
+- Guide (short press) opens the quick menu over the live app; Back or Resume closes it and returns focus to the app; holding Guide still opens the power choices. Home leaves the app running (it becomes the Running card in Recent; Accept on it resumes). Close app asks `Session.stop` and confirms only when the app reports unsaved state (later). One app is in front; others keep running until closed (memory limits: later).
 
 ### 1.2 Settings page (as built, T-103)
 - Two panes. Left: the category list (Profiles, Network, Bluetooth & controllers, Display & motion, Audio, Storage, Accessibility, System, About). Right: the selected category's pane. Up/Down choose a category and swap the pane at once; Right or Accept enters the pane (only if it has content); Left or Back returns to the list; Back on the list closes the page. Panes stay alive, and each remembers its last focused row.
@@ -50,11 +55,7 @@ Each surface is a separate QML module loaded with `Loader { asynchronous: true }
 - For development, `RUYA_MOCK_PROFILES=empty` starts the mock services without profiles (see `docs/dev-setup.md`).
 
 ## 2. Visual language
-- Dark theme, large type (TV 10-foot UI: min 24 px body at 1080p, scaled by display DPI and the user's text-scale setting).
-- Safe-area margin of 5% (overscan) by default, adjustable in Settings → Display.
-- Translucent "frosted glass" panels over blurred, dimmed hero art.
-- The focused item scales up (1.0 → 1.08) with a glow/outline ring. The focus ring is never hidden.
-- Design tokens (colours, spacing, durations, easing) live in one `Theme` QML singleton. No literals in components.
+Defined in [`04-design-system.md`](04-design-system.md) ("Dreamglass", ADR-012): principles, colour/type/spacing/radius/motion tokens, focus, depth, the component catalogue, copy rules and the screenshot review list. In short: dark theme, 10-foot type (body 30 px, min 24 px at 1080p), 5 % safe area, frosted glass over blurred hero art, the focused item scales to 1.08 with a white ring that is never hidden, and every value is a `Theme` token.
 
 ## 3. Motion & effects
 

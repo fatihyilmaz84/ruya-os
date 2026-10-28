@@ -1,6 +1,6 @@
 # shell/ — rules for the Qt Quick console UI
 
-Read `docs/specs/02-shell.md` for the UX spec. This file covers how the code is built.
+Specs: `docs/specs/02-shell.md` (behaviour) and `docs/specs/04-design-system.md` (look: tokens, components, focus, copy). This file covers how the code is built.
 
 ## Structure
 
@@ -14,13 +14,13 @@ Read `docs/specs/02-shell.md` for the UX spec. This file covers how the code is 
   - `Xxx`: a `QML_ELEMENT QML_SINGLETON` facade. `create()` picks the backend from `RUYA_SERVICES` (`mock`/`dbus`; the default is D-Bus on Linux, the mock elsewhere). Expose `bool mock`.
   - Follow `src/profiles/` exactly as the reference implementation.
 - `tests/`: Qt Quick Test. `tst_main.cpp` forces `RUYA_SERVICES=mock`; each `tst_*.qml` gets a fresh engine (and so fresh singletons).
-- Everything except `main.cpp` is the static QML module `RuyaShell` (`ruyashell` target). **Add every new `.qml`, `.h` and `.cpp` to `CMakeLists.txt`.** Singletons need `QT_QML_SINGLETON_TYPE` set in CMake **and** `pragma Singleton` in the file. Adding, editing or removing a `QML_ELEMENT` type is safe on the first `dev.ps1` run: a build step (`cmake/InvalidateStaleQmlTypes.cmake`) works around the Visual Studio generator skipping `qmltyperegistrar` (T-116). If you ever see "X is not defined" again, that step is the first suspect, not the tests.
+- Everything except `main.cpp` is the static QML module `RuyaShell` (`ruyashell` target). **Add every new `.qml`, `.h` and `.cpp` to `CMakeLists.txt`.** Singletons need `QT_QML_SINGLETON_TYPE` set in CMake **and** `pragma Singleton` in the file. A build step (`cmake/InvalidateStaleQmlTypes.cmake`, T-116) keeps `QML_ELEMENT` registration fresh; on "X is not defined" see the root `CLAUDE.md` pitfall.
 
 ## QML rules
 
 - Start files with `pragma ComponentBehavior: Bound` when they have delegates or inline components. Delegates use `required property`. qmllint runs with zero warnings allowed.
 - **Sizes are design pixels at 1080p × `u`** (`u = height / 1080`), passed down as a `u` property. Respect the safe area (`Theme.safeArea`).
-- **No literal colours, durations or easing values in components.** Add a token to `Theme.qml` instead. `dev.ps1 shell` (so `test`) and CI run a token lint (`scripts/lint-tokens.ps1`) that fails on `duration: <non-zero number>`, a quoted hex colour or `Qt.rgba(` anywhere but `Theme.qml`; for a rare exception end the line with `// token-ok: <reason>`. (Easing types are still a convention, not linted.) A feedback animation (shake, pulse) must also not run under reduced motion: guard its start on `Theme.reducedMotion`.
+- **No literal colours, durations or easing values in components** (and, once T-142 lands, font sizes, spacing, radii): use the `Theme` tokens listed in `04-design-system.md` §3. **Builders don't invent tokens or components:** take the closest existing one and add an Inbox line (`04` §8); the lead changes the system. `dev.ps1 shell` (so `test`) and CI run a token lint (`scripts/lint-tokens.ps1`) that fails on `duration: <non-zero number>`, a quoted hex colour or `Qt.rgba(` anywhere but `Theme.qml`; for a rare exception end the line with `// token-ok: <reason>`. (Easing types are still a convention, not linted.) A feedback animation (shake, pulse) must also not run under reduced motion: guard its start on `Theme.reducedMotion`.
 - User-visible strings: `qsTr()`, with `%n` plurals where counts appear (see Translations below).
 - Effects: `MultiEffect` or precompiled `.qsb` shaders only. Never inline GLSL. Blur the shared backdrop; never stack more fullscreen blurs.
 - Never block the GUI thread. Service calls are asynchronous: invoke them, then react to a signal.

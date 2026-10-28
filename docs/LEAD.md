@@ -42,6 +42,7 @@ For each task commit, read the task file (Scope, criteria, Outcome) and the diff
 - [ ] **Patterns:** follows the reference implementations and area `CLAUDE.md` rules (Theme tokens, focus rules, backend pattern, pure Rust core, contract-first).
 - [ ] **Contracts:** XML, Rust service, mock and D-Bus client agree.
 - [ ] **Security invariants** from `CLAUDE.md` hold.
+- [ ] **Design:** UI matches `docs/specs/04-design-system.md`: tokens and components only, the §8 screenshot review list holds; any new token or component came with the spec update in the same commit (§8). Builder Inbox lines `design: needs …` are design decisions for you.
 - [ ] **Docs:** the specs describe what the code does now; the Outcome is honest and complete; every follow-up mentioned is in the Inbox.
 - [ ] **Verification claims:** "verified in VM/host" matches what was actually run.
 
@@ -68,6 +69,7 @@ Run the planner procedure in [`docs/tasks/PLANNING.md`](tasks/PLANNING.md): empt
 Mark tasks a builder should not take with `Owner: lead` (see below).
 
 ### 5. Direction and architecture
+- **Design system steward.** You own `docs/specs/04-design-system.md` and `Theme.qml`'s token set: decide `design:` Inbox items (add the token/component per §8, or say which existing one to use), keep the spec's built/planned/proposed marks true, and tell the owner which canvas boards are stale. New typefaces, icon sets, brand colours or principles are owner-level.
 - **Compare progress with the roadmap** (`docs/specs/00-overview.md` §6). Is the current phase converging on its exit criteria, or drifting (lots of mock-only UI, little real integration)? Rebalance the board if so.
 - **Technical decisions inside accepted ADRs:** decide, record them in the spec or in a new ADR marked *Accepted (lead, date)*, and move on.
 - **Owner-level questions:** add them to "Open owner decisions" in STATUS. Give the options, a recommendation, and what is blocked until then. Ask the owner directly in your final reply.

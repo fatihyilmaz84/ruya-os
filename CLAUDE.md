@@ -9,7 +9,7 @@ RuyaOS is an open-source, immutable (Fedora bootc) console OS for living-room PC
 | Board (open tasks, NEXT), Inbox, blockers, owner decisions, last five sessions. **Read first, update last.** | `docs/STATUS.md` |
 | Work items with acceptance criteria; a finished task is recorded in its own file | `docs/tasks/T-*.md` (format: `docs/tasks/README.md`) |
 | Roles (owner, Opus lead, Sonnet builder), the lead procedure, lead handoff | `docs/LEAD.md`, `docs/LEAD-NOTES.md` |
-| Product, architecture, decisions (ADRs) | `docs/specs/00-overview.md`; platform/image `01`, shell UX `02`, services/apps `03` |
+| Product, architecture, decisions (ADRs) | `docs/specs/00-overview.md`; platform/image `01`, shell UX `02`, services/apps `03`, **design system `04`** (tokens, components, focus, copy) |
 | Shell ↔ service contracts | `api/dbus/*.xml` |
 | How to build/run on this machine | `docs/dev-setup.md`, `scripts/dev.ps1` |
 | Shell how-tos (pages, settings rows, modals, text input, translations) | `shell/PATTERNS.md` |
@@ -31,8 +31,8 @@ RuyaOS is an open-source, immutable (Fedora bootc) console OS for living-room PC
    - **Contracts are drafts until the first release.** If the task can't be done cleanly within the contract, extend it: in the same commit update the XML, the Rust service and its tests, the mock and the D-Bus client, and explain it in the Outcome. No workarounds such as extra calls to recover missing data. This applies even if a task says "don't change the contract" (that means "no unnecessary changes"). Never break behaviour other code relies on.
 5. **Verify.**
    - `.\scripts\dev.ps1 test` must end with `ALL GREEN`. Its Qt Quick tests run **offscreen**, independent of the desktop. A red `test` is a real failure.
-   - UI change: also `.\scripts\dev.ps1 shots` (real GPU windows). Read the screenshots your task changed from `output\shell-shots\review\` (half size) and check them against the criteria; open a full-size PNG only for small text. Fix what you see.
-   - `shots` depends on the desktop: if it fails while `test` is green, suspect a locked screen or a window that stole focus, and re-run before changing anything (`TEST WINDOW LOST ACTIVATION` followed by an `activeFocus` failure is the desktop, not the product). Never edit a test to suit the desktop.
+   - UI change: also `.\scripts\dev.ps1 shots` (real GPU windows). Read the screenshots your task changed from `output\shell-shots\review\` (half size) and check them against the criteria and the design review list (`04-design-system.md` §8); open a full-size PNG only for small text. Fix what you see.
+   - `shots` depends on the desktop: if it fails while `test` is green (`TEST WINDOW LOST ACTIVATION`, then an `activeFocus` failure), suspect a locked screen or a focus thief and re-run before changing anything. Never edit a test to suit the desktop.
 6. **Document.**
    - Task file: fill **Outcome**, starting with a `Verified:` line (host / vm / unverified / hw, see the legend in STATUS), then what was built, files, deviations. Set `Status: done` (or `blocked`, with the reason).
    - Update every spec section whose behaviour changed (specs describe what the code does) and `docs/dev-setup.md` if commands changed.
@@ -43,7 +43,7 @@ RuyaOS is an open-source, immutable (Fedora bootc) console OS for living-room PC
 
 - [ ] Every acceptance criterion is met **and** checked by a test or a reviewed screenshot.
 - [ ] `.\scripts\dev.ps1 test` → `ALL GREEN`. No test was weakened, skipped or deleted to get there.
-- [ ] New QML/C++ files are in `shell/CMakeLists.txt`; new strings use `qsTr()`.
+- [ ] New QML/C++ files are in `shell/CMakeLists.txt`; new strings use `qsTr()`; UI uses only existing design tokens and components (a missing one is an Inbox line, `04` §8).
 - [ ] Contracts, mocks, D-Bus clients and services agree (method names, argument order, status strings).
 - [ ] Task Outcome, specs and STATUS are updated. Whatever couldn't run on this machine is marked **unverified**.
 
@@ -65,7 +65,7 @@ RuyaOS is an open-source, immutable (Fedora bootc) console OS for living-room PC
 
 ## Working style
 
-- **Read lean.** Everything you read is paid for again on every later turn. Read line ranges (`Read` with offset/limit, `grep -n`), don't re-read what is in context, don't dump directories, filter long output (`dev.ps1 ... | Select-String`), read only the screenshots your task changed. Don't open the archives.
+- **Read lean.** Everything you read is paid for again on every later turn. Read line ranges, don't re-read what is in context or dump directories, filter long output (`| Select-String`), read only the screenshots your task changed, never the archives.
 - **Small steps.** Build and run the relevant check (`dev.ps1 shell` or `rust`) after each meaningful change.
 - **Copy existing patterns.** `ruya-profiles` (Rust), `shell/src/profiles` and `PinPad.qml` (shell) are the reference implementations; `shell/src/network` is the newest complete backend with a pane.
 - **Ambiguity.** If a criterion reads two ways, take the reading closest to the spec and say so in the Outcome. Don't ask for routine technical choices.
