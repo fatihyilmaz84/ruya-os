@@ -54,12 +54,12 @@ Follow-ups and debt for the next planner. Builders: add one line per item, `- (s
 ## Open owner decisions
 
 - **WSL ext4 corruption: apparently fixed 2026-10-27, watch it.** After recreating the distro with `memory=8GB` and `nestedVirtualization=false` (backup `.wslconfig.bak-2026-10-27`; the earlier "disk 3" Windows errors belong to an empty card reader, not an SSD), a full `build.sh`, `make-disk.sh qcow2` and a VM session ran with no `ext4` error in `dmesg`. Not proven whether RAM pressure at 20 GB or the old distro was the cause. If it returns: Windows Memory Diagnostic or memtest86, then move the VHD to the D: SSD (about 63 GB free; clear `output/` first). Claude recreates the distro itself (owner said so).
-- **Pushed 2026-10-27** (secret scan clean; `image/bib/config.toml` stays git-ignored). CI has not been read yet: check the first run (it exercises the new board lint) before the next lead review.
+- **Pushed 2026-10-28** (`scan-secrets.ps1` clean). CI has not been read yet since the 2026-10-27 push: check the latest run (board lint, the new `ruya-store` crate) at the next lead review.
 - **Real hardware (B-002):** is a spare low-tier x86-64 PC (Intel/AMD iGPU) available for the dev ISO? It unblocks the Phase 0 hardware item, the first KPIs and the ADR-002 performance check. Recommendation: yes, a test machine only.
 - **One admin or several?** Overview §2 says one admin, `03` §1.1 says one or more. The service supports several; the UI offers Standard and Guest. Recommendation: one admin in the UI for the MVP (as the overview says); revisit after the first user test. Not blocking.
 - **Turkish wording review** (`shell/i18n/ruyashell_tr.ts`, written by AI): a native review before the first release. Not blocking; best done after the Settings panes settle (T-135..T-137).
 - **libdvdcss / AACS:** not included; needs an explicit owner decision.
-- Decided (for the record): ADR-002 option A (owner, 2026-10-23); repo public on GitHub (2026-10-23), later pushes need the owner's go-ahead.
+- Decided (for the record): ADR-002 option A (owner, 2026-10-23); repo public on GitHub (2026-10-23); the lead pushes `main` at the end of every lead session after `scripts\scan-secrets.ps1` passes, builders never push (owner, 2026-10-28).
 
 ## Session log (newest first, the latest five; older entries in `STATUS-log.md`)
 

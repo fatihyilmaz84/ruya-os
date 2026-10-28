@@ -17,7 +17,7 @@ The procedure is in [`LEAD.md`](LEAD.md). **Rewrite this file at the end of ever
 4. **Admin authorization:** `ruya-store` now checks admin for `AddRemote` itself (caller uid 0, or the active profile is an admin per `Profiles1`). Other services still trust the shell. Decide when T-135 (update) lands whether every admin-only call verifies the same way (security invariant territory).
 5. **Mock-only surface:** Update (T-135), Bluetooth (T-136), Storage (T-137), Session (T-138) are contract-and-mock tasks with real services waiting. Keep at most about 4 waiting; check the mocks against the services when those land.
 6. **`shots` focus flakes:** T-127's guard works; watch `TEST WINDOW LOST ACTIVATION` frequency.
-7. **CI** not read since the 2026-10-27 push; this session's commits are unpushed (owner decision).
+7. **CI** not read since the 2026-10-27 push; this session's commits were pushed at its end (the lead pushes every session now, `LEAD.md` step 7). Read the Actions result first next time (`gh run list`, if `gh` is authenticated; otherwise ask the owner).
 8. **Real hardware (B-002), image size:** owner question open.
 
 ## First things the next lead should do

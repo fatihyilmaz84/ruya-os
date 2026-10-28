@@ -4,7 +4,7 @@ RuyaOS is built by two kinds of AI session under the owner:
 
 | Role | Model | Started with | Job |
 |---|---|---|---|
-| **Owner** | human | anything | Product direction, owner-level decisions (legal, licence, scope, spending, publishing), hardware, pushing to GitHub |
+| **Owner** | human | anything | Product direction, owner-level decisions (legal, licence, scope, spending, publishing), hardware |
 | **Lead** | Opus | "Run a lead session following docs/LEAD.md." | Direction, quality, planning, architecture, hard tasks, and keeping this system working |
 | **Builder** | Sonnet | "Do the next task from docs/STATUS.md, following CLAUDE.md." | One task per session, exactly as specified |
 
@@ -89,7 +89,8 @@ If time remains, take **one** `Owner: lead` task and do it with the full builder
   - the quality-signal table row for this session.
 - STATUS: move session-log entries beyond the newest five to `docs/STATUS-log.md` (top of its list), so builders read a short STATUS.
 - STATUS: a session-log entry `· Opus · Lead` with: verification numbers, review findings (count, and what was fixed or filed), planning changes, decisions taken or escalated.
-- Commit, as `docs: lead review <range>; plan …` plus any `review:` fix commits. **Do not push** unless the owner asks in this session (`CLAUDE.md` push rule, including the secret scan).
+- Commit, as `docs: lead review <range>; plan …` plus any `review:` fix commits.
+- **Push, every lead session** (owner decision 2026-10-28; don't ask): with a clean tree and `dev.ps1 test` ALL GREEN, run `.\scripts\scan-secrets.ps1`; when it passes, `git push origin main`. If it fails, or the push is rejected (someone else pushed, history diverged), don't force anything: stop and tell the owner. Never `--force`.
 
 ### 8. Report to the owner (final reply, short)
 1. What was verified, and the result.
@@ -101,7 +102,7 @@ If time remains, take **one** `Owner: lead` task and do it with the full builder
 
 | The lead may | The lead may not |
 |---|---|
-| Reorder the board, write, split, rescope or drop tasks | Push or publish without the owner's request in that session |
+| Reorder the board, write, split, rescope or drop tasks; push `main` after a passing secret scan | Force-push, push other branches or tags, or publish anything else (releases, images) without the owner's request |
 | Edit any code, test, spec or instruction file (`CLAUDE.md`s, `PLANNING.md`, this file) | Make owner-level decisions (legal, licence, product scope, spending, publishing) |
 | Accept technical ADRs inside the accepted architecture | Change an *Accepted* owner ADR without asking |
 | Reopen a builder's task, or revert a commit with a reason | Weaken the security invariants or any test gate |
