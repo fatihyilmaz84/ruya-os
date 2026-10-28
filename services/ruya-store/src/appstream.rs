@@ -91,10 +91,7 @@ pub fn parse(xml: &str, icon_base: &str) -> Vec<Component> {
     let mut stack: Vec<Open> = Vec::new();
     let mut cur: Option<Builder> = None;
 
-    loop {
-        let Ok(event) = reader.read_event() else {
-            break;
-        };
+    while let Ok(event) = reader.read_event() {
         match event {
             Event::Start(e) => {
                 let open = open_of(&e);
