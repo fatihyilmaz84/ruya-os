@@ -5,7 +5,8 @@
 #include <functional>
 
 // In-memory sessions. An app id "org.example.*" is installed; "crashy" is too and exits with
-// reason "crashed" shortly after it runs. Launch goes starting -> running after about 300 ms
+// reason "crashed" shortly after it runs; "nolaunch" is installed but never runs (AppExited
+// "launch-failed", exit code -1). Launch goes starting -> running after about 300 ms
 // (10 ms with RUYA_MOCK_FAST=1); Stop exits with reason "quit" after about a third of that.
 // One app id runs once per profile. The profile check is injected (the Session facade passes
 // the mock Profiles list); without one every profile is known.

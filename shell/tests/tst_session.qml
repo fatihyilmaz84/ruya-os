@@ -27,7 +27,7 @@ Item {
             verify(windowGuard.ensureActive() === "", windowGuard.ensureActive())
             Session.mockReset()
             tryVerify(() => Profiles.profiles.length === 3)
-            tryCompare(Session.running, "length", 0)
+            tryVerify(() => Session.running.length === 0)
             launched.clear()
             stopped.clear()
             exited.clear()
@@ -125,6 +125,19 @@ Item {
             compare(Notifications.shownCount, shown + 1)
             compare(Notifications.model.get(Notifications.model.count - 1).text, "crashy stopped unexpectedly")
             tryVerify(() => Session.running.length === 0)
+
+            // Never reached running: one toast, reason "launch-failed", no AppStarted.
+            const started = Session.running.length
+            launchOk("nolaunch", "p1")
+            tryCompare(exited, "count", 3)
+            compare(exited.signalArguments[2][1], "nolaunch")
+            compare(exited.signalArguments[2][2], -1)
+            compare(exited.signalArguments[2][3], "launch-failed")
+            tryCompare(Notifications, "shownCount", shown + 2)
+            wait(50)
+            compare(Notifications.shownCount, shown + 2)
+            compare(Notifications.model.get(Notifications.model.count - 1).text, "nolaunch stopped unexpectedly")
+            tryVerify(() => Session.running.length === started)
         }
     }
 }

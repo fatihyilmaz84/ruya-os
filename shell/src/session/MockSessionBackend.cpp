@@ -5,10 +5,11 @@
 
 namespace {
 const QString Crashy = QStringLiteral("crashy");
+const QString NoLaunch = QStringLiteral("nolaunch");
 
 bool installed(const QString &appId)
 {
-    return appId == Crashy || appId.startsWith(QLatin1String("org.example."));
+    return appId == Crashy || appId == NoLaunch || appId.startsWith(QLatin1String("org.example."));
 }
 } // namespace
 
@@ -78,6 +79,10 @@ void MockSessionBackend::setRunning(const QString &instance)
     const int i = indexOf(instance);
     if (i < 0 || m_running.at(i).state != QLatin1String("starting"))
         return; // stopped while it was starting
+    if (m_running.at(i).appId == NoLaunch) {
+        exitApp(instance, -1, QStringLiteral("launch-failed"));
+        return;
+    }
     m_running[i].state = QStringLiteral("running");
     emit appStarted(instance, m_running.at(i).appId);
     if (m_running.at(i).appId == Crashy)
