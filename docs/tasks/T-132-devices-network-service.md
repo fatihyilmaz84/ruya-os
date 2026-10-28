@@ -1,6 +1,6 @@
 # T-132 — `ruya-devices`: the network part of `Devices1` over NetworkManager, in the VM
 
-Status: todo · Phase: 2 · Depends: T-129, T-128 · Area: services, image, shell · Size: M
+Status: done · Phase: 2 · Depends: T-129, T-128 · Area: services, image, shell · Size: M
 
 ## Goal
 Settings → Network shows the VM's real wired connection: `ruya-devices` implements `org.ruyaos.Devices1.Network` (contract from T-129) over NetworkManager, and the Linux shell uses it over D-Bus instead of the mock.
@@ -47,4 +47,12 @@ Settings → Network shows the VM's real wired connection: `ruya-devices` implem
 - The shell already has one `QDBusServiceWatcher` pattern in `DBusAudioBackend`; copy it.
 
 ## Outcome
-_Filled in by the implementer: what was built, files, how it was verified, deviations, follow-ups._
+Verified: vm (image `0.0.17-t134`, `RUYA_BOOT_OK`), 2026-10-28. Code by a Sonnet builder (commit `7392be4`); the builder stopped before the VM run, so the lead ran it and wrote this Outcome.
+
+- **Built** (`7392be4`): `network.rs` (pure core: state mapping incl. `limited` from NM `Connectivity`, primary connection, Wi-Fi dedupe by SSID with the strongest signal, `known`/`active`, every `Connect`/`Forget` status), `networkmanager.rs` (the `NetworkManager` trait, a fake, and the Linux side over NM's D-Bus API with zbus; NM signals, debounced, drive `NetworksChanged` and the property changes; no polling, no `nmcli`), the interface on the existing `ruya-devices` object, `Network::create` D-Bus by default on Linux, `smoke-test.ps1` names the NIC `net0`. New dependency `blocking` (already in the tree).
+- **polkit rule** `image/rootfs/usr/share/polkit-1/rules.d/50-ruyaos-network.rules`: user `ruya-shell` only, actions `wifi.scan`, `network-control`, `settings.modify.system`, `settings.modify.own`; everything else keeps NM's default. polkit cannot tell connection types apart, so the service only ever touches Wi-Fi connections. Spec 01 §2.2 records it.
+- **VM checks** (`vm-devices-check.sh check`, all PASS): NetworkManager active; `State` connected; `Primary` ethernet `Wired` with 10.0.2.15; `ListWifi` (empty) and `Scan` answer; unknown networks refused for `Connect` and `Forget`; a call from `nobody` refused; the audio checks still pass. `systemd-analyze --user security ruya-devices`: 3.4 OK.
+- **Link test:** `set_link net0 off` in the QEMU monitor turned `State` to `disconnected` after 6 s (NM's carrier delay); `set_link net0 on` brought `connected` back within 1 s.
+- **Shell over the real bus** (first runtime check of `DBusNetworkBackend`): `scripts/vm-network-probe.qml` (the shell's `Network` singleton, offscreen, as `ruya-shell`) showed `mock=false state=connected primary={"ip":"10.0.2.15","kind":"ethernet","name":"Wired"}`, then `stateChanged disconnected` with an empty primary during the unplug and `stateChanged connected` on replug.
+- **Deviation:** no `vm-screenshot.ps1` image of Settings → Network. A fresh VM shows the first-boot wizard, and reaching Settings means driving five wizard steps by key injection. The probe exercises the same singleton the pane binds to (`NetworkPane.qml` reads `Network.state`/`primary`; the pane itself is covered by host tests and `shots`). A VM navigation helper is in the Inbox.
+- `dev.ps1 test` ALL GREEN (164 QML passed, 13 skipped offscreen; 117 Rust). Real Wi-Fi stays unverified (QEMU has none): rules are covered by unit tests and the fake.
