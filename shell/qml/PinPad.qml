@@ -185,7 +185,7 @@ FocusScope {
             text: pad.mode === "verify" ? qsTr("Enter PIN for %1").arg(pad.profile.name ?? "")
                 : pad.stage === 1 ? qsTr("Confirm PIN") : pad.prompt
             color: Theme.text
-            font.pixelSize: 44 * pad.u
+            font.pixelSize: Theme.typeTitle * pad.u
         }
 
         Row {
@@ -222,7 +222,7 @@ FocusScope {
             height: 36 * pad.u
             text: pad.locked ? qsTr("Too many attempts. Try again in %1 s.").arg(pad.lockSecs) : pad.message
             color: Theme.errorText
-            font.pixelSize: 26 * pad.u
+            font.pixelSize: Theme.typeCaption * pad.u
         }
 
         GridView {
@@ -271,7 +271,7 @@ FocusScope {
                         anchors.centerIn: parent
                         text: keyCell.modelData === "del" ? qsTr("Del") : keyCell.modelData === "ok" ? qsTr("OK") : keyCell.modelData
                         color: Theme.text
-                        font.pixelSize: (keyCell.isAction ? 34 : 48) * pad.u
+                        font.pixelSize: (keyCell.isAction ? Theme.typeHeadline : Theme.typeTitle) * pad.u
                     }
                 }
             }

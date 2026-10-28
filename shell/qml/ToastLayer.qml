@@ -73,7 +73,7 @@ Item {
                 visible: toast.iconText !== ""
                 text: toast.iconText
                 color: toast.accent
-                font.pixelSize: 38 * layer.u
+                font.pixelSize: Theme.typeHeadline * layer.u
             }
             Text {
                 anchors {
@@ -84,7 +84,7 @@ Item {
                 }
                 text: toast.text
                 color: Theme.text
-                font.pixelSize: 28 * layer.u
+                font.pixelSize: Theme.typeBody * layer.u
                 elide: Text.ElideRight
                 maximumLineCount: 2
                 wrapMode: Text.Wrap

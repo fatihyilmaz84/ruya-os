@@ -26,7 +26,7 @@ Rüya is Turkish for *dream*: a dark room lit by the thing you are about to play
 
 ## 3. Tokens (`shell/qml/Theme.qml`)
 
-Components use tokens only; `scripts/lint-tokens.ps1` fails on literal colours and durations (sizes: T-142). Names below are the `Theme` property names.
+Components use tokens only; `scripts/lint-tokens.ps1` fails on literal colours and durations (font sizes too, since T-142; spacing and radii: T-143). Names below are the `Theme` property names.
 
 ### 3.1 Colour (built)
 
@@ -47,9 +47,9 @@ Components use tokens only; `scripts/lint-tokens.ps1` fails on literal colours a
 
 Contrast (WCAG, measured): `text` on `background` 18.3:1, on `panel` 15.3:1; `textDim` 8.7:1 on `background`, 7.3:1 on `panel`; `errorText` 8.8:1. **`textDim` only on opaque surfaces** (`background`, `panel`, `glassOpaque`, scrims): on glass over a bright tint it falls to about 2.8:1, so text on the shelf or over the backdrop is `text`. Status colours are never the only signal: a toast has a title word, a row has a message.
 
-### 3.2 Type (planned, T-142)
+### 3.2 Type (built, T-142)
 
-Typeface: **Inter** (OFL-1.1), bundled as a Qt resource (owner, 2026-10-28; T-145); until T-145 lands the system sans is used. Game titles in the hero use `typeHero` at Bold with -2 % tracking. Seven steps replace the twelve sizes in use today (20, 26, 28, 30, 32, 34, 36, 38, 44, 56, 64, 96).
+Typeface: **Inter** (OFL-1.1), bundled as a Qt resource (owner, 2026-10-28; T-145); until T-145 lands the system sans is used. Game titles in the hero use `typeHero` at Bold with -2 % tracking. Seven steps replace the twelve sizes that were in use (20, 26, 28, 30, 32, 34, 36, 38, 44, 56, 64, 96). Sizes outside the table were mapped to the nearest step in T-142: 40, 52 and 36 key caps to `typeHeadline` (40 is the keyboard entry text), 48/52 to `typeTitle`, 84 (wizard glyphs) to `typeDisplay`. Tokens: `typeHero`..`typeMicro`, `weightLight`/`weightRegular`/`weightDemiBold`/`weightBold`, `fontFamily` (empty until T-145). Call sites write `Theme.typeBody * u`; the weights are not applied at call sites yet.
 
 | Token | px / weight | Use | Replaces |
 |---|---|---|---|
@@ -69,7 +69,7 @@ Turkish runs about 30 % longer than English: rows elide on the right (`Text.Elid
 - **Radius:** `radiusS` 12 (keys, badges), `radiusM` 18 (tiles, art), `radiusL` 32 (panels, dialogs); pills are `height / 2` (rows, buttons, toasts, OSD).
 - **Sizes:** `rowHeight` 84, `buttonHeight` 76, `tileWidth` 400 × `tileHeight` 260, `avatarSize` 200, `focusRingWidth` 4, `focusRingOffset` 7, `hairline` 1 (`Math.max(1, u)`).
 
-### 3.4 Motion (built; `overlayMs` planned, T-142)
+### 3.4 Motion (built)
 
 `focusMs` 140, `pageMs` 300 (slide `pageSlide` 60), `overlayMs` 200, `tintMs` 700 (also the hero art cross-fade), `launchMs` 400 (planned, T-147), pulse 0.94 over 70 + 180 ms, wrong-PIN shake 18 px over 45 / 90 ms, ambient drift 18–29 s periods. Easing: `OutCubic` for focus, pages and overlays, `InOutQuad` for tints, `InOutSine` for drift, `OutQuad`/`OutBack` for the pulse. Reduced motion: every duration 0, no pulse, no shake, no drift (`02-shell.md` §3.2). Only `opacity`, `scale`, `x`/`y` and colour animate.
 

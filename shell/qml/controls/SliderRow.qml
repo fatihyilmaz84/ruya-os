@@ -32,7 +32,7 @@ SettingControl {
         horizontalAlignment: Text.AlignRight
         text: Math.round(row.value) + row.unit
         color: Theme.text
-        font.pixelSize: 28 * row.u
+        font.pixelSize: Theme.typeBody * row.u
     }
     Rectangle {
         anchors { right: valueText.left; rightMargin: 24 * row.u; verticalCenter: parent.verticalCenter }

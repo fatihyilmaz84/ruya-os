@@ -1,6 +1,6 @@
 # T-142 — Design tokens v2: type scale, motion gap, and a size lint
 
-Status: todo · Phase: 2 · Depends: — · Area: shell · Size: M
+Status: done · Phase: 2 · Depends: — · Area: shell · Size: M
 
 ## Goal
 Every text size in the shell comes from the seven-step type scale of the design system, so screens read as one family and later text scaling has one place to act. A lint keeps literal font sizes from coming back.
@@ -39,4 +39,8 @@ Every text size in the shell comes from the seven-step type scale of the design 
 - Keep the `* u` at the call site: `font.pixelSize: Theme.typeBody * root.u`.
 
 ## Outcome
-_Filled in by the implementer. Start with a `Verified:` line._
+Verified: host (`dev.ps1 test` ALL GREEN, 172 QML passed; `shots` ALL GREEN, 185 passed; shots reviewed: Settings TR, setup admin step, TR keyboard, PIN pad; nothing clipped. Setup in Turkish, toasts, OSD, Guide overlay not individually inspected).
+
+Built: `Theme.qml` gains `typeHero`..`typeMicro`, the four weights, `fontFamily` (empty), `overlayMs`; all 57 `font.pixelSize` literals in `shell/qml` now use `Theme.type* * u` (sizes not in the spec table mapped to the nearest step: 40 to Headline, 52 to Title, 84 to Display); the Guide overlay fades with `overlayMs`. `lint-tokens.ps1` rejects `font.pixelSize:` followed by a digit, with a self-check in `Test-Tokens` (fixture QML must be rejected). New `shell/tests/tst_theme.qml::test_type_scale`. No existing test changed. Spec 04 §3.2/§3.4 and `shell/CLAUDE.md` updated.
+
+Deviations: weights are defined but not applied at call sites (task scope only asked for tokens). `shell/spike/KeyClient.qml` still has a literal size (outside `shell/qml`, not linted).

@@ -123,7 +123,7 @@ FocusScope {
             anchors.centerIn: parent
             text: pill.label
             color: Theme.text
-            font.pixelSize: 32 * setup.u
+            font.pixelSize: Theme.typeHeadline * setup.u
         }
     }
 
@@ -153,7 +153,7 @@ FocusScope {
             anchors.horizontalCenter: parent.horizontalCenter
             text: qsTr("Step %1 of %2").arg(setup.step + 1).arg(setup.stepCount)
             color: Theme.textDim
-            font.pixelSize: 26 * setup.u
+            font.pixelSize: Theme.typeCaption * setup.u
         }
     }
 
@@ -169,7 +169,7 @@ FocusScope {
             horizontalAlignment: Text.AlignHCenter
             text: qsTr("Welcome to RuyaOS")
             color: Theme.text
-            font.pixelSize: 84 * setup.u
+            font.pixelSize: Theme.typeDisplay * setup.u
             font.weight: Font.Light
         }
         Text {
@@ -178,7 +178,7 @@ FocusScope {
             wrapMode: Text.Wrap
             text: qsTr("Let's get your console ready. It only takes a minute, and you only need your controller.")
             color: Theme.textDim
-            font.pixelSize: 32 * setup.u
+            font.pixelSize: Theme.typeHeadline * setup.u
         }
         Pill { anchors.horizontalCenter: parent.horizontalCenter; label: qsTr("Press A to start") }
     }
@@ -196,7 +196,7 @@ FocusScope {
             horizontalAlignment: Text.AlignHCenter
             text: qsTr("Language")
             color: Theme.text
-            font.pixelSize: 64 * setup.u
+            font.pixelSize: Theme.typeDisplay * setup.u
             font.weight: Font.Light
         }
         Text {
@@ -205,7 +205,7 @@ FocusScope {
             wrapMode: Text.Wrap
             text: qsTr("Use left and right to choose. You can change this later in Settings.")
             color: Theme.textDim
-            font.pixelSize: 28 * setup.u
+            font.pixelSize: Theme.typeBody * setup.u
         }
         ChoiceRow {
             id: languageRow
@@ -235,7 +235,7 @@ FocusScope {
             horizontalAlignment: Text.AlignHCenter
             text: qsTr("Network")
             color: Theme.text
-            font.pixelSize: 64 * setup.u
+            font.pixelSize: Theme.typeDisplay * setup.u
             font.weight: Font.Light
         }
         Text {
@@ -244,7 +244,7 @@ FocusScope {
             wrapMode: Text.Wrap
             text: qsTr("Network setup comes later. A wired connection works without any setup.")
             color: Theme.textDim
-            font.pixelSize: 32 * setup.u
+            font.pixelSize: Theme.typeHeadline * setup.u
         }
         Pill { anchors.horizontalCenter: parent.horizontalCenter; label: qsTr("Press A to continue") }
     }
@@ -261,7 +261,7 @@ FocusScope {
             horizontalAlignment: Text.AlignHCenter
             text: qsTr("Create your profile")
             color: Theme.text
-            font.pixelSize: 64 * setup.u
+            font.pixelSize: Theme.typeDisplay * setup.u
             font.weight: Font.Light
         }
         Text {
@@ -270,7 +270,7 @@ FocusScope {
             wrapMode: Text.Wrap
             text: qsTr("You will be the admin of this console. Choose a name and a PIN of 4 to 6 digits.")
             color: Theme.textDim
-            font.pixelSize: 28 * setup.u
+            font.pixelSize: Theme.typeBody * setup.u
         }
         SettingRow {
             id: nameRow
@@ -297,7 +297,7 @@ FocusScope {
             horizontalAlignment: Text.AlignHCenter
             text: setup.message
             color: Theme.errorText
-            font.pixelSize: 28 * setup.u
+            font.pixelSize: Theme.typeBody * setup.u
             wrapMode: Text.Wrap
         }
     }
@@ -314,7 +314,7 @@ FocusScope {
             horizontalAlignment: Text.AlignHCenter
             text: qsTr("You're all set")
             color: Theme.text
-            font.pixelSize: 84 * setup.u
+            font.pixelSize: Theme.typeDisplay * setup.u
             font.weight: Font.Light
         }
         Text {
@@ -323,7 +323,7 @@ FocusScope {
             wrapMode: Text.Wrap
             text: qsTr("Welcome, %1.").arg(setup.adminName.trim())
             color: Theme.textDim
-            font.pixelSize: 32 * setup.u
+            font.pixelSize: Theme.typeHeadline * setup.u
         }
         Pill { anchors.horizontalCenter: parent.horizontalCenter; label: qsTr("Press A to continue") }
     }
@@ -334,7 +334,7 @@ FocusScope {
         anchors { left: parent.left; bottom: parent.bottom; leftMargin: 120 * setup.u; bottomMargin: 120 * setup.u }
         text: qsTr("B  Back")
         color: Theme.textDim
-        font.pixelSize: 26 * setup.u
+        font.pixelSize: Theme.typeCaption * setup.u
     }
 
     // Full-screen layer for the keyboard and the PIN pad.

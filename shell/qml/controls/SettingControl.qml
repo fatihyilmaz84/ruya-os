@@ -51,6 +51,6 @@ FocusScope {
         }
         text: control.label
         color: Theme.text
-        font.pixelSize: 30 * control.u
+        font.pixelSize: Theme.typeBody * control.u
     }
 }

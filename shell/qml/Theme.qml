@@ -41,6 +41,20 @@ QtObject {
         }
     }
 
+    // Type scale (04 §3.2): design px, multiplied by `u` at the call site.
+    readonly property string fontFamily: ""     // empty = system default until the typeface is bundled (T-145)
+    readonly property real typeHero: 96
+    readonly property real typeDisplay: 64
+    readonly property real typeTitle: 48
+    readonly property real typeHeadline: 34
+    readonly property real typeBody: 30
+    readonly property real typeCaption: 24
+    readonly property real typeMicro: 20
+    readonly property int weightLight: Font.Light
+    readonly property int weightRegular: Font.Normal
+    readonly property int weightDemiBold: Font.DemiBold
+    readonly property int weightBold: Font.Bold
+
     readonly property real safeArea: DeviceSettings.overscan   // fraction of width/height
     readonly property real focusScale: 1.08
 
@@ -48,6 +62,7 @@ QtObject {
     readonly property int focusMs: reducedMotion ? 0 : 140
     readonly property int pageMs: reducedMotion ? 0 : 300
     readonly property int tintMs: reducedMotion ? 0 : 700
+    readonly property int overlayMs: reducedMotion ? 0 : 200   // Guide overlay fade
 
     // Feedback animations. Under reduced motion the PIN-pad shake and the tile pulse do not run
     // at all (their call sites check `reducedMotion`); the error text/sound or the page change

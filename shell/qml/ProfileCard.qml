@@ -28,7 +28,7 @@ Item {
             anchors.centerIn: parent
             text: card.modelData.name.charAt(0).toUpperCase()
             color: Theme.text
-            font.pixelSize: 96 * card.u
+            font.pixelSize: Theme.typeHero * card.u
             font.weight: Font.Light
         }
     }
@@ -37,7 +37,7 @@ Item {
         anchors { horizontalCenter: parent.horizontalCenter; top: avatar.bottom; topMargin: 24 * card.u }
         text: card.modelData.name
         color: card.focused ? Theme.text : Theme.textDim
-        font.pixelSize: 34 * card.u
+        font.pixelSize: Theme.typeHeadline * card.u
     }
 
     Rectangle {
@@ -52,7 +52,7 @@ Item {
             anchors.centerIn: parent
             text: qsTr("PIN")
             color: Theme.textDim
-            font.pixelSize: 18 * card.u
+            font.pixelSize: Theme.typeMicro * card.u
             font.weight: Font.DemiBold
         }
     }

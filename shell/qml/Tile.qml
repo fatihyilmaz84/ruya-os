@@ -34,7 +34,7 @@ Item {
             anchors { left: parent.left; bottom: parent.bottom; margins: 22 * tile.u }
             text: tile.title
             color: Theme.text
-            font.pixelSize: 34 * tile.u
+            font.pixelSize: Theme.typeHeadline * tile.u
             font.weight: Font.DemiBold
         }
     }

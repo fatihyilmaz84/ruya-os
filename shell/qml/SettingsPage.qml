@@ -87,7 +87,7 @@ Page {
                 anchors { left: parent.left; leftMargin: 32 * page.u; right: parent.right; rightMargin: 24 * page.u; verticalCenter: parent.verticalCenter }
                 text: page.labelFor(category.modelData.key)
                 color: category.selected ? Theme.text : Theme.textDim
-                font.pixelSize: 30 * page.u
+                font.pixelSize: Theme.typeBody * page.u
                 elide: Text.ElideRight
             }
         }
@@ -161,13 +161,13 @@ Page {
             Text {
                 text: page.labelFor(page.current.key)
                 color: Theme.text
-                font.pixelSize: 44 * page.u
+                font.pixelSize: Theme.typeTitle * page.u
                 font.weight: Font.Light
             }
             Text {
                 text: qsTr("Coming soon")
                 color: Theme.textDim
-                font.pixelSize: 32 * page.u
+                font.pixelSize: Theme.typeHeadline * page.u
             }
         }
     }

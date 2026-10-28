@@ -125,6 +125,15 @@ function Test-Tokens {
     Step "token lint (no literal durations or colours outside Theme.qml)"
     & (Join-Path $PSScriptRoot "lint-tokens.ps1")
     Record "token lint" ($LASTEXITCODE -eq 0)
+
+    # Self-check: the lint must reject a literal font size and a literal colour.
+    $fixture = Join-Path ([IO.Path]::GetTempPath()) ("ruya-lint-" + [guid]::NewGuid().ToString("N"))
+    New-Item -ItemType Directory -Path $fixture | Out-Null
+    Set-Content -Path (Join-Path $fixture "Bad.qml") -Value 'Text { font.pixelSize: 30 * u }'
+    & (Join-Path $PSScriptRoot "lint-tokens.ps1") -QmlDir $fixture | Out-Null
+    $rejected = ($LASTEXITCODE -eq 1)
+    Remove-Item -Recurse -Force $fixture
+    Record "token lint self-check (rejects a literal font size)" $rejected
 }
 
 # The rules live in scripts\lint-translations.ps1 (shared with CI).

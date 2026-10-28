@@ -372,7 +372,7 @@ SettingsPane {
         visible: pane.message.length > 0
         text: pane.message
         color: pane.messageIsError ? Theme.errorText : Theme.toastSuccess
-        font.pixelSize: 28 * pane.u
+        font.pixelSize: Theme.typeBody * pane.u
         wrapMode: Text.Wrap
     }
 }

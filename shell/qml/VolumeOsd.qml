@@ -45,7 +45,7 @@ Item {
         anchors { left: parent.left; leftMargin: 36 * osd.u; verticalCenter: parent.verticalCenter }
         text: Audio.muted ? qsTr("Muted") : qsTr("Volume")
         color: Audio.muted ? Theme.toastWarning : Theme.text
-        font.pixelSize: 28 * osd.u
+        font.pixelSize: Theme.typeBody * osd.u
     }
     Rectangle {
         id: track
@@ -69,6 +69,6 @@ Item {
         horizontalAlignment: Text.AlignRight
         text: Audio.muted ? "–" : Audio.volume
         color: Theme.text
-        font.pixelSize: 28 * osd.u
+        font.pixelSize: Theme.typeBody * osd.u
     }
 }

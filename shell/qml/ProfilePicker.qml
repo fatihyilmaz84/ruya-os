@@ -28,7 +28,7 @@ FocusScope {
         opacity: pinPad.shown ? 0 : 1      // the PIN pad replaces the chooser, not overlays it
         Behavior on opacity { NumberAnimation { duration: Theme.pageMs } }
         color: Theme.text
-        font.pixelSize: 64 * picker.u
+        font.pixelSize: Theme.typeDisplay * picker.u
         font.weight: Font.Light
     }
 
@@ -63,7 +63,7 @@ FocusScope {
         Behavior on opacity { NumberAnimation { duration: Theme.pageMs } }
         text: qsTr("Waiting for the profiles service…")
         color: Theme.textDim
-        font.pixelSize: 28 * picker.u
+        font.pixelSize: Theme.typeBody * picker.u
     }
 
     PinPad {

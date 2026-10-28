@@ -92,7 +92,7 @@ FocusScope {
             anchors.horizontalCenter: parent.horizontalCenter
             text: dialog.action === "custom" ? dialog.customTitle : (dialog.titles[dialog.action] ?? "")
             color: Theme.text
-            font.pixelSize: 52 * dialog.u
+            font.pixelSize: Theme.typeTitle * dialog.u
         }
 
         Text {
@@ -102,7 +102,7 @@ FocusScope {
             width: Math.min(implicitWidth, 1100 * dialog.u)
             text: dialog.detail
             color: Theme.textDim
-            font.pixelSize: 30 * dialog.u
+            font.pixelSize: Theme.typeBody * dialog.u
             wrapMode: Text.Wrap
             horizontalAlignment: Text.AlignHCenter
         }
@@ -125,7 +125,7 @@ FocusScope {
                     anchors.centerIn: parent
                     text: qsTr("Cancel")
                     color: Theme.text
-                    font.pixelSize: 32 * dialog.u
+                    font.pixelSize: Theme.typeHeadline * dialog.u
                 }
                 Keys.onReturnPressed: dialog.cancel()
                 Keys.onEnterPressed: dialog.cancel()
@@ -145,7 +145,7 @@ FocusScope {
                     anchors.centerIn: parent
                     text: qsTr("Confirm")
                     color: Theme.text
-                    font.pixelSize: 32 * dialog.u
+                    font.pixelSize: Theme.typeHeadline * dialog.u
                 }
                 Keys.onReturnPressed: dialog.confirm()
                 Keys.onEnterPressed: dialog.confirm()

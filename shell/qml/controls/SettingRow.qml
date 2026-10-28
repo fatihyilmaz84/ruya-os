@@ -14,7 +14,7 @@ SettingControl {
         anchors { right: parent.right; rightMargin: 36 * row.u; verticalCenter: parent.verticalCenter }
         text: row.value
         color: Theme.textDim
-        font.pixelSize: 28 * row.u
+        font.pixelSize: Theme.typeBody * row.u
     }
 
     function accept() {

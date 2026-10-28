@@ -15,7 +15,7 @@ FocusScope {
         id: message
         text: qsTr("Coming soon")
         color: Theme.textDim
-        font.pixelSize: 36 * root.u
+        font.pixelSize: Theme.typeHeadline * root.u
     }
 
     Rectangle {
@@ -32,7 +32,7 @@ FocusScope {
             anchors.centerIn: parent
             text: qsTr("Placeholder")
             color: Theme.text
-            font.pixelSize: 32 * root.u
+            font.pixelSize: Theme.typeHeadline * root.u
         }
     }
 }

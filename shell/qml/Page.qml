@@ -27,7 +27,7 @@ FocusScope {
         y: page.marginY + 110 * page.u
         text: page.title
         color: Theme.text
-        font.pixelSize: 64 * page.u
+        font.pixelSize: Theme.typeDisplay * page.u
         font.weight: Font.Light
     }
 

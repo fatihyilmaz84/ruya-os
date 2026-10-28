@@ -257,7 +257,7 @@ FocusScope {
         y: root.marginY
         text: "RuyaOS"
         color: Theme.text
-        font.pixelSize: 44 * root.u
+        font.pixelSize: Theme.typeTitle * root.u
         font.weight: Font.Bold
     }
     Row {
@@ -277,7 +277,7 @@ FocusScope {
                     anchors.centerIn: parent
                     text: (Profiles.active.name ?? "?").charAt(0).toUpperCase()
                     color: Theme.text
-                    font.pixelSize: 26 * root.u
+                    font.pixelSize: Theme.typeCaption * root.u
                 }
             }
             Text {
@@ -285,14 +285,14 @@ FocusScope {
                 anchors.verticalCenter: parent.verticalCenter
                 text: Profiles.active.name ?? ""
                 color: Theme.text
-                font.pixelSize: 30 * root.u
+                font.pixelSize: Theme.typeBody * root.u
             }
         }
         Text {
             id: clock
             anchors.verticalCenter: parent.verticalCenter
             color: Theme.text
-            font.pixelSize: 36 * root.u
+            font.pixelSize: Theme.typeHeadline * root.u
             text: Qt.formatTime(new Date(), "HH:mm")
             Timer {
                 interval: 10000; running: true; repeat: true
@@ -380,7 +380,7 @@ FocusScope {
             anchors { left: shelf.left; leftMargin: root.marginX; bottom: shelf.top; bottomMargin: 20 * root.u }
             text: root.currentTile ? root.currentTile.title : ""
             color: Theme.text
-            font.pixelSize: 64 * root.u
+            font.pixelSize: Theme.typeDisplay * root.u
             font.weight: Font.Light
         }
 
@@ -545,7 +545,7 @@ FocusScope {
         color: Theme.scrimOverlay
         opacity: open ? 1 : 0
         visible: opacity > 0
-        Behavior on opacity { NumberAnimation { duration: Theme.pageMs; easing.type: Easing.OutCubic } }
+        Behavior on opacity { NumberAnimation { duration: Theme.overlayMs; easing.type: Easing.OutCubic } }
         onOpenChanged: {
             powerMode = false
             if (open) {
@@ -571,9 +571,9 @@ FocusScope {
             id: panelColumn
             anchors.centerIn: parent
             spacing: 18 * root.u
-            Text { text: qsTr("System"); color: Theme.text; font.pixelSize: 56 * root.u; anchors.horizontalCenter: parent.horizontalCenter }
-            Text { text: qsTr("Image version %1").arg(root.version); color: Theme.textDim; font.pixelSize: 30 * root.u; anchors.horizontalCenter: parent.horizontalCenter }
-            FpsMeter { font.pixelSize: 30 * root.u; anchors.horizontalCenter: parent.horizontalCenter; visible: systemPanel.visible }
+            Text { text: qsTr("System"); color: Theme.text; font.pixelSize: Theme.typeTitle * root.u; anchors.horizontalCenter: parent.horizontalCenter }
+            Text { text: qsTr("Image version %1").arg(root.version); color: Theme.textDim; font.pixelSize: Theme.typeBody * root.u; anchors.horizontalCenter: parent.horizontalCenter }
+            FpsMeter { font.pixelSize: Theme.typeBody * root.u; anchors.horizontalCenter: parent.horizontalCenter; visible: systemPanel.visible }
 
             ListView {
                 id: actions
@@ -653,7 +653,7 @@ FocusScope {
                         anchors.centerIn: parent
                         text: action.modelData.label
                         color: Theme.text
-                        font.pixelSize: 32 * root.u
+                        font.pixelSize: Theme.typeHeadline * root.u
                     }
                 }
             }
@@ -679,7 +679,7 @@ FocusScope {
         anchors { right: parent.right; bottom: parent.bottom; margins: root.marginY / 2 }
         text: root.version
         color: Theme.textDim
-        font.pixelSize: 20 * root.u
+        font.pixelSize: Theme.typeMicro * root.u
     }
 
     Text {
@@ -687,7 +687,7 @@ FocusScope {
         anchors { left: parent.left; bottom: parent.bottom; margins: root.marginY / 2 }
         text: qsTr("mock services")
         color: Theme.warningText
-        font.pixelSize: 20 * root.u
+        font.pixelSize: Theme.typeMicro * root.u
     }
 
     VolumeOsd {

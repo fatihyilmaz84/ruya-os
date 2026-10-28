@@ -292,7 +292,7 @@ FocusScope {
             anchors.horizontalCenter: parent.horizontalCenter
             text: entry.title
             color: Theme.text
-            font.pixelSize: 40 * entry.u
+            font.pixelSize: Theme.typeHeadline * entry.u
         }
 
         // The text field: shows the end of the text, with a caret after it.
@@ -316,7 +316,7 @@ FocusScope {
                     objectName: "entryDisplay"
                     text: entry.displayText
                     color: Theme.text
-                    font.pixelSize: 38 * entry.u
+                    font.pixelSize: Theme.typeHeadline * entry.u
                 }
                 Rectangle {
                     id: caret
@@ -387,7 +387,7 @@ FocusScope {
                                     anchors.centerIn: parent
                                     text: entry.labelFor(keyItem.modelData)
                                     color: Theme.text
-                                    font.pixelSize: (keyItem.modelData.kind === "char" && keyItem.modelData.label.length === 1 ? 36 : 28) * entry.u
+                                    font.pixelSize: (keyItem.modelData.kind === "char" && keyItem.modelData.label.length === 1 ? Theme.typeHeadline : Theme.typeBody) * entry.u
                                 }
                             }
                         }

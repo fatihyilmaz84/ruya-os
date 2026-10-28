@@ -15,16 +15,15 @@ Verification legend: **host** = built and tested on Windows · **vm** = built in
 
 ## Board
 
-**NEXT → T-142**
+**NEXT → T-143**
 
-**Lead review due: after 1 more builder task** (reviewed up to the lead commit "lead review f5b1a90..198e9ab", see `docs/LEAD-NOTES.md`). **One builder session at a time, one task per session:** two builders in one checkout mixed three tasks' work on 2026-10-28. Builders: when your task makes this true, end your reply by recommending a lead session.
+**Lead review due: now (2 builder tasks since the last review)** (reviewed up to the lead commit "lead review f5b1a90..198e9ab", see `docs/LEAD-NOTES.md`). **One builder session at a time, one task per session:** two builders in one checkout mixed three tasks' work on 2026-10-28. Builders: when your task makes this true, end your reply by recommending a lead session.
 
 Open work only (todo, in-progress, blocked). The order is the recommended order; when NEXT is blocked take the first `todo` whose dependencies are `done` (a task's status is in its file header). `[lead]` tasks are skipped by builders. If nothing qualifies, **stop and ask for a planning session** (`docs/tasks/PLANNING.md`).
 
 | ID | Title | Status | Depends |
 |---|---|---|---|
 | [T-130](tasks/T-130-compositor-session.md) | **[lead]** Compositor session: `ruya-shell` replaces cage  | todo | T-123 |
-| [T-142](tasks/T-142-type-scale-tokens.md) | Design tokens v2: type scale, `overlayMs`, size lint | todo | — |
 | [T-143](tasks/T-143-space-shape-tokens-and-badge.md) | Design tokens v2: spacing, radius, sizes, `Badge` | todo | T-142 |
 | [T-140](tasks/T-140-store-remotes-and-progress.md) | Store in the image: Flathub remote, AppStream refresh, real progress | todo | T-134 |
 | [T-112](tasks/T-112-library-service-core.md) | ruya-library discovery core (Rust) | todo | — |
@@ -69,6 +68,7 @@ Follow-ups and debt for the next planner. Builders: add one line per item, `- (s
 
 One entry per session, at most 4 lines: date · model · tasks · what happened · numbers · follow-ups. Detail belongs in the task Outcome.
 
+- 2026-10-28 · Sonnet 5.5 · T-142 · Type scale tokens (`typeHero`..`typeMicro`, weights, `overlayMs`), 57 font sizes migrated, lint rejects literal `font.pixelSize` plus self-check. `test` ALL GREEN (172 QML), `shots` ALL GREEN, key shots reviewed. Weights not yet applied at call sites.
 - 2026-10-28 · Sonnet 5.5 · T-141 · `scripts/vm-goto.ps1 <target>`: wizard with fixed answers (PIN 1234), picker sign-in, keys to home/store/Settings panes; results checked over SSH. VM-verified on a fresh `-Work` disk (network, audio, store shots reviewed). The backdrop is never still, so keys are paced by `-SettleMs`, not by screen stability.
 - 2026-10-28 · Sonnet 5.5 · T-139 · New crate `ruya-session`: pure core, `Spawner` and `ProfileDirectory` traits, fake, `systemd-run` command builder, zbus adapter (`--session` only). `test` ALL GREEN (169 QML, Rust +25). Not in the image; adapter and bus flow unverified (no session bus on Windows, flow test over the core instead).
 - 2026-10-28 · Opus 5.5 · Lead (review `f5b1a90..198e9ab`: T-138, the design-system docs) · `test` ALL GREEN (169 QML + 13 skipped, 117 Rust); `shots`/VM not run (no screen, no image change). CI was red since `81ce23e` (runner clippy 1.99 > host 1.92): fixed the lint (T-134) and pinned CI to 1.92.0. T-138: mock `nolaunch` + launch-failed toast test, frozen-copy `tryCompare` fixed. Design docs committed (ADR-012, `04`, T-142..T-147). A zeroed `zbus` source in the host's cargo registry was re-extracted (owner note). NEXT T-139.
