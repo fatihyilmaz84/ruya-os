@@ -71,6 +71,7 @@ In the VM, the shell's own log is `journalctl -b _UID=$(id -u ruya-shell)`. pam_
 | Script | Does |
 |---|---|
 | `.\scripts\vm-screenshot.ps1 <name>` | `screendump` through the monitor, converted to `output\vm-shots\<name>.png` (System.Drawing only). |
+| `.\scripts\vm-goto.ps1 <target>` | Past the wizard to a named page and a screenshot of it (T-141, below). |
 | `.\scripts\vm-keys.ps1 right right ret` / `-Text Owner` / `-Text 2468 kp_enter` | `sendkey` per key; the guest sees a USB keyboard, so the shell gets the keys a controller produces. Digits and letters via `-Text` (capitals use shift). `-DelayMs` (default 250) is the pause per key; use 1500-3000 before steps that animate or open a modal. |
 | `scripts/vm-inject-key.py guide [--hold 3]` (run in the guest) | Presses a key a USB keyboard cannot send: `guide` is `KEY_HOMEPAGE`, what `ruya-inputd` emits for the controller's Guide button; also `menu`, `home`, `meta`. Creates a throw-away uinput device, so cage and the shell see a real key event, held keys auto-repeat. |
 | `scripts/vm-profiles-check.sh [state\|introspect\|security\|create\|lifecycle]` (run in the guest; `lifecycle` renames and deletes the profile `create` made, T-118) | What `ruya-profiles` lists over the system bus, `profiles.toml` (mode, hashes cut off), the `ruya-p*` Unix users and homes. |
@@ -84,6 +85,8 @@ Typical session (a persistent copy, so profiles survive reboots; `Enter` on a PI
 scp -i $env:USERPROFILE\.ssh\ruyaos_dev -P 2222 scripts\vm-*.sh scripts\vm-inject-key.py root@127.0.0.1:/root/
 ssh -i $env:USERPROFILE\.ssh\ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-profiles-check.sh state
 ```
+
+**`vm-goto.ps1`** (T-141): after `smoke-test.ps1 -Work -Keep`, `.\scripts\vm-goto.ps1 settings-network` (about a minute) takes the VM to `home`, `store`, `settings-profiles`, `settings-network` or `settings-audio` and saves `output\vm-shots\<target>.png`. On an empty disk it walks the wizard with fixed answers: English, admin "Player One", PIN `1234`. If a profile exists it locks the session, restarts `ruya-compositor@tty1` so the shell starts at the picker, and signs in with PIN `1234` (a disk whose first profile has another PIN needs a fresh `-Work` disk). Keys are paced by `-SettleMs`, because the backdrop never stops moving and a still screen never comes; the wizard's result and the sign-in are checked over SSH (`busctl` on `Profiles1`). An unknown target or a VM that is not running fails within seconds; a check that shows nothing within `-StepTimeoutSec` (90) fails naming its step.
 
 **Pitfalls.** The shell is software-rendered and CPU-bound in the VM (about 94 % of a core), so the screen can lag the keys by several seconds and the shell's own timers run slowly (the PIN lock countdown, for instance). Wait before a screenshot and before judging "nothing happened"; take a second screenshot first. PowerShell 5.1 binds extra arguments to later positional parameters: `vm-keys.ps1` sets `PositionalBinding = $false` for that reason. On a keyboard the Guide is **Super** (T-124): `vm-keys.ps1 meta_l` opens and closes the overlay. `sendkey menu` does nothing in the shell (Menu is the context-menu key, not Guide) and `home` is not a Guide key; to send the controller's Guide use `vm-inject-key.py guide`.
 
