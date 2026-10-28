@@ -126,7 +126,7 @@ function Test-Tokens {
     & (Join-Path $PSScriptRoot "lint-tokens.ps1")
     Record "token lint" ($LASTEXITCODE -eq 0)
 
-    # Self-check: the lint must reject a literal font size and a literal colour.
+    # Self-check: the lint must reject a literal font size.
     $fixture = Join-Path ([IO.Path]::GetTempPath()) ("ruya-lint-" + [guid]::NewGuid().ToString("N"))
     New-Item -ItemType Directory -Path $fixture | Out-Null
     Set-Content -Path (Join-Path $fixture "Bad.qml") -Value 'Text { font.pixelSize: 30 * u }'

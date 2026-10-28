@@ -61,7 +61,8 @@
     </signal>
 
     <!-- Sent once per instance. reason: "quit" (stopped on request or ended normally), "crashed"
-         (exited abnormally by itself), "killed" (ended by a signal after Stop, or by the system),
+         (exited abnormally by itself), "killed" (ended by the kill after a Stop it ignored, or by
+         a signal from the system while it ran; dying of the Stop's own SIGTERM is "quit"),
          "launch-failed" (never reached running; exit_code is then -1). -->
     <signal name="AppExited">
       <arg name="instance" type="s"/>

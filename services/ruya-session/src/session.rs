@@ -266,10 +266,11 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
 /// The exit code for the signal and the reason, from the state the instance was in.
 fn exit_reason(inst: &Instance, code: i32, signaled: bool) -> (i32, ExitReason) {
     if inst.state == State::Stopping {
-        // Asked to stop: a signal exit means it had to be killed (or the system did it).
+        // Asked to stop: the stop itself is a SIGTERM, so dying of a signal is still a quit.
+        // Only an exit after the kill of `tick` is "killed".
         return (
             code,
-            if signaled {
+            if signaled && inst.kill_sent {
                 ExitReason::Killed
             } else {
                 ExitReason::Quit
@@ -509,6 +510,15 @@ mod tests {
         let unit = running(&mut s);
         s.stop(&unit, Instant::now());
         assert_eq!(reason(s.on_event(exited(&unit, 143, false))), (143, "quit"));
+    }
+
+    #[test]
+    fn dying_of_the_stop_signal_is_quit_not_killed() {
+        // `systemctl stop` sends SIGTERM; an app without a handler dies of it before any kill.
+        let mut s = session();
+        let unit = running(&mut s);
+        s.stop(&unit, Instant::now());
+        assert_eq!(reason(s.on_event(exited(&unit, 15, true))), (15, "quit"));
     }
 
     #[test]

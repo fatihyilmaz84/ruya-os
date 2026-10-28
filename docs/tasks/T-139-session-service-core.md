@@ -57,4 +57,6 @@ Decisions:
 - After `Stop`, a non-zero exit that is not a signal is still `quit` (apps answer SIGTERM with 143).
 - Contract XML unchanged.
 
+Review (lead, 2026-10-28): while `stopping`, any signal exit was reported `killed`, so an app dying of the Stop's own SIGTERM (no handler) would differ from the mock and the contract ("`killed` after the kill"). Now `killed` only once `tick` sent the kill; test `dying_of_the_stop_signal_is_quit_not_killed`, XML comment clarified.
+
 Deviations: criterion 3 uses the allowed fallback: Windows has no session bus, so the Launch, AppStarted, Stop, AppExited sequence is proven by `tests/flow.rs` over the core with the fake, not by `busctl`. Unverified: the zbus adapter at runtime (also the shell's D-Bus client from T-138), `fetch_profile_ids`, and everything about the real spawner (does `systemd-run --machine=<user>@.host` work from the service's user, where the Wayland socket lives, how exits and `signaled` are read from the unit). Left for the VM task after T-130: unit, policy, hardening, Containerfile, `vm-session-check.sh`, the real spawner.

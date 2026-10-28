@@ -49,7 +49,7 @@ Contrast (WCAG, measured): `text` on `background` 18.3:1, on `panel` 15.3:1; `te
 
 ### 3.2 Type (built, T-142)
 
-Typeface: **Inter** (OFL-1.1), bundled as a Qt resource (owner, 2026-10-28; T-145); until T-145 lands the system sans is used. Game titles in the hero use `typeHero` at Bold with -2 % tracking. Seven steps replace the twelve sizes that were in use (20, 26, 28, 30, 32, 34, 36, 38, 44, 56, 64, 96). Sizes outside the table were mapped to the nearest step in T-142: 40, 52 and 36 key caps to `typeHeadline` (40 is the keyboard entry text), 48/52 to `typeTitle`, 84 (wizard glyphs) to `typeDisplay`. Tokens: `typeHero`..`typeMicro`, `weightLight`/`weightRegular`/`weightDemiBold`/`weightBold`, `fontFamily` (empty until T-145). Call sites write `Theme.typeBody * u`; the weights are not applied at call sites yet.
+Typeface: **Inter** (OFL-1.1), bundled as a Qt resource (owner, 2026-10-28; T-145); until T-145 lands the system sans is used. Game titles in the hero use `typeHero` at Bold with -2 % tracking. Seven steps replace the twelve sizes that were in use (20, 26, 28, 30, 32, 34, 36, 38, 44, 56, 64, 96). Sizes outside the table were mapped to the nearest step in T-142: 40 (the keyboard entry text) and 36 (key caps) to `typeHeadline`, 52 to `typeTitle`, 84 (wizard glyphs) to `typeDisplay`. Tokens: `typeHero`..`typeMicro`, `weightLight`/`weightRegular`/`weightDemiBold`/`weightBold`, `fontFamily` (empty until T-145). Call sites write `Theme.typeBody * u`; the weights are not applied at call sites yet.
 
 | Token | px / weight | Use | Replaces |
 |---|---|---|---|
