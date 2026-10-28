@@ -2,7 +2,7 @@
 
 **Read this first in every session; update it last.** Rules: root `CLAUDE.md`. Roles (Opus lead, Sonnet builders): `docs/LEAD.md`. Task format: `docs/tasks/README.md`. Finished work: each task's own file (`Status: done`, Outcome starting with `Verified:`); history before T-132 in [`STATUS-done.md`](STATUS-done.md). `scripts/lint-board.ps1` (part of `dev.ps1 test`) keeps this board and the task files in step.
 
-Last updated: 2026-10-28 (Opus 5.5, lead)
+Last updated: 2026-10-28 (Opus 5.5, lead review f5b1a90..198e9ab)
 
 ## Where we are
 
@@ -17,7 +17,7 @@ Verification legend: **host** = built and tested on Windows · **vm** = built in
 
 **NEXT → T-139**
 
-**Lead review due: after 2 more builder tasks** (reviewed up to the lead commit "lead review f835519..7392be4", see `docs/LEAD-NOTES.md`). **One builder session at a time, one task per session:** two builders in one checkout mixed three tasks' work on 2026-10-28. Builders: when your task makes this true, end your reply by recommending a lead session.
+**Lead review due: after 3 more builder tasks** (reviewed up to the lead commit "lead review f5b1a90..198e9ab", see `docs/LEAD-NOTES.md`). **One builder session at a time, one task per session:** two builders in one checkout mixed three tasks' work on 2026-10-28. Builders: when your task makes this true, end your reply by recommending a lead session.
 
 Open work only (todo, in-progress, blocked). The order is the recommended order; when NEXT is blocked take the first `todo` whose dependencies are `done` (a task's status is in its file header). `[lead]` tasks are skipped by builders. If nothing qualifies, **stop and ask for a planning session** (`docs/tasks/PLANNING.md`).
 
@@ -59,7 +59,8 @@ Follow-ups and debt for the next planner. Builders: add one line per item, `- (s
 ## Open owner decisions
 
 - **WSL ext4 corruption: apparently fixed 2026-10-27, watch it.** After recreating the distro with `memory=8GB` and `nestedVirtualization=false` (backup `.wslconfig.bak-2026-10-27`; the earlier "disk 3" Windows errors belong to an empty card reader, not an SSD), a full `build.sh`, `make-disk.sh qcow2` and a VM session ran with no `ext4` error in `dmesg`. Not proven whether RAM pressure at 20 GB or the old distro was the cause. If it returns: Windows Memory Diagnostic or memtest86, then move the VHD to the D: SSD (about 63 GB free; clear `output/` first). Claude recreates the distro itself (owner said so).
-- **Pushed 2026-10-28** (`scan-secrets.ps1` clean). CI has not been read yet since the 2026-10-27 push: check the latest run (board lint, the new `ruya-store` crate) at the next lead review.
+- **Host disk or RAM, watch it (2026-10-28):** a file in the cargo registry on C: (`zbus-5.19.0/src/address/transport/mod.rs`) had turned into null bytes; re-extracted from the checksummed `.crate`, no other zeroed files. Together with the earlier WSL `ext4` errors (also on C:) this hints at the C: drive or RAM. Recommendation: run Windows Memory Diagnostic and the drive maker's SMART check; not blocking.
+- **CI read 2026-10-28:** services red since `81ce23e` (newer clippy on the runner), fixed and pinned to Rust 1.92.0 in this push; check that the next run is green.
 - **Real hardware (B-002):** is a spare low-tier x86-64 PC (Intel/AMD iGPU) available for the dev ISO? It unblocks the Phase 0 hardware item, the first KPIs and the ADR-002 performance check. Recommendation: yes, a test machine only.
 - **One admin or several?** Overview §2 says one admin, `03` §1.1 says one or more. The service supports several; the UI offers Standard and Guest. Recommendation: one admin in the UI for the MVP (as the overview says); revisit after the first user test. Not blocking.
 - **Turkish wording review** (`shell/i18n/ruyashell_tr.ts`, written by AI): a native review before the first release. Not blocking; best done after the Settings panes settle (T-135..T-137).
@@ -70,16 +71,12 @@ Follow-ups and debt for the next planner. Builders: add one line per item, `- (s
 
 One entry per session, at most 4 lines: date · model · tasks · what happened · numbers · follow-ups. Detail belongs in the task Outcome.
 
+- 2026-10-28 · Opus 5.5 · Lead (review `f5b1a90..198e9ab`: T-138, the design-system docs) · `test` ALL GREEN (169 QML + 13 skipped, 117 Rust); `shots`/VM not run (no screen, no image change). CI was red since `81ce23e` (runner clippy 1.99 > host 1.92): fixed the lint (T-134) and pinned CI to 1.92.0. T-138: mock `nolaunch` + launch-failed toast test, frozen-copy `tryCompare` fixed. Design docs committed (ADR-012, `04`, T-142..T-147). A zeroed `zbus` source in the host's cargo registry was re-extracted (owner note). NEXT T-139.
+
 - 2026-10-28 · Sonnet 5.5 · T-138 · `Session1` contract, `Session` singleton with mock and D-Bus client, crash toast, `tst_session.qml`. `test` ALL GREEN (169). D-Bus client unverified (T-139).
-- 2026-10-28 · Opus 5.5 · Owner: design system · New `docs/specs/04-design-system.md` ("Dreamglass", ADR-012), wired into the `CLAUDE.md`s, `LEAD.md`, `PLANNING.md`, `TEMPLATE.md`. Owner then chose Inter, an art-led Home and full-screen apps: specs 02 §1/§1.5, 04 v1.1; T-113 rescoped (its Home row moved to T-146); planned T-142..T-147. Docs only, `dev.ps1 test` not run, not committed.
+- 2026-10-28 · Opus 5.5 · Owner: design system · New `docs/specs/04-design-system.md` ("Dreamglass", ADR-012), wired into the `CLAUDE.md`s, `LEAD.md`, `PLANNING.md`, `TEMPLATE.md`. Owner then chose Inter, an art-led Home and full-screen apps: specs 02 §1/§1.5, 04 v1.1; T-113 rescoped (its Home row moved to T-146); planned T-142..T-147. Docs only; reviewed and committed by the next lead (`b16bf1e`).
 
 ### 2026-10-28 · Opus 5.5 · Lead (review of `f835519..7392be4` plus uncommitted T-132/T-133/T-134 work)
 Two Sonnet builder sessions ran T-132, T-133 and T-134 at once in this checkout and stopped without Outcomes or commits; the lead reviewed the code (0 findings), ran the VM checks and committed each task. `dev.ps1 test` ALL GREEN (164 QML, 13 skipped; 117 Rust); `shots` not run (no screen changed). VM `0.0.17-t134`: `RUYA_BOOT_OK`, `vm-devices-check.sh` and `vm-store-check.sh` all PASS, NIC unplug followed by service and shell, exposure 3.4 / 3.3 OK; no `ext4` errors.
 Found: the image ships Fedora's OCI Flatpak remote (524 unnamed apps) → T-140; Settings screenshots in the VM need a wizard walk → T-141; job-signal buffering → T-111 hint. NEXT T-138.
 
-### 2026-10-27 · Opus 5.5 · Lead (owner: "take the lead, optimise docs and rules")
-Review of `2f2f1e1..f7574e9` (T-129 was lead work; docs only otherwise) and planning. `dev.ps1 test` ALL GREEN (164 QML passed, 13 skipped offscreen; Rust 54), `shots` ALL GREEN (177; one `TEST WINDOW LOST ACTIVATION`, recovered); `23-settings-network.png` reviewed: fine. VM not run (WSL disk). CI not checked; 6 commits unpushed. **Docs and rules slimmed** (STATUS 25 KB → about 9 KB, Done table archived, board lists open work only, `lint-board.ps1`, `shell/PATTERNS.md` split out, duplicated role text removed; see `LEAD-NOTES.md`). Planned T-135..T-139 (update, Bluetooth, storage, session contract and core). **Later the same day (owner: do the WSL steps and the push):** `main` pushed after a clean secret scan; the owner recreated the WSL distro with `memory=8GB`; `build.sh` 0.0.13-lead, `make-disk.sh` and `smoke-test.ps1 -Work -Keep` all passed (`RUYA_BOOT_OK`, no ext4 errors); T-131's VM criterion done (rename and delete by keys, service state checked). CI not read yet.
-
-- 2026-10-24 · Sonnet 5.5 · T-110 · `org.ruyaos.Store1` contract, `Store` singleton with mock (12 apps, simulated installs) and D-Bus client, 7 tests. `test` ALL GREEN (152). D-Bus client unverified.
-
-- 2026-10-24 · Sonnet 5.5 · T-131 · Rename and delete in Settings → Profiles (`ProfileManageFlow`). `test` 144, `shots` 156 green. **VM criterion not run** (WSL disk went read-only three times): Inbox.

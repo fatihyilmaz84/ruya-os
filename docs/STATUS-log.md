@@ -2,6 +2,15 @@
 
 Older entries of the `docs/STATUS.md` session log, newest first. STATUS keeps only the latest five; the lead moves the rest here at each review. Nobody needs to read this file to start a task.
 
+### 2026-10-27 · Opus 5.5 · Lead (owner: "take the lead, optimise docs and rules")
+Review of `2f2f1e1..f7574e9` (T-129 was lead work; docs only otherwise) and planning. `dev.ps1 test` ALL GREEN (164 QML passed, 13 skipped offscreen; Rust 54), `shots` ALL GREEN (177; one `TEST WINDOW LOST ACTIVATION`, recovered); `23-settings-network.png` reviewed: fine. VM not run (WSL disk). CI not checked; 6 commits unpushed. **Docs and rules slimmed** (STATUS 25 KB → about 9 KB, Done table archived, board lists open work only, `lint-board.ps1`, `shell/PATTERNS.md` split out, duplicated role text removed; see `LEAD-NOTES.md`). Planned T-135..T-139 (update, Bluetooth, storage, session contract and core). **Later the same day (owner: do the WSL steps and the push):** `main` pushed after a clean secret scan; the owner recreated the WSL distro with `memory=8GB`; `build.sh` 0.0.13-lead, `make-disk.sh` and `smoke-test.ps1 -Work -Keep` all passed (`RUYA_BOOT_OK`, no ext4 errors); T-131's VM criterion done (rename and delete by keys, service state checked). CI not read yet.
+
+- 2026-10-24 · Sonnet 5.5 · T-110 · `org.ruyaos.Store1` contract, `Store` singleton with mock (12 apps, simulated installs) and D-Bus client, 7 tests. `test` ALL GREEN (152). D-Bus client unverified.
+
+- 2026-10-24 · Sonnet 5.5 · T-131 · Rename and delete in Settings → Profiles (`ProfileManageFlow`). `test` 144, `shots` 156 green. **VM criterion not run** (WSL disk went read-only three times): Inbox.
+
+- 2026-10-24 · Opus 5.5 · T-129 (lead, host-only while the disk is broken) · `Devices1.Network` contract, mock, D-Bus client, Settings → Network. `test` 164, `shots` 177 green. D-Bus client unverified.
+
 - 2026-10-24 · Opus 5.5 · Lead (disk space) · `build.sh` removes untagged images it did not use (WSL use 78 → 30 GB); `smoke-test.ps1 -Work` gives one shared `work.qcow2`; fixed a stale `RUYA_BOOT_OK` read when the old QEMU held `serial.log`. `.vhdx` shrink is an owner step (`dev-setup.md`).
 
 ### 2026-10-24 · Opus 5.5 · Lead

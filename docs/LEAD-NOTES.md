@@ -4,28 +4,28 @@ The procedure is in [`LEAD.md`](LEAD.md). **Rewrite this file at the end of ever
 
 ## Review range
 
-- **Last reviewed commit: the lead commit of 2026-10-28 "lead review f835519..7392be4"** (`git log --grep="lead review f835519"`). Everything up to T-134 is reviewed and VM-verified.
+- **Last reviewed commit: the lead commit of 2026-10-28 "lead review f5b1a90..198e9ab"** (`git log --grep="lead review f5b1a90"`). Everything up to T-138 and the design-system docs is reviewed.
 - Next review: `git log --oneline <that commit>..HEAD`. Due after 3 builder tasks (the board says so).
-- Last VM verification: image `0.0.17-t134` (2026-10-28): `RUYA_BOOT_OK`, `vm-devices-check.sh` (audio, network, events) and `vm-store-check.sh` all PASS, NIC unplug followed live by the service and the shell's `Network` client. No `ext4` errors in WSL.
+- Last VM verification: image `0.0.17-t134` (2026-10-28): `RUYA_BOOT_OK`, `vm-devices-check.sh` and `vm-store-check.sh` all PASS. Nothing under `image/` or `services/` changed since, except a one-line clippy fix in `ruya-store` (same behaviour).
 
 ## Concerns (ranked)
 
-0. **Concurrent builder sessions (2026-10-28).** The owner started two "Next 3 tasks" builder sessions in the same checkout. They worked on T-132, T-133 and T-134 at once, left everything uncommitted with no Outcomes, and kept waking up whenever a background build they had started finished: one booted a VM at the same moment the lead did. The rule exists (CLAUDE.md step 1, LEAD.md); the problem was how sessions were started, so it is in the owner report, not a new rule. If it happens again, add an automated guard (e.g. `dev.ps1` refusing to build or boot while another session's lock file in `output/` is fresh). Lead tip: a builder's background job (`build.sh && make-disk.sh`) re-invokes that session when it ends; check `wsl ... pgrep -af build.sh` before assuming a builder is done.
-1. **T-130 `[lead]` is the critical path** (compositor session replaces cage). No app has been launched from the shell yet; Phase 1's exit "overlay over a running app" waits on it. Then write the reserved VM tasks: `ruya-session` in the image (unit, polkit, per-profile Wayland/PipeWire sockets per ADR-004/010, spawner, `ambient`/`media` levels, Store "Open"); `ruya-update` over `bootc` (contract T-135, greenboot rollback event); BlueZ in `ruya-devices` (contract T-136); udisks2 (contract T-137).
-2. **Store realism:** T-140 (Flathub instead of Fedora's OCI remote, AppStream refresh, real progress) should land before or with T-111 (Store UI), or the UI will be tuned to a catalogue of 524 unnamed apps. The job-signal race is mitigated by a 100 ms start delay in `ruya-store`; T-111's hint asks the client to buffer unknown-job signals as well.
-3. **VM screenshots of Settings need a wizard walk:** T-132 used a probe instead (`scripts/vm-network-probe.qml`). T-141 scripts it; after that, insist on VM screenshots again for service tasks with a pane. Probes must use `console.warn`: the image filters `console.log`.
-4. **Admin authorization:** `ruya-store` now checks admin for `AddRemote` itself (caller uid 0, or the active profile is an admin per `Profiles1`). Other services still trust the shell. Decide when T-135 (update) lands whether every admin-only call verifies the same way (security invariant territory).
-5. **Mock-only surface:** Update (T-135), Bluetooth (T-136), Storage (T-137), Session (T-138) are contract-and-mock tasks with real services waiting. Keep at most about 4 waiting; check the mocks against the services when those land.
-6. **`shots` focus flakes:** T-127's guard works; watch `TEST WINDOW LOST ACTIVATION` frequency.
-7. **CI** not read since the 2026-10-27 push; this session's commits were pushed at its end (the lead pushes every session now, `LEAD.md` step 7). Read the Actions result first next time (`gh run list`, if `gh` is authenticated; otherwise ask the owner).
-8. **Real hardware (B-002), image size:** owner question open.
+1. **T-130 `[lead]` is the critical path** (compositor session replaces cage). No app has been launched from the shell; Phase 1's exit "overlay over a running app" and T-147 (full-screen apps) wait on it. Then write the reserved VM tasks: `ruya-session` in the image (unit, polkit, per-profile Wayland/PipeWire sockets per ADR-004/010, spawner, `ambient`/`media` levels, Store "Open"); `ruya-update` over `bootc` (contract T-135); BlueZ (T-136); udisks2 (T-137).
+2. **Host storage integrity.** A cargo registry file on C: turned into null bytes (2026-10-28), after the WSL `ext4` errors of 2026-10-24..27 (also on C:). Owner asked to run a memory and SMART check. If a tracked file ever shows null bytes, `lint-text.ps1` catches it; for caches, delete and re-fetch.
+3. **CI drift.** CI was red from `81ce23e` until this push because the runner's clippy (1.99) knew a lint the host's (1.92) did not. CI is now pinned to 1.92.0 (`ci.yml`, `dev-setup.md`); **check the first run after this push is green** (public API: `https://api.github.com/repos/fatihyilmaz84/ruya-os/actions/runs?per_page=4`, no `gh` on this host). The `image` job failed once at `f835519` and passed at `2e280ef`.
+4. **Design system rollout.** You are its steward (`LEAD.md` §5). T-142 (type scale + size lint) and T-143 (spacing/shape + `Badge`) come first; T-111 and T-113 should land after T-143 so they use the tokens. T-146/T-147 are the owner's art-led Home and full-screen flow. The canvas boards have not been compared with the spec since it was written: tell the owner which are stale once T-142/T-143 land.
+5. **Store realism:** T-140 (Flathub, AppStream refresh, real progress) before or with T-111.
+6. **Admin authorization:** only `ruya-store` checks admin itself. Decide when T-135 lands whether every admin-only call verifies the same way.
+7. **Mock-only surface:** Update (T-135), Bluetooth (T-136), Storage (T-137), Session (T-138, service T-139). Keep at most about 4 waiting.
+8. **Real hardware (B-002):** owner question open.
 
 ## First things the next lead should do
 
-1. `git status` clean and no builder session running (`list_sessions`, and no `build.sh` in WSL).
-2. Steps 1–3 of `LEAD.md` over the range above; T-138/T-139 are the interesting ones (the `Session1` contract is the base of the app launch story).
-3. T-130 as the lead task; then the reserved VM tasks above.
-4. Size budgets (`LEAD.md` 3b): root `CLAUDE.md` is 10.7 KB, at its budget; trim before adding anything.
+1. `git status` clean and no builder session running (`list_sessions`, and no `build.sh` in WSL; the distro is `FedoraLinux-44`).
+2. Read the CI result of this push (concern 3).
+3. Steps 1–3 of `LEAD.md` over the range above; T-139 (`ruya-session` core) is the interesting one: check the mock and the Rust core agree on every status and reason, including `launch-failed`.
+4. T-130 as the lead task.
+5. Size budgets (`LEAD.md` 3b): root `CLAUDE.md` 10.8 KB, `shell/CLAUDE.md` 7.0 KB, at budget; trim before adding anything.
 
 ## Quality signals (one row per lead session)
 
@@ -41,3 +41,4 @@ The procedure is in [`LEAD.md`](LEAD.md). **Rewrite this file at the end of ever
 | 2026-10-24 | 2aab79e..64b7e3f | T-119, T-131, T-110 (+ lead disk-space scripts) | 0 / 1 (job-signal race note for T-134) | 152 + 12 skipped QML; shots 164 | not run (WSL disk) |
 | 2026-10-27 | 2f2f1e1..f7574e9 | T-129 (lead work), docs; + docs slimming, T-135..T-139 planned | 0 / 0 (T-129 screenshot fine; Forget rows sit below a long Wi-Fi list, cosmetic) | 164 + 13 skipped QML, 54 Rust; shots 177 (1 focus loss, recovered) | not run (WSL disk) |
 | 2026-10-28 | f835519..7392be4 + uncommitted | T-132, T-133, T-134 (builders stopped undocumented; lead verified and committed) | 0 code / 3 filed (Fedora remote → T-140, VM nav → T-141, signal buffering → T-111) + process (concurrent builders → owner) | 164 + 13 skipped QML, 117 Rust; shots not run (no screen changed) | `0.0.17-t134` ✅ devices, network link test, store, shell clients over the bus |
+| 2026-10-28 | f5b1a90..198e9ab | T-138, design-system docs (ADR-012, T-142..T-147) | 3 fixed (untested launch-failed toast, frozen-copy `tryCompare`, red CI clippy) + system fix (CI pinned to host Rust) | 169 + 13 skipped QML, 117 Rust; shots not run (no screen changed) | not run (no image change) |
