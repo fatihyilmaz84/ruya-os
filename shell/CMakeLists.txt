@@ -34,6 +34,10 @@ qt_add_qml_module(ruyashell
         src/store/MockStoreBackend.h src/store/MockStoreBackend.cpp
         src/store/DBusStoreBackend.h src/store/DBusStoreBackend.cpp
         src/store/Store.h src/store/Store.cpp
+        src/session/SessionBackend.h
+        src/session/MockSessionBackend.h src/session/MockSessionBackend.cpp
+        src/session/DBusSessionBackend.h src/session/DBusSessionBackend.cpp
+        src/session/Session.h src/session/Session.cpp
         src/power/PowerBackend.h
         src/power/MockPowerBackend.h src/power/MockPowerBackend.cpp
         src/power/DBusPowerBackend.h src/power/DBusPowerBackend.cpp
@@ -85,7 +89,7 @@ qt_add_qml_module(ruyashell
 )
 
 # qmltyperegistrar includes the QML_ELEMENT headers by file name.
-target_include_directories(ruyashell PUBLIC src/profiles src/settings src/audio src/network src/system src/power src/store)
+target_include_directories(ruyashell PUBLIC src/profiles src/settings src/audio src/network src/system src/power src/store src/session)
 target_link_libraries(ruyashell PRIVATE Qt6::Quick Qt6::Multimedia Qt6::DBus)
 
 # Translations: the .ts files in i18n/ are compiled to .qm and embedded as :/i18n/ruyashell_<lang>.qm.

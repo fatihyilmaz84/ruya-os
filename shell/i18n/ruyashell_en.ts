@@ -826,12 +826,17 @@
     </message>
     <message>
         <location line="+1"/>
-        <location line="+478"/>
+        <location line="+490"/>
         <source>Power</source>
         <translation>Power</translation>
     </message>
     <message>
-        <location line="-16"/>
+        <location line="-365"/>
+        <source>%1 stopped unexpectedly</source>
+        <translation>%1 stopped unexpectedly</translation>
+    </message>
+    <message>
+        <location line="+349"/>
         <source>System</source>
         <translation>System</translation>
     </message>

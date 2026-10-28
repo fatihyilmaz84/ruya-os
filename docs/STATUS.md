@@ -15,25 +15,30 @@ Verification legend: **host** = built and tested on Windows · **vm** = built in
 
 ## Board
 
-**NEXT → T-138**
+**NEXT → T-139**
 
-**Lead review due: after 3 more builder tasks** (reviewed up to the lead commit "lead review f835519..7392be4", see `docs/LEAD-NOTES.md`). **One builder session at a time, one task per session:** two builders in one checkout mixed three tasks' work on 2026-10-28. Builders: when your task makes this true, end your reply by recommending a lead session.
+**Lead review due: after 2 more builder tasks** (reviewed up to the lead commit "lead review f835519..7392be4", see `docs/LEAD-NOTES.md`). **One builder session at a time, one task per session:** two builders in one checkout mixed three tasks' work on 2026-10-28. Builders: when your task makes this true, end your reply by recommending a lead session.
 
 Open work only (todo, in-progress, blocked). The order is the recommended order; when NEXT is blocked take the first `todo` whose dependencies are `done` (a task's status is in its file header). `[lead]` tasks are skipped by builders. If nothing qualifies, **stop and ask for a planning session** (`docs/tasks/PLANNING.md`).
 
 | ID | Title | Status | Depends |
 |---|---|---|---|
 | [T-130](tasks/T-130-compositor-session.md) | **[lead]** Compositor session: `ruya-shell` replaces cage  | todo | T-123 |
-| [T-138](tasks/T-138-session-contract-and-mock.md) | `Session1` contract and shell `Session` singleton with a mock | todo | — |
 | [T-139](tasks/T-139-session-service-core.md) | `ruya-session`: pure core and D-Bus adapter (dev mode) | todo | T-138 |
 | [T-141](tasks/T-141-vm-goto-page.md) | `vm-goto.ps1`: a VM past the wizard to a named page | todo | — |
+| [T-142](tasks/T-142-type-scale-tokens.md) | Design tokens v2: type scale, `overlayMs`, size lint | todo | — |
+| [T-143](tasks/T-143-space-shape-tokens-and-badge.md) | Design tokens v2: spacing, radius, sizes, `Badge` | todo | T-142 |
 | [T-140](tasks/T-140-store-remotes-and-progress.md) | Store in the image: Flathub remote, AppStream refresh, real progress | todo | T-134 |
 | [T-112](tasks/T-112-library-service-core.md) | ruya-library discovery core (Rust) | todo | — |
 | [T-135](tasks/T-135-update-contract-and-settings.md) | `Update1` contract, mock, Settings → System updates | todo | — |
 | [T-111](tasks/T-111-store-ui.md) | Store UI | todo | T-110, T-119 |
-| [T-113](tasks/T-113-games-page.md) | Games page and recent row | todo | T-101, T-112 |
+| [T-113](tasks/T-113-games-page.md) | Library client and Games page with art cards | todo | T-101, T-112, T-143 |
+| [T-146](tasks/T-146-art-led-home.md) | Art-led Home: hero, Recent art row, section nav | todo | T-113, T-143 |
+| [T-147](tasks/T-147-fullscreen-app-flow.md) | Full-screen apps: launch splash, quick menu, return, close | todo | T-130, T-138, T-146 |
 | [T-136](tasks/T-136-bluetooth-contract-and-settings.md) | `Devices1.Bluetooth` contract, mock, Settings pane | todo | — |
 | [T-137](tasks/T-137-storage-contract-and-settings.md) | `Devices1.Storage` contract, mock, Settings → Storage | todo | — |
+| [T-144](tasks/T-144-contrast-and-accessible-names.md) | Design review: contrast over the backdrop, accessible names | todo | T-143 |
+| [T-145](tasks/T-145-bundle-inter.md) | Bundle the Inter typeface | todo | T-142 |
 
 ## Inbox
 
@@ -59,11 +64,14 @@ Follow-ups and debt for the next planner. Builders: add one line per item, `- (s
 - **One admin or several?** Overview §2 says one admin, `03` §1.1 says one or more. The service supports several; the UI offers Standard and Guest. Recommendation: one admin in the UI for the MVP (as the overview says); revisit after the first user test. Not blocking.
 - **Turkish wording review** (`shell/i18n/ruyashell_tr.ts`, written by AI): a native review before the first release. Not blocking; best done after the Settings panes settle (T-135..T-137).
 - **libdvdcss / AACS:** not included; needs an explicit owner decision.
-- Decided (for the record): ADR-002 option A (owner, 2026-10-23); repo public on GitHub (2026-10-23); the lead pushes `main` at the end of every lead session after `scripts\scan-secrets.ps1` passes, builders never push (owner, 2026-10-28).
+- Decided (for the record): design system ADR-012 with Inter bundled, an art-led Home and full-screen apps (owner, 2026-10-28); ADR-002 option A (owner, 2026-10-23); repo public on GitHub (2026-10-23); the lead pushes `main` at the end of every lead session after `scripts\scan-secrets.ps1` passes, builders never push (owner, 2026-10-28).
 
 ## Session log (newest first, the latest five; older entries in `STATUS-log.md`)
 
 One entry per session, at most 4 lines: date · model · tasks · what happened · numbers · follow-ups. Detail belongs in the task Outcome.
+
+- 2026-10-28 · Sonnet 5.5 · T-138 · `Session1` contract, `Session` singleton with mock and D-Bus client, crash toast, `tst_session.qml`. `test` ALL GREEN (169). D-Bus client unverified (T-139).
+- 2026-10-28 · Opus 5.5 · Owner: design system · New `docs/specs/04-design-system.md` ("Dreamglass", ADR-012), wired into the `CLAUDE.md`s, `LEAD.md`, `PLANNING.md`, `TEMPLATE.md`. Owner then chose Inter, an art-led Home and full-screen apps: specs 02 §1/§1.5, 04 v1.1; T-113 rescoped (its Home row moved to T-146); planned T-142..T-147. Docs only, `dev.ps1 test` not run, not committed.
 
 ### 2026-10-28 · Opus 5.5 · Lead (review of `f835519..7392be4` plus uncommitted T-132/T-133/T-134 work)
 Two Sonnet builder sessions ran T-132, T-133 and T-134 at once in this checkout and stopped without Outcomes or commits; the lead reviewed the code (0 findings), ran the VM checks and committed each task. `dev.ps1 test` ALL GREEN (164 QML, 13 skipped; 117 Rust); `shots` not run (no screen changed). VM `0.0.17-t134`: `RUYA_BOOT_OK`, `vm-devices-check.sh` and `vm-store-check.sh` all PASS, NIC unplug followed by service and shell, exposure 3.4 / 3.3 OK; no `ext4` errors.
@@ -75,5 +83,3 @@ Review of `2f2f1e1..f7574e9` (T-129 was lead work; docs only otherwise) and plan
 - 2026-10-24 · Sonnet 5.5 · T-110 · `org.ruyaos.Store1` contract, `Store` singleton with mock (12 apps, simulated installs) and D-Bus client, 7 tests. `test` ALL GREEN (152). D-Bus client unverified.
 
 - 2026-10-24 · Sonnet 5.5 · T-131 · Rename and delete in Settings → Profiles (`ProfileManageFlow`). `test` 144, `shots` 156 green. **VM criterion not run** (WSL disk went read-only three times): Inbox.
-
-- 2026-10-24 · Opus 5.5 · T-129 (lead, host-only while the disk is broken) · `Devices1.Network` contract, mock, D-Bus client, Settings → Network. `test` 164, `shots` 177 green. D-Bus client unverified.

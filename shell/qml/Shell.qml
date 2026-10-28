@@ -214,6 +214,18 @@ FocusScope {
         }
     }
 
+    // An app that crashed or never got to run is the only exit the user hears about; a normal
+    // quit (including a Stop from the shell) is silent.
+    Connections {
+        target: Session
+        function onAppExited(instance, appId, exitCode, reason) {
+            if (reason !== "crashed" && reason !== "launch-failed")
+                return
+            const name = Store.app(appId).name || appId
+            Notifications.show(qsTr("%1 stopped unexpectedly").arg(name), "error")
+        }
+    }
+
     // Volume keys work in every state, modals included. A Shortcut is matched before key
     // events reach the focus item, so no modal can swallow them and focus never moves.
     Shortcut { sequences: ["Volume Up"]; context: Qt.ApplicationShortcut; onActivated: Audio.stepVolume(5) }

@@ -1,0 +1,74 @@
+<!DOCTYPE node PUBLIC "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
+ "http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
+<!--
+  org.ruyaos.Session1 — launch installed apps as a profile, stop them, list what runs.
+  Served by ruya-session on the system bus at /org/ruyaos/Session1 (service: T-139; the shell's
+  mock backend follows this contract too).
+  Contract between shell (Qt/QML) and services (Rust); see docs/specs/03-services-and-apps.md §4.1.
+
+  Trust: the `profile` argument of Launch is trusted. The bus policy lets only ruya-shell and root
+  call this interface, and the shell passes the active profile. The service nevertheless refuses
+  to run anything as a non-profile account (root, system users, ruya-shell): such a name is
+  "unknown-profile". Apps run as the profile's Unix user, never as ruya-shell or root (ADR-004).
+
+  Status strings are stable API:
+    "ok"                success (for Launch: the app is starting, AppStarted follows when it runs)
+    "unknown-app"       the app id is not installed
+    "unknown-profile"   no such profile, or not an account apps may run as
+    "already-running"   this app is already running (or starting) for this profile
+    "unknown-instance"  no running instance with that name
+    "invalid"           malformed argument (empty id, bad characters)
+    "failed"            internal error
+
+  An instance is an opaque string chosen by the service (a systemd unit name); the shell only
+  hands it back. Every list is a plain array and every record an a{sv} dictionary, so fields can be
+  added later without breaking clients (unknown keys are ignored).
+
+  Running record (a{sv}), keys:
+    instance   s    opaque instance name
+    app_id     s    Flatpak application id
+    profile    s    profile id the app runs as
+    started    x    unix seconds
+    state      s    "starting" | "running" | "stopping"
+-->
+<node>
+  <interface name="org.ruyaos.Session1">
+
+    <!-- Starts the app as the profile. The answer comes as soon as it is queued; the app is
+         running when AppStarted arrives. If it never gets there, AppExited with reason
+         "launch-failed" is sent instead. `instance` is "" unless the status is "ok". -->
+    <method name="Launch">
+      <arg name="app_id" type="s" direction="in"/>
+      <arg name="profile" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+      <arg name="instance" type="s" direction="out"/>
+    </method>
+
+    <!-- Asks the app to quit, and kills it if it does not. AppExited (reason "quit", or "killed"
+         after the kill) follows. Stopping an instance that is already stopping is "ok". -->
+    <method name="Stop">
+      <arg name="instance" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <method name="ListRunning">
+      <arg name="apps" type="aa{sv}" direction="out"/>
+    </method>
+
+    <signal name="AppStarted">
+      <arg name="instance" type="s"/>
+      <arg name="app_id" type="s"/>
+    </signal>
+
+    <!-- Sent once per instance. reason: "quit" (stopped on request or ended normally), "crashed"
+         (exited abnormally by itself), "killed" (ended by a signal after Stop, or by the system),
+         "launch-failed" (never reached running; exit_code is then -1). -->
+    <signal name="AppExited">
+      <arg name="instance" type="s"/>
+      <arg name="app_id" type="s"/>
+      <arg name="exit_code" type="i"/>
+      <arg name="reason" type="s"/>
+    </signal>
+
+  </interface>
+</node>

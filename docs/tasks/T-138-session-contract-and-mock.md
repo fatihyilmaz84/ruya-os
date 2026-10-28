@@ -1,6 +1,6 @@
 # T-138 — App sessions: `Session1` contract and shell `Session` singleton with a mock
 
-Status: todo · Phase: 3 · Depends: — · Area: api, shell · Size: S
+Status: done · Phase: 3 · Depends: — · Area: api, shell · Size: S
 
 ## Goal
 The shell gets one object, `Session`, that launches an installed app, stops it, and tells the UI which apps are running and when one exits, against a mock. It is the contract that the Store UI ("Open"), the Games page (tiles) and the Guide overlay (switch/close app, after T-130) will call; `ruya-session` (T-139, and later the VM task) implements it.
@@ -39,4 +39,10 @@ The shell gets one object, `Session`, that launches an installed app, stops it, 
 - Translations: one new string; refresh `shell/i18n` and translate it.
 
 ## Outcome
-_Filled in by the implementer. Start with a `Verified:` line._
+Verified: host (`dev.ps1 test` ALL GREEN, 169 QML passed). The D-Bus client only compiles here: unverified until `ruya-session` (T-139).
+
+Built `api/dbus/org.ruyaos.Session1.xml` and `shell/src/session/` (`SessionBackend`, `MockSessionBackend`, `DBusSessionBackend`, `Session` facade, as the Store pattern). The mock knows `org.example.*` and `crashy`, checks profiles against the mock `Profiles` list (injected check), goes starting then running (300 ms, 10 ms with `RUYA_MOCK_FAST=1`), and `Stop` exits with `quit`. The toast lives in `Shell.qml` (`Connections` on `Session`, `crashed` and `launch-failed` only). Tests: `tests/tst_session.qml` (statuses, running list, quit silent, crash one toast). Spec 03 section 4.1 and the Turkish and English strings updated.
+
+Files: the XML, `shell/src/session/*`, `shell/CMakeLists.txt`, `shell/qml/Shell.qml`, `shell/tests/tst_session.qml`, `shell/i18n/*.ts`, `docs/specs/03-services-and-apps.md`.
+
+Deviation: `running` is a `QVariantList` of records (like `Store.installed`), not a list model; it is small, and QML needs no per-row signals yet.
