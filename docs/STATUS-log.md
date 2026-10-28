@@ -2,6 +2,13 @@
 
 Older entries of the `docs/STATUS.md` session log, newest first. STATUS keeps only the latest five; the lead moves the rest here at each review. Nobody needs to read this file to start a task.
 
+- 2026-10-28 · Sonnet 5.5 · T-138 · `Session1` contract, `Session` singleton with mock and D-Bus client, crash toast, `tst_session.qml`. `test` ALL GREEN (169). D-Bus client unverified (T-139).
+- 2026-10-28 · Opus 5.5 · Owner: design system · New `docs/specs/04-design-system.md` ("Dreamglass", ADR-012), wired into the `CLAUDE.md`s, `LEAD.md`, `PLANNING.md`, `TEMPLATE.md`. Owner then chose Inter, an art-led Home and full-screen apps: specs 02 §1/§1.5, 04 v1.1; T-113 rescoped (its Home row moved to T-146); planned T-142..T-147. Docs only; reviewed and committed by the next lead (`b16bf1e`).
+
+### 2026-10-28 · Opus 5.5 · Lead (review of `f835519..7392be4` plus uncommitted T-132/T-133/T-134 work)
+Two Sonnet builder sessions ran T-132, T-133 and T-134 at once in this checkout and stopped without Outcomes or commits; the lead reviewed the code (0 findings), ran the VM checks and committed each task. `dev.ps1 test` ALL GREEN (164 QML, 13 skipped; 117 Rust); `shots` not run (no screen changed). VM `0.0.17-t134`: `RUYA_BOOT_OK`, `vm-devices-check.sh` and `vm-store-check.sh` all PASS, NIC unplug followed by service and shell, exposure 3.4 / 3.3 OK; no `ext4` errors.
+Found: the image ships Fedora's OCI Flatpak remote (524 unnamed apps) → T-140; Settings screenshots in the VM need a wizard walk → T-141; job-signal buffering → T-111 hint. NEXT T-138.
+
 ### 2026-10-27 · Opus 5.5 · Lead (owner: "take the lead, optimise docs and rules")
 Review of `2f2f1e1..f7574e9` (T-129 was lead work; docs only otherwise) and planning. `dev.ps1 test` ALL GREEN (164 QML passed, 13 skipped offscreen; Rust 54), `shots` ALL GREEN (177; one `TEST WINDOW LOST ACTIVATION`, recovered); `23-settings-network.png` reviewed: fine. VM not run (WSL disk). CI not checked; 6 commits unpushed. **Docs and rules slimmed** (STATUS 25 KB → about 9 KB, Done table archived, board lists open work only, `lint-board.ps1`, `shell/PATTERNS.md` split out, duplicated role text removed; see `LEAD-NOTES.md`). Planned T-135..T-139 (update, Bluetooth, storage, session contract and core). **Later the same day (owner: do the WSL steps and the push):** `main` pushed after a clean secret scan; the owner recreated the WSL distro with `memory=8GB`; `build.sh` 0.0.13-lead, `make-disk.sh` and `smoke-test.ps1 -Work -Keep` all passed (`RUYA_BOOT_OK`, no ext4 errors); T-131's VM criterion done (rename and delete by keys, service state checked). CI not read yet.
 
