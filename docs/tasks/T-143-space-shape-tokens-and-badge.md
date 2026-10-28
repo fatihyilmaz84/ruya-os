@@ -1,6 +1,6 @@
 # T-143 — Design tokens v2: spacing, radius, sizes, and the Badge component
 
-Status: todo · Phase: 2 · Depends: T-142 · Area: shell · Size: M
+Status: done · Phase: 2 · Depends: T-142 · Area: shell · Size: M
 
 ## Goal
 Spacing, corner radii and the standard control sizes come from tokens, and the small pills scattered through the shell (PIN badge, "mock services" flag) become one `Badge` component, ready for the Store's source badges (T-111).
@@ -36,4 +36,8 @@ Spacing, corner radii and the standard control sizes come from tokens, and the s
 - The store's source badges (Official / Community / Dev) map to `success` / `info` / `warning`.
 
 ## Outcome
-_Filled in by the implementer. Start with a `Verified:` line._
+Verified: host (`dev.ps1 test` ALL GREEN, 178 QML; `shots` ALL GREEN, picker, home, Settings, power confirm reviewed).
+
+Built: spacing, radius and size tokens, `badgeFillAlpha` and `Theme.badgeFill()` in `Theme.qml`; `qml/Badge.qml` (in CMake) used for the PIN badge and the "mock services" flag; `tst_theme::test_space_shape`, `tst_badge.qml`. About 70 literals in 19 QML files became tokens (spacing, margins, radii, focus-ring width/offset, row/button/tile/avatar sizes).
+
+Nearest-token shifts (design px): spacing 10 -> 8, 14/18/20 -> 16, 22/28/30 -> 24, 32/40 -> 36, 60/80 -> 64, 90/120 -> 96; radius 16 -> 12 (keys), 20 -> 18 (toast, text entry field); dialog buttons 84 -> `buttonHeight` 76. Neutral badge has a `background` fill (spec: outline only) because on the avatar ring a transparent one was unreadable. The "mock services" flag is now a warning Badge (caps, pill). Setup's `topMargin: 200` became 2 x `spaceXxxl` (192). Left as literals: `1` hairline borders (`Math.max(1, u)`, no token), the Setup keycap/`SettingsPage` swatch sizes and other widths that match no token.

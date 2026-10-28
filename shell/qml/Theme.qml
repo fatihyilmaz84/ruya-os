@@ -55,6 +55,28 @@ QtObject {
     readonly property int weightDemiBold: Font.DemiBold
     readonly property int weightBold: Font.Bold
 
+    // Spacing (8 px grid), shape and sizes (04 §3.3): design px, multiplied by `u` at the call site.
+    readonly property real spaceXxs: 4
+    readonly property real spaceXs: 8
+    readonly property real spaceS: 16
+    readonly property real spaceM: 24
+    readonly property real spaceL: 36
+    readonly property real spaceXl: 48
+    readonly property real spaceXxl: 64
+    readonly property real spaceXxxl: 96
+    readonly property real radiusS: 12      // keys, badges
+    readonly property real radiusM: 18      // tiles, art, toasts
+    readonly property real radiusL: 32      // panels, dialogs (pills are height / 2)
+    readonly property real rowHeight: 84
+    readonly property real buttonHeight: 76
+    readonly property real tileWidth: 400
+    readonly property real tileHeight: 260
+    readonly property real avatarSize: 200
+    readonly property real focusRingWidth: 4
+    readonly property real focusRingOffset: 7
+    readonly property real badgeFillAlpha: 0.18   // badge fill = the kind's colour at this alpha
+    function badgeFill(c) { return Qt.rgba(c.r, c.g, c.b, badgeFillAlpha) }
+
     readonly property real safeArea: DeviceSettings.overscan   // fraction of width/height
     readonly property real focusScale: 1.08
 

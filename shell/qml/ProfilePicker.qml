@@ -23,7 +23,7 @@ FocusScope {
 
     Text {
         objectName: "pickerTitle"
-        anchors { horizontalCenter: parent.horizontalCenter; bottom: list.top; bottomMargin: 80 * picker.u }
+        anchors { horizontalCenter: parent.horizontalCenter; bottom: list.top; bottomMargin: Theme.spaceXxl * picker.u }
         text: qsTr("Who's playing?")
         opacity: pinPad.shown ? 0 : 1      // the PIN pad replaces the chooser, not overlays it
         Behavior on opacity { NumberAnimation { duration: Theme.pageMs } }
@@ -43,7 +43,7 @@ FocusScope {
         width: Math.min(contentWidth, picker.width * 0.9)
         height: 340 * picker.u
         orientation: ListView.Horizontal
-        spacing: 48 * picker.u
+        spacing: Theme.spaceXl * picker.u
         interactive: false
         keyNavigationEnabled: true
         focus: true
@@ -57,7 +57,7 @@ FocusScope {
     }
 
     Text {
-        anchors { horizontalCenter: parent.horizontalCenter; top: list.bottom; topMargin: 40 * picker.u }
+        anchors { horizontalCenter: parent.horizontalCenter; top: list.bottom; topMargin: Theme.spaceL * picker.u }
         visible: !Profiles.available
         opacity: pinPad.shown ? 0 : 1      // the PIN pad replaces the chooser, not overlays it
         Behavior on opacity { NumberAnimation { duration: Theme.pageMs } }

@@ -285,7 +285,7 @@ FocusScope {
     Column {
         id: content
         anchors.centerIn: parent
-        spacing: 24 * entry.u
+        spacing: Theme.spaceM * entry.u
 
         Text {
             objectName: "entryTitle"
@@ -301,8 +301,8 @@ FocusScope {
             objectName: "entryField"
             anchors.horizontalCenter: parent.horizontalCenter
             width: (10 * (entry.keyUnit + entry.keyGap) - entry.keyGap) * entry.u
-            height: 84 * entry.u
-            radius: 20 * entry.u
+            height: Theme.rowHeight * entry.u
+            radius: Theme.radiusM * entry.u
             color: Theme.glass
             border.width: Math.max(1, entry.u)
             border.color: Theme.glassBorder
@@ -376,10 +376,10 @@ FocusScope {
 
                             Rectangle {
                                 anchors.fill: parent
-                                radius: 16 * entry.u
+                                radius: Theme.radiusS * entry.u
                                 color: keyItem.focused ? Theme.entryKeyFocusFill
                                      : keyItem.active ? Theme.entryKeyActiveFill : Theme.glass
-                                border.width: keyItem.focused ? 4 * entry.u : Math.max(1, entry.u)
+                                border.width: keyItem.focused ? Theme.focusRingWidth * entry.u : Math.max(1, entry.u)
                                 border.color: keyItem.focused ? Theme.focusRing : Theme.glassBorder
                                 opacity: keyItem.dimmed ? 0.4 : 1
 

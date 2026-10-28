@@ -26,5 +26,27 @@ Item {
             DeviceSettings.reducedMotion = true
             compare(Theme.overlayMs, 0)
         }
+
+        function test_space_shape() {
+            compare(Theme.spaceXxs, 4)
+            compare(Theme.spaceXs, 8)
+            compare(Theme.spaceS, 16)
+            compare(Theme.spaceM, 24)
+            compare(Theme.spaceL, 36)
+            compare(Theme.spaceXl, 48)
+            compare(Theme.spaceXxl, 64)
+            compare(Theme.spaceXxxl, 96)
+            compare(Theme.radiusS, 12)
+            compare(Theme.radiusM, 18)
+            compare(Theme.radiusL, 32)
+            compare(Theme.rowHeight, 84)
+            compare(Theme.buttonHeight, 76)
+            compare(Theme.tileWidth, 400)
+            compare(Theme.tileHeight, 260)
+            compare(Theme.avatarSize, 200)
+            compare(Theme.focusRingWidth, 4)
+            compare(Theme.focusRingOffset, 7)
+            compare(Theme.badgeFillAlpha, 0.18)
+        }
     }
 }

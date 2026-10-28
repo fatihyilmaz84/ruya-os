@@ -262,11 +262,11 @@ FocusScope {
     }
     Row {
         anchors { right: parent.right; rightMargin: root.marginX; verticalCenter: brand.verticalCenter }
-        spacing: 28 * root.u
+        spacing: Theme.spaceM * root.u
 
         Row {
             visible: root.signedIn
-            spacing: 14 * root.u
+            spacing: Theme.spaceS * root.u
             anchors.verticalCenter: parent.verticalCenter
             Rectangle {
                 width: 48 * root.u
@@ -348,7 +348,7 @@ FocusScope {
             id: shelf
             anchors {
                 left: parent.left; right: parent.right
-                bottom: parent.bottom; bottomMargin: root.marginY + 60 * root.u
+                bottom: parent.bottom; bottomMargin: root.marginY + Theme.spaceXxl * root.u
             }
             height: 380 * root.u
             clip: true
@@ -377,7 +377,7 @@ FocusScope {
         }
 
         Text {
-            anchors { left: shelf.left; leftMargin: root.marginX; bottom: shelf.top; bottomMargin: 20 * root.u }
+            anchors { left: shelf.left; leftMargin: root.marginX; bottom: shelf.top; bottomMargin: Theme.spaceS * root.u }
             text: root.currentTile ? root.currentTile.title : ""
             color: Theme.text
             font.pixelSize: Theme.typeDisplay * root.u
@@ -391,9 +391,9 @@ FocusScope {
             anchors { left: shelf.left; right: shelf.right; verticalCenter: shelf.verticalCenter }
             leftMargin: root.marginX
             rightMargin: root.marginX
-            height: 260 * root.u
+            height: Theme.tileHeight * root.u
             orientation: ListView.Horizontal
-            spacing: 36 * root.u
+            spacing: Theme.spaceL * root.u
             keyNavigationWraps: false
             highlightMoveDuration: Theme.focusMs
             highlightRangeMode: ListView.ApplyRange
@@ -412,7 +412,7 @@ FocusScope {
                 key: modelData
                 title: root.tileTitle(modelData)
                 u: root.u
-                width: 400 * root.u
+                width: Theme.tileWidth * root.u
                 height: tiles.height
             }
 
@@ -562,7 +562,7 @@ FocusScope {
             anchors.centerIn: parent
             width: panelColumn.width + 96 * root.u
             height: panelColumn.height + 96 * root.u
-            radius: 32 * root.u
+            radius: Theme.radiusL * root.u
             color: Theme.panel
             border.color: Theme.glassBorder
         }
@@ -570,7 +570,7 @@ FocusScope {
         Column {
             id: panelColumn
             anchors.centerIn: parent
-            spacing: 18 * root.u
+            spacing: Theme.spaceS * root.u
             Text { text: qsTr("System"); color: Theme.text; font.pixelSize: Theme.typeTitle * root.u; anchors.horizontalCenter: parent.horizontalCenter }
             Text { text: qsTr("Image version %1").arg(root.version); color: Theme.textDim; font.pixelSize: Theme.typeBody * root.u; anchors.horizontalCenter: parent.horizontalCenter }
             FpsMeter { font.pixelSize: Theme.typeBody * root.u; anchors.horizontalCenter: parent.horizontalCenter; visible: systemPanel.visible }
@@ -582,7 +582,7 @@ FocusScope {
                 anchors.horizontalCenter: parent.horizontalCenter
                 width: 520 * root.u
                 height: contentHeight
-                spacing: 14 * root.u
+                spacing: Theme.spaceS * root.u
                 interactive: false
                 keyNavigationEnabled: true
                 readonly property var systemItems: [
@@ -644,10 +644,10 @@ FocusScope {
                     readonly property bool focused: ListView.isCurrentItem && actions.activeFocus
 
                     width: actions.width
-                    height: 76 * root.u
+                    height: Theme.buttonHeight * root.u
                     radius: height / 2
                     color: focused ? Theme.focusFill : Theme.glass
-                    border.width: focused ? 4 * root.u : 1
+                    border.width: focused ? Theme.focusRingWidth * root.u : 1
                     border.color: focused ? Theme.focusRing : Theme.glassBorder
                     Text {
                         anchors.centerIn: parent
@@ -682,12 +682,12 @@ FocusScope {
         font.pixelSize: Theme.typeMicro * root.u
     }
 
-    Text {
+    Badge {
         visible: Profiles.mock
         anchors { left: parent.left; bottom: parent.bottom; margins: root.marginY / 2 }
+        u: root.u
+        kind: "warning"
         text: qsTr("mock services")
-        color: Theme.warningText
-        font.pixelSize: Theme.typeMicro * root.u
     }
 
     VolumeOsd {

@@ -17,7 +17,7 @@ Item {
     Rectangle {
         id: avatar
         anchors.horizontalCenter: parent.horizontalCenter
-        width: 200 * card.u
+        width: Theme.avatarSize * card.u
         height: width
         radius: width / 2
         color: card.modelData.avatar
@@ -34,26 +34,16 @@ Item {
     }
 
     Text {
-        anchors { horizontalCenter: parent.horizontalCenter; top: avatar.bottom; topMargin: 24 * card.u }
+        anchors { horizontalCenter: parent.horizontalCenter; top: avatar.bottom; topMargin: Theme.spaceM * card.u }
         text: card.modelData.name
         color: card.focused ? Theme.text : Theme.textDim
         font.pixelSize: Theme.typeHeadline * card.u
     }
 
-    Rectangle {
+    Badge {
         visible: card.modelData.hasPin
         anchors { right: avatar.right; bottom: avatar.bottom }
-        width: 64 * card.u
-        height: 36 * card.u
-        radius: height / 2
-        color: Theme.background
-        border.color: Theme.glassBorder
-        Text {
-            anchors.centerIn: parent
-            text: qsTr("PIN")
-            color: Theme.textDim
-            font.pixelSize: Theme.typeMicro * card.u
-            font.weight: Font.DemiBold
-        }
+        u: card.u
+        text: qsTr("PIN")
     }
 }

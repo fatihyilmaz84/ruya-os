@@ -20,13 +20,13 @@ FocusScope {
 
     Rectangle {
         objectName: "pagePlaceholder"
-        anchors { left: parent.left; top: message.bottom; topMargin: 40 * root.u }
+        anchors { left: parent.left; top: message.bottom; topMargin: Theme.spaceL * root.u }
         width: 360 * root.u
-        height: 76 * root.u
+        height: Theme.buttonHeight * root.u
         radius: height / 2
         focus: true
         color: Theme.glass
-        border.width: activeFocus ? 4 * root.u : 1
+        border.width: activeFocus ? Theme.focusRingWidth * root.u : 1
         border.color: activeFocus ? Theme.focusRing : Theme.glassBorder
         Text {
             anchors.centerIn: parent

@@ -13,7 +13,7 @@ SettingControl {
     Rectangle {
         id: track
         objectName: "switchTrack"
-        anchors { right: parent.right; rightMargin: 36 * row.u; verticalCenter: parent.verticalCenter }
+        anchors { right: parent.right; rightMargin: Theme.spaceL * row.u; verticalCenter: parent.verticalCenter }
         width: 96 * row.u
         height: 48 * row.u
         radius: height / 2

@@ -55,7 +55,7 @@ Page {
         objectName: "categoryList"
         anchors { left: parent.left; top: parent.top; bottom: parent.bottom }
         width: 470 * page.u
-        spacing: 10 * page.u
+        spacing: Theme.spaceXs * page.u
         focus: true
         interactive: false
         keyNavigationEnabled: true
@@ -79,12 +79,12 @@ Page {
             height: 72 * page.u
             radius: height / 2
             color: focused ? Theme.focusFill : selected ? Theme.selectedFill : "transparent"
-            border.width: focused ? 4 * page.u : selected ? Math.max(1, page.u) : 0
+            border.width: focused ? Theme.focusRingWidth * page.u : selected ? Math.max(1, page.u) : 0
             border.color: focused ? Theme.focusRing : Theme.glassBorder
             Behavior on color { ColorAnimation { duration: Theme.focusMs } }
 
             Text {
-                anchors { left: parent.left; leftMargin: 32 * page.u; right: parent.right; rightMargin: 24 * page.u; verticalCenter: parent.verticalCenter }
+                anchors { left: parent.left; leftMargin: Theme.spaceL * page.u; right: parent.right; rightMargin: Theme.spaceM * page.u; verticalCenter: parent.verticalCenter }
                 text: page.labelFor(category.modelData.key)
                 color: category.selected ? Theme.text : Theme.textDim
                 font.pixelSize: Theme.typeBody * page.u
@@ -95,7 +95,7 @@ Page {
 
     Item {
         id: paneArea
-        anchors { left: categoryList.right; leftMargin: 60 * page.u; right: parent.right; top: parent.top; bottom: parent.bottom }
+        anchors { left: categoryList.right; leftMargin: Theme.spaceXxl * page.u; right: parent.right; top: parent.top; bottom: parent.bottom }
 
         ProfilesPane {
             id: profilesPane
@@ -157,7 +157,7 @@ Page {
         Column {
             objectName: "paneComingSoon"
             visible: page.currentPane === null
-            spacing: 16 * page.u
+            spacing: Theme.spaceS * page.u
             Text {
                 text: page.labelFor(page.current.key)
                 color: Theme.text

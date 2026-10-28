@@ -76,7 +76,7 @@ FocusScope {
         anchors.centerIn: parent
         width: Math.max(titleText.width, buttons.width) + 120 * dialog.u
         height: card.height + 96 * dialog.u
-        radius: 32 * dialog.u
+        radius: Theme.radiusL * dialog.u
         color: Theme.panel
         border.color: Theme.glassBorder
     }
@@ -84,7 +84,7 @@ FocusScope {
     Column {
         id: card
         anchors.centerIn: parent
-        spacing: 40 * dialog.u
+        spacing: Theme.spaceL * dialog.u
 
         Text {
             id: titleText
@@ -110,16 +110,16 @@ FocusScope {
         Row {
             id: buttons
             anchors.horizontalCenter: parent.horizontalCenter
-            spacing: 28 * dialog.u
+            spacing: Theme.spaceM * dialog.u
 
             Rectangle {
                 id: cancelButton
                 objectName: "powerCancel"
                 width: 300 * dialog.u
-                height: 84 * dialog.u
+                height: Theme.buttonHeight * dialog.u
                 radius: height / 2
                 color: activeFocus ? Theme.focusFill : Theme.glass
-                border.width: activeFocus ? 4 * dialog.u : Math.max(1, dialog.u)
+                border.width: activeFocus ? Theme.focusRingWidth * dialog.u : Math.max(1, dialog.u)
                 border.color: activeFocus ? Theme.focusRing : Theme.glassBorder
                 Text {
                     anchors.centerIn: parent
@@ -136,10 +136,10 @@ FocusScope {
                 id: confirmButton
                 objectName: "powerConfirm"
                 width: 300 * dialog.u
-                height: 84 * dialog.u
+                height: Theme.buttonHeight * dialog.u
                 radius: height / 2
                 color: dialog.action === "suspend" ? (activeFocus ? Theme.focusFill : Theme.glass) : Theme.dangerFill
-                border.width: activeFocus ? 4 * dialog.u : Math.max(1, dialog.u)
+                border.width: activeFocus ? Theme.focusRingWidth * dialog.u : Math.max(1, dialog.u)
                 border.color: activeFocus ? Theme.focusRing : Theme.glassBorder
                 Text {
                     anchors.centerIn: parent

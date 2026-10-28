@@ -77,7 +77,7 @@ FocusScope {
         Column {
             id: column
             width: flick.width
-            spacing: 16 * pane.u
+            spacing: Theme.spaceS * pane.u
         }
     }
 

@@ -113,10 +113,10 @@ FocusScope {
         id: pill
         property string label
         implicitWidth: pillText.implicitWidth + 96 * setup.u
-        implicitHeight: 84 * setup.u
+        implicitHeight: Theme.rowHeight * setup.u
         radius: height / 2
         color: Theme.focusFill
-        border.width: 4 * setup.u
+        border.width: Theme.focusRingWidth * setup.u
         border.color: Theme.focusRing
         Text {
             id: pillText
@@ -129,12 +129,12 @@ FocusScope {
 
     // ---- progress ----
     Column {
-        anchors { top: parent.top; topMargin: 200 * setup.u; horizontalCenter: parent.horizontalCenter }
-        spacing: 14 * setup.u
+        anchors { top: parent.top; topMargin: 2 * Theme.spaceXxxl * setup.u; horizontalCenter: parent.horizontalCenter }
+        spacing: Theme.spaceS * setup.u
 
         Row {
             anchors.horizontalCenter: parent.horizontalCenter
-            spacing: 14 * setup.u
+            spacing: Theme.spaceS * setup.u
             Repeater {
                 model: setup.stepCount
                 Rectangle {
@@ -163,7 +163,7 @@ FocusScope {
         visible: setup.step === 0
         anchors.centerIn: parent
         width: 1000 * setup.u
-        spacing: 28 * setup.u
+        spacing: Theme.spaceM * setup.u
         Text {
             width: parent.width
             horizontalAlignment: Text.AlignHCenter
@@ -189,7 +189,7 @@ FocusScope {
         visible: setup.step === 1
         anchors.centerIn: parent
         width: 1000 * setup.u
-        spacing: 28 * setup.u
+        spacing: Theme.spaceM * setup.u
         Text {
             objectName: "setupLanguageTitle"
             width: parent.width
@@ -228,7 +228,7 @@ FocusScope {
         visible: setup.step === 2
         anchors.centerIn: parent
         width: 1000 * setup.u
-        spacing: 28 * setup.u
+        spacing: Theme.spaceM * setup.u
         Text {
             objectName: "setupNetworkTitle"
             width: parent.width
@@ -255,7 +255,7 @@ FocusScope {
         visible: setup.step === 3
         anchors.centerIn: parent
         width: 1000 * setup.u
-        spacing: 24 * setup.u
+        spacing: Theme.spaceM * setup.u
         Text {
             width: parent.width
             horizontalAlignment: Text.AlignHCenter
@@ -308,7 +308,7 @@ FocusScope {
         visible: setup.step === 4
         anchors.centerIn: parent
         width: 1000 * setup.u
-        spacing: 28 * setup.u
+        spacing: Theme.spaceM * setup.u
         Text {
             width: parent.width
             horizontalAlignment: Text.AlignHCenter
@@ -331,7 +331,7 @@ FocusScope {
     // Back hint (not on the first step, nor once the account exists).
     Text {
         visible: setup.step > 0 && setup.step < 4
-        anchors { left: parent.left; bottom: parent.bottom; leftMargin: 120 * setup.u; bottomMargin: 120 * setup.u }
+        anchors { left: parent.left; bottom: parent.bottom; leftMargin: Theme.spaceXxxl * setup.u; bottomMargin: Theme.spaceXxxl * setup.u }
         text: qsTr("B  Back")
         color: Theme.textDim
         font.pixelSize: Theme.typeCaption * setup.u

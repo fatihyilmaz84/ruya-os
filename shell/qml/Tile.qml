@@ -24,14 +24,14 @@ Item {
     Rectangle {
         id: card
         anchors.fill: parent
-        radius: 18 * tile.u
+        radius: Theme.radiusM * tile.u
         gradient: Gradient {
             GradientStop { position: 0.0; color: Qt.lighter(tile.accent, 1.25) }
             GradientStop { position: 1.0; color: Qt.darker(tile.accent, 1.8) }
         }
 
         Text {
-            anchors { left: parent.left; bottom: parent.bottom; margins: 22 * tile.u }
+            anchors { left: parent.left; bottom: parent.bottom; margins: Theme.spaceM * tile.u }
             text: tile.title
             color: Theme.text
             font.pixelSize: Theme.typeHeadline * tile.u
@@ -42,10 +42,10 @@ Item {
     // Focus ring: always visible on the focused tile, never animated away mid-navigation.
     Rectangle {
         anchors.fill: card
-        anchors.margins: -7 * tile.u
-        radius: card.radius + 7 * tile.u
+        anchors.margins: -Theme.focusRingOffset * tile.u
+        radius: card.radius + Theme.focusRingOffset * tile.u
         color: "transparent"
-        border.width: 4 * tile.u
+        border.width: Theme.focusRingWidth * tile.u
         border.color: Theme.focusRing
         opacity: tile.focused ? 1 : 0
         Behavior on opacity { NumberAnimation { duration: Theme.focusMs } }

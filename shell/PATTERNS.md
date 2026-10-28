@@ -21,6 +21,8 @@ Reusable settings rows. All extend `SettingControl` (a `FocusScope` with the lab
 | `ChoiceRow` | Left/Right cycle `options` (`[{value, label}]`), wrapping | `value`; `edited(value)` |
 | `SliderRow` | Left/Right step by `stepSize` within `from`..`to`, clamped | `value`; `edited(value)` |
 
+`Badge` (`qml/Badge.qml`, 04 §5): `text`, `kind` (`neutral | success | info | warning`), `u`. Static, never focused; its `Accessible.name` is its text.
+
 A control changes its own value, then emits the signal; the owner writes the setting, resyncs the control, and keeps a `Binding` on it so external changes show (see `DisplayPane.qml`). `Sfx.navigateCount`/`selectCount`/`backCount` count cue requests so tests can check the sound path.
 
 ## Modals from pages

@@ -27,7 +27,7 @@ SettingControl {
     Text {
         id: valueText
         objectName: "value"
-        anchors { right: parent.right; rightMargin: 36 * row.u; verticalCenter: parent.verticalCenter }
+        anchors { right: parent.right; rightMargin: Theme.spaceL * row.u; verticalCenter: parent.verticalCenter }
         width: 90 * row.u
         horizontalAlignment: Text.AlignRight
         text: Math.round(row.value) + row.unit
@@ -35,7 +35,7 @@ SettingControl {
         font.pixelSize: Theme.typeBody * row.u
     }
     Rectangle {
-        anchors { right: valueText.left; rightMargin: 24 * row.u; verticalCenter: parent.verticalCenter }
+        anchors { right: valueText.left; rightMargin: Theme.spaceM * row.u; verticalCenter: parent.verticalCenter }
         width: 320 * row.u
         height: 12 * row.u
         radius: height / 2

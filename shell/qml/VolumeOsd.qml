@@ -42,7 +42,7 @@ Item {
 
     Text {
         id: label
-        anchors { left: parent.left; leftMargin: 36 * osd.u; verticalCenter: parent.verticalCenter }
+        anchors { left: parent.left; leftMargin: Theme.spaceL * osd.u; verticalCenter: parent.verticalCenter }
         text: Audio.muted ? qsTr("Muted") : qsTr("Volume")
         color: Audio.muted ? Theme.toastWarning : Theme.text
         font.pixelSize: Theme.typeBody * osd.u
@@ -50,7 +50,7 @@ Item {
     Rectangle {
         id: track
         objectName: "volumeTrack"
-        anchors { left: label.right; leftMargin: 28 * osd.u; right: value.left; rightMargin: 28 * osd.u; verticalCenter: parent.verticalCenter }
+        anchors { left: label.right; leftMargin: Theme.spaceM * osd.u; right: value.left; rightMargin: Theme.spaceM * osd.u; verticalCenter: parent.verticalCenter }
         height: 12 * osd.u
         radius: height / 2
         color: Theme.glass
@@ -64,7 +64,7 @@ Item {
     Text {
         id: value
         objectName: "volumeValue"
-        anchors { right: parent.right; rightMargin: 36 * osd.u; verticalCenter: parent.verticalCenter }
+        anchors { right: parent.right; rightMargin: Theme.spaceL * osd.u; verticalCenter: parent.verticalCenter }
         width: 70 * osd.u
         horizontalAlignment: Text.AlignRight
         text: Audio.muted ? "–" : Audio.volume

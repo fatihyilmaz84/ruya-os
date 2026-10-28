@@ -34,7 +34,7 @@ SettingControl {
 
     Text {
         objectName: "value"
-        anchors { right: parent.right; rightMargin: 36 * row.u; verticalCenter: parent.verticalCenter }
+        anchors { right: parent.right; rightMargin: Theme.spaceL * row.u; verticalCenter: parent.verticalCenter }
         text: "‹  " + row.currentLabel + "  ›"
         color: Theme.text
         font.pixelSize: Theme.typeBody * row.u

@@ -17,7 +17,7 @@ FocusScope {
     readonly property bool focusable: true
 
     width: parent ? parent.width : 900 * u
-    height: 84 * u
+    height: Theme.rowHeight * u
     activeFocusOnTab: true
 
     Rectangle {
@@ -25,7 +25,7 @@ FocusScope {
         anchors.fill: parent
         radius: height / 2
         color: control.activeFocus ? Theme.focusFill : Theme.glass
-        border.width: control.activeFocus ? 4 * control.u : Math.max(1, control.u)
+        border.width: control.activeFocus ? Theme.focusRingWidth * control.u : Math.max(1, control.u)
         border.color: control.activeFocus ? Theme.focusRing : Theme.glassBorder
         Behavior on color { ColorAnimation { duration: Theme.focusMs } }
     }
@@ -34,7 +34,7 @@ FocusScope {
         id: swatchDot
         objectName: "swatch"
         visible: control.hasSwatch
-        anchors { left: parent.left; leftMargin: 30 * control.u; verticalCenter: parent.verticalCenter }
+        anchors { left: parent.left; leftMargin: Theme.spaceM * control.u; verticalCenter: parent.verticalCenter }
         width: 40 * control.u
         height: width
         radius: width / 2
@@ -46,7 +46,7 @@ FocusScope {
         objectName: "label"
         anchors {
             left: parent.left
-            leftMargin: (control.hasSwatch ? 90 : 36) * control.u
+            leftMargin: (control.hasSwatch ? Theme.spaceXxxl : Theme.spaceL) * control.u
             verticalCenter: parent.verticalCenter
         }
         text: control.label

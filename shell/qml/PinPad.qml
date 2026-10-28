@@ -178,7 +178,7 @@ FocusScope {
     Column {
         id: content
         anchors.centerIn: parent
-        spacing: 28 * pad.u
+        spacing: Theme.spaceM * pad.u
 
         Text {
             anchors.horizontalCenter: parent.horizontalCenter
@@ -192,7 +192,7 @@ FocusScope {
             id: dots
             objectName: "pinDots"
             anchors.horizontalCenter: parent.horizontalCenter
-            spacing: 18 * pad.u
+            spacing: Theme.spaceS * pad.u
             opacity: pad.locked ? Theme.disabledOpacity : 1
             Repeater {
                 model: Math.max(pad.minDigits, pad.entered.length)
@@ -262,7 +262,7 @@ FocusScope {
                     scale: keyCell.focused ? 1.1 : 1.0
                     Behavior on scale { NumberAnimation { duration: Theme.focusMs } }
                     color: keyCell.focused ? Theme.keyFocusFill : Theme.glass
-                    border.width: keyCell.focused ? 4 * pad.u : 1
+                    border.width: keyCell.focused ? Theme.focusRingWidth * pad.u : 1
                     border.color: keyCell.focused ? Theme.focusRing : Theme.glassBorder
                     opacity: pad.locked || (keyCell.modelData === "ok" && pad.entered.length < pad.minDigits)
                         ? Theme.disabledOpacity : 1

@@ -36,7 +36,7 @@ FocusScope {
         anchors {
             left: parent.left; leftMargin: page.marginX
             right: parent.right; rightMargin: page.marginX
-            top: heading.bottom; topMargin: 40 * page.u
+            top: heading.bottom; topMargin: Theme.spaceL * page.u
             bottom: parent.bottom; bottomMargin: page.marginY
         }
     }

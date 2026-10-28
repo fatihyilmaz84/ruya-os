@@ -18,11 +18,11 @@ Item {
         objectName: "toastList"
         anchors {
             right: parent.right; rightMargin: layer.marginX
-            top: parent.top; topMargin: layer.marginY + 90 * layer.u
+            top: parent.top; topMargin: layer.marginY + Theme.spaceXxxl * layer.u
         }
         width: 560 * layer.u
         height: Notifications.maxVisible * (92 + 14) * layer.u
-        spacing: 14 * layer.u
+        spacing: Theme.spaceS * layer.u
         interactive: false
         keyNavigationEnabled: false
         activeFocusOnTab: false
@@ -54,7 +54,7 @@ Item {
 
             width: list.width
             height: 92 * layer.u
-            radius: 20 * layer.u
+            radius: Theme.radiusM * layer.u
             color: Theme.toastBackground
             border.width: Math.max(1, layer.u)
             border.color: Theme.glassBorder
@@ -69,7 +69,7 @@ Item {
             }
             Text {
                 id: icon
-                anchors { left: bar.right; leftMargin: 22 * layer.u; verticalCenter: parent.verticalCenter }
+                anchors { left: bar.right; leftMargin: Theme.spaceM * layer.u; verticalCenter: parent.verticalCenter }
                 visible: toast.iconText !== ""
                 text: toast.iconText
                 color: toast.accent
@@ -78,8 +78,8 @@ Item {
             Text {
                 anchors {
                     left: icon.visible ? icon.right : bar.right
-                    leftMargin: 22 * layer.u
-                    right: parent.right; rightMargin: 24 * layer.u
+                    leftMargin: Theme.spaceM * layer.u
+                    right: parent.right; rightMargin: Theme.spaceM * layer.u
                     verticalCenter: parent.verticalCenter
                 }
                 text: toast.text

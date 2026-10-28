@@ -63,7 +63,7 @@ Typeface: **Inter** (OFL-1.1), bundled as a Qt resource (owner, 2026-10-28; T-14
 
 Turkish runs about 30 % longer than English: rows elide on the right (`Text.ElideRight`), titles never wrap to more than two lines.
 
-### 3.3 Spacing, shape, size (planned, T-143)
+### 3.3 Spacing, shape, size (built, T-143)
 
 - **Spacing** (8 px grid): `spaceXxs` 4, `spaceXs` 8, `spaceS` 16, `spaceM` 24, `spaceL` 36, `spaceXl` 48, `spaceXxl` 64, `spaceXxxl` 96. Rows in a list `spaceS`; tiles in a row `spaceL`; panel padding `spaceXl`; between sections `spaceXxl`.
 - **Radius:** `radiusS` 12 (keys, badges), `radiusM` 18 (tiles, art), `radiusL` 32 (panels, dialogs); pills are `height / 2` (rows, buttons, toasts, OSD).
@@ -122,7 +122,7 @@ Each entry: file, status, and the rules a change must keep. A new component gets
 | Volume OSD | `VolumeOsd.qml` | built | Bottom centre, pill, icon + bar + number, "Muted" in words |
 | Guide overlay | `Shell.qml` | built | `scrimOverlay` + `panel` card `radiusL`, title `typeTitle`, actions as rows |
 | Backdrop | `Backdrop.qml` | built | Tint from focus, three drifting blobs, `tintMs` cross-fade |
-| Badge | (inline today) | planned (T-143) | `typeMicro`, pill; source badges Official (success colour), Community (info), Dev (warning) on a 18 % fill of their colour |
+| Badge | `Badge.qml` | built (T-143) | `typeMicro` DemiBold caps, pill (`text`, `kind` neutral/success/info/warning); neutral = `background` fill, `glassBorder` outline, `textDim`; the others `badgeFill()` (kind colour at `badgeFillAlpha` 18 %) and text in the kind colour; used for PIN and mock services; source badges Official (success colour), Community (info), Dev (warning) on a 18 % fill of their colour |
 | Hint bar | — | proposed | Bottom-left, controller glyph + verb for the actions the focused item accepts; needs pad-type glyphs (B-006) |
 
 ### 5.1 Full-screen apps (look; behaviour in `02-shell.md` §1.5)
