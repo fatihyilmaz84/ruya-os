@@ -1,0 +1,19 @@
+[package]
+name = "ruya-store"
+description = "RuyaOS app store: catalogue and install jobs over the flatpak CLI (org.ruyaos.Store1)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+quick-xml = "0.37"  # AppStream metadata (pure Rust, no libappstream to link)
+flate2 = "1"  # appstream.xml.gz written by flatpak (pure Rust backend)
+zbus = { version = "5", default-features = false, features = ["async-io"] }
+futures-lite = "2"
+async-io = "2"  # timers; already in the tree through zbus
+blocking = "1"  # runs the blocking AddRemote off the executor; already in the tree through zbus
+async-channel = "2"  # job events from the runner thread to the signal emitter; already in the tree through zbus
+
+[dev-dependencies]
+tempfile = "3"

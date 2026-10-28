@@ -10,9 +10,8 @@
 #include <memory>
 
 // QML face of org.ruyaos.Store1: the catalogue, the installed apps and the running jobs.
-// Backend: RUYA_SERVICES=mock|dbus. Unlike Profiles this defaults to the mock on every OS,
-// because the D-Bus service (ruya-store, blocker B-004) does not exist yet; flip the default to
-// follow Profiles once it does.
+// Backend: RUYA_SERVICES=mock|dbus; the default is D-Bus on Linux (ruya-store, T-134) and the
+// mock elsewhere, like Audio and Profiles.
 //
 // App records are plain objects: { id, name, summary, description, developer, source,
 // controller, ageRating, permissions, installedSize, icon, tile, hero, installed,

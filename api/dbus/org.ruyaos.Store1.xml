@@ -2,8 +2,8 @@
  "http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
 <!--
   org.ruyaos.Store1 — the app store: search, install, update, uninstall Flatpak apps.
-  Served by ruya-store on the system bus at /org/ruyaos/Store1 (blocker B-004: the service does
-  not exist yet; the shell's mock backend follows this contract).
+  Served by ruya-store on the system bus at /org/ruyaos/Store1 (ruya-store, T-134; the shell's mock
+  backend follows this contract too).
   Contract between shell (Qt/QML) and services (Rust); see docs/specs/03-services-and-apps.md §4.
 
   Status strings are stable API:
@@ -41,7 +41,8 @@
     source          s    "official" | "community" | "developer" (spec §4.2: the remote's trust level)
     controller      s    "full" | "partial" | "none" (x-ruya-controller / <control>gamepad)
     age_rating      s    OARS summary: "all" | "7+" | "12+" | "16+" | "18+"
-    permissions     as   stable keys, in plain-language order: "network", "home-files",
+    permissions     as   (GetApp reads them on first use; the lists carry the ones already read)
+                         stable keys, in plain-language order: "network", "home-files",
                          "host-files", "all-devices", "audio", "gamepad", "session-bus", ...
                          (unknown keys are shown by the shell as-is)
     installed_size  t    bytes on disk when installed (download size is not exposed)
@@ -131,7 +132,8 @@
       <arg name="status" type="s"/>
     </signal>
 
-    <!-- The set of installed apps, or an app's update flag, changed; call ListInstalled again. -->
+    <!-- The set of installed apps, or an app's update flag, changed; call ListInstalled again. Also sent
+         when the catalogue was first read after the service started and after AddRemote: call Search again. -->
     <signal name="InstalledChanged"/>
 
   </interface>

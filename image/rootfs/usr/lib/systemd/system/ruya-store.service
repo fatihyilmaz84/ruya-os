@@ -1,0 +1,43 @@
+[Unit]
+Description=RuyaOS app store service (org.ruyaos.Store1)
+Before=ruya-compositor@tty1.service
+
+[Service]
+Type=dbus
+BusName=org.ruyaos.Store1
+ExecStart=/usr/bin/ruya-store
+Restart=on-failure
+Environment=HOME=/var/lib/ruya-store
+# flatpak's own state: system installation, temporary files, the profiles' ~/.var/app (delete
+# data on uninstall; removed as the profile's own user, see flatpak_cli.rs).
+StateDirectory=ruya-store
+ReadWritePaths=/var/lib/flatpak /var/tmp /var/home
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=yes
+PrivateDevices=yes
+PrivateIPC=yes
+NoNewPrivileges=yes
+# Root only for ostree/flatpak (checkouts owned by root, files of every owner) and for the
+# switch to a profile's user when its app data is removed.
+CapabilityBoundingSet=CAP_CHOWN CAP_DAC_OVERRIDE CAP_DAC_READ_SEARCH CAP_FOWNER CAP_FSETID CAP_SETUID CAP_SETGID
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+SystemCallArchitectures=native
+UMask=0022
+# ostree reads /proc/sys/kernel/random/boot_id: no ProcSubset=pid.
+ProtectProc=invisible
+ProtectClock=yes
+ProtectHostname=yes
+ProtectKernelLogs=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+# AF_INET/AF_INET6: fetching from remotes. AF_UNIX: the bus and flatpak's helpers.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+
+[Install]
+WantedBy=multi-user.target
