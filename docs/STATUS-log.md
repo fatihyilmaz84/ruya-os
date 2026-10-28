@@ -2,6 +2,8 @@
 
 Older entries of the `docs/STATUS.md` session log, newest first. STATUS keeps only the latest five; the lead moves the rest here at each review. Nobody needs to read this file to start a task.
 
+- 2026-10-24 · Opus 5.5 · Lead (disk space) · `build.sh` removes untagged images it did not use (WSL use 78 → 30 GB); `smoke-test.ps1 -Work` gives one shared `work.qcow2`; fixed a stale `RUYA_BOOT_OK` read when the old QEMU held `serial.log`. `.vhdx` shrink is an owner step (`dev-setup.md`).
+
 ### 2026-10-24 · Opus 5.5 · Lead
 Lead review of `2aab79e..64b7e3f` (disk-space scripts, T-119, T-131, T-110), and planning.
 

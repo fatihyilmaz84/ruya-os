@@ -52,6 +52,7 @@ From the Store tile, the user browses apps, opens a detail page that explains th
 - Nested pages, `params` and state keeping come from T-119; do not re-solve them here. Back from the detail page must return to the Store page with the same row and item focused (`test_detail_back_restores_focus` relies on it).
 - Reuse the Settings controls (`ToggleRow` for "Also delete my data") and the generated-art idea from `ProfileCard`.
 - Use `Notifications.show` for "Installed" / "Update available"-style messages if useful, never for errors the user must act on (show those inline).
+- **The real service exists since T-134** (`ruya-store`, VM-verified). It answers `Install` with only 0 and 100 progress (T-140 adds real percentages), and it delays a job's start by 100 ms so that `DBusStoreBackend::startJob` has the job id before the first signal. Make the client robust anyway: in `DBusStoreBackend`, keep `JobProgress`/`JobFinished` for a job id it doesn't know yet and replay them once the reply maps the id (add a test with a fake bus order if feasible, or say in the Outcome why not).
 
 ## Outcome
 _Filled in by the implementer._

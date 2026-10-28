@@ -2,12 +2,12 @@
 
 **Read this first in every session; update it last.** Rules: root `CLAUDE.md`. Roles (Opus lead, Sonnet builders): `docs/LEAD.md`. Task format: `docs/tasks/README.md`. Finished work: each task's own file (`Status: done`, Outcome starting with `Verified:`); history before T-132 in [`STATUS-done.md`](STATUS-done.md). `scripts/lint-board.ps1` (part of `dev.ps1 test`) keeps this board and the task files in step.
 
-Last updated: 2026-10-27 (Opus 5.5, lead)
+Last updated: 2026-10-28 (Opus 5.5, lead)
 
 ## Where we are
 
 - **Phase 0 (foundation): vm-verified 2026-10-22.** Image builds, boots to the shell, updates, rolls back by hand and by greenboot. Left: real hardware (B-002).
-- **Phases 1–2 (shell core, profiles, devices):** the shell has pages, motion, toasts/OSD, Settings (Profiles, Network, Audio, Display, System, About), on-screen keyboard, first-boot wizard, Turkish translation. Profiles, power, audio (`ruya-devices`) and the Guide key are **vm-verified** over the real bus. Network and Store exist only as contract, mock and UI (host); their services are T-132 and T-134. The compositor spike (T-123) proved ADR-002 option A (shell as Wayland compositor on KMS); T-130 (lead) makes it the session.
+- **Phases 1–2 (shell core, profiles, devices):** the shell has pages, motion, toasts/OSD, Settings (Profiles, Network, Audio, Display, System, About), on-screen keyboard, first-boot wizard, Turkish translation. Profiles, power, audio (`ruya-devices`, event-driven since T-133), network (`ruya-devices` over NetworkManager, T-132), the store service (`ruya-store` over `flatpak`, T-134) and the Guide key are **vm-verified** over the real bus; the Store UI is T-111. The compositor spike (T-123) proved ADR-002 option A (shell as Wayland compositor on KMS); T-130 (lead) makes it the session.
 - **Not started:** `ruya-session` (launch apps; T-138, T-139), `ruya-update` (T-135 is its UI contract), Bluetooth, USB storage, InputPlumber (B-006), installer. No app has ever been launched from the shell.
 - **Host:** Windows plus a Fedora 44 WSL distribution (image builds) and QEMU/WHPX (boot tests): `docs/dev-setup.md`. **Image and VM work works again since 2026-10-27** (fresh WSL distro, `.wslconfig` `memory=8GB`; image `0.0.13-lead` built, made into a disk and booted `RUYA_BOOT_OK`, T-131 VM-verified). If `ext4` errors return, see the WSL note under Open owner decisions.
 
@@ -15,20 +15,19 @@ Verification legend: **host** = built and tested on Windows · **vm** = built in
 
 ## Board
 
-**NEXT → T-132**
+**NEXT → T-138**
 
-**Lead review due: after 3 more builder tasks** (reviewed up to the lead commit "lead review 2f2f1e1..f7574e9", see `docs/LEAD-NOTES.md`). Builders: when your task makes this true, end your reply by recommending a lead session.
+**Lead review due: after 3 more builder tasks** (reviewed up to the lead commit "lead review f835519..7392be4", see `docs/LEAD-NOTES.md`). **One builder session at a time, one task per session:** two builders in one checkout mixed three tasks' work on 2026-10-28. Builders: when your task makes this true, end your reply by recommending a lead session.
 
 Open work only (todo, in-progress, blocked). The order is the recommended order; when NEXT is blocked take the first `todo` whose dependencies are `done` (a task's status is in its file header). `[lead]` tasks are skipped by builders. If nothing qualifies, **stop and ask for a planning session** (`docs/tasks/PLANNING.md`).
 
 | ID | Title | Status | Depends |
 |---|---|---|---|
 | [T-130](tasks/T-130-compositor-session.md) | **[lead]** Compositor session: `ruya-shell` replaces cage  | todo | T-123 |
-| [T-132](tasks/T-132-devices-network-service.md) | `ruya-devices`: network over NetworkManager, in the VM | todo | T-129, T-128 |
-| [T-134](tasks/T-134-store-service-core.md) | `ruya-store` service over the `flatpak` CLI, in the VM | todo | T-110 |
-| [T-133](tasks/T-133-devices-pipewire-events.md) | `ruya-devices`: follow PipeWire by events, no 1 s poll | todo | T-128 |
 | [T-138](tasks/T-138-session-contract-and-mock.md) | `Session1` contract and shell `Session` singleton with a mock | todo | — |
 | [T-139](tasks/T-139-session-service-core.md) | `ruya-session`: pure core and D-Bus adapter (dev mode) | todo | T-138 |
+| [T-141](tasks/T-141-vm-goto-page.md) | `vm-goto.ps1`: a VM past the wizard to a named page | todo | — |
+| [T-140](tasks/T-140-store-remotes-and-progress.md) | Store in the image: Flathub remote, AppStream refresh, real progress | todo | T-134 |
 | [T-112](tasks/T-112-library-service-core.md) | ruya-library discovery core (Rust) | todo | — |
 | [T-135](tasks/T-135-update-contract-and-settings.md) | `Update1` contract, mock, Settings → System updates | todo | — |
 | [T-111](tasks/T-111-store-ui.md) | Store UI | todo | T-110, T-119 |
@@ -50,7 +49,7 @@ Follow-ups and debt for the next planner. Builders: add one line per item, `- (s
 | B-002 | Install on a real low-tier machine; first frame-time numbers (spec 02 §8) | Hardware | A dev ISO exists (`output/bootiso/`, holds the dev SSH key: test machines only). Decide there: a failed boot takes ~100 s, so automatic rollback takes ~7 min; consider a shorter required-check timeout once real boot times are known. |
 | B-003 | Compositor performance: blurred Guide overlay over a running game at ≥ 55 FPS on the mid tier (ADR-002) | A GPU | Functional part done in the VM (T-123). Left: frame rates, dmabuf clients, blur over a client surface, gamescope nesting, volume-key `Shortcut`s with an app focused. |
 | B-006 | Replace the `ruya-inputd` stopgap with InputPlumber (ADR-003), grab and re-emit | Linux + controllers | Also owns key repeat (400 ms delay, then accelerating), stick repeat speed, Accept long-press and context menu (spec 02 §4.3). |
-| B-007 | `ruya-devices` remainder: BlueZ part (contract T-136), applying `ambient`/`media` levels to app streams, PipeWire for profile apps | `ruya-session` after T-130 | Audio is T-128; network service T-132; the PipeWire poll T-133. ADR-010. |
+| B-007 | `ruya-devices` remainder: BlueZ part (contract T-136), applying `ambient`/`media` levels to app streams, PipeWire for profile apps | `ruya-session` after T-130 | Audio (T-128, by events since T-133) and network (T-132) are done and VM-verified. ADR-010. |
 
 ## Open owner decisions
 
@@ -66,6 +65,10 @@ Follow-ups and debt for the next planner. Builders: add one line per item, `- (s
 
 One entry per session, at most 4 lines: date · model · tasks · what happened · numbers · follow-ups. Detail belongs in the task Outcome.
 
+### 2026-10-28 · Opus 5.5 · Lead (review of `f835519..7392be4` plus uncommitted T-132/T-133/T-134 work)
+Two Sonnet builder sessions ran T-132, T-133 and T-134 at once in this checkout and stopped without Outcomes or commits; the lead reviewed the code (0 findings), ran the VM checks and committed each task. `dev.ps1 test` ALL GREEN (164 QML, 13 skipped; 117 Rust); `shots` not run (no screen changed). VM `0.0.17-t134`: `RUYA_BOOT_OK`, `vm-devices-check.sh` and `vm-store-check.sh` all PASS, NIC unplug followed by service and shell, exposure 3.4 / 3.3 OK; no `ext4` errors.
+Found: the image ships Fedora's OCI Flatpak remote (524 unnamed apps) → T-140; Settings screenshots in the VM need a wizard walk → T-141; job-signal buffering → T-111 hint. NEXT T-138.
+
 ### 2026-10-27 · Opus 5.5 · Lead (owner: "take the lead, optimise docs and rules")
 Review of `2f2f1e1..f7574e9` (T-129 was lead work; docs only otherwise) and planning. `dev.ps1 test` ALL GREEN (164 QML passed, 13 skipped offscreen; Rust 54), `shots` ALL GREEN (177; one `TEST WINDOW LOST ACTIVATION`, recovered); `23-settings-network.png` reviewed: fine. VM not run (WSL disk). CI not checked; 6 commits unpushed. **Docs and rules slimmed** (STATUS 25 KB → about 9 KB, Done table archived, board lists open work only, `lint-board.ps1`, `shell/PATTERNS.md` split out, duplicated role text removed; see `LEAD-NOTES.md`). Planned T-135..T-139 (update, Bluetooth, storage, session contract and core). **Later the same day (owner: do the WSL steps and the push):** `main` pushed after a clean secret scan; the owner recreated the WSL distro with `memory=8GB`; `build.sh` 0.0.13-lead, `make-disk.sh` and `smoke-test.ps1 -Work -Keep` all passed (`RUYA_BOOT_OK`, no ext4 errors); T-131's VM criterion done (rename and delete by keys, service state checked). CI not read yet.
 
@@ -74,5 +77,3 @@ Review of `2f2f1e1..f7574e9` (T-129 was lead work; docs only otherwise) and plan
 - 2026-10-24 · Sonnet 5.5 · T-131 · Rename and delete in Settings → Profiles (`ProfileManageFlow`). `test` 144, `shots` 156 green. **VM criterion not run** (WSL disk went read-only three times): Inbox.
 
 - 2026-10-24 · Opus 5.5 · T-129 (lead, host-only while the disk is broken) · `Devices1.Network` contract, mock, D-Bus client, Settings → Network. `test` 164, `shots` 177 green. D-Bus client unverified.
-
-- 2026-10-24 · Opus 5.5 · Lead (disk space) · `build.sh` removes untagged images it did not use (WSL use 78 → 30 GB); `smoke-test.ps1 -Work` gives one shared `work.qcow2`; fixed a stale `RUYA_BOOT_OK` read when the old QEMU held `serial.log`. `.vhdx` shrink is an owner step (`dev-setup.md`).
