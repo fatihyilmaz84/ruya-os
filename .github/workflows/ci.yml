@@ -39,6 +39,9 @@ jobs:
         working-directory: services
     steps:
       - uses: actions/checkout@v4
+      # Same toolchain as the dev host (dev-setup.md), so clippy here and in dev.ps1 knows the
+      # same lints. Bump both together.
+      - run: rustup toolchain install 1.92.0 --profile minimal -c clippy,rustfmt && rustup default 1.92.0
       - run: cargo fmt --check
       - run: cargo clippy --all-targets --locked -- -D warnings
       - run: cargo test --locked
