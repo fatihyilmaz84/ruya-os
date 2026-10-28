@@ -1,6 +1,6 @@
 # T-133 — `ruya-devices`: follow PipeWire by events instead of a 1 s poll
 
-Status: todo · Phase: 2 · Depends: T-128 · Area: services · Size: S
+Status: done · Phase: 2 · Depends: T-128 · Area: services · Size: S
 
 ## Goal
 `ruya-devices` stops starting `pw-dump` every second. It reacts to PipeWire changes as they happen, so an idle console spends no CPU on audio bookkeeping, and an output change still reaches the shell within a second.
@@ -39,4 +39,10 @@ Status: todo · Phase: 2 · Depends: T-128 · Area: services · Size: S
 - The executor is single-threaded `block_on`: read the child's stdout with `async-io`'s `Async<ChildStdout>` (Linux) rather than a blocking read in the async task.
 
 ## Outcome
-_Filled in by the implementer: what was built, files, how it was verified, deviations, follow-ups._
+Verified: vm (image `0.0.17-t134`, `smoke-test.ps1 -Audio -AudioBackend wav`, `RUYA_BOOT_OK`), 2026-10-28. Built by a Sonnet builder session; it stopped before documenting, so the lead verified it and wrote this Outcome.
+
+- **Built:** `services/ruya-devices/src/events.rs`: `BatchSplitter` counts top-level JSON arrays across reads (strings and escapes skipped), `Backoff` (1 s doubling to 30 s, reset once a source delivers), and `follow()`, which refreshes once per (re)connect and once per quiet burst (100 ms debounce); time and sleep are injected. The Linux `PwMonitor` runs `pw-dump --monitor --no-colors` as one child, read through `Async<ChildStdout>` and killed on drop. `dbus.rs` `watch` uses it instead of the 1 s `POLL`; the `--session` fakes just stay up (nothing to follow). `audio.rs` is unchanged (pure). Deviation: the event source is its own trait in `events.rs`, not part of the `PipeWire` trait; the boundary (fake source in tests, pure core) is the same.
+- **Unit tests** (`events.rs`): splitter across reads and inside strings, back-off sequence and reset, a burst gives one refresh, a quiet event refreshes after the window, a dead source and a failing start back off (1, 2, 4, 8 s), delivering resets the back-off.
+- **VM** (`IDLE=60 vm-devices-check.sh check`, all PASS): exactly one `pw-dump` (the monitor); `wpctl set-volume` from outside shows in `MasterVolume` after about 0.1 s; over 60 s idle no `pw-dump` or `wpctl` was started and the service used 2 ms of CPU; after `systemctl --user restart pipewire` the service recovered (`MasterVolume` followed in about 0.1 s) with one monitor again. The audio checks of T-128 still pass. `systemd-analyze --user security ruya-devices`: 3.4 OK.
+- `scripts/vm-devices-check.sh` gained `events_check` (part of `check`; `events` runs it alone). Spec 03 §2.3 describes the event-driven design.
+- `dev.ps1 test` ALL GREEN (164 QML passed, 13 skipped offscreen; 117 Rust).

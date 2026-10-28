@@ -7,8 +7,10 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use ruya_devices::audio::{Audio, FakePipeWire};
+#[cfg(target_os = "linux")]
+use ruya_devices::dbus::{watch, watch_network};
 use ruya_devices::dbus::{
-    watch, watch_network, AudioIface, DynNm, DynPipeWire, NetworkIface, BUS_NAME, OBJECT_PATH,
+    AudioIface, DynNm, DynPipeWire, NetworkIface, Shared, SharedNet, BUS_NAME, OBJECT_PATH,
 };
 use ruya_devices::network::{FakeNetworkManager, Network};
 use ruya_devices::store::Store;
@@ -50,6 +52,21 @@ fn state_file() -> Option<PathBuf> {
     Some(PathBuf::from(first).join("audio.toml"))
 }
 
+/// PipeWire's events and NetworkManager's signals, until the process is stopped.
+async fn follow_system(connection: zbus::Connection, audio: Shared, net: SharedNet) {
+    #[cfg(target_os = "linux")]
+    futures_lite::future::zip(
+        watch(connection.clone(), audio),
+        watch_network(connection, net),
+    )
+    .await;
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _keep = (connection, audio, net);
+        futures_lite::future::pending::<()>().await;
+    }
+}
+
 fn run() -> Result<(), Box<dyn Error>> {
     let session = std::env::args().any(|a| a == "--session");
     let store = state_file().map_or_else(Store::in_memory, |p| Store::at(&p));
@@ -79,15 +96,12 @@ fn run() -> Result<(), Box<dyn Error>> {
             .serve_at(OBJECT_PATH, NetworkIface::new(net.clone()))?
             .build()
             .await?;
-        // The fake NetworkManager has no signals to follow (it changes only through calls).
+        // The fakes have nothing to follow (they change only through calls): just stay up.
         if session {
-            watch(connection, audio).await;
+            let _keep = (connection, audio, net);
+            futures_lite::future::pending::<()>().await;
         } else {
-            futures_lite::future::zip(
-                watch(connection.clone(), audio),
-                watch_network(connection, net),
-            )
-            .await;
+            follow_system(connection, audio, net).await;
         }
         Ok::<(), Box<dyn Error>>(())
     })

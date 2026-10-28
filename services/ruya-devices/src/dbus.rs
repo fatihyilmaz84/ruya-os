@@ -11,7 +11,9 @@ use zbus::object_server::SignalEmitter;
 use zbus::zvariant::{OwnedValue, Value};
 use zbus::{interface, Connection, MatchRule, MessageStream};
 
-use crate::audio::{Audio, Changes};
+use crate::audio::Audio;
+#[cfg(target_os = "linux")]
+use crate::audio::Changes;
 use crate::network::{self, Network, NetworkManager};
 
 /// Chosen at runtime: `wpctl` on Linux, a fake in `--session` development.
@@ -34,9 +36,6 @@ impl crate::audio::PipeWire for DynPipeWire {
 
 pub const BUS_NAME: &str = "org.ruyaos.Devices1";
 pub const OBJECT_PATH: &str = "/org/ruyaos/Devices1";
-/// How often PipeWire is read for hot-plug and for changes made from outside.
-const POLL: Duration = Duration::from_secs(1);
-
 pub type Shared = Arc<Mutex<Audio<DynPipeWire>>>;
 
 fn lock(shared: &Shared) -> MutexGuard<'_, Audio<DynPipeWire>> {
@@ -144,23 +143,39 @@ impl AudioIface {
     async fn default_sink_changed(emitter: &SignalEmitter<'_>, id: String) -> zbus::Result<()>;
 }
 
-/// Reads PipeWire every `POLL` and turns what changed into signals. Runs forever.
+/// Follows PipeWire by events (`pw-dump --monitor`, restarted with a back-off when it dies) and
+/// turns what changed into signals. Runs forever; nothing runs while the graph is quiet.
+#[cfg(target_os = "linux")]
 pub async fn watch(connection: Connection, audio: Shared) {
-    loop {
-        async_io::Timer::after(POLL).await;
-        let result = lock(&audio).refresh();
-        match result {
-            Ok(changes) if changes.any() => {
-                if let Err(err) = announce(&connection, &changes).await {
-                    eprintln!("ruya-devices: emitting signals failed: {err}");
-                }
+    crate::events::follow(
+        crate::events::PwMonitor::start,
+        |delay| async move {
+            async_io::Timer::after(delay).await;
+        },
+        || async {
+            refresh_audio(&connection, &audio).await;
+            true
+        },
+    )
+    .await;
+}
+
+/// Reads PipeWire once and emits the signals for what changed.
+#[cfg(target_os = "linux")]
+async fn refresh_audio(connection: &Connection, audio: &Shared) {
+    let result = lock(audio).refresh();
+    match result {
+        Ok(changes) if changes.any() => {
+            if let Err(err) = announce(connection, &changes).await {
+                eprintln!("ruya-devices: emitting signals failed: {err}");
             }
-            Ok(_) => {}
-            Err(err) => eprintln!("ruya-devices: reading PipeWire failed: {err}"),
         }
+        Ok(_) => {}
+        Err(err) => eprintln!("ruya-devices: reading PipeWire failed: {err}"),
     }
 }
 
+#[cfg(target_os = "linux")]
 async fn announce(connection: &Connection, changes: &Changes) -> zbus::Result<()> {
     let iface = connection
         .object_server()
