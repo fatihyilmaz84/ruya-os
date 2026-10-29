@@ -2,7 +2,7 @@
 
 **Read this first in every session; update it last.** Rules: root `CLAUDE.md`. Roles (Opus lead, Sonnet builders): `docs/LEAD.md`. Task format: `docs/tasks/README.md`. Finished work: each task's own file (`Status: done`, Outcome starting with `Verified:`); history before T-132 in [`STATUS-done.md`](STATUS-done.md). `scripts/lint-board.ps1` (part of `dev.ps1 test`) keeps this board and the task files in step.
 
-Last updated: 2026-10-29 (Sonnet 5.5, builder)
+Last updated: 2026-10-30 (Opus 5.5, lead)
 
 ## Where we are
 
@@ -17,7 +17,7 @@ Verification legend: **host** = built and tested on Windows · **vm** = built in
 
 **NEXT → T-149**
 
-**Lead review due now** (four builder tasks since the last review: T-150, T-135, T-148, T-111, all done) (reviewed up to the lead commit "lead review 124ee1d..0fbe215", see `docs/LEAD-NOTES.md`). **One builder session at a time, one task per session:** two builders in one checkout mixed three tasks' work on 2026-10-28. Builders: when your task makes this true, end your reply by recommending a lead session.
+**Lead review due** after 3–5 more builder tasks (reviewed up to the lead commit "lead review 4671bb5..e863439", see `docs/LEAD-NOTES.md`). **One builder session at a time, one task per session:** two builders in one checkout mixed three tasks' work on 2026-10-28. Builders: when your task makes this true, end your reply by recommending a lead session.
 
 Open work only (todo, in-progress, blocked). The order is the recommended order; when NEXT is blocked take the first `todo` whose dependencies are `done` (a task's status is in its file header). `[lead]` tasks are skipped by builders. If nothing qualifies, **stop and ask for a planning session** (`docs/tasks/PLANNING.md`).
 
@@ -25,7 +25,9 @@ Open work only (todo, in-progress, blocked). The order is the recommended order;
 |---|---|---|---|
 | [T-130](tasks/T-130-compositor-session.md) | **[lead]** Compositor session: `ruya-shell` replaces cage  | todo | T-150 |
 | [T-149](tasks/T-149-library-flatpak-games.md) | `ruya-library`: Flatpak games are games | todo | T-112 |
+| [T-151](tasks/T-151-ruya-update-service.md) | `ruya-update`: the `Update1` service over `bootc` | todo | T-135 |
 | [T-113](tasks/T-113-games-page.md) | Library client and Games page with art cards | todo | T-101, T-112, T-143 |
+| [T-152](tasks/T-152-store-high-risk-admin-pin.md) | Store: admin PIN before a Standard profile installs a high-risk app | todo | T-111 |
 | [T-146](tasks/T-146-art-led-home.md) | Art-led Home: hero, Recent art row, section nav | todo | T-113, T-143 |
 | [T-147](tasks/T-147-fullscreen-app-flow.md) | Full-screen apps: launch splash, quick menu, return, close | todo | T-130, T-138, T-146 |
 | [T-136](tasks/T-136-bluetooth-contract-and-settings.md) | `Devices1.Bluetooth` contract, mock, Settings pane | todo | — |
@@ -37,9 +39,6 @@ Open work only (todo, in-progress, blocked). The order is the recommended order;
 
 Follow-ups and debt for the next planner. Builders: add one line per item, `- (source) what, and why it matters`; write a task file only if your own task needs one. Run a planner at 5+ items.
 
-- (T-111) Admin PIN for high-risk installs (`all-devices`, `host-files`, `session-bus`, spec 03 4.4): not enforced; building blocks are `PinPad` collect mode and `Profiles.VerifyAdmin`.
-- (T-111) `AppArt.qml` (generated app art) is a new component the design system does not list: lead to adopt it in `04` section 5 or replace it.
-- (T-111) App records have no genre or category, so Store rows are by source and controller level; needs a field in `Store1` and the service when categories matter.
 
 
 ## Blocked (need something this host doesn't have)
@@ -65,6 +64,10 @@ Follow-ups and debt for the next planner. Builders: add one line per item, `- (s
 
 One entry per session, at most 4 lines: date · model · tasks · what happened · numbers · follow-ups. Detail belongs in the task Outcome.
 
+- 2026-10-30 · Opus 5.5 · Lead (review `4671bb5..e863439`: T-150, T-135, T-148, T-111) · `test` ALL GREEN (209 QML + 15 screenshot skips, 178 Rust); `shots` ALL GREEN (224; `17`, `18`, `19`, `25` reviewed, `19` now caught after the fade). CI green at `4671bb5`. No VM run (T-148's `0.0.19-t148` covers every service change).
+  Findings 2 fixed / 0 filed: Store progress fill white like the volume OSD (was `toastInfo`); `AppArt` and the progress bar adopted in `04` §5. Decided: admin-only service calls check the caller like `AddRemote` (Update1 header, T-151).
+  Planned T-151 (`ruya-update` over `bootc`, VM) and T-152 (admin PIN for high-risk installs). Inbox: AppArt decided; genre field dropped until Home (T-146) needs categories.
+
 - 2026-10-29 · Sonnet 5.5 · T-111 · Store page (toolbar, four rows, search results, controller filter via the service) and `appDetail` page (badges, plain-language permissions with high-risk flags, install/update/uninstall with progress and inline errors); `Page.openRequested`; D-Bus client replays early job signals (unverified). `test` ALL GREEN; `shots` green once, `17`/`18` reviewed, `19` caught mid-fade (re-run hung on this desktop).
   Lead review is due (T-150, T-135, T-148, T-111).
 - 2026-10-29 · Sonnet 5.5 · T-148 · `Search(query, options)` (controller, limit) and `CatalogChanged`; service `sync`, shell patches installed flags without re-searching, `Store.controllerFilter`. `test` ALL GREEN (198 QML); VM `0.0.19-t148` `RUYA_BOOT_OK`, `vm-store-check.sh` all passed (127 of 3419 apps are gamepad).
@@ -73,5 +76,3 @@ One entry per session, at most 4 lines: date · model · tasks · what happened 
   Scoped two `powerCancel` lookups in `tst_profile_admin` (a second `PowerConfirm` made the name ambiguous). No `ruya-update` yet. Lead review is due after T-148.
 - 2026-10-29 · Sonnet 5.5 · T-150 · `KeyRouter` (C++ event filter, one `isGuideKey`) and the shell's `appLayer` with `addApp/focusApp/removeApp`; stand-in app tests. `test` ALL GREEN (187 QML). `shots` unjudged: timer tests fail on this desktop session, also on the baseline.
   Unblocks T-130 (lead). Lead review is due after T-148.
-- 2026-10-29 · Opus 5.5 · Lead (review `124ee1d..0fbe215`: T-143, T-140, T-112) · `test` ALL GREEN (178 QML + 13 skipped, 172 Rust); `shots` ALL GREEN (191, every T-143 screen reviewed); VM `0.0.18-lead` `RUYA_BOOT_OK`, `vm-store-check.sh` 41/41, security 3.3. CI green at `124ee1d`.
-  Findings 3 fixed / 2 filed: devkitPro's MSYS2 first on PATH broke `dev.ps1` (its cmake: tests ran stale) and `scan-secrets.ps1` (its git mangled `{n}`): both prefer the real tool; badge radius text; Flatpak games all `app` → T-149, catalogue re-read → T-148. T-130 split: host half T-150 (builder) is NEXT.

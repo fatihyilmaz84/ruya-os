@@ -4,28 +4,27 @@ The procedure is in [`LEAD.md`](LEAD.md). **Rewrite this file at the end of ever
 
 ## Review range
 
-- **Last reviewed commit: the lead commit of 2026-10-29 "lead review 124ee1d..0fbe215"** (`git log --grep="lead review 124ee1d"`). Everything up to T-112 is reviewed.
-- Next review: `git log --oneline <that commit>..HEAD`. Due after T-150, T-135, T-148 (the board says so).
-- Last VM verification: image `0.0.18-lead` (lead, 2026-10-29, at `0fbe215`): `RUYA_BOOT_OK`, `qemu-img check` clean, `vm-store-check.sh` 41/41 PASS, `ruya-store` security 3.3. `ruya-session` and `ruya-library` are not in the image.
+- **Last reviewed commit: the lead commit of 2026-10-30 "lead review 4671bb5..e863439"** (`git log --grep="lead review 4671bb5"`). Everything up to T-111 is reviewed.
+- Next review: `git log --oneline <that commit>..HEAD`, after 3–5 builder tasks.
+- Last VM verification: image `0.0.19-t148` (builder, 2026-10-29, at `668b612`): `RUYA_BOOT_OK`, `vm-store-check.sh` all passed. It contains T-135's `Profiles1.VerifyAdmin`, but nothing called it over the bus; T-111's early-job-signal replay in `DBusStoreBackend` is also unverified. `ruya-session`, `ruya-library` and `ruya-update` are not in the image.
 
 ## Concerns (ranked)
 
-1. **The compositor session is still the critical path**, now split: **T-150** (builder, NEXT: app layer + C++ `KeyRouter`, host-tested) then **T-130** (lead: `WaylandCompositor` wiring, unit, cage out, VM checks, drill). Review T-150 carefully: focus restoration and the Guide hold are the classic bug sources. Take T-130 in the first lead session after T-150 lands. Still no app has ever been launched from the shell.
-2. **After T-130, write the reserved VM tasks:** `ruya-session` in the image (unit, policy, real spawner, Profiles1 fetch, `vm-session-check.sh`); `ruya-library` in the image, which first needs a decision **where it runs**: Steam libraries live in each profile user's home (ADR-004), so a system service would need read access to every home; a per-profile user service, or `ruya-session` handing the active profile's home to it, fits better. Decide with `ruya-session`. Then `ruya-update` over `bootc` (T-135 contract), BlueZ (T-136), udisks2 (T-137).
+1. **T-130 is still not started and is the critical path.** T-150 (host half) is done and reviewed: `KeyRouter` takes Guide keys only while `appItem->hasActiveFocus()`. In T-130, give `focusApp` the item that really holds focus (the `ShellSurfaceItem` itself, or make the wrapper a `FocusScope`), or Guide will reach the app. Run T-130 as its **own lead session** (several image builds, the update drill and the broken-compositor rollback): it did not fit after this review. Still no app has ever been launched from the shell.
+2. **After T-130, write the reserved VM tasks:** `ruya-session` in the image (unit, policy, real spawner, Profiles1 fetch, `vm-session-check.sh`); `ruya-library` in the image (decide where it runs: per-profile user service, or `ruya-session` hands it the active profile's home; ADR-004); then the scheduled-check/idle-reboot follow-up of T-151, BlueZ (T-136), udisks2 (T-137).
 3. **`ruya-session` real spawner open questions** (T-139 Outcome): `systemd-run --user --machine=<user>@.host` from the service's user; per-profile Wayland socket location; reading exit code and `signaled` from the unit.
-4. **Host storage integrity.** C: showed a zeroed cargo file and WSL `ext4` errors; T-140's builder saw two truncated `make-disk` outputs while WSL restarted. Always `qemu-img check` a fresh disk. Owner asked for a memory and SMART check.
-5. **Store scale:** T-148 (service-side filter, `CatalogChanged`) must land before T-111; the shell re-read a 6 MB catalogue after every install.
-6. **Admin authorization:** only `ruya-store` checks admin itself. Decide when T-135 lands whether every admin-only call verifies the same way.
-7. **Mock-only surface:** Update (T-135), Bluetooth (T-136), Storage (T-137), Session client (T-138), Library client (T-113). At the limit (~4-5 waiting): don't add more contract+mock tasks until a real service catches up.
-8. **Design system:** T-144 (contrast, weights) and T-145 (Inter) wait; canvas boards not compared with the spec yet (tell the owner which are stale once T-144/T-145 land).
+4. **Admin authorization, decided 2026-10-30:** services refuse admin-only calls unless the caller is root or the shell while the active profile is an admin (as `ruya-store`'s `AddRemote`); PINs are checked by the shell with `Profiles1.VerifyAdmin`. T-151 applies it to `Update1`. When a third service needs it, move the check into a shared crate.
+5. **Host storage integrity.** C: showed a zeroed cargo file and WSL `ext4` errors; `make-disk` outputs came out truncated while WSL restarted. Always `qemu-img check` a fresh disk. Owner asked for a memory and SMART check.
+6. **Mock-only surface:** Bluetooth (T-136), Storage (T-137), Session client (T-138), Library client (T-113); Update gets its service in T-151. Don't add more contract+mock tasks until a real service catches up.
+7. **Design system:** T-144 (contrast, weights) and T-145 (Inter) wait; the Store detail page's description text (`textDim` over bright backdrop blobs) is a T-144 case. Canvas boards not compared with the spec yet; `AppArt` and the progress bar were added to `04` §5 this session, so the canvas "system components" board is stale on those two.
+8. **Store cards** look their app up with `Store.catalogue.find()` per delegate (`StorePage.qml`): fine while ListViews create only visible delegates; watch it if "Show all apps" feels slow on hardware.
 
 ## First things the next lead should do
 
 1. `git status` clean, no builder session running, no `build.sh` in WSL (distro `FedoraLinux-44`).
 2. CI of this push (`https://api.github.com/repos/fatihyilmaz84/ruya-os/actions/runs?per_page=4`; no `gh` here; `curl` works from Git Bash).
-3. Steps 1–3 of `LEAD.md` over the range above.
-4. T-130 as the lead task if T-150 is done.
-5. Size budgets: root `CLAUDE.md` 10.8 KB and `shell/CLAUDE.md` 7.2 KB sit at budget; trim before adding anything.
+3. If the owner starts a lead session for T-130: claim it and do it (concern 1). Otherwise steps 1–3 of `LEAD.md`.
+4. Size budgets: root `CLAUDE.md` 10.8 KB and `shell/CLAUDE.md` 7.2 KB sit at budget; trim before adding anything.
 
 ## Quality signals (one row per lead session)
 
@@ -44,3 +43,4 @@ The procedure is in [`LEAD.md`](LEAD.md). **Rewrite this file at the end of ever
 | 2026-10-28 | f5b1a90..198e9ab | T-138, design-system docs (ADR-012, T-142..T-147) | 3 fixed (untested launch-failed toast, frozen-copy `tryCompare`, red CI clippy) + system fix (CI pinned to host Rust) | 169 + 13 skipped QML, 117 Rust; shots not run (no screen changed) | not run (no image change) |
 | 2026-10-28 | 070e312..8e7a7fc | T-139, T-141, T-142 | 2 fixed (SIGTERM-after-Stop reported `killed`, spec mapping text) / 1 filed (weights → T-144, with a lint) | 172 + 13 skipped QML, 143 Rust; shots 185 | not run (no image change) |
 | 2026-10-29 | 124ee1d..0fbe215 | T-143, T-140, T-112 | 3 fixed (`dev.ps1` picked devkitPro's cmake, `scan-secrets.ps1` its brace-expanding git: both now prefer the real tool; badge radius text) / 2 filed (Flatpak games all `app` → T-149, catalogue re-read → T-148) + T-130 split (host half T-150) | 178 + 13 skipped QML, 172 Rust; shots 191 | `0.0.18-lead` ✅ boot, store check 41/41 |
+| 2026-10-30 | 4671bb5..e863439 | T-150, T-135, T-148, T-111 | 2 fixed (progress fill colour, `AppArt` + progress bar into `04` §5) / 0 filed; admin-check decision; T-151, T-152 planned | 209 + 15 skipped QML, 178 Rust; shots 224 | not run (builder's `0.0.19-t148` covers the service changes) |

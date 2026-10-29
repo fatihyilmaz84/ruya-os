@@ -19,7 +19,10 @@
 
   Admin: Rollback and SetChannel are for an admin. The shell asks for the admin's PIN first and
   checks it with Profiles1.VerifyAdmin; the bus policy lets only ruya-shell and root call this
-  interface. Whether the service should also verify an admin PIN itself is open (T-135 Outcome).
+  interface. Decided (lead, 2026-10-30): the service does not take a PIN, but it checks the caller
+  the way ruya-store checks AddRemote (root, or ruya-shell while Profiles1's active profile is an
+  admin) and answers "forbidden" otherwise; the ruya-update task (T-151) adds that status here,
+  in the mock and in the client.
 
   GetStatus returns one a{sv} record, keys:
     state             s   "idle" | "checking" | "downloading" | "staged" | "up-to-date" | "failed"

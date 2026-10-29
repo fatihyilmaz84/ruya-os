@@ -2,6 +2,9 @@
 
 Older entries of the `docs/STATUS.md` session log, newest first. STATUS keeps only the latest five; the lead moves the rest here at each review. Nobody needs to read this file to start a task.
 
+- 2026-10-29 · Opus 5.5 · Lead (review `124ee1d..0fbe215`: T-143, T-140, T-112) · `test` ALL GREEN (178 QML + 13 skipped, 172 Rust); `shots` ALL GREEN (191, every T-143 screen reviewed); VM `0.0.18-lead` `RUYA_BOOT_OK`, `vm-store-check.sh` 41/41, security 3.3. CI green at `124ee1d`.
+  Findings 3 fixed / 2 filed: devkitPro's MSYS2 first on PATH broke `dev.ps1` (its cmake: tests ran stale) and `scan-secrets.ps1` (its git mangled `{n}`): both prefer the real tool; badge radius text; Flatpak games all `app` → T-149, catalogue re-read → T-148. T-130 split: host half T-150 (builder) is NEXT.
+
 - 2026-10-29 · Sonnet 5.5 · T-112 · New crate `ruya-library` + `Library1.xml`: VDF parser, Steam manifests, Flatpak list, merged catalogue, zbus adapter. `rust` green (+24 tests). D-Bus serving and real Steam/Flatpak unverified; not in the image; home dir from `RUYA_LIBRARY_HOME` until T-130.
 - 2026-10-29 · Sonnet 5.5 · T-140 · Flathub (signed) replaces Fedora's OCI remote in the image, AppStream refresh after start/`AddRemote`, real install progress through a pseudo-terminal. VM-verified (`0.0.16-t140`): progress 0/50/100, SuperTux found by name, `ruya-store` 3.3 OK; `test` ALL GREEN.
   Two `make-disk` runs came out truncated while WSL restarted (host watch item); the third passed `qemu-img check`. Shell takes seconds to re-read a 3405-app catalogue (6 MB reply) after each change: T-111/T-113 filtering matters.
