@@ -221,7 +221,7 @@ Page {
                         width: parent.width * (page.job ? page.job.percent : 0) / 100
                         height: parent.height
                         radius: height / 2
-                        color: Theme.toastInfo
+                        color: Theme.text
                         Behavior on width { NumberAnimation { duration: Theme.focusMs } }
                     }
                 }

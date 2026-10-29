@@ -106,6 +106,8 @@ Each entry: file, status, and the rules a change must keep. A new component gets
 |---|---|---|---|
 | Tile | `Tile.qml` | built; replaced on Home by Section nav + Art cards (T-146) | `radiusM`, gradient from `tileAccent`, title `typeHeadline` bottom-left, card focus |
 | Art card | `ArtCard.qml` | planned (T-113, reused by T-146) | 16:9 key art edge to edge, `radiusM`, title on `artCaptionFade`, state pills in words (Running, Installing n %), card focus; no art: app icon on a tint from the id hash |
+| App art | `AppArt.qml` | built (T-111) | The art fill of Store cards and the app detail page, and of Art card (T-113 wraps it, no second version): the record's picture cropped to fill, else a two-stop tint from the id hash (`Qt.hsla`, light 0.42 → dark 0.18) with the name's initial `typeHero` Light; `radiusM` |
+| Progress bar | inline in `AppDetailPage.qml` (T-111) | built | Pill track `glass` + `glassBorder`, height `spaceS`; fill `text` (white, as the volume OSD bar), width animates over `focusMs`; percentage in words beside it. Extract to `ProgressBar.qml` when a second screen needs one (updates, launch) |
 | Cover card | `CoverCard.qml` | proposed | 2:3 cover for the Library grid; falls back to the 16:9 art cropped centre |
 | Hero block | `HeroBlock.qml` | planned (T-146) | Eyebrow `typeCaption` caps, title `typeHero` Bold, meta `typeBody`, Play (primary) + Details (secondary); follows the focused card, art cross-fades over `tintMs` |
 | Buttons | `PrimaryButton.qml`, `SecondaryButton.qml` | planned (T-146) | Pill `rowHeight`; primary `primaryFill`/`onPrimary`, focused = dark gap + white ring; secondary = glass, row focus |
