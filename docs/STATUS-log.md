@@ -2,6 +2,9 @@
 
 Older entries of the `docs/STATUS.md` session log, newest first. STATUS keeps only the latest five; the lead moves the rest here at each review. Nobody needs to read this file to start a task.
 
+- 2026-10-28 · Sonnet 5.5 · T-142 · Type scale tokens (`typeHero`..`typeMicro`, weights, `overlayMs`), 57 font sizes migrated, lint rejects literal `font.pixelSize` plus self-check. `test` ALL GREEN (172 QML), `shots` ALL GREEN, key shots reviewed. Weights not yet applied at call sites.
+- 2026-10-28 · Sonnet 5.5 · T-141 · `scripts/vm-goto.ps1 <target>`: wizard with fixed answers (PIN 1234), picker sign-in, keys to home/store/Settings panes; results checked over SSH. VM-verified on a fresh `-Work` disk (network, audio, store shots reviewed). The backdrop is never still, so keys are paced by `-SettleMs`, not by screen stability.
+- 2026-10-28 · Sonnet 5.5 · T-139 · New crate `ruya-session`: pure core, `Spawner` and `ProfileDirectory` traits, fake, `systemd-run` command builder, zbus adapter (`--session` only). `test` ALL GREEN (169 QML, Rust +25). Not in the image; adapter and bus flow unverified (no session bus on Windows, flow test over the core instead).
 - 2026-10-28 · Sonnet 5.5 · T-138 · `Session1` contract, `Session` singleton with mock and D-Bus client, crash toast, `tst_session.qml`. `test` ALL GREEN (169). D-Bus client unverified (T-139).
 - 2026-10-28 · Opus 5.5 · Owner: design system · New `docs/specs/04-design-system.md` ("Dreamglass", ADR-012), wired into the `CLAUDE.md`s, `LEAD.md`, `PLANNING.md`, `TEMPLATE.md`. Owner then chose Inter, an art-led Home and full-screen apps: specs 02 §1/§1.5, 04 v1.1; T-113 rescoped (its Home row moved to T-146); planned T-142..T-147. Docs only; reviewed and committed by the next lead (`b16bf1e`).
 

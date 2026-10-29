@@ -1,6 +1,6 @@
 # T-111 — Store UI: browse, detail page, install with progress
 
-Status: todo · Phase: 3 · Depends: T-110, T-119 (nested pages), T-104 (done) · Area: shell · Size: M
+Status: todo · Phase: 3 · Depends: T-110, T-119, T-148 · Area: shell · Size: M
 
 ## Goal
 From the Store tile, the user browses apps, opens a detail page that explains the source and permissions plainly, and installs or uninstalls with visible progress, entirely by controller.
@@ -14,11 +14,11 @@ From the Store tile, the user browses apps, opens a detail page that explains th
 1. `StorePage.qml` (replacing the T-101 placeholder):
    - rows "Featured" (official apps), "Games", "Apps & media", and "Installed";
    - Up/Down between rows, Left/Right within a row.
-2. Controller filter: apps with controller support `none` are hidden by default. A "Show all apps" toggle at the top (or in a row header) reveals them.
+2. Controller filter: apps with controller support `none` are hidden by default. A "Show all apps" toggle at the top (or in a row header) reveals them. Use the filter `Store` exposes since T-148 (the service filters; don't filter 3405 apps in QML).
 3. Search: a Search row opens `TextEntry` (T-104, done; parent it to `page.overlay`), and the results replace the rows until Back.
 4. `AppDetailPage.qml`, opened with Accept on any app (`Shell.openPage("appDetail", {appId})`, using T-119's nested pages; register it in `pageComponents`):
    - hero area (generated art), name, developer;
-   - **source badge**: Official / Community / Developer, with distinct colours (new Theme tokens);
+   - **source badge**: Official / Community / Developer as `Badge` (T-143) kinds `success` / `info` / `warning`; no new tokens;
    - controller support line and age rating;
    - permissions in plain language (spec §4.4); `all-devices`, `host-files` and `session-bus` are flagged **high risk** with a warning colour and icon text;
    - primary button: Install / Open (disabled placeholder) / Update; secondary: Uninstall, which asks for confirmation with a "Also delete my data" toggle;
@@ -48,7 +48,7 @@ From the Store tile, the user browses apps, opens a detail page that explains th
 - `docs/specs/02-shell.md` §1 Store row; `docs/specs/03-services-and-apps.md` §4.4: what the UI shows.
 
 ## Hints
-- **UI rules since T-117:** every colour and duration comes from `Theme`; the new badge and warning colours are new tokens, and the token lint in `dev.ps1 shell` fails on literals (quoted hex, `Qt.rgba(`, `duration: 120`). Generated art colours can come from `Qt.hsla(...)` of the id hash, which the lint does not flag. A new feedback animation must not run under reduced motion.
+- **UI rules since T-117:** every colour and duration comes from `Theme` (badges and the high-risk warning use the existing `Badge` kinds and toast colours), and the token lint in `dev.ps1 shell` fails on literals (quoted hex, `Qt.rgba(`, `duration: 120`). Generated art colours can come from `Qt.hsla(...)` of the id hash, which the lint does not flag. A new feedback animation must not run under reduced motion.
 - Nested pages, `params` and state keeping come from T-119; do not re-solve them here. Back from the detail page must return to the Store page with the same row and item focused (`test_detail_back_restores_focus` relies on it).
 - Reuse the Settings controls (`ToggleRow` for "Also delete my data") and the generated-art idea from `ProfileCard`.
 - Use `Notifications.show` for "Installed" / "Update available"-style messages if useful, never for errors the user must act on (show those inline).

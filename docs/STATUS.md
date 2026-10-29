@@ -2,7 +2,7 @@
 
 **Read this first in every session; update it last.** Rules: root `CLAUDE.md`. Roles (Opus lead, Sonnet builders): `docs/LEAD.md`. Task format: `docs/tasks/README.md`. Finished work: each task's own file (`Status: done`, Outcome starting with `Verified:`); history before T-132 in [`STATUS-done.md`](STATUS-done.md). `scripts/lint-board.ps1` (part of `dev.ps1 test`) keeps this board and the task files in step.
 
-Last updated: 2026-10-29 (Sonnet 5.5, T-112)
+Last updated: 2026-10-29 (Opus 5.5, lead)
 
 ## Where we are
 
@@ -15,17 +15,20 @@ Verification legend: **host** = built and tested on Windows · **vm** = built in
 
 ## Board
 
-**NEXT → T-135**
+**NEXT → T-150**
 
-**Lead review due: now (T-112 was the last builder task before it)** (reviewed up to the lead commit "lead review 070e312..8e7a7fc", see `docs/LEAD-NOTES.md`). **One builder session at a time, one task per session:** two builders in one checkout mixed three tasks' work on 2026-10-28. Builders: when your task makes this true, end your reply by recommending a lead session.
+**Lead review due: after T-148** (three builder tasks: T-150, T-135, T-148) (reviewed up to the lead commit "lead review 124ee1d..0fbe215", see `docs/LEAD-NOTES.md`). **One builder session at a time, one task per session:** two builders in one checkout mixed three tasks' work on 2026-10-28. Builders: when your task makes this true, end your reply by recommending a lead session.
 
 Open work only (todo, in-progress, blocked). The order is the recommended order; when NEXT is blocked take the first `todo` whose dependencies are `done` (a task's status is in its file header). `[lead]` tasks are skipped by builders. If nothing qualifies, **stop and ask for a planning session** (`docs/tasks/PLANNING.md`).
 
 | ID | Title | Status | Depends |
 |---|---|---|---|
-| [T-130](tasks/T-130-compositor-session.md) | **[lead]** Compositor session: `ruya-shell` replaces cage  | todo | T-123 |
+| [T-150](tasks/T-150-app-layer-and-key-router.md) | App layer and C++ key router (host half of T-130) | todo | T-123 |
+| [T-130](tasks/T-130-compositor-session.md) | **[lead]** Compositor session: `ruya-shell` replaces cage  | todo | T-150 |
 | [T-135](tasks/T-135-update-contract-and-settings.md) | `Update1` contract, mock, Settings → System updates | todo | — |
-| [T-111](tasks/T-111-store-ui.md) | Store UI | todo | T-110, T-119 |
+| [T-148](tasks/T-148-store-catalogue-filter.md) | Store: filter the catalogue in the service, `CatalogChanged` | todo | T-140 |
+| [T-111](tasks/T-111-store-ui.md) | Store UI | todo | T-110, T-119, T-148 |
+| [T-149](tasks/T-149-library-flatpak-games.md) | `ruya-library`: Flatpak games are games | todo | T-112 |
 | [T-113](tasks/T-113-games-page.md) | Library client and Games page with art cards | todo | T-101, T-112, T-143 |
 | [T-146](tasks/T-146-art-led-home.md) | Art-led Home: hero, Recent art row, section nav | todo | T-113, T-143 |
 | [T-147](tasks/T-147-fullscreen-app-flow.md) | Full-screen apps: launch splash, quick menu, return, close | todo | T-130, T-138, T-146 |
@@ -38,8 +41,6 @@ Open work only (todo, in-progress, blocked). The order is the recommended order;
 
 Follow-ups and debt for the next planner. Builders: add one line per item, `- (source) what, and why it matters`; write a task file only if your own task needs one. Run a planner at 5+ items.
 
-- (T-140) the shell re-reads the whole Flathub catalogue (3405 apps, 6 MB `Search("")` reply) after every `InstalledChanged`: the store UI/Games page need server-side filtering or paging (controller-support filter, spec 03 §4.2) before T-111 ships
-- (T-112) here `dev.ps1` finds `c:\devkitPro\msys2\usr\bin\cmake.exe` on PATH before `C:\Program Files\CMake\bin`, so `cmake build` fails ("is not a directory"); `dev.ps1` should prefer the real CMake (I prefixed PATH for one run)
 
 
 ## Blocked (need something this host doesn't have)
@@ -65,14 +66,12 @@ Follow-ups and debt for the next planner. Builders: add one line per item, `- (s
 
 One entry per session, at most 4 lines: date · model · tasks · what happened · numbers · follow-ups. Detail belongs in the task Outcome.
 
+- 2026-10-29 · Opus 5.5 · Lead (review `124ee1d..0fbe215`: T-143, T-140, T-112) · `test` ALL GREEN (178 QML + 13 skipped, 172 Rust); `shots` ALL GREEN (191, every T-143 screen reviewed); VM `0.0.18-lead` `RUYA_BOOT_OK`, `vm-store-check.sh` 41/41, security 3.3. CI green at `124ee1d`.
+  Findings 2 fixed / 2 filed: `dev.ps1` used devkitPro's cmake (build failed, tests ran stale), badge radius text; Flatpak games all `app` → T-149, catalogue re-read → T-148. T-130 split: host half T-150 (builder) is NEXT.
 - 2026-10-29 · Sonnet 5.5 · T-112 · New crate `ruya-library` + `Library1.xml`: VDF parser, Steam manifests, Flatpak list, merged catalogue, zbus adapter. `rust` green (+24 tests). D-Bus serving and real Steam/Flatpak unverified; not in the image; home dir from `RUYA_LIBRARY_HOME` until T-130.
 - 2026-10-29 · Sonnet 5.5 · T-140 · Flathub (signed) replaces Fedora's OCI remote in the image, AppStream refresh after start/`AddRemote`, real install progress through a pseudo-terminal. VM-verified (`0.0.16-t140`): progress 0/50/100, SuperTux found by name, `ruya-store` 3.3 OK; `test` ALL GREEN.
   Two `make-disk` runs came out truncated while WSL restarted (host watch item); the third passed `qemu-img check`. Shell takes seconds to re-read a 3405-app catalogue (6 MB reply) after each change: T-111/T-113 filtering matters.
 - 2026-10-29 · Sonnet 5.5 · T-143 · Spacing/radius/size tokens (~70 literals migrated, nearest-token shifts listed in the Outcome), `Badge` for PIN and mock flag. `test` ALL GREEN (178 QML), `shots` ALL GREEN, key shots reviewed. Hairline and a few odd widths stay literal.
 - 2026-10-28 · Opus 5.5 · Lead (review `070e312..8e7a7fc`: T-139, T-141, T-142) · `test` ALL GREEN (172 QML + 13 skipped, 143 Rust); `shots` ALL GREEN (185; toast/OSD, overlay, setup, keyboard reviewed, nothing clipped); VM not run (no image change). CI green at `070e312` (pin works).
   Findings 2 fixed / 1 filed: T-139 reported a SIGTERM death after Stop as `killed` (mock and contract say `quit`), fixed with a test; spec 04 §3.2 mapping text; type weights unused at call sites → T-144 (now M, with a lint). Plan unchanged, NEXT T-143.
-
-- 2026-10-28 · Sonnet 5.5 · T-142 · Type scale tokens (`typeHero`..`typeMicro`, weights, `overlayMs`), 57 font sizes migrated, lint rejects literal `font.pixelSize` plus self-check. `test` ALL GREEN (172 QML), `shots` ALL GREEN, key shots reviewed. Weights not yet applied at call sites.
-- 2026-10-28 · Sonnet 5.5 · T-141 · `scripts/vm-goto.ps1 <target>`: wizard with fixed answers (PIN 1234), picker sign-in, keys to home/store/Settings panes; results checked over SSH. VM-verified on a fresh `-Work` disk (network, audio, store shots reviewed). The backdrop is never still, so keys are paced by `-SettleMs`, not by screen stability.
-- 2026-10-28 · Sonnet 5.5 · T-139 · New crate `ruya-session`: pure core, `Spawner` and `ProfileDirectory` traits, fake, `systemd-run` command builder, zbus adapter (`--session` only). `test` ALL GREEN (169 QML, Rust +25). Not in the image; adapter and bus flow unverified (no session bus on Windows, flow test over the core instead).
 
