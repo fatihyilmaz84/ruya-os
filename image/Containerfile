@@ -52,7 +52,7 @@ RUN --mount=type=bind,source=image/build,target=/ctx/build \
     && chmod 0755 /usr/libexec/ruyaos/wait-shell-ready /usr/lib/greenboot/check/required.d/*.sh \
     && (cd /ctx/rootfs && find . -mindepth 1 ! -type l -print0 | xargs -0 -I{} find "/{}" -maxdepth 0 -perm /022 > /tmp/writable \
         && test ! -s /tmp/writable || { echo "group/world-writable files shipped from image/rootfs:"; cat /tmp/writable; exit 1; }) \
-    && systemctl enable ruya-compositor@tty1.service ruya-inputd.service ruya-profiles.service ruya-store.service ruya-boot-marker.service \
+    && systemctl enable ruya-compositor@tty1.service ruya-inputd.service ruya-profiles.service ruya-store.service ruya-flathub-remote.service ruya-boot-marker.service \
     && systemctl --global enable ruya-devices.service \
     && systemctl enable greenboot-healthcheck.service greenboot-set-rollback-trigger.service \
     && systemctl set-default graphical.target \

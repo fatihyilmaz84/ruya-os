@@ -1,6 +1,6 @@
 # T-140 — Store in the image: the spec's remotes, AppStream refresh and real install progress
 
-Status: todo · Phase: 3 · Depends: T-134 · Area: image, services · Size: M
+Status: done · Phase: 3 · Depends: T-134 · Area: image, services · Size: M
 
 ## Goal
 The store in the VM lists real, named apps from the sources spec 03 §4.2 names (Flathub), not the 524 unnamed apps of Fedora's own OCI remote, and an install shows progress between 0 and 100.
@@ -40,3 +40,15 @@ The store in the VM lists real, named apps from the sources spec 03 §4.2 names 
 - A pseudo-terminal in pure Rust: `rustix` has `openpt`/`grantpt`/`unlockpt`/`ptsname` (`pty` feature); if that grows too much, `script -qfec` from util-linux (already in the image) is an acceptable wrapper. Either way set `TERM=dumb`/`NO_COLOR` where flatpak honours them, and strip escape codes in the parser anyway.
 - The unit's `RestrictAddressFamilies` already allows network; a pty needs `/dev/ptmx`, which `PrivateDevices=yes` hides: check what the hardening allows and record any change and the new score.
 - Flathub's `.flatpakrepo` carries its GPG key; ADR-005 requires signed remotes, and `AddRemote`'s signed-only rule must not be bypassed by the image route.
+
+## Outcome
+Verified: vm (image `0.0.16-t140`, `RUYA_BOOT_OK`, guest online), 2026-10-29. `dev.ps1 test` ALL GREEN (178 QML, 36 ruya-store unit tests).
+
+- **Remotes:** `fedora-flathub-remote` is installed only for its `.flatpakrepo` (Flathub's key, empty filter). `ruya-flathub-remote.service` (oneshot, runs once, marker `/var/lib/flatpak/.ruya-flathub-initialized`, no network) adds `flathub` and removes `fedora`/`fedora-testing`; `flatpak-add-fedora-repos.service` is masked; `ruya-store` is `Wants`/`After` it. VM: `flatpak remotes --system` shows `flathub` (signed) and no `fedora`.
+- **AppStream:** `Store::update_appstream` runs `flatpak update --appstream` per enabled remote, then reads the catalogue (`dbus::spawn_sync`, after start and after `AddRemote`; `InstalledChanged` after both reads). Offline: one log line, cached data kept (unit-tested with `FakeFlatpak::offline`). VM: `Search SuperTux` returns "SuperTux" (A jump-and-run game starring Tux the Penguin) and "SuperTuxKart"; the catalogue has 3405 apps.
+- **Progress:** `flatpak_cli::run_on_terminal` gives `flatpak` a pseudo-terminal (`rustix`, Linux-only dependency already in the tree via async-io; 200 columns). Two findings: the pty slave must be opened with `O_NOCTTY` (the service is a session leader; without it closing the pty sent the service SIGHUP, seen in the first VM run), and `flatpak` draws no bar with `--noninteractive`, so install/update/rollback run with `-y` only (stdin is /dev/null). Parsing is in the pure core (`strip_escapes`, `parse_progress` with the "n/m" share of the whole transaction, `ProgressScanner` for carriage-return redraws and the error tail). VM log excerpt of the test install: `job-1 0, 50, 100 install`.
+- **Check script:** `vm-store-check.sh` has a 50 MB payload, asserts `flathub` signed / `fedora` absent and an intermediate `JobProgress`, and now waits until the shell shows the app installed before uninstalling (with Flathub's 3405 apps the shell needs seconds to re-read the catalogue). `vm-store-probe.qml` prints a timestamp. All checks passed.
+- **Security:** `systemd-analyze security ruya-store` 3.3 OK, unchanged: `PrivateDevices=yes` still provides `/dev/ptmx`, no unit change was needed.
+- **Host note:** two `make-disk.sh` runs produced truncated qcow2 files (`qemu-img check` errors, XFS errors at boot) while WSL restarted; the third, checked with `qemu-img check` in the same WSL session, was clean. Same family as the host disk/RAM watch item in STATUS.
+- **Not done / deviations:** the pty probe reads one flatpak output format (0.18.4 in the image); the no-pty fallback has no progress. Not verified: Flathub install of a real large app.
+

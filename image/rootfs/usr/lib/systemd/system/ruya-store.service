@@ -1,5 +1,7 @@
 [Unit]
 Description=RuyaOS app store service (org.ruyaos.Store1)
+Wants=ruya-flathub-remote.service
+After=ruya-flathub-remote.service
 Before=ruya-compositor@tty1.service
 
 [Service]

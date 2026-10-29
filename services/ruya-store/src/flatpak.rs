@@ -134,6 +134,9 @@ pub trait Flatpak: Send + Sync {
     fn run(&self, op: &Operation, progress: &mut dyn FnMut(Progress)) -> Result<(), FlatpakError>;
     /// Adds a system-wide remote. Never without signature verification.
     fn add_remote(&self, name: &str, url: &str) -> Result<(), FlatpakError>;
+    /// Fetches the remote's AppStream data again (names, summaries, icons). A failure (no
+    /// network) leaves the data flatpak already has.
+    fn update_appstream(&self, remote: &str) -> Result<(), String>;
 }
 
 /// Maps the error text of `flatpak` to what the user can do about it. The first match wins, the
@@ -269,9 +272,61 @@ pub fn parse_remotes(output: &str) -> Vec<RemoteInfo> {
         .collect()
 }
 
+/// `text` without terminal escape sequences (colours, cursor movement, window titles), which
+/// flatpak writes when it believes it talks to a terminal.
+pub fn strip_escapes(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut chars = text.chars();
+    while let Some(c) = chars.next() {
+        if c != '\u{1b}' {
+            out.push(c);
+            continue;
+        }
+        match chars.next() {
+            // CSI: parameters and intermediates, then one final byte in 0x40..=0x7e.
+            Some('[') => {
+                for c in chars.by_ref() {
+                    if ('\u{40}'..='\u{7e}').contains(&c) {
+                        break;
+                    }
+                }
+            }
+            // OSC: up to BEL or ESC plus one more character.
+            Some(']') => {
+                while let Some(c) = chars.next() {
+                    if c == '\u{7}' {
+                        break;
+                    }
+                    if c == '\u{1b}' {
+                        chars.next();
+                        break;
+                    }
+                }
+            }
+            // Any other two-character sequence.
+            _ => {}
+        }
+    }
+    out
+}
+
+/// The `n/m` of "Installing 2/3" (the n-th of m refs), when the text before the percentage
+/// has one.
+fn step_of(before_percent: &str) -> Option<(u32, u32)> {
+    before_percent.split_whitespace().find_map(|word| {
+        let word = word.trim_matches(|c: char| !c.is_ascii_digit() && c != '/');
+        let (n, m) = word.split_once('/')?;
+        let (n, m): (u32, u32) = (n.parse().ok()?, m.parse().ok()?);
+        (m >= 1 && (1..=m).contains(&n)).then_some((n, m))
+    })
+}
+
 /// The percentage in a line of `flatpak install` output ("Installing... 45%"), and the phase
-/// when the line names one. Lines without a percentage give `None`.
+/// when the line names one. Lines without a percentage give `None`. flatpak counts every ref
+/// (the app and its runtimes) from 0 to 100 on its own; with an "n/m" in the line the result
+/// is the share of the whole transaction.
 pub fn parse_progress(line: &str) -> Option<(u32, Option<Phase>)> {
+    let line = strip_escapes(line);
     let end = line.find('%')?;
     let digits: String = line[..end]
         .chars()
@@ -281,7 +336,10 @@ pub fn parse_progress(line: &str) -> Option<(u32, Option<Phase>)> {
         .into_iter()
         .rev()
         .collect();
-    let percent: u32 = digits.parse().ok()?;
+    let mut percent: u32 = digits.parse::<u32>().ok()?.min(100);
+    if let Some((n, m)) = step_of(&line[..end - digits.len()]) {
+        percent = ((n - 1) * 100 + percent) / m;
+    }
     let lower = line.to_lowercase();
     let phase = if lower.contains("download") || lower.contains("fetch") {
         Some(Phase::Download)
@@ -294,7 +352,56 @@ pub fn parse_progress(line: &str) -> Option<(u32, Option<Phase>)> {
     } else {
         None
     };
-    Some((percent.min(100), phase))
+    Some((percent, phase))
+}
+
+/// Reads what a flatpak transaction prints on a terminal: lines end in a newline or, for a
+/// redrawn progress bar, a carriage return. Reports every percentage and keeps the last lines
+/// (without escape sequences) for `classify_error`, since a terminal merges stdout and stderr.
+#[derive(Default)]
+pub struct ProgressScanner {
+    line: Vec<u8>,
+    tail: std::collections::VecDeque<String>,
+}
+
+const TAIL_LINES: usize = 20;
+const MAX_LINE: usize = 4096;
+
+impl ProgressScanner {
+    pub fn feed(&mut self, bytes: &[u8], on_progress: &mut dyn FnMut(u32, Option<Phase>)) {
+        for &byte in bytes {
+            if byte == b'\r' || byte == b'\n' {
+                self.end_line(on_progress);
+            } else if self.line.len() < MAX_LINE {
+                self.line.push(byte);
+            }
+        }
+    }
+
+    /// The output has ended: a last line without a terminator counts too.
+    pub fn finish(&mut self, on_progress: &mut dyn FnMut(u32, Option<Phase>)) {
+        self.end_line(on_progress);
+    }
+
+    fn end_line(&mut self, on_progress: &mut dyn FnMut(u32, Option<Phase>)) {
+        let raw = String::from_utf8_lossy(&self.line).into_owned();
+        self.line.clear();
+        if let Some((percent, phase)) = parse_progress(&raw) {
+            on_progress(percent, phase);
+        }
+        let text = strip_escapes(&raw);
+        if !text.trim().is_empty() {
+            if self.tail.len() == TAIL_LINES {
+                self.tail.pop_front();
+            }
+            self.tail.push_back(text);
+        }
+    }
+
+    /// The last lines of output, for classifying a failure.
+    pub fn tail(&self) -> String {
+        self.tail.iter().cloned().collect::<Vec<_>>().join("\n")
+    }
 }
 
 /// Scripted Flatpak for tests and `--session`: remotes with apps, installed apps, pending
@@ -310,6 +417,10 @@ struct FakeState {
     installed: Vec<InstalledApp>,
     updates: Vec<String>,
     appstream: HashMap<String, Appstream>,
+    /// What `update_appstream` fetches, per remote.
+    appstream_fresh: HashMap<String, Appstream>,
+    appstream_offline: bool,
+    appstream_updates: Vec<String>,
     metadata: HashMap<String, String>,
     fail_next: Option<FlatpakError>,
     progress: Vec<u32>,
@@ -376,6 +487,28 @@ impl FakeFlatpak {
         self
     }
 
+    /// The AppStream data a successful `update_appstream` of `remote` fetches.
+    pub fn with_fresh_appstream(self, remote: &str, xml: &str) -> Self {
+        self.state().appstream_fresh.insert(
+            remote.to_owned(),
+            Appstream {
+                xml: xml.to_owned(),
+                icon_base: format!("/icons/{remote}"),
+            },
+        );
+        self
+    }
+
+    /// `update_appstream` fails, as without a network.
+    pub fn offline(self) -> Self {
+        self.state().appstream_offline = true;
+        self
+    }
+
+    pub fn appstream_updates(&self) -> Vec<String> {
+        self.state().appstream_updates.clone()
+    }
+
     pub fn with_metadata(self, id: &str, metadata: &str) -> Self {
         self.state()
             .metadata
@@ -426,6 +559,18 @@ impl Flatpak for FakeFlatpak {
 
     fn metadata(&self, _remote: &str, id: &str) -> Option<String> {
         self.state().metadata.get(id).cloned()
+    }
+
+    fn update_appstream(&self, remote: &str) -> Result<(), String> {
+        let mut state = self.state();
+        state.appstream_updates.push(remote.to_owned());
+        if state.appstream_offline {
+            return Err("unable to connect".to_owned());
+        }
+        if let Some(fresh) = state.appstream_fresh.get(remote).cloned() {
+            state.appstream.insert(remote.to_owned(), fresh);
+        }
+        Ok(())
     }
 
     fn run(&self, op: &Operation, progress: &mut dyn FnMut(Progress)) -> Result<(), FlatpakError> {
@@ -582,11 +727,79 @@ mod tests {
             Some((50, Some(Phase::Remove)))
         );
         assert_eq!(parse_progress("  12%"), Some((12, None)));
+        assert_eq!(
+            parse_progress("Installing 2/4...  50%"),
+            Some((37, Some(Phase::Install)))
+        );
+        assert_eq!(
+            parse_progress("Installing 4/4...  100%"),
+            Some((100, Some(Phase::Install)))
+        );
+        assert_eq!(
+            parse_progress("Installing 5/4  50%"),
+            Some((50, Some(Phase::Install)))
+        );
         assert_eq!(parse_progress("Installing org.a.One"), None);
         assert_eq!(
             parse_progress("% done"),
             None,
             "no digits before the percent sign"
         );
+    }
+
+    #[test]
+    fn escape_codes_are_stripped() {
+        assert_eq!(
+            strip_escapes("\x1b[?25l\x1b[1mHello\x1b[0m \x1b[2K"),
+            "Hello "
+        );
+        assert_eq!(strip_escapes("a\x1b]0;title\x07b"), "ab");
+        assert_eq!(
+            parse_progress("\x1b[1mInstalling\x1b[0m 1/1... \x1b[32m####\x1b[0m 45%\x1b[K"),
+            Some((45, Some(Phase::Install)))
+        );
+    }
+
+    /// Output as a terminal gets it: redrawn lines end in `\r`, colours around, a failure at the end.
+    const CAPTURE: &str = "\x1b[?25lInstalling 1/2...  \u{2588}        0%\r\
+        Installing 1/2... \u{2588}\u{2588}\u{2588}\u{2588}    50%\r\
+        Installing 1/2... \u{2588}\u{2588}\u{2588}\u{2588}\u{2588}\u{2588}\u{2588}\u{2588}\u{2588}\u{2588} 100%\r\n\
+        Installing 2/2...  \u{2588}        0%\r\
+        Installing 2/2... \u{2588}\u{2588}\u{2588}\u{2588}\u{2588}   60%\r\
+        Installing 2/2... \u{2588}\u{2588}\u{2588}\u{2588}\u{2588}\u{2588}\u{2588}\u{2588}\u{2588}\u{2588} 100%\r\n\x1b[?25h";
+
+    #[test]
+    fn scanner_reads_redraws_and_never_decreases_once_filtered() {
+        let mut scanner = ProgressScanner::default();
+        let mut seen = Vec::new();
+        // Fed in awkward pieces: a sequence split in the middle must not matter.
+        for chunk in CAPTURE.as_bytes().chunks(7) {
+            scanner.feed(chunk, &mut |p, _| seen.push(p));
+        }
+        scanner.finish(&mut |p, _| seen.push(p));
+        assert_eq!(seen, [0, 25, 50, 50, 80, 100]);
+        let mut monotone = crate::queue::Monotone::default();
+        let shown: Vec<_> = seen
+            .iter()
+            .filter_map(|&p| monotone.next(p, Phase::Install))
+            .collect();
+        assert_eq!(shown, [0, 25, 50, 80, 100]);
+    }
+
+    #[test]
+    fn scanner_keeps_the_last_lines_for_the_error() {
+        let mut scanner = ProgressScanner::default();
+        scanner.feed(
+            b"Installing 1/1...  10%\rerror: Unable to connect to dl.flathub.org\r\n",
+            &mut |_, _| {},
+        );
+        scanner.finish(&mut |_, _| {});
+        assert_eq!(classify_error(&scanner.tail()), FlatpakError::Network);
+        let mut long = ProgressScanner::default();
+        for i in 0..100 {
+            long.feed(format!("line {i}\n").as_bytes(), &mut |_, _| {});
+        }
+        assert_eq!(long.tail().lines().count(), TAIL_LINES);
+        assert!(long.tail().ends_with("line 99"));
     }
 }

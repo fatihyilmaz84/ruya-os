@@ -261,6 +261,27 @@ impl<F: Flatpak> Store<F> {
             .collect()
     }
 
+    /// Fetches every enabled remote's AppStream data again, then reads the catalogue. A remote
+    /// that cannot be reached (no network) keeps the data flatpak has; that is logged once, not
+    /// per remote. Returns whether the installed set or an update flag changed.
+    pub fn update_appstream(&self) -> Result<bool, String> {
+        let failed: Vec<String> = self
+            .flatpak
+            .remotes()?
+            .into_iter()
+            .filter(|r| r.enabled && valid_remote_name(&r.name))
+            .filter(|r| self.flatpak.update_appstream(&r.name).is_err())
+            .map(|r| r.name)
+            .collect();
+        if !failed.is_empty() {
+            eprintln!(
+                "ruya-store: AppStream not refreshed for {} (offline?), keeping the cached data",
+                failed.join(", ")
+            );
+        }
+        self.refresh()
+    }
+
     /// Adds a software source. Only for an admin (`is_admin`, decided by the caller); a remote
     /// without signature verification is never added.
     pub fn add_remote(&self, name: &str, url: &str, is_admin: bool) -> Status {
@@ -602,6 +623,45 @@ mod tests {
                 commit: "abcdef123456".into()
             }]
         );
+    }
+
+    const FRESH: &str = r#"<components origin="flathub">
+      <component type="desktop-application"><id>org.other.Tool</id><name>Other Tool</name>
+        <summary>Does things</summary></component>
+    </components>"#;
+
+    #[test]
+    fn appstream_refresh_gives_names_to_the_remotes_apps() {
+        let s = store(
+            fake()
+                .with_remote("flathub", "Flathub", true)
+                .with_fresh_appstream("flathub", FRESH),
+        );
+        assert_eq!(s.get_app("org.other.Tool").1.name, "Tool");
+        s.update_appstream().unwrap();
+        let app = s.get_app("org.other.Tool").1;
+        assert_eq!(
+            (app.name.as_str(), app.summary.as_str()),
+            ("Other Tool", "Does things")
+        );
+        assert_eq!(s.flatpak.appstream_updates(), ["ruyaos", "flathub"]);
+    }
+
+    #[test]
+    fn appstream_refresh_failure_keeps_the_catalogue() {
+        let s = store(
+            fake()
+                .with_remote("flathub", "Flathub", true)
+                .with_fresh_appstream("flathub", FRESH)
+                .offline(),
+        );
+        let before: Vec<_> = s.search("").into_iter().map(|a| (a.id, a.name)).collect();
+        assert_eq!(s.update_appstream(), Ok(false));
+        let after: Vec<_> = s.search("").into_iter().map(|a| (a.id, a.name)).collect();
+        assert_eq!(before, after);
+        assert!(before
+            .iter()
+            .any(|(id, name)| id == "org.ruya.Racer" && name == "Turbo Racer"));
     }
 
     #[test]

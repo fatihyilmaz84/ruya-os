@@ -9,7 +9,7 @@ dnf -y install --setopt=install_weak_deps=False \
     pipewire pipewire-pulseaudio pipewire-alsa pipewire-utils wireplumber \
     NetworkManager-wifi bluez \
     udisks2 exfatprogs ntfs-3g \
-    flatpak \
+    flatpak fedora-flathub-remote \
     greenboot greenboot-default-health-checks \
     plymouth plymouth-theme-spinner \
     google-noto-sans-fonts

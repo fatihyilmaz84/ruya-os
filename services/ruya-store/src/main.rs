@@ -5,9 +5,9 @@
 use std::error::Error;
 use std::sync::Arc;
 
-use ruya_store::dbus::{forward, DynFlatpak, StoreIface, BUS_NAME, OBJECT_PATH};
+use ruya_store::dbus::{forward, spawn_sync, DynFlatpak, StoreIface, BUS_NAME, OBJECT_PATH};
 use ruya_store::flatpak::FakeFlatpak;
-use ruya_store::service::{Event, Store};
+use ruya_store::service::Store;
 
 fn main() {
     if let Err(err) = run() {
@@ -47,16 +47,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     // The first read of the catalogue can take a while (remotes are asked over the network):
     // the name is taken first and clients are told when the lists are ready. A failing flatpak
     // leaves an empty store, not a dead service.
-    {
-        let store = store.clone();
-        let events = events.clone();
-        std::thread::spawn(move || {
-            if let Err(err) = store.refresh() {
-                eprintln!("ruya-store: Flatpak not readable yet: {err}");
-            }
-            let _ = events.send_blocking(Event::InstalledChanged);
-        });
-    }
+    spawn_sync(store.clone(), events.clone());
 
     futures_lite::future::block_on(async {
         let builder = if session {

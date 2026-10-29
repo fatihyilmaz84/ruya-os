@@ -3,16 +3,16 @@
 
 use std::fs;
 use std::io::Read;
+use std::os::fd::AsFd;
 use std::os::unix::fs::MetadataExt;
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::thread;
 
 use crate::app::{valid_app_id, valid_remote_name};
 use crate::flatpak::{
-    classify_error, parse_ids, parse_installed, parse_progress, parse_remote_ls, parse_remotes,
-    Appstream, Flatpak, FlatpakError, InstalledApp, Operation, Progress, RemoteApp, RemoteInfo,
+    classify_error, parse_ids, parse_installed, parse_remote_ls, parse_remotes, Appstream, Flatpak,
+    FlatpakError, InstalledApp, Operation, Phase, Progress, ProgressScanner, RemoteApp, RemoteInfo,
 };
 
 pub struct FlatpakCli {
@@ -143,82 +143,32 @@ impl Flatpak for FlatpakCli {
                 if !valid_app_id(id) || !valid_remote_name(remote) {
                     return Err(FlatpakError::Other("refused argument".to_owned()));
                 }
-                vec!["install", "--system", "--noninteractive", "-y", remote, id]
+                // No --noninteractive: flatpak then draws no progress bar. -y answers its questions
+                // and stdin is /dev/null, so nothing can wait for a person.
+                vec!["install", "--system", "-y", remote, id]
             }
             Operation::Uninstall { id, .. } => {
                 vec!["uninstall", "--system", "--noninteractive", "-y", id]
             }
-            Operation::Update { id } => vec!["update", "--system", "--noninteractive", "-y", id],
+            Operation::Update { id } => vec!["update", "--system", "-y", id],
             Operation::Rollback { id, commit } => {
                 commit_arg = format!("--commit={commit}");
-                vec![
-                    "update",
-                    "--system",
-                    "--noninteractive",
-                    "-y",
-                    &commit_arg,
-                    id,
-                ]
+                vec!["update", "--system", "-y", &commit_arg, id]
             }
         };
         if !valid_app_id(op.app()) {
             return Err(FlatpakError::Other("refused argument".to_owned()));
         }
 
-        let mut child = command(&args)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .map_err(|e| FlatpakError::Other(format!("flatpak: {e}")))?;
-        let mut stderr = child.stderr.take();
-        // stderr is read on its own thread, or a full pipe would stop the command.
-        let errors = thread::spawn(move || {
-            let mut text = String::new();
-            if let Some(pipe) = stderr.as_mut() {
-                let mut bytes = Vec::new();
-                let _ = pipe.read_to_end(&mut bytes);
-                text = String::from_utf8_lossy(&bytes).into_owned();
-            }
-            text
-        });
-
-        // Progress lines end in \r (a redrawn line) or \n.
-        let mut seen = String::new();
-        if let Some(mut out) = child.stdout.take() {
-            let mut buf = [0u8; 4096];
-            let mut line = Vec::new();
-            loop {
-                let n = match out.read(&mut buf) {
-                    Ok(0) | Err(_) => break,
-                    Ok(n) => n,
-                };
-                for &byte in &buf[..n] {
-                    if byte == b'\r' || byte == b'\n' {
-                        let text = String::from_utf8_lossy(&line).into_owned();
-                        if let Some((percent, phase)) = parse_progress(&text) {
-                            progress(Progress {
-                                percent,
-                                phase: phase.unwrap_or_else(|| op.phase()),
-                            });
-                        }
-                        seen = text;
-                        line.clear();
-                    } else if line.len() < 4096 {
-                        line.push(byte);
-                    }
-                }
-            }
-        }
-        let status = child
-            .wait()
-            .map_err(|e| FlatpakError::Other(format!("flatpak: {e}")))?;
-        let stderr = errors.join().unwrap_or_default();
+        let (status, output) = run_on_terminal(&args, &mut |percent, phase| {
+            progress(Progress {
+                percent,
+                phase: phase.unwrap_or_else(|| op.phase()),
+            });
+        })
+        .map_err(|e| FlatpakError::Other(format!("flatpak: {e}")))?;
         if !status.success() {
-            return Err(classify_error(if stderr.trim().is_empty() {
-                &seen
-            } else {
-                &stderr
-            }));
+            return Err(classify_error(&output));
         }
         if let Operation::Uninstall {
             id,
@@ -228,6 +178,20 @@ impl Flatpak for FlatpakCli {
             self.delete_user_data(id);
         }
         Ok(())
+    }
+
+    fn update_appstream(&self, remote: &str) -> Result<(), String> {
+        if !valid_remote_name(remote) {
+            return Err("refused argument".to_owned());
+        }
+        output(&[
+            "update",
+            "--appstream",
+            "--system",
+            "--noninteractive",
+            remote,
+        ])
+        .map(|_| ())
     }
 
     fn add_remote(&self, name: &str, url: &str) -> Result<(), FlatpakError> {
@@ -296,4 +260,95 @@ fn read_appstream(active: &Path) -> Option<String> {
         return Some(xml);
     }
     fs::read_to_string(active.join("appstream.xml")).ok()
+}
+
+/// Runs `flatpak` with a pseudo-terminal as stdout and stderr: it prints its progress bar only
+/// to a terminal. Returns the exit status and the last lines it printed (stdout and stderr are
+/// one stream on a terminal). Without a terminal available it runs on pipes, without progress.
+fn run_on_terminal(
+    args: &[&str],
+    on_progress: &mut dyn FnMut(u32, Option<Phase>),
+) -> std::io::Result<(std::process::ExitStatus, String)> {
+    let mut scanner = ProgressScanner::default();
+    let (mut child, master) = match open_terminal() {
+        Ok((master, slave)) => {
+            let mut cmd = command(args);
+            cmd.env("TERM", "xterm")
+                .env("NO_COLOR", "1")
+                .stdout(Stdio::from(slave.try_clone()?))
+                .stderr(Stdio::from(slave));
+            // `cmd` (and with it the last copy of the slave) is dropped before reading, or the
+            // master would never see the end of the output.
+            (cmd.spawn()?, Some(master))
+        }
+        Err(err) => {
+            eprintln!("ruya-store: no pseudo-terminal ({err}), no install progress");
+            let mut cmd = command(args);
+            cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+            (cmd.spawn()?, None)
+        }
+    };
+    let mut buf = [0u8; 4096];
+    if let Some(mut master) = master {
+        // EIO when the child has closed the terminal: the end of the output.
+        while let Ok(n) = master.read(&mut buf) {
+            if n == 0 {
+                break;
+            }
+            scanner.feed(&buf[..n], on_progress);
+        }
+    } else {
+        let mut stderr = child.stderr.take();
+        let errors = std::thread::spawn(move || {
+            let mut bytes = Vec::new();
+            if let Some(pipe) = stderr.as_mut() {
+                let _ = pipe.read_to_end(&mut bytes);
+            }
+            bytes
+        });
+        if let Some(mut out) = child.stdout.take() {
+            while let Ok(n) = out.read(&mut buf) {
+                if n == 0 {
+                    break;
+                }
+                scanner.feed(&buf[..n], on_progress);
+            }
+        }
+        let bytes = errors.join().unwrap_or_default();
+        scanner.feed(&bytes, on_progress);
+    }
+    scanner.finish(on_progress);
+    let status = child.wait()?;
+    Ok((status, scanner.tail()))
+}
+
+/// A new pseudo-terminal: the master to read from and the slave to give the child. 200 columns
+/// wide, so the progress bar is not squeezed into a default of zero.
+fn open_terminal() -> std::io::Result<(fs::File, fs::File)> {
+    use rustix::pty::{grantpt, openpt, ptsname, unlockpt, OpenptFlags};
+    use rustix::termios::{tcsetwinsize, Winsize};
+    use std::os::unix::ffi::OsStrExt;
+    use std::os::unix::fs::OpenOptionsExt;
+
+    let master = openpt(OpenptFlags::RDWR | OpenptFlags::NOCTTY | OpenptFlags::CLOEXEC)?;
+    grantpt(&master)?;
+    unlockpt(&master)?;
+    let name = ptsname(&master, Vec::new())?;
+    let slave = fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        // The service is a session leader: without O_NOCTTY the terminal would become its
+        // controlling terminal and closing it would send the service SIGHUP.
+        .custom_flags(rustix::fs::OFlags::NOCTTY.bits() as i32)
+        .open(std::ffi::OsStr::from_bytes(name.as_bytes()))?;
+    tcsetwinsize(
+        slave.as_fd(),
+        Winsize {
+            ws_row: 24,
+            ws_col: 200,
+            ws_xpixel: 0,
+            ws_ypixel: 0,
+        },
+    )?;
+    Ok((fs::File::from(master), slave))
 }

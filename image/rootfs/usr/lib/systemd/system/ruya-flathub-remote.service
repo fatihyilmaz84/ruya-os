@@ -1,0 +1,23 @@
+[Unit]
+Description=Add the Flathub remote (signed, from the key in the image) once
+ConditionPathExists=!/var/lib/flatpak/.ruya-flathub-initialized
+Before=ruya-store.service flatpak-system-helper.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# Fedora's own OCI remote is not wanted (its apps have no names in AppStream); it may exist on a
+# system that was installed before this unit did. No network is needed: the .flatpakrepo carries
+# Flathub's signing key.
+ExecStart=-/usr/bin/flatpak remote-delete --system --force fedora
+ExecStart=-/usr/bin/flatpak remote-delete --system --force fedora-testing
+ExecStart=/usr/bin/flatpak remote-add --system --if-not-exists --title Flathub flathub /usr/lib/fedora-third-party/conf.d/fedora-flathub.flatpakrepo
+ExecStartPost=/usr/bin/touch /var/lib/flatpak/.ruya-flathub-initialized
+ReadWritePaths=/var/lib/flatpak /var/tmp
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=multi-user.target

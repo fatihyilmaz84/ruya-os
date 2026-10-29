@@ -2,7 +2,7 @@
 
 **Read this first in every session; update it last.** Rules: root `CLAUDE.md`. Roles (Opus lead, Sonnet builders): `docs/LEAD.md`. Task format: `docs/tasks/README.md`. Finished work: each task's own file (`Status: done`, Outcome starting with `Verified:`); history before T-132 in [`STATUS-done.md`](STATUS-done.md). `scripts/lint-board.ps1` (part of `dev.ps1 test`) keeps this board and the task files in step.
 
-Last updated: 2026-10-29 (Sonnet 5.5, T-143)
+Last updated: 2026-10-29 (Sonnet 5.5, T-140)
 
 ## Where we are
 
@@ -15,16 +15,15 @@ Verification legend: **host** = built and tested on Windows · **vm** = built in
 
 ## Board
 
-**NEXT → T-140**
+**NEXT → T-112**
 
-**Lead review due: after 2 more builder tasks** (reviewed up to the lead commit "lead review 070e312..8e7a7fc", see `docs/LEAD-NOTES.md`). **One builder session at a time, one task per session:** two builders in one checkout mixed three tasks' work on 2026-10-28. Builders: when your task makes this true, end your reply by recommending a lead session.
+**Lead review due: after 1 more builder task** (reviewed up to the lead commit "lead review 070e312..8e7a7fc", see `docs/LEAD-NOTES.md`). **One builder session at a time, one task per session:** two builders in one checkout mixed three tasks' work on 2026-10-28. Builders: when your task makes this true, end your reply by recommending a lead session.
 
 Open work only (todo, in-progress, blocked). The order is the recommended order; when NEXT is blocked take the first `todo` whose dependencies are `done` (a task's status is in its file header). `[lead]` tasks are skipped by builders. If nothing qualifies, **stop and ask for a planning session** (`docs/tasks/PLANNING.md`).
 
 | ID | Title | Status | Depends |
 |---|---|---|---|
 | [T-130](tasks/T-130-compositor-session.md) | **[lead]** Compositor session: `ruya-shell` replaces cage  | todo | T-123 |
-| [T-140](tasks/T-140-store-remotes-and-progress.md) | Store in the image: Flathub remote, AppStream refresh, real progress | todo | T-134 |
 | [T-112](tasks/T-112-library-service-core.md) | ruya-library discovery core (Rust) | todo | — |
 | [T-135](tasks/T-135-update-contract-and-settings.md) | `Update1` contract, mock, Settings → System updates | todo | — |
 | [T-111](tasks/T-111-store-ui.md) | Store UI | todo | T-110, T-119 |
@@ -40,7 +39,7 @@ Open work only (todo, in-progress, blocked). The order is the recommended order;
 
 Follow-ups and debt for the next planner. Builders: add one line per item, `- (source) what, and why it matters`; write a task file only if your own task needs one. Run a planner at 5+ items.
 
-- (empty)
+- (T-140) the shell re-reads the whole Flathub catalogue (3405 apps, 6 MB `Search("")` reply) after every `InstalledChanged`: the store UI/Games page need server-side filtering or paging (controller-support filter, spec 03 §4.2) before T-111 ships
 
 
 ## Blocked (need something this host doesn't have)
@@ -66,6 +65,8 @@ Follow-ups and debt for the next planner. Builders: add one line per item, `- (s
 
 One entry per session, at most 4 lines: date · model · tasks · what happened · numbers · follow-ups. Detail belongs in the task Outcome.
 
+- 2026-10-29 · Sonnet 5.5 · T-140 · Flathub (signed) replaces Fedora's OCI remote in the image, AppStream refresh after start/`AddRemote`, real install progress through a pseudo-terminal. VM-verified (`0.0.16-t140`): progress 0/50/100, SuperTux found by name, `ruya-store` 3.3 OK; `test` ALL GREEN.
+  Two `make-disk` runs came out truncated while WSL restarted (host watch item); the third passed `qemu-img check`. Shell takes seconds to re-read a 3405-app catalogue (6 MB reply) after each change: T-111/T-113 filtering matters.
 - 2026-10-29 · Sonnet 5.5 · T-143 · Spacing/radius/size tokens (~70 literals migrated, nearest-token shifts listed in the Outcome), `Badge` for PIN and mock flag. `test` ALL GREEN (178 QML), `shots` ALL GREEN, key shots reviewed. Hairline and a few odd widths stay literal.
 - 2026-10-28 · Opus 5.5 · Lead (review `070e312..8e7a7fc`: T-139, T-141, T-142) · `test` ALL GREEN (172 QML + 13 skipped, 143 Rust); `shots` ALL GREEN (185; toast/OSD, overlay, setup, keyboard reviewed, nothing clipped); VM not run (no image change). CI green at `070e312` (pin works).
   Findings 2 fixed / 1 filed: T-139 reported a SIGTERM death after Stop as `killed` (mock and contract say `quit`), fixed with a test; spec 04 §3.2 mapping text; type weights unused at call sites → T-144 (now M, with a lint). Plan unchanged, NEXT T-143.
@@ -73,5 +74,4 @@ One entry per session, at most 4 lines: date · model · tasks · what happened 
 - 2026-10-28 · Sonnet 5.5 · T-142 · Type scale tokens (`typeHero`..`typeMicro`, weights, `overlayMs`), 57 font sizes migrated, lint rejects literal `font.pixelSize` plus self-check. `test` ALL GREEN (172 QML), `shots` ALL GREEN, key shots reviewed. Weights not yet applied at call sites.
 - 2026-10-28 · Sonnet 5.5 · T-141 · `scripts/vm-goto.ps1 <target>`: wizard with fixed answers (PIN 1234), picker sign-in, keys to home/store/Settings panes; results checked over SSH. VM-verified on a fresh `-Work` disk (network, audio, store shots reviewed). The backdrop is never still, so keys are paced by `-SettleMs`, not by screen stability.
 - 2026-10-28 · Sonnet 5.5 · T-139 · New crate `ruya-session`: pure core, `Spawner` and `ProfileDirectory` traits, fake, `systemd-run` command builder, zbus adapter (`--session` only). `test` ALL GREEN (169 QML, Rust +25). Not in the image; adapter and bus flow unverified (no session bus on Windows, flow test over the core instead).
-- 2026-10-28 · Opus 5.5 · Lead (review `f5b1a90..198e9ab`: T-138, the design-system docs) · `test` ALL GREEN (169 QML + 13 skipped, 117 Rust); `shots`/VM not run (no screen, no image change). CI was red since `81ce23e` (runner clippy 1.99 > host 1.92): fixed the lint (T-134) and pinned CI to 1.92.0. T-138: mock `nolaunch` + launch-failed toast test, frozen-copy `tryCompare` fixed. Design docs committed (ADR-012, `04`, T-142..T-147). A zeroed `zbus` source in the host's cargo registry was re-extracted (owner note). NEXT T-139.
 

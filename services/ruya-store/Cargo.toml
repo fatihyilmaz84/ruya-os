@@ -15,5 +15,8 @@ async-io = "2"  # timers; already in the tree through zbus
 blocking = "1"  # runs the blocking AddRemote off the executor; already in the tree through zbus
 async-channel = "2"  # job events from the runner thread to the signal emitter; already in the tree through zbus
 
+[target.'cfg(target_os = "linux")'.dependencies]
+rustix = { version = "1", default-features = false, features = ["std", "pty", "termios", "fs"] }  # a pseudo-terminal for flatpak's progress bar (already in the tree through async-io)
+
 [dev-dependencies]
 tempfile = "3"

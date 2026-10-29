@@ -48,6 +48,9 @@ impl Flatpak for DynFlatpak {
     fn add_remote(&self, name: &str, url: &str) -> Result<(), FlatpakError> {
         (**self).add_remote(name, url)
     }
+    fn update_appstream(&self, remote: &str) -> Result<(), String> {
+        (**self).update_appstream(remote)
+    }
 }
 
 pub type Shared = Arc<Store<DynFlatpak>>;
@@ -55,6 +58,23 @@ pub type Shared = Arc<Store<DynFlatpak>>;
 /// A job starts this long after its method returned, so the reply is on the wire before the
 /// first `JobProgress` (a client maps job ids to apps from the reply).
 const START_DELAY: Duration = Duration::from_millis(100);
+
+/// Reads the catalogue, tells the clients, then fetches the remotes' AppStream data (names,
+/// summaries, icons) and tells them again. On its own thread: every step can wait for the network.
+pub fn spawn_sync(store: Shared, events: Sender<Event>) {
+    std::thread::spawn(move || {
+        if let Err(err) = store.refresh() {
+            eprintln!("ruya-store: Flatpak not readable yet: {err}");
+        }
+        let _ = events.send_blocking(Event::InstalledChanged);
+        match store.update_appstream() {
+            Ok(_) => {
+                let _ = events.send_blocking(Event::InstalledChanged);
+            }
+            Err(err) => eprintln!("ruya-store: reading Flatpak failed: {err}"),
+        }
+    });
+}
 
 pub struct StoreIface {
     store: Shared,
@@ -240,13 +260,7 @@ impl StoreIface {
         if status == crate::app::Status::Ok {
             // The catalogue gets the new source's apps: read again (remotes can be slow, the
             // reply does not wait) and tell the clients.
-            let (store, events) = (self.store.clone(), self.events.clone());
-            std::thread::spawn(move || {
-                if let Err(err) = store.refresh() {
-                    eprintln!("ruya-store: reading Flatpak failed: {err}");
-                }
-                let _ = events.send_blocking(Event::InstalledChanged);
-            });
+            spawn_sync(self.store.clone(), self.events.clone());
         }
         status.as_str().to_owned()
     }

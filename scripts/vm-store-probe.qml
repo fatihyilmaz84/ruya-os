@@ -14,7 +14,7 @@ QtObject {
             const ids = Store.catalogue.map(a => a.id + (a.installed ? "(installed)" : ""));
             console.warn("store-probe: mock=" + Store.mock + " available=" + Store.available
                 + " catalogue=" + Store.catalogue.length + " installed=" + Store.installed.length
-                + " jobs=" + JSON.stringify(Store.jobs) + " apps=" + ids.join(","));
+                + " jobs=" + JSON.stringify(Store.jobs) + " t=" + new Date().toISOString().substr(11, 8) + " apps=" + ids.join(","));
         }
     }
 

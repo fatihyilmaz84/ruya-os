@@ -31,6 +31,8 @@ build_repo() {
         --quick-generate-key "ruya-store-test <test@example.org>" default default never >/dev/null 2>&1 || return 1
     key="$(gpg --homedir "$work/gpg" --list-keys --with-colons | awk -F: '/^pub/ {k=$5} END {print k}')"
     echo hello > "$work/rt/usr/share/ruya-test/hello"
+    # Incompressible payload in the app: the install must take long enough to show progress.
+    head -c 50000000 /dev/urandom > "$work/app/files/share/payload.bin"
     printf '[Runtime]\nname=%s\nruntime=%s/x86_64/stable\nsdk=%s/x86_64/stable\n' "$rt" "$rt" "$rt" > "$work/rt/metadata"
     printf '#!/bin/sh\necho hello\n' > "$work/app/files/bin/hello"; chmod 755 "$work/app/files/bin/hello"
     printf '[Application]\nname=%s\nruntime=%s/x86_64/stable\nsdk=%s/x86_64/stable\ncommand=hello\n\n[Context]\nshared=network;\nsockets=pulseaudio;\n' "$app" "$rt" "$rt" > "$work/app/metadata"
@@ -88,6 +90,11 @@ check)
     echo "--- build a signed test repository"
     build_repo && ok "repository built" || { bad "cannot build the test repository"; exit 1; }
 
+    echo "--- remotes of the image"
+    flatpak remotes --system --columns=name,options
+    flatpak remotes --system --columns=name | grep -qx fedora && bad "the fedora remote is still there" || ok "no fedora remote"
+    flatpak remotes --system --columns=name,options | grep '^flathub' | grep -q 'no-gpg-verify' && bad "flathub is unsigned" || { flatpak remotes --system --columns=name | grep -qx flathub && ok "flathub is present and signed" || bad "flathub is missing"; }
+
     echo "--- AddRemote"
     out="$(as_shell busctl --system call "$svc" "$path" "$ifc" AddRemote ss x "file://$work/test.flatpakrepo")"
     echo "as ruya-shell: $out"
@@ -138,7 +145,8 @@ check)
     fin="$(wait_job "$job" 180)" && ok "JobFinished arrived" || bad "no JobFinished within 180 s"
     echo "$fin" | head -c 400; echo
     echo "$fin" | grep -q '"ok"' && ok "JobFinished is ok" || bad "JobFinished is not ok"
-    grep -h '"member":"JobProgress"' "$work/signals.log" | grep "\"$job\"" | head -5
+    grep -h '"member":"JobProgress"' "$work/signals.log" | grep "\"$job\"" | head -8
+    grep -h '"member":"JobProgress"' "$work/signals.log" | grep "\"$job\"" | sed -n 's/.*"data":\["[^"]*",\([0-9]*\),.*/\1/p' | awk '$1 > 0 && $1 < 100 {f=1} END {exit !f}' && ok "a JobProgress strictly between 0 and 100" || bad "no intermediate JobProgress"
     grep -h '"member":"JobProgress"' "$work/signals.log" | grep "\"$job\"" | grep -q '100' && ok "JobProgress reached 100" || bad "no JobProgress 100"
     grep -q '"member":"InstalledChanged"' "$work/signals.log" && ok "InstalledChanged sent" || bad "no InstalledChanged"
     # InstalledChanged comes before JobFinished
@@ -150,6 +158,12 @@ check)
     flatpak list --system --app --columns=application,origin | grep "$app" && ok "flatpak agrees" || bad "flatpak does not list it"
     case "$(as_shell busctl --system call "$svc" "$path" "$ifc" Install s "$app")" in 'ss "already-installed"'*) ok "Install again: already-installed";; *) bad "Install again";; esac
     case "$(as_shell busctl --system call "$svc" "$path" "$ifc" Update s "$app")" in 'ss "no-update"'*) ok "Update: no-update";; *) bad "Update status";; esac
+
+    # With Flathub's catalogue (thousands of apps) the shell needs a while to read it again after
+    # every InstalledChanged: wait until it shows the app before it is uninstalled.
+    n=0
+    until grep -a -q "installed=1" "$work/probe.log" || [ "$n" -ge 120 ]; do sleep 1; n=$((n + 1)); done
+    echo "the shell showed the app installed after about $n s"
 
     echo "--- Uninstall with data"
     # A profile's home (ruya-p*) lives in /var/home; make one for a user without privileges, with a
