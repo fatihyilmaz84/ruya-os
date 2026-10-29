@@ -59,6 +59,7 @@ FocusScope {
         page.marginY = Qt.binding(() => root.marginY)
         page.anchors.fill = slot
         page.backRequested.connect(root.closePage)
+        page.openRequested.connect(root.openPage)
         slot.page = page
         slotCount += 1
         if (below)
@@ -322,6 +323,7 @@ FocusScope {
         games: gamesPage,
         media: mediaPage,
         store: storePage,
+        appDetail: appDetailPage,
         settings: settingsPage,
         power: powerPage
     })
@@ -522,6 +524,7 @@ FocusScope {
     Component { id: gamesPage; GamesPage {} }
     Component { id: mediaPage; MediaPage {} }
     Component { id: storePage; StorePage {} }
+    Component { id: appDetailPage; AppDetailPage {} }
     Component { id: settingsPage; SettingsPage {} }
     Component { id: powerPage; PowerPage {} }
 

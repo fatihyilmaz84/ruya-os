@@ -35,4 +35,17 @@ private:
     QDBusConnection m_bus;
     QDBusServiceWatcher m_watcher;
     QHash<QString, QString> m_jobApps; // job id -> app id
+
+    // A signal can overtake the reply that names its job. While an Install/Uninstall/Update call
+    // is unanswered, signals of unknown jobs are kept and replayed once the reply maps the id.
+    struct EarlySignal
+    {
+        bool finished = false;
+        uint percent = 0;
+        QString phase;
+        QString status;
+    };
+    void replay(const QString &job, const QString &appId);
+    QHash<QString, QList<EarlySignal>> m_early;
+    int m_pendingCalls = 0;
 };

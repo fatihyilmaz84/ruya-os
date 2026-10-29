@@ -40,6 +40,190 @@
     </message>
 </context>
 <context>
+    <name>AppDetailPage</name>
+    <message>
+        <location filename="../qml/AppDetailPage.qml" line="+30"/>
+        <source>Official</source>
+        <translation>Resmi</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Developer</source>
+        <translation>Geliştirici</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Community</source>
+        <translation>Topluluk</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Full controller support</source>
+        <translation>Tam kumanda desteği</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Partial controller support</source>
+        <translation>Kısmi kumanda desteği</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Needs a keyboard or mouse</source>
+        <translation>Klavye veya fare gerekir</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>All ages</source>
+        <translation>Her yaş</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Ages %1</source>
+        <translation>%1 yaş ve üzeri</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Plays sound</source>
+        <translation>Ses çalar</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Uses game controllers</source>
+        <translation>Oyun kumandalarını kullanır</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Uses the network</source>
+        <translation>Ağı kullanır</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Reads and writes files in your home folder</source>
+        <translation>Ana klasörünüzdeki dosyaları okur ve yazar</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Reads and writes all files on this device</source>
+        <translation>Bu cihazdaki tüm dosyaları okur ve yazar</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Accesses all devices</source>
+        <translation>Tüm cihazlara erişir</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Can control other programs on this device</source>
+        <translation>Bu cihazdaki diğer programları denetleyebilir</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Waiting…</source>
+        <translation>Bekleniyor…</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Downloading…</source>
+        <translation>İndiriliyor…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Installing…</source>
+        <translation>Kuruluyor…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Updating…</source>
+        <translation>Güncelleniyor…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Removing…</source>
+        <translation>Kaldırılıyor…</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Working…</source>
+        <translation>Çalışıyor…</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>No network connection. Check it and try again.</source>
+        <translation>Ağ bağlantısı yok. Kontrol edip tekrar deneyin.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This app could not be verified, so it was not installed.</source>
+        <translation>Bu uygulama doğrulanamadığı için kurulmadı.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>A part this app needs could not be found.</source>
+        <translation>Bu uygulamanın ihtiyaç duyduğu bir bileşen bulunamadı.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>There is not enough space on this device.</source>
+        <translation>Bu cihazda yeterli alan yok.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Another change is running. Try again in a moment.</source>
+        <translation>Başka bir değişiklik sürüyor. Birazdan tekrar deneyin.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Something went wrong. You can try again.</source>
+        <translation>Bir şeyler ters gitti. Tekrar deneyebilirsiniz.</translation>
+    </message>
+    <message>
+        <location line="+102"/>
+        <source>Install</source>
+        <translation>Kur</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Update</source>
+        <translation>Güncelle</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Open</source>
+        <translation>Açık</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <location line="+222"/>
+        <source>Uninstall</source>
+        <translation>Kaldır</translation>
+    </message>
+    <message>
+        <location line="-123"/>
+        <source>This app can</source>
+        <translation>Bu uygulama şunları yapabilir</translation>
+    </message>
+    <message>
+        <location line="+24"/>
+        <source>High risk</source>
+        <translation>Yüksek risk</translation>
+    </message>
+    <message>
+        <location line="+66"/>
+        <source>Uninstall %1?</source>
+        <translation>%1 kaldırılsın mı?</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Also delete my data</source>
+        <translation>Verilerimi de sil</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Cancel</source>
+        <translation>İptal</translation>
+    </message>
+</context>
+<context>
     <name>AudioPane</name>
     <message>
         <location filename="../qml/AudioPane.qml" line="+57"/>
@@ -778,7 +962,7 @@
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+281"/>
+        <location filename="../qml/Shell.qml" line="+282"/>
         <source>Could not %1.</source>
         <translation>%1 işlemi yapılamadı.</translation>
     </message>
@@ -824,12 +1008,12 @@
     </message>
     <message>
         <location line="+1"/>
-        <location line="+585"/>
+        <location line="+587"/>
         <source>Power</source>
         <translation>Güç</translation>
     </message>
     <message>
-        <location line="-386"/>
+        <location line="-388"/>
         <source>Update ready. Restart to finish.</source>
         <translation>Güncelleme hazır. Bitirmek için yeniden başlat.</translation>
     </message>
@@ -839,7 +1023,7 @@
         <translation>%1 beklenmedik şekilde durdu</translation>
     </message>
     <message>
-        <location line="+358"/>
+        <location line="+360"/>
         <source>System</source>
         <translation>Sistem</translation>
     </message>
@@ -887,9 +1071,70 @@
 <context>
     <name>StorePage</name>
     <message>
-        <location filename="../qml/StorePage.qml" line="+6"/>
+        <location filename="../qml/StorePage.qml" line="+13"/>
         <source>Store</source>
         <translation>Mağaza</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>Featured</source>
+        <translation>Öne çıkanlar</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Games</source>
+        <translation>Oyunlar</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Apps &amp; media</source>
+        <translation>Uygulamalar ve medya</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+171"/>
+        <source>Installed</source>
+        <translation>Kurulu</translation>
+    </message>
+    <message>
+        <location line="-147"/>
+        <source>Official</source>
+        <translation>Resmi</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Developer</source>
+        <translation>Geliştirici</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Community</source>
+        <translation>Topluluk</translation>
+    </message>
+    <message>
+        <location line="+146"/>
+        <source>Update available</source>
+        <translation>Güncelleme var</translation>
+    </message>
+    <message>
+        <location line="+33"/>
+        <source>Search</source>
+        <translation>Ara</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Search the Store</source>
+        <translation>Mağazada ara</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Show all apps</source>
+        <translation>Tüm uygulamaları göster</translation>
+    </message>
+    <message>
+        <location line="+126"/>
+        <source>No apps found for &quot;%1&quot;</source>
+        <translation>&quot;%1&quot; için uygulama bulunamadı</translation>
     </message>
 </context>
 <context>

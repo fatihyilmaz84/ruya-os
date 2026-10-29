@@ -40,6 +40,190 @@
     </message>
 </context>
 <context>
+    <name>AppDetailPage</name>
+    <message>
+        <location filename="../qml/AppDetailPage.qml" line="+30"/>
+        <source>Official</source>
+        <translation>Official</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Developer</source>
+        <translation>Developer</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Community</source>
+        <translation>Community</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Full controller support</source>
+        <translation>Full controller support</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Partial controller support</source>
+        <translation>Partial controller support</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Needs a keyboard or mouse</source>
+        <translation>Needs a keyboard or mouse</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>All ages</source>
+        <translation>All ages</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Ages %1</source>
+        <translation>Ages %1</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Plays sound</source>
+        <translation>Plays sound</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Uses game controllers</source>
+        <translation>Uses game controllers</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Uses the network</source>
+        <translation>Uses the network</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Reads and writes files in your home folder</source>
+        <translation>Reads and writes files in your home folder</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Reads and writes all files on this device</source>
+        <translation>Reads and writes all files on this device</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Accesses all devices</source>
+        <translation>Accesses all devices</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Can control other programs on this device</source>
+        <translation>Can control other programs on this device</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Waiting…</source>
+        <translation>Waiting…</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Downloading…</source>
+        <translation>Downloading…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Installing…</source>
+        <translation>Installing…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Updating…</source>
+        <translation>Updating…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Removing…</source>
+        <translation>Removing…</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Working…</source>
+        <translation>Working…</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>No network connection. Check it and try again.</source>
+        <translation>No network connection. Check it and try again.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This app could not be verified, so it was not installed.</source>
+        <translation>This app could not be verified, so it was not installed.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>A part this app needs could not be found.</source>
+        <translation>A part this app needs could not be found.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>There is not enough space on this device.</source>
+        <translation>There is not enough space on this device.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Another change is running. Try again in a moment.</source>
+        <translation>Another change is running. Try again in a moment.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Something went wrong. You can try again.</source>
+        <translation>Something went wrong. You can try again.</translation>
+    </message>
+    <message>
+        <location line="+102"/>
+        <source>Install</source>
+        <translation>Install</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Update</source>
+        <translation>Update</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Open</source>
+        <translation>Open</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <location line="+222"/>
+        <source>Uninstall</source>
+        <translation>Uninstall</translation>
+    </message>
+    <message>
+        <location line="-123"/>
+        <source>This app can</source>
+        <translation>This app can</translation>
+    </message>
+    <message>
+        <location line="+24"/>
+        <source>High risk</source>
+        <translation>High risk</translation>
+    </message>
+    <message>
+        <location line="+66"/>
+        <source>Uninstall %1?</source>
+        <translation>Uninstall %1?</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Also delete my data</source>
+        <translation>Also delete my data</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Cancel</source>
+        <translation>Cancel</translation>
+    </message>
+</context>
+<context>
     <name>AudioPane</name>
     <message>
         <location filename="../qml/AudioPane.qml" line="+57"/>
@@ -780,7 +964,7 @@
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+281"/>
+        <location filename="../qml/Shell.qml" line="+282"/>
         <source>Could not %1.</source>
         <translation>Could not %1.</translation>
     </message>
@@ -826,12 +1010,12 @@
     </message>
     <message>
         <location line="+1"/>
-        <location line="+585"/>
+        <location line="+587"/>
         <source>Power</source>
         <translation>Power</translation>
     </message>
     <message>
-        <location line="-386"/>
+        <location line="-388"/>
         <source>Update ready. Restart to finish.</source>
         <translation>Update ready. Restart to finish.</translation>
     </message>
@@ -841,7 +1025,7 @@
         <translation>%1 stopped unexpectedly</translation>
     </message>
     <message>
-        <location line="+358"/>
+        <location line="+360"/>
         <source>System</source>
         <translation>System</translation>
     </message>
@@ -889,9 +1073,70 @@
 <context>
     <name>StorePage</name>
     <message>
-        <location filename="../qml/StorePage.qml" line="+6"/>
+        <location filename="../qml/StorePage.qml" line="+13"/>
         <source>Store</source>
         <translation>Store</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>Featured</source>
+        <translation>Featured</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Games</source>
+        <translation>Games</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Apps &amp; media</source>
+        <translation>Apps &amp; media</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+171"/>
+        <source>Installed</source>
+        <translation>Installed</translation>
+    </message>
+    <message>
+        <location line="-147"/>
+        <source>Official</source>
+        <translation>Official</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Developer</source>
+        <translation>Developer</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Community</source>
+        <translation>Community</translation>
+    </message>
+    <message>
+        <location line="+146"/>
+        <source>Update available</source>
+        <translation>Update available</translation>
+    </message>
+    <message>
+        <location line="+33"/>
+        <source>Search</source>
+        <translation>Search</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Search the Store</source>
+        <translation>Search the Store</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Show all apps</source>
+        <translation>Show all apps</translation>
+    </message>
+    <message>
+        <location line="+126"/>
+        <source>No apps found for &quot;%1&quot;</source>
+        <translation>No apps found for &quot;%1&quot;</translation>
     </message>
 </context>
 <context>

@@ -5,6 +5,7 @@
 #include <QDBusPendingCallWatcher>
 #include <QDBusPendingReply>
 #include <QDBusVariant>
+#include <QScopeGuard>
 
 namespace {
 const QString Service = QStringLiteral("org.ruyaos.Store1");
@@ -127,10 +128,16 @@ void DBusStoreBackend::startJob(const QString &method, const QString &id, const 
 {
     auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, method);
     msg.setArguments(args);
+    ++m_pendingCalls;
     auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
     connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, method, id](QDBusPendingCallWatcher *w) {
         w->deleteLater();
         QDBusPendingReply<QString, QString> reply = *w;
+        // Signals that arrived before this reply belong to the job it names (below), or to no one.
+        const auto done = qScopeGuard([this] {
+            if (--m_pendingCalls == 0)
+                m_early.clear();
+        });
         if (!reply.isValid()) {
             qWarning("ruya-shell: Store1 %s %s failed: %s", qPrintable(method), qPrintable(id),
                      qPrintable(reply.error().message()));
@@ -140,8 +147,10 @@ void DBusStoreBackend::startJob(const QString &method, const QString &id, const 
         const QString status = reply.argumentAt<0>();
         const QString job = reply.argumentAt<1>();
         if (status == QLatin1String("ok") && !job.isEmpty())
+        {
             m_jobApps.insert(job, id); // progress and the result arrive as signals
-        else
+            replay(job, id);
+        } else
             emit jobFinished(id, status);
     });
 }
@@ -161,11 +170,26 @@ void DBusStoreBackend::update(const QString &id)
     startJob(QStringLiteral("Update"), id, {id});
 }
 
+void DBusStoreBackend::replay(const QString &job, const QString &appId)
+{
+    const QList<EarlySignal> early = m_early.take(job);
+    for (const EarlySignal &e : early) {
+        if (e.finished) {
+            m_jobApps.remove(job);
+            emit jobFinished(appId, e.status);
+        } else {
+            emit jobProgress(appId, int(e.percent), e.phase);
+        }
+    }
+}
+
 void DBusStoreBackend::onJobProgress(const QString &job, uint percent, const QString &phase)
 {
     const auto it = m_jobApps.constFind(job);
     if (it != m_jobApps.cend())
         emit jobProgress(it.value(), int(percent), phase);
+    else if (m_pendingCalls > 0)
+        m_early[job].append({false, percent, phase, QString()});
 }
 
 void DBusStoreBackend::onJobFinished(const QString &job, const QString &status)
@@ -173,4 +197,6 @@ void DBusStoreBackend::onJobFinished(const QString &job, const QString &status)
     const QString id = m_jobApps.take(job);
     if (!id.isEmpty())
         emit jobFinished(id, status);
+    else if (m_pendingCalls > 0)
+        m_early[job].append({true, 0, QString(), status});
 }

@@ -68,7 +68,7 @@ Item {
             return [
                 { tag: "games", index: 0, focusName: "pagePlaceholder" },
                 { tag: "media", index: 1, focusName: "pagePlaceholder" },
-                { tag: "store", index: 2, focusName: "pagePlaceholder" },
+                { tag: "store", index: 2, focusName: "storeCards_featured" },   // T-111
                 { tag: "settings", index: 3, focusName: "categoryList" },   // T-103: real page
                 { tag: "power", index: 4, focusName: "powerSuspend" },      // T-107: real page
             ]
@@ -108,7 +108,7 @@ Item {
 
         function test_page_is_isolated() {
             openTile(2)
-            tryVerify(() => find("pagePlaceholder") && find("pagePlaceholder").activeFocus)
+            tryVerify(() => find("storeCards_featured") && find("storeCards_featured").activeFocus)
             keyClick(Qt.Key_Right)
             keyClick(Qt.Key_Left)
             keyClick(Qt.Key_Down)
@@ -165,11 +165,11 @@ Item {
 
         function test_back_walks_the_stack() {
             openTile(2)
-            tryVerify(() => find("pagePlaceholder").activeFocus)
+            tryVerify(() => find("storeCards_featured").activeFocus)
             openDetail({})
             keyClick(Qt.Key_Escape)
             tryCompare(tc.shell, "currentPage", "store")
-            tryVerify(() => find("pagePlaceholder").activeFocus)
+            tryVerify(() => find("storeCards_featured").activeFocus)
             compare(find("tiles").activeFocus, false)
             keyClick(Qt.Key_Escape)
             tryCompare(tc.shell, "currentPage", "")

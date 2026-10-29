@@ -1,6 +1,6 @@
 # T-111 — Store UI: browse, detail page, install with progress
 
-Status: todo · Phase: 3 · Depends: T-110, T-119, T-148 · Area: shell · Size: M
+Status: done · Phase: 3 · Depends: T-110, T-119, T-148 · Area: shell · Size: M
 
 ## Goal
 From the Store tile, the user browses apps, opens a detail page that explains the source and permissions plainly, and installs or uninstalls with visible progress, entirely by controller.
@@ -55,4 +55,11 @@ From the Store tile, the user browses apps, opens a detail page that explains th
 - **The real service exists since T-134** (`ruya-store`, VM-verified). It answers `Install` with only 0 and 100 progress (T-140 adds real percentages), and it delays a job's start by 100 ms so that `DBusStoreBackend::startJob` has the job id before the first signal. Make the client robust anyway: in `DBusStoreBackend`, keep `JobProgress`/`JobFinished` for a job id it doesn't know yet and replay them once the reply maps the id (add a test with a fake bus order if feasible, or say in the Outcome why not).
 
 ## Outcome
-_Filled in by the implementer._
+Verified: host (`test` ALL GREEN, `shots` ALL GREEN on the first run, `17` and `18` reviewed); the D-Bus replay of early job signals is unverified (QtDBus runs only on Linux, no test with a fake bus order).
+
+Built: `StorePage.qml` (toolbar with Search and "Show all apps"; rows Featured = official, Games = controller `full`, Apps & media = the rest, Installed; a search replaces the rows with a results grid until Back; the page sets `Store.controllerFilter = "gamepad"` while open and restores `any`), `AppDetailPage.qml` (art, source `Badge`, controller and age lines, permissions in plain words with `High risk` flags, Install / Update / Open (disabled), Uninstall dialog with "Also delete my data", phase text and progress bar, inline errors), `AppArt.qml` (generated art from the id hash), `Page.openRequested(key, params)` wired in `Shell.openPage`, `appDetail` registered in `builtinPages`. `DBusStoreBackend` keeps `JobProgress`/`JobFinished` that arrive while an Install/Uninstall/Update reply is pending and replays them when the reply names the job. Tests: `tests/tst_store_ui.qml` (all named criteria plus search); `tst_pages.qml` now expects `storeCards_featured` on the Store tile. Turkish and English strings added.
+
+Screenshot `19-store-installing.png`: the reviewed one (first `shots` run) showed the progress bar and "Downloading... 5%" but was caught mid-fade of the page transition; I added waits in the test to fix that, and two later `shots` runs hung on this desktop (timer stalls, see the 2026-10-29 T-150 note), so the fixed capture was never seen. Re-take it on an unlocked desktop.
+
+Deviations / notes: rows follow the record (no genre field exists), so "Games" is controller `full`. Cards look the app up in `Store.catalogue` with `find()`; a bare `Store.catalogue;` statement is dropped by the QML compiler and the binding never updated. Search text is handed to `TextEntry.accepted` in the test (on-screen typing is `tst_textentry`'s job). `AppArt` is a new component the task did not list (Inbox). Admin PIN for high-risk installs not done (Inbox).
+

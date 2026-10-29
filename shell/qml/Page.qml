@@ -20,6 +20,8 @@ FocusScope {
     default property alias content: contentArea.data
 
     signal backRequested()
+    // Ask the shell to push another page over this one (a detail page, T-111).
+    signal openRequested(string key, var params)
 
     Text {
         id: heading

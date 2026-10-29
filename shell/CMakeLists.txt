@@ -70,6 +70,8 @@ qt_add_qml_module(ruyashell
         qml/GamesPage.qml
         qml/MediaPage.qml
         qml/StorePage.qml
+        qml/AppDetailPage.qml
+        qml/AppArt.qml
         qml/SettingsPage.qml
         qml/PowerPage.qml
         qml/PowerConfirm.qml
