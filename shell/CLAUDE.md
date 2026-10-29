@@ -5,7 +5,7 @@ Specs: `docs/specs/02-shell.md` (behaviour) and `docs/specs/04-design-system.md`
 ## Structure
 
 - `qml/Main.qml`: the window only (fullscreen, or `--windowed`). It hosts `Shell`.
-- `qml/Shell.qml`: the whole UI as one `FocusScope`, so tests can host it in their own window. It owns top-level flow: picker → home → overlay, and later pages.
+- `qml/Shell.qml`: the whole UI as one `FocusScope`, so tests can host it in their own window. It owns top-level flow: picker → home → overlay, and later pages. App items: `addApp`/`removeApp`, `src/input/KeyRouter` (`PATTERNS.md`).
 - `qml/*.qml`: components. `Theme` (design tokens) and `Sfx` (UI sounds) are singletons.
 - `src/<area>/`: C++ for QML-exposed services. For each system service:
   - `XxxBackend.h`: an abstract `QObject` with virtual methods and result **signals**.
@@ -14,7 +14,7 @@ Specs: `docs/specs/02-shell.md` (behaviour) and `docs/specs/04-design-system.md`
   - `Xxx`: a `QML_ELEMENT QML_SINGLETON` facade. `create()` picks the backend from `RUYA_SERVICES` (`mock`/`dbus`; the default is D-Bus on Linux, the mock elsewhere). Expose `bool mock`.
   - Follow `src/profiles/` exactly as the reference implementation.
 - `tests/`: Qt Quick Test. `tst_main.cpp` forces `RUYA_SERVICES=mock`; each `tst_*.qml` gets a fresh engine (and so fresh singletons).
-- Everything except `main.cpp` is the static QML module `RuyaShell` (`ruyashell` target). **Add every new `.qml`, `.h` and `.cpp` to `CMakeLists.txt`.** Singletons need `QT_QML_SINGLETON_TYPE` set in CMake **and** `pragma Singleton` in the file. A build step (`cmake/InvalidateStaleQmlTypes.cmake`, T-116) keeps `QML_ELEMENT` registration fresh; on "X is not defined" see the root `CLAUDE.md` pitfall.
+- Everything except `main.cpp` is the static QML module `RuyaShell`. **Add every new `.qml`, `.h` and `.cpp` to `CMakeLists.txt`.** Singletons need `QT_QML_SINGLETON_TYPE` set in CMake **and** `pragma Singleton` in the file. A build step (`cmake/InvalidateStaleQmlTypes.cmake`, T-116) keeps `QML_ELEMENT` registration fresh; on "X is not defined" see the root `CLAUDE.md` pitfall.
 
 ## QML rules
 
@@ -23,7 +23,7 @@ Specs: `docs/specs/02-shell.md` (behaviour) and `docs/specs/04-design-system.md`
 - **No literal colours, durations or easing values in components** (and font sizes, and, since T-143, spacing, radii and the standard control sizes: `spaceXs`.., `radiusS..L`, `rowHeight`, `focusRingWidth`; spacing is not linted): use the `Theme` tokens listed in `04-design-system.md` §3. **Builders don't invent tokens or components:** take the closest existing one and add an Inbox line (`04` §8); the lead changes the system. `dev.ps1 shell` (so `test`) and CI run a token lint (`scripts/lint-tokens.ps1`) that fails on `duration: <non-zero number>`, a quoted hex colour, `Qt.rgba(` or a literal `font.pixelSize: <number>` anywhere but `Theme.qml`; for a rare exception end the line with `// token-ok: <reason>`. (Easing types are still a convention, not linted.) A feedback animation (shake, pulse) must also not run under reduced motion: guard its start on `Theme.reducedMotion`.
 - User-visible strings: `qsTr()`, with `%n` plurals where counts appear (see Translations below).
 - Effects: `MultiEffect` or precompiled `.qsb` shaders only. Never inline GLSL. Blur the shared backdrop; never stack more fullscreen blurs.
-- Never block the GUI thread. Service calls are asynchronous: invoke them, then react to a signal.
+- Never block the GUI thread: service calls are asynchronous (invoke, then react to a signal).
 
 ## Focus and input rules (the most common source of bugs)
 
@@ -38,14 +38,14 @@ Specs: `docs/specs/02-shell.md` (behaviour) and `docs/specs/04-design-system.md`
   | Guide | `Key_HomePage` |
   | LB / RB | `Key_PageUp` / `Key_PageDown` |
 
-  Keyboards also send `Key_Enter` (keypad), digits and `Key_Backspace`. Every flow must be completable with the controller keys alone.
+  Keyboards also send `Key_Enter` (keypad), digits, `Key_Backspace`. Every flow must work with the controller keys alone.
 - Each screen or modal is a `FocusScope`. Exactly one item has active focus, and the focused item always shows a visible focus ring or scale.
 - `ListView`/`GridView` with `interactive: false` **also turns off key navigation**, so set `keyNavigationEnabled: true` explicitly.
 - **Modals** (PIN pad, overlay, dialogs) accept *every* key in their `Keys.onPressed` (`event.accepted = true`), so nothing leaks underneath.
   Accepting every key also skips a `ListView`'s own key navigation, so a modal list handles Up/Down itself (`incrementCurrentIndex()`), as the Guide overlay does.
 - **A held key repeats** (`event.isAutoRepeat`). Ignore repeats in handlers that toggle or close (a held Guide used to close the overlay it had just opened); time long presses from the first press and the release (`Shell.qml`, `guideHoldTimer`).
 - **Focus restoration:** when a modal or page closes, return focus to where it was. Guard any re-focus with a check that the target is still enabled; otherwise you will steal focus after state changes (see `ProfilePicker.onClosed`).
-- Use `Sfx.navigate()` on focus moves, `Sfx.select()` on Accept, and `Sfx.back()` on Back or errors.
+- `Sfx.navigate()` on focus moves, `Sfx.select()` on Accept, `Sfx.back()` on Back or errors.
 
 ## Patterns (read `shell/PATTERNS.md` when your task touches one)
 

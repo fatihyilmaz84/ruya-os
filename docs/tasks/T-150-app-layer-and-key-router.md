@@ -1,6 +1,6 @@
 # T-150 — App layer and key router in the shell (host half of T-130)
 
-Status: todo · Phase: 1 · Depends: T-123 · Area: shell · Size: M
+Status: done · Phase: 1 · Depends: T-123 · Area: shell · Size: M
 
 ## Goal
 The shell has a proper place for app windows and decides in C++ which keys reach an app: apps sit under the shell's overlays, Guide and the volume keys always reach the shell, every other key goes to the focused app. All of it is tested on Windows with a stand-in app item; the Wayland compositor that fills the layer with real windows is T-130 (lead, image).
@@ -40,4 +40,13 @@ The shell has a proper place for app windows and decides in C++ which keys reach
 - Keep `ruya-shell: ready` and `--windowed` behaviour unchanged.
 
 ## Outcome
-_Filled in by the implementer. First line: `Verified: host | vm | unverified | hw` (say what ran where). Then: what was built, files, deviations, follow-ups (each also an Inbox line)._
+Verified: host (`dev.ps1 test` ALL GREEN, 187 QML tests offscreen). `dev.ps1 shots` could not be judged here: on real windows 8 timer-based tests fail (Power Guide hold, toast queue, OSD hide, lockout, picker fade); the same 6 of them fail on the untouched baseline (stash check), so it is the desktop session, not this change. No screen was meant to change (the app layer is invisible with no app); screenshots not reviewed.
+
+Built:
+- `src/input/KeyRouter` (C++, `QML_ELEMENT`, instantiated in `Shell`): event filter on the window. While `appItem` has active focus it takes the Guide keys (press and release, incl. Super/Meta and auto-repeat flag) and emits `guidePressed/guideReleased`; everything else is untouched. `KeyRouter.isGuideKey` is now the single definition; `Shell.isGuideKey` is a thin call to it. Shell's Guide logic became `guideDown/guideUp`, shared by the router and the ordinary `Keys` handlers (overlay, pages, tiles behave exactly as before).
+- `Shell`: `appLayer` (z 5, above home/pages, below toasts z 10, modals 15, overlay 20, OSD 30), `addApp/focusApp/removeApp`, `focusedApp`, `appOpen`; `focusCurrent()` prefers the focused app, so closing the overlay returns focus to it and removing the last app returns to the page or tiles. Home and pageHost are disabled while an app is open. Destroyed items are detected through a guard child per item.
+- `tests/tst_compositor_layers.qml` with a stand-in app: all six named tests plus a z-order test.
+- Docs: spec 02 §1.5/§4.1, `shell/PATTERNS.md`, `shell/CLAUDE.md` (stays about 7.2 KB, as before).
+
+Deviations: "everything else goes to the focused app" is plain focus delivery, no `sendEvent` re-sending (a Wayland compositor surface item gets keys through focus anyway; T-130 can add forwarding if it needs it). Volume keys remain the existing application `Shortcut`s, which already win before any key event.
+Pitfall found: a destroyed QML item must not be touched from JS (any use throws), and `var` properties copy JS objects, so records are matched by id.

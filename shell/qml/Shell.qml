@@ -102,11 +102,72 @@ FocusScope {
         return key
     }
 
-    // Gives focus to whatever is on top: the open page, else the home tiles.
+    // App items (a compositor's windows, T-130) live in `appLayer`: above home and pages, below
+    // toasts, modals and the Guide overlay. The shell API for a compositor: addApp(item),
+    // focusApp(item), removeApp(item) (also run when the item is destroyed).
+    // One record {item} per app item. A destroyed item must not be touched (QML throws), so
+    // the list holds records and a guard child of each item removes its record on destruction.
+    property var apps: []
+    property Item focusedApp: null
+    readonly property bool appOpen: apps.length > 0
+
+    property int appSerial: 0
+
+    function recordOf(item) {
+        return apps.find(r => r.item === item)
+    }
+
+    function addApp(item) {
+        if (!item || recordOf(item))
+            return
+        item.parent = appLayer
+        item.anchors.fill = appLayer
+        const record = { item: item, id: ++appSerial }
+        appGuard.createObject(item, { recordId: record.id })
+        apps = apps.concat([record])
+        focusApp(item)
+    }
+
+    function focusApp(item) {
+        if (!recordOf(item))
+            return
+        focusedApp = item
+        if (!systemPanel.open)          // the overlay keeps the focus until it closes
+            focusCurrent()
+    }
+
+    function removeApp(item) {
+        const record = recordOf(item)
+        if (record)
+            dropRecord(record.id)
+    }
+
+    function dropRecord(id) {
+        const record = apps.find(r => r.id === id)
+        if (!record)
+            return
+        apps = apps.filter(r => r.id !== id)
+        if (!focusedApp || focusedApp === record.item)
+            focusedApp = apps.length > 0 ? apps[apps.length - 1].item : null
+        if (!systemPanel.open)
+            focusCurrent()              // the next app, else the page or the home tiles
+    }
+
+    Component {
+        id: appGuard
+        QtObject {
+            property int recordId
+            Component.onDestruction: root.dropRecord(recordId)
+        }
+    }
+
+    // Gives focus to whatever is on top: the focused app, else the open page, else the home tiles.
     function focusCurrent() {
         if (!signedIn)
             return
-        if (pageOpen)
+        if (focusedApp)
+            focusedApp.forceActiveFocus()
+        else if (pageOpen)
             slots[slots.length - 1].restoreFocus()
         else
             tiles.forceActiveFocus()
@@ -161,29 +222,46 @@ FocusScope {
     // same physical press.
     property bool guideHeld: false
 
-    // The controller's Guide button arrives as HomePage (ruya-inputd); on a keyboard it is
-    // Super, left or right (Qt reports the Windows key as Meta on the Windows host). Menu is
-    // the context-menu key (spec 02 4.2), not Guide.
+    // Which keys are Guide is decided in C++ (KeyRouter.isGuideKey). Menu is the context-menu
+    // key (spec 02 4.2), not Guide.
     function isGuideKey(key) {
-        return key === Qt.Key_HomePage || key === Qt.Key_Super_L || key === Qt.Key_Super_R || key === Qt.Key_Meta
+        return keyRouter.isGuideKey(key)
+    }
+
+    function guideDown(autoRepeat) {
+        if (!autoRepeat) {
+            systemPanel.open = true
+            Sfx.select()
+            guideHeld = true
+            guideHoldTimer.restart()
+        }
+    }
+    function guideUp(autoRepeat) {
+        if (!autoRepeat) {
+            guideHeld = false
+            guideHoldTimer.stop()
+        }
+    }
+
+    // With an app focused the router takes the Guide keys before the app sees them (the
+    // overlay, pages and tiles get them as ordinary key events, below).
+    KeyRouter {
+        id: keyRouter
+        window: root.Window.window
+        appItem: root.focusedApp
+        onGuidePressed: autoRepeat => { if (root.signedIn && !systemPanel.open) root.guideDown(autoRepeat) }
+        onGuideReleased: autoRepeat => root.guideUp(autoRepeat)
     }
 
     Keys.onPressed: event => {
         if (signedIn && !systemPanel.open && isGuideKey(event.key)) {
-            if (!event.isAutoRepeat) {
-                systemPanel.open = true
-                Sfx.select()
-                guideHeld = true
-                guideHoldTimer.restart()
-            }
+            guideDown(event.isAutoRepeat)
             event.accepted = true
         }
     }
     Keys.onReleased: event => {
-        if (isGuideKey(event.key) && !event.isAutoRepeat) {
-            guideHeld = false
-            guideHoldTimer.stop()
-        }
+        if (isGuideKey(event.key))
+            guideUp(event.isAutoRepeat)
     }
     Timer {
         id: guideHoldTimer
@@ -332,7 +410,7 @@ FocusScope {
         id: home
         objectName: "home"
         anchors.fill: parent
-        readonly property bool shown: root.signedIn && !root.pageOpen
+        readonly property bool shown: root.signedIn && !root.pageOpen && !root.appOpen
         opacity: shown ? 1 : 0
         visible: shown || opacity > 0      // visible at once, so focus can be given in the same step
         enabled: shown                     // disabled while a page is open: no focus, no keys
@@ -446,7 +524,16 @@ FocusScope {
         objectName: "pageHost"
         anchors.fill: parent
         visible: root.slotCount > 0
-        enabled: root.pageOpen
+        enabled: root.pageOpen && !root.appOpen
+    }
+
+    // App items (addApp): above home and pages, below the toasts, modals and overlay.
+    Item {
+        id: appLayer
+        objectName: "appLayer"
+        anchors.fill: parent
+        z: 5
+        visible: root.appOpen
     }
 
     // One per stack entry. The top slot is shown and enabled (it fades and slides in while

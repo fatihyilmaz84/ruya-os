@@ -29,7 +29,7 @@ Each surface is a separate QML module loaded with `Loader { asynchronous: true }
 - Games, Media and Store are placeholders ("Coming soon" plus one focusable element) until their tasks land; Settings (§1.2) and Power (§1.4) are real.
 
 ### 1.5 Full-screen apps (target; owner 2026-10-28; T-130, T-138, T-147)
-- Every app and game runs full screen in the shell's app layer (ADR-002 A, T-130). While an app is in front the shell draws nothing over it except the quick menu, the volume OSD and critical toasts (errors, low controller battery); other toasts wait until the user is back in the shell.
+- Every app and game runs full screen in the shell's app layer (ADR-002 A, T-130). As built (T-150): `Shell.addApp(item)`, `focusApp`, `removeApp` manage the layer (`appLayer`, z 5: above home and pages, below toasts, modals, the Guide overlay and the volume OSD); the last app item removed or destroyed gives focus back to the page or the home tiles. While an app is in front the shell draws nothing over it except the quick menu, the volume OSD and critical toasts (errors, low controller battery); other toasts wait until the user is back in the shell.
 - Launch (Play on Home, a card, or the Store's Open): input to the shell locks, the launch transition and splash run (04 §5.1) until the app maps its first window, then the app gets focus. Failure: error toast, focus back where Play was. After 20 s without a window the splash offers Close.
 - Guide (short press) opens the quick menu over the live app; Back or Resume closes it and returns focus to the app; holding Guide still opens the power choices. Home leaves the app running (it becomes the Running card in Recent; Accept on it resumes). Close app asks `Session.stop` and confirms only when the app reports unsaved state (later). One app is in front; others keep running until closed (memory limits: later).
 
@@ -89,7 +89,7 @@ Token values per tier (`Theme.qml`): `blurMax` is 64 / 32 / 0, and the shelf `Mu
 ## 4. Input & focus model
 
 ### 4.1 Event path
-Physical pad → input daemon (ADR-003) → shell. While the shell has input focus, the daemon emits navigation as key events (Up/Down/Left/Right, Accept, Back, Menu, Guide, LB/RB, LT/RT) to the compositor's seat. While an app is focused, only **Guide** reaches the shell. Keyboard and mouse go through libinput and the compositor as normal.
+Physical pad → input daemon (ADR-003) → shell. While the shell has input focus, the daemon emits navigation as key events (Up/Down/Left/Right, Accept, Back, Menu, Guide, LB/RB, LT/RT) to the compositor's seat. While an app is focused, only **Guide** (and the volume keys) reach the shell. As built (T-150): the C++ `KeyRouter` (event filter on the window, `shell/src/input/`) takes the Guide keys, including Super and the Guide hold, from a focused app item and hands them to the shell; the volume keys are application shortcuts matched before any key event; every other key reaches the app by normal focus delivery. `KeyRouter.isGuideKey` is the one definition of which keys are Guide. Keyboard and mouse go through libinput and the compositor as normal.
 
 ### 4.2 Mapping
 | Action | Xbox | PlayStation | Keyboard |
