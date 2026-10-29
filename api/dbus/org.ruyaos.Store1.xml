@@ -30,7 +30,8 @@
   Jobs are named by an opaque string returned from Install/Uninstall/Update/Rollback.
 
   Every list is a plain array and every record an a{sv} dictionary, so fields can be added later
-  without breaking clients (unknown keys are ignored). Lists are re-read after InstalledChanged.
+  without breaking clients (unknown keys are ignored). The installed list is re-read after InstalledChanged,
+  the catalogue (Search) after CatalogChanged.
 
   App record (a{sv}), keys:
     id              s    Flatpak application id, e.g. "org.example.Racer"
@@ -55,9 +56,16 @@
 <node>
   <interface name="org.ruyaos.Store1">
 
-    <!-- Apps whose name, summary or id contains the query (case-insensitive). "" returns the whole catalogue. -->
+    <!--
+      Apps whose name, summary or id contains the query (case-insensitive). "" returns the whole catalogue.
+      options (a{sv}, unknown keys are ignored, {} = no filter):
+        controller  s   "any" (default) | "gamepad" (controller "full" or "partial" only)
+        limit       u   at most this many apps, 0 = no limit (default)
+      A bad value of a known key makes the call fail with org.freedesktop.DBus.Error.InvalidArgs.
+    -->
     <method name="Search">
       <arg name="query" type="s" direction="in"/>
+      <arg name="options" type="a{sv}" direction="in"/>
       <arg name="apps" type="aa{sv}" direction="out"/>
     </method>
 
@@ -132,9 +140,14 @@
       <arg name="status" type="s"/>
     </signal>
 
-    <!-- The set of installed apps, or an app's update flag, changed; call ListInstalled again. Also sent
-         when the catalogue was first read after the service started and after AddRemote: call Search again. -->
+    <!-- The set of installed apps, or an app's update flag, changed: call ListInstalled again (the
+         installed and update_available flags of apps already held change with it). Not sent for a
+         catalogue re-read that changed no installed state. -->
     <signal name="InstalledChanged"/>
+
+    <!-- The catalogue was (re)read: after the service first read it, after an AppStream refresh and
+         after AddRemote. Call Search again. -->
+    <signal name="CatalogChanged"/>
 
   </interface>
 </node>

@@ -78,9 +78,10 @@ DBusStoreBackend::DBusStoreBackend(QObject *parent)
 {
     connect(&m_watcher, &QDBusServiceWatcher::serviceRegistered, this, [this] {
         refresh();
-        search(QString());
+        search(QString(), false, 0);
     });
     m_bus.connect(Service, Path, Interface, QStringLiteral("InstalledChanged"), this, SIGNAL(installedChanged()));
+    m_bus.connect(Service, Path, Interface, QStringLiteral("CatalogChanged"), this, SIGNAL(catalogChanged()));
     m_bus.connect(Service, Path, Interface, QStringLiteral("JobProgress"), this,
                   SLOT(onJobProgress(QString, uint, QString)));
     m_bus.connect(Service, Path, Interface, QStringLiteral("JobFinished"), this, SLOT(onJobFinished(QString, QString)));
@@ -101,19 +102,24 @@ void DBusStoreBackend::refresh()
     });
 }
 
-void DBusStoreBackend::search(const QString &query)
+void DBusStoreBackend::search(const QString &query, bool gamepadOnly, uint limit)
 {
     auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("Search"));
-    msg << query;
+    QVariantMap options; // a{sv}
+    if (gamepadOnly)
+        options.insert(QStringLiteral("controller"), QStringLiteral("gamepad"));
+    if (limit != 0)
+        options.insert(QStringLiteral("limit"), limit);
+    msg << query << options;
     auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
-    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, query](QDBusPendingCallWatcher *w) {
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, query, gamepadOnly](QDBusPendingCallWatcher *w) {
         w->deleteLater();
         const QDBusMessage reply = w->reply();
         if (reply.type() != QDBusMessage::ReplyMessage || reply.arguments().isEmpty()) {
             qWarning("ruya-shell: Store1 Search failed: %s", qPrintable(reply.errorMessage()));
             return;
         }
-        emit searchFinished(query, parseApps(reply.arguments().constFirst().value<QDBusArgument>()));
+        emit searchFinished(query, gamepadOnly, parseApps(reply.arguments().constFirst().value<QDBusArgument>()));
     });
 }
 

@@ -111,14 +111,20 @@ check)
     echo "--- catalogue"
     # AddRemote answers at once; the catalogue is read again in the background (it asks every remote).
     n=0
-    until as_shell busctl --system call "$svc" "$path" "$ifc" Search s "TestApp" | grep -q "$app" || [ "$n" -ge 90 ]; do sleep 1; n=$((n + 1)); done
+    until as_shell busctl --system call "$svc" "$path" "$ifc" Search sa{sv} "TestApp" 0 | grep -q "$app" || [ "$n" -ge 90 ]; do sleep 1; n=$((n + 1)); done
     echo "the new source's apps were in the catalogue after about $n s"
-    list="$(as_shell busctl --system call "$svc" "$path" "$ifc" Search s "")"
+    list="$(as_shell busctl --system call "$svc" "$path" "$ifc" Search sa{sv} "" 0)"
     echo "$list" | head -c 1500; echo
     echo "$list" | grep -q "$app" && ok "Search lists the test app" || bad "test app not in the catalogue"
     echo "$list" | grep -q '"installed" b false' && ok "not installed yet" || bad "installed flag"
-    q="$(as_shell busctl --system call "$svc" "$path" "$ifc" Search s "no-such-app-zzz")"
+    q="$(as_shell busctl --system call "$svc" "$path" "$ifc" Search sa{sv} "no-such-app-zzz" 0)"
     echo "$q" | grep -q "$app" && bad "a query that matches nothing found the app" || ok "Search filters"
+    all_n="$(as_shell busctl --system call "$svc" "$path" "$ifc" Search sa{sv} "" 0 | grep -o '"id"' | wc -l)"
+    pad_n="$(as_shell busctl --system call "$svc" "$path" "$ifc" Search sa{sv} "" 1 controller s gamepad | grep -o '"id"' | wc -l)"
+    echo "apps without a filter: $all_n, with controller=gamepad: $pad_n"
+    [ "$pad_n" -lt "$all_n" ] && ok "Search with controller=gamepad returns fewer apps" || bad "controller=gamepad did not filter ($pad_n of $all_n)"
+    lim_n="$(as_shell busctl --system call "$svc" "$path" "$ifc" Search sa{sv} "" 1 limit u 1 | grep -o '"id"' | wc -l)"
+    [ "$lim_n" = 1 ] && ok "Search with limit=1 returns one app" || bad "limit=1 returned $lim_n"
     busctl --system call "$svc" "$path" "$ifc" GetApp s "$app" | head -c 800; echo
     case "$(busctl --system call "$svc" "$path" "$ifc" GetApp s org.nope.Missing)" in 'sa{sv} "unknown-app"'*) ok "GetApp of an unknown id";; *) bad "GetApp unknown";; esac
 
@@ -135,6 +141,15 @@ check)
     n=0
     until grep -a -q "available=true" "$work/probe.log" || [ "$n" -ge 90 ]; do sleep 1; n=$((n + 1)); done
     echo "the shell's Store was available after about $n s"
+    # The start-up read and the AppStream refresh each send CatalogChanged; let them finish so that
+    # the Install is the only thing that can send signals from here on.
+    prev=-1; n=0
+    while [ "$n" -lt 24 ]; do
+        cur="$(grep -c '"member":"CatalogChanged"' "$work/signals.log")"
+        [ "$cur" = "$prev" ] && break
+        prev="$cur"; sleep 5; n=$((n + 1))
+    done
+    sig_before="$(wc -l < "$work/signals.log")"
     out="$(as_shell busctl --system call "$svc" "$path" "$ifc" Install s "$app")"
     echo "$out"
     job="$(echo "$out" | sed -n 's/^ss "ok" "\(.*\)"$/\1/p')"
@@ -149,6 +164,11 @@ check)
     grep -h '"member":"JobProgress"' "$work/signals.log" | grep "\"$job\"" | sed -n 's/.*"data":\["[^"]*",\([0-9]*\),.*/\1/p' | awk '$1 > 0 && $1 < 100 {f=1} END {exit !f}' && ok "a JobProgress strictly between 0 and 100" || bad "no intermediate JobProgress"
     grep -h '"member":"JobProgress"' "$work/signals.log" | grep "\"$job\"" | grep -q '100' && ok "JobProgress reached 100" || bad "no JobProgress 100"
     grep -q '"member":"InstalledChanged"' "$work/signals.log" && ok "InstalledChanged sent" || bad "no InstalledChanged"
+    if tail -n +"$((sig_before + 1))" "$work/signals.log" | grep -q '"member":"CatalogChanged"'; then
+        bad "the Install sent CatalogChanged"
+    else
+        ok "the Install sent InstalledChanged but not CatalogChanged"
+    fi
     # InstalledChanged comes before JobFinished
     first_ic="$(grep -n '"member":"InstalledChanged"' "$work/signals.log" | head -1 | cut -d: -f1)"
     first_jf="$(grep -n '"member":"JobFinished"' "$work/signals.log" | head -1 | cut -d: -f1)"
@@ -190,7 +210,7 @@ check)
     echo "--- bad input and other users"
     case "$(as_shell busctl --system call -- "$svc" "$path" "$ifc" Install s "--user")" in 'ss "invalid"'*) ok "an option as id is invalid";; *) bad "option id";; esac
     case "$(as_shell busctl --system call -- "$svc" "$path" "$ifc" Rollback ss "$app" "--x")" in 'ss "invalid"'*) ok "a bad commit is invalid";; *) bad "bad commit";; esac
-    if out="$(runuser -u nobody -- busctl --system call "$svc" "$path" "$ifc" Search s "" 2>&1)"; then
+    if out="$(runuser -u nobody -- busctl --system call "$svc" "$path" "$ifc" Search sa{sv} "" 0 2>&1)"; then
         bad "nobody could call Search: $out"
     else
         echo "$out"; ok "call from nobody refused"

@@ -2,6 +2,8 @@
 
 Older entries of the `docs/STATUS.md` session log, newest first. STATUS keeps only the latest five; the lead moves the rest here at each review. Nobody needs to read this file to start a task.
 
+- 2026-10-29 · Sonnet 5.5 · T-140 · Flathub (signed) replaces Fedora's OCI remote in the image, AppStream refresh after start/`AddRemote`, real install progress through a pseudo-terminal. VM-verified (`0.0.16-t140`): progress 0/50/100, SuperTux found by name, `ruya-store` 3.3 OK; `test` ALL GREEN.
+  Two `make-disk` runs came out truncated while WSL restarted (host watch item); the third passed `qemu-img check`. Shell takes seconds to re-read a 3405-app catalogue (6 MB reply) after each change: T-111/T-113 filtering matters.
 - 2026-10-29 · Sonnet 5.5 · T-143 · Spacing/radius/size tokens (~70 literals migrated, nearest-token shifts listed in the Outcome), `Badge` for PIN and mock flag. `test` ALL GREEN (178 QML), `shots` ALL GREEN, key shots reviewed. Hairline and a few odd widths stay literal.
 - 2026-10-28 · Opus 5.5 · Lead (review `070e312..8e7a7fc`: T-139, T-141, T-142) · `test` ALL GREEN (172 QML + 13 skipped, 143 Rust); `shots` ALL GREEN (185; toast/OSD, overlay, setup, keyboard reviewed, nothing clipped); VM not run (no image change). CI green at `070e312` (pin works).
   Findings 2 fixed / 1 filed: T-139 reported a SIGTERM death after Stop as `killed` (mock and contract say `quit`), fixed with a test; spec 04 §3.2 mapping text; type weights unused at call sites → T-144 (now M, with a lint). Plan unchanged, NEXT T-143.

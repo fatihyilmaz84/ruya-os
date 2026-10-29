@@ -15,7 +15,7 @@ use crate::app::App;
 use crate::flatpak::{
     Appstream, Flatpak, FlatpakError, InstalledApp, Operation, Progress, RemoteApp, RemoteInfo,
 };
-use crate::service::{Event, Store};
+use crate::service::{Event, SearchOptions, Store};
 
 pub const BUS_NAME: &str = "org.ruyaos.Store1";
 pub const OBJECT_PATH: &str = "/org/ruyaos/Store1";
@@ -63,16 +63,9 @@ const START_DELAY: Duration = Duration::from_millis(100);
 /// summaries, icons) and tells them again. On its own thread: every step can wait for the network.
 pub fn spawn_sync(store: Shared, events: Sender<Event>) {
     std::thread::spawn(move || {
-        if let Err(err) = store.refresh() {
-            eprintln!("ruya-store: Flatpak not readable yet: {err}");
-        }
-        let _ = events.send_blocking(Event::InstalledChanged);
-        match store.update_appstream() {
-            Ok(_) => {
-                let _ = events.send_blocking(Event::InstalledChanged);
-            }
-            Err(err) => eprintln!("ruya-store: reading Flatpak failed: {err}"),
-        }
+        store.sync(&mut |event| {
+            let _ = events.send_blocking(event);
+        });
     });
 }
 
@@ -193,8 +186,29 @@ fn record(app: &App) -> Dict {
 
 #[interface(name = "org.ruyaos.Store1")]
 impl StoreIface {
-    fn search(&self, query: &str) -> Vec<Dict> {
-        self.store.search(query).iter().map(record).collect()
+    fn search(&self, query: &str, options: Dict) -> fdo::Result<Vec<Dict>> {
+        let controller = match options.get("controller") {
+            Some(v) => Some(
+                <&str>::try_from(v)
+                    .map_err(|_| fdo::Error::InvalidArgs("controller must be a string".into()))?,
+            ),
+            None => None,
+        };
+        let limit = match options.get("limit") {
+            Some(v) => Some(
+                u32::try_from(v)
+                    .map_err(|_| fdo::Error::InvalidArgs("limit must be a uint32".into()))?,
+            ),
+            None => None,
+        };
+        let options = SearchOptions::parse(controller, limit)
+            .ok_or_else(|| fdo::Error::InvalidArgs("controller: any or gamepad".into()))?;
+        Ok(self
+            .store
+            .search(query, &options)
+            .iter()
+            .map(record)
+            .collect())
     }
 
     async fn get_app(&self, id: &str) -> (String, Dict) {
@@ -282,6 +296,9 @@ impl StoreIface {
 
     #[zbus(signal)]
     async fn installed_changed(emitter: &SignalEmitter<'_>) -> zbus::Result<()>;
+
+    #[zbus(signal)]
+    async fn catalog_changed(emitter: &SignalEmitter<'_>) -> zbus::Result<()>;
 }
 
 /// Turns the events of the job thread into signals, in the order they happened. Runs forever.
@@ -302,6 +319,7 @@ pub async fn forward(connection: Connection, events: Receiver<Event>) {
                     StoreIface::job_progress(emitter, job, percent, phase.as_str().to_owned()).await
                 }
                 Event::InstalledChanged => StoreIface::installed_changed(emitter).await,
+                Event::CatalogChanged => StoreIface::catalog_changed(emitter).await,
                 Event::Finished { job, status } => {
                     StoreIface::job_finished(emitter, job, status.as_str().to_owned()).await
                 }

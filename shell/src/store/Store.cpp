@@ -3,32 +3,45 @@
 #include "DBusStoreBackend.h"
 #include "MockStoreBackend.h"
 
+#include <QHash>
+
 Store::Store(std::unique_ptr<StoreBackend> backend, QObject *parent)
     : QObject(parent)
     , m_backend(std::move(backend))
 {
-    connect(m_backend.get(), &StoreBackend::searchFinished, this, [this](const QString &query, const QList<AppInfo> &apps) {
+    connect(m_backend.get(), &StoreBackend::searchFinished, this, [this](const QString &query, bool gamepadOnly, const QList<AppInfo> &apps) {
         const QVariantList list = toList(apps);
         if (!m_available) {
             m_available = true;
             emit availableChanged();
         }
-        if (query.isEmpty()) {
+        const bool wanted = query == m_lastQuery && gamepadOnly == m_gamepadOnly;
+        if (query.isEmpty() && !gamepadOnly) {
             m_catalogue = list;
             emit catalogueChanged();
         }
-        m_results = list;
-        emit resultsChanged();
-        emit searchFinished(query, list);
+        if (wanted) {
+            m_results = list;
+            emit resultsChanged();
+            emit searchFinished(query, list);
+        }
     });
     connect(m_backend.get(), &StoreBackend::installedListed, this, [this](const QList<AppInfo> &apps) {
         m_installed = toList(apps);
         emit installedChanged();
+        // The apps already held keep their records: only their flags follow the installed set.
+        if (patchFlags(m_catalogue))
+            emit catalogueChanged();
+        if (patchFlags(m_results))
+            emit resultsChanged();
     });
     connect(m_backend.get(), &StoreBackend::installedChanged, this, [this] {
-        // The flags in the catalogue go stale with the installed set: read both again.
-        m_backend->refresh();
-        m_backend->search(QString());
+        m_backend->refresh(); // not the catalogue: its records are patched when the list arrives
+    });
+    connect(m_backend.get(), &StoreBackend::catalogChanged, this, [this] {
+        m_backend->search(QString(), false, 0);
+        if (!m_lastQuery.isEmpty() || m_gamepadOnly)
+            m_backend->search(m_lastQuery, m_gamepadOnly, 0);
     });
     connect(m_backend.get(), &StoreBackend::jobProgress, this, [this](const QString &id, int percent, const QString &phase) {
         m_jobs.insert(id, QVariantMap{{QStringLiteral("percent"), percent}, {QStringLiteral("phase"), phase}});
@@ -40,7 +53,7 @@ Store::Store(std::unique_ptr<StoreBackend> backend, QObject *parent)
         emit jobFinished(id, status);
     });
     m_backend->refresh();
-    m_backend->search(QString());
+    m_backend->search(QString(), false, 0);
 }
 
 Store::~Store() = default;
@@ -72,7 +85,42 @@ QVariantList Store::toList(const QList<AppInfo> &apps)
 
 void Store::search(const QString &query)
 {
-    m_backend->search(query);
+    m_lastQuery = query;
+    m_backend->search(query, m_gamepadOnly, 0);
+}
+
+void Store::setControllerFilter(const QString &filter)
+{
+    const bool gamepadOnly = filter == QLatin1String("gamepad");
+    if (gamepadOnly == m_gamepadOnly)
+        return;
+    m_gamepadOnly = gamepadOnly;
+    emit controllerFilterChanged();
+    m_backend->search(m_lastQuery, m_gamepadOnly, 0);
+}
+
+bool Store::patchFlags(QVariantList &list) const
+{
+    QHash<QString, bool> installed; // id -> update available
+    for (const QVariant &v : m_installed) {
+        const QVariantMap m = v.toMap();
+        installed.insert(m.value(QStringLiteral("id")).toString(), m.value(QStringLiteral("updateAvailable")).toBool());
+    }
+    bool changed = false;
+    for (QVariant &v : list) {
+        QVariantMap m = v.toMap();
+        const auto it = installed.constFind(m.value(QStringLiteral("id")).toString());
+        const bool isInstalled = it != installed.cend();
+        const bool update = isInstalled && it.value();
+        if (m.value(QStringLiteral("installed")).toBool() == isInstalled
+            && m.value(QStringLiteral("updateAvailable")).toBool() == update)
+            continue;
+        m.insert(QStringLiteral("installed"), isInstalled);
+        m.insert(QStringLiteral("updateAvailable"), update);
+        v = m;
+        changed = true;
+    }
+    return changed;
 }
 
 void Store::install(const QString &appId)
@@ -110,4 +158,16 @@ void Store::mockReset()
 {
     if (auto *mock = qobject_cast<MockStoreBackend *>(m_backend.get()))
         mock->reset();
+}
+
+int Store::mockSearchCount() const
+{
+    auto *mock = qobject_cast<MockStoreBackend *>(m_backend.get());
+    return mock ? mock->searchCount() : 0;
+}
+
+void Store::mockCatalogChanged()
+{
+    if (auto *mock = qobject_cast<MockStoreBackend *>(m_backend.get()))
+        mock->announceCatalogChanged();
 }

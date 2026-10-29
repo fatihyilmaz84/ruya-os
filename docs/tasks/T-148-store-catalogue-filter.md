@@ -1,6 +1,6 @@
 # T-148 — Store: filter the catalogue in the service, re-read it only when it changes
 
-Status: todo · Phase: 3 · Depends: T-140 · Area: api, services, shell · Size: M
+Status: done · Phase: 3 · Depends: T-140 · Area: api, services, shell · Size: M
 
 ## Goal
 With Flathub's 3405 apps in the image, the shell no longer re-reads the whole catalogue (a 6 MB `Search("")` reply, seconds of work) after every install or uninstall, and the Store UI (T-111) can ask the service for controller-capable apps only, as spec 03 §4.2 requires by default.
@@ -42,4 +42,12 @@ With Flathub's 3405 apps in the image, the shell no longer re-reads the whole ca
 - Keep `Search("")` working with no options for existing callers until they are all migrated in this commit; then drop the old signature (contracts are drafts until release).
 
 ## Outcome
-_Filled in by the implementer. First line: `Verified: host | vm | unverified | hw` (say what ran where). Then: what was built, files, deviations, follow-ups (each also an Inbox line)._
+Verified: vm (image `0.0.19-t148` booted `RUYA_BOOT_OK`; `vm-store-check.sh` ALL CHECKS PASSED over the real system bus, 3419-app catalogue). `dev.ps1 test` ALL GREEN (198 QML, Rust incl. 5 new store tests).
+
+- **Contract:** `Search(query s, options a{sv})` with `controller` (`any` | `gamepad` = `full` or `partial`; unknown counts as none) and `limit` u (0 = none); a bad value of a known key gives `InvalidArgs`. New signal `CatalogChanged`. The old one-argument `Search` is gone (the only callers, the D-Bus client and the VM script, were migrated in the same commit).
+- **Service:** `SearchOptions` and `Store::search(query, &options)` in `service.rs`; `Store::sync` (first read, then AppStream refresh) replaces the thread body of `spawn_sync` and is unit-tested: it sends `CatalogChanged` after each step and `InstalledChanged` only when the installed set or an update flag differs. Jobs send `InstalledChanged` only. `Event::CatalogChanged` is forwarded in `dbus.rs`.
+- **Shell:** `StoreBackend::search(query, gamepadOnly, limit)`, `searchFinished` carries `gamepadOnly`, new `catalogChanged`. `Store` patches the flags of `catalogue`/`results` when `ListInstalled` arrives (no `Search`), repeats the catalogue read and the last query on `CatalogChanged`, and has `controllerFilter` (default `any`, so existing UI is unchanged; T-111 sets `gamepad` and offers "Show all apps"). The filter applies to `search()` results; `catalogue` stays whole so `Store.app()` finds every app. Replies that do not match the last query and filter are ignored for `results`.
+- **Tests:** `tst_store_backend.qml` (+3: flags flip with no new search, `CatalogChanged` repeats the query, filter); Rust: filter, limit, option parsing, signals per event. `vm-store-check.sh`: gamepad filter returns fewer apps (127 of 3419), `limit=1` returns one, an install sends no `CatalogChanged` (it first waits for the sync signals to settle).
+- **Timing:** the shell saw the installed app within the check's 1 s polling step ("after about 0 s") after the install; before this task it re-read the 6 MB catalogue and T-140 recorded "seconds" without a number, so there is no measured before-value.
+- **Files:** `api/dbus/org.ruyaos.Store1.xml`, `services/ruya-store/src/{service,dbus}.rs`, `shell/src/store/*`, `shell/tests/tst_store_backend.qml`, `scripts/vm-store-check.sh`, spec 03 §4.3, `dev-setup.md`.
+- `shots` not run: no UI change.

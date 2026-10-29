@@ -60,16 +60,21 @@ public:
 
     virtual bool isMock() const = 0;
     virtual void refresh() = 0;                           // reports the installed list
-    virtual void search(const QString &query) = 0;        // "" = the whole catalogue
+    // "" = the whole catalogue. gamepadOnly: only apps with controller "full" or "partial";
+    // limit 0 = no limit.
+    virtual void search(const QString &query, bool gamepadOnly, uint limit) = 0;
     virtual void install(const QString &id) = 0;
     virtual void uninstall(const QString &id, bool deleteData) = 0;
     virtual void update(const QString &id) = 0;
 
 signals:
-    void searchFinished(const QString &query, const QList<AppInfo> &apps);
+    void searchFinished(const QString &query, bool gamepadOnly, const QList<AppInfo> &apps);
     void installedListed(const QList<AppInfo> &apps);
-    // The set of installed apps or an update flag changed: the facade reads both lists again.
+    // The set of installed apps or an update flag changed: the facade reads the installed list
+    // again and patches the flags of the apps it holds.
     void installedChanged();
+    // The catalogue was (re)read by the service: the facade searches again.
+    void catalogChanged();
     void jobProgress(const QString &appId, int percent, const QString &phase);
     // status: see the XML ("ok", "failed", "network", ...). A request the service refused
     // ("unknown-app", "busy", ...) is reported the same way, without any progress before it.

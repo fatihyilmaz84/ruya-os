@@ -24,6 +24,9 @@ class Store : public QObject
 
     // The whole catalogue (search("")), with the installed flags kept current.
     Q_PROPERTY(QVariantList catalogue READ catalogue NOTIFY catalogueChanged)
+    // "any" (default) or "gamepad": which apps search() asks the service for (controller "full" or
+    // "partial" only). The catalogue stays whole; changing the filter repeats the last search.
+    Q_PROPERTY(QString controllerFilter READ controllerFilter WRITE setControllerFilter NOTIFY controllerFilterChanged)
     Q_PROPERTY(QVariantList installed READ installed NOTIFY installedChanged)
     // Result of the last search(); search("") also fills the catalogue.
     Q_PROPERTY(QVariantList results READ results NOTIFY resultsChanged)
@@ -45,6 +48,8 @@ public:
     QVariantMap jobs() const { return m_jobs; }
     bool isAvailable() const { return m_available; }
     bool isMock() const { return m_backend->isMock(); }
+    QString controllerFilter() const { return m_gamepadOnly ? QStringLiteral("gamepad") : QStringLiteral("any"); }
+    void setControllerFilter(const QString &filter);
 
     // Results arrive with searchFinished / results.
     Q_INVOKABLE void search(const QString &query);
@@ -59,6 +64,8 @@ public:
     // Tests only, and only with the mock backend (otherwise false / no-op).
     Q_INVOKABLE bool mockDataDeleted(const QString &appId) const;
     Q_INVOKABLE void mockReset();
+    Q_INVOKABLE int mockSearchCount() const;
+    Q_INVOKABLE void mockCatalogChanged();
 
 signals:
     void catalogueChanged();
@@ -66,17 +73,22 @@ signals:
     void resultsChanged();
     void jobsChanged();
     void availableChanged();
+    void controllerFilterChanged();
     void searchFinished(const QString &query, const QVariantList &apps);
     // status: see api/dbus/org.ruyaos.Store1.xml (JobFinished statuses, plus request statuses).
     void jobFinished(const QString &appId, const QString &status);
 
 private:
     static QVariantList toList(const QList<AppInfo> &apps);
+    // Copies the installed/updateAvailable flags of m_installed into the apps of list.
+    bool patchFlags(QVariantList &list) const;
 
     std::unique_ptr<StoreBackend> m_backend;
     QVariantList m_catalogue;
     QVariantList m_installed;
     QVariantList m_results;
     QVariantMap m_jobs;
+    QString m_lastQuery;
+    bool m_gamepadOnly = false;
     bool m_available = false;
 };

@@ -20,10 +20,37 @@ pub enum Event {
     },
     /// The installed set or an update flag changed.
     InstalledChanged,
+    /// The catalogue was (re)read: clients search again.
+    CatalogChanged,
     Finished {
         job: String,
         status: JobStatus,
     },
+}
+
+/// Filters of `Search` (`options` of the contract).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct SearchOptions {
+    /// Only apps with controller support, `full` or `partial` (unknown counts as none).
+    pub gamepad_only: bool,
+    /// 0 = no limit.
+    pub limit: usize,
+}
+
+impl SearchOptions {
+    /// From the values of the `controller` and `limit` keys; `None` if `controller` is neither
+    /// "any" nor "gamepad".
+    pub fn parse(controller: Option<&str>, limit: Option<u32>) -> Option<Self> {
+        let gamepad_only = match controller {
+            None | Some("any") => false,
+            Some("gamepad") => true,
+            Some(_) => return None,
+        };
+        Some(SearchOptions {
+            gamepad_only,
+            limit: limit.map_or(0, |l| l as usize),
+        })
+    }
 }
 
 /// The trust level shown on an app's page, from the remote it comes from (spec 03 §4.2).
@@ -131,13 +158,40 @@ impl<F: Flatpak> Store<F> {
         Ok(changed)
     }
 
-    pub fn search(&self, query: &str) -> Vec<App> {
+    pub fn search(&self, query: &str, options: &SearchOptions) -> Vec<App> {
+        let limit = if options.limit == 0 {
+            usize::MAX
+        } else {
+            options.limit
+        };
         self.state()
             .catalogue
             .iter()
             .filter(|a| a.matches(query))
+            .filter(|a| {
+                !options.gamepad_only || matches!(a.controller.as_str(), "full" | "partial")
+            })
+            .take(limit)
             .cloned()
             .collect()
+    }
+
+    /// Reads the catalogue, then fetches the remotes' AppStream data and reads it again, telling
+    /// the clients after each step: `CatalogChanged` always, `InstalledChanged` only when the
+    /// installed set or an update flag differs from before (an install does not re-send the
+    /// catalogue, a refresh does not re-send the installed list).
+    pub fn sync(&self, emit: &mut dyn FnMut(Event)) {
+        let announce = |result: Result<bool, String>, emit: &mut dyn FnMut(Event)| match result {
+            Ok(installed_changed) => {
+                if installed_changed {
+                    emit(Event::InstalledChanged);
+                }
+                emit(Event::CatalogChanged);
+            }
+            Err(err) => eprintln!("ruya-store: reading Flatpak failed: {err}"),
+        };
+        announce(self.refresh(), emit);
+        announce(self.update_appstream(), emit);
     }
 
     /// One app with its permissions, read from Flatpak the first time they are asked for (the
@@ -412,6 +466,11 @@ mod tests {
         <summary>Fit the blocks</summary></component>
     </components>"#;
 
+    const ANY: SearchOptions = SearchOptions {
+        gamepad_only: false,
+        limit: 0,
+    };
+
     fn fake() -> FakeFlatpak {
         FakeFlatpak::default()
             .with_remote("ruyaos", "RuyaOS", true)
@@ -440,27 +499,30 @@ mod tests {
     #[test]
     fn the_catalogue_joins_remotes_appstream_and_permissions() {
         let s = store(fake());
-        let all = s.search("");
+        let all = s.search("", &ANY);
         let names: Vec<_> = all.iter().map(|a| a.name.as_str()).collect();
         assert_eq!(
             names,
             ["Block Puzzle", "Tool", "Turbo Racer"],
             "sorted, id tail for unknown"
         );
-        assert!(s.search("racer")[0].permissions.is_empty(), "not read yet");
+        assert!(
+            s.search("racer", &ANY)[0].permissions.is_empty(),
+            "not read yet"
+        );
         let racer = s.get_app("org.ruya.Racer").1;
         assert_eq!(racer.summary, "Drive fast");
         assert_eq!(racer.source, "official");
         assert_eq!(racer.installed_size, 5_000_000);
         assert_eq!(racer.permissions, ["network", "audio"]);
         assert_eq!(
-            s.search("racer")[0].permissions,
+            s.search("racer", &ANY)[0].permissions,
             ["network", "audio"],
             "kept after GetApp"
         );
         s.refresh().unwrap();
         assert_eq!(
-            s.search("racer")[0].permissions,
+            s.search("racer", &ANY)[0].permissions,
             ["network", "audio"],
             "and across a refresh"
         );
@@ -471,10 +533,10 @@ mod tests {
     #[test]
     fn search_matches_name_summary_and_id() {
         let s = store(fake());
-        assert_eq!(s.search("racer").len(), 1);
-        assert_eq!(s.search("FIT THE").len(), 1);
-        assert_eq!(s.search("org.other").len(), 1);
-        assert!(s.search("zzz").is_empty());
+        assert_eq!(s.search("racer", &ANY).len(), 1);
+        assert_eq!(s.search("FIT THE", &ANY).len(), 1);
+        assert_eq!(s.search("org.other", &ANY).len(), 1);
+        assert!(s.search("zzz", &ANY).is_empty());
     }
 
     #[test]
@@ -655,9 +717,17 @@ mod tests {
                 .with_fresh_appstream("flathub", FRESH)
                 .offline(),
         );
-        let before: Vec<_> = s.search("").into_iter().map(|a| (a.id, a.name)).collect();
+        let before: Vec<_> = s
+            .search("", &ANY)
+            .into_iter()
+            .map(|a| (a.id, a.name))
+            .collect();
         assert_eq!(s.update_appstream(), Ok(false));
-        let after: Vec<_> = s.search("").into_iter().map(|a| (a.id, a.name)).collect();
+        let after: Vec<_> = s
+            .search("", &ANY)
+            .into_iter()
+            .map(|a| (a.id, a.name))
+            .collect();
         assert_eq!(before, after);
         assert!(before
             .iter()
@@ -716,5 +786,86 @@ mod tests {
         assert!(gone.installed);
         assert_eq!(gone.name, "Game");
         assert_eq!(gone.source, "developer");
+    }
+
+    const GAMES: &str = r#"<components origin="ruyaos">
+      <component type="desktop-application"><id>org.ruya.Racer</id><name>Turbo Racer</name>
+        <custom><value key="x-ruya-controller">full</value></custom></component>
+      <component type="desktop-application"><id>org.ruya.Puzzle</id><name>Block Puzzle</name>
+        <custom><value key="x-ruya-controller">partial</value></custom></component>
+      <component type="desktop-application"><id>org.ruya.Editor</id><name>Text Editor</name>
+        <custom><value key="x-ruya-controller">none</value></custom></component>
+    </components>"#;
+
+    #[test]
+    fn search_options_are_parsed() {
+        assert_eq!(SearchOptions::parse(None, None), Some(ANY));
+        assert_eq!(SearchOptions::parse(Some("any"), Some(0)), Some(ANY));
+        assert_eq!(
+            SearchOptions::parse(Some("gamepad"), Some(5)),
+            Some(SearchOptions {
+                gamepad_only: true,
+                limit: 5
+            })
+        );
+        assert_eq!(SearchOptions::parse(Some("keyboard"), None), None);
+    }
+
+    #[test]
+    fn the_controller_filter_keeps_full_and_partial_and_counts_unknown_as_none() {
+        let f = FakeFlatpak::default()
+            .with_remote("ruyaos", "RuyaOS", true)
+            .with_app("ruyaos", "org.ruya.Racer", 1)
+            .with_app("ruyaos", "org.ruya.Puzzle", 1)
+            .with_app("ruyaos", "org.ruya.Editor", 1)
+            .with_app("ruyaos", "org.ruya.NoMetadata", 1)
+            .with_appstream("ruyaos", GAMES);
+        let s = store(f);
+        let gamepad = SearchOptions::parse(Some("gamepad"), None).unwrap();
+        let mut ids: Vec<_> = s.search("", &gamepad).into_iter().map(|a| a.id).collect();
+        ids.sort();
+        assert_eq!(ids, ["org.ruya.Puzzle", "org.ruya.Racer"]);
+        assert_eq!(s.search("", &ANY).len(), 4);
+        assert_eq!(
+            s.search("editor", &gamepad).len(),
+            0,
+            "the query still applies"
+        );
+    }
+
+    #[test]
+    fn the_limit_caps_the_result() {
+        let s = store(fake());
+        let two = SearchOptions::parse(None, Some(2)).unwrap();
+        assert_eq!(s.search("", &two).len(), 2);
+        assert_eq!(s.search("", &ANY).len(), 3, "0 means no limit");
+    }
+
+    #[test]
+    fn a_job_sends_installed_changed_and_never_catalog_changed() {
+        let s = store(fake());
+        s.install("org.ruya.Racer");
+        let events = drain(&s);
+        assert!(events.contains(&Event::InstalledChanged));
+        assert!(!events.contains(&Event::CatalogChanged));
+    }
+
+    #[test]
+    fn sync_sends_catalog_changed_and_installed_changed_only_when_it_changed() {
+        let s = Store::new(fake().with_installed("ruyaos", "org.ruya.Racer", 1));
+        let mut events = Vec::new();
+        s.sync(&mut |e| events.push(e));
+        // First read: the installed set is new, the AppStream step changes none of it.
+        assert_eq!(
+            events,
+            [
+                Event::InstalledChanged,
+                Event::CatalogChanged,
+                Event::CatalogChanged
+            ]
+        );
+        events.clear();
+        s.sync(&mut |e| events.push(e));
+        assert_eq!(events, [Event::CatalogChanged, Event::CatalogChanged]);
     }
 }

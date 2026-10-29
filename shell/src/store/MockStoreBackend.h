@@ -19,7 +19,7 @@ public:
 
     bool isMock() const override { return true; }
     void refresh() override;
-    void search(const QString &query) override;
+    void search(const QString &query, bool gamepadOnly, uint limit) override;
     void install(const QString &id) override;
     void uninstall(const QString &id, bool deleteData) override;
     void update(const QString &id) override;
@@ -27,6 +27,8 @@ public:
     // Tests only: whether an uninstall of this app asked for its data to be deleted.
     bool dataDeleted(const QString &id) const { return m_dataDeleted.contains(id); }
     void reset();
+    int searchCount() const { return m_searchCount; }
+    void announceCatalogChanged() { emit catalogChanged(); }
 
 private:
     struct Job
@@ -49,4 +51,5 @@ private:
     QSet<QString> m_dataDeleted;
     QTimer m_timer;
     int m_stepMs = 100;
+    int m_searchCount = 0;
 };

@@ -19,7 +19,7 @@ public:
 
     bool isMock() const override { return false; }
     void refresh() override;
-    void search(const QString &query) override;
+    void search(const QString &query, bool gamepadOnly, uint limit) override;
     void install(const QString &id) override;
     void uninstall(const QString &id, bool deleteData) override;
     void update(const QString &id) override;

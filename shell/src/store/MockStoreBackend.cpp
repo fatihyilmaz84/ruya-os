@@ -101,15 +101,20 @@ void MockStoreBackend::refresh()
     QTimer::singleShot(0, this, [this, list] { emit installedListed(list); });
 }
 
-void MockStoreBackend::search(const QString &query)
+void MockStoreBackend::search(const QString &query, bool gamepadOnly, uint limit)
 {
+    ++m_searchCount;
     QList<AppInfo> out;
     for (const AppInfo &a : std::as_const(m_apps)) {
+        if (limit != 0 && uint(out.size()) >= limit)
+            break;
+        if (gamepadOnly && a.controller != QLatin1String("full") && a.controller != QLatin1String("partial"))
+            continue;
         if (query.isEmpty() || a.name.contains(query, Qt::CaseInsensitive)
             || a.summary.contains(query, Qt::CaseInsensitive) || a.id.contains(query, Qt::CaseInsensitive))
             out.append(a);
     }
-    QTimer::singleShot(0, this, [this, query, out] { emit searchFinished(query, out); });
+    QTimer::singleShot(0, this, [this, query, gamepadOnly, out] { emit searchFinished(query, gamepadOnly, out); });
 }
 
 void MockStoreBackend::reject(const QString &id, const QString &status)
