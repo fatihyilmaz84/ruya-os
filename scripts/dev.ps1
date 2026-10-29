@@ -42,6 +42,9 @@ function Use-Qt {
         exit 2
     }
     if (-not ($env:PATH -like "*$QtDir\bin*")) { $env:PATH = "$QtDir\bin;$env:PATH" }
+    # Other toolchains (devkitPro's MSYS2) ship a cmake that can't drive Visual Studio: prefer the real one.
+    $cmakeBin = Join-Path $env:ProgramFiles "CMake\bin"
+    if ((Test-Path (Join-Path $cmakeBin "cmake.exe")) -and -not ($env:PATH -like "$cmakeBin;*")) { $env:PATH = "$cmakeBin;$env:PATH" }
 }
 
 function Do-Check {

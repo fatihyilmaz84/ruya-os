@@ -64,7 +64,7 @@ QtObject {
     readonly property real spaceXl: 48
     readonly property real spaceXxl: 64
     readonly property real spaceXxxl: 96
-    readonly property real radiusS: 12      // keys, badges
+    readonly property real radiusS: 12      // keys (badges are pills)
     readonly property real radiusM: 18      // tiles, art, toasts
     readonly property real radiusL: 32      // panels, dialogs (pills are height / 2)
     readonly property real rowHeight: 84

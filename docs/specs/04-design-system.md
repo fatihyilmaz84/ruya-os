@@ -66,7 +66,7 @@ Turkish runs about 30 % longer than English: rows elide on the right (`Text.Elid
 ### 3.3 Spacing, shape, size (built, T-143)
 
 - **Spacing** (8 px grid): `spaceXxs` 4, `spaceXs` 8, `spaceS` 16, `spaceM` 24, `spaceL` 36, `spaceXl` 48, `spaceXxl` 64, `spaceXxxl` 96. Rows in a list `spaceS`; tiles in a row `spaceL`; panel padding `spaceXl`; between sections `spaceXxl`.
-- **Radius:** `radiusS` 12 (keys, badges), `radiusM` 18 (tiles, art), `radiusL` 32 (panels, dialogs); pills are `height / 2` (rows, buttons, toasts, OSD).
+- **Radius:** `radiusS` 12 (keys), `radiusM` 18 (tiles, art, toasts, the text-entry field), `radiusL` 32 (panels, dialogs); pills are `height / 2` (rows, buttons, badges, OSD).
 - **Sizes:** `rowHeight` 84, `buttonHeight` 76, `tileWidth` 400 × `tileHeight` 260, `avatarSize` 200, `focusRingWidth` 4, `focusRingOffset` 7, `hairline` 1 (`Math.max(1, u)`).
 
 ### 3.4 Motion (built)
