@@ -2,7 +2,7 @@
 
 **Read this first in every session; update it last.** Rules: root `CLAUDE.md`. Roles (Opus lead, Sonnet builders): `docs/LEAD.md`. Task format: `docs/tasks/README.md`. Finished work: each task's own file (`Status: done`, Outcome starting with `Verified:`); history before T-132 in [`STATUS-done.md`](STATUS-done.md). `scripts/lint-board.ps1` (part of `dev.ps1 test`) keeps this board and the task files in step.
 
-Last updated: 2026-10-29 (Sonnet 5.5, T-140)
+Last updated: 2026-10-29 (Sonnet 5.5, T-112)
 
 ## Where we are
 
@@ -15,16 +15,15 @@ Verification legend: **host** = built and tested on Windows · **vm** = built in
 
 ## Board
 
-**NEXT → T-112**
+**NEXT → T-135**
 
-**Lead review due: after 1 more builder task** (reviewed up to the lead commit "lead review 070e312..8e7a7fc", see `docs/LEAD-NOTES.md`). **One builder session at a time, one task per session:** two builders in one checkout mixed three tasks' work on 2026-10-28. Builders: when your task makes this true, end your reply by recommending a lead session.
+**Lead review due: now (T-112 was the last builder task before it)** (reviewed up to the lead commit "lead review 070e312..8e7a7fc", see `docs/LEAD-NOTES.md`). **One builder session at a time, one task per session:** two builders in one checkout mixed three tasks' work on 2026-10-28. Builders: when your task makes this true, end your reply by recommending a lead session.
 
 Open work only (todo, in-progress, blocked). The order is the recommended order; when NEXT is blocked take the first `todo` whose dependencies are `done` (a task's status is in its file header). `[lead]` tasks are skipped by builders. If nothing qualifies, **stop and ask for a planning session** (`docs/tasks/PLANNING.md`).
 
 | ID | Title | Status | Depends |
 |---|---|---|---|
 | [T-130](tasks/T-130-compositor-session.md) | **[lead]** Compositor session: `ruya-shell` replaces cage  | todo | T-123 |
-| [T-112](tasks/T-112-library-service-core.md) | ruya-library discovery core (Rust) | todo | — |
 | [T-135](tasks/T-135-update-contract-and-settings.md) | `Update1` contract, mock, Settings → System updates | todo | — |
 | [T-111](tasks/T-111-store-ui.md) | Store UI | todo | T-110, T-119 |
 | [T-113](tasks/T-113-games-page.md) | Library client and Games page with art cards | todo | T-101, T-112, T-143 |
@@ -40,6 +39,7 @@ Open work only (todo, in-progress, blocked). The order is the recommended order;
 Follow-ups and debt for the next planner. Builders: add one line per item, `- (source) what, and why it matters`; write a task file only if your own task needs one. Run a planner at 5+ items.
 
 - (T-140) the shell re-reads the whole Flathub catalogue (3405 apps, 6 MB `Search("")` reply) after every `InstalledChanged`: the store UI/Games page need server-side filtering or paging (controller-support filter, spec 03 §4.2) before T-111 ships
+- (T-112) here `dev.ps1` finds `c:\devkitPro\msys2\usr\bin\cmake.exe` on PATH before `C:\Program Files\CMake\bin`, so `cmake build` fails ("is not a directory"); `dev.ps1` should prefer the real CMake (I prefixed PATH for one run)
 
 
 ## Blocked (need something this host doesn't have)
@@ -65,6 +65,7 @@ Follow-ups and debt for the next planner. Builders: add one line per item, `- (s
 
 One entry per session, at most 4 lines: date · model · tasks · what happened · numbers · follow-ups. Detail belongs in the task Outcome.
 
+- 2026-10-29 · Sonnet 5.5 · T-112 · New crate `ruya-library` + `Library1.xml`: VDF parser, Steam manifests, Flatpak list, merged catalogue, zbus adapter. `rust` green (+24 tests). D-Bus serving and real Steam/Flatpak unverified; not in the image; home dir from `RUYA_LIBRARY_HOME` until T-130.
 - 2026-10-29 · Sonnet 5.5 · T-140 · Flathub (signed) replaces Fedora's OCI remote in the image, AppStream refresh after start/`AddRemote`, real install progress through a pseudo-terminal. VM-verified (`0.0.16-t140`): progress 0/50/100, SuperTux found by name, `ruya-store` 3.3 OK; `test` ALL GREEN.
   Two `make-disk` runs came out truncated while WSL restarted (host watch item); the third passed `qemu-img check`. Shell takes seconds to re-read a 3405-app catalogue (6 MB reply) after each change: T-111/T-113 filtering matters.
 - 2026-10-29 · Sonnet 5.5 · T-143 · Spacing/radius/size tokens (~70 literals migrated, nearest-token shifts listed in the Outcome), `Badge` for PIN and mock flag. `test` ALL GREEN (178 QML), `shots` ALL GREEN, key shots reviewed. Hairline and a few odd widths stay literal.

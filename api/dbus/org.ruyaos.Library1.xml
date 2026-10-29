@@ -1,0 +1,41 @@
+<!DOCTYPE node PUBLIC "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
+ "http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
+<!--
+  org.ruyaos.Library1 — everything installed that can be started: Steam games (read from Steam's
+  library files, read-only) and installed Flatpak apps, as one list.
+  Served by ruya-library (T-112) at /org/ruyaos/Library1. Launching is not part of this
+  interface (the session service does it, from the item's "launch" string).
+  Contract between shell (Qt/QML) and services (Rust); see docs/specs/03-services-and-apps.md §5.
+
+  Every record is an a{sv} dictionary, so fields can be added later without breaking clients
+  (unknown keys are ignored).
+
+  Item record (a{sv}), keys:
+    id           s    "steam:<appid>" or "flatpak:<application id>"; stable
+    kind         s    "game" or "app"
+    title        s    display name
+    source       s    "steam" or "flatpak"
+    launch       s    opaque launch spec for the session service: "steam://rungameid/<appid>"
+                      for Steam, "flatpak:<application id>" for Flatpak
+    art          a{ss} artwork by role ("tile", "hero", "icon") -> file path or URL; may be empty
+    last_played  x    unix seconds, 0 if unknown
+
+  Order: last_played descending, then title (case-insensitive), then id.
+-->
+<node>
+  <interface name="org.ruyaos.Library1">
+
+    <!-- The whole library, in the order above. -->
+    <method name="ListItems">
+      <arg name="items" type="aa{sv}" direction="out"/>
+    </method>
+
+    <!-- Read the library files and the Flatpak list again. Returns after the scan; ItemsChanged
+         follows if the list differs from before. -->
+    <method name="Rescan"/>
+
+    <!-- The list changed; call ListItems again. -->
+    <signal name="ItemsChanged"/>
+
+  </interface>
+</node>

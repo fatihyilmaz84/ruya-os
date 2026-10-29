@@ -1,0 +1,26 @@
+"libraryfolders"
+{
+  "0"
+  {
+    "path"    "@ROOT@"
+    "label"    ""
+    "contentid"    "1234567890123456789"
+    "totalsize"    "0"
+    "apps"
+    {
+      "220"    "4194304"
+    }
+  }
+  "1"
+  {
+    "path"    "@LIB2@"
+    "label"    "Games SSD"
+    "contentid"    "9876543210987654321"
+    "totalsize"    "1000204886016"
+    "apps"
+    {
+      "400"    "1048576"
+      "1493710"    "524288"
+    }
+  }
+}

@@ -1,0 +1,9 @@
+"AppState"
+{
+  "AppID"    "400"
+  "Universe"    "1"
+  "name"    "Block Puzzle"
+  "StateFlags"    "4"
+  "installdir"    "BlockPuzzle"
+  "SizeOnDisk"    "1048576"
+}

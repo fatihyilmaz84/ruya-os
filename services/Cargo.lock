@@ -746,6 +746,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "ruya-library"
+version = "0.1.0"
+dependencies = [
+ "blocking",
+ "futures-lite",
+ "tempfile",
+ "zbus",
+]
+
+[[package]]
 name = "ruya-profiles"
 version = "0.1.0"
 dependencies = [

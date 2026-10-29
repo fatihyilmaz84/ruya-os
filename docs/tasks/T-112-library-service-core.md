@@ -1,6 +1,6 @@
 # T-112 — ruya-library: game/app discovery core (Rust)
 
-Status: todo · Phase: 5 · Depends: — · Area: services, api · Size: M
+Status: done · Phase: 5 · Depends: — · Area: services, api · Size: M
 
 ## Goal
 A Rust service crate that finds installed games and apps (Steam games from Steam's library files; installed Flatpak apps) and serves them as one list over `org.ruyaos.Library1`. All parsing is pure and unit-tested on Windows.
@@ -52,4 +52,10 @@ A Rust service crate that finds installed games and apps (Steam games from Steam
 - `appmanifest` files sometimes contain keys in different case (`appid` vs `AppID`). Match case-insensitively.
 
 ## Outcome
-_Filled in by the implementer._
+Verified: host (unit tests and clippy for Windows and the Linux target; D-Bus serving, the `flatpak` command and a real Steam tree are **unverified**: no bus on Windows, no image change).
+
+Built `api/dbus/org.ruyaos.Library1.xml` (`ListItems`, `Rescan`, `ItemsChanged`) and the crate `services/ruya-library`: `vdf.rs` (hand-written parser, depth-limited, errors never panics), `steam.rs` (library folders in new and old format, manifests with case-insensitive keys, bit 4 of `StateFlags`, Proton/runtime entries skipped), `flatpak.rs` (`parse_list`, `AppLister` with `FlatpakCli` on Linux and `FixtureLister`), `catalog.rs` (`Item`, `merge`, `scan`, `steam_roots`), `dbus.rs`, `main.rs` (`--session` lists demo Flatpak apps). 24 unit tests; fixtures in `tests/fixtures/` (2 libraries, 3 manifests, one Proton) use spaces, not Steam's tabs, because `lint-text` rejects tabs; the test writes them to a temp dir with the library paths filled in.
+
+Decisions: ordering is last played, then case-insensitive title, then id. `launch` is `steam://rungameid/<appid>` for Steam and `flatpak:<id>` for Flatpak; `art` is `a{ss}` and always empty for now (artwork is for T-113). New dependency: `blocking` (runs the rescan off the executor; already in the tree through zbus), so `Cargo.lock` gains the crate entry only.
+
+Left: the home directory comes from `RUYA_LIBRARY_HOME` (else `HOME`); wiring it to the active profile's user needs the session service (T-130). No unit, D-Bus policy or Containerfile entry (out of scope; an image task).

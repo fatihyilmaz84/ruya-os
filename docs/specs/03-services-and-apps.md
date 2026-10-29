@@ -127,7 +127,7 @@ Install, launch, update, roll back and uninstall (with "also delete data" option
 | Steam Input | Steam grabs controllers too. With ADR-003, InputPlumber exposes virtual Xbox-style pads that Steam consumes normally. Verify no double input in the Phase 5 test matrix. |
 | Non-Steam Windows games | Heroic / Lutris Flatpaks (they use umu-launcher/Proton). We don't build our own Proton front-end. |
 | Emulation | RetroArch Flatpak plus a curated cores list. No ROMs or BIOS files are shipped. ROM folders on USB or in `~/Games/roms` are detected by RetroArch, not by us. |
-| Library | The shell's Games row lists installed Flatpak games, plus Steam games read from Steam's `libraryfolders.vdf`/`appmanifest_*.acf` (read-only) and launched via `steam steam://rungameid/<id>`. Heroic integration is a stretch goal. |
+| Library | The shell's Games row lists installed Flatpak games, plus Steam games read from Steam's `libraryfolders.vdf`/`appmanifest_*.acf` (read-only) and launched via `steam steam://rungameid/<id>`. Served by `services/ruya-library` over `api/dbus/org.ruyaos.Library1.xml` (T-112: discovery core; D-Bus serving unverified, not yet in the image). Heroic integration is a stretch goal. |
 | Saves | Stay where each app puts them (inside `~/.var/app/<id>` per profile). "Back up profile to USB" archives `~/.var/app` for that profile (Phase 6). Cloud saves are left to Steam etc. |
 | Streaming | Moonlight (Flathub), Steam Link (Flathub), Xbox Cloud Gaming via a browser Flatpak in kiosk mode (stretch, controller passthrough to be tested) |
 | Anti-cheat | Documented as unsupported where the game blocks Linux. |
