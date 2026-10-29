@@ -39,6 +39,7 @@ Profiles::Profiles(std::unique_ptr<ProfilesBackend> backend, QObject *parent)
     connect(m_backend.get(), &ProfilesBackend::setPinFinished, this, &Profiles::setPinFinished);
     connect(m_backend.get(), &ProfilesBackend::renameFinished, this, &Profiles::renameFinished);
     connect(m_backend.get(), &ProfilesBackend::deleteFinished, this, &Profiles::deleteFinished);
+    connect(m_backend.get(), &ProfilesBackend::verifyAdminFinished, this, &Profiles::verifyAdminFinished);
     m_backend->refresh();
 }
 
@@ -105,6 +106,11 @@ void Profiles::renameProfile(const QString &actorId, const QString &actorPin, co
 void Profiles::deleteProfile(const QString &adminId, const QString &adminPin, const QString &id)
 {
     m_backend->deleteProfile(adminId, adminPin, id);
+}
+
+void Profiles::verifyAdmin(const QString &adminId, const QString &adminPin)
+{
+    m_backend->verifyAdmin(adminId, adminPin);
 }
 
 bool Profiles::resetMockForTests(const QString &state)

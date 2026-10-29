@@ -1,0 +1,76 @@
+<!DOCTYPE node PUBLIC "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
+ "http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
+<!--
+  org.ruyaos.Update1 — OS image updates: check, stage, roll back, choose the channel.
+  Planned service: ruya-update on the system bus at /org/ruyaos/Update1 (over bootc; not written
+  yet). Today only the shell's mock backend follows this contract (T-135).
+  Contract between shell (Qt/QML) and services (Rust); see docs/specs/01-platform.md §4.
+
+  Rebooting is not here: the shell uses logind (Power.restart) once the state is "staged".
+
+  Status strings (the reply of every method) are stable API:
+    "ok"           success: Check and Download only start the work, progress arrives with
+                   StatusChanged
+    "busy"         a check or download is already running (Rollback: also while staging)
+    "unavailable"  nothing to do: Download without an update found, Rollback without
+                   rollback_available
+    "invalid"      malformed argument (SetChannel with an unknown channel)
+    "failed"       internal error
+
+  Admin: Rollback and SetChannel are for an admin. The shell asks for the admin's PIN first and
+  checks it with Profiles1.VerifyAdmin; the bus policy lets only ruya-shell and root call this
+  interface. Whether the service should also verify an admin PIN itself is open (T-135 Outcome).
+
+  GetStatus returns one a{sv} record, keys:
+    state             s   "idle" | "checking" | "downloading" | "staged" | "up-to-date" | "failed"
+                          idle        nothing running (an update may be waiting: see available)
+                          checking    looking for a newer image
+                          downloading staging the new image (progress 0..100)
+                          staged      the next boot uses `staged`: the shell offers a restart
+                          up-to-date  the last check found nothing newer
+                          failed      the last check or download failed (see error)
+    current           s   running image version, e.g. "0.0.18"
+    available         s   version a check found and Download would stage, "" when none
+    staged            s   version that will boot next (also after a rollback), "" when none
+    channel           s   "stable" | "beta"
+    last_check        x   unix seconds of the last finished check, 0 = never
+    progress          u   download progress 0..100 (meaningful while downloading)
+    rollback_available b  a previous image exists that Rollback can boot
+    error             s   short text of the last failure, "" otherwise
+
+  Unknown keys are ignored by clients. The record is re-read after every StatusChanged.
+-->
+<node>
+  <interface name="org.ruyaos.Update1">
+
+    <!-- Starts a check for a newer image. state becomes "checking", then "idle" (available
+         set) or "up-to-date" (or "failed"). -->
+    <method name="Check">
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <!-- Stages the image a check found. state becomes "downloading" (progress), then "staged". -->
+    <method name="Download">
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <!-- Admin. Makes the previous image the next boot; state becomes "staged" with `staged` set.
+         rollback_available is false afterwards. -->
+    <method name="Rollback">
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <!-- Admin. channel is "stable" or "beta". Clears `available`: the next Check applies it. -->
+    <method name="SetChannel">
+      <arg name="channel" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <method name="GetStatus">
+      <arg name="status" type="a{sv}" direction="out"/>
+    </method>
+
+    <!-- Any field of the status record changed (also every progress step): read GetStatus. -->
+    <signal name="StatusChanged"/>
+  </interface>
+</node>

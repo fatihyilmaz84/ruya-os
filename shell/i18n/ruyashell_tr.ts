@@ -375,7 +375,7 @@
 <context>
     <name>ProfileCard</name>
     <message>
-        <location filename="../qml/ProfileCard.qml" line="+53"/>
+        <location filename="../qml/ProfileCard.qml" line="+47"/>
         <source>PIN</source>
         <translation>PIN</translation>
     </message>
@@ -659,7 +659,7 @@
         <translation>Hakkında</translation>
     </message>
     <message>
-        <location line="+137"/>
+        <location line="+138"/>
         <source>Coming soon</source>
         <translation>Yakında</translation>
     </message>
@@ -778,7 +778,7 @@
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+203"/>
+        <location filename="../qml/Shell.qml" line="+281"/>
         <source>Could not %1.</source>
         <translation>%1 işlemi yapılamadı.</translation>
     </message>
@@ -803,7 +803,7 @@
         <translation>Ses çıkışı: %1</translation>
     </message>
     <message>
-        <location line="-117"/>
+        <location line="-195"/>
         <source>Games</source>
         <translation>Oyunlar</translation>
     </message>
@@ -824,17 +824,22 @@
     </message>
     <message>
         <location line="+1"/>
-        <location line="+490"/>
+        <location line="+585"/>
         <source>Power</source>
         <translation>Güç</translation>
     </message>
     <message>
-        <location line="-365"/>
+        <location line="-386"/>
+        <source>Update ready. Restart to finish.</source>
+        <translation>Güncelleme hazır. Bitirmek için yeniden başlat.</translation>
+    </message>
+    <message>
+        <location line="+12"/>
         <source>%1 stopped unexpectedly</source>
         <translation>%1 beklenmedik şekilde durdu</translation>
     </message>
     <message>
-        <location line="+349"/>
+        <location line="+358"/>
         <source>System</source>
         <translation>Sistem</translation>
     </message>
@@ -874,7 +879,7 @@
         <translation>Geri</translation>
     </message>
     <message>
-        <location line="+90"/>
+        <location line="+92"/>
         <source>mock services</source>
         <translation>sahte hizmetler</translation>
     </message>
@@ -890,9 +895,136 @@
 <context>
     <name>SystemPane</name>
     <message>
-        <location filename="../qml/SystemPane.qml" line="+13"/>
+        <location filename="../qml/SystemPane.qml" line="+27"/>
+        <location line="+214"/>
+        <source>Beta</source>
+        <translation>Beta</translation>
+    </message>
+    <message>
+        <location line="-214"/>
+        <location line="+213"/>
+        <source>Stable</source>
+        <translation>Kararlı</translation>
+    </message>
+    <message>
+        <location line="-208"/>
+        <source>Last checked %1</source>
+        <translation>Son kontrol: %1</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Never checked</source>
+        <translation>Hiç kontrol edilmedi</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Checking for updates…</source>
+        <translation>Güncellemeler denetleniyor…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Downloading version %1</source>
+        <translation>%1 sürümü indiriliyor</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Restart to finish</source>
+        <translation>Bitirmek için yeniden başlat</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Download version %1</source>
+        <translation>%1 sürümünü indir</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Check for updates</source>
+        <translation>Güncellemeleri denetle</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>%1 %</source>
+        <translation>%%1</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Version %1 is ready</source>
+        <translation>%1 sürümü hazır</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Up to date</source>
+        <translation>Güncel</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Failed</source>
+        <translation>Başarısız</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Update found</source>
+        <translation>Güncelleme bulundu</translation>
+    </message>
+    <message>
+        <location line="+43"/>
+        <source>Enter your PIN</source>
+        <translation>PIN kodunu gir</translation>
+    </message>
+    <message>
+        <location line="+67"/>
+        <source>Roll back to the previous version?</source>
+        <translation>Önceki sürüme dönülsün mü?</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The console starts the previous version the next time it restarts.</source>
+        <translation>Konsol, bir sonraki yeniden başlatmada önceki sürümü açar.</translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <source>The previous version starts after the next restart.</source>
+        <translation>Önceki sürüm bir sonraki yeniden başlatmadan sonra açılır.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Could not roll back.</source>
+        <translation>Önceki sürüme dönülemedi.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>An update is already in progress.</source>
+        <translation>Bir güncelleme zaten sürüyor.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The update could not be started.</source>
+        <translation>Güncelleme başlatılamadı.</translation>
+    </message>
+    <message>
+        <location line="+13"/>
         <source>Language</source>
         <translation>Dil</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Updates</source>
+        <translation>Güncellemeler</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Version</source>
+        <translation>Sürüm</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Update channel</source>
+        <translation>Güncelleme kanalı</translation>
+    </message>
+    <message>
+        <location line="+26"/>
+        <source>Roll back to the previous version</source>
+        <translation>Önceki sürüme dön</translation>
     </message>
 </context>
 <context>

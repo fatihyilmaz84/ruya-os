@@ -295,3 +295,17 @@ void MockProfilesBackend::deleteProfile(const QString &adminId, const QString &a
     m_entries.removeIf([&](const Entry &e) { return e.info.id == id; });
     reply(QStringLiteral("ok"));
 }
+
+void MockProfilesBackend::verifyAdmin(const QString &adminId, const QString &adminPin)
+{
+    auto reply = [this, adminId](const QString &status, int attemptsLeft = 0, int retryAfterSecs = 0) {
+        QTimer::singleShot(0, this, [this, adminId, status, attemptsLeft, retryAfterSecs] {
+            emit verifyAdminFinished(adminId, status, attemptsLeft, retryAfterSecs);
+        });
+    };
+    const Entry *admin = find(adminId);
+    if (!admin || admin->info.role != QLatin1String("admin"))
+        return reply(QStringLiteral("not-allowed"));
+    const Outcome auth = authenticate(adminId, adminPin);
+    reply(auth.status, auth.attemptsLeft, auth.retryAfterSecs);
+}

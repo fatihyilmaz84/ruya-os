@@ -1,6 +1,6 @@
 # T-135 — OS updates: `Update1` contract, mock, and Settings → System updates
 
-Status: todo · Phase: 2 · Depends: — · Area: api, shell · Size: M
+Status: done · Phase: 2 · Depends: — · Area: api, shell · Size: M
 
 ## Goal
 In Settings → System the user sees the OS version and channel, checks for an update, watches it download, and gets "Restart to finish" when it is staged; an admin can roll back to the previous image. All of it runs against a mock now; `ruya-update` (the service over `bootc`) is a later task.
@@ -46,4 +46,15 @@ In Settings → System the user sees the OS version and channel, checks for an u
 - A model must not change with the language: keep the group's rows as bindings, not a model rebuilt per language.
 
 ## Outcome
-_Filled in by the implementer. Start with a `Verified:` line (host / vm / unverified)._
+Verified: host (`dev.ps1 test` ALL GREEN: 195 QML + Rust; `shots` ALL GREEN, `25-settings-updates.png` reviewed). The D-Bus client (`DBusUpdateBackend`) and the new `VerifyAdmin` over the real bus are **unverified** (no `ruya-update`; `ruya-profiles` not rebuilt into an image).
+
+Built:
+- `api/dbus/org.ruyaos.Update1.xml`: `GetStatus` (a{sv}: state, current, available, staged, channel, last_check, progress, rollback_available, error), `Check`, `Download`, `Rollback`, `SetChannel`, `StatusChanged`; status strings in the header. Extension to the task text: an `available` version (a found update waits in state `idle`, so no extra state was needed).
+- `shell/src/update/`: `UpdateBackend`, `MockUpdateBackend` (steps of 100 ms, 10 ms with `RUYA_MOCK_FAST`; a check finds 0.0.19 once, a download stages it in 10 % steps, a rollback stages 0.0.17; `busy`/`unavailable`/`invalid`/`failed` as the XML says; test hooks), `DBusUpdateBackend` (unverified), facade `Update` (adds `stagedReady`).
+- Settings -> System: Version, channel (admin), one update row that follows the state, rollback row (admin, only with `rollback_available`: PIN, confirm, then `Update.rollback()`), message line. Toast "Update ready. Restart to finish." from `Shell.qml` on `stagedReady`.
+- **Contract extension (CLAUDE.md step 4):** the shell had no way to check an admin PIN without side effects, so `Profiles1.VerifyAdmin(admin_id, admin_pin)` was added: XML, `ruya-profiles` (`verify_admin` + a test, D-Bus method), mock, D-Bus client, `Profiles` facade.
+- `tests/tst_update.qml` (mock rules, check/download/restart, progress, rollback with wrong then right PIN, standard profile, channel, screenshot); Turkish translations written (AI, for the native review).
+
+Deviations: `tst_profile_admin.qml` found `powerCancel`/`powerConfirm` by name in the whole shell; with a second `PowerConfirm` in the System pane the name is ambiguous, so those two lookups are now scoped to `profileDeleteConfirm` (same assertions). The mock replies `failed` to a check that fails (and sets state `failed`) so every status string is covered. No progress bar, only the percentage in the row (no token for one).
+
+Open question for the owner/lead: should `ruya-update` verify the admin PIN itself (it would need to call `Profiles1.VerifyAdmin` or be handed the PIN)? Today the shell checks and the bus policy limits callers to `ruya-shell` and root, as for `AddRemote`.

@@ -23,6 +23,7 @@ public:
     void renameProfile(const QString &actorId, const QString &actorPin, const QString &id,
                        const QString &name) override;
     void deleteProfile(const QString &adminId, const QString &adminPin, const QString &id) override;
+    void verifyAdmin(const QString &adminId, const QString &adminPin) override;
 
 private slots:
     void onProfilesChanged();

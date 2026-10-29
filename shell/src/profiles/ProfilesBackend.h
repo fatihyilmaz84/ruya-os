@@ -35,6 +35,8 @@ public:
     virtual void renameProfile(const QString &actorId, const QString &actorPin, const QString &id,
                                const QString &name) = 0;
     virtual void deleteProfile(const QString &adminId, const QString &adminPin, const QString &id) = 0;
+    // Mirrors VerifyAdmin: checks the admin's PIN and changes nothing.
+    virtual void verifyAdmin(const QString &adminId, const QString &adminPin) = 0;
 
 signals:
     void listed(const QList<ProfileInfo> &profiles);
@@ -47,5 +49,6 @@ signals:
     // `id` is the profile that was renamed / deleted; the rest is shaped like setPinFinished.
     void renameFinished(const QString &id, const QString &status, int attemptsLeft, int retryAfterSecs);
     void deleteFinished(const QString &id, const QString &status, int attemptsLeft, int retryAfterSecs);
+    void verifyAdminFinished(const QString &adminId, const QString &status, int attemptsLeft, int retryAfterSecs);
     void availabilityChanged(bool available);
 };

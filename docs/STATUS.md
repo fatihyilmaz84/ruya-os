@@ -8,23 +8,22 @@ Last updated: 2026-10-29 (Sonnet 5.5, builder)
 
 - **Phase 0 (foundation): vm-verified 2026-10-22.** Image builds, boots to the shell, updates, rolls back by hand and by greenboot. Left: real hardware (B-002).
 - **Phases 1–2 (shell core, profiles, devices):** the shell has pages, motion, toasts/OSD, Settings (Profiles, Network, Audio, Display, System, About), on-screen keyboard, first-boot wizard, Turkish translation. Profiles, power, audio (`ruya-devices`, event-driven since T-133), network (`ruya-devices` over NetworkManager, T-132), the store service (`ruya-store` over `flatpak`, T-134) and the Guide key are **vm-verified** over the real bus; the Store UI is T-111. The compositor spike (T-123) proved ADR-002 option A (shell as Wayland compositor on KMS); T-130 (lead) makes it the session.
-- **Not started:** `ruya-session` in the image (T-139 built the core, dev mode only; unit, policy and the real spawner follow T-130), `ruya-update` (T-135 is its UI contract), Bluetooth, USB storage, InputPlumber (B-006), installer. No app has ever been launched from the shell.
+- **Not started:** `ruya-session` in the image (T-139 built the core, dev mode only; unit, policy and the real spawner follow T-130), `ruya-update` (T-135 built its contract `Update1` and the Settings UI against a mock), Bluetooth, USB storage, InputPlumber (B-006), installer. No app has ever been launched from the shell.
 - **Host:** Windows plus a Fedora 44 WSL distribution (image builds) and QEMU/WHPX (boot tests): `docs/dev-setup.md`. **Image and VM work works again since 2026-10-27** (fresh WSL distro, `.wslconfig` `memory=8GB`; image `0.0.13-lead` built, made into a disk and booted `RUYA_BOOT_OK`, T-131 VM-verified). If `ext4` errors return, see the WSL note under Open owner decisions.
 
 Verification legend: **host** = built and tested on Windows · **vm** = built into the image and verified booted in QEMU · **unverified** = written, not run · **hw** = real hardware.
 
 ## Board
 
-**NEXT → T-135**
+**NEXT → T-148**
 
-**Lead review due: after T-148** (three builder tasks: T-150 done, T-135, T-148) (reviewed up to the lead commit "lead review 124ee1d..0fbe215", see `docs/LEAD-NOTES.md`). **One builder session at a time, one task per session:** two builders in one checkout mixed three tasks' work on 2026-10-28. Builders: when your task makes this true, end your reply by recommending a lead session.
+**Lead review due: after T-148** (three builder tasks: T-150 done, T-135 done, T-148) (reviewed up to the lead commit "lead review 124ee1d..0fbe215", see `docs/LEAD-NOTES.md`). **One builder session at a time, one task per session:** two builders in one checkout mixed three tasks' work on 2026-10-28. Builders: when your task makes this true, end your reply by recommending a lead session.
 
 Open work only (todo, in-progress, blocked). The order is the recommended order; when NEXT is blocked take the first `todo` whose dependencies are `done` (a task's status is in its file header). `[lead]` tasks are skipped by builders. If nothing qualifies, **stop and ask for a planning session** (`docs/tasks/PLANNING.md`).
 
 | ID | Title | Status | Depends |
 |---|---|---|---|
 | [T-130](tasks/T-130-compositor-session.md) | **[lead]** Compositor session: `ruya-shell` replaces cage  | todo | T-150 |
-| [T-135](tasks/T-135-update-contract-and-settings.md) | `Update1` contract, mock, Settings → System updates | todo | — |
 | [T-148](tasks/T-148-store-catalogue-filter.md) | Store: filter the catalogue in the service, `CatalogChanged` | todo | T-140 |
 | [T-111](tasks/T-111-store-ui.md) | Store UI | todo | T-110, T-119, T-148 |
 | [T-149](tasks/T-149-library-flatpak-games.md) | `ruya-library`: Flatpak games are games | todo | T-112 |
@@ -65,6 +64,8 @@ Follow-ups and debt for the next planner. Builders: add one line per item, `- (s
 
 One entry per session, at most 4 lines: date · model · tasks · what happened · numbers · follow-ups. Detail belongs in the task Outcome.
 
+- 2026-10-29 · Sonnet 5.5 · T-135 · `Update1` contract, `Update` singleton + mock + unverified D-Bus client, Settings -> System Updates group (check, download progress, restart, admin rollback and channel), staged toast. Added `Profiles1.VerifyAdmin` (XML, Rust + test, mock, client) to gate the rollback. `test` ALL GREEN (195 QML), `shots` ALL GREEN, `25` reviewed.
+  Scoped two `powerCancel` lookups in `tst_profile_admin` (a second `PowerConfirm` made the name ambiguous). No `ruya-update` yet. Lead review is due after T-148.
 - 2026-10-29 · Sonnet 5.5 · T-150 · `KeyRouter` (C++ event filter, one `isGuideKey`) and the shell's `appLayer` with `addApp/focusApp/removeApp`; stand-in app tests. `test` ALL GREEN (187 QML). `shots` unjudged: timer tests fail on this desktop session, also on the baseline.
   Unblocks T-130 (lead). Lead review is due after T-148.
 - 2026-10-29 · Opus 5.5 · Lead (review `124ee1d..0fbe215`: T-143, T-140, T-112) · `test` ALL GREEN (178 QML + 13 skipped, 172 Rust); `shots` ALL GREEN (191, every T-143 screen reviewed); VM `0.0.18-lead` `RUYA_BOOT_OK`, `vm-store-check.sh` 41/41, security 3.3. CI green at `124ee1d`.
@@ -72,7 +73,4 @@ One entry per session, at most 4 lines: date · model · tasks · what happened 
 - 2026-10-29 · Sonnet 5.5 · T-112 · New crate `ruya-library` + `Library1.xml`: VDF parser, Steam manifests, Flatpak list, merged catalogue, zbus adapter. `rust` green (+24 tests). D-Bus serving and real Steam/Flatpak unverified; not in the image; home dir from `RUYA_LIBRARY_HOME` until T-130.
 - 2026-10-29 · Sonnet 5.5 · T-140 · Flathub (signed) replaces Fedora's OCI remote in the image, AppStream refresh after start/`AddRemote`, real install progress through a pseudo-terminal. VM-verified (`0.0.16-t140`): progress 0/50/100, SuperTux found by name, `ruya-store` 3.3 OK; `test` ALL GREEN.
   Two `make-disk` runs came out truncated while WSL restarted (host watch item); the third passed `qemu-img check`. Shell takes seconds to re-read a 3405-app catalogue (6 MB reply) after each change: T-111/T-113 filtering matters.
-- 2026-10-29 · Sonnet 5.5 · T-143 · Spacing/radius/size tokens (~70 literals migrated, nearest-token shifts listed in the Outcome), `Badge` for PIN and mock flag. `test` ALL GREEN (178 QML), `shots` ALL GREEN, key shots reviewed. Hairline and a few odd widths stay literal.
-- 2026-10-28 · Opus 5.5 · Lead (review `070e312..8e7a7fc`: T-139, T-141, T-142) · `test` ALL GREEN (172 QML + 13 skipped, 143 Rust); `shots` ALL GREEN (185; toast/OSD, overlay, setup, keyboard reviewed, nothing clipped); VM not run (no image change). CI green at `070e312` (pin works).
-  Findings 2 fixed / 1 filed: T-139 reported a SIGTERM death after Stop as `killed` (mock and contract say `quit`), fixed with a test; spec 04 §3.2 mapping text; type weights unused at call sites → T-144 (now M, with a lint). Plan unchanged, NEXT T-143.
 

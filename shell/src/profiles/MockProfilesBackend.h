@@ -28,6 +28,7 @@ public:
     void renameProfile(const QString &actorId, const QString &actorPin, const QString &id,
                        const QString &name) override;
     void deleteProfile(const QString &adminId, const QString &adminPin, const QString &id) override;
+    void verifyAdmin(const QString &adminId, const QString &adminPin) override;
 
     // Tests: back to the seeded profiles, or to an empty store (first boot); clears
     // lockouts and the active profile.

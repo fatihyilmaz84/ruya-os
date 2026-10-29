@@ -47,6 +47,9 @@ public:
     Q_INVOKABLE void renameProfile(const QString &actorId, const QString &actorPin, const QString &id,
                                    const QString &name);
     Q_INVOKABLE void deleteProfile(const QString &adminId, const QString &adminPin, const QString &id);
+    // Contract: VerifyAdmin. For actions of other services behind an admin PIN (a system
+    // rollback). The result arrives as verifyAdminFinished.
+    Q_INVOKABLE void verifyAdmin(const QString &adminId, const QString &adminPin);
     // Tests only, and only with the mock backend (otherwise a no-op that returns false):
     // "seeded" (the three default profiles) or "empty" (first boot).
     Q_INVOKABLE bool resetMockForTests(const QString &state);
@@ -63,6 +66,7 @@ signals:
     void setPinFinished(const QString &id, const QString &status, int attemptsLeft, int retryAfterSecs);
     void renameFinished(const QString &id, const QString &status, int attemptsLeft, int retryAfterSecs);
     void deleteFinished(const QString &id, const QString &status, int attemptsLeft, int retryAfterSecs);
+    void verifyAdminFinished(const QString &adminId, const QString &status, int attemptsLeft, int retryAfterSecs);
 
 private:
     std::unique_ptr<ProfilesBackend> m_backend;

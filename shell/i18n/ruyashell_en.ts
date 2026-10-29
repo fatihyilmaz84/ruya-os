@@ -376,7 +376,7 @@
 <context>
     <name>ProfileCard</name>
     <message>
-        <location filename="../qml/ProfileCard.qml" line="+53"/>
+        <location filename="../qml/ProfileCard.qml" line="+47"/>
         <source>PIN</source>
         <translation>PIN</translation>
     </message>
@@ -661,7 +661,7 @@
         <translation>About</translation>
     </message>
     <message>
-        <location line="+137"/>
+        <location line="+138"/>
         <source>Coming soon</source>
         <translation>Coming soon</translation>
     </message>
@@ -780,7 +780,7 @@
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+203"/>
+        <location filename="../qml/Shell.qml" line="+281"/>
         <source>Could not %1.</source>
         <translation>Could not %1.</translation>
     </message>
@@ -805,7 +805,7 @@
         <translation>Audio output: %1</translation>
     </message>
     <message>
-        <location line="-117"/>
+        <location line="-195"/>
         <source>Games</source>
         <translation>Games</translation>
     </message>
@@ -826,17 +826,22 @@
     </message>
     <message>
         <location line="+1"/>
-        <location line="+490"/>
+        <location line="+585"/>
         <source>Power</source>
         <translation>Power</translation>
     </message>
     <message>
-        <location line="-365"/>
+        <location line="-386"/>
+        <source>Update ready. Restart to finish.</source>
+        <translation>Update ready. Restart to finish.</translation>
+    </message>
+    <message>
+        <location line="+12"/>
         <source>%1 stopped unexpectedly</source>
         <translation>%1 stopped unexpectedly</translation>
     </message>
     <message>
-        <location line="+349"/>
+        <location line="+358"/>
         <source>System</source>
         <translation>System</translation>
     </message>
@@ -876,7 +881,7 @@
         <translation>Back</translation>
     </message>
     <message>
-        <location line="+90"/>
+        <location line="+92"/>
         <source>mock services</source>
         <translation>mock services</translation>
     </message>
@@ -892,9 +897,136 @@
 <context>
     <name>SystemPane</name>
     <message>
-        <location filename="../qml/SystemPane.qml" line="+13"/>
+        <location filename="../qml/SystemPane.qml" line="+27"/>
+        <location line="+214"/>
+        <source>Beta</source>
+        <translation>Beta</translation>
+    </message>
+    <message>
+        <location line="-214"/>
+        <location line="+213"/>
+        <source>Stable</source>
+        <translation>Stable</translation>
+    </message>
+    <message>
+        <location line="-208"/>
+        <source>Last checked %1</source>
+        <translation>Last checked %1</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Never checked</source>
+        <translation>Never checked</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Checking for updates…</source>
+        <translation>Checking for updates…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Downloading version %1</source>
+        <translation>Downloading version %1</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Restart to finish</source>
+        <translation>Restart to finish</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Download version %1</source>
+        <translation>Download version %1</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Check for updates</source>
+        <translation>Check for updates</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>%1 %</source>
+        <translation>%1 %</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Version %1 is ready</source>
+        <translation>Version %1 is ready</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Up to date</source>
+        <translation>Up to date</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Failed</source>
+        <translation>Failed</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Update found</source>
+        <translation>Update found</translation>
+    </message>
+    <message>
+        <location line="+43"/>
+        <source>Enter your PIN</source>
+        <translation>Enter your PIN</translation>
+    </message>
+    <message>
+        <location line="+67"/>
+        <source>Roll back to the previous version?</source>
+        <translation>Roll back to the previous version?</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The console starts the previous version the next time it restarts.</source>
+        <translation>The console starts the previous version the next time it restarts.</translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <source>The previous version starts after the next restart.</source>
+        <translation>The previous version starts after the next restart.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Could not roll back.</source>
+        <translation>Could not roll back.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>An update is already in progress.</source>
+        <translation>An update is already in progress.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The update could not be started.</source>
+        <translation>The update could not be started.</translation>
+    </message>
+    <message>
+        <location line="+13"/>
         <source>Language</source>
         <translation>Language</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Updates</source>
+        <translation>Updates</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Version</source>
+        <translation>Version</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Update channel</source>
+        <translation>Update channel</translation>
+    </message>
+    <message>
+        <location line="+26"/>
+        <source>Roll back to the previous version</source>
+        <translation>Roll back to the previous version</translation>
     </message>
 </context>
 <context>

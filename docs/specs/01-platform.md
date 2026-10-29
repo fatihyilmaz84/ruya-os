@@ -65,6 +65,7 @@ The build excludes any desktop environment, display manager, `kdeconnect` and `p
 
 ## 4. Updates & rollback (ADR-006)
 - Images are pushed to an OCI registry (e.g. `ghcr.io/<org>/ruyaos:<channel>`), signed with **cosign** keyless or a project key.
+- **Built so far (T-135, shell side only):** the contract `api/dbus/org.ruyaos.Update1.xml` (status record with state `idle|checking|downloading|staged|up-to-date|failed`, `available`/`staged`/`current` versions, `channel`, `last_check`, `progress`, `rollback_available`; methods `Check`, `Download`, `Rollback`, `SetChannel`, `GetStatus`; signal `StatusChanged`), the shell's `Update` singleton with a mock and an unverified D-Bus client, and Settings -> System. `ruya-update` does not exist yet. The admin PIN for rollback and channel is checked by the shell through the new `Profiles1.VerifyAdmin`.
 - `ruya-update` checks daily (or on demand) with `bootc upgrade --check`. Then it downloads with `bootc upgrade`, stages, notifies, and reboots when idle or when the user accepts.
 - **Automatic rollback:** greenboot runs required health checks on boot (compositor starts, `ruya-*` services are active, the shell reports "home rendered" over D-Bus within 60 s). After 3 failed boots, greenboot rolls back with `bootc rollback` and records the event, which the shell displays.
 - Manual rollback is available in Settings → System (admin only) and in the GRUB menu (hold Shift/Esc).

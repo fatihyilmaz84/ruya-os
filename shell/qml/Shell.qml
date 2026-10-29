@@ -292,6 +292,14 @@ FocusScope {
         }
     }
 
+    // A staged update (also a rollback) needs a restart: say so once per staging.
+    Connections {
+        target: Update
+        function onStagedReady(version) {
+            Notifications.show(qsTr("Update ready. Restart to finish."), "info")
+        }
+    }
+
     // An app that crashed or never got to run is the only exit the user hears about; a normal
     // quit (including a Stop from the shell) is silent.
     Connections {

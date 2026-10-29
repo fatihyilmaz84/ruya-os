@@ -15,7 +15,7 @@
     "invalid"          malformed argument (e.g. PIN not 4-6 digits, empty name)
     "failed"           internal error (e.g. could not write the store or create the Unix user)
 
-  Methods that check a PIN (SwitchTo, CreateProfile, SetPin, RenameProfile, DeleteProfile) also return attempts_left and
+  Methods that check a PIN (SwitchTo, CreateProfile, SetPin, RenameProfile, DeleteProfile, VerifyAdmin) also return attempts_left and
   retry_after_secs. They matter only for "wrong-pin" (attempts_left = tries before lockout) and
   "locked-out" (retry_after_secs = seconds until the next try is accepted, rounded up); they are 0
   otherwise. SwitchTo additionally reports attempts_left with "pin-required".
@@ -92,6 +92,19 @@
       <arg name="admin_id" type="s" direction="in"/>
       <arg name="admin_pin" type="s" direction="in"/>
       <arg name="id" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+      <arg name="attempts_left" type="u" direction="out"/>
+      <arg name="retry_after_secs" type="u" direction="out"/>
+    </method>
+
+    <!--
+      Check that admin_id is an admin and admin_pin is its PIN; nothing changes. For actions of
+      other services that the shell gates behind an admin PIN (T-135: a system rollback).
+      "not-allowed" when admin_id is unknown or not an admin. Counts towards the shared lockout.
+    -->
+    <method name="VerifyAdmin">
+      <arg name="admin_id" type="s" direction="in"/>
+      <arg name="admin_pin" type="s" direction="in"/>
       <arg name="status" type="s" direction="out"/>
       <arg name="attempts_left" type="u" direction="out"/>
       <arg name="retry_after_secs" type="u" direction="out"/>

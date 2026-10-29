@@ -140,6 +140,7 @@ Page {
             objectName: "paneSystem"
             anchors.fill: parent
             u: page.u
+            overlay: page.overlay
             visible: page.current.key === "system"
             enabled: visible
             onExitRequested: page.leavePane()

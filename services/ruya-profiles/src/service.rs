@@ -283,6 +283,16 @@ impl<A: Accounts> ProfileService<A> {
         Outcome::of(Status::Ok)
     }
 
+    /// Checks that `admin_id` is an admin and the PIN is right, and changes nothing. The shell
+    /// asks before it starts an action of its own that needs an admin (a system rollback).
+    /// Counts towards the shared lockout like every other PIN check.
+    pub fn verify_admin(&mut self, admin_id: &str, admin_pin: &str, now: Instant) -> Outcome {
+        if self.store.get(admin_id).map(|p| p.role) != Some(Role::Admin) {
+            return Outcome::of(Status::NotAllowed);
+        }
+        self.authenticate(admin_id, admin_pin, now)
+    }
+
     /// Admin only. Refused for the last admin and for the active profile. The Unix user goes
     /// first: if that fails the store is untouched.
     pub fn delete_profile(
@@ -637,6 +647,28 @@ mod tests {
         svc.create_profile("", "", "Admin", "admin", "1234", now);
         svc.create_profile("p1", "1234", "Kid", "standard", "", now);
         (dir, svc, now)
+    }
+
+    #[test]
+    fn verify_admin_rules() {
+        let accounts = Recording::default();
+        let (_dir, mut svc, now) = recording_fixture(accounts);
+        assert_eq!(svc.verify_admin("p1", "1234", now).status, Status::Ok);
+        assert_eq!(
+            svc.verify_admin("p2", "", now).status,
+            Status::NotAllowed,
+            "a standard profile is not an admin"
+        );
+        assert_eq!(
+            svc.verify_admin("nope", "1234", now).status,
+            Status::NotAllowed
+        );
+        let o = svc.verify_admin("p1", "0000", now);
+        assert_eq!(
+            (o.status, o.attempts_left),
+            (Status::WrongPin, FREE_ATTEMPTS - 1)
+        );
+        assert_eq!(svc.verify_admin("p1", "1234", now).status, Status::Ok);
     }
 
     #[test]

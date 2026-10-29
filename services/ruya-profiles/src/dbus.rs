@@ -156,6 +156,15 @@ impl ProfilesIface {
         )
     }
 
+    async fn verify_admin(&mut self, admin_id: &str, admin_pin: &str) -> (String, u32, u32) {
+        let outcome = self.svc.verify_admin(admin_id, admin_pin, Instant::now());
+        (
+            outcome.status.as_str().to_owned(),
+            outcome.attempts_left,
+            retry_secs(outcome.retry_after),
+        )
+    }
+
     #[zbus(property)]
     fn active_profile(&self) -> String {
         self.svc.active().unwrap_or_default().to_owned()

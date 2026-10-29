@@ -168,6 +168,22 @@ void DBusProfilesBackend::deleteProfile(const QString &adminId, const QString &a
     });
 }
 
+void DBusProfilesBackend::verifyAdmin(const QString &adminId, const QString &adminPin)
+{
+    auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("VerifyAdmin"));
+    msg << adminId << adminPin;
+    auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, adminId](QDBusPendingCallWatcher *w) {
+        w->deleteLater();
+        QDBusPendingReply<QString, uint, uint> reply = *w;   // status, attempts_left, retry_after_secs
+        if (!reply.isValid()) {
+            emit verifyAdminFinished(adminId, QStringLiteral("failed"), 0, 0);
+            return;
+        }
+        emit verifyAdminFinished(adminId, reply.argumentAt<0>(), int(reply.argumentAt<1>()), int(reply.argumentAt<2>()));
+    });
+}
+
 void DBusProfilesBackend::onProfilesChanged()
 {
     refresh();
