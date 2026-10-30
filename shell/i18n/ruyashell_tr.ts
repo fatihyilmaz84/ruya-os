@@ -224,6 +224,19 @@
     </message>
 </context>
 <context>
+    <name>ArtCard</name>
+    <message>
+        <location filename="../qml/ArtCard.qml" line="+19"/>
+        <source>Running</source>
+        <translation>Çalışıyor</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Installing %1 %</source>
+        <translation>Yükleniyor %1 %</translation>
+    </message>
+</context>
+<context>
     <name>AudioPane</name>
     <message>
         <location filename="../qml/AudioPane.qml" line="+57"/>
@@ -323,9 +336,44 @@
 <context>
     <name>GamesPage</name>
     <message>
-        <location filename="../qml/GamesPage.qml" line="+6"/>
+        <location filename="../qml/GamesPage.qml" line="+12"/>
         <source>Games</source>
         <translation>Oyunlar</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Starting %1…</source>
+        <translation>%1 başlatılıyor…</translation>
+    </message>
+    <message>
+        <location line="+35"/>
+        <source>Show</source>
+        <translation>Göster</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>All</source>
+        <translation>Tümü</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Steam</source>
+        <translation>Steam</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Flatpak</source>
+        <translation>Flatpak</translation>
+    </message>
+    <message>
+        <location line="+59"/>
+        <source>No games yet — visit the Store</source>
+        <translation>Henüz oyun yok — Mağaza'yı ziyaret et</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Open the Store</source>
+        <translation>Mağaza'yı aç</translation>
     </message>
 </context>
 <context>
@@ -1092,12 +1140,12 @@
     </message>
     <message>
         <location line="+1"/>
-        <location line="+171"/>
+        <location line="+172"/>
         <source>Installed</source>
         <translation>Kurulu</translation>
     </message>
     <message>
-        <location line="-147"/>
+        <location line="-148"/>
         <source>Official</source>
         <translation>Resmi</translation>
     </message>
@@ -1112,7 +1160,7 @@
         <translation>Topluluk</translation>
     </message>
     <message>
-        <location line="+146"/>
+        <location line="+147"/>
         <source>Update available</source>
         <translation>Güncelleme var</translation>
     </message>

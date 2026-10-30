@@ -1,6 +1,6 @@
 # T-113 — Library client and Games page with art cards
 
-Status: todo · Phase: 5 · Depends: T-101, T-112, T-143 · Area: shell · Size: M
+Status: done · Phase: 5 · Depends: T-101, T-112, T-143 · Area: shell · Size: M
 
 ## Goal
 The Games tile opens a grid of installed games drawn as art cards, from `org.ruyaos.Library1` (mock on Windows); launching records a request. The art card is built here as the shared component the art-led Home (T-146) reuses.
@@ -46,4 +46,8 @@ The Games tile opens a grid of installed games drawn as art cards, from `org.ruy
 - Home focus is routed by `Shell.focusCurrent()`/`routeFocus()`; adding a second row means extending that single place, not adding another `forceActiveFocus` elsewhere.
 
 ## Outcome
-_Filled in by the implementer._
+Verified: host (`dev.ps1 test` ALL GREEN, 220 QML; `shots` ALL GREEN, `21-games-grid.png` reviewed: 4 columns, focus ring, caption fade, initials on tints). D-Bus client (`DBusLibraryBackend`) is **unverified**: no bus on Windows.
+
+Built `shell/src/library/` (`LibraryBackend`, `MockLibraryBackend` with 10 items and an `empty` scenario, `DBusLibraryBackend`, `Library` singleton with `items`/`games`/`recent`/`available`, `rescan()`, `launch(id)`, `item(id)`, `resetMockForTests`), `ArtCard.qml` (wraps `AppArt`, title on a caption fade, Running / Installing n % pill via `Badge`, card focus) and the real `GamesPage.qml` (filter ChoiceRow, 4-column grid, toast, empty state with a button to the Store). Tests: `tst_games.qml` (grid and filter, launch request, recent, empty state, screenshot), `tst_artcard.qml`. Turkish strings added.
+
+Deviations: `tst_pages.qml` assumed Games was a placeholder; its focus target is now `gamesGrid`, and the profile-switch test opens Media instead (still a placeholder). No design token exists for the caption fade, so it uses `Theme.scrim` fading to `transparent` (Inbox). Nothing marks a game Running or Installing yet, so the pill is only tested on the component.

@@ -66,7 +66,7 @@ Item {
 
         function test_each_tile_opens_its_page_data() {
             return [
-                { tag: "games", index: 0, focusName: "pagePlaceholder" },
+                { tag: "games", index: 0, focusName: "gamesGrid" },   // T-113: real page
                 { tag: "media", index: 1, focusName: "pagePlaceholder" },
                 { tag: "store", index: 2, focusName: "storeCards_featured" },   // T-111
                 { tag: "settings", index: 3, focusName: "categoryList" },   // T-103: real page
@@ -118,7 +118,7 @@ Item {
         }
 
         function test_switch_profile_from_page() {
-            openTile(0)
+            openTile(1)
             tryVerify(() => find("pagePlaceholder") && find("pagePlaceholder").activeFocus)
             keyClick(Qt.Key_HomePage)
             tryVerify(() => find("systemActions").activeFocus)
