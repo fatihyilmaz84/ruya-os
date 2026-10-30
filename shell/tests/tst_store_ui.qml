@@ -148,6 +148,77 @@ Item {
             verify(!find("riskFlag_audio").visible)
         }
 
+        // D-pad over the PIN pad keypad (3 columns: 1-9, then Del 0 OK).
+        function padPress(label) {
+            const order = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "del", "0", "ok"]
+            const target = order.indexOf(label)
+            const pad = find("detailPinPad")
+            const keys = findChild(pad, "pinKeys")
+            verify(pad.shown, "the PIN pad is open")
+            for (let step = 0; step < 12 && keys.currentIndex !== target; ++step) {
+                const row = Math.floor(keys.currentIndex / 3)
+                const targetRow = Math.floor(target / 3)
+                if (row !== targetRow)
+                    keyClick(row < targetRow ? Qt.Key_Down : Qt.Key_Up)
+                else
+                    keyClick(keys.currentIndex % 3 < target % 3 ? Qt.Key_Right : Qt.Key_Left)
+            }
+            compare(keys.currentIndex, target)
+            keyClick(Qt.Key_Return)
+        }
+
+        function enterPin(pin) {
+            for (const d of pin)
+                padPress(d)
+            padPress("ok")
+        }
+
+        function test_high_risk_needs_admin_pin() {
+            openStore()
+            openApp("org.example.Stream")
+            verify(find("detailAdminNote").visible)
+            keyClick(Qt.Key_Return)
+            const pad = find("detailPinPad")
+            tryVerify(() => pad.shown && findChild(pad, "pinKeys").activeFocus, 2000, "the PIN pad has focus")
+            compare(find("page_appDetail").working, false)
+            enterPin("0000")
+            tryVerify(() => !pad.shown)
+            tryVerify(() => find("detailError").visible && find("detailError").text.indexOf("Wrong PIN") === 0)
+            tryVerify(() => find("detailPrimary").activeFocus, 2000, "focus returns to Install")
+            compare(find("page_appDetail").working, false)
+            compare(Object.keys(Store.jobs).length, 0)
+
+            keyClick(Qt.Key_Return)
+            tryVerify(() => pad.shown)
+            enterPin("1234")
+            tryVerify(() => find("page_appDetail").working, 2000, "the admin's PIN starts the install")
+            tryVerify(() => find("detailPrimary").activeFocus)
+            tryVerify(() => Store.app("org.example.Stream").installed === true)
+        }
+
+        function test_high_risk_back_cancels() {
+            openStore()
+            openApp("org.example.Stream")
+            keyClick(Qt.Key_Return)
+            const pad = find("detailPinPad")
+            tryVerify(() => pad.shown)
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !pad.shown)
+            tryVerify(() => find("detailPrimary").activeFocus, 2000, "focus is on Install")
+            compare(find("page_appDetail").working, false)
+            compare(Object.keys(Store.jobs).length, 0)
+            compare(Store.app("org.example.Stream").installed, false)
+        }
+
+        function test_low_risk_needs_no_pin() {
+            openStore()
+            openApp("org.example.Racer")
+            verify(!find("detailAdminNote").visible)
+            keyClick(Qt.Key_Return)
+            verify(find("page_appDetail").working)
+            verify(!find("detailPinPad").shown)
+        }
+
         function test_uninstall_confirm() {
             openStore()
             openApp("org.example.Puzzle")              // installed from the start
@@ -237,6 +308,12 @@ Item {
             openApp("org.example.Stream")
             wait(800)
             grabImage(tc.shell).save(shotsDir + "/18-store-detail.png")
+            keyClick(Qt.Key_Return)                    // Ada is Standard: the admin PIN pad
+            tryVerify(() => find("detailPinPad").shown, 2000)
+            wait(800)
+            grabImage(tc.shell).save(shotsDir + "/20-store-admin-pin.png")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !find("detailPinPad").shown)
             keyClick(Qt.Key_Escape)
             tryCompare(tc.shell, "currentPage", "store")
             wait(800)

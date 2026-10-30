@@ -42,7 +42,7 @@
 <context>
     <name>AppDetailPage</name>
     <message>
-        <location filename="../qml/AppDetailPage.qml" line="+30"/>
+        <location filename="../qml/AppDetailPage.qml" line="+36"/>
         <source>Official</source>
         <translation>Official</translation>
     </message>
@@ -177,7 +177,12 @@
         <translation>Something went wrong. You can try again.</translation>
     </message>
     <message>
-        <location line="+102"/>
+        <location line="+24"/>
+        <source>Enter an admin&apos;s PIN</source>
+        <translation>Enter an admin&apos;s PIN</translation>
+    </message>
+    <message>
+        <location line="+130"/>
         <source>Install</source>
         <translation>Install</translation>
     </message>
@@ -193,12 +198,12 @@
     </message>
     <message>
         <location line="+10"/>
-        <location line="+222"/>
+        <location line="+232"/>
         <source>Uninstall</source>
         <translation>Uninstall</translation>
     </message>
     <message>
-        <location line="-123"/>
+        <location line="-133"/>
         <source>This app can</source>
         <translation>This app can</translation>
     </message>
@@ -208,7 +213,12 @@
         <translation>High risk</translation>
     </message>
     <message>
-        <location line="+66"/>
+        <location line="+15"/>
+        <source>An admin&apos;s PIN is needed to install this app.</source>
+        <translation>An admin&apos;s PIN is needed to install this app.</translation>
+    </message>
+    <message>
+        <location line="+61"/>
         <source>Uninstall %1?</source>
         <translation>Uninstall %1?</translation>
     </message>

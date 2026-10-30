@@ -2,7 +2,7 @@
 
 **Read this first in every session; update it last.** Rules: root `CLAUDE.md`. Roles (Opus lead, Sonnet builders): `docs/LEAD.md`. Task format: `docs/tasks/README.md`. Finished work: each task's own file (`Status: done`, Outcome starting with `Verified:`); history before T-132 in [`STATUS-done.md`](STATUS-done.md). `scripts/lint-board.ps1` (part of `dev.ps1 test`) keeps this board and the task files in step.
 
-Last updated: 2026-10-30 (Sonnet 5.5, T-113)
+Last updated: 2026-10-30 (Sonnet 5.5, T-152)
 
 ## Where we are
 
@@ -15,7 +15,7 @@ Verification legend: **host** = built and tested on Windows · **vm** = built in
 
 ## Board
 
-**NEXT → T-152**
+**NEXT → T-146**
 
 **Lead review due** after 3–5 more builder tasks (reviewed up to the lead commit "lead review 4671bb5..e863439", see `docs/LEAD-NOTES.md`). **One builder session at a time, one task per session:** two builders in one checkout mixed three tasks' work on 2026-10-28. Builders: when your task makes this true, end your reply by recommending a lead session.
 
@@ -24,7 +24,6 @@ Open work only (todo, in-progress, blocked). The order is the recommended order;
 | ID | Title | Status | Depends |
 |---|---|---|---|
 | [T-130](tasks/T-130-compositor-session.md) | **[lead]** Compositor session: `ruya-shell` replaces cage  | todo | T-150 |
-| [T-152](tasks/T-152-store-high-risk-admin-pin.md) | Store: admin PIN before a Standard profile installs a high-risk app | todo | T-111 |
 | [T-146](tasks/T-146-art-led-home.md) | Art-led Home: hero, Recent art row, section nav | todo | T-113, T-143 |
 | [T-147](tasks/T-147-fullscreen-app-flow.md) | Full-screen apps: launch splash, quick menu, return, close | todo | T-130, T-138, T-146 |
 | [T-136](tasks/T-136-bluetooth-contract-and-settings.md) | `Devices1.Bluetooth` contract, mock, Settings pane | todo | — |
@@ -65,6 +64,8 @@ Follow-ups and debt for the next planner. Builders: add one line per item, `- (s
 ## Session log (newest first, the latest five; older entries in `STATUS-log.md`)
 
 One entry per session, at most 4 lines: date · model · tasks · what happened · numbers · follow-ups. Detail belongs in the task Outcome.
+
+- 2026-10-30 · Sonnet 5.5 · T-152 · Standard profiles enter an admin's PIN (`PinPad` + `Profiles.verifyAdmin`) before Install of a high-risk app; note under the permissions; 4 tests, `20` reviewed. `test` and `shots` ALL GREEN (226 QML). Lead review is due after 1-2 more tasks.
 
 - 2026-10-30 · Sonnet 5.5 · T-113 · `Library` singleton (mock + unverified D-Bus client), `ArtCard`, real Games page (4-column grid, source filter, launch request + toast, empty state). `test` ALL GREEN (220 QML), `shots` ALL GREEN, `21` reviewed. `tst_pages` retargeted from the old placeholder. Lead review is due after 1-2 more tasks.
 

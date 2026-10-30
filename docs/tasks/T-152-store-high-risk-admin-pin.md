@@ -1,6 +1,6 @@
 # T-152 — Store: admin PIN before a Standard profile installs a high-risk app
 
-Status: todo · Phase: 3 · Depends: T-111 · Area: shell · Size: S
+Status: done · Phase: 3 · Depends: T-111 · Area: shell · Size: S
 
 ## Goal
 A Standard profile that presses Install on an app with a high-risk permission (`all-devices`, `host-files`, `session-bus`) is asked for an admin's PIN first; the install starts only after the right PIN. Admins install as before. Spec 03 §4.4 asks for this; T-111 left it out.
@@ -41,4 +41,10 @@ A Standard profile that presses Install on an app with a high-risk permission (`
 - Lockout state leaks between tests: if a test runs into the lockout, give the lockout case its own file (`shell/CLAUDE.md`, Tests).
 
 ## Outcome
-_Filled in by the implementer. First line: `Verified: host | vm | unverified | hw` (say what ran where). Then: what was built, files, deviations, follow-ups (each also an Inbox line)._
+Verified: host (`dev.ps1 test` ALL GREEN, 226 QML; `shots` ALL GREEN, `20-store-admin-pin.png` and `18` reviewed). Mock services only.
+
+Built: `AppDetailPage` asks a Standard profile for an admin's PIN before Install of an app with a high-risk permission (`needsAdminPin`: not installed, high-risk permission, active role not admin). It opens `PinPad` in collect mode (`detailPinPad`), checks the PIN with `Profiles.verifyAdmin` against the first admin in `Profiles.profiles`, and calls `Store.install` only on `ok`. Wrong PIN or lockout shows `ProfileStatus.describe` in the inline `detailError` line (same as the rollback flow shows it in its pane); Back cancels. Focus returns to Install in every case. `detailAdminNote` ("An admin's PIN is needed to install this app.") shows under the permissions; Turkish added.
+
+Tests: `tst_store_ui` `test_high_risk_needs_admin_pin`, `test_high_risk_back_cancels`, `test_low_risk_needs_no_pin`; new `tst_store_admin.qml::test_high_risk_admin_installs_directly` (own file: it signs in as Player One). Spec 03 §4.4 updated.
+
+Deviations: the wrong-PIN message is the inline error after the pad closes, not inside the pad (collect mode closes on submit, like the rollback). With several admins the first one is asked; there is no chooser (UI offers one admin, see owner decisions). Screenshot 20 is taken from the Stream detail page right after `18`, because the Store rows change while an install runs.

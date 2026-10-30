@@ -42,7 +42,7 @@
 <context>
     <name>AppDetailPage</name>
     <message>
-        <location filename="../qml/AppDetailPage.qml" line="+30"/>
+        <location filename="../qml/AppDetailPage.qml" line="+36"/>
         <source>Official</source>
         <translation>Resmi</translation>
     </message>
@@ -177,7 +177,12 @@
         <translation>Bir şeyler ters gitti. Tekrar deneyebilirsiniz.</translation>
     </message>
     <message>
-        <location line="+102"/>
+        <location line="+24"/>
+        <source>Enter an admin&apos;s PIN</source>
+        <translation>Bir yöneticinin PIN&apos;ini girin</translation>
+    </message>
+    <message>
+        <location line="+130"/>
         <source>Install</source>
         <translation>Kur</translation>
     </message>
@@ -193,12 +198,12 @@
     </message>
     <message>
         <location line="+10"/>
-        <location line="+222"/>
+        <location line="+232"/>
         <source>Uninstall</source>
         <translation>Kaldır</translation>
     </message>
     <message>
-        <location line="-123"/>
+        <location line="-133"/>
         <source>This app can</source>
         <translation>Bu uygulama şunları yapabilir</translation>
     </message>
@@ -208,7 +213,12 @@
         <translation>Yüksek risk</translation>
     </message>
     <message>
-        <location line="+66"/>
+        <location line="+15"/>
+        <source>An admin&apos;s PIN is needed to install this app.</source>
+        <translation>Bu uygulamayı yüklemek için bir yöneticinin PIN&apos;i gerekir.</translation>
+    </message>
+    <message>
+        <location line="+61"/>
         <source>Uninstall %1?</source>
         <translation>%1 kaldırılsın mı?</translation>
     </message>
@@ -368,12 +378,12 @@
     <message>
         <location line="+59"/>
         <source>No games yet — visit the Store</source>
-        <translation>Henüz oyun yok — Mağaza'yı ziyaret et</translation>
+        <translation>Henüz oyun yok — Mağaza&apos;yı ziyaret et</translation>
     </message>
     <message>
         <location line="+10"/>
         <source>Open the Store</source>
-        <translation>Mağaza'yı aç</translation>
+        <translation>Mağaza&apos;yı aç</translation>
     </message>
 </context>
 <context>

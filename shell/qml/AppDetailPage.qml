@@ -16,6 +16,12 @@ Page {
     readonly property bool hasUpdate: app.updateAvailable ?? false
     readonly property var highRisk: ["all-devices", "host-files", "session-bus"]
 
+    // A Standard profile needs an admin's PIN to install an app with a high-risk permission (03 §4.4).
+    readonly property bool hasHighRisk: (app.permissions ?? []).some(p => highRisk.indexOf(p) >= 0)
+    readonly property bool needsAdminPin: !installed && hasHighRisk && (Profiles.active.role ?? "") !== "admin"
+
+    property string pinStep: "idle"    // idle | pin | working
+    property string adminId: ""
     property bool working: false
     property string kind: ""       // "install" | "update" | "uninstall" while working
     property string errorText: ""
@@ -88,12 +94,27 @@ Page {
             Store.update(page.appId)
     }
 
-    function primaryAction() {
-        if (page.working)
+    function startAdminPin() {
+        const admin = Profiles.profiles.find(p => p.role === "admin")
+        if (!admin) {
+            page.errorText = ProfileStatus.describe("not-allowed", 0, 0)
             return
-        if (!page.installed)
-            page.start("install")
-        else if (page.hasUpdate)
+        }
+        page.errorText = ""
+        page.pinStep = "pin"
+        page.adminId = admin.id
+        pad.collect(qsTr("Enter an admin's PIN"), false)
+    }
+
+    function primaryAction() {
+        if (page.working || page.pinStep !== "idle")
+            return
+        if (!page.installed) {
+            if (page.needsAdminPin)
+                page.startAdminPin()
+            else
+                page.start("install")
+        } else if (page.hasUpdate)
             page.start("update")
         // "Open" waits for the session service (T-130).
     }
@@ -112,6 +133,43 @@ Page {
                 return
             page.working = false
             page.errorText = status === "ok" ? "" : page.describe(status)
+        }
+    }
+
+    PinPad {
+        id: pad
+        objectName: "detailPinPad"
+        parent: page.overlay
+        width: parent ? parent.width : 0
+        height: parent ? parent.height : 0
+        u: page.u
+        onCollected: pin => {
+            if (page.pinStep === "pin") {
+                page.pinStep = "working"
+                Profiles.verifyAdmin(page.adminId, pin)
+            }
+        }
+        onCancelled: {
+            if (page.pinStep === "pin") {
+                page.pinStep = "idle"
+                primary.forceActiveFocus()
+            }
+        }
+    }
+
+    Connections {
+        target: Profiles
+        function onVerifyAdminFinished(adminId, status, attemptsLeft, retryAfterSecs) {
+            if (page.pinStep !== "working")
+                return
+            page.pinStep = "idle"
+            primary.forceActiveFocus()
+            if (status === "ok") {
+                page.start("install")
+            } else {
+                Sfx.back()
+                page.errorText = ProfileStatus.describe(status, attemptsLeft, retryAfterSecs)
+            }
         }
     }
 
@@ -319,6 +377,16 @@ Page {
                     font.pixelSize: Theme.typeCaption * page.u
                 }
             }
+        }
+
+        Text {
+            objectName: "detailAdminNote"
+            visible: page.needsAdminPin
+            width: parent.width
+            text: qsTr("An admin's PIN is needed to install this app.")
+            color: Theme.textDim
+            font.pixelSize: Theme.typeCaption * page.u
+            wrapMode: Text.Wrap
         }
     }
 
