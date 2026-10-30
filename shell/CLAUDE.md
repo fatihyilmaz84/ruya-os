@@ -64,13 +64,13 @@ cmake --build shell\build-win --config Release --target update_translations
 
 ## Tests (required for every behaviour you add)
 
-- Every `init()` starts with `verify(windowGuard.ensureActive() === "", windowGuard.ensureActive())` (T-127): it re-activates the test window, or fails with "test window is not active" instead of a later `activeFocus` assertion. Copy it into new test files.
+- Every `init()` starts with `verify(windowGuard.ensureActive() === "", windowGuard.ensureActive())` (T-127: re-activates the window or fails clearly). Copy it into new test files.
 - Drive the UI with `keyClick()` using only the keys listed above, unless a test is specifically about keyboard input.
 - Give an `objectName` to every element a test needs to find, and find it with `findChild(shell, "name")`.
 - To wait on asynchronous results use `tryCompare(obj, "prop", value)` or `tryVerify(() => …)`. **Never** use `tryCompare` on a `QVariantList` property's `length`: that polls a frozen copy.
 - Assert focus explicitly (`find("x").activeFocus`) after every navigation step that matters. A missing focus assertion let a real bug through once.
 - State that would leak between tests (lockouts, created profiles) gets its own `tst_*.qml` file.
-- UI tasks: extend `test_zz_screenshots` (or add a similar test) so `dev.ps1 shots` captures the new screens, then review the PNGs.
+- UI tasks: extend `test_zz_screenshots` (or add a similar test) so `dev.ps1 shots` captures the new screens, then review the PNGs. `shots` runs only functions that save to `shotsDir`, so a screenshot must not rely on an earlier test function.
 
 ## C++ rules
 

@@ -66,8 +66,9 @@ Item {
             tryCompare(tc.shell, "currentPage", "settings")
             const list = find("categoryList")
             tryVerify(() => list.activeFocus, 2000, "category list has focus")
-            while (list.currentIndex < systemIndex)
+            for (let i = 0; i < 20 && list.currentIndex < systemIndex; ++i)
                 keyClick(Qt.Key_Down)
+            compare(list.currentIndex, systemIndex)
             keyClick(Qt.Key_Right)
             tryVerify(() => find("paneSystem").activeFocus, 2000, "System pane has focus")
         }

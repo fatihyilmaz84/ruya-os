@@ -71,10 +71,11 @@ Item {
 
         function selectCategory(index) {
             const list = find("categoryList")
-            while (list.currentIndex < index)
+            for (let i = 0; i < 20 && list.currentIndex < index; ++i)
                 keyClick(Qt.Key_Down)
-            while (list.currentIndex > index)
+            for (let i = 0; i < 20 && list.currentIndex > index; ++i)
                 keyClick(Qt.Key_Up)
+            compare(list.currentIndex, index)
         }
 
         readonly property int displayIndex: 3

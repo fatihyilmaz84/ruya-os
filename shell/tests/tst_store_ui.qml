@@ -63,9 +63,13 @@ Item {
                 const at = list.model.indexOf(id)
                 if (at < 0)
                     continue
-                while (!list.activeFocus)
+                // The row may be above the focused one (after Back): up to the toolbar, then down.
+                for (let i = 0; i < 10 && !list.activeFocus; ++i)
+                    keyClick(Qt.Key_Up)
+                for (let i = 0; i < 10 && !list.activeFocus; ++i)
                     keyClick(Qt.Key_Down)
-                while (list.currentIndex < at)
+                verify(list.activeFocus, "row " + r + " takes focus")
+                for (let i = 0; i < 50 && list.currentIndex < at; ++i)
                     keyClick(Qt.Key_Right)
                 compare(list.model[list.currentIndex], id)
                 keyClick(Qt.Key_Return)

@@ -24,7 +24,8 @@ The procedure is in [`LEAD.md`](LEAD.md). **Rewrite this file at the end of ever
 1. `git status` clean, no builder session running, no `build.sh` in WSL (distro `FedoraLinux-44`).
 2. CI of this push (`https://api.github.com/repos/fatihyilmaz84/ruya-os/actions/runs?per_page=4`; no `gh` here; `curl` works from Git Bash).
 3. If the owner starts a lead session for T-130: claim it and do it (concern 1). Otherwise steps 1–3 of `LEAD.md`.
-4. Size budgets: root `CLAUDE.md` 10.8 KB and `shell/CLAUDE.md` 7.2 KB sit at budget; trim before adding anything.
+4. Size budgets: root `CLAUDE.md` 10.9 KB and `shell/CLAUDE.md` 7.3 KB sit at budget; trim before adding anything.
+5. Step 6b (retrospective): check that builders' `shots` now finish (screenshot-only, ~25 s); if a screenshot test fails alone but passed in the old full run, it leaned on an earlier test function: fix the test.
 
 ## Quality signals (one row per lead session)
 
@@ -43,4 +44,4 @@ The procedure is in [`LEAD.md`](LEAD.md). **Rewrite this file at the end of ever
 | 2026-10-28 | f5b1a90..198e9ab | T-138, design-system docs (ADR-012, T-142..T-147) | 3 fixed (untested launch-failed toast, frozen-copy `tryCompare`, red CI clippy) + system fix (CI pinned to host Rust) | 169 + 13 skipped QML, 117 Rust; shots not run (no screen changed) | not run (no image change) |
 | 2026-10-28 | 070e312..8e7a7fc | T-139, T-141, T-142 | 2 fixed (SIGTERM-after-Stop reported `killed`, spec mapping text) / 1 filed (weights → T-144, with a lint) | 172 + 13 skipped QML, 143 Rust; shots 185 | not run (no image change) |
 | 2026-10-29 | 124ee1d..0fbe215 | T-143, T-140, T-112 | 3 fixed (`dev.ps1` picked devkitPro's cmake, `scan-secrets.ps1` its brace-expanding git: both now prefer the real tool; badge radius text) / 2 filed (Flatpak games all `app` → T-149, catalogue re-read → T-148) + T-130 split (host half T-150) | 178 + 13 skipped QML, 172 Rust; shots 191 | `0.0.18-lead` ✅ boot, store check 41/41 |
-| 2026-10-30 | 4671bb5..e863439 | T-150, T-135, T-148, T-111 | 2 fixed (progress fill colour, `AppArt` + progress bar into `04` §5) / 0 filed; admin-check decision; T-151, T-152 planned | 209 + 15 skipped QML, 178 Rust; shots 224 | not run (builder's `0.0.19-t148` covers the service changes) |
+| 2026-10-30 | 4671bb5..e863439 | T-150, T-135, T-148, T-111 | 2 fixed (progress fill colour, `AppArt` + progress bar into `04` §5) / 0 filed; admin-check decision; T-151, T-152 planned. Process: `shots` screenshot-only (240 → 23 s), locked-screen refusal, bounded key loops + `lint-tests.ps1`, retrospective step 6b | 209 + 15 skipped QML, 178 Rust; shots 224, then 46 (screenshot-only) | not run (builder's `0.0.19-t148` covers the service changes) |

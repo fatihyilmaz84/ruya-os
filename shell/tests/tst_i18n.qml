@@ -98,8 +98,9 @@ Item {
             tryCompare(tc.shell, "currentPage", "settings")
             const list = find("categoryList")
             tryVerify(() => list.activeFocus)
-            while (list.currentIndex < 7)              // System
+            for (let i = 0; i < 20 && list.currentIndex < 7; ++i)   // System
                 keyClick(Qt.Key_Down)
+            compare(list.currentIndex, 7)
             keyClick(Qt.Key_Return)
             const row = find("rowLanguage")
             tryVerify(() => row.activeFocus, 2000, "the language row has focus")
@@ -217,8 +218,9 @@ Item {
             tryCompare(tc.shell, "currentPage", "settings")
             const list = find("categoryList")
             tryVerify(() => list.activeFocus)
-            while (list.currentIndex < 3)              // Ekran ve hareket
+            for (let i = 0; i < 20 && list.currentIndex < 3; ++i)   // Ekran ve hareket
                 keyClick(Qt.Key_Down)
+            compare(list.currentIndex, 3)
             keyClick(Qt.Key_Return)
             wait(600)
             grabImage(tc.shell).save(shotsDir + "/16-settings-tr.png")

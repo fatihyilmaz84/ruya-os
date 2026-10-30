@@ -30,7 +30,7 @@ The lead follows the root `CLAUDE.md` (rules, commit format, definition of done)
 
 ### 2. Verify independently (never trust an Outcome on its own)
 - `.\scripts\dev.ps1 test` → must be ALL GREEN.
-- `.\scripts\dev.ps1 shots`, then **look at the screenshots** of every screen that changed since the last review.
+- `.\scripts\dev.ps1 shots`, then **look at the screenshots** of every screen that changed since the last review. Skip `shots` when no `.qml` file changed in the range.
 - If anything under `image/`, `services/` or the shell's Linux paths changed since the last VM verification: build the image, `make-disk.sh qcow2`, run `scripts\smoke-test.ps1` (recipe in `docs/dev-setup.md`). Run the update/rollback drill when updates, health checks or greenboot are touched.
 - CI on GitHub: if the owner can share the Actions result, or it's visible from a pushed state, record it; otherwise note "CI not checked".
 - Write the numbers down (test counts, boot result, timings). They go into the log entry.
@@ -83,6 +83,13 @@ If time remains, take **one** `Owner: lead` task and do it with the full builder
 - cross-cutting refactors of shared infrastructure;
 - anything a builder failed at or blocked on twice.
 
+### 6b. Retrospective: builders, lead, tests (every lead session, owner 2026-10-30)
+Before the handoff, ask what made this range slower or worse than it needed to be, and change the system once per finding (a script or check first, then a template or `CLAUDE.md` line; prune when you add):
+- **Builders:** from the Outcomes, the session log and the diffs: re-runs, hung or unjudged checks, steps skipped, a task file misread or too vague, the same question asked twice, rules ignored. Fix the cause (task template, `PLANNING.md` Lessons, area `CLAUDE.md`, `dev.ps1`).
+- **Lead:** your own session: what you re-did, read without need, or couldn't finish, and which step of this file cost the most for the least. Fix `LEAD.md` or `LEAD-NOTES.md`.
+- **Tests:** each gate runs only what it needs. Time `dev.ps1 test` and `shots`; look for checks that duplicate another gate, run where they can't pass (a locked desktop), or check nothing a criterion needs. Trim or speed up those, but never drop the only check of a criterion or weaken one (`CLAUDE.md`, Hard rules).
+- Record each change as "Process:" in the session-log entry and in the quality-signal row; say "Process: none" when there was nothing.
+
 ### 7. Handoff
 - **Rewrite** `LEAD-NOTES.md` (don't append forever):
   - the new review range (`HEAD` after your commits);
@@ -99,6 +106,7 @@ If time remains, take **one** `Owner: lead` task and do it with the full builder
 2. Quality findings: what was fixed, and what became tasks.
 3. **Decisions needed from the owner:** each a concrete question with your recommendation.
 4. What the next builder sessions will do (the top 3 of the board), and when the next lead session is due.
+5. Process changes from step 6b (builders, lead, tests), or "none".
 
 ## Authority
 

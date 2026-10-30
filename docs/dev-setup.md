@@ -143,7 +143,7 @@ It prints `pkcheck` verdicts for the six `login1` actions for the `ruya-shell` p
 |---|---|
 | `.\scripts\dev.ps1 check` | Prerequisites present? |
 | `.\scripts\dev.ps1 test` | Text lint (tracked text files are UTF-8 with no stray control characters or tabs); board lint (`docs/STATUS.md` and the task files agree, `scripts/lint-board.ps1`); Rust fmt, clippy (Windows + Linux target) and tests; shell build; token lint (no literal durations or colours outside `Theme.qml`); qmllint (zero warnings); Qt Quick tests. **Must be ALL GREEN before any commit.** |
-| `.\scripts\dev.ps1 shots` | Qt Quick tests plus screenshots into `output\shell-shots\` (cleared first), and half-size copies in `output\shell-shots\review\` for reviewing at a quarter of the image tokens |
+| `.\scripts\dev.ps1 shots` | Only the Qt Quick tests that save a screenshot (`shotsDir + "/…"`), in real windows, into `output\shell-shots\` (cleared first), and half-size copies in `output\shell-shots\review\` for reviewing at a quarter of the image tokens |
 | `.\scripts\dev.ps1 run` | The shell in a window with mock services |
 | `.\scripts\dev.ps1 rust` / `shell` | Half of `test` |
 | `.\scripts\lint-tokens.ps1` | The token lint alone (also called by `dev.ps1 shell` and by CI). Exit 1 and a list of `file:line` on findings. |
@@ -202,7 +202,7 @@ $env:RUYA_SHOTS_DIR = "$PWD\output\shell-shots"; shell\build-win\Release\tst_ruy
 cmake --build shell\build-win --config Release --target all_qmllint
 ```
 
-`dev.ps1 shots` runs the same tests in real GPU windows and saves screenshots. Keep the desktop unlocked and leave the windows alone while it runs. Offscreen is the software renderer, where `MultiEffect` draws nothing, so effects only show up in `shots`.
+`dev.ps1 shots` runs only the test functions that save a screenshot, in real GPU windows (behaviour is already gated offscreen by `test`), in about 25 s. It stops at once when the session is locked (`LogonUI` running). Leave the windows alone while it runs. Offscreen is the software renderer, where `MultiEffect` draws nothing, so effects only show up in `shots`.
 
 **Against the real profiles service (Linux):** in `--session` mode the service uses the session bus and creates no Unix users, so it runs fine without root.
 

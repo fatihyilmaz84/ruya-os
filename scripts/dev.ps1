@@ -5,7 +5,7 @@
 #   .\scripts\dev.ps1 build     # configure (first time) + build the shell
 #   .\scripts\dev.ps1 test      # EVERYTHING that must pass before a commit (text lint, rust, shell)
 #   .\scripts\dev.ps1 run       # start the shell in a window with mock services
-#   .\scripts\dev.ps1 shots     # run the QML tests and save screenshots to output\shell-shots
+#   .\scripts\dev.ps1 shots     # run the screenshot tests on real windows, save to output\shell-shots
 #   .\scripts\dev.ps1 rust      # Rust checks only (fmt, clippy for Windows + Linux, tests)
 #   .\scripts\dev.ps1 shell     # shell checks only (build, token lint, qmllint, Qt Quick tests)
 #
@@ -83,11 +83,35 @@ function Do-Rust {
     Pop-Location
 }
 
+# "Name::test_x" for every test function in shell\tests that saves a screenshot
+# (`shotsDir + "/...`; Name = the file's TestCase name), so `shots` runs only those.
+function Get-ScreenshotFunctions {
+    $fns = @()
+    foreach ($file in Get-ChildItem (Join-Path $Repo "shell\tests") -Filter *.qml) {
+        $case = $null; $fn = $null
+        foreach ($line in Get-Content -LiteralPath $file.FullName -Encoding UTF8) {
+            if (-not $case -and $line -match '^\s+name:\s*"(\w+)"') { $case = $Matches[1] }
+            if ($line -match '\bfunction (test_\w+)\s*\(') { $fn = $Matches[1] }
+            if ($fn -and $case -and $line -match 'shotsDir \+ "/' -and $fns -notcontains "${case}::$fn") { $fns += "${case}::$fn" }
+        }
+    }
+    return $fns
+}
+
 function Run-QmlTests([string]$ShotsDir) {
     $log = Join-Path $env:TEMP "ruya-qmltest.txt"
+    $only = @()
     if ($ShotsDir) {
         # Screenshots need a real GPU window (offscreen = software renderer, no MultiEffect).
         # Real windows depend on the desktop: keep it unlocked and don't click other windows.
+        # A locked session (LogonUI running) renders nothing and stalls timers: stop at once.
+        if (Get-Process LogonUI -ErrorAction SilentlyContinue) {
+            Write-Host "    The Windows session is locked: real windows can't render. Unlock it and re-run shots." -ForegroundColor Red
+            Record "Qt Quick tests (session locked)" $false
+            return
+        }
+        # Behaviour is gated offscreen by `test`; here only the screenshot functions run.
+        $only = Get-ScreenshotFunctions
         New-Item -ItemType Directory -Force $ShotsDir | Out-Null
         $env:RUYA_SHOTS_DIR = $ShotsDir
     } else {
@@ -96,7 +120,7 @@ function Run-QmlTests([string]$ShotsDir) {
         $env:QT_QPA_PLATFORM = "offscreen"
     }
     # -o <file>,txt: the runner's stdout is unreliable under PowerShell.
-    & (Join-Path $ShellBuild "Release\tst_ruyashell.exe") -o "$log,txt" | Out-Null
+    & (Join-Path $ShellBuild "Release\tst_ruyashell.exe") -o "$log,txt" @only | Out-Null
     $code = $LASTEXITCODE
     Remove-Item Env:\RUYA_SHOTS_DIR -ErrorAction SilentlyContinue
     Remove-Item Env:\QT_QPA_PLATFORM -ErrorAction SilentlyContinue
@@ -160,10 +184,18 @@ function Test-Board {
     Record "board lint" ($LASTEXITCODE -eq 0)
 }
 
+# The rules live in scripts\lint-tests.ps1 (shared with CI).
+function Test-QmlTests {
+    Step "test lint (no key presses in unbounded loops)"
+    & (Join-Path $PSScriptRoot "lint-tests.ps1")
+    Record "test lint" ($LASTEXITCODE -eq 0)
+}
+
 function Do-Shell {
     Do-Build
     Test-Tokens
     Test-Translations
+    Test-QmlTests
     Step "qmllint (module context)"
     # --max-warnings 0: without it qmllint exits 0 even when it reports warnings.
     Invoke-Native "qmllint" { qmllint --max-warnings 0 "@$ShellBuild\.rcc\qmllint\ruyashell.rsp" }
