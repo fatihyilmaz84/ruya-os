@@ -2,20 +2,20 @@
 
 **Read this first in every session; update it last.** Rules: root `CLAUDE.md`. Roles (Opus lead, Sonnet builders): `docs/LEAD.md`. Task format: `docs/tasks/README.md`. Finished work: each task's own file (`Status: done`, Outcome starting with `Verified:`); history before T-132 in [`STATUS-done.md`](STATUS-done.md). `scripts/lint-board.ps1` (part of `dev.ps1 test`) keeps this board and the task files in step.
 
-Last updated: 2026-10-30 (Opus 5.5, lead)
+Last updated: 2026-10-30 (Sonnet 5.5, T-151)
 
 ## Where we are
 
 - **Phase 0 (foundation): vm-verified 2026-10-22.** Image builds, boots to the shell, updates, rolls back by hand and by greenboot. Left: real hardware (B-002).
-- **Phases 1–2 (shell core, profiles, devices):** the shell has pages, motion, toasts/OSD, Settings (Profiles, Network, Audio, Display, System, About), on-screen keyboard, first-boot wizard, Turkish translation. Profiles, power, audio (`ruya-devices`, event-driven since T-133), network (`ruya-devices` over NetworkManager, T-132), the store service (`ruya-store` over `flatpak`, T-134) and the Guide key are **vm-verified** over the real bus; the Store UI (T-111) is built against the mock. The compositor spike (T-123) proved ADR-002 option A (shell as Wayland compositor on KMS); T-130 (lead) makes it the session.
-- **Not started:** `ruya-session` in the image (T-139 built the core, dev mode only; unit, policy and the real spawner follow T-130), `ruya-update` (T-135 built its contract `Update1` and the Settings UI against a mock), Bluetooth, USB storage, InputPlumber (B-006), installer. No app has ever been launched from the shell.
+- **Phases 1–2 (shell core, profiles, devices):** the shell has pages, motion, toasts/OSD, Settings (Profiles, Network, Audio, Display, System, About), on-screen keyboard, first-boot wizard, Turkish translation. Profiles, power, audio (`ruya-devices`, event-driven since T-133), network (`ruya-devices` over NetworkManager, T-132), the store service (`ruya-store` over `flatpak`, T-134), the update service (`ruya-update` over `bootc`, T-151; manual check, download, rollback, channel) and the Guide key are **vm-verified** over the real bus; the Store UI (T-111) is built against the mock. The compositor spike (T-123) proved ADR-002 option A (shell as Wayland compositor on KMS); T-130 (lead) makes it the session.
+- **Not started:** `ruya-session` in the image (T-139 built the core, dev mode only; unit, policy and the real spawner follow T-130), Bluetooth, USB storage, InputPlumber (B-006), installer. No app has ever been launched from the shell.
 - **Host:** Windows plus a Fedora 44 WSL distribution (image builds) and QEMU/WHPX (boot tests): `docs/dev-setup.md`. **Image and VM work works again since 2026-10-27** (fresh WSL distro, `.wslconfig` `memory=8GB`; image `0.0.13-lead` built, made into a disk and booted `RUYA_BOOT_OK`, T-131 VM-verified). If `ext4` errors return, see the WSL note under Open owner decisions.
 
 Verification legend: **host** = built and tested on Windows · **vm** = built into the image and verified booted in QEMU · **unverified** = written, not run · **hw** = real hardware.
 
 ## Board
 
-**NEXT → T-151**
+**NEXT → T-113**
 
 **Lead review due** after 3–5 more builder tasks (reviewed up to the lead commit "lead review 4671bb5..e863439", see `docs/LEAD-NOTES.md`). **One builder session at a time, one task per session:** two builders in one checkout mixed three tasks' work on 2026-10-28. Builders: when your task makes this true, end your reply by recommending a lead session.
 
@@ -24,7 +24,6 @@ Open work only (todo, in-progress, blocked). The order is the recommended order;
 | ID | Title | Status | Depends |
 |---|---|---|---|
 | [T-130](tasks/T-130-compositor-session.md) | **[lead]** Compositor session: `ruya-shell` replaces cage  | todo | T-150 |
-| [T-151](tasks/T-151-ruya-update-service.md) | `ruya-update`: the `Update1` service over `bootc` | todo | T-135 |
 | [T-113](tasks/T-113-games-page.md) | Library client and Games page with art cards | todo | T-101, T-112, T-143 |
 | [T-152](tasks/T-152-store-high-risk-admin-pin.md) | Store: admin PIN before a Standard profile installs a high-risk app | todo | T-111 |
 | [T-146](tasks/T-146-art-led-home.md) | Art-led Home: hero, Recent art row, section nav | todo | T-113, T-143 |
@@ -38,6 +37,9 @@ Open work only (todo, in-progress, blocked). The order is the recommended order;
 
 Follow-ups and debt for the next planner. Builders: add one line per item, `- (source) what, and why it matters`; write a task file only if your own task needs one. Run a planner at 5+ items.
 
+- (T-151) `ruya-update` does not check on a schedule or reboot when idle (spec 01 §4); the update flow is only manual until then.
+- (T-151) `caller_is_admin` / `active_profile_is_admin` are copied between `ruya-store` and `ruya-update`: share them if a third admin-gated service appears.
+- (T-151) SystemPane shows the generic "update could not be started" for `forbidden` (SetChannel/Rollback); needs its own string and Turkish.
 
 
 ## Blocked (need something this host doesn't have)
@@ -62,6 +64,9 @@ Follow-ups and debt for the next planner. Builders: add one line per item, `- (s
 ## Session log (newest first, the latest five; older entries in `STATUS-log.md`)
 
 One entry per session, at most 4 lines: date · model · tasks · what happened · numbers · follow-ups. Detail belongs in the task Outcome.
+
+- 2026-10-30 · Sonnet 5.5 · T-151 · `ruya-update` (bootc) + `forbidden` in XML/mock/test, unit, policy, greenboot check. `test` ALL GREEN (210 QML, 25 new Rust). VM `0.0.20`->`0.0.21-t151`: `vm-update-check.sh` ALL PASSED, restart from Settings booted the new version, exposure 4.8 OK.
+  Found in the VM: bootc needs `CAP_SYS_PTRACE` and no `RestrictSUIDSGID`. Progress is 0 then 100. Lead review is due after 2-3 more tasks.
 
 - 2026-10-30 · Sonnet 5.5 · T-149 · Flatpak items are `game` when the exported desktop entry's `[Desktop Entry]` `Categories` has `Game` (`AppLister::desktop_entry`, pure `is_game`); demo list has a game and an app. `rust` and `test` ALL GREEN (209 QML). D-Bus serving unverified.
 

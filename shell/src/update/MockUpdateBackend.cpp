@@ -12,6 +12,7 @@ const QString FailedState = QStringLiteral("failed");
 const QString Ok = QStringLiteral("ok");
 const QString Busy = QStringLiteral("busy");
 const QString Unavailable = QStringLiteral("unavailable");
+const QString Forbidden = QStringLiteral("forbidden");
 } // namespace
 
 MockUpdateBackend::MockUpdateBackend(QObject *parent)
@@ -36,6 +37,7 @@ void MockUpdateBackend::reset()
     m_pauseAt = -1;
     m_paused = false;
     m_rollbackCount = 0;
+    m_callerIsAdmin = true;
     publish();
 }
 
@@ -109,6 +111,8 @@ void MockUpdateBackend::download()
 
 void MockUpdateBackend::rollback()
 {
+    if (!m_callerIsAdmin)
+        return finish(QStringLiteral("rollback"), Forbidden);
     if (isRunning())
         return finish(QStringLiteral("rollback"), Busy);
     if (!m_status.rollbackAvailable)
@@ -124,6 +128,8 @@ void MockUpdateBackend::rollback()
 
 void MockUpdateBackend::setChannel(const QString &channel)
 {
+    if (!m_callerIsAdmin)
+        return finish(QStringLiteral("setChannel"), Forbidden);
     if (channel != QLatin1String("stable") && channel != QLatin1String("beta"))
         return finish(QStringLiteral("setChannel"), QStringLiteral("invalid"));
     if (isRunning())

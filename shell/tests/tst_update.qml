@@ -203,6 +203,17 @@ Item {
             tryCompare(Update, "state", "staged")
         }
 
+        function test_forbidden_for_a_non_admin_caller() {
+            Update.mockSetCallerIsAdmin(false)
+            compare(request(() => Update.rollback())[1], "forbidden")
+            compare(request(() => Update.setChannel("beta"))[1], "forbidden")
+            compare(Update.channel, "stable")
+            compare(Update.rollbackAvailable, true)
+            compare(Update.mockRollbackCount(), 0)
+            compare(request(() => Update.check())[1], "ok", "checking is for everyone")
+            Update.mockSetCallerIsAdmin(true)
+        }
+
         function test_rollback_asks_for_the_admin_pin() {
             openSystemPane("p1", "1234")                  // Player One: admin
             verify(find("rowChannel").visible)

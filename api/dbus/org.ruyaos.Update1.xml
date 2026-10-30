@@ -2,8 +2,8 @@
  "http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
 <!--
   org.ruyaos.Update1 — OS image updates: check, stage, roll back, choose the channel.
-  Planned service: ruya-update on the system bus at /org/ruyaos/Update1 (over bootc; not written
-  yet). Today only the shell's mock backend follows this contract (T-135).
+  Service: ruya-update on the system bus at /org/ruyaos/Update1 (over bootc, T-151); the shell's
+  mock backend follows the same rules.
   Contract between shell (Qt/QML) and services (Rust); see docs/specs/01-platform.md §4.
 
   Rebooting is not here: the shell uses logind (Power.restart) once the state is "staged".
@@ -15,14 +15,14 @@
     "unavailable"  nothing to do: Download without an update found, Rollback without
                    rollback_available
     "invalid"      malformed argument (SetChannel with an unknown channel)
+    "forbidden"    Rollback or SetChannel from a caller that is not an admin (see below)
     "failed"       internal error
 
   Admin: Rollback and SetChannel are for an admin. The shell asks for the admin's PIN first and
   checks it with Profiles1.VerifyAdmin; the bus policy lets only ruya-shell and root call this
   interface. Decided (lead, 2026-10-30): the service does not take a PIN, but it checks the caller
   the way ruya-store checks AddRemote (root, or ruya-shell while Profiles1's active profile is an
-  admin) and answers "forbidden" otherwise; the ruya-update task (T-151) adds that status here,
-  in the mock and in the client.
+  admin) and answers "forbidden" otherwise.
 
   GetStatus returns one a{sv} record, keys:
     state             s   "idle" | "checking" | "downloading" | "staged" | "up-to-date" | "failed"

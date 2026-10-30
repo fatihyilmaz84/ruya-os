@@ -1,6 +1,6 @@
 # T-151 — `ruya-update`: the `Update1` service over `bootc`
 
-Status: todo · Phase: 2 · Depends: T-135 · Area: services, image · Size: M
+Status: done · Phase: 2 · Depends: T-135 · Area: services, image · Size: M
 
 ## Goal
 Settings → System → Updates works for real: in the VM, "Check for updates" finds a newer image in the dev registry, the download stages it, and after "Restart to finish" the VM boots the new version; an admin can roll back. Until now only the shell's mock followed `Update1`.
@@ -47,4 +47,20 @@ Settings → System → Updates works for real: in the VM, "Check for updates" f
 - A fresh disk copy has new SSH host keys: use the batch SSH options in `docs/dev-setup.md`.
 
 ## Outcome
-_Filled in by the implementer. First line: `Verified: host | vm | unverified | hw` (say what ran where). Then: what was built, files, deviations, follow-ups (each also an Inbox line)._
+Verified: **vm** (images `0.0.20-t151` and `0.0.21-t151`, booted in QEMU, real bus; `vm-update-check.sh` ALL PASSED) and **host** (`dev.ps1 test` ALL GREEN, 210 QML, Rust incl. 25 new `ruya-update` tests).
+
+**Built.** `services/ruya-update`: `bootc.rs` (a `Bootc` trait, `BootcCli` running `bootc status --json | upgrade --check | upgrade | switch | rollback`, a pure `parse_status`, `FakeBootc`), `service.rs` (the state machine: statuses, state transitions, rules, channel file), `dbus.rs` (thin zbus adapter, jobs on a thread, `StatusChanged` through a channel, admin check copied from `ruya-store`'s `AddRemote`), `main.rs` (`--session` runs over a fake host). Image: `ruya-update.service`, bus policy `org.ruyaos.Update1.conf`, Containerfile install and enable, greenboot required check `51-ruya-update.sh` (service active within 60 s). Contract: `forbidden` added to the XML (status list, header); the mock answers `forbidden` for `Rollback`/`SetChannel` after `Update.mockSetCallerIsAdmin(false)`; `DBusUpdateBackend` already passes any status through. `tst_update.qml` gained `test_forbidden_for_a_non_admin_caller`. `scripts/vm-update-check.sh`; `vm-goto.ps1` got a `settings-system` target.
+
+**Commands.** `Check`: `bootc upgrade --check`, then `bootc status --json`; `available` is `booted.cachedUpdate` unless its digest equals the booted or staged one (version label, else tag). `Download`: `bootc upgrade`, or `bootc switch <repo>:<channel>` while the chosen channel differs from the tag the host tracks. `Rollback`: `bootc rollback`; the previous image then shows as `staged` and `rollback_available` is false (`rollbackQueued`). `SetChannel`: writes `stable|beta` to `/var/lib/ruya-update/channel` (atomic; a corrupt file stops the service) and clears `available`. Without a chosen channel the host's tag is followed (a dev tag just upgrades).
+
+**Deviations / decisions.**
+- **Progress** is `0` while `bootc` works, then `100` (nothing of its output is parsed; the Download took about a minute in the VM).
+- A check for a *different* channel cannot ask the registry (`bootc` cannot look at another tag without staging it): `available` is then the channel name (not a version) and the version shows once staged. Not VM-tested (needs a `beta` tag); unit-tested with the fake.
+- `Rollback` without a prior `Check` works in any state but `checking`/`downloading` (`busy`). Root's `Rollback` verified in the VM (`ok`, then `unavailable`, `staged` = previous version); the admin-profile path through `Profiles1` is the same code as `ruya-store` and is unit-tested only as the `admin` boolean.
+- `ruya-update` repeats `caller_is_admin`/`active_profile_is_admin` from `ruya-store` (Inbox: share them).
+
+**Hardening** (`systemd-analyze security ruya-update`: **4.8 OK** in the VM; `ruya-store` is 3.3, `ruya-profiles` 1.6). Options that had to go, found by bisecting `bootc upgrade --check` under `systemd-run`: no `ProtectSystem=` (bootc remounts `/sysroot` and writes `/boot`, `/etc`, `/var`) and so `CAP_SYS_ADMIN`; `CAP_SYS_PTRACE` (bootc reads `/proc/1/ns/mnt`, even for `status`; without it "Permission denied"); **no `RestrictSUIDSGID`** (with it bootc fails with ENOSYS "Opening runtime auth file", and an ostree checkout must create setuid files); no `PrivateDevices`/`PrivateNetwork`. Kept: `NoNewPrivileges`, `PrivateTmp`, `PrivateIPC`, a bounded capability set, `SystemCallFilter=@system-service @mount`, `ProtectProc=invisible`, `ProtectKernel*`, `ProtectClock`, `ProtectHostname`, `ProtectControlGroups`, `RestrictAddressFamilies`, `RestrictRealtime`, `LockPersonality`.
+
+**VM run.** Image A pushed as `<wsl-ip>:5000/ruyaos:stable`, disk made, VM `bootc switch`ed to that tag and rebooted; image B (version `0.0.21-t151`, with the unit fixes) pushed over the same tag. `vm-update-check.sh`: active, current `0.0.20-t151`, `Check` finds `0.0.21-t151` (second `Check`: busy), `Download` stages it (`bootc status` has a staged deployment), `Rollback` and `SetChannel` by `ruya-shell` without an admin profile: `forbidden`, `nobody` refused by the bus policy, `SetChannel nightly`: `invalid`. That run used a drop-in repeating the two unit fixes on image A (A's unit predates them); after the reboot into B (below) the unmodified unit answered `Check` (`up-to-date`). Screenshot `output/vm-shots/settings-system.png`: Updates group with the real service: "Version 0.0.20-t151 · Stable", "Restart to finish: Version 0.0.21-t151 is ready"; Accept, then Confirm, rebooted the VM: `RUYA_BOOT_OK 0.0.21-t151`, Version row shows it. Greenboot passed on B (required check lists `51-ruya-update.sh`). Registry container and tags removed afterwards. A first `make-disk.sh` failed once with "Cannot allocate memory" writing to `/mnt/d`; `drop_caches` and a retry worked (WSL RAM, not the code).
+
+**Follow-ups (Inbox).** Scheduled daily check and idle-time reboot (planned next); share the admin-caller code between services; the Settings pane says only "The update could not be started." for `forbidden` (needs a string + Turkish).

@@ -36,6 +36,6 @@ public:
 signals:
     void statusChanged(const UpdateStatus &status);
     // method: "check" | "download" | "rollback" | "setChannel"; status: see the XML header
-    // ("ok", "busy", "unavailable", "invalid", "failed").
+    // ("ok", "busy", "unavailable", "invalid", "forbidden", "failed").
     void requestFinished(const QString &method, const QString &status);
 };

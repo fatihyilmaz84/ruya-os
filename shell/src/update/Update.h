@@ -63,6 +63,7 @@ public:
     Q_INVOKABLE void mockPauseDownloadAt(int percent);
     Q_INVOKABLE void mockResumeDownload();
     Q_INVOKABLE int mockRollbackCount() const;
+    Q_INVOKABLE void mockSetCallerIsAdmin(bool admin);
 
 signals:
     void statusChanged();

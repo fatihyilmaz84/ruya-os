@@ -94,6 +94,12 @@ void Update::mockResumeDownload()
         mock->resume();
 }
 
+void Update::mockSetCallerIsAdmin(bool admin)
+{
+    if (auto *mock = qobject_cast<MockUpdateBackend *>(m_backend.get()))
+        mock->setCallerIsAdmin(admin);
+}
+
 int Update::mockRollbackCount() const
 {
     auto *mock = qobject_cast<MockUpdateBackend *>(m_backend.get());
