@@ -19,7 +19,7 @@ fn main() {
 }
 
 const DEMO_FLATPAK: &str =
-    "org.ruyaos.Racer\tTurbo Racer\truyaos\norg.ruyaos.Puzzle\tBlock Puzzle\truyaos\n";
+    "org.ruyaos.Racer\tTurbo Racer\truyaos\norg.ruyaos.Notes\tNotes\truyaos\n";
 
 fn lister(session: bool) -> Box<dyn AppLister> {
     #[cfg(target_os = "linux")]
@@ -27,7 +27,17 @@ fn lister(session: bool) -> Box<dyn AppLister> {
         return Box::new(ruya_library::flatpak::FlatpakCli);
     }
     let _ = session;
-    Box::new(FixtureLister(DEMO_FLATPAK.to_owned()))
+    Box::new(
+        FixtureLister::new(DEMO_FLATPAK)
+            .with_desktop(
+                "org.ruyaos.Racer",
+                "[Desktop Entry]\nName=Turbo Racer\nCategories=Game;ArcadeGame;\n",
+            )
+            .with_desktop(
+                "org.ruyaos.Notes",
+                "[Desktop Entry]\nName=Notes\nCategories=Utility;\n",
+            ),
+    )
 }
 
 fn run() -> Result<(), Box<dyn Error>> {

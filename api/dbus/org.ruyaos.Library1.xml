@@ -12,7 +12,9 @@
 
   Item record (a{sv}), keys:
     id           s    "steam:<appid>" or "flatpak:<application id>"; stable
-    kind         s    "game" or "app"
+    kind         s    "game" or "app". Steam items are always "game". A Flatpak item is a "game" when
+                      "Game" is in the Categories of the [Desktop Entry] group of its exported
+                      desktop entry (system installation), else "app" (also without such a file)
     title        s    display name
     source       s    "steam" or "flatpak"
     launch       s    opaque launch spec for the session service: "steam://rungameid/<appid>"

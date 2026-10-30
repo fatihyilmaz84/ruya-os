@@ -1,6 +1,6 @@
 # T-149 — ruya-library: Flatpak games are games
 
-Status: todo · Phase: 5 · Depends: T-112 · Area: services, api · Size: S
+Status: done · Phase: 5 · Depends: T-112 · Area: services, api · Size: S
 
 ## Goal
 A game installed from the Store as a Flatpak (e.g. SuperTux) has `kind` `game` in `Library1.ListItems`, so it appears on the Games page (T-113). Today every Flatpak item is an `app`.
@@ -36,4 +36,10 @@ A game installed from the Store as a Flatpak (e.g. SuperTux) has `kind` `game` i
 - `ruya-library` is not in the image yet, so there is no VM criterion; say "D-Bus serving unverified" in the Outcome as T-112 did.
 
 ## Outcome
-_Filled in by the implementer. First line: `Verified: host | vm | unverified | hw` (say what ran where). Then: what was built, files, deviations, follow-ups (each also an Inbox line)._
+Verified: host (`dev.ps1 rust` and `dev.ps1 test` ALL GREEN). D-Bus serving and the real desktop-file read on Linux unverified (`ruya-library` is not in the image yet; the Linux code type-checks under clippy for the Linux target).
+
+Built: a Flatpak item is a `game` when `Game` is in `Categories` of the `[Desktop Entry]` group of `/var/lib/flatpak/exports/share/applications/<id>.desktop`, else an `app` (no file, malformed file, `Game` only in another group, localized `Categories[xx]` keys all give `app`). `is_game` is pure; reading the file is a second method `AppLister::desktop_entry` (default `None`), so no new trait. `parse_list` now takes the lister. `FixtureLister` became a struct (`new`, `with_desktop`) instead of a tuple struct. The `--session` demo list has a game (Turbo Racer) and an app (Notes, replacing Block Puzzle). Contract comment (`Library1.xml`) and spec 03 §5 say how `kind` is decided.
+
+Files: `services/ruya-library/src/{flatpak,catalog,main}.rs`, `api/dbus/org.ruyaos.Library1.xml`, `docs/specs/03-services-and-apps.md`.
+
+Deviations: none. Only the system installation is read (user installations are out of scope).

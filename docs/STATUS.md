@@ -15,7 +15,7 @@ Verification legend: **host** = built and tested on Windows · **vm** = built in
 
 ## Board
 
-**NEXT → T-149**
+**NEXT → T-151**
 
 **Lead review due** after 3–5 more builder tasks (reviewed up to the lead commit "lead review 4671bb5..e863439", see `docs/LEAD-NOTES.md`). **One builder session at a time, one task per session:** two builders in one checkout mixed three tasks' work on 2026-10-28. Builders: when your task makes this true, end your reply by recommending a lead session.
 
@@ -24,7 +24,6 @@ Open work only (todo, in-progress, blocked). The order is the recommended order;
 | ID | Title | Status | Depends |
 |---|---|---|---|
 | [T-130](tasks/T-130-compositor-session.md) | **[lead]** Compositor session: `ruya-shell` replaces cage  | todo | T-150 |
-| [T-149](tasks/T-149-library-flatpak-games.md) | `ruya-library`: Flatpak games are games | todo | T-112 |
 | [T-151](tasks/T-151-ruya-update-service.md) | `ruya-update`: the `Update1` service over `bootc` | todo | T-135 |
 | [T-113](tasks/T-113-games-page.md) | Library client and Games page with art cards | todo | T-101, T-112, T-143 |
 | [T-152](tasks/T-152-store-high-risk-admin-pin.md) | Store: admin PIN before a Standard profile installs a high-risk app | todo | T-111 |
@@ -63,6 +62,8 @@ Follow-ups and debt for the next planner. Builders: add one line per item, `- (s
 ## Session log (newest first, the latest five; older entries in `STATUS-log.md`)
 
 One entry per session, at most 4 lines: date · model · tasks · what happened · numbers · follow-ups. Detail belongs in the task Outcome.
+
+- 2026-10-30 · Sonnet 5.5 · T-149 · Flatpak items are `game` when the exported desktop entry's `[Desktop Entry]` `Categories` has `Game` (`AppLister::desktop_entry`, pure `is_game`); demo list has a game and an app. `rust` and `test` ALL GREEN (209 QML). D-Bus serving unverified.
 
 - 2026-10-30 · Opus 5.5 · Lead (review `4671bb5..e863439`: T-150, T-135, T-148, T-111) · `test` ALL GREEN (209 QML + 15 screenshot skips, 178 Rust); `shots` ALL GREEN (224; `17`, `18`, `19`, `25` reviewed, `19` now caught after the fade). CI green at `4671bb5`. No VM run (T-148's `0.0.19-t148` covers every service change).
   Findings 2 fixed / 0 filed: Store progress fill white like the volume OSD (was `toastInfo`); `AppArt` and the progress bar adopted in `04` §5. Decided: admin-only service calls check the caller like `AddRemote` (Update1 header, T-151).

@@ -75,7 +75,7 @@ pub fn scan(steam_roots: &[PathBuf], lister: &dyn AppLister) -> Vec<Item> {
         }
     }
     let flatpak_items = match lister.list() {
-        Ok(text) => flatpak::parse_list(&text),
+        Ok(text) => flatpak::parse_list(&text, lister),
         Err(err) => {
             eprintln!("ruya-library: Flatpak list unavailable: {err}");
             Vec::new()
@@ -156,12 +156,20 @@ mod tests {
         )
         .unwrap();
         let roots = vec![root.clone(), root];
-        let both = scan(&roots, &FixtureLister("a.b.C\tCee\tflathub\n".into()));
+        let lister = FixtureLister::new("a.b.C\tCee\tflathub\nd.e.Game\tTux\tflathub\n")
+            .with_desktop("d.e.Game", "[Desktop Entry]\nCategories=Game;\n");
+        let both = scan(&roots, &lister);
         assert_eq!(
             both.len(),
-            2,
+            3,
             "the same root twice lists a game once: {both:?}"
         );
+        let kinds: Vec<(&str, Kind)> = both.iter().map(|i| (i.id.as_str(), i.kind)).collect();
+        assert!(
+            kinds.contains(&("flatpak:d.e.Game", Kind::Game)),
+            "{kinds:?}"
+        );
+        assert!(kinds.contains(&("flatpak:a.b.C", Kind::App)), "{kinds:?}");
         assert_eq!(scan(&roots, &Broken).len(), 1);
     }
 
