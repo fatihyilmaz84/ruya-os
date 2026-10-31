@@ -92,7 +92,8 @@ Item {
             for (const d of "1234") keyClick(d)
             keyClick(Qt.Key_Enter)
             tryCompare(Profiles, "activeProfile", "p1")
-            for (let i = 0; i < 3; ++i)
+            keyClick(Qt.Key_Up)                        // the section nav
+            for (let i = 0; i < 4; ++i)
                 keyClick(Qt.Key_Right)
             keyClick(Qt.Key_Return)                    // Settings
             tryCompare(tc.shell, "currentPage", "settings")
@@ -145,7 +146,7 @@ Item {
             tryCompare(find("setupNetworkTitle"), "text", "Network")
         }
 
-        function test_home_tiles_follow_language() {
+        function test_home_nav_follows_language() {
             startShell()
             keyClick(Qt.Key_Return)
             const pad = find("pinPad")
@@ -153,16 +154,19 @@ Item {
             for (const d of "1234") keyClick(d)
             keyClick(Qt.Key_Enter)
             tryCompare(Profiles, "activeProfile", "p1")
-            const tiles = find("tiles")
-            tryVerify(() => tiles.currentItem !== null)
-            compare(tiles.currentItem.title, "Games")
+            tryVerify(() => find("homePlay").activeFocus)
+            keyClick(Qt.Key_Up)                        // the section nav
             keyClick(Qt.Key_Right)
-            compare(tiles.currentIndex, 1)
+            const nav = find("sectionNav")
+            compare(nav.currentKey, "games")
+            compare(find("navPill_games").Accessible.name, "Games")
+            keyClick(Qt.Key_Right)
+            compare(nav.currentIndex, 2)
             DeviceSettings.language = "tr"
-            tryCompare(tiles.currentItem, "title", "Medya")
-            compare(tiles.currentIndex, 1, "the language change keeps the selected tile")
+            tryCompare(find("navPill_media").Accessible, "name", "Medya")
+            compare(nav.currentIndex, 2, "the language change keeps the selected pill")
             DeviceSettings.language = "en"
-            tryCompare(tiles.currentItem, "title", "Media")
+            tryCompare(find("navPill_media").Accessible, "name", "Media")
         }
 
         // RTL readiness: with the layout mirrored, the whole sign-in -> home -> Settings -> back
@@ -184,18 +188,19 @@ Item {
             for (const d of "1234") keyClick(d)
             keyClick(Qt.Key_Enter)
             tryCompare(Profiles, "activeProfile", "p1")
-            const tiles = find("tiles")
-            tryVerify(() => tiles.activeFocus)
-            for (let i = 0; i < 3; ++i)
+            const nav = find("sectionNav")
+            tryVerify(() => find("homePlay").activeFocus)
+            keyClick(Qt.Key_Up)
+            for (let i = 0; i < 4; ++i)
                 keyClick(Qt.Key_Left)
-            compare(tiles.currentIndex, 3)
+            compare(nav.currentKey, "settings")
             keyClick(Qt.Key_Return)                    // Settings
             tryCompare(tc.shell, "currentPage", "settings")
             tryVerify(() => find("categoryList").activeFocus)
             keyClick(Qt.Key_Escape)
             tryCompare(tc.shell, "currentPage", "")
-            tryVerify(() => tiles.activeFocus)
-            compare(tiles.currentIndex, 3, "back on the Settings tile")
+            tryVerify(() => nav.activeFocus)
+            compare(nav.currentKey, "settings", "back on the Settings pill")
         }
 
         function test_zz_screenshots() {
@@ -212,9 +217,10 @@ Item {
             for (const d of "1234") keyClick(d)
             keyClick(Qt.Key_Enter)
             tryCompare(Profiles, "activeProfile", "p1")
-            for (let i = 0; i < 3; ++i)
+            keyClick(Qt.Key_Up)                          // the section nav
+            for (let i = 0; i < 4; ++i)
                 keyClick(Qt.Key_Right)
-            keyClick(Qt.Key_Return)
+            keyClick(Qt.Key_Return)                      // Settings
             tryCompare(tc.shell, "currentPage", "settings")
             const list = find("categoryList")
             tryVerify(() => list.activeFocus)

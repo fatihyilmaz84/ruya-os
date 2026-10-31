@@ -12,6 +12,7 @@ QtObject {
     readonly property color glass: "#1fffffff"
     readonly property color glassOpaque: "#e6182033"   // shelf panel when there is no blur behind it
     readonly property color glassBorder: "#33ffffff"
+    readonly property color glassStrong: "#1fffffff"    // top bar and quick menu: white 12 %, blurred with a saturation boost
     readonly property color focusRing: "#ffffff"
 
     // Fills and overlays. White at a given alpha marks focus, selection and key caps.
@@ -24,6 +25,10 @@ QtObject {
     readonly property color scrimOverlay: "#d8000000"               // behind the Guide overlay
     readonly property color panel: "#1a1d26"                        // card of the Guide overlay
     readonly property color dangerFill: "#8f2d2d"                   // confirm button of restart / power off
+    readonly property color primaryFill: "#f2f4f8"                  // the one main verb per screen (Play, Open Store)
+    readonly property color onPrimary: "#05070d"                    // text on primaryFill
+    readonly property color heroScrim: "#bf05070d"                  // left legibility scrim over hero art (75 %, fades to 0 over 75 % of the width)
+    readonly property color artCaptionFade: "#d905070d"             // caption fade at the bottom of an art card (85 % to 0)
     readonly property color errorText: "#ff8a80"
     readonly property real disabledOpacity: 0.4                     // unavailable controls (PIN-pad OK, locked pad)
     readonly property color warningText: "#ffb74d"

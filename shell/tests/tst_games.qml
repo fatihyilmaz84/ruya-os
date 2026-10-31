@@ -37,13 +37,15 @@ Item {
             keyClick(Qt.Key_Right)
             keyClick(Qt.Key_Return)
             tryCompare(Profiles, "activeProfile", "p2")
-            tryVerify(() => find("tiles").activeFocus, 2000, "home shelf takes focus after sign-in")
+            tryVerify(() => find("homePlay").activeFocus, 2000, "Play takes focus after sign-in")
             tryVerify(() => Library.available)
             if (scenario === "empty")
                 tryVerify(() => Library.items.length === 0)
             else
                 tryVerify(() => Library.items.length === 10)
-            compare(find("tiles").currentIndex, 0)
+            keyClick(Qt.Key_Up)                          // the section nav
+            keyClick(Qt.Key_Right)
+            compare(find("sectionNav").currentKey, "games")
             keyClick(Qt.Key_Return)
             tryCompare(tc.shell, "currentPage", "games")
         }

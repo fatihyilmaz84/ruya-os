@@ -16,6 +16,7 @@ Item {
     }
 
     Component { id: spyComponent; SignalSpy {} }
+    Component { id: tileComponent; Tile { index: 0; key: "games"; title: "Games" } }
     SignalSpy { id: switchSpy; target: Profiles; signalName: "switchFinished" }
 
     TestCase {
@@ -39,7 +40,7 @@ Item {
             keyClick(Qt.Key_Right)
             keyClick(Qt.Key_Return)
             tryCompare(Profiles, "activeProfile", "p2")
-            tryVerify(() => find("tiles").activeFocus, 2000, "home shelf takes focus after sign-in")
+            tryVerify(() => find("homePlay").activeFocus, 2000, "Play takes focus after sign-in")
         }
 
         function cleanup() {
@@ -57,7 +58,7 @@ Item {
             compare(Theme.tintMs, 700)
             compare(Theme.blurMax, 64)
             verify(find("backdrop").drifting, "ambient drift runs by default")
-            verify(find("shelfBlur").visible)
+            verify(find("glassBlur").visible)
         }
 
         function test_reduced_motion() {
@@ -68,13 +69,13 @@ Item {
             tryVerify(() => !find("backdrop").drifting, 2000, "backdrop animations stop")
 
             // Navigation still works and is not left half-way.
-            keyClick(Qt.Key_Right)
-            keyClick(Qt.Key_Right)
-            keyClick(Qt.Key_Right)
+            keyClick(Qt.Key_Up)                        // the section nav
+            for (let i = 0; i < 4; ++i)
+                keyClick(Qt.Key_Right)
             keyClick(Qt.Key_Return)
             tryVerify(() => find("page_settings") !== null && find("page_settings").activeFocus, 2000)
             keyClick(Qt.Key_Escape)
-            tryVerify(() => find("tiles").activeFocus, 2000)
+            tryVerify(() => find("sectionNav").activeFocus, 2000)
 
             DeviceSettings.reducedMotion = false
             compare(Theme.focusMs, 140)
@@ -94,8 +95,9 @@ Item {
         // The PIN-pad shake and the tile pulse are feedback animations: they run normally and
         // do not run at all under reduced motion (the message/sound and the page change remain).
         function test_feedback_animations_respect_reduced_motion() {
-            // Tile pulse (home shelf is showing, Ada is signed in).
-            const tile = find("tiles").currentItem
+            // Tile pulse (a stand-in tile: Home no longer has tiles, Tile.qml is kept).
+            const tile = createTemporaryObject(tileComponent, host)
+            verify(tile)
             const pulse = findChild(tile, "pulseAnimation")
             verify(pulse, "the tile has a pulse animation")
             const pulseSpy = createTemporaryObject(spyComponent, host, { target: pulse, signalName: "runningChanged" })
@@ -137,17 +139,17 @@ Item {
         function test_quality_tiers() {
             DeviceSettings.effectsQuality = "balanced"
             compare(Theme.blurMax, 32)
-            verify(find("shelfBlur").visible)
+            verify(find("glassBlur").visible)
             verify(find("backdrop").drifting, "balanced keeps ambient drift")
 
             DeviceSettings.effectsQuality = "performance"
             compare(Theme.blurMax, 0)
-            verify(!find("shelfBlur").visible, "performance hides the blur effect")
+            verify(!find("glassBlur").visible, "performance hides the blur effect")
             tryVerify(() => !find("backdrop").drifting, 2000, "performance stops ambient drift")
 
             DeviceSettings.effectsQuality = "high"
             compare(Theme.blurMax, 64)
-            verify(find("shelfBlur").visible)
+            verify(find("glassBlur").visible)
         }
 
         function test_invalid_values_rejected() {
@@ -170,13 +172,13 @@ Item {
         }
 
         function test_overscan_moves_header() {
-            const before = find("brand").x
+            const before = find("sectionNav").x
             compare(before, tc.shell.width * 0.05)
             DeviceSettings.overscan = 0.10
-            verify(find("brand").x > before, "header moves inward with more overscan")
-            compare(find("brand").x, tc.shell.width * 0.10)
+            verify(find("sectionNav").x > before, "header moves inward with more overscan")
+            compare(find("sectionNav").x, tc.shell.width * 0.10)
             DeviceSettings.overscan = 0.0
-            compare(find("brand").x, 0)
+            compare(find("sectionNav").x, 0)
         }
 
         function test_zz_screenshots() {

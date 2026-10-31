@@ -86,13 +86,14 @@ Item {
         function signIn(id, pin) {
             Profiles.switchTo(id, pin)
             tryCompare(Profiles, "activeProfile", id)
-            tryVerify(() => find("tiles").activeFocus, 2000, "home shelf takes focus after sign-in")
+            tryVerify(() => find("homePlay").activeFocus, 2000, "Play takes focus after sign-in")
         }
 
         function openProfilesPane() {
-            for (let i = 0; i < 3; ++i)
+            keyClick(Qt.Key_Up)                          // the section nav
+            for (let i = 0; i < 4; ++i)
                 keyClick(Qt.Key_Right)
-            keyClick(Qt.Key_Return)                       // Settings tile
+            keyClick(Qt.Key_Return)                      // Settings
             tryCompare(tc.shell, "currentPage", "settings")
             tryVerify(() => find("categoryList") !== null && find("categoryList").activeFocus)
             compare(find("categoryList").currentIndex, 0) // Profiles

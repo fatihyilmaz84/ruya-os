@@ -37,7 +37,7 @@ Item {
             tc.shell.forceActiveFocus()
             Profiles.switchTo("p1", "1234")
             tryCompare(Profiles, "activeProfile", "p1")
-            tryVerify(() => find("tiles").activeFocus, 2000, "home shelf takes focus after sign-in")
+            tryVerify(() => find("homePlay").activeFocus, 2000, "Play takes focus after sign-in")
             tryVerify(() => Store.catalogue.length > 0)
             tc.shell.openPage("appDetail", { appId: "org.example.Stream" })
             tryCompare(tc.shell, "currentPage", "appDetail")

@@ -1,6 +1,5 @@
 pragma ComponentBehavior: Bound
 import QtQuick
-import QtQuick.Effects
 import RuyaShell
 
 // The whole console UI as one Item, so tests can host it in their own window.
@@ -14,7 +13,6 @@ FocusScope {
     readonly property real marginX: width * Theme.safeArea
     readonly property real marginY: height * Theme.safeArea
     readonly property bool signedIn: Profiles.activeProfile !== ""
-    readonly property Tile currentTile: tiles.currentItem as Tile
 
     // Open pages, oldest first, as {key, params}; only the last one is shown. Every entry
     // keeps its own live page item (in `slots`), so a page below keeps its state.
@@ -37,6 +35,8 @@ FocusScope {
         const below = slots.length > 0 ? slots[slots.length - 1] : null
         if (below)
             below.rememberFocus()
+        else if (home.shown)
+            rememberHomeFocus()
         const entry = { key: key, params: params ?? ({}) }
         const slot = pageSlot.createObject(pageHost, { key: key })
         if (!slot) {
@@ -90,17 +90,6 @@ FocusScope {
         slotCount = 0
         for (const s of all)
             s.destroy()
-    }
-
-    function tileTitle(key) {
-        switch (key) {
-        case "games": return qsTr("Games")
-        case "media": return qsTr("Media")
-        case "store": return qsTr("Store")
-        case "settings": return qsTr("Settings")
-        case "power": return qsTr("Power")
-        }
-        return key
     }
 
     // App items (a compositor's windows, T-130) live in `appLayer`: above home and pages, below
@@ -171,7 +160,17 @@ FocusScope {
         else if (pageOpen)
             slots[slots.length - 1].restoreFocus()
         else
-            tiles.forceActiveFocus()
+            focusHome()
+    }
+
+    // Home: the item that had focus before a page or the overlay, else Play.
+    function focusHome() {
+        const saved = homeSavedFocus
+        homeSavedFocus = null
+        if (saved && saved.enabled && saved.visible)
+            saved.forceActiveFocus()
+        else
+            heroBlock.forceActiveFocus()
     }
 
     // First boot: no profile exists, so the setup wizard replaces the picker. It stays up
@@ -201,8 +200,10 @@ FocusScope {
         routeFocus()
     }
     onSignedInChanged: {
-        if (!signedIn)
+        if (!signedIn) {
             dropAllPages()       // the next sign-in starts at home
+            homeSavedFocus = null
+        }
         routeFocus()
     }
     Component.onCompleted: {
@@ -324,67 +325,126 @@ FocusScope {
         media: mediaPage,
         store: storePage,
         appDetail: appDetailPage,
+        details: libraryDetailsPage,
         settings: settingsPage,
         power: powerPage
     })
     readonly property var pageComponents: Object.assign({}, builtinPages, extraPages)
 
-    Backdrop {
-        id: backdrop
-        objectName: "backdrop"
+    // L0: the backdrop and, on Home, the hero art of the focused Recent item. Glass blurs a
+    // crop of this layer (SectionNav.Glass).
+    Item {
+        id: l0
+        objectName: "l0"
         anchors.fill: parent
-        tint: root.signedIn && root.currentTile ? root.currentTile.accent
-                                                : (Profiles.active.avatar ?? Theme.defaultTint)
+
+        Backdrop {
+            id: backdrop
+            objectName: "backdrop"
+            anchors.fill: parent
+            tint: Profiles.active.avatar ?? Theme.defaultTint
+        }
+
+        // Hero art: two layers that cross-fade over tintMs when the focused item changes.
+        Item {
+            id: heroArt
+            objectName: "heroArt"
+            anchors.fill: parent
+            opacity: home.opacity
+            visible: opacity > 0
+            property bool showB: false
+
+            component ArtLayer: AppArt {
+                anchors.fill: parent
+                radius: 0
+                clip: false
+                Behavior on opacity { NumberAnimation { duration: Theme.tintMs; easing.type: Easing.InOutQuad } }
+            }
+            ArtLayer { id: artA; objectName: "heroArtA"; u: root.u; opacity: heroArt.showB ? 0 : 1 }
+            ArtLayer { id: artB; objectName: "heroArtB"; u: root.u; opacity: heroArt.showB ? 1 : 0 }
+
+            function show(item) {
+                const to = showB ? artA : artB
+                const known = item && item.id
+                to.appId = known ? item.id : ""
+                to.appName = known ? (item.title ?? "") : ""
+                to.picture = known && item.art ? (item.art.hero ?? item.art.tile ?? "") : ""
+                showB = !showB
+            }
+
+            // Left scrim for the text, bottom fade for the Recent row (04 §3.1).
+            Rectangle {
+                anchors { left: parent.left; top: parent.top; bottom: parent.bottom }
+                width: parent.width * 0.75
+                gradient: Gradient {
+                    orientation: Gradient.Horizontal
+                    GradientStop { position: 0.0; color: Theme.heroScrim }
+                    GradientStop { position: 1.0; color: "transparent" }
+                }
+            }
+            Rectangle {
+                anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
+                height: parent.height * 0.45
+                gradient: Gradient {
+                    GradientStop { position: 0.0; color: "transparent" }
+                    GradientStop { position: 1.0; color: Theme.artCaptionFade }
+                }
+            }
+        }
     }
 
-    // Header
-    Text {
-        id: brand
-        objectName: "brand"
-        x: root.marginX
+    // Status cluster (profile, clock) top right, on glass; shown on Home and on pages.
+    GlassPill {
+        id: statusGlass
+        objectName: "statusGlass"
+        visible: root.signedIn
+        height: Theme.buttonHeight * root.u + 2 * Theme.spaceXs * root.u
+        width: statusRow.width + 2 * Theme.spaceL * root.u
+        x: root.width - root.marginX - width
         y: root.marginY
-        text: "RuyaOS"
-        color: Theme.text
-        font.pixelSize: Theme.typeTitle * root.u
-        font.weight: Font.Bold
-    }
-    Row {
-        anchors { right: parent.right; rightMargin: root.marginX; verticalCenter: brand.verticalCenter }
-        spacing: Theme.spaceM * root.u
+        u: root.u
+        source: l0
+        sourceX: x
+        sourceY: y
 
         Row {
-            visible: root.signedIn
-            spacing: Theme.spaceS * root.u
-            anchors.verticalCenter: parent.verticalCenter
-            Rectangle {
-                width: 48 * root.u
-                height: width
-                radius: width / 2
-                color: Profiles.active.avatar ?? Theme.glass
+            id: statusRow
+            anchors.centerIn: parent
+            spacing: Theme.spaceM * root.u
+
+            Row {
+                spacing: Theme.spaceS * root.u
+                anchors.verticalCenter: parent.verticalCenter
+                Rectangle {
+                    width: 48 * root.u
+                    height: width
+                    radius: width / 2
+                    color: Profiles.active.avatar ?? Theme.glass
+                    Text {
+                        anchors.centerIn: parent
+                        text: (Profiles.active.name ?? "?").charAt(0).toUpperCase()
+                        color: Theme.text
+                        font.pixelSize: Theme.typeCaption * root.u
+                    }
+                }
                 Text {
-                    anchors.centerIn: parent
-                    text: (Profiles.active.name ?? "?").charAt(0).toUpperCase()
+                    objectName: "activeProfileName"
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: Profiles.active.name ?? ""
                     color: Theme.text
-                    font.pixelSize: Theme.typeCaption * root.u
+                    font.pixelSize: Theme.typeBody * root.u
                 }
             }
             Text {
-                objectName: "activeProfileName"
+                id: clock
                 anchors.verticalCenter: parent.verticalCenter
-                text: Profiles.active.name ?? ""
                 color: Theme.text
-                font.pixelSize: Theme.typeBody * root.u
-            }
-        }
-        Text {
-            id: clock
-            anchors.verticalCenter: parent.verticalCenter
-            color: Theme.text
-            font.pixelSize: Theme.typeHeadline * root.u
-            text: Qt.formatTime(new Date(), "HH:mm")
-            Timer {
-                interval: 10000; running: true; repeat: true
-                onTriggered: clock.text = Qt.formatTime(new Date(), "HH:mm")
+                font.pixelSize: Theme.typeHeadline * root.u
+                text: Qt.formatTime(new Date(), "HH:mm")
+                Timer {
+                    interval: 10000; running: true; repeat: true
+                    onTriggered: clock.text = Qt.formatTime(new Date(), "HH:mm")
+                }
             }
         }
     }
@@ -416,6 +476,8 @@ FocusScope {
         }
     }
 
+    // Home (04 §2, art-led): the section nav top left, the hero block of the focused Recent item
+    // and the Recent row of art cards. The hero art itself is in `l0`.
     Item {
         id: home
         objectName: "home"
@@ -430,56 +492,61 @@ FocusScope {
             Behavior on x { NumberAnimation { duration: Theme.pageMs; easing.type: Easing.OutCubic } }
         }
 
-        // Frosted shelf: blurs only the backdrop region behind it (one shared source, no
-        // second render of the scene).
-        Item {
-            id: shelf
-            anchors {
-                left: parent.left; right: parent.right
-                bottom: parent.bottom; bottomMargin: root.marginY + Theme.spaceXxl * root.u
-            }
-            height: 380 * root.u
-            clip: true
-
-            MultiEffect {
-                objectName: "shelfBlur"
-                visible: Theme.blurMax > 0     // performance tier: no blur, opaque panel below
-                x: -shelf.x
-                y: -shelf.y
-                width: root.width
-                height: root.height
-                source: backdrop
-                autoPaddingEnabled: false
-                blurEnabled: true
-                blur: 1.0
-                blurMax: Theme.blurMax
-                brightness: -0.08
-                saturation: 0.15
-            }
-            Rectangle {
-                anchors.fill: parent
-                color: Theme.blurMax > 0 ? Theme.glass : Theme.glassOpaque
-                Rectangle { anchors { left: parent.left; right: parent.right; top: parent.top } height: Math.max(1, root.u); color: Theme.glassBorder }
-                Rectangle { anchors { left: parent.left; right: parent.right; bottom: parent.bottom } height: Math.max(1, root.u); color: Theme.glassBorder }
+        // LB / RB switch sections from anywhere on Home; Back does nothing here.
+        Keys.onPressed: event => {
+            if (event.key === Qt.Key_PageDown) {
+                root.stepSection(1)
+                event.accepted = true
+            } else if (event.key === Qt.Key_PageUp) {
+                root.stepSection(-1)
+                event.accepted = true
+            } else if (event.key === Qt.Key_Escape || event.key === Qt.Key_Back) {
+                Sfx.back()
+                event.accepted = true
             }
         }
 
-        Text {
-            anchors { left: shelf.left; leftMargin: root.marginX; bottom: shelf.top; bottomMargin: Theme.spaceS * root.u }
-            text: root.currentTile ? root.currentTile.title : ""
-            color: Theme.text
-            font.pixelSize: Theme.typeDisplay * root.u
-            font.weight: Font.Light
+        SectionNav {
+            id: sectionNav
+            objectName: "sectionNav"
+            x: root.marginX
+            y: root.marginY
+            u: root.u
+            blurSource: l0
+            blurX: x
+            blurY: y
+            onActivated: key => root.openSection(key)
+            onDownRequested: heroBlock.forceActiveFocus()
         }
 
+        HeroBlock {
+            id: heroBlock
+            objectName: "heroBlock"
+            focus: true
+            u: root.u
+            width: Math.min(960 * root.u, root.width * 0.55)
+            anchors { left: parent.left; leftMargin: root.marginX; bottom: recentRow.top; bottomMargin: Theme.spaceL * root.u }
+
+            eyebrow: root.libraryEmpty ? "" : qsTr("Continue playing")
+            title: root.libraryEmpty ? qsTr("Your library is empty") : (root.heroItem.title ?? "")
+            meta: root.libraryEmpty ? "" : root.sourceLabel(root.heroItem.source ?? "")
+            primaryText: root.libraryEmpty ? qsTr("Open Store") : qsTr("Play")
+            secondaryText: root.libraryEmpty ? "" : qsTr("Details")
+
+            onPrimaryAccepted: root.playHero()
+            onSecondaryAccepted: root.openDetails()
+            onUpRequested: { Sfx.navigate(); sectionNav.forceActiveFocus() }
+            onDownRequested: if (!root.libraryEmpty) { Sfx.navigate(); recentRow.forceActiveFocus() }
+        }
+
+        // Recent: the eight last played items. Moving along it changes the hero.
         ListView {
-            id: tiles
-            objectName: "tiles"
-
-            anchors { left: shelf.left; right: shelf.right; verticalCenter: shelf.verticalCenter }
+            id: recentRow
+            objectName: "recentRow"
+            anchors { left: parent.left; right: parent.right; bottom: parent.bottom; bottomMargin: root.marginY }
             leftMargin: root.marginX
             rightMargin: root.marginX
-            height: Theme.tileHeight * root.u
+            height: 220 * root.u
             orientation: ListView.Horizontal
             spacing: Theme.spaceL * root.u
             keyNavigationWraps: false
@@ -491,40 +558,101 @@ FocusScope {
             keyNavigationEnabled: true   // ...but keys still navigate (defaults to `interactive`)
             clip: false
 
-            // Keys only: a model whose contents change (e.g. translated titles) would reset
-            // currentIndex when the language changes. The title is a binding in the delegate.
-            model: ["games", "media", "store", "settings", "power"]
+            // Item ids: a model of records would rebuild the row on every library change.
+            model: root.recentIds
 
-            delegate: Tile {
+            delegate: ArtCard {
+                id: recentCard
+
+                required property int index
                 required property string modelData
-                key: modelData
-                title: root.tileTitle(modelData)
+                readonly property var entry: Library.item(modelData)
+
+                objectName: "recentCard_" + modelData
                 u: root.u
-                width: Theme.tileWidth * root.u
-                height: tiles.height
+                width: 320 * root.u
+                y: (ListView.view.height - height) / 2
+                itemId: modelData
+                title: entry.title ?? ""
+                picture: entry.art ? (entry.art.tile ?? "") : ""
+                focused: ListView.isCurrentItem && ListView.view.activeFocus
             }
 
-            onCurrentIndexChanged: Sfx.navigate()
-            function accept() {
-                root.currentTile.pulse()
-                Sfx.select()
-                root.openPage(root.currentTile.key)
-            }
-            Keys.onReturnPressed: accept()
-            Keys.onEnterPressed: accept()
-            Keys.onPressed: event => {
-                if (event.key === Qt.Key_Escape || event.key === Qt.Key_Back) {
-                    Sfx.back()
-                    event.accepted = true
-                }
-            }
+            onCurrentIndexChanged: if (activeFocus) Sfx.navigate()
+            Keys.onReturnPressed: root.playHero()
+            Keys.onEnterPressed: root.playHero()
+            Keys.onUpPressed: { Sfx.navigate(); heroBlock.forceActiveFocus() }
         }
+    }
+
+    // What Home shows. The Recent row holds ids; the hero follows its current item.
+    readonly property var recentIds: Library.recent.map(r => r.id)
+    readonly property bool libraryEmpty: recentIds.length === 0
+    readonly property var heroItem: libraryEmpty ? ({}) : Library.item(recentIds[Math.max(0, Math.min(recentRow.currentIndex, recentIds.length - 1))])
+    onHeroItemChanged: heroArt.show(libraryEmpty ? null : heroItem)
+
+    // The home item to give focus back to after a page, the overlay or an app (set by
+    // rememberHomeFocus, used once by focusHome).
+    property Item homeSavedFocus: null
+
+    function rememberHomeFocus() {
+        const f = Window.activeFocusItem
+        let p = f
+        while (p && p !== home)
+            p = p.parent
+        homeSavedFocus = p ? f : null
+    }
+
+    function sourceLabel(source) {
+        switch (source) {
+        case "steam": return "Steam"
+        case "flatpak": return "Flatpak"
+        }
+        return source
+    }
+
+    function playHero() {
+        if (libraryEmpty) {
+            openSection("store")
+            return
+        }
+        const id = heroItem.id
+        Sfx.select()
+        Library.launch(id)
+        Notifications.show(qsTr("Starting %1…").arg(heroItem.title ?? id), "info")
+    }
+
+    function openDetails() {
+        openPage("details", { id: heroItem.id })
+    }
+
+    // Opens a section from the nav or LB/RB; "home" just brings focus back to Play.
+    function openSection(key) {
+        if (key === "home")
+            heroBlock.forceActiveFocus()
+        else
+            openPage(key)
+    }
+
+    // LB / RB: the section after (or before) the focused pill, or after Home when focus is not
+    // in the nav.
+    function stepSection(direction) {
+        if (!home.shown)
+            return
+        const inNav = sectionNav.activeFocus
+        const index = (inNav ? sectionNav.currentIndex : 0) + direction
+        if (index < 0 || index >= sectionNav.keys.length)
+            return
+        if (inNav)
+            sectionNav.currentIndex = index
+        openSection(sectionNav.keys[index])
     }
 
     Component { id: gamesPage; GamesPage {} }
     Component { id: mediaPage; MediaPage {} }
     Component { id: storePage; StorePage {} }
     Component { id: appDetailPage; AppDetailPage {} }
+    Component { id: libraryDetailsPage; LibraryDetailsPage {} }
     Component { id: settingsPage; SettingsPage {} }
     Component { id: powerPage; PowerPage {} }
 
@@ -647,12 +775,14 @@ FocusScope {
         onOpenChanged: {
             powerMode = false
             if (open) {
+                if (home.shown)
+                    root.rememberHomeFocus()
                 Power.refresh()
                 actions.currentIndex = 0
                 actions.forceActiveFocus()
             } else {
                 guideHoldTimer.stop()
-                root.focusCurrent()      // the page if one is open, else the tiles
+                root.focusCurrent()      // the page if one is open, else Home
             }
         }
 

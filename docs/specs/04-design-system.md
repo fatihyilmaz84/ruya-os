@@ -20,7 +20,7 @@ Rüya is Turkish for *dream*: a dark room lit by the thing you are about to play
 
 - **Design pixels:** every size is written at 1080p and multiplied by `u` (`height / 1080`), so the same numbers serve 720p and 4K (`shell/CLAUDE.md`).
 - **Safe area:** the outer margin is `Theme.safeArea` (overscan, default 5 % = 96 × 54 px at 1080p), never a spacing token. Nothing focusable or readable sits outside it; backdrops and scrims fill the whole screen.
-- **Home (art-led, planned T-146):** full-bleed hero art of the focused game (L0) with a left legibility scrim (`heroScrim`) and a bottom fade; top bar in the safe area: section nav (Home, Games, Media, Store, Settings icon) left, status cluster (controller battery, clock, profile) right, both glass pills; hero block left (eyebrow, title `typeHero` Bold, meta, Play + Details); the Recent row of art cards along the bottom; hint bar under it.
+- **Home (art-led, built T-146):** full-bleed hero art of the focused game (L0) with a left legibility scrim (`heroScrim`) and a bottom fade; top bar in the safe area: section nav (Home, Games, Media, Store, Settings icon) left, status cluster (controller battery, clock, profile) right, both glass pills; hero block left (eyebrow, title `typeHero` Bold, meta, Play + Details); the Recent row of art cards along the bottom; hint bar under it (proposed, not built). As built: the status cluster is profile and clock (no controller battery yet), and the Settings pill shows a gear glyph (U+2699) until an icon set is chosen.
 - **Pages** (Settings, Store, …): top bar as on Home, page title `typeTitle`, content, hint bar. The backdrop stays the last hero art, blurred and dimmed. Two-pane pages (Settings): list 520 px, gap `spaceXxl`, pane on a `radiusL` glass panel with `spaceXl` padding.
 - **Running app:** nothing of the shell is drawn except the quick menu (Guide), the volume OSD and critical toasts (§5.1).
 
@@ -34,15 +34,15 @@ Components use tokens only; `scripts/lint-tokens.ps1` fails on literal colours a
 |---|---|---|---|
 | Ground | `background` | `#05070d` | Behind everything |
 | Panel | `panel` | `#1a1d26` | Opaque cards (Guide overlay, dialogs) |
-| Glass | `glass` / `glassOpaque` / `glassBorder` | white 12 % / `#182033` at 90 % / white 20 % | Shelf, rows, panes. `glassOpaque` when `blurMax` is 0 |
+| Glass | `glass` / `glassStrong` / `glassOpaque` / `glassBorder` | white 12 % / `#182033` at 90 % / white 20 % | Shelf, rows, panes. `glassOpaque` when `blurMax` is 0 |
 | Scrim | `scrim` / `scrimOverlay` | black 82 % / 85 % | Behind PIN pad and keyboard / behind the Guide overlay |
 | Text | `text` / `textDim` | `#f2f4f8` / `#a3abbd` | Primary / secondary text |
 | Focus | `focusRing`, `focusFill`, `selectedFill` | white, white 20 %, white 10 % | §4 |
 | Keys | `keyFocusFill`, `entryKeyFocusFill`, `entryKeyActiveFill` | white 22 %, 24 %, 30 % | PIN pad, on-screen keyboard |
 | Status | `toastInfo`, `toastSuccess`, `toastWarning`, `toastError`, `errorText`, `warningText` | `#6ea8ff`, `#4cc38a`, `#ffb74d`, `#ff6b6b`, `#ff8a80`, `#ffb74d` | Toast bars, messages |
 | Danger | `dangerFill` | `#8f2d2d` | Confirm button of destructive actions only |
-| Primary (planned, T-146) | `primaryFill` / `onPrimary` | `#f2f4f8` / `#05070d` | The one main verb per screen (Play, Install, Resume) |
-| Art scrims (planned, T-146) | `heroScrim` / `artCaptionFade` | night at 75 % → 0 over 75 % width / night 85 % → 0, bottom up | Legibility over art; text on art is always `text` |
+| Primary (built, T-146) | `primaryFill` / `onPrimary` | `#f2f4f8` / `#05070d` | The one main verb per screen (Play, Install, Resume) |
+| Art scrims (built, T-146) | `heroScrim` / `artCaptionFade` | night `#05070d` at 75 % → 0 over 75 % width / night 85 % → 0, bottom up (Home bottom fade, Art card caption) | Legibility over art; text on art is always `text` |
 | Tints | `defaultTint`, `tileAccent(key)` | games `#3a5bd9` (Ruya indigo), media `#d9483a`, store `#2fa37a`, settings `#7a5bd9`, other `#5a6478` | Backdrop tint, tiles, fallback avatar |
 
 Contrast (WCAG, measured): `text` on `background` 18.3:1, on `panel` 15.3:1; `textDim` 8.7:1 on `background`, 7.3:1 on `panel`; `errorText` 8.8:1. **`textDim` only on opaque surfaces** (`background`, `panel`, `glassOpaque`, scrims): on glass over a bright tint it falls to about 2.8:1, so text on the shelf or over the backdrop is `text`. Status colours are never the only signal: a toast has a title word, a row has a message.
@@ -85,7 +85,7 @@ Turkish runs about 30 % longer than English: rows elide on the right (`Text.Elid
 
 ### 3.6 Glass and blur
 
-Glass is translucent white over a **Gaussian blur** of what is behind it (`MultiEffect`, `blurMax` per tier: High 64, Balanced 32, Performance 0). Rules: glass always comes with blur, or it turns opaque (`glassOpaque`): never translucent glass over sharp art. One shared blurred copy of L0 (downscaled), sampled by every glass panel; never a second fullscreen blur. `glassStrong` (planned, T-146: white 12 % plus a slight saturation boost) is for the top bar and the quick menu. Glass over a **running app** blurs a downscaled copy of the app surface; until that is measured on a GPU (B-003) the quick menu uses `glassOpaque` on every tier.
+Glass is translucent white over a **Gaussian blur** of what is behind it (`MultiEffect`, `blurMax` per tier: High 64, Balanced 32, Performance 0). Rules: glass always comes with blur, or it turns opaque (`glassOpaque`): never translucent glass over sharp art. One shared blurred copy of L0 (downscaled), sampled by every glass panel; never a second fullscreen blur. `glassStrong` (built, T-146: white 12 %, with a saturation boost of 0.3 on the blur) is for the top bar and the quick menu. As built, each glass pill (`GlassPill.qml`: section nav, status cluster) blurs its own quarter-resolution crop of L0 through a rounded mask, not one shared texture; both are small, never fullscreen. Glass over a **running app** blurs a downscaled copy of the app surface; until that is measured on a GPU (B-003) the quick menu uses `glassOpaque` on every tier.
 
 ## 4. Focus
 
@@ -104,14 +104,14 @@ Each entry: file, status, and the rules a change must keep. A new component gets
 
 | Component | File | Status | Rules |
 |---|---|---|---|
-| Tile | `Tile.qml` | built; replaced on Home by Section nav + Art cards (T-146) | `radiusM`, gradient from `tileAccent`, title `typeHeadline` bottom-left, card focus |
-| Art card | `ArtCard.qml` | built (T-113), reused by T-146; caption fade uses `Theme.scrim` to transparent (no own token yet) | 16:9 key art edge to edge, `radiusM`, title on `artCaptionFade`, state pills in words (Running, Installing n %), card focus; no art: app icon on a tint from the id hash |
+| Tile | `Tile.qml` | built, unused since T-146 (Home has the Section nav + Art cards); delete when nothing needs it | `radiusM`, gradient from `tileAccent`, title `typeHeadline` bottom-left, card focus |
+| Art card | `ArtCard.qml` | built (T-113), reused by T-146; caption fade uses `artCaptionFade` (T-146); Home's Recent row reuses it | 16:9 key art edge to edge, `radiusM`, title on `artCaptionFade`, state pills in words (Running, Installing n %), card focus; no art: app icon on a tint from the id hash |
 | App art | `AppArt.qml` | built (T-111) | The art fill of Store cards and the app detail page, and of Art card (T-113 wraps it, no second version): the record's picture cropped to fill, else a two-stop tint from the id hash (`Qt.hsla`, light 0.42 → dark 0.18) with the name's initial `typeHero` Light; `radiusM` |
 | Progress bar | inline in `AppDetailPage.qml` (T-111) | built | Pill track `glass` + `glassBorder`, height `spaceS`; fill `text` (white, as the volume OSD bar), width animates over `focusMs`; percentage in words beside it. Extract to `ProgressBar.qml` when a second screen needs one (updates, launch) |
 | Cover card | `CoverCard.qml` | proposed | 2:3 cover for the Library grid; falls back to the 16:9 art cropped centre |
-| Hero block | `HeroBlock.qml` | planned (T-146) | Eyebrow `typeCaption` caps, title `typeHero` Bold, meta `typeBody`, Play (primary) + Details (secondary); follows the focused card, art cross-fades over `tintMs` |
-| Buttons | `PrimaryButton.qml`, `SecondaryButton.qml` | planned (T-146) | Pill `rowHeight`; primary `primaryFill`/`onPrimary`, focused = dark gap + white ring; secondary = glass, row focus |
-| Section nav | `SectionNav.qml` | planned (T-146) | Glass pill of section pills; current = `primaryFill`, focus = ring; LB/RB switch sections |
+| Hero block | `HeroBlock.qml` | built (T-146) | Eyebrow `typeCaption` caps, title `typeHero` Bold, meta `typeBody`, Play (primary) + Details (secondary); follows the focused card, art cross-fades over `tintMs` |
+| Buttons | `PrimaryButton.qml`, `SecondaryButton.qml` | built (T-146) | Pill `rowHeight`; primary `primaryFill`/`onPrimary`, focused = dark gap + white ring; secondary = glass, row focus |
+| Section nav | `SectionNav.qml` (glass: `GlassPill.qml`) | built (T-146) | Glass pill of section pills; current = `primaryFill`, focus = ring; LB/RB switch sections |
 | Quick menu | `QuickMenu.qml` | planned (T-147) | Left panel 640 px over the live app on `glassStrong` (opaque until B-003): app header, Resume (focused first), Home, Close game, Switch to, volume, profile, Power; replaces the centred Guide card |
 | Launch splash | `LaunchSplash.qml` | planned (T-147) | Blurred hero art, title, spinner until the app's first frame; "Still starting" + Close after 20 s |
 | Profile card | `ProfileCard.qml` | built | Avatar circle in the profile colour, initial `typeHero`, name dims to `textDim` when unfocused, PIN badge |

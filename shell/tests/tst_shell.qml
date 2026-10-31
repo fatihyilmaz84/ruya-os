@@ -33,7 +33,7 @@ Item {
             keyClick(Qt.Key_Right)
             keyClick(Qt.Key_Return)
             tryCompare(Profiles, "activeProfile", "p2")
-            tryVerify(() => find("tiles").activeFocus, 2000, "home shelf takes focus after sign-in")
+            tryVerify(() => find("homePlay").activeFocus, 2000, "Play takes focus after sign-in")
         }
 
         function init() {
@@ -64,7 +64,7 @@ Item {
             typePin("1234")
             keyClick(Qt.Key_Enter)                     // keypad Enter submits
             tryCompare(Profiles, "activeProfile", "p1")
-            tryVerify(() => find("tiles").activeFocus)
+            tryVerify(() => find("homePlay").activeFocus)
         }
 
         function test_pin_with_dpad_only() {
@@ -84,7 +84,7 @@ Item {
             compare(keys.currentIndex, 11)
             keyClick(Qt.Key_Return)
             tryCompare(Profiles, "activeProfile", "p1")
-            tryVerify(() => find("tiles").activeFocus, 2000, "home takes focus after PIN sign-in")
+            tryVerify(() => find("homePlay").activeFocus, 2000, "home takes focus after PIN sign-in")
         }
 
         function test_back_edits_then_closes_pin_pad() {
@@ -121,10 +121,10 @@ Item {
             keyClick(data.key)
             tryVerify(() => find("systemActions").activeFocus, 2000, "Super opens the overlay")
             keyClick(Qt.Key_Right)                     // modal: swallowed
-            compare(find("tiles").currentIndex, 0)
+            verify(!find("homeDetails").activeFocus, "the key did not reach Home")
             keyClick(data.key)
             tryCompare(find("systemPanel"), "open", false)
-            tryVerify(() => find("tiles").activeFocus, 2000, "and closes it again, focus back on the shelf")
+            tryVerify(() => find("homePlay").activeFocus, 2000, "and closes it again, focus back on the shelf")
         }
 
         function test_menu_is_not_guide() {
@@ -132,7 +132,7 @@ Item {
             keyClick(Qt.Key_Menu)                      // the context-menu key (T-124)
             wait(200)
             compare(find("systemPanel").open, false)
-            verify(find("tiles").activeFocus)
+            verify(find("homePlay").activeFocus)
             keyClick(Qt.Key_HomePage)                  // Guide still opens it
             tryVerify(() => find("systemActions").activeFocus)
             keyClick(Qt.Key_Menu)                      // and Menu does not close it
@@ -147,9 +147,9 @@ Item {
             keyClick(Qt.Key_HomePage)
             tryVerify(() => find("systemActions").activeFocus)
             keyClick(Qt.Key_Right)                     // swallowed by the modal overlay
-            compare(find("tiles").currentIndex, 0)
+            verify(!find("homeDetails").activeFocus, "the key did not reach Home")
             keyClick(Qt.Key_Escape)                    // Back closes it
-            tryVerify(() => find("tiles").activeFocus)
+            tryVerify(() => find("homePlay").activeFocus)
 
             keyClick(Qt.Key_HomePage)
             tryVerify(() => find("systemActions").activeFocus)

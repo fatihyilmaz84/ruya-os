@@ -77,6 +77,12 @@ qt_add_qml_module(ruyashell
         qml/AppDetailPage.qml
         qml/AppArt.qml
         qml/ArtCard.qml
+        qml/HeroBlock.qml
+        qml/PrimaryButton.qml
+        qml/SecondaryButton.qml
+        qml/SectionNav.qml
+        qml/GlassPill.qml
+        qml/LibraryDetailsPage.qml
         qml/SettingsPage.qml
         qml/PowerPage.qml
         qml/PowerConfirm.qml

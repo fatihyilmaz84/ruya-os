@@ -2,7 +2,7 @@
 
 **Read this first in every session; update it last.** Rules: root `CLAUDE.md`. Roles (Opus lead, Sonnet builders): `docs/LEAD.md`. Task format: `docs/tasks/README.md`. Finished work: each task's own file (`Status: done`, Outcome starting with `Verified:`); history before T-132 in [`STATUS-done.md`](STATUS-done.md). `scripts/lint-board.ps1` (part of `dev.ps1 test`) keeps this board and the task files in step.
 
-Last updated: 2026-10-30 (Sonnet 5.5, T-152)
+Last updated: 2026-10-31 (Sonnet 5.5, T-146)
 
 ## Where we are
 
@@ -15,7 +15,7 @@ Verification legend: **host** = built and tested on Windows · **vm** = built in
 
 ## Board
 
-**NEXT → T-146**
+**NEXT → T-136**
 
 **Lead review due** after 3–5 more builder tasks (reviewed up to the lead commit "lead review 4671bb5..e863439", see `docs/LEAD-NOTES.md`). **One builder session at a time, one task per session:** two builders in one checkout mixed three tasks' work on 2026-10-28. Builders: when your task makes this true, end your reply by recommending a lead session.
 
@@ -24,7 +24,6 @@ Open work only (todo, in-progress, blocked). The order is the recommended order;
 | ID | Title | Status | Depends |
 |---|---|---|---|
 | [T-130](tasks/T-130-compositor-session.md) | **[lead]** Compositor session: `ruya-shell` replaces cage  | todo | T-150 |
-| [T-146](tasks/T-146-art-led-home.md) | Art-led Home: hero, Recent art row, section nav | todo | T-113, T-143 |
 | [T-147](tasks/T-147-fullscreen-app-flow.md) | Full-screen apps: launch splash, quick menu, return, close | todo | T-130, T-138, T-146 |
 | [T-136](tasks/T-136-bluetooth-contract-and-settings.md) | `Devices1.Bluetooth` contract, mock, Settings pane | todo | — |
 | [T-137](tasks/T-137-storage-contract-and-settings.md) | `Devices1.Storage` contract, mock, Settings → Storage | todo | — |
@@ -38,7 +37,8 @@ Follow-ups and debt for the next planner. Builders: add one line per item, `- (s
 - (T-151) `ruya-update` does not check on a schedule or reboot when idle (spec 01 §4); the update flow is only manual until then.
 - (T-151) `caller_is_admin` / `active_profile_is_admin` are copied between `ruya-store` and `ruya-update`: share them if a third admin-gated service appears.
 - (T-151) SystemPane shows the generic "update could not be started" for `forbidden` (SetChannel/Rollback); needs its own string and Turkish.
-- (T-113) `ArtCard` needs a caption-fade token (`artCaptionFade`, 04 §5); it uses `Theme.scrim` to transparent for now.
+- (T-146) `shots` was not run (Windows session locked): `01-home*.png` are unreviewed, and the GPU blur/mask of `GlassPill` is unchecked. Re-run `.\scripts\dev.ps1 shots` and review them first.
+- (T-146) design: needs an icon set (the Settings pill is a gear glyph), a controller-battery item for the status cluster, and a hint bar; `Tile.qml` is unused and can go; `Theme.hairline` is in `04` §3.3 but not in `Theme.qml`.
 - (T-113) The D-Bus `Library` client ignores `art` roles beyond `tile`; Home (T-146) will want `hero`. Nothing sets Running/Installing on cards until the session service exists.
 
 
@@ -64,6 +64,8 @@ Follow-ups and debt for the next planner. Builders: add one line per item, `- (s
 ## Session log (newest first, the latest five; older entries in `STATUS-log.md`)
 
 One entry per session, at most 4 lines: date · model · tasks · what happened · numbers · follow-ups. Detail belongs in the task Outcome.
+
+- 2026-10-31 · Sonnet 5.5 · T-146 · Art-led Home: hero art, hero block (Play/Details), Recent row, glass section nav with LB/RB, empty state; 5 new tokens, 5 components, `tst_home` (13 tests), 15 test files moved off the tiles. `test` ALL GREEN (241 QML). `shots` NOT run (session locked): screenshots unreviewed. Lead review is due.
 
 - 2026-10-30 · Sonnet 5.5 · T-152 · Standard profiles enter an admin's PIN (`PinPad` + `Profiles.verifyAdmin`) before Install of a high-risk app; note under the permissions; 4 tests, `20` reviewed. `test` and `shots` ALL GREEN (226 QML). Lead review is due after 1-2 more tasks.
 

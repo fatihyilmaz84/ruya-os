@@ -37,14 +37,13 @@ Item {
             keyClick(Qt.Key_Right)
             keyClick(Qt.Key_Return)
             tryCompare(Profiles, "activeProfile", "p2")
-            tryVerify(() => find("tiles").activeFocus, 2000, "home shelf takes focus after sign-in")
+            tryVerify(() => find("homePlay").activeFocus, 2000, "Play takes focus after sign-in")
             tryVerify(() => Power.canPowerOff, 2000, "the mock allows everything")
         }
 
+        // Power is not in the section nav (it is in the Guide overlay): open the page directly.
         function openPowerPage() {
-            for (let i = 0; i < 4; ++i)
-                keyClick(Qt.Key_Right)
-            keyClick(Qt.Key_Return)
+            tc.shell.openPage("power")
             tryCompare(tc.shell, "currentPage", "power")
             tryVerify(() => find("powerSuspend") && find("powerSuspend").activeFocus, 2000, "first row has focus")
         }
@@ -59,8 +58,7 @@ Item {
             verify(find("powerOff").activeFocus, "clamped at the last row")
             keyClick(Qt.Key_Escape)
             tryCompare(tc.shell, "currentPage", "")
-            tryVerify(() => find("tiles").activeFocus, 2000, "tiles regain focus")
-            compare(find("tiles").currentIndex, 4)
+            tryVerify(() => find("homePlay").activeFocus, 2000, "Play regains focus")
         }
 
         function test_default_focus_is_cancel() {
@@ -207,7 +205,7 @@ Item {
             keyClick(Qt.Key_Return)
             tryCompare(Power, "lastAction", "restart")
             tryVerify(() => !find("systemPanel").open, 2000, "the overlay closes after Confirm")
-            tryVerify(() => find("tiles").activeFocus, 2000, "focus returns to the shelf")
+            tryVerify(() => find("homePlay").activeFocus, 2000, "focus returns to the shelf")
         }
 
         function test_overlay_power_choices_by_menu() {
@@ -230,7 +228,7 @@ Item {
             compare(find("systemActions").currentIndex, 1)
             keyClick(Qt.Key_Escape)                    // closes the overlay
             tryVerify(() => !find("systemPanel").open)
-            tryVerify(() => find("tiles").activeFocus)
+            tryVerify(() => find("homePlay").activeFocus)
             compare(Power.actionCount, 0)
         }
 

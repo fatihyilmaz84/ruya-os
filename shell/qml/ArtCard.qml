@@ -43,7 +43,7 @@ Item {
             radius: parent.radius
             gradient: Gradient {
                 GradientStop { position: 0.0; color: "transparent" }
-                GradientStop { position: 1.0; color: Theme.scrim }
+                GradientStop { position: 1.0; color: Theme.artCaptionFade }
             }
         }
 

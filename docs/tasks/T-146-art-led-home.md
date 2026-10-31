@@ -1,6 +1,6 @@
 # T-146 — Art-led Home: hero, Recent art row, section nav
 
-Status: todo · Phase: 5 · Depends: T-113, T-143 · Area: shell · Size: M
+Status: done · Phase: 5 · Depends: T-113, T-143 · Area: shell · Size: M
 
 ## Goal
 Home looks and works like a game console: the focused game's key art fills the screen, its title and a Play button sit over it, recent games run along the bottom as art cards, and the sections (Home, Games, Media, Store, Settings) live in a glass bar at the top. Owner decision 2026-10-28 (ADR-012 amendment).
@@ -44,4 +44,10 @@ Home looks and works like a game console: the focused game's key art fills the s
 - The blur pattern is `02-shell` §3.1: one quarter-resolution `ShaderEffectSource` of the backdrop, shared by the top bar and any glass.
 
 ## Outcome
-_Filled in by the implementer. Start with a `Verified:` line._
+Verified: host (offscreen `dev.ps1 test` ALL GREEN, 241 QML tests). **Screenshots unverified:** `dev.ps1 shots` refused to run (the Windows session was locked), so `01-home.png`, `01-home-recent.png`, `01-home-performance.png`, `01-home-empty.png` and `01-home-tr.png` are written (`tst_home.qml`) but were never rendered or reviewed against `04` §8. The blur, mask and layout on a real GPU are unchecked; re-run `shots` first thing in the next session.
+
+Built: tokens `primaryFill`, `onPrimary`, `heroScrim`, `artCaptionFade` (also used by `ArtCard`) and `glassStrong`; `PrimaryButton`, `SecondaryButton`, `HeroBlock`, `SectionNav` and `GlassPill` (the glass behind the nav and the status cluster); `LibraryDetailsPage` ("Coming soon", key `details`). Home in `Shell.qml`: hero art of `Library.recent`'s current item in a new `l0` layer with the backdrop (two `AppArt` layers cross-fading over `tintMs`, left scrim, bottom fade), top bar (nav left, profile and clock right on glass), hero block, Recent row of `ArtCard`s. The five tiles and `tileTitle` are gone; `Tile.qml` stays unused. Focus: starts on Play; Down/Up as specified; PageUp/PageDown step the sections (from the focused nav pill, else from Home); `homeSavedFocus` restores the item that had focus after a page, Details or the Guide overlay. Empty library: "Your library is empty" with Open Store. Translations (tr) added; `Tile` section strings moved to `SectionNav`.
+
+Tests: new `tst_home.qml` (13 tests: focus start, arrows, hero follows Recent, Play/Accept launch, RB/LB with focus restore, nav Accept, Details, Back, overlay restore, empty, Performance tier keeps the layout). Existing tests moved off the tiles, assertions kept: every `find("tiles").activeFocus` is `find("homePlay").activeFocus`; opening Settings/Store/Games is Up, Right x n, Accept on the nav (tst_audio, network, update, profile_admin, settings, store_ui, games, i18n, motion, pages); "Back returns to the tile (`currentIndex`)" is now "the nav has focus on the same `currentKey`" (pages, settings, i18n RTL); `shelfBlur` is `glassBlur`; the header `brand` x test uses `sectionNav` x (the brand text is gone); the two "key swallowed by the overlay" checks assert Details did not get focus; the tile-pulse check builds a stand-alone `Tile`; Power is not in the nav, so `tst_power` and `tst_pages` call `Shell.openPage("power")`.
+
+Deviations: Left/Right are mirror-aware in `SectionNav` and `HeroBlock`. Each `GlassPill` blurs its own quarter-resolution crop of L0 (through a rounded mask) rather than sharing one texture. The Settings pill is a gear glyph (U+2699), the status cluster has no controller battery yet, no hint bar. LB/RB from content open the section after Home (Games), from the nav the one after the focused pill; LB at Home does nothing. `Theme.hairline` (named in `04` §3.3) does not exist in `Theme.qml`; the buttons use `Math.max(1, u)` like the rest.

@@ -41,7 +41,7 @@ Item {
             keyClick(Qt.Key_Right)
             keyClick(Qt.Key_Return)
             tryCompare(Profiles, "activeProfile", "p2")
-            tryVerify(() => find("tiles").activeFocus, 2000, "home shelf takes focus after sign-in")
+            tryVerify(() => find("homePlay").activeFocus, 2000, "Play takes focus after sign-in")
             clearToasts()
         }
 
@@ -64,9 +64,10 @@ Item {
         }
 
         function openAudioPane() {
-            for (let i = 0; i < 3; ++i)
+            keyClick(Qt.Key_Up)                          // the section nav
+            for (let i = 0; i < 4; ++i)
                 keyClick(Qt.Key_Right)
-            keyClick(Qt.Key_Return)                      // Settings tile
+            keyClick(Qt.Key_Return)                      // Settings
             tryCompare(tc.shell, "currentPage", "settings")
             const list = find("categoryList")
             tryVerify(() => list.activeFocus, 2000, "category list has focus")

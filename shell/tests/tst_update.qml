@@ -59,10 +59,11 @@ Item {
             tc.shell.forceActiveFocus()
             Profiles.switchTo(id, pin)
             tryCompare(Profiles, "activeProfile", id)
-            tryVerify(() => find("tiles").activeFocus, 2000, "home shelf takes focus after sign-in")
-            for (let i = 0; i < 3; ++i)
+            tryVerify(() => find("homePlay").activeFocus, 2000, "Play takes focus after sign-in")
+            keyClick(Qt.Key_Up)                          // the section nav
+            for (let i = 0; i < 4; ++i)
                 keyClick(Qt.Key_Right)
-            keyClick(Qt.Key_Return)                       // Settings tile
+            keyClick(Qt.Key_Return)                      // Settings
             tryCompare(tc.shell, "currentPage", "settings")
             const list = find("categoryList")
             tryVerify(() => list.activeFocus, 2000, "category list has focus")

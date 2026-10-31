@@ -52,7 +52,7 @@ Item {
             keyClick(Qt.Key_Right)
             keyClick(Qt.Key_Return)
             tryCompare(Profiles, "activeProfile", "p2")
-            tryVerify(() => find("tiles").activeFocus, 2000, "home shelf takes focus after sign-in")
+            tryVerify(() => find("homePlay").activeFocus, 2000, "Play takes focus after sign-in")
             tc.app = createTemporaryObject(appComponent, host)
             verify(tc.app)
             tc.shell.addApp(tc.app)
@@ -66,7 +66,7 @@ Item {
             keyClick(Qt.Key_Return)
             keyClick(Qt.Key_Escape)
             compare(tc.app.keys, [Qt.Key_Left, Qt.Key_Down, Qt.Key_A, Qt.Key_Return, Qt.Key_Escape])
-            verify(!find("tiles").activeFocus, "the home tiles got nothing")
+            verify(!find("homePlay").activeFocus, "Home got nothing")
         }
 
         function test_guide_blocks_app() {
@@ -117,12 +117,12 @@ Item {
 
         function test_app_removed() {
             tc.shell.removeApp(tc.app)
-            tryVerify(() => find("tiles").activeFocus, 2000, "focus goes back to the home tiles")
+            tryVerify(() => find("homePlay").activeFocus, 2000, "focus goes back to Home")
             compare(tc.shell.appOpen, false)
             tc.shell.addApp(tc.app)                      // an app that is destroyed does the same
             tryVerify(() => tc.app.activeFocus)
             tc.app.destroy()
-            tryVerify(() => find("tiles").activeFocus, 2000, "a destroyed app item is removed too")
+            tryVerify(() => find("homePlay").activeFocus, 2000, "a destroyed app item is removed too")
             compare(tc.shell.appOpen, false)
         }
 

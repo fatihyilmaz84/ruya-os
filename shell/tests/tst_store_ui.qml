@@ -39,14 +39,15 @@ Item {
             keyClick(Qt.Key_Right)
             keyClick(Qt.Key_Return)
             tryCompare(Profiles, "activeProfile", "p2")
-            tryVerify(() => find("tiles").activeFocus, 2000, "home shelf takes focus after sign-in")
+            tryVerify(() => find("homePlay").activeFocus, 2000, "Play takes focus after sign-in")
             jobsSpy.clear()
         }
 
         function openStore() {
-            keyClick(Qt.Key_Right)
-            keyClick(Qt.Key_Right)
-            compare(find("tiles").currentIndex, 2)
+            keyClick(Qt.Key_Up)                          // the section nav
+            for (let i = 0; i < 3; ++i)
+                keyClick(Qt.Key_Right)
+            compare(find("sectionNav").currentKey, "store")
             keyClick(Qt.Key_Return)
             tryCompare(tc.shell, "currentPage", "store")
             tryVerify(() => find("storeCards_featured") && find("storeCards_featured").activeFocus, 2000,

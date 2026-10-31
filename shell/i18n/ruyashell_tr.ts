@@ -387,6 +387,14 @@
     </message>
 </context>
 <context>
+    <name>LibraryDetailsPage</name>
+    <message>
+        <location filename="../qml/LibraryDetailsPage.qml" line="+8"/>
+        <source>Details</source>
+        <translation>Ayrıntılar</translation>
+    </message>
+</context>
+<context>
     <name>MediaPage</name>
     <message>
         <location filename="../qml/MediaPage.qml" line="+6"/>
@@ -849,6 +857,39 @@
     </message>
 </context>
 <context>
+    <name>SectionNav</name>
+    <message>
+        <location filename="../qml/SectionNav.qml" line="+28"/>
+        <source>Home</source>
+        <translation>Ana sayfa</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Games</source>
+        <translation>Oyunlar</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Media</source>
+        <translation>Medya</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Store</source>
+        <translation>Mağaza</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Settings</source>
+        <translation>Ayarlar</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Sections</source>
+        <translation>Bölümler</translation>
+    </message>
+</context>
+<context>
     <name>SettingsPage</name>
     <message>
         <location filename="../qml/SettingsPage.qml" line="+12"/>
@@ -1020,7 +1061,7 @@
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+282"/>
+        <location filename="../qml/Shell.qml" line="+283"/>
         <source>Could not %1.</source>
         <translation>%1 işlemi yapılamadı.</translation>
     </message>
@@ -1045,33 +1086,12 @@
         <translation>Ses çıkışı: %1</translation>
     </message>
     <message>
-        <location line="-195"/>
-        <source>Games</source>
-        <translation>Oyunlar</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Media</source>
-        <translation>Medya</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Store</source>
-        <translation>Mağaza</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Settings</source>
-        <translation>Ayarlar</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <location line="+587"/>
+        <location line="+524"/>
         <source>Power</source>
         <translation>Güç</translation>
     </message>
     <message>
-        <location line="-388"/>
+        <location line="-516"/>
         <source>Update ready. Restart to finish.</source>
         <translation>Güncelleme hazır. Bitirmek için yeniden başlat.</translation>
     </message>
@@ -1081,7 +1101,37 @@
         <translation>%1 beklenmedik şekilde durdu</translation>
     </message>
     <message>
-        <location line="+360"/>
+        <location line="+216"/>
+        <source>Continue playing</source>
+        <translation>Oynamaya devam et</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Your library is empty</source>
+        <translation>Kitaplığın boş</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Open Store</source>
+        <translation>Mağazayı aç</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Play</source>
+        <translation>Oyna</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Details</source>
+        <translation>Ayrıntılar</translation>
+    </message>
+    <message>
+        <location line="+88"/>
+        <source>Starting %1…</source>
+        <translation>%1 başlatılıyor…</translation>
+    </message>
+    <message>
+        <location line="+180"/>
         <source>System</source>
         <translation>Sistem</translation>
     </message>

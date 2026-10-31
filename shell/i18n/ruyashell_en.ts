@@ -387,6 +387,14 @@
     </message>
 </context>
 <context>
+    <name>LibraryDetailsPage</name>
+    <message>
+        <location filename="../qml/LibraryDetailsPage.qml" line="+8"/>
+        <source>Details</source>
+        <translation>Details</translation>
+    </message>
+</context>
+<context>
     <name>MediaPage</name>
     <message>
         <location filename="../qml/MediaPage.qml" line="+6"/>
@@ -851,6 +859,39 @@
     </message>
 </context>
 <context>
+    <name>SectionNav</name>
+    <message>
+        <location filename="../qml/SectionNav.qml" line="+28"/>
+        <source>Home</source>
+        <translation>Home</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Games</source>
+        <translation>Games</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Media</source>
+        <translation>Media</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Store</source>
+        <translation>Store</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Settings</source>
+        <translation>Settings</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Sections</source>
+        <translation>Sections</translation>
+    </message>
+</context>
+<context>
     <name>SettingsPage</name>
     <message>
         <location filename="../qml/SettingsPage.qml" line="+12"/>
@@ -1022,7 +1063,7 @@
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+282"/>
+        <location filename="../qml/Shell.qml" line="+283"/>
         <source>Could not %1.</source>
         <translation>Could not %1.</translation>
     </message>
@@ -1047,33 +1088,12 @@
         <translation>Audio output: %1</translation>
     </message>
     <message>
-        <location line="-195"/>
-        <source>Games</source>
-        <translation>Games</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Media</source>
-        <translation>Media</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Store</source>
-        <translation>Store</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Settings</source>
-        <translation>Settings</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <location line="+587"/>
+        <location line="+524"/>
         <source>Power</source>
         <translation>Power</translation>
     </message>
     <message>
-        <location line="-388"/>
+        <location line="-516"/>
         <source>Update ready. Restart to finish.</source>
         <translation>Update ready. Restart to finish.</translation>
     </message>
@@ -1083,7 +1103,37 @@
         <translation>%1 stopped unexpectedly</translation>
     </message>
     <message>
-        <location line="+360"/>
+        <location line="+216"/>
+        <source>Continue playing</source>
+        <translation>Continue playing</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Your library is empty</source>
+        <translation>Your library is empty</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Open Store</source>
+        <translation>Open Store</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Play</source>
+        <translation>Play</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Details</source>
+        <translation>Details</translation>
+    </message>
+    <message>
+        <location line="+88"/>
+        <source>Starting %1…</source>
+        <translation>Starting %1…</translation>
+    </message>
+    <message>
+        <location line="+180"/>
         <source>System</source>
         <translation>System</translation>
     </message>

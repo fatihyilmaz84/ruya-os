@@ -58,7 +58,7 @@ Item {
             keyClick(Qt.Key_Right)
             keyClick(Qt.Key_Return)
             tryCompare(Profiles, "activeProfile", "p2")
-            tryVerify(() => find("tiles").activeFocus, 2000, "home shelf takes focus after sign-in")
+            tryVerify(() => find("homePlay").activeFocus, 2000, "Play takes focus after sign-in")
         }
 
         function test_toast_never_steals_focus() {
@@ -96,7 +96,7 @@ Item {
             verify(Notifications.model.count <= 3)
             tryCompare(Notifications.model, "count", 0, 5000, "and each goes away by itself")
             compare(Notifications.pendingCount, 0)
-            verify(tc.hasFocus(find("tiles")))
+            verify(tc.hasFocus(find("homePlay")))
         }
 
         function test_toast_kind_falls_back_to_info() {
@@ -112,7 +112,7 @@ Item {
             keyClick(Qt.Key_VolumeUp)
             tryCompare(Audio, "volume", 55)
             tryCompare(osd, "shown", true)
-            verify(find("tiles").activeFocus, "focus does not move")
+            verify(find("homePlay").activeFocus, "focus does not move")
 
             keyClick(Qt.Key_VolumeDown)
             tryCompare(Audio, "volume", 50)
@@ -123,7 +123,7 @@ Item {
             tryCompare(Audio, "muted", false)
 
             tryCompare(osd, "shown", false, 4000, "the OSD hides by itself")
-            verify(tc.hasFocus(find("tiles")))
+            verify(tc.hasFocus(find("homePlay")))
         }
 
         function test_volume_keys_in_modal() {
@@ -146,7 +146,7 @@ Item {
             tryCompare(Audio, "volume", 50)
             verify(find("systemActions").activeFocus, "the overlay keeps focus")
             keyClick(Qt.Key_Escape)
-            tryVerify(() => find("tiles").activeFocus)
+            tryVerify(() => find("homePlay").activeFocus)
         }
 
         function test_volume_clamps() {

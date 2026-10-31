@@ -2,7 +2,7 @@ import QtQuick
 import QtTest
 import RuyaShell
 
-// Page navigation: tiles open pages, Back returns to the same tile, the Guide overlay works
+// Page navigation: the section nav opens pages, Back returns to the same pill, the Guide overlay works
 // over pages. Driven with controller keys only (arrows, Return = Accept, Escape = Back,
 // HomePage = Guide). Signs in as "Ada" (p2, no PIN).
 Item {
@@ -42,13 +42,22 @@ Item {
             keyClick(Qt.Key_Right)
             keyClick(Qt.Key_Return)
             tryCompare(Profiles, "activeProfile", "p2")
-            tryVerify(() => find("tiles").activeFocus, 2000, "home shelf takes focus after sign-in")
+            tryVerify(() => find("homePlay").activeFocus, 2000, "Play takes focus after sign-in")
         }
 
-        function openTile(index) {
-            for (let i = 0; i < index; ++i)
+        // Opens a section through the nav (Up from Play, Right to the pill, Accept). Power is
+        // not in the nav (it is in the Guide overlay), so its page is opened directly.
+        function openSection(key) {
+            if (key === "power") {
+                tc.shell.openPage("power")
+                return
+            }
+            keyClick(Qt.Key_Up)
+            const nav = find("sectionNav")
+            tryVerify(() => nav.activeFocus)
+            for (let i = 0; i < nav.keys.indexOf(key); ++i)
                 keyClick(Qt.Key_Right)
-            compare(find("tiles").currentIndex, index)
+            compare(nav.currentKey, key)
             keyClick(Qt.Key_Return)
         }
 
@@ -64,18 +73,18 @@ Item {
             signInAsAda()
         }
 
-        function test_each_tile_opens_its_page_data() {
+        function test_each_section_opens_its_page_data() {
             return [
-                { tag: "games", index: 0, focusName: "gamesGrid" },   // T-113: real page
-                { tag: "media", index: 1, focusName: "pagePlaceholder" },
-                { tag: "store", index: 2, focusName: "storeCards_featured" },   // T-111
-                { tag: "settings", index: 3, focusName: "categoryList" },   // T-103: real page
-                { tag: "power", index: 4, focusName: "powerSuspend" },      // T-107: real page
+                { tag: "games", focusName: "gamesGrid" },   // T-113: real page
+                { tag: "media", focusName: "pagePlaceholder" },
+                { tag: "store", focusName: "storeCards_featured" },   // T-111
+                { tag: "settings", focusName: "categoryList" },   // T-103: real page
+                { tag: "power", focusName: "powerSuspend" },      // T-107: real page
             ]
         }
 
-        function test_each_tile_opens_its_page(data) {
-            openTile(data.index)
+        function test_each_section_opens_its_page(data) {
+            openSection(data.tag)
             tryCompare(tc.shell, "currentPage", data.tag)
             tryVerify(() => find("page_" + data.tag) !== null, 2000, "page is loaded")
             tryVerify(() => find(data.focusName).activeFocus, 2000, "page focuses its first element")
@@ -83,19 +92,19 @@ Item {
             tryVerify(() => !find("home").visible, 2000, "home fades away")
         }
 
-        function test_back_restores_tile_focus() {
-            openTile(1)
+        function test_back_restores_nav_focus() {
+            openSection("media")
             tryVerify(() => find("pagePlaceholder") && find("pagePlaceholder").activeFocus)
             keyClick(Qt.Key_Escape)
             tryCompare(tc.shell, "currentPage", "")
-            tryVerify(() => find("tiles").activeFocus, 2000, "tiles regain focus")
-            compare(find("tiles").currentIndex, 1)
+            tryVerify(() => find("sectionNav").activeFocus, 2000, "the nav regains focus")
+            compare(find("sectionNav").currentKey, "media")
             tryVerify(() => find("home").visible)
             tryVerify(() => !find("pageHost").visible, 2000, "page fades out")
         }
 
         function test_overlay_over_page() {
-            openTile(1)
+            openSection("media")
             tryVerify(() => find("pagePlaceholder") && find("pagePlaceholder").activeFocus)
             keyClick(Qt.Key_HomePage)
             tryVerify(() => find("systemActions").activeFocus, 2000, "overlay opens over the page")
@@ -103,22 +112,22 @@ Item {
             keyClick(Qt.Key_Escape)                    // closes the overlay, not the page
             tryVerify(() => find("pagePlaceholder").activeFocus, 2000, "focus returns to the page")
             compare(tc.shell.currentPage, "media")
-            compare(find("tiles").activeFocus, false)
+            compare(find("homePlay").activeFocus, false)
         }
 
         function test_page_is_isolated() {
-            openTile(2)
+            openSection("store")
             tryVerify(() => find("storeCards_featured") && find("storeCards_featured").activeFocus)
             keyClick(Qt.Key_Right)
             keyClick(Qt.Key_Left)
             keyClick(Qt.Key_Down)
-            compare(find("tiles").currentIndex, 2)
-            compare(find("tiles").activeFocus, false)
+            compare(find("sectionNav").currentKey, "store")
+            compare(find("sectionNav").activeFocus, false)
             compare(tc.shell.currentPage, "store")
         }
 
         function test_switch_profile_from_page() {
-            openTile(1)
+            openSection("media")
             tryVerify(() => find("pagePlaceholder") && find("pagePlaceholder").activeFocus)
             keyClick(Qt.Key_HomePage)
             tryVerify(() => find("systemActions").activeFocus)
@@ -129,7 +138,7 @@ Item {
             compare(find("profileList").currentIndex, 1)     // the picker keeps Ada selected
             keyClick(Qt.Key_Return)
             tryCompare(Profiles, "activeProfile", "p2")
-            tryVerify(() => find("tiles").activeFocus, 2000, "home shelf takes focus after sign-in")
+            tryVerify(() => find("homePlay").activeFocus, 2000, "Play takes focus after sign-in")
             compare(tc.shell.currentPage, "")
             tryVerify(() => find("home").visible)
             tryVerify(() => !find("pageHost").visible, 2000, "no page after the next sign-in")
@@ -143,7 +152,7 @@ Item {
         }
 
         function test_nested_page_keeps_state() {
-            openTile(3)
+            openSection("settings")
             tryVerify(() => find("categoryList").activeFocus)
             for (let i = 0; i < 8; ++i)
                 keyClick(Qt.Key_Down)
@@ -164,22 +173,22 @@ Item {
         }
 
         function test_back_walks_the_stack() {
-            openTile(2)
+            openSection("store")
             tryVerify(() => find("storeCards_featured").activeFocus)
             openDetail({})
             keyClick(Qt.Key_Escape)
             tryCompare(tc.shell, "currentPage", "store")
             tryVerify(() => find("storeCards_featured").activeFocus)
-            compare(find("tiles").activeFocus, false)
+            compare(find("homePlay").activeFocus, false)
             keyClick(Qt.Key_Escape)
             tryCompare(tc.shell, "currentPage", "")
-            tryVerify(() => find("tiles").activeFocus, 2000, "tiles regain focus")
-            compare(find("tiles").currentIndex, 2)
+            tryVerify(() => find("sectionNav").activeFocus, 2000, "the nav regains focus")
+            compare(find("sectionNav").currentKey, "store")
             tryVerify(() => find("pageSlot_detail") === null, 2000, "popped page is destroyed")
         }
 
         function test_overlay_over_nested_page() {
-            openTile(1)
+            openSection("media")
             tryVerify(() => find("pagePlaceholder").activeFocus)
             openDetail({})
             keyClick(Qt.Key_HomePage)
@@ -190,7 +199,7 @@ Item {
         }
 
         function test_params_reach_the_page() {
-            openTile(1)
+            openSection("media")
             tryVerify(() => find("pagePlaceholder").activeFocus)
             compare(Object.keys(tc.shell.currentParams).length, 0)
             openDetail({ id: "app.x", n: 7 })
@@ -202,7 +211,7 @@ Item {
         }
 
         function test_sign_out_leaves_no_pages() {
-            openTile(1)
+            openSection("media")
             tryVerify(() => find("pagePlaceholder").activeFocus)
             openDetail({})
             compare(find("pageHost").children.length, 2)
@@ -215,7 +224,7 @@ Item {
         function test_zz_screenshots() {
             if (!shotsDir)
                 skip("set RUYA_SHOTS_DIR to save screenshots")
-            openTile(1)
+            openSection("media")
             tryVerify(() => find("pagePlaceholder") && find("pagePlaceholder").activeFocus)
             wait(800)
             grabImage(tc.shell).save(shotsDir + "/5-page-placeholder.png")

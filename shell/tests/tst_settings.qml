@@ -52,7 +52,7 @@ Item {
             keyClick(Qt.Key_Right)
             keyClick(Qt.Key_Return)
             tryCompare(Profiles, "activeProfile", "p2")
-            tryVerify(() => find("tiles").activeFocus, 2000, "home shelf takes focus after sign-in")
+            tryVerify(() => find("homePlay").activeFocus, 2000, "Play takes focus after sign-in")
         }
 
         function cleanup() {
@@ -62,9 +62,10 @@ Item {
         }
 
         function openSettings() {
-            for (let i = 0; i < 3; ++i)
+            keyClick(Qt.Key_Up)                          // the section nav
+            for (let i = 0; i < 4; ++i)
                 keyClick(Qt.Key_Right)
-            keyClick(Qt.Key_Return)
+            keyClick(Qt.Key_Return)                      // Settings
             tryCompare(tc.shell, "currentPage", "settings")
             tryVerify(() => find("categoryList") !== null && find("categoryList").activeFocus, 2000, "category list has focus")
         }
@@ -132,8 +133,8 @@ Item {
 
             keyClick(Qt.Key_Escape)                      // Back on the list closes the page
             tryCompare(tc.shell, "currentPage", "")
-            tryVerify(() => find("tiles").activeFocus, 2000, "tiles regain focus")
-            compare(find("tiles").currentIndex, 3)
+            tryVerify(() => find("sectionNav").activeFocus, 2000, "the nav regains focus")
+            compare(find("sectionNav").currentKey, "settings")
         }
 
         function test_pane_rows_navigate_and_clamp() {
@@ -149,7 +150,7 @@ Item {
             verify(find("rowOverscan").activeFocus)
             keyClick(Qt.Key_Down)                        // clamped at the last row
             verify(find("rowOverscan").activeFocus)
-            verify(find("tiles").activeFocus === false)
+            verify(find("homePlay").activeFocus === false)
         }
 
         function test_pane_remembers_last_row() {
@@ -292,7 +293,7 @@ Item {
             for (let j = 0; j < 12; ++j)
                 keyClick(Qt.Key_Left)
             compare(DeviceSettings.overscan, 0.0, "clamps at 0 %")
-            compare(find("brand").x, 0, "the header follows the setting")
+            compare(find("sectionNav").x, 0, "the header follows the setting")
 
             // Back on the shelf the blur is gone (performance tier).
             keyClick(Qt.Key_Escape)
@@ -300,7 +301,7 @@ Item {
             keyClick(Qt.Key_Escape)
             tryCompare(tc.shell, "currentPage", "")
             tryVerify(() => find("home").visible)
-            verify(!find("shelfBlur").visible, "the shelf blur is off in the performance tier")
+            verify(!find("glassBlur").visible, "the shelf blur is off in the performance tier")
         }
 
         function test_rows_follow_external_changes() {
