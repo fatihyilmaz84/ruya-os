@@ -2,45 +2,43 @@
 
 **Read this first in every session; update it last.** Rules: root `CLAUDE.md`. Roles (Opus lead, Sonnet builders): `docs/LEAD.md`. Task format: `docs/tasks/README.md`. Finished work: each task's own file (`Status: done`, Outcome starting with `Verified:`); history before T-132 in [`STATUS-done.md`](STATUS-done.md). `scripts/lint-board.ps1` (part of `dev.ps1 test`) keeps this board and the task files in step.
 
-Last updated: 2026-10-31 (Sonnet 5.5, T-146)
+Last updated: 2026-11-01 (Opus 5.5, lead review)
 
 ## Where we are
 
 - **Phase 0 (foundation): vm-verified 2026-10-22.** Image builds, boots to the shell, updates, rolls back by hand and by greenboot. Left: real hardware (B-002).
-- **Phases 1–2 (shell core, profiles, devices):** the shell has pages, motion, toasts/OSD, Settings (Profiles, Network, Audio, Display, System, About), on-screen keyboard, first-boot wizard, Turkish translation. Profiles, power, audio (`ruya-devices`, event-driven since T-133), network (`ruya-devices` over NetworkManager, T-132), the store service (`ruya-store` over `flatpak`, T-134), the update service (`ruya-update` over `bootc`, T-151; manual check, download, rollback, channel) and the Guide key are **vm-verified** over the real bus; the Store UI (T-111) is built against the mock. The compositor spike (T-123) proved ADR-002 option A (shell as Wayland compositor on KMS); T-130 (lead) makes it the session.
+- **Phases 1–2 (shell core, profiles, devices):** pages, motion, toasts/OSD, Settings (Profiles, Network, Audio, Display, System, About), on-screen keyboard, first-boot wizard, Turkish. **vm-verified over the real bus:** profiles, power, audio and network (`ruya-devices`), store (`ruya-store`), updates (`ruya-update`, manual only), the Guide key. Against the mock: Store UI, Games page, art-led Home (T-111, T-113, T-146). ADR-002 option A proven (T-123); T-130 (lead) makes the shell the session.
 - **Not started:** `ruya-session` in the image (T-139 built the core, dev mode only; unit, policy and the real spawner follow T-130), Bluetooth, USB storage, InputPlumber (B-006), installer. No app has ever been launched from the shell.
-- **Host:** Windows plus a Fedora 44 WSL distribution (image builds) and QEMU/WHPX (boot tests): `docs/dev-setup.md`. **Image and VM work works again since 2026-10-27** (fresh WSL distro, `.wslconfig` `memory=8GB`; image `0.0.13-lead` built, made into a disk and booted `RUYA_BOOT_OK`, T-131 VM-verified). If `ext4` errors return, see the WSL note under Open owner decisions.
+- **Host:** Windows plus a Fedora 44 WSL distribution (image builds) and QEMU/WHPX (boot tests): `docs/dev-setup.md`. If WSL `ext4` errors return, see Open owner decisions.
 
 Verification legend: **host** = built and tested on Windows · **vm** = built into the image and verified booted in QEMU · **unverified** = written, not run · **hw** = real hardware.
 
 ## Board
 
-**NEXT → T-136**
+**NEXT → T-153**
 
-**Lead review due** after 3–5 more builder tasks (reviewed up to the lead commit "lead review 4671bb5..e863439", see `docs/LEAD-NOTES.md`). **One builder session at a time, one task per session:** two builders in one checkout mixed three tasks' work on 2026-10-28. Builders: when your task makes this true, end your reply by recommending a lead session.
+**Lead review due** after 3–5 more builder tasks (reviewed up to the lead commit "lead review 300245c..e19899f", see `docs/LEAD-NOTES.md`). **One builder session at a time, one task per session:** two builders in one checkout mixed three tasks' work on 2026-10-28. Builders: when your task makes this true, end your reply by recommending a lead session.
 
 Open work only (todo, in-progress, blocked). The order is the recommended order; when NEXT is blocked take the first `todo` whose dependencies are `done` (a task's status is in its file header). `[lead]` tasks are skipped by builders. If nothing qualifies, **stop and ask for a planning session** (`docs/tasks/PLANNING.md`).
 
 | ID | Title | Status | Depends |
 |---|---|---|---|
 | [T-130](tasks/T-130-compositor-session.md) | **[lead]** Compositor session: `ruya-shell` replaces cage  | todo | T-150 |
-| [T-147](tasks/T-147-fullscreen-app-flow.md) | Full-screen apps: launch splash, quick menu, return, close | todo | T-130, T-138, T-146 |
-| [T-136](tasks/T-136-bluetooth-contract-and-settings.md) | `Devices1.Bluetooth` contract, mock, Settings pane | todo | — |
-| [T-137](tasks/T-137-storage-contract-and-settings.md) | `Devices1.Storage` contract, mock, Settings → Storage | todo | — |
+| [T-153](tasks/T-153-update-review-fixes.md) | `ruya-update` review fixes: races, empty tag, corrupt channel file | todo | T-151 |
+| [T-156](tasks/T-156-update-high-risk-pin.md) | Admin PIN before an app update that adds a high-risk permission | todo | T-152 |
+| [T-154](tasks/T-154-update-schedule-and-idle-reboot.md) | `ruya-update`: daily check, automatic download, reboot when idle | todo | T-153 |
+| [T-155](tasks/T-155-card-accept-pulse.md) | Accept pulse on art cards; remove the unused `Tile` | todo | T-146 |
 | [T-144](tasks/T-144-contrast-and-accessible-names.md) | Design review: contrast over the backdrop, accessible names | todo | T-143 |
 | [T-145](tasks/T-145-bundle-inter.md) | Bundle the Inter typeface | todo | T-142 |
+| [T-136](tasks/T-136-bluetooth-contract-and-settings.md) | `Devices1.Bluetooth` contract, mock, Settings pane | todo | — |
+| [T-137](tasks/T-137-storage-contract-and-settings.md) | `Devices1.Storage` contract, mock, Settings → Storage | todo | — |
+| [T-147](tasks/T-147-fullscreen-app-flow.md) | Full-screen apps: launch splash, quick menu, return, close | todo | T-130, T-138, T-146 |
 
 ## Inbox
 
 Follow-ups and debt for the next planner. Builders: add one line per item, `- (source) what, and why it matters`; write a task file only if your own task needs one. Run a planner at 5+ items.
 
-- (T-151) `ruya-update` does not check on a schedule or reboot when idle (spec 01 §4); the update flow is only manual until then.
-- (T-151) `caller_is_admin` / `active_profile_is_admin` are copied between `ruya-store` and `ruya-update`: share them if a third admin-gated service appears.
-- (T-151) SystemPane shows the generic "update could not be started" for `forbidden` (SetChannel/Rollback); needs its own string and Turkish.
-- (T-146) `shots` was not run (Windows session locked): `01-home*.png` are unreviewed, and the GPU blur/mask of `GlassPill` is unchecked. Re-run `.\scripts\dev.ps1 shots` and review them first.
-- (T-146) design: needs an icon set (the Settings pill is a gear glyph), a controller-battery item for the status cluster, and a hint bar; `Tile.qml` is unused and can go; `Theme.hairline` is in `04` §3.3 but not in `Theme.qml`.
-- (T-113) The D-Bus `Library` client ignores `art` roles beyond `tile`; Home (T-146) will want `hero`. Nothing sets Running/Installing on cards until the session service exists.
-
+(empty)
 
 ## Blocked (need something this host doesn't have)
 
@@ -58,12 +56,17 @@ Follow-ups and debt for the next planner. Builders: add one line per item, `- (s
 - **Real hardware (B-002):** is a spare low-tier x86-64 PC (Intel/AMD iGPU) available for the dev ISO? It unblocks the Phase 0 hardware item, the first KPIs and the ADR-002 performance check. Recommendation: yes, a test machine only.
 - **One admin or several?** Overview §2 says one admin, `03` §1.1 says one or more. The service supports several; the UI offers Standard and Guest. Recommendation: one admin in the UI for the MVP (as the overview says); revisit after the first user test. Not blocking.
 - **Turkish wording review** (`shell/i18n/ruyashell_tr.ts`, written by AI): a native review before the first release. Not blocking; best done after the Settings panes settle (T-135..T-137).
+- **Icon set (new, 2026-11-01; owner-level by `04` §8):** Home's Settings pill is a gear character that Windows draws as a colour emoji, and the planned controller-battery item and hint bar (A/B glyphs) need icons too. Options: Material Symbols Rounded (Apache-2.0, variable font), Lucide (ISC, line icons), Phosphor (MIT). Recommendation: **Material Symbols Rounded**, a subset bundled as a font like Inter; button glyphs drawn as letters in circles. Blocks: the gear, the battery item, the hint bar.
 - **libdvdcss / AACS:** not included; needs an explicit owner decision.
 - Decided (for the record): design system ADR-012 with Inter bundled, an art-led Home and full-screen apps (owner, 2026-10-28); ADR-002 option A (owner, 2026-10-23); repo public on GitHub (2026-10-23); the lead pushes `main` at the end of every lead session after `scripts\scan-secrets.ps1` passes, builders never push (owner, 2026-10-28).
 
 ## Session log (newest first, the latest five; older entries in `STATUS-log.md`)
 
 One entry per session, at most 4 lines: date · model · tasks · what happened · numbers · follow-ups. Detail belongs in the task Outcome.
+
+- 2026-11-01 · Opus 5.5 · Lead (review `300245c..e19899f`: T-149, T-151, T-113, T-152, T-146) · `test` ALL GREEN (242 QML + 20 skips, 207 Rust, 63 s); `shots` ALL GREEN (55, 36 s; every Home, Games and Store-PIN screen reviewed). CI green at `300245c`. No VM run (T-151's `0.0.21-t151` covers the only packaged change).
+  Findings 8 fixed / 4 filed: art cards were 2.2:1 not 16:9, focused Home pill showed no ring, stray letter mid-hero, hero art missed its first value, vacuous ArtCard test, `Theme.hairline` added (`hairlineAt(u)`), 04 glass rows, stale comments; `ruya-update` rollback race, empty tag, fatal channel file → T-153, update adding a high-risk permission → T-156.
+  Planned T-153..T-156; Inbox emptied (2 dropped: art-roles line was wrong; user-installed Flatpak games are outside the contract). Escalated: icon set. Process: parallel review subagents (`LEAD.md` 3); geometry criteria need a property test (`PLANNING.md` Lessons).
 
 - 2026-10-31 · Sonnet 5.5 · T-146 · Art-led Home: hero art, hero block (Play/Details), Recent row, glass section nav with LB/RB, empty state; 5 new tokens, 5 components, `tst_home` (13 tests), 15 test files moved off the tiles. `test` ALL GREEN (241 QML). `shots` NOT run (session locked): screenshots unreviewed. Lead review is due.
 
@@ -73,19 +76,3 @@ One entry per session, at most 4 lines: date · model · tasks · what happened 
 
 - 2026-10-30 · Sonnet 5.5 · T-151 · `ruya-update` (bootc) + `forbidden` in XML/mock/test, unit, policy, greenboot check. `test` ALL GREEN (210 QML, 25 new Rust). VM `0.0.20`->`0.0.21-t151`: `vm-update-check.sh` ALL PASSED, restart from Settings booted the new version, exposure 4.8 OK.
   Found in the VM: bootc needs `CAP_SYS_PTRACE` and no `RestrictSUIDSGID`. Progress is 0 then 100. Lead review is due after 2-3 more tasks.
-
-- 2026-10-30 · Sonnet 5.5 · T-149 · Flatpak items are `game` when the exported desktop entry's `[Desktop Entry]` `Categories` has `Game` (`AppLister::desktop_entry`, pure `is_game`); demo list has a game and an app. `rust` and `test` ALL GREEN (209 QML). D-Bus serving unverified.
-
-- 2026-10-30 · Opus 5.5 · Lead (review `4671bb5..e863439`: T-150, T-135, T-148, T-111) · `test` ALL GREEN (209 QML + 15 screenshot skips, 178 Rust); `shots` ALL GREEN (224; `17`, `18`, `19`, `25` reviewed, `19` now caught after the fade). CI green at `4671bb5`. No VM run (T-148's `0.0.19-t148` covers every service change).
-  Findings 2 fixed / 0 filed: Store progress fill white like the volume OSD (was `toastInfo`); `AppArt` and the progress bar adopted in `04` §5. Decided: admin-only service calls check the caller like `AddRemote` (Update1 header, T-151).
-  Planned T-151 (`ruya-update` over `bootc`, VM) and T-152 (admin PIN for high-risk installs). Inbox: AppArt decided; genre field dropped until Home (T-146) needs categories.
-  Process (owner asked; `LEAD.md` 6b): `shots` runs only tests that save a screenshot (240 s → 23 s) and refuses a locked screen; unbounded key loops (the T-111 "hang") (8) bounded in 5 test files + `lint-tests.ps1` (dev.ps1, CI); PS 5.1 commit-message pitfall in `CLAUDE.md`.
-
-- 2026-10-29 · Sonnet 5.5 · T-111 · Store page (toolbar, four rows, search results, controller filter via the service) and `appDetail` page (badges, plain-language permissions with high-risk flags, install/update/uninstall with progress and inline errors); `Page.openRequested`; D-Bus client replays early job signals (unverified). `test` ALL GREEN; `shots` green once, `17`/`18` reviewed, `19` caught mid-fade (re-run hung on this desktop).
-  Lead review is due (T-150, T-135, T-148, T-111).
-- 2026-10-29 · Sonnet 5.5 · T-148 · `Search(query, options)` (controller, limit) and `CatalogChanged`; service `sync`, shell patches installed flags without re-searching, `Store.controllerFilter`. `test` ALL GREEN (198 QML); VM `0.0.19-t148` `RUYA_BOOT_OK`, `vm-store-check.sh` all passed (127 of 3419 apps are gamepad).
-  Lead review is due.
-- 2026-10-29 · Sonnet 5.5 · T-135 · `Update1` contract, `Update` singleton + mock + unverified D-Bus client, Settings -> System Updates group (check, download progress, restart, admin rollback and channel), staged toast. Added `Profiles1.VerifyAdmin` (XML, Rust + test, mock, client) to gate the rollback. `test` ALL GREEN (195 QML), `shots` ALL GREEN, `25` reviewed.
-  Scoped two `powerCancel` lookups in `tst_profile_admin` (a second `PowerConfirm` made the name ambiguous). No `ruya-update` yet. Lead review is due after T-148.
-- 2026-10-29 · Sonnet 5.5 · T-150 · `KeyRouter` (C++ event filter, one `isGuideKey`) and the shell's `appLayer` with `addApp/focusApp/removeApp`; stand-in app tests. `test` ALL GREEN (187 QML). `shots` unjudged: timer tests fail on this desktop session, also on the baseline.
-  Unblocks T-130 (lead). Lead review is due after T-148.

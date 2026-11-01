@@ -36,7 +36,7 @@ The lead follows the root `CLAUDE.md` (rules, commit format, definition of done)
 - Write the numbers down (test counts, boot result, timings). They go into the log entry.
 
 ### 3. Review each builder commit in the range
-For each task commit, read the task file (Scope, criteria, Outcome) and the diff. Check:
+For each task commit, read the task file (Scope, criteria, Outcome) and the diff. With four or more commits, hand the reading to parallel read-only subagents (one per area, each given this checklist and its commits), then verify every finding in the code before acting on it. Check:
 - [ ] **Scope:** it did what the task asked, nothing silently extra, and it isn't missing a criterion.
 - [ ] **Tests:** each acceptance criterion has a test that would fail without the feature. No assertion weakened, no `skip()`, no deleted test. Focus asserted after navigation.
 - [ ] **Patterns:** follows the reference implementations and area `CLAUDE.md` rules (Theme tokens, focus rules, backend pattern, pure Rust core, contract-first).

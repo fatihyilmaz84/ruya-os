@@ -34,4 +34,5 @@ Any of these is true (builders check at session start and stop if they find noth
 - **Don't freeze contracts in task text.** Write "extend the contract if needed" (contracts are drafts until release).
 - **Service-facing work gets a VM criterion** naming the check (`smoke-test.ps1`, a `scripts/vm-*` script, a VM screenshot): a task that changes a service, a unit, the image or a D-Bus client is not verified by mocks. Pure mock-only UI tasks don't need one.
 - **Prefer visible-behaviour criteria** over signatures: state what the user sees, leave the signatures to the builder.
+- **Geometry gets a property test** with the size a real caller sets (aspect ratio, ring outside a filled pill): two builders' screenshot reviews passed 2.2:1 "16:9" cards and an invisible focus ring (T-113, T-146).
 - **Host-only is a phase, not a plan.** When the VM is unavailable, keep real-service tasks queued behind the blocker and fill the gap with contract + mock + UI tasks, but each contract task should name its service task so the mock can't drift unnoticed.

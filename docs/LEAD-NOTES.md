@@ -4,28 +4,28 @@ The procedure is in [`LEAD.md`](LEAD.md). **Rewrite this file at the end of ever
 
 ## Review range
 
-- **Last reviewed commit: the lead commit of 2026-10-30 "lead review 4671bb5..e863439"** (`git log --grep="lead review 4671bb5"`). Everything up to T-111 is reviewed.
+- **Last reviewed commit: the lead commit of 2026-11-01 "lead review 300245c..e19899f"** (`git log --grep="lead review 300245c"`). Everything up to T-146 is reviewed.
 - Next review: `git log --oneline <that commit>..HEAD`, after 3–5 builder tasks.
-- Last VM verification: image `0.0.19-t148` (builder, 2026-10-29, at `668b612`): `RUYA_BOOT_OK`, `vm-store-check.sh` all passed. It contains T-135's `Profiles1.VerifyAdmin`, but nothing called it over the bus; T-111's early-job-signal replay in `DBusStoreBackend` is also unverified. `ruya-session`, `ruya-library` and `ruya-update` are not in the image.
+- Last VM verification: image `0.0.21-t151` (builder, 2026-10-30): `RUYA_BOOT_OK`, `vm-update-check.sh` ALL PASSED. `ruya-session` and `ruya-library` are not in the image; the shell's Library and Session D-Bus clients have never run.
 
 ## Concerns (ranked)
 
-1. **T-130 is still not started and is the critical path.** T-150 (host half) is done and reviewed: `KeyRouter` takes Guide keys only while `appItem->hasActiveFocus()`. In T-130, give `focusApp` the item that really holds focus (the `ShellSurfaceItem` itself, or make the wrapper a `FocusScope`), or Guide will reach the app. Run T-130 as its **own lead session** (several image builds, the update drill and the broken-compositor rollback): it did not fit after this review. Still no app has ever been launched from the shell.
-2. **After T-130, write the reserved VM tasks:** `ruya-session` in the image (unit, policy, real spawner, Profiles1 fetch, `vm-session-check.sh`); `ruya-library` in the image (decide where it runs: per-profile user service, or `ruya-session` hands it the active profile's home; ADR-004); then the scheduled-check/idle-reboot follow-up of T-151, BlueZ (T-136), udisks2 (T-137).
-3. **`ruya-session` real spawner open questions** (T-139 Outcome): `systemd-run --user --machine=<user>@.host` from the service's user; per-profile Wayland socket location; reading exit code and `signaled` from the unit.
-4. **Admin authorization, decided 2026-10-30:** services refuse admin-only calls unless the caller is root or the shell while the active profile is an admin (as `ruya-store`'s `AddRemote`); PINs are checked by the shell with `Profiles1.VerifyAdmin`. T-151 applies it to `Update1`. When a third service needs it, move the check into a shared crate.
-5. **Host storage integrity.** C: showed a zeroed cargo file and WSL `ext4` errors; `make-disk` outputs came out truncated while WSL restarted. Always `qemu-img check` a fresh disk. Owner asked for a memory and SMART check.
-6. **Mock-only surface:** Bluetooth (T-136), Storage (T-137), Session client (T-138), Library client (T-113); Update gets its service in T-151. Don't add more contract+mock tasks until a real service catches up.
-7. **Design system:** T-144 (contrast, weights) and T-145 (Inter) wait; the Store detail page's description text (`textDim` over bright backdrop blobs) is a T-144 case. Canvas boards not compared with the spec yet; `AppArt` and the progress bar were added to `04` §5 this session, so the canvas "system components" board is stale on those two.
-8. **Store cards** look their app up with `Store.catalogue.find()` per delegate (`StorePage.qml`): fine while ListViews create only visible delegates; watch it if "Show all apps" feels slow on hardware.
+1. **T-130 is still not started and is the critical path** (third review in a row). Run it as its **own lead session** (several image builds, the update drill, the broken-compositor rollback). `KeyRouter` takes Guide keys only while `appItem->hasActiveFocus()`: give `focusApp` the item that really holds focus (the `ShellSurfaceItem`, or make the wrapper a `FocusScope`). No app has ever been launched from the shell, and the whole Home/Games surface is mock-only.
+2. **After T-130, write the reserved VM tasks:** `ruya-session` in the image (unit, policy, real spawner, Profiles1 fetch, `vm-session-check.sh`); `ruya-library` in the image (per-profile user service, or `ruya-session` hands it the profile's home: ADR-004; a system service reading every profile's home is a privacy problem); then BlueZ (T-136), udisks2 (T-137).
+3. **`ruya-update` robustness** (T-153): until it lands, a bad `/var/lib/ruya-update/channel` stops the service and fails the required greenboot check on every boot, also after a rollback. Don't ship an image to hardware (B-002) before T-153.
+4. **`ruya-session` real spawner open questions** (T-139 Outcome): `systemd-run --user --machine=<user>@.host`; per-profile Wayland socket location; exit code and `signaled` from the unit.
+5. **Admin authorization** (decided 2026-10-30): services refuse admin-only calls unless the caller is root or the shell with an admin active; the shell checks PINs with `Profiles1.VerifyAdmin`. `caller_is_admin` is copied in `ruya-store` and `ruya-update`; share it when a third service needs it. T-156 closes the update-adds-permission hole.
+6. **Builders miss geometry in screenshots** (T-113/T-146 cards, nav ring). Lesson added to `PLANNING.md`; check new components' sizes yourself in the next `shots` review.
+7. **Host storage integrity.** C: showed a zeroed cargo file and WSL `ext4` errors. Always `qemu-img check` a fresh disk. Owner asked for a memory and SMART check.
+8. **Design system:** icon set escalated to the owner (blocks the gear, the battery item, the hint bar). T-144 (contrast) and T-145 (Inter) wait. Canvas boards are stale on `AppArt`, the progress bar, `GlassPill`, `HeroBlock`, the buttons and the section nav.
 
 ## First things the next lead should do
 
 1. `git status` clean, no builder session running, no `build.sh` in WSL (distro `FedoraLinux-44`).
 2. CI of this push (`https://api.github.com/repos/fatihyilmaz84/ruya-os/actions/runs?per_page=4`; no `gh` here; `curl` works from Git Bash).
 3. If the owner starts a lead session for T-130: claim it and do it (concern 1). Otherwise steps 1–3 of `LEAD.md`.
-4. Size budgets: root `CLAUDE.md` 10.9 KB and `shell/CLAUDE.md` 7.3 KB sit at budget; trim before adding anything.
-5. Step 6b (retrospective): check that builders' `shots` now finish (screenshot-only, ~25 s); if a screenshot test fails alone but passed in the old full run, it leaned on an earlier test function: fix the test.
+4. If the owner answered the icon-set question: record the ADR, add the font like Inter (T-145 pattern), write the battery-item and hint-bar task.
+5. Size budgets: root `CLAUDE.md` 10.9 KB and `shell/CLAUDE.md` 7.3 KB sit at budget; STATUS 10.5 KB. Trim before adding anything.
 
 ## Quality signals (one row per lead session)
 
@@ -45,3 +45,4 @@ The procedure is in [`LEAD.md`](LEAD.md). **Rewrite this file at the end of ever
 | 2026-10-28 | 070e312..8e7a7fc | T-139, T-141, T-142 | 2 fixed (SIGTERM-after-Stop reported `killed`, spec mapping text) / 1 filed (weights → T-144, with a lint) | 172 + 13 skipped QML, 143 Rust; shots 185 | not run (no image change) |
 | 2026-10-29 | 124ee1d..0fbe215 | T-143, T-140, T-112 | 3 fixed (`dev.ps1` picked devkitPro's cmake, `scan-secrets.ps1` its brace-expanding git: both now prefer the real tool; badge radius text) / 2 filed (Flatpak games all `app` → T-149, catalogue re-read → T-148) + T-130 split (host half T-150) | 178 + 13 skipped QML, 172 Rust; shots 191 | `0.0.18-lead` ✅ boot, store check 41/41 |
 | 2026-10-30 | 4671bb5..e863439 | T-150, T-135, T-148, T-111 | 2 fixed (progress fill colour, `AppArt` + progress bar into `04` §5) / 0 filed; admin-check decision; T-151, T-152 planned. Process: `shots` screenshot-only (240 → 23 s), locked-screen refusal, bounded key loops + `lint-tests.ps1`, retrospective step 6b | 209 + 15 skipped QML, 178 Rust; shots 224, then 46 (screenshot-only) | not run (builder's `0.0.19-t148` covers the service changes) |
+| 2026-11-01 | 300245c..e19899f | T-149, T-151, T-113, T-152, T-146 | 8 fixed (16:9 cards, Home pill ring, hero letter, first hero art, ArtCard test, `Theme.hairline`, 04 glass rows, comments) / 4 filed (T-153: rollback race, empty tag, fatal channel file; T-156: update adds high-risk permission). Process: parallel review subagents, geometry lesson | 242 + 20 skipped QML, 207 Rust (63 s); shots 55 (36 s) | not run (`0.0.21-t151` covers it) |

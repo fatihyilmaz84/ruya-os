@@ -2,6 +2,25 @@
 
 Older entries of the `docs/STATUS.md` session log, newest first. STATUS keeps only the latest five; the lead moves the rest here at each review. Nobody needs to read this file to start a task.
 
+- 2026-10-30 · Sonnet 5.5 · T-149 · Flatpak items are `game` when the exported desktop entry's `[Desktop Entry]` `Categories` has `Game` (`AppLister::desktop_entry`, pure `is_game`); demo list has a game and an app. `rust` and `test` ALL GREEN (209 QML). D-Bus serving unverified.
+
+- 2026-10-30 · Opus 5.5 · Lead (review `4671bb5..e863439`: T-150, T-135, T-148, T-111) · `test` ALL GREEN (209 QML + 15 screenshot skips, 178 Rust); `shots` ALL GREEN (224; `17`, `18`, `19`, `25` reviewed, `19` now caught after the fade). CI green at `4671bb5`. No VM run (T-148's `0.0.19-t148` covers every service change).
+  Findings 2 fixed / 0 filed: Store progress fill white like the volume OSD (was `toastInfo`); `AppArt` and the progress bar adopted in `04` §5. Decided: admin-only service calls check the caller like `AddRemote` (Update1 header, T-151).
+  Planned T-151 (`ruya-update` over `bootc`, VM) and T-152 (admin PIN for high-risk installs). Inbox: AppArt decided; genre field dropped until Home (T-146) needs categories.
+  Process (owner asked; `LEAD.md` 6b): `shots` runs only tests that save a screenshot (240 s → 23 s) and refuses a locked screen; unbounded key loops (the T-111 "hang") (8) bounded in 5 test files + `lint-tests.ps1` (dev.ps1, CI); PS 5.1 commit-message pitfall in `CLAUDE.md`.
+
+- 2026-10-29 · Sonnet 5.5 · T-111 · Store page (toolbar, four rows, search results, controller filter via the service) and `appDetail` page (badges, plain-language permissions with high-risk flags, install/update/uninstall with progress and inline errors); `Page.openRequested`; D-Bus client replays early job signals (unverified). `test` ALL GREEN; `shots` green once, `17`/`18` reviewed, `19` caught mid-fade (re-run hung on this desktop).
+  Lead review is due (T-150, T-135, T-148, T-111).
+
+- 2026-10-29 · Sonnet 5.5 · T-148 · `Search(query, options)` (controller, limit) and `CatalogChanged`; service `sync`, shell patches installed flags without re-searching, `Store.controllerFilter`. `test` ALL GREEN (198 QML); VM `0.0.19-t148` `RUYA_BOOT_OK`, `vm-store-check.sh` all passed (127 of 3419 apps are gamepad).
+  Lead review is due.
+
+- 2026-10-29 · Sonnet 5.5 · T-135 · `Update1` contract, `Update` singleton + mock + unverified D-Bus client, Settings -> System Updates group (check, download progress, restart, admin rollback and channel), staged toast. Added `Profiles1.VerifyAdmin` (XML, Rust + test, mock, client) to gate the rollback. `test` ALL GREEN (195 QML), `shots` ALL GREEN, `25` reviewed.
+  Scoped two `powerCancel` lookups in `tst_profile_admin` (a second `PowerConfirm` made the name ambiguous). No `ruya-update` yet. Lead review is due after T-148.
+
+- 2026-10-29 · Sonnet 5.5 · T-150 · `KeyRouter` (C++ event filter, one `isGuideKey`) and the shell's `appLayer` with `addApp/focusApp/removeApp`; stand-in app tests. `test` ALL GREEN (187 QML). `shots` unjudged: timer tests fail on this desktop session, also on the baseline.
+  Unblocks T-130 (lead). Lead review is due after T-148.
+
 - 2026-10-29 · Opus 5.5 · Lead (review `124ee1d..0fbe215`: T-143, T-140, T-112) · `test` ALL GREEN (178 QML + 13 skipped, 172 Rust); `shots` ALL GREEN (191, every T-143 screen reviewed); VM `0.0.18-lead` `RUYA_BOOT_OK`, `vm-store-check.sh` 41/41, security 3.3. CI green at `124ee1d`.
   Findings 3 fixed / 2 filed: devkitPro's MSYS2 first on PATH broke `dev.ps1` (its cmake: tests ran stale) and `scan-secrets.ps1` (its git mangled `{n}`): both prefer the real tool; badge radius text; Flatpak games all `app` → T-149, catalogue re-read → T-148. T-130 split: host half T-150 (builder) is NEXT.
 
