@@ -304,7 +304,7 @@ FocusScope {
             height: Theme.rowHeight * entry.u
             radius: Theme.radiusM * entry.u
             color: Theme.glass
-            border.width: Math.max(1, entry.u)
+            border.width: Theme.hairlineAt(entry.u)
             border.color: Theme.glassBorder
             clip: true
 
@@ -379,7 +379,7 @@ FocusScope {
                                 radius: Theme.radiusS * entry.u
                                 color: keyItem.focused ? Theme.entryKeyFocusFill
                                      : keyItem.active ? Theme.entryKeyActiveFill : Theme.glass
-                                border.width: keyItem.focused ? Theme.focusRingWidth * entry.u : Math.max(1, entry.u)
+                                border.width: keyItem.focused ? Theme.focusRingWidth * entry.u : Theme.hairlineAt(entry.u)
                                 border.color: keyItem.focused ? Theme.focusRing : Theme.glassBorder
                                 opacity: keyItem.dimmed ? 0.4 : 1
 

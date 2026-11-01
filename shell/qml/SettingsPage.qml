@@ -79,7 +79,7 @@ Page {
             height: 72 * page.u
             radius: height / 2
             color: focused ? Theme.focusFill : selected ? Theme.selectedFill : "transparent"
-            border.width: focused ? Theme.focusRingWidth * page.u : selected ? Math.max(1, page.u) : 0
+            border.width: focused ? Theme.focusRingWidth * page.u : selected ? Theme.hairlineAt(page.u) : 0
             border.color: focused ? Theme.focusRing : Theme.glassBorder
             Behavior on color { ColorAnimation { duration: Theme.focusMs } }
 

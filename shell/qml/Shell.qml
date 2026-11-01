@@ -140,7 +140,7 @@ FocusScope {
         if (!focusedApp || focusedApp === record.item)
             focusedApp = apps.length > 0 ? apps[apps.length - 1].item : null
         if (!systemPanel.open)
-            focusCurrent()              // the next app, else the page or the home tiles
+            focusCurrent()              // the next app, else the page or Home
     }
 
     Component {
@@ -151,7 +151,7 @@ FocusScope {
         }
     }
 
-    // Gives focus to whatever is on top: the focused app, else the open page, else the home tiles.
+    // Gives focus to whatever is on top: the focused app, else the open page, else Home.
     function focusCurrent() {
         if (!signedIn)
             return
@@ -212,6 +212,7 @@ FocusScope {
             setupActive = true
             setup.start()
         }
+        heroArt.show(libraryEmpty ? null : heroItem)   // the change handler misses a first value
         routeFocus()
     }
 
@@ -358,6 +359,7 @@ FocusScope {
                 anchors.fill: parent
                 radius: 0
                 clip: false
+                monogram: false
                 Behavior on opacity { NumberAnimation { duration: Theme.tintMs; easing.type: Easing.InOutQuad } }
             }
             ArtLayer { id: artA; objectName: "heroArtA"; u: root.u; opacity: heroArt.showB ? 0 : 1 }
@@ -591,8 +593,8 @@ FocusScope {
     readonly property var heroItem: libraryEmpty ? ({}) : Library.item(recentIds[Math.max(0, Math.min(recentRow.currentIndex, recentIds.length - 1))])
     onHeroItemChanged: heroArt.show(libraryEmpty ? null : heroItem)
 
-    // The home item to give focus back to after a page, the overlay or an app (set by
-    // rememberHomeFocus, used once by focusHome).
+    // The home item to give focus back to after a page or the overlay (set by rememberHomeFocus,
+    // used once by focusHome). After an app closes, focus goes to Play.
     property Item homeSavedFocus: null
 
     function rememberHomeFocus() {

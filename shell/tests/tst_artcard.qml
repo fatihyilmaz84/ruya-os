@@ -27,7 +27,10 @@ Item {
             verify(card)
             compare(findChild(card, "artCardTitle").text, "Portal 2")
             verify(!findChild(card, "artCardPill").visible, "no pill by default")
-            compare(card.implicitHeight, card.implicitWidth * 9 / 16)
+            compare(card.height, card.width * 9 / 16)
+            compare(findChild(card, "artMonogram").text, "P", "fallback art shows the initial")
+            card.width = 400
+            compare(card.height, 225, "stays 16:9 when the caller sets the width")
             card.running = true
             verify(findChild(card, "artCardPill").visible)
             compare(card.stateText, "Running")
@@ -43,7 +46,9 @@ Item {
             const a = createTemporaryObject(cardComponent, host)
             const b = createTemporaryObject(cardComponent, host, { itemId: "steam:730" })
             verify(a.focused === false)
-            verify(a !== b)
+            const hueA = findChild(a, "artMonogram").parent.hue
+            const hueB = findChild(b, "artMonogram").parent.hue
+            verify(hueA !== hueB, "different ids get different tints")
         }
     }
 }

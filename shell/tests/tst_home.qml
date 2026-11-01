@@ -74,6 +74,7 @@ Item {
             keyClick(Qt.Key_Up)
             tryVerify(() => find("sectionNav").activeFocus, 2000, "Up from the hero goes to the nav")
             compare(find("sectionNav").currentKey, "home")
+            verify(find("navPillRing_home").visible, "the white current pill shows its ring outside")
             keyClick(Qt.Key_Up)
             verify(find("sectionNav").activeFocus, "the nav is the top")
             keyClick(Qt.Key_Down)
@@ -100,6 +101,13 @@ Item {
             tryCompare(find("heroTitle"), "text", "Portal 2")
             keyClick(Qt.Key_Left)
             compare(find("recentRow").currentIndex, 0, "clamped at the first card")
+        }
+
+        function test_hero_art_has_no_monogram() {
+            start("")
+            // Full-screen art without a picture is the gradient alone, no stray letter mid-screen.
+            for (const name of ["heroArtA", "heroArtB"])
+                verify(!findChild(find(name), "artMonogram").visible, name)
         }
 
         function test_play_launches_the_hero_item() {

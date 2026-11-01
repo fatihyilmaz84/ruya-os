@@ -79,6 +79,8 @@ QtObject {
     readonly property real avatarSize: 200
     readonly property real focusRingWidth: 4
     readonly property real focusRingOffset: 7
+    readonly property real hairline: 1      // outline of unfocused glass and neutral badges
+    function hairlineAt(u) { return Math.max(1, hairline * u) }   // never thinner than a pixel
     readonly property real badgeFillAlpha: 0.18   // badge fill = the kind's colour at this alpha
     function badgeFill(c) { return Qt.rgba(c.r, c.g, c.b, badgeFillAlpha) }
 

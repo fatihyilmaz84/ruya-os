@@ -11,6 +11,7 @@ Rectangle {
     property string appId
     property string appName
     property string picture      // path from the app record (tile or hero), may be empty
+    property bool monogram: true // the letter; off for full-screen art (the Home hero)
 
     readonly property real hue: {
         let h = 0
@@ -27,6 +28,8 @@ Rectangle {
     }
 
     Text {
+        objectName: "artMonogram"
+        visible: art.monogram
         anchors.centerIn: parent
         text: art.appName.charAt(0).toUpperCase()
         color: Theme.text

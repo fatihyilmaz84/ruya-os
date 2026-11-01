@@ -20,7 +20,7 @@ Item {
                                       : installing ? qsTr("Installing %1 %").arg(installPercent) : ""
 
     implicitWidth: 360 * u
-    implicitHeight: implicitWidth * 9 / 16
+    implicitHeight: width * 9 / 16      // stays 16:9 when a grid or row sets the width
     scale: focused ? Theme.focusScale : 1.0
     z: focused ? 1 : 0
     Behavior on scale { NumberAnimation { duration: Theme.focusMs; easing.type: Easing.OutCubic } }

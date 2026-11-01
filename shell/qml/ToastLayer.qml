@@ -56,7 +56,7 @@ Item {
             height: 92 * layer.u
             radius: Theme.radiusM * layer.u
             color: Theme.toastBackground
-            border.width: Math.max(1, layer.u)
+            border.width: Theme.hairlineAt(layer.u)
             border.color: Theme.glassBorder
 
             Rectangle {

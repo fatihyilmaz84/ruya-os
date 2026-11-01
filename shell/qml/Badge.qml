@@ -20,7 +20,7 @@ Rectangle {
     color: kind === "neutral" ? Theme.background
          : Theme.badgeFill(tone)
     border.color: Theme.glassBorder
-    border.width: kind === "neutral" ? Math.max(1, u) : 0
+    border.width: kind === "neutral" ? Theme.hairlineAt(u) : 0
 
     Accessible.role: Accessible.StaticText
     Accessible.name: text

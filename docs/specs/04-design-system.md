@@ -34,7 +34,7 @@ Components use tokens only; `scripts/lint-tokens.ps1` fails on literal colours a
 |---|---|---|---|
 | Ground | `background` | `#05070d` | Behind everything |
 | Panel | `panel` | `#1a1d26` | Opaque cards (Guide overlay, dialogs) |
-| Glass | `glass` / `glassStrong` / `glassOpaque` / `glassBorder` | white 12 % / `#182033` at 90 % / white 20 % | Shelf, rows, panes. `glassOpaque` when `blurMax` is 0 |
+| Glass | `glass` / `glassStrong` / `glassOpaque` / `glassBorder` | white 12 % / white 12 % (same value for now; the difference is the blur's saturation boost, §3.6) / `#182033` at 90 % / white 20 % | Shelf, rows, panes. `glassOpaque` when `blurMax` is 0 |
 | Scrim | `scrim` / `scrimOverlay` | black 82 % / 85 % | Behind PIN pad and keyboard / behind the Guide overlay |
 | Text | `text` / `textDim` | `#f2f4f8` / `#a3abbd` | Primary / secondary text |
 | Focus | `focusRing`, `focusFill`, `selectedFill` | white, white 20 %, white 10 % | §4 |
@@ -67,7 +67,7 @@ Turkish runs about 30 % longer than English: rows elide on the right (`Text.Elid
 
 - **Spacing** (8 px grid): `spaceXxs` 4, `spaceXs` 8, `spaceS` 16, `spaceM` 24, `spaceL` 36, `spaceXl` 48, `spaceXxl` 64, `spaceXxxl` 96. Rows in a list `spaceS`; tiles in a row `spaceL`; panel padding `spaceXl`; between sections `spaceXxl`.
 - **Radius:** `radiusS` 12 (keys), `radiusM` 18 (tiles, art, toasts, the text-entry field), `radiusL` 32 (panels, dialogs); pills are `height / 2` (rows, buttons, badges, OSD).
-- **Sizes:** `rowHeight` 84, `buttonHeight` 76, `tileWidth` 400 × `tileHeight` 260, `avatarSize` 200, `focusRingWidth` 4, `focusRingOffset` 7, `hairline` 1 (`Math.max(1, u)`).
+- **Sizes:** `rowHeight` 84, `buttonHeight` 76, `tileWidth` 400 × `tileHeight` 260, `avatarSize` 200, `focusRingWidth` 4, `focusRingOffset` 7, `hairline` 1 (use `Theme.hairlineAt(u)`, never thinner than a pixel: unfocused glass, buttons and neutral badges).
 
 ### 3.4 Motion (built)
 
@@ -106,12 +106,13 @@ Each entry: file, status, and the rules a change must keep. A new component gets
 |---|---|---|---|
 | Tile | `Tile.qml` | built, unused since T-146 (Home has the Section nav + Art cards); delete when nothing needs it | `radiusM`, gradient from `tileAccent`, title `typeHeadline` bottom-left, card focus |
 | Art card | `ArtCard.qml` | built (T-113), reused by T-146; caption fade uses `artCaptionFade` (T-146); Home's Recent row reuses it | 16:9 key art edge to edge, `radiusM`, title on `artCaptionFade`, state pills in words (Running, Installing n %), card focus; no art: app icon on a tint from the id hash |
-| App art | `AppArt.qml` | built (T-111) | The art fill of Store cards and the app detail page, and of Art card (T-113 wraps it, no second version): the record's picture cropped to fill, else a two-stop tint from the id hash (`Qt.hsla`, light 0.42 → dark 0.18) with the name's initial `typeHero` Light; `radiusM` |
+| App art | `AppArt.qml` | built (T-111) | The art fill of Store cards and the app detail page, and of Art card (T-113 wraps it, no second version): the record's picture cropped to fill, else a two-stop tint from the id hash (`Qt.hsla`, light 0.42 → dark 0.18) with the name's initial `typeHero` Light (`monogram: false` for the full-screen Home hero, which shows the tint alone); `radiusM` |
 | Progress bar | inline in `AppDetailPage.qml` (T-111) | built | Pill track `glass` + `glassBorder`, height `spaceS`; fill `text` (white, as the volume OSD bar), width animates over `focusMs`; percentage in words beside it. Extract to `ProgressBar.qml` when a second screen needs one (updates, launch) |
 | Cover card | `CoverCard.qml` | proposed | 2:3 cover for the Library grid; falls back to the 16:9 art cropped centre |
 | Hero block | `HeroBlock.qml` | built (T-146) | Eyebrow `typeCaption` caps, title `typeHero` Bold, meta `typeBody`, Play (primary) + Details (secondary); follows the focused card, art cross-fades over `tintMs` |
 | Buttons | `PrimaryButton.qml`, `SecondaryButton.qml` | built (T-146) | Pill `rowHeight`; primary `primaryFill`/`onPrimary`, focused = dark gap + white ring; secondary = glass, row focus |
-| Section nav | `SectionNav.qml` (glass: `GlassPill.qml`) | built (T-146) | Glass pill of section pills; current = `primaryFill`, focus = ring; LB/RB switch sections |
+| Section nav | `SectionNav.qml` (glass: `GlassPill.qml`) | built (T-146) | Glass pill of section pills; current = `primaryFill`, focus = ring (outside the current pill, `focusRingOffset`); LB/RB switch sections |
+| Glass pill | `GlassPill.qml` | built (T-146) | Pill of `glassStrong` over its own quarter-resolution blur of L0 (§3.6), `glassBorder` hairline; `glassOpaque` when `blurMax` is 0. Section nav and status cluster |
 | Quick menu | `QuickMenu.qml` | planned (T-147) | Left panel 640 px over the live app on `glassStrong` (opaque until B-003): app header, Resume (focused first), Home, Close game, Switch to, volume, profile, Power; replaces the centred Guide card |
 | Launch splash | `LaunchSplash.qml` | planned (T-147) | Blurred hero art, title, spinner until the app's first frame; "Still starting" + Close after 20 s |
 | Profile card | `ProfileCard.qml` | built | Avatar circle in the profile colour, initial `typeHero`, name dims to `textDim` when unfocused, PIN badge |

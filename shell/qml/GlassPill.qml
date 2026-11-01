@@ -46,7 +46,7 @@ Item {
         anchors.fill: parent
         radius: height / 2
         color: Theme.blurMax > 0 ? Theme.glassStrong : Theme.glassOpaque
-        border.width: Math.max(1, glass.u)
+        border.width: Theme.hairlineAt(glass.u)
         border.color: Theme.glassBorder
     }
 }

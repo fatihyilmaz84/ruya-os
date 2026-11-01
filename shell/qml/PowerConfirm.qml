@@ -119,7 +119,7 @@ FocusScope {
                 height: Theme.buttonHeight * dialog.u
                 radius: height / 2
                 color: activeFocus ? Theme.focusFill : Theme.glass
-                border.width: activeFocus ? Theme.focusRingWidth * dialog.u : Math.max(1, dialog.u)
+                border.width: activeFocus ? Theme.focusRingWidth * dialog.u : Theme.hairlineAt(dialog.u)
                 border.color: activeFocus ? Theme.focusRing : Theme.glassBorder
                 Text {
                     anchors.centerIn: parent
@@ -139,7 +139,7 @@ FocusScope {
                 height: Theme.buttonHeight * dialog.u
                 radius: height / 2
                 color: dialog.action === "suspend" ? (activeFocus ? Theme.focusFill : Theme.glass) : Theme.dangerFill
-                border.width: activeFocus ? Theme.focusRingWidth * dialog.u : Math.max(1, dialog.u)
+                border.width: activeFocus ? Theme.focusRingWidth * dialog.u : Theme.hairlineAt(dialog.u)
                 border.color: activeFocus ? Theme.focusRing : Theme.glassBorder
                 Text {
                     anchors.centerIn: parent

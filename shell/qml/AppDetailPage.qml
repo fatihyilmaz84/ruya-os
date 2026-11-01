@@ -186,7 +186,7 @@ Page {
         radius: height / 2
         opacity: active ? 1 : Theme.disabledOpacity
         color: danger ? Theme.dangerFill : (activeFocus ? Theme.focusFill : Theme.glass)
-        border.width: activeFocus ? Theme.focusRingWidth * page.u : Math.max(1, page.u)
+        border.width: activeFocus ? Theme.focusRingWidth * page.u : Theme.hairlineAt(page.u)
         border.color: activeFocus ? Theme.focusRing : Theme.glassBorder
         Accessible.role: Accessible.Button
         Accessible.name: text
@@ -271,7 +271,7 @@ Page {
                     height: Theme.spaceS * page.u
                     radius: height / 2
                     color: Theme.glass
-                    border.width: Math.max(1, page.u)
+                    border.width: Theme.hairlineAt(page.u)
                     border.color: Theme.glassBorder
 
                     Rectangle {

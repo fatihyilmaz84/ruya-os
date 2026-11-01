@@ -22,7 +22,7 @@ FocusScope {
         anchors.fill: parent
         radius: height / 2
         color: button.activeFocus ? Theme.focusFill : Theme.glass
-        border.width: button.activeFocus ? Theme.focusRingWidth * button.u : Math.max(1, button.u)
+        border.width: button.activeFocus ? Theme.focusRingWidth * button.u : Theme.hairlineAt(button.u)
         border.color: button.activeFocus ? Theme.focusRing : Theme.glassBorder
 
         Text {

@@ -36,7 +36,7 @@ Item {
         anchors.fill: parent
         radius: height / 2
         color: Theme.toastBackground
-        border.width: Math.max(1, osd.u)
+        border.width: Theme.hairlineAt(osd.u)
         border.color: Theme.glassBorder
     }
 

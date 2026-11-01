@@ -79,8 +79,19 @@ FocusScope {
                     anchors.fill: parent
                     radius: height / 2
                     color: pill.isSection ? Theme.primaryFill : (pill.focused ? Theme.focusFill : "transparent")
-                    border.width: pill.focused ? Theme.focusRingWidth * nav.u : 0
+                    border.width: pill.focused && !pill.isSection ? Theme.focusRingWidth * nav.u : 0
                     border.color: Theme.focusRing
+                }
+                // The current pill is white, so its ring sits outside with a gap (PrimaryButton).
+                Rectangle {
+                    objectName: "navPillRing_" + pill.modelData
+                    anchors.fill: parent
+                    anchors.margins: -Theme.focusRingOffset * nav.u
+                    radius: height / 2
+                    color: "transparent"
+                    border.width: Theme.focusRingWidth * nav.u
+                    border.color: Theme.focusRing
+                    visible: pill.focused && pill.isSection
                 }
                 Text {
                     id: text
