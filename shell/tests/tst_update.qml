@@ -39,6 +39,7 @@ Item {
         }
 
         function cleanup() {
+            Update.mockSetCallerIsAdmin(true)
             Notifications.durationMs = Theme.toastMs
             while (Notifications.model.count > 0)
                 Notifications.dismiss(Notifications.model.get(0).toastId)
@@ -213,6 +214,16 @@ Item {
             compare(Update.mockRollbackCount(), 0)
             compare(request(() => Update.check())[1], "ok", "checking is for everyone")
             Update.mockSetCallerIsAdmin(true)
+        }
+
+        function test_forbidden_has_its_own_message() {
+            openSystemPane("p1", "1234")
+            goToRow("rowChannel")
+            Update.mockSetCallerIsAdmin(false)
+            keyClick(Qt.Key_Right)
+            compare(Update.channel, "stable")
+            tryVerify(() => find("updateMessage").visible
+                            && find("updateMessage").text === "Only an admin can do this.")
         }
 
         function test_rollback_asks_for_the_admin_pin() {

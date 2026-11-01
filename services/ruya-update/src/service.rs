@@ -84,6 +84,9 @@ struct Inner {
     progress: u32,
     /// The tag the user chose with `SetChannel`; None until then (the host's own tag is tracked).
     channel: Option<String>,
+    /// Why the remembered channel could not be read; "" when it could. Shown as the error
+    /// until `SetChannel` writes a good file.
+    channel_problem: String,
     host: HostStatus,
 }
 
@@ -96,19 +99,21 @@ pub struct Update<B: Bootc> {
     commands: Mutex<()>,
 }
 
+/// The remembered channel. A file that cannot be used is an `Err` naming it; it stays as it is
+/// until `SetChannel` replaces it.
 fn load_channel(dir: &std::path::Path) -> Result<Option<String>, String> {
-    match fs::read_to_string(dir.join(CHANNEL_FILE)) {
+    let path = dir.join(CHANNEL_FILE);
+    match fs::read_to_string(&path) {
         Ok(text) => {
             let text = text.trim();
             if CHANNELS.contains(&text) {
                 Ok(Some(text.to_owned()))
             } else {
-                // Never overwritten silently: the service stops and the file is looked at.
-                Err(format!("{CHANNEL_FILE}: unknown channel {text:?}"))
+                Err(format!("{}: unknown channel {text:?}", path.display()))
             }
         }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(e) => Err(format!("{CHANNEL_FILE}: {e}")),
+        Err(e) => Err(format!("{}: {e}", path.display())),
     }
 }
 
@@ -120,13 +125,19 @@ fn save_channel(dir: &std::path::Path, channel: &str) -> std::io::Result<()> {
 }
 
 impl<B: Bootc> Update<B> {
-    /// `dir`: where the channel is remembered. Errors on a corrupt state file.
-    pub fn new(bootc: B, dir: Option<PathBuf>) -> Result<Self, String> {
-        let channel = match &dir {
-            Some(dir) => load_channel(dir)?,
-            None => None,
+    /// `dir`: where the channel is remembered. A corrupt state file does not stop the service
+    /// (`/var` survives an image rollback, so a fatal start would fail every boot): the host's
+    /// own tag is followed and the problem is the status error until `SetChannel`.
+    pub fn new(bootc: B, dir: Option<PathBuf>) -> Self {
+        let (channel, channel_problem) = match dir.as_deref().map(load_channel) {
+            Some(Ok(channel)) => (channel, String::new()),
+            Some(Err(problem)) => {
+                eprintln!("ruya-update: ignoring the remembered channel: {problem}");
+                (None, problem)
+            }
+            None => (None, String::new()),
         };
-        Ok(Update {
+        Update {
             bootc,
             dir,
             inner: Mutex::new(Inner {
@@ -136,10 +147,11 @@ impl<B: Bootc> Update<B> {
                 last_check: 0,
                 progress: 0,
                 channel,
+                channel_problem,
                 host: HostStatus::default(),
             }),
             commands: Mutex::new(()),
-        })
+        }
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, Inner> {
@@ -165,8 +177,11 @@ impl<B: Bootc> Update<B> {
 
     pub fn record(&self) -> Record {
         let inner = self.lock();
+        // A staged image or a running job matters more than the bad file.
+        let problem = !inner.channel_problem.is_empty()
+            && matches!(inner.state, State::Idle | State::UpToDate | State::Failed);
         Record {
-            state: inner.state,
+            state: if problem { State::Failed } else { inner.state },
             current: inner
                 .host
                 .booted
@@ -179,7 +194,11 @@ impl<B: Bootc> Update<B> {
             last_check: inner.last_check,
             progress: inner.progress,
             rollback_available: inner.host.rollback.is_some() && !inner.host.rollback_queued,
-            error: inner.error.clone(),
+            error: if problem && inner.error.is_empty() {
+                inner.channel_problem.clone()
+            } else {
+                inner.error.clone()
+            },
         }
     }
 
@@ -200,14 +219,9 @@ impl<B: Bootc> Update<B> {
     /// nothing to ask (`bootc` cannot look at another tag without staging it): the channel
     /// itself is "available", and `run_download` switches to it.
     pub fn run_check(&self, now: i64, emit: &mut dyn FnMut()) {
-        let switching = self.switch_target().is_some();
         let result = {
             let _cmd = self.command_lock();
-            if switching {
-                self.bootc.status()
-            } else {
-                self.bootc.check().and_then(|()| self.bootc.status())
-            }
+            self.check_locked()
         };
         {
             let mut inner = self.lock();
@@ -216,7 +230,7 @@ impl<B: Bootc> Update<B> {
                     inner.state = State::Failed;
                     inner.error = e;
                 }
-                Ok(host) => {
+                Ok((host, switching)) => {
                     inner.last_check = now;
                     inner.available = available_version(&host, switching, &inner);
                     inner.host = host;
@@ -232,6 +246,24 @@ impl<B: Bootc> Update<B> {
             }
         }
         emit();
+    }
+
+    /// The `bootc` part of a check, with `commands` held: the host's answer and whether the
+    /// chosen channel differs from the tracked tag.
+    fn check_locked(&self) -> Result<(HostStatus, bool), String> {
+        // The start-up reading may not have finished (or failed): learn the tracked image now.
+        if self.lock().host.tracked.is_empty() {
+            let host = self.bootc.status()?;
+            self.lock().host = host;
+        }
+        if self.lock().host.tracked.is_empty() {
+            return Err("bootc does not say which image this console follows".to_owned());
+        }
+        if self.switch_target().is_some() {
+            return Ok((self.bootc.status()?, true));
+        }
+        self.bootc.check()?;
+        Ok((self.bootc.status()?, false))
     }
 
     // ---- download --------------------------------------------------------------------
@@ -290,6 +322,14 @@ impl<B: Bootc> Update<B> {
         if !admin {
             return Status::Forbidden;
         }
+        // Busy at once rather than after a download that holds `commands`.
+        if self.lock().state.running() {
+            return Status::Busy;
+        }
+        // `commands` is held to the end: a check begun meanwhile waits for it and then sees the
+        // rolled-back host. (`inner` is never held while waiting: status reads take it.) The
+        // rules are asked again under it, because the host may have changed while waiting.
+        let _cmd = self.command_lock();
         {
             let inner = self.lock();
             if inner.state.running() {
@@ -299,10 +339,7 @@ impl<B: Bootc> Update<B> {
                 return Status::Unavailable;
             }
         }
-        let result = {
-            let _cmd = self.command_lock();
-            self.bootc.rollback().and_then(|()| self.bootc.status())
-        };
+        let result = self.bootc.rollback().and_then(|()| self.bootc.status());
         let mut inner = self.lock();
         match result {
             Err(e) => {
@@ -313,7 +350,10 @@ impl<B: Bootc> Update<B> {
                 inner.host = host;
                 inner.available.clear();
                 inner.error.clear();
-                inner.state = State::Staged;
+                // A job that began while `bootc` worked settles the state itself.
+                if !inner.state.running() {
+                    inner.state = State::Staged;
+                }
                 Status::Ok
             }
         }
@@ -336,6 +376,7 @@ impl<B: Bootc> Update<B> {
             }
         }
         inner.channel = Some(channel.to_owned());
+        inner.channel_problem.clear();
         inner.available.clear();
         if matches!(inner.state, State::UpToDate | State::Failed) {
             inner.state = State::Idle;
@@ -348,6 +389,10 @@ impl<B: Bootc> Update<B> {
     fn switch_target(&self) -> Option<String> {
         let inner = self.lock();
         let channel = inner.channel.as_deref()?;
+        // Not read yet: a reference like ":beta" would be a switch to nowhere.
+        if inner.host.tracked.is_empty() {
+            return None;
+        }
         (tag_of(&inner.host.tracked) != channel).then(|| with_tag(&inner.host.tracked, channel))
     }
 }
@@ -419,7 +464,7 @@ mod tests {
     }
 
     fn service(host: HostStatus) -> Update<FakeBootc> {
-        let u = Update::new(FakeBootc::new(host), None).expect("new");
+        let u = Update::new(FakeBootc::new(host), None);
         u.refresh().expect("refresh");
         u
     }
@@ -670,16 +715,141 @@ mod tests {
     #[test]
     fn the_channel_survives_a_restart() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let u = Update::new(FakeBootc::new(host()), Some(dir.path().join("state"))).expect("new");
+        let u = Update::new(FakeBootc::new(host()), Some(dir.path().join("state")));
         assert_eq!(u.set_channel("beta", true), Status::Ok);
-        let u = Update::new(FakeBootc::new(host()), Some(dir.path().join("state"))).expect("new");
+        let u = Update::new(FakeBootc::new(host()), Some(dir.path().join("state")));
         assert_eq!(u.record().channel, "beta");
     }
 
     #[test]
-    fn a_corrupt_state_file_is_an_error_not_a_default() {
+    fn a_corrupt_state_file_does_not_stop_the_service() {
         let dir = tempfile::tempdir().expect("tempdir");
         fs::write(dir.path().join(CHANNEL_FILE), "nightly").expect("write");
-        assert!(Update::new(FakeBootc::new(host()), Some(dir.path().to_owned())).is_err());
+        let u = Update::new(FakeBootc::new(host()), Some(dir.path().to_owned()));
+        u.refresh().expect("refresh");
+        let r = u.record();
+        assert_eq!(r.state, State::Failed);
+        assert!(r.error.contains(CHANNEL_FILE), "{}", r.error);
+        assert!(r.error.contains("nightly"), "{}", r.error);
+        assert_eq!(r.channel, "stable", "the host's own tag is followed");
+
+        // A check still works, and the file is still reported afterwards.
+        check(&u);
+        let r = u.record();
+        assert_eq!((r.state, r.available.as_str()), (State::Failed, "0.0.20"));
+        assert!(r.error.contains(CHANNEL_FILE));
+        assert!(!u.bootc.calls().iter().any(|c| c.starts_with("switch")));
+
+        // SetChannel replaces the file and clears the report.
+        assert_eq!(u.set_channel("stable", true), Status::Ok);
+        let r = u.record();
+        assert_eq!((r.state, r.error.as_str()), (State::Idle, ""));
+        let dir_text = fs::read_to_string(dir.path().join(CHANNEL_FILE)).expect("read");
+        assert_eq!(dir_text, "stable\n");
+    }
+
+    #[test]
+    fn an_unreadable_state_file_does_not_stop_the_service_either() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        // A directory where the file belongs: reading it fails with something other than NotFound.
+        fs::create_dir(dir.path().join(CHANNEL_FILE)).expect("mkdir");
+        let u = Update::new(FakeBootc::new(host()), Some(dir.path().to_owned()));
+        assert_eq!(u.record().state, State::Failed);
+        assert!(u.record().error.contains(CHANNEL_FILE));
+    }
+
+    #[test]
+    fn a_staged_image_is_not_hidden_by_the_bad_file() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        fs::write(dir.path().join(CHANNEL_FILE), "nightly").expect("write");
+        let mut h = host();
+        h.staged = Some(dep("reg:5000/ruyaos:stable", "0.0.20", "sha256:b"));
+        let u = Update::new(FakeBootc::new(h), Some(dir.path().to_owned()));
+        u.refresh().expect("refresh");
+        assert_eq!(u.record().state, State::Staged);
+    }
+
+    #[test]
+    fn without_a_known_tracked_image_a_check_fails_before_any_switch() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        fs::write(dir.path().join(CHANNEL_FILE), "beta\n").expect("write");
+        let mut h = host();
+        h.tracked = String::new();
+        let u = Update::new(FakeBootc::new(h), Some(dir.path().to_owned()));
+        // The start-up reading has not finished: nothing is known about the host.
+        assert_eq!(u.begin_check(), Status::Ok);
+        u.run_check(5, &mut || {});
+        let r = u.record();
+        assert_eq!(r.state, State::Failed);
+        assert!(r.error.contains("which image"), "{}", r.error);
+        assert!(!u.bootc.calls().iter().any(|c| c.starts_with("switch")));
+        assert!(!u.bootc.calls().contains(&"check".to_owned()));
+        assert_eq!(u.begin_download(), Status::Unavailable);
+    }
+
+    #[test]
+    fn a_check_learns_the_tracked_image_when_the_first_reading_failed() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        fs::write(dir.path().join(CHANNEL_FILE), "beta\n").expect("write");
+        let u = Update::new(FakeBootc::new(host()), Some(dir.path().to_owned()));
+        // No refresh() yet: the check reads the host itself and finds a channel to switch to.
+        check(&u);
+        let r = u.record();
+        assert_eq!((r.state, r.available.as_str()), (State::Idle, "beta"));
+        assert!(!u.bootc.calls().iter().any(|c| c.starts_with("switch")));
+    }
+
+    #[test]
+    fn a_download_that_staged_nothing_is_a_failure() {
+        let u = service(host());
+        check(&u);
+        assert_eq!(u.begin_download(), Status::Ok);
+        // The image vanished from the registry between the check and the download.
+        u.bootc.set_cached_update(None);
+        u.run_download(&mut || {});
+        let r = u.record();
+        assert_eq!(r.state, State::Failed);
+        assert_eq!(r.error, "bootc staged nothing");
+        assert_eq!(r.progress, 0);
+        assert_eq!(r.staged, "");
+    }
+
+    #[test]
+    fn a_check_begun_during_a_rollback_ends_staged_with_the_rollback() {
+        let u = service(host());
+        let (started, release) = u.bootc.hold_next_rollback();
+        std::thread::scope(|scope| {
+            let rollback = scope.spawn(|| u.rollback(true));
+            // `bootc rollback` is running, with `commands` held.
+            started.recv().expect("rollback started");
+            assert_eq!(
+                u.begin_check(),
+                Status::Ok,
+                "no job runs yet: a check may begin"
+            );
+            let check = scope.spawn(|| u.run_check(7, &mut || {}));
+            std::thread::sleep(std::time::Duration::from_millis(50));
+            assert_eq!(u.record().state, State::Checking, "it waits for bootc");
+            release.send(()).expect("release");
+            assert_eq!(rollback.join().expect("rollback thread"), Status::Ok);
+            check.join().expect("check thread");
+        });
+        let r = u.record();
+        assert_eq!((r.state, r.staged.as_str()), (State::Staged, "0.0.18"));
+        assert!(!r.rollback_available);
+        assert_eq!(r.available, "");
+        assert_eq!(r.last_check, 7);
+        // The check read the host after the rollback, never before.
+        let calls = u.bootc.calls();
+        let at = |name: &str| calls.iter().position(|c| c == name).expect("call");
+        assert!(at("rollback") < at("check"), "{calls:?}");
+    }
+
+    #[test]
+    fn a_rollback_does_not_wait_for_a_download() {
+        let u = service(host());
+        check(&u);
+        assert_eq!(u.begin_download(), Status::Ok);
+        assert_eq!(u.rollback(true), Status::Busy);
     }
 }

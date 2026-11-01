@@ -2,6 +2,7 @@
 //! and `--session` development.
 
 use std::process::Command;
+use std::sync::mpsc::{Receiver, Sender};
 use std::sync::Mutex;
 
 /// One deployment of `bootc status`.
@@ -195,6 +196,8 @@ pub struct FakeBootc {
     host: Mutex<HostStatus>,
     fail: Mutex<Option<String>>,
     calls: Mutex<Vec<String>>,
+    /// Set by `hold_next_rollback`.
+    gate: Mutex<Option<(Sender<()>, Receiver<()>)>>,
 }
 
 impl FakeBootc {
@@ -213,6 +216,15 @@ impl FakeBootc {
     /// The commands run so far, e.g. `["check", "switch x:beta"]`.
     pub fn calls(&self) -> Vec<String> {
         self.calls.lock().expect("fake lock").clone()
+    }
+
+    /// The next `rollback` stops inside the command: the first channel fires when it has
+    /// started, it goes on when the second is sent to (or dropped). For tests of racing calls.
+    pub fn hold_next_rollback(&self) -> (Receiver<()>, Sender<()>) {
+        let (entered, started) = std::sync::mpsc::channel();
+        let (release, wait) = std::sync::mpsc::channel();
+        *self.gate.lock().expect("fake lock") = Some((entered, wait));
+        (started, release)
     }
 
     pub fn set_cached_update(&self, update: Option<Deployment>) {
@@ -258,6 +270,11 @@ impl Bootc for FakeBootc {
     }
     fn rollback(&self) -> Result<(), String> {
         self.enter("rollback")?;
+        let gate = self.gate.lock().expect("fake lock").take();
+        if let Some((entered, wait)) = gate {
+            let _ = entered.send(());
+            let _ = wait.recv();
+        }
         self.host.lock().expect("fake lock").rollback_queued = true;
         Ok(())
     }

@@ -1,6 +1,6 @@
 # T-153 — `ruya-update` review fixes: races, empty tag, corrupt channel file
 
-Status: todo · Phase: 2 · Depends: T-151 · Area: services, image, shell · Size: S · Owner: builder
+Status: done · Phase: 2 · Depends: T-151 · Area: services, image, shell · Size: S · Owner: builder
 
 ## Goal
 `ruya-update` survives the edge cases the 2026-11-01 lead review found: a rollback racing a check, a channel switch before the host's tag is known, and a bad channel file in `/var`, which today stops the service and fails every boot through the required greenboot check.
@@ -45,4 +45,15 @@ Then the image recipe in `docs/dev-setup.md` (`build.sh`, `make-disk.sh qcow2`, 
 - The fake `bootc` in `service.rs` tests already counts calls; add a blocking gate (a `Barrier` or channel) for the race test.
 
 ## Outcome
-_Filled in by the implementer._
+Verified: **vm** (service, unit, policy as packaged) and **host** (`dev.ps1 test` ALL GREEN: 243 QML + 20 screenshot skips, 32 `ruya-update` tests). `shots` not run: no visible UI change beyond one message string.
+
+**Built**
+- `service.rs`: `rollback` takes `commands` before it checks the rules and holds it across `bootc rollback` + `status`; a quick `Busy` check before the lock means it does not wait out a download. State becomes `Staged` only if no job started meanwhile. `switch_target` is `None` while `host.tracked` is empty; `run_check` does its `bootc` part in `check_locked`, which first reads `status` if the tracked image is unknown and fails with "bootc does not say which image this console follows" if it still is not. `Update::new` no longer fails: a channel file that is unknown or unreadable is logged, the host's own tag is followed, and `record()` reports state `failed` with the error naming the file (`/var/lib/ruya-update/channel: unknown channel "nightly"`) while the state is idle, up-to-date or failed (a staged image or running job still shows); `SetChannel` clears it. `main.rs` follows. The fake `bootc` got `hold_next_rollback` (test gate).
+- Shell: `SystemPane.qml` shows "Only an admin can do this." (Turkish: "Bunu yalnızca bir yönetici yapabilir.") for `forbidden` from `SetChannel`, `Check`, `Download` and `Rollback`; `.ts` files edited by hand (locations are cosmetic).
+- Comments and docs: `ProtectProc=invisible` note in the unit and in the T-151 hardening list, `Cargo.toml` and `vm-update-check.sh` comments, spec 01 §4 (staged download hides other channels until the reboot; bad channel file; unknown tracked image).
+
+**Tests added:** rollback racing a check (fake `bootc` blocks inside `rollback`; final state `staged`, staged `0.0.18`, `check` after `rollback`), rollback busy during a download, empty tracked image (no `switch`, no `check`), check learning the tracked image, corrupt and unreadable channel file (start, `failed` with file name, check still works, `SetChannel` clears and rewrites), staged image not hidden by the bad file, "bootc staged nothing"; QML `test_forbidden_has_its_own_message`.
+
+**Deviations:** the race test cannot fail on the old code in the exact interleaving (it needs a check slipping into the gap between two locks); it pins the new ordering instead (the check's `bootc` calls come after the rollback's). `Check`/`Download` `forbidden` cannot happen on the real service; the shared string is harmless there.
+
+**VM** (image `0.0.22-t153`, WSL registry, work disk): `RUYA_BOOT_OK 0.0.22-t153`; guest `bootc switch <wsl-ip>:5000/ruyaos:stable` + `vm-reboot-check.ps1`; `echo nightly > /var/lib/ruya-update/channel`, `vm-reboot-check.ps1`: `RUYA_BOOT_OK`, `ruya-update` active, journal "ignoring the remembered channel", `GetStatus` state `failed` with the file in `error`, greenboot "required script 51-ruya-update.sh success!", "health-check passed", `boot_success=1`; `SetChannel stable` as root: `ok`, file rewritten, state `idle`. Then image `0.0.23-t153` pushed as `stable`: `scripts/vm-update-check.sh` ALL PASSED, `systemd-analyze security` 4.8 OK. Registry and tags removed afterwards. Greenboot's wanted script `01_update_platforms_check.sh` fails on every boot (pre-existing, not required; Inbox line).

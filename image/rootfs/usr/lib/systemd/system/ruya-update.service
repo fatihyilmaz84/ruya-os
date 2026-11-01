@@ -22,6 +22,8 @@ SystemCallFilter=@system-service @mount
 SystemCallErrorNumber=EPERM
 SystemCallArchitectures=native
 UMask=0022
+# Ineffective while CAP_SYS_PTRACE is in the bounding set (ptrace access to other processes'
+# /proc entries is allowed regardless); kept for the day bootc no longer needs it.
 ProtectProc=invisible
 ProtectClock=yes
 ProtectHostname=yes

@@ -1355,6 +1355,11 @@
         <translation>Güncelleme başlatılamadı.</translation>
     </message>
     <message>
+        <location line="+1"/>
+        <source>Only an admin can do this.</source>
+        <translation>Bunu yalnızca bir yönetici yapabilir.</translation>
+    </message>
+    <message>
         <location line="+13"/>
         <source>Language</source>
         <translation>Dil</translation>

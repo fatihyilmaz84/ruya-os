@@ -74,7 +74,7 @@ if runuser -u nobody -- busctl --system call "$svc" "$path" "$ifc" GetStatus >/d
 else
     ok "user nobody refused by the bus policy"
 fi
-# Root may roll back, and the channel round trip works.
+# A name that is no channel is refused (as root, so it is the value, not the caller).
 [ "$(call SetChannel s nightly)" = invalid ] && ok "SetChannel nightly: invalid" || bad "SetChannel nightly not invalid"
 
 [ "$fail" = 0 ] && echo "ALL PASSED" || echo "SOME FAILED"

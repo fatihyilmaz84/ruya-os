@@ -183,13 +183,15 @@ SettingsPane {
                     pane.report(qsTr("The previous version starts after the next restart."), false)
                 } else {
                     Sfx.back()
-                    pane.report(qsTr("Could not roll back."), true)
+                    pane.report(status === "forbidden" ? qsTr("Only an admin can do this.")
+                                                       : qsTr("Could not roll back."), true)
                 }
                 pane.restoreFocus()
             } else if (status !== "ok" && (method === "check" || method === "download" || method === "setChannel")) {
                 Sfx.back()
                 pane.report(status === "busy" ? qsTr("An update is already in progress.")
-                                              : qsTr("The update could not be started."), true)
+                            : status === "forbidden" ? qsTr("Only an admin can do this.")
+                                                     : qsTr("The update could not be started."), true)
             }
         }
         function onStatusChanged() {

@@ -47,7 +47,7 @@ fn run() -> Result<(), Box<dyn Error>> {
             std::env::var("RUYA_UPDATE_STATE").unwrap_or_else(|_| "/var/lib/ruya-update".into()),
         )
     });
-    let update: Arc<Update<DynBootc>> = Arc::new(Update::new(bootc(session), dir)?);
+    let update: Arc<Update<DynBootc>> = Arc::new(Update::new(bootc(session), dir));
     // `bootc status` can be slow right after boot: the name is taken first and a client reading
     // earlier sees an empty record until the deployments are known.
     let (changes, receiver) = async_channel::unbounded();

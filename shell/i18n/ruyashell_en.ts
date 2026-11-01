@@ -1357,6 +1357,11 @@
         <translation>The update could not be started.</translation>
     </message>
     <message>
+        <location line="+1"/>
+        <source>Only an admin can do this.</source>
+        <translation>Only an admin can do this.</translation>
+    </message>
+    <message>
         <location line="+13"/>
         <source>Language</source>
         <translation>Language</translation>
