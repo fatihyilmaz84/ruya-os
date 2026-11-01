@@ -17,14 +17,14 @@ The procedure is in [`LEAD.md`](LEAD.md). **Rewrite this file at the end of ever
 5. **Admin authorization** (decided 2026-10-30): services refuse admin-only calls unless the caller is root or the shell with an admin active; the shell checks PINs with `Profiles1.VerifyAdmin`. `caller_is_admin` is copied in `ruya-store` and `ruya-update`; share it when a third service needs it. T-156 closes the update-adds-permission hole.
 6. **Builders miss geometry in screenshots** (T-113/T-146 cards, nav ring). Lesson added to `PLANNING.md`; check new components' sizes yourself in the next `shots` review.
 7. **Host storage integrity.** C: showed a zeroed cargo file and WSL `ext4` errors. Always `qemu-img check` a fresh disk. Owner asked for a memory and SMART check.
-8. **Design system:** icon set escalated to the owner (blocks the gear, the battery item, the hint bar). T-144 (contrast) and T-145 (Inter) wait. Canvas boards are stale on `AppArt`, the progress bar, `GlassPill`, `HeroBlock`, the buttons and the section nav.
+8. **Design system:** icon set decided (ADR-013, 04 §3.7): T-157 font + `Icon`, T-158 hint bar; the controller-battery item waits for a real battery source (Inbox). T-144 (contrast) and T-145 (Inter) wait. Canvas boards are stale on `AppArt`, the progress bar, `GlassPill`, `HeroBlock`, the buttons, the section nav and §3.7 icons.
 
 ## First things the next lead should do
 
 1. `git status` clean, no builder session running, no `build.sh` in WSL (distro `FedoraLinux-44`).
 2. CI of this push (`https://api.github.com/repos/fatihyilmaz84/ruya-os/actions/runs?per_page=4`; no `gh` here; `curl` works from Git Bash).
 3. If the owner starts a lead session for T-130: claim it and do it (concern 1). Otherwise steps 1–3 of `LEAD.md`.
-4. If the owner answered the icon-set question: record the ADR, add the font like Inter (T-145 pattern), write the battery-item and hint-bar task.
+4. Check T-157's subset script and pinned download (commit + SHA-256) if it has landed: it is the first build input fetched from the internet.
 5. Size budgets: root `CLAUDE.md` 10.9 KB and `shell/CLAUDE.md` 7.3 KB sit at budget; STATUS 10.5 KB. Trim before adding anything.
 
 ## Quality signals (one row per lead session)

@@ -28,6 +28,8 @@ Open work only (todo, in-progress, blocked). The order is the recommended order;
 | [T-156](tasks/T-156-update-high-risk-pin.md) | Admin PIN before an app update that adds a high-risk permission | todo | T-152 |
 | [T-154](tasks/T-154-update-schedule-and-idle-reboot.md) | `ruya-update`: daily check, automatic download, reboot when idle | todo | T-153 |
 | [T-155](tasks/T-155-card-accept-pulse.md) | Accept pulse on art cards; remove the unused `Tile` | todo | T-146 |
+| [T-157](tasks/T-157-icon-font.md) | Icon font (Material Symbols Rounded) and `Icon` | todo | — |
+| [T-158](tasks/T-158-hint-bar.md) | Hint bar with controller button glyphs | todo | T-157 |
 | [T-144](tasks/T-144-contrast-and-accessible-names.md) | Design review: contrast over the backdrop, accessible names | todo | T-143 |
 | [T-145](tasks/T-145-bundle-inter.md) | Bundle the Inter typeface | todo | T-142 |
 | [T-136](tasks/T-136-bluetooth-contract-and-settings.md) | `Devices1.Bluetooth` contract, mock, Settings pane | todo | — |
@@ -38,7 +40,7 @@ Open work only (todo, in-progress, blocked). The order is the recommended order;
 
 Follow-ups and debt for the next planner. Builders: add one line per item, `- (source) what, and why it matters`; write a task file only if your own task needs one. Run a planner at 5+ items.
 
-(empty)
+- (lead) The status cluster's controller battery (04 §2) needs battery data: a `Devices1` contract over UPower in `ruya-devices` with its VM check, not a mock-only pane; plan it after T-157 (its icon comes from that set).
 
 ## Blocked (need something this host doesn't have)
 
@@ -56,9 +58,8 @@ Follow-ups and debt for the next planner. Builders: add one line per item, `- (s
 - **Real hardware (B-002):** is a spare low-tier x86-64 PC (Intel/AMD iGPU) available for the dev ISO? It unblocks the Phase 0 hardware item, the first KPIs and the ADR-002 performance check. Recommendation: yes, a test machine only.
 - **One admin or several?** Overview §2 says one admin, `03` §1.1 says one or more. The service supports several; the UI offers Standard and Guest. Recommendation: one admin in the UI for the MVP (as the overview says); revisit after the first user test. Not blocking.
 - **Turkish wording review** (`shell/i18n/ruyashell_tr.ts`, written by AI): a native review before the first release. Not blocking; best done after the Settings panes settle (T-135..T-137).
-- **Icon set (new, 2026-11-01; owner-level by `04` §8):** Home's Settings pill is a gear character that Windows draws as a colour emoji, and the planned controller-battery item and hint bar (A/B glyphs) need icons too. Options: Material Symbols Rounded (Apache-2.0, variable font), Lucide (ISC, line icons), Phosphor (MIT). Recommendation: **Material Symbols Rounded**, a subset bundled as a font like Inter; button glyphs drawn as letters in circles. Blocks: the gear, the battery item, the hint bar.
 - **libdvdcss / AACS:** not included; needs an explicit owner decision.
-- Decided (for the record): design system ADR-012 with Inter bundled, an art-led Home and full-screen apps (owner, 2026-10-28); ADR-002 option A (owner, 2026-10-23); repo public on GitHub (2026-10-23); the lead pushes `main` at the end of every lead session after `scripts\scan-secrets.ps1` passes, builders never push (owner, 2026-10-28).
+- Decided (for the record): icon set Material Symbols Rounded, ADR-013 (owner, 2026-11-01); design system ADR-012 with Inter bundled, an art-led Home and full-screen apps (owner, 2026-10-28); ADR-002 option A (owner, 2026-10-23); repo public on GitHub (2026-10-23); the lead pushes `main` at the end of every lead session after `scripts\scan-secrets.ps1` passes, builders never push (owner, 2026-10-28).
 
 ## Session log (newest first, the latest five; older entries in `STATUS-log.md`)
 
@@ -67,6 +68,7 @@ One entry per session, at most 4 lines: date · model · tasks · what happened 
 - 2026-11-01 · Opus 5.5 · Lead (review `300245c..e19899f`: T-149, T-151, T-113, T-152, T-146) · `test` ALL GREEN (242 QML + 20 skips, 207 Rust, 63 s); `shots` ALL GREEN (55, 36 s; every Home, Games and Store-PIN screen reviewed). CI green at `300245c`. No VM run (T-151's `0.0.21-t151` covers the only packaged change).
   Findings 8 fixed / 4 filed: art cards were 2.2:1 not 16:9, focused Home pill showed no ring, stray letter mid-hero, hero art missed its first value, vacuous ArtCard test, `Theme.hairline` added (`hairlineAt(u)`), 04 glass rows, stale comments; `ruya-update` rollback race, empty tag, fatal channel file → T-153, update adding a high-risk permission → T-156.
   Planned T-153..T-156; Inbox emptied (2 dropped: art-roles line was wrong; user-installed Flatpak games are outside the contract). Escalated: icon set. Process: parallel review subagents (`LEAD.md` 3); geometry criteria need a property test (`PLANNING.md` Lessons).
+  Owner chose Material Symbols Rounded (ADR-013, 04 §3.7): planned T-157 (icon font, `Icon`, gear and OSD) and T-158 (hint bar).
 
 - 2026-10-31 · Sonnet 5.5 · T-146 · Art-led Home: hero art, hero block (Play/Details), Recent row, glass section nav with LB/RB, empty state; 5 new tokens, 5 components, `tst_home` (13 tests), 15 test files moved off the tiles. `test` ALL GREEN (241 QML). `shots` NOT run (session locked): screenshots unreviewed. Lead review is due.
 

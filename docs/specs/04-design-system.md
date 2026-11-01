@@ -20,7 +20,7 @@ Rüya is Turkish for *dream*: a dark room lit by the thing you are about to play
 
 - **Design pixels:** every size is written at 1080p and multiplied by `u` (`height / 1080`), so the same numbers serve 720p and 4K (`shell/CLAUDE.md`).
 - **Safe area:** the outer margin is `Theme.safeArea` (overscan, default 5 % = 96 × 54 px at 1080p), never a spacing token. Nothing focusable or readable sits outside it; backdrops and scrims fill the whole screen.
-- **Home (art-led, built T-146):** full-bleed hero art of the focused game (L0) with a left legibility scrim (`heroScrim`) and a bottom fade; top bar in the safe area: section nav (Home, Games, Media, Store, Settings icon) left, status cluster (controller battery, clock, profile) right, both glass pills; hero block left (eyebrow, title `typeHero` Bold, meta, Play + Details); the Recent row of art cards along the bottom; hint bar under it (proposed, not built). As built: the status cluster is profile and clock (no controller battery yet), and the Settings pill shows a gear glyph (U+2699) until an icon set is chosen.
+- **Home (art-led, built T-146):** full-bleed hero art of the focused game (L0) with a left legibility scrim (`heroScrim`) and a bottom fade; top bar in the safe area: section nav (Home, Games, Media, Store, Settings icon) left, status cluster (controller battery, clock, profile) right, both glass pills; hero block left (eyebrow, title `typeHero` Bold, meta, Play + Details); the Recent row of art cards along the bottom; hint bar under it (proposed, not built). As built: the status cluster is profile and clock (no controller battery yet), and the Settings pill shows a gear character (U+2699, a colour emoji on Windows) until the icon font lands (ADR-013, T-157).
 - **Pages** (Settings, Store, …): top bar as on Home, page title `typeTitle`, content, hint bar. The backdrop stays the last hero art, blurred and dimmed. Two-pane pages (Settings): list 520 px, gap `spaceXxl`, pane on a `radiusL` glass panel with `spaceXl` padding.
 - **Running app:** nothing of the shell is drawn except the quick menu (Guide), the volume OSD and critical toasts (§5.1).
 
@@ -87,6 +87,14 @@ Turkish runs about 30 % longer than English: rows elide on the right (`Text.Elid
 
 Glass is translucent white over a **Gaussian blur** of what is behind it (`MultiEffect`, `blurMax` per tier: High 64, Balanced 32, Performance 0). Rules: glass always comes with blur, or it turns opaque (`glassOpaque`): never translucent glass over sharp art. One shared blurred copy of L0 (downscaled), sampled by every glass panel; never a second fullscreen blur. `glassStrong` (built, T-146: white 12 %, with a saturation boost of 0.3 on the blur) is for the top bar and the quick menu. As built, each glass pill (`GlassPill.qml`: section nav, status cluster) blurs its own quarter-resolution crop of L0 through a rounded mask, not one shared texture; both are small, never fullscreen. Glass over a **running app** blurs a downscaled copy of the app surface; until that is measured on a GPU (B-003) the quick menu uses `glassOpaque` on every tier.
 
+### 3.7 Icons (decided ADR-013; planned, T-157)
+
+- **Set:** Material Symbols Rounded (Apache-2.0), a subset font in the Qt resources (`shell/fonts/`), family name exposed as `Theme.iconFamily`.
+- **Drawing:** `Icon.qml` by name (`Icon { name: "settings" }`): a name → code point table inside the component, never ligatures and never a raw code point in a page; an unknown name draws nothing and warns once. Adding an icon = a table entry plus re-running the subset script.
+- **Style:** weight 400, grade 0, optical size 40: two static cuts of the variable font, outlined (FILL 0) normally and filled (FILL 1) for the current or selected state (static cuts render the same on every Qt ≥ 6.8; no variable-axis API needed). Colour from the text tokens (`text`, `onPrimary`, `textDim`, the toast kind colours), never a category tint.
+- **Sizes:** `iconM` 40 (pills, rows, toasts, OSD), `iconL` 64 (empty states). An icon in a pill or button is centred like its label would be.
+- **Controller glyphs** are not icons: `ButtonGlyph.qml` draws the button's letter (A, B, X, Y, LB, RB, Start) in `typeMicro` on a `primaryFill` circle (`glyphSize` 40) with `onPrimary` text (hint bar, T-158).
+
 ## 4. Focus
 
 | Item kind | Focused look |
@@ -126,7 +134,9 @@ Each entry: file, status, and the rules a change must keep. A new component gets
 | Guide overlay | `Shell.qml` | built | `scrimOverlay` + `panel` card `radiusL`, title `typeTitle`, actions as rows |
 | Backdrop | `Backdrop.qml` | built | Tint from focus, three drifting blobs, `tintMs` cross-fade |
 | Badge | `Badge.qml` | built (T-143) | `typeMicro` DemiBold caps, pill (`text`, `kind` neutral/success/info/warning); neutral = `background` fill, `glassBorder` outline, `textDim`; the others `badgeFill()` (kind colour at `badgeFillAlpha` 18 %) and text in the kind colour; used for PIN and mock services; source badges Official (success colour), Community (info), Dev (warning) on a 18 % fill of their colour |
-| Hint bar | — | proposed | Bottom-left, controller glyph + verb for the actions the focused item accepts; needs pad-type glyphs (B-006) |
+| Hint bar | `HintBar.qml` | planned (T-158) | Bottom-left in the safe area, one `ButtonGlyph` + verb (`typeCaption`, `text`) per action the focused screen accepts, `spaceS` between glyph and verb, `spaceL` between hints, no background over art (the bottom fade carries it); at most four hints; letters until pad-type glyphs (B-006) |
+| Icon | `Icon.qml` | planned (T-157) | A Material Symbols glyph by name, `iconM`/`iconL`, colour from text tokens, `filled` for the current state (§3.7) |
+| Button glyph | `ButtonGlyph.qml` | planned (T-158) | Controller button letter on a `primaryFill` circle, `glyphSize`, `typeMicro`, `onPrimary` (§3.7) |
 
 ### 5.1 Full-screen apps (look; behaviour in `02-shell.md` §1.5)
 
