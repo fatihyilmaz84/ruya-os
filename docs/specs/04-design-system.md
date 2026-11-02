@@ -112,8 +112,7 @@ Each entry: file, status, and the rules a change must keep. A new component gets
 
 | Component | File | Status | Rules |
 |---|---|---|---|
-| Tile | `Tile.qml` | built, unused since T-146 (Home has the Section nav + Art cards); delete when nothing needs it | `radiusM`, gradient from `tileAccent`, title `typeHeadline` bottom-left, card focus |
-| Art card | `ArtCard.qml` | built (T-113), reused by T-146; caption fade uses `artCaptionFade` (T-146); Home's Recent row reuses it | 16:9 key art edge to edge, `radiusM`, title on `artCaptionFade`, state pills in words (Running, Installing n %), card focus; no art: app icon on a tint from the id hash |
+| Art card | `ArtCard.qml` | built (T-113), reused by T-146; caption fade uses `artCaptionFade` (T-146); Home's Recent row reuses it; `pulse()` (the art shrinks to `pulseScale`; skipped under reduced motion) is run by the owner on Accept (T-155) | 16:9 key art edge to edge, `radiusM`, title on `artCaptionFade`, state pills in words (Running, Installing n %), card focus; no art: app icon on a tint from the id hash |
 | App art | `AppArt.qml` | built (T-111) | The art fill of Store cards and the app detail page, and of Art card (T-113 wraps it, no second version): the record's picture cropped to fill, else a two-stop tint from the id hash (`Qt.hsla`, light 0.42 → dark 0.18) with the name's initial `typeHero` Light (`monogram: false` for the full-screen Home hero, which shows the tint alone); `radiusM` |
 | Progress bar | inline in `AppDetailPage.qml` (T-111) | built | Pill track `glass` + `glassBorder`, height `spaceS`; fill `text` (white, as the volume OSD bar), width animates over `focusMs`; percentage in words beside it. Extract to `ProgressBar.qml` when a second screen needs one (updates, launch) |
 | Cover card | `CoverCard.qml` | proposed | 2:3 cover for the Library grid; falls back to the 16:9 art cropped centre |
@@ -152,7 +151,7 @@ Launch: Accept on Play → art takes the screen (chrome fades, hero art scales 1
 ## 7. Accessibility
 
 - Text contrast ≥ 4.5:1 against the surface it actually sits on, worst case (backdrop at its brightest tint); the focus ring ≥ 3:1 against both the item and its surroundings (white on any tint passes).
-- High-contrast theme, text scale and focus-ring size (`02-shell.md` §7) will be token sets over the same names, so components need no change: never compute a colour in a component (`Qt.lighter` of a token for a gradient is the one allowed exception, as in `Tile.qml`).
+- High-contrast theme, text scale and focus-ring size (`02-shell.md` §7) will be token sets over the same names, so components need no change: never compute a colour in a component (`Qt.lighter` of a token for a gradient is the one allowed exception, as in `Backdrop.qml`).
 - Every interactive item has `Accessible.name`; decoration has none. **Not done anywhere yet** (Inbox): needed before the Orca spike (`02-shell.md` §7).
 
 ## 8. Changing the design system

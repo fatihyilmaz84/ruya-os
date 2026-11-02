@@ -1,6 +1,6 @@
 # T-155 — Accept pulse on art cards; remove the unused `Tile`
 
-Status: todo · Phase: 2 · Depends: T-146 · Area: shell · Size: S · Owner: builder
+Status: done · Phase: 2 · Depends: T-146 · Area: shell · Size: S · Owner: builder
 
 ## Goal
 Pressing A on a game card gives the same short press feedback the old Home tiles had. T-146 replaced the tiles with art cards, so the pulse no longer runs anywhere and its reduced-motion test now exercises a component nothing uses.
@@ -35,4 +35,12 @@ Pressing A on a game card gives the same short press feedback the old Home tiles
 - `docs/specs/02-shell.md` §3.2, `docs/specs/04-design-system.md` §3.4/§5.
 
 ## Outcome
-_Filled in by the implementer._
+Verified: host. `.\scripts\dev.ps1 test` ALL GREEN (258 QML passed, 0 failed, 21 skips = the screenshot tests; 56+ Rust). No `shots` run: the pulse lasts 250 ms and no screen changed.
+
+Built: `ArtCard.pulse()` plus a `pulseAnimation` (objectName kept) on the card's `AppArt`, so the pulse scales the art and not the card and cannot fight the focus scale (which scales the card). Skipped under reduced motion. Callers: `Shell.playRecent()` (the Recent row's Accept, then `playHero()`, which launches the same item the row has focused) and `GamesPage.acceptCurrent()`. `Tile.qml` and its CMake line are deleted; `git grep Tile.qml` is empty outside task history.
+
+Files: `shell/qml/ArtCard.qml`, `Shell.qml`, `GamesPage.qml`, `Theme.qml` (comment), `shell/CMakeLists.txt`, `shell/tests/tst_motion.qml`, `tst_games.qml`; specs 02 s3.2, 04 s5 (Tile row removed, Art card row mentions the pulse) and the `Qt.lighter` note (now points at `Backdrop.qml`).
+
+Tests: `tst_motion::test_feedback_animations_respect_reduced_motion` now uses a stand-alone `ArtCard` with both assertions unchanged. New `test_recent_card_accept_pulses` (no pulse but the launch still happens under reduced motion; pulse runs with motion on) and `tst_games::test_accept_pulses_the_card`.
+
+Deviation: `currentItem` is typed `Item`, so the callers cast `(currentItem as ArtCard)?.pulse()` to keep qmllint at zero warnings.

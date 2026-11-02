@@ -28,7 +28,22 @@ Item {
     Accessible.role: Accessible.Button
     Accessible.name: stateText.length > 0 ? title + ", " + stateText : title
 
+    // Accept feedback, run by the owner. It shrinks the art, not the card, so it does not fight
+    // the focus scale; skipped under reduced motion (the launch toast that follows is the feedback).
+    function pulse() {
+        if (!Theme.reducedMotion)
+            pulseAnimation.restart()
+    }
+
+    SequentialAnimation {
+        id: pulseAnimation
+        objectName: "pulseAnimation"
+        NumberAnimation { target: art; property: "scale"; to: Theme.pulseScale; duration: Theme.pulseDownMs; easing.type: Easing.OutQuad }
+        NumberAnimation { target: art; property: "scale"; to: 1.0; duration: Theme.pulseUpMs; easing.type: Easing.OutBack }
+    }
+
     AppArt {
+        id: art
         anchors.fill: parent
         u: card.u
         appId: card.itemId

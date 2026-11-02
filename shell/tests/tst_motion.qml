@@ -16,8 +16,9 @@ Item {
     }
 
     Component { id: spyComponent; SignalSpy {} }
-    Component { id: tileComponent; Tile { index: 0; key: "games"; title: "Games" } }
+    Component { id: cardComponent; ArtCard { itemId: "steam:620"; title: "Portal 2" } }
     SignalSpy { id: switchSpy; target: Profiles; signalName: "switchFinished" }
+    SignalSpy { id: launchSpy; target: Library; signalName: "launchRequested" }
 
     TestCase {
         id: tc
@@ -92,25 +93,50 @@ Item {
             tryVerify(() => pad.message.indexOf("attempt") >= 0, 2000, "the error message is shown")
         }
 
-        // The PIN-pad shake and the tile pulse are feedback animations: they run normally and
-        // do not run at all under reduced motion (the message/sound and the page change remain).
-        function test_feedback_animations_respect_reduced_motion() {
-            // Tile pulse (a stand-in tile: Home no longer has tiles, Tile.qml is kept).
-            const tile = createTemporaryObject(tileComponent, host)
-            verify(tile)
-            const pulse = findChild(tile, "pulseAnimation")
-            verify(pulse, "the tile has a pulse animation")
+        // Accept on a Recent card pulses it and starts the game; under reduced motion only the
+        // launch remains.
+        function test_recent_card_accept_pulses() {
+            keyClick(Qt.Key_Down)
+            tryVerify(() => find("recentRow").activeFocus, 2000, "Down goes to the Recent row")
+            const card = find("recentRow").currentItem
+            verify(card)
+            const pulse = findChild(card, "pulseAnimation")
+            verify(pulse, "the card has a pulse animation")
             const pulseSpy = createTemporaryObject(spyComponent, host, { target: pulse, signalName: "runningChanged" })
             verify(pulseSpy.valid)
 
             DeviceSettings.reducedMotion = true
-            tile.pulse()
+            launchSpy.clear()
+            keyClick(Qt.Key_Return)
+            tryCompare(launchSpy, "count", 1)
+            wait(150)
+            compare(pulseSpy.count, 0, "no pulse under reduced motion")
+
+            DeviceSettings.reducedMotion = false
+            keyClick(Qt.Key_Return)
+            tryCompare(launchSpy, "count", 2)
+            tryVerify(() => pulseSpy.count > 0, 2000, "Accept pulses the card with motion on")
+        }
+
+        // The PIN-pad shake and the card pulse are feedback animations: they run normally and
+        // do not run at all under reduced motion (the message/sound and the page change remain).
+        function test_feedback_animations_respect_reduced_motion() {
+            // Card pulse (a stand-alone ArtCard).
+            const card = createTemporaryObject(cardComponent, host)
+            verify(card)
+            const pulse = findChild(card, "pulseAnimation")
+            verify(pulse, "the card has a pulse animation")
+            const pulseSpy = createTemporaryObject(spyComponent, host, { target: pulse, signalName: "runningChanged" })
+            verify(pulseSpy.valid)
+
+            DeviceSettings.reducedMotion = true
+            card.pulse()
             wait(150)
             compare(pulseSpy.count, 0, "no pulse under reduced motion")
             verify(!pulse.running)
 
             DeviceSettings.reducedMotion = false
-            tile.pulse()
+            card.pulse()
             tryVerify(() => pulseSpy.count > 0, 2000, "the pulse runs with motion on")
 
             // PIN-pad shake: wrong PIN for Player One (p1, PIN 1234; 2 of the 5 free attempts).

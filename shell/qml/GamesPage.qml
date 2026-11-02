@@ -28,6 +28,13 @@ Page {
         Notifications.show(qsTr("Starting %1…").arg(g.title ?? id), "info")
     }
 
+    function acceptCurrent() {
+        if (grid.currentIndex < 0)
+            return
+        (grid.currentItem as ArtCard)?.pulse()
+        launch(shownIds[grid.currentIndex])
+    }
+
     function focusContent() {
         if (Library.games.length === 0)
             storeButton.forceActiveFocus()
@@ -103,8 +110,8 @@ Page {
                 focused: GridView.isCurrentItem && GridView.view.activeFocus
             }
 
-            Keys.onReturnPressed: if (currentIndex >= 0) page.launch(page.shownIds[currentIndex])
-            Keys.onEnterPressed: if (currentIndex >= 0) page.launch(page.shownIds[currentIndex])
+            Keys.onReturnPressed: page.acceptCurrent()
+            Keys.onEnterPressed: page.acceptCurrent()
             Keys.onUpPressed: {
                 if (currentIndex < page.columns) {
                     Sfx.navigate()

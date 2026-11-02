@@ -64,7 +64,6 @@ qt_add_qml_module(ruyashell
         qml/Setup.qml
         qml/ToastLayer.qml
         qml/VolumeOsd.qml
-        qml/Tile.qml
         qml/Badge.qml
         qml/Backdrop.qml
         qml/FpsMeter.qml

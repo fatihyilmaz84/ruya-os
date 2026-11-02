@@ -586,8 +586,8 @@ FocusScope {
             }
 
             onCurrentIndexChanged: if (activeFocus) Sfx.navigate()
-            Keys.onReturnPressed: root.playHero()
-            Keys.onEnterPressed: root.playHero()
+            Keys.onReturnPressed: root.playRecent()
+            Keys.onEnterPressed: root.playRecent()
             Keys.onUpPressed: { Sfx.navigate(); heroBlock.forceActiveFocus() }
         }
     }
@@ -627,6 +627,12 @@ FocusScope {
         Sfx.select()
         Library.launch(id)
         Notifications.show(qsTr("Starting %1…").arg(heroItem.title ?? id), "info")
+    }
+
+    // Accept on a Recent card: the card pulses, then the game starts (the hero follows the row).
+    function playRecent() {
+        (recentRow.currentItem as ArtCard)?.pulse()
+        playHero()
     }
 
     function openDetails() {

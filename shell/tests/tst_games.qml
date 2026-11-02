@@ -15,6 +15,7 @@ Item {
     }
 
     SignalSpy { id: launchSpy; target: Library; signalName: "launchRequested" }
+    SignalSpy { id: pulseSpy; signalName: "runningChanged" }
 
     TestCase {
         id: tc
@@ -81,6 +82,20 @@ Item {
             tryCompare(launchSpy, "count", 1)
             compare(launchSpy.signalArguments[0][0], "steam:620")
             compare(launchSpy.signalArguments[0][1], "steam://rungameid/620")
+        }
+
+        function test_accept_pulses_the_card() {
+            start("")
+            tryVerify(() => find("gamesGrid").activeFocus, 2000)
+            const card = find("gamesGrid").currentItem
+            verify(card)
+            const pulse = findChild(card, "pulseAnimation")
+            verify(pulse, "the card has a pulse animation")
+            pulseSpy.target = pulse
+            pulseSpy.clear()
+            keyClick(Qt.Key_Return)
+            tryCompare(launchSpy, "count", 1)
+            tryVerify(() => pulseSpy.count > 0, 2000, "Accept pulses the game card")
         }
 
         function test_recent() {

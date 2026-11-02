@@ -93,7 +93,7 @@ QtObject {
     readonly property int tintMs: reducedMotion ? 0 : 700
     readonly property int overlayMs: reducedMotion ? 0 : 200   // Guide overlay fade
 
-    // Feedback animations. Under reduced motion the PIN-pad shake and the tile pulse do not run
+    // Feedback animations. Under reduced motion the PIN-pad shake and the card pulse do not run
     // at all (their call sites check `reducedMotion`); the error text/sound or the page change
     // that follows is the feedback.
     readonly property real shakeDistance: 18     // design px

@@ -2,6 +2,8 @@
 
 Older entries of the `docs/STATUS.md` session log, newest first. STATUS keeps only the latest five; the lead moves the rest here at each review. Nobody needs to read this file to start a task.
 
+- 2026-11-02 · Sonnet 5.5 · T-156 · `GetApp` returns `new_permissions` (installed vs remote metadata); a Standard profile needs an admin's PIN to update an app whose update adds a high-risk permission. The shell never called `GetApp` (permissions empty over D-Bus, so T-152's gate was dead there): the page now loads them first. `test` ALL GREEN (247 QML, 46 store Rust), `shots` reviewed. VM `0.0.23-t156`: `vm-store-check.sh` ALL CHECKS PASSED. A real permission-adding update unverified. Lead review due after 1-3 more tasks.
+
 - 2026-11-02 · Sonnet 5.5 · T-153 · `ruya-update`: rollback holds the command lock, no switch to a tagless reference, a bad channel file reports `failed` instead of stopping the service, forbidden string in Settings. `test` ALL GREEN (243 QML, 32 Rust in the crate). VM `0.0.22-t153`: bad channel file boots healthy, `vm-update-check.sh` ALL PASSED, 4.8 OK. Lead review due after 2-4 more tasks.
 
 - 2026-11-01 · Opus 5.5 · Lead (review `300245c..e19899f`: T-149, T-151, T-113, T-152, T-146) · `test` ALL GREEN (242 QML + 20 skips, 207 Rust, 63 s); `shots` ALL GREEN (55, 36 s; every Home, Games and Store-PIN screen reviewed). CI green at `300245c`. No VM run (T-151's `0.0.21-t151` covers the only packaged change).

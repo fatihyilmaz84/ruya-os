@@ -2,7 +2,7 @@
 
 **Read this first in every session; update it last.** Rules: root `CLAUDE.md`. Roles (Opus lead, Sonnet builders): `docs/LEAD.md`. Task format: `docs/tasks/README.md`. Finished work: each task's own file (`Status: done`, Outcome starting with `Verified:`); history before T-132 in [`STATUS-done.md`](STATUS-done.md). `scripts/lint-board.ps1` (part of `dev.ps1 test`) keeps this board and the task files in step.
 
-Last updated: 2026-11-02 (Opus 5.5, lead session T-130)
+Last updated: 2026-11-02 (Sonnet 5.5, T-155)
 
 ## Where we are
 
@@ -15,7 +15,7 @@ Verification legend: **host** = built and tested on Windows · **vm** = built in
 
 ## Board
 
-**NEXT → T-155**
+**NEXT → T-157**
 
 **Lead review due** after 3–5 more builder tasks (reviewed up to the lead commit "lead review e5c2ab3..ac6e5b1", see `docs/LEAD-NOTES.md`). **One builder session at a time, one task per session:** two builders in one checkout mixed three tasks' work on 2026-10-28. Builders: when your task makes this true, end your reply by recommending a lead session.
 
@@ -23,7 +23,6 @@ Open work only (todo, in-progress, blocked). The order is the recommended order;
 
 | ID | Title | Status | Depends |
 |---|---|---|---|
-| [T-155](tasks/T-155-card-accept-pulse.md) | Accept pulse on art cards; remove the unused `Tile` | todo | T-146 |
 | [T-157](tasks/T-157-icon-font.md) | Icon font (Material Symbols Rounded) and `Icon` | todo | — |
 | [T-159](tasks/T-159-restart-notice-and-download-retry.md) | `ruya-update`: notice before the automatic restart; retry a failed download | todo | T-154 |
 | [T-160](tasks/T-160-greenboot-wanted-check.md) | Greenboot: no failing wanted check on a healthy boot | todo | — |
@@ -65,10 +64,10 @@ Follow-ups and debt for the next planner. Builders: add one line per item, `- (s
 
 One entry per session, at most 700 characters (`lint-board.ps1`): date · model · tasks · what happened · numbers · follow-ups. Detail belongs in the task Outcome.
 
+- 2026-11-02 · Sonnet 5.5 · T-155 · Accept pulse moved from `Tile` into `ArtCard.pulse()` (the art shrinks to `pulseScale`, so no clash with the focus scale), run on Accept in the Home Recent row (`playRecent`) and the Games grid (`acceptCurrent`); `Tile.qml` deleted. Reduced-motion test retargeted to `ArtCard`; new Accept tests in `tst_motion` (Recent, plus launch still happens under reduced motion) and `tst_games`. `test` ALL GREEN (258 QML + 21 skips); no screenshot change. Lead review due after 2-4 more tasks.
+
 - 2026-11-02 · Opus 5.5 · Lead (T-130; no review, nothing landed since `39b25f2`) · `ruya-shell` is the compositor on KMS, cage removed; input devices by a `uaccess` rule (lead decision); `KeyRouter` takes Guide from any item inside an app. `test` ALL GREEN (256 QML + 21 skips), `shots` 56. VM `0.0.26-t130`, fresh disk: `RUYA_BOOT_OK`, no cage, wizard and picker over the real bus, T-123 sequence and a held Guide over a test client. Drill: update to `0.0.27`, rollback, a broken compositor rolled back by greenboot after 4 boots. Process: drill step 5 recipe, `/NUL` git-ignored. Inbox +3. Host drives 99 % full (owner).
 
 - 2026-11-02 · Opus 5.5 · Lead (review `e5c2ab3..ac6e5b1`: T-153, T-156, T-154) · `test` ALL GREEN (255 QML + 21 skips, 242 Rust, 52 s), `shots` 56 (39 s, update-adds and Updates screens reviewed), CI green at `48406c7`; no VM run (`0.0.25-t154` covers it). Fixed 2: a `last_check` in the future stopped the daily check; app start/close waited for the once-a-minute report. Inbox → T-159 (restart notice, download retry), T-160 (greenboot), T-161 (controller battery), T-147 hint. Process: `lint-board.ps1` caps the log at five entries of 700 characters.
 
 - 2026-11-02 · Sonnet 5.5 · T-154 · `ruya-update` schedule (`schedule.rs`, fake clock): check at start and every 24 h, scheduled check downloads, restart via `systemctl reboot` at 03:00-05:00 after 30 idle minutes with no app; `SetAutoRestart` (admin) + Settings switch, `ReportActivity` from the shell. `test` ALL GREEN (254 QML, 56 Rust), `shots` reviewed. VM `0.0.24-t154`->`0.0.25-t154`: guest clock moved to 03:10, the service rebooted the guest, cold start `RUYA_BOOT_OK`; `settings` ALL PASSED, exposure 4.8 OK. Shell D-Bus client unverified. Lead review due after 2-4 more tasks.
-
-- 2026-11-02 · Sonnet 5.5 · T-156 · `GetApp` returns `new_permissions` (installed vs remote metadata); a Standard profile needs an admin's PIN to update an app whose update adds a high-risk permission. The shell never called `GetApp` (permissions empty over D-Bus, so T-152's gate was dead there): the page now loads them first. `test` ALL GREEN (247 QML, 46 store Rust), `shots` reviewed. VM `0.0.23-t156`: `vm-store-check.sh` ALL CHECKS PASSED. A real permission-adding update unverified. Lead review due after 1-3 more tasks.
