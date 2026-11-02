@@ -1,0 +1,7 @@
+# Icons in the shell's subset font (T-157, 04-design-system.md 3.7): "<name> <code point, hex>".
+# Code points are Material Symbols Rounded's (the .codepoints file next to the upstream font).
+# To add an icon: add a line here and the same pair to the table in qml/Icon.qml, then run
+# scripts/subset-icons.sh in WSL (docs/dev-setup.md). tests/tst_icon.qml fails if the two differ.
+settings e8b8
+volume_up e050
+volume_off e04f

@@ -284,6 +284,28 @@ Item {
             compare(Audio.volume, 55)
         }
 
+        function test_osd_shows_a_speaker_icon_and_muted_in_words() {
+            const osd = find("volumeOsd")
+            const icon = find("volumeIcon")
+            const label = find("volumeLabel")
+            keyClick(Qt.Key_VolumeUp)
+            tryCompare(osd, "shown", true)
+            tryVerify(() => osd.visible)
+            compare(icon.name, "volume_up")
+            verify(icon.implicitWidth > 0)
+            verify(!label.visible, "no word beside the icon while sound is on")
+
+            keyClick(Qt.Key_VolumeMute)
+            tryCompare(Audio, "muted", true)
+            compare(icon.name, "volume_off")
+            tryVerify(() => label.visible, 2000, "the word Muted appears beside the icon")
+            compare(label.text, "Muted")
+
+            keyClick(Qt.Key_VolumeMute)
+            tryCompare(Audio, "muted", false)
+            compare(icon.name, "volume_up")
+        }
+
         function test_zz_screenshots() {
             if (!shotsDir)
                 skip("set RUYA_SHOTS_DIR to save screenshots")

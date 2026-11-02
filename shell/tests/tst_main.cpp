@@ -1,3 +1,4 @@
+#include <QFontDatabase>
 #include <QGuiApplication>
 #include <QPointer>
 #include <QQmlContext>
@@ -84,6 +85,17 @@ public:
 public slots:
     void qmlEngineAvailable(QQmlEngine *engine)
     {
+        // The icon fonts, as main.cpp loads them. Setup is constructed before the
+        // QGuiApplication exists, so this is the first place fonts can be registered.
+        static bool fontsLoaded = false;
+        if (!fontsLoaded) {
+            fontsLoaded = true;
+            for (const char *file : {"MaterialSymbolsRounded.ttf", "MaterialSymbolsRoundedFilled.ttf"}) {
+                const QString path = QStringLiteral(":/qt/qml/RuyaShell/fonts/") + QLatin1String(file);
+                if (QFontDatabase::addApplicationFont(path) < 0)
+                    qWarning("ruya-shell test: cannot load font %s", file);
+            }
+        }
         // Set RUYA_SHOTS_DIR to have the screenshot test save PNGs there.
         engine->rootContext()->setContextProperty(QStringLiteral("windowGuard"), new WindowGuard(engine));
         engine->rootContext()->setContextProperty(QStringLiteral("shotsDir"),

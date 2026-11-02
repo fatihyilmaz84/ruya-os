@@ -84,6 +84,7 @@ qt_add_qml_module(ruyashell
         qml/SecondaryButton.qml
         qml/SectionNav.qml
         qml/GlassPill.qml
+        qml/Icon.qml
         qml/LibraryDetailsPage.qml
         qml/SettingsPage.qml
         qml/PowerPage.qml
@@ -107,6 +108,8 @@ qt_add_qml_module(ruyashell
         sounds/navigate.wav
         sounds/select.wav
         sounds/back.wav
+        fonts/MaterialSymbolsRounded.ttf
+        fonts/MaterialSymbolsRoundedFilled.ttf
 )
 
 # qmltyperegistrar includes the QML_ELEMENT headers by file name.
@@ -165,6 +168,8 @@ endif()
 
 include(GNUInstallDirs)
 install(TARGETS ruya-shell RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+# Licences of the bundled fonts (T-157; Inter joins with T-145).
+install(FILES fonts/LICENSE-MaterialSymbols.txt DESTINATION share/licenses/ruyaos)
 
 if(RUYA_BUILD_TESTS)
     find_package(Qt6 REQUIRED COMPONENTS QuickTest)

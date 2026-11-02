@@ -1,5 +1,6 @@
 #include <QCommandLineParser>
 #include <QFile>
+#include <QFontDatabase>
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
 #include <QQuickWindow>
@@ -27,6 +28,13 @@ int main(int argc, char *argv[])
     QGuiApplication app(argc, argv);
     app.setApplicationName(QStringLiteral("ruya-shell"));
     app.setOrganizationDomain(QStringLiteral("ruyaos.org"));
+
+    // The icon font cuts (04 §3.7, T-157) must be registered before the engine draws any text.
+    for (const char *file : {"MaterialSymbolsRounded.ttf", "MaterialSymbolsRoundedFilled.ttf"}) {
+        const QString path = QStringLiteral(":/qt/qml/RuyaShell/fonts/") + QLatin1String(file);
+        if (QFontDatabase::addApplicationFont(path) < 0)
+            qWarning("ruya-shell: cannot load font %s", file);
+    }
 
     QCommandLineParser parser;
     parser.addHelpOption();

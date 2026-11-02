@@ -96,11 +96,21 @@ FocusScope {
                 Text {
                     id: text
                     anchors.centerIn: parent
-                    // The Settings pill is an icon; its name is the accessible name.
-                    text: pill.modelData === "settings" ? "⚙" : nav.label(pill.modelData)
+                    text: pill.modelData === "settings" ? "" : nav.label(pill.modelData)
                     color: pill.isSection ? Theme.onPrimary : Theme.text
-                    font.pixelSize: (pill.modelData === "settings" ? Theme.typeTitle : Theme.typeBody) * nav.u
+                    font.pixelSize: Theme.typeBody * nav.u
                     font.weight: pill.isSection ? Theme.weightDemiBold : Theme.weightRegular
+                }
+                // The Settings pill is an icon, filled while Settings is the section on screen; its
+                // name is the accessible name of the pill.
+                Icon {
+                    objectName: "navIcon_" + pill.modelData
+                    anchors.centerIn: parent
+                    visible: pill.modelData === "settings"
+                    name: pill.modelData === "settings" ? "settings" : ""
+                    u: nav.u
+                    filled: pill.isSection
+                    color: pill.isSection ? Theme.onPrimary : Theme.text
                 }
             }
         }

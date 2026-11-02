@@ -2,7 +2,7 @@
 
 **Read this first in every session; update it last.** Rules: root `CLAUDE.md`. Roles (Opus lead, Sonnet builders): `docs/LEAD.md`. Task format: `docs/tasks/README.md`. Finished work: each task's own file (`Status: done`, Outcome starting with `Verified:`); history before T-132 in [`STATUS-done.md`](STATUS-done.md). `scripts/lint-board.ps1` (part of `dev.ps1 test`) keeps this board and the task files in step.
 
-Last updated: 2026-11-02 (Sonnet 5.5, T-155)
+Last updated: 2026-11-03 (Sonnet 5.5, T-157)
 
 ## Where we are
 
@@ -15,15 +15,14 @@ Verification legend: **host** = built and tested on Windows · **vm** = built in
 
 ## Board
 
-**NEXT → T-157**
+**NEXT → T-159**
 
-**Lead review due** after 3–5 more builder tasks (reviewed up to the lead commit "lead review e5c2ab3..ac6e5b1", see `docs/LEAD-NOTES.md`). **One builder session at a time, one task per session:** two builders in one checkout mixed three tasks' work on 2026-10-28. Builders: when your task makes this true, end your reply by recommending a lead session.
+**Lead review due** after 2–4 more builder tasks (reviewed up to the lead commit "lead review e5c2ab3..ac6e5b1", see `docs/LEAD-NOTES.md`). **One builder session at a time, one task per session:** two builders in one checkout mixed three tasks' work on 2026-10-28. Builders: when your task makes this true, end your reply by recommending a lead session.
 
 Open work only (todo, in-progress, blocked). The order is the recommended order; when NEXT is blocked take the first `todo` whose dependencies are `done` (a task's status is in its file header). `[lead]` tasks are skipped by builders. If nothing qualifies, **stop and ask for a planning session** (`docs/tasks/PLANNING.md`).
 
 | ID | Title | Status | Depends |
 |---|---|---|---|
-| [T-157](tasks/T-157-icon-font.md) | Icon font (Material Symbols Rounded) and `Icon` | todo | — |
 | [T-159](tasks/T-159-restart-notice-and-download-retry.md) | `ruya-update`: notice before the automatic restart; retry a failed download | todo | T-154 |
 | [T-160](tasks/T-160-greenboot-wanted-check.md) | Greenboot: no failing wanted check on a healthy boot | todo | — |
 | [T-158](tasks/T-158-hint-bar.md) | Hint bar with controller button glyphs | todo | T-157 |
@@ -41,6 +40,9 @@ Follow-ups and debt for the next planner. Builders: add one line per item, `- (s
 - (T-130) Apps connect to `ruya-0` in `ruya-shell`'s own runtime directory (mode 0700): apps running as a profile's user (ADR-004) cannot reach it. The `ruya-session` image task must add per-profile sockets (or hand the client a socket fd).
 - (T-130) A Wayland app that connects while nobody is signed in is drawn above the picker (it gets no focus); the `ruya-session` task should define what lock or sign-out does to open apps.
 - (T-130) Suspend/resume and VT switching under eglfs are untested, but the Guide power menu offers Suspend: try `Suspend` in the VM (and on hardware, B-002) before users rely on it.
+
+- (T-157) `tst_store_ui.qml::test_update_adding_high_risk_*` failed once (`Store.jobs` length 1 instead of 0) in a full `test` run and passed on every rerun: a possible timing flake in the mock install jobs; watch for it.
+- (T-157) The section nav is only on Home, so the Settings pill's filled state never shows in the running shell; it needs the nav (or the top bar) on the other pages to be seen.
 
 ## Blocked (need something this host doesn't have)
 
@@ -63,6 +65,8 @@ Follow-ups and debt for the next planner. Builders: add one line per item, `- (s
 ## Session log (newest first, the latest five; older entries in `STATUS-log.md`)
 
 One entry per session, at most 700 characters (`lint-board.ps1`): date · model · tasks · what happened · numbers · follow-ups. Detail belongs in the task Outcome.
+
+- 2026-11-03 · Sonnet 5.5 · T-157 · Material Symbols Rounded subset (3 icons, two static cuts, ~2 KB each) via `scripts/subset-icons.sh` (pinned commit, SHA-256), `Icon.qml` + `Theme` icon tokens, `lint-icons.ps1`; the Settings pill and volume OSD use it; licence in `/usr/share/licenses/ruyaos/`. `test` ALL GREEN (267 QML + 21 skips), `shots` reviewed. VM `0.0.28-t157`: `RUYA_BOOT_OK`, licence present, gear drawn. Test host loads fonts in `qmlEngineAvailable` (Setup precedes QGuiApplication). Inbox +2. Lead review due after 2-3 more tasks.
 
 - 2026-11-02 · Sonnet 5.5 · T-155 · Accept pulse moved from `Tile` into `ArtCard.pulse()` (the art shrinks to `pulseScale`, so no clash with the focus scale), run on Accept in the Home Recent row (`playRecent`) and the Games grid (`acceptCurrent`); `Tile.qml` deleted. Reduced-motion test retargeted to `ArtCard`; new Accept tests in `tst_motion` (Recent, plus launch still happens under reduced motion) and `tst_games`. `test` ALL GREEN (258 QML + 21 skips); no screenshot change. Lead review due after 2-4 more tasks.
 

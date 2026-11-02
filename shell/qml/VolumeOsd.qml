@@ -40,17 +40,27 @@ Item {
         border.color: Theme.glassBorder
     }
 
+    Icon {
+        id: icon
+        objectName: "volumeIcon"
+        anchors { left: parent.left; leftMargin: Theme.spaceL * osd.u; verticalCenter: parent.verticalCenter }
+        u: osd.u
+        name: Audio.muted ? "volume_off" : "volume_up"
+        color: Audio.muted ? Theme.toastWarning : Theme.text
+    }
     Text {
         id: label
-        anchors { left: parent.left; leftMargin: Theme.spaceL * osd.u; verticalCenter: parent.verticalCenter }
-        text: Audio.muted ? qsTr("Muted") : qsTr("Volume")
-        color: Audio.muted ? Theme.toastWarning : Theme.text
+        objectName: "volumeLabel"
+        anchors { left: icon.right; leftMargin: Theme.spaceS * osd.u; verticalCenter: parent.verticalCenter }
+        visible: Audio.muted
+        text: qsTr("Muted")
+        color: Theme.toastWarning
         font.pixelSize: Theme.typeBody * osd.u
     }
     Rectangle {
         id: track
         objectName: "volumeTrack"
-        anchors { left: label.right; leftMargin: Theme.spaceM * osd.u; right: value.left; rightMargin: Theme.spaceM * osd.u; verticalCenter: parent.verticalCenter }
+        anchors { left: Audio.muted ? label.right : icon.right; leftMargin: Theme.spaceM * osd.u; right: value.left; rightMargin: Theme.spaceM * osd.u; verticalCenter: parent.verticalCenter }
         height: 12 * osd.u
         radius: height / 2
         color: Theme.glass

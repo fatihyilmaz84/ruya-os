@@ -44,6 +44,16 @@ Image builds and VM disks are big (an image is ~4.7 GB, a qcow2 ~2.6 GB), and th
 
 In the VM, the shell's own log is `journalctl -b _UID=$(id -u ruya-shell)`. pam_systemd moves the compositor into `session-N.scope`, so `journalctl -u ruya-compositor@tty1` shows only the unit's start.
 
+### Adding an icon (T-157)
+
+The shell's icons come from a subset of Material Symbols Rounded (`shell/fonts/`, 04 §3.7). To add one: look up its code point in the upstream `.codepoints` file, add `<name> <hex>` to `shell/fonts/icons.txt` and the same pair to the table in `shell/qml/Icon.qml`, then cut the fonts again in WSL (`python3-fonttools` installed; no other setup):
+
+```bash
+cd /mnt/d/dev/RuyaOS && scripts/subset-icons.sh
+```
+
+The script downloads the variable font from a pinned upstream commit into a temporary directory (SHA-256 checked), checks every `icons.txt` pair against upstream, and rewrites the two static cuts (outlined, filled) in `shell/fonts/`. Commit the TTFs with the list. `scripts/lint-icons.ps1` (part of `dev.ps1 shell`) fails when the list and the table differ.
+
 ## Update / rollback drill (Phase 0 items 6–7; passed 2026-10-22)
 
 1. Boot the working disk: `.\scripts\smoke-test.ps1 -Work -Keep` (delete `output\qcow2\work.qcow2` first for a fresh one). `vm-reboot-check.ps1` needs `-Disk output\qcow2\work.qcow2` then.

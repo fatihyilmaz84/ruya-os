@@ -35,8 +35,8 @@
     </message>
     <message>
         <location line="+1"/>
-        <source>GPL-3.0-or-later; see LICENSE.md</source>
-        <translation>GPL-3.0 veya üzeri; bkz. LICENSE.md</translation>
+        <source>GPL-3.0-or-later; icon font Apache-2.0</source>
+        <translation>GPL-3.0 veya üzeri; simge yazı tipi Apache-2.0</translation>
     </message>
 </context>
 <context>
@@ -366,7 +366,7 @@
         <translation>%1 başlatılıyor…</translation>
     </message>
     <message>
-        <location line="+35"/>
+        <location line="+42"/>
         <source>Show</source>
         <translation>Göster</translation>
     </message>
@@ -1071,7 +1071,7 @@
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+286"/>
+        <location filename="../qml/Shell.qml" line="+289"/>
         <source>Could not %1.</source>
         <translation>%1 işlemi yapılamadı.</translation>
     </message>
@@ -1096,12 +1096,12 @@
         <translation>Ses çıkışı: %1</translation>
     </message>
     <message>
-        <location line="+526"/>
+        <location line="+532"/>
         <source>Power</source>
         <translation>Güç</translation>
     </message>
     <message>
-        <location line="-518"/>
+        <location line="-524"/>
         <source>Update ready. Restart to finish.</source>
         <translation>Güncelleme hazır. Bitirmek için yeniden başlat.</translation>
     </message>
@@ -1141,7 +1141,7 @@
         <translation>%1 başlatılıyor…</translation>
     </message>
     <message>
-        <location line="+180"/>
+        <location line="+186"/>
         <source>System</source>
         <translation>Sistem</translation>
     </message>
@@ -1442,14 +1442,9 @@
 <context>
     <name>VolumeOsd</name>
     <message>
-        <location filename="../qml/VolumeOsd.qml" line="+46"/>
+        <location filename="../qml/VolumeOsd.qml" line="+56"/>
         <source>Muted</source>
         <translation>Sessiz</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Volume</source>
-        <translation>Ses</translation>
     </message>
 </context>
 </TS>

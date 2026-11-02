@@ -29,6 +29,6 @@ SettingsPane {
         objectName: "aboutLicence"
         u: pane.u
         label: qsTr("Licence")
-        value: qsTr("GPL-3.0-or-later; see LICENSE.md")
+        value: qsTr("GPL-3.0-or-later; icon font Apache-2.0")
     }
 }

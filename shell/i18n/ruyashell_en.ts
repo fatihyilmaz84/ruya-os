@@ -35,8 +35,8 @@
     </message>
     <message>
         <location line="+1"/>
-        <source>GPL-3.0-or-later; see LICENSE.md</source>
-        <translation>GPL-3.0-or-later; see LICENSE.md</translation>
+        <source>GPL-3.0-or-later; icon font Apache-2.0</source>
+        <translation>GPL-3.0-or-later; icon font Apache-2.0</translation>
     </message>
 </context>
 <context>
@@ -366,7 +366,7 @@
         <translation>Starting %1…</translation>
     </message>
     <message>
-        <location line="+35"/>
+        <location line="+42"/>
         <source>Show</source>
         <translation>Show</translation>
     </message>
@@ -1073,7 +1073,7 @@
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+286"/>
+        <location filename="../qml/Shell.qml" line="+289"/>
         <source>Could not %1.</source>
         <translation>Could not %1.</translation>
     </message>
@@ -1098,12 +1098,12 @@
         <translation>Audio output: %1</translation>
     </message>
     <message>
-        <location line="+526"/>
+        <location line="+532"/>
         <source>Power</source>
         <translation>Power</translation>
     </message>
     <message>
-        <location line="-518"/>
+        <location line="-524"/>
         <source>Update ready. Restart to finish.</source>
         <translation>Update ready. Restart to finish.</translation>
     </message>
@@ -1143,7 +1143,7 @@
         <translation>Starting %1…</translation>
     </message>
     <message>
-        <location line="+180"/>
+        <location line="+186"/>
         <source>System</source>
         <translation>System</translation>
     </message>
@@ -1444,14 +1444,9 @@
 <context>
     <name>VolumeOsd</name>
     <message>
-        <location filename="../qml/VolumeOsd.qml" line="+46"/>
+        <location filename="../qml/VolumeOsd.qml" line="+56"/>
         <source>Muted</source>
         <translation>Muted</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Volume</source>
-        <translation>Volume</translation>
     </message>
 </context>
 </TS>

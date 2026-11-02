@@ -1,0 +1,48 @@
+import QtQuick
+import RuyaShell
+
+// A Material Symbols Rounded glyph by name (04 §3.7). The table below is kept in step with
+// fonts/icons.txt (scripts/lint-icons.ps1); an unknown name draws nothing and warns once.
+// `filled` is for the current or selected state. Decorative: the owner carries the accessible name.
+Item {
+    id: icon
+
+    property string name
+    property real u: 1
+    property real size: Theme.iconM         // design px, multiplied by `u`
+    property color color: Theme.text
+    property bool filled: false
+
+    readonly property var codePoints: ({
+        "settings": 0xe8b8,
+        "volume_up": 0xe050,
+        "volume_off": 0xe04f
+    })
+    readonly property bool known: name in codePoints
+
+    implicitWidth: known ? glyph.implicitWidth : 0
+    implicitHeight: known ? size * u : 0
+    width: implicitWidth
+    height: implicitHeight
+
+    Accessible.ignored: true
+
+    property bool warned: false
+    function warnIfUnknown() {
+        if (name !== "" && !known && !warned) {
+            warned = true
+            console.warn("Icon: unknown icon name '" + name + "'")
+        }
+    }
+    onNameChanged: warnIfUnknown()
+    Component.onCompleted: warnIfUnknown()
+
+    Text {
+        id: glyph
+        anchors.centerIn: parent
+        text: icon.known ? String.fromCodePoint(icon.codePoints[icon.name]) : ""
+        color: icon.color
+        font.family: icon.filled ? Theme.iconFamilyFilled : Theme.iconFamily
+        font.pixelSize: icon.size * icon.u
+    }
+}

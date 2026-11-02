@@ -26,6 +26,8 @@ jobs:
         run: pwsh -NoProfile -File scripts/lint-text.ps1
       - name: Token lint
         run: pwsh -NoProfile -File scripts/lint-tokens.ps1
+      - name: Icon lint
+        run: pwsh -NoProfile -File scripts/lint-icons.ps1
       - name: Translation lint
         run: pwsh -NoProfile -File scripts/lint-translations.ps1
       - name: Board lint

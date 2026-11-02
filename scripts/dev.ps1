@@ -191,9 +191,17 @@ function Test-QmlTests {
     Record "test lint" ($LASTEXITCODE -eq 0)
 }
 
+# The rules live in scripts\lint-icons.ps1 (shared with CI).
+function Test-Icons {
+    Step "icon lint (shell\fonts\icons.txt and the Icon.qml table agree)"
+    & (Join-Path $PSScriptRoot "lint-icons.ps1")
+    Record "icon lint" ($LASTEXITCODE -eq 0)
+}
+
 function Do-Shell {
     Do-Build
     Test-Tokens
+    Test-Icons
     Test-Translations
     Test-QmlTests
     Step "qmllint (module context)"

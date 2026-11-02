@@ -48,6 +48,11 @@ QtObject {
 
     // Type scale (04 §3.2): design px, multiplied by `u` at the call site.
     readonly property string fontFamily: ""     // empty = system default until the typeface is bundled (T-145)
+    // Icons (04 §3.7, T-157): two static cuts of Material Symbols Rounded under their own family names.
+    readonly property string iconFamily: "Material Symbols Rounded"
+    readonly property string iconFamilyFilled: "Material Symbols Rounded Filled"
+    readonly property real iconM: 40
+    readonly property real iconL: 64
     readonly property real typeHero: 96
     readonly property real typeDisplay: 64
     readonly property real typeTitle: 48

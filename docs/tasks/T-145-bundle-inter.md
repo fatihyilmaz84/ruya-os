@@ -35,6 +35,7 @@ The shell renders in Inter on every machine (Windows dev host, offscreen tests, 
 - `04-design-system.md` §3.2, ADR-012 (font no longer open), `docs/dev-setup.md` if anything changes.
 
 ## Hints
+- T-157 created the pattern for the licence: `install(FILES fonts/<licence> DESTINATION share/licenses/ruyaos)` in `shell/CMakeLists.txt`, and the fonts are loaded in `main.cpp` and in `tst_main.cpp`'s `qmlEngineAvailable` (not the `Setup` constructor: no `QGuiApplication` yet).
 - Fedora also packages it (`rsms-inter-fonts`), but a Qt resource keeps Windows, CI and the image identical.
 
 ## Outcome
