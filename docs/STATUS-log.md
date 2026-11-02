@@ -2,6 +2,13 @@
 
 Older entries of the `docs/STATUS.md` session log, newest first. STATUS keeps only the latest five; the lead moves the rest here at each review. Nobody needs to read this file to start a task.
 
+- 2026-10-30 · Sonnet 5.5 · T-152 · Standard profiles enter an admin's PIN (`PinPad` + `Profiles.verifyAdmin`) before Install of a high-risk app; note under the permissions; 4 tests, `20` reviewed. `test` and `shots` ALL GREEN (226 QML). Lead review is due after 1-2 more tasks.
+
+- 2026-10-30 · Sonnet 5.5 · T-113 · `Library` singleton (mock + unverified D-Bus client), `ArtCard`, real Games page (4-column grid, source filter, launch request + toast, empty state). `test` ALL GREEN (220 QML), `shots` ALL GREEN, `21` reviewed. `tst_pages` retargeted from the old placeholder. Lead review is due after 1-2 more tasks.
+
+- 2026-10-30 · Sonnet 5.5 · T-151 · `ruya-update` (bootc) + `forbidden` in XML/mock/test, unit, policy, greenboot check. `test` ALL GREEN (210 QML, 25 new Rust). VM `0.0.20`->`0.0.21-t151`: `vm-update-check.sh` ALL PASSED, restart from Settings booted the new version, exposure 4.8 OK.
+  Found in the VM: bootc needs `CAP_SYS_PTRACE` and no `RestrictSUIDSGID`. Progress is 0 then 100. Lead review is due after 2-3 more tasks.
+
 - 2026-10-30 · Sonnet 5.5 · T-149 · Flatpak items are `game` when the exported desktop entry's `[Desktop Entry]` `Categories` has `Game` (`AppLister::desktop_entry`, pure `is_game`); demo list has a game and an app. `rust` and `test` ALL GREEN (209 QML). D-Bus serving unverified.
 
 - 2026-10-30 · Opus 5.5 · Lead (review `4671bb5..e863439`: T-150, T-135, T-148, T-111) · `test` ALL GREEN (209 QML + 15 screenshot skips, 178 Rust); `shots` ALL GREEN (224; `17`, `18`, `19`, `25` reviewed, `19` now caught after the fade). CI green at `4671bb5`. No VM run (T-148's `0.0.19-t148` covers every service change).

@@ -21,6 +21,8 @@ public:
     void download() override;
     void rollback() override;
     void setChannel(const QString &channel) override;
+    void setAutoRestart(bool enabled) override;
+    void reportActivity(bool appRunning) override;
 
 private slots:
     void onStatusChanged();

@@ -254,6 +254,8 @@ FocusScope {
         appItem: root.focusedApp
         onGuidePressed: autoRepeat => { if (root.signedIn && !systemPanel.open) root.guideDown(autoRepeat) }
         onGuideReleased: autoRepeat => root.guideUp(autoRepeat)
+        // The update service restarts the console only when nobody is using it.
+        onActivity: Update.noteActivity(root.focusedApp !== null)
     }
 
     Keys.onPressed: event => {

@@ -37,6 +37,8 @@ void MockUpdateBackend::reset()
     m_pauseAt = -1;
     m_paused = false;
     m_rollbackCount = 0;
+    m_activityCount = 0;
+    m_lastAppRunning = false;
     m_callerIsAdmin = true;
     publish();
 }
@@ -140,6 +142,21 @@ void MockUpdateBackend::setChannel(const QString &channel)
         m_status.state = IdleState;
     publish();
     finish(QStringLiteral("setChannel"), Ok);
+}
+
+void MockUpdateBackend::setAutoRestart(bool enabled)
+{
+    if (!m_callerIsAdmin)
+        return finish(QStringLiteral("setAutoRestart"), Forbidden);
+    m_status.autoRestart = enabled;
+    publish();
+    finish(QStringLiteral("setAutoRestart"), Ok);
+}
+
+void MockUpdateBackend::reportActivity(bool appRunning)
+{
+    ++m_activityCount;
+    m_lastAppRunning = appRunning;
 }
 
 void MockUpdateBackend::step()

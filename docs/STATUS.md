@@ -2,7 +2,7 @@
 
 **Read this first in every session; update it last.** Rules: root `CLAUDE.md`. Roles (Opus lead, Sonnet builders): `docs/LEAD.md`. Task format: `docs/tasks/README.md`. Finished work: each task's own file (`Status: done`, Outcome starting with `Verified:`); history before T-132 in [`STATUS-done.md`](STATUS-done.md). `scripts/lint-board.ps1` (part of `dev.ps1 test`) keeps this board and the task files in step.
 
-Last updated: 2026-11-02 (Sonnet 5.5, T-156)
+Last updated: 2026-11-02 (Sonnet 5.5, T-154)
 
 ## Where we are
 
@@ -15,16 +15,15 @@ Verification legend: **host** = built and tested on Windows · **vm** = built in
 
 ## Board
 
-**NEXT → T-154**
+**NEXT → T-155**
 
-**Lead review due** after 3–5 more builder tasks (reviewed up to the lead commit "lead review 300245c..e19899f", see `docs/LEAD-NOTES.md`). **One builder session at a time, one task per session:** two builders in one checkout mixed three tasks' work on 2026-10-28. Builders: when your task makes this true, end your reply by recommending a lead session.
+**Lead review due** after 2–4 more builder tasks (reviewed up to the lead commit "lead review 300245c..e19899f", see `docs/LEAD-NOTES.md`). **One builder session at a time, one task per session:** two builders in one checkout mixed three tasks' work on 2026-10-28. Builders: when your task makes this true, end your reply by recommending a lead session.
 
 Open work only (todo, in-progress, blocked). The order is the recommended order; when NEXT is blocked take the first `todo` whose dependencies are `done` (a task's status is in its file header). `[lead]` tasks are skipped by builders. If nothing qualifies, **stop and ask for a planning session** (`docs/tasks/PLANNING.md`).
 
 | ID | Title | Status | Depends |
 |---|---|---|---|
 | [T-130](tasks/T-130-compositor-session.md) | **[lead]** Compositor session: `ruya-shell` replaces cage  | todo | T-150 |
-| [T-154](tasks/T-154-update-schedule-and-idle-reboot.md) | `ruya-update`: daily check, automatic download, reboot when idle | todo | T-153 |
 | [T-155](tasks/T-155-card-accept-pulse.md) | Accept pulse on art cards; remove the unused `Tile` | todo | T-146 |
 | [T-157](tasks/T-157-icon-font.md) | Icon font (Material Symbols Rounded) and `Icon` | todo | — |
 | [T-158](tasks/T-158-hint-bar.md) | Hint bar with controller button glyphs | todo | T-157 |
@@ -38,6 +37,9 @@ Open work only (todo, in-progress, blocked). The order is the recommended order;
 
 Follow-ups and debt for the next planner. Builders: add one line per item, `- (source) what, and why it matters`; write a task file only if your own task needs one. Run a planner at 5+ items.
 
+- (T-154) Tell the user before an automatic restart (toast or countdown, and a way to postpone); today `ruya-update` just runs `systemctl reboot` at night when idle.
+- (T-154) A scheduled download that fails is not retried until the next check (24 h); retry it after an hour like a failed check.
+- (T-154) When `ruya-session` runs apps it must call `Update1.ReportActivity(true)` (the shell only knows about its own app layer), and a headless/idle app should keep reporting so a long movie is not restarted over.
 - (T-153) Greenboot's wanted script `01_update_platforms_check.sh` fails on every VM boot ("wanted", so harmless); find out what it checks or drop it.
 - (lead) The status cluster's controller battery (04 §2) needs battery data: a `Devices1` contract over UPower in `ruya-devices` with its VM check, not a mock-only pane; plan it after T-157 (its icon comes from that set).
 
@@ -64,6 +66,8 @@ Follow-ups and debt for the next planner. Builders: add one line per item, `- (s
 
 One entry per session, at most 4 lines: date · model · tasks · what happened · numbers · follow-ups. Detail belongs in the task Outcome.
 
+- 2026-11-02 · Sonnet 5.5 · T-154 · `ruya-update` schedule (`schedule.rs`, fake clock): check at start and every 24 h, scheduled check downloads, restart via `systemctl reboot` at 03:00-05:00 after 30 idle minutes with no app; `SetAutoRestart` (admin) + Settings switch, `ReportActivity` from the shell. `test` ALL GREEN (254 QML, 56 Rust), `shots` reviewed. VM `0.0.24-t154`->`0.0.25-t154`: guest clock moved to 03:10, the service rebooted the guest, cold start `RUYA_BOOT_OK`; `settings` ALL PASSED, exposure 4.8 OK. Shell D-Bus client unverified. Lead review due after 2-4 more tasks.
+
 - 2026-11-02 · Sonnet 5.5 · T-156 · `GetApp` returns `new_permissions` (installed vs remote metadata); a Standard profile needs an admin's PIN to update an app whose update adds a high-risk permission. The shell never called `GetApp` (permissions empty over D-Bus, so T-152's gate was dead there): the page now loads them first. `test` ALL GREEN (247 QML, 46 store Rust), `shots` reviewed. VM `0.0.23-t156`: `vm-store-check.sh` ALL CHECKS PASSED. A real permission-adding update unverified. Lead review due after 1-3 more tasks.
 
 - 2026-11-02 · Sonnet 5.5 · T-153 · `ruya-update`: rollback holds the command lock, no switch to a tagless reference, a bad channel file reports `failed` instead of stopping the service, forbidden string in Settings. `test` ALL GREEN (243 QML, 32 Rust in the crate). VM `0.0.22-t153`: bad channel file boots healthy, `vm-update-check.sh` ALL PASSED, 4.8 OK. Lead review due after 2-4 more tasks.
@@ -74,10 +78,3 @@ One entry per session, at most 4 lines: date · model · tasks · what happened 
   Owner chose Material Symbols Rounded (ADR-013, 04 §3.7): planned T-157 (icon font, `Icon`, gear and OSD) and T-158 (hint bar).
 
 - 2026-10-31 · Sonnet 5.5 · T-146 · Art-led Home: hero art, hero block (Play/Details), Recent row, glass section nav with LB/RB, empty state; 5 new tokens, 5 components, `tst_home` (13 tests), 15 test files moved off the tiles. `test` ALL GREEN (241 QML). `shots` NOT run (session locked): screenshots unreviewed. Lead review is due.
-
-- 2026-10-30 · Sonnet 5.5 · T-152 · Standard profiles enter an admin's PIN (`PinPad` + `Profiles.verifyAdmin`) before Install of a high-risk app; note under the permissions; 4 tests, `20` reviewed. `test` and `shots` ALL GREEN (226 QML). Lead review is due after 1-2 more tasks.
-
-- 2026-10-30 · Sonnet 5.5 · T-113 · `Library` singleton (mock + unverified D-Bus client), `ArtCard`, real Games page (4-column grid, source filter, launch request + toast, empty state). `test` ALL GREEN (220 QML), `shots` ALL GREEN, `21` reviewed. `tst_pages` retargeted from the old placeholder. Lead review is due after 1-2 more tasks.
-
-- 2026-10-30 · Sonnet 5.5 · T-151 · `ruya-update` (bootc) + `forbidden` in XML/mock/test, unit, policy, greenboot check. `test` ALL GREEN (210 QML, 25 new Rust). VM `0.0.20`->`0.0.21-t151`: `vm-update-check.sh` ALL PASSED, restart from Settings booted the new version, exposure 4.8 OK.
-  Found in the VM: bootc needs `CAP_SYS_PTRACE` and no `RestrictSUIDSGID`. Progress is 0 then 100. Lead review is due after 2-3 more tasks.

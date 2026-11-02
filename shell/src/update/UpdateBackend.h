@@ -11,6 +11,7 @@ struct UpdateStatus
     QString available;
     QString staged;
     QString channel = QStringLiteral("stable");
+    bool autoRestart = true;
     qint64 lastCheck = 0;
     int progress = 0;
     bool rollbackAvailable = false;
@@ -32,10 +33,14 @@ public:
     virtual void download() = 0;
     virtual void rollback() = 0;
     virtual void setChannel(const QString &channel) = 0;
+    virtual void setAutoRestart(bool enabled) = 0;
+    // Input arrived (the caller limits this to once a minute); appRunning: an app is in front.
+    // No reply.
+    virtual void reportActivity(bool appRunning) = 0;
 
 signals:
     void statusChanged(const UpdateStatus &status);
-    // method: "check" | "download" | "rollback" | "setChannel"; status: see the XML header
+    // method: "check" | "download" | "rollback" | "setChannel" | "setAutoRestart"; status: see the XML header
     // ("ok", "busy", "unavailable", "invalid", "forbidden", "failed").
     void requestFinished(const QString &method, const QString &status);
 };

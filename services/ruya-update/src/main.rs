@@ -8,6 +8,7 @@ use std::sync::Arc;
 
 use ruya_update::bootc::{Bootc, BootcCli, Deployment, FakeBootc, HostStatus};
 use ruya_update::dbus::{forward, DynBootc, UpdateIface, BUS_NAME, OBJECT_PATH};
+use ruya_update::schedule::{LogReboot, Reboot, SystemClock, SystemctlReboot, TICK_SECS};
 use ruya_update::service::Update;
 
 fn main() {
@@ -49,7 +50,8 @@ fn run() -> Result<(), Box<dyn Error>> {
     });
     let update: Arc<Update<DynBootc>> = Arc::new(Update::new(bootc(session), dir));
     // `bootc status` can be slow right after boot: the name is taken first and a client reading
-    // earlier sees an empty record until the deployments are known.
+    // earlier sees an empty record until the deployments are known. The same thread then runs
+    // the schedule (daily check, restart at a quiet hour) once a minute.
     let (changes, receiver) = async_channel::unbounded();
     {
         let update = update.clone();
@@ -65,6 +67,17 @@ fn run() -> Result<(), Box<dyn Error>> {
                 }
             }
             let _ = changes.send_blocking(());
+            let reboot: Box<dyn Reboot> = if session {
+                Box::new(LogReboot)
+            } else {
+                Box::new(SystemctlReboot)
+            };
+            loop {
+                update.tick(&SystemClock, reboot.as_ref(), &mut || {
+                    let _ = changes.send_blocking(());
+                });
+                std::thread::sleep(std::time::Duration::from_secs(TICK_SECS));
+            }
         });
     }
 

@@ -281,6 +281,67 @@ Item {
             compare(find("rowVersion").value, "0.0.18 · Beta")
         }
 
+        function test_auto_restart_setting_round_trip() {
+            compare(Update.autoRestart, true, "on by default")
+            compare(request(() => Update.setAutoRestart(false))[1], "ok")
+            tryCompare(Update, "autoRestart", false)
+            compare(request(() => Update.setAutoRestart(true))[1], "ok")
+            tryCompare(Update, "autoRestart", true)
+        }
+
+        function test_auto_restart_is_refused_for_a_non_admin_caller() {
+            Update.mockSetCallerIsAdmin(false)
+            compare(request(() => Update.setAutoRestart(false))[1], "forbidden")
+            compare(Update.autoRestart, true)
+            Update.mockSetCallerIsAdmin(true)
+        }
+
+        function test_auto_restart_row_is_hidden_from_a_standard_profile() {
+            openSystemPane("p2", "")                      // Ada: standard
+            compare(find("rowAutoRestart").visible, false, "the setting is for admins")
+        }
+
+        function test_auto_restart_row_toggles_for_an_admin() {
+            openSystemPane("p1", "1234")
+            verify(find("rowAutoRestart").visible)
+            goToRow("rowAutoRestart")
+            compare(find("rowAutoRestart").checked, true)
+            keyClick(Qt.Key_Return)
+            tryCompare(Update, "autoRestart", false)
+            tryVerify(() => find("rowAutoRestart").checked === false)
+            verify(find("rowAutoRestart").activeFocus)
+            keyClick(Qt.Key_Return)
+            tryCompare(Update, "autoRestart", true)
+            tryVerify(() => find("rowAutoRestart").checked === true)
+        }
+
+        function test_a_refused_setting_says_so() {
+            openSystemPane("p1", "1234")
+            goToRow("rowAutoRestart")
+            Update.mockSetCallerIsAdmin(false)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("updateMessage").visible
+                            && find("updateMessage").text === "Only an admin can do this.")
+            compare(Update.autoRestart, true)
+            tryVerify(() => find("rowAutoRestart").checked === true, 2000, "the row shows what the service has")
+        }
+
+        function test_activity_is_reported_at_most_once_a_minute() {
+            compare(Update.mockActivityCount(), 0)
+            Update.noteActivity(false)
+            Update.noteActivity(true)
+            Update.noteActivity(false)
+            compare(Update.mockActivityCount(), 1, "a burst of input is one report")
+            compare(Update.mockLastActivityAppRunning(), false)
+        }
+
+        function test_input_in_the_shell_is_reported_once() {
+            compare(Update.mockActivityCount(), 0)
+            openSystemPane("p2", "")                      // dozens of key presses
+            compare(Update.mockActivityCount(), 1, "the shell reports input, once for the burst")
+            compare(Update.mockLastActivityAppRunning(), false, "no app is in front")
+        }
+
         function test_zz_screenshots() {
             if (!shotsDir)
                 skip("set RUYA_SHOTS_DIR to save screenshots")

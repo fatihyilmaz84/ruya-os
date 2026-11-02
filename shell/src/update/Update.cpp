@@ -58,8 +58,24 @@ void Update::setChannel(const QString &channel)
     m_backend->setChannel(channel);
 }
 
+void Update::setAutoRestart(bool enabled)
+{
+    m_backend->setAutoRestart(enabled);
+}
+
+void Update::noteActivity(bool appRunning)
+{
+    // A minute is plenty for a 30-minute idle rule, and keeps a held stick off the bus.
+    constexpr qint64 ReportEveryMs = 60 * 1000;
+    if (m_lastReport.isValid() && m_lastReport.elapsed() < ReportEveryMs)
+        return;
+    m_lastReport.start();
+    m_backend->reportActivity(appRunning);
+}
+
 void Update::mockReset()
 {
+    m_lastReport.invalidate();
     if (auto *mock = qobject_cast<MockUpdateBackend *>(m_backend.get()))
         mock->reset();
 }
@@ -104,4 +120,16 @@ int Update::mockRollbackCount() const
 {
     auto *mock = qobject_cast<MockUpdateBackend *>(m_backend.get());
     return mock ? mock->rollbackCount() : 0;
+}
+
+int Update::mockActivityCount() const
+{
+    auto *mock = qobject_cast<MockUpdateBackend *>(m_backend.get());
+    return mock ? mock->activityCount() : 0;
+}
+
+bool Update::mockLastActivityAppRunning() const
+{
+    auto *mock = qobject_cast<MockUpdateBackend *>(m_backend.get());
+    return mock && mock->lastActivityAppRunning();
 }

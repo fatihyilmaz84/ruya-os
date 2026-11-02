@@ -34,9 +34,22 @@ bool KeyRouter::isGuideKey(int key)
 
 bool KeyRouter::eventFilter(QObject *watched, QEvent *event)
 {
-    if (watched != m_window || !m_appItem || !m_appItem->hasActiveFocus())
+    if (watched != m_window)
         return false;
     const QEvent::Type type = event->type();
+    switch (type) {
+    case QEvent::KeyPress:
+    case QEvent::MouseButtonPress:
+    case QEvent::MouseMove:
+    case QEvent::TouchBegin:
+    case QEvent::Wheel:
+        emit activity();
+        break;
+    default:
+        break;
+    }
+    if (!m_appItem || !m_appItem->hasActiveFocus())
+        return false;
     if (type != QEvent::KeyPress && type != QEvent::KeyRelease)
         return false;
     auto *key = static_cast<QKeyEvent *>(event);

@@ -1073,7 +1073,7 @@
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+284"/>
+        <location filename="../qml/Shell.qml" line="+286"/>
         <source>Could not %1.</source>
         <translation>Could not %1.</translation>
     </message>
@@ -1261,18 +1261,18 @@
     <name>SystemPane</name>
     <message>
         <location filename="../qml/SystemPane.qml" line="+27"/>
-        <location line="+216"/>
+        <location line="+219"/>
         <source>Beta</source>
         <translation>Beta</translation>
     </message>
     <message>
-        <location line="-216"/>
-        <location line="+215"/>
+        <location line="-219"/>
+        <location line="+218"/>
         <source>Stable</source>
         <translation>Stable</translation>
     </message>
     <message>
-        <location line="-210"/>
+        <location line="-213"/>
         <source>Last checked %1</source>
         <translation>Last checked %1</translation>
     </message>
@@ -1347,7 +1347,7 @@
         <translation>The console starts the previous version the next time it restarts.</translation>
     </message>
     <message>
-        <location line="+18"/>
+        <location line="+20"/>
         <source>The previous version starts after the next restart.</source>
         <translation>The previous version starts after the next restart.</translation>
     </message>
@@ -1357,7 +1357,7 @@
         <translation>Could not roll back.</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+6"/>
         <source>An update is already in progress.</source>
         <translation>An update is already in progress.</translation>
     </message>
@@ -1367,8 +1367,8 @@
         <translation>The update could not be started.</translation>
     </message>
     <message>
-        <location line="-8"/>
-        <location line="+7"/>
+        <location line="-9"/>
+        <location line="+8"/>
         <source>Only an admin can do this.</source>
         <translation>Only an admin can do this.</translation>
     </message>
@@ -1393,7 +1393,12 @@
         <translation>Update channel</translation>
     </message>
     <message>
-        <location line="+26"/>
+        <location line="+17"/>
+        <source>Restart automatically for updates</source>
+        <translation>Restart automatically for updates</translation>
+    </message>
+    <message>
+        <location line="+22"/>
         <source>Roll back to the previous version</source>
         <translation>Roll back to the previous version</translation>
     </message>

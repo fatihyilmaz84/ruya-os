@@ -42,6 +42,9 @@ signals:
     // A Guide key taken from the focused app (press, or release; `autoRepeat` for held keys).
     void guidePressed(bool autoRepeat);
     void guideReleased(bool autoRepeat);
+    // Any key, mouse or touch input reached the window (for the idle rule of the update service;
+    // the receiver limits how often it acts on it).
+    void activity();
 
 private:
     QPointer<QQuickWindow> m_window;

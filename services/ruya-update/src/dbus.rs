@@ -123,6 +123,7 @@ fn record(r: &Record) -> Dict {
         ("available", Value::from(r.available.clone())),
         ("staged", Value::from(r.staged.clone())),
         ("channel", Value::from(r.channel.clone())),
+        ("auto_restart", Value::from(r.auto_restart)),
         ("last_check", Value::from(r.last_check)),
         ("progress", Value::from(r.progress)),
         ("rollback_available", Value::from(r.rollback_available)),
@@ -177,6 +178,24 @@ impl UpdateIface {
             self.changed();
         }
         status.as_str().to_owned()
+    }
+
+    async fn set_auto_restart(
+        &self,
+        enabled: bool,
+        #[zbus(header)] header: Header<'_>,
+        #[zbus(connection)] connection: &Connection,
+    ) -> String {
+        let admin = self.caller_is_admin(&header, connection).await;
+        let status = self.update.set_auto_restart(enabled, admin);
+        if status == Status::Ok {
+            self.changed();
+        }
+        status.as_str().to_owned()
+    }
+
+    fn report_activity(&self, app_running: bool) {
+        self.update.report_activity(now(), app_running);
     }
 
     fn get_status(&self) -> Dict {

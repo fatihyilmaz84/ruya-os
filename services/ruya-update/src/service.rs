@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 
 use crate::bootc::{tag_of, with_tag, Bootc, HostStatus};
+use crate::schedule::{parse_seconds, Clock, Reboot, Schedule};
 
 /// Statuses of the method replies (stable API, `api/dbus/org.ruyaos.Update1.xml`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -67,6 +68,7 @@ pub struct Record {
     pub available: String,
     pub staged: String,
     pub channel: String,
+    pub auto_restart: bool,
     pub last_check: i64,
     pub progress: u32,
     pub rollback_available: bool,
@@ -75,6 +77,8 @@ pub struct Record {
 
 const CHANNELS: [&str; 2] = ["stable", "beta"];
 const CHANNEL_FILE: &str = "channel";
+const AUTO_RESTART_FILE: &str = "auto_restart";
+const LAST_CHECK_FILE: &str = "last_check";
 
 struct Inner {
     state: State,
@@ -88,6 +92,9 @@ struct Inner {
     /// until `SetChannel` writes a good file.
     channel_problem: String,
     host: HostStatus,
+    /// "Restart automatically for updates"; on until an admin turns it off.
+    auto_restart: bool,
+    schedule: Schedule,
 }
 
 pub struct Update<B: Bootc> {
@@ -117,11 +124,30 @@ fn load_channel(dir: &std::path::Path) -> Result<Option<String>, String> {
     }
 }
 
-fn save_channel(dir: &std::path::Path, channel: &str) -> std::io::Result<()> {
+/// Writes one small state file atomically (tmp + rename).
+fn save_file(dir: &std::path::Path, name: &str, text: &str) -> std::io::Result<()> {
     fs::create_dir_all(dir)?;
-    let tmp = dir.join(format!("{CHANNEL_FILE}.tmp"));
-    fs::write(&tmp, format!("{channel}\n"))?;
-    fs::rename(tmp, dir.join(CHANNEL_FILE))
+    let tmp = dir.join(format!("{name}.tmp"));
+    fs::write(&tmp, format!("{text}\n"))?;
+    fs::rename(tmp, dir.join(name))
+}
+
+fn save_channel(dir: &std::path::Path, channel: &str) -> std::io::Result<()> {
+    save_file(dir, CHANNEL_FILE, channel)
+}
+
+/// The remembered automatic-restart setting; on when there is none or it is unreadable (a
+/// state file never stops the service).
+fn load_auto_restart(dir: &std::path::Path) -> bool {
+    match fs::read_to_string(dir.join(AUTO_RESTART_FILE)) {
+        Ok(text) if text.trim() == "off" => false,
+        Ok(text) if text.trim() == "on" => true,
+        Ok(text) => {
+            eprintln!("ruya-update: ignoring auto_restart {:?}", text.trim());
+            true
+        }
+        Err(_) => true,
+    }
 }
 
 impl<B: Bootc> Update<B> {
@@ -137,6 +163,11 @@ impl<B: Bootc> Update<B> {
             }
             None => (None, String::new()),
         };
+        let auto_restart = dir.as_deref().map(load_auto_restart).unwrap_or(true);
+        let last_check = dir
+            .as_deref()
+            .and_then(|d| fs::read_to_string(d.join(LAST_CHECK_FILE)).ok())
+            .map_or(0, |text| parse_seconds(&text));
         Update {
             bootc,
             dir,
@@ -144,11 +175,13 @@ impl<B: Bootc> Update<B> {
                 state: State::Idle,
                 available: String::new(),
                 error: String::new(),
-                last_check: 0,
+                last_check,
                 progress: 0,
                 channel,
                 channel_problem,
                 host: HostStatus::default(),
+                auto_restart,
+                schedule: Schedule::default(),
             }),
             commands: Mutex::new(()),
         }
@@ -191,6 +224,7 @@ impl<B: Bootc> Update<B> {
             available: inner.available.clone(),
             staged: staged_label(&inner.host).unwrap_or_default(),
             channel: effective_channel(&inner),
+            auto_restart: inner.auto_restart,
             last_check: inner.last_check,
             progress: inner.progress,
             rollback_available: inner.host.rollback.is_some() && !inner.host.rollback_queued,
@@ -232,6 +266,11 @@ impl<B: Bootc> Update<B> {
                 }
                 Ok((host, switching)) => {
                     inner.last_check = now;
+                    if let Some(dir) = &self.dir {
+                        if let Err(e) = save_file(dir, LAST_CHECK_FILE, &now.to_string()) {
+                            eprintln!("ruya-update: cannot remember the check time: {e}");
+                        }
+                    }
                     inner.available = available_version(&host, switching, &inner);
                     inner.host = host;
                     inner.state = if staged_label(&inner.host).is_some() {
@@ -384,6 +423,80 @@ impl<B: Bootc> Update<B> {
         Status::Ok
     }
 
+    pub fn set_auto_restart(&self, enabled: bool, admin: bool) -> Status {
+        if !admin {
+            return Status::Forbidden;
+        }
+        let mut inner = self.lock();
+        if let Some(dir) = &self.dir {
+            let text = if enabled { "on" } else { "off" };
+            if save_file(dir, AUTO_RESTART_FILE, text).is_err() {
+                return Status::Failed;
+            }
+        }
+        inner.auto_restart = enabled;
+        Status::Ok
+    }
+
+    /// Input arrived (the shell's report): the console is not idle, and `app_running` says
+    /// whether an app is in front.
+    pub fn report_activity(&self, now: i64, app_running: bool) {
+        self.lock().schedule.activity(now, app_running);
+    }
+
+    // ---- schedule --------------------------------------------------------------------
+
+    /// One look at the schedule, once a minute and at start (after `refresh`): the daily check
+    /// with the download it leads to, then the restart into a staged image. Blocks while a
+    /// check or download runs, so it belongs on its own thread.
+    pub fn tick(&self, clock: &dyn Clock, reboot: &dyn Reboot, emit: &mut dyn FnMut()) {
+        let now = clock.now();
+        self.lock().schedule.seen(now);
+        self.scheduled_check(now, emit);
+        self.scheduled_restart(clock, reboot);
+    }
+
+    fn scheduled_check(&self, now: i64, emit: &mut dyn FnMut()) {
+        {
+            let inner = self.lock();
+            // A staged image waits for its restart: a check could only say "staged".
+            if inner.state == State::Staged || !inner.schedule.check_due(inner.last_check, now) {
+                return;
+            }
+        }
+        if self.begin_check() != Status::Ok {
+            return; // a job is running; the next tick looks again
+        }
+        self.lock().schedule.attempted(now);
+        emit();
+        self.run_check(now, emit);
+        // Only what this check found (not an older find that the check could not confirm).
+        let found = {
+            let inner = self.lock();
+            inner.state == State::Idle && !inner.available.is_empty()
+        };
+        if found && self.begin_download() == Status::Ok {
+            emit();
+            self.run_download(emit);
+        }
+    }
+
+    fn scheduled_restart(&self, clock: &dyn Clock, reboot: &dyn Reboot) {
+        let due = {
+            let inner = self.lock();
+            inner.state == State::Staged
+                && inner.auto_restart
+                && inner.schedule.quiet(clock.now(), clock.minute_of_day())
+        };
+        if !due {
+            return;
+        }
+        eprintln!("ruya-update: the console is idle, restarting into the staged image");
+        if let Err(e) = reboot.reboot() {
+            eprintln!("ruya-update: automatic restart failed: {e}");
+        }
+    }
+
     /// The image reference to `bootc switch` to, when the chosen channel is not the tag the host
     /// tracks.
     fn switch_target(&self) -> Option<String> {
@@ -443,6 +556,7 @@ fn available_version(host: &HostStatus, switching: bool, inner: &Inner) -> Strin
 mod tests {
     use super::*;
     use crate::bootc::{Deployment, FakeBootc};
+    use crate::schedule::{FakeClock, FakeReboot};
 
     fn dep(image: &str, version: &str, digest: &str) -> Deployment {
         Deployment {
@@ -851,5 +965,280 @@ mod tests {
         check(&u);
         assert_eq!(u.begin_download(), Status::Ok);
         assert_eq!(u.rollback(true), Status::Busy);
+    }
+
+    // ---- schedule --------------------------------------------------------------------
+
+    const T0: i64 = 1_800_000_000;
+    const DAY: i64 = 24 * 3600;
+    const IDLE: i64 = 30 * 60;
+    /// 03:10 local time.
+    const NIGHT: u32 = 3 * 60 + 10;
+
+    fn calls_named(u: &Update<FakeBootc>, name: &str) -> usize {
+        u.bootc.calls().iter().filter(|c| *c == name).count()
+    }
+
+    /// A service whose remembered last check was `ago` seconds before `T0`.
+    fn service_checked(ago: i64, h: HostStatus) -> (Update<FakeBootc>, tempfile::TempDir) {
+        let dir = tempfile::tempdir().expect("tempdir");
+        fs::write(dir.path().join(LAST_CHECK_FILE), format!("{}\n", T0 - ago)).expect("write");
+        let u = Update::new(FakeBootc::new(h), Some(dir.path().to_owned()));
+        u.refresh().expect("refresh");
+        (u, dir)
+    }
+
+    fn staged_service() -> Update<FakeBootc> {
+        let mut h = host();
+        h.staged = Some(dep("reg:5000/ruyaos:stable", "0.0.20", "sha256:b"));
+        service(h)
+    }
+
+    #[test]
+    fn a_check_runs_at_start_when_the_last_one_is_old() {
+        let clock = FakeClock::new(T0, NIGHT);
+        let reboot = FakeReboot::default();
+        let (u, _dir) = service_checked(DAY + 1, host());
+        u.tick(&clock, &reboot, &mut || {});
+        assert_eq!(calls_named(&u, "check"), 1);
+        assert_eq!(u.record().last_check, T0);
+
+        // Never checked (nothing remembered) is old too.
+        let u = service(host());
+        u.tick(&clock, &reboot, &mut || {});
+        assert_eq!(calls_named(&u, "check"), 1);
+    }
+
+    #[test]
+    fn a_check_does_not_run_at_start_when_the_last_one_is_new() {
+        let clock = FakeClock::new(T0, NIGHT);
+        let reboot = FakeReboot::default();
+        let (u, _dir) = service_checked(DAY - 60, host());
+        u.tick(&clock, &reboot, &mut || {});
+        assert_eq!(calls_named(&u, "check"), 0);
+        assert_eq!(
+            u.record().last_check,
+            T0 - DAY + 60,
+            "remembered over a restart"
+        );
+    }
+
+    #[test]
+    fn the_check_repeats_every_24_hours() {
+        let mut h = host();
+        h.cached_update = None;
+        let clock = FakeClock::new(T0, NIGHT);
+        let reboot = FakeReboot::default();
+        let (u, _dir) = service_checked(DAY + 1, h);
+        u.tick(&clock, &reboot, &mut || {});
+        assert_eq!(calls_named(&u, "check"), 1);
+        clock.set(T0 + DAY - 1, NIGHT);
+        u.tick(&clock, &reboot, &mut || {});
+        assert_eq!(calls_named(&u, "check"), 1, "a second short of a day");
+        clock.set(T0 + DAY, NIGHT);
+        u.tick(&clock, &reboot, &mut || {});
+        assert_eq!(calls_named(&u, "check"), 2);
+    }
+
+    #[test]
+    fn a_scheduled_check_that_finds_an_update_downloads_it() {
+        let clock = FakeClock::new(T0, NIGHT);
+        let u = service(host());
+        let mut changes = 0;
+        u.tick(&clock, &FakeReboot::default(), &mut || changes += 1);
+        let r = u.record();
+        assert_eq!((r.state, r.staged.as_str()), (State::Staged, "0.0.20"));
+        assert_eq!(calls_named(&u, "upgrade"), 1);
+        assert!(
+            changes >= 3,
+            "checking, found, downloading, staged: {changes}"
+        );
+    }
+
+    #[test]
+    fn a_manual_check_does_not_download() {
+        let u = service(host());
+        check(&u);
+        assert_eq!(u.record().available, "0.0.20");
+        assert_eq!(calls_named(&u, "upgrade"), 0);
+        // The user's check counts as the day's check: the schedule leaves the find to them.
+        let clock = FakeClock::new(1000 + 60, NIGHT);
+        u.tick(&clock, &FakeReboot::default(), &mut || {});
+        assert_eq!(calls_named(&u, "upgrade"), 0);
+        assert_eq!(calls_named(&u, "check"), 1);
+    }
+
+    #[test]
+    fn nothing_is_downloaded_when_there_is_nothing_new() {
+        let mut h = host();
+        h.cached_update = None;
+        let u = service(h);
+        u.tick(
+            &FakeClock::new(T0, NIGHT),
+            &FakeReboot::default(),
+            &mut || {},
+        );
+        assert_eq!(u.record().state, State::UpToDate);
+        assert_eq!(calls_named(&u, "upgrade"), 0);
+    }
+
+    #[test]
+    fn a_failed_scheduled_check_is_retried_after_an_hour() {
+        let clock = FakeClock::new(T0, NIGHT);
+        let reboot = FakeReboot::default();
+        let u = service(host());
+        u.bootc.fail_next("offline");
+        u.tick(&clock, &reboot, &mut || {});
+        let r = u.record();
+        assert_eq!((r.state, r.error.as_str()), (State::Failed, "offline"));
+        assert_eq!(
+            calls_named(&u, "upgrade"),
+            0,
+            "a failed check downloads nothing"
+        );
+        clock.set(T0 + 3599, NIGHT);
+        u.tick(&clock, &reboot, &mut || {});
+        assert_eq!(calls_named(&u, "check"), 1);
+        clock.set(T0 + 3600, NIGHT);
+        u.tick(&clock, &reboot, &mut || {});
+        assert_eq!(calls_named(&u, "check"), 2);
+        assert_eq!(
+            u.record().state,
+            State::Staged,
+            "and this time it went through"
+        );
+    }
+
+    #[test]
+    fn no_scheduled_check_while_a_job_runs_or_an_update_waits() {
+        let clock = FakeClock::new(T0, NIGHT);
+        let u = service(host());
+        assert_eq!(u.begin_check(), Status::Ok);
+        u.tick(&clock, &FakeReboot::default(), &mut || {});
+        assert_eq!(calls_named(&u, "check"), 0, "busy: skipped");
+
+        let u = staged_service();
+        u.tick(&clock, &FakeReboot::default(), &mut || {});
+        assert_eq!(calls_named(&u, "check"), 0, "staged: nothing to look for");
+    }
+
+    #[test]
+    fn the_console_restarts_only_when_it_is_quiet() {
+        let reboot = FakeReboot::default();
+        let u = staged_service();
+        let clock = FakeClock::new(T0, NIGHT);
+
+        u.tick(&clock, &reboot, &mut || {}); // the start counts as activity
+        assert_eq!(reboot.count(), 0, "not idle yet");
+        clock.set(T0 + IDLE - 1, NIGHT);
+        u.tick(&clock, &reboot, &mut || {});
+        assert_eq!(reboot.count(), 0, "29:59 idle");
+
+        // Activity resets the idle time.
+        u.report_activity(T0 + IDLE - 1, false);
+        clock.set(T0 + IDLE + 60, NIGHT);
+        u.tick(&clock, &reboot, &mut || {});
+        assert_eq!(reboot.count(), 0);
+
+        // An app in front blocks it however long the console is idle.
+        u.report_activity(T0 + IDLE - 1, true);
+        clock.set(T0 + 3 * IDLE, NIGHT);
+        u.tick(&clock, &reboot, &mut || {});
+        assert_eq!(reboot.count(), 0, "app running");
+
+        u.report_activity(T0 + IDLE - 1, false);
+        u.tick(&clock, &reboot, &mut || {});
+        assert_eq!(reboot.count(), 1, "idle, no app, 03:10, setting on");
+    }
+
+    #[test]
+    fn the_console_restarts_only_inside_the_window() {
+        let reboot = FakeReboot::default();
+        let u = staged_service();
+        let clock = FakeClock::new(T0, 12 * 60);
+        u.tick(&clock, &reboot, &mut || {});
+        for (minute, expected) in [(12 * 60, 0), (3 * 60 - 1, 0), (5 * 60, 0), (3 * 60, 1)] {
+            clock.set(T0 + 2 * IDLE, minute);
+            u.tick(&clock, &reboot, &mut || {});
+            assert_eq!(reboot.count(), expected, "minute {minute}");
+        }
+    }
+
+    #[test]
+    fn the_console_does_not_restart_with_the_setting_off_or_nothing_staged() {
+        let reboot = FakeReboot::default();
+        let clock = FakeClock::new(T0, NIGHT);
+        let u = staged_service();
+        u.tick(&clock, &reboot, &mut || {});
+        assert_eq!(u.set_auto_restart(false, true), Status::Ok);
+        clock.set(T0 + 2 * IDLE, NIGHT);
+        u.tick(&clock, &reboot, &mut || {});
+        assert_eq!(reboot.count(), 0, "turned off");
+        assert_eq!(u.set_auto_restart(true, true), Status::Ok);
+        u.tick(&clock, &reboot, &mut || {});
+        assert_eq!(reboot.count(), 1);
+
+        // Nothing staged (the 03:10 check finds no update): nothing to restart into.
+        let mut h = host();
+        h.cached_update = None;
+        let reboot = FakeReboot::default();
+        let u = service(h);
+        let clock = FakeClock::new(T0, NIGHT);
+        u.tick(&clock, &reboot, &mut || {});
+        clock.set(T0 + 2 * IDLE, NIGHT);
+        u.tick(&clock, &reboot, &mut || {});
+        assert_eq!(reboot.count(), 0);
+    }
+
+    #[test]
+    fn an_update_found_overnight_restarts_after_the_idle_time() {
+        // The whole path: the tick checks, downloads, and 30 idle minutes later restarts.
+        let reboot = FakeReboot::default();
+        let clock = FakeClock::new(T0, NIGHT);
+        let u = service(host());
+        u.tick(&clock, &reboot, &mut || {});
+        assert_eq!(u.record().state, State::Staged);
+        assert_eq!(reboot.count(), 0);
+        clock.set(T0 + IDLE, NIGHT + 30);
+        u.tick(&clock, &reboot, &mut || {});
+        assert_eq!(reboot.count(), 1);
+    }
+
+    #[test]
+    fn a_failed_restart_is_tried_again_at_the_next_tick() {
+        let reboot = FakeReboot::default();
+        let u = staged_service();
+        let clock = FakeClock::new(T0, NIGHT);
+        u.tick(&clock, &reboot, &mut || {});
+        clock.set(T0 + IDLE, NIGHT);
+        reboot.fail_next();
+        u.tick(&clock, &reboot, &mut || {});
+        assert_eq!(reboot.count(), 0);
+        clock.set(T0 + IDLE + 60, NIGHT);
+        u.tick(&clock, &reboot, &mut || {});
+        assert_eq!(reboot.count(), 1);
+    }
+
+    #[test]
+    fn the_automatic_restart_setting_is_for_admins_and_survives_a_restart() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let new = || Update::new(FakeBootc::new(host()), Some(dir.path().to_owned()));
+        let u = new();
+        assert!(u.record().auto_restart, "on by default");
+        assert_eq!(u.set_auto_restart(false, false), Status::Forbidden);
+        assert!(u.record().auto_restart);
+        assert_eq!(u.set_auto_restart(false, true), Status::Ok);
+        assert!(!u.record().auto_restart);
+        assert!(!new().record().auto_restart, "remembered");
+        assert_eq!(u.set_auto_restart(true, true), Status::Ok);
+        assert!(new().record().auto_restart);
+    }
+
+    #[test]
+    fn a_bad_auto_restart_file_means_the_default() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        fs::write(dir.path().join(AUTO_RESTART_FILE), "maybe").expect("write");
+        let u = Update::new(FakeBootc::new(host()), Some(dir.path().to_owned()));
+        assert!(u.record().auto_restart);
     }
 }

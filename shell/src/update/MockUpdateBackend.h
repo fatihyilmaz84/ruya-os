@@ -7,8 +7,8 @@
 // In-memory Update1: a check finds one newer image (once), a download stages it in steps of
 // 10 %, a rollback stages the previous image. Steps take 100 ms (10 ms with RUYA_MOCK_FAST=1).
 // Follows the rules the real service will have: no Download without a found update, busy
-// while a check or download runs, Rollback only with rollback_available, "forbidden" for Rollback and SetChannel when
-// the caller is not an admin (test hook).
+// while a check or download runs, Rollback only with rollback_available, "forbidden" for Rollback, SetChannel and
+// SetAutoRestart when the caller is not an admin (test hook). ReportActivity is only counted.
 class MockUpdateBackend final : public UpdateBackend
 {
     Q_OBJECT
@@ -22,6 +22,8 @@ public:
     void download() override;
     void rollback() override;
     void setChannel(const QString &channel) override;
+    void setAutoRestart(bool enabled) override;
+    void reportActivity(bool appRunning) override;
 
     // Test hooks (reached through Update.mock*).
     void reset();
@@ -33,6 +35,8 @@ public:
     void setPauseAt(int percent) { m_pauseAt = percent; }
     void resume();
     int rollbackCount() const { return m_rollbackCount; }
+    int activityCount() const { return m_activityCount; }
+    bool lastActivityAppRunning() const { return m_lastAppRunning; }
     // The active profile is not an admin: Rollback and SetChannel answer "forbidden".
     void setCallerIsAdmin(bool admin) { m_callerIsAdmin = admin; }
 
@@ -51,5 +55,7 @@ private:
     int m_pauseAt = -1;
     bool m_paused = false;
     int m_rollbackCount = 0;
+    int m_activityCount = 0;
+    bool m_lastAppRunning = false;
     bool m_callerIsAdmin = true;
 };

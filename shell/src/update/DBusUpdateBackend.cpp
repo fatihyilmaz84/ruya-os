@@ -42,6 +42,7 @@ UpdateStatus toStatus(const QVariantMap &d)
     s.available = d.value(QStringLiteral("available")).toString();
     s.staged = d.value(QStringLiteral("staged")).toString();
     s.channel = d.value(QStringLiteral("channel"), s.channel).toString();
+    s.autoRestart = d.value(QStringLiteral("auto_restart"), s.autoRestart).toBool();
     s.lastCheck = d.value(QStringLiteral("last_check")).toLongLong();
     s.progress = d.value(QStringLiteral("progress")).toInt();
     s.rollbackAvailable = d.value(QStringLiteral("rollback_available")).toBool();
@@ -110,4 +111,16 @@ void DBusUpdateBackend::rollback()
 void DBusUpdateBackend::setChannel(const QString &channel)
 {
     call(QStringLiteral("SetChannel"), QStringLiteral("setChannel"), {channel});
+}
+
+void DBusUpdateBackend::setAutoRestart(bool enabled)
+{
+    call(QStringLiteral("SetAutoRestart"), QStringLiteral("setAutoRestart"), {enabled});
+}
+
+void DBusUpdateBackend::reportActivity(bool appRunning)
+{
+    auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("ReportActivity"));
+    msg.setArguments({appRunning});
+    m_bus.asyncCall(msg);
 }

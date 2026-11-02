@@ -6,8 +6,8 @@ import RuyaShell
 // translator and retranslates the UI at once. Language names are shown in their own language.
 //
 // The Updates group (org.ruyaos.Update1) is one row that follows the update state: check,
-// download (with progress), "Restart to finish". A rollback to the previous image and the
-// channel are for admins; the rollback asks for the admin's PIN (Profiles.verifyAdmin), then
+// download (with progress), "Restart to finish". A rollback to the previous image, the
+// channel and "Restart automatically for updates" are for admins; the rollback asks for the admin's PIN (Profiles.verifyAdmin), then
 // a confirmation, then calls Update.rollback().
 SettingsPane {
     id: pane
@@ -177,6 +177,8 @@ SettingsPane {
         target: Update
 
         function onRequestFinished(method, status) {
+            if (method === "setAutoRestart" && status !== "ok")
+                autoRestartRow.checked = Update.autoRestart
             if (method === "rollback" && pane.rollbackStep === "working") {
                 pane.rollbackStep = "idle"
                 if (status === "ok") {
@@ -187,7 +189,8 @@ SettingsPane {
                                                        : qsTr("Could not roll back."), true)
                 }
                 pane.restoreFocus()
-            } else if (status !== "ok" && (method === "check" || method === "download" || method === "setChannel")) {
+            } else if (status !== "ok" && (method === "check" || method === "download" || method === "setChannel"
+                                            || method === "setAutoRestart")) {
                 Sfx.back()
                 pane.report(status === "busy" ? qsTr("An update is already in progress.")
                             : status === "forbidden" ? qsTr("Only an admin can do this.")
@@ -248,6 +251,19 @@ SettingsPane {
         }
     }
     Binding { target: channelRow; property: "value"; value: Update.channel }
+
+    ToggleRow {
+        id: autoRestartRow
+        objectName: "rowAutoRestart"
+        u: pane.u
+        visible: pane.isAdmin
+        label: qsTr("Restart automatically for updates")
+        onToggled: checked => {
+            pane.report("", false)
+            Update.setAutoRestart(checked)
+        }
+    }
+    Binding { target: autoRestartRow; property: "checked"; value: Update.autoRestart }
 
     SettingRow {
         id: updateRow

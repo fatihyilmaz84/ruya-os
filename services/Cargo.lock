@@ -800,6 +800,7 @@ dependencies = [
  "async-channel",
  "blocking",
  "futures-lite",
+ "libc",
  "serde_json",
  "tempfile",
  "zbus",

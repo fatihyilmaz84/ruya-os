@@ -1,0 +1,269 @@
+//! When the service acts on its own: the daily check, and the restart into a staged image at a
+//! quiet hour. Pure rules; the time comes from a `Clock` and the restart goes through `Reboot`,
+//! so tests use a fake clock and a fake reboot.
+
+use std::process::Command;
+use std::sync::Mutex;
+
+/// A scheduled check when the last finished one is at least this old.
+pub const CHECK_INTERVAL_SECS: i64 = 24 * 60 * 60;
+/// A scheduled check that failed (offline, registry down) is tried again after this long.
+pub const RETRY_SECS: i64 = 60 * 60;
+/// No input for this long counts as idle.
+pub const IDLE_SECS: i64 = 30 * 60;
+/// The local-time window in which the console restarts by itself: [03:00, 05:00).
+pub const WINDOW_START_MINUTE: u32 = 3 * 60;
+pub const WINDOW_END_MINUTE: u32 = 5 * 60;
+/// How often the service looks at the schedule.
+pub const TICK_SECS: u64 = 60;
+
+pub trait Clock: Send + Sync {
+    /// Unix seconds.
+    fn now(&self) -> i64;
+    /// Minutes since local midnight, 0..1440.
+    fn minute_of_day(&self) -> u32;
+}
+
+/// Restarts the console.
+pub trait Reboot: Send + Sync {
+    fn reboot(&self) -> Result<(), String>;
+}
+
+/// The wall clock and the local time zone.
+pub struct SystemClock;
+
+impl Clock for SystemClock {
+    fn now(&self) -> i64 {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| i64::try_from(d.as_secs()).unwrap_or(0))
+    }
+
+    #[cfg(target_os = "linux")]
+    fn minute_of_day(&self) -> u32 {
+        let now: libc::time_t = self.now();
+        // SAFETY: `tm` is plain data that localtime_r fills in; both pointers are valid for the
+        // call, and localtime_r (unlike localtime) keeps no static buffer.
+        let mut tm: libc::tm = unsafe { std::mem::zeroed() };
+        let filled = unsafe { libc::localtime_r(&now, &mut tm) };
+        if filled.is_null() {
+            return utc_minute_of_day(self.now());
+        }
+        u32::try_from(tm.tm_hour * 60 + tm.tm_min).unwrap_or(0)
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    fn minute_of_day(&self) -> u32 {
+        utc_minute_of_day(self.now())
+    }
+}
+
+fn utc_minute_of_day(now: i64) -> u32 {
+    u32::try_from(now.rem_euclid(86_400) / 60).unwrap_or(0)
+}
+
+/// `systemctl reboot`: systemd stops the services and boots the staged deployment.
+pub struct SystemctlReboot;
+
+impl Reboot for SystemctlReboot {
+    fn reboot(&self) -> Result<(), String> {
+        let out = Command::new("systemctl")
+            .arg("reboot")
+            .output()
+            .map_err(|e| format!("cannot run systemctl: {e}"))?;
+        if out.status.success() {
+            Ok(())
+        } else {
+            Err(format!(
+                "systemctl reboot failed: {}",
+                String::from_utf8_lossy(&out.stderr).trim()
+            ))
+        }
+    }
+}
+
+/// Development (`--session`): says what it would have done.
+pub struct LogReboot;
+
+impl Reboot for LogReboot {
+    fn reboot(&self) -> Result<(), String> {
+        eprintln!("ruya-update: would reboot now (development)");
+        Ok(())
+    }
+}
+
+/// What the service knows about the console's activity, and when it last tried to check.
+#[derive(Debug, Default)]
+pub struct Schedule {
+    /// Unix seconds of the last input report; None until the first tick (then the service's
+    /// start counts as activity).
+    last_activity: Option<i64>,
+    app_running: bool,
+    /// Unix seconds of the last scheduled check that began; 0 = none.
+    last_attempt: i64,
+}
+
+impl Schedule {
+    /// The first thing a tick does: the service's start is the first activity.
+    pub fn seen(&mut self, now: i64) {
+        self.last_activity.get_or_insert(now);
+    }
+
+    pub fn activity(&mut self, now: i64, app_running: bool) {
+        self.last_activity = Some(now);
+        self.app_running = app_running;
+    }
+
+    pub fn attempted(&mut self, now: i64) {
+        self.last_attempt = now;
+    }
+
+    /// A scheduled check is due: the last finished check is a day old (0 = never), and the last
+    /// attempt, finished or not, is at least `RETRY_SECS` ago.
+    pub fn check_due(&self, last_check: i64, now: i64) -> bool {
+        now - last_check >= CHECK_INTERVAL_SECS
+            && (self.last_attempt == 0 || now - self.last_attempt >= RETRY_SECS)
+    }
+
+    /// The console may restart by itself: inside the window, idle long enough, no app.
+    pub fn quiet(&self, now: i64, minute_of_day: u32) -> bool {
+        let Some(last) = self.last_activity else {
+            return false;
+        };
+        (WINDOW_START_MINUTE..WINDOW_END_MINUTE).contains(&minute_of_day)
+            && now - last >= IDLE_SECS
+            && !self.app_running
+    }
+}
+
+/// The remembered `last_check` (unix seconds). A missing or unreadable file means "never".
+pub(crate) fn parse_seconds(text: &str) -> i64 {
+    text.trim().parse::<i64>().unwrap_or(0).max(0)
+}
+
+/// For tests: a settable clock.
+#[derive(Default)]
+pub struct FakeClock {
+    state: Mutex<(i64, u32)>,
+}
+
+impl FakeClock {
+    pub fn new(now: i64, minute_of_day: u32) -> Self {
+        FakeClock {
+            state: Mutex::new((now, minute_of_day)),
+        }
+    }
+
+    pub fn set(&self, now: i64, minute_of_day: u32) {
+        *self.state.lock().expect("fake lock") = (now, minute_of_day);
+    }
+}
+
+impl Clock for FakeClock {
+    fn now(&self) -> i64 {
+        self.state.lock().expect("fake lock").0
+    }
+    fn minute_of_day(&self) -> u32 {
+        self.state.lock().expect("fake lock").1
+    }
+}
+
+/// For tests: counts the restarts it was asked for.
+#[derive(Default)]
+pub struct FakeReboot {
+    count: Mutex<u32>,
+    fail: Mutex<bool>,
+}
+
+impl FakeReboot {
+    pub fn count(&self) -> u32 {
+        *self.count.lock().expect("fake lock")
+    }
+
+    pub fn fail_next(&self) {
+        *self.fail.lock().expect("fake lock") = true;
+    }
+}
+
+impl Reboot for FakeReboot {
+    fn reboot(&self) -> Result<(), String> {
+        if std::mem::take(&mut *self.fail.lock().expect("fake lock")) {
+            return Err("no".to_owned());
+        }
+        *self.count.lock().expect("fake lock") += 1;
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const DAY: i64 = CHECK_INTERVAL_SECS;
+
+    #[test]
+    fn a_check_is_due_after_a_day_or_never() {
+        let s = Schedule::default();
+        assert!(s.check_due(0, 1_000_000), "never checked");
+        assert!(!s.check_due(1_000_000 - DAY + 1, 1_000_000));
+        assert!(s.check_due(1_000_000 - DAY, 1_000_000));
+    }
+
+    #[test]
+    fn a_failed_attempt_waits_an_hour() {
+        let mut s = Schedule::default();
+        s.attempted(1_000_000);
+        assert!(!s.check_due(0, 1_000_000 + RETRY_SECS - 1));
+        assert!(s.check_due(0, 1_000_000 + RETRY_SECS));
+    }
+
+    #[test]
+    fn quiet_needs_the_window_idle_time_and_no_app() {
+        let mut s = Schedule::default();
+        let t0 = 1_000_000;
+        assert!(!s.quiet(t0 + IDLE_SECS, 200), "nothing seen yet");
+        s.seen(t0);
+        let late = t0 + IDLE_SECS;
+        assert!(s.quiet(late, 200));
+        assert!(!s.quiet(late - 1, 200), "29:59 idle");
+        assert!(!s.quiet(late, WINDOW_START_MINUTE - 1), "02:59");
+        assert!(s.quiet(late, WINDOW_START_MINUTE), "03:00");
+        assert!(s.quiet(late, WINDOW_END_MINUTE - 1), "04:59");
+        assert!(!s.quiet(late, WINDOW_END_MINUTE), "05:00");
+        s.activity(t0, true);
+        assert!(!s.quiet(late, 200), "an app runs");
+        s.activity(t0, false);
+        assert!(s.quiet(late, 200));
+        s.activity(late - 1, false);
+        assert!(!s.quiet(late, 200), "activity resets the idle time");
+    }
+
+    #[test]
+    fn seen_keeps_the_first_activity() {
+        let mut s = Schedule::default();
+        s.seen(10);
+        s.seen(99_999);
+        assert!(s.quiet(10 + IDLE_SECS, 200));
+    }
+
+    #[test]
+    fn seconds_files() {
+        assert_eq!(parse_seconds("1700000000\n"), 1_700_000_000);
+        assert_eq!(parse_seconds("junk"), 0);
+        assert_eq!(parse_seconds("-5"), 0);
+    }
+
+    #[test]
+    fn the_utc_fallback_counts_minutes() {
+        assert_eq!(utc_minute_of_day(0), 0);
+        assert_eq!(utc_minute_of_day(3 * 3600 + 120), 182);
+        assert_eq!(utc_minute_of_day(86_400 + 59), 0);
+    }
+
+    #[test]
+    fn the_system_clock_is_sane() {
+        let c = SystemClock;
+        assert!(c.now() > 1_700_000_000);
+        assert!(c.minute_of_day() < 1440);
+    }
+}

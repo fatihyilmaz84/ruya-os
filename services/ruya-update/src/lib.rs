@@ -4,4 +4,5 @@
 
 pub mod bootc;
 pub mod dbus;
+pub mod schedule;
 pub mod service;

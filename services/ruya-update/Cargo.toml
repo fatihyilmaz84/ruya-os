@@ -13,5 +13,8 @@ futures-lite = "2"
 blocking = "1"  # runs Rollback (which waits for `bootc`) off the executor; already in the tree through zbus
 async-channel = "2"  # change events from the job thread to the signal emitter; already in the tree through zbus
 
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = "0.2"  # localtime_r: the local hour for the restart window (already in the tree)
+
 [dev-dependencies]
 tempfile = "3"

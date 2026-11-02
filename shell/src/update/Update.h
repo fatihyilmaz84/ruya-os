@@ -2,6 +2,7 @@
 
 #include "UpdateBackend.h"
 
+#include <QElapsedTimer>
 #include <QObject>
 #include <QQmlEngine>
 
@@ -22,6 +23,9 @@ class Update : public QObject
     Q_PROPERTY(QString available READ available NOTIFY statusChanged)
     Q_PROPERTY(QString staged READ staged NOTIFY statusChanged)
     Q_PROPERTY(QString channel READ channel NOTIFY statusChanged)
+    // "Restart automatically for updates": the service restarts into a staged image when the
+    // console has been idle at night.
+    Q_PROPERTY(bool autoRestart READ autoRestart NOTIFY statusChanged)
     // Unix seconds of the last finished check, 0 = never.
     Q_PROPERTY(qint64 lastCheck READ lastCheck NOTIFY statusChanged)
     Q_PROPERTY(int progress READ progress NOTIFY statusChanged)
@@ -42,6 +46,7 @@ public:
     QString available() const { return m_status.available; }
     QString staged() const { return m_status.staged; }
     QString channel() const { return m_status.channel; }
+    bool autoRestart() const { return m_status.autoRestart; }
     qint64 lastCheck() const { return m_status.lastCheck; }
     int progress() const { return m_status.progress; }
     bool rollbackAvailable() const { return m_status.rollbackAvailable; }
@@ -54,6 +59,10 @@ public:
     Q_INVOKABLE void download();
     Q_INVOKABLE void rollback();
     Q_INVOKABLE void setChannel(const QString &channel);
+    Q_INVOKABLE void setAutoRestart(bool enabled);
+    // Input arrived. Tells the service (so it can tell idle from busy), at most once a minute;
+    // appRunning: an app is in front.
+    Q_INVOKABLE void noteActivity(bool appRunning);
 
     // Tests only, and only with the mock backend (otherwise a no-op / 0).
     Q_INVOKABLE void mockReset();
@@ -63,11 +72,13 @@ public:
     Q_INVOKABLE void mockPauseDownloadAt(int percent);
     Q_INVOKABLE void mockResumeDownload();
     Q_INVOKABLE int mockRollbackCount() const;
+    Q_INVOKABLE int mockActivityCount() const;
+    Q_INVOKABLE bool mockLastActivityAppRunning() const;
     Q_INVOKABLE void mockSetCallerIsAdmin(bool admin);
 
 signals:
     void statusChanged();
-    // method: "check" | "download" | "rollback" | "setChannel"; status: see the XML header.
+    // method: "check" | "download" | "rollback" | "setChannel" | "setAutoRestart"; status: see the XML header.
     void requestFinished(const QString &method, const QString &status);
     // The state became "staged" (from another state): a restart finishes the update.
     void stagedReady(const QString &version);
@@ -76,4 +87,5 @@ private:
     std::unique_ptr<UpdateBackend> m_backend;
     UpdateStatus m_status;
     bool m_known = false;
+    QElapsedTimer m_lastReport;
 };
