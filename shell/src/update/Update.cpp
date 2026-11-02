@@ -65,17 +65,21 @@ void Update::setAutoRestart(bool enabled)
 
 void Update::noteActivity(bool appRunning)
 {
-    // A minute is plenty for a 30-minute idle rule, and keeps a held stick off the bus.
+    // A minute is plenty for a 30-minute idle rule, and keeps a held stick off the bus. An app
+    // starting is reported at once: nobody may touch the controller during a film, and the
+    // service must not restart into an update under it. Closing the last app is reported at once too.
     constexpr qint64 ReportEveryMs = 60 * 1000;
-    if (m_lastReport.isValid() && m_lastReport.elapsed() < ReportEveryMs)
+    if (m_lastReport.isValid() && m_lastReport.elapsed() < ReportEveryMs && appRunning == m_lastAppRunning)
         return;
     m_lastReport.start();
+    m_lastAppRunning = appRunning;
     m_backend->reportActivity(appRunning);
 }
 
 void Update::mockReset()
 {
     m_lastReport.invalidate();
+    m_lastAppRunning = false;
     if (auto *mock = qobject_cast<MockUpdateBackend *>(m_backend.get()))
         mock->reset();
 }

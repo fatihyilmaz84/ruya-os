@@ -104,9 +104,12 @@ pub struct Schedule {
 }
 
 impl Schedule {
-    /// The first thing a tick does: the service's start is the first activity.
+    /// The first thing a tick does: the service's start is the first activity. A time after
+    /// `now` (the clock was set back) restarts the idle count instead of holding it off.
     pub fn seen(&mut self, now: i64) {
-        self.last_activity.get_or_insert(now);
+        if self.last_activity.map_or(true, |t| t > now) {
+            self.last_activity = Some(now);
+        }
     }
 
     pub fn activity(&mut self, now: i64, app_running: bool) {
@@ -119,10 +122,13 @@ impl Schedule {
     }
 
     /// A scheduled check is due: the last finished check is a day old (0 = never), and the last
-    /// attempt, finished or not, is at least `RETRY_SECS` ago.
+    /// attempt, finished or not, is at least `RETRY_SECS` ago. A time after `now` was taken with
+    /// a wrong clock (a bad RTC before NTP) and counts as long ago; otherwise the console would
+    /// not check again until the clock caught up with it.
     pub fn check_due(&self, last_check: i64, now: i64) -> bool {
-        now - last_check >= CHECK_INTERVAL_SECS
-            && (self.last_attempt == 0 || now - self.last_attempt >= RETRY_SECS)
+        let since = |t: i64| if t > now { i64::MAX } else { now - t };
+        since(last_check) >= CHECK_INTERVAL_SECS
+            && (self.last_attempt == 0 || since(self.last_attempt) >= RETRY_SECS)
     }
 
     /// The console may restart by itself: inside the window, idle long enough, no app.
@@ -244,6 +250,21 @@ mod tests {
         s.seen(10);
         s.seen(99_999);
         assert!(s.quiet(10 + IDLE_SECS, 200));
+    }
+
+    #[test]
+    fn times_after_now_do_not_stop_the_schedule() {
+        let now = 1_000_000;
+        let mut s = Schedule::default();
+        // A check remembered with a clock that ran a year ahead.
+        assert!(s.check_due(now + 365 * DAY, now));
+        s.attempted(now + DAY);
+        assert!(s.check_due(0, now), "an attempt in the future");
+        // Activity reported before the clock was set back: idle counts from now.
+        s.activity(now + DAY, false);
+        s.seen(now);
+        assert!(!s.quiet(now + IDLE_SECS - 1, 200));
+        assert!(s.quiet(now + IDLE_SECS, 200));
     }
 
     #[test]

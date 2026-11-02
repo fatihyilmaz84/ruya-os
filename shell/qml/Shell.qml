@@ -100,6 +100,9 @@ FocusScope {
     property var apps: []
     property Item focusedApp: null
     readonly property bool appOpen: apps.length > 0
+    // The update service restarts the console only when no app runs, also one left behind Home
+    // (input is reported by KeyRouter.onActivity).
+    onAppOpenChanged: Update.noteActivity(appOpen)
 
     property int appSerial: 0
 
@@ -255,7 +258,7 @@ FocusScope {
         onGuidePressed: autoRepeat => { if (root.signedIn && !systemPanel.open) root.guideDown(autoRepeat) }
         onGuideReleased: autoRepeat => root.guideUp(autoRepeat)
         // The update service restarts the console only when nobody is using it.
-        onActivity: Update.noteActivity(root.focusedApp !== null)
+        onActivity: Update.noteActivity(root.appOpen)
     }
 
     Keys.onPressed: event => {

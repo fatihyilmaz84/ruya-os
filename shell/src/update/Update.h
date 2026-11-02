@@ -60,8 +60,8 @@ public:
     Q_INVOKABLE void rollback();
     Q_INVOKABLE void setChannel(const QString &channel);
     Q_INVOKABLE void setAutoRestart(bool enabled);
-    // Input arrived. Tells the service (so it can tell idle from busy), at most once a minute;
-    // appRunning: an app is in front.
+    // Input arrived, or the first app started or the last one closed. Tells the service (so it
+    // can tell idle from busy) at most once a minute, but a change of appRunning at once.
     Q_INVOKABLE void noteActivity(bool appRunning);
 
     // Tests only, and only with the mock backend (otherwise a no-op / 0).
@@ -88,4 +88,5 @@ private:
     UpdateStatus m_status;
     bool m_known = false;
     QElapsedTimer m_lastReport;
+    bool m_lastAppRunning = false;
 };

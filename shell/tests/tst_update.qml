@@ -15,6 +15,11 @@ Item {
         Shell { anchors.fill: parent; version: "test"; focus: true }
     }
 
+    Component {
+        id: appComponent
+        Item { objectName: "standInApp" }
+    }
+
     SignalSpy { id: requestSpy; target: Update; signalName: "requestFinished" }
 
     TestCase {
@@ -329,10 +334,34 @@ Item {
         function test_activity_is_reported_at_most_once_a_minute() {
             compare(Update.mockActivityCount(), 0)
             Update.noteActivity(false)
-            Update.noteActivity(true)
+            Update.noteActivity(false)
             Update.noteActivity(false)
             compare(Update.mockActivityCount(), 1, "a burst of input is one report")
             compare(Update.mockLastActivityAppRunning(), false)
+            // An app coming to the front or leaving it is never held back (review 2026-11-02):
+            // the input that launched it was reported as "no app".
+            Update.noteActivity(true)
+            compare(Update.mockActivityCount(), 2, "an app in front is reported at once")
+            compare(Update.mockLastActivityAppRunning(), true)
+            Update.noteActivity(true)
+            compare(Update.mockActivityCount(), 2, "input over the app waits for the minute")
+            Update.noteActivity(false)
+            compare(Update.mockActivityCount(), 3, "the app closing is reported at once")
+            compare(Update.mockLastActivityAppRunning(), false)
+        }
+
+        function test_an_app_in_front_is_reported_without_input() {
+            openSystemPane("p2", "")
+            const before = Update.mockActivityCount()
+            const app = createTemporaryObject(appComponent, host)
+            verify(app)
+            tc.shell.addApp(app)
+            tryVerify(() => app.activeFocus, 2000, "the app takes focus")
+            compare(Update.mockActivityCount(), before + 1)
+            compare(Update.mockLastActivityAppRunning(), true, "an app is in front")
+            tc.shell.removeApp(app)
+            compare(Update.mockActivityCount(), before + 2)
+            compare(Update.mockLastActivityAppRunning(), false, "the app is gone")
         }
 
         function test_input_in_the_shell_is_reported_once() {

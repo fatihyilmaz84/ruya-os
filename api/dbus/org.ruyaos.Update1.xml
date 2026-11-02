@@ -88,10 +88,10 @@
       <arg name="status" type="s" direction="out"/>
     </method>
 
-    <!-- The shell calls this when input arrives, at most once a minute, and says whether an app
-         is running. It resets the idle time; while app_running was the last report, the console
-         does not restart by itself. Any caller the bus policy lets in may call it. No reply
-         status. -->
+    <!-- The shell calls this when input arrives, at most once a minute, and at once when the
+         first app starts or the last one closes, and says whether an app is running. It resets
+         the idle time; while app_running was the last report, the console does not restart by
+         itself. Any caller the bus policy lets in may call it. No reply status. -->
     <method name="ReportActivity">
       <arg name="app_running" type="b" direction="in"/>
     </method>
