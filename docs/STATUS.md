@@ -39,7 +39,9 @@ Open work only (todo, in-progress, blocked). The order is the recommended order;
 
 Follow-ups and debt for the next planner. Builders: add one line per item, `- (source) what, and why it matters`; write a task file only if your own task needs one. Run a planner at 5+ items.
 
-_(empty)_
+- (T-130) Apps connect to `ruya-0` in `ruya-shell`'s own runtime directory (mode 0700): apps running as a profile's user (ADR-004) cannot reach it. The `ruya-session` image task must add per-profile sockets (or hand the client a socket fd).
+- (T-130) A Wayland app that connects while nobody is signed in is drawn above the picker (it gets no focus); the `ruya-session` task should define what lock or sign-out does to open apps.
+- (T-130) Suspend/resume and VT switching under eglfs are untested, but the Guide power menu offers Suspend: try `Suspend` in the VM (and on hardware, B-002) before users rely on it.
 
 ## Blocked (need something this host doesn't have)
 
@@ -64,7 +66,7 @@ _(empty)_
 
 One entry per session, at most 700 characters (`lint-board.ps1`): date · model · tasks · what happened · numbers · follow-ups. Detail belongs in the task Outcome.
 
-- 2026-11-02 · Opus 5.5 · Lead (T-130; no review, nothing landed since `39b25f2`) · `ruya-shell` is the compositor on KMS, cage removed; input devices by a `uaccess` rule (lead decision); `KeyRouter` takes Guide from any item inside an app. `test` ALL GREEN (256 QML + 21 skips), `shots` 56. VM `0.0.26-t130`, fresh disk: `RUYA_BOOT_OK`, no cage, wizard and picker over the real bus, T-123 sequence and a held Guide over a test client. Drill: update to `0.0.27`, rollback, a broken compositor rolled back by greenboot after 4 boots. Process: drill step 5 recipe made concrete. Host drives 99 % full (owner).
+- 2026-11-02 · Opus 5.5 · Lead (T-130; no review, nothing landed since `39b25f2`) · `ruya-shell` is the compositor on KMS, cage removed; input devices by a `uaccess` rule (lead decision); `KeyRouter` takes Guide from any item inside an app. `test` ALL GREEN (256 QML + 21 skips), `shots` 56. VM `0.0.26-t130`, fresh disk: `RUYA_BOOT_OK`, no cage, wizard and picker over the real bus, T-123 sequence and a held Guide over a test client. Drill: update to `0.0.27`, rollback, a broken compositor rolled back by greenboot after 4 boots. Process: drill step 5 recipe, `/NUL` git-ignored. Inbox +3. Host drives 99 % full (owner).
 
 - 2026-11-02 · Opus 5.5 · Lead (review `e5c2ab3..ac6e5b1`: T-153, T-156, T-154) · `test` ALL GREEN (255 QML + 21 skips, 242 Rust, 52 s), `shots` 56 (39 s, update-adds and Updates screens reviewed), CI green at `48406c7`; no VM run (`0.0.25-t154` covers it). Fixed 2: a `last_check` in the future stopped the daily check; app start/close waited for the once-a-minute report. Inbox → T-159 (restart notice, download retry), T-160 (greenboot), T-161 (controller battery), T-147 hint. Process: `lint-board.ps1` caps the log at five entries of 700 characters.
 
