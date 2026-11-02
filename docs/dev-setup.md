@@ -232,6 +232,12 @@ cmake -S shell -B shell/build -G Ninja && cmake --build shell/build && shell/bui
 - Gamepad passthrough into QEMU on Windows is unreliable. Test controllers on hardware or a Linux host (`-device usb-host,...`).
 - `smoke-test.ps1` boots without a sound card unless asked (`-Audio`, see "Audio in the VM"). Without one the shell logs `QSoundEffect: playback of this format is not supported` once per cue and nothing plays. With one, the same three lines still appear at the first shell start of a session (a start-up race, benign: the cues play), but not when the shell restarts later.
 
+## Free disk space
+C: holds the WSL disk (`%LOCALAPPDATA%\wsl\FedoraLinux-44\ext4.vhdx`), D: holds `output/`; both drives are nearly full, and a full drive breaks `make-disk.sh` ("Cannot allocate memory"). After a session with image builds:
+- In WSL as root: `podman image prune -f; podman system prune -f`, and `podman rmi` every drill/registry tag you pushed. Keep `localhost/ruyaos:dev`, `fedora-bootc:44`, `bootc-image-builder` and `fedora:44` (the next build needs them).
+- `output/qcow2/work.qcow2` and any `.iso` you no longer need; `disk.qcow2` is the newest fresh disk (`make-disk.sh` recreates it).
+- The VHDX never shrinks by itself (marking it sparse did not release space, 2026-11-02). To compact it: `wsl --shutdown`, `wsl --export FedoraLinux-44 D:\dev\RuyaOS\output\wsl-export.tar`, `wsl --unregister FedoraLinux-44`, `wsl --import FedoraLinux-44 %LOCALAPPDATA%\wsl\FedoraLinux-44 <tar>`, check that `wsl -d FedoraLinux-44 -u root -- podman images` lists the images, then delete the tar. The default user stays root and `/etc/wsl.conf` (systemd) comes along in the tar.
+
 ## Problems hit (Phase 0 exit item 9)
 
 | Problem | Cause | Fix / workaround |
