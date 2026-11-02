@@ -7,9 +7,11 @@ FROM registry.fedoraproject.org/fedora:${FEDORA_VERSION} AS shell-build
 RUN dnf -y install --setopt=install_weak_deps=False \
         cmake ninja-build gcc-c++ \
         qt6-qtbase-devel qt6-qtdeclarative-devel qt6-qtmultimedia-devel qt6-qttools-devel qt6-linguist \
+        qt6-qtwayland-devel \
     && dnf clean all
 COPY shell /src/shell
-RUN cmake -S /src/shell -B /build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DRUYA_BUILD_TESTS=OFF \
+# RUYA_COMPOSITOR: ruya-shell is the Wayland compositor on KMS (ADR-002 option A, T-130).
+RUN cmake -S /src/shell -B /build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DRUYA_BUILD_TESTS=OFF -DRUYA_COMPOSITOR=ON \
     && cmake --build /build \
     && DESTDIR=/out cmake --install /build
 

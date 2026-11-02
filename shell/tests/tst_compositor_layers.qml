@@ -28,6 +28,24 @@ Item {
         }
     }
 
+    // An app item whose keys go to an item inside it (a compositor surface item can hold focus
+    // in a child; the wrapper is a plain Item, not a focus scope).
+    Component {
+        id: wrappedAppComponent
+        Item {
+            property alias inner: inner
+            Item {
+                id: inner
+                anchors.fill: parent
+                property var keys: []
+                Keys.onPressed: event => {
+                    keys = keys.concat([event.key])
+                    event.accepted = true
+                }
+            }
+        }
+    }
+
     TestCase {
         id: tc
         name: "CompositorLayers"
@@ -92,6 +110,21 @@ Item {
             keyClick(Qt.Key_Super_L)                     // and Guide closes the overlay again
             tryVerify(() => tc.app.activeFocus)
             compare(tc.app.keys, [Qt.Key_X])
+        }
+
+        function test_guide_taken_from_item_inside_app() {
+            tc.shell.removeApp(tc.app)
+            const wrapped = createTemporaryObject(wrappedAppComponent, host)
+            tc.shell.addApp(wrapped)
+            wrapped.inner.forceActiveFocus()
+            verify(wrapped.inner.activeFocus && !wrapped.activeFocus, "focus sits inside the app item")
+            keyClick(Qt.Key_A)
+            compare(wrapped.inner.keys, [Qt.Key_A])
+            keyClick(Qt.Key_HomePage)
+            tryVerify(() => find("systemActions").activeFocus, 2000, "Guide opens the overlay")
+            compare(wrapped.inner.keys, [Qt.Key_A], "the Guide key did not reach the app")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => wrapped.activeFocus, 2000, "closing the overlay returns focus to the app")
         }
 
         function test_guide_hold() {

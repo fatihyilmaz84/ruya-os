@@ -6,6 +6,7 @@ Window {
 
     required property string version
     property bool windowed: false        // --windowed, development only
+    readonly property alias shell: shell // for the compositor (compositor/Compositor.qml, Linux)
 
     width: 1920
     height: 1080
@@ -14,6 +15,7 @@ Window {
     title: "RuyaOS"
 
     Shell {
+        id: shell
         anchors.fill: parent
         version: window.version
         focus: true

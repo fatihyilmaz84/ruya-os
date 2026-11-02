@@ -8,6 +8,9 @@
 #include <cstdio>
 
 Q_IMPORT_QML_PLUGIN(RuyaShellPlugin)
+#ifdef RUYA_COMPOSITOR
+Q_IMPORT_QML_PLUGIN(RuyaCompositorPlugin)
+#endif
 
 // Written into the image at build time (image/Containerfile); lets update/rollback tests
 // see which deployment is running.
@@ -44,7 +47,7 @@ int main(int argc, char *argv[])
                                      QStringLiteral("Lay the UI out right-to-left (RTL readiness check)."));
     parser.addOption(reverse);
     const QCommandLineOption load(QStringLiteral("load"),
-                                  QStringLiteral("Load this QML file instead of the shell (spikes, development)."),
+                                  QStringLiteral("Load this QML file instead of the shell (test clients, probes)."),
                                   QStringLiteral("file"));
     parser.addOption(load);
     parser.process(app);
@@ -63,14 +66,19 @@ int main(int argc, char *argv[])
         &engine, &QQmlApplicationEngine::objectCreationFailed, &app,
         [] { QCoreApplication::exit(1); }, Qt::QueuedConnection);
     if (parser.isSet(load)) {
-        // A file outside the RuyaShell module (shell/spike, T-123); it can still import RuyaShell.
+        // A file outside the RuyaShell module (a VM test client or probe); it can still import RuyaShell.
         engine.load(parser.value(load));
     } else {
         engine.setInitialProperties({
             {QStringLiteral("version"), imageVersion()},
             {QStringLiteral("windowed"), parser.isSet(windowed)},
         });
+#ifdef RUYA_COMPOSITOR
+        // The image: the shell is the Wayland compositor, and Main is its output window (T-130).
+        engine.loadFromModule("RuyaCompositor", "Compositor");
+#else
         engine.loadFromModule("RuyaShell", "Main");
+#endif
     }
 
     QObject *root = engine.rootObjects().value(0);

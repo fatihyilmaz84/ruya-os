@@ -1,0 +1,6 @@
+# ruya-shell is the compositor on KMS (Qt eglfs, T-130) and opens /dev/input/event* itself: Qt
+# has no logind TakeDevice support (cage used libseat). Tag the input devices uaccess, so logind
+# gives the active seat session, the shell's, an ACL on them, as it already does for the DRM card.
+# Only the active session gets access: a login on another VT that becomes active takes it over.
+# Must sort before 73-seat-late.rules, which applies the uaccess ACLs.
+SUBSYSTEM=="input", KERNEL=="event*", TAG+="uaccess"

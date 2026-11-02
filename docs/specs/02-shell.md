@@ -2,7 +2,7 @@
 
 Status: **Draft v1** · Parent: [00-overview](00-overview.md)
 
-The shell (`ruya-shell`) is the only UI the user sees. It's written in Qt 6 Quick/QML with C++ glue. Per ADR-002 (option A, accepted) it is also the Wayland compositor; until T-130 lands it still runs under cage. It holds no business logic: state and side effects live in the Rust services, which it reaches over D-Bus.
+The shell (`ruya-shell`) is the only UI the user sees. It's written in Qt 6 Quick/QML with C++ glue. Per ADR-002 (option A, accepted) it is also the Wayland compositor, directly on KMS (T-130; on the Windows host and in the tests it is an ordinary window). It holds no business logic: state and side effects live in the Rust services, which it reaches over D-Bus.
 
 ## 1. Information architecture
 
@@ -90,7 +90,7 @@ Token values per tier (`Theme.qml`): `blurMax` is 64 / 32 / 0, and the glass `Mu
 ## 4. Input & focus model
 
 ### 4.1 Event path
-Physical pad → input daemon (ADR-003) → shell. While the shell has input focus, the daemon emits navigation as key events (Up/Down/Left/Right, Accept, Back, Menu, Guide, LB/RB, LT/RT) to the compositor's seat. While an app is focused, only **Guide** (and the volume keys) reach the shell. As built (T-150): the C++ `KeyRouter` (event filter on the window, `shell/src/input/`) takes the Guide keys, including Super and the Guide hold, from a focused app item and hands them to the shell; the volume keys are application shortcuts matched before any key event; every other key reaches the app by normal focus delivery. `KeyRouter.isGuideKey` is the one definition of which keys are Guide. Keyboard and mouse go through libinput and the compositor as normal.
+Physical pad → input daemon (ADR-003) → shell. While the shell has input focus, the daemon emits navigation as key events (Up/Down/Left/Right, Accept, Back, Menu, Guide, LB/RB, LT/RT) to the compositor's seat. While an app is focused, only **Guide** (and the volume keys) reach the shell. As built (T-150): the C++ `KeyRouter` (event filter on the window, `shell/src/input/`) takes the Guide keys, including Super and the Guide hold, from a focused app item and hands them to the shell; the volume keys are application shortcuts matched before any key event; every other key reaches the app by normal focus delivery (the router counts focus on the app item or any item inside it). In the image (T-130) the app items are `ShellSurfaceItem`s, one per xdg toplevel, which forward the keys they get to their Wayland client. `KeyRouter.isGuideKey` is the one definition of which keys are Guide. Keyboard and mouse go through libinput and the compositor as normal.
 
 ### 4.2 Mapping
 | Action | Xbox | PlayStation | Keyboard |

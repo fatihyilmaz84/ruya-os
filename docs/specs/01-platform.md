@@ -15,7 +15,7 @@ Status: **Draft v1** · Parent: [00-overview](00-overview.md)
 |---|---|
 | Graphics | `mesa-dri-drivers`, `mesa-vulkan-drivers`, `linux-firmware` (already in base?) |
 | Qt | `qt6-qtbase`, `qt6-qtdeclarative` (includes Quick Controls 2), `qt6-qtwayland`, `qt6-qtmultimedia`, `qt6-qtshadertools` (build only) |
-| Compositor (Phase 0) | `cage` (verify it's in Fedora; otherwise build it) |
+| Compositor | none: `ruya-shell` is the compositor (QtWaylandCompositor from `qt6-qtwayland`, ADR-002 A, T-130). `cage` ran the Phase 0 session and was removed with T-130. |
 | Audio | `pipewire`, `pipewire-pulseaudio`, `pipewire-alsa`, `wireplumber`. **Not** `pulseaudio` or `jack-audio-connection-kit`, which conflict. |
 | Network/BT | `NetworkManager`, `NetworkManager-wifi`, `bluez`, `iwlwifi-*` firmware |
 | Storage | `udisks2`, `exfatprogs`, `ntfs-3g` (or kernel `ntfs3`) |
@@ -38,7 +38,9 @@ The build excludes any desktop environment, display manager, `kdeconnect` and `p
 ### 2.1 Startup chain
 `systemd` → `graphical.target` → `ruya-compositor@tty1.service` (implemented in `image/rootfs/usr/lib/systemd/system/`). This unit has `User=ruya-shell`, `PAMName=ruya-shell` (dedicated PAM stack: auth denied, account + session only), `TTYPath=/dev/tty1`, `StandardInput=tty`, and `Conflicts=getty@tty1`. It gets a logind session on seat0 with DRM and input access. The Rust services are ordinary system services with `Before=ruya-compositor.service`, except `ruya-devices` (ADR-010): a systemd *user* unit of `ruya-shell` (`/usr/lib/systemd/user/ruya-devices.service`, `ConditionUser=ruya-shell`, after `wireplumber.service`, enabled with `systemctl --global`) that owns `org.ruyaos.Devices1` on the system bus from code (`Type=simple`).
 
-- Today the unit runs `cage`, with `ruya-shell` as its Wayland client (ADR-002 option C). The image also ships `ruya-compositor-spike@.service`, **not enabled**: the same session with `ruya-shell` itself as the compositor on KMS (option A, T-123). It is started only by `scripts/vm-compositor-spike.sh`, which also installs a temporary `uaccess` rule for input devices in `/run/udev/rules.d` (eglfs opens them itself).
+- **As built (T-130):** the unit runs `ruya-shell` itself as the Wayland compositor, directly on KMS (`QT_QPA_PLATFORM=eglfs`, `eglfs_kms`), with no cage (ADR-002 option A). The image compiles the shell with `-DRUYA_COMPOSITOR=ON`, which makes `compositor/Compositor.qml` the entry point: a `WaylandCompositor` whose output window is the ordinary `Main`. Apps connect to `/run/user/<ruya-shell uid>/ruya-0` (xdg-shell) and are shown fullscreen in the shell's app layer (02 §1.5). The health check still waits for `ruya-shell: ready` (the first frame of the output window).
+- **Device access (decided, lead, T-130):** eglfs opens DRM and `/dev/input/event*` itself; Qt has no logind `TakeDevice` path. `/usr/lib/udev/rules.d/70-ruya-input.rules` tags input devices `uaccess`, so logind gives the **active seat session** (the shell's) an ACL on them, as it already does for the DRM card. The shell user can then read every input device, which is acceptable because it is the session's only UI; a session on another VT that becomes active takes the access over. Logind-based opening (a small QPA input plugin) stays an option if this ever needs tightening. VT switching, suspend/resume and DRM-master handover under eglfs are not explored yet.
+- **Fallback:** no second session ships. A shell that cannot start fails the health check and greenboot rolls back to the previous deployment (§4); a crash loop also stops at `StartLimitBurst`.
 - No display manager and no greeter. Profile selection happens inside the shell.
 - `Restart=always` with `StartLimitBurst` on the compositor. After N fast failures, start `ruya-safe-mode.service`: a minimal QML screen offering Restart, Roll back OS, or Factory reset.
 - Plymouth boot splash with the RuyaOS theme. `quiet loglevel=3` on the kernel command line.
@@ -162,11 +164,11 @@ Legend: ✅ verified · 🟡 implemented, partly verified · ⬜ not started. Ve
 |---|---|---|---|
 | 1 | `image/Containerfile` builds from `fedora-bootc:<N>`; `bootc container lint` clean | ✅ Fedora 44, 14 checks, `--fatal-warnings` | `image/Containerfile` |
 | 2 | bootc-image-builder → qcow2 + anaconda-iso | ✅ qcow2 (40 GiB root) · ISO: see STATUS | `scripts/make-disk.sh`, `image/bib/disk.toml` |
-| 3 | qcow2 boots in QEMU (UEFI, virtio); cage starts the QML shell fullscreen with animation + `MultiEffect` blur; no login prompt or desktop | ✅ `RUYA_BOOT_OK` about 4 s after the compositor starts (software rendering in the VM; blur only judged on host/GPU) | `ruya-compositor@.service`, `scripts/smoke-test.ps1` |
+| 3 | qcow2 boots in QEMU (UEFI, virtio); the QML shell starts fullscreen with animation + `MultiEffect` blur; no login prompt or desktop | ✅ `RUYA_BOOT_OK` about 4 s after the compositor starts (software rendering in the VM; blur only judged on host/GPU). Since T-130 (2026-11-02, `0.0.26-t130`) the shell is the compositor itself on KMS, no cage | `ruya-compositor@.service`, `scripts/smoke-test.ps1` |
 | 4 | Keyboard arrows move focus; a USB gamepad does the same | 🟡 keys ✅ on host; `ruya-inputd` runs in the VM; a gamepad needs hardware | `services/ruya-inputd` |
 | 5 | A UI click plays through PipeWire | ✅ in the VM with a sound card (`smoke-test.ps1 -Audio`): PipeWire, WirePlumber and pipewire-pulse run for `ruya-shell`, `wpctl` lists the HDA sink and the shell's stream, and a recording shows one burst per cue (T-121). Not heard on real hardware | `shell/sounds`, `SoundEffect`, `scripts/vm-audio-check.sh` |
-| 6 | Update N → N+1 and rollback, visible version change | ✅ 0.0.3 → 0.0.4 via `bootc switch` (about 2 min), `bootc rollback` → 0.0.3 | `docs/dev-setup.md` drill, `scripts/vm-reboot-check.ps1` |
-| 7 | greenboot rolls back a broken image automatically | ✅ greenboot 0.16 (Rust) once its units are enabled: 4 failed boots, then GRUB fell back to the previous deployment | `/usr/lib/greenboot/check/required.d/`, `/etc/greenboot/greenboot.conf` |
+| 6 | Update N → N+1 and rollback, visible version change | ✅ 0.0.3 → 0.0.4 via `bootc switch` (about 2 min), `bootc rollback` → 0.0.3; again with the compositor session (T-130): 0.0.26 → 0.0.27 → rollback | `docs/dev-setup.md` drill, `scripts/vm-reboot-check.ps1` |
+| 7 | greenboot rolls back a broken image automatically | ✅ greenboot 0.16 (Rust) once its units are enabled: 4 failed boots, then GRUB fell back to the previous deployment. Repeated in T-130 with a compositor that cannot start (Qt platform `nonexistent`): same result | `/usr/lib/greenboot/check/required.d/`, `/etc/greenboot/greenboot.conf` |
 | 8 | ISO installs on one real low-tier machine; frame time recorded | ⬜ needs hardware | — |
 | 9 | `docs/dev-setup.md` reflects the setup actually used, including problems | ✅ setup, drill recipe and a 10-row problem log | `docs/dev-setup.md` |
 

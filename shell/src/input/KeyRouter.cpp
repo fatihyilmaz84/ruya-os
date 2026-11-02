@@ -32,6 +32,16 @@ bool KeyRouter::isGuideKey(int key)
     return key == Qt::Key_HomePage || key == Qt::Key_Super_L || key == Qt::Key_Super_R || key == Qt::Key_Meta;
 }
 
+// The app item itself, or an item inside it (a compositor surface item may hand the focus to a
+// child, and a plain Item is not a focus scope, so hasActiveFocus() alone would miss it).
+bool KeyRouter::appHasFocus() const
+{
+    if (!m_window || !m_appItem)
+        return false;
+    QQuickItem *focused = m_window->activeFocusItem();
+    return focused && (focused == m_appItem || m_appItem->isAncestorOf(focused));
+}
+
 bool KeyRouter::eventFilter(QObject *watched, QEvent *event)
 {
     if (watched != m_window)
@@ -48,7 +58,7 @@ bool KeyRouter::eventFilter(QObject *watched, QEvent *event)
     default:
         break;
     }
-    if (!m_appItem || !m_appItem->hasActiveFocus())
+    if (!appHasFocus())
         return false;
     if (type != QEvent::KeyPress && type != QEvent::KeyRelease)
         return false;

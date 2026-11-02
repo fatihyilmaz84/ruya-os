@@ -2,6 +2,9 @@ cmake_minimum_required(VERSION 3.21)
 project(ruya-shell VERSION 0.1.0 LANGUAGES CXX)
 
 option(RUYA_BUILD_TESTS "Build the Qt Quick tests" ON)
+# The image build turns this on (image/Containerfile): ruya-shell is then the Wayland compositor
+# (compositor/, ADR-002 option A, T-130). Needs QtWaylandCompositor, which the Windows kit lacks.
+option(RUYA_COMPOSITOR "Build ruya-shell as the Wayland compositor (Linux)" OFF)
 
 find_package(Qt6 6.8 REQUIRED COMPONENTS Gui Quick Multimedia DBus LinguistTools)
 qt_standard_project_setup(REQUIRES 6.8)
@@ -147,10 +150,22 @@ endif()
 qt_add_executable(ruya-shell src/main.cpp)
 target_link_libraries(ruya-shell PRIVATE Qt6::Gui Qt6::Quick ruyashellplugin)
 
+# A module of its own, outside RuyaShell, so qmllint, lupdate and the tests (Windows) never see it.
+if(RUYA_COMPOSITOR)
+    find_package(Qt6 REQUIRED COMPONENTS WaylandCompositor)
+    qt_add_library(ruyacompositor STATIC)
+    qt_add_qml_module(ruyacompositor
+        URI RuyaCompositor
+        VERSION 1.0
+        QML_FILES compositor/Compositor.qml
+    )
+    target_link_libraries(ruyacompositor PRIVATE Qt6::Quick Qt6::WaylandCompositor)
+    target_link_libraries(ruya-shell PRIVATE ruyacompositorplugin Qt6::WaylandCompositor)
+    target_compile_definitions(ruya-shell PRIVATE RUYA_COMPOSITOR)
+endif()
+
 include(GNUInstallDirs)
 install(TARGETS ruya-shell RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
-# T-123 compositor spike: loaded from disk with --load, outside the module and its tests.
-install(DIRECTORY spike/ DESTINATION ${CMAKE_INSTALL_DATADIR}/ruya-shell/spike FILES_MATCHING PATTERN "*.qml")
 
 if(RUYA_BUILD_TESTS)
     find_package(Qt6 REQUIRED COMPONENTS QuickTest)

@@ -5,7 +5,7 @@ Specs: `docs/specs/02-shell.md` (behaviour) and `docs/specs/04-design-system.md`
 ## Structure
 
 - `qml/Main.qml`: the window only (fullscreen, or `--windowed`). It hosts `Shell`.
-- `qml/Shell.qml`: the whole UI as one `FocusScope`, so tests can host it in their own window. It owns top-level flow: picker → home → overlay, and later pages. App items: `addApp`/`removeApp`, `src/input/KeyRouter` (`PATTERNS.md`).
+- `qml/Shell.qml`: the whole UI as one `FocusScope`, so tests can host it in their own window. It owns top-level flow: picker → home → overlay, and later pages. App items: `addApp`/`removeApp`, `src/input/KeyRouter`; on Linux `compositor/Compositor.qml` (`RUYA_COMPOSITOR`, image only) feeds them Wayland windows (`PATTERNS.md`).
 - `qml/*.qml`: components. `Theme` (design tokens) and `Sfx` (UI sounds) are singletons.
 - `src/<area>/`: C++ for QML-exposed services. For each system service:
   - `XxxBackend.h`: an abstract `QObject` with virtual methods and result **signals**.

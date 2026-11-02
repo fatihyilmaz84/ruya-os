@@ -10,3 +10,5 @@ image/bib/config.toml
 .vscode/
 aqtinstall.log
 shell/build-*/
+# ssh -o UserKnownHostsFile=NUL (dev-setup) writes a real file when msys ssh runs it
+/NUL

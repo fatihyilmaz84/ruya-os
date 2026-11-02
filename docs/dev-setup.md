@@ -61,7 +61,7 @@ In the VM, the shell's own log is `journalctl -b _UID=$(id -u ruya-shell)`. pam_
    ```
 3. **Update:** in the VM, `bootc switch <wsl-ip>:5000/ruyaos:<ver>` (about 2 minutes). Then `.\scripts\vm-reboot-check.ps1`, which reboots, waits for the shell, and prints the deployments and greenboot's verdict.
 4. **Manual rollback:** `bootc rollback`, then `.\scripts\vm-reboot-check.ps1`.
-5. **Automatic rollback (greenboot):** build an image whose compositor is `ExecStart=/bin/false`, `bootc switch` to it, and reboot. Every boot fails the shell health check and greenboot reboots; after 3 failed boots GRUB falls back to the previous deployment. Results are in `docs/STATUS.md`, session log 2026-10-22.
+5. **Automatic rollback (greenboot):** build a broken image on top of the pushed one (T-130 used a two-line Containerfile `FROM <wsl-ip>:5000/ruyaos:<ver>` adding a drop-in `ruya-compositor@.service.d/50-broken.conf` with `Environment=QT_QPA_PLATFORM=nonexistent`), push it, `bootc switch` to it, and reboot. QEMU exits at each greenboot reboot (`-no-reboot`): cold-start it with `smoke-test.ps1 -Work -Keep` until a boot prints `RUYA_BOOT_OK` (each failed boot takes about 2 minutes). Every boot fails the shell health check and greenboot reboots; after 3 failed boots GRUB falls back to the previous deployment. Results are in `docs/STATUS.md`, session log 2026-10-22.
 6. **Clean up** in WSL: `podman rm -f registry; podman rmi localhost:5000/ruyaos:<ver>` for every tag you pushed (each pins a ~4.7 GB image that `build.sh` never removes, because it is tagged).
 
 ## Seeing and driving the VM (T-120)
@@ -116,19 +116,21 @@ Since T-132 the same script also checks the network part (NetworkManager active,
 
 Preparation (registry and insecure-registry setup as in the drill above): build the image, push it as `<wsl-ip>:5000/ruyaos:stable`, make the disk, boot, then in the guest `bootc switch <wsl-ip>:5000/ruyaos:stable` and reboot so the host tracks that tag. Build a second image with a higher version, push it as the same tag, and run the script: the check finds it. Restart from Settings -> System ("Restart to finish") or `systemctl reboot` and see `RUYA_BOOT_OK` with the new version (`vm-reboot-check.ps1`). Remove the tags afterwards (each pins about 4.7 GB in WSL).
 
-## Compositor spike (T-123)
+## Test app in the VM (T-130)
 
-The image ships `ruya-shell` as a Wayland compositor (`shell/spike/Compositor.qml`, loaded with `ruya-shell --load`), off by default. In a booted VM (`smoke-test.ps1 -Keep`, then `scp scripts/vm-compositor-spike.sh scripts/vm-inject-key.py root@127.0.0.1:/root/`):
+`ruya-shell` is the compositor of the default session (on KMS through Qt eglfs, socket `/run/user/<uid>/ruya-0`). `scripts/vm-app-check.sh` (guest, as root) starts a key-logging Wayland test client (`scripts/vm-key-client.qml`) as `ruya-shell`, so the shell shows it fullscreen in its app layer. Sign in first (the wizard or `vm-goto.ps1 home`): before sign-in an app gets no focus. In a booted VM (`smoke-test.ps1 -Work -Keep`):
 
 ```powershell
-ssh ... root@127.0.0.1 bash /root/vm-compositor-spike.sh start    # cage stops; the spike compositor owns ruya-0
-ssh ... root@127.0.0.1 bash /root/vm-compositor-spike.sh client   # the key-logging test client, fullscreen
-.\scripts\vm-keys.ps1 a b c; .\scripts\vm-keys.ps1 meta_l          # keys reach the client; Super opens the overlay over it
-ssh ... root@127.0.0.1 bash /root/vm-compositor-spike.sh log      # what the compositor and the client saw
-ssh ... root@127.0.0.1 bash /root/vm-compositor-spike.sh stop     # back to cage
+scp ... scripts/vm-app-check.sh scripts/vm-key-client.qml scripts/vm-inject-key.py root@127.0.0.1:/root/
+ssh ... root@127.0.0.1 bash /root/vm-app-check.sh state     # no cage, the socket, input ACLs, the session
+ssh ... root@127.0.0.1 bash /root/vm-app-check.sh client    # the test client, fullscreen
+.\scripts\vm-keys.ps1 a b c; .\scripts\vm-keys.ps1 meta_l     # keys reach the client; Super opens the Guide overlay over it
+ssh ... root@127.0.0.1 python3 /root/vm-inject-key.py guide  # the controller's Guide
+ssh ... root@127.0.0.1 bash /root/vm-app-check.sh log       # what the compositor and the client saw
+ssh ... root@127.0.0.1 bash /root/vm-app-check.sh kill      # the client exits; the shell takes the screen back
 ```
 
-`lupdate`, `qmllint` and the Qt Quick tests never see `shell/spike/` (it is not in the `RuyaShell` module; the Windows Qt kit has no QtWaylandCompositor). A fresh disk copy has new SSH host keys: use `-o StrictHostKeyChecking=no -o UserKnownHostsFile=NUL -o BatchMode=yes`, or `ssh` waits for a host-key prompt that never shows.
+The client renders in software (`QT_QUICK_BACKEND=software`): llvmpipe has no `EGL_WL_bind_wayland_display`, so a GL client cannot hand its buffers to the compositor in the VM. `compositor/` is not in the `RuyaShell` module, so `lupdate`, `qmllint` and the Qt Quick tests never see it (the Windows Qt kit has no QtWaylandCompositor); the image build compiles it. A fresh disk copy has new SSH host keys: use `-o StrictHostKeyChecking=no -o UserKnownHostsFile=NUL -o BatchMode=yes`, or `ssh` waits for a host-key prompt that never shows.
 
 ## Power-policy check (T-107)
 

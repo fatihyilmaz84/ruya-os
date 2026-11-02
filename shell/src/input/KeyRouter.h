@@ -7,8 +7,8 @@
 #include <QQuickWindow>
 
 // Decides in C++ which keys the shell keeps when an app item has the focus (ADR-002/003).
-// An event filter on the window sees a key before the focused item does. While `appItem` has
-// active focus, the Guide keys are taken here and reported as signals, so the app never sees
+// An event filter on the window sees a key before the focused item does. While `appItem` or an
+// item inside it has active focus, the Guide keys are taken here and reported as signals, so the app never sees
 // them; every other key is left alone and reaches the app by normal focus delivery. The volume
 // keys are application shortcuts (Shell.qml) and are matched before any key event.
 // With no app focused (home, pages, overlays) nothing changes: the Guide key arrives as an
@@ -47,6 +47,8 @@ signals:
     void activity();
 
 private:
+    bool appHasFocus() const;
+
     QPointer<QQuickWindow> m_window;
     QPointer<QQuickItem> m_appItem;
 };
