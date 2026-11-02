@@ -8,8 +8,8 @@
 
 // Client of org.ruyaos.Store1 (api/dbus/org.ruyaos.Store1.xml) on the system bus, or the session
 // bus when RUYA_DBUS=session. The service may start after the shell, so the lists are read
-// again whenever the name appears. GetApp, Rollback, ListRemotes and AddRemote have no caller
-// yet and no method here.
+// again whenever the name appears. Rollback, ListRemotes and AddRemote have no caller yet and no
+// method here.
 class DBusStoreBackend final : public StoreBackend
 {
     Q_OBJECT
@@ -23,6 +23,7 @@ public:
     void install(const QString &id) override;
     void uninstall(const QString &id, bool deleteData) override;
     void update(const QString &id) override;
+    void getApp(const QString &id) override;
 
 private slots:
     void onJobProgress(const QString &job, uint percent, const QString &phase);

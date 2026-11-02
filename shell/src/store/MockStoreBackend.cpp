@@ -61,10 +61,13 @@ void MockStoreBackend::initState()
         app("org.example.Broken", "Broken App", "Always fails to install; for tests.", "Example Games", "official",
             "partial", "all", {"audio"}, 20),
     };
-    // Installed from the start; Open Chess has an update.
+    // Installed from the start; Open Chess has an update that adds a permission, Text Editor one that adds none.
     for (const char *id : {"org.example.Puzzle", "org.example.Chess", "org.example.Editor"})
         m_apps[indexOf(QString::fromLatin1(id))].installed = true;
-    m_apps[indexOf(QStringLiteral("org.example.Chess"))].updateAvailable = true;
+    AppInfo &chess = m_apps[indexOf(QStringLiteral("org.example.Chess"))];
+    chess.updateAvailable = true;
+    chess.newPermissions = {QStringLiteral("all-devices")};
+    m_apps[indexOf(QStringLiteral("org.example.Editor"))].updateAvailable = true; // adds nothing
 }
 
 void MockStoreBackend::reset()
@@ -90,9 +93,34 @@ QList<AppInfo> MockStoreBackend::installedApps() const
     QList<AppInfo> out;
     for (const AppInfo &a : m_apps) {
         if (a.installed)
-            out.append(a);
+            out.append(listed(a));
     }
     return out;
+}
+
+// The lists carry no newPermissions (the service reads those in GetApp only).
+AppInfo MockStoreBackend::listed(AppInfo a)
+{
+    a.newPermissions.clear();
+    return a;
+}
+
+void MockStoreBackend::getApp(const QString &id)
+{
+    const int i = indexOf(id);
+    QTimer::singleShot(0, this, [this, id, i] {
+        if (i < 0) {
+            emit appLoadFailed(id);
+            return;
+        }
+        AppInfo a = m_apps.at(i);
+        // As the service: an update's permissions are the app's permissions on its page.
+        for (const QString &p : std::as_const(a.newPermissions)) {
+            if (!a.permissions.contains(p))
+                a.permissions.append(p);
+        }
+        emit appLoaded(a);
+    });
 }
 
 void MockStoreBackend::refresh()
@@ -112,7 +140,7 @@ void MockStoreBackend::search(const QString &query, bool gamepadOnly, uint limit
             continue;
         if (query.isEmpty() || a.name.contains(query, Qt::CaseInsensitive)
             || a.summary.contains(query, Qt::CaseInsensitive) || a.id.contains(query, Qt::CaseInsensitive))
-            out.append(a);
+            out.append(listed(a));
     }
     QTimer::singleShot(0, this, [this, query, gamepadOnly, out] { emit searchFinished(query, gamepadOnly, out); });
 }
@@ -197,6 +225,13 @@ void MockStoreBackend::step()
         const Job done = m_jobs.takeFirst();
         AppInfo &a = m_apps[indexOf(done.id)];
         a.installed = done.kind != Job::Uninstall;
+        if (done.kind == Job::Update) {
+            for (const QString &p : std::as_const(a.newPermissions)) {
+                if (!a.permissions.contains(p))
+                    a.permissions.append(p);
+            }
+        }
+        a.newPermissions.clear();
         a.updateAvailable = false;
         emit installedChanged();
         finish(done, QStringLiteral("ok"));

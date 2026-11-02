@@ -202,6 +202,25 @@ impl<F: Flatpak> Store<F> {
             return (Status::UnknownApp, App::default());
         };
         let key = (app.id.clone(), app.remote.clone());
+        if app.installed && app.update_available {
+            // The remote's metadata is read again, not taken from the cache: what the update
+            // would grant is what a Standard profile's PIN gate is about. A remote that cannot
+            // be read gives no list; then nothing is reported as new (the update cannot be
+            // downloaded either). An installed version that cannot be read counts as having no
+            // permissions, so everything the update asks for is reported.
+            if let Some(meta) = self.flatpak.metadata(&app.remote, &app.id) {
+                let latest = appstream::permissions(&meta);
+                let current = self
+                    .flatpak
+                    .installed_metadata(&app.id)
+                    .map(|m| appstream::permissions(&m))
+                    .unwrap_or_default();
+                app.new_permissions = appstream::added_permissions(&current, &latest);
+                self.remember_permissions(&key, &latest);
+                app.permissions = latest;
+                return (Status::Ok, app);
+            }
+        }
         let cached = self.state().permissions.get(&key).cloned();
         app.permissions = cached.unwrap_or_else(|| {
             let list = self
@@ -209,14 +228,19 @@ impl<F: Flatpak> Store<F> {
                 .metadata(&app.remote, &app.id)
                 .map(|m| appstream::permissions(&m))
                 .unwrap_or_default();
-            let mut state = self.state();
-            state.permissions.insert(key, list.clone());
-            if let Some(entry) = state.catalogue.iter_mut().find(|a| a.id == app.id) {
-                entry.permissions = list.clone();
-            }
+            self.remember_permissions(&key, &list);
             list
         });
         (Status::Ok, app)
+    }
+
+    /// Keeps an app's permissions for the lists and the next `get_app`.
+    fn remember_permissions(&self, key: &(String, String), list: &[String]) {
+        let mut state = self.state();
+        state.permissions.insert(key.clone(), list.to_vec());
+        if let Some(entry) = state.catalogue.iter_mut().find(|a| a.id == key.0) {
+            entry.permissions = list.to_vec();
+        }
     }
 
     pub fn list_installed(&self) -> Vec<App> {
@@ -655,6 +679,83 @@ mod tests {
         );
         assert!(!s.get_app("org.ruya.Racer").1.update_available);
         assert_eq!(s.update("org.ruya.Racer").0, Status::NoUpdate);
+    }
+
+    #[test]
+    fn get_app_reports_the_permissions_an_update_adds() {
+        let f = fake()
+            .with_installed("ruyaos", "org.ruya.Racer", 5_000_000)
+            .with_update("org.ruya.Racer")
+            .with_metadata(
+                "org.ruya.Racer",
+                "[Context]\nshared=network;\nsockets=pulseaudio;\ndevices=all;input;\n",
+            )
+            .with_installed_metadata(
+                "org.ruya.Racer",
+                "[Context]\nshared=network;\nsockets=pulseaudio;\n",
+            );
+        let s = store(f);
+        let racer = s.get_app("org.ruya.Racer").1;
+        assert_eq!(racer.new_permissions, ["all-devices", "gamepad"]);
+        assert_eq!(
+            racer.permissions,
+            ["network", "all-devices", "audio", "gamepad"],
+            "the page lists the update's permissions"
+        );
+    }
+
+    #[test]
+    fn get_app_reports_nothing_new_without_an_update_or_a_change() {
+        // Installed, no update: nothing is compared.
+        let s = store(fake().with_installed("ruyaos", "org.ruya.Racer", 1));
+        let racer = s.get_app("org.ruya.Racer").1;
+        assert!(racer.new_permissions.is_empty());
+        assert_eq!(racer.permissions, ["network", "audio"]);
+        // Not installed: no installed version to compare with.
+        let s = store(fake());
+        assert!(s.get_app("org.ruya.Racer").1.new_permissions.is_empty());
+        // An update with the same permissions.
+        let s = store(
+            fake()
+                .with_installed("ruyaos", "org.ruya.Racer", 1)
+                .with_update("org.ruya.Racer"),
+        );
+        assert!(s.get_app("org.ruya.Racer").1.new_permissions.is_empty());
+    }
+
+    #[test]
+    fn an_unreadable_installed_version_counts_as_having_no_permissions() {
+        let f = fake()
+            .with_installed("ruyaos", "org.ruya.Racer", 1)
+            .with_update("org.ruya.Racer")
+            .with_installed_metadata("org.ruya.Racer", "");
+        let s = store(f);
+        assert_eq!(
+            s.get_app("org.ruya.Racer").1.new_permissions,
+            ["network", "audio"]
+        );
+    }
+
+    #[test]
+    fn the_update_diff_reads_the_remote_again() {
+        let f = fake()
+            .with_installed("ruyaos", "org.ruya.Racer", 1)
+            .with_update("org.ruya.Racer")
+            .with_installed_metadata(
+                "org.ruya.Racer",
+                "[Context]\nshared=network;\nsockets=pulseaudio;\n",
+            );
+        let s = store(f);
+        // Cached by an earlier call; the remote then publishes a version asking for more.
+        assert!(s.get_app("org.ruya.Racer").1.new_permissions.is_empty());
+        s.flatpak.set_metadata(
+            "org.ruya.Racer",
+            "[Context]\nshared=network;\nsockets=pulseaudio;\nfilesystems=host;\n",
+        );
+        assert_eq!(
+            s.get_app("org.ruya.Racer").1.new_permissions,
+            ["host-files"]
+        );
     }
 
     #[test]

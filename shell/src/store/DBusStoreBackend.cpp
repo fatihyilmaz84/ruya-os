@@ -51,6 +51,11 @@ AppInfo toApp(const QVariantMap &d)
         a.permissions = qdbus_cast<QStringList>(perms.value<QDBusArgument>());
     else
         a.permissions = perms.toStringList();
+    const QVariant added = d.value(QStringLiteral("new_permissions"));
+    if (added.canConvert<QDBusArgument>())
+        a.newPermissions = qdbus_cast<QStringList>(added.value<QDBusArgument>());
+    else
+        a.newPermissions = added.toStringList();
     a.installedSize = d.value(QStringLiteral("installed_size")).toULongLong();
     a.icon = d.value(QStringLiteral("icon")).toString();
     a.tile = d.value(QStringLiteral("tile")).toString();
@@ -121,6 +126,25 @@ void DBusStoreBackend::search(const QString &query, bool gamepadOnly, uint limit
             return;
         }
         emit searchFinished(query, gamepadOnly, parseApps(reply.arguments().constFirst().value<QDBusArgument>()));
+    });
+}
+
+void DBusStoreBackend::getApp(const QString &id)
+{
+    auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("GetApp"));
+    msg << id;
+    auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, id](QDBusPendingCallWatcher *w) {
+        w->deleteLater();
+        const QDBusMessage reply = w->reply();
+        // (status s, app a{sv})
+        if (reply.type() != QDBusMessage::ReplyMessage || reply.arguments().size() < 2
+            || reply.arguments().at(0).toString() != QLatin1String("ok")) {
+            qWarning("ruya-shell: Store1 GetApp %s failed: %s", qPrintable(id), qPrintable(reply.errorMessage()));
+            emit appLoadFailed(id);
+            return;
+        }
+        emit appLoaded(toApp(parseDict(reply.arguments().at(1).value<QDBusArgument>())));
     });
 }
 

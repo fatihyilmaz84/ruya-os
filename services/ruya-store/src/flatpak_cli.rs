@@ -136,6 +136,13 @@ impl Flatpak for FlatpakCli {
             .ok()
     }
 
+    fn installed_metadata(&self, id: &str) -> Option<String> {
+        if !valid_app_id(id) {
+            return None;
+        }
+        output(&["info", "--system", "--show-metadata", id]).ok()
+    }
+
     fn run(&self, op: &Operation, progress: &mut dyn FnMut(Progress)) -> Result<(), FlatpakError> {
         let commit_arg;
         let args: Vec<&str> = match op {

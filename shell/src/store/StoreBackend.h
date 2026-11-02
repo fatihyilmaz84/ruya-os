@@ -18,6 +18,7 @@ struct AppInfo
     QString controller = QStringLiteral("none");  // "full" | "partial" | "none"
     QString ageRating = QStringLiteral("all");
     QStringList permissions;
+    QStringList newPermissions; // what the available update adds; only getApp fills it
     qulonglong installedSize = 0;
     QString icon;
     QString tile;
@@ -38,6 +39,7 @@ struct AppInfo
             {QStringLiteral("controller"), controller},
             {QStringLiteral("ageRating"), ageRating},
             {QStringLiteral("permissions"), permissions},
+            {QStringLiteral("newPermissions"), newPermissions},
             {QStringLiteral("installedSize"), installedSize},
             {QStringLiteral("icon"), icon},
             {QStringLiteral("tile"), tile},
@@ -66,8 +68,13 @@ public:
     virtual void install(const QString &id) = 0;
     virtual void uninstall(const QString &id, bool deleteData) = 0;
     virtual void update(const QString &id) = 0;
+    // One app with its permissions and, for an installed app with an update, what the update adds.
+    // Answers with appLoaded or appLoadFailed.
+    virtual void getApp(const QString &id) = 0;
 
 signals:
+    void appLoaded(const AppInfo &app);
+    void appLoadFailed(const QString &id);
     void searchFinished(const QString &query, bool gamepadOnly, const QList<AppInfo> &apps);
     void installedListed(const QList<AppInfo> &apps);
     // The set of installed apps or an update flag changed: the facade reads the installed list

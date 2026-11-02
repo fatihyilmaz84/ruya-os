@@ -2,7 +2,7 @@
 
 **Read this first in every session; update it last.** Rules: root `CLAUDE.md`. Roles (Opus lead, Sonnet builders): `docs/LEAD.md`. Task format: `docs/tasks/README.md`. Finished work: each task's own file (`Status: done`, Outcome starting with `Verified:`); history before T-132 in [`STATUS-done.md`](STATUS-done.md). `scripts/lint-board.ps1` (part of `dev.ps1 test`) keeps this board and the task files in step.
 
-Last updated: 2026-11-02 (Sonnet 5.5, T-153)
+Last updated: 2026-11-02 (Sonnet 5.5, T-156)
 
 ## Where we are
 
@@ -15,7 +15,7 @@ Verification legend: **host** = built and tested on Windows · **vm** = built in
 
 ## Board
 
-**NEXT → T-156**
+**NEXT → T-154**
 
 **Lead review due** after 3–5 more builder tasks (reviewed up to the lead commit "lead review 300245c..e19899f", see `docs/LEAD-NOTES.md`). **One builder session at a time, one task per session:** two builders in one checkout mixed three tasks' work on 2026-10-28. Builders: when your task makes this true, end your reply by recommending a lead session.
 
@@ -24,7 +24,6 @@ Open work only (todo, in-progress, blocked). The order is the recommended order;
 | ID | Title | Status | Depends |
 |---|---|---|---|
 | [T-130](tasks/T-130-compositor-session.md) | **[lead]** Compositor session: `ruya-shell` replaces cage  | todo | T-150 |
-| [T-156](tasks/T-156-update-high-risk-pin.md) | Admin PIN before an app update that adds a high-risk permission | todo | T-152 |
 | [T-154](tasks/T-154-update-schedule-and-idle-reboot.md) | `ruya-update`: daily check, automatic download, reboot when idle | todo | T-153 |
 | [T-155](tasks/T-155-card-accept-pulse.md) | Accept pulse on art cards; remove the unused `Tile` | todo | T-146 |
 | [T-157](tasks/T-157-icon-font.md) | Icon font (Material Symbols Rounded) and `Icon` | todo | — |
@@ -64,6 +63,8 @@ Follow-ups and debt for the next planner. Builders: add one line per item, `- (s
 ## Session log (newest first, the latest five; older entries in `STATUS-log.md`)
 
 One entry per session, at most 4 lines: date · model · tasks · what happened · numbers · follow-ups. Detail belongs in the task Outcome.
+
+- 2026-11-02 · Sonnet 5.5 · T-156 · `GetApp` returns `new_permissions` (installed vs remote metadata); a Standard profile needs an admin's PIN to update an app whose update adds a high-risk permission. The shell never called `GetApp` (permissions empty over D-Bus, so T-152's gate was dead there): the page now loads them first. `test` ALL GREEN (247 QML, 46 store Rust), `shots` reviewed. VM `0.0.23-t156`: `vm-store-check.sh` ALL CHECKS PASSED. A real permission-adding update unverified. Lead review due after 1-3 more tasks.
 
 - 2026-11-02 · Sonnet 5.5 · T-153 · `ruya-update`: rollback holds the command lock, no switch to a tagless reference, a bad channel file reports `failed` instead of stopping the service, forbidden string in Settings. `test` ALL GREEN (243 QML, 32 Rust in the crate). VM `0.0.22-t153`: bad channel file boots healthy, `vm-update-check.sh` ALL PASSED, 4.8 OK. Lead review due after 2-4 more tasks.
 

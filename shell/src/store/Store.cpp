@@ -5,6 +5,8 @@
 
 #include <QHash>
 
+#include <algorithm>
+
 Store::Store(std::unique_ptr<StoreBackend> backend, QObject *parent)
     : QObject(parent)
     , m_backend(std::move(backend))
@@ -26,7 +28,27 @@ Store::Store(std::unique_ptr<StoreBackend> backend, QObject *parent)
             emit searchFinished(query, list);
         }
     });
+    connect(m_backend.get(), &StoreBackend::appLoaded, this, [this](const AppInfo &app) {
+        if (app.newPermissions.isEmpty())
+            m_added.remove(app.id);
+        else
+            m_added.insert(app.id, app.newPermissions);
+        if (mergeDetails(m_catalogue, app))
+            emit catalogueChanged();
+        if (mergeDetails(m_results, app))
+            emit resultsChanged();
+        if (mergeDetails(m_installed, app))
+            emit installedChanged();
+        emit appLoaded(app.id);
+    });
+    connect(m_backend.get(), &StoreBackend::appLoadFailed, this, [this](const QString &id) { emit appLoadFailed(id); });
     connect(m_backend.get(), &StoreBackend::installedListed, this, [this](const QList<AppInfo> &apps) {
+        // What an update adds is only known while the update is there.
+        for (auto it = m_added.begin(); it != m_added.end();) {
+            const QString id = it.key();
+            const bool pending = std::any_of(apps.cbegin(), apps.cend(), [&id](const AppInfo &a) { return a.id == id && a.updateAvailable; });
+            it = pending ? std::next(it) : m_added.erase(it);
+        }
         m_installed = toList(apps);
         emit installedChanged();
         // The apps already held keep their records: only their flags follow the installed set.
@@ -75,12 +97,33 @@ Store *Store::create(QQmlEngine *, QJSEngine *)
     return new Store(std::move(backend));
 }
 
-QVariantList Store::toList(const QList<AppInfo> &apps)
+QVariantList Store::toList(const QList<AppInfo> &apps) const
 {
     QVariantList out;
-    for (const AppInfo &a : apps)
+    for (AppInfo a : apps) {
+        // The lists never carry what an update adds; GetApp did, and the page still needs it.
+        if (a.updateAvailable && a.newPermissions.isEmpty())
+            a.newPermissions = m_added.value(a.id);
         out.append(a.toVariant());
+    }
     return out;
+}
+
+bool Store::mergeDetails(QVariantList &list, const AppInfo &app) const
+{
+    for (QVariant &v : list) {
+        QVariantMap m = v.toMap();
+        if (m.value(QStringLiteral("id")).toString() != app.id)
+            continue;
+        if (m.value(QStringLiteral("permissions")).toStringList() == app.permissions
+            && m.value(QStringLiteral("newPermissions")).toStringList() == app.newPermissions)
+            return false;
+        m.insert(QStringLiteral("permissions"), app.permissions);
+        m.insert(QStringLiteral("newPermissions"), app.newPermissions);
+        v = m;
+        return true;
+    }
+    return false;
 }
 
 void Store::search(const QString &query)
@@ -112,11 +155,14 @@ bool Store::patchFlags(QVariantList &list) const
         const auto it = installed.constFind(m.value(QStringLiteral("id")).toString());
         const bool isInstalled = it != installed.cend();
         const bool update = isInstalled && it.value();
+        const QStringList added = update ? m_added.value(m.value(QStringLiteral("id")).toString()) : QStringList();
         if (m.value(QStringLiteral("installed")).toBool() == isInstalled
-            && m.value(QStringLiteral("updateAvailable")).toBool() == update)
+            && m.value(QStringLiteral("updateAvailable")).toBool() == update
+            && m.value(QStringLiteral("newPermissions")).toStringList() == added)
             continue;
         m.insert(QStringLiteral("installed"), isInstalled);
         m.insert(QStringLiteral("updateAvailable"), update);
+        m.insert(QStringLiteral("newPermissions"), added);
         v = m;
         changed = true;
     }
@@ -136,6 +182,11 @@ void Store::uninstall(const QString &appId, bool deleteData)
 void Store::update(const QString &appId)
 {
     m_backend->update(appId);
+}
+
+void Store::loadApp(const QString &appId)
+{
+    m_backend->getApp(appId);
 }
 
 QVariantMap Store::app(const QString &appId) const

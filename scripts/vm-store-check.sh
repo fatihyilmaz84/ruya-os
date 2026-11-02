@@ -125,7 +125,10 @@ check)
     [ "$pad_n" -lt "$all_n" ] && ok "Search with controller=gamepad returns fewer apps" || bad "controller=gamepad did not filter ($pad_n of $all_n)"
     lim_n="$(as_shell busctl --system call "$svc" "$path" "$ifc" Search sa{sv} "" 1 limit u 1 | grep -o '"id"' | wc -l)"
     [ "$lim_n" = 1 ] && ok "Search with limit=1 returns one app" || bad "limit=1 returned $lim_n"
-    busctl --system call "$svc" "$path" "$ifc" GetApp s "$app" | head -c 800; echo
+    got="$(busctl --system call "$svc" "$path" "$ifc" GetApp s "$app")"
+    echo "$got" | head -c 800; echo
+    # T-156: the record carries new_permissions, empty for an app with no update.
+    echo "$got" | grep -q '"new_permissions" as 0' && ok "GetApp reports an empty new_permissions" || bad "GetApp new_permissions: $got"
     case "$(busctl --system call "$svc" "$path" "$ifc" GetApp s org.nope.Missing)" in 'sa{sv} "unknown-app"'*) ok "GetApp of an unknown id";; *) bad "GetApp unknown";; esac
 
     echo "--- Install"

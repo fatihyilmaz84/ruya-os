@@ -130,6 +130,8 @@ pub trait Flatpak: Send + Sync {
     fn appstream(&self, remote: &str) -> Option<Appstream>;
     /// The Flatpak `metadata` file of an app in a remote (its permissions).
     fn metadata(&self, remote: &str, id: &str) -> Option<String>;
+    /// The `metadata` file of the installed version of an app.
+    fn installed_metadata(&self, id: &str) -> Option<String>;
     /// Runs a transaction, reporting progress as the command prints it.
     fn run(&self, op: &Operation, progress: &mut dyn FnMut(Progress)) -> Result<(), FlatpakError>;
     /// Adds a system-wide remote. Never without signature verification.
@@ -422,6 +424,7 @@ struct FakeState {
     appstream_offline: bool,
     appstream_updates: Vec<String>,
     metadata: HashMap<String, String>,
+    installed_metadata: HashMap<String, String>,
     fail_next: Option<FlatpakError>,
     progress: Vec<u32>,
     ran: Vec<Operation>,
@@ -516,6 +519,21 @@ impl FakeFlatpak {
         self
     }
 
+    /// Replaces the remote's metadata of an app (a new version was published).
+    pub fn set_metadata(&self, id: &str, metadata: &str) {
+        self.state()
+            .metadata
+            .insert(id.to_owned(), metadata.to_owned());
+    }
+
+    /// The metadata of the installed version, when it differs from the remote's.
+    pub fn with_installed_metadata(self, id: &str, metadata: &str) -> Self {
+        self.state()
+            .installed_metadata
+            .insert(id.to_owned(), metadata.to_owned());
+        self
+    }
+
     /// The percentages the next transactions report (a download that goes 10, 60, 100).
     pub fn with_progress(self, steps: &[u32]) -> Self {
         self.state().progress = steps.to_vec();
@@ -559,6 +577,15 @@ impl Flatpak for FakeFlatpak {
 
     fn metadata(&self, _remote: &str, id: &str) -> Option<String> {
         self.state().metadata.get(id).cloned()
+    }
+
+    fn installed_metadata(&self, id: &str) -> Option<String> {
+        let state = self.state();
+        state
+            .installed_metadata
+            .get(id)
+            .or_else(|| state.metadata.get(id))
+            .cloned()
     }
 
     fn update_appstream(&self, remote: &str) -> Result<(), String> {

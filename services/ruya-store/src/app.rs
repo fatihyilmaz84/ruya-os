@@ -69,6 +69,9 @@ pub struct App {
     /// "all" | "7+" | "12+" | "16+" | "18+", "" when the metadata has no rating.
     pub age_rating: String,
     pub permissions: Vec<String>,
+    /// What the available update adds to the installed version's permissions; only `get_app`
+    /// fills it, empty without an update.
+    pub new_permissions: Vec<String>,
     pub installed_size: u64,
     pub icon: String,
     pub tile: String,

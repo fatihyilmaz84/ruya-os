@@ -16,9 +16,18 @@ Page {
     readonly property bool hasUpdate: app.updateAvailable ?? false
     readonly property var highRisk: ["all-devices", "host-files", "session-bus"]
 
-    // A Standard profile needs an admin's PIN to install an app with a high-risk permission (03 §4.4).
+    // A Standard profile needs an admin's PIN to install an app with a high-risk permission, and to
+    // update one whose update adds a high-risk permission (03 §4.4).
+    readonly property var newPermissions: installed && hasUpdate ? (app.newPermissions ?? []) : []
     readonly property bool hasHighRisk: (app.permissions ?? []).some(p => highRisk.indexOf(p) >= 0)
-    readonly property bool needsAdminPin: !installed && hasHighRisk && (Profiles.active.role ?? "") !== "admin"
+    readonly property bool addsHighRisk: newPermissions.some(p => highRisk.indexOf(p) >= 0)
+    readonly property bool needsAdminPin: (installed ? addsHighRisk : hasHighRisk) && (Profiles.active.role ?? "") !== "admin"
+
+    // The permissions are read from the service when the page opens; Install and Update wait for
+    // them, because the PIN gate depends on them.
+    property bool detailsReady: false
+    property bool detailsFailed: false
+    property bool actionPending: false
 
     property string pinStep: "idle"    // idle | pin | working
     property string adminId: ""
@@ -106,16 +115,33 @@ Page {
         pad.collect(qsTr("Enter an admin's PIN"), false)
     }
 
+    function loadDetails() {
+        page.detailsReady = false
+        page.detailsFailed = false
+        Store.loadApp(page.appId)
+    }
+
     function primaryAction() {
         if (page.working || page.pinStep !== "idle")
             return
+        if (!page.detailsReady) {
+            // Not known yet whether a PIN is needed: do it as soon as the permissions are in.
+            page.actionPending = true
+            if (page.detailsFailed)
+                page.loadDetails()
+            return
+        }
         if (!page.installed) {
             if (page.needsAdminPin)
                 page.startAdminPin()
             else
                 page.start("install")
-        } else if (page.hasUpdate)
-            page.start("update")
+        } else if (page.hasUpdate) {
+            if (page.needsAdminPin)
+                page.startAdminPin()
+            else
+                page.start("update")
+        }
         // "Open" waits for the session service (T-130).
     }
 
@@ -126,8 +152,29 @@ Page {
         Store.uninstall(page.appId, deleteData)
     }
 
+    Component.onCompleted: loadDetails()
+    onHasUpdateChanged: loadDetails()      // an update just finished: its permissions are the app's now
+
     Connections {
         target: Store
+        function onAppLoaded(id) {
+            if (id !== page.appId)
+                return
+            page.detailsReady = true
+            if (page.actionPending) {
+                page.actionPending = false
+                page.primaryAction()
+            }
+        }
+        function onAppLoadFailed(id) {
+            if (id !== page.appId)
+                return
+            page.detailsFailed = true
+            if (page.actionPending) {
+                page.actionPending = false
+                page.errorText = page.describe("failed")
+            }
+        }
         function onJobFinished(id, status) {
             if (id !== page.appId)
                 return
@@ -165,7 +212,7 @@ Page {
             page.pinStep = "idle"
             primary.forceActiveFocus()
             if (status === "ok") {
-                page.start("install")
+                page.start(page.installed ? "update" : "install")
             } else {
                 Sfx.back()
                 page.errorText = ProfileStatus.describe(status, attemptsLeft, retryAfterSecs)
@@ -380,10 +427,21 @@ Page {
         }
 
         Text {
+            objectName: "detailUpdateAdds"
+            visible: page.newPermissions.length > 0
+            width: parent.width
+            text: qsTr("The update adds: %1").arg(page.newPermissions.map(p => page.permissionText(p)).join(", "))
+            color: page.addsHighRisk ? Theme.warningText : Theme.textDim
+            font.pixelSize: Theme.typeCaption * page.u
+            wrapMode: Text.Wrap
+        }
+
+        Text {
             objectName: "detailAdminNote"
             visible: page.needsAdminPin
             width: parent.width
-            text: qsTr("An admin's PIN is needed to install this app.")
+            text: page.installed ? qsTr("An admin's PIN is needed to update this app.")
+                                 : qsTr("An admin's PIN is needed to install this app.")
             color: Theme.textDim
             font.pixelSize: Theme.typeCaption * page.u
             wrapMode: Text.Wrap

@@ -7,7 +7,8 @@
 #include <QTimer>
 
 // In-memory store: a catalogue of 12 apps (all sources and controller levels), three installed
-// from the start, one of them with an update. An install runs download (0-49) then install
+// from the start, two of them with an update: Open Chess adds "all-devices" (reported by getApp
+// only, as the service does), Text Editor adds nothing. An install runs download (0-49) then install
 // (50-100) in 20 steps of about 100 ms (10 ms with RUYA_MOCK_FAST=1), then reports
 // InstalledChanged and ok. "org.example.Broken" always fails part-way.
 class MockStoreBackend final : public StoreBackend
@@ -23,6 +24,7 @@ public:
     void install(const QString &id) override;
     void uninstall(const QString &id, bool deleteData) override;
     void update(const QString &id) override;
+    void getApp(const QString &id) override;
 
     // Tests only: whether an uninstall of this app asked for its data to be deleted.
     bool dataDeleted(const QString &id) const { return m_dataDeleted.contains(id); }
@@ -45,6 +47,7 @@ private:
     void finish(const Job &job, const QString &status);
     void reject(const QString &id, const QString &status);
     QList<AppInfo> installedApps() const;
+    static AppInfo listed(AppInfo a);
 
     QList<AppInfo> m_apps;
     QList<Job> m_jobs; // one transaction queue: only the first runs

@@ -42,7 +42,7 @@
 <context>
     <name>AppDetailPage</name>
     <message>
-        <location filename="../qml/AppDetailPage.qml" line="+36"/>
+        <location filename="../qml/AppDetailPage.qml" line="+45"/>
         <source>Official</source>
         <translation>Official</translation>
     </message>
@@ -182,7 +182,7 @@
         <translation>Enter an admin&apos;s PIN</translation>
     </message>
     <message>
-        <location line="+130"/>
+        <location line="+168"/>
         <source>Install</source>
         <translation>Install</translation>
     </message>
@@ -198,12 +198,12 @@
     </message>
     <message>
         <location line="+10"/>
-        <location line="+232"/>
+        <location line="+243"/>
         <source>Uninstall</source>
         <translation>Uninstall</translation>
     </message>
     <message>
-        <location line="-133"/>
+        <location line="-144"/>
         <source>This app can</source>
         <translation>This app can</translation>
     </message>
@@ -214,6 +214,16 @@
     </message>
     <message>
         <location line="+15"/>
+        <source>The update adds: %1</source>
+        <translation>The update adds: %1</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>An admin&apos;s PIN is needed to update this app.</source>
+        <translation>An admin&apos;s PIN is needed to update this app.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>An admin&apos;s PIN is needed to install this app.</source>
         <translation>An admin&apos;s PIN is needed to install this app.</translation>
     </message>
@@ -1063,7 +1073,7 @@
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+283"/>
+        <location filename="../qml/Shell.qml" line="+284"/>
         <source>Could not %1.</source>
         <translation>Could not %1.</translation>
     </message>
@@ -1088,12 +1098,12 @@
         <translation>Audio output: %1</translation>
     </message>
     <message>
-        <location line="+524"/>
+        <location line="+526"/>
         <source>Power</source>
         <translation>Power</translation>
     </message>
     <message>
-        <location line="-516"/>
+        <location line="-518"/>
         <source>Update ready. Restart to finish.</source>
         <translation>Update ready. Restart to finish.</translation>
     </message>
@@ -1103,7 +1113,7 @@
         <translation>%1 stopped unexpectedly</translation>
     </message>
     <message>
-        <location line="+216"/>
+        <location line="+218"/>
         <source>Continue playing</source>
         <translation>Continue playing</translation>
     </message>
@@ -1251,18 +1261,18 @@
     <name>SystemPane</name>
     <message>
         <location filename="../qml/SystemPane.qml" line="+27"/>
-        <location line="+214"/>
+        <location line="+216"/>
         <source>Beta</source>
         <translation>Beta</translation>
     </message>
     <message>
-        <location line="-214"/>
-        <location line="+213"/>
+        <location line="-216"/>
+        <location line="+215"/>
         <source>Stable</source>
         <translation>Stable</translation>
     </message>
     <message>
-        <location line="-208"/>
+        <location line="-210"/>
         <source>Last checked %1</source>
         <translation>Last checked %1</translation>
     </message>
@@ -1342,7 +1352,7 @@
         <translation>The previous version starts after the next restart.</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+4"/>
         <source>Could not roll back.</source>
         <translation>Could not roll back.</translation>
     </message>
@@ -1352,17 +1362,18 @@
         <translation>An update is already in progress.</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+2"/>
         <source>The update could not be started.</source>
         <translation>The update could not be started.</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-8"/>
+        <location line="+7"/>
         <source>Only an admin can do this.</source>
         <translation>Only an admin can do this.</translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+14"/>
         <source>Language</source>
         <translation>Language</translation>
     </message>

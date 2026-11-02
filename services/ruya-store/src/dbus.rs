@@ -42,6 +42,9 @@ impl Flatpak for DynFlatpak {
     fn metadata(&self, remote: &str, id: &str) -> Option<String> {
         (**self).metadata(remote, id)
     }
+    fn installed_metadata(&self, id: &str) -> Option<String> {
+        (**self).installed_metadata(id)
+    }
     fn run(&self, op: &Operation, progress: &mut dyn FnMut(Progress)) -> Result<(), FlatpakError> {
         (**self).run(op, progress)
     }
@@ -169,6 +172,10 @@ fn record(app: &App) -> Dict {
         (
             "permissions",
             Value::Array(Array::from(app.permissions.clone())),
+        ),
+        (
+            "new_permissions",
+            Value::Array(Array::from(app.new_permissions.clone())),
         ),
         ("installed_size", Value::from(app.installed_size)),
         ("icon", Value::from(app.icon.clone())),

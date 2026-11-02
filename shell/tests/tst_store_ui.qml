@@ -76,6 +76,7 @@ Item {
                 keyClick(Qt.Key_Return)
                 tryCompare(tc.shell, "currentPage", "appDetail")
                 tryVerify(() => find("detailPrimary") && find("detailPrimary").activeFocus, 2000)
+                tryCompare(find("page_appDetail"), "detailsReady", true)   // the gate needs the permissions
                 return
             }
             fail("no card for " + id)
@@ -220,6 +221,62 @@ Item {
             verify(!find("detailPinPad").shown)
         }
 
+        function test_update_adding_high_risk_needs_admin_pin() {
+            openStore()
+            openApp("org.example.Chess")                // its update adds all-devices
+            compare(find("detailPrimary").text, "Update")
+            verify(find("detailUpdateAdds").visible)
+            verify(find("detailUpdateAdds").text.indexOf("Accesses all devices") >= 0, find("detailUpdateAdds").text)
+            verify(find("detailAdminNote").visible)
+            keyClick(Qt.Key_Return)
+            const pad = find("detailPinPad")
+            tryVerify(() => pad.shown && findChild(pad, "pinKeys").activeFocus, 2000, "the PIN pad has focus")
+            compare(find("page_appDetail").working, false)
+            enterPin("0000")
+            tryVerify(() => !pad.shown)
+            tryVerify(() => find("detailError").visible && find("detailError").text.indexOf("Wrong PIN") === 0)
+            tryVerify(() => find("detailPrimary").activeFocus, 2000, "focus returns to Update")
+            compare(find("page_appDetail").working, false)
+            compare(Object.keys(Store.jobs).length, 0)
+            verify(Store.app("org.example.Chess").updateAvailable, "a wrong PIN starts no update")
+
+            keyClick(Qt.Key_Return)
+            tryVerify(() => pad.shown)
+            enterPin("1234")
+            tryVerify(() => find("page_appDetail").working, 2000, "the admin's PIN starts the update")
+            tryVerify(() => find("detailPrimary").activeFocus)
+            tryVerify(() => Store.app("org.example.Chess").updateAvailable === false)
+            tryVerify(() => !find("page_appDetail").working)
+            verify(!find("detailAdminNote").visible, "nothing is left to gate")
+            verify(!find("detailUpdateAdds").visible)
+            verify(Store.app("org.example.Chess").permissions.indexOf("all-devices") >= 0)
+        }
+
+        function test_update_adding_high_risk_back_cancels() {
+            openStore()
+            openApp("org.example.Chess")
+            keyClick(Qt.Key_Return)
+            const pad = find("detailPinPad")
+            tryVerify(() => pad.shown)
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !pad.shown)
+            tryVerify(() => find("detailPrimary").activeFocus, 2000, "focus is on Update")
+            compare(find("page_appDetail").working, false)
+            compare(Object.keys(Store.jobs).length, 0)
+        }
+
+        function test_update_adding_nothing_is_not_gated() {
+            openStore()
+            openApp("org.example.Editor")               // an update with no new permission
+            compare(find("detailPrimary").text, "Update")
+            verify(!find("detailUpdateAdds").visible)
+            verify(!find("detailAdminNote").visible)
+            keyClick(Qt.Key_Return)
+            verify(find("page_appDetail").working, "Update starts at once")
+            verify(!find("detailPinPad").shown)
+            tryVerify(() => Store.app("org.example.Editor").updateAvailable === false)
+        }
+
         function test_uninstall_confirm() {
             openStore()
             openApp("org.example.Puzzle")              // installed from the start
@@ -323,6 +380,15 @@ Item {
             keyClick(Qt.Key_Return)
             tryVerify(() => Store.jobs["org.example.Racer"] !== undefined, 2000)
             grabImage(tc.shell).save(shotsDir + "/19-store-installing.png")
+        }
+
+        function test_zz_screenshots_update() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            openStore()
+            openApp("org.example.Chess")               // an update that adds a high-risk permission
+            wait(800)
+            grabImage(tc.shell).save(shotsDir + "/56-store-update-adds.png")
         }
     }
 }

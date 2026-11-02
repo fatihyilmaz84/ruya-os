@@ -46,6 +46,12 @@
                          stable keys, in plain-language order: "network", "home-files",
                          "host-files", "all-devices", "audio", "gamepad", "session-bus", ...
                          (unknown keys are shown by the shell as-is)
+    new_permissions as   what the available update adds to the installed version's permissions (same
+                         keys as permissions, in the new version's order); empty when the app is
+                         not installed, has no update or the update adds nothing. Only GetApp
+                         fills it (it reads the installed and the new version's metadata, the new
+                         one fresh each time); the lists carry an empty array. A Standard profile
+                         needs the admin PIN for an update that adds a high-risk permission.
     installed_size  t    bytes on disk when installed (download size is not exposed)
     icon            s    URL (https: or file:) or "" - the shell draws a generated tile then
     tile            s    URL or ""
@@ -69,7 +75,9 @@
       <arg name="apps" type="aa{sv}" direction="out"/>
     </method>
 
-    <!-- One app. status "unknown-app" returns an empty dictionary. -->
+    <!-- One app, with its permissions and (for an installed app with an update) new_permissions
+         read now. The shell calls it when an app page opens. status "unknown-app" returns an empty
+         dictionary. -->
     <method name="GetApp">
       <arg name="id" type="s" direction="in"/>
       <arg name="status" type="s" direction="out"/>

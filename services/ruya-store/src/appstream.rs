@@ -220,6 +220,16 @@ fn on_text(b: &mut Builder, stack: &[Open], text: &str, icon_base: &str) {
     }
 }
 
+/// The permissions an update adds: those of the new version the installed one does not have, in
+/// the new version's order. A removed or unchanged permission is not reported.
+pub fn added_permissions(installed: &[String], update: &[String]) -> Vec<String> {
+    update
+        .iter()
+        .filter(|p| !installed.contains(p))
+        .cloned()
+        .collect()
+}
+
 /// The permission keys of an app from its Flatpak `metadata` (a keyfile), in the order the
 /// contract lists them. Negated entries (`!x`) grant nothing.
 pub fn permissions(metadata: &str) -> Vec<String> {
@@ -435,5 +445,26 @@ mod tests {
         assert_eq!(permissions(meta), ["home-files", "host-files"]);
         assert!(permissions("").is_empty());
         assert!(permissions("garbage").is_empty());
+    }
+
+    fn keys(list: &[&str]) -> Vec<String> {
+        list.iter().map(|s| (*s).to_owned()).collect()
+    }
+
+    #[test]
+    fn an_update_reports_the_permissions_it_adds() {
+        let old = keys(&["network", "audio"]);
+        // Added high-risk, and added harmless: both are reported, the shell judges the risk.
+        assert_eq!(
+            added_permissions(&old, &keys(&["network", "all-devices", "audio", "gamepad"])),
+            ["all-devices", "gamepad"]
+        );
+        // Removed: nothing added.
+        assert!(added_permissions(&old, &keys(&["network"])).is_empty());
+        // Unchanged.
+        assert!(added_permissions(&old, &old).is_empty());
+        // Nothing known about the installed version: everything counts as added.
+        assert_eq!(added_permissions(&[], &old), ["network", "audio"]);
+        assert!(added_permissions(&old, &[]).is_empty());
     }
 }

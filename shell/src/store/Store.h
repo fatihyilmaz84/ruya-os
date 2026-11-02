@@ -2,6 +2,7 @@
 
 #include "StoreBackend.h"
 
+#include <QHash>
 #include <QObject>
 #include <QQmlEngine>
 #include <QVariantList>
@@ -14,8 +15,9 @@
 // mock elsewhere, like Audio and Profiles.
 //
 // App records are plain objects: { id, name, summary, description, developer, source,
-// controller, ageRating, permissions, installedSize, icon, tile, hero, installed,
-// updateAvailable }.
+// controller, ageRating, permissions, newPermissions, installedSize, icon, tile, hero, installed,
+// updateAvailable }. permissions and newPermissions (what the available update adds) are complete
+// only after loadApp() of that app has answered.
 class Store : public QObject
 {
     Q_OBJECT
@@ -58,6 +60,9 @@ public:
     Q_INVOKABLE void install(const QString &appId);
     Q_INVOKABLE void uninstall(const QString &appId, bool deleteData);
     Q_INVOKABLE void update(const QString &appId);
+    // Reads one app's permissions (and what its update adds) from the service and merges them into
+    // the records held; answers with appLoaded or appLoadFailed. The app page calls it when it opens.
+    Q_INVOKABLE void loadApp(const QString &appId);
     // The record of an app from the catalogue, or an empty object.
     Q_INVOKABLE QVariantMap app(const QString &appId) const;
 
@@ -77,9 +82,13 @@ signals:
     void searchFinished(const QString &query, const QVariantList &apps);
     // status: see api/dbus/org.ruyaos.Store1.xml (JobFinished statuses, plus request statuses).
     void jobFinished(const QString &appId, const QString &status);
+    void appLoaded(const QString &appId);
+    void appLoadFailed(const QString &appId);
 
 private:
-    static QVariantList toList(const QList<AppInfo> &apps);
+    QVariantList toList(const QList<AppInfo> &apps) const;
+    // Puts the permissions of app into the record of the same id in list; whether it changed.
+    bool mergeDetails(QVariantList &list, const AppInfo &app) const;
     // Copies the installed/updateAvailable flags of m_installed into the apps of list.
     bool patchFlags(QVariantList &list) const;
 
@@ -88,6 +97,7 @@ private:
     QVariantList m_installed;
     QVariantList m_results;
     QVariantMap m_jobs;
+    QHash<QString, QStringList> m_added; // app id -> what its update adds, from loadApp
     QString m_lastQuery;
     bool m_gamepadOnly = false;
     bool m_available = false;

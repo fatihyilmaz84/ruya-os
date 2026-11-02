@@ -42,7 +42,7 @@
 <context>
     <name>AppDetailPage</name>
     <message>
-        <location filename="../qml/AppDetailPage.qml" line="+36"/>
+        <location filename="../qml/AppDetailPage.qml" line="+45"/>
         <source>Official</source>
         <translation>Resmi</translation>
     </message>
@@ -182,7 +182,7 @@
         <translation>Bir yöneticinin PIN&apos;ini girin</translation>
     </message>
     <message>
-        <location line="+130"/>
+        <location line="+168"/>
         <source>Install</source>
         <translation>Kur</translation>
     </message>
@@ -198,12 +198,12 @@
     </message>
     <message>
         <location line="+10"/>
-        <location line="+232"/>
+        <location line="+243"/>
         <source>Uninstall</source>
         <translation>Kaldır</translation>
     </message>
     <message>
-        <location line="-133"/>
+        <location line="-144"/>
         <source>This app can</source>
         <translation>Bu uygulama şunları yapabilir</translation>
     </message>
@@ -214,6 +214,16 @@
     </message>
     <message>
         <location line="+15"/>
+        <source>The update adds: %1</source>
+        <translation>Güncelleme şunları ekliyor: %1</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>An admin&apos;s PIN is needed to update this app.</source>
+        <translation>Bu uygulamayı güncellemek için bir yöneticinin PIN&apos;i gerekir.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>An admin&apos;s PIN is needed to install this app.</source>
         <translation>Bu uygulamayı yüklemek için bir yöneticinin PIN&apos;i gerekir.</translation>
     </message>
@@ -1061,7 +1071,7 @@
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+283"/>
+        <location filename="../qml/Shell.qml" line="+284"/>
         <source>Could not %1.</source>
         <translation>%1 işlemi yapılamadı.</translation>
     </message>
@@ -1086,12 +1096,12 @@
         <translation>Ses çıkışı: %1</translation>
     </message>
     <message>
-        <location line="+524"/>
+        <location line="+526"/>
         <source>Power</source>
         <translation>Güç</translation>
     </message>
     <message>
-        <location line="-516"/>
+        <location line="-518"/>
         <source>Update ready. Restart to finish.</source>
         <translation>Güncelleme hazır. Bitirmek için yeniden başlat.</translation>
     </message>
@@ -1101,7 +1111,7 @@
         <translation>%1 beklenmedik şekilde durdu</translation>
     </message>
     <message>
-        <location line="+216"/>
+        <location line="+218"/>
         <source>Continue playing</source>
         <translation>Oynamaya devam et</translation>
     </message>
@@ -1249,18 +1259,18 @@
     <name>SystemPane</name>
     <message>
         <location filename="../qml/SystemPane.qml" line="+27"/>
-        <location line="+214"/>
+        <location line="+216"/>
         <source>Beta</source>
         <translation>Beta</translation>
     </message>
     <message>
-        <location line="-214"/>
-        <location line="+213"/>
+        <location line="-216"/>
+        <location line="+215"/>
         <source>Stable</source>
         <translation>Kararlı</translation>
     </message>
     <message>
-        <location line="-208"/>
+        <location line="-210"/>
         <source>Last checked %1</source>
         <translation>Son kontrol: %1</translation>
     </message>
@@ -1340,7 +1350,7 @@
         <translation>Önceki sürüm bir sonraki yeniden başlatmadan sonra açılır.</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+4"/>
         <source>Could not roll back.</source>
         <translation>Önceki sürüme dönülemedi.</translation>
     </message>
@@ -1350,17 +1360,18 @@
         <translation>Bir güncelleme zaten sürüyor.</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+2"/>
         <source>The update could not be started.</source>
         <translation>Güncelleme başlatılamadı.</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-8"/>
+        <location line="+7"/>
         <source>Only an admin can do this.</source>
         <translation>Bunu yalnızca bir yönetici yapabilir.</translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+14"/>
         <source>Language</source>
         <translation>Dil</translation>
     </message>
