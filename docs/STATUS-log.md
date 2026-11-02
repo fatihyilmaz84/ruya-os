@@ -2,6 +2,13 @@
 
 Older entries of the `docs/STATUS.md` session log, newest first. STATUS keeps only the latest five; the lead moves the rest here at each review. Nobody needs to read this file to start a task.
 
+- 2026-11-01 · Opus 5.5 · Lead (review `300245c..e19899f`: T-149, T-151, T-113, T-152, T-146) · `test` ALL GREEN (242 QML + 20 skips, 207 Rust, 63 s); `shots` ALL GREEN (55, 36 s; every Home, Games and Store-PIN screen reviewed). CI green at `300245c`. No VM run (T-151's `0.0.21-t151` covers the only packaged change).
+  Findings 8 fixed / 4 filed: art cards were 2.2:1 not 16:9, focused Home pill showed no ring, stray letter mid-hero, hero art missed its first value, vacuous ArtCard test, `Theme.hairline` added (`hairlineAt(u)`), 04 glass rows, stale comments; `ruya-update` rollback race, empty tag, fatal channel file → T-153, update adding a high-risk permission → T-156.
+  Planned T-153..T-156; Inbox emptied (2 dropped: art-roles line was wrong; user-installed Flatpak games are outside the contract). Escalated: icon set. Process: parallel review subagents (`LEAD.md` 3); geometry criteria need a property test (`PLANNING.md` Lessons).
+  Owner chose Material Symbols Rounded (ADR-013, 04 §3.7): planned T-157 (icon font, `Icon`, gear and OSD) and T-158 (hint bar).
+
+- 2026-10-31 · Sonnet 5.5 · T-146 · Art-led Home: hero art, hero block (Play/Details), Recent row, glass section nav with LB/RB, empty state; 5 new tokens, 5 components, `tst_home` (13 tests), 15 test files moved off the tiles. `test` ALL GREEN (241 QML). `shots` NOT run (session locked): screenshots unreviewed. Lead review is due.
+
 - 2026-10-30 · Sonnet 5.5 · T-152 · Standard profiles enter an admin's PIN (`PinPad` + `Profiles.verifyAdmin`) before Install of a high-risk app; note under the permissions; 4 tests, `20` reviewed. `test` and `shots` ALL GREEN (226 QML). Lead review is due after 1-2 more tasks.
 
 - 2026-10-30 · Sonnet 5.5 · T-113 · `Library` singleton (mock + unverified D-Bus client), `ArtCard`, real Games page (4-column grid, source filter, launch request + toast, empty state). `test` ALL GREEN (220 QML), `shots` ALL GREEN, `21` reviewed. `tst_pages` retargeted from the old placeholder. Lead review is due after 1-2 more tasks.

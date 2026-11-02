@@ -36,7 +36,7 @@ RuyaOS is an open-source, immutable (Fedora bootc) console OS for living-room PC
 6. **Document.**
    - Task file: fill **Outcome**, starting with a `Verified:` line (host / vm / unverified / hw, see the legend in STATUS), then what was built, files, deviations. Set `Status: done` (or `blocked`, with the reason).
    - Update every spec section whose behaviour changed (specs describe what the code does) and `docs/dev-setup.md` if commands changed.
-   - `docs/STATUS.md`: **delete the task's board row** (done work leaves the board; there is no Done table), move **NEXT**, add a session-log entry of at most 4 lines at the top.
+   - `docs/STATUS.md`: **delete the task's board row** (done work leaves the board; there is no Done table), move **NEXT**, add a session-log entry (at most 700 characters, linted) at the top.
 7. **Commit.** One commit per task (a small series is fine), format below. **Builders never push.** The lead pushes `main` to `origin` (https://github.com/fatihyilmaz84/ruya-os.git) at the end of every lead session, only after `scripts\scan-secrets.ps1` passes (owner, 2026-10-28). `image/bib/config.toml` holds the dev SSH key and stays git-ignored.
 
 ## Definition of done (all must hold)

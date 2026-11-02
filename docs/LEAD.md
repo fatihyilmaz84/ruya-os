@@ -58,7 +58,7 @@ Every builder session pays to read these files again on every turn, so they have
 |---|---|
 | root `CLAUDE.md` | about 10 KB |
 | area `CLAUDE.md` (`shell/`, `services/`, `image/`) | about 7 KB each |
-| `docs/STATUS.md` | about 10 KB (the log keeps five entries of at most 4 lines; everything older goes to `STATUS-log.md`; no Done table) |
+| `docs/STATUS.md` | about 10 KB (the log keeps five entries of at most 700 characters, linted by `lint-board.ps1`; everything older goes to `STATUS-log.md`; no Done table) |
 | a task file | about 8 KB; split bigger |
 
 How-tos and catalogues belong in a reference file that a task links (`shell/PATTERNS.md`, `docs/dev-setup.md`), rules belong in `CLAUDE.md`, and a rule that a script can enforce belongs in a script (`scripts/lint-*.ps1`), not in prose. When you add a rule, delete or merge one.

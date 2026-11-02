@@ -44,6 +44,7 @@ Pressing Play starts the game full screen with a short art-led launch; Guide bri
 ## Hints
 - The power choices and `PowerConfirm` already work above the overlay: move them, don't rewrite them.
 - Keep the quick menu's model keys-only (translations rule).
+- The nightly update restart (T-154) must never hit a running app: the shell reports `Update.noteActivity(appOpen)` when the first app starts or the last closes (lead review 2026-11-02). Keep an app left behind Home in `apps`, so `appOpen` stays true; add a test that `Update.mockLastActivityAppRunning()` is true while a game runs behind Home. In the VM criterion, check the journal or `vm-update-check.sh` that `ReportActivity(true)` arrives.
 
 ## Outcome
 _Filled in by the implementer. Start with a `Verified:` line._

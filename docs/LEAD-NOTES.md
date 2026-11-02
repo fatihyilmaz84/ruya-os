@@ -4,28 +4,28 @@ The procedure is in [`LEAD.md`](LEAD.md). **Rewrite this file at the end of ever
 
 ## Review range
 
-- **Last reviewed commit: the lead commit of 2026-11-01 "lead review 300245c..e19899f"** (`git log --grep="lead review 300245c"`). Everything up to T-146 is reviewed.
+- **Last reviewed commit: the lead commit of 2026-11-02 "lead review e5c2ab3..ac6e5b1"** (`git log --grep="lead review e5c2ab3"`). Everything up to T-154 is reviewed.
 - Next review: `git log --oneline <that commit>..HEAD`, after 3–5 builder tasks.
-- Last VM verification: image `0.0.21-t151` (builder, 2026-10-30): `RUYA_BOOT_OK`, `vm-update-check.sh` ALL PASSED. `ruya-session` and `ruya-library` are not in the image; the shell's Library and Session D-Bus clients have never run.
+- Last VM verification: image `0.0.25-t154` (builder, 2026-11-02): `RUYA_BOOT_OK`, `vm-update-check.sh` ALL PASSED, the scheduled 03:10 restart booted the staged image. The 2026-11-02 review fix (`schedule.rs` clock edge, shell activity report) has no VM run: pure core plus shell, covered by Rust and QML tests. `ruya-session` and `ruya-library` are not in the image; the shell's Library, Session and Update-activity D-Bus clients have never run.
 
 ## Concerns (ranked)
 
-1. **T-130 is still not started and is the critical path** (third review in a row). Run it as its **own lead session** (several image builds, the update drill, the broken-compositor rollback). `KeyRouter` takes Guide keys only while `appItem->hasActiveFocus()`: give `focusApp` the item that really holds focus (the `ShellSurfaceItem`, or make the wrapper a `FocusScope`). No app has ever been launched from the shell, and the whole Home/Games surface is mock-only.
+1. **T-130 is still not started and is the critical path** (fourth review in a row). Three update tasks landed instead; the update stack is now complete enough. Run T-130 as its **own lead session** (several image builds, the update drill, the broken-compositor rollback). `KeyRouter` takes Guide keys only while `appItem->hasActiveFocus()`: give `focusApp` the item that really holds focus (the `ShellSurfaceItem`, or make the wrapper a `FocusScope`). No app has ever been launched from the shell, and Home/Games are mock-only.
 2. **After T-130, write the reserved VM tasks:** `ruya-session` in the image (unit, policy, real spawner, Profiles1 fetch, `vm-session-check.sh`); `ruya-library` in the image (per-profile user service, or `ruya-session` hands it the profile's home: ADR-004; a system service reading every profile's home is a privacy problem); then BlueZ (T-136), udisks2 (T-137).
-3. **`ruya-update` robustness** (T-153): until it lands, a bad `/var/lib/ruya-update/channel` stops the service and fails the required greenboot check on every boot, also after a rollback. Don't ship an image to hardware (B-002) before T-153.
-4. **`ruya-session` real spawner open questions** (T-139 Outcome): `systemd-run --user --machine=<user>@.host`; per-profile Wayland socket location; exit code and `signaled` from the unit.
-5. **Admin authorization** (decided 2026-10-30): services refuse admin-only calls unless the caller is root or the shell with an admin active; the shell checks PINs with `Profiles1.VerifyAdmin`. `caller_is_admin` is copied in `ruya-store` and `ruya-update`; share it when a third service needs it. T-156 closes the update-adds-permission hole.
-6. **Builders miss geometry in screenshots** (T-113/T-146 cards, nav ring). Lesson added to `PLANNING.md`; check new components' sizes yourself in the next `shots` review.
+3. **Nightly restart vs running apps.** The service restarts at 03:00–05:00 after 30 idle minutes with no app; "no app" is the shell's `appOpen` (review fix 2026-11-02: reported at once on change, not only with input). T-147 must keep apps left behind Home in `apps` (hint added). T-159 adds the on-screen notice.
+4. **High-risk permission gate is enforced by the shell only** (T-152/T-156): the service trusts the shell (bus policy: shell and root). Acceptable while the shell is the only caller; revisit if another client (a web remote, an app portal) ever reaches Store1.
+5. **`ruya-session` real spawner open questions** (T-139 Outcome): `systemd-run --user --machine=<user>@.host`; per-profile Wayland socket location; exit code and `signaled` from the unit.
+6. **Admin authorization:** `caller_is_admin` is copied in `ruya-store` and `ruya-update`; share it when a third service needs it.
 7. **Host storage integrity.** C: showed a zeroed cargo file and WSL `ext4` errors. Always `qemu-img check` a fresh disk. Owner asked for a memory and SMART check.
-8. **Design system:** icon set decided (ADR-013, 04 §3.7): T-157 font + `Icon`, T-158 hint bar; the controller-battery item waits for a real battery source (Inbox). T-144 (contrast) and T-145 (Inter) wait. Canvas boards are stale on `AppArt`, the progress bar, `GlassPill`, `HeroBlock`, the buttons, the section nav and §3.7 icons.
+8. **Design system:** T-157 (icon font) unblocks T-158 (hint bar) and T-161 (battery). T-144 (contrast) and T-145 (Inter) wait. Canvas boards stale on `AppArt`, the progress bar, `GlassPill`, `HeroBlock`, the buttons, the section nav, §3.7 icons.
 
 ## First things the next lead should do
 
 1. `git status` clean, no builder session running, no `build.sh` in WSL (distro `FedoraLinux-44`).
 2. CI of this push (`https://api.github.com/repos/fatihyilmaz84/ruya-os/actions/runs?per_page=4`; no `gh` here; `curl` works from Git Bash).
 3. If the owner starts a lead session for T-130: claim it and do it (concern 1). Otherwise steps 1–3 of `LEAD.md`.
-4. Check T-157's subset script and pinned download (commit + SHA-256) if it has landed: it is the first build input fetched from the internet.
-5. Size budgets: root `CLAUDE.md` 10.9 KB and `shell/CLAUDE.md` 7.3 KB sit at budget; STATUS 10.5 KB. Trim before adding anything.
+4. Check T-157's subset script and pinned download (commit + SHA-256) if it has landed: the first build input fetched from the internet.
+5. Size budgets: root `CLAUDE.md` 10.9 KB and `shell/CLAUDE.md` 7.3 KB sit at budget. STATUS is now under 10 KB and `lint-board.ps1` holds the log to five entries of ≤ 700 characters: keep your own lead entry inside that too.
 
 ## Quality signals (one row per lead session)
 
@@ -46,3 +46,4 @@ The procedure is in [`LEAD.md`](LEAD.md). **Rewrite this file at the end of ever
 | 2026-10-29 | 124ee1d..0fbe215 | T-143, T-140, T-112 | 3 fixed (`dev.ps1` picked devkitPro's cmake, `scan-secrets.ps1` its brace-expanding git: both now prefer the real tool; badge radius text) / 2 filed (Flatpak games all `app` → T-149, catalogue re-read → T-148) + T-130 split (host half T-150) | 178 + 13 skipped QML, 172 Rust; shots 191 | `0.0.18-lead` ✅ boot, store check 41/41 |
 | 2026-10-30 | 4671bb5..e863439 | T-150, T-135, T-148, T-111 | 2 fixed (progress fill colour, `AppArt` + progress bar into `04` §5) / 0 filed; admin-check decision; T-151, T-152 planned. Process: `shots` screenshot-only (240 → 23 s), locked-screen refusal, bounded key loops + `lint-tests.ps1`, retrospective step 6b | 209 + 15 skipped QML, 178 Rust; shots 224, then 46 (screenshot-only) | not run (builder's `0.0.19-t148` covers the service changes) |
 | 2026-11-01 | 300245c..e19899f | T-149, T-151, T-113, T-152, T-146 | 8 fixed (16:9 cards, Home pill ring, hero letter, first hero art, ArtCard test, `Theme.hairline`, 04 glass rows, comments) / 4 filed (T-153: rollback race, empty tag, fatal channel file; T-156: update adds high-risk permission). Process: parallel review subagents, geometry lesson | 242 + 20 skipped QML, 207 Rust (63 s); shots 55 (36 s) | not run (`0.0.21-t151` covers it) |
+| 2026-11-02 | e5c2ab3..ac6e5b1 | T-153, T-156, T-154 | 2 fixed (future `last_check` stopped the daily check; app start/close swallowed by the once-a-minute report) / 0 filed; Inbox 5 → T-159, T-160, T-161, T-147 hint. Process: `lint-board.ps1` caps the session log (STATUS was 11.3 KB) | 255 + 21 skipped QML, 242 Rust (52 s); shots 56 (39 s) | not run (`0.0.25-t154` covers it; review fix is core + shell) |

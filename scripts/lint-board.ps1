@@ -2,7 +2,8 @@
 #   - every board row links an existing task file, and its status equals the file's "Status:" header;
 #   - the board lists only open work (todo, in-progress, blocked): done tasks live in their file;
 #   - every task file whose status is not done has a board row;
-#   - "NEXT -> T-nnn" names a task on the board.
+#   - "NEXT -> T-nnn" names a task on the board;
+#   - the session log has at most five entries of at most 700 characters.
 #
 # Used by dev.ps1 (test) and by the CI workflow. Works on Windows PowerShell 5.1 and on pwsh.
 # Exit code 0 = consistent, 1 = findings.
@@ -47,6 +48,18 @@ if ($next.Success) {
     }
 }
 else { $problems.Add("STATUS.md has no '**NEXT -> T-nnn**' line") }
+
+# The session log keeps STATUS short (every builder reads it): five entries, each short; older
+# ones go to STATUS-log.md, detail goes to the task Outcome (lead review 2026-11-02).
+$log = [regex]::Match($status, '(?ms)^## Session log.*?(?=^## |\z)').Value
+$entries = [regex]::Matches($log, '(?ms)^- \d{4}-\d{2}-\d{2} .*?(?=^\s*$|\z)')
+if ($entries.Count -gt 5) { $problems.Add("session log has $($entries.Count) entries; keep the newest five, move the rest to STATUS-log.md") }
+foreach ($e in $entries) {
+    $len = $e.Value.Trim().Length
+    if ($len -gt 700) {
+        $problems.Add("session log entry '$($e.Value.Substring(0, 30))...' has $len characters (at most 700; detail belongs in the Outcome)")
+    }
+}
 
 foreach ($p in $problems) { Write-Host "    $p" -ForegroundColor Yellow }
 if ($problems.Count -gt 0) { exit 1 }

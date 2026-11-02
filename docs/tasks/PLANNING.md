@@ -18,7 +18,7 @@ Any of these is true (builders check at session start and stop if they find noth
 4. **Write each task from `TEMPLATE.md`** (quality bar below), numbered from the next free id.
 5. **Order the board** (dependencies first, then value), set **NEXT**, and re-check every existing `todo` task against what was actually built; fix stale scope and hints. Board rows list open tasks only (`scripts/lint-board.ps1`).
 6. **Never plan around an owner-level question** (legal, licence, product scope, publishing, spending): add it to "Open owner decisions" with options and a recommendation.
-7. **Log and commit:** a session-log entry (at most 4 lines: tasks added, Inbox items handled or dropped, decisions escalated), commit as `docs: plan <summary>`, `dev.ps1 test` green first.
+7. **Log and commit:** a session-log entry (at most 700 characters: tasks added, Inbox items handled or dropped, decisions escalated), commit as `docs: plan <summary>`, `dev.ps1 test` green first.
 
 ## Quality bar for a task
 
