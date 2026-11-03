@@ -128,7 +128,7 @@ Each entry: file, status, and the rules a change must keep. A new component gets
 | Dialog buttons | `PowerConfirm.qml` | built | Pills `buttonHeight`; the safe choice has focus first; only the destructive confirm uses `dangerFill` |
 | PIN pad | `PinPad.qml` | built | 3 × 4 grid of `radiusS` keys, digit dots, message in `errorText` below; the grid stays left to right in RTL |
 | On-screen keyboard | `TextEntry.qml` | built | Key fills rest 8 % / focused / latched (`entryKeyActiveFill`) |
-| Toast | `ToastLayer.qml` | built | `toastBackground` card `radiusM` (20 today), status bar in the status colour + title word + one line |
+| Toast | `ToastLayer.qml` | built | `toastBackground` card `radiusM` (20 today), status bar in the status colour + title word + one line; a sticky one (no timer, `Notifications.showSticky`, T-159) for a state that lasts, such as the pending automatic restart |
 | Volume OSD | `VolumeOsd.qml` | built (icon: T-157) | Bottom centre, pill, `volume_up` / `volume_off` icon + bar + number; muted: `volume_off` and "Muted" in words in `toastWarning` |
 | Guide overlay | `Shell.qml` | built | `scrimOverlay` + `panel` card `radiusL`, title `typeTitle`, actions as rows |
 | Backdrop | `Backdrop.qml` | built | Tint from focus, three drifting blobs, `tintMs` cross-fade |

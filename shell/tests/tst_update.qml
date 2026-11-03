@@ -45,6 +45,7 @@ Item {
 
         function cleanup() {
             Update.mockSetCallerIsAdmin(true)
+            Update.mockAnnounceRestart(0)
             Notifications.durationMs = Theme.toastMs
             while (Notifications.model.count > 0)
                 Notifications.dismiss(Notifications.model.get(0).toastId)
@@ -350,6 +351,65 @@ Item {
             compare(Update.mockLastActivityAppRunning(), false)
         }
 
+        // The sticky restart notice currently on screen, or null.
+        function restartToast() {
+            for (let i = 0; i < Notifications.model.count; ++i) {
+                const t = Notifications.model.get(i)
+                if (t.key === "update-restart")
+                    return t
+            }
+            return null
+        }
+
+        function test_an_announced_restart_shows_a_toast_until_it_is_called_off() {
+            openSystemPane("p2", "")
+            Notifications.durationMs = 100                // ordinary toasts would be gone long ago
+            compare(Update.restartPending, false)
+            verify(restartToast() === null)
+
+            Update.mockAnnounceRestart(Math.floor(Date.now() / 1000) + 120)
+            tryCompare(Update, "restartPending", true)
+            tryVerify(() => restartToast() !== null, 2000, "the notice appears")
+            compare(restartToast().text, "Restarting to finish the update in 2 minutes. Press any button to wait.")
+            compare(restartToast().kind, "warning")
+            wait(600)
+            verify(restartToast() !== null, "it does not dismiss itself")
+        }
+
+        function test_a_cleared_restart_takes_the_toast_away() {
+            openSystemPane("p2", "")
+            Update.mockAnnounceRestart(Math.floor(Date.now() / 1000) + 120)
+            tryVerify(() => restartToast() !== null)
+            Update.mockAnnounceRestart(0)
+            tryCompare(Update, "restartPending", false)
+            tryVerify(() => restartToast() === null, 2000, "the notice goes")
+        }
+
+        function test_the_notice_is_shown_once_per_announcement() {
+            openSystemPane("p2", "")
+            Update.mockAnnounceRestart(Math.floor(Date.now() / 1000) + 120)
+            tryVerify(() => restartToast() !== null)
+            const shown = Notifications.shownCount
+            Update.mockAnnounceRestart(Math.floor(Date.now() / 1000) + 121)   // a refreshed record
+            wait(100)
+            compare(Notifications.shownCount, shown, "the same announcement is not shown again")
+        }
+
+        function test_a_press_while_a_restart_is_announced_is_reported_at_once() {
+            openSystemPane("p2", "")
+            Update.noteActivity(false)                    // the minute is running
+            const before = Update.mockActivityCount()
+            Update.noteActivity(false)
+            compare(Update.mockActivityCount(), before, "inside the minute nothing is sent")
+
+            Update.mockAnnounceRestart(Math.floor(Date.now() / 1000) + 120)
+            tryCompare(Update, "restartPending", true)
+            keyClick(Qt.Key_Up)                           // any button
+            tryVerify(() => Update.mockActivityCount() > before, 2000, "the press got through the minute")
+            tryCompare(Update, "restartPending", false)   // the service called the restart off
+            tryVerify(() => restartToast() === null, 2000, "and the notice went")
+        }
+
         function test_an_app_in_front_is_reported_without_input() {
             openSystemPane("p2", "")
             const before = Update.mockActivityCount()
@@ -384,6 +444,21 @@ Item {
             wait(600)
             grabImage(tc.shell).save(shotsDir + "/25-settings-updates.png")
             Update.mockResumeDownload()
+        }
+
+        function test_zz_screenshots_restart_notice() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            tc.shell = createTemporaryObject(shellComponent, host)
+            verify(tc.shell)
+            tc.shell.forceActiveFocus()
+            Profiles.switchTo("p1", "1234")
+            tryCompare(Profiles, "activeProfile", "p1")
+            tryVerify(() => find("homePlay").activeFocus, 2000, "Play takes focus after sign-in")
+            Update.mockAnnounceRestart(Math.floor(Date.now() / 1000) + 120)
+            tryVerify(() => restartToast() !== null, 2000, "the notice appears")
+            wait(800)
+            grabImage(tc.shell).save(shotsDir + "/26-restart-notice.png")
         }
     }
 }

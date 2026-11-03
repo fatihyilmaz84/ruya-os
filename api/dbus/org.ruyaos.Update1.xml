@@ -16,6 +16,14 @@
       auto_restart is on, the local time is between 03:00 and 05:00, the console has had no
       input for 30 minutes and no app runs. Idle time and apps come from the shell through
       ReportActivity; with no report since the service started, idle time counts from the start.
+    - Notice (T-159): when those rules first hold the service does not restart at once. It sets
+      restart_at to now + 120 s and emits StatusChanged; the shell tells the user. At a look at the
+      schedule (once a minute) at or after restart_at, if the rules still hold, it restarts. Any
+      ReportActivity, SetAutoRestart(false), or the image no longer being staged clears restart_at
+      (StatusChanged) and the 30 idle minutes start again. The restart lands 120 to 180 s after
+      the notice.
+    - A scheduled download that failed is tried again after an hour (as a failed scheduled check);
+      a download the user started with Download is not retried.
 
   Status strings (the reply of every method) are stable API:
     "ok"           success: Check and Download only start the work, progress arrives with
@@ -49,6 +57,9 @@
     auto_restart      b   restart by itself into a staged image when the console is idle at night
                           (default true)
     last_check        x   unix seconds of the last finished check, 0 = never (kept over restarts)
+    restart_at        x   unix seconds at which the service restarts by itself, 0 = no restart
+                          is announced (T-159). Only set while state is "staged" and auto_restart
+                          is true; the shell shows a notice while it is non-zero.
     progress          u   download progress 0..100 (meaningful while downloading)
     rollback_available b  a previous image exists that Rollback can boot
     error             s   short text of the last failure, "" otherwise
@@ -91,7 +102,8 @@
     <!-- The shell calls this when input arrives, at most once a minute, and at once when the
          first app starts or the last one closes, and says whether an app is running. It resets
          the idle time; while app_running was the last report, the console does not restart by
-         itself. Any caller the bus policy lets in may call it. No reply status. -->
+         itself. It also calls off an announced restart (restart_at becomes 0). Any caller the bus
+         policy lets in may call it. No reply status. -->
     <method name="ReportActivity">
       <arg name="app_running" type="b" direction="in"/>
     </method>

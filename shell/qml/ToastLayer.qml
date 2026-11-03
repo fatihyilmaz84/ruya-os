@@ -47,6 +47,7 @@ Item {
             required property string text
             required property string kind
             required property string iconText
+            required property bool sticky
 
             readonly property color accent: kind === "success" ? Theme.toastSuccess
                                           : kind === "warning" ? Theme.toastWarning
@@ -92,7 +93,7 @@ Item {
 
             Timer {
                 interval: Notifications.durationMs
-                running: true
+                running: !toast.sticky
                 onTriggered: Notifications.dismiss(toast.toastId)
             }
         }

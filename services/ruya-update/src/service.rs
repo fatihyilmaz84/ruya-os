@@ -70,6 +70,8 @@ pub struct Record {
     pub channel: String,
     pub auto_restart: bool,
     pub last_check: i64,
+    /// Unix seconds of the announced automatic restart, 0 = none announced.
+    pub restart_at: i64,
     pub progress: u32,
     pub rollback_available: bool,
     pub error: String,
@@ -226,6 +228,12 @@ impl<B: Bootc> Update<B> {
             channel: effective_channel(&inner),
             auto_restart: inner.auto_restart,
             last_check: inner.last_check,
+            // Only an announcement that still holds: the schedule clears the rest at its next
+            // look, but a client must not read a stale one before that.
+            restart_at: match inner.schedule.pending_restart() {
+                Some(at) if inner.state == State::Staged && inner.auto_restart => at,
+                _ => 0,
+            },
             progress: inner.progress,
             rollback_available: inner.host.rollback.is_some() && !inner.host.rollback_queued,
             error: if problem && inner.error.is_empty() {
@@ -315,6 +323,9 @@ impl<B: Bootc> Update<B> {
         if inner.available.is_empty() {
             return Status::Unavailable;
         }
+        // Whoever starts a download takes over: a failure of this one is retried only if the
+        // schedule started it (`scheduled_download` notes that afterwards).
+        inner.schedule.download_begun();
         inner.state = State::Downloading;
         inner.progress = 0;
         inner.error.clear();
@@ -435,13 +446,17 @@ impl<B: Bootc> Update<B> {
             }
         }
         inner.auto_restart = enabled;
+        if !enabled {
+            inner.schedule.cancel_restart();
+        }
         Status::Ok
     }
 
     /// Input arrived (the shell's report): the console is not idle, and `app_running` says
-    /// whether an app is in front.
-    pub fn report_activity(&self, now: i64, app_running: bool) {
-        self.lock().schedule.activity(now, app_running);
+    /// whether an app is in front. Returns whether an announced restart was called off, which
+    /// is a change of the record.
+    pub fn report_activity(&self, now: i64, app_running: bool) -> bool {
+        self.lock().schedule.activity(now, app_running)
     }
 
     // ---- schedule --------------------------------------------------------------------
@@ -453,7 +468,8 @@ impl<B: Bootc> Update<B> {
         let now = clock.now();
         self.lock().schedule.seen(now);
         self.scheduled_check(now, emit);
-        self.scheduled_restart(clock, reboot);
+        self.scheduled_download_retry(now, emit);
+        self.scheduled_restart(clock, reboot, emit);
     }
 
     fn scheduled_check(&self, now: i64, emit: &mut dyn FnMut()) {
@@ -475,19 +491,56 @@ impl<B: Bootc> Update<B> {
             let inner = self.lock();
             inner.state == State::Idle && !inner.available.is_empty()
         };
-        if found && self.begin_download() == Status::Ok {
-            emit();
-            self.run_download(emit);
+        if found {
+            self.scheduled_download(now, emit);
         }
     }
 
-    fn scheduled_restart(&self, clock: &dyn Clock, reboot: &dyn Reboot) {
-        let due = {
-            let inner = self.lock();
-            inner.state == State::Staged
-                && inner.auto_restart
-                && inner.schedule.quiet(clock.now(), clock.minute_of_day())
+    /// A download the schedule starts: if it fails it is tried again after `RETRY_SECS`.
+    fn scheduled_download(&self, now: i64, emit: &mut dyn FnMut()) {
+        if self.begin_download() != Status::Ok {
+            return;
+        }
+        emit();
+        self.run_download(emit);
+        let mut inner = self.lock();
+        if inner.state == State::Failed {
+            inner.schedule.download_failed(now);
+        }
+    }
+
+    /// The retry of a failed scheduled download. Anything that settled it meanwhile (the user's
+    /// own download, a new check, a channel change) leaves nothing to retry: `begin_download`
+    /// refuses without an update found and clears the note.
+    fn scheduled_download_retry(&self, now: i64, emit: &mut dyn FnMut()) {
+        {
+            let mut inner = self.lock();
+            if !inner.schedule.download_retry_due(now) {
+                return;
+            }
+            if inner.state != State::Failed || inner.available.is_empty() {
+                inner.schedule.download_begun();
+                return;
+            }
+        }
+        self.scheduled_download(now, emit);
+    }
+
+    /// The restart into a staged image: announced first, done at the look after the grace period
+    /// if the rules still hold (`Schedule::restart_step`).
+    fn scheduled_restart(&self, clock: &dyn Clock, reboot: &dyn Reboot, emit: &mut dyn FnMut()) {
+        let (due, changed) = {
+            let mut inner = self.lock();
+            let can = inner.state == State::Staged && inner.auto_restart;
+            let before = inner.schedule.pending_restart();
+            let due = inner
+                .schedule
+                .restart_step(clock.now(), clock.minute_of_day(), can);
+            (due, inner.schedule.pending_restart() != before)
         };
+        if changed {
+            emit();
+        }
         if !due {
             return;
         }
@@ -972,6 +1025,8 @@ mod tests {
     const T0: i64 = 1_800_000_000;
     const DAY: i64 = 24 * 3600;
     const IDLE: i64 = 30 * 60;
+    const GRACE: i64 = crate::schedule::GRACE_SECS;
+    const RETRY: i64 = crate::schedule::RETRY_SECS;
     /// 03:10 local time.
     const NIGHT: u32 = 3 * 60 + 10;
 
@@ -1148,7 +1203,15 @@ mod tests {
 
         u.report_activity(T0 + IDLE - 1, false);
         u.tick(&clock, &reboot, &mut || {});
-        assert_eq!(reboot.count(), 1, "idle, no app, 03:10, setting on");
+        assert_eq!(
+            reboot.count(),
+            0,
+            "idle, no app, 03:10, setting on: announced"
+        );
+        assert_eq!(u.record().restart_at, T0 + 3 * IDLE + GRACE);
+        clock.set(T0 + 3 * IDLE + GRACE, NIGHT);
+        u.tick(&clock, &reboot, &mut || {});
+        assert_eq!(reboot.count(), 1);
     }
 
     #[test]
@@ -1160,8 +1223,16 @@ mod tests {
         for (minute, expected) in [(12 * 60, 0), (3 * 60 - 1, 0), (5 * 60, 0), (3 * 60, 1)] {
             clock.set(T0 + 2 * IDLE, minute);
             u.tick(&clock, &reboot, &mut || {});
-            assert_eq!(reboot.count(), expected, "minute {minute}");
+            assert_eq!(reboot.count(), 0, "minute {minute}: at most announced");
+            assert_eq!(
+                u.record().restart_at != 0,
+                expected == 1,
+                "minute {minute}: announced only inside the window"
+            );
         }
+        clock.set(T0 + 2 * IDLE + GRACE, 3 * 60);
+        u.tick(&clock, &reboot, &mut || {});
+        assert_eq!(reboot.count(), 1);
     }
 
     #[test]
@@ -1175,7 +1246,7 @@ mod tests {
         u.tick(&clock, &reboot, &mut || {});
         assert_eq!(reboot.count(), 0, "turned off");
         assert_eq!(u.set_auto_restart(true, true), Status::Ok);
-        u.tick(&clock, &reboot, &mut || {});
+        restart_after_grace(&u, &clock, &reboot);
         assert_eq!(reboot.count(), 1);
 
         // Nothing staged (the 03:10 check finds no update): nothing to restart into.
@@ -1200,7 +1271,7 @@ mod tests {
         assert_eq!(u.record().state, State::Staged);
         assert_eq!(reboot.count(), 0);
         clock.set(T0 + IDLE, NIGHT + 30);
-        u.tick(&clock, &reboot, &mut || {});
+        restart_after_grace(&u, &clock, &reboot);
         assert_eq!(reboot.count(), 1);
     }
 
@@ -1211,12 +1282,259 @@ mod tests {
         let clock = FakeClock::new(T0, NIGHT);
         u.tick(&clock, &reboot, &mut || {});
         clock.set(T0 + IDLE, NIGHT);
+        u.tick(&clock, &reboot, &mut || {});
+        clock.set(T0 + IDLE + GRACE, NIGHT);
         reboot.fail_next();
         u.tick(&clock, &reboot, &mut || {});
         assert_eq!(reboot.count(), 0);
-        clock.set(T0 + IDLE + 60, NIGHT);
+        clock.set(T0 + IDLE + GRACE + 60, NIGHT);
         u.tick(&clock, &reboot, &mut || {});
         assert_eq!(reboot.count(), 1);
+    }
+
+    /// The announcement, then the restart at the first look after the grace period.
+    fn restart_after_grace(u: &Update<FakeBootc>, clock: &FakeClock, reboot: &FakeReboot) {
+        u.tick(clock, reboot, &mut || {});
+        assert_eq!(reboot.count(), 0, "announced first");
+        let now = clock.now();
+        clock.set(now + GRACE, clock.minute_of_day());
+        u.tick(clock, reboot, &mut || {});
+    }
+
+    // ---- notice before the restart -----------------------------------------------------
+
+    /// A staged service at 03:10 that has been idle for 30 minutes.
+    fn quiet_service() -> (Update<FakeBootc>, FakeClock, FakeReboot) {
+        let u = staged_service();
+        let clock = FakeClock::new(T0, NIGHT);
+        let reboot = FakeReboot::default();
+        u.tick(&clock, &reboot, &mut || {});
+        clock.set(T0 + IDLE, NIGHT);
+        (u, clock, reboot)
+    }
+
+    #[test]
+    fn the_restart_is_announced_two_minutes_ahead() {
+        let (u, clock, reboot) = quiet_service();
+        assert_eq!(u.record().restart_at, 0);
+        let mut changes = 0;
+        u.tick(&clock, &reboot, &mut || changes += 1);
+        assert_eq!(u.record().restart_at, T0 + IDLE + GRACE);
+        assert_eq!(changes, 1, "StatusChanged when it is set");
+        assert_eq!(reboot.count(), 0, "no reboot yet");
+        clock.set(T0 + IDLE + GRACE - 1, NIGHT);
+        u.tick(&clock, &reboot, &mut || changes += 1);
+        assert_eq!(reboot.count(), 0, "119 s: not yet");
+        assert_eq!(changes, 1, "and nothing new to say");
+        assert_eq!(
+            u.record().restart_at,
+            T0 + IDLE + GRACE,
+            "the time does not move"
+        );
+        clock.set(T0 + IDLE + GRACE, NIGHT);
+        u.tick(&clock, &reboot, &mut || changes += 1);
+        assert_eq!(reboot.count(), 1, "120 s: one reboot");
+    }
+
+    #[test]
+    fn activity_calls_off_the_restart_and_the_idle_time_starts_over() {
+        let (u, clock, reboot) = quiet_service();
+        u.tick(&clock, &reboot, &mut || {});
+        assert_ne!(u.record().restart_at, 0);
+        assert!(
+            u.report_activity(T0 + IDLE + 30, false),
+            "there was one to call off"
+        );
+        assert_eq!(u.record().restart_at, 0, "cleared at once");
+        assert!(
+            !u.report_activity(T0 + IDLE + 31, false),
+            "nothing announced now"
+        );
+        clock.set(T0 + IDLE + GRACE + 60, NIGHT);
+        u.tick(&clock, &reboot, &mut || {});
+        assert_eq!(reboot.count(), 0, "no reboot follows");
+        assert_eq!(u.record().restart_at, 0);
+        // Quiet again only after 30 more idle minutes (counted from the last report, +31 s).
+        clock.set(T0 + IDLE + 31 + IDLE - 1, NIGHT);
+        u.tick(&clock, &reboot, &mut || {});
+        assert_eq!(u.record().restart_at, 0, "29:59 since the activity");
+        clock.set(T0 + IDLE + 31 + IDLE, NIGHT);
+        u.tick(&clock, &reboot, &mut || {});
+        assert_eq!(u.record().restart_at, T0 + 2 * IDLE + 31 + GRACE);
+        clock.set(T0 + 2 * IDLE + 31 + GRACE, NIGHT);
+        u.tick(&clock, &reboot, &mut || {});
+        assert_eq!(reboot.count(), 1);
+    }
+
+    #[test]
+    fn an_app_starting_calls_off_the_restart() {
+        let (u, clock, reboot) = quiet_service();
+        u.tick(&clock, &reboot, &mut || {});
+        assert!(u.report_activity(T0 + IDLE + 5, true));
+        clock.set(T0 + 5 * IDLE, NIGHT);
+        u.tick(&clock, &reboot, &mut || {});
+        assert_eq!((reboot.count(), u.record().restart_at), (0, 0));
+    }
+
+    #[test]
+    fn turning_the_setting_off_calls_off_the_restart() {
+        let (u, clock, reboot) = quiet_service();
+        u.tick(&clock, &reboot, &mut || {});
+        assert_ne!(u.record().restart_at, 0);
+        assert_eq!(u.set_auto_restart(false, true), Status::Ok);
+        assert_eq!(u.record().restart_at, 0, "cleared at once");
+        clock.set(T0 + IDLE + 10 * GRACE, NIGHT);
+        u.tick(&clock, &reboot, &mut || {});
+        assert_eq!(reboot.count(), 0);
+        // On again: a new announcement with a new grace period, not the old one.
+        assert_eq!(u.set_auto_restart(true, true), Status::Ok);
+        u.tick(&clock, &reboot, &mut || {});
+        assert_eq!(u.record().restart_at, T0 + IDLE + 10 * GRACE + GRACE);
+        assert_eq!(reboot.count(), 0);
+    }
+
+    #[test]
+    fn nothing_staged_during_the_grace_calls_off_the_restart() {
+        let (u, clock, reboot) = quiet_service();
+        u.tick(&clock, &reboot, &mut || {});
+        assert_ne!(u.record().restart_at, 0);
+        // The image is no longer staged.
+        {
+            let mut inner = u.lock();
+            inner.state = State::UpToDate;
+            inner.last_check = T0 + IDLE; // no scheduled check brings the staged image back
+        }
+        assert_eq!(u.record().restart_at, 0, "a client never reads a stale one");
+        let mut changes = 0;
+        clock.set(T0 + IDLE + GRACE, NIGHT);
+        u.tick(&clock, &reboot, &mut || changes += 1);
+        assert_eq!(reboot.count(), 0);
+        assert_eq!(changes, 1, "the schedule says it is gone");
+        u.lock().state = State::Staged;
+        assert_eq!(u.record().restart_at, 0);
+        u.tick(&clock, &reboot, &mut || {});
+        assert_eq!(
+            u.record().restart_at,
+            T0 + IDLE + 2 * GRACE,
+            "a new announcement"
+        );
+    }
+
+    #[test]
+    fn leaving_the_window_during_the_grace_calls_off_the_restart() {
+        let (u, clock, reboot) = quiet_service();
+        clock.set(T0 + IDLE, 5 * 60 - 1);
+        u.tick(&clock, &reboot, &mut || {});
+        assert_ne!(u.record().restart_at, 0);
+        clock.set(T0 + IDLE + GRACE, 5 * 60 + 1);
+        u.tick(&clock, &reboot, &mut || {});
+        assert_eq!((reboot.count(), u.record().restart_at), (0, 0));
+    }
+
+    #[test]
+    fn an_announcement_set_far_ahead_by_a_wrong_clock_is_replaced() {
+        let (u, clock, reboot) = quiet_service();
+        u.tick(&clock, &reboot, &mut || {});
+        // The clock was set back an hour: the announced time is not waited for.
+        clock.set(T0 + IDLE - 3600, NIGHT);
+        u.tick(&clock, &reboot, &mut || {});
+        assert_eq!(
+            u.record().restart_at,
+            0,
+            "idle time restarted from the earlier clock"
+        );
+        clock.set(T0 + IDLE - 3600 + IDLE, NIGHT);
+        u.tick(&clock, &reboot, &mut || {});
+        assert_eq!(u.record().restart_at, T0 + IDLE - 3600 + IDLE + GRACE);
+        assert_eq!(reboot.count(), 0);
+    }
+
+    // ---- download retry ----------------------------------------------------------------
+
+    #[test]
+    fn a_failed_scheduled_download_is_retried_after_an_hour() {
+        let clock = FakeClock::new(T0, NIGHT);
+        let reboot = FakeReboot::default();
+        let u = service(host());
+        u.bootc.fail_next_call("upgrade", "no space");
+        u.tick(&clock, &reboot, &mut || {});
+        let r = u.record();
+        assert_eq!((r.state, r.error.as_str()), (State::Failed, "no space"));
+        assert_eq!(calls_named(&u, "upgrade"), 1);
+        clock.set(T0 + RETRY - 1, NIGHT);
+        u.tick(&clock, &reboot, &mut || {});
+        assert_eq!(calls_named(&u, "upgrade"), 1, "not before the hour");
+        assert_eq!(
+            calls_named(&u, "check"),
+            1,
+            "and a download is not a new check"
+        );
+        clock.set(T0 + RETRY, NIGHT);
+        u.tick(&clock, &reboot, &mut || {});
+        assert_eq!(calls_named(&u, "upgrade"), 2);
+        assert_eq!(
+            u.record().state,
+            State::Staged,
+            "and this time it went through"
+        );
+        clock.set(T0 + 3 * RETRY, NIGHT);
+        u.tick(&clock, &reboot, &mut || {});
+        assert_eq!(calls_named(&u, "upgrade"), 2, "once is enough");
+    }
+
+    #[test]
+    fn a_failed_retry_is_retried_again_after_another_hour() {
+        let clock = FakeClock::new(T0, NIGHT);
+        let reboot = FakeReboot::default();
+        let u = service(host());
+        u.bootc.fail_next_call("upgrade", "no space");
+        u.tick(&clock, &reboot, &mut || {});
+        clock.set(T0 + RETRY, NIGHT);
+        u.bootc.fail_next_call("upgrade", "still no space");
+        u.tick(&clock, &reboot, &mut || {});
+        assert_eq!(calls_named(&u, "upgrade"), 2);
+        clock.set(T0 + 2 * RETRY - 1, NIGHT);
+        u.tick(&clock, &reboot, &mut || {});
+        assert_eq!(calls_named(&u, "upgrade"), 2);
+        clock.set(T0 + 2 * RETRY, NIGHT);
+        u.tick(&clock, &reboot, &mut || {});
+        assert_eq!(calls_named(&u, "upgrade"), 3);
+        assert_eq!(u.record().state, State::Staged);
+    }
+
+    #[test]
+    fn a_failed_manual_download_is_not_retried() {
+        let u = service(host());
+        check(&u);
+        assert_eq!(u.begin_download(), Status::Ok);
+        u.bootc.fail_next_call("upgrade", "no space");
+        u.run_download(&mut || {});
+        assert_eq!(u.record().state, State::Failed);
+        let clock = FakeClock::new(1000 + 10 * RETRY, NIGHT);
+        u.tick(&clock, &FakeReboot::default(), &mut || {});
+        clock.set(1000 + 20 * RETRY, NIGHT);
+        u.tick(&clock, &FakeReboot::default(), &mut || {});
+        assert_eq!(
+            calls_named(&u, "upgrade"),
+            1,
+            "the user's download stays the user's"
+        );
+    }
+
+    #[test]
+    fn the_users_download_takes_over_a_scheduled_failure() {
+        let clock = FakeClock::new(T0, NIGHT);
+        let reboot = FakeReboot::default();
+        let u = service(host());
+        u.bootc.fail_next_call("upgrade", "no space");
+        u.tick(&clock, &reboot, &mut || {});
+        // The user presses Download; it fails too. That failure is theirs to retry.
+        assert_eq!(u.begin_download(), Status::Ok);
+        u.bootc.fail_next_call("upgrade", "no space");
+        u.run_download(&mut || {});
+        clock.set(T0 + 2 * RETRY, NIGHT);
+        u.tick(&clock, &reboot, &mut || {});
+        assert_eq!(calls_named(&u, "upgrade"), 2);
     }
 
     #[test]

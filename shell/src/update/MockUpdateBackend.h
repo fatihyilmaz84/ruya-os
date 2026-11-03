@@ -8,7 +8,8 @@
 // 10 %, a rollback stages the previous image. Steps take 100 ms (10 ms with RUYA_MOCK_FAST=1).
 // Follows the rules the real service will have: no Download without a found update, busy
 // while a check or download runs, Rollback only with rollback_available, "forbidden" for Rollback, SetChannel and
-// SetAutoRestart when the caller is not an admin (test hook). ReportActivity is only counted.
+// SetAutoRestart when the caller is not an admin (test hook). ReportActivity is counted, and it calls
+// off an announced restart like the service does (restart_at back to 0).
 class MockUpdateBackend final : public UpdateBackend
 {
     Q_OBJECT
@@ -39,6 +40,8 @@ public:
     bool lastActivityAppRunning() const { return m_lastAppRunning; }
     // The active profile is not an admin: Rollback and SetChannel answer "forbidden".
     void setCallerIsAdmin(bool admin) { m_callerIsAdmin = admin; }
+    // The service announces a restart at this unix time (0: none), as the schedule does.
+    void announceRestart(qint64 restartAt);
 
 private:
     bool isRunning() const;

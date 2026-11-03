@@ -5,13 +5,14 @@ import RuyaShell
 // Short, non-blocking system messages. Anything may call Notifications.show(); the
 // ToastLayer in Shell shows at most `maxVisible` at a time and each dismisses itself after
 // `durationMs`. Extra messages wait in a queue, in order. Toasts are never focusable.
+// A sticky toast (showSticky) stays until remove(key) is called.
 QtObject {
     id: notifications
 
     readonly property int maxVisible: 3
     property int durationMs: Theme.toastMs          // overridable (tests use a short one)
 
-    // Toasts on screen, oldest first: { toastId, text, kind, iconText }.
+    // Toasts on screen, oldest first: { toastId, text, kind, iconText, sticky, key }.
     readonly property ListModel model: ListModel {}
     readonly property int pendingCount: pending.length
     readonly property int shownCount: shown        // toasts that have appeared, ever
@@ -23,7 +24,28 @@ QtObject {
     // kind: "info" | "success" | "warning" | "error"
     function show(text, kind, iconText) {
         const k = ["info", "success", "warning", "error"].includes(kind) ? kind : "info"
-        pending = pending.concat([{ text: text, kind: k, iconText: iconText ?? "" }])
+        pending = pending.concat([{ text: text, kind: k, iconText: iconText ?? "", sticky: false, key: "" }])
+        promote()
+    }
+
+    // A toast that does not dismiss itself; it stays until remove(key). One per key: showing
+    // the same key again replaces the earlier one.
+    function showSticky(key, text, kind, iconText) {
+        remove(key)
+        const k = ["info", "success", "warning", "error"].includes(kind) ? kind : "info"
+        pending = pending.concat([{ text: text, kind: k, iconText: iconText ?? "", sticky: true, key: key }])
+        promote()
+    }
+
+    // Takes a sticky toast away, on screen or still waiting.
+    function remove(key) {
+        pending = pending.filter(p => p.key !== key)
+        for (let i = 0; i < model.count; ++i) {
+            if (model.get(i).key === key) {
+                model.remove(i)
+                break
+            }
+        }
         promote()
     }
 
@@ -41,7 +63,8 @@ QtObject {
         while (pending.length > 0 && model.count < maxVisible) {
             const next = pending[0]
             pending = pending.slice(1)
-            model.append({ toastId: nextId++, text: next.text, kind: next.kind, iconText: next.iconText })
+            model.append({ toastId: nextId++, text: next.text, kind: next.kind, iconText: next.iconText,
+                           sticky: next.sticky, key: next.key })
             shown += 1
         }
     }

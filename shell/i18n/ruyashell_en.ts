@@ -1098,17 +1098,22 @@
         <translation>Audio output: %1</translation>
     </message>
     <message>
-        <location line="+532"/>
+        <location line="+545"/>
         <source>Power</source>
         <translation>Power</translation>
     </message>
     <message>
-        <location line="-524"/>
+        <location line="-537"/>
         <source>Update ready. Restart to finish.</source>
         <translation>Update ready. Restart to finish.</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+11"/>
+        <source>Restarting to finish the update in 2 minutes. Press any button to wait.</source>
+        <translation>Restarting to finish the update in 2 minutes. Press any button to wait.</translation>
+    </message>
+    <message>
+        <location line="+14"/>
         <source>%1 stopped unexpectedly</source>
         <translation>%1 stopped unexpectedly</translation>
     </message>

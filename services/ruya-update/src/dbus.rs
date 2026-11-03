@@ -125,6 +125,7 @@ fn record(r: &Record) -> Dict {
         ("channel", Value::from(r.channel.clone())),
         ("auto_restart", Value::from(r.auto_restart)),
         ("last_check", Value::from(r.last_check)),
+        ("restart_at", Value::from(r.restart_at)),
         ("progress", Value::from(r.progress)),
         ("rollback_available", Value::from(r.rollback_available)),
         ("error", Value::from(r.error.clone())),
@@ -195,7 +196,10 @@ impl UpdateIface {
     }
 
     fn report_activity(&self, app_running: bool) {
-        self.update.report_activity(now(), app_running);
+        // Input calls off an announced restart, which the shell must hear about.
+        if self.update.report_activity(now(), app_running) {
+            self.changed();
+        }
     }
 
     fn get_status(&self) -> Dict {

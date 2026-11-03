@@ -1096,17 +1096,22 @@
         <translation>Ses çıkışı: %1</translation>
     </message>
     <message>
-        <location line="+532"/>
+        <location line="+545"/>
         <source>Power</source>
         <translation>Güç</translation>
     </message>
     <message>
-        <location line="-524"/>
+        <location line="-537"/>
         <source>Update ready. Restart to finish.</source>
         <translation>Güncelleme hazır. Bitirmek için yeniden başlat.</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+11"/>
+        <source>Restarting to finish the update in 2 minutes. Press any button to wait.</source>
+        <translation>Güncellemeyi bitirmek için 2 dakika içinde yeniden başlatılıyor. Beklemek için herhangi bir düğmeye bas.</translation>
+    </message>
+    <message>
+        <location line="+14"/>
         <source>%1 stopped unexpectedly</source>
         <translation>%1 beklenmedik şekilde durdu</translation>
     </message>

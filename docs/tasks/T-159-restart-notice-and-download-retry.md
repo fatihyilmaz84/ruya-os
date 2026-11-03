@@ -1,6 +1,6 @@
 # T-159 — `ruya-update`: notice before the automatic restart; retry a failed download
 
-Status: todo · Phase: 2 · Depends: T-154 · Area: api, services, shell · Size: M · Owner: builder
+Status: done · Phase: 2 · Depends: T-154 · Area: api, services, shell · Size: M · Owner: builder
 
 ## Goal
 Nobody loses a session to the nightly update restart: the console announces it two minutes ahead on screen, any button press calls it off, and a scheduled download that failed is tried again within the hour instead of a day later.
@@ -46,4 +46,20 @@ Then the image recipe in `docs/dev-setup.md` and `vm-update-check.sh` over SSH.
 - T-154's `vm-update-check.sh reboot` mode already sets the guest clock; copy it.
 
 ## Outcome
-_Filled in by the implementer. First line: `Verified: host | vm | unverified | hw` (say what ran where). Then: what was built, files, deviations, follow-ups (each also an Inbox line)._
+Verified: host (vm pending: lead runs `vm-update-check.sh reboot`). `dev.ps1 test` ALL GREEN (271 QML + 22 skips; `ruya-update` crate 70 tests, +14); `dev.ps1 shots` ALL GREEN (57), `26-restart-notice.png` reviewed against 04 §8: warning bar and text readable on the toast card, two lines, no overlap with the header or the focus ring.
+
+**Built.**
+- *Contract* (`org.ruyaos.Update1.xml`): record key `restart_at` (x, unix seconds, 0 = none), only non-zero while state is `staged` and `auto_restart` is on; the header describes the notice, the cancelling events and the download retry. `StatusChanged` when it is set or cleared (also by `ReportActivity`, which now emits when it called a restart off).
+- *Service* (`schedule.rs`, `service.rs`, `dbus.rs`): `Schedule::restart_step(now, minute, can)` holds the decision (`pending_restart: Option<i64>`, `GRACE_SECS` = 120): the first look where the rules hold announces `now + 120`, a look at or after it reboots if they still hold, anything else clears it (a time more than a grace ahead, from a clock set back, is replaced). `activity()` clears it and says whether it did; `set_auto_restart(false)` clears it; `scheduled_restart` only reads it and emits when it changed. Retry: `Schedule` notes a failed *scheduled* download (`download_failed`); `tick` starts it again after `RETRY_SECS` (`scheduled_download_retry`); `begin_download` (every download, including the user's) clears the note, so a failed manual download is never retried and a manual download takes over a scheduled failure. A retry that fails is retried again after another hour. `FakeBootc::fail_next_call(name, msg)` is new (fail one named command; the existing tests that expected an immediate reboot now go through the grace).
+- *Shell:* `UpdateStatus.restartAt`, the D-Bus client, the mock (`mockAnnounceRestart`; `reportActivity` clears `restartAt` like the service), `Update.restartAt/restartPending` (+ `restartPendingChanged`), `Update.noteActivity` reports every press while a restart is pending. `Notifications.showSticky(key, text, kind)` / `remove(key)` (toast without timer; `ToastLayer` takes a `sticky` role); `Shell.qml` shows the warning toast while `restartPending`. Turkish added (`ruyashell_tr.ts`, `_en.ts`).
+- *Tests:* Rust 14 new (grace 119/120 s, activity, app start, setting off, nothing staged, window end, clock set back, retry after an hour and again, manual not retried, manual takes over); QML 4 new in `tst_update.qml` (toast appears and stays past `durationMs`, cleared by the service, shown once per announcement, a press inside the minute is reported at once and calls it off) and one screenshot test.
+- *Docs:* `01` §4, `02` §5.1, `04` §5 (Toast row), `dev-setup.md`, the XML header.
+- `scripts/vm-update-check.sh reboot` extended (written, **not run**): clock to 03:10 tomorrow, wait for `restart_at` (within 90 s, at most 120 s ahead), `ReportActivity` as `ruya-shell`, `restart_at` is 0 at once, 200 s with no reboot and no new announcement, clock +31 minutes, announced again, no activity, wait for the reboot (QEMU exits). The record check also asserts `restart_at` = 0 when idle.
+
+**Deviations.**
+- *Build fix: kernel upgrade leftovers.* Fedora shipped kernel 7.2.15 while the base image has an older one, so `40-nvidia.sh` upgrades the kernel in the container and leaves `/boot/symvers-7.2.15-200.fc44.x86_64.xz` (lint `nonempty-boot`) and `/var/lib/rpm-state/kernel` (lint `var-tmpfiles`); `bootc container lint --fatal-warnings` failed `0.0.29-t159a`. `image/build/99-cleanup.sh` now empties `/boot` and removes `/var/lib/rpm-state` (commented). Build `0.0.29-t159a` with the fix passed the lint (14 checks), `make-disk.sh` produced `disk.qcow2`, and the image was pushed to the WSL registry as `localhost:5000/ruyaos:stable` (the registry container is stopped). Not booted by me.
+- `dracut-install: ERROR: installing '/root'` appears in `90-initramfs.sh`'s output; the initramfs was still created. Whether it matters is for the VM boot (Inbox).
+- Nothing was run in a VM (owner rule 2026-11-03: logic-only service tasks stop at the host). The real-bus behaviour (the `StatusChanged` from `ReportActivity`, the shell's D-Bus client reading `restart_at`) is unverified until then.
+- The 22nd skip is the new screenshot test.
+
+**Follow-ups (Inbox).** The `dracut-install` message; the language flip seen in tests.

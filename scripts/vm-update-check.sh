@@ -59,20 +59,53 @@ if [ "${1:-check}" = security ]; then
     exit 0
 fi
 
-# The automatic restart (T-154): with an update staged ("check" leaves one), move the clock to
-# 03:10 tomorrow. The service saw its own start as the last activity, so the console counts as idle
-# for far more than 30 minutes, and the next tick (within a minute) runs `systemctl reboot`.
-# QEMU runs with -no-reboot, so the VM ends here: the host sees the SSH connection drop and QEMU
-# exit, and a cold start boots the staged version.
+# The automatic restart (T-154, T-159): with an update staged ("check" leaves one), move the clock
+# to 03:10 tomorrow. The service saw its own start as the last activity, so the console counts as
+# idle for far more than 30 minutes; at the next tick (within a minute) it announces the restart
+# (`restart_at`, 120 s ahead). The script calls it off with a ReportActivity as ruya-shell, checks
+# that nothing follows, moves the clock 31 minutes on, and then lets the second announcement run
+# out: the service runs `systemctl reboot`. QEMU runs with -no-reboot, so the VM ends here: the host
+# sees the SSH connection drop and QEMU exit, and a cold start boots the staged version.
 if [ "${1:-check}" = reboot ]; then
     [ "$(field state)" = staged ] || { echo "FAIL: no staged update (run check first)"; exit 1; }
     [ "$(field auto_restart)" = true ] || { echo "FAIL: auto_restart is off"; exit 1; }
+    # T-159: the restart is announced first (restart_at = now + 120 s); input calls it off; only
+    # a second quiet stretch ends in the reboot.
+    wait_restart_at() { # wait_restart_at <nonzero|zero> <seconds>
+        local i=0
+        while [ "$i" -lt "$2" ]; do
+            if [ "$1" = nonzero ]; then [ "$(field restart_at)" != 0 ] && return 0
+            else [ "$(field restart_at)" = 0 ] && return 0; fi
+            sleep 2; i=$((i + 2))
+        done
+        return 1
+    }
     timedatectl set-ntp false 2>/dev/null || true
     target="$(date -d 'tomorrow 03:10' '+%Y-%m-%d %H:%M:%S')"
-    echo "setting the clock to $target (zone $(date +%Z)); waiting for the restart (up to 150 s)"
+    echo "setting the clock to $target (zone $(date +%Z))"
+    [ "$(field restart_at)" = 0 ] && ok "no restart announced before the clock moved" || bad "restart_at is set at 12:00"
     date -s "$target"
-    sleep 150
-    echo "FAIL: still running 150 s after the clock moved"
+    # Run 1: announced within a tick, then called off by a ReportActivity from the shell.
+    if wait_restart_at nonzero 90; then
+        at="$(field restart_at)"; left=$((at - $(date +%s)))
+        ok "restart announced: restart_at in ${left} s (a grace of 120 s, reported at the tick)"
+        [ "$left" -le 120 ] && [ "$left" -gt 0 ] && ok "and it lies within the grace period" || bad "restart_at is ${left} s away"
+    else
+        bad "no restart_at within 90 s of the clock move"; journalctl -u ruya-update --no-pager | tail -5; exit 1
+    fi
+    runuser -u ruya-shell -- busctl --system call "$svc" "$path" "$ifc" ReportActivity b false >/dev/null 2>&1 \
+        && ok "ReportActivity by the shell: answered" || bad "ReportActivity by the shell failed"
+    [ "$(field restart_at)" = 0 ] && ok "restart_at cleared at once by the activity" || bad "restart_at still set after ReportActivity"
+    echo "waiting 200 s: no restart may follow (the idle time starts over)"
+    sleep 200
+    [ "$(field restart_at)" = 0 ] && ok "still not announced 200 s later (30 idle minutes needed)" || bad "announced again too soon"
+    systemctl is-active --quiet ruya-update && ok "still running, no reboot" || bad "ruya-update is not active"
+    # Run 2: 31 minutes later, no activity: announced, then the reboot after the grace period.
+    date -s "+31 minutes" >/dev/null
+    wait_restart_at nonzero 90 && ok "announced again after 30 more idle minutes" || { bad "not announced after 31 idle minutes"; exit 1; }
+    echo "no activity; waiting for the restart (up to 240 s)"
+    sleep 240
+    echo "FAIL: still running 240 s after the announcement"
     journalctl -u ruya-update --no-pager | tail -5
     exit 1
 fi
@@ -94,6 +127,7 @@ else
     bad "no newer image found (state $(field state), error '$(field error)')"
 fi
 [ "$(field last_check)" != 0 ] && ok "last_check set" || bad "last_check is 0"
+[ "$(field restart_at)" = 0 ] && ok "restart_at is 0 (no restart announced)" || bad "restart_at is $(field restart_at) before any restart rule held"
 
 # Download stages it.
 [ "$(call Download)" = ok ] && ok "Download started" || bad "Download did not answer ok"

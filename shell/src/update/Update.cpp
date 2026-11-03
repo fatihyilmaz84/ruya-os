@@ -9,9 +9,12 @@ Update::Update(std::unique_ptr<UpdateBackend> backend, QObject *parent)
 {
     connect(m_backend.get(), &UpdateBackend::statusChanged, this, [this](const UpdateStatus &status) {
         const bool becameStaged = status.state == QLatin1String("staged") && m_status.state != status.state;
+        const bool pendingChanged = (status.restartAt > 0) != (m_status.restartAt > 0);
         m_status = status;
         m_known = true;
         emit statusChanged();
+        if (pendingChanged)
+            emit restartPendingChanged();
         if (becameStaged)
             emit stagedReady(status.staged);
     });
@@ -68,8 +71,10 @@ void Update::noteActivity(bool appRunning)
     // A minute is plenty for a 30-minute idle rule, and keeps a held stick off the bus. An app
     // starting is reported at once: nobody may touch the controller during a film, and the
     // service must not restart into an update under it. Closing the last app is reported at once too.
+    // While a restart is announced every press is reported: it is the one that calls it off.
     constexpr qint64 ReportEveryMs = 60 * 1000;
-    if (m_lastReport.isValid() && m_lastReport.elapsed() < ReportEveryMs && appRunning == m_lastAppRunning)
+    if (!restartPending() && m_lastReport.isValid() && m_lastReport.elapsed() < ReportEveryMs
+        && appRunning == m_lastAppRunning)
         return;
     m_lastReport.start();
     m_lastAppRunning = appRunning;
@@ -118,6 +123,12 @@ void Update::mockSetCallerIsAdmin(bool admin)
 {
     if (auto *mock = qobject_cast<MockUpdateBackend *>(m_backend.get()))
         mock->setCallerIsAdmin(admin);
+}
+
+void Update::mockAnnounceRestart(qint64 restartAt)
+{
+    if (auto *mock = qobject_cast<MockUpdateBackend *>(m_backend.get()))
+        mock->announceRestart(restartAt);
 }
 
 int Update::mockRollbackCount() const

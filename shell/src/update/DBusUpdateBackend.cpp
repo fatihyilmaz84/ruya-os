@@ -44,6 +44,7 @@ UpdateStatus toStatus(const QVariantMap &d)
     s.channel = d.value(QStringLiteral("channel"), s.channel).toString();
     s.autoRestart = d.value(QStringLiteral("auto_restart"), s.autoRestart).toBool();
     s.lastCheck = d.value(QStringLiteral("last_check")).toLongLong();
+    s.restartAt = d.value(QStringLiteral("restart_at")).toLongLong();
     s.progress = d.value(QStringLiteral("progress")).toInt();
     s.rollbackAvailable = d.value(QStringLiteral("rollback_available")).toBool();
     s.error = d.value(QStringLiteral("error")).toString();

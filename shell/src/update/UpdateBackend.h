@@ -13,6 +13,7 @@ struct UpdateStatus
     QString channel = QStringLiteral("stable");
     bool autoRestart = true;
     qint64 lastCheck = 0;
+    qint64 restartAt = 0; // unix seconds of the announced automatic restart, 0 = none
     int progress = 0;
     bool rollbackAvailable = false;
     QString error;

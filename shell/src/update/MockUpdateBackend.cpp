@@ -157,6 +157,16 @@ void MockUpdateBackend::reportActivity(bool appRunning)
 {
     ++m_activityCount;
     m_lastAppRunning = appRunning;
+    if (m_status.restartAt != 0) {
+        m_status.restartAt = 0;
+        publish();
+    }
+}
+
+void MockUpdateBackend::announceRestart(qint64 restartAt)
+{
+    m_status.restartAt = restartAt;
+    publish();
 }
 
 void MockUpdateBackend::step()

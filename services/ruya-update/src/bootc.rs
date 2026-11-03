@@ -195,6 +195,8 @@ impl Bootc for BootcCli {
 pub struct FakeBootc {
     host: Mutex<HostStatus>,
     fail: Mutex<Option<String>>,
+    /// Set by `fail_next_call`: the next call with this name fails with this message.
+    fail_named: Mutex<Option<(String, String)>>,
     calls: Mutex<Vec<String>>,
     /// Set by `hold_next_rollback`.
     gate: Mutex<Option<(Sender<()>, Receiver<()>)>>,
@@ -211,6 +213,11 @@ impl FakeBootc {
     /// The next command fails with this message.
     pub fn fail_next(&self, message: &str) {
         *self.fail.lock().expect("fake lock") = Some(message.to_owned());
+    }
+
+    /// The next call of this command (`"upgrade"`, `"check"`, ...) fails with this message.
+    pub fn fail_next_call(&self, call: &str, message: &str) {
+        *self.fail_named.lock().expect("fake lock") = Some((call.to_owned(), message.to_owned()));
     }
 
     /// The commands run so far, e.g. `["check", "switch x:beta"]`.
@@ -233,6 +240,14 @@ impl FakeBootc {
 
     fn enter(&self, call: &str) -> Result<(), String> {
         self.calls.lock().expect("fake lock").push(call.to_owned());
+        {
+            let mut named = self.fail_named.lock().expect("fake lock");
+            if named.as_ref().is_some_and(|(name, _)| name == call) {
+                if let Some((_, message)) = named.take() {
+                    return Err(message);
+                }
+            }
+        }
         match self.fail.lock().expect("fake lock").take() {
             Some(message) => Err(message),
             None => Ok(()),

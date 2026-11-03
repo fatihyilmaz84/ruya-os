@@ -308,6 +308,19 @@ FocusScope {
         }
     }
 
+    // The service restarts the console by itself about two minutes after it says so: tell the
+    // user, until a press calls it off (the service clears restart_at) or the restart happens.
+    Connections {
+        target: Update
+        function onRestartPendingChanged() {
+            if (Update.restartPending)
+                Notifications.showSticky("update-restart",
+                    qsTr("Restarting to finish the update in 2 minutes. Press any button to wait."), "warning")
+            else
+                Notifications.remove("update-restart")
+        }
+    }
+
     // An app that crashed or never got to run is the only exit the user hears about; a normal
     // quit (including a Stop from the shell) is silent.
     Connections {

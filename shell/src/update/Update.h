@@ -28,6 +28,10 @@ class Update : public QObject
     Q_PROPERTY(bool autoRestart READ autoRestart NOTIFY statusChanged)
     // Unix seconds of the last finished check, 0 = never.
     Q_PROPERTY(qint64 lastCheck READ lastCheck NOTIFY statusChanged)
+    // True while the service has announced an automatic restart (about two minutes ahead): the
+    // shell tells the user, and any input calls it off. restartAt: unix seconds, 0 = none.
+    Q_PROPERTY(bool restartPending READ restartPending NOTIFY restartPendingChanged)
+    Q_PROPERTY(qint64 restartAt READ restartAt NOTIFY statusChanged)
     Q_PROPERTY(int progress READ progress NOTIFY statusChanged)
     Q_PROPERTY(bool rollbackAvailable READ rollbackAvailable NOTIFY statusChanged)
     Q_PROPERTY(QString error READ error NOTIFY statusChanged)
@@ -48,6 +52,8 @@ public:
     QString channel() const { return m_status.channel; }
     bool autoRestart() const { return m_status.autoRestart; }
     qint64 lastCheck() const { return m_status.lastCheck; }
+    qint64 restartAt() const { return m_status.restartAt; }
+    bool restartPending() const { return m_status.restartAt > 0; }
     int progress() const { return m_status.progress; }
     bool rollbackAvailable() const { return m_status.rollbackAvailable; }
     QString error() const { return m_status.error; }
@@ -61,7 +67,8 @@ public:
     Q_INVOKABLE void setChannel(const QString &channel);
     Q_INVOKABLE void setAutoRestart(bool enabled);
     // Input arrived, or the first app started or the last one closed. Tells the service (so it
-    // can tell idle from busy) at most once a minute, but a change of appRunning at once.
+    // can tell idle from busy) at most once a minute, but a change of appRunning at once, and
+    // every time while a restart is announced (the press that calls it off must get through).
     Q_INVOKABLE void noteActivity(bool appRunning);
 
     // Tests only, and only with the mock backend (otherwise a no-op / 0).
@@ -74,10 +81,14 @@ public:
     Q_INVOKABLE int mockRollbackCount() const;
     Q_INVOKABLE int mockActivityCount() const;
     Q_INVOKABLE bool mockLastActivityAppRunning() const;
+    // The service announces an automatic restart at this unix time (0: calls it off).
+    Q_INVOKABLE void mockAnnounceRestart(qint64 restartAt);
     Q_INVOKABLE void mockSetCallerIsAdmin(bool admin);
 
 signals:
     void statusChanged();
+    // restartPending changed: show or remove the notice.
+    void restartPendingChanged();
     // method: "check" | "download" | "rollback" | "setChannel" | "setAutoRestart"; status: see the XML header.
     void requestFinished(const QString &method, const QString &status);
     // The state became "staged" (from another state): a restart finishes the update.

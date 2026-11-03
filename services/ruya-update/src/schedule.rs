@@ -14,6 +14,8 @@ pub const IDLE_SECS: i64 = 30 * 60;
 /// The local-time window in which the console restarts by itself: [03:00, 05:00).
 pub const WINDOW_START_MINUTE: u32 = 3 * 60;
 pub const WINDOW_END_MINUTE: u32 = 5 * 60;
+/// The notice before an automatic restart: the restart waits this long after it was announced.
+pub const GRACE_SECS: i64 = 120;
 /// How often the service looks at the schedule.
 pub const TICK_SECS: u64 = 60;
 
@@ -101,6 +103,11 @@ pub struct Schedule {
     app_running: bool,
     /// Unix seconds of the last scheduled check that began; 0 = none.
     last_attempt: i64,
+    /// Unix seconds at which the announced restart happens; None = nothing announced.
+    pending_restart: Option<i64>,
+    /// Unix seconds at which a scheduled download failed; None = no download to retry. Manual
+    /// downloads never set it.
+    failed_download: Option<i64>,
 }
 
 impl Schedule {
@@ -112,9 +119,11 @@ impl Schedule {
         }
     }
 
-    pub fn activity(&mut self, now: i64, app_running: bool) {
+    /// Input arrived. Calls off an announced restart; returns whether there was one.
+    pub fn activity(&mut self, now: i64, app_running: bool) -> bool {
         self.last_activity = Some(now);
         self.app_running = app_running;
+        self.pending_restart.take().is_some()
     }
 
     pub fn attempted(&mut self, now: i64) {
@@ -129,6 +138,53 @@ impl Schedule {
         let since = |t: i64| if t > now { i64::MAX } else { now - t };
         since(last_check) >= CHECK_INTERVAL_SECS
             && (self.last_attempt == 0 || since(self.last_attempt) >= RETRY_SECS)
+    }
+
+    /// Unix seconds of the announced restart.
+    pub fn pending_restart(&self) -> Option<i64> {
+        self.pending_restart
+    }
+
+    /// The announcement is off (the setting was turned off). Returns whether there was one.
+    pub fn cancel_restart(&mut self) -> bool {
+        self.pending_restart.take().is_some()
+    }
+
+    /// One look at the restart rules. `can` is what the service knows (an image is staged and
+    /// the setting is on); the rest is `quiet`. The first look at which everything holds
+    /// announces the restart for `now + GRACE_SECS`; a look at or after that time returns true
+    /// ("restart now") if everything still holds; a look at which something does not hold clears
+    /// the announcement, so the idle time starts over. A time further ahead than the grace
+    /// (the clock was set back) is replaced.
+    pub fn restart_step(&mut self, now: i64, minute_of_day: u32, can: bool) -> bool {
+        if !(can && self.quiet(now, minute_of_day)) {
+            self.pending_restart = None;
+            return false;
+        }
+        match self.pending_restart {
+            Some(at) if at <= now + GRACE_SECS => now >= at,
+            _ => {
+                self.pending_restart = Some(now + GRACE_SECS);
+                false
+            }
+        }
+    }
+
+    /// A scheduled download failed at `now`.
+    pub fn download_failed(&mut self, now: i64) {
+        self.failed_download = Some(now);
+    }
+
+    /// Whatever was to be retried is settled or taken over (a download began).
+    pub fn download_begun(&mut self) {
+        self.failed_download = None;
+    }
+
+    /// A failed scheduled download is due again: `RETRY_SECS` have passed (a failure time after
+    /// `now` counts as long ago, like the other times).
+    pub fn download_retry_due(&self, now: i64) -> bool {
+        self.failed_download
+            .is_some_and(|t| t > now || now - t >= RETRY_SECS)
     }
 
     /// The console may restart by itself: inside the window, idle long enough, no app.
@@ -265,6 +321,85 @@ mod tests {
         s.seen(now);
         assert!(!s.quiet(now + IDLE_SECS - 1, 200));
         assert!(s.quiet(now + IDLE_SECS, 200));
+    }
+
+    #[test]
+    fn the_restart_is_announced_then_done_after_the_grace() {
+        let mut s = Schedule::default();
+        let t0 = 1_000_000;
+        s.seen(t0);
+        let now = t0 + IDLE_SECS;
+        assert!(!s.restart_step(now, 200, true), "announced, not done");
+        assert_eq!(s.pending_restart(), Some(now + GRACE_SECS));
+        assert!(!s.restart_step(now + GRACE_SECS - 1, 200, true));
+        assert_eq!(s.pending_restart(), Some(now + GRACE_SECS), "does not move");
+        assert!(s.restart_step(now + GRACE_SECS, 200, true));
+        assert!(
+            s.restart_step(now + GRACE_SECS + 60, 200, true),
+            "a failed reboot is tried at the next look"
+        );
+    }
+
+    #[test]
+    fn anything_that_stops_holding_clears_the_announcement() {
+        let announced = || {
+            let mut s = Schedule::default();
+            s.seen(0);
+            assert!(!s.restart_step(IDLE_SECS, 200, true));
+            assert!(s.pending_restart().is_some());
+            s
+        };
+        let mut s = announced();
+        assert!(
+            !s.restart_step(IDLE_SECS + 5, 200, false),
+            "nothing staged / setting off"
+        );
+        assert_eq!(s.pending_restart(), None);
+        let mut s = announced();
+        assert!(
+            !s.restart_step(IDLE_SECS + 5, WINDOW_END_MINUTE, true),
+            "left the window"
+        );
+        assert_eq!(s.pending_restart(), None);
+        let mut s = announced();
+        assert!(s.activity(IDLE_SECS + 5, false), "activity calls it off");
+        assert!(!s.activity(IDLE_SECS + 6, false), "and says so once");
+        assert!(
+            !s.restart_step(IDLE_SECS + GRACE_SECS, 200, true),
+            "idle starts over"
+        );
+        let mut s = announced();
+        assert!(s.cancel_restart());
+        assert!(!s.cancel_restart());
+    }
+
+    #[test]
+    fn an_announcement_too_far_ahead_is_replaced() {
+        let mut s = Schedule::default();
+        s.seen(0);
+        assert!(!s.restart_step(IDLE_SECS, 200, true));
+        // The clock moved back by an hour (idle time was restarted by `seen`).
+        s.seen(IDLE_SECS - 3600);
+        assert!(!s.restart_step(IDLE_SECS - 3600 + IDLE_SECS, 200, true));
+        assert_eq!(
+            s.pending_restart(),
+            Some(IDLE_SECS - 3600 + IDLE_SECS + GRACE_SECS)
+        );
+    }
+
+    #[test]
+    fn a_failed_scheduled_download_is_due_after_an_hour() {
+        let mut s = Schedule::default();
+        assert!(!s.download_retry_due(5_000_000), "nothing failed");
+        s.download_failed(1_000_000);
+        assert!(!s.download_retry_due(1_000_000 + RETRY_SECS - 1));
+        assert!(s.download_retry_due(1_000_000 + RETRY_SECS));
+        assert!(
+            s.download_retry_due(500_000),
+            "a failure in the future counts as long ago"
+        );
+        s.download_begun();
+        assert!(!s.download_retry_due(5_000_000));
     }
 
     #[test]
