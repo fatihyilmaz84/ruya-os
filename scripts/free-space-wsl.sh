@@ -15,4 +15,4 @@ podman images --format '{{.Repository}}:{{.Tag}}' | grep '^localhost:5000/' | xa
 podman image prune -f >/dev/null
 podman images --format '  kept {{.Repository}}:{{.Tag}} {{.Size}}'
 fstrim -a >/dev/null 2>&1 || true
-df -h / | tail -1 | awk '{print "  WSL in use: " $3}'
+echo "  WSL in use: $(df -h --output=used / | tail -1 | tr -d ' ')"
