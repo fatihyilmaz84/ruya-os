@@ -1,6 +1,6 @@
 # T-160 — Greenboot: no failing wanted check on a healthy boot
 
-Status: todo · Phase: 0 · Depends: — · Area: image · Size: S · Owner: builder
+Status: in-progress · Phase: 0 · Depends: — · Area: image · Size: S · Owner: builder
 
 ## Goal
 A healthy boot logs no failing greenboot check. Today the wanted script `01_update_platforms_check.sh` fails on every VM boot; it is harmless ("wanted"), but it hides real failures in the journal and will confuse the first hardware install (B-002).
@@ -20,7 +20,7 @@ A healthy boot logs no failing greenboot check. Today the wanted script `01_upda
 - Shortening greenboot timeouts (B-002 decides that on hardware), new health checks.
 
 ## Acceptance criteria
-- [ ] VM: image built, `RUYA_BOOT_OK`; `journalctl -b -u greenboot-healthcheck` shows no failing script and "health-check passed" (record the lines in the Outcome).
+- [ ] VM (this task): image built, `RUYA_BOOT_OK`; `journalctl -b -u greenboot-healthcheck` shows no failing script and "health-check passed" (record the lines in the Outcome).
 - [ ] `scripts/vm-update-check.sh` ALL PASSED (the update and rollback drill still works).
 - [ ] `dev.ps1 test` ALL GREEN.
 

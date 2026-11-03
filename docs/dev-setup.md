@@ -246,7 +246,7 @@ cmake -S shell -B shell/build -G Ninja && cmake --build shell/build && shell/bui
 C: holds the WSL disk (`%LOCALAPPDATA%\wsl\FedoraLinux-44\ext4.vhdx`), D: holds `output/`; both drives are nearly full, and a full drive breaks `make-disk.sh` ("Cannot allocate memory"). After a session with image builds:
 - In WSL as root: `podman image prune -f; podman system prune -f`, and `podman rmi` every drill/registry tag you pushed. Keep `localhost/ruyaos:dev`, `fedora-bootc:44`, `bootc-image-builder` and `fedora:44` (the next build needs them).
 - `output/qcow2/work.qcow2` and any `.iso` you no longer need; `disk.qcow2` is the newest fresh disk (`make-disk.sh` recreates it).
-- The VHDX never shrinks by itself (marking it sparse did not release space, 2026-11-02). To compact it: `wsl --shutdown`, `wsl --export FedoraLinux-44 D:\dev\RuyaOS\output\wsl-export.tar`, `wsl --unregister FedoraLinux-44`, `wsl --import FedoraLinux-44 %LOCALAPPDATA%\wsl\FedoraLinux-44 <tar>`, check that `wsl -d FedoraLinux-44 -u root -- podman images` lists the images, then delete the tar. The default user stays root and `/etc/wsl.conf` (systemd) comes along in the tar.
+- The VHDX never shrinks by itself (7 → 29 GB in one failed build, 2026-11-03). **`.\scripts\free-space.ps1`** does all of this section after every image build, passed or failed (owner rule): it refuses while a build runs, prunes untagged images, drill tags (`localhost:5000/*`) and stopped containers, keeps `ruyaos:dev` and the base images, deletes `work.qcow2` (unless `-KeepWork`), shuts WSL down and runs `wsl --manage FedoraLinux-44 --compact` (29 → 5.9 GB on 2026-11-03; the old export/import recipe is no longer needed).
 
 ## Problems hit (Phase 0 exit item 9)
 

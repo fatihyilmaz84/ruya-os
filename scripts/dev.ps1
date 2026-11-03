@@ -219,12 +219,25 @@ switch ($Command) {
     "test" { Test-Text; Test-Board; Do-Rust; Do-Shell }
     "shots" {
         Do-Build
-        # Start empty: a screenshot no test writes any more must not be reviewed as current.
-        Remove-Item (Join-Path $Repo "output\shell-shots\*.png") -ErrorAction SilentlyContinue
-        Step "Qt Quick tests with screenshots"
-        Run-QmlTests (Join-Path $Repo "output\shell-shots")
-        Save-ReviewCopies (Join-Path $Repo "output\shell-shots")
-        Write-Host "    screenshots: $(Join-Path $Repo 'output\shell-shots') (half size for review: review\)"
+        # One shots run per desktop: two builders' windows (parallel worktrees, LEAD.md 4b) would
+        # take each other's activation. A run killed while holding the lock counts as released.
+        $shotsLock = New-Object System.Threading.Mutex($false, "Local\RuyaOS-shots")
+        try {
+            if (-not $shotsLock.WaitOne(0)) {
+                Write-Host "    another shots run is using the desktop; waiting for it..."
+                [void]$shotsLock.WaitOne()
+            }
+        } catch [System.Threading.AbandonedMutexException] { }
+        try {
+            # Start empty: a screenshot no test writes any more must not be reviewed as current.
+            Remove-Item (Join-Path $Repo "output\shell-shots\*.png") -ErrorAction SilentlyContinue
+            Step "Qt Quick tests with screenshots"
+            Run-QmlTests (Join-Path $Repo "output\shell-shots")
+            Save-ReviewCopies (Join-Path $Repo "output\shell-shots")
+            Write-Host "    screenshots: $(Join-Path $Repo 'output\shell-shots') (half size for review: review\)"
+        } finally {
+            $shotsLock.ReleaseMutex()
+        }
     }
     "run" {
         Do-Build

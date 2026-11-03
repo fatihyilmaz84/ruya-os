@@ -26,13 +26,14 @@ Any of these is true (builders check at session start and stop if they find noth
 - Every acceptance criterion is observable by a named test or screenshot ("works", "looks good", "is robust" are not criteria).
 - It names the reference pattern to copy (`shell/src/network`, `ruya-profiles`, `PinPad.qml`, …) and what is out of scope, especially the tempting next step.
 - **UI tasks** link the `04-design-system.md` sections and components they use, and say which tokens or components (if any) the task may add. A screen that needs a component not in `04` §5 gets a design step first (lead or a `design:` task), not an improvised one.
-- Size S or M.
+- Size S (up to ~150 changed lines) or M (up to ~400); split anything bigger.
+- Its Area and named files let the lead tell whether two tasks can run in parallel (LEAD.md 4b).
 
 ## Lessons from past sessions (apply when writing tasks)
 
 - **Split shared infrastructure from features.** T-105 invented a modal layer and scrollable panes on the way and grew to ~1,500 lines.
 - **Don't freeze contracts in task text.** Write "extend the contract if needed" (contracts are drafts until release).
-- **Service-facing work gets a VM criterion** naming the check (`smoke-test.ps1`, a `scripts/vm-*` script, a VM screenshot): a task that changes a service, a unit, the image or a D-Bus client is not verified by mocks. Pure mock-only UI tasks don't need one.
+- **Service-facing work gets a VM criterion** naming the check (`smoke-test.ps1`, a `scripts/vm-*` script, a VM screenshot): a task that changes a service, a unit, the image or a D-Bus client is not verified by mocks. Pure mock-only UI tasks don't need one. Label it **"VM (this task)"** when the risk is in the image (packaging, units, bus policy, hardening) or **"VM (lead run)"** for service or shell logic (owner, 2026-11-03; root `CLAUDE.md`, Host).
 - **Prefer visible-behaviour criteria** over signatures: state what the user sees, leave the signatures to the builder.
 - **Geometry gets a property test** with the size a real caller sets (aspect ratio, ring outside a filled pill): two builders' screenshot reviews passed 2.2:1 "16:9" cards and an invisible focus ring (T-113, T-146).
 - **Host-only is a phase, not a plan.** When the VM is unavailable, keep real-service tasks queued behind the blocker and fill the gap with contract + mock + UI tasks, but each contract task should name its service task so the mock can't drift unnoticed.

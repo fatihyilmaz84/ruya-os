@@ -26,7 +26,7 @@ The status cluster on Home shows the controller's battery, as the design asks (0
 - [ ] Pure core: a gamepad at 40 % discharging is listed; a laptop battery and a mouse are not; a device removed leaves the list (Rust tests).
 - [ ] Mock: one controller at 60 % → the battery icon is visible in the status cluster; none → hidden; a drop to 15 % → one toast, not repeated at 14 % (QML tests).
 - [ ] Screenshot of Home with the battery in the status cluster, reviewed against `04` §2 and §8 (icon size and alignment with the clock).
-- [ ] VM: image built, `RUYA_BOOT_OK`; a VM check (extend `scripts/vm-devices-check.sh`) asserts `upower` runs and `ListBatteries` answers an empty list. A real controller's battery is **unverified** (no controller in the VM); say so.
+- [ ] VM (this task): image built, `RUYA_BOOT_OK`; a VM check (extend `scripts/vm-devices-check.sh`) asserts `upower` runs and `ListBatteries` answers an empty list. A real controller's battery is **unverified** (no controller in the VM); say so.
 
 ## Verification
 ```powershell

@@ -1,6 +1,6 @@
 # T-147 — Full-screen apps: launch splash, quick menu, return and close
 
-Status: todo · Phase: 3 · Depends: T-130, T-138, T-146 · Area: shell · Size: M
+Status: todo · Phase: 3 · Depends: T-138, T-146, T-164 · Area: shell · Size: M
 
 ## Goal
 Pressing Play starts the game full screen with a short art-led launch; Guide brings up the quick menu over the running game; Home and Close work as on a console. Owner decision 2026-10-28 (ADR-012 amendment).
@@ -28,7 +28,7 @@ Pressing Play starts the game full screen with a short art-led launch; Guide bri
 - [ ] An info toast raised while the app has focus is shown only after returning to Home (test).
 - [ ] Reduced motion: no animation runs during launch (test asserts durations 0 / no running animations).
 - [ ] Screenshots: splash, quick menu over the stand-in app, quick menu without an app; reviewed against `04` §8 and the canvas boards.
-- [ ] VM (after T-130/T-139 are in the image): launch the T-123 test client from a Home card, quick menu over it, Home and resume, close — screenshots in the Outcome; if `ruya-session` is not in the image yet, mark this criterion **unverified** and add an Inbox line.
+- [ ] VM (lead run), after T-130/T-139 are in the image): launch the T-123 test client from a Home card, quick menu over it, Home and resume, close — screenshots in the Outcome; if `ruya-session` is not in the image yet, mark this criterion **unverified** and add an Inbox line.
 - [ ] `dev.ps1 test` ALL GREEN.
 
 ## Verification

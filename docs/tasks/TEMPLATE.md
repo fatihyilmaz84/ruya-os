@@ -20,6 +20,7 @@ Status: todo · Phase: n · Depends: T-xxx, … · Area: shell | services | api 
 ## Acceptance criteria
 - [ ] … (test: `tst_xxx.qml::test_yyy`)
 - [ ] … (screenshot: `output/shell-shots/n-name.png` shows …)
+- [ ] VM (this task | lead run): `scripts/vm-…-check.sh` … (service-facing tasks only, PLANNING.md Lessons)
 
 ## Verification
 ```powershell

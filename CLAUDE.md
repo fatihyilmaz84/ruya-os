@@ -17,27 +17,26 @@ RuyaOS is an open-source, immutable (Fedora bootc) console OS for living-room PC
 
 ## Session workflow (do every step, in order)
 
-0. **Which session?** Asked for a **lead session**: follow `docs/LEAD.md`. A **planning session**: `docs/tasks/PLANNING.md`. Anything else is a **builder session**: the steps below. Builders don't create tasks; they add Inbox lines.
-1. **Orient.** Read `docs/STATUS.md`. Take **NEXT**, or else the first `todo` whose dependencies are all `done`. Skip **[lead]** tasks. **One task per session**, unless its file says it is small enough to pair. If asked for another task in the same session, do it but say once that a fresh session is cheaper (every turn re-reads the whole conversation).
+0. **Which session?** Asked for a **lead session**: follow `docs/LEAD.md`. A **planning session**: `docs/tasks/PLANNING.md`. A **builder** is normally the `ruya-builder` agent the lead dispatches with one task and its own worktree (`.claude/agents/ruya-builder.md`: steps, self-check, HANDOFF); it never edits `docs/STATUS.md` or the task's `Status:`. A builder session the **owner starts directly** works in the main checkout and also does the lead's bookkeeping (steps 3 and 6 below). Builders don't create tasks; follow-ups are Inbox lines (in the HANDOFF when dispatched).
+1. **Orient** (direct sessions). Read `docs/STATUS.md`. Take **NEXT**, or else the first `todo` whose dependencies are all `done`. Skip **[lead]** tasks. **One task per session**, unless its file says it is small enough to pair.
    - `git status` shows changes you didn't make? Another session may be running: stop and tell the user.
    - Nothing qualifies? Stop and say the backlog needs a planning session. Don't invent work.
-   - Inbox has 5+ items? Do your task, then recommend a planning session. Lead review due (see the board)? Recommend a lead session.
 2. **Read before coding.** The whole task file, every spec section it links, the `CLAUDE.md` of each area you touch, and the existing code you will change. Read the Outcome of a dependency only when the task's Hints point to it.
-3. **Claim it.** Set `Status: in-progress` in the task file header **and** on the `docs/STATUS.md` board (`scripts/lint-board.ps1` fails if they differ).
+3. **Claim it** (direct sessions; the lead does it for dispatched builders). Set `Status: in-progress` in the task file header **and** on the `docs/STATUS.md` board (`scripts/lint-board.ps1` fails if they differ).
 4. **Build within scope.** Implement exactly the task's Scope.
-   - **Every follow-up** you notice (debt, flaky build, missing feature, spec gap) is one line in the **Inbox**. A follow-up that exists only in prose is lost.
-   - Write a task file yourself only if your task can't finish without it.
+   - **Every follow-up** you notice (debt, flaky build, missing feature, spec gap) is one Inbox line. A follow-up that exists only in prose is lost.
    - Crossing the shell/service boundary: **write or extend the D-Bus XML first**; the mock, the D-Bus client and the Rust service all follow it.
    - **Contracts are drafts until the first release.** If the task can't be done cleanly within the contract, extend it: in the same commit update the XML, the Rust service and its tests, the mock and the D-Bus client, and explain it in the Outcome. No workarounds such as extra calls to recover missing data. This applies even if a task says "don't change the contract" (that means "no unnecessary changes"). Never break behaviour other code relies on.
 5. **Verify.**
    - `.\scripts\dev.ps1 test` must end with `ALL GREEN`. Its Qt Quick tests run **offscreen**, independent of the desktop. A red `test` is a real failure.
-   - UI change: also `.\scripts\dev.ps1 shots` (real GPU windows; runs only the tests that save a screenshot, ~25 s). Read the screenshots your task changed from `output\shell-shots\review\` (half size) and check them against the criteria and the design review list (`04-design-system.md` §8); open a full-size PNG only for small text. Fix what you see.
+   - UI change: also `.\scripts\dev.ps1 shots` (real GPU windows; only the tests that save a screenshot; it waits while another `shots` runs). Read the screenshots your task changed from `output\shell-shots\review\` (half size) against the criteria and `04-design-system.md` §8; open a full-size PNG only for small text. Fix what you see.
    - `shots` needs an unlocked, undisturbed desktop: if it fails while `test` is green (`TEST WINDOW LOST ACTIVATION`), re-run first. Never edit a test to suit the desktop.
+   - Image builds: see Hard rules, **Host**.
 6. **Document.**
-   - Task file: fill **Outcome**, starting with a `Verified:` line (host / vm / unverified / hw, see the legend in STATUS), then what was built, files, deviations. Set `Status: done` (or `blocked`, with the reason).
+   - Task file: fill **Outcome**, starting with a `Verified:` line (host / host (vm pending: <check>) / vm / unverified / hw, legend in STATUS), then what was built, files, deviations.
    - Update every spec section whose behaviour changed (specs describe what the code does) and `docs/dev-setup.md` if commands changed.
-   - `docs/STATUS.md`: **delete the task's board row** (done work leaves the board; there is no Done table), move **NEXT**, add a session-log entry (at most 700 characters, linted) at the top.
-7. **Commit.** One commit per task (a small series is fine), format below. **Builders never push.** The lead pushes `main` to `origin` (https://github.com/fatihyilmaz84/ruya-os.git) at the end of every lead session, only after `scripts\scan-secrets.ps1` passes (owner, 2026-10-28). `image/bib/config.toml` holds the dev SSH key and stays git-ignored.
+   - Direct sessions only: set `Status: done` (or `blocked`, with the reason), **delete the task's board row**, move **NEXT**, add a session-log entry (at most 700 characters, linted) at the top.
+7. **Commit.** One commit per task (a small series is fine), format below. Dispatched builders commit on their branch; the lead merges. **Builders never push.** The lead pushes `main` to `origin` (https://github.com/fatihyilmaz84/ruya-os.git) at the end of every lead session, only after `scripts\scan-secrets.ps1` passes (owner, 2026-10-28). `image/bib/config.toml` holds the dev SSH key and stays git-ignored.
 
 ## Definition of done (all must hold)
 
@@ -51,7 +50,7 @@ RuyaOS is an open-source, immutable (Fedora bootc) console OS for living-room PC
 
 - **Decisions.** ADRs marked *Accepted* in `00-overview.md` are binding. If a task seems to need a different decision, or a new owner-level one (legal, licensing, product scope, spending, publishing), don't decide: add a *Proposed* ADR, mark the task `blocked` with the question, and stop.
 - **Host.** Windows, with a Fedora 44 WSL distribution for image builds and QEMU (WHPX) for boot tests (`docs/dev-setup.md`). Never install system software or change system settings; `dnf` inside the WSL distribution is fine.
-  - **Image changes** (Containerfile, `image/`, units, services as packaged) are built and boot-tested: `scripts/build.sh` + `make-disk.sh` in WSL, then `scripts\smoke-test.ps1`. Such a task is not `done` until it boots with `RUYA_BOOT_OK`. Builds take 3–30 minutes: run them in the background.
+  - **Image builds (owner, 2026-11-03).** A task whose risk is in the image (Containerfile, `image/`, units, bus policies, packaging, hardening) has a **"VM (this task)"** criterion: build and boot-test it (`scripts/build.sh` + `make-disk.sh` in WSL, then `scripts\smoke-test.ps1`); it is not `done` until it boots with `RUYA_BOOT_OK`. A service or shell logic task has **"VM (lead run)"**: write or extend its `scripts/vm-*-check.sh`, start the Outcome with `Verified: host (vm pending: <check>)`; the lead runs the board's VM queue with one image build. One image build at a time on this host; every build, passed or failed, ends with `scripts\free-space.ps1` once the VM checks are done. Builds take 3–30 minutes: run them in the background.
   - **Unverifiable here** (say so, never claim it works): real GPU/KPI numbers, controllers in the VM, audio output in the VM (no sound device unless `-Audio`), and the shell talking to services over D-Bus unless you test inside the VM over SSH.
 - **Tests are the spec's teeth.** Never weaken an assertion, add `skip()`, or delete a test to get green. If a test is wrong, fix it and say why in the Outcome.
 - **Security invariants:**

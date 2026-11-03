@@ -2,7 +2,7 @@
 
 **Read this first in every session; update it last.** Rules: root `CLAUDE.md`. Roles (Opus lead, Sonnet builders): `docs/LEAD.md`. Task format: `docs/tasks/README.md`. Finished work: each task's own file (`Status: done`, Outcome starting with `Verified:`); history before T-132 in [`STATUS-done.md`](STATUS-done.md). `scripts/lint-board.ps1` (part of `dev.ps1 test`) keeps this board and the task files in step.
 
-Last updated: 2026-11-04 (Sonnet 5.5, T-159)
+Last updated: 2026-11-04 (Opus 5.5, lead)
 
 ## Where we are
 
@@ -11,39 +11,42 @@ Last updated: 2026-11-04 (Sonnet 5.5, T-159)
 - **Not started:** `ruya-session` in the image (T-139 built the core, dev mode only; unit, policy and the real spawner are next, unblocked by T-130), Bluetooth, USB storage, InputPlumber (B-006), installer. No app has been launched from the shell's own UI yet (a test client ran as a Wayland app, T-130).
 - **Host:** Windows plus a Fedora 44 WSL distribution (image builds) and QEMU/WHPX (boot tests): `docs/dev-setup.md`. If WSL `ext4` errors return, see Open owner decisions.
 
-Verification legend: **host** = built and tested on Windows · **vm** = built into the image and verified booted in QEMU · **unverified** = written, not run · **hw** = real hardware.
+Verification legend: **host** = built and tested on Windows · **host (vm pending)** = on the VM queue · **vm** = built into the image and verified booted in QEMU · **unverified** = written, not run · **hw** = real hardware.
 
 ## Board
 
-**NEXT → T-160**
+**NEXT → T-160** (paired with T-163: one image build)
 
-**Lead review due** after 2–4 more builder tasks (reviewed up to the lead commit "lead review e5c2ab3..ac6e5b1", see `docs/LEAD-NOTES.md`). **One builder session at a time, one task per session:** two builders in one checkout mixed three tasks' work on 2026-10-28. Builders: when your task makes this true, end your reply by recommending a lead session.
+**How work runs (owner, 2026-11-04):** the lead dispatches `ruya-builder` agents, at most two at a time in their own worktrees and in different areas, has each branch reviewed by `ruya-reviewer`, and merges it (`docs/LEAD.md`, build loop). Dispatched builders never edit this file. At most one task with a "VM (this task)" criterion runs at a time. A builder session the owner starts directly takes NEXT in the main checkout, alone, and does the bookkeeping itself (`CLAUDE.md`).
 
-Open work only (todo, in-progress, blocked). The order is the recommended order; when NEXT is blocked take the first `todo` whose dependencies are `done` (a task's status is in its file header). `[lead]` tasks are skipped by builders. If nothing qualifies, **stop and ask for a planning session** (`docs/tasks/PLANNING.md`).
+Open work only (todo, in-progress, blocked), in the recommended order; when NEXT is blocked take the first `todo` whose dependencies are `done`. `[lead]` tasks are skipped by builders. If nothing qualifies, **stop and ask for a planning session** (`docs/tasks/PLANNING.md`).
 
 | ID | Title | Status | Depends |
 |---|---|---|---|
-| [T-160](tasks/T-160-greenboot-wanted-check.md) | Greenboot: no failing wanted check on a healthy boot | todo | — |
+| [T-160](tasks/T-160-greenboot-wanted-check.md) | Greenboot: no failing wanted check on a healthy boot | in-progress | — |
+| [T-163](tasks/T-163-ruya-library-in-the-image.md) | `ruya-library` in the image: installed Flatpaks over the real bus | in-progress | — |
+| [T-167](tasks/T-167-store-ui-flake.md) | Test isolation: the Store UI flake and a language leak | in-progress | — |
+| [T-168](tasks/T-168-section-nav-on-section-pages.md) | Section nav on every section page | todo | T-157 |
 | [T-158](tasks/T-158-hint-bar.md) | Hint bar with controller button glyphs | todo | T-157 |
+| [T-162](tasks/T-162-ruya-session-in-the-image.md) | **[lead]** `ruya-session` in the image: real spawner, unit, bus policy | todo | — |
+| [T-164](tasks/T-164-per-profile-wayland-sockets.md) | **[lead]** Per-profile Wayland sockets: a profile's app appears in the shell | todo | T-162 |
+| [T-165](tasks/T-165-profile-switch-freezes-apps.md) | Profile switch and sign-out freeze the profile's apps | todo | T-164 |
+| [T-147](tasks/T-147-fullscreen-app-flow.md) | Full-screen apps: launch splash, quick menu, return, close | todo | T-164 |
 | [T-161](tasks/T-161-controller-battery.md) | Controller battery: `Devices1` over UPower, status cluster, low-battery toast | todo | T-157 |
+| [T-166](tasks/T-166-suspend-under-eglfs.md) | **[lead]** Suspend and resume with the shell on KMS (eglfs) | todo | — |
 | [T-144](tasks/T-144-contrast-and-accessible-names.md) | Design review: contrast over the backdrop, accessible names | todo | T-143 |
 | [T-145](tasks/T-145-bundle-inter.md) | Bundle the Inter typeface | todo | T-142 |
 | [T-136](tasks/T-136-bluetooth-contract-and-settings.md) | `Devices1.Bluetooth` contract, mock, Settings pane | todo | — |
 | [T-137](tasks/T-137-storage-contract-and-settings.md) | `Devices1.Storage` contract, mock, Settings → Storage | todo | — |
-| [T-147](tasks/T-147-fullscreen-app-flow.md) | Full-screen apps: launch splash, quick menu, return, close | todo | T-130, T-138, T-146 |
+
+**VM queue** (done on the host, VM check pending; the lead runs them with one image build): T-159 (`vm-update-check.sh reboot`).
 
 ## Inbox
 
-Follow-ups and debt for the next planner. Builders: add one line per item, `- (source) what, and why it matters`; write a task file only if your own task needs one. Run a planner at 5+ items.
+Follow-ups and debt for the next planner, one line each: `- (source) what, and why it matters`. Dispatched builders put them in their HANDOFF; the lead copies them here. Plan at 5+ items.
 
-- (T-130) Apps connect to `ruya-0` in `ruya-shell`'s own runtime directory (mode 0700): apps running as a profile's user (ADR-004) cannot reach it. The `ruya-session` image task must add per-profile sockets (or hand the client a socket fd).
-- (T-130) A Wayland app that connects while nobody is signed in is drawn above the picker (it gets no focus); the `ruya-session` task should define what lock or sign-out does to open apps.
-- (T-130) Suspend/resume and VT switching under eglfs are untested, but the Guide power menu offers Suspend: try `Suspend` in the VM (and on hardware, B-002) before users rely on it.
-
-- (T-157) `tst_store_ui.qml::test_update_adding_high_risk_*` failed once (`Store.jobs` length 1 instead of 0) in a full `test` run and passed on every rerun: a possible timing flake in the mock install jobs; watch for it.
-- (T-159) `image/build/90-initramfs.sh` prints `dracut-install: ERROR: installing '/root'` (the initramfs is still written); check in the VM boot whether it matters, else silence it.
-- (T-159) In `tst_update.qml` a `Key_Right` right after signing in as Ada (p2) changed `DeviceSettings.language` to `tr` for the rest of the process (seen with `Update::test_a_press_...` before the key was changed to `Key_Up`); the cause is unknown (profile or setup flow?) and other test files may be exposed to it.
-- (T-157) The section nav is only on Home, so the Settings pill's filled state never shows in the running shell; it needs the nav (or the top bar) on the other pages to be seen.
+- (lead, T-163) Steam libraries per profile: `ruya-library` cannot read profile homes (`ProtectHome`); design how the active profile's Steam list reaches the shell (a per-profile user unit started by `ruya-session`, or `ruya-session` handing the library a directory fd).
+- (T-159) `image/build/90-initramfs.sh` prints `dracut-install: ERROR: installing '/root'` (the initramfs is still written); check at the next VM boot whether it matters, else silence it.
 
 ## Blocked (need something this host doesn't have)
 
@@ -61,7 +64,7 @@ Follow-ups and debt for the next planner. Builders: add one line per item, `- (s
 - **One admin or several?** Overview §2 says one admin, `03` §1.1 says one or more. The service supports several; the UI offers Standard and Guest. Recommendation: one admin in the UI for the MVP (as the overview says); revisit after the first user test. Not blocking.
 - **Turkish wording review** (`shell/i18n/ruyashell_tr.ts`, written by AI): a native review before the first release. Not blocking; best done after the Settings panes settle (T-135..T-137).
 - **libdvdcss / AACS:** not included; needs an explicit owner decision.
-- Decided (for the record): icon set Material Symbols Rounded, ADR-013 (owner, 2026-11-01); design system ADR-012 with Inter bundled, an art-led Home and full-screen apps (owner, 2026-10-28); ADR-002 option A (owner, 2026-10-23); repo public on GitHub (2026-10-23); the lead pushes `main` at the end of every lead session after `scripts\scan-secrets.ps1` passes, builders never push (owner, 2026-10-28).
+- Decided (for the record): builders as `ruya-builder` agents in worktrees (two at a time), a `ruya-reviewer` verdict before every merge, the lead as the only writer of STATUS (owner, 2026-11-04, after comparing with Tinwave); image builds only in image-heavy tasks, logic tasks go to the lead's VM queue, every image build ends with `scripts\free-space.ps1` (owner, 2026-11-03); icon set Material Symbols Rounded, ADR-013 (owner, 2026-11-01); design system ADR-012 with Inter bundled, an art-led Home and full-screen apps (owner, 2026-10-28); ADR-002 option A (owner, 2026-10-23); repo public on GitHub (2026-10-23); the lead pushes `main` at the end of every lead session after `scripts\scan-secrets.ps1` passes, builders never push (owner, 2026-10-28).
 
 ## Session log (newest first, the latest five; older entries in `STATUS-log.md`)
 

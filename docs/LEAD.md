@@ -6,7 +6,8 @@ RuyaOS is built by two kinds of AI session under the owner:
 |---|---|---|---|
 | **Owner** | human | anything | Product direction, owner-level decisions (legal, licence, scope, spending, publishing), hardware |
 | **Lead** | Opus | "Run a lead session following docs/LEAD.md." | Direction, quality, planning, architecture, hard tasks, and keeping this system working |
-| **Builder** | Sonnet | "Do the next task from docs/STATUS.md, following CLAUDE.md." | One task per session, exactly as specified |
+| **Builder** | Sonnet | The lead dispatches the `ruya-builder` agent (`.claude/agents/`) into a worktree; or the owner: "Do the next task from docs/STATUS.md, following CLAUDE.md." | One task, exactly as specified, ending in a HANDOFF |
+| **Reviewer** | Opus | The lead dispatches the `ruya-reviewer` agent on a builder's branch | A verdict (APPROVE or CHANGES_REQUESTED) before the branch is merged; never edits |
 
 The lead follows the root `CLAUDE.md` (rules, commit format, definition of done) **plus** this file. Every lead session starts cold, so continuity lives in [`LEAD-NOTES.md`](LEAD-NOTES.md). **Read it first; rewrite it last.**
 
@@ -18,7 +19,7 @@ The lead follows the root `CLAUDE.md` (rules, commit format, definition of done)
 - After the owner answers an open decision, or wants something new.
 - When something is visibly wrong: red CI, a broken build, the app misbehaving.
 
-**Never run a lead and a builder at the same time.** They edit the same files (STATUS, tasks, specs). If `git status` shows uncommitted work you didn't make, stop, tell the owner, and don't touch it.
+**Builders the lead dispatches work only in their own worktrees; nobody else edits the main checkout while a lead session runs, and a builder session the owner starts directly never runs alongside a lead.** Two writers in one checkout mixed three tasks' work on 2026-10-28. If `git status` shows uncommitted work you didn't make, stop, tell the owner, and don't touch it.
 
 ## Procedure (in order)
 
@@ -31,12 +32,12 @@ The lead follows the root `CLAUDE.md` (rules, commit format, definition of done)
 ### 2. Verify independently (never trust an Outcome on its own)
 - `.\scripts\dev.ps1 test` → must be ALL GREEN.
 - `.\scripts\dev.ps1 shots`, then **look at the screenshots** of every screen that changed since the last review. Skip `shots` when no `.qml` file changed in the range.
-- If anything under `image/`, `services/` or the shell's Linux paths changed since the last VM verification: build the image, `make-disk.sh qcow2`, run `scripts\smoke-test.ps1` (recipe in `docs/dev-setup.md`). Run the update/rollback drill when updates, health checks or greenboot are touched.
+- **VM queue** (board): build one image of `main`, `make-disk.sh qcow2`, `scripts\smoke-test.ps1` (recipe in `docs/dev-setup.md`), then each queued task's check. Record each result in that task's Outcome (`Verified: vm`, with the numbers) and clear the queue; a failed check reopens its task. Also build when anything under `image/`, `services/` or the shell's Linux paths changed since the last VM verification and nothing in the range was VM-verified. Run the update/rollback drill when updates, health checks or greenboot are touched. End with `scripts\free-space.ps1`.
 - CI on GitHub: if the owner can share the Actions result, or it's visible from a pushed state, record it; otherwise note "CI not checked".
 - Write the numbers down (test counts, boot result, timings). They go into the log entry.
 
 ### 3. Review each builder commit in the range
-For each task commit, read the task file (Scope, criteria, Outcome) and the diff. With four or more commits, hand the reading to parallel read-only subagents (one per area, each given this checklist and its commits), then verify every finding in the code before acting on it. Check:
+Branches merged by the build loop (4b) already carry a `ruya-reviewer` APPROVE: skim their diff and the review, and spend the time on commits from direct builder sessions. For those, read the task file (Scope, criteria, Outcome) and the diff. With four or more commits, hand the reading to parallel read-only subagents (one per area, each given this checklist and its commits), then verify every finding in the code before acting on it. Check:
 - [ ] **Scope:** it did what the task asked, nothing silently extra, and it isn't missing a criterion.
 - [ ] **Tests:** each acceptance criterion has a test that would fail without the feature. No assertion weakened, no `skip()`, no deleted test. Focus asserted after navigation.
 - [ ] **Patterns:** follows the reference implementations and area `CLAUDE.md` rules (Theme tokens, focus rules, backend pattern, pure Rust core, contract-first).
@@ -67,6 +68,16 @@ How-tos and catalogues belong in a reference file that a task links (`shell/PATT
 Run the planner procedure in [`docs/tasks/PLANNING.md`](tasks/PLANNING.md): empty the Inbox, fill the queue to 8–12 ready tasks, order the board, set NEXT. The lead is the default planner. A builder-run planning session is acceptable for routine refills, but the lead re-checks its tasks at the next review.
 
 Mark tasks a builder should not take with `Owner: lead` (see below).
+
+### 4b. Build loop: dispatch, review, merge (owner, 2026-11-04)
+Keep going while ready tasks remain and the owner hasn't said stop.
+1. **Pick** up to **two** ready builder tasks in different areas whose files don't overlap; at most one with a "VM (this task)" criterion in flight (one image build at a time). `Cargo.lock`, translations and `shell/CMakeLists.txt` are shared, append-mostly files: the branch merged second resolves them.
+2. **Claim on `main`:** `Status: in-progress` in the task file and on the board, commit `docs: claim T-nnn`. Then `git worktree add D:\dev\RuyaOS-worktrees\T-nnn -b t/T-nnn-slug main` (make worktrees yourself, so the path is known; not the Agent tool's `isolation`).
+3. **Dispatch** the `ruya-builder` agent in the background (if the type isn't loaded in this session, a `general-purpose` agent on `model: sonnet` told to follow `.claude/agents/ruya-builder.md`) with: task path, worktree path, branch, round 1.
+4. **HANDOFF `done`:** dispatch `ruya-reviewer` (Opus) with the task, worktree, branch and the HANDOFF. `partial`/`blocked`: answer and resume the same builder, split the task, or mark it blocked.
+5. **CHANGES_REQUESTED:** send the blocking findings to the **same** builder (SendMessage, round + 1; it keeps its context). After round 2 still fails: fix it yourself, split it, or reopen it.
+6. **APPROVE:** in the main checkout `git merge --no-ff t/T-nnn-slug`; set `Status: done`, delete the board row, copy the HANDOFF's and the review's `inbox` lines to the Inbox, add the task to the **VM queue** if its Outcome says `vm pending`, move NEXT; `dev.ps1 test` on `main` (red: revert the merge and reopen). Commit `docs: T-nnn done`. Remove the worktree (`git worktree remove --force`, then `git branch -d`): its `shell\build-win` and `services\target` cost ~4 GB.
+7. The session log gets one lead entry per session listing the tasks merged; dispatched builders write none.
 
 ### 5. Direction and architecture
 - **Design system steward.** You own `docs/specs/04-design-system.md` and `Theme.qml`'s token set: decide `design:` Inbox items (add the token/component per §8, or say which existing one to use), keep the spec's built/planned/proposed marks true, and tell the owner which canvas boards are stale. New typefaces, icon sets, brand colours or principles are owner-level.
