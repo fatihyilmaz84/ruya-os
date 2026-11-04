@@ -16,7 +16,10 @@ Item {
     readonly property var codePoints: ({
         "settings": 0xe8b8,
         "volume_up": 0xe050,
-        "volume_off": 0xe04f
+        "volume_off": 0xe04f,
+        "battery_full": 0xe1a5,
+        "battery_alert": 0xe19c,
+        "battery_charging_full": 0xe1a3
     })
     readonly property bool known: name in codePoints
 

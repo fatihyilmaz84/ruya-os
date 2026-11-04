@@ -37,6 +37,10 @@ qt_add_qml_module(ruyashell
         src/bluetooth/MockBluetoothBackend.h src/bluetooth/MockBluetoothBackend.cpp
         src/bluetooth/DBusBluetoothBackend.h src/bluetooth/DBusBluetoothBackend.cpp
         src/bluetooth/Bluetooth.h src/bluetooth/Bluetooth.cpp
+        src/battery/BatteryBackend.h
+        src/battery/MockBatteryBackend.h src/battery/MockBatteryBackend.cpp
+        src/battery/DBusBatteryBackend.h src/battery/DBusBatteryBackend.cpp
+        src/battery/Batteries.h src/battery/Batteries.cpp
         src/storage/StorageBackend.h
         src/storage/MockStorageBackend.h src/storage/MockStorageBackend.cpp
         src/storage/DBusStorageBackend.h src/storage/DBusStorageBackend.cpp
@@ -125,7 +129,7 @@ qt_add_qml_module(ruyashell
 )
 
 # qmltyperegistrar includes the QML_ELEMENT headers by file name.
-target_include_directories(ruyashell PUBLIC src/profiles src/settings src/audio src/network src/bluetooth src/storage src/system src/power src/store src/library src/update src/session src/input)
+target_include_directories(ruyashell PUBLIC src/profiles src/settings src/audio src/network src/bluetooth src/battery src/storage src/system src/power src/store src/library src/update src/session src/input)
 target_link_libraries(ruyashell PRIVATE Qt6::Quick Qt6::Multimedia Qt6::DBus)
 
 # Translations: the .ts files in i18n/ are compiled to .qm and embedded as :/i18n/ruyashell_<lang>.qm.

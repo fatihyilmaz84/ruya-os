@@ -1243,12 +1243,12 @@
         <translation>Ses çıkışı: %1</translation>
     </message>
     <message>
-        <location line="+657"/>
+        <location line="+683"/>
         <source>Power</source>
         <translation>Güç</translation>
     </message>
     <message>
-        <location line="-649"/>
+        <location line="-675"/>
         <source>Update ready. Restart to finish.</source>
         <translation>Güncelleme hazır. Bitirmek için yeniden başlat.</translation>
     </message>
@@ -1263,7 +1263,12 @@
         <translation>%1 beklenmedik şekilde durdu</translation>
     </message>
     <message>
-        <location line="+207"/>
+        <location line="+112"/>
+        <source>Controller battery %1%</source>
+        <translation>Kumanda pili %1%</translation>
+    </message>
+    <message>
+        <location line="+121"/>
         <source>Continue playing</source>
         <translation>Oynamaya devam et</translation>
     </message>
@@ -1672,6 +1677,11 @@
         <location filename="../qml/ToastLayer.qml" line="+20"/>
         <source>%1: battery low (%2%)</source>
         <translation>%1: pil zayıf (%2%)</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Controller battery low (%1%)</source>
+        <translation>Kumanda pili zayıf (%1%)</translation>
     </message>
     <message>
         <location line="+9"/>

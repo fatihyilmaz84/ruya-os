@@ -415,7 +415,7 @@ FocusScope {
         }
     }
 
-    // Status cluster (profile, clock) top right, on glass; shown on Home and on pages.
+    // Status cluster (controller battery, profile, clock) top right, on glass; shown on Home and on pages.
     GlassPill {
         id: statusGlass
         objectName: "statusGlass"
@@ -434,6 +434,32 @@ FocusScope {
             anchors.centerIn: parent
             spacing: Theme.spaceM * root.u
 
+            // The lowest controller battery (Batteries, UPower behind it); nothing without one.
+            Row {
+                id: batteryStatus
+                objectName: "batteryStatus"
+                visible: Batteries.lowest >= 0
+                spacing: Theme.spaceXs * root.u
+                anchors.verticalCenter: parent.verticalCenter
+                readonly property bool low: Batteries.low
+                Accessible.role: Accessible.StaticText
+                Accessible.name: qsTr("Controller battery %1%").arg(Batteries.lowest)
+                Icon {
+                    objectName: "batteryIcon"
+                    anchors.verticalCenter: parent.verticalCenter
+                    u: root.u
+                    name: batteryStatus.low ? "battery_alert"
+                          : Batteries.lowestState === "charging" ? "battery_charging_full" : "battery_full"
+                    color: batteryStatus.low ? Theme.warningText : Theme.text
+                }
+                Text {
+                    objectName: "batteryLevel"
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: Batteries.lowest + "%"
+                    color: batteryStatus.low ? Theme.warningText : Theme.text
+                    font.pixelSize: Theme.typeBody * root.u
+                }
+            }
             Row {
                 spacing: Theme.spaceS * root.u
                 anchors.verticalCenter: parent.verticalCenter

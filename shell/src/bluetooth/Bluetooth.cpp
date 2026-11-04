@@ -61,7 +61,9 @@ Bluetooth *Bluetooth::create(QQmlEngine *, QJSEngine *)
 void Bluetooth::checkBatteries(const QList<BtDevice> &devices)
 {
     for (const BtDevice &d : devices) {
-        const bool low = d.connected && d.battery >= 0 && d.battery < LowBatteryPercent;
+        // Controllers are covered by Batteries (UPower), which reports the same battery.
+        const bool low = d.kind != QLatin1String("controller") && d.connected && d.battery >= 0
+                         && d.battery < LowBatteryPercent;
         if (!low) {
             m_lowReported.remove(d.id);
         } else if (!m_lowReported.contains(d.id)) {

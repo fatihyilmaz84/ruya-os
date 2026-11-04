@@ -25,7 +25,8 @@ class Bluetooth : public QObject
     Q_PROPERTY(bool mock READ isMock CONSTANT)
 
 public:
-    // A connected device under this battery level is reported once by batteryLow().
+    // A connected device (not a controller: Batteries reports those) under this battery level is
+    // reported once by batteryLow().
     static constexpr int LowBatteryPercent = 15;
 
     explicit Bluetooth(std::unique_ptr<BluetoothBackend> backend, QObject *parent = nullptr);
