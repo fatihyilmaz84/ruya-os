@@ -103,7 +103,10 @@ FocusScope {
         id: keySink
         focus: true
         Accessible.role: Accessible.Pane
-        Accessible.name: qsTr("Setup")
+        // Per step, so a screen reader says where the wizard is (steps 1 and 3 focus their own rows).
+        Accessible.name: setup.step === 4 ? qsTr("You're all set")
+                       : setup.step === 2 ? qsTr("Network")
+                       : qsTr("Welcome to RuyaOS")
     }
 
     Connections {

@@ -31,6 +31,16 @@ function Record([string]$Name, [bool]$Ok) {
     else { Write-Host "    FAILED: $Name" -ForegroundColor Red; $script:Failures += $Name }
 }
 
+# A locked Windows session (LogonUI running) renders nothing and stalls timers. RUYA_ASSUME_LOCKED=1
+# simulates it (only this script reads it) so the behaviour can be checked on an unlocked desktop.
+function Test-SessionLocked {
+    return ($env:RUYA_ASSUME_LOCKED -eq "1") -or [bool](Get-Process LogonUI -ErrorAction SilentlyContinue)
+}
+function Stop-SessionLocked {
+    Write-Host "    The Windows session is locked: real windows can't render. Unlock it and re-run shots." -ForegroundColor Red
+    Record "shots (session locked)" $false
+}
+
 function Invoke-Native([string]$Name, [scriptblock]$Block) {
     & $Block
     Record $Name ($LASTEXITCODE -eq 0)
@@ -125,11 +135,7 @@ function Run-QmlTests([string]$ShotsDir) {
         # Screenshots need a real GPU window (offscreen = software renderer, no MultiEffect).
         # Real windows depend on the desktop: keep it unlocked and don't click other windows.
         # A locked session (LogonUI running) renders nothing and stalls timers: stop at once.
-        if (Get-Process LogonUI -ErrorAction SilentlyContinue) {
-            Write-Host "    The Windows session is locked: real windows can't render. Unlock it and re-run shots." -ForegroundColor Red
-            Record "Qt Quick tests (session locked)" $false
-            return
-        }
+        if (Test-SessionLocked) { Stop-SessionLocked; return }
         # Behaviour is gated offscreen by `test`; here only the screenshot functions run.
         $only = Get-ScreenshotFunctions
         New-Item -ItemType Directory -Force $ShotsDir | Out-Null
@@ -144,6 +150,8 @@ function Run-QmlTests([string]$ShotsDir) {
     $code = $LASTEXITCODE
     Remove-Item Env:\RUYA_SHOTS_DIR -ErrorAction SilentlyContinue
     Remove-Item Env:\QT_QPA_PLATFORM -ErrorAction SilentlyContinue
+    # A run that failed because the desktop locked mid-run says so, instead of listing test failures.
+    if ($ShotsDir -and $code -ne 0 -and (Test-SessionLocked)) { Stop-SessionLocked; return }
     Get-Content $log | Where-Object { $_ -match '^(FAIL|XPASS|SKIP|Totals)|failure location|QWARN|QCRITICAL' } | ForEach-Object { Write-Host "    $_" }
     Record "Qt Quick tests" ($code -eq 0)
 }
@@ -194,8 +202,27 @@ function Test-Tokens {
     Set-Content -Path $bad -Value "Item {`n    Text {`n        font.pixelSize: Theme.typeTitle * u`n        font.weight: Theme.weightDemiBold`n    }`n}"
     & (Join-Path $PSScriptRoot "lint-tokens.ps1") -QmlDir $fixture 6>&1 | Out-Null
     $acceptedW = ($LASTEXITCODE -eq 0)
+    # The weight must belong to the Text itself: not a child item's, not a comment's; and a
+    # pixelSize whose Theme.type* is on the next line is still checked.
+    $cases = @{
+        "nested child"   = "Item {`n    Text {`n        font.pixelSize: Theme.typeTitle * u`n        Item { font.weight: Theme.weightDemiBold }`n    }`n}"
+        "line comment"   = "Item {`n    Text {`n        font.pixelSize: Theme.typeTitle * u`n        // font.weight: Theme.weightDemiBold`n    }`n}"
+        "block comment"  = "Item {`n    Text {`n        font.pixelSize: Theme.typeTitle * u`n        /* font.weight: Theme.weightDemiBold */`n    }`n}"
+        "two-line size"  = "Item {`n    Text {`n        font.pixelSize:`n            Theme.typeTitle * u`n    }`n}"
+    }
+    $allRejected = $true
+    foreach ($k in $cases.Keys) {
+        Set-Content -Path $bad -Value $cases[$k]
+        & (Join-Path $PSScriptRoot "lint-tokens.ps1") -QmlDir $fixture 6>&1 | Out-Null
+        if ($LASTEXITCODE -ne 1) { Write-Host "    lint accepted: $k" -ForegroundColor Yellow; $allRejected = $false }
+    }
+    # A two-line size with its own weight is fine.
+    Set-Content -Path $bad -Value "Item {`n    Text {`n        font.pixelSize:`n            Theme.typeTitle * u`n        font.weight: Theme.weightDemiBold`n    }`n}"
+    & (Join-Path $PSScriptRoot "lint-tokens.ps1") -QmlDir $fixture 6>&1 | Out-Null
+    $acceptedTwoLine = ($LASTEXITCODE -eq 0)
     Remove-Item -Recurse -Force $fixture
     Record "token lint self-check (rejects a type step without font.weight)" ($rejectedW -and $acceptedW)
+    Record "token lint self-check (weight in a child or comment, or a two-line size, is still rejected)" ($allRejected -and $acceptedTwoLine)
 }
 
 # The lupdate project (source list for lupdate) is written by the build's lupdate target, which
@@ -278,25 +305,32 @@ switch ($Command) {
     "shell" { Do-Shell }
     "test" { Test-Text; Test-Board; Do-Rust; Do-Shell }
     "shots" {
-        Do-Build
-        # One shots run per desktop: two builders' windows (parallel worktrees, LEAD.md 4b) would
-        # take each other's activation. A run killed while holding the lock counts as released.
-        $shotsLock = New-Object System.Threading.Mutex($false, "Local\RuyaOS-shots")
-        try {
-            if (-not $shotsLock.WaitOne(0)) {
-                Write-Host "    another shots run is using the desktop; waiting for it..."
-                [void]$shotsLock.WaitOne()
+        if (Test-SessionLocked) { Stop-SessionLocked } else {
+            Do-Build
+            # One shots run per desktop: two builders' windows (parallel worktrees, LEAD.md 4b) would
+            # take each other's activation. A run killed while holding the lock counts as released.
+            $shotsLock = New-Object System.Threading.Mutex($false, "Local\RuyaOS-shots")
+            $got = $false
+            try {
+                $got = $shotsLock.WaitOne(0)
+                if (-not $got) {
+                    Write-Host "    another shots run is using the desktop; waiting for it..."
+                    # Poll, so a session that locks while we wait ends the wait.
+                    while (-not $got -and -not (Test-SessionLocked)) { $got = $shotsLock.WaitOne(2000) }
+                }
+            } catch [System.Threading.AbandonedMutexException] { $got = $true }
+            if (-not $got) { Stop-SessionLocked } else {
+                try {
+                    # Start empty: a screenshot no test writes any more must not be reviewed as current.
+                    Remove-Item (Join-Path $Repo "output\shell-shots\*.png") -ErrorAction SilentlyContinue
+                    Step "Qt Quick tests with screenshots"
+                    Run-QmlTests (Join-Path $Repo "output\shell-shots")
+                    Save-ReviewCopies (Join-Path $Repo "output\shell-shots")
+                    Write-Host "    screenshots: $(Join-Path $Repo 'output\shell-shots') (half size for review: review\)"
+                } finally {
+                    $shotsLock.ReleaseMutex()
+                }
             }
-        } catch [System.Threading.AbandonedMutexException] { }
-        try {
-            # Start empty: a screenshot no test writes any more must not be reviewed as current.
-            Remove-Item (Join-Path $Repo "output\shell-shots\*.png") -ErrorAction SilentlyContinue
-            Step "Qt Quick tests with screenshots"
-            Run-QmlTests (Join-Path $Repo "output\shell-shots")
-            Save-ReviewCopies (Join-Path $Repo "output\shell-shots")
-            Write-Host "    screenshots: $(Join-Path $Repo 'output\shell-shots') (half size for review: review\)"
-        } finally {
-            $shotsLock.ReleaseMutex()
         }
     }
     "run" {

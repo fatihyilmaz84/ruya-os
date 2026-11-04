@@ -413,10 +413,13 @@ Item {
                     const pill = list.currentItem
                     const pillBottom = pill.mapToItem(tc.shell, 0, pill.height).y
                     verify(pillBottom <= barTop + 0.5, "About pill above the bar, " + what + ": " + pillBottom + " vs " + barTop)
+                    // Inside the page's content area, which ends above Page.qml's bottom margin.
+                    const areaBottom = list.parent.mapToItem(tc.shell, 0, list.parent.height).y
+                    verify(pillBottom <= areaBottom + 0.5, "About pill inside the content area, " + what + ": " + pillBottom + " vs " + areaBottom)
                     for (const b of ["A", "B"]) {
                         const glyph = findChild(bar, "hint_" + b)
-                        if (glyph)
-                            verify(pillBottom <= glyph.mapToItem(tc.shell, 0, 0).y + 0.5, "clear of glyph " + b + ", " + what)
+                        verify(glyph, "hint glyph " + b + " exists, " + what)
+                        verify(pillBottom <= glyph.mapToItem(tc.shell, 0, 0).y + 0.5, "clear of glyph " + b + ", " + what)
                     }
                     // The list shows whole rows only, and the first category is reachable again.
                     const stride = list.stride

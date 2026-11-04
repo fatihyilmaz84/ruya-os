@@ -28,8 +28,31 @@ foreach ($h in $hits) {
 # typeDisplay, typeTitle, typeHeadline or typeMicro needs a font.weight.
 $weightHits = @()
 foreach ($f in (Get-ChildItem $QmlDir -Recurse -Filter *.qml | Where-Object { $_.Name -ne "Theme.qml" })) {
-    $text = [IO.File]::ReadAllText($f.FullName)
-    foreach ($m in [regex]::Matches($text, 'font\.pixelSize\s*:[^\r\n;}]*Theme\.type(Hero|Display|Title|Headline|Micro)\b')) {
+    $raw = [IO.File]::ReadAllText($f.FullName)
+    # Comments become spaces (same offsets, newlines kept), so a commented-out font.weight can't count.
+    $sb = New-Object System.Text.StringBuilder
+    $i = 0; $n = $raw.Length
+    while ($i -lt $n) {
+        $c = $raw[$i]; $d = if ($i + 1 -lt $n) { $raw[$i + 1] } else { [char]0 }
+        if ($c -eq '/' -and $d -eq '/') {
+            while ($i -lt $n -and $raw[$i] -ne "`n" -and $raw[$i] -ne "`r") { [void]$sb.Append(' '); $i++ }
+        } elseif ($c -eq '/' -and $d -eq '*') {
+            while ($i -lt $n -and -not ($raw[$i] -eq '*' -and $i + 1 -lt $n -and $raw[$i + 1] -eq '/')) {
+                [void]$sb.Append($(if ($raw[$i] -eq "`n" -or $raw[$i] -eq "`r") { $raw[$i] } else { ' ' })); $i++
+            }
+            if ($i -lt $n) { [void]$sb.Append('  '); $i += 2 }
+        } elseif ($c -eq '"' -or $c -eq "'") {
+            [void]$sb.Append($c); $i++
+            while ($i -lt $n -and $raw[$i] -ne $c -and $raw[$i] -ne "`n") {
+                if ($raw[$i] -eq '\' -and $i + 1 -lt $n) { [void]$sb.Append($raw[$i]); $i++ }
+                [void]$sb.Append($raw[$i]); $i++
+            }
+            if ($i -lt $n) { [void]$sb.Append($raw[$i]); $i++ }
+        } else { [void]$sb.Append($c); $i++ }
+    }
+    $text = $sb.ToString()
+    # The value may continue on the next line (Theme.type* on line two is still checked).
+    foreach ($m in [regex]::Matches($text, 'font\.pixelSize\s*:[^\r\n;}]*(?:\r?\n[^\r\n;}]*)?Theme\.type(Hero|Display|Title|Headline|Micro)\b')) {
         $a = 0; $depth = 0
         for ($k = $m.Index - 1; $k -ge 0; $k--) {
             $c = $text[$k]
@@ -40,10 +63,13 @@ foreach ($f in (Get-ChildItem $QmlDir -Recurse -Filter *.qml | Where-Object { $_
             $c = $text[$k]
             if ($c -eq '{') { $depth++ } elseif ($c -eq '}') { if ($depth -eq 0) { $b = $k; break }; $depth-- }
         }
-        $block = $text.Substring($a, $b - $a)
-        $lineStart = $text.LastIndexOf("`n", $m.Index) + 1
-        $lineEnd = $text.IndexOf("`n", $m.Index); if ($lineEnd -lt 0) { $lineEnd = $text.Length }
-        if ($block -notmatch 'font\.weight\s*:' -and $text.Substring($lineStart, $lineEnd - $lineStart) -notmatch 'token-ok:') {
+        # Only this item's own properties count: drop nested { } child blocks, innermost first.
+        $block = $text.Substring($a, $b - $a).Substring(1)
+        do { $prev = $block; $block = [regex]::Replace($block, '\{[^{}]*\}', ' ') } while ($block -ne $prev)
+        # token-ok is a comment, so look for it in the raw line (same offsets as $text).
+        $lineStart = $raw.LastIndexOf("`n", $m.Index) + 1
+        $lineEnd = $raw.IndexOf("`n", $m.Index); if ($lineEnd -lt 0) { $lineEnd = $raw.Length }
+        if ($block -notmatch 'font\.weight\s*:' -and $raw.Substring($lineStart, $lineEnd - $lineStart) -notmatch 'token-ok:') {
             $ln = ($text.Substring(0, $m.Index) -split "`n").Count
             $rel = $f.FullName
             if ($rel.StartsWith($Repo)) { $rel = $rel.Substring($Repo.Length).TrimStart('\', '/') }

@@ -756,7 +756,12 @@
 <context>
     <name>ProfileCard</name>
     <message>
-        <location filename="../qml/ProfileCard.qml" line="+52"/>
+        <location filename="../qml/ProfileCard.qml" line="+13"/>
+        <source>%1, PIN protected</source>
+        <translation>%1, PIN korumalı</translation>
+    </message>
+    <message>
+        <location line="+39"/>
         <source>PIN</source>
         <translation>PIN</translation>
     </message>
@@ -1135,17 +1140,13 @@
         <translation>Bir PIN seçin</translation>
     </message>
     <message>
-        <location line="+18"/>
-        <source>Setup</source>
-        <translation>Kurulum</translation>
-    </message>
-    <message>
-        <location line="+65"/>
+        <location line="+86"/>
         <source>Step %1 of %2</source>
         <translation>Adım %1 / %2</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="-65"/>
+        <location line="+81"/>
         <source>Welcome to RuyaOS</source>
         <translation>RuyaOS&apos;a hoş geldiniz</translation>
     </message>
@@ -1178,7 +1179,8 @@
         <translation>Devam etmek için A&apos;ya basın</translation>
     </message>
     <message>
-        <location line="-92"/>
+        <location line="-240"/>
+        <location line="+148"/>
         <source>Network</source>
         <translation>Ağ</translation>
     </message>
@@ -1223,7 +1225,8 @@
         <translation>Oluşturuluyor…</translation>
     </message>
     <message>
-        <location line="+26"/>
+        <location line="-202"/>
+        <location line="+228"/>
         <source>You&apos;re all set</source>
         <translation>Her şey hazır</translation>
     </message>
