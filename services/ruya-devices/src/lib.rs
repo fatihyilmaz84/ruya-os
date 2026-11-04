@@ -10,6 +10,7 @@ pub mod bluetooth;
 #[cfg(target_os = "linux")]
 pub mod bluez;
 pub mod dbus;
+pub mod debounce;
 pub mod events;
 pub mod network;
 pub mod networkmanager;

@@ -27,4 +27,20 @@ public:
 
 signals:
     void listed(const QList<ControllerBattery> &controllers);
+
+protected:
+    // Replies can arrive out of order: number each request when it is sent and report a reply only
+    // if no newer one has been reported already.
+    quint64 beginRequest() { return ++m_issued; }
+    void deliver(quint64 request, const QList<ControllerBattery> &controllers)
+    {
+        if (request <= m_applied)
+            return;
+        m_applied = request;
+        emit listed(controllers);
+    }
+
+private:
+    quint64 m_issued = 0;
+    quint64 m_applied = 0;
 };

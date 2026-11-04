@@ -1,5 +1,7 @@
 #include "MockBatteryBackend.h"
 
+#include <QTimer>
+
 MockBatteryBackend::MockBatteryBackend(QObject *parent)
     : BatteryBackend(parent)
 {
@@ -8,7 +10,21 @@ MockBatteryBackend::MockBatteryBackend(QObject *parent)
 
 void MockBatteryBackend::refresh()
 {
-    emit listed(m_list);
+    const quint64 request = beginRequest();
+    if (m_delay <= 0) {
+        deliver(request, m_list);
+        return;
+    }
+    ++m_pending;
+    QTimer::singleShot(m_delay, this, [this, request, snapshot = m_list] {
+        --m_pending;
+        deliver(request, snapshot);
+    });
+}
+
+void MockBatteryBackend::publish()
+{
+    deliver(beginRequest(), m_list);
 }
 
 void MockBatteryBackend::setController(const QString &id, int percent, const QString &state)
@@ -22,12 +38,12 @@ void MockBatteryBackend::setController(const QString &id, int percent, const QSt
         if (existing.id == id) {
             c.name = existing.name;
             existing = c;
-            emit listed(m_list);
+            publish();
             return;
         }
     }
     m_list.append(c);
-    emit listed(m_list);
+    publish();
 }
 
 void MockBatteryBackend::removeController(const QString &id)
@@ -38,13 +54,13 @@ void MockBatteryBackend::removeController(const QString &id)
             break;
         }
     }
-    emit listed(m_list);
+    publish();
 }
 
 void MockBatteryBackend::clear()
 {
     m_list.clear();
-    emit listed(m_list);
+    publish();
 }
 
 void MockBatteryBackend::reset()
@@ -56,5 +72,5 @@ void MockBatteryBackend::reset()
     c.percent = 60;
     c.state = QStringLiteral("discharging");
     m_list.append(c);
-    emit listed(m_list);
+    publish();
 }

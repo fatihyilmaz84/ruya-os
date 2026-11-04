@@ -24,9 +24,10 @@ class Batteries : public QObject
 
     // [{ id, name, percent, state }], state "charging" | "discharging" | "full" | "unknown"
     Q_PROPERTY(QVariantList controllers READ controllers NOTIFY controllersChanged)
-    // The lowest percent among the controllers, -1 when there is none.
+    // The level the cluster shows, -1 when there is no controller: the lowest percent, but when the
+    // lowest is charging (or tied with a discharging one) the lowest discharging controller.
     Q_PROPERTY(int lowest READ lowest NOTIFY controllersChanged)
-    // The state of the controller that has the lowest percent ("" when there is none).
+    // The state of the controller `lowest` belongs to ("" when there is none).
     Q_PROPERTY(QString lowestState READ lowestState NOTIFY controllersChanged)
     // The lowest controller is discharging at or under LowBatteryPercent.
     Q_PROPERTY(bool low READ isLow NOTIFY controllersChanged)
@@ -53,6 +54,9 @@ public:
     Q_INVOKABLE void mockRemove(const QString &id);
     Q_INVOKABLE void mockClear();
     Q_INVOKABLE void mockReset();
+    // Asks the backend for the list; its reply arrives after `ms` and shows the list as it is now.
+    Q_INVOKABLE void mockRefreshDelayed(int ms);
+    Q_INVOKABLE int mockPendingReplies() const;
 
 signals:
     void controllersChanged();

@@ -64,14 +64,15 @@ DBusBatteryBackend::DBusBatteryBackend(QObject *parent)
 void DBusBatteryBackend::refresh()
 {
     auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("ListBatteries"));
+    const quint64 request = beginRequest();
     auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
-    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this](QDBusPendingCallWatcher *w) {
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, request](QDBusPendingCallWatcher *w) {
         w->deleteLater();
         const QDBusMessage reply = w->reply();
         if (reply.type() != QDBusMessage::ReplyMessage || reply.arguments().isEmpty()) {
             qWarning("ruya-shell: Devices1.Batteries ListBatteries failed: %s", qPrintable(reply.errorMessage()));
             return;
         }
-        emit listed(parseBatteries(reply.arguments().constFirst().value<QDBusArgument>()));
+        deliver(request, parseBatteries(reply.arguments().constFirst().value<QDBusArgument>()));
     });
 }

@@ -99,6 +99,41 @@ Item {
             tryCompare(find("batteryLevel"), "text", "60%")
         }
 
+        function test_a_charging_lowest_pad_shows_the_discharging_one() {
+            Batteries.mockSet("pad-1", 10, "charging")
+            Batteries.mockSet("pad-2", 12, "discharging")
+            tryCompare(Batteries, "lowest", 12)
+            compare(Batteries.lowestState, "discharging")
+            tryCompare(find("batteryLevel"), "text", "12%")
+            compare(find("batteryIcon").name, "battery_alert", "warning state, like the toast")
+            tryVerify(() => lowToasts().length === 1, 2000)
+            compare(lowToasts()[0], "Controller battery low (12%)")
+        }
+
+        function test_equal_levels_prefer_the_discharging_pad() {
+            Batteries.mockSet("pad-1", 20, "charging")
+            Batteries.mockSet("pad-2", 20, "discharging")
+            tryCompare(Batteries, "lowestState", "discharging")
+            compare(Batteries.lowest, 20)
+            // Same result whichever pad comes first in the list.
+            Batteries.mockReset()
+            Batteries.mockSet("pad-1", 20, "discharging")
+            Batteries.mockSet("pad-2", 20, "charging")
+            tryCompare(Batteries, "lowestState", "discharging")
+        }
+
+        function test_an_older_reply_arriving_late_is_dropped() {
+            // pad-1 is at 60 %. Ask again (the reply, a snapshot at 60 %, is held back), then the
+            // level falls to 40 %: the late reply must not put 60 % back.
+            Batteries.mockRefreshDelayed(150)
+            compare(Batteries.mockPendingReplies(), 1)
+            Batteries.mockSet("pad-1", 40)
+            tryCompare(Batteries, "lowest", 40)
+            tryVerify(() => Batteries.mockPendingReplies() === 0)
+            compare(Batteries.lowest, 40, "the late 60 % reply was dropped")
+            compare(find("batteryLevel").text, "40%")
+        }
+
         function test_low_battery_toast_once_and_not_while_charging() {
             Batteries.mockSet("pad-1", 16)
             tryCompare(Batteries, "lowest", 16)
