@@ -27,7 +27,6 @@ Open work only (todo, in-progress, blocked), in the recommended order; when NEXT
 | [T-164](tasks/T-164-per-profile-wayland-sockets.md) | **[lead]** Per-profile Wayland sockets: a profile's app appears in the shell | todo | T-162 |
 | [T-165](tasks/T-165-profile-switch-freezes-apps.md) | Profile switch and sign-out freeze the profile's apps | todo | T-164 |
 | [T-147](tasks/T-147-fullscreen-app-flow.md) | Full-screen apps: launch splash, quick menu, return, close | todo | T-164 |
-| [T-174](tasks/T-174-devices-storage-service.md) | `ruya-devices`: `Devices1.Storage` over udisks2 | in-progress | T-137 |
 | [T-166](tasks/T-166-suspend-under-eglfs.md) | **[lead]** Suspend and resume with the shell on KMS (eglfs) | todo | — |
 
 **VM queue** (done on the host, VM check pending; the lead runs them with one image build): empty (T-173, T-177 verified 2026-11-04 on 0.0.37).
@@ -58,6 +57,7 @@ Follow-ups and debt for the next planner, one line each: `- (source) what, and w
 - (T-174 review) Audit `50-ruyaos-network.rules`: it returns `NOT_HANDLED` too, so NetworkManager's default `allow_active` actions beyond the four listed stay open to `ruya-shell`; deny the rest as T-174 round 2 does for udisks2.
 - (T-174) A stick with several partitions gives one `VolumeAdded` per partition, so the shell toasts once per partition: group them. Also cover a two-partition stick and an unsupported filesystem in `vm-storage-check` (unit tests only today).
 - (T-174) Media access for profile users and Flatpak apps on `/run/media/ruya-shell/...` belongs to the Media task (mounts belong to `ruya-shell`, not the active profile).
+- (T-174 review) `scripts/vm-*` ssh with `-o UserKnownHostsFile=NUL` still prints "Offending key in NUL:1" on Windows OpenSSH: a stray `NUL` known_hosts entry exists somewhere; use a scratch known_hosts file in `output\` instead (pairs with the vm-goto host-key Inbox line).
 
 ## Blocked (need something this host doesn't have)
 
