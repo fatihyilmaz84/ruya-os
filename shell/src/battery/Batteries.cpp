@@ -35,8 +35,6 @@ Batteries *Batteries::create(QQmlEngine *, QJSEngine *)
 void Batteries::apply(const QList<ControllerBattery> &list)
 {
     QVariantList out;
-    int lowest = -1;
-    QString lowestState;
     for (const ControllerBattery &c : list) {
         out.append(QVariantMap{
             {QStringLiteral("id"), c.id},
@@ -44,11 +42,23 @@ void Batteries::apply(const QList<ControllerBattery> &list)
             {QStringLiteral("percent"), c.percent},
             {QStringLiteral("state"), c.state},
         });
-        if (lowest < 0 || c.percent < lowest) {
-            lowest = c.percent;
-            lowestState = c.state;
+    }
+    // The cluster shows the lowest pad; on a tie, or when that pad is charging, the discharging one
+    // (lowest of those), so the warning colour agrees with the low-battery toast.
+    const auto discharging = [](const ControllerBattery &c) { return c.state == QLatin1String("discharging"); };
+    const ControllerBattery *shown = nullptr;
+    for (const ControllerBattery &c : list) {
+        if (!shown || c.percent < shown->percent)
+            shown = &c;
+    }
+    if (shown && !discharging(*shown)) {
+        for (const ControllerBattery &c : list) {
+            if (discharging(c) && (!discharging(*shown) || c.percent < shown->percent))
+                shown = &c;
         }
     }
+    const int lowest = shown ? shown->percent : -1;
+    const QString lowestState = shown ? shown->state : QString();
     // The low-battery rule first, so a listener of controllersChanged sees the toast's reason.
     for (const ControllerBattery &c : list) {
         const bool low = c.state == QLatin1String("discharging") && c.percent <= LowBatteryPercent;
@@ -95,4 +105,19 @@ void Batteries::mockReset()
 {
     if (auto *mock = qobject_cast<MockBatteryBackend *>(m_backend.get()))
         mock->reset();
+}
+
+void Batteries::mockRefreshDelayed(int ms)
+{
+    if (auto *mock = qobject_cast<MockBatteryBackend *>(m_backend.get())) {
+        mock->setReplyDelay(ms);
+        mock->refresh();
+        mock->setReplyDelay(0);
+    }
+}
+
+int Batteries::mockPendingReplies() const
+{
+    auto *mock = qobject_cast<MockBatteryBackend *>(m_backend.get());
+    return mock ? mock->pendingReplies() : 0;
 }

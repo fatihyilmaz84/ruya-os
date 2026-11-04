@@ -6,7 +6,9 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
 use blocking::unblock;
-use futures_lite::{future, StreamExt};
+#[cfg(target_os = "linux")]
+use futures_lite::future;
+use futures_lite::StreamExt;
 use zbus::object_server::SignalEmitter;
 use zbus::zvariant::{OwnedValue, Value};
 use zbus::{interface, Connection, MatchRule, MessageStream};
@@ -16,6 +18,7 @@ use crate::audio::Audio;
 use crate::audio::Changes;
 use crate::battery::{Batteries, UPower};
 use crate::bluetooth::{self, Bluetooth, Bluez, BtError};
+use crate::debounce;
 use crate::network::{self, Network, NetworkManager};
 
 /// Chosen at runtime: `wpctl` on Linux, a fake in `--session` development.
@@ -218,14 +221,6 @@ impl NetworkManager for DynNm {
 
 pub type SharedNet = Arc<Network<DynNm>>;
 
-/// Quiet time after the last NetworkManager signal before the state is read again: a scan or a
-/// join is a burst of dozens of them.
-const DEBOUNCE: Duration = Duration::from_millis(300);
-
-/// A burst of BlueZ signals is read once after this much quiet, or after this long at most.
-#[cfg(target_os = "linux")]
-const DEBOUNCE_MAX: Duration = Duration::from_secs(1);
-
 const NM_BUS_NAME: &str = "org.freedesktop.NetworkManager";
 
 pub struct NetworkIface {
@@ -353,12 +348,7 @@ pub async fn watch_network(connection: Connection, net: SharedNet) {
         Err(err) => return eprintln!("ruya-devices: cannot follow NetworkManager: {err}"),
     };
     while stream.next().await.is_some() {
-        while future::or(async { stream.next().await.is_some() }, async {
-            async_io::Timer::after(DEBOUNCE).await;
-            false
-        })
-        .await
-        {}
+        debounce::settle(&mut stream, debounce::QUIET, debounce::MAX_WAIT, None).await;
         let net = net.clone();
         match unblock(move || net.refresh()).await {
             Ok(changes) if changes.any() => {
@@ -459,12 +449,7 @@ pub async fn watch_batteries(connection: Connection, batteries: SharedBatteries)
     };
     let mut stream = futures_lite::stream::or(signals, owner);
     while stream.next().await.is_some() {
-        while future::or(async { stream.next().await.is_some() }, async {
-            async_io::Timer::after(DEBOUNCE).await;
-            false
-        })
-        .await
-        {}
+        debounce::settle(&mut stream, debounce::QUIET, debounce::MAX_WAIT, None).await;
         let batteries = batteries.clone();
         match unblock(move || batteries.refresh()).await {
             Ok(true) => {
@@ -730,21 +715,15 @@ pub async fn watch_bluetooth(connection: Connection, bt: SharedBluetooth) {
         .await;
         match event {
             Wake::Signal => {
-                // Wait for a quiet moment, but never longer than DEBOUNCE_MAX (a scan sends a
+                // Wait for a quiet moment, but never longer than MAX_WAIT (a scan sends a
                 // signal per device every second or so) and never past the scan's deadline.
-                let cap = Instant::now() + DEBOUNCE_MAX;
-                let cap = bt.scan_deadline().map_or(cap, |d| d.min(cap));
-                while future::or(async { stream.next().await.is_some() }, async {
-                    let quiet = Instant::now() + DEBOUNCE;
-                    async_io::Timer::at(quiet.min(cap)).await;
-                    false
-                })
-                .await
-                {
-                    if Instant::now() >= cap {
-                        break;
-                    }
-                }
+                debounce::settle(
+                    &mut stream,
+                    debounce::QUIET,
+                    debounce::MAX_WAIT,
+                    bt.scan_deadline(),
+                )
+                .await;
             }
             Wake::ScanOver => {}
             Wake::Closed => return,
