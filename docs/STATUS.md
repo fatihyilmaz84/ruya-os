@@ -28,7 +28,6 @@ Open work only (todo, in-progress, blocked), in the recommended order; when NEXT
 | [T-165](tasks/T-165-profile-switch-freezes-apps.md) | Profile switch and sign-out freeze the profile's apps | todo | T-164 |
 | [T-147](tasks/T-147-fullscreen-app-flow.md) | Full-screen apps: launch splash, quick menu, return, close | todo | T-164 |
 | [T-161](tasks/T-161-controller-battery.md) | Controller battery: `Devices1` over UPower, status cluster, low-battery toast | in-progress | T-157 |
-| [T-176](tasks/T-176-test-gate-hardening.md) | Test-gate hardening: locked session, weight lint, weak assertions, accessibility walks | in-progress | — |
 | [T-173](tasks/T-173-devices-bluetooth-service.md) | `ruya-devices`: `Devices1.Bluetooth` over BlueZ | todo | — |
 | [T-174](tasks/T-174-devices-storage-service.md) | `ruya-devices`: `Devices1.Storage` over udisks2 | todo | T-137 |
 | [T-145](tasks/T-145-bundle-inter.md) | Bundle the Inter typeface | todo | T-142 |
@@ -47,6 +46,8 @@ Follow-ups and debt for the next planner, one line each: `- (source) what, and w
 - (T-163) Flatpak titles lack appstream names until the remote's appstream is fetched (the VM shows "TestGame").
 - (T-171 review) Store: resume or re-query jobs after `ruya-store` comes back (needs a `ListJobs` in `Store1.xml`).
 - (T-170 review) Settings panes give no cue that more rows exist below the viewport, now that no cut row hints at it: decide on a scroll affordance (fade, chevron or peek) in 04 §5 (design, lead).
+- (T-176 review) lint-tokens weight rule: also handle grouped `font { pixelSize: ... }` and values spread over three or more lines (none in the tree).
+- (T-176) PowerConfirm's buttons are named "Cancel"/"Confirm": name them after the action ("Restart now") for screen readers; the wizard's create-name-and-PIN step and the profile add/manage flows are not walked by `tst_accessibility` yet.
 
 ## Blocked (need something this host doesn't have)
 

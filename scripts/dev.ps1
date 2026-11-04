@@ -150,9 +150,10 @@ function Run-QmlTests([string]$ShotsDir) {
     $code = $LASTEXITCODE
     Remove-Item Env:\RUYA_SHOTS_DIR -ErrorAction SilentlyContinue
     Remove-Item Env:\QT_QPA_PLATFORM -ErrorAction SilentlyContinue
-    # A run that failed because the desktop locked mid-run says so, instead of listing test failures.
-    if ($ShotsDir -and $code -ne 0 -and (Test-SessionLocked)) { Stop-SessionLocked; return }
     Get-Content $log | Where-Object { $_ -match '^(FAIL|XPASS|SKIP|Totals)|failure location|QWARN|QCRITICAL' } | ForEach-Object { Write-Host "    $_" }
+    # A run that failed while the desktop is locked says so too; the failures above stay visible,
+    # since LogonUI can also belong to another session or a lock that came after a real failure.
+    if ($ShotsDir -and $code -ne 0 -and (Test-SessionLocked)) { Stop-SessionLocked; return }
     Record "Qt Quick tests" ($code -eq 0)
 }
 

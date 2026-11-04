@@ -1,6 +1,6 @@
 # T-176 — Test-gate hardening: a locked session, the weight lint, weak assertions, more accessibility walks
 
-Status: in-progress · Phase: 2 · Depends: — · Area: scripts, shell · Size: M · Owner: builder
+Status: done · Phase: 2 · Depends: — · Area: scripts, shell · Size: M · Owner: builder
 
 ## Goal
 The gates fail for the right reason and only then. `shots` says "session locked" instead of hanging or failing misleadingly. The weight lint can't be satisfied by a child item or a comment. Tests named in recent reviews fail by a clear margin when their feature breaks. The accessibility walk covers the screens it skips today.
