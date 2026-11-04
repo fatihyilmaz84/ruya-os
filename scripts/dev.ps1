@@ -36,15 +36,33 @@ function Invoke-Native([string]$Name, [scriptblock]$Block) {
     Record $Name ($LASTEXITCODE -eq 0)
 }
 
+# The real CMake. devkitPro (MSYS2) puts its own cmake first on PATH, and that one can't drive the
+# Visual Studio generator, so never trust PATH: %ProgramFiles%\CMake, then the copy Visual Studio
+# ships, then whatever PATH has.
+function Find-CMake {
+    $candidates = @(Join-Path $env:ProgramFiles "CMake\bin\cmake.exe")
+    foreach ($root in @($env:ProgramFiles, ${env:ProgramFiles(x86)})) {
+        if (-not $root) { continue }
+        $candidates += @(Get-ChildItem (Join-Path $root "Microsoft Visual Studio\*\*\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe") -ErrorAction SilentlyContinue |
+            ForEach-Object { $_.FullName })
+    }
+    foreach ($c in $candidates) { if (Test-Path $c) { return $c } }
+    $onPath = Get-Command cmake -ErrorAction SilentlyContinue
+    if ($onPath) { return $onPath.Source }
+    Write-Host "cmake not found (install CMake or Visual Studio's C++ workload). See docs/dev-setup.md." -ForegroundColor Red
+    exit 2
+}
+
 function Use-Qt {
     if (-not (Test-Path (Join-Path $QtDir "bin\Qt6Core.dll"))) {
         Write-Host "Qt not found at $QtDir (set RUYA_QT_DIR). See docs/dev-setup.md." -ForegroundColor Red
         exit 2
     }
     if (-not ($env:PATH -like "*$QtDir\bin*")) { $env:PATH = "$QtDir\bin;$env:PATH" }
-    # Other toolchains (devkitPro's MSYS2) ship a cmake that can't drive Visual Studio: prefer the real one.
-    $cmakeBin = Join-Path $env:ProgramFiles "CMake\bin"
-    if ((Test-Path (Join-Path $cmakeBin "cmake.exe")) -and -not ($env:PATH -like "$cmakeBin;*")) { $env:PATH = "$cmakeBin;$env:PATH" }
+    # MSBuild and CMake's own sub-calls look cmake up on PATH too: put the real one first.
+    $script:CMake = Find-CMake
+    $cmakeBin = Split-Path -Parent $script:CMake
+    if (-not ($env:PATH -like "$cmakeBin;*")) { $env:PATH = "$cmakeBin;$env:PATH" }
 }
 
 function Do-Check {
@@ -52,6 +70,7 @@ function Do-Check {
     $ok = $true
     foreach ($tool in "git", "cmake", "cargo", "rustup") {
         $found = Get-Command $tool -ErrorAction SilentlyContinue
+        if ($tool -eq "cmake") { Write-Host "    cmake : $(Find-CMake) (used by dev.ps1)"; continue }
         if ($found) { Write-Host "    $tool : $($found.Source)" } else { Write-Host "    $tool : MISSING" -ForegroundColor Red; $ok = $false }
     }
     if (Test-Path (Join-Path $QtDir "bin\Qt6Core.dll")) { Write-Host "    Qt   : $QtDir" } else { Write-Host "    Qt   : MISSING at $QtDir" -ForegroundColor Red; $ok = $false }
@@ -65,9 +84,9 @@ function Do-Build {
     Use-Qt
     Step "Build shell (Release)"
     if (-not (Test-Path (Join-Path $ShellBuild "CMakeCache.txt"))) {
-        Invoke-Native "cmake configure" { cmake -S (Join-Path $Repo "shell") -B $ShellBuild -G "Visual Studio 18 2026" -A x64 "-DCMAKE_PREFIX_PATH=$($QtDir -replace '\\','/')" }
+        Invoke-Native "cmake configure" { & $script:CMake -S (Join-Path $Repo "shell") -B $ShellBuild -G "Visual Studio 18 2026" -A x64 "-DCMAKE_PREFIX_PATH=$($QtDir -replace '\\','/')" }
     }
-    Invoke-Native "cmake build" { cmake --build $ShellBuild --config Release -- -m '-v:minimal' -nologo }   # quoted: PS 5.1 splits -v:x
+    Invoke-Native "cmake build" { & $script:CMake --build $ShellBuild --config Release -- -m '-v:minimal' -nologo }   # quoted: PS 5.1 splits -v:x
 }
 
 function Do-Rust {
@@ -158,16 +177,43 @@ function Test-Tokens {
     $fixture = Join-Path ([IO.Path]::GetTempPath()) ("ruya-lint-" + [guid]::NewGuid().ToString("N"))
     New-Item -ItemType Directory -Path $fixture | Out-Null
     Set-Content -Path (Join-Path $fixture "Bad.qml") -Value 'Text { font.pixelSize: 30 * u }'
-    & (Join-Path $PSScriptRoot "lint-tokens.ps1") -QmlDir $fixture | Out-Null
+    $selfOut = & (Join-Path $PSScriptRoot "lint-tokens.ps1") -QmlDir $fixture 6>&1
     $rejected = ($LASTEXITCODE -eq 1)
     Remove-Item -Recurse -Force $fixture
+    # The sample is deliberately bad: show the lint's output only when it was NOT rejected.
+    if (-not $rejected) { $selfOut | ForEach-Object { Write-Host "    $_" } }
     Record "token lint self-check (rejects a literal font size)" $rejected
+}
+
+# The lupdate project (source list for lupdate) is written by the build's lupdate target, which
+# also rewrites the tracked .ts files, so `dev.ps1` makes the project itself: from the configure-time
+# <name>.Release.cmake, the same script that target runs. It is regenerated when missing (fresh
+# worktree) or older than shell\CMakeLists.txt (a merge added a source file). The configure that
+# refreshes the Release.cmake happens first, explicitly, in the same case.
+function Update-LUpdateProject {
+    $dir = Join-Path $ShellBuild ".lupdate"
+    $json = Join-Path $dir "ruya-shell_lupdate_project.json"
+    $in = Join-Path $dir "ruya-shell_lupdate_project.Release.cmake"
+    $cml = Join-Path $Repo "shell\CMakeLists.txt"
+    $stale = (-not (Test-Path $json)) -or (-not (Test-Path $in)) -or ((Get-Item $cml).LastWriteTime -gt (Get-Item $json).LastWriteTime)
+    if (-not $stale) { return $json }
+    if ((Test-Path (Join-Path $ShellBuild "CMakeCache.txt")) -and ((-not (Test-Path $in)) -or (Get-Item $cml).LastWriteTime -gt (Get-Item $in).LastWriteTime)) {
+        & $script:CMake -S (Join-Path $Repo "shell") -B $ShellBuild | Out-Null
+        if ($LASTEXITCODE -ne 0) { Write-Host "    CMake reconfigure failed (exit $LASTEXITCODE)" -ForegroundColor Red; return $json }
+    }
+    $gen = Join-Path $QtDir "lib\cmake\Qt6LinguistTools\GenerateLUpdateProject.cmake"
+    & $script:CMake "-DIN_FILE=$($in -replace '\\','/')" "-DOUT_FILE=$($json -replace '\\','/')" -P $gen | Out-Null
+    # Touch only on success: a stale json with a fresh time would never be regenerated.
+    if ($LASTEXITCODE -ne 0) { Write-Host "    lupdate project generation failed (exit $LASTEXITCODE)" -ForegroundColor Red }
+    elseif (Test-Path $json) { (Get-Item $json).LastWriteTime = Get-Date }
+    return $json
 }
 
 # The rules live in scripts\lint-translations.ps1 (shared with CI).
 function Test-Translations {
     Step "translation lint (shell\i18n is current with the sources and complete)"
-    & (Join-Path $PSScriptRoot "lint-translations.ps1") -LUpdateProject (Join-Path $ShellBuild ".lupdate\ruya-shell_lupdate_project.json")
+    $project = Update-LUpdateProject
+    & (Join-Path $PSScriptRoot "lint-translations.ps1") -LUpdateProject $project
     Record "translation lint" ($LASTEXITCODE -eq 0)
 }
 

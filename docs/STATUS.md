@@ -15,7 +15,7 @@ Verification legend: **host** = built and tested on Windows · **host (vm pendin
 
 ## Board
 
-**NEXT → T-169** (T-160 + T-163 are in flight as one image build)
+**NEXT → T-170** (T-160 + T-163 are in flight as one image build)
 
 **How work runs (owner, 2026-11-04):** the lead dispatches `ruya-builder` agents, at most two at a time in their own worktrees and in different areas, has each branch reviewed by `ruya-reviewer`, and merges it (`docs/LEAD.md`, build loop). Dispatched builders never edit this file. At most one task with a "VM (this task)" criterion runs at a time. A builder session the owner starts directly takes NEXT in the main checkout, alone, and does the bookkeeping itself (`CLAUDE.md`).
 
@@ -25,7 +25,6 @@ Open work only (todo, in-progress, blocked), in the recommended order; when NEXT
 |---|---|---|---|
 | [T-160](tasks/T-160-greenboot-wanted-check.md) | Greenboot: no failing wanted check on a healthy boot | in-progress | — |
 | [T-163](tasks/T-163-ruya-library-in-the-image.md) | `ruya-library` in the image: installed Flatpaks over the real bus | in-progress | — |
-| [T-169](tasks/T-169-dev-ps1-fresh-worktree.md) | `dev.ps1 test` green first time in a fresh worktree and after a merge | in-progress | — |
 | [T-162](tasks/T-162-ruya-session-in-the-image.md) | **[lead]** `ruya-session` in the image: real spawner, unit, bus policy | todo | — |
 | [T-164](tasks/T-164-per-profile-wayland-sockets.md) | **[lead]** Per-profile Wayland sockets: a profile's app appears in the shell | todo | T-162 |
 | [T-165](tasks/T-165-profile-switch-freezes-apps.md) | Profile switch and sign-out freeze the profile's apps | todo | T-164 |
