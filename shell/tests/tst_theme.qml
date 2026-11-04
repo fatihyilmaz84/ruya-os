@@ -27,6 +27,15 @@ Item {
             compare(Theme.overlayMs, 0)
         }
 
+        Text { id: probe; text: "ç ğ ı İ ö ş ü" }
+
+        function test_font_loaded() {
+            verify(Qt.fontFamilies().indexOf("Inter") >= 0)
+            compare(Theme.fontFamily, "Inter")
+            compare(probe.font.family, "Inter")
+            verify(probe.contentWidth > 0)
+        }
+
         function test_space_shape() {
             compare(Theme.spaceXxs, 4)
             compare(Theme.spaceXs, 8)

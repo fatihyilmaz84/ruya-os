@@ -54,6 +54,8 @@ cd /mnt/d/dev/RuyaOS && scripts/subset-icons.sh
 
 The script downloads the variable font from a pinned upstream commit into a temporary directory (SHA-256 checked), checks every `icons.txt` pair against upstream, and rewrites the two static cuts (outlined, filled) in `shell/fonts/`. Commit the TTFs with the list. `scripts/lint-icons.ps1` (part of `dev.ps1 shell`) fails when the list and the table differ.
 
+The typeface (Inter 4.1, OFL-1.1) is cut the same way: `scripts/fetch-inter.sh` in WSL (`python3-fonttools`, `unzip`) downloads the pinned release zip into a temporary directory, checks its SHA-256, extracts a fixed list of members and writes the three subset TTFs and `OFL-Inter.txt` to `shell/fonts/`.
+
 ## Update / rollback drill (Phase 0 items 6–7; passed 2026-10-22)
 
 1. Boot the working disk: `.\scripts\smoke-test.ps1 -Work -Keep` (delete `output\qcow2\work.qcow2` first for a fresh one). `vm-reboot-check.ps1` needs `-Disk output\qcow2\work.qcow2` then.

@@ -15,7 +15,7 @@ Verification legend: **host** = built and tested on Windows · **host (vm pendin
 
 ## Board
 
-**NEXT → planning** (T-174 and T-145 in flight; the remaining todo tasks are [lead] or wait on T-164)
+**NEXT → T-162** ([lead]: builders have no ready task left besides T-174 and T-145 in flight; plan more from the Inbox)
 
 **How work runs (owner, 2026-11-04):** the lead dispatches `ruya-builder` agents, at most two at a time in their own worktrees and in different areas, has each branch reviewed by `ruya-reviewer`, and merges it (`docs/LEAD.md`, build loop). Dispatched builders never edit this file. At most one task with a "VM (this task)" criterion runs at a time. A builder session the owner starts directly takes NEXT in the main checkout, alone, and does the bookkeeping itself (`CLAUDE.md`).
 
@@ -29,7 +29,6 @@ Open work only (todo, in-progress, blocked), in the recommended order; when NEXT
 | [T-147](tasks/T-147-fullscreen-app-flow.md) | Full-screen apps: launch splash, quick menu, return, close | todo | T-164 |
 | [T-173](tasks/T-173-devices-bluetooth-service.md) | `ruya-devices`: `Devices1.Bluetooth` over BlueZ | in-progress | — |
 | [T-174](tasks/T-174-devices-storage-service.md) | `ruya-devices`: `Devices1.Storage` over udisks2 | in-progress | T-137 |
-| [T-145](tasks/T-145-bundle-inter.md) | Bundle the Inter typeface | in-progress | T-142 |
 | [T-166](tasks/T-166-suspend-under-eglfs.md) | **[lead]** Suspend and resume with the shell on KMS (eglfs) | todo | — |
 
 **VM queue** (done on the host, VM check pending; the lead runs them with one image build): T-173 (`vm-devices-check.sh check` on an image after the org.bluez bus rule was dropped: `Powered`, `ListDevices`, `StartScan` must still answer; if not, the rule goes back). T-173 stays `in-progress` until then (VM-this-task criterion); T-177 (`vm-devices-check.sh check`).
@@ -53,6 +52,10 @@ Follow-ups and debt for the next planner, one line each: `- (source) what, and w
 - (T-173) Hardware check of the Bluetooth service: adapter, "just works" controller pairing, Battery1 values, rfkill-blocked `Powered`, hot-plugged USB adapter (B-002).
 - (T-177 review) Network, Bluetooth, Storage and Audio D-Bus clients have the same unguarded async refresh as batteries had: a late reply can overwrite newer data. Move `beginRequest`/`deliver` (from `BatteryBackend`) into each backend base or a shared helper.
 - (T-177) The PipeWire watcher (`events.rs`) has its own 100 ms debounce; check whether it needs the same 1 s cap as `debounce.rs`.
+- (T-145) Run `scripts/check-font-coverage.py` in `.github/workflows/ci.yml` next to `lint-icons.ps1` (it's pure standard-library Python).
+- (T-145 review) `google-noto-sans-fonts` (`image/build/20-base.sh`) is now only a fallback for the shell: keep it for Flatpak apps and future scripts, or drop it (lead, design).
+- (T-145) The next image build carries the round-2 fonts (Bold, ‹ ›): check a VM home screenshot with a library entry, so the hero title is seen in real Bold on the image.
+- (lead) `vm-goto.ps1` and the other `scripts/vm-*.ps1` SSH helpers fail on a fresh disk's new host key: give them `-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null` for the local dev VM (127.0.0.1:2222 only).
 
 ## Blocked (need something this host doesn't have)
 
