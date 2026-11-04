@@ -3,7 +3,10 @@
 <!--
   org.ruyaos.Library1 — everything installed that can be started: Steam games (read from Steam's
   library files, read-only) and installed Flatpak apps, as one list.
-  Served by ruya-library (T-112) at /org/ruyaos/Library1. Launching is not part of this
+  Served by ruya-library (T-112) at /org/ruyaos/Library1 on the system bus, as the system user
+  ruya-library (T-163). In the image it serves the system Flatpak installation only; Steam is off
+  there (Steam libraries live in the profiles' homes). The service sends ItemsChanged by itself
+  when apps are installed or removed. Launching is not part of this
   interface (the session service does it, from the item's "launch" string).
   Contract between shell (Qt/QML) and services (Rust); see docs/specs/03-services-and-apps.md §5.
 

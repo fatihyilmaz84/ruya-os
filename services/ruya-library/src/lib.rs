@@ -6,3 +6,4 @@ pub mod dbus;
 pub mod flatpak;
 pub mod steam;
 pub mod vdf;
+pub mod watch;
