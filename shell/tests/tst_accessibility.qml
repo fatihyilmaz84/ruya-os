@@ -94,6 +94,9 @@ Item {
             keyClick(Qt.Key_Up)
             keyClick(Qt.Key_Up)                          // the section nav
             walk(Qt.Key_Right, 5, "section nav")
+            // The nav is one focus item: its name must follow the current pill.
+            verify(seen.indexOf("sectionNav: Games") >= 0, "nav names Games: " + seen)
+            verify(seen.indexOf("sectionNav: Settings") >= 0, "nav names Settings: " + seen)
         }
 
         function test_settings_every_pane() {

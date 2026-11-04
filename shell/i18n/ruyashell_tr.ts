@@ -1014,11 +1014,6 @@
         <source>Settings</source>
         <translation>Ayarlar</translation>
     </message>
-    <message>
-        <location line="+11"/>
-        <source>Sections</source>
-        <translation>Bölümler</translation>
-    </message>
 </context>
 <context>
     <name>SettingsPage</name>
@@ -1636,7 +1631,7 @@
 <context>
     <name>TextEntry</name>
     <message>
-        <location filename="../qml/TextEntry.qml" line="+126"/>
+        <location filename="../qml/TextEntry.qml" line="+129"/>
         <source>Space</source>
         <translation>Boşluk</translation>
     </message>

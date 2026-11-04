@@ -318,7 +318,7 @@ Page {
                             id: cards
                             objectName: "storeCards_" + row.modelData
                             Accessible.role: Accessible.List
-                            Accessible.name: currentItem ? currentItem.Accessible.name : row.modelData
+                            Accessible.name: currentItem ? currentItem.Accessible.name : page.rowTitle(row.modelData)
                             anchors { left: parent.left; right: parent.right; top: rowHeading.bottom }
                             height: page.cardHeight + Theme.spaceM * page.u
                             focus: true

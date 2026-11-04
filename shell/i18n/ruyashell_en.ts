@@ -1016,11 +1016,6 @@
         <source>Settings</source>
         <translation>Settings</translation>
     </message>
-    <message>
-        <location line="+11"/>
-        <source>Sections</source>
-        <translation>Sections</translation>
-    </message>
 </context>
 <context>
     <name>SettingsPage</name>
@@ -1638,7 +1633,7 @@
 <context>
     <name>TextEntry</name>
     <message>
-        <location filename="../qml/TextEntry.qml" line="+126"/>
+        <location filename="../qml/TextEntry.qml" line="+129"/>
         <source>Space</source>
         <translation>Space</translation>
     </message>

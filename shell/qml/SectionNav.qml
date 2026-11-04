@@ -44,7 +44,8 @@ FocusScope {
     height: implicitHeight
 
     Accessible.role: Accessible.PageTabList
-    Accessible.name: qsTr("Sections")
+    // The nav holds focus, not its pills: the name follows the current pill.
+    Accessible.name: label(currentKey)
 
     GlassPill {
         objectName: "sectionNavGlass"
