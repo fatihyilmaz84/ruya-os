@@ -1,6 +1,6 @@
 # T-168 — Section nav on every section page
 
-Status: todo · Phase: 2 · Depends: T-157 · Area: shell · Size: M · Owner: builder
+Status: in-progress · Phase: 2 · Depends: T-157 · Area: shell · Size: M · Owner: builder
 
 ## Goal
 Games, Media, Store and Settings show the same top bar as Home: the section nav on the left (the current section filled, Settings as the filled gear) and the status cluster on the right, so the user always sees where they are and can jump sections. Today the nav is only on Home, so the Settings pill's filled state never shows (T-157 Inbox).
