@@ -28,12 +28,11 @@ Open work only (todo, in-progress, blocked), in the recommended order; when NEXT
 | [T-165](tasks/T-165-profile-switch-freezes-apps.md) | Profile switch and sign-out freeze the profile's apps | todo | T-164 |
 | [T-147](tasks/T-147-fullscreen-app-flow.md) | Full-screen apps: launch splash, quick menu, return, close | todo | T-164 |
 | [T-173](tasks/T-173-devices-bluetooth-service.md) | `ruya-devices`: `Devices1.Bluetooth` over BlueZ | in-progress | — |
-| [T-177](tasks/T-177-devices-watchers-and-battery-polish.md) | `ruya-devices` watchers can't be starved; battery cluster and replies consistent | in-progress | — |
 | [T-174](tasks/T-174-devices-storage-service.md) | `ruya-devices`: `Devices1.Storage` over udisks2 | todo | T-137 |
 | [T-145](tasks/T-145-bundle-inter.md) | Bundle the Inter typeface | in-progress | T-142 |
 | [T-166](tasks/T-166-suspend-under-eglfs.md) | **[lead]** Suspend and resume with the shell on KMS (eglfs) | todo | — |
 
-**VM queue** (done on the host, VM check pending; the lead runs them with one image build): T-173 (`vm-devices-check.sh check` on an image after the org.bluez bus rule was dropped: `Powered`, `ListDevices`, `StartScan` must still answer; if not, the rule goes back). T-173 stays `in-progress` until then (VM-this-task criterion).
+**VM queue** (done on the host, VM check pending; the lead runs them with one image build): T-173 (`vm-devices-check.sh check` on an image after the org.bluez bus rule was dropped: `Powered`, `ListDevices`, `StartScan` must still answer; if not, the rule goes back). T-173 stays `in-progress` until then (VM-this-task criterion); T-177 (`vm-devices-check.sh check`).
 
 ## Inbox
 
@@ -52,6 +51,8 @@ Follow-ups and debt for the next planner, one line each: `- (source) what, and w
 - (T-161) A fake UPower device in the VM (umockdev or python-dbusmock on the system bus) would let `vm-devices-check.sh` cover a non-empty `ListBatteries`.
 - (T-161) `image/bib/config.toml` (git-ignored, the dev SSH key) is missing in a fresh worktree, so `make-disk.sh` builds a disk ssh can't log into: make `make-disk.sh` fail loudly, and say in `dev-setup.md` to copy it from the main checkout.
 - (T-173) Hardware check of the Bluetooth service: adapter, "just works" controller pairing, Battery1 values, rfkill-blocked `Powered`, hot-plugged USB adapter (B-002).
+- (T-177 review) Network, Bluetooth, Storage and Audio D-Bus clients have the same unguarded async refresh as batteries had: a late reply can overwrite newer data. Move `beginRequest`/`deliver` (from `BatteryBackend`) into each backend base or a shared helper.
+- (T-177) The PipeWire watcher (`events.rs`) has its own 100 ms debounce; check whether it needs the same 1 s cap as `debounce.rs`.
 
 ## Blocked (need something this host doesn't have)
 

@@ -1,6 +1,6 @@
 # T-177 — `ruya-devices` watchers can't be starved; battery cluster and replies stay consistent
 
-Status: in-progress · Phase: 2 · Depends: — · Area: services, shell, scripts · Size: S · Owner: builder
+Status: done · Phase: 2 · Depends: — · Area: services, shell, scripts · Size: S · Owner: builder
 
 ## Goal
 A stream of D-Bus signals can't hold off a refresh indefinitely: busy Wi-Fi, a PipeWire burst or a room full of BLE devices. The battery in the status cluster always agrees with the low-battery toast. A host session catches compile errors in Linux-only service code before the image build does.
