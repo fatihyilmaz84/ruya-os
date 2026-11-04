@@ -99,7 +99,12 @@ FocusScope {
     }
 
     // Receives keys on the steps that have no control of their own.
-    Item { id: keySink; focus: true }
+    Item {
+        id: keySink
+        focus: true
+        Accessible.role: Accessible.Pane
+        Accessible.name: qsTr("Setup")
+    }
 
     Connections {
         target: Profiles
@@ -135,6 +140,7 @@ FocusScope {
             text: pill.label
             color: Theme.text
             font.pixelSize: Theme.typeHeadline * setup.u
+            font.weight: Theme.weightDemiBold
         }
     }
 
@@ -163,7 +169,7 @@ FocusScope {
             objectName: "setupStepLabel"
             anchors.horizontalCenter: parent.horizontalCenter
             text: qsTr("Step %1 of %2").arg(setup.step + 1).arg(setup.stepCount)
-            color: Theme.textDim
+            color: Theme.text
             font.pixelSize: Theme.typeCaption * setup.u
         }
     }
@@ -181,15 +187,16 @@ FocusScope {
             text: qsTr("Welcome to RuyaOS")
             color: Theme.text
             font.pixelSize: Theme.typeDisplay * setup.u
-            font.weight: Font.Light
+            font.weight: Theme.weightLight
         }
         Text {
             width: parent.width
             horizontalAlignment: Text.AlignHCenter
             wrapMode: Text.Wrap
             text: qsTr("Let's get your console ready. It only takes a minute, and you only need your controller.")
-            color: Theme.textDim
+            color: Theme.text
             font.pixelSize: Theme.typeHeadline * setup.u
+            font.weight: Theme.weightDemiBold
         }
         Pill { anchors.horizontalCenter: parent.horizontalCenter; label: qsTr("Press A to start") }
     }
@@ -208,14 +215,14 @@ FocusScope {
             text: qsTr("Language")
             color: Theme.text
             font.pixelSize: Theme.typeDisplay * setup.u
-            font.weight: Font.Light
+            font.weight: Theme.weightLight
         }
         Text {
             width: parent.width
             horizontalAlignment: Text.AlignHCenter
             wrapMode: Text.Wrap
             text: qsTr("Use left and right to choose. You can change this later in Settings.")
-            color: Theme.textDim
+            color: Theme.text
             font.pixelSize: Theme.typeBody * setup.u
         }
         ChoiceRow {
@@ -247,15 +254,16 @@ FocusScope {
             text: qsTr("Network")
             color: Theme.text
             font.pixelSize: Theme.typeDisplay * setup.u
-            font.weight: Font.Light
+            font.weight: Theme.weightLight
         }
         Text {
             width: parent.width
             horizontalAlignment: Text.AlignHCenter
             wrapMode: Text.Wrap
             text: qsTr("Network setup comes later. A wired connection works without any setup.")
-            color: Theme.textDim
+            color: Theme.text
             font.pixelSize: Theme.typeHeadline * setup.u
+            font.weight: Theme.weightDemiBold
         }
         Pill { anchors.horizontalCenter: parent.horizontalCenter; label: qsTr("Press A to continue") }
     }
@@ -273,14 +281,14 @@ FocusScope {
             text: qsTr("Create your profile")
             color: Theme.text
             font.pixelSize: Theme.typeDisplay * setup.u
-            font.weight: Font.Light
+            font.weight: Theme.weightLight
         }
         Text {
             width: parent.width
             horizontalAlignment: Text.AlignHCenter
             wrapMode: Text.Wrap
             text: qsTr("You will be the admin of this console. Choose a name and a PIN of 4 to 6 digits.")
-            color: Theme.textDim
+            color: Theme.text
             font.pixelSize: Theme.typeBody * setup.u
         }
         SettingRow {
@@ -326,15 +334,16 @@ FocusScope {
             text: qsTr("You're all set")
             color: Theme.text
             font.pixelSize: Theme.typeDisplay * setup.u
-            font.weight: Font.Light
+            font.weight: Theme.weightLight
         }
         Text {
             width: parent.width
             horizontalAlignment: Text.AlignHCenter
             wrapMode: Text.Wrap
             text: qsTr("Welcome, %1.").arg(setup.adminName.trim())
-            color: Theme.textDim
+            color: Theme.text
             font.pixelSize: Theme.typeHeadline * setup.u
+            font.weight: Theme.weightDemiBold
         }
         Pill { anchors.horizontalCenter: parent.horizontalCenter; label: qsTr("Press A to continue") }
     }

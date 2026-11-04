@@ -36,4 +36,16 @@ No text in the shell falls below 4.5:1 against what it actually sits on, and eve
 - In QML tests, `item.Accessible.name` is readable as an attached property.
 
 ## Outcome
-_Filled in by the implementer. Start with a `Verified:` line._
+Verified: host (`dev.ps1 test` ALL GREEN, `dev.ps1 shots` ALL GREEN; screen-reader output itself is out of scope).
+
+**Contrast.** Every `Theme.textDim` text that sat on glass or the backdrop is now `Theme.text`: unfocused profile names (ProfileCard, which dims by weight now: DemiBold focused, Regular otherwise), the picker's waiting line, hint-bar verbs, the version tag, Settings category items and rows' values (SettingRow, SystemPane heading), Games/Store empty and name lines, AppDetailPage lines, Setup copy, ComingSoon. Kept `textDim` where the surface is opaque: Badge neutral (`background` fill), the PowerConfirm detail and the System panel version and FPS lines (`panel`), and two ring colours (`border.color`, not text). Reviewed `output\shell-shotseview-picker.png`, `3-home.png`, `5c-settings-nav-focus.png`: no dim text over the backdrop.
+
+**Weights.** Every `Theme.typeHero/Display/Title/Headline/Micro` site has a `font.weight` (Light for Hero and Display, DemiBold for Title, Headline and Micro; the hero game title keeps Bold; key caps are DemiBold for single characters, Regular for the Body-size ones); `Font.Light` literals became `Theme.weightLight`. The Settings "coming soon" heading was Light at Title size and is DemiBold now. `scripts\lint-tokens.ps1` fails on a block that sizes text with one of those steps and has no `font.weight` (a `// token-ok:` line opts out); `dev.ps1` self-checks it with a fixture that must be rejected and a fixed one that must pass. Reviewed `14-toast-and-osd.png` and the home and picker shots.
+
+**Accessible names.** `SettingControl` has `accessibleValue` and names itself `label, value` (Button; ToggleRow CheckBox with `checked`; ChoiceRow ComboBox; SliderRow Slider). Added to ArtCard-less items: ProfileCard, Settings category delegates, Guide overlay actions (MenuItem), PIN keys, TextEntry keys (and the entry itself, which keeps focus: `title, focused key`), PowerConfirm buttons, Store AppCard, Setup's key sink, the ComingSoon placeholder. A ListView/GridView that holds focus (profileList, recentRow, categoryList, systemActions, gamesGrid, storeCards_*, storeResults, pinKeys) is `Accessible.List` named after its current item. `tst_accessibility.qml` walks the picker and PIN pad, Home (hero, shelf, nav), all eight Settings panes (Accessibility has no pane yet) and the Guide overlay with controller keys, asserting a name on every focused item. Revert test: removing `Accessible.name` from `SettingControl` made `test_settings_every_pane` fail at "pane 0".
+
+Five new strings (Keypad, Profiles in the picker, Setup, Recent, Search results) are in the en and tr `.ts`. `TextEntry` guards `focusedKey` (it is undefined for a moment when the layout changes).
+
+Not covered by the walk: the profile add/manage flows and wizard steps beyond the key sink (their rows are SettingControls, so named, but not walked).
+
+Files: shell/qml (controls/*, AppDetailPage, ComingSoon, GamesPage, HintBar, PinPad, PowerConfirm, ProfileCard, ProfilePicker, SettingsPage, Setup, Shell, StorePage, SystemPane, TextEntry, ToastLayer, AppArt, Page), shell/tests/tst_accessibility.qml, shell/i18n/*.ts, scripts/lint-tokens.ps1, scripts/dev.ps1, docs/specs/04-design-system.md.

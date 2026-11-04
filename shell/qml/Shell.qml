@@ -462,6 +462,7 @@ FocusScope {
                 anchors.verticalCenter: parent.verticalCenter
                 color: Theme.text
                 font.pixelSize: Theme.typeHeadline * root.u
+                font.weight: Theme.weightDemiBold
                 text: Qt.formatTime(new Date(), "HH:mm")
                 Timer {
                     interval: 10000; running: true; repeat: true
@@ -553,6 +554,8 @@ FocusScope {
         ListView {
             id: recentRow
             objectName: "recentRow"
+            Accessible.role: Accessible.List
+            Accessible.name: currentItem ? currentItem.Accessible.name : qsTr("Recent")
             anchors { left: parent.left; right: parent.right; bottom: parent.bottom; bottomMargin: root.marginY + hintBar.height + Theme.spaceM * root.u }
             leftMargin: root.marginX
             rightMargin: root.marginX
@@ -934,13 +937,15 @@ FocusScope {
             id: panelColumn
             anchors.centerIn: parent
             spacing: Theme.spaceS * root.u
-            Text { text: qsTr("System"); color: Theme.text; font.pixelSize: Theme.typeTitle * root.u; anchors.horizontalCenter: parent.horizontalCenter }
+            Text { text: qsTr("System"); color: Theme.text; font.pixelSize: Theme.typeTitle * root.u; font.weight: Theme.weightDemiBold; anchors.horizontalCenter: parent.horizontalCenter }
             Text { text: qsTr("Image version %1").arg(root.version); color: Theme.textDim; font.pixelSize: Theme.typeBody * root.u; anchors.horizontalCenter: parent.horizontalCenter }
             FpsMeter { font.pixelSize: Theme.typeBody * root.u; anchors.horizontalCenter: parent.horizontalCenter; visible: systemPanel.visible }
 
             ListView {
                 id: actions
                 objectName: "systemActions"
+                Accessible.role: Accessible.List
+                Accessible.name: currentItem ? currentItem.Accessible.name : qsTr("System")
 
                 anchors.horizontalCenter: parent.horizontalCenter
                 width: 520 * root.u
@@ -1006,6 +1011,8 @@ FocusScope {
                     required property var modelData
                     readonly property bool focused: ListView.isCurrentItem && actions.activeFocus
 
+                    Accessible.role: Accessible.MenuItem
+                    Accessible.name: modelData.label
                     width: actions.width
                     height: Theme.buttonHeight * root.u
                     radius: height / 2
@@ -1017,6 +1024,7 @@ FocusScope {
                         text: action.modelData.label
                         color: Theme.text
                         font.pixelSize: Theme.typeHeadline * root.u
+                        font.weight: Theme.weightDemiBold
                     }
                 }
             }
@@ -1043,8 +1051,9 @@ FocusScope {
         objectName: "versionTag"
         anchors { right: parent.right; bottom: parent.bottom; margins: root.marginY / 2 }
         text: root.version
-        color: Theme.textDim
+        color: Theme.text
         font.pixelSize: Theme.typeMicro * root.u
+        font.weight: Theme.weightDemiBold
     }
 
     Badge {

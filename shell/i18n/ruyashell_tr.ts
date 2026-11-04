@@ -182,7 +182,7 @@
         <translation>Bir yöneticinin PIN&apos;ini girin</translation>
     </message>
     <message>
-        <location line="+168"/>
+        <location line="+169"/>
         <source>Install</source>
         <translation>Kur</translation>
     </message>
@@ -198,12 +198,12 @@
     </message>
     <message>
         <location line="+10"/>
-        <location line="+243"/>
+        <location line="+244"/>
         <source>Uninstall</source>
         <translation>Kaldır</translation>
     </message>
     <message>
-        <location line="-144"/>
+        <location line="-145"/>
         <source>This app can</source>
         <translation>Bu uygulama şunları yapabilir</translation>
     </message>
@@ -233,7 +233,7 @@
         <translation>%1 kaldırılsın mı?</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+11"/>
         <source>Also delete my data</source>
         <translation>Verilerimi de sil</translation>
     </message>
@@ -408,7 +408,8 @@
         <translation>Yakında</translation>
     </message>
     <message>
-        <location line="+17"/>
+        <location line="+9"/>
+        <location line="+12"/>
         <source>Placeholder</source>
         <translation>Yer tutucu</translation>
     </message>
@@ -450,11 +451,12 @@
     <name>GamesPage</name>
     <message>
         <location filename="../qml/GamesPage.qml" line="+12"/>
+        <location line="+73"/>
         <source>Games</source>
         <translation>Oyunlar</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="-57"/>
         <source>Starting %1…</source>
         <translation>%1 başlatılıyor…</translation>
     </message>
@@ -479,7 +481,7 @@
         <translation>Flatpak</translation>
     </message>
     <message>
-        <location line="+59"/>
+        <location line="+61"/>
         <source>No games yet — visit the Store</source>
         <translation>Henüz oyun yok — Mağaza&apos;yı ziyaret et</translation>
     </message>
@@ -653,12 +655,17 @@
         <translation>PIN&apos;i onaylayın</translation>
     </message>
     <message>
-        <location line="+37"/>
+        <location line="+38"/>
         <source>Too many attempts. Try again in %1 s.</source>
         <translation>Çok fazla deneme. %1 sn sonra tekrar deneyin.</translation>
     </message>
     <message>
-        <location line="+49"/>
+        <location line="+9"/>
+        <source>Keypad</source>
+        <translation>Tuş takımı</translation>
+    </message>
+    <message>
+        <location line="+23"/>
         <source>Del</source>
         <translation>Sil</translation>
     </message>
@@ -686,12 +693,14 @@
         <translation>Şimdi kapatılsın mı?</translation>
     </message>
     <message>
-        <location line="+98"/>
+        <location line="+92"/>
+        <location line="+10"/>
         <source>Cancel</source>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="+20"/>
+        <location line="+14"/>
+        <location line="+10"/>
         <source>Confirm</source>
         <translation>Onayla</translation>
     </message>
@@ -742,7 +751,7 @@
 <context>
     <name>ProfileCard</name>
     <message>
-        <location filename="../qml/ProfileCard.qml" line="+47"/>
+        <location filename="../qml/ProfileCard.qml" line="+52"/>
         <source>PIN</source>
         <translation>PIN</translation>
     </message>
@@ -778,7 +787,12 @@
         <translation>Kim oynuyor?</translation>
     </message>
     <message>
-        <location line="+37"/>
+        <location line="+24"/>
+        <source>Profiles</source>
+        <translation>Profiller</translation>
+    </message>
+    <message>
+        <location line="+15"/>
         <source>Waiting for the profiles service…</source>
         <translation>Profil hizmeti bekleniyor…</translation>
     </message>
@@ -1010,11 +1024,12 @@
     <name>SettingsPage</name>
     <message>
         <location filename="../qml/SettingsPage.qml" line="+12"/>
+        <location line="+51"/>
         <source>Settings</source>
         <translation>Ayarlar</translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="-40"/>
         <source>Profiles</source>
         <translation>Profiller</translation>
     </message>
@@ -1069,7 +1084,7 @@
         <translation>Geri</translation>
     </message>
     <message>
-        <location line="+146"/>
+        <location line="+152"/>
         <source>Coming soon</source>
         <translation>Yakında</translation>
     </message>
@@ -1107,7 +1122,12 @@
         <translation>Bir PIN seçin</translation>
     </message>
     <message>
-        <location line="+77"/>
+        <location line="+18"/>
+        <source>Setup</source>
+        <translation>Kurulum</translation>
+    </message>
+    <message>
+        <location line="+65"/>
         <source>Step %1 of %2</source>
         <translation>Adım %1 / %2</translation>
     </message>
@@ -1122,7 +1142,7 @@
         <translation>Konsolunuzu hazırlayalım. Bir dakika sürer ve yalnızca kolunuz yeterli.</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+5"/>
         <source>Press A to start</source>
         <translation>Başlamak için A&apos;ya basın</translation>
     </message>
@@ -1139,13 +1159,13 @@
     </message>
     <message>
         <location line="+16"/>
-        <location line="+27"/>
-        <location line="+79"/>
+        <location line="+28"/>
+        <location line="+80"/>
         <source>Press A to continue</source>
         <translation>Devam etmek için A&apos;ya basın</translation>
     </message>
     <message>
-        <location line="-92"/>
+        <location line="-94"/>
         <source>Network</source>
         <translation>Ağ</translation>
     </message>
@@ -1155,7 +1175,7 @@
         <translation>Ağ kurulumu daha sonra gelecek. Kablolu bağlantı herhangi bir kurulum olmadan çalışır.</translation>
     </message>
     <message>
-        <location line="+17"/>
+        <location line="+18"/>
         <source>Create your profile</source>
         <translation>Profilinizi oluşturun</translation>
     </message>
@@ -1228,12 +1248,12 @@
         <translation>Ses çıkışı: %1</translation>
     </message>
     <message>
-        <location line="+652"/>
+        <location line="+657"/>
         <source>Power</source>
         <translation>Güç</translation>
     </message>
     <message>
-        <location line="-644"/>
+        <location line="-649"/>
         <source>Update ready. Restart to finish.</source>
         <translation>Güncelleme hazır. Bitirmek için yeniden başlat.</translation>
     </message>
@@ -1248,7 +1268,7 @@
         <translation>%1 beklenmedik şekilde durdu</translation>
     </message>
     <message>
-        <location line="+206"/>
+        <location line="+207"/>
         <source>Continue playing</source>
         <translation>Oynamaya devam et</translation>
     </message>
@@ -1273,7 +1293,12 @@
         <translation>Ayrıntılar</translation>
     </message>
     <message>
-        <location line="+88"/>
+        <location line="+13"/>
+        <source>Recent</source>
+        <translation>Son oynananlar</translation>
+    </message>
+    <message>
+        <location line="+77"/>
         <source>Starting %1…</source>
         <translation>%1 başlatılıyor…</translation>
     </message>
@@ -1296,22 +1321,23 @@
     </message>
     <message>
         <location line="+63"/>
+        <location line="+8"/>
         <source>System</source>
         <translation>Sistem</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-7"/>
         <source>Image version %1</source>
         <translation>Sistem sürümü %1</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+16"/>
         <source>Switch profile</source>
         <translation>Profil değiştir</translation>
     </message>
     <message>
-        <location line="-88"/>
-        <location line="+90"/>
+        <location line="-90"/>
+        <location line="+92"/>
         <source>Close</source>
         <translation>Kapat</translation>
     </message>
@@ -1331,13 +1357,13 @@
         <translation>Kapat</translation>
     </message>
     <message>
-        <location line="-96"/>
-        <location line="+97"/>
+        <location line="-98"/>
+        <location line="+99"/>
         <source>Back</source>
         <translation>Geri</translation>
     </message>
     <message>
-        <location line="+96"/>
+        <location line="+100"/>
         <source>mock services</source>
         <translation>sahte hizmetler</translation>
     </message>
@@ -1409,12 +1435,13 @@
     </message>
     <message>
         <location line="+1"/>
-        <location line="+172"/>
+        <location line="+136"/>
+        <location line="+39"/>
         <source>Installed</source>
         <translation>Kurulu</translation>
     </message>
     <message>
-        <location line="-148"/>
+        <location line="-151"/>
         <source>Official</source>
         <translation>Resmi</translation>
     </message>
@@ -1429,12 +1456,13 @@
         <translation>Topluluk</translation>
     </message>
     <message>
-        <location line="+147"/>
+        <location line="+111"/>
+        <location line="+39"/>
         <source>Update available</source>
         <translation>Güncelleme var</translation>
     </message>
     <message>
-        <location line="+33"/>
+        <location line="+34"/>
         <source>Search</source>
         <translation>Ara</translation>
     </message>
@@ -1449,7 +1477,12 @@
         <translation>Tüm uygulamaları göster</translation>
     </message>
     <message>
-        <location line="+126"/>
+        <location line="+99"/>
+        <source>Search results</source>
+        <translation>Arama sonuçları</translation>
+    </message>
+    <message>
+        <location line="+31"/>
         <source>No apps found for &quot;%1&quot;</source>
         <translation>&quot;%1&quot; için uygulama bulunamadı</translation>
     </message>
@@ -1603,7 +1636,7 @@
 <context>
     <name>TextEntry</name>
     <message>
-        <location filename="../qml/TextEntry.qml" line="+122"/>
+        <location filename="../qml/TextEntry.qml" line="+126"/>
         <source>Space</source>
         <translation>Boşluk</translation>
     </message>

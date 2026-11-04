@@ -9,11 +9,13 @@ SettingControl {
 
     signal activated()
 
+    accessibleValue: value
+
     Text {
         objectName: "value"
         anchors { right: parent.right; rightMargin: Theme.spaceL * row.u; verticalCenter: parent.verticalCenter }
         text: row.value
-        color: Theme.textDim
+        color: Theme.text
         font.pixelSize: Theme.typeBody * row.u
     }
 

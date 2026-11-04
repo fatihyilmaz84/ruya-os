@@ -49,7 +49,7 @@ Item {
                 Text {
                     anchors.verticalCenter: parent.verticalCenter
                     text: hint.verb
-                    color: Theme.textDim
+                    color: Theme.text
                     font.pixelSize: Theme.typeCaption * bar.u
                 }
             }

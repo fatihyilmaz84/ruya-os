@@ -24,8 +24,39 @@ foreach ($h in $hits) {
     if ($rel.StartsWith($Repo)) { $rel = $rel.Substring($Repo.Length).TrimStart('\', '/') }
     Write-Host "    ${rel}:$($h.LineNumber): $($h.Line.Trim())" -ForegroundColor Yellow
 }
+# Weight rule (04 section 3.2): the innermost { } block that sizes text with Theme.typeHero,
+# typeDisplay, typeTitle, typeHeadline or typeMicro needs a font.weight.
+$weightHits = @()
+foreach ($f in (Get-ChildItem $QmlDir -Recurse -Filter *.qml | Where-Object { $_.Name -ne "Theme.qml" })) {
+    $text = [IO.File]::ReadAllText($f.FullName)
+    foreach ($m in [regex]::Matches($text, 'font\.pixelSize\s*:[^\r\n;}]*Theme\.type(Hero|Display|Title|Headline|Micro)\b')) {
+        $a = 0; $depth = 0
+        for ($k = $m.Index - 1; $k -ge 0; $k--) {
+            $c = $text[$k]
+            if ($c -eq '}') { $depth++ } elseif ($c -eq '{') { if ($depth -eq 0) { $a = $k; break }; $depth-- }
+        }
+        $b = $text.Length; $depth = 0
+        for ($k = $m.Index; $k -lt $text.Length; $k++) {
+            $c = $text[$k]
+            if ($c -eq '{') { $depth++ } elseif ($c -eq '}') { if ($depth -eq 0) { $b = $k; break }; $depth-- }
+        }
+        $block = $text.Substring($a, $b - $a)
+        $lineStart = $text.LastIndexOf("`n", $m.Index) + 1
+        $lineEnd = $text.IndexOf("`n", $m.Index); if ($lineEnd -lt 0) { $lineEnd = $text.Length }
+        if ($block -notmatch 'font\.weight\s*:' -and $text.Substring($lineStart, $lineEnd - $lineStart) -notmatch 'token-ok:') {
+            $ln = ($text.Substring(0, $m.Index) -split "`n").Count
+            $rel = $f.FullName
+            if ($rel.StartsWith($Repo)) { $rel = $rel.Substring($Repo.Length).TrimStart('\', '/') }
+            $weightHits += "${rel}:${ln}: Theme.type* step without font.weight"
+        }
+    }
+}
+foreach ($w in $weightHits) { Write-Host "    $w" -ForegroundColor Yellow }
+if ($weightHits.Count -gt 0) { Write-Host "    Add font.weight: Theme.weightLight (Hero, Display) or Theme.weightDemiBold (Title, Headline, Micro)." }
 if ($hits.Count -gt 0) {
     Write-Host "    Move these into Theme.qml tokens, or add '// token-ok: <reason>'."
+}
+if ($hits.Count -gt 0 -or $weightHits.Count -gt 0) {
     exit 1
 }
 exit 0

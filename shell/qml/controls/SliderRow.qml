@@ -15,6 +15,9 @@ SettingControl {
 
     signal edited(real value)
 
+    accessibleValue: Math.round(value) + unit
+    Accessible.role: Accessible.Slider
+
     function step(delta) {
         const next = Math.min(to, Math.max(from, value + delta * stepSize))
         if (next === value)

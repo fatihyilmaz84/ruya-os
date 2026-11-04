@@ -81,6 +81,8 @@ Page {
         GridView {
             id: grid
             objectName: "gamesGrid"
+            Accessible.role: Accessible.List
+            Accessible.name: currentItem ? currentItem.Accessible.name : qsTr("Games")
             visible: Library.games.length > 0
             anchors { left: parent.left; right: parent.right; top: filterRow.bottom; topMargin: Theme.spaceM * page.u; bottom: parent.bottom }
             clip: true
@@ -131,7 +133,7 @@ Page {
             Text {
                 anchors.horizontalCenter: parent.horizontalCenter
                 text: qsTr("No games yet — visit the Store")
-                color: Theme.textDim
+                color: Theme.text
                 font.pixelSize: Theme.typeBody * page.u
             }
 

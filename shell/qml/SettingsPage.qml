@@ -59,6 +59,8 @@ Page {
     ListView {
         id: categoryList
         objectName: "categoryList"
+        Accessible.role: Accessible.List
+        Accessible.name: currentItem ? currentItem.Accessible.name : qsTr("Settings")
         anchors { left: parent.left; top: parent.top; bottom: parent.bottom }
         width: 470 * page.u
         spacing: Theme.spaceXs * page.u
@@ -81,6 +83,10 @@ Page {
             readonly property bool selected: ListView.isCurrentItem
             readonly property bool focused: selected && categoryList.activeFocus
 
+            Accessible.role: Accessible.ListItem
+            Accessible.name: page.labelFor(modelData.key)
+            Accessible.selected: selected
+
             width: categoryList.width
             height: 72 * page.u
             radius: height / 2
@@ -92,7 +98,7 @@ Page {
             Text {
                 anchors { left: parent.left; leftMargin: Theme.spaceL * page.u; right: parent.right; rightMargin: Theme.spaceM * page.u; verticalCenter: parent.verticalCenter }
                 text: page.labelFor(category.modelData.key)
-                color: category.selected ? Theme.text : Theme.textDim
+                color: Theme.text
                 font.pixelSize: Theme.typeBody * page.u
                 elide: Text.ElideRight
             }
@@ -187,12 +193,13 @@ Page {
                 text: page.labelFor(page.current.key)
                 color: Theme.text
                 font.pixelSize: Theme.typeTitle * page.u
-                font.weight: Font.Light
+                font.weight: Theme.weightDemiBold
             }
             Text {
                 text: qsTr("Coming soon")
-                color: Theme.textDim
+                color: Theme.text
                 font.pixelSize: Theme.typeHeadline * page.u
+                font.weight: Theme.weightDemiBold
             }
         }
     }

@@ -14,12 +14,16 @@ FocusScope {
     Text {
         id: message
         text: qsTr("Coming soon")
-        color: Theme.textDim
+        color: Theme.text
         font.pixelSize: Theme.typeHeadline * root.u
+        font.weight: Theme.weightDemiBold
     }
 
     Rectangle {
         objectName: "pagePlaceholder"
+        Accessible.role: Accessible.Button
+        Accessible.name: qsTr("Placeholder")
+        Accessible.focusable: true
         anchors { left: parent.left; top: message.bottom; topMargin: Theme.spaceL * root.u }
         width: 360 * root.u
         height: Theme.buttonHeight * root.u
@@ -33,6 +37,7 @@ FocusScope {
             text: qsTr("Placeholder")
             color: Theme.text
             font.pixelSize: Theme.typeHeadline * root.u
+            font.weight: Theme.weightDemiBold
         }
     }
 }

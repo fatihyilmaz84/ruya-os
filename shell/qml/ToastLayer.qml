@@ -96,6 +96,7 @@ Item {
                 text: toast.iconText
                 color: toast.accent
                 font.pixelSize: Theme.typeHeadline * layer.u
+                font.weight: Theme.weightDemiBold
             }
             Text {
                 anchors {

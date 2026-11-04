@@ -224,7 +224,7 @@ SettingsPane {
         width: parent ? parent.width : 0
         topPadding: Theme.spaceS * pane.u
         text: qsTr("Updates")
-        color: Theme.textDim
+        color: Theme.text
         font.pixelSize: Theme.typeBody * pane.u
     }
 

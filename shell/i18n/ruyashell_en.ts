@@ -182,7 +182,7 @@
         <translation>Enter an admin&apos;s PIN</translation>
     </message>
     <message>
-        <location line="+168"/>
+        <location line="+169"/>
         <source>Install</source>
         <translation>Install</translation>
     </message>
@@ -198,12 +198,12 @@
     </message>
     <message>
         <location line="+10"/>
-        <location line="+243"/>
+        <location line="+244"/>
         <source>Uninstall</source>
         <translation>Uninstall</translation>
     </message>
     <message>
-        <location line="-144"/>
+        <location line="-145"/>
         <source>This app can</source>
         <translation>This app can</translation>
     </message>
@@ -233,7 +233,7 @@
         <translation>Uninstall %1?</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+11"/>
         <source>Also delete my data</source>
         <translation>Also delete my data</translation>
     </message>
@@ -408,7 +408,8 @@
         <translation>Coming soon</translation>
     </message>
     <message>
-        <location line="+17"/>
+        <location line="+9"/>
+        <location line="+12"/>
         <source>Placeholder</source>
         <translation>Placeholder</translation>
     </message>
@@ -450,11 +451,12 @@
     <name>GamesPage</name>
     <message>
         <location filename="../qml/GamesPage.qml" line="+12"/>
+        <location line="+73"/>
         <source>Games</source>
         <translation>Games</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="-57"/>
         <source>Starting %1…</source>
         <translation>Starting %1…</translation>
     </message>
@@ -479,7 +481,7 @@
         <translation>Flatpak</translation>
     </message>
     <message>
-        <location line="+59"/>
+        <location line="+61"/>
         <source>No games yet — visit the Store</source>
         <translation>No games yet — visit the Store</translation>
     </message>
@@ -654,12 +656,17 @@
         <translation>Confirm PIN</translation>
     </message>
     <message>
-        <location line="+37"/>
+        <location line="+38"/>
         <source>Too many attempts. Try again in %1 s.</source>
         <translation>Too many attempts. Try again in %1 s.</translation>
     </message>
     <message>
-        <location line="+49"/>
+        <location line="+9"/>
+        <source>Keypad</source>
+        <translation>Keypad</translation>
+    </message>
+    <message>
+        <location line="+23"/>
         <source>Del</source>
         <translation>Del</translation>
     </message>
@@ -687,12 +694,14 @@
         <translation>Power off now?</translation>
     </message>
     <message>
-        <location line="+98"/>
+        <location line="+92"/>
+        <location line="+10"/>
         <source>Cancel</source>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location line="+20"/>
+        <location line="+14"/>
+        <location line="+10"/>
         <source>Confirm</source>
         <translation>Confirm</translation>
     </message>
@@ -743,7 +752,7 @@
 <context>
     <name>ProfileCard</name>
     <message>
-        <location filename="../qml/ProfileCard.qml" line="+47"/>
+        <location filename="../qml/ProfileCard.qml" line="+52"/>
         <source>PIN</source>
         <translation>PIN</translation>
     </message>
@@ -779,7 +788,12 @@
         <translation>Who&apos;s playing?</translation>
     </message>
     <message>
-        <location line="+37"/>
+        <location line="+24"/>
+        <source>Profiles</source>
+        <translation>Profiles</translation>
+    </message>
+    <message>
+        <location line="+15"/>
         <source>Waiting for the profiles service…</source>
         <translation>Waiting for the profiles service…</translation>
     </message>
@@ -1012,11 +1026,12 @@
     <name>SettingsPage</name>
     <message>
         <location filename="../qml/SettingsPage.qml" line="+12"/>
+        <location line="+51"/>
         <source>Settings</source>
         <translation>Settings</translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="-40"/>
         <source>Profiles</source>
         <translation>Profiles</translation>
     </message>
@@ -1071,7 +1086,7 @@
         <translation>Back</translation>
     </message>
     <message>
-        <location line="+146"/>
+        <location line="+152"/>
         <source>Coming soon</source>
         <translation>Coming soon</translation>
     </message>
@@ -1109,7 +1124,12 @@
         <translation>Choose a PIN</translation>
     </message>
     <message>
-        <location line="+77"/>
+        <location line="+18"/>
+        <source>Setup</source>
+        <translation>Setup</translation>
+    </message>
+    <message>
+        <location line="+65"/>
         <source>Step %1 of %2</source>
         <translation>Step %1 of %2</translation>
     </message>
@@ -1124,7 +1144,7 @@
         <translation>Let&apos;s get your console ready. It only takes a minute, and you only need your controller.</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+5"/>
         <source>Press A to start</source>
         <translation>Press A to start</translation>
     </message>
@@ -1141,13 +1161,13 @@
     </message>
     <message>
         <location line="+16"/>
-        <location line="+27"/>
-        <location line="+79"/>
+        <location line="+28"/>
+        <location line="+80"/>
         <source>Press A to continue</source>
         <translation>Press A to continue</translation>
     </message>
     <message>
-        <location line="-92"/>
+        <location line="-94"/>
         <source>Network</source>
         <translation>Network</translation>
     </message>
@@ -1157,7 +1177,7 @@
         <translation>Network setup comes later. A wired connection works without any setup.</translation>
     </message>
     <message>
-        <location line="+17"/>
+        <location line="+18"/>
         <source>Create your profile</source>
         <translation>Create your profile</translation>
     </message>
@@ -1230,12 +1250,12 @@
         <translation>Audio output: %1</translation>
     </message>
     <message>
-        <location line="+652"/>
+        <location line="+657"/>
         <source>Power</source>
         <translation>Power</translation>
     </message>
     <message>
-        <location line="-644"/>
+        <location line="-649"/>
         <source>Update ready. Restart to finish.</source>
         <translation>Update ready. Restart to finish.</translation>
     </message>
@@ -1250,7 +1270,7 @@
         <translation>%1 stopped unexpectedly</translation>
     </message>
     <message>
-        <location line="+206"/>
+        <location line="+207"/>
         <source>Continue playing</source>
         <translation>Continue playing</translation>
     </message>
@@ -1275,7 +1295,12 @@
         <translation>Details</translation>
     </message>
     <message>
-        <location line="+88"/>
+        <location line="+13"/>
+        <source>Recent</source>
+        <translation>Recent</translation>
+    </message>
+    <message>
+        <location line="+77"/>
         <source>Starting %1…</source>
         <translation>Starting %1…</translation>
     </message>
@@ -1298,22 +1323,23 @@
     </message>
     <message>
         <location line="+63"/>
+        <location line="+8"/>
         <source>System</source>
         <translation>System</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-7"/>
         <source>Image version %1</source>
         <translation>Image version %1</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+16"/>
         <source>Switch profile</source>
         <translation>Switch profile</translation>
     </message>
     <message>
-        <location line="-88"/>
-        <location line="+90"/>
+        <location line="-90"/>
+        <location line="+92"/>
         <source>Close</source>
         <translation>Close</translation>
     </message>
@@ -1333,13 +1359,13 @@
         <translation>Power off</translation>
     </message>
     <message>
-        <location line="-96"/>
-        <location line="+97"/>
+        <location line="-98"/>
+        <location line="+99"/>
         <source>Back</source>
         <translation>Back</translation>
     </message>
     <message>
-        <location line="+96"/>
+        <location line="+100"/>
         <source>mock services</source>
         <translation>mock services</translation>
     </message>
@@ -1411,12 +1437,13 @@
     </message>
     <message>
         <location line="+1"/>
-        <location line="+172"/>
+        <location line="+136"/>
+        <location line="+39"/>
         <source>Installed</source>
         <translation>Installed</translation>
     </message>
     <message>
-        <location line="-148"/>
+        <location line="-151"/>
         <source>Official</source>
         <translation>Official</translation>
     </message>
@@ -1431,12 +1458,13 @@
         <translation>Community</translation>
     </message>
     <message>
-        <location line="+147"/>
+        <location line="+111"/>
+        <location line="+39"/>
         <source>Update available</source>
         <translation>Update available</translation>
     </message>
     <message>
-        <location line="+33"/>
+        <location line="+34"/>
         <source>Search</source>
         <translation>Search</translation>
     </message>
@@ -1451,7 +1479,12 @@
         <translation>Show all apps</translation>
     </message>
     <message>
-        <location line="+126"/>
+        <location line="+99"/>
+        <source>Search results</source>
+        <translation>Search results</translation>
+    </message>
+    <message>
+        <location line="+31"/>
         <source>No apps found for &quot;%1&quot;</source>
         <translation>No apps found for &quot;%1&quot;</translation>
     </message>
@@ -1605,7 +1638,7 @@
 <context>
     <name>TextEntry</name>
     <message>
-        <location filename="../qml/TextEntry.qml" line="+122"/>
+        <location filename="../qml/TextEntry.qml" line="+126"/>
         <source>Space</source>
         <translation>Space</translation>
     </message>
