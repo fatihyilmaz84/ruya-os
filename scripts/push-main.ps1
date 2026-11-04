@@ -2,7 +2,9 @@
 # scan passes (lead sessions, docs/LEAD.md step 7). A push chained after a red test reached origin
 # on 2026-11-04; this script makes the order impossible to get wrong. Never forces.
 #   .\scripts\push-main.ps1
-$ErrorActionPreference = "Stop"
+# Continue: every step checks its exit code; under Stop, PowerShell 5.1 turns git's normal stderr
+# progress lines into a terminating error.
+$ErrorActionPreference = "Continue"
 $Repo = Split-Path -Parent $PSScriptRoot
 Set-Location $Repo
 # Git for Windows: the `git` on PATH here can be devkitPro's MSYS2 build.
