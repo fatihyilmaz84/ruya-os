@@ -47,8 +47,10 @@ if (-not $targets.ContainsKey($Target)) {
 
 function Invoke-Guest {
     param([Parameter(Mandatory)][string]$Command)
+    # Scratch known_hosts (see vm-reboot-check.ps1): each fresh disk has a new host key.
+    $knownHosts = Join-Path (Split-Path -Parent $PSScriptRoot) "output\vm-known_hosts"
     $out = & ssh -i $Key -p $SshPort -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=no `
-        -o LogLevel=ERROR root@127.0.0.1 $Command 2>&1
+        -o "UserKnownHostsFile=$knownHosts" -o LogLevel=ERROR root@127.0.0.1 $Command 2>&1
     if ($LASTEXITCODE -ne 0) { throw "vm-goto: SSH to the VM failed ($Command): $out" }
     return ($out | Out-String)
 }

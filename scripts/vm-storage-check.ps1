@@ -14,7 +14,9 @@ param(
 $ErrorActionPreference = "Continue"
 . (Join-Path $PSScriptRoot "vm-lib.ps1")
 $Repo = Split-Path -Parent $PSScriptRoot
-$ssh = @("-i", $Key, "-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=NUL", "-o", "LogLevel=ERROR", "-o", "ConnectTimeout=10")
+# A scratch known_hosts (see vm-reboot-check.ps1): UserKnownHostsFile=NUL makes MSYS2's ssh write a file named NUL.
+$KnownHosts = Join-Path $Repo "output\vm-known_hosts"
+$ssh = @("-i", $Key, "-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=$KnownHosts", "-o", "LogLevel=ERROR", "-o", "ConnectTimeout=10")
 
 function Invoke-Guest([string]$Step) {
     Write-Host "== guest: $Step"

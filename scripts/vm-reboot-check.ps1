@@ -14,7 +14,10 @@ param(
 $ErrorActionPreference = "Continue"
 $Repo = Split-Path -Parent $PSScriptRoot
 Set-Location $Repo
-$o = @("-i", $Key, "-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=NUL", "-o", "LogLevel=ERROR", "-o", "ConnectTimeout=5", "-p", "2222")
+# A scratch known_hosts: every fresh disk has a new host key, and the ssh on PATH here may be
+# MSYS2's, which writes a real file named NUL for UserKnownHostsFile=NUL.
+$KnownHosts = Join-Path $Repo "output\vm-known_hosts"
+$o = @("-i", $Key, "-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=$KnownHosts", "-o", "LogLevel=ERROR", "-o", "ConnectTimeout=5", "-p", "2222")
 
 ssh @o root@127.0.0.1 "systemctl reboot" 2>$null | Out-Null
 Write-Host "guest reboot requested; waiting for QEMU to exit"
