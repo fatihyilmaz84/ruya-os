@@ -1,6 +1,6 @@
-//! ruya-devices: serves org.ruyaos.Devices1.Audio, .Network and .Batteries on the system bus, as a systemd
+//! ruya-devices: serves org.ruyaos.Devices1.Audio, .Network, .Bluetooth and .Batteries on the system bus, as a systemd
 //! user unit of `ruya-shell` (ADR-010). With `--session` (development) it serves on the session
-//! bus over a fake PipeWire, NetworkManager and UPower.
+//! bus over a fake PipeWire, NetworkManager, BlueZ and UPower.
 
 use std::error::Error;
 use std::path::PathBuf;
@@ -8,11 +8,12 @@ use std::sync::{Arc, Mutex};
 
 use ruya_devices::audio::{Audio, FakePipeWire};
 use ruya_devices::battery::{Batteries, FakeUPower, RawDevice, KIND_GAMING_INPUT};
+use ruya_devices::bluetooth::{Bluetooth, FakeBluez};
 #[cfg(target_os = "linux")]
-use ruya_devices::dbus::{watch, watch_batteries, watch_network};
+use ruya_devices::dbus::{watch, watch_batteries, watch_bluetooth, watch_network};
 use ruya_devices::dbus::{
-    AudioIface, BatteriesIface, DynNm, DynPipeWire, DynUPower, NetworkIface, Shared,
-    SharedBatteries, SharedNet, BUS_NAME, OBJECT_PATH,
+    AudioIface, BatteriesIface, BluetoothIface, DynBluez, DynNm, DynPipeWire, DynUPower,
+    NetworkIface, Shared, SharedBatteries, SharedBluetooth, SharedNet, BUS_NAME, OBJECT_PATH,
 };
 use ruya_devices::network::{FakeNetworkManager, Network};
 use ruya_devices::store::Store;
@@ -43,6 +44,15 @@ fn network_manager(session: bool) -> Result<DynNm, Box<dyn Error>> {
     Ok(Box::new(FakeNetworkManager::new("ruya-wifi-pass")))
 }
 
+fn bluez(session: bool) -> Result<DynBluez, Box<dyn Error>> {
+    #[cfg(target_os = "linux")]
+    if !session {
+        return Ok(Box::new(ruya_devices::bluez::BluezClient::connect()?));
+    }
+    let _ = session;
+    Ok(Box::new(FakeBluez::with_devices()))
+}
+
 fn upower(session: bool) -> Result<DynUPower, Box<dyn Error>> {
     #[cfg(target_os = "linux")]
     if !session {
@@ -69,25 +79,29 @@ fn state_file() -> Option<PathBuf> {
     Some(PathBuf::from(first).join("audio.toml"))
 }
 
-/// PipeWire's events, NetworkManager's and UPower's signals, until the process is stopped.
+/// PipeWire's events, NetworkManager's, BlueZ's and UPower's signals, until the process is stopped.
 async fn follow_system(
     connection: zbus::Connection,
     audio: Shared,
     net: SharedNet,
     batteries: SharedBatteries,
+    bluetooth: SharedBluetooth,
 ) {
     #[cfg(target_os = "linux")]
     futures_lite::future::zip(
         watch(connection.clone(), audio),
         futures_lite::future::zip(
             watch_network(connection.clone(), net),
-            watch_batteries(connection, batteries),
+            futures_lite::future::zip(
+                watch_batteries(connection.clone(), batteries),
+                watch_bluetooth(connection, bluetooth),
+            ),
         ),
     )
     .await;
     #[cfg(not(target_os = "linux"))]
     {
-        let _keep = (connection, audio, net, batteries);
+        let _keep = (connection, audio, net, batteries, bluetooth);
         futures_lite::future::pending::<()>().await;
     }
 }
@@ -116,6 +130,13 @@ fn run() -> Result<(), Box<dyn Error>> {
         eprintln!("ruya-devices: UPower not readable yet: {err}");
     }
 
+    // No adapter (or no BlueZ) is "unavailable" and an empty list; BlueZ not up yet is retried
+    // by its signals.
+    let bluetooth: SharedBluetooth = Arc::new(Bluetooth::new(bluez(session)?));
+    if let Err(err) = bluetooth.refresh() {
+        eprintln!("ruya-devices: BlueZ not readable yet: {}", err.0);
+    }
+
     futures_lite::future::block_on(async {
         let builder = if session {
             zbus::connection::Builder::session()?
@@ -127,14 +148,15 @@ fn run() -> Result<(), Box<dyn Error>> {
             .serve_at(OBJECT_PATH, AudioIface::new(audio.clone()))?
             .serve_at(OBJECT_PATH, NetworkIface::new(net.clone()))?
             .serve_at(OBJECT_PATH, BatteriesIface::new(batteries.clone()))?
+            .serve_at(OBJECT_PATH, BluetoothIface::new(bluetooth.clone()))?
             .build()
             .await?;
         // The fakes have nothing to follow (they change only through calls): just stay up.
         if session {
-            let _keep = (connection, audio, net, batteries);
+            let _keep = (connection, audio, net, batteries, bluetooth);
             futures_lite::future::pending::<()>().await;
         } else {
-            follow_system(connection, audio, net, batteries).await;
+            follow_system(connection, audio, net, batteries, bluetooth).await;
         }
         Ok::<(), Box<dyn Error>>(())
     })

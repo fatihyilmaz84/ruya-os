@@ -3,7 +3,7 @@
 <!--
   org.ruyaos.Devices1 — audio outputs and volumes, the network, Bluetooth, storage and controller batteries.
   Served by ruya-devices on the system bus at /org/ruyaos/Devices1 (blocker B-007: the service
-  does not exist yet; the shell's mock backend follows this contract).
+  has Audio, Network, Bluetooth and Batteries; the shell's mock backends follow this contract).
   Contract between shell (Qt/QML) and services (Rust); see docs/specs/03-services-and-apps.md §2.3.
 
   One bus name and one object, one interface per device class: org.ruyaos.Devices1.Audio now,
@@ -33,7 +33,10 @@
     "ok"              success (Pair: paired, trusted and connected; the list follows by DevicesChanged)
     "unknown-device"  no device with that id in the list (Pair, Forget, Connect, Disconnect)
     "pairing-failed"  the device refused or the pairing was rejected
-    "timeout"         the device did not answer in time (Pair, Connect)
+    "timeout"         the device did not answer in time (Pair, Connect). The service answers it
+                      itself after 20 s, before the D-Bus default call timeout (25 s), so clients
+                      keep the default timeout and Pair/Connect always get a status, never a
+                      D-Bus error. The pairing is cancelled when it times out.
     "unavailable"     Bluetooth is off or there is no adapter (StartScan, Pair, Connect)
     "invalid"         malformed argument (an empty id)
     "failed"          internal error, or Connect/Disconnect on a device that is not paired
@@ -168,8 +171,10 @@
 
     <!--
       Adapter power. Writable (org.freedesktop.DBus.Properties.Set). Switching off disconnects
-      every device, stops a running scan and empties the list of unpaired devices; switching on
-      reconnects paired, trusted devices that are in range. A failed Set answers a D-Bus error.
+      every device, stops a running scan and empties the list (ListDevices answers an empty
+      list while Powered is false); switching on reconnects paired, trusted devices that are in
+      range and brings the list back. A failed Set (no adapter, rfkill blocked) answers a D-Bus
+      error. Powered is false when there is no adapter.
     -->
     <property name="Powered" type="b" access="readwrite">
       <annotation name="org.freedesktop.DBus.Property.EmitsChangedSignal" value="true"/>

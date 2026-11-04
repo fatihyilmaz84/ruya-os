@@ -17,7 +17,7 @@ Status: **Draft v1** · Parent: [00-overview](00-overview.md)
 | Qt | `qt6-qtbase`, `qt6-qtdeclarative` (includes Quick Controls 2), `qt6-qtwayland`, `qt6-qtmultimedia`, `qt6-qtshadertools` (build only) |
 | Compositor | none: `ruya-shell` is the compositor (QtWaylandCompositor from `qt6-qtwayland`, ADR-002 A, T-130). `cage` ran the Phase 0 session and was removed with T-130. |
 | Audio | `pipewire`, `pipewire-pulseaudio`, `pipewire-alsa`, `wireplumber`. **Not** `pulseaudio` or `jack-audio-connection-kit`, which conflict. |
-| Network/BT | `NetworkManager`, `NetworkManager-wifi`, `bluez`, `upower`, `iwlwifi-*` firmware |
+| Network/BT | `NetworkManager`, `NetworkManager-wifi`, `bluez` (`bluetooth.service` enabled, with a drop-in that lets it run without an adapter, T-173), `upower`, `iwlwifi-*` firmware |
 | Storage | `udisks2`, `exfatprogs`, `ntfs-3g` (or kernel `ntfs3`) |
 | Apps | `flatpak`, `xdg-desktop-portal` (+ a portal backend, see 03 §4.4) |
 | Health | `greenboot`, `greenboot-default-health-checks` |

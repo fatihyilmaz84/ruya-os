@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
-# Checks the Devices service (audio T-128, network T-132, controller batteries T-161) inside a running VM booted with sound. Copy and run as root:
+# Checks the Devices service (audio T-128, network T-132, controller batteries T-161, Bluetooth T-173) inside a running VM booted with sound. Copy and run as root:
 #   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-devices-check.sh root@127.0.0.1:/root/
-#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-devices-check.sh [check|events|security|state|batteries]
+#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-devices-check.sh [check|events|security|state|batteries|bluetooth]
 # check (default): unit active, name owned by ruya-shell, ListSinks, a MasterVolume write reaches
 # PipeWire, a call from another user is refused; then the network part: State is connected, Primary is
 # the ethernet link with an IPv4 address, ListWifi and Scan answer, unknown ids are refused, another
 # user is refused; then the batteries part: upower is installed and answers on the bus, ListBatteries answers an
 # empty list (no controller in the VM; a real controller's battery is NOT checked here), another user is
+# refused; then the Bluetooth part: bluetooth.service is active and org.bluez is on the bus, Powered is false,
+# ListDevices answers an empty list, StartScan/Pair/Connect answer unavailable (no adapter in the VM; a real
+# adapter and controller are NOT checked here), unknown ids and empty ids are refused, another user is
 # refused. Needs the shell logged in (VM booted with -Audio).
 # events: only the PipeWire event checks (T-133); IDLE=60 adds the idle-process count (also part of check; samples the process list for IDLE seconds).
 # state: prints State and Primary (for the link test, see docs/dev-setup.md).
@@ -16,6 +19,7 @@ path=/org/ruyaos/Devices1
 ifc=org.ruyaos.Devices1.Audio
 net=org.ruyaos.Devices1.Network
 bat=org.ruyaos.Devices1.Batteries
+bt=org.ruyaos.Devices1.Bluetooth
 uid="$(id -u ruya-shell)"
 as_shell() { runuser -u ruya-shell -- env XDG_RUNTIME_DIR="/run/user/$uid" "$@"; }
 fail=0
@@ -74,6 +78,44 @@ events_check() {
     [ "$(pgrep -x pw-dump | wc -l)" = 1 ] && ok "one monitor again" || bad "monitor count after restart: $(pgrep -x pw-dump | wc -l)"
     as_shell systemctl --user status ruya-devices --no-pager | tail -6
     busctl --system set-property "$svc" "$path" "$ifc" MasterVolume u 50
+}
+
+# T-173: BlueZ behind Devices1.Bluetooth. No adapter in the VM: the service answers, the list is empty.
+bluetooth_check() {
+    echo "--- bluetooth (T-173): BlueZ behind Devices1.Bluetooth"
+    if systemctl is-active bluetooth; then ok "bluetooth.service is active"; else bad "bluetooth.service not active"; fi
+    if busctl --system status org.bluez >/dev/null 2>&1; then ok "org.bluez is on the system bus"; else bad "org.bluez is not on the bus"; fi
+    ls /sys/class/bluetooth 2>/dev/null | head -3
+    powered="$(busctl --system get-property "$svc" "$path" "$bt" Powered)"
+    echo "Powered: $powered"
+    case "$powered" in 'b false') ok "Powered is false (no adapter)";; *) bad "Powered is not false";; esac
+    disc="$(busctl --system get-property "$svc" "$path" "$bt" Discovering)"
+    case "$disc" in 'b false') ok "Discovering is false";; *) bad "Discovering is not false: $disc";; esac
+    list="$(busctl --system call "$svc" "$path" "$bt" ListDevices)"
+    echo "ListDevices: $list"
+    case "$list" in 'aa{sv} 0') ok "ListDevices answers an empty list";; *) bad "ListDevices did not answer an empty aa{sv}";; esac
+    scan="$(busctl --system call "$svc" "$path" "$bt" StartScan)"
+    echo "StartScan: $scan"
+    case "$scan" in 's "unavailable"') ok "StartScan answers unavailable";; *) bad "StartScan did not answer unavailable";; esac
+    r="$(busctl --system call "$svc" "$path" "$bt" Pair s AA:BB:CC:DD:EE:FF)"
+    case "$r" in 's "unavailable"') ok "Pair answers unavailable";; *) bad "Pair answered: $r";; esac
+    r="$(busctl --system call "$svc" "$path" "$bt" Pair s "")"
+    case "$r" in 's "invalid"') ok "Pair with an empty id is invalid";; *) bad "Pair('') answered: $r";; esac
+    r="$(busctl --system call "$svc" "$path" "$bt" Forget s AA:BB:CC:DD:EE:FF)"
+    case "$r" in 's "unknown-device"') ok "Forget of an unknown device is refused";; *) bad "Forget answered: $r";; esac
+    r="$(busctl --system call "$svc" "$path" "$bt" StopScan)"
+    case "$r" in 's "ok"') ok "StopScan with no scan answers ok";; *) bad "StopScan answered: $r";; esac
+    if out="$(busctl --system set-property "$svc" "$path" "$bt" Powered b true 2>&1)"; then
+        bad "Powered could be set with no adapter"
+    else
+        echo "$out"; ok "Powered write without an adapter answers a D-Bus error"
+    fi
+    if out="$(runuser -u nobody -- busctl --system call "$svc" "$path" "$bt" ListDevices 2>&1)"; then
+        bad "nobody could call ListDevices: $out"
+    else
+        echo "$out"; ok "bluetooth call from nobody refused"
+    fi
+    as_shell systemctl --user is-active ruya-devices >/dev/null && ok "ruya-devices still active after the Bluetooth calls" || bad "ruya-devices not active"
 }
 
 case "${1:-check}" in
@@ -169,7 +211,12 @@ check)
     fi
     as_shell systemctl --user is-active ruya-devices >/dev/null && ok "ruya-devices still active after the UPower calls" || bad "ruya-devices not active"
 
+    bluetooth_check
+
     events_check "${IDLE:-60}"
+    ;;
+bluetooth)
+    bluetooth_check
     ;;
 events)
     events_check "${IDLE:-0}"

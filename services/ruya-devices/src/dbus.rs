@@ -1,9 +1,9 @@
-//! org.ruyaos.Devices1.Audio, .Network and .Batteries on D-Bus. Thin adapter: the rules live in `audio.rs`
-//! and `network.rs`.
+//! org.ruyaos.Devices1.Audio, .Network, .Bluetooth and .Batteries on D-Bus. Thin adapter: the rules live in
+//! `audio.rs`, `network.rs` and `bluetooth.rs`.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use blocking::unblock;
 use futures_lite::{future, StreamExt};
@@ -15,6 +15,7 @@ use crate::audio::Audio;
 #[cfg(target_os = "linux")]
 use crate::audio::Changes;
 use crate::battery::{Batteries, UPower};
+use crate::bluetooth::{self, Bluetooth, Bluez, BtError};
 use crate::network::{self, Network, NetworkManager};
 
 /// Chosen at runtime: `wpctl` on Linux, a fake in `--session` development.
@@ -220,6 +221,10 @@ pub type SharedNet = Arc<Network<DynNm>>;
 /// Quiet time after the last NetworkManager signal before the state is read again: a scan or a
 /// join is a burst of dozens of them.
 const DEBOUNCE: Duration = Duration::from_millis(300);
+
+/// A burst of BlueZ signals is read once after this much quiet, or after this long at most.
+#[cfg(target_os = "linux")]
+const DEBOUNCE_MAX: Duration = Duration::from_secs(1);
 
 const NM_BUS_NAME: &str = "org.freedesktop.NetworkManager";
 
@@ -480,4 +485,296 @@ async fn announce_batteries(connection: &Connection) -> zbus::Result<()> {
         .interface::<_, BatteriesIface>(OBJECT_PATH)
         .await?;
     BatteriesIface::batteries_changed(iface.signal_emitter()).await
+}
+
+/// Chosen at runtime: BlueZ on Linux, a fake in `--session` development.
+pub type DynBluez = Box<dyn Bluez>;
+
+impl Bluez for DynBluez {
+    fn snapshot(&self) -> Result<crate::bluetooth::Raw, BtError> {
+        (**self).snapshot()
+    }
+    fn set_powered(&self, on: bool) -> Result<(), BtError> {
+        (**self).set_powered(on)
+    }
+    fn start_discovery(&self) -> Result<(), BtError> {
+        (**self).start_discovery()
+    }
+    fn stop_discovery(&self) -> Result<(), BtError> {
+        (**self).stop_discovery()
+    }
+    fn pair(&self, address: &str, timeout: Duration) -> Result<(), BtError> {
+        (**self).pair(address, timeout)
+    }
+    fn set_trusted(&self, address: &str) -> Result<(), BtError> {
+        (**self).set_trusted(address)
+    }
+    fn connect(&self, address: &str, timeout: Duration) -> Result<(), BtError> {
+        (**self).connect(address, timeout)
+    }
+    fn disconnect(&self, address: &str) -> Result<(), BtError> {
+        (**self).disconnect(address)
+    }
+    fn remove(&self, address: &str) -> Result<(), BtError> {
+        (**self).remove(address)
+    }
+}
+
+pub type SharedBluetooth = Arc<Bluetooth<DynBluez>>;
+
+pub struct BluetoothIface {
+    bt: SharedBluetooth,
+}
+
+impl BluetoothIface {
+    pub fn new(bt: SharedBluetooth) -> Self {
+        BluetoothIface { bt }
+    }
+
+    async fn emit(&self, emitter: &SignalEmitter<'_>, changes: &bluetooth::Changes) {
+        let result = async {
+            if changes.powered {
+                self.powered_changed(emitter).await?;
+            }
+            if changes.discovering {
+                self.discovering_changed(emitter).await?;
+            }
+            if changes.devices {
+                Self::devices_changed(emitter).await?;
+            }
+            Ok::<(), zbus::Error>(())
+        }
+        .await;
+        if let Err(err) = result {
+            eprintln!("ruya-devices: emitting Bluetooth signals failed: {err}");
+        }
+    }
+
+    /// Reads BlueZ again (off the executor: it blocks) and announces what changed.
+    async fn settle(&self, emitter: &SignalEmitter<'_>) {
+        let bt = self.bt.clone();
+        match unblock(move || bt.refresh()).await {
+            Ok(changes) => self.emit(emitter, &changes).await,
+            Err(err) => eprintln!("ruya-devices: reading BlueZ failed: {}", err.0),
+        }
+    }
+}
+
+#[interface(name = "org.ruyaos.Devices1.Bluetooth")]
+impl BluetoothIface {
+    #[zbus(property)]
+    fn powered(&self) -> bool {
+        self.bt.powered()
+    }
+
+    #[zbus(property)]
+    async fn set_powered(
+        &mut self,
+        on: bool,
+        #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
+    ) -> zbus::fdo::Result<()> {
+        let bt = self.bt.clone();
+        match unblock(move || bt.set_powered(on)).await {
+            Ok(changes) => {
+                // `Powered` itself is announced by zbus after a successful Set.
+                let rest = bluetooth::Changes {
+                    powered: false,
+                    ..changes
+                };
+                self.emit(&emitter, &rest).await;
+                Ok(())
+            }
+            Err(err) => Err(zbus::fdo::Error::Failed(err.0)),
+        }
+    }
+
+    #[zbus(property)]
+    fn discovering(&self) -> bool {
+        self.bt.discovering()
+    }
+
+    fn list_devices(&self) -> Vec<HashMap<String, OwnedValue>> {
+        self.bt
+            .list()
+            .into_iter()
+            .map(|d| {
+                let own = |v: Value<'_>| OwnedValue::try_from(v).ok();
+                [
+                    ("id", own(Value::from(d.id.clone()))),
+                    ("name", own(Value::from(d.name.clone()))),
+                    ("kind", own(Value::from(d.kind))),
+                    ("paired", own(Value::from(d.paired))),
+                    ("connected", own(Value::from(d.connected))),
+                    ("trusted", own(Value::from(d.trusted))),
+                    ("battery", own(Value::from(d.battery))),
+                ]
+                .into_iter()
+                .filter_map(|(k, v)| v.map(|v| (k.to_owned(), v)))
+                .collect()
+            })
+            .collect()
+    }
+
+    async fn start_scan(&self, #[zbus(signal_emitter)] emitter: SignalEmitter<'_>) -> String {
+        let bt = self.bt.clone();
+        let status = unblock(move || bt.start_scan(Instant::now())).await;
+        self.settle(&emitter).await;
+        status.as_str().to_owned()
+    }
+
+    async fn stop_scan(&self, #[zbus(signal_emitter)] emitter: SignalEmitter<'_>) -> String {
+        let bt = self.bt.clone();
+        let status = unblock(move || bt.stop_scan()).await;
+        self.settle(&emitter).await;
+        status.as_str().to_owned()
+    }
+
+    async fn pair(&self, id: &str, #[zbus(signal_emitter)] emitter: SignalEmitter<'_>) -> String {
+        let (bt, id) = (self.bt.clone(), id.to_owned());
+        let status = unblock(move || bt.pair(&id, Instant::now)).await;
+        self.settle(&emitter).await;
+        status.as_str().to_owned()
+    }
+
+    async fn forget(&self, id: &str, #[zbus(signal_emitter)] emitter: SignalEmitter<'_>) -> String {
+        let (bt, id) = (self.bt.clone(), id.to_owned());
+        let status = unblock(move || bt.forget(&id)).await;
+        self.settle(&emitter).await;
+        status.as_str().to_owned()
+    }
+
+    async fn connect(
+        &self,
+        id: &str,
+        #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
+    ) -> String {
+        let (bt, id) = (self.bt.clone(), id.to_owned());
+        let status = unblock(move || bt.connect(&id)).await;
+        self.settle(&emitter).await;
+        status.as_str().to_owned()
+    }
+
+    async fn disconnect(
+        &self,
+        id: &str,
+        #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
+    ) -> String {
+        let (bt, id) = (self.bt.clone(), id.to_owned());
+        let status = unblock(move || bt.disconnect(&id)).await;
+        self.settle(&emitter).await;
+        status.as_str().to_owned()
+    }
+
+    #[zbus(signal)]
+    async fn devices_changed(emitter: &SignalEmitter<'_>) -> zbus::Result<()>;
+}
+
+#[cfg(target_os = "linux")]
+enum Wake {
+    Signal,
+    ScanOver,
+    Closed,
+}
+
+/// Follows BlueZ's signals (devices and adapters added or removed, any property) and BlueZ
+/// itself appearing or leaving, and after a quiet moment reads it again and announces what
+/// changed. Also ends the scan when its 30 s are up. No polling. Runs forever.
+#[cfg(target_os = "linux")]
+pub async fn watch_bluetooth(connection: Connection, bt: SharedBluetooth) {
+    use crate::bluez::BLUEZ;
+
+    let signals = MatchRule::builder()
+        .msg_type(zbus::message::Type::Signal)
+        .sender(BLUEZ)
+        .map(|b| b.build());
+    let owner = MatchRule::builder()
+        .msg_type(zbus::message::Type::Signal)
+        .sender("org.freedesktop.DBus")
+        .and_then(|b| b.member("NameOwnerChanged"))
+        .and_then(|b| b.arg(0, BLUEZ))
+        .map(|b| b.build());
+    let (Ok(signals), Ok(owner)) = (signals, owner) else {
+        return eprintln!("ruya-devices: cannot follow BlueZ");
+    };
+    let (signals, owner) = match (
+        MessageStream::for_match_rule(signals, &connection, None).await,
+        MessageStream::for_match_rule(owner, &connection, None).await,
+    ) {
+        (Ok(a), Ok(b)) => (a, b),
+        (Err(err), _) | (_, Err(err)) => {
+            return eprintln!("ruya-devices: cannot follow BlueZ: {err}");
+        }
+    };
+    let mut stream = futures_lite::stream::or(signals, owner);
+    loop {
+        // Either a BlueZ signal or the end of the scan we started, whichever comes first.
+        let deadline = bt.scan_deadline();
+        let event = future::or(
+            async {
+                if stream.next().await.is_some() {
+                    Wake::Signal
+                } else {
+                    Wake::Closed
+                }
+            },
+            async {
+                match deadline {
+                    Some(at) => {
+                        async_io::Timer::at(at).await;
+                        Wake::ScanOver
+                    }
+                    None => future::pending().await,
+                }
+            },
+        )
+        .await;
+        match event {
+            Wake::Signal => {
+                // Wait for a quiet moment, but never longer than DEBOUNCE_MAX (a scan sends a
+                // signal per device every second or so) and never past the scan's deadline.
+                let cap = Instant::now() + DEBOUNCE_MAX;
+                let cap = bt.scan_deadline().map_or(cap, |d| d.min(cap));
+                while future::or(async { stream.next().await.is_some() }, async {
+                    let quiet = Instant::now() + DEBOUNCE;
+                    async_io::Timer::at(quiet.min(cap)).await;
+                    false
+                })
+                .await
+                {
+                    if Instant::now() >= cap {
+                        break;
+                    }
+                }
+            }
+            Wake::ScanOver => {}
+            Wake::Closed => return,
+        }
+        // Ends the scan if its time is up (a no-op otherwise), whatever woke us.
+        let bt2 = bt.clone();
+        unblock(move || bt2.tick(Instant::now())).await;
+        let bt2 = bt.clone();
+        match unblock(move || bt2.refresh()).await {
+            Ok(changes) if changes.any() => {
+                if let Err(err) = announce_bluetooth(&connection, &changes).await {
+                    eprintln!("ruya-devices: emitting Bluetooth signals failed: {err}");
+                }
+            }
+            Ok(_) => {}
+            Err(err) => eprintln!("ruya-devices: reading BlueZ failed: {}", err.0),
+        }
+    }
+}
+
+#[cfg(target_os = "linux")]
+async fn announce_bluetooth(
+    connection: &Connection,
+    changes: &bluetooth::Changes,
+) -> zbus::Result<()> {
+    let iface = connection
+        .object_server()
+        .interface::<_, BluetoothIface>(OBJECT_PATH)
+        .await?;
+    let this = iface.get().await;
+    this.emit(iface.signal_emitter(), changes).await;
+    Ok(())
 }
