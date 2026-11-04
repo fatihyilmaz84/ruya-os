@@ -39,6 +39,13 @@ FocusScope {
     readonly property string displayText: mask ? "•".repeat(text.length) : text
     readonly property bool canFinish: text.length > 0
 
+    // Focus stays on the entry itself; the focused key is part of its name.
+    Accessible.role: Accessible.Dialog
+    Accessible.name: {
+        const key = focusedKey ? labelFor(focusedKey) : ""
+        return title.length > 0 && key.length > 0 ? title + ", " + key : title + key
+    }
+
     // Geometry, in design px (times u).
     readonly property real keyUnit: 98
     readonly property real keyGap: 10
@@ -293,6 +300,7 @@ FocusScope {
             text: entry.title
             color: Theme.text
             font.pixelSize: Theme.typeHeadline * entry.u
+            font.weight: Theme.weightDemiBold
         }
 
         // The text field: shows the end of the text, with a caret after it.
@@ -317,6 +325,7 @@ FocusScope {
                     text: entry.displayText
                     color: Theme.text
                     font.pixelSize: Theme.typeHeadline * entry.u
+                    font.weight: Theme.weightDemiBold
                 }
                 Rectangle {
                     id: caret
@@ -367,6 +376,11 @@ FocusScope {
                             readonly property bool dimmed: modelData.kind === "done" && !entry.canFinish
                             readonly property bool active: modelData.kind === "shift" && entry.shift
 
+                            Accessible.role: Accessible.Button
+                            Accessible.name: entry.labelFor(modelData)
+                            Accessible.checkable: modelData.kind === "shift"
+                            Accessible.checked: active
+
                             x: modelData.x * (entry.keyUnit + entry.keyGap) * entry.u
                             width: (modelData.w * (entry.keyUnit + entry.keyGap) - entry.keyGap) * entry.u
                             height: rowItem.height
@@ -388,6 +402,7 @@ FocusScope {
                                     text: entry.labelFor(keyItem.modelData)
                                     color: Theme.text
                                     font.pixelSize: (keyItem.modelData.kind === "char" && keyItem.modelData.label.length === 1 ? Theme.typeHeadline : Theme.typeBody) * entry.u
+                                    font.weight: (keyItem.modelData.kind === "char" && keyItem.modelData.label.length === 1) ? Theme.weightDemiBold : Theme.weightRegular
                                 }
                             }
                         }

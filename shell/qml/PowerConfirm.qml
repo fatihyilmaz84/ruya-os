@@ -93,6 +93,7 @@ FocusScope {
             text: dialog.action === "custom" ? dialog.customTitle : (dialog.titles[dialog.action] ?? "")
             color: Theme.text
             font.pixelSize: Theme.typeTitle * dialog.u
+            font.weight: Theme.weightDemiBold
         }
 
         Text {
@@ -115,6 +116,9 @@ FocusScope {
             Rectangle {
                 id: cancelButton
                 objectName: "powerCancel"
+                Accessible.role: Accessible.Button
+                Accessible.name: qsTr("Cancel")
+                Accessible.focusable: true
                 width: 300 * dialog.u
                 height: Theme.buttonHeight * dialog.u
                 radius: height / 2
@@ -126,6 +130,7 @@ FocusScope {
                     text: qsTr("Cancel")
                     color: Theme.text
                     font.pixelSize: Theme.typeHeadline * dialog.u
+                    font.weight: Theme.weightDemiBold
                 }
                 Keys.onReturnPressed: dialog.cancel()
                 Keys.onEnterPressed: dialog.cancel()
@@ -135,6 +140,9 @@ FocusScope {
             Rectangle {
                 id: confirmButton
                 objectName: "powerConfirm"
+                Accessible.role: Accessible.Button
+                Accessible.name: qsTr("Confirm")
+                Accessible.focusable: true
                 width: 300 * dialog.u
                 height: Theme.buttonHeight * dialog.u
                 radius: height / 2
@@ -146,6 +154,7 @@ FocusScope {
                     text: qsTr("Confirm")
                     color: Theme.text
                     font.pixelSize: Theme.typeHeadline * dialog.u
+                    font.weight: Theme.weightDemiBold
                 }
                 Keys.onReturnPressed: dialog.confirm()
                 Keys.onEnterPressed: dialog.confirm()

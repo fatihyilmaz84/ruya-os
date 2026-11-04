@@ -162,6 +162,9 @@ Page {
                                                        : GridView.isCurrentItem && GridView.view.activeFocus)
 
         objectName: "appCard_" + modelData
+        Accessible.role: Accessible.Button
+        Accessible.name: (app.name ?? "") + (app.updateAvailable ? ", " + qsTr("Update available")
+                                              : app.installed ? ", " + qsTr("Installed") : "")
         width: page.cardWidth
         height: page.cardHeight
         scale: focused ? Theme.focusScale : 1.0
@@ -191,7 +194,7 @@ Page {
             id: nameText
             anchors { left: parent.left; right: parent.right; top: art.bottom; topMargin: Theme.spaceXs * card.u }
             text: card.app.name ?? ""
-            color: card.focused ? Theme.text : Theme.textDim
+            color: Theme.text
             font.pixelSize: Theme.typeCaption * card.u
             font.weight: Theme.weightDemiBold
             elide: Text.ElideRight
@@ -201,8 +204,9 @@ Page {
             anchors { left: parent.left; right: parent.right; top: nameText.bottom }
             text: card.app.updateAvailable ? qsTr("Update available")
                 : card.app.installed ? qsTr("Installed") : (card.app.developer ?? "")
-            color: card.app.updateAvailable ? Theme.warningText : Theme.textDim
+            color: card.app.updateAvailable ? Theme.warningText : Theme.text
             font.pixelSize: Theme.typeMicro * card.u
+            font.weight: Theme.weightDemiBold
             elide: Text.ElideRight
         }
     }
@@ -313,6 +317,8 @@ Page {
                         ListView {
                             id: cards
                             objectName: "storeCards_" + row.modelData
+                            Accessible.role: Accessible.List
+                            Accessible.name: currentItem ? currentItem.Accessible.name : page.rowTitle(row.modelData)
                             anchors { left: parent.left; right: parent.right; top: rowHeading.bottom }
                             height: page.cardHeight + Theme.spaceM * page.u
                             focus: true
@@ -341,6 +347,8 @@ Page {
         GridView {
             id: resultsGrid
             objectName: "storeResults"
+            Accessible.role: Accessible.List
+            Accessible.name: currentItem ? currentItem.Accessible.name : qsTr("Search results")
             visible: page.searching
             anchors { left: parent.left; right: parent.right; top: toolbar.bottom; topMargin: Theme.spaceM * page.u; bottom: parent.bottom }
             clip: true
@@ -372,7 +380,7 @@ Page {
             visible: page.searching && page.resultIds.length === 0
             anchors { horizontalCenter: parent.horizontalCenter; top: toolbar.bottom; topMargin: Theme.spaceXxl * page.u }
             text: qsTr("No apps found for \"%1\"").arg(page.query)
-            color: Theme.textDim
+            color: Theme.text
             font.pixelSize: Theme.typeBody * page.u
         }
     }

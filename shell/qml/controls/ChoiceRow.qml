@@ -22,6 +22,9 @@ SettingControl {
 
     signal edited(var value)
 
+    accessibleValue: currentLabel
+    Accessible.role: Accessible.ComboBox
+
     function step(delta) {
         if (options.length === 0)
             return

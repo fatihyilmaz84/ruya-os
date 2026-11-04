@@ -42,7 +42,7 @@ FocusScope {
         text: page.title
         color: Theme.text
         font.pixelSize: Theme.typeDisplay * page.u
-        font.weight: Font.Light
+        font.weight: Theme.weightLight
     }
 
     Item {

@@ -35,7 +35,7 @@ Rectangle {
         color: Theme.text
         opacity: 0.85
         font.pixelSize: Theme.typeHero * art.u
-        font.weight: Font.Light
+        font.weight: Theme.weightLight
     }
 
     Image {

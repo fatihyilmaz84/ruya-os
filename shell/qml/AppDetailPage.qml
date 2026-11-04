@@ -243,6 +243,7 @@ Page {
             text: button.text
             color: Theme.text
             font.pixelSize: Theme.typeHeadline * page.u
+            font.weight: Theme.weightDemiBold
         }
 
         function accept() {
@@ -306,7 +307,7 @@ Page {
                     objectName: "detailPhase"
                     visible: page.working
                     text: page.phaseText() + (page.job ? "  " + page.job.percent + "%" : "")
-                    color: Theme.textDim
+                    color: Theme.text
                     font.pixelSize: Theme.typeCaption * page.u
                 }
 
@@ -353,7 +354,7 @@ Page {
         Text {
             objectName: "detailDeveloper"
             text: page.app.developer ?? ""
-            color: Theme.textDim
+            color: Theme.text
             font.pixelSize: Theme.typeBody * page.u
         }
 
@@ -382,7 +383,7 @@ Page {
         Text {
             width: parent.width
             text: page.app.description ?? ""
-            color: Theme.textDim
+            color: Theme.text
             font.pixelSize: Theme.typeCaption * page.u
             wrapMode: Text.Wrap
             maximumLineCount: 3
@@ -431,7 +432,7 @@ Page {
             visible: page.newPermissions.length > 0
             width: parent.width
             text: qsTr("The update adds: %1").arg(page.newPermissions.map(p => page.permissionText(p)).join(", "))
-            color: page.addsHighRisk ? Theme.warningText : Theme.textDim
+            color: page.addsHighRisk ? Theme.warningText : Theme.text
             font.pixelSize: Theme.typeCaption * page.u
             wrapMode: Text.Wrap
         }
@@ -442,7 +443,7 @@ Page {
             width: parent.width
             text: page.installed ? qsTr("An admin's PIN is needed to update this app.")
                                  : qsTr("An admin's PIN is needed to install this app.")
-            color: Theme.textDim
+            color: Theme.text
             font.pixelSize: Theme.typeCaption * page.u
             wrapMode: Text.Wrap
         }
@@ -505,6 +506,7 @@ Page {
                 text: qsTr("Uninstall %1?").arg(page.app.name ?? "")
                 color: Theme.text
                 font.pixelSize: Theme.typeTitle * page.u
+                font.weight: Theme.weightDemiBold
                 elide: Text.ElideRight
             }
 

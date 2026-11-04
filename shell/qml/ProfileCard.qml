@@ -9,6 +9,10 @@ Item {
 
     readonly property bool focused: ListView.isCurrentItem && ListView.view.activeFocus
 
+    Accessible.role: Accessible.ListItem
+    Accessible.name: modelData.name
+    Accessible.selected: focused
+
     width: 260 * u
     height: 320 * u
     scale: focused ? Theme.focusScale : 1.0
@@ -29,15 +33,16 @@ Item {
             text: card.modelData.name.charAt(0).toUpperCase()
             color: Theme.text
             font.pixelSize: Theme.typeHero * card.u
-            font.weight: Font.Light
+            font.weight: Theme.weightLight
         }
     }
 
     Text {
         anchors { horizontalCenter: parent.horizontalCenter; top: avatar.bottom; topMargin: Theme.spaceM * card.u }
         text: card.modelData.name
-        color: card.focused ? Theme.text : Theme.textDim
+        color: Theme.text
         font.pixelSize: Theme.typeHeadline * card.u
+        font.weight: card.focused ? Theme.weightDemiBold : Theme.weightRegular   // de-emphasis by weight, not by a dimmer colour
     }
 
     Badge {

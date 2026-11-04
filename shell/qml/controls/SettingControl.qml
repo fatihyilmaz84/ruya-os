@@ -20,6 +20,12 @@ FocusScope {
     height: Theme.rowHeight * u
     activeFocusOnTab: true
 
+    // What a screen reader says after the label: the subtype sets it (a value, "on"/"off").
+    property string accessibleValue
+    Accessible.role: Accessible.Button
+    Accessible.name: accessibleValue.length > 0 ? label + ", " + accessibleValue : label
+    Accessible.focusable: true
+
     Rectangle {
         id: background
         anchors.fill: parent

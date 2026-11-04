@@ -49,7 +49,7 @@ Contrast (WCAG, measured): `text` on `background` 18.3:1, on `panel` 15.3:1; `te
 
 ### 3.2 Type (built, T-142)
 
-Typeface: **Inter** (OFL-1.1), bundled as a Qt resource (owner, 2026-10-28; T-145); until T-145 lands the system sans is used. Game titles in the hero use `typeHero` at Bold with -2 % tracking. Seven steps replace the twelve sizes that were in use (20, 26, 28, 30, 32, 34, 36, 38, 44, 56, 64, 96). Sizes outside the table were mapped to the nearest step in T-142: 40 (the keyboard entry text) and 36 (key caps) to `typeHeadline`, 52 to `typeTitle`, 84 (wizard glyphs) to `typeDisplay`. Tokens: `typeHero`..`typeMicro`, `weightLight`/`weightRegular`/`weightDemiBold`/`weightBold`, `fontFamily` (empty until T-145). Call sites write `Theme.typeBody * u`; the weights are not applied at call sites yet.
+Typeface: **Inter** (OFL-1.1), bundled as a Qt resource (owner, 2026-10-28; T-145); until T-145 lands the system sans is used. Game titles in the hero use `typeHero` at Bold with -2 % tracking. Seven steps replace the twelve sizes that were in use (20, 26, 28, 30, 32, 34, 36, 38, 44, 56, 64, 96). Sizes outside the table were mapped to the nearest step in T-142: 40 (the keyboard entry text) and 36 (key caps) to `typeHeadline`, 52 to `typeTitle`, 84 (wizard glyphs) to `typeDisplay`. Tokens: `typeHero`..`typeMicro`, `weightLight`/`weightRegular`/`weightDemiBold`/`weightBold`, `fontFamily` (empty until T-145). Call sites write `Theme.typeBody * u` and set `font.weight` themselves (Light for Hero and Display, DemiBold for Title, Headline and Micro; T-144); `scripts/lint-tokens.ps1` fails on a `Theme.typeHero/Display/Title/Headline/Micro` size in a block with no `font.weight`. De-emphasis is by weight or size, never a dimmer colour on glass.
 
 | Token | px / weight | Use | Replaces |
 |---|---|---|---|
@@ -122,9 +122,9 @@ Each entry: file, status, and the rules a change must keep. A new component gets
 | Glass pill | `GlassPill.qml` | built (T-146) | Pill of `glassStrong` over its own quarter-resolution blur of L0 (§3.6), `glassBorder` hairline; `glassOpaque` when `blurMax` is 0. Section nav and status cluster |
 | Quick menu | `QuickMenu.qml` | planned (T-147) | Left panel 640 px over the live app on `glassStrong` (opaque until B-003): app header, Resume (focused first), Home, Close game, Switch to, volume, profile, Power; replaces the centred Guide card |
 | Launch splash | `LaunchSplash.qml` | planned (T-147) | Blurred hero art, title, spinner until the app's first frame; "Still starting" + Close after 20 s |
-| Profile card | `ProfileCard.qml` | built | Avatar circle in the profile colour, initial `typeHero`, name dims to `textDim` when unfocused, PIN badge |
+| Profile card | `ProfileCard.qml` | built | Avatar circle in the profile colour, initial `typeHero`, name `text`, DemiBold when focused and Regular otherwise, PIN badge |
 | Setting rows | `controls/SettingControl.qml` + `SettingRow`, `ToggleRow`, `ChoiceRow`, `SliderRow` | built | Pill `rowHeight`, label left `typeBody`, value right; optional swatch dot; row focus |
-| Category item | `SettingsPage.qml` | built | Pill, `textDim` at rest, `selectedFill` when chosen, row focus |
+| Category item | `SettingsPage.qml` | built | Pill, `text`, `selectedFill` when chosen, row focus |
 | Settings pane | `SettingsPane.qml` | built | Rows in a column that scrolls with focus in whole rows: the top edge is always the top of a row and the clip ends at the bottom of the last row that fits, so no row is drawn cut or under the header (T-170) |
 | Dialog buttons | `PowerConfirm.qml` | built | Pills `buttonHeight`; the safe choice has focus first; only the destructive confirm uses `dangerFill` |
 | PIN pad | `PinPad.qml` | built | 3 × 4 grid of `radiusS` keys, digit dots, message in `errorText` below; the grid stays left to right in RTL |
@@ -153,7 +153,7 @@ Launch: Accept on Play → art takes the screen (chrome fades, hero art scales 1
 
 - Text contrast ≥ 4.5:1 against the surface it actually sits on, worst case (backdrop at its brightest tint); the focus ring ≥ 3:1 against both the item and its surroundings (white on any tint passes).
 - High-contrast theme, text scale and focus-ring size (`02-shell.md` §7) will be token sets over the same names, so components need no change: never compute a colour in a component (`Qt.lighter` of a token for a gradient is the one allowed exception, as in `Backdrop.qml`).
-- Every interactive item has `Accessible.name`; decoration has none. **Not done anywhere yet** (Inbox): needed before the Orca spike (`02-shell.md` §7).
+- Every interactive item has `Accessible.name`; decoration has none. Done in T-144 and checked by `tst_accessibility.qml`, which walks the focus chain of the picker, the PIN pad, Home, every Settings pane and the Guide overlay and asserts a non-empty `Accessible.name` on each focused item. Lists that hold focus (a ListView or GridView whose delegates are not items of their own) name themselves after the current delegate; setting rows read `label, value` (`SettingControl.accessibleValue`), toggles are `CheckBox` with `checked`, choice rows `ComboBox`, sliders `Slider`; buttons, tiles, profile cards, category items, PIN keys and keyboard keys are `Button`/`ListItem` with their visible text.
 
 ## 8. Changing the design system
 

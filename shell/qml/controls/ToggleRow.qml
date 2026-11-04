@@ -10,6 +10,10 @@ SettingControl {
 
     signal toggled(bool checked)
 
+    Accessible.role: Accessible.CheckBox
+    Accessible.checkable: true
+    Accessible.checked: checked
+
     Rectangle {
         id: track
         objectName: "switchTrack"

@@ -186,6 +186,7 @@ FocusScope {
                 : pad.stage === 1 ? qsTr("Confirm PIN") : pad.prompt
             color: Theme.text
             font.pixelSize: Theme.typeTitle * pad.u
+            font.weight: Theme.weightDemiBold
         }
 
         Row {
@@ -228,6 +229,8 @@ FocusScope {
         GridView {
             id: keys
             objectName: "pinKeys"
+            Accessible.role: Accessible.List
+            Accessible.name: currentItem ? currentItem.Accessible.name : qsTr("Keypad")
 
             readonly property real key: 120 * pad.u
 
@@ -250,6 +253,10 @@ FocusScope {
                 required property string modelData
                 readonly property bool focused: GridView.isCurrentItem && keys.activeFocus
                 readonly property bool isAction: modelData === "del" || modelData === "ok"
+                readonly property string caption: modelData === "del" ? qsTr("Del") : modelData === "ok" ? qsTr("OK") : modelData
+
+                Accessible.role: Accessible.Button
+                Accessible.name: caption
 
                 width: keys.cellWidth
                 height: keys.cellHeight
@@ -269,9 +276,10 @@ FocusScope {
 
                     Text {
                         anchors.centerIn: parent
-                        text: keyCell.modelData === "del" ? qsTr("Del") : keyCell.modelData === "ok" ? qsTr("OK") : keyCell.modelData
+                        text: keyCell.caption
                         color: Theme.text
                         font.pixelSize: (keyCell.isAction ? Theme.typeHeadline : Theme.typeTitle) * pad.u
+                        font.weight: Theme.weightDemiBold
                     }
                 }
             }

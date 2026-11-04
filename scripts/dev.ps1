@@ -183,6 +183,19 @@ function Test-Tokens {
     # The sample is deliberately bad: show the lint's output only when it was NOT rejected.
     if (-not $rejected) { $selfOut | ForEach-Object { Write-Host "    $_" } }
     Record "token lint self-check (rejects a literal font size)" $rejected
+
+    # Self-check: the lint must reject a type step without a weight, and accept one with it.
+    $fixture = Join-Path ([IO.Path]::GetTempPath()) ("ruya-lint-" + [guid]::NewGuid().ToString("N"))
+    New-Item -ItemType Directory -Path $fixture | Out-Null
+    $bad = Join-Path $fixture "NoWeight.qml"
+    Set-Content -Path $bad -Value "Item {`n    Text {`n        font.pixelSize: Theme.typeTitle * u`n    }`n}"
+    & (Join-Path $PSScriptRoot "lint-tokens.ps1") -QmlDir $fixture 6>&1 | Out-Null
+    $rejectedW = ($LASTEXITCODE -eq 1)
+    Set-Content -Path $bad -Value "Item {`n    Text {`n        font.pixelSize: Theme.typeTitle * u`n        font.weight: Theme.weightDemiBold`n    }`n}"
+    & (Join-Path $PSScriptRoot "lint-tokens.ps1") -QmlDir $fixture 6>&1 | Out-Null
+    $acceptedW = ($LASTEXITCODE -eq 0)
+    Remove-Item -Recurse -Force $fixture
+    Record "token lint self-check (rejects a type step without font.weight)" ($rejectedW -and $acceptedW)
 }
 
 # The lupdate project (source list for lupdate) is written by the build's lupdate target, which
