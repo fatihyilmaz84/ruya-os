@@ -18,7 +18,7 @@ bad() { echo "FAIL: $*"; fail=1; }
 status() { busctl --system call "$svc" "$path" "$ifc" GetStatus --json=short; }
 # one key of the record, e.g. field state -> checking
 field() { status | python3 -c "import json,sys; v=json.load(sys.stdin)['data'][0]['$1']['data']; print(str(v).lower() if isinstance(v, bool) else v)"; }
-call() { busctl --system call "$svc" "$path" "$ifc" "$@" | sed 's/^s "\(.*\)"$/\1/'; }
+call() { busctl --system call "$svc" "$path" "$ifc" "$@" | sed -E 's/^ss? "([^"]*)".*/\1/'; }
 wait_state() { # wait_state <not-this-state> <seconds>
     local i=0
     while [ "$i" -lt "$2" ]; do
