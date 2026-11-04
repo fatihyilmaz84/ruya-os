@@ -194,6 +194,19 @@ Item {
             keyClick(Qt.Key_Right)
             const pane = find("paneBluetooth")
             tryVerify(() => pane.activeFocus && pane.laidOutRows().length > 12, 2000, "the pane is filled")
+            // Size the pane so that a row is left half visible: k whole rows plus half a stride.
+            const first = pane.laidOutRows()
+            const stride = first[1].y - first[0].y
+            const gap = stride - first[0].height
+            const whole = Math.floor((pane.height + gap) / stride) - 1
+            verify(whole >= 3 && whole < first.length - 3, "enough rows to scroll")
+            pane.anchors.bottomMargin = pane.height - (whole * stride - gap + stride / 2)
+            tryVerify(() => Math.abs(pane.height - (whole * stride - gap + stride / 2)) < 1, 2000, "pane resized")
+            const wholeBottom = whole * stride - gap
+            tryVerify(() => Math.abs(pane.viewport.height - wholeBottom) < 1, 2000, "the viewport ends at the last whole row")
+            verify(pane.viewport.height < pane.height - 1, "a partial row is clipped away")
+            function onRowTop() { return pane.laidOutRows().some(r => Math.abs(r.y - pane.scrollY) < 0.5) }
+            verify(onRowTop())
             checkRowsInside(pane)
             const rows = pane.focusableRows()
             for (let i = 0; i < rows.length + 2; ++i)
@@ -203,6 +216,10 @@ Item {
             const y = last.mapToItem(pane.viewport, 0, 0).y
             verify(y >= 0 && y + last.height <= pane.viewport.height + 0.5, "the focused row is inside the viewport")
             verify(checkRowsInside(pane) > 0, "the pane did scroll, so the top rows left the view")
+            verify(onRowTop(), "the top edge is the top of a row (scrollY=" + pane.scrollY + ")")
+            verify(pane.laidOutRows().some(r => Math.abs(r.y + r.height - pane.scrollY - pane.viewport.height) < 0.5),
+                   "the viewport ends at the bottom of a row")
+            verify(pane.viewport.height <= wholeBottom + 1, "no partial row at the bottom")
             for (let i = 0; i < rows.length + 2; ++i)
                 keyClick(Qt.Key_Up)                      // and back to the first
             tryVerify(() => pane.focusableRows()[0].activeFocus, 2000, "the first row has focus")

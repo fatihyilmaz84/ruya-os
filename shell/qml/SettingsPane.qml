@@ -20,6 +20,7 @@ FocusScope {
     // moves in whole rows (the top edge is always the top of a row) and the viewport ends at the
     // bottom of the last row that fits. Its height is therefore at most the pane's.
     readonly property Item viewport: view
+    readonly property real scrollY: flick.contentY
 
     // Visible rows (and spacers) of the column in order, with a height.
     function laidOutRows() {
