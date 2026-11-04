@@ -13,6 +13,14 @@ Item {
 
     readonly property int visibleCount: list.count
 
+    // A connected Bluetooth device's battery is low (once per crossing, Bluetooth.batteryLow).
+    Connections {
+        target: Bluetooth
+        function onBatteryLow(id, name, percent) {
+            Notifications.show(qsTr("%1: battery low (%2%)").arg(name).arg(percent), "warning")
+        }
+    }
+
     ListView {
         id: list
         objectName: "toastList"

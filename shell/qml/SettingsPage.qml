@@ -36,6 +36,7 @@ Page {
     readonly property SettingsPane currentPane: current.key === "profiles" ? profilesPane
                                               : current.key === "display" ? displayPane
                                               : current.key === "network" ? networkPane
+                                              : current.key === "bluetooth" ? bluetoothPane
                                               : current.key === "audio" ? audioPane
                                               : current.key === "system" ? systemPane
                                               : current.key === "about" ? aboutPane : null
@@ -123,6 +124,15 @@ Page {
             u: page.u
             overlay: page.overlay
             visible: page.current.key === "network"
+            enabled: visible
+            onExitRequested: page.leavePane()
+        }
+        BluetoothPane {
+            id: bluetoothPane
+            objectName: "paneBluetooth"
+            anchors.fill: parent
+            u: page.u
+            visible: page.current.key === "bluetooth"
             enabled: visible
             onExitRequested: page.leavePane()
         }

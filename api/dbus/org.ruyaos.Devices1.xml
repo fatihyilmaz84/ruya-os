@@ -1,13 +1,13 @@
 <!DOCTYPE node PUBLIC "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
  "http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
 <!--
-  org.ruyaos.Devices1 — audio outputs and volumes, and the network (Bluetooth follows later).
+  org.ruyaos.Devices1 — audio outputs and volumes, the network and Bluetooth.
   Served by ruya-devices on the system bus at /org/ruyaos/Devices1 (blocker B-007: the service
   does not exist yet; the shell's mock backend follows this contract).
   Contract between shell (Qt/QML) and services (Rust); see docs/specs/03-services-and-apps.md §2.3.
 
   One bus name and one object, one interface per device class: org.ruyaos.Devices1.Audio now,
-  org.ruyaos.Devices1.Network and org.ruyaos.Devices1.Bluetooth added next to it later. A new
+  org.ruyaos.Devices1.Network and org.ruyaos.Devices1.Bluetooth next to it. A new
   class is a new interface, so existing clients and their PropertiesChanged filters (which match
   the interface name) are not touched, and each class can be mocked, implemented and tested on
   its own. Shared rules for every interface of this object:
@@ -28,6 +28,15 @@
     "invalid"          malformed argument (e.g. a password for an open network is ignored, but
                        an empty password for a secured network that is not known is invalid)
     "failed"           internal error
+
+  org.ruyaos.Devices1.Bluetooth status strings (BlueZ behind it; "just works" pairing only):
+    "ok"              success (Pair: paired, trusted and connected; the list follows by DevicesChanged)
+    "unknown-device"  no device with that id in the list (Pair, Forget, Connect, Disconnect)
+    "pairing-failed"  the device refused or the pairing was rejected
+    "timeout"         the device did not answer in time (Pair, Connect)
+    "unavailable"     Bluetooth is off or there is no adapter (StartScan, Pair, Connect)
+    "invalid"         malformed argument (an empty id)
+    "failed"          internal error, or Connect/Disconnect on a device that is not paired
 -->
 <node>
   <interface name="org.ruyaos.Devices1.Audio">
@@ -141,6 +150,77 @@
 
     <!-- Networks appeared, disappeared or changed (signal, known, active); call ListWifi again. -->
     <signal name="NetworksChanged"/>
+
+  </interface>
+  <interface name="org.ruyaos.Devices1.Bluetooth">
+
+    <!--
+      Adapter power. Writable (org.freedesktop.DBus.Properties.Set). Switching off disconnects
+      every device, stops a running scan and empties the list of unpaired devices; switching on
+      reconnects paired, trusted devices that are in range. A failed Set answers a D-Bus error.
+    -->
+    <property name="Powered" type="b" access="readwrite">
+      <annotation name="org.freedesktop.DBus.Property.EmitsChangedSignal" value="true"/>
+    </property>
+
+    <!--
+      A scan is running. The service ends it by itself after at most 30 s (and when Powered
+      becomes false); StopScan ends it earlier.
+    -->
+    <property name="Discovering" type="b" access="read">
+      <annotation name="org.freedesktop.DBus.Property.EmitsChangedSignal" value="true"/>
+    </property>
+
+    <!--
+      Paired devices and those found by a scan, in a stable order (paired first). One
+      dictionary per device:
+        id         s   stable id, opaque to the shell (e.g. the BlueZ address)
+        name       s   display name
+        kind       s   "controller" | "headset" | "audio" | "other"
+        paired     b
+        connected  b
+        trusted    b   may reconnect by itself
+        battery    i   0-100, or -1 when the device reports none
+      Empty while Powered is false.
+    -->
+    <method name="ListDevices">
+      <arg name="devices" type="aa{sv}" direction="out"/>
+    </method>
+
+    <!-- Start discovery; found devices arrive as DevicesChanged. "unavailable" when off. -->
+    <method name="StartScan">
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <method name="StopScan">
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <!-- Pair, trust and connect (spec 03 §2.1). Answers when done or failed. -->
+    <method name="Pair">
+      <arg name="id" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <!-- Disconnect and remove the pairing; the device leaves the list. -->
+    <method name="Forget">
+      <arg name="id" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <!-- Connect / disconnect a paired device. -->
+    <method name="Connect">
+      <arg name="id" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <method name="Disconnect">
+      <arg name="id" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <!-- A device appeared, disappeared or changed (connected, battery, ...); call ListDevices again. -->
+    <signal name="DevicesChanged"/>
 
   </interface>
 
