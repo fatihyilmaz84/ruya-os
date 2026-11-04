@@ -1,6 +1,6 @@
 # T-144 — Design review pass: text contrast over the backdrop, accessible names
 
-Status: in-progress · Phase: 2 · Depends: T-143 · Area: shell · Size: M
+Status: done · Phase: 2 · Depends: T-143 · Area: shell · Size: M
 
 ## Goal
 No text in the shell falls below 4.5:1 against what it actually sits on, and every focusable item has an accessible name, so the Orca spike (`02-shell.md` §7) starts from a clean base.

@@ -46,7 +46,7 @@ Then the image recipe in `docs/dev-setup.md` and `vm-update-check.sh` over SSH.
 - T-154's `vm-update-check.sh reboot` mode already sets the guest clock; copy it.
 
 ## Outcome
-Verified: host (vm pending: lead runs `vm-update-check.sh reboot`). `dev.ps1 test` ALL GREEN (271 QML + 22 skips; `ruya-update` crate 70 tests, +14); `dev.ps1 shots` ALL GREEN (57), `26-restart-notice.png` reviewed against 04 §8: warning bar and text readable on the toast card, two lines, no overlap with the header or the focus ring.
+Verified: vm (lead, 2026-11-04: images 0.0.32 and 0.0.33 of main through a local registry; `vm-update-check.sh check` ALL PASSED, then `vm-update-check.sh reboot`: no announcement before the clock moved, `restart_at` 120 s ahead, cleared at once by `ReportActivity`, not announced again for 200 s, announced again after 30 more idle minutes, then the service rebooted the guest (QEMU exited, serial log `reboot: Restarting system`); the cold start booted 0.0.33 with 0.0.32 as rollback, greenboot passed.) Host: `dev.ps1 test` ALL GREEN (271 QML + 22 skips; `ruya-update` crate 70 tests, +14); `dev.ps1 shots` ALL GREEN (57), `26-restart-notice.png` reviewed against 04 §8: warning bar and text readable on the toast card, two lines, no overlap with the header or the focus ring.
 
 **Built.**
 - *Contract* (`org.ruyaos.Update1.xml`): record key `restart_at` (x, unix seconds, 0 = none), only non-zero while state is `staged` and `auto_restart` is on; the header describes the notice, the cancelling events and the download retry. `StatusChanged` when it is set or cleared (also by `ReportActivity`, which now emits when it called a restart off).

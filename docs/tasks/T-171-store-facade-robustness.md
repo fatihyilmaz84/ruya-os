@@ -22,7 +22,7 @@ If `ruya-store` restarts or vanishes mid-install, the Store stops showing a job 
 ## Acceptance criteria
 - [ ] With a job running in the mock, a simulated service loss leaves `Store.jobs` empty and the row's progress hidden (test in `tst_store_backend.qml` or `tst_store_ui.qml`; it fails without the fix).
 - [ ] `tst_pages` runs without a `StorePage.qml` `TypeError` in the log (the Outcome quotes the grep; if a test can assert it with `ignoreWarning`/`failOnWarning`, do so).
-- [ ] VM (lead run): `scripts/vm-store-check.sh` gains a step that restarts `ruya-store` during an install; afterwards the shell's job list is empty (Outcome: `Verified: host (vm pending: vm-store-check.sh)`).
+- [ ] VM (lead run): `scripts/vm-store-check.sh` gains a step that restarts `ruya-store` during an install; afterwards the shell's job list is empty (Outcome: `Verified: vm (lead, 2026-11-04: image 0.0.32 of main, `RUYA_BOOT_OK 0.0.32`; `vm-store-check.sh check` ALL CHECKS PASSED, 48 passes. The restart step, as rewritten by the lead in ac31a3b: the probe's Store requested the install, the job reached `Store.jobs`, `systemctl restart ruya-store` ended it as `failed`, no `ok` for it, `jobs={}` afterwards.)`).
 - [ ] `dev.ps1 test` ALL GREEN.
 
 ## Docs to update

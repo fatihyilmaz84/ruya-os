@@ -1,6 +1,6 @@
 # T-160 — Greenboot: no failing wanted check on a healthy boot
 
-Status: in-progress · Phase: 0 · Depends: — · Area: image · Size: S · Owner: builder
+Status: done · Phase: 0 · Depends: — · Area: image · Size: S · Owner: builder
 
 ## Goal
 A healthy boot logs no failing greenboot check. Today the wanted script `01_update_platforms_check.sh` fails on every VM boot; it is harmless ("wanted"), but it hides real failures in the journal and will confuse the first hardware install (B-002).
@@ -49,6 +49,6 @@ Verified: vm (paired with T-163, same image 0.0.30-t163, booted `RUYA_BOOT_OK 0.
 
 **Update drill:** booted the image, `bootc switch` to a local registry tag, rebooted (health check passed again), built 0.0.31-t163 and pushed it as the same tag; `vm-update-check.sh check`: Check found 0.0.31-t163, Download staged it, `bootc status` has the staged deployment, rollback/SetChannel by the shell are forbidden, nobody refused, auto_restart cases pass. Two lines failed ("Check did not answer ok", "Download did not answer ok"); the rest passed. The builder blamed the `call` helper (`ss` replies) and changed its `sed`, but did not re-run.
 
-**Review correction (lead, 2026-11-04):** that diagnosis was wrong. `Update1.Check`/`Download` reply with one `s` (`api/dbus/org.ruyaos.Update1.xml`), which the old helper parsed. The answers were real non-`ok` ones, most likely `busy`: after the `bootc switch` reboot, the start-up scheduled check (T-154) was still running, and when it finds an update it also downloads it. `vm-update-check.sh` now waits for a running check or download first, notes when the scheduled run already staged the update, and prints the actual reply on failure. The new `sed` is harmless and stays. The criterion stays open until the lead's VM pass shows ALL PASSED.
+**Review correction (lead, 2026-11-04):** that diagnosis was wrong. `Update1.Check`/`Download` reply with one `s` (`api/dbus/org.ruyaos.Update1.xml`), which the old helper parsed. The answers were real non-`ok` ones, most likely `busy`: after the `bootc switch` reboot, the start-up scheduled check (T-154) was still running, and when it finds an update it also downloads it. `vm-update-check.sh` now waits for a running check or download first, notes when the scheduled run already staged the update, and prints the actual reply on failure. The new `sed` is harmless and stays. **Lead VM pass (2026-11-04):** image 0.0.32 healthy boot: greenboot skipped `01_update_platforms_check.sh` and passed; after `bootc switch` to the registry tag and 0.0.33 pushed, `vm-update-check.sh check` ALL PASSED (26 passes, no FAIL; it noted the start state `up-to-date`, the scheduled check had already run); `Check` and `Download` answered `ok`, 0.0.33 staged. The criterion is met.
 
 Files: image/rootfs/etc/greenboot/greenboot.conf, docs/specs/01-platform.md (section 4), scripts/vm-update-check.sh.

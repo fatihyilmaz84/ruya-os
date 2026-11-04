@@ -23,7 +23,6 @@ Open work only (todo, in-progress, blocked), in the recommended order; when NEXT
 
 | ID | Title | Status | Depends |
 |---|---|---|---|
-| [T-160](tasks/T-160-greenboot-wanted-check.md) | Greenboot: no failing wanted check on a healthy boot | in-progress | — |
 | [T-162](tasks/T-162-ruya-session-in-the-image.md) | **[lead]** `ruya-session` in the image: real spawner, unit, bus policy | todo | — |
 | [T-164](tasks/T-164-per-profile-wayland-sockets.md) | **[lead]** Per-profile Wayland sockets: a profile's app appears in the shell | todo | T-162 |
 | [T-165](tasks/T-165-profile-switch-freezes-apps.md) | Profile switch and sign-out freeze the profile's apps | todo | T-164 |
@@ -32,16 +31,15 @@ Open work only (todo, in-progress, blocked), in the recommended order; when NEXT
 | [T-173](tasks/T-173-devices-bluetooth-service.md) | `ruya-devices`: `Devices1.Bluetooth` over BlueZ | todo | — |
 | [T-174](tasks/T-174-devices-storage-service.md) | `ruya-devices`: `Devices1.Storage` over udisks2 | todo | T-137 |
 | [T-145](tasks/T-145-bundle-inter.md) | Bundle the Inter typeface | todo | T-142 |
-| [T-144](tasks/T-144-contrast-and-accessible-names.md) | Design review: contrast over the backdrop, accessible names | in-progress | T-143 |
 | [T-166](tasks/T-166-suspend-under-eglfs.md) | **[lead]** Suspend and resume with the shell on KMS (eglfs) | todo | — |
 
-**VM queue** (done on the host, VM check pending; the lead runs them with one image build): T-159 (`vm-update-check.sh reboot`); T-160 (`vm-update-check.sh` ALL PASSED, drill fixed by the lead after review); T-171 (`vm-store-check.sh check`, the restart step rewritten by the lead).
+**VM queue** (done on the host, VM check pending; the lead runs them with one image build): empty (T-159, T-160, T-171 verified 2026-11-04 on 0.0.32/0.0.33).
 
 ## Inbox
 
 Follow-ups and debt for the next planner, one line each: `- (source) what, and why it matters`. Dispatched builders put them in their HANDOFF; the lead copies them here. Plan at 5+ items.
 
-- (T-159) `image/build/90-initramfs.sh` prints `dracut-install: ERROR: installing '/root'` (the initramfs is still written); check at the next VM boot whether it matters, else silence it.
+- (T-159) `image/build/90-initramfs.sh` prints `dracut-install: ERROR: installing '/root'` (the initramfs is still written); 0.0.32 and 0.0.33 print it once each and boot fine (`RUYA_BOOT_OK`, greenboot passed): it doesn't matter, silence it (small image task).
 - (T-163 review) `ruya-library`: rescan on Flatpak updates too (the fingerprint is names only; put the deploy commit in it), so a renamed or recategorised app refreshes without `Rescan`.
 - (T-163) Home says "Your library is empty" while apps are installed but none was played (`last_played` 0, Recent row only): fall back to installed items, or record `last_played` (T-162/T-147).
 - (T-163) `Store1` answers `already-installed` for an app removed outside the Store (`flatpak uninstall`): its installed cache is stale.
@@ -49,6 +47,10 @@ Follow-ups and debt for the next planner, one line each: `- (source) what, and w
 - (T-172 review) Settings panes expose their own `hints` (SettingsPage uses `currentPane.hints` while the pane has focus), instead of `SettingsPage.qml:46` special-casing `aboutPane.activeFocus`; also renumber `15-picker-tr`/`15-pin-locked`.
 - (T-171 review) Store: resume or re-query jobs after `ruya-store` comes back (needs a `ListJobs` in `Store1.xml`).
 - (T-170 review) Settings panes give no cue that more rows exist below the viewport, now that no cut row hints at it: decide on a scroll affordance (fade, chevron or peek) in 04 §5 (design, lead).
+- (T-144 review) Settings category list overflows at 1920x1080 (9 x 72 + 8 x 8 = 712 px, `clip: false`, `SettingsPage.qml:62-75`): About runs ~10 px into the hint bar; selected, its pill and ring will cover the A/B glyphs. Shrink the items or scroll in whole rows like `SettingsPane` (T-170).
+- (T-144 review) Setup's multi-line copy is `typeHeadline`, now DemiBold at 34 px: heavy for prose; consider `typeBody` Regular (04 §3.2, design).
+- (T-144) `tst_accessibility`: also walk Games, Store, AppDetail, PowerConfirm, the TextEntry keys, the profile add/manage flows and the wizard steps (Setup's key sink is just "Setup"); ProfileCard's name could say "PIN protected"; re-check the Accessibility category when its pane lands.
+- (T-144 review) `lint-tokens.ps1` weight rule can be fooled by a `font.weight` in a nested child or a comment, and misses a multi-line `font.pixelSize:`; none in the tree today.
 
 ## Blocked (need something this host doesn't have)
 
