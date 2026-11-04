@@ -30,7 +30,7 @@ Open work only (todo, in-progress, blocked), in the recommended order; when NEXT
 | [T-164](tasks/T-164-per-profile-wayland-sockets.md) | **[lead]** Per-profile Wayland sockets: a profile's app appears in the shell | todo | T-162 |
 | [T-165](tasks/T-165-profile-switch-freezes-apps.md) | Profile switch and sign-out freeze the profile's apps | todo | T-164 |
 | [T-147](tasks/T-147-fullscreen-app-flow.md) | Full-screen apps: launch splash, quick menu, return, close | todo | T-164 |
-| [T-171](tasks/T-171-store-facade-robustness.md) | Store: no ghost jobs when the service restarts; no null-binding warnings | todo | — |
+| [T-171](tasks/T-171-store-facade-robustness.md) | Store: no ghost jobs when the service restarts; no null-binding warnings | in-progress | — |
 | [T-170](tasks/T-170-settings-pane-polish.md) | Settings panes: no clipped top rows; Bluetooth and Storage pane fixes | todo | T-137 |
 | [T-172](tasks/T-172-hint-bar-follow-ups.md) | Hint bar follow-ups: one Sections hint, wizard hints, per-page overrides | todo | — |
 | [T-161](tasks/T-161-controller-battery.md) | Controller battery: `Devices1` over UPower, status cluster, low-battery toast | todo | T-157 |
