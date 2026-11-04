@@ -871,7 +871,7 @@
 <context>
     <name>SectionNav</name>
     <message>
-        <location filename="../qml/SectionNav.qml" line="+28"/>
+        <location filename="../qml/SectionNav.qml" line="+32"/>
         <source>Home</source>
         <translation>Home</translation>
     </message>
@@ -1073,7 +1073,7 @@
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+289"/>
+        <location filename="../qml/Shell.qml" line="+291"/>
         <source>Could not %1.</source>
         <translation>Could not %1.</translation>
     </message>
@@ -1098,12 +1098,12 @@
         <translation>Audio output: %1</translation>
     </message>
     <message>
-        <location line="+545"/>
+        <location line="+612"/>
         <source>Power</source>
         <translation>Power</translation>
     </message>
     <message>
-        <location line="-537"/>
+        <location line="-604"/>
         <source>Update ready. Restart to finish.</source>
         <translation>Update ready. Restart to finish.</translation>
     </message>
@@ -1118,7 +1118,7 @@
         <translation>%1 stopped unexpectedly</translation>
     </message>
     <message>
-        <location line="+218"/>
+        <location line="+206"/>
         <source>Continue playing</source>
         <translation>Continue playing</translation>
     </message>
@@ -1148,7 +1148,7 @@
         <translation>Starting %1…</translation>
     </message>
     <message>
-        <location line="+186"/>
+        <location line="+265"/>
         <source>System</source>
         <translation>System</translation>
     </message>

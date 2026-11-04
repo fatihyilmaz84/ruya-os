@@ -60,6 +60,8 @@ FocusScope {
         page.anchors.fill = slot
         page.backRequested.connect(root.closePage)
         page.openRequested.connect(root.openPage)
+        page.upFromTop.connect(root.focusNav)
+        page.stepRequested.connect(root.stepSection)
         slot.page = page
         slotCount += 1
         if (below)
@@ -512,7 +514,8 @@ FocusScope {
             Behavior on x { NumberAnimation { duration: Theme.pageMs; easing.type: Easing.OutCubic } }
         }
 
-        // LB / RB switch sections from anywhere on Home; Back does nothing here.
+        // LB / RB switch sections from anywhere on Home (the nav handles them itself); Back does
+        // nothing here.
         Keys.onPressed: event => {
             if (event.key === Qt.Key_PageDown) {
                 root.stepSection(1)
@@ -524,19 +527,6 @@ FocusScope {
                 Sfx.back()
                 event.accepted = true
             }
-        }
-
-        SectionNav {
-            id: sectionNav
-            objectName: "sectionNav"
-            x: root.marginX
-            y: root.marginY
-            u: root.u
-            blurSource: l0
-            blurX: x
-            blurY: y
-            onActivated: key => root.openSection(key)
-            onDownRequested: heroBlock.forceActiveFocus()
         }
 
         HeroBlock {
@@ -618,7 +608,7 @@ FocusScope {
     function rememberHomeFocus() {
         const f = Window.activeFocusItem
         let p = f
-        while (p && p !== home)
+        while (p && p !== home && p !== sectionNav)
             p = p.parent
         homeSavedFocus = p ? f : null
     }
@@ -652,26 +642,59 @@ FocusScope {
         openPage("details", { id: heroItem.id })
     }
 
-    // Opens a section from the nav or LB/RB; "home" just brings focus back to Play.
+    // Opens a section from the nav or LB/RB. From Home, "home" just brings focus to Play. On a
+    // section page the open pages are closed first (Back from the new one lands on Home, where
+    // it started); "home" then stays there, and the page's own pill returns focus to its content.
     function openSection(key) {
-        if (key === "home")
+        if (pageOpen) {
+            if (key === navSection) {
+                leaveNavDown()
+                return
+            }
+            while (pageOpen)
+                closePage()
+            if (key === "home") {
+                heroBlock.forceActiveFocus()
+                return
+            }
+        } else if (key === "home") {
             heroBlock.forceActiveFocus()
-        else
-            openPage(key)
+            return
+        }
+        openPage(key)
     }
 
-    // LB / RB: the section after (or before) the focused pill, or after Home when focus is not
-    // in the nav.
+    // LB / RB: the section after (or before) the focused pill, or after the one on screen when
+    // focus is not in the nav.
     function stepSection(direction) {
-        if (!home.shown)
+        if (!navShown || systemPanel.open)
             return
         const inNav = sectionNav.activeFocus
-        const index = (inNav ? sectionNav.currentIndex : 0) + direction
+        const index = (inNav ? sectionNav.currentIndex : sectionNav.keys.indexOf(navSection)) + direction
         if (index < 0 || index >= sectionNav.keys.length)
             return
         if (inNav)
             sectionNav.currentIndex = index
         openSection(sectionNav.keys[index])
+    }
+
+    // Up from the top of a section page: the nav, on the pill of that page.
+    function focusNav() {
+        if (!navShown || systemPanel.open)
+            return
+        Sfx.navigate()
+        if (pageOpen)
+            slots[slots.length - 1].rememberFocus()
+        sectionNav.currentIndex = sectionNav.keys.indexOf(navSection)
+        sectionNav.forceActiveFocus()
+    }
+
+    // Down from the nav: the page content that had focus, or Play on Home.
+    function leaveNavDown() {
+        if (pageOpen)
+            slots[slots.length - 1].restoreFocus()
+        else
+            heroBlock.forceActiveFocus()
     }
 
     Component { id: gamesPage; GamesPage {} }
@@ -690,6 +713,52 @@ FocusScope {
         anchors.fill: parent
         visible: root.slotCount > 0
         enabled: root.pageOpen && !root.appOpen
+    }
+
+    // The section nav (04 §5): one instance in the top layer, so it stays put when Home gives way
+    // to a section page. Shown on Home and on the section pages (a key of `sectionNav.keys` on top
+    // of the stack); a detail page, a running app, the picker and the wizard hide it, and the
+    // Guide overlay disables it.
+    readonly property bool navShown: signedIn && !appOpen
+        && (!pageOpen || sectionNav.keys.indexOf(currentPage) >= 0)
+    // The section on screen: the top section page, else Home. A detail page keeps the last one
+    // (the nav fades out with it).
+    property string navSection: "home"
+    onCurrentPageChanged: {
+        if (currentPage === "")       // not pageOpen: that binding may not have updated yet
+            navSection = "home"
+        else if (sectionNav.keys.indexOf(currentPage) >= 0)
+            navSection = currentPage
+    }
+    // The focus ring follows a section page; going back to Home leaves it on the pill that opened
+    // the page (Back lands on it).
+    onNavSectionChanged: {
+        if (navSection !== "home")
+            sectionNav.currentIndex = sectionNav.keys.indexOf(navSection)
+    }
+
+    SectionNav {
+        id: sectionNav
+        objectName: "sectionNav"
+        x: root.marginX
+        y: root.marginY
+        u: root.u
+        section: root.navSection
+        blurSource: l0
+        blurX: x
+        blurY: y
+        opacity: root.navShown ? 1 : 0
+        visible: root.navShown || opacity > 0     // visible at once, so focus can be given in the same step
+        enabled: root.navShown && !systemPanel.open
+        Behavior on opacity { NumberAnimation { duration: Theme.pageMs; easing.type: Easing.OutCubic } }
+        onActivated: key => root.openSection(key)
+        onDownRequested: root.leaveNavDown()
+        onStepRequested: direction => root.stepSection(direction)
+        onBackRequested: {
+            Sfx.back()
+            if (root.pageOpen)
+                root.closePage()
+        }
     }
 
     // App items (addApp): above home and pages, below the toasts, modals and overlay.

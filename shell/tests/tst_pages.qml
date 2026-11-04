@@ -221,6 +221,99 @@ Item {
             tryVerify(() => find("pageHost").children.length === 0, 2000, "no page items left")
         }
 
+        function test_nav_on_each_section_page_data() {
+            return [
+                { tag: "games", focusName: "gamesGrid" },
+                { tag: "media", focusName: "pagePlaceholder" },
+                { tag: "store", focusName: "storeCards_featured" },
+                { tag: "settings", focusName: "categoryList" },
+            ]
+        }
+
+        function test_nav_on_each_section_page(data) {
+            openSection(data.tag)
+            tryCompare(tc.shell, "currentPage", data.tag)
+            tryVerify(() => find(data.focusName).activeFocus, 2000)
+            const nav = find("sectionNav")
+            tryCompare(nav, "opacity", 1)
+            verify(nav.visible)
+            compare(nav.section, data.tag, "the current pill is the page")
+            compare(find("navIcon_settings").filled, data.tag === "settings")
+            // Up from the top row goes to the nav, on this page's pill; Down comes back to the
+            // item that had focus. (Games and Store have a filter or search row above the content.)
+            const win = tc.shell.Window.window
+            let last = null
+            for (let i = 0; i < 3 && !nav.activeFocus; ++i) {
+                last = win.activeFocusItem
+                keyClick(Qt.Key_Up)
+            }
+            tryVerify(() => nav.activeFocus, 2000, "Up reaches the nav")
+            compare(nav.currentKey, data.tag)
+            keyClick(Qt.Key_Down)
+            tryVerify(() => !nav.activeFocus, 2000)
+            verify(last !== null)
+            tryVerify(() => win.activeFocusItem === last, 2000, "Down returns to the same item")
+            compare(tc.shell.currentPage, data.tag)
+        }
+
+        function test_nav_down_returns_to_the_same_item() {
+            openSection("settings")
+            tryVerify(() => find("categoryList").activeFocus)
+            keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Down)
+            compare(find("categoryList").currentIndex, 2)
+            keyClick(Qt.Key_Up)
+            keyClick(Qt.Key_Up)
+            compare(find("categoryList").currentIndex, 0)
+            verify(find("categoryList").activeFocus, "Up inside the list stays in the page")
+            keyClick(Qt.Key_Up)
+            tryVerify(() => find("sectionNav").activeFocus)
+            keyClick(Qt.Key_Down)
+            tryVerify(() => find("categoryList").activeFocus, 2000)
+            compare(find("categoryList").currentIndex, 0)
+        }
+
+        function test_bumpers_switch_sections_on_a_page() {
+            openSection("games")
+            tryVerify(() => find("gamesGrid").activeFocus)
+            keyClick(Qt.Key_PageDown)
+            tryCompare(tc.shell, "currentPage", "media")
+            tryVerify(() => find("pagePlaceholder").activeFocus, 2000)
+            compare(find("sectionNav").section, "media")
+            keyClick(Qt.Key_PageUp)
+            tryCompare(tc.shell, "currentPage", "games")
+            tryVerify(() => find("gamesGrid").activeFocus, 2000)
+            keyClick(Qt.Key_PageUp)                    // Home
+            tryCompare(tc.shell, "currentPage", "")
+            tryVerify(() => find("homePlay").activeFocus, 2000)
+            // Back from a switched-to page still lands on Home.
+            keyClick(Qt.Key_PageDown)
+            tryCompare(tc.shell, "currentPage", "games")
+            keyClick(Qt.Key_Escape)
+            tryCompare(tc.shell, "currentPage", "")
+        }
+
+        function test_nav_hidden_on_detail_and_disabled_under_guide() {
+            openSection("store")
+            tryVerify(() => find("storeCards_featured").activeFocus)
+            const nav = find("sectionNav")
+            openDetail({})
+            tryCompare(nav, "opacity", 0)
+            compare(nav.enabled, false)
+            keyClick(Qt.Key_Up)
+            compare(nav.activeFocus, false)
+            keyClick(Qt.Key_PageDown)
+            compare(tc.shell.currentPage, "detail")
+            keyClick(Qt.Key_Escape)
+            tryCompare(nav, "opacity", 1)
+            tryVerify(() => find("storeCards_featured").activeFocus, 2000)
+            keyClick(Qt.Key_HomePage)
+            tryVerify(() => find("systemActions").activeFocus, 2000)
+            compare(nav.enabled, false)
+            keyClick(Qt.Key_Escape)
+            tryCompare(nav, "enabled", true)
+        }
+
         function test_zz_screenshots() {
             if (!shotsDir)
                 skip("set RUYA_SHOTS_DIR to save screenshots")
@@ -228,6 +321,15 @@ Item {
             tryVerify(() => find("pagePlaceholder") && find("pagePlaceholder").activeFocus)
             wait(800)
             grabImage(tc.shell).save(shotsDir + "/5-page-placeholder.png")
+        }
+
+        function test_zz_screenshots_settings() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            openSection("settings")
+            tryVerify(() => find("categoryList").activeFocus)
+            wait(800)
+            grabImage(tc.shell).save(shotsDir + "/5b-settings-nav.png")
         }
     }
 }

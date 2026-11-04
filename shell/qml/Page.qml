@@ -22,6 +22,10 @@ FocusScope {
     signal backRequested()
     // Ask the shell to push another page over this one (a detail page, T-111).
     signal openRequested(string key, var params)
+    // Up that no content item handled (the top row of the content): the shell moves focus to the
+    // section nav when this page shows it. LB/RB: the next/previous section (direction +1/-1).
+    signal upFromTop()
+    signal stepRequested(int direction)
 
     Text {
         id: heading
@@ -43,12 +47,19 @@ FocusScope {
         }
     }
 
-    // Only Back is handled here; everything else bubbles up (the shell opens the Guide
-    // overlay from any page).
+    // Back, the nav hand-offs (Up from the top, LB/RB) are handled here; everything else bubbles
+    // up (the shell opens the Guide overlay from any page). Content items that use Up or
+    // LB/RB themselves accept the key first.
     Keys.onPressed: event => {
         if (event.key === Qt.Key_Escape || event.key === Qt.Key_Back) {
             Sfx.back()
             page.backRequested()
+            event.accepted = true
+        } else if (event.key === Qt.Key_Up) {
+            page.upFromTop()
+            event.accepted = true
+        } else if (event.key === Qt.Key_PageDown || event.key === Qt.Key_PageUp) {
+            page.stepRequested(event.key === Qt.Key_PageDown ? 1 : -1)
             event.accepted = true
         }
     }
