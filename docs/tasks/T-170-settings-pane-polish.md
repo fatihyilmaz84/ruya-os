@@ -1,6 +1,6 @@
 # T-170 — Settings panes: no clipped top rows; Bluetooth and Storage pane fixes
 
-Status: todo · Phase: 2 · Depends: T-137 · Area: shell · Size: S · Owner: builder
+Status: in-progress · Phase: 2 · Depends: T-137 · Area: shell · Size: S · Owner: builder
 
 ## Goal
 When a Settings pane scrolls, its first rows no longer slide under the header. Pressing Accept on a device that is already pairing, or a drive that is ejecting, does nothing. A failed Disconnect says so. Drive sizes follow the shell language.
