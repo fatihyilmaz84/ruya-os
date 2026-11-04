@@ -1186,12 +1186,12 @@
         <translation>Audio output: %1</translation>
     </message>
     <message>
-        <location line="+612"/>
+        <location line="+613"/>
         <source>Power</source>
         <translation>Power</translation>
     </message>
     <message>
-        <location line="-604"/>
+        <location line="-605"/>
         <source>Update ready. Restart to finish.</source>
         <translation>Update ready. Restart to finish.</translation>
     </message>
@@ -1236,7 +1236,7 @@
         <translation>Starting %1…</translation>
     </message>
     <message>
-        <location line="+265"/>
+        <location line="+266"/>
         <source>System</source>
         <translation>System</translation>
     </message>

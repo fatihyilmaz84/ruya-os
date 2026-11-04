@@ -34,7 +34,6 @@ Open work only (todo, in-progress, blocked), in the recommended order; when NEXT
 | [T-166](tasks/T-166-suspend-under-eglfs.md) | **[lead]** Suspend and resume with the shell on KMS (eglfs) | todo | — |
 | [T-144](tasks/T-144-contrast-and-accessible-names.md) | Design review: contrast over the backdrop, accessible names | todo | T-143 |
 | [T-145](tasks/T-145-bundle-inter.md) | Bundle the Inter typeface | todo | T-142 |
-| [T-136](tasks/T-136-bluetooth-contract-and-settings.md) | `Devices1.Bluetooth` contract, mock, Settings pane | in-progress | — |
 | [T-137](tasks/T-137-storage-contract-and-settings.md) | `Devices1.Storage` contract, mock, Settings → Storage | todo | — |
 
 **VM queue** (done on the host, VM check pending; the lead runs them with one image build): T-159 (`vm-update-check.sh reboot`).
@@ -51,6 +50,12 @@ Follow-ups and debt for the next planner, one line each: `- (source) what, and w
 - (T-168 review) `shell/PATTERNS.md` (pages): document `Page.qml`'s `upFromTop` and `stepRequested` (Up at a page's top row reaches the nav, LB/RB switch sections); every page now swallows unaccepted Up/PageUp/PageDown.
 - (T-168 review) Add a screenshot of the Home nav with focus, so the ring on the filled Home pill is reviewed on Home too.
 - (T-167) Token-lint self-check text: the builder flagged its wording as misleading; re-read `lint-tokens` output when touching it.
+- (T-136) BlueZ half of `Devices1.Bluetooth` in `ruya-devices` (T-132 family): 30 s scan auto-stop, paired first, power-off clears the list, a `Powered` write that fails under rfkill; and `Pair` must answer within the ~25 s D-Bus default timeout (say so in the XML) or `DBusBluetoothBackend` sets a longer one (review). Part of B-007.
+- (T-136) Pairing PIN/passkey dialogs, player assignment, button test and remapping are missing (input daemon, B-006); the pane does "just works" pairing only.
+- (T-136 review) `BluetoothPane`: ignore Accept on the row that is pairing (`busyId`), and a Disconnect-specific failure message (it says "Could not connect.").
+- (T-136 review) Settings panes: the top rows are clipped under the header when the pane scrolls (`23-settings-network`, `26-settings-bluetooth`).
+- (lead) `dev.ps1`: after a merge adds a `.qml` file, `shell\build-win\.lupdate\*_lupdate_project.json` stays stale and the translation lint reports the new strings as "vanished"; a `cmake -S shell -B shell\build-win` fixed it. `dev.ps1` should reconfigure when `shell/CMakeLists.txt` is newer than that file.
+- (T-136) Screenshot numbering: `26-settings-bluetooth.png` and `26-restart-notice.png` share a prefix; renumber when touching shots.
 
 ## Blocked (need something this host doesn't have)
 

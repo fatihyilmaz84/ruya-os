@@ -1184,12 +1184,12 @@
         <translation>Ses çıkışı: %1</translation>
     </message>
     <message>
-        <location line="+612"/>
+        <location line="+613"/>
         <source>Power</source>
         <translation>Güç</translation>
     </message>
     <message>
-        <location line="-604"/>
+        <location line="-605"/>
         <source>Update ready. Restart to finish.</source>
         <translation>Güncelleme hazır. Bitirmek için yeniden başlat.</translation>
     </message>
@@ -1234,7 +1234,7 @@
         <translation>%1 başlatılıyor…</translation>
     </message>
     <message>
-        <location line="+265"/>
+        <location line="+266"/>
         <source>System</source>
         <translation>Sistem</translation>
     </message>
