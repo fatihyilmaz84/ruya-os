@@ -94,9 +94,10 @@ Item {
             verify(find("paneNetwork").visible)
             verify(!find("paneComingSoon").visible)
             verify(!find("paneProfiles").visible)
-            keyClick(Qt.Key_Down)                        // Bluetooth: no content yet
+            keyClick(Qt.Key_Down)                        // Bluetooth has a pane (T-136)
             compare(list.currentIndex, 2)
-            verify(find("paneComingSoon").visible)
+            verify(find("paneBluetooth").visible)
+            verify(!find("paneComingSoon").visible)
             verify(!find("paneNetwork").visible)
             keyClick(Qt.Key_Up)
             keyClick(Qt.Key_Up)

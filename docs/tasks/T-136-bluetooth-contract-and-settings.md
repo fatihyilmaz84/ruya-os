@@ -44,4 +44,14 @@ Settings → "Bluetooth & controllers" lets the user turn Bluetooth on or off, s
 - Refresh translations and give Turkish a real translation.
 
 ## Outcome
-_Filled in by the implementer. Start with a `Verified:` line._
+Verified: host (vm pending: none needed; the D-Bus client is unverified until the BlueZ service exists)
+
+Built `org.ruyaos.Devices1.Bluetooth` (same XML file: `Powered` rw, `Discovering`, `ListDevices`, `StartScan`/`StopScan`, `Pair`, `Forget`, `Connect`, `Disconnect`, `DevicesChanged`, status strings in the header), `shell/src/bluetooth/` (`BluetoothBackend`, `MockBluetoothBackend`, `DBusBluetoothBackend`, `Bluetooth` singleton, same structure as `network/`), `qml/BluetoothPane.qml` wired into `SettingsPage.qml`, and `tests/tst_bluetooth.qml` (8 tests plus the screenshot `26-settings-bluetooth.png`, reviewed: devices, battery values and the focus ring on a row are visible). Turkish strings added. `dev.ps1 test` ALL GREEN (284 passed, 23 skips are the screenshot tests), `shots` ALL GREEN.
+
+Design points: the singleton emits `finished(op, id, status)` for every command (`op` = power | scan | pair | forget | connect | disconnect). The low-battery rule lives in the singleton (`batteryLow(id, name, percent)`: connected, battery known and under 15 %, once until the device recovers or disconnects); the toast is shown by a `Connections` in `ToastLayer.qml` so it works wherever the user is. Mock: paired "Ruya Pad Pro" (connected, 80 %), "Retro Pad", "Soundbar" (battery unknown); a first scan finds "Flaky Pad" (pairing-failed), "Sound Buds" and "Old Headset" (timeout), a second scan "Ruya Pad". A scan ends by itself after 600 ms. Power off clears unpaired devices and the scan counter, disconnects everything and reconnects the trusted ones on power on. Contract choices: `Connect`/`Disconnect` on an unpaired device answer `failed` (documented in the XML); the mock is the only thing that reaches `timeout`/`pairing-failed`. After Forget focus goes to the row that takes the place of the forgotten one (else the last row).
+
+`tst_settings.qml::test_two_pane_navigation` used Bluetooth as its "Coming soon" category; it now checks that Bluetooth has a pane (Storage is already covered as "Coming soon" later in that test; no assertion weakened).
+
+Revert checks: removing the once-per-crossing guard fails `test_low_battery_toast_once_per_crossing`; removing the scan stop on power off fails `test_power_off_hides_and_stops_scan`.
+
+Unverified: `DBusBluetoothBackend` (compiled only; the property `Set` for `Powered` answers only ok/failed). Player assignment, button test, remapping, PIN/passkey dialogs are out of scope.

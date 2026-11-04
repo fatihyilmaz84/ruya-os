@@ -295,6 +295,94 @@
     </message>
 </context>
 <context>
+    <name>BluetoothPane</name>
+    <message>
+        <location filename="../qml/BluetoothPane.qml" line="+70"/>
+        <source>Pairing failed. Put the device in pairing mode and try again.</source>
+        <translation>Pairing failed. Put the device in pairing mode and try again.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The device did not answer.</source>
+        <translation>The device did not answer.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Bluetooth is off.</source>
+        <translation>Bluetooth is off.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>That device is no longer available.</source>
+        <translation>That device is no longer available.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Could not pair the device.</source>
+        <translation>Could not pair the device.</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Could not connect.</source>
+        <translation>Could not connect.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Pairing…</source>
+        <translation>Pairing…</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Not paired</source>
+        <translation>Not paired</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Connected</source>
+        <translation>Connected</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Paired</source>
+        <translation>Paired</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Battery %1%</source>
+        <translation>Battery %1%</translation>
+    </message>
+    <message>
+        <location line="+37"/>
+        <source>Bluetooth</source>
+        <translation>Bluetooth</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Bluetooth is off</source>
+        <translation>Bluetooth is off</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Add a device</source>
+        <translation>Add a device</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Scanning…</source>
+        <translation>Scanning…</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Controller: hold its pairing button until the light blinks</source>
+        <translation>Controller: hold its pairing button until the light blinks</translation>
+    </message>
+    <message>
+        <location line="+29"/>
+        <source>Forget %1</source>
+        <translation>Forget %1</translation>
+    </message>
+</context>
+<context>
     <name>ChangePinFlow</name>
     <message>
         <location filename="../qml/ChangePinFlow.qml" line="+35"/>
@@ -954,7 +1042,7 @@
         <translation>About</translation>
     </message>
     <message>
-        <location line="+138"/>
+        <location line="+148"/>
         <source>Coming soon</source>
         <translation>Coming soon</translation>
     </message>
@@ -1444,6 +1532,14 @@
         <location line="+12"/>
         <source>Shift</source>
         <translation>Shift</translation>
+    </message>
+</context>
+<context>
+    <name>ToastLayer</name>
+    <message>
+        <location filename="../qml/ToastLayer.qml" line="+20"/>
+        <source>%1: battery low (%2%)</source>
+        <translation>%1: battery low (%2%)</translation>
     </message>
 </context>
 <context>

@@ -295,6 +295,94 @@
     </message>
 </context>
 <context>
+    <name>BluetoothPane</name>
+    <message>
+        <location filename="../qml/BluetoothPane.qml" line="+70"/>
+        <source>Pairing failed. Put the device in pairing mode and try again.</source>
+        <translation>Eşleştirme başarısız. Cihazı eşleştirme moduna alıp yeniden deneyin.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The device did not answer.</source>
+        <translation>Cihaz yanıt vermedi.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Bluetooth is off.</source>
+        <translation>Bluetooth kapalı.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>That device is no longer available.</source>
+        <translation>Bu cihaz artık kullanılamıyor.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Could not pair the device.</source>
+        <translation>Cihaz eşleştirilemedi.</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Could not connect.</source>
+        <translation>Bağlanılamadı.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Pairing…</source>
+        <translation>Eşleştiriliyor…</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Not paired</source>
+        <translation>Eşleşmedi</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Connected</source>
+        <translation>Bağlı</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Paired</source>
+        <translation>Eşleşti</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Battery %1%</source>
+        <translation>Pil %1%</translation>
+    </message>
+    <message>
+        <location line="+37"/>
+        <source>Bluetooth</source>
+        <translation>Bluetooth</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Bluetooth is off</source>
+        <translation>Bluetooth kapalı</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Add a device</source>
+        <translation>Cihaz ekle</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Scanning…</source>
+        <translation>Taranıyor…</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Controller: hold its pairing button until the light blinks</source>
+        <translation>Kontrolcü: ışık yanıp sönene kadar eşleştirme düğmesini basılı tutun</translation>
+    </message>
+    <message>
+        <location line="+29"/>
+        <source>Forget %1</source>
+        <translation>%1 cihazını unut</translation>
+    </message>
+</context>
+<context>
     <name>ChangePinFlow</name>
     <message>
         <location filename="../qml/ChangePinFlow.qml" line="+35"/>
@@ -952,7 +1040,7 @@
         <translation>Hakkında</translation>
     </message>
     <message>
-        <location line="+138"/>
+        <location line="+148"/>
         <source>Coming soon</source>
         <translation>Yakında</translation>
     </message>
@@ -1442,6 +1530,14 @@
         <location line="+12"/>
         <source>Shift</source>
         <translation>Shift</translation>
+    </message>
+</context>
+<context>
+    <name>ToastLayer</name>
+    <message>
+        <location filename="../qml/ToastLayer.qml" line="+20"/>
+        <source>%1: battery low (%2%)</source>
+        <translation>%1: pil zayıf (%2%)</translation>
     </message>
 </context>
 <context>
