@@ -105,6 +105,21 @@ Item {
             compare(Store.jobs[id], undefined)
         }
 
+        // T-167: the reset drops the mock's running jobs without a JobFinished; the facade
+        // must not keep the progress it had seen (a test after it saw "one job" and failed at random).
+        function test_reset_drops_a_running_job() {
+            const id = "org.example.Racer"
+            Store.install(id)
+            tryVerify(() => Store.jobs[id] !== undefined, 2000, "progress arrived")
+            verify(Store.jobs[id].percent < 100, "the job is still running")
+            Store.mockReset()
+            compare(Object.keys(Store.jobs).length, 0)
+            tryVerify(() => Store.installed.length === 3)
+            wait(100)                                   // no late progress brings it back
+            compare(Object.keys(Store.jobs).length, 0)
+            verify(!isInstalled(id))
+        }
+
         function test_install_failure() {
             Store.install("org.example.Broken")
             tryCompare(finished, "count", 1)

@@ -28,6 +28,7 @@ Item {
         function init() {
             verify(windowGuard.ensureActive() === "", windowGuard.ensureActive())
             Store.mockReset()
+            compare(Object.keys(Store.jobs).length, 0, "no job survives the reset")
             Store.controllerFilter = "any"
             Profiles.lock()
             tryCompare(Profiles, "activeProfile", "")
@@ -219,6 +220,10 @@ Item {
             keyClick(Qt.Key_Return)
             verify(find("page_appDetail").working)
             verify(!find("detailPinPad").shown)
+            // Ends with the install still running, on purpose (T-167): the next init's reset has
+            // to drop it, or a later test that expects no job saw this one (it failed at random
+            // when the first progress tick came before the reset).
+            tryVerify(() => Store.jobs["org.example.Racer"] !== undefined, 2000, "the job is running")
         }
 
         function test_update_adding_high_risk_needs_admin_pin() {

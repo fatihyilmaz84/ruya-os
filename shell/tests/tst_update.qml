@@ -40,6 +40,7 @@ Item {
             tryCompare(Profiles, "activeProfile", "")
             Update.mockReset()
             tryCompare(Update, "state", "idle")
+            DeviceSettings.language = "en"
             requestSpy.clear()
         }
 
@@ -50,6 +51,30 @@ Item {
             while (Notifications.model.count > 0)
                 Notifications.dismiss(Notifications.model.get(0).toastId)
             Notifications.pending = []
+            DeviceSettings.language = "en"               // a Left/Right in the System pane changes it (T-167)
+        }
+
+        // The language is process-wide (the installed translator) and later tests compare English
+        // text, so this one must not leave "tr" behind: init and cleanup put "en" back.
+        function test_a_press_in_the_system_pane_reaches_the_language_row() {
+            openSystemPane("p2", "")
+            verify(find("rowLanguage").activeFocus, "the System pane starts on the Language row")
+            compare(DeviceSettings.language, "en")
+            keyClick(Qt.Key_Right)                       // a ChoiceRow consumes Left/Right (02 §1.2)
+            tryCompare(DeviceSettings, "language", "tr")
+            verify(find("rowLanguage").activeFocus)
+        }
+
+        function test_a_press_right_after_sign_in_stays_on_home() {
+            tc.shell = createTemporaryObject(shellComponent, host)
+            verify(tc.shell)
+            tc.shell.forceActiveFocus()
+            Profiles.switchTo("p2", "")
+            tryCompare(Profiles, "activeProfile", "p2")
+            tryVerify(() => find("homePlay").activeFocus, 2000, "Play takes focus after sign-in (02 §1)")
+            keyClick(Qt.Key_Right)
+            tryVerify(() => find("homeDetails").activeFocus, 2000, "Right on Play goes to Details")
+            compare(DeviceSettings.language, "en")
         }
 
         // The reply status of one request: [method, status].
