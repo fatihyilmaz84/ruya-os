@@ -129,6 +129,7 @@ qt_add_qml_module(ruyashell
         fonts/Inter-Regular.ttf
         fonts/Inter-Light.ttf
         fonts/Inter-SemiBold.ttf
+        fonts/Inter-Bold.ttf
 )
 
 # qmltyperegistrar includes the QML_ELEMENT headers by file name.

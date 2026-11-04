@@ -286,10 +286,24 @@ function Test-Icons {
     Record "icon lint" ($LASTEXITCODE -eq 0)
 }
 
+# Every character the shell shows must be in the bundled Inter cuts (T-145; pure Python, no packages).
+function Test-FontCoverage {
+    Step "font coverage (every character in shell\qml, i18n and src is in the Inter cuts)"
+    $py = Get-Command python -ErrorAction SilentlyContinue
+    if (-not $py) {
+        Write-Host "FAIL: python is not on PATH; scripts\check-font-coverage.py needs it" -ForegroundColor Red
+        Record "font coverage (python missing)" $false
+        return
+    }
+    & $py.Source -I (Join-Path $PSScriptRoot "check-font-coverage.py") (Join-Path $PSScriptRoot "..")
+    Record "font coverage" ($LASTEXITCODE -eq 0)
+}
+
 function Do-Shell {
     Do-Build
     Test-Tokens
     Test-Icons
+    Test-FontCoverage
     Test-Translations
     Test-QmlTests
     Step "qmllint (module context)"

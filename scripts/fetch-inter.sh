@@ -6,7 +6,7 @@
 #
 # Downloads the official release zip from github.com/rsms/inter (pinned URL, SHA-256 checked)
 # into a fresh temporary directory. The archive is untrusted data: only a fixed list of members
-# is extracted, nothing from it is ever run. Regular, Light and SemiBold are subset to Latin +
+# is extracted, nothing from it is ever run. Regular, Light, SemiBold and Bold are subset to Latin +
 # Latin Extended-A (plus common punctuation) and written to shell/fonts/ together with the OFL
 # text. The outputs are committed; the download is not.
 set -euo pipefail
@@ -25,12 +25,15 @@ curl -fsSL -o inter.zip "$URL"
 echo "$SHA_ZIP  inter.zip" | sha256sum -c --quiet - || { echo "SHA-256 mismatch for inter.zip" >&2; exit 1; }
 
 unzip -q -j inter.zip extras/ttf/Inter-Regular.ttf extras/ttf/Inter-Light.ttf \
-    extras/ttf/Inter-SemiBold.ttf LICENSE.txt -d src
+    extras/ttf/Inter-SemiBold.ttf extras/ttf/Inter-Bold.ttf LICENSE.txt -d src
 
-unicodes="U+0020-007E,U+00A0-017F,U+02C6,U+02DA,U+02DC,U+2013-2014,U+2018-201E,U+2022,U+2026,U+20AC,U+2190-2193,U+2212"
-for w in Regular Light SemiBold; do
-    python3 -m fontTools.subset "src/Inter-$w.ttf" --unicodes="$unicodes" --layout-features='kern,liga,calt,ccmp,locl,mark,mkmk' \
+unicodes="U+0020-007E,U+00A0-017F,U+02C6,U+02DA,U+02DC,U+2013-2014,U+2039-203A,U+2018-201E,U+2022,U+2026,U+20AC,U+2190-2193,U+2212"
+for w in Regular Light SemiBold Bold; do
+    python3 -I -m fontTools.subset "src/Inter-$w.ttf" --unicodes="$unicodes" --layout-features='kern,liga,calt,ccmp,locl,mark,mkmk' \
         --no-hinting --drop-tables+=DSIG --output-file="$out/Inter-$w.ttf"
 done
 cp src/LICENSE.txt "$out/OFL-Inter.txt"
 ls -l "$out"
+
+# Every character the shell uses must be in the cuts (fails the cut otherwise).
+python3 -I "$repo/scripts/check-font-coverage.py" "$repo"
