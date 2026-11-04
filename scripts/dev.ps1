@@ -99,7 +99,8 @@ function Get-ScreenshotFunctions {
 }
 
 function Run-QmlTests([string]$ShotsDir) {
-    $log = Join-Path $env:TEMP "ruya-qmltest.txt"
+    # Per checkout: worktree lanes run `test` at the same time (a shared %TEMP% log collided, 2026-11-04).
+    $log = Join-Path $ShellBuild "ruya-qmltest.txt"
     $only = @()
     if ($ShotsDir) {
         # Screenshots need a real GPU window (offscreen = software renderer, no MultiEffect).
