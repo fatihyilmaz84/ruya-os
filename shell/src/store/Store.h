@@ -33,6 +33,8 @@ class Store : public QObject
     // Result of the last search(); search("") also fills the catalogue.
     Q_PROPERTY(QVariantList results READ results NOTIFY resultsChanged)
     // App id -> { percent, phase } for every job that has reported progress and not finished.
+    // When the service loses its bus name (crash, restart) the jobs are dropped and every job it
+    // ran or queued ends with jobFinished(id, "failed"); resuming is not attempted.
     Q_PROPERTY(QVariantMap jobs READ jobs NOTIFY jobsChanged)
     // True once the service has answered (always, for the mock).
     Q_PROPERTY(bool available READ isAvailable NOTIFY availableChanged)
@@ -65,9 +67,6 @@ public:
     Q_INVOKABLE void loadApp(const QString &appId);
     // The record of an app from the catalogue, or an empty object.
     Q_INVOKABLE QVariantMap app(const QString &appId) const;
-
-    // The service lost its bus name (crash, restart): jobs are dropped and each ends with
-    // jobFinished(id, "failed"). Resuming is not attempted.
 
     // Tests only, and only with the mock backend (otherwise false / no-op).
     Q_INVOKABLE bool mockDataDeleted(const QString &appId) const;

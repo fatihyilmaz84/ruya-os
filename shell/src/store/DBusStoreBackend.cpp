@@ -82,11 +82,15 @@ DBusStoreBackend::DBusStoreBackend(QObject *parent)
     , m_bus(chooseBus())
     , m_watcher(Service, m_bus, QDBusServiceWatcher::WatchForOwnerChange, this)
 {
-    connect(&m_watcher, &QDBusServiceWatcher::serviceUnregistered, this, [this] {
-        // Jobs and early signals belonged to the old process.
+    // An old owner that goes away, or is replaced directly by a new one, took its jobs with it.
+    connect(&m_watcher, &QDBusServiceWatcher::serviceOwnerChanged, this,
+            [this](const QString &, const QString &oldOwner, const QString &) {
+        if (oldOwner.isEmpty())
+            return;
+        const QStringList ids = m_jobApps.values(); // running and queued jobs the client knows
         m_jobApps.clear();
         m_early.clear();
-        emit serviceLost();
+        emit serviceLost(ids);
     });
     connect(&m_watcher, &QDBusServiceWatcher::serviceRegistered, this, [this] {
         refresh();

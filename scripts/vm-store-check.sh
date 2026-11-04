@@ -228,20 +228,25 @@ check)
     grep -a -q "installed=1" "$work/probe.log" && ok "the shell saw the app installed (InstalledChanged -> ListInstalled)" || bad "the shell never saw the installed app"
     grep -a "installed=1" "$work/probe.log" | head -1 | grep -q "$app(installed)" && ok "and its catalogue flag changed" || bad "catalogue flag did not change"
     grep -a "installed=" "$work/probe.log" | tail -1 | grep -q "installed=0" && ok "the shell saw it uninstalled again" || bad "the shell still shows it installed"
-    echo "--- the service restarts during an install (T-171): the shell drops the job"
+    echo "--- the service restarts during an install (T-171): the shell ends the job as failed"
+    # A fresh probe: the first one has used up its timeout by now.
+    pkill -f "probe[.]qml" 2>/dev/null
+    : > "$work/probe2.log"; chmod 666 "$work/probe2.log"
+    as_shell env XDG_RUNTIME_DIR="/run/user/$uid" QT_QPA_PLATFORM=offscreen QT_FORCE_STDERR_LOGGING=1         timeout 150 ruya-shell --load "$work/probe.qml" > "$work/probe2.log" 2>&1 &
+    n=0
+    until grep -a -q "available=true" "$work/probe2.log" || [ "$n" -ge 90 ]; do sleep 1; n=$((n + 1)); done
+    # Restart right after the Install reply: the install cannot have finished (it needs a download),
+    # and only the service-lost path can produce a jobFinished for it.
     out="$(as_shell busctl --system call "$svc" "$path" "$ifc" Install s "$app")"
     case "$out" in 'ss "ok"'*) ok "Install queued for the restart test";; *) bad "Install before restart: $out";; esac
-    n=0
-    until grep -a "jobs=" "$work/probe.log" | tail -1 | grep -q "\"$app\""; do
-        [ "$n" -ge 60 ] && break; sleep 1; n=$((n + 1))
-    done
-    grep -a "jobs=" "$work/probe.log" | tail -1 | grep -q "\"$app\"" && ok "the shell showed the job" || bad "the shell never showed the job"
     systemctl restart ruya-store
     n=0
-    until grep -a "jobs=" "$work/probe.log" | tail -1 | grep -q 'jobs={}'; do
-        [ "$n" -ge 30 ] && break; sleep 1; n=$((n + 1))
-    done
-    grep -a "jobs=" "$work/probe.log" | tail -1 | grep -q 'jobs={}' && ok "after the restart the shell's job list is empty" || bad "the shell still shows a job of the old service"
+    until grep -a -q "store-probe: jobFinished $app failed" "$work/probe2.log" || [ "$n" -ge 40 ]; do sleep 1; n=$((n + 1)); done
+    grep -a -q "store-probe: jobFinished $app failed" "$work/probe2.log" && ok "the shell ended the cut-short install as failed" || bad "the shell never ended the job of the old service"
+    grep -a -q "store-probe: jobFinished $app ok" "$work/probe2.log" && bad "the install finished ok before the restart; the test proved nothing" || ok "no ok for that install"
+    sleep 4
+    grep -a "jobs=" "$work/probe2.log" | tail -1 | grep -q 'jobs={}' && ok "the shell's job list is empty after the restart" || bad "the shell still shows a job of the old service"
+    pkill -f "probe[.]qml" 2>/dev/null
     flatpak uninstall --system -y "$app" >/dev/null 2>&1 || true   # an install cut short may have left it
     grep -a -i "warn\|Store1.*failed" "$work/probe.log" | head -5
     ;;

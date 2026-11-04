@@ -74,14 +74,18 @@ Store::Store(std::unique_ptr<StoreBackend> backend, QObject *parent)
             emit jobsChanged();
         emit jobFinished(id, status);
     });
-    connect(m_backend.get(), &StoreBackend::serviceLost, this, [this] {
+    connect(m_backend.get(), &StoreBackend::serviceLost, this, [this](const QStringList &appIds) {
         // A job of the lost service never finishes; do not show it for ever. Pages waiting for
         // its result get "failed" so that they stop working.
-        if (m_jobs.isEmpty())
-            return;
-        const QStringList ids = m_jobs.keys();
-        m_jobs.clear();
-        emit jobsChanged();
+        QStringList ids = m_jobs.keys(); // running; a queued job has no progress yet
+        for (const QString &id : appIds) {
+            if (!ids.contains(id))
+                ids.append(id);
+        }
+        if (!m_jobs.isEmpty()) {
+            m_jobs.clear();
+            emit jobsChanged();
+        }
         for (const QString &id : ids)
             emit jobFinished(id, QStringLiteral("failed"));
     });
