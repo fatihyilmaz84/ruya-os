@@ -57,7 +57,15 @@ Storage *Storage::create(QQmlEngine *, QJSEngine *)
 
 QString Storage::formatBytes(qint64 bytes)
 {
-    return QLocale().formattedDataSize(bytes < 0 ? 0 : bytes, 1, QLocale::DataSizeSIFormat);
+    // The shell language (QLocale::setDefault follows it), not the system's; a trailing zero
+    // decimal is dropped: "1.5 GB", "32 GB".
+    const QLocale locale;
+    QString text = locale.formattedDataSize(bytes < 0 ? 0 : bytes, 1, QLocale::DataSizeSIFormat);
+    const QString zero = locale.decimalPoint() + QLatin1Char('0');
+    const int at = text.indexOf(zero);
+    if (at >= 0 && (at + zero.size() == text.size() || !text.at(at + zero.size()).isDigit()))
+        text.remove(at, zero.size());
+    return text;
 }
 
 void Storage::eject(const QString &id)
@@ -75,6 +83,25 @@ void Storage::mockPlugStick()
 {
     if (auto *mock = qobject_cast<MockStorageBackend *>(m_backend.get()))
         mock->plugStick();
+}
+
+void Storage::mockHoldEject(bool hold)
+{
+    if (auto *mock = qobject_cast<MockStorageBackend *>(m_backend.get()))
+        mock->holdEject(hold);
+}
+
+int Storage::mockEjectCalls() const
+{
+    if (auto *mock = qobject_cast<MockStorageBackend *>(m_backend.get()))
+        return mock->ejectCalls();
+    return 0;
+}
+
+void Storage::mockRepublish()
+{
+    if (auto *mock = qobject_cast<MockStorageBackend *>(m_backend.get()))
+        mock->republish();
 }
 
 void Storage::mockSetBusy(const QString &id, bool busy)

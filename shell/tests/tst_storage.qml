@@ -20,6 +20,7 @@ Item {
     }
 
     SignalSpy { id: addedSpy; target: Storage; signalName: "volumeAdded" }
+    SignalSpy { id: listedSpy; target: Storage; signalName: "volumesChanged" }
 
     Component {
         id: shellComponent
@@ -56,6 +57,7 @@ Item {
         }
 
         function cleanup() {
+            DeviceSettings.language = "en"
             clearToasts()
         }
 
@@ -107,18 +109,49 @@ Item {
         }
 
         function test_format_bytes() {
-            const dp = Qt.locale().decimalPoint
-            verify(Storage.formatBytes(0).startsWith("0"), Storage.formatBytes(0))
-            // 1023 B is a bit over 1 kB (SI), shown with one decimal.
-            compare(Storage.formatBytes(1023).substring(0, 3), "1" + dp + "0")
-            compare(Storage.formatBytes(1500000000).substring(0, 3), "1" + dp + "5")
-            verify(Storage.formatBytes(1500000000).includes("G"), Storage.formatBytes(1500000000))
-            verify(Storage.formatBytes(-5).startsWith("0"), "negative sizes are shown as 0")
+            DeviceSettings.language = "en"
+            compare(Storage.formatBytes(1500000000), "1.5 GB")
+            compare(Storage.formatBytes(32000000000), "32 GB", "a trailing .0 is dropped")
+            compare(Storage.formatBytes(0), "0 bytes")
+            compare(Storage.formatBytes(-5), "0 bytes", "negative sizes are shown as 0")
+            compare(Storage.formatBytes(1023), "1 kB", "1023 B is 1.0 kB (SI)")
+            DeviceSettings.language = "tr"
+            compare(Storage.formatBytes(1500000000), "1,5 GB", "the shell language, not the system's")
+            compare(Storage.formatBytes(32000000000), "32 GB")
+        }
+
+        function test_eject_in_flight_sends_one_eject() {
+            Storage.mockPlugStick()
+            tryVerify(() => volume("vol-stick") !== undefined)
+            openStoragePane()
+            goTo("storageEject_vol-stick")
+            Storage.mockHoldEject(true)                  // an unmount that takes a while
+            keyClick(Qt.Key_Return)
+            tryVerify(() => Storage.mockEjectCalls() === 1, 2000, "one eject sent")
+            keyClick(Qt.Key_Return)                      // a second Accept, a key repeat
+            keyClick(Qt.Key_Return)
+            wait(100)                                    // a second call would have arrived by now
+            compare(Storage.mockEjectCalls(), 1, "still one eject")
+            Storage.mockHoldEject(false)                 // the answer comes
+            tryVerify(() => volume("vol-stick") === undefined, 2000, "ejected")
+            tryVerify(() => toastTexts().includes("Safe to remove"), 2000)
+            compare(Storage.mockEjectCalls(), 1)
+        }
+
+        function test_republished_list_keeps_one_inserted_toast() {
+            Storage.mockPlugStick()
+            tryVerify(() => toastCount("Drive inserted: Ruya Stick") === 1, 2000, "one toast")
+            compare(addedSpy.count, 1)
+            listedSpy.clear()
+            Storage.mockRepublish()
+            tryCompare(listedSpy, "count", 1, 2000, "the list was published again")
+            compare(addedSpy.count, 1, "no second volumeAdded")
+            compare(toastCount("Drive inserted: Ruya Stick"), 1, "still one toast")
         }
 
         function test_contract_statuses() {
             const seen = new Set()
-            function run(id, setup) {
+            function run(id) {
                 host.answers = []
                 Storage.eject(id)
                 tryVerify(() => answerFor("eject", id) !== undefined, 2000, "eject " + id + " answered")

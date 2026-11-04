@@ -213,6 +213,39 @@ Item {
             tryVerify(() => find("btDev_bt-sleepy").activeFocus, 2000, "focus stays on the row")
         }
 
+        function test_second_accept_while_pairing_does_not_pair_again() {
+            openBluetoothPane()
+            scan()
+            goTo("btDev_bt-buds")
+            Bluetooth.mockHoldPairing(true)              // a pairing that takes a while
+            keyClick(Qt.Key_Return)
+            tryVerify(() => Bluetooth.mockPairCalls() === 1, 2000, "pair sent")
+            tryCompare(find("btDev_bt-buds"), "value", "Pairing…")
+            keyClick(Qt.Key_Return)                      // a second Accept, a key repeat
+            keyClick(Qt.Key_Return)
+            wait(100)                                    // a second call would have arrived by now
+            compare(Bluetooth.mockPairCalls(), 1, "still one pair call")
+            Bluetooth.mockHoldPairing(false)             // the answer comes
+            tryVerify(() => device("bt-buds").paired, 2000)
+            tryVerify(() => find("btDev_bt-buds").value.startsWith("Connected"), 2000, "connected")
+            compare(Bluetooth.mockPairCalls(), 1)
+            keyClick(Qt.Key_Return)                      // free again: now it disconnects
+            tryVerify(() => find("btDev_bt-buds").value === "Paired", 2000, "disconnected")
+        }
+
+        function test_failed_disconnect_says_so() {
+            openBluetoothPane()
+            Bluetooth.disconnectDevice("bt-nobody-paired")   // unknown device
+            tryVerify(() => toastTexts().includes("That device is no longer available."), 2000)
+            clearToasts()
+            scan()
+            Bluetooth.disconnectDevice("bt-flaky")       // found but not paired: the mock answers "failed"
+            tryVerify(() => answerFor("disconnect", "bt-flaky") !== undefined, 2000)
+            compare(answerFor("disconnect", "bt-flaky").status, "failed")
+            tryVerify(() => toastTexts().includes("Could not disconnect."), 2000, "the disconnect message")
+            verify(!toastTexts().includes("Could not connect."))
+        }
+
         function test_connect_and_disconnect() {
             openBluetoothPane()
             compare(find("btDev_bt-pad-main").value, "Connected · Battery 80%")

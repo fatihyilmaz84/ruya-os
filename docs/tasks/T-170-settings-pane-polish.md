@@ -36,4 +36,15 @@ When a Settings pane scrolls, its first rows no longer slide under the header. P
 - The mock answers pairing at once. To hold a pairing open in the test, use the mock's existing delay or add a test hook, as `MockStoreBackend` does for jobs.
 
 ## Outcome
-_Filled in by the implementer._
+Verified: host (Qt Quick tests offscreen ALL GREEN; `shots` reviewed for 23 and 26).
+
+**Clipping (`SettingsPane`, once).** The pane now scrolls in whole rows: `ensureFocusedVisible` puts the top edge on a row's top and the clip (`viewport`, a clipping Item around the Flickable) ends at the bottom of the last row that fits whole, so no row is drawn cut, under the header or at the bottom edge. `relayout()` re-aligns after rows change or the pane is resized. Cost: a little empty space under the last whole row. Test `tst_settings.qml` `test_scrolled_pane_draws_only_whole_rows` (Bluetooth pane after two scans, `mapToItem` against `viewport`, last row focused, then back to the first). Note: in the old shots the cut rows were at the bottom edge; at that size nothing was under the top edge, so I read "no clipped rows" as "no row drawn partly".
+
+**Bluetooth.** `activate` ignores the row whose device is `busyId`; `statusText("disconnect", ...)` gives "Could not disconnect." (Turkish "Bağlantı kesilemedi."). Tests: `test_second_accept_while_pairing_does_not_pair_again`, `test_failed_disconnect_says_so`. Test hooks: `Bluetooth.mockHoldPairing(bool)` and `mockPairCalls()` (mock only).
+
+**Storage.** `StoragePane.ejectVolume` guards with `ejectingId` (cleared on the eject answer). Hooks: `Storage.mockHoldEject`, `mockEjectCalls`, `mockRepublish`. Tests `test_eject_in_flight_sends_one_eject`, `test_republished_list_keeps_one_inserted_toast` (fails with `remove` changed to `contains` in `Storage.cpp`, tried), `test_format_bytes` ("1.5 GB" en, "1,5 GB" tr, "32 GB"). `formatBytes` uses `QLocale()`; `DeviceSettings::applyLanguage` now calls `QLocale::setDefault(QLocale(language))` so it follows the shell language, and drops a trailing ",0"/".0". The unused `setup` parameter of `run()` is gone.
+
+Revert checks: with the three QML files (`SettingsPane`, `BluetoothPane`, `StoragePane`) stashed the new Settings, Bluetooth (2) and Storage (eject) tests fail; with `contains` in `Storage.cpp` the republish test fails.
+
+Files: shell/qml/SettingsPane.qml, BluetoothPane.qml, StoragePane.qml; shell/src/bluetooth/{Bluetooth,MockBluetoothBackend}.{h,cpp}; shell/src/storage/{Storage,MockStorageBackend}.{h,cpp}; shell/src/settings/DeviceSettings.cpp; shell/tests/tst_settings.qml, tst_bluetooth.qml, tst_storage.qml; shell/i18n/*.ts; docs/specs/03, 04.
+

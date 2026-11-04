@@ -28,6 +28,9 @@ public:
     // Tests only.
     void setBattery(const QString &id, int percent);
     void reset();
+    // While held, pair() is counted but unanswered (a pairing that takes a while) until released.
+    void holdPairing(bool hold);
+    int pairCalls() const { return m_pairCalls; }
 
 private:
     struct Entry
@@ -40,6 +43,7 @@ private:
     };
 
     void initState();
+    void doPair(const QString &id);
     void publish();
     void answer(const QString &op, const QString &id, const QString &status);
     int indexOf(const QString &id) const;
@@ -47,6 +51,9 @@ private:
 
     bool m_powered = true;
     bool m_discovering = false;
+    bool m_holdPairing = false;
+    QStringList m_heldPairs;
+    int m_pairCalls = 0;
     int m_scans = 0;
     QList<Entry> m_entries;
     QTimer m_scanTimer;

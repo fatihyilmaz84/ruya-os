@@ -125,6 +125,7 @@ Each entry: file, status, and the rules a change must keep. A new component gets
 | Profile card | `ProfileCard.qml` | built | Avatar circle in the profile colour, initial `typeHero`, name dims to `textDim` when unfocused, PIN badge |
 | Setting rows | `controls/SettingControl.qml` + `SettingRow`, `ToggleRow`, `ChoiceRow`, `SliderRow` | built | Pill `rowHeight`, label left `typeBody`, value right; optional swatch dot; row focus |
 | Category item | `SettingsPage.qml` | built | Pill, `textDim` at rest, `selectedFill` when chosen, row focus |
+| Settings pane | `SettingsPane.qml` | built | Rows in a column that scrolls with focus in whole rows: the top edge is always the top of a row and the clip ends at the bottom of the last row that fits, so no row is drawn cut or under the header (T-170) |
 | Dialog buttons | `PowerConfirm.qml` | built | Pills `buttonHeight`; the safe choice has focus first; only the destructive confirm uses `dangerFill` |
 | PIN pad | `PinPad.qml` | built | 3 × 4 grid of `radiusS` keys, digit dots, message in `errorText` below; the grid stays left to right in RTL |
 | On-screen keyboard | `TextEntry.qml` | built | Key fills rest 8 % / focused / latched (`entryKeyActiveFill`) |

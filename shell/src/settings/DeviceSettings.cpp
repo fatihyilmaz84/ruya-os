@@ -62,6 +62,8 @@ DeviceSettings *DeviceSettings::create(QQmlEngine *qmlEngine, QJSEngine *)
 // English is the source language; its .qm only adds the plural forms, so it is installed too.
 void DeviceSettings::applyLanguage(bool retranslate)
 {
+    // Numbers and sizes (Storage::formatBytes) follow the shell language, not the system's.
+    QLocale::setDefault(QLocale(m_language));
     QCoreApplication::removeTranslator(&m_translator);
     if (!m_translator.load(QStringLiteral("ruyashell_%1").arg(m_language), QStringLiteral(":/i18n")))
         qWarning("ruya-shell: no translation for '%s'", qPrintable(m_language));

@@ -317,14 +317,19 @@
         <translation>That device is no longer available.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+3"/>
         <source>Could not pair the device.</source>
         <translation>Could not pair the device.</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="+1"/>
         <source>Could not connect.</source>
         <translation>Could not connect.</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Could not disconnect.</source>
+        <translation>Could not disconnect.</translation>
     </message>
     <message>
         <location line="+5"/>
@@ -352,7 +357,7 @@
         <translation>Battery %1%</translation>
     </message>
     <message>
-        <location line="+37"/>
+        <location line="+39"/>
         <source>Bluetooth</source>
         <translation>Bluetooth</translation>
     </message>
@@ -1352,7 +1357,7 @@
         <translation>Read-only</translation>
     </message>
     <message>
-        <location line="+60"/>
+        <location line="+71"/>
         <source>Eject %1</source>
         <translation>Eject %1</translation>
     </message>
