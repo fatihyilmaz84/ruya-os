@@ -605,6 +605,19 @@
     </message>
 </context>
 <context>
+    <name>Page</name>
+    <message>
+        <location filename="../qml/Page.qml" line="+23"/>
+        <source>Select</source>
+        <translation>Seç</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Back</source>
+        <translation>Geri</translation>
+    </message>
+</context>
+<context>
     <name>PinPad</name>
     <message>
         <location filename="../qml/PinPad.qml" line="+127"/>
@@ -754,7 +767,7 @@
 <context>
     <name>ProfilePicker</name>
     <message>
-        <location filename="../qml/ProfilePicker.qml" line="+27"/>
+        <location filename="../qml/ProfilePicker.qml" line="+28"/>
         <source>Who&apos;s playing?</source>
         <translation>Kim oynuyor?</translation>
     </message>
@@ -1184,12 +1197,12 @@
         <translation>Ses çıkışı: %1</translation>
     </message>
     <message>
-        <location line="+613"/>
+        <location line="+653"/>
         <source>Power</source>
         <translation>Güç</translation>
     </message>
     <message>
-        <location line="-605"/>
+        <location line="-645"/>
         <source>Update ready. Restart to finish.</source>
         <translation>Güncelleme hazır. Bitirmek için yeniden başlat.</translation>
     </message>
@@ -1234,7 +1247,25 @@
         <translation>%1 başlatılıyor…</translation>
     </message>
     <message>
-        <location line="+266"/>
+        <location line="+231"/>
+        <location line="+7"/>
+        <location line="+3"/>
+        <source>Select</source>
+        <translation>Seç</translation>
+    </message>
+    <message>
+        <location line="-5"/>
+        <source>Cancel</source>
+        <translation>İptal</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <location line="+1"/>
+        <source>Sections</source>
+        <translation>Bölümler</translation>
+    </message>
+    <message>
+        <location line="+63"/>
         <source>System</source>
         <translation>Sistem</translation>
     </message>
@@ -1249,7 +1280,8 @@
         <translation>Profil değiştir</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="-89"/>
+        <location line="+91"/>
         <source>Close</source>
         <translation>Kapat</translation>
     </message>
@@ -1269,7 +1301,8 @@
         <translation>Kapat</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-97"/>
+        <location line="+98"/>
         <source>Back</source>
         <translation>Geri</translation>
     </message>

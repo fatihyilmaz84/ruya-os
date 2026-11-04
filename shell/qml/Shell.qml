@@ -553,7 +553,7 @@ FocusScope {
         ListView {
             id: recentRow
             objectName: "recentRow"
-            anchors { left: parent.left; right: parent.right; bottom: parent.bottom; bottomMargin: root.marginY }
+            anchors { left: parent.left; right: parent.right; bottom: parent.bottom; bottomMargin: root.marginY + hintBar.height + Theme.spaceM * root.u }
             leftMargin: root.marginX
             rightMargin: root.marginX
             height: 220 * root.u
@@ -845,6 +845,46 @@ FocusScope {
         u: root.u
         marginX: root.marginX
         marginY: root.marginY
+    }
+
+    // The hint bar (04 §5): one instance above everything, saying what the buttons do on the
+    // screen on top. Pages supply their own (`Page.hints`); modals and the Guide overlay are
+    // decided here. Hidden while an app is focused (the app owns the screen), never focusable.
+    readonly property Item activeItem: root.Window.window ? root.Window.window.activeFocusItem : null
+    function hasAncestor(item, ancestor) {
+        for (let p = item; p; p = p.parent) {
+            if (p === ancestor)
+                return true
+        }
+        return false
+    }
+    readonly property var hintList: {
+        if (systemPanel.open)
+            return [{ button: "A", text: qsTr("Select") },
+                    { button: "B", text: systemPanel.powerMode ? qsTr("Back") : qsTr("Close") }]
+        if (appOpen)
+            return []
+        if (hasAncestor(activeItem, modalLayer) || hasAncestor(activeItem, pinPadInPicker))
+            return [{ button: "B", text: qsTr("Cancel") }]
+        if (!signedIn)
+            return setupActive ? [] : [{ button: "A", text: qsTr("Select") }]
+        if (pageOpen)       // slots and pageStack are updated one after the other
+            return slots.length > 0 ? (slots[slots.length - 1].page?.hints ?? []) : []
+        return [{ button: "A", text: qsTr("Select") },
+                { button: "LB", text: qsTr("Sections") },
+                { button: "RB", text: qsTr("Sections") }]
+    }
+    readonly property Item pinPadInPicker: picker.pinPadItem
+
+    HintBar {
+        id: hintBar
+        objectName: "hintBar"
+        z: 30
+        x: root.marginX
+        y: root.height - root.marginY - height
+        u: root.u
+        hints: root.hintList
+        enabled: false
     }
 
     // Placeholder for the Guide overlay; also shows build info used by the update tests.

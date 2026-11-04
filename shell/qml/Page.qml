@@ -17,6 +17,13 @@ FocusScope {
     property real marginX: 0
     property real marginY: 0
 
+    // What the buttons do on this page, for the shell's hint bar (T-158): a list of { button, text }.
+    // Override it for a page with nothing to select.
+    property var hints: [
+        { button: "A", text: qsTr("Select") },
+        { button: "B", text: qsTr("Back") }
+    ]
+
     default property alias content: contentArea.data
 
     signal backRequested()
@@ -43,7 +50,7 @@ FocusScope {
             left: parent.left; leftMargin: page.marginX
             right: parent.right; rightMargin: page.marginX
             top: heading.bottom; topMargin: Theme.spaceL * page.u
-            bottom: parent.bottom; bottomMargin: page.marginY
+            bottom: parent.bottom; bottomMargin: page.marginY + (Theme.glyphSize + Theme.spaceM) * page.u   // clear of the hint bar
         }
     }
 
