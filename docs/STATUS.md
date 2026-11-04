@@ -15,7 +15,7 @@ Verification legend: **host** = built and tested on Windows · **host (vm pendin
 
 ## Board
 
-**NEXT → T-160** (paired with T-163: one image build)
+**NEXT → T-169** (T-160 + T-163 are in flight as one image build)
 
 **How work runs (owner, 2026-11-04):** the lead dispatches `ruya-builder` agents, at most two at a time in their own worktrees and in different areas, has each branch reviewed by `ruya-reviewer`, and merges it (`docs/LEAD.md`, build loop). Dispatched builders never edit this file. At most one task with a "VM (this task)" criterion runs at a time. A builder session the owner starts directly takes NEXT in the main checkout, alone, and does the bookkeeping itself (`CLAUDE.md`).
 
@@ -25,15 +25,21 @@ Open work only (todo, in-progress, blocked), in the recommended order; when NEXT
 |---|---|---|---|
 | [T-160](tasks/T-160-greenboot-wanted-check.md) | Greenboot: no failing wanted check on a healthy boot | in-progress | — |
 | [T-163](tasks/T-163-ruya-library-in-the-image.md) | `ruya-library` in the image: installed Flatpaks over the real bus | in-progress | — |
+| [T-137](tasks/T-137-storage-contract-and-settings.md) | `Devices1.Storage` contract, mock, Settings → Storage | in-progress | — |
+| [T-169](tasks/T-169-dev-ps1-fresh-worktree.md) | `dev.ps1 test` green first time in a fresh worktree and after a merge | todo | — |
 | [T-162](tasks/T-162-ruya-session-in-the-image.md) | **[lead]** `ruya-session` in the image: real spawner, unit, bus policy | todo | — |
 | [T-164](tasks/T-164-per-profile-wayland-sockets.md) | **[lead]** Per-profile Wayland sockets: a profile's app appears in the shell | todo | T-162 |
 | [T-165](tasks/T-165-profile-switch-freezes-apps.md) | Profile switch and sign-out freeze the profile's apps | todo | T-164 |
 | [T-147](tasks/T-147-fullscreen-app-flow.md) | Full-screen apps: launch splash, quick menu, return, close | todo | T-164 |
+| [T-171](tasks/T-171-store-facade-robustness.md) | Store: no ghost jobs when the service restarts; no null-binding warnings | todo | — |
+| [T-170](tasks/T-170-settings-pane-polish.md) | Settings panes: no clipped top rows; Bluetooth and Storage pane fixes | todo | T-137 |
+| [T-172](tasks/T-172-hint-bar-follow-ups.md) | Hint bar follow-ups: one Sections hint, wizard hints, per-page overrides | todo | — |
 | [T-161](tasks/T-161-controller-battery.md) | Controller battery: `Devices1` over UPower, status cluster, low-battery toast | todo | T-157 |
-| [T-166](tasks/T-166-suspend-under-eglfs.md) | **[lead]** Suspend and resume with the shell on KMS (eglfs) | todo | — |
-| [T-144](tasks/T-144-contrast-and-accessible-names.md) | Design review: contrast over the backdrop, accessible names | todo | T-143 |
+| [T-173](tasks/T-173-devices-bluetooth-service.md) | `ruya-devices`: `Devices1.Bluetooth` over BlueZ | todo | — |
+| [T-174](tasks/T-174-devices-storage-service.md) | `ruya-devices`: `Devices1.Storage` over udisks2 | todo | T-137 |
 | [T-145](tasks/T-145-bundle-inter.md) | Bundle the Inter typeface | todo | T-142 |
-| [T-137](tasks/T-137-storage-contract-and-settings.md) | `Devices1.Storage` contract, mock, Settings → Storage | in-progress | — |
+| [T-144](tasks/T-144-contrast-and-accessible-names.md) | Design review: contrast over the backdrop, accessible names | todo | T-143 |
+| [T-166](tasks/T-166-suspend-under-eglfs.md) | **[lead]** Suspend and resume with the shell on KMS (eglfs) | todo | — |
 
 **VM queue** (done on the host, VM check pending; the lead runs them with one image build): T-159 (`vm-update-check.sh reboot`).
 
@@ -41,32 +47,16 @@ Open work only (todo, in-progress, blocked), in the recommended order; when NEXT
 
 Follow-ups and debt for the next planner, one line each: `- (source) what, and why it matters`. Dispatched builders put them in their HANDOFF; the lead copies them here. Plan at 5+ items.
 
-- (lead, T-163) Steam libraries per profile: `ruya-library` cannot read profile homes (`ProtectHome`); design how the active profile's Steam list reaches the shell (a per-profile user unit started by `ruya-session`, or `ruya-session` handing the library a directory fd).
 - (T-159) `image/build/90-initramfs.sh` prints `dracut-install: ERROR: installing '/root'` (the initramfs is still written); check at the next VM boot whether it matters, else silence it.
-- (T-167) Store facade: with the real D-Bus backend, `m_jobs` is never cleared if `ruya-store` restarts or vanishes mid-job without `JobFinished`; clear the jobs when the bus name owner changes, or the UI shows a ghost job.
-- (T-167) In a fresh worktree `dev.ps1 test`'s translation lint fails until the `update_translations` target was built once; `dev.ps1` should build it itself (costs every new builder lane a re-run). Building it by hand needs `%ProgramFiles%\CMake\bin` first on PATH: devkitPro's cmake can't use the VS generator (T-168); same for `git` (lead).
-- (lead) `tst_pages::test_back_walks_the_stack` logs ~30 `StorePage.qml:185/186 TypeError ... of null` (`sourceText`/`sourceKind`) warnings: a binding on a destroyed or not-yet-set item; noise that hides real warnings.
-- (T-168 review) `shell/PATTERNS.md` (pages): document `Page.qml`'s `upFromTop` and `stepRequested` (Up at a page's top row reaches the nav, LB/RB switch sections); every page now swallows unaccepted Up/PageUp/PageDown.
-- (T-168 review) Add a screenshot of the Home nav with focus, so the ring on the filled Home pill is reviewed on Home too.
-- (T-167) Token-lint self-check text: the builder flagged its wording as misleading; re-read `lint-tokens` output when touching it.
-- (T-136) BlueZ half of `Devices1.Bluetooth` in `ruya-devices` (T-132 family): 30 s scan auto-stop, paired first, power-off clears the list, a `Powered` write that fails under rfkill; and `Pair` must answer within the ~25 s D-Bus default timeout (say so in the XML) or `DBusBluetoothBackend` sets a longer one (review). Part of B-007.
-- (T-136) Pairing PIN/passkey dialogs, player assignment, button test and remapping are missing (input daemon, B-006); the pane does "just works" pairing only.
-- (T-136 review) `BluetoothPane`: ignore Accept on the row that is pairing (`busyId`), and a Disconnect-specific failure message (it says "Could not connect.").
-- (T-136 review) Settings panes: the top rows are clipped under the header when the pane scrolls (`23-settings-network`, `26-settings-bluetooth`).
-- (lead) `dev.ps1`: after a merge adds a `.qml` file, `shell\build-win\.lupdate\*_lupdate_project.json` stays stale and the translation lint reports the new strings as "vanished"; a `cmake -S shell -B shell\build-win` fixed it. `dev.ps1` should reconfigure when `shell/CMakeLists.txt` is newer than that file.
-- (T-136) Screenshot numbering: `26-settings-bluetooth.png` and `26-restart-notice.png` share a prefix; renumber when touching shots.
-- (T-158) Hint bar follow-ups (one small shell task): LB/RB as one hint (two glyphs, one verb, review); hints for the setup wizard steps; per-page `hints` overrides where a page has nothing to select; move the dev-only MOCK SERVICES badge off the bar (bottom right).
-- (T-158 review) 04 §2 Pages: say that page content ends above the hint bar (`Page.qml` bottom margin, reserved even with `hints: []`); and the hint bar's spacing to the Settings list's last row needs a look at 1080p on hardware.
-- (T-158 review) `Shell.qml` checks `appOpen` before modals, so a modal over a running app would show no hints; revisit with T-147 (quick menu over an app).
 
 ## Blocked (need something this host doesn't have)
 
 | ID | What | Needs | Notes |
 |---|---|---|---|
-| B-002 | Install on a real low-tier machine; first frame-time numbers (spec 02 §8) | Hardware | Build a fresh dev ISO first (the 0.0.4 one was deleted to free space on 2026-11-02; it holds the dev SSH key: test machines only). Decide there: a failed boot takes ~100 s, so automatic rollback takes ~7 min; consider a shorter required-check timeout once real boot times are known. |
+| B-002 | Install on a real low-tier machine; first frame-time numbers (spec 02 §8) | Hardware | Build a fresh dev ISO first (the 0.0.4 one was deleted to free space on 2026-11-02; it holds the dev SSH key: test machines only). Decide there: a failed boot takes ~100 s, so automatic rollback takes ~7 min; consider a shorter required-check timeout once real boot times are known. Also check the hint bar's spacing to the Settings list's last row at 1080p (T-158). |
 | B-003 | Compositor performance: blurred Guide overlay over a running game at ≥ 55 FPS on the mid tier (ADR-002) | A GPU | Functional part done in the VM (T-123) and the session built (T-130). Left: frame rates, dmabuf clients, blur over a client surface, gamescope nesting, volume-key `Shortcut`s with an app focused. |
-| B-006 | Replace the `ruya-inputd` stopgap with InputPlumber (ADR-003), grab and re-emit | Linux + controllers | Also owns key repeat (400 ms delay, then accelerating), stick repeat speed, Accept long-press and context menu (spec 02 §4.3). |
-| B-007 | `ruya-devices` remainder: BlueZ part (contract T-136), applying `ambient`/`media` levels to app streams, PipeWire for profile apps | `ruya-session` in the image (T-130 done) | Audio (T-128, by events since T-133) and network (T-132) are done and VM-verified. ADR-010. |
+| B-006 | Replace the `ruya-inputd` stopgap with InputPlumber (ADR-003), grab and re-emit | Linux + controllers | Also owns key repeat (400 ms delay, then accelerating), stick repeat speed, Accept long-press and context menu (spec 02 §4.3), and Bluetooth PIN/passkey pairing, player assignment, button test and remapping (T-136). |
+| B-007 | `ruya-devices` remainder (BlueZ is now T-173): applying `ambient`/`media` levels to app streams, PipeWire for profile apps | `ruya-session` in the image (T-130 done) | Audio (T-128, by events since T-133) and network (T-132) are done and VM-verified. ADR-010. |
 
 ## Open owner decisions
 

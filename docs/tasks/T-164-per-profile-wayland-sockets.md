@@ -37,6 +37,7 @@ Then the image recipe in `docs/dev-setup.md`, `scripts\smoke-test.ps1` and the V
 ## Hints
 - `vm-key-client.qml` is a ready Wayland test client; run it through `ruya-shell --qml` as the profile user.
 - Mind the hardening of `ruya-session` from T-162: creating a socket in `/run/user/<uid>` needs write access there.
+- Same per-profile problem, next in line (lead, T-163): `ruya-library` can't read profile homes (`ProtectHome`), so Steam libraries per profile need a path in. Options: a per-profile user unit started by `ruya-session`, or `ruya-session` handing the library a directory fd. Choose here, with the socket design, and note it in `03` (no Steam code in this task).
 
 ## Outcome
 _Filled in by the implementer. First line: `Verified: host | vm | unverified | hw` (say what ran where). Then: what was built, files, deviations, follow-ups (each also an Inbox line)._
