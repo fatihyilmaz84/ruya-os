@@ -56,7 +56,7 @@ Follow-ups and debt for the next planner, one line each: `- (source) what, and w
 - (T-174 review) Audit `50-ruyaos-network.rules`: it returns `NOT_HANDLED` too, so NetworkManager's default `allow_active` actions beyond the four listed stay open to `ruya-shell`; deny the rest as T-174 round 2 does for udisks2.
 - (T-174) A stick with several partitions gives one `VolumeAdded` per partition, so the shell toasts once per partition: group them. Also cover a two-partition stick and an unsupported filesystem in `vm-storage-check` (unit tests only today).
 - (T-174) Media access for profile users and Flatpak apps on `/run/media/ruya-shell/...` belongs to the Media task (mounts belong to `ruya-shell`, not the active profile).
-- (lead) `vm-goto.ps1`, `vm-reboot-check.ps1` and `vm-storage-check.ps1` now use a scratch `outputm-known_hosts` (UserKnownHostsFile=NUL made MSYS2's ssh write a file named `NUL`); not yet exercised against a VM: confirm at the next VM run.
+- (lead) `vm-goto.ps1`, `vm-reboot-check.ps1` and `vm-storage-check.ps1` now use a scratch `output\vm-known_hosts` (UserKnownHostsFile=NUL made MSYS2's ssh write a file named `NUL`); not yet exercised against a VM: confirm at the next VM run.
 
 ## Blocked (need something this host doesn't have)
 

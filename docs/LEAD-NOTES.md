@@ -24,7 +24,7 @@ None running: every worktree is merged and removed. `git worktree list` shows on
 ## Host facts learned this session (also in LEAD.md / the builder file)
 
 - In PowerShell, `git` and `cmake` are devkitPro's MSYS2 builds (first on PATH). Worktrees: Git Bash only. CMake: `dev.ps1` finds the real one; by hand use `& "$env:ProgramFiles\CMake\bin\cmake.exe"`.
-- Every fresh VM disk has a new SSH host key. The `ssh` on PATH is MSYS2's too: `UserKnownHostsFile=NUL` writes a file named `NUL`; the vm scripts now use `outputm-known_hosts` (by hand: `/dev/null`). Never edit `~/.ssh/known_hosts` (a builder ran `ssh-keygen -R` once; backup `known_hosts.old`).
+- Every fresh VM disk has a new SSH host key. The `ssh` on PATH is MSYS2's too: `UserKnownHostsFile=NUL` writes a file named `NUL`; the vm scripts now use `output\vm-known_hosts` (by hand: `/dev/null`). Never edit `~/.ssh/known_hosts` (a builder ran `ssh-keygen -R` once; backup `known_hosts.old`).
 - `make-disk.sh` once failed with "Cannot allocate memory" writing to `/mnt/d`; a plain retry passed.
 - A file named `NUL` in a worktree blocks its removal: `rm -rf` from Git Bash works.
 
