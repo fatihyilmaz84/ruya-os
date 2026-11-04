@@ -47,7 +47,7 @@ QtObject {
     }
 
     // Type scale (04 §3.2): design px, multiplied by `u` at the call site.
-    readonly property string fontFamily: ""     // empty = system default until the typeface is bundled (T-145)
+    readonly property string fontFamily: "Inter"   // bundled (T-145); main.cpp and the test host make it the application font
     // Icons (04 §3.7, T-157): two static cuts of Material Symbols Rounded under their own family names.
     readonly property string iconFamily: "Material Symbols Rounded"
     readonly property string iconFamilyFilled: "Material Symbols Rounded Filled"

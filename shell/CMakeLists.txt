@@ -126,6 +126,9 @@ qt_add_qml_module(ruyashell
         sounds/back.wav
         fonts/MaterialSymbolsRounded.ttf
         fonts/MaterialSymbolsRoundedFilled.ttf
+        fonts/Inter-Regular.ttf
+        fonts/Inter-Light.ttf
+        fonts/Inter-SemiBold.ttf
 )
 
 # qmltyperegistrar includes the QML_ELEMENT headers by file name.
@@ -184,8 +187,8 @@ endif()
 
 include(GNUInstallDirs)
 install(TARGETS ruya-shell RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
-# Licences of the bundled fonts (T-157; Inter joins with T-145).
-install(FILES fonts/LICENSE-MaterialSymbols.txt DESTINATION share/licenses/ruyaos)
+# Licences of the bundled fonts (T-157, T-145).
+install(FILES fonts/LICENSE-MaterialSymbols.txt fonts/OFL-Inter.txt DESTINATION share/licenses/ruyaos)
 
 if(RUYA_BUILD_TESTS)
     find_package(Qt6 REQUIRED COMPONENTS QuickTest)

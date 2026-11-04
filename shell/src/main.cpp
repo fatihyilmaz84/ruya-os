@@ -35,6 +35,13 @@ int main(int argc, char *argv[])
         if (QFontDatabase::addApplicationFont(path) < 0)
             qWarning("ruya-shell: cannot load font %s", file);
     }
+    // Inter (04 §3.2, T-145) is the default font, so every Text and control inherits it.
+    for (const char *file : {"Inter-Regular.ttf", "Inter-Light.ttf", "Inter-SemiBold.ttf"}) {
+        const QString path = QStringLiteral(":/qt/qml/RuyaShell/fonts/") + QLatin1String(file);
+        if (QFontDatabase::addApplicationFont(path) < 0)
+            qWarning("ruya-shell: cannot load font %s", file);
+    }
+    QGuiApplication::setFont(QFont(QStringLiteral("Inter")));
 
     QCommandLineParser parser;
     parser.addHelpOption();

@@ -439,7 +439,7 @@ Item {
             compare(find("aboutQt").value, SystemInfo.qtVersion)
             verify(SystemInfo.qtVersion.length > 0)
             compare(find("aboutServices").value, Profiles.mock ? "Mock (in-memory)" : "D-Bus")
-            compare(find("aboutLicence").value, "GPL-3.0-or-later; icon font Apache-2.0")
+            compare(find("aboutLicence").value, "GPL-3.0-or-later; icon font Apache-2.0; Inter typeface OFL-1.1")
 
             keyClick(Qt.Key_Right)
             tryVerify(() => find("aboutVersion").activeFocus)
