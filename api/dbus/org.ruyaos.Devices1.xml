@@ -243,8 +243,10 @@
   <interface name="org.ruyaos.Devices1.Storage">
 
     <!--
-      Internal and removable volumes (one per partition or filesystem), internal first, then in
-      a stable order. One dictionary per volume:
+      Removable volumes (one per partition or filesystem) and internal volumes that are mounted
+      outside the system paths (the OS itself is not listed), internal first, then in a stable
+      order. Only removable volumes with a supported filesystem are mounted, by the service, once
+      per plug-in, nosuid,nodev,noexec. One dictionary per volume:
         id           s   stable id, opaque to the shell (e.g. the udisks object name)
         label        s   display name; the service falls back to the model or "USB drive"
         filesystem   s   "ext4" | "btrfs" | "exfat" | "vfat" | "ntfs" | "unknown" (not supported)

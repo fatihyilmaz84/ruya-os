@@ -1,7 +1,7 @@
-//! org.ruyaos.Devices1.Audio, .Network, .Bluetooth and .Batteries on D-Bus. Thin adapter: the rules live in
-//! `audio.rs`, `network.rs` and `bluetooth.rs`.
+//! org.ruyaos.Devices1.Audio, .Network, .Bluetooth, .Storage and .Batteries on D-Bus. Thin adapter: the rules live in
+//! `audio.rs`, `network.rs`, `bluetooth.rs`, `storage.rs` and `battery.rs`.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
@@ -20,6 +20,7 @@ use crate::battery::{Batteries, UPower};
 use crate::bluetooth::{self, Bluetooth, Bluez, BtError};
 use crate::debounce;
 use crate::network::{self, Network, NetworkManager};
+use crate::storage::{self, Storage, Udisks};
 
 /// Chosen at runtime: `wpctl` on Linux, a fake in `--session` development.
 pub type DynPipeWire = Box<dyn crate::audio::PipeWire>;
@@ -755,5 +756,149 @@ async fn announce_bluetooth(
         .await?;
     let this = iface.get().await;
     this.emit(iface.signal_emitter(), changes).await;
+    Ok(())
+}
+
+/// Chosen at runtime: udisks2 on Linux, a fake in `--session` development.
+pub type DynUdisks = Box<dyn Udisks>;
+
+impl Udisks for DynUdisks {
+    fn volumes(&self) -> Result<Vec<crate::storage::RawVolume>, String> {
+        (**self).volumes()
+    }
+    fn mount(&self, id: &str, options: &str) -> Result<(), String> {
+        (**self).mount(id, options)
+    }
+    fn unmount(&self, id: &str) -> Result<(), crate::storage::UnmountError> {
+        (**self).unmount(id)
+    }
+    fn power_off(&self, id: &str) -> Result<(), String> {
+        (**self).power_off(id)
+    }
+}
+
+pub type SharedStorage = Arc<Storage<DynUdisks>>;
+
+pub struct StorageIface {
+    storage: SharedStorage,
+}
+
+impl StorageIface {
+    pub fn new(storage: SharedStorage) -> Self {
+        StorageIface { storage }
+    }
+
+    /// `VolumeAdded` first, then `VolumesChanged` (the contract's order).
+    async fn emit(emitter: &SignalEmitter<'_>, changes: &storage::Changes) {
+        for id in &changes.added {
+            if let Err(err) = Self::volume_added(emitter, id.clone()).await {
+                eprintln!("ruya-devices: emitting VolumeAdded failed: {err}");
+            }
+        }
+        if changes.changed {
+            if let Err(err) = Self::volumes_changed(emitter).await {
+                eprintln!("ruya-devices: emitting VolumesChanged failed: {err}");
+            }
+        }
+    }
+}
+
+#[interface(name = "org.ruyaos.Devices1.Storage")]
+impl StorageIface {
+    fn list_volumes(&self) -> Vec<BTreeMap<String, OwnedValue>> {
+        self.storage
+            .list()
+            .into_iter()
+            .map(|v| {
+                let own = |v: Value<'_>| OwnedValue::try_from(v).ok();
+                [
+                    ("id", own(Value::from(v.id.clone()))),
+                    ("label", own(Value::from(v.label.clone()))),
+                    ("filesystem", own(Value::from(v.filesystem))),
+                    ("size_bytes", own(Value::from(v.size_bytes))),
+                    ("free_bytes", own(Value::from(v.free_bytes))),
+                    ("removable", own(Value::from(v.removable))),
+                    ("mounted", own(Value::from(v.mounted))),
+                    ("mount_point", own(Value::from(v.mount_point.clone()))),
+                    ("read_only", own(Value::from(v.read_only))),
+                ]
+                .into_iter()
+                .filter_map(|(k, v)| v.map(|v| (k.to_owned(), v)))
+                .collect()
+            })
+            .collect()
+    }
+
+    async fn eject(&self, id: &str, #[zbus(signal_emitter)] emitter: SignalEmitter<'_>) -> String {
+        let (storage, id) = (self.storage.clone(), id.to_owned());
+        let status = unblock(move || storage.eject(&id)).await;
+        // Do not wait for udisks' signals: the volume should leave the list as the call returns.
+        let storage = self.storage.clone();
+        match unblock(move || storage.refresh()).await {
+            Ok(changes) => Self::emit(&emitter, &changes).await,
+            Err(err) => eprintln!("ruya-devices: reading udisks2 failed: {err}"),
+        }
+        status.as_str().to_owned()
+    }
+
+    #[zbus(signal)]
+    async fn volumes_changed(emitter: &SignalEmitter<'_>) -> zbus::Result<()>;
+
+    #[zbus(signal)]
+    async fn volume_added(emitter: &SignalEmitter<'_>, id: String) -> zbus::Result<()>;
+}
+
+/// Follows udisks2's signals (objects added or removed, properties changed) and udisks2 itself
+/// appearing or leaving, and after a quiet moment reads the list again (mounting new removable
+/// volumes) and announces what changed. No polling. Runs forever.
+#[cfg(target_os = "linux")]
+pub async fn watch_storage(connection: Connection, storage: SharedStorage) {
+    use crate::udisks::UDISKS;
+
+    let signals = MatchRule::builder()
+        .msg_type(zbus::message::Type::Signal)
+        .sender(UDISKS)
+        .map(|b| b.build());
+    let owner = MatchRule::builder()
+        .msg_type(zbus::message::Type::Signal)
+        .sender("org.freedesktop.DBus")
+        .and_then(|b| b.member("NameOwnerChanged"))
+        .and_then(|b| b.arg(0, UDISKS))
+        .map(|b| b.build());
+    let (Ok(signals), Ok(owner)) = (signals, owner) else {
+        return eprintln!("ruya-devices: cannot follow udisks2");
+    };
+    let (signals, owner) = match (
+        MessageStream::for_match_rule(signals, &connection, None).await,
+        MessageStream::for_match_rule(owner, &connection, None).await,
+    ) {
+        (Ok(a), Ok(b)) => (a, b),
+        (Err(err), _) | (_, Err(err)) => {
+            return eprintln!("ruya-devices: cannot follow udisks2: {err}");
+        }
+    };
+    let mut stream = futures_lite::stream::or(signals, owner);
+    while stream.next().await.is_some() {
+        debounce::settle(&mut stream, debounce::QUIET, debounce::MAX_WAIT, None).await;
+        let storage = storage.clone();
+        match unblock(move || storage.refresh()).await {
+            Ok(changes) if changes.any() => {
+                if let Err(err) = announce_storage(&connection, &changes).await {
+                    eprintln!("ruya-devices: emitting storage signals failed: {err}");
+                }
+            }
+            Ok(_) => {}
+            Err(err) => eprintln!("ruya-devices: reading udisks2 failed: {err}"),
+        }
+    }
+}
+
+#[cfg(target_os = "linux")]
+async fn announce_storage(connection: &Connection, changes: &storage::Changes) -> zbus::Result<()> {
+    let iface = connection
+        .object_server()
+        .interface::<_, StorageIface>(OBJECT_PATH)
+        .await?;
+    StorageIface::emit(iface.signal_emitter(), changes).await;
     Ok(())
 }

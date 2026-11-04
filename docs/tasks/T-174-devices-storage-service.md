@@ -35,4 +35,22 @@ Plug a USB stick into the console and the shell toasts "Drive inserted". Setting
 - QEMU needs a USB controller for hot-plug (`-device qemu-xhci`). Check how `smoke-test.ps1` starts QEMU before you add one.
 
 ## Outcome
-_Filled in by the implementer._
+Verified: host (VM part pending: `scripts/vm-storage-check.ps1`, image 0.0.38-t174; builder round 1 stops before the image build because the lane is busy)
+
+**Built**
+- `services/ruya-devices/src/storage.rs` (pure core, 24 unit tests): classification (removable = drive removable or USB/SDIO bus and not `HintSystem`; `HintIgnore` and drive-less devices never listed; internal volumes only when mounted outside the system paths; five known filesystems, else `unknown`), free space only while mounted, label fallbacks, order, mounting policy, `VolumeAdded` hot-plug only, `Eject` with `busy` mapping (what was unmounted is mounted again), a `FakeUdisks`.
+- `services/ruya-devices/src/udisks.rs` (Linux): `GetManagedObjects`, `Filesystem.Mount/Unmount`, `Drive.PowerOff/Eject`, `statvfs` through `libc` (already in the tree through ruya-update; Linux-only dependency).
+- `dbus.rs`: `StorageIface` (keys of each dictionary in alphabetical order, so the VM check can parse `busctl` output) and `watch_storage` (udisks2 signals + name owner, shared debounce, no polling); `Eject` refreshes at once. `main.rs`: first read at start (mounts sticks already plugged in, no `VolumeAdded`), `--session` runs on a fake stick.
+- Mount policy: removable volumes with a known filesystem are mounted once when first seen, `nosuid,nodev,noexec`, read-write (read-only would stop people copying saves onto a stick; the three options already stop execution, privilege gain and device nodes). Never re-mounted after an eject or a failed mount until unplugged (`seen` set; tests cover it).
+- Image: `image/rootfs/usr/share/polkit-1/rules.d/50-ruyaos-storage.rules` (ruya-shell: `filesystem-mount`, `eject-media`, `power-off-drive` and the `-other-seat` variants only). `udisks2`, `exfatprogs`, `ntfs-3g` were already in `20-base.sh`; the unit file is unchanged.
+- VM check: `scripts/vm-storage-check.ps1` (host: QEMU monitor `drive_add` + `device_add usb-storage`, format, detach, re-attach) and `scripts/vm-storage-check.sh` (guest steps).
+- Contract: XML only got clearer text for `ListVolumes` (which volumes are listed and mounted); no names or statuses changed, so mock and shell client are untouched.
+
+**Deviations / interpretations**
+- Spec 03 said "mounted for the active profile (`/run/media/<user>/...`)": mounted for `ruya-shell` (the user the service runs as); profile users get media access with the Media task. Spec updated.
+- Internal volumes: listed only when mounted outside system paths (the OS partitions would be noise); never mounted or ejected.
+
+**Revert tests:** removing `noexec` from `MOUNT_OPTIONS` plus the `seen` guard failed 3 storage tests (options, no re-mount after eject, failed mount); forcing `added` empty failed 3 (hot-plug, unsupported hot-plug, leave-and-return).
+
+**Unverified:** everything udisks2/polkit/QEMU (the VM part). Real USB hardware, SD readers and NTFS sticks are not covered by the VM check.
+

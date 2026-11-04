@@ -1,0 +1,31 @@
+// ruya-devices (a user unit of ruya-shell, ADR-010) mounts USB sticks and cards and ejects them
+// through udisks2's D-Bus API on behalf of the shell. udisks2 asks polkit for every such call,
+// and nobody is there to type a password on a TV (the unit also has no logind session of its
+// own), so these actions are allowed for the user ruya-shell:
+//
+//   filesystem-mount     mount a removable volume (the service passes nosuid,nodev,noexec)
+//   eject-media          eject media (a card reader, an optical drive)
+//   power-off-drive      switch a drive off after it was unmounted
+//
+// Nothing else: not the "-system" variants (internal disks stay untouched), not
+// filesystem-unmount-others (the shell only unmounts what it mounted itself), not formatting,
+// repairing, partitioning, loop devices, encryption or fstab changes. udisks2 itself only
+// accepts the mount options nosuid, nodev, noexec, ro, sync and a few more from a caller that
+// is not root, and the unit runs with NoNewPrivileges. Nothing here runs anything from a
+// volume. Other users (profile users, Flatpak apps) keep the default policy.
+polkit.addRule(function(action, subject) {
+    if (subject.user !== "ruya-shell")
+        return polkit.Result.NOT_HANDLED;
+
+    var allowed = [
+        "org.freedesktop.udisks2.filesystem-mount",
+        "org.freedesktop.udisks2.filesystem-mount-other-seat",
+        "org.freedesktop.udisks2.eject-media",
+        "org.freedesktop.udisks2.eject-media-other-seat",
+        "org.freedesktop.udisks2.power-off-drive",
+        "org.freedesktop.udisks2.power-off-drive-other-seat"
+    ];
+    if (allowed.indexOf(action.id) >= 0)
+        return polkit.Result.YES;
+    return polkit.Result.NOT_HANDLED;
+});

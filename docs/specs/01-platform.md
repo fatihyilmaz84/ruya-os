@@ -62,7 +62,7 @@ The build excludes any desktop environment, display manager, `kdeconnect` and `p
 3. Third-party code runs only in Flatpak sandboxes, as the profile's user, never as root.
 4. **Full-disk encryption (Phase 6):** LUKS2 with TPM2 auto-unlock (`systemd-cryptenroll --tpm2-pcrs=7`) as an installer option that's on by default when a TPM2 is present. Without it, profile PINs only protect against casual access.
 5. Image signature enforcement via `/etc/containers/policy.json` (`sigstoreSigned` for our registry).
-6. No auto-run from removable media, ever.
+6. No auto-run from removable media, ever. Mount policy (T-174): `ruya-devices` mounts removable volumes through udisks2 with `nosuid,nodev,noexec` (read-write, so saves and screenshots can be copied; these options already stop anything on the stick from running, gaining privileges or acting as a device), only filesystems `ext4`, `btrfs`, `exfat`, `vfat`, `ntfs`, only once per plug-in. polkit (`image/rootfs/usr/share/polkit-1/rules.d/50-ruyaos-storage.rules`) gives `ruya-shell` mounting, media ejecting and drive power-off, nothing else; udisks2 and `exfatprogs`/`ntfs-3g` are in the base packages.
 7. Debug features (SSH, VT switching, shell journal over network) exist only in `dev` channel images.
 
 ## 4. Updates & rollback (ADR-006)
