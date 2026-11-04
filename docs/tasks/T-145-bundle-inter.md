@@ -1,6 +1,6 @@
 # T-145 — Bundle the Inter typeface
 
-Status: in-progress · Phase: 2 · Depends: T-142 · Area: shell, image · Size: S
+Status: done · Phase: 2 · Depends: T-142 · Area: shell, image · Size: S
 
 Owner decision 2026-10-28: yes, bundle Inter as a Qt resource.
 
