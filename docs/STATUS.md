@@ -49,6 +49,7 @@ Follow-ups and debt for the next planner, one line each: `- (source) what, and w
 - (T-170 review) Settings panes give no cue that more rows exist below the viewport, now that no cut row hints at it: decide on a scroll affordance (fade, chevron or peek) in 04 §5 (design, lead).
 - (T-144) `tst_accessibility`: also walk Games, Store, AppDetail, PowerConfirm, the TextEntry keys, the profile add/manage flows and the wizard steps (Setup's key sink is just "Setup"); ProfileCard's name could say "PIN protected"; re-check the Accessibility category when its pane lands.
 - (T-144 review) `lint-tokens.ps1` weight rule can be fooled by a `font.weight` in a nested child or a comment, and misses a multi-line `font.pixelSize:`; none in the tree today.
+- (lead) `dev.ps1 shots` checks for a locked session (LogonUI) only at start: a lock during the run (or while waiting on the shots lock) gives a 10+ min hang or misleading failures (a Lockout test, the picker in `27-settings-storage.png`, T-175). Re-check LogonUI while waiting and after a failure, and print "session locked" instead.
 
 ## Blocked (need something this host doesn't have)
 
