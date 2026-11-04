@@ -869,7 +869,7 @@
 <context>
     <name>SectionNav</name>
     <message>
-        <location filename="../qml/SectionNav.qml" line="+28"/>
+        <location filename="../qml/SectionNav.qml" line="+32"/>
         <source>Home</source>
         <translation>Ana sayfa</translation>
     </message>
@@ -1071,7 +1071,7 @@
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+289"/>
+        <location filename="../qml/Shell.qml" line="+291"/>
         <source>Could not %1.</source>
         <translation>%1 işlemi yapılamadı.</translation>
     </message>
@@ -1096,12 +1096,12 @@
         <translation>Ses çıkışı: %1</translation>
     </message>
     <message>
-        <location line="+545"/>
+        <location line="+612"/>
         <source>Power</source>
         <translation>Güç</translation>
     </message>
     <message>
-        <location line="-537"/>
+        <location line="-604"/>
         <source>Update ready. Restart to finish.</source>
         <translation>Güncelleme hazır. Bitirmek için yeniden başlat.</translation>
     </message>
@@ -1116,7 +1116,7 @@
         <translation>%1 beklenmedik şekilde durdu</translation>
     </message>
     <message>
-        <location line="+218"/>
+        <location line="+206"/>
         <source>Continue playing</source>
         <translation>Oynamaya devam et</translation>
     </message>
@@ -1146,7 +1146,7 @@
         <translation>%1 başlatılıyor…</translation>
     </message>
     <message>
-        <location line="+186"/>
+        <location line="+265"/>
         <source>System</source>
         <translation>Sistem</translation>
     </message>

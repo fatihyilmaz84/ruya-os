@@ -4,7 +4,9 @@ import RuyaShell
 
 // Section nav (04 §5): a glass pill of section pills (Home, Games, Media, Store, Settings).
 // The current section is filled with `primaryFill`; the focused pill carries the white ring.
-// Left/Right move between pills, Accept emits `activated(key)`, Down leaves downwards.
+// Left/Right move between pills, Accept emits `activated(key)`, Down leaves downwards, LB/RB
+// ask for the next/previous section (`stepRequested`), Back asks to go back (`backRequested`).
+// One instance lives in the shell's top layer and is shown on Home and the section pages.
 // The glass blurs a crop of `blurSource` (the shared backdrop layer); with no blur (the
 // Performance tier) it is `glassOpaque`.
 FocusScope {
@@ -22,6 +24,8 @@ FocusScope {
 
     signal activated(string key)
     signal downRequested()
+    signal stepRequested(int direction)
+    signal backRequested()
 
     function label(key) {
         switch (key) {
@@ -131,6 +135,12 @@ FocusScope {
             event.accepted = true
         } else if (event.key === Qt.Key_Up) {
             event.accepted = true          // the top of the screen
+        } else if (event.key === Qt.Key_PageDown || event.key === Qt.Key_PageUp) {
+            nav.stepRequested(event.key === Qt.Key_PageDown ? 1 : -1)
+            event.accepted = true
+        } else if (event.key === Qt.Key_Escape || event.key === Qt.Key_Back) {
+            nav.backRequested()
+            event.accepted = true
         } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
             Sfx.select()
             nav.activated(currentKey)
