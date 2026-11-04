@@ -279,25 +279,31 @@ Item {
         }
 
         function test_low_battery_toast_once_per_crossing() {
-            Bluetooth.mockSetBattery("bt-pad-main", 20)
-            tryVerify(() => device("bt-pad-main").battery === 20)
+            // The soundbar stands for any connected device that is not a controller; controllers
+            // are reported by Batteries (UPower), see tst_battery.qml.
+            Bluetooth.mockSetBattery("bt-soundbar", 20)
+            tryVerify(() => device("bt-soundbar").battery === 20)
             compare(lowSpy.count, 0, "above the limit")
-            Bluetooth.mockSetBattery("bt-pad-main", 14)
+            Bluetooth.mockSetBattery("bt-soundbar", 14)
             tryCompare(lowSpy, "count", 1)
-            tryVerify(() => toastTexts().includes("Ruya Pad Pro: battery low (14%)"), 2000)
-            Bluetooth.mockSetBattery("bt-pad-main", 12)
-            tryVerify(() => device("bt-pad-main").battery === 12)
-            Bluetooth.mockSetBattery("bt-pad-main", 9)
-            tryVerify(() => device("bt-pad-main").battery === 9)
+            tryVerify(() => toastTexts().includes("Soundbar: battery low (14%)"), 2000)
+            Bluetooth.mockSetBattery("bt-soundbar", 12)
+            tryVerify(() => device("bt-soundbar").battery === 12)
+            Bluetooth.mockSetBattery("bt-soundbar", 9)
+            tryVerify(() => device("bt-soundbar").battery === 9)
             compare(lowSpy.count, 1, "still low: no second toast")
             compare(toastTexts().filter(t => t.includes("battery low")).length, 1)
-            Bluetooth.mockSetBattery("bt-pad-main", 40)  // recharged ...
-            tryVerify(() => device("bt-pad-main").battery === 40)
-            Bluetooth.mockSetBattery("bt-pad-main", 10)  // ... and low again
+            Bluetooth.mockSetBattery("bt-soundbar", 40)  // recharged ...
+            tryVerify(() => device("bt-soundbar").battery === 40)
+            Bluetooth.mockSetBattery("bt-soundbar", 10)  // ... and low again
             tryCompare(lowSpy, "count", 2)
             // An unconnected or unknown battery never toasts.
             Bluetooth.mockSetBattery("bt-pad-old", 3)
             tryVerify(() => device("bt-pad-old").battery === 3)
+            compare(lowSpy.count, 2)
+            // A controller never toasts here: Batteries owns it.
+            Bluetooth.mockSetBattery("bt-pad-main", 5)
+            tryVerify(() => device("bt-pad-main").battery === 5)
             compare(lowSpy.count, 2)
         }
 

@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
-# Checks the Devices service (audio T-128, network T-132) inside a running VM booted with sound. Copy and run as root:
+# Checks the Devices service (audio T-128, network T-132, controller batteries T-161) inside a running VM booted with sound. Copy and run as root:
 #   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-devices-check.sh root@127.0.0.1:/root/
-#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-devices-check.sh [check|events|security|state]
+#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-devices-check.sh [check|events|security|state|batteries]
 # check (default): unit active, name owned by ruya-shell, ListSinks, a MasterVolume write reaches
 # PipeWire, a call from another user is refused; then the network part: State is connected, Primary is
 # the ethernet link with an IPv4 address, ListWifi and Scan answer, unknown ids are refused, another
-# user is refused. Needs the shell logged in (VM booted with -Audio).
+# user is refused; then the batteries part: upower is installed and answers on the bus, ListBatteries answers an
+# empty list (no controller in the VM; a real controller's battery is NOT checked here), another user is
+# refused. Needs the shell logged in (VM booted with -Audio).
 # events: only the PipeWire event checks (T-133); IDLE=60 adds the idle-process count (also part of check; samples the process list for IDLE seconds).
 # state: prints State and Primary (for the link test, see docs/dev-setup.md).
 set -u
@@ -13,6 +15,7 @@ svc=org.ruyaos.Devices1
 path=/org/ruyaos/Devices1
 ifc=org.ruyaos.Devices1.Audio
 net=org.ruyaos.Devices1.Network
+bat=org.ruyaos.Devices1.Batteries
 uid="$(id -u ruya-shell)"
 as_shell() { runuser -u ruya-shell -- env XDG_RUNTIME_DIR="/run/user/$uid" "$@"; }
 fail=0
@@ -148,10 +151,31 @@ check)
         echo "$out"; ok "network call from nobody refused"
     fi
 
+    echo "--- batteries (T-161): UPower behind Devices1.Batteries"
+    if command -v upower >/dev/null; then ok "upower is installed"; else bad "upower is not installed"; fi
+    upower --version 2>/dev/null | head -2
+    # UPower is D-Bus activated: the call below starts it if needed.
+    if busctl --system call org.freedesktop.UPower /org/freedesktop/UPower org.freedesktop.UPower EnumerateDevices >/dev/null 2>&1; then ok "UPower answers on the system bus"; else bad "UPower does not answer"; fi
+    if systemctl is-active upower; then ok "upower.service is active"; else bad "upower.service not active"; fi
+    echo "UPower devices (type 12 = gaming input, none expected in the VM):"
+    upower -d 2>/dev/null | grep -E "^Device:|  (model|native-path):" | head -12
+    batt="$(busctl --system call "$svc" "$path" "$bat" ListBatteries)"
+    echo "ListBatteries: $batt"
+    case "$batt" in 'aa{sv} 0') ok "ListBatteries answers an empty list (no controller in the VM)";; *) bad "ListBatteries did not answer an empty aa{sv}";; esac
+    if out="$(runuser -u nobody -- busctl --system call "$svc" "$path" "$bat" ListBatteries 2>&1)"; then
+        bad "nobody could call ListBatteries: $out"
+    else
+        echo "$out"; ok "batteries call from nobody refused"
+    fi
+    as_shell systemctl --user is-active ruya-devices >/dev/null && ok "ruya-devices still active after the UPower calls" || bad "ruya-devices not active"
+
     events_check "${IDLE:-60}"
     ;;
 events)
     events_check "${IDLE:-0}"
+    ;;
+batteries)
+    busctl --system call "$svc" "$path" "$bat" ListBatteries
     ;;
 state)
     # For the link test: the host runs `set_link <name> off|on` in the QEMU monitor, this shows the result.

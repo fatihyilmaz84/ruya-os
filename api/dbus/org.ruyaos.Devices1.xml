@@ -1,13 +1,13 @@
 <!DOCTYPE node PUBLIC "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
  "http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
 <!--
-  org.ruyaos.Devices1 — audio outputs and volumes, the network, Bluetooth and storage.
+  org.ruyaos.Devices1 — audio outputs and volumes, the network, Bluetooth, storage and controller batteries.
   Served by ruya-devices on the system bus at /org/ruyaos/Devices1 (blocker B-007: the service
   does not exist yet; the shell's mock backend follows this contract).
   Contract between shell (Qt/QML) and services (Rust); see docs/specs/03-services-and-apps.md §2.3.
 
   One bus name and one object, one interface per device class: org.ruyaos.Devices1.Audio now,
-  org.ruyaos.Devices1.Network, .Bluetooth and .Storage next to it. A new
+  org.ruyaos.Devices1.Network, .Bluetooth, .Storage and .Batteries next to it. A new
   class is a new interface, so existing clients and their PropertiesChanged filters (which match
   the interface name) are not touched, and each class can be mocked, implemented and tested on
   its own. Shared rules for every interface of this object:
@@ -46,6 +46,9 @@
                       (Eject: nothing to eject, it is safe to unplug)
     "invalid"         malformed argument (an empty id)
     "failed"          internal error, or Eject of a volume that is not removable
+
+  org.ruyaos.Devices1.Batteries status strings: none. The list is the status (UPower behind it;
+  an empty list when UPower is not on the bus, never an error).
 -->
 <node>
   <interface name="org.ruyaos.Devices1.Audio">
@@ -270,6 +273,27 @@
     <signal name="VolumeAdded">
       <arg name="id" type="s"/>
     </signal>
+
+  </interface>
+  <interface name="org.ruyaos.Devices1.Batteries">
+
+    <!--
+      Batteries of gaming controllers (UPower device type "gaming input"), sorted by id. The PC's
+      own battery, mice, keyboards and headsets are not listed. One dictionary per controller:
+        id       s   stable id, opaque to the shell (the UPower object path)
+        name     s   display name (the device model; "Controller" when it has none)
+        percent  u   0-100
+        state    s   "charging" | "discharging" | "full" | "unknown"
+      A controller that has no battery reading, or is gone, is not listed. A controller can also
+      be in Devices1.Bluetooth.ListDevices (with its own "battery"); this list is the one the
+      status cluster and the low-battery toast use for controllers.
+    -->
+    <method name="ListBatteries">
+      <arg name="batteries" type="aa{sv}" direction="out"/>
+    </method>
+
+    <!-- A controller appeared, disappeared or changed (percent, state); call ListBatteries again. -->
+    <signal name="BatteriesChanged"/>
 
   </interface>
 

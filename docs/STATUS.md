@@ -27,7 +27,6 @@ Open work only (todo, in-progress, blocked), in the recommended order; when NEXT
 | [T-164](tasks/T-164-per-profile-wayland-sockets.md) | **[lead]** Per-profile Wayland sockets: a profile's app appears in the shell | todo | T-162 |
 | [T-165](tasks/T-165-profile-switch-freezes-apps.md) | Profile switch and sign-out freeze the profile's apps | todo | T-164 |
 | [T-147](tasks/T-147-fullscreen-app-flow.md) | Full-screen apps: launch splash, quick menu, return, close | todo | T-164 |
-| [T-161](tasks/T-161-controller-battery.md) | Controller battery: `Devices1` over UPower, status cluster, low-battery toast | in-progress | T-157 |
 | [T-173](tasks/T-173-devices-bluetooth-service.md) | `ruya-devices`: `Devices1.Bluetooth` over BlueZ | todo | — |
 | [T-174](tasks/T-174-devices-storage-service.md) | `ruya-devices`: `Devices1.Storage` over udisks2 | todo | T-137 |
 | [T-145](tasks/T-145-bundle-inter.md) | Bundle the Inter typeface | todo | T-142 |
@@ -48,6 +47,10 @@ Follow-ups and debt for the next planner, one line each: `- (source) what, and w
 - (T-170 review) Settings panes give no cue that more rows exist below the viewport, now that no cut row hints at it: decide on a scroll affordance (fade, chevron or peek) in 04 §5 (design, lead).
 - (T-176 review) lint-tokens weight rule: also handle grouped `font { pixelSize: ... }` and values spread over three or more lines (none in the tree).
 - (T-176) PowerConfirm's buttons are named "Cancel"/"Confirm": name them after the action ("Restart now") for screen readers; the wizard's create-name-and-PIN step and the profile add/manage flows are not walked by `tst_accessibility` yet.
+- (T-161 review) Real pads: confirm on hardware that DualSense (hid-playstation), Xbox (xpadneo or dongle) and 8BitDo pads show in UPower as kind 12 "gaming-input"; otherwise the kind-12 filter hides them (extend `KIND_GAMING_INPUT` in `battery.rs`). Pair with B-002 / T-173.
+- (T-161) A fake UPower device in the VM (umockdev or python-dbusmock on the system bus) would let `vm-devices-check.sh` cover a non-empty `ListBatteries`.
+- (T-161 review) `Batteries` cluster: on a tie, or when the lowest pad is charging, prefer the discharging pad so the warning state matches the toast; `DBusBatteryBackend` (and siblings): drop stale `ListBatteries` replies with a sequence counter.
+- (T-161) `image/bib/config.toml` (git-ignored, the dev SSH key) is missing in a fresh worktree, so `make-disk.sh` builds a disk ssh can't log into: make `make-disk.sh` fail loudly, and say in `dev-setup.md` to copy it from the main checkout.
 
 ## Blocked (need something this host doesn't have)
 

@@ -21,6 +21,15 @@ Item {
         }
     }
 
+    // A controller (UPower) is discharging at 15 % or less (once per crossing, Batteries.batteryLow).
+    // This is the only low-battery toast for controllers: Bluetooth.batteryLow skips them.
+    Connections {
+        target: Batteries
+        function onBatteryLow(id, name, percent) {
+            Notifications.show(qsTr("Controller battery low (%1%)").arg(percent), "warning")
+        }
+    }
+
     // A drive was plugged in (once per insert, when it is in the list), and an eject finished.
     // No actions yet; nothing on the drive is opened or run.
     Connections {

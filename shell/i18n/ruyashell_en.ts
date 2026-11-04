@@ -1266,12 +1266,12 @@
         <translation>Audio output: %1</translation>
     </message>
     <message>
-        <location line="+657"/>
+        <location line="+683"/>
         <source>Power</source>
         <translation>Power</translation>
     </message>
     <message>
-        <location line="-649"/>
+        <location line="-675"/>
         <source>Update ready. Restart to finish.</source>
         <translation>Update ready. Restart to finish.</translation>
     </message>
@@ -1286,7 +1286,12 @@
         <translation>%1 stopped unexpectedly</translation>
     </message>
     <message>
-        <location line="+207"/>
+        <location line="+112"/>
+        <source>Controller battery %1%</source>
+        <translation>Controller battery %1%</translation>
+    </message>
+    <message>
+        <location line="+121"/>
         <source>Continue playing</source>
         <translation>Continue playing</translation>
     </message>
@@ -1695,6 +1700,11 @@
         <location filename="../qml/ToastLayer.qml" line="+20"/>
         <source>%1: battery low (%2%)</source>
         <translation>%1: battery low (%2%)</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Controller battery low (%1%)</source>
+        <translation>Controller battery low (%1%)</translation>
     </message>
     <message>
         <location line="+9"/>

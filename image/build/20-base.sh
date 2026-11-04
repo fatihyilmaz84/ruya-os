@@ -6,7 +6,7 @@ dnf -y install --setopt=install_weak_deps=False \
     qt6-qtbase qt6-qtbase-gui qt6-qtdeclarative qt6-qtwayland qt6-qtmultimedia \
     mesa-dri-drivers mesa-vulkan-drivers vulkan-loader \
     pipewire pipewire-pulseaudio pipewire-alsa pipewire-utils wireplumber \
-    NetworkManager-wifi bluez \
+    NetworkManager-wifi bluez upower \
     udisks2 exfatprogs ntfs-3g \
     flatpak fedora-flathub-remote \
     greenboot greenboot-default-health-checks \

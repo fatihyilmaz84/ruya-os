@@ -1,4 +1,4 @@
-//! org.ruyaos.Devices1.Audio and .Network on D-Bus. Thin adapter: the rules live in `audio.rs`
+//! org.ruyaos.Devices1.Audio, .Network and .Batteries on D-Bus. Thin adapter: the rules live in `audio.rs`
 //! and `network.rs`.
 
 use std::collections::HashMap;
@@ -14,6 +14,7 @@ use zbus::{interface, Connection, MatchRule, MessageStream};
 use crate::audio::Audio;
 #[cfg(target_os = "linux")]
 use crate::audio::Changes;
+use crate::battery::{Batteries, UPower};
 use crate::network::{self, Network, NetworkManager};
 
 /// Chosen at runtime: `wpctl` on Linux, a fake in `--session` development.
@@ -374,4 +375,109 @@ async fn announce_network(connection: &Connection, changes: &network::Changes) -
     let this = iface.get().await;
     this.emit(iface.signal_emitter(), changes).await;
     Ok(())
+}
+
+/// Chosen at runtime: UPower on Linux, a fake in `--session` development.
+pub type DynUPower = Box<dyn UPower>;
+
+impl UPower for DynUPower {
+    fn devices(&self) -> Result<Vec<crate::battery::RawDevice>, String> {
+        (**self).devices()
+    }
+}
+
+pub type SharedBatteries = Arc<Batteries<DynUPower>>;
+
+pub struct BatteriesIface {
+    batteries: SharedBatteries,
+}
+
+impl BatteriesIface {
+    pub fn new(batteries: SharedBatteries) -> Self {
+        BatteriesIface { batteries }
+    }
+}
+
+#[interface(name = "org.ruyaos.Devices1.Batteries")]
+impl BatteriesIface {
+    fn list_batteries(&self) -> Vec<HashMap<String, OwnedValue>> {
+        self.batteries
+            .list()
+            .into_iter()
+            .map(|b| {
+                let own = |v: Value<'_>| OwnedValue::try_from(v).ok();
+                [
+                    ("id", own(Value::from(b.id.clone()))),
+                    ("name", own(Value::from(b.name.clone()))),
+                    ("percent", own(Value::from(b.percent))),
+                    ("state", own(Value::from(b.state.as_str()))),
+                ]
+                .into_iter()
+                .filter_map(|(k, v)| v.map(|v| (k.to_owned(), v)))
+                .collect()
+            })
+            .collect()
+    }
+
+    #[zbus(signal)]
+    async fn batteries_changed(emitter: &SignalEmitter<'_>) -> zbus::Result<()>;
+}
+
+/// Follows UPower's signals (devices added or removed, any device's properties) and UPower
+/// itself appearing or leaving, and after a quiet moment reads the list again and announces a
+/// change. No polling. Runs forever.
+#[cfg(target_os = "linux")]
+pub async fn watch_batteries(connection: Connection, batteries: SharedBatteries) {
+    use crate::upower::UPOWER;
+
+    let signals = MatchRule::builder()
+        .msg_type(zbus::message::Type::Signal)
+        .sender(UPOWER)
+        .map(|b| b.build());
+    let owner = MatchRule::builder()
+        .msg_type(zbus::message::Type::Signal)
+        .sender("org.freedesktop.DBus")
+        .and_then(|b| b.member("NameOwnerChanged"))
+        .and_then(|b| b.arg(0, UPOWER))
+        .map(|b| b.build());
+    let (Ok(signals), Ok(owner)) = (signals, owner) else {
+        return eprintln!("ruya-devices: cannot follow UPower");
+    };
+    let (signals, owner) = match (
+        MessageStream::for_match_rule(signals, &connection, None).await,
+        MessageStream::for_match_rule(owner, &connection, None).await,
+    ) {
+        (Ok(a), Ok(b)) => (a, b),
+        (Err(err), _) | (_, Err(err)) => {
+            return eprintln!("ruya-devices: cannot follow UPower: {err}");
+        }
+    };
+    let mut stream = futures_lite::stream::or(signals, owner);
+    while stream.next().await.is_some() {
+        while future::or(async { stream.next().await.is_some() }, async {
+            async_io::Timer::after(DEBOUNCE).await;
+            false
+        })
+        .await
+        {}
+        let batteries = batteries.clone();
+        match unblock(move || batteries.refresh()).await {
+            Ok(true) => {
+                if let Err(err) = announce_batteries(&connection).await {
+                    eprintln!("ruya-devices: emitting battery signals failed: {err}");
+                }
+            }
+            Ok(false) => {}
+            Err(err) => eprintln!("ruya-devices: reading UPower failed: {err}"),
+        }
+    }
+}
+
+#[cfg(target_os = "linux")]
+async fn announce_batteries(connection: &Connection) -> zbus::Result<()> {
+    let iface = connection
+        .object_server()
+        .interface::<_, BatteriesIface>(OBJECT_PATH)
+        .await?;
+    BatteriesIface::batteries_changed(iface.signal_emitter()).await
 }
