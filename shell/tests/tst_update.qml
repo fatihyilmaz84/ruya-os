@@ -483,7 +483,7 @@ Item {
             Update.mockAnnounceRestart(Math.floor(Date.now() / 1000) + 120)
             tryVerify(() => restartToast() !== null, 2000, "the notice appears")
             wait(800)
-            grabImage(tc.shell).save(shotsDir + "/26-restart-notice.png")
+            grabImage(tc.shell).save(shotsDir + "/28-restart-notice.png")
         }
     }
 }

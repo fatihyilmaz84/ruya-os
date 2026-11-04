@@ -1,6 +1,6 @@
 # T-172 — Hint bar follow-ups: one Sections hint, wizard hints, per-page overrides
 
-Status: todo · Phase: 2 · Depends: — · Area: shell · Size: S · Owner: builder
+Status: done · Phase: 2 · Depends: — · Area: shell · Size: S · Owner: builder
 
 ## Goal
 The hint bar tells the truth on every screen. Home shows "LB RB Sections" as one hint, the setup wizard shows its own hints, and a page with nothing to select shows only Back. The dev badge no longer crowds the bar.
@@ -34,4 +34,11 @@ The hint bar tells the truth on every screen. Home shows "LB RB Sections" as one
 - `04` §2 and §5, `02` §4.3, `shell/PATTERNS.md` (how a page sets `hints`, and Page's `upFromTop`/`stepRequested`: Up at a page's top row reaches the nav, LB/RB switch sections, a page swallows unaccepted Up/PageUp/PageDown).
 
 ## Outcome
-_Filled in by the implementer._
+Verified: host
+
+Built: `HintBar` accepts `{ buttons: ["LB", "RB"], text }` (two `ButtonGlyph`s, one verb; delegate objectName `hint_LBRB`); Home uses it. `Setup.hints` gives each wizard step its hints (A Next, A Select on the profile step, B Back except first and last step, B Cancel over the keyboard or PIN pad) and Shell shows them; the wizard's own old "B  Back" text is removed. `Page.backOnlyHints` is used by `MediaPage` and `LibraryDetailsPage` (placeholders) and by Settings while About has focus or a category has no pane. The mock-services badge moved bottom right, left of the version tag (`mockBadge`, `versionTag`). `04` section 2 states the bottom margin; `04` section 5, `02` section 4.3 and `shell/PATTERNS.md` updated. New screenshot `01-home-nav.png` (tst_home); the restart-notice shot is now `28-restart-notice.png` (tst_update).
+
+Tests: `tst_hints` (one LB RB Sections hint with glyphs LB,RB; placeholder page and About show only B Back; badge bottom right), `tst_setup::test_hints_follow_the_step`. Screenshots reviewed: 01-home, 01-home-nav (ring outside the filled Home pill), 12-setup-admin.
+
+Deviations: no existing `tst_*` checked hint names, so `tst_hints.shown()` now lists `LBRB`. Other shared screenshot prefixes (`01-home-*`, `15-*`) were left as they are.
+

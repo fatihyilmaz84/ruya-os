@@ -182,8 +182,8 @@ Page {
             Badge {
                 anchors { left: parent.left; bottom: parent.bottom; margins: Theme.spaceXs * card.u }
                 u: card.u
-                text: page.sourceText(card.app.source ?? "")
-                kind: page.sourceKind(card.app.source ?? "")
+                text: page ? page.sourceText(card.app.source ?? "") : ""
+                kind: page ? page.sourceKind(card.app.source ?? "") : "info"
             }
         }
 

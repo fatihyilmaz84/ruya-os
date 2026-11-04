@@ -59,7 +59,14 @@ pub struct FlatpakCli;
 impl AppLister for FlatpakCli {
     fn list(&self) -> Result<String, String> {
         let out = std::process::Command::new("flatpak")
-            .args(["list", "--app", "--columns=application,name,origin"])
+            // --system: the image serves the system installation only (spec 03 §5); a user
+            // installation of the service's own account would be empty anyway.
+            .args([
+                "list",
+                "--system",
+                "--app",
+                "--columns=application,name,origin",
+            ])
             .output()
             .map_err(|e| format!("cannot run flatpak: {e}"))?;
         if !out.status.success() {

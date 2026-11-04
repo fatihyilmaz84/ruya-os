@@ -36,6 +36,34 @@ impl LibraryIface {
             items: Mutex::new(items),
         }
     }
+
+    /// Replaces the list; true when it differs from the one before.
+    fn store(&self, fresh: Vec<Item>) -> bool {
+        match self.items.lock() {
+            Ok(mut items) => {
+                let changed = *items != fresh;
+                *items = fresh;
+                changed
+            }
+            Err(_) => false,
+        }
+    }
+
+    /// Scans on the calling thread (the watcher thread in `main.rs`, never the executor).
+    /// True when the list changed; the caller then sends `ItemsChanged` with `announce`.
+    pub fn refresh(&self) -> bool {
+        self.store(catalog::scan(
+            &self.sources.steam_roots,
+            self.sources.lister.as_ref(),
+        ))
+    }
+
+    /// Sends `ItemsChanged`.
+    pub async fn announce(emitter: &SignalEmitter<'_>) {
+        if let Err(err) = Self::items_changed(emitter).await {
+            eprintln!("ruya-library: emitting ItemsChanged failed: {err}");
+        }
+    }
 }
 
 fn record(item: &Item) -> Dict {
@@ -70,18 +98,8 @@ impl LibraryIface {
         let fresh =
             blocking::unblock(move || catalog::scan(&sources.steam_roots, sources.lister.as_ref()))
                 .await;
-        let changed = match self.items.lock() {
-            Ok(mut items) => {
-                let changed = *items != fresh;
-                *items = fresh;
-                changed
-            }
-            Err(_) => false,
-        };
-        if changed {
-            if let Err(err) = Self::items_changed(&emitter).await {
-                eprintln!("ruya-library: emitting ItemsChanged failed: {err}");
-            }
+        if self.store(fresh) {
+            Self::announce(&emitter).await;
         }
     }
 

@@ -3,7 +3,8 @@ import QtQuick
 import RuyaShell
 
 // What the buttons do right now (04 §5): one glyph and verb per action the screen on top accepts,
-// bottom-left in the safe area. `hints` is a list of { button, text }, at most four. Never
+// bottom-left in the safe area. `hints` is a list of { button, text }, at most four; a hint
+// with two buttons and one verb (LB RB Sections) gives { buttons: ["LB", "RB"], text }. Never
 // focusable; the shell decides what it says and whether it shows.
 Item {
     id: bar
@@ -31,14 +32,19 @@ Item {
             delegate: Row {
                 id: hint
                 required property var modelData
-                objectName: "hint_" + modelData.button
+                readonly property var buttons: modelData.buttons ?? [modelData.button]
+                objectName: "hint_" + buttons.join("")
                 spacing: Theme.spaceS * bar.u
 
                 readonly property string verb: modelData.text
 
-                ButtonGlyph {
-                    button: hint.modelData.button
-                    u: bar.u
+                Repeater {
+                    model: hint.buttons
+                    delegate: ButtonGlyph {
+                        required property string modelData
+                        button: modelData
+                        u: bar.u
+                    }
                 }
                 Text {
                     anchors.verticalCenter: parent.verticalCenter

@@ -39,7 +39,7 @@ Item {
             if (!bar.visible)
                 return ""
             const parts = []
-            for (const b of ["A", "B", "X", "Y", "LB", "RB", "Start"]) {
+            for (const b of ["A", "B", "X", "Y", "LBRB", "Start"]) {
                 const h = findChild(bar, "hint_" + b)
                 if (h)
                     parts.push(b + " " + h.verb)
@@ -68,7 +68,7 @@ Item {
 
         function test_home_and_page() {
             signInAsAda()
-            compare(tc.shown(), "A Select|LB Sections|RB Sections")
+            compare(tc.shown(), "A Select|LBRB Sections")
             verify(find("homePlay").activeFocus)
 
             tc.shell.openPage("settings")
@@ -80,7 +80,58 @@ Item {
             keyClick(Qt.Key_Escape)
             tryCompare(tc.shell, "currentPage", "")
             tryVerify(() => find("homePlay").activeFocus, 2000, "Back returns focus to Play")
-            compare(tc.shown(), "A Select|LB Sections|RB Sections")
+            compare(tc.shown(), "A Select|LBRB Sections")
+        }
+
+        function test_sections_is_one_hint_with_two_glyphs() {
+            signInAsAda()
+            const hint = find("hint_LBRB")
+            verify(hint, "one hint for LB and RB")
+            compare(hint.verb, "Sections")
+            compare(findChild(tc.shell, "hint_LB"), null)
+            compare(findChild(tc.shell, "hint_RB"), null)
+            // the glyphs sit in a Repeater inside the hint row
+            const found = []
+            const collect = it => { for (const c of it.children) { if (c.button !== undefined) found.push(c.button); else collect(c) } }
+            collect(hint)
+            compare(found.join(","), "LB,RB")
+        }
+
+        function test_placeholder_page_and_about_show_only_back() {
+            signInAsAda()
+            tc.shell.openPage("media")
+            tryCompare(tc.shell, "currentPage", "media")
+            compare(tc.shown(), "B Back")
+            keyClick(Qt.Key_Escape)
+            tryCompare(tc.shell, "currentPage", "")
+            tryVerify(() => find("homePlay").activeFocus, 2000)
+
+            tc.shell.openPage("settings")
+            tryCompare(tc.shell, "currentPage", "settings")
+            tryVerify(() => find("categoryList").activeFocus, 2000)
+            compare(tc.shown(), "A Select|B Back")
+            for (let i = 0; i < 8; ++i)
+                keyClick(Qt.Key_Down)
+            tryCompare(find("categoryList"), "currentIndex", 8)
+            compare(tc.shown(), "A Select|B Back", "the category list still enters About")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("paneAbout").activeFocus, 2000, "About took focus")
+            compare(tc.shown(), "B Back")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => find("categoryList").activeFocus, 2000)
+            compare(tc.shown(), "A Select|B Back")
+        }
+
+        function test_mock_badge_is_bottom_right_off_the_bar() {
+            signInAsAda()
+            const badge = find("mockBadge")
+            const bar = find("hintBar")
+            verify(badge.visible)
+            const b = badge.mapToItem(tc.shell, 0, 0)
+            verify(b.x > tc.shell.width / 2, "badge on the right half")
+            verify(b.x + badge.width <= find("versionTag").mapToItem(tc.shell, 0, 0).x, "left of the version tag")
+            verify(b.y > tc.shell.height * 0.9, "at the bottom edge, not above the bar's row")
+            verify(!(b.x < bar.mapToItem(tc.shell, bar.width, 0).x), "clear of the hint bar")
         }
 
         function test_overlay() {
@@ -92,7 +143,7 @@ Item {
             keyClick(Qt.Key_Escape)
             tryCompare(find("systemPanel"), "open", false)
             tryVerify(() => find("homePlay").activeFocus, 2000)
-            compare(tc.shown(), "A Select|LB Sections|RB Sections")
+            compare(tc.shown(), "A Select|LBRB Sections")
         }
 
         function test_pin_pad_modal() {
