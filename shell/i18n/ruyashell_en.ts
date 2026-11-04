@@ -40,8 +40,8 @@
     </message>
     <message>
         <location line="+1"/>
-        <source>GPL-3.0-or-later; icon font Apache-2.0</source>
-        <translation>GPL-3.0-or-later; icon font Apache-2.0</translation>
+        <source>GPL-3.0-or-later; icon font Apache-2.0; Inter typeface OFL-1.1</source>
+        <translation>GPL-3.0-or-later; icon font Apache-2.0; Inter typeface OFL-1.1</translation>
     </message>
 </context>
 <context>

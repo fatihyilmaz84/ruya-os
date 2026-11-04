@@ -97,6 +97,12 @@ public slots:
                 if (QFontDatabase::addApplicationFont(path) < 0)
                     qWarning("ruya-shell test: cannot load font %s", file);
             }
+            for (const char *file : {"Inter-Regular.ttf", "Inter-Light.ttf", "Inter-SemiBold.ttf", "Inter-Bold.ttf"}) {
+                const QString path = QStringLiteral(":/qt/qml/RuyaShell/fonts/") + QLatin1String(file);
+                if (QFontDatabase::addApplicationFont(path) < 0)
+                    qWarning("ruya-shell test: cannot load font %s", file);
+            }
+            QGuiApplication::setFont(QFont(QStringLiteral("Inter")));
         }
         // Set RUYA_SHOTS_DIR to have the screenshot test save PNGs there.
         engine->rootContext()->setContextProperty(QStringLiteral("windowGuard"), new WindowGuard(engine));
