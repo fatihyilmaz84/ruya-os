@@ -110,7 +110,7 @@ Before the handoff, ask what made this range slower or worse than it needed to b
 - STATUS: move session-log entries beyond the newest five to `docs/STATUS-log.md` (top of its list), so builders read a short STATUS.
 - STATUS: a session-log entry `· Opus · Lead` with: verification numbers, review findings (count, and what was fixed or filed), planning changes, decisions taken or escalated.
 - Commit, as `docs: lead review <range>; plan …` plus any `review:` fix commits.
-- **Push, every lead session** (owner decision 2026-10-28; don't ask): with a clean tree and `dev.ps1 test` ALL GREEN, run `.\scripts\scan-secrets.ps1`; when it passes, `git push origin main`. If it fails, or the push is rejected (someone else pushed, history diverged), don't force anything: stop and tell the owner. Never `--force`.
+- **Push, every lead session** (owner decision 2026-10-28; don't ask): `.\scripts\push-main.ps1`, which pushes only from a clean tree after `dev.ps1 test` is ALL GREEN and `scan-secrets.ps1` passes (never chain `git push` after a test by hand: a red text lint reached origin that way on 2026-11-04). If it fails, or the push is rejected (someone else pushed, history diverged), don't force anything: stop and tell the owner. Never `--force`.
 
 ### 8. Report to the owner (final reply, short)
 1. What was verified, and the result.
