@@ -1,13 +1,13 @@
 <!DOCTYPE node PUBLIC "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
  "http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
 <!--
-  org.ruyaos.Devices1 — audio outputs and volumes, the network and Bluetooth.
+  org.ruyaos.Devices1 — audio outputs and volumes, the network, Bluetooth and storage.
   Served by ruya-devices on the system bus at /org/ruyaos/Devices1 (blocker B-007: the service
   does not exist yet; the shell's mock backend follows this contract).
   Contract between shell (Qt/QML) and services (Rust); see docs/specs/03-services-and-apps.md §2.3.
 
   One bus name and one object, one interface per device class: org.ruyaos.Devices1.Audio now,
-  org.ruyaos.Devices1.Network and org.ruyaos.Devices1.Bluetooth next to it. A new
+  org.ruyaos.Devices1.Network, .Bluetooth and .Storage next to it. A new
   class is a new interface, so existing clients and their PropertiesChanged filters (which match
   the interface name) are not touched, and each class can be mocked, implemented and tested on
   its own. Shared rules for every interface of this object:
@@ -37,6 +37,15 @@
     "unavailable"     Bluetooth is off or there is no adapter (StartScan, Pair, Connect)
     "invalid"         malformed argument (an empty id)
     "failed"          internal error, or Connect/Disconnect on a device that is not paired
+
+  org.ruyaos.Devices1.Storage status strings (udisks2 behind it; nothing is ever run from a volume):
+    "ok"              success (Eject: unmounted and powered off; the volume leaves the list)
+    "unknown-volume"  no volume with that id in the list (Eject)
+    "busy"            something still uses the volume (Eject); it stays mounted and listed
+    "unsupported"     the filesystem is not one we mount, so the volume is listed but never mounted
+                      (Eject: nothing to eject, it is safe to unplug)
+    "invalid"         malformed argument (an empty id)
+    "failed"          internal error, or Eject of a volume that is not removable
 -->
 <node>
   <interface name="org.ruyaos.Devices1.Audio">
@@ -221,6 +230,46 @@
 
     <!-- A device appeared, disappeared or changed (connected, battery, ...); call ListDevices again. -->
     <signal name="DevicesChanged"/>
+
+  </interface>
+  <interface name="org.ruyaos.Devices1.Storage">
+
+    <!--
+      Internal and removable volumes (one per partition or filesystem), internal first, then in
+      a stable order. One dictionary per volume:
+        id           s   stable id, opaque to the shell (e.g. the udisks object name)
+        label        s   display name; the service falls back to the model or "USB drive"
+        filesystem   s   "ext4" | "btrfs" | "exfat" | "vfat" | "ntfs" | "unknown" (not supported)
+        size_bytes   x   total size
+        free_bytes   x   free space; 0 when not mounted
+        removable    b   true for USB sticks and cards
+        mounted      b   false for an unsupported filesystem
+        mount_point  s   "" when not mounted
+        read_only    b
+    -->
+    <method name="ListVolumes">
+      <arg name="volumes" type="aa{sv}" direction="out"/>
+    </method>
+
+    <!--
+      Unmount and power off a removable volume. Answers when done or failed. See the status
+      strings in the header; a volume that is "busy" stays as it was.
+    -->
+    <method name="Eject">
+      <arg name="id" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <!-- A volume appeared, disappeared or changed (mounted, free space, ...); call ListVolumes again. -->
+    <signal name="VolumesChanged"/>
+
+    <!--
+      A volume was plugged in (not sent for the volumes present at start). Sent before
+      VolumesChanged; the shell shows "Drive inserted" once the volume is in the list.
+    -->
+    <signal name="VolumeAdded">
+      <arg name="id" type="s"/>
+    </signal>
 
   </interface>
 

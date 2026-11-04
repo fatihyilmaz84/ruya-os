@@ -44,4 +44,14 @@ Plugging in a USB drive shows a toast; Settings → Storage lists the internal d
 - Refresh translations; give Turkish a real translation.
 
 ## Outcome
-_Filled in by the implementer. Start with a `Verified:` line._
+Verified: host (D-Bus client and the real udisks2 service unverified: none exists yet)
+
+Built `org.ruyaos.Devices1.Storage` in the shared XML (`ListVolumes`, `Eject`, signals `VolumesChanged` and `VolumeAdded(id)`; statuses `ok`, `unknown-volume`, `busy`, `unsupported`, `invalid`, `failed`, documented in the header: `unsupported` is also what Eject answers for a listed-but-never-mounted drive, `failed` for a non-removable volume), `shell/src/storage/` (`StorageBackend`, `MockStorageBackend`, `DBusStorageBackend`, `Storage` facade; same structure as `bluetooth/`), `qml/StoragePane.qml` wired into `SettingsPage.qml`, and the two toasts in `ToastLayer.qml` ("Drive inserted: <label>" once the volume is in the list, "Safe to remove" after an ok eject). Turkish and English strings filled. `tests/tst_storage.qml`: 8 tests plus the screenshot `27-settings-storage.png` (reviewed: three volumes, free space, focus ring, Eject row, insert toast).
+
+Decisions: the facade emits `volumeAdded(id, label)` only when the list holding the volume arrives (the signal itself carries just the id), so the toast has a label and appears once. Sizes: `Storage.formatBytes()` (QLocale, SI units), the only formatter. Eject rows follow the volume rows (as Forget does in Bluetooth); Accept on a removable volume moves focus to its Eject row, on the unsupported drive it toasts the reason. A new env `RUYA_MOCK_NO_STICK=1` (set in `tst_main.cpp`) stops the mock stick plugging itself in, otherwise it would toast inside every test; tests plug it with `Storage.mockPlugStick()` and one test uses `mockReset(true)` for the delayed insert. The mock's delay is 3 s, 30 ms with `RUYA_MOCK_FAST`.
+
+`tst_settings.qml` `test_two_pane_navigation` used Storage as its "Coming soon" row: it now asserts Storage has a pane and uses Accessibility (the remaining empty category) for the same check, nothing weakened.
+
+Revert test: with the "Safe to remove" toast removed and the mock's busy check removed, `test_eject_by_keys`, `test_busy_volume_shows_message_and_stays` and `test_contract_statuses` failed. `dev.ps1 test`: ALL GREEN (301 passed, 26 skips are the screenshot tests), `shots` ALL GREEN.
+
+Files: `api/dbus/org.ruyaos.Devices1.xml`, `shell/src/storage/*`, `shell/qml/StoragePane.qml`, `SettingsPage.qml`, `ToastLayer.qml`, `shell/CMakeLists.txt`, `shell/tests/tst_storage.qml`, `tst_settings.qml`, `tst_main.cpp`, `shell/i18n/*.ts`, specs 02 and 03.

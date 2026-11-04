@@ -37,6 +37,10 @@ qt_add_qml_module(ruyashell
         src/bluetooth/MockBluetoothBackend.h src/bluetooth/MockBluetoothBackend.cpp
         src/bluetooth/DBusBluetoothBackend.h src/bluetooth/DBusBluetoothBackend.cpp
         src/bluetooth/Bluetooth.h src/bluetooth/Bluetooth.cpp
+        src/storage/StorageBackend.h
+        src/storage/MockStorageBackend.h src/storage/MockStorageBackend.cpp
+        src/storage/DBusStorageBackend.h src/storage/DBusStorageBackend.cpp
+        src/storage/Storage.h src/storage/Storage.cpp
         src/store/StoreBackend.h
         src/store/MockStoreBackend.h src/store/MockStoreBackend.cpp
         src/store/DBusStoreBackend.h src/store/DBusStoreBackend.cpp
@@ -102,6 +106,7 @@ qt_add_qml_module(ruyashell
         qml/AudioPane.qml
         qml/NetworkPane.qml
         qml/BluetoothPane.qml
+        qml/StoragePane.qml
         qml/SystemPane.qml
         qml/AboutPane.qml
         qml/controls/SettingControl.qml
@@ -118,7 +123,7 @@ qt_add_qml_module(ruyashell
 )
 
 # qmltyperegistrar includes the QML_ELEMENT headers by file name.
-target_include_directories(ruyashell PUBLIC src/profiles src/settings src/audio src/network src/bluetooth src/system src/power src/store src/library src/update src/session src/input)
+target_include_directories(ruyashell PUBLIC src/profiles src/settings src/audio src/network src/bluetooth src/storage src/system src/power src/store src/library src/update src/session src/input)
 target_link_libraries(ruyashell PRIVATE Qt6::Quick Qt6::Multimedia Qt6::DBus)
 
 # Translations: the .ts files in i18n/ are compiled to .qm and embedded as :/i18n/ruyashell_<lang>.qm.
