@@ -32,7 +32,7 @@ Open work only (todo, in-progress, blocked), in the recommended order; when NEXT
 | [T-173](tasks/T-173-devices-bluetooth-service.md) | `ruya-devices`: `Devices1.Bluetooth` over BlueZ | todo | — |
 | [T-174](tasks/T-174-devices-storage-service.md) | `ruya-devices`: `Devices1.Storage` over udisks2 | todo | T-137 |
 | [T-145](tasks/T-145-bundle-inter.md) | Bundle the Inter typeface | todo | T-142 |
-| [T-144](tasks/T-144-contrast-and-accessible-names.md) | Design review: contrast over the backdrop, accessible names | todo | T-143 |
+| [T-144](tasks/T-144-contrast-and-accessible-names.md) | Design review: contrast over the backdrop, accessible names | in-progress | T-143 |
 | [T-166](tasks/T-166-suspend-under-eglfs.md) | **[lead]** Suspend and resume with the shell on KMS (eglfs) | todo | — |
 
 **VM queue** (done on the host, VM check pending; the lead runs them with one image build): T-159 (`vm-update-check.sh reboot`); T-160 (`vm-update-check.sh` ALL PASSED, drill fixed by the lead after review); T-171 (`vm-store-check.sh check`, the restart step rewritten by the lead).
