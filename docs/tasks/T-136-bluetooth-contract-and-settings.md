@@ -1,6 +1,6 @@
 # T-136 — Bluetooth and controllers: `Devices1.Bluetooth` contract, mock, Settings pane
 
-Status: todo · Phase: 2 · Depends: — · Area: api, shell · Size: M
+Status: in-progress · Phase: 2 · Depends: — · Area: api, shell · Size: M
 
 ## Goal
 Settings → "Bluetooth & controllers" lets the user turn Bluetooth on or off, scan, pair a controller or headset with the pad alone, see battery levels and forget a device, against a mock. The BlueZ service part is a later task.
