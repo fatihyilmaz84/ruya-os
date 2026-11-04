@@ -3,7 +3,7 @@
 Status: todo · Phase: 2 · Depends: T-137 · Area: shell · Size: S · Owner: builder
 
 ## Goal
-When a Settings pane scrolls, its first rows no longer slide under the header. Pressing Accept on a device that is already pairing does nothing. A failed Disconnect says so.
+When a Settings pane scrolls, its first rows no longer slide under the header. Pressing Accept on a device that is already pairing, or a drive that is ejecting, does nothing. A failed Disconnect says so. Drive sizes follow the shell language.
 
 ## Read first
 - `docs/specs/04-design-system.md` §2 (Settings two-pane), §5 (rows), §8
@@ -14,7 +14,8 @@ When a Settings pane scrolls, its first rows no longer slide under the header. P
 ## Scope
 1. **Clipping:** a scrolled pane's top rows are drawn under the header (seen in the Network, Bluetooth and Storage shots). Clip the pane's content to its own area, or keep the focused row fully inside it. Fix it once in `SettingsPane`, not per pane.
 2. **Bluetooth:** Accept on the row whose device is pairing (`busyId`) is ignored. A failed Disconnect shows a Disconnect-specific message (it says "Could not connect." today). Add Turkish.
-3. **Tidy:** remove the unused `setup` parameter of `tst_storage.qml`'s `run()` helper.
+3. **Storage (T-137 review):** an in-flight guard on Eject like Bluetooth's `busyId`, so a second Accept or a key repeat doesn't send a second Eject (a real unmount takes seconds). A test proves "Drive inserted" stays one toast when the volume list is published again after the insert (`Storage.cpp` `m_pendingAdded`: changing `remove` to `contains` must fail it). Sizes: `formatBytes` uses the system `QLocale`, so English UI shows "318,0 GB" on this host. Make sizes follow the shell language and drop a trailing ",0"/".0".
+4. **Tidy:** remove the unused `setup` parameter of `tst_storage.qml`'s `run()` helper.
 
 ## Out of scope
 - New rows, panes or tokens.
@@ -24,6 +25,7 @@ When a Settings pane scrolls, its first rows no longer slide under the header. P
 - [ ] With focus on the last row of a long pane, every visible row lies inside the pane's area, below the header (property test with `mapToItem`, in `tst_settings.qml` or the pane's test).
 - [ ] A second Accept while a device is pairing doesn't call pair again (test in `tst_bluetooth.qml`, counting the mock's pair calls).
 - [ ] A failed Disconnect toasts the new message (test in `tst_bluetooth.qml`).
+- [ ] A second Accept on Eject while ejecting sends no second Eject; a republished list after an insert keeps one "Drive inserted" toast; in English, 1 500 000 000 bytes reads "1.5 GB", and in Turkish "1,5 GB" (`tst_storage.qml`).
 - [ ] Screenshots `23-settings-network.png` and `26-settings-bluetooth.png` re-shot and reviewed: no row under the header.
 - [ ] `dev.ps1 test` ALL GREEN.
 

@@ -1,6 +1,6 @@
 # T-137 — USB storage: `Devices1.Storage` contract, mock, Settings → Storage and the inserted toast
 
-Status: in-progress · Phase: 2 · Depends: — · Area: api, shell · Size: M
+Status: done · Phase: 2 · Depends: — · Area: api, shell · Size: M
 
 ## Goal
 Plugging in a USB drive shows a toast; Settings → Storage lists the internal disk and removable volumes with free space and lets the user eject, against a mock. The udisks2 service part is a later task.
