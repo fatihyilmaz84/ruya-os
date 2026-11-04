@@ -1,6 +1,6 @@
 # T-167 — Test isolation: the Store UI flake and a language leak
 
-Status: in-progress · Phase: 2 · Depends: — · Area: shell · Size: M · Owner: builder
+Status: done · Phase: 2 · Depends: — · Area: shell · Size: M · Owner: builder
 
 ## Goal
 `dev.ps1 test` and CI never fail at random. `tst_store_ui.qml::test_update_adding_high_risk_*` failed once in a full run (`Store.jobs` length 1 instead of 0) and passed on every rerun (T-157); CI's shell job also failed once on a docs-only commit (`18a342a`, 2026-11-02), likely the same test.
