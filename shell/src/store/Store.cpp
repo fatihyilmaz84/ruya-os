@@ -207,8 +207,16 @@ bool Store::mockDataDeleted(const QString &appId) const
 
 void Store::mockReset()
 {
-    if (auto *mock = qobject_cast<MockStoreBackend *>(m_backend.get()))
-        mock->reset();
+    auto *mock = qobject_cast<MockStoreBackend *>(m_backend.get());
+    if (!mock)
+        return;
+    mock->reset();
+    // The reset drops the mock's running jobs without a JobFinished, so the jobs this facade
+    // already saw progress for would stay in `jobs` for ever (T-167).
+    if (!m_jobs.isEmpty()) {
+        m_jobs.clear();
+        emit jobsChanged();
+    }
 }
 
 int Store::mockSearchCount() const
