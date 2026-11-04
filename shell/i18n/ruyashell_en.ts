@@ -757,7 +757,12 @@
 <context>
     <name>ProfileCard</name>
     <message>
-        <location filename="../qml/ProfileCard.qml" line="+52"/>
+        <location filename="../qml/ProfileCard.qml" line="+13"/>
+        <source>%1, PIN protected</source>
+        <translation>%1, PIN protected</translation>
+    </message>
+    <message>
+        <location line="+39"/>
         <source>PIN</source>
         <translation>PIN</translation>
     </message>
@@ -1137,17 +1142,13 @@
         <translation>Choose a PIN</translation>
     </message>
     <message>
-        <location line="+18"/>
-        <source>Setup</source>
-        <translation>Setup</translation>
-    </message>
-    <message>
-        <location line="+65"/>
+        <location line="+86"/>
         <source>Step %1 of %2</source>
         <translation>Step %1 of %2</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="-65"/>
+        <location line="+81"/>
         <source>Welcome to RuyaOS</source>
         <translation>Welcome to RuyaOS</translation>
     </message>
@@ -1180,7 +1181,8 @@
         <translation>Press A to continue</translation>
     </message>
     <message>
-        <location line="-92"/>
+        <location line="-240"/>
+        <location line="+148"/>
         <source>Network</source>
         <translation>Network</translation>
     </message>
@@ -1225,7 +1227,8 @@
         <translation>Creating…</translation>
     </message>
     <message>
-        <location line="+26"/>
+        <location line="-202"/>
+        <location line="+228"/>
         <source>You&apos;re all set</source>
         <translation>You&apos;re all set</translation>
     </message>

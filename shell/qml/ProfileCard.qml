@@ -10,7 +10,7 @@ Item {
     readonly property bool focused: ListView.isCurrentItem && ListView.view.activeFocus
 
     Accessible.role: Accessible.ListItem
-    Accessible.name: modelData.name
+    Accessible.name: modelData.hasPin ? qsTr("%1, PIN protected").arg(modelData.name) : modelData.name
     Accessible.selected: focused
 
     width: 260 * u

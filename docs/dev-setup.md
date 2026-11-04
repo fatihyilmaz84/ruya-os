@@ -222,7 +222,7 @@ $env:RUYA_SHOTS_DIR = "$PWD\output\shell-shots"; shell\build-win\Release\tst_ruy
 cmake --build shell\build-win --config Release --target all_qmllint
 ```
 
-`dev.ps1 shots` runs only the test functions that save a screenshot, in real GPU windows (behaviour is already gated offscreen by `test`), in about 25 s. It stops at once when the session is locked (`LogonUI` running). Leave the windows alone while it runs. Offscreen is the software renderer, where `MultiEffect` draws nothing, so effects only show up in `shots`.
+`dev.ps1 shots` runs only the test functions that save a screenshot, in real GPU windows (behaviour is already gated offscreen by `test`), in about 25 s. It stops at once, before building, when the session is locked (`LogonUI` running): red "The Windows session is locked" and a non-zero exit. The check repeats while it waits for another `shots` run and after a run that failed (a desktop that locked mid-run is reported as locked, not as test failures). `RUYA_ASSUME_LOCKED=1` simulates a locked session (read only by `dev.ps1`). Leave the windows alone while it runs. Offscreen is the software renderer, where `MultiEffect` draws nothing, so effects only show up in `shots`.
 
 **Against the real profiles service (Linux):** in `--session` mode the service uses the session bus and creates no Unix users, so it runs fine without root.
 
