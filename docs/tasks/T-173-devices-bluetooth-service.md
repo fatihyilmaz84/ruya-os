@@ -33,7 +33,7 @@ The Bluetooth pane T-136 built against the mock talks to a real service. On a ma
 - `03` §2.1 (as built, service side), `01` (packages, units), STATUS B-007 note.
 
 ## Outcome
-Verified: vm (image `0.0.35-t173` built and booted, `RUYA_BOOT_OK 0.0.35-t173`; `vm-devices-check.sh check`: ALL CHECKS PASSED, audio, network, batteries and the new Bluetooth part) and host (`dev.ps1 test` ALL GREEN). A real adapter and controller are **unverified** (none in the VM): scanning, pairing, Battery1, rfkill and the 20 s/30 s timers against real hardware were tested only against `FakeBluez`. `shots` not run: no UI file changed.
+Verified: host (vm pending: vm-devices-check.sh bluetooth, after round 2 dropped the org.bluez bus rule). Round 1 was vm (image `0.0.35-t173` built and booted, `RUYA_BOOT_OK 0.0.35-t173`; `vm-devices-check.sh check`: ALL CHECKS PASSED, audio, network, batteries and the new Bluetooth part) and host (`dev.ps1 test` ALL GREEN). A real adapter and controller are **unverified** (none in the VM): scanning, pairing, Battery1, rfkill and the 20 s/30 s timers against real hardware were tested only against `FakeBluez`. `shots` not run: no UI file changed.
 
 **What was built.**
 - `services/ruya-devices/src/bluetooth.rs`: pure core (`Bluetooth<B: Bluez>`, trait `Bluez`, `FakeBluez`). Ordering (paired first, then name, then id; unnamed unpaired devices left out), `kind` from BlueZ's `Icon`, battery from `Battery1.Percentage` (-1 when none), 30 s scan auto-stop (`start_scan(now)`, `scan_deadline()`, `tick(now)`; fake-clock tests), power-off clears list and scan, `map_error` for every `org.bluez.Error.*` name plus the bus errors, pair = Pair + Trusted + Connect.
@@ -49,3 +49,11 @@ Verified: vm (image `0.0.35-t173` built and booted, `RUYA_BOOT_OK 0.0.35-t173`; 
 - **Docs:** `03` §2.1 (service side), `01` packages row. **STATUS B-007 note not edited** (the lead owns STATUS): BlueZ is no longer open there.
 
 Files: see the commit. Deviation: the pure core also decides the `unavailable`/`unknown-device` order (empty id first, then no adapter, then unknown id).
+
+
+**Round 2 (review).**
+- `Discovering` was never announced: start/stop/tick wrote the cached state, so the next refresh saw no change. They no longer touch it; every read keeps what changed in `pending` and the next `refresh()` returns it (also fixes changes consumed by the reads inside `pair`/`find`). A stale snapshot right after `StartDiscovery` no longer drops the scan deadline (it is cleared only on BlueZ going from discovering to not, or power off). Tests: `start_stop_and_tick_are_announced_as_discovering`, `a_change_read_on_the_way_is_not_lost`, `the_auto_stop_survives_a_stale_snapshot` (reverting the deadline rule fails the last).
+- `Pair` has one 20 s budget (injected clock): `bluez.pair` gets it, `connect` gets what is left, none left is `timeout`; the client-side undo call is limited to 2 s (22 s worst case, under 25). `pair_and_connect_share_one_budget_under_25_seconds` records the timeouts (20 s, then 5 s after 15 s spent); giving both the full 20 s fails it. `nothing_left_for_connect_is_a_timeout`.
+- Debounce capped at 1 s and `tick` runs on every wake, so RSSI signals cannot delay the auto-stop.
+- Bus rule `allow send_destination="org.bluez"` for `ruya-shell` removed (Fedora's `bluetooth.conf` allows it by default); comment and spec 03 corrected. **Not re-run in a VM**: the lead's `vm-devices-check.sh bluetooth` must show `Powered`/`ListDevices`/`StartScan` still answering. `10-ruyaos.conf` comment now says an empty `ConditionPathIsDirectory=` resets the unit's conditions of that type.
+- `dev.ps1 rust` green after the changes.

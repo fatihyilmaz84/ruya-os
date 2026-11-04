@@ -18,6 +18,9 @@ const BATTERY: &str = "org.bluez.Battery1";
 const PROPERTIES: &str = "org.freedesktop.DBus.Properties";
 const OBJECTS: &str = "org.freedesktop.DBus.ObjectManager";
 
+/// Longest the cancelling call after a timeout may take.
+const UNDO_LIMIT: Duration = Duration::from_secs(2);
+
 type Dict = HashMap<String, OwnedValue>;
 
 pub struct BluezClient {
@@ -86,7 +89,14 @@ impl BluezClient {
         let result = future::or(call, wait).await;
         if matches!(&result, Err(e) if e.0 == LOCAL_TIMEOUT) {
             // Best effort; the answer to the caller is the timeout either way.
-            let _ = self.call(path, iface, undo, &()).await;
+            // It has a short limit of its own, so the whole call stays inside UNDO_LIMIT more.
+            let undo_call = async {
+                let _ = self.call(path, iface, undo, &()).await;
+            };
+            let limit = async {
+                async_io::Timer::after(UNDO_LIMIT).await;
+            };
+            future::or(undo_call, limit).await;
         }
         result
     }

@@ -207,6 +207,9 @@ struct State {
     devices: Vec<Device>,
     /// When the running scan has to be stopped (only for a scan we started).
     scan_until: Option<Instant>,
+    /// Changes seen by reads whose caller did not announce them (a call that read on the way);
+    /// the next `refresh` reports them.
+    pending: Changes,
 }
 
 pub struct Bluetooth<B: Bluez> {
@@ -246,8 +249,15 @@ impl<B: Bluez> Bluetooth<B> {
         self.lock().scan_until
     }
 
-    /// Reads BlueZ again. Powered off (or no adapter) means an empty list and no scan.
+    /// Reads BlueZ again and returns every change not announced yet. Powered off (or no
+    /// adapter) means an empty list and no scan.
     pub fn refresh(&self) -> Result<Changes, BtError> {
+        self.read()?;
+        Ok(std::mem::take(&mut self.lock().pending))
+    }
+
+    /// Reads BlueZ and remembers what changed for the next `refresh`.
+    fn read(&self) -> Result<(), BtError> {
         let raw = self.bluez.snapshot()?;
         let adapter = raw.adapter;
         let on = adapter.is_some_and(|a| a.powered);
@@ -269,19 +279,25 @@ impl<B: Bluez> Bluetooth<B> {
             discovering: (before.powered && before.discovering)
                 != (after.powered && after.discovering),
         };
+        st.pending.devices |= changes.devices;
+        st.pending.powered |= changes.powered;
+        st.pending.discovering |= changes.discovering;
         st.adapter = adapter;
         st.devices = devices;
-        if !(on && after.discovering) {
+        // The scan is over when BlueZ says so after having said it runs, or the adapter went
+        // off. A snapshot that still shows "not discovering" right after StartDiscovery (BlueZ
+        // sets the property a moment later) must not drop the deadline.
+        if !on || (before.discovering && !after.discovering) {
             st.scan_until = None;
         }
-        Ok(changes)
+        Ok(())
     }
 
     /// The adapter must be there and on for scanning, pairing and connecting.
     fn ready(&self) -> Result<(), Status> {
-        match self.refresh() {
-            Ok(_) if self.powered() => Ok(()),
-            Ok(_) => Err(Status::Unavailable),
+        match self.read() {
+            Ok(()) if self.powered() => Ok(()),
+            Ok(()) => Err(Status::Unavailable),
             Err(e) => Err(map_error(&e.0, false)),
         }
     }
@@ -290,7 +306,7 @@ impl<B: Bluez> Bluetooth<B> {
     /// answers a D-Bus error.
     pub fn set_powered(&self, on: bool) -> Result<Changes, BtError> {
         // Know the adapter first: BlueZ may have just come up.
-        self.refresh()?;
+        self.read()?;
         self.bluez.set_powered(on)?;
         self.refresh()
     }
@@ -304,16 +320,12 @@ impl<B: Bluez> Bluetooth<B> {
                 return map_error(&e.0, false);
             }
         }
-        let mut st = self.lock();
-        if let Some(a) = st.adapter.as_mut() {
-            a.discovering = true;
-        }
-        st.scan_until = Some(now + SCAN_LIMIT);
+        self.lock().scan_until = Some(now + SCAN_LIMIT);
         Status::Ok
     }
 
     pub fn stop_scan(&self) -> Status {
-        if self.refresh().is_err() || !self.discovering() {
+        if self.read().is_err() || !self.discovering() {
             self.lock().scan_until = None;
             return Status::Ok;
         }
@@ -321,13 +333,7 @@ impl<B: Bluez> Bluetooth<B> {
             Ok(()) => Status::Ok,
             Err(e) => map_error(&e.0, false),
         };
-        let mut st = self.lock();
-        st.scan_until = None;
-        if status == Status::Ok {
-            if let Some(a) = st.adapter.as_mut() {
-                a.discovering = false;
-            }
-        }
+        self.lock().scan_until = None;
         status
     }
 
@@ -340,11 +346,7 @@ impl<B: Bluez> Bluetooth<B> {
         if let Err(e) = self.bluez.stop_discovery() {
             eprintln!("ruya-devices: ending the scan failed: {}", e.0);
         }
-        let mut st = self.lock();
-        st.scan_until = None;
-        if let Some(a) = st.adapter.as_mut() {
-            a.discovering = false;
-        }
+        self.lock().scan_until = None;
         true
     }
 
@@ -353,7 +355,7 @@ impl<B: Bluez> Bluetooth<B> {
         if id.is_empty() {
             return Err(Status::Invalid);
         }
-        self.refresh().map_err(|e| map_error(&e.0, false))?;
+        self.read().map_err(|e| map_error(&e.0, false))?;
         self.list()
             .into_iter()
             .find(|d| d.id == id)
@@ -368,21 +370,29 @@ impl<B: Bluez> Bluetooth<B> {
         self.find(id)
     }
 
-    /// Pair (just works), trust and connect.
-    pub fn pair(&self, id: &str) -> Status {
+    /// Pair (just works), trust and connect. One budget of `CALL_TIMEOUT` (counted by `clock`)
+    /// covers the whole call: connecting gets what pairing left, so the answer comes before the
+    /// D-Bus default timeout.
+    pub fn pair(&self, id: &str, clock: impl Fn() -> Instant) -> Status {
         let dev = match self.ready_device(id) {
             Ok(d) => d,
             Err(s) => return s,
         };
+        let end = clock() + CALL_TIMEOUT;
+        let left = || end.saturating_duration_since(clock());
         if !dev.paired {
-            if let Err(e) = self.bluez.pair(&dev.id, CALL_TIMEOUT) {
+            if let Err(e) = self.bluez.pair(&dev.id, left()) {
                 return map_error(&e.0, true);
             }
         }
         if let Err(e) = self.bluez.set_trusted(&dev.id) {
             return map_error(&e.0, false);
         }
-        match self.bluez.connect(&dev.id, CALL_TIMEOUT) {
+        let left = left();
+        if left.is_zero() {
+            return Status::Timeout;
+        }
+        match self.bluez.connect(&dev.id, left) {
             Ok(()) => Status::Ok,
             Err(e) => map_error(&e.0, true),
         }
@@ -433,6 +443,12 @@ struct FakeInner {
     fail: Vec<String>,
     /// The calls received, for the tests.
     calls: Vec<String>,
+    /// The timeouts `pair` and `connect` were given.
+    timeouts: Vec<Duration>,
+    /// Discovery calls do not change what a snapshot says (BlueZ sets the property later).
+    sticky_discovery: bool,
+    /// Time that `pair` and `connect` use up on this clock.
+    spend: Option<(std::sync::Arc<Mutex<Instant>>, Duration)>,
 }
 
 impl FakeBluez {
@@ -442,6 +458,9 @@ impl FakeBluez {
                 raw,
                 fail: Vec::new(),
                 calls: Vec::new(),
+                timeouts: Vec::new(),
+                sticky_discovery: false,
+                spend: None,
             }),
         }
     }
@@ -479,6 +498,27 @@ impl FakeBluez {
 
     pub fn fail_next(&self, name: &str) {
         self.inner().fail.push(name.to_owned());
+    }
+
+    pub fn timeouts(&self) -> Vec<Duration> {
+        self.inner().timeouts.clone()
+    }
+
+    pub fn set_sticky_discovery(&self, on: bool) {
+        self.inner().sticky_discovery = on;
+    }
+
+    /// Every `pair` and `connect` call moves `clock` forward by `each`.
+    pub fn spend_time(&self, clock: std::sync::Arc<Mutex<Instant>>, each: Duration) {
+        self.inner().spend = Some((clock, each));
+    }
+
+    fn took(&self, timeout: Duration) {
+        let mut i = self.inner();
+        i.timeouts.push(timeout);
+        if let Some((clock, each)) = &i.spend {
+            *clock.lock().unwrap_or_else(|e| e.into_inner()) += *each;
+        }
     }
 
     pub fn calls(&self) -> Vec<String> {
@@ -521,20 +561,23 @@ impl Bluez for FakeBluez {
         Ok(())
     }
     fn start_discovery(&self) -> Result<(), BtError> {
+        let sticky = self.inner().sticky_discovery;
         self.act("start".to_owned(), |raw| {
-            if let Some(a) = raw.adapter.as_mut() {
+            if let (Some(a), false) = (raw.adapter.as_mut(), sticky) {
                 a.discovering = true;
             }
         })
     }
     fn stop_discovery(&self) -> Result<(), BtError> {
+        let sticky = self.inner().sticky_discovery;
         self.act("stop".to_owned(), |raw| {
-            if let Some(a) = raw.adapter.as_mut() {
+            if let (Some(a), false) = (raw.adapter.as_mut(), sticky) {
                 a.discovering = false;
             }
         })
     }
-    fn pair(&self, address: &str, _timeout: Duration) -> Result<(), BtError> {
+    fn pair(&self, address: &str, timeout: Duration) -> Result<(), BtError> {
+        self.took(timeout);
         self.act(format!("pair {address}"), |raw| {
             with_device(raw, address, |d| d.paired = true);
         })
@@ -544,7 +587,8 @@ impl Bluez for FakeBluez {
             with_device(raw, address, |d| d.trusted = true);
         })
     }
-    fn connect(&self, address: &str, _timeout: Duration) -> Result<(), BtError> {
+    fn connect(&self, address: &str, timeout: Duration) -> Result<(), BtError> {
+        self.took(timeout);
         self.act(format!("connect {address}"), |raw| {
             with_device(raw, address, |d| d.connected = true);
         })
@@ -581,6 +625,76 @@ mod tests {
         let bt = Bluetooth::new(FakeBluez::with_devices());
         bt.refresh().expect("fake reads");
         bt
+    }
+
+    #[test]
+    fn start_stop_and_tick_are_announced_as_discovering() {
+        let bt = bt();
+        let t0 = Instant::now();
+        assert_eq!(bt.start_scan(t0), Status::Ok);
+        assert!(bt.refresh().expect("reads").discovering, "start");
+        assert!(!bt.refresh().expect("reads").any());
+        assert_eq!(bt.stop_scan(), Status::Ok);
+        assert!(bt.refresh().expect("reads").discovering, "stop");
+        bt.start_scan(t0);
+        bt.refresh().expect("reads");
+        assert!(bt.tick(t0 + SCAN_LIMIT));
+        assert!(bt.refresh().expect("reads").discovering, "tick");
+    }
+
+    #[test]
+    fn a_change_read_on_the_way_is_not_lost() {
+        let bt = bt();
+        // pair reads BlueZ (ready, find) after it was last announced; the change stays pending
+        let t = Instant::now();
+        bt.pair("AA:00:00:00:00:02", move || t);
+        assert!(bt.refresh().expect("reads").devices);
+    }
+
+    #[test]
+    fn the_auto_stop_survives_a_stale_snapshot() {
+        let bt = bt();
+        bt.bluez.set_sticky_discovery(true);
+        let t0 = Instant::now();
+        assert_eq!(bt.start_scan(t0), Status::Ok);
+        // BlueZ still says "not discovering" for a moment
+        bt.refresh().expect("reads");
+        bt.refresh().expect("reads");
+        assert_eq!(bt.scan_deadline(), Some(t0 + SCAN_LIMIT));
+        assert!(bt.tick(t0 + SCAN_LIMIT));
+        assert!(bt.bluez.calls().contains(&"stop".to_owned()));
+    }
+
+    #[test]
+    fn pair_and_connect_share_one_budget_under_25_seconds() {
+        let bt = bt();
+        let clock = std::sync::Arc::new(Mutex::new(Instant::now()));
+        bt.bluez.spend_time(clock.clone(), Duration::from_secs(15));
+        let c = clock.clone();
+        let status = bt.pair("AA:00:00:00:00:02", move || {
+            *c.lock().unwrap_or_else(|e| e.into_inner())
+        });
+        // pairing used 15 s of 20; connecting got the 5 s left
+        assert_eq!(status, Status::Ok);
+        let given = bt.bluez.timeouts();
+        assert_eq!(given, [Duration::from_secs(20), Duration::from_secs(5)]);
+        // worst case: connect uses all it was given, after 15 s were spent: still 20 s in all,
+        // and the 2 s undo of the client keeps it under the 25 s D-Bus default
+        assert!(Duration::from_secs(15) + given[1] <= CALL_TIMEOUT);
+        assert!(CALL_TIMEOUT + Duration::from_secs(2) < Duration::from_secs(25));
+    }
+
+    #[test]
+    fn nothing_left_for_connect_is_a_timeout() {
+        let bt = bt();
+        let clock = std::sync::Arc::new(Mutex::new(Instant::now()));
+        bt.bluez.spend_time(clock.clone(), Duration::from_secs(20));
+        let c = clock.clone();
+        let status = bt.pair("AA:00:00:00:00:02", move || {
+            *c.lock().unwrap_or_else(|e| e.into_inner())
+        });
+        assert_eq!(status, Status::Timeout);
+        assert_eq!(bt.bluez.timeouts().len(), 1, "connect was not even tried");
     }
 
     #[test]
@@ -717,11 +831,13 @@ mod tests {
         let bt = bt();
         let t0 = Instant::now();
         assert_eq!(bt.start_scan(t0), Status::Ok);
+        bt.refresh().expect("reads");
         assert!(bt.discovering());
         assert_eq!(bt.scan_deadline(), Some(t0 + SCAN_LIMIT));
         assert!(!bt.tick(t0 + Duration::from_secs(29)));
         assert!(bt.discovering(), "still scanning at 29 s");
         assert!(bt.tick(t0 + SCAN_LIMIT));
+        bt.refresh().expect("reads");
         assert!(!bt.discovering());
         assert_eq!(bt.scan_deadline(), None);
         assert!(bt.bluez.calls().contains(&"stop".to_owned()));
@@ -749,7 +865,9 @@ mod tests {
     fn stop_scan_ends_it_and_clears_the_deadline() {
         let bt = bt();
         bt.start_scan(Instant::now());
+        bt.refresh().expect("reads");
         assert_eq!(bt.stop_scan(), Status::Ok);
+        bt.refresh().expect("reads");
         assert!(!bt.discovering());
         assert_eq!(bt.scan_deadline(), None);
         // Stopping when nothing runs is fine and calls nothing.
@@ -762,6 +880,7 @@ mod tests {
     fn a_scan_that_ended_in_bluez_drops_the_deadline() {
         let bt = bt();
         bt.start_scan(Instant::now());
+        bt.refresh().expect("fake reads");
         bt.bluez.stop_discovery().expect("fake");
         let changes = bt.refresh().expect("fake reads");
         assert!(changes.discovering);
@@ -799,7 +918,10 @@ mod tests {
         let bt = Bluetooth::new(FakeBluez::new(Raw::default()));
         assert!(!bt.powered() && !bt.discovering());
         assert_eq!(bt.start_scan(Instant::now()), Status::Unavailable);
-        assert_eq!(bt.pair("AA:00:00:00:00:02"), Status::Unavailable);
+        assert_eq!(
+            bt.pair("AA:00:00:00:00:02", Instant::now),
+            Status::Unavailable
+        );
         assert_eq!(bt.connect("AA:00:00:00:00:01"), Status::Unavailable);
         assert_eq!(bt.forget("AA:00:00:00:00:01"), Status::UnknownDevice);
         assert!(bt.list().is_empty());
@@ -809,7 +931,7 @@ mod tests {
     #[test]
     fn pair_pairs_trusts_and_connects() {
         let bt = bt();
-        assert_eq!(bt.pair("AA:00:00:00:00:02"), Status::Ok);
+        assert_eq!(bt.pair("AA:00:00:00:00:02", Instant::now), Status::Ok);
         let calls = bt.bluez.calls();
         assert_eq!(
             calls,
@@ -832,17 +954,23 @@ mod tests {
     fn pair_failures_map_to_their_statuses() {
         let bt = bt();
         bt.bluez.fail_next("org.bluez.Error.AuthenticationFailed");
-        assert_eq!(bt.pair("AA:00:00:00:00:02"), Status::PairingFailed);
+        assert_eq!(
+            bt.pair("AA:00:00:00:00:02", Instant::now),
+            Status::PairingFailed
+        );
         bt.bluez.fail_next(LOCAL_TIMEOUT);
-        assert_eq!(bt.pair("AA:00:00:00:00:02"), Status::Timeout);
-        assert_eq!(bt.pair("AA:00:00:00:00:99"), Status::UnknownDevice);
-        assert_eq!(bt.pair(""), Status::Invalid);
+        assert_eq!(bt.pair("AA:00:00:00:00:02", Instant::now), Status::Timeout);
+        assert_eq!(
+            bt.pair("AA:00:00:00:00:99", Instant::now),
+            Status::UnknownDevice
+        );
+        assert_eq!(bt.pair("", Instant::now), Status::Invalid);
     }
 
     #[test]
     fn pair_of_a_paired_device_skips_pairing() {
         let bt = bt();
-        assert_eq!(bt.pair("AA:00:00:00:00:01"), Status::Ok);
+        assert_eq!(bt.pair("AA:00:00:00:00:01", Instant::now), Status::Ok);
         assert!(!bt.bluez.calls().iter().any(|c| c.starts_with("pair ")));
     }
 

@@ -222,6 +222,10 @@ pub type SharedNet = Arc<Network<DynNm>>;
 /// join is a burst of dozens of them.
 const DEBOUNCE: Duration = Duration::from_millis(300);
 
+/// A burst of BlueZ signals is read once after this much quiet, or after this long at most.
+#[cfg(target_os = "linux")]
+const DEBOUNCE_MAX: Duration = Duration::from_secs(1);
+
 const NM_BUS_NAME: &str = "org.freedesktop.NetworkManager";
 
 pub struct NetworkIface {
@@ -627,7 +631,7 @@ impl BluetoothIface {
 
     async fn pair(&self, id: &str, #[zbus(signal_emitter)] emitter: SignalEmitter<'_>) -> String {
         let (bt, id) = (self.bt.clone(), id.to_owned());
-        let status = unblock(move || bt.pair(&id)).await;
+        let status = unblock(move || bt.pair(&id, Instant::now)).await;
         self.settle(&emitter).await;
         status.as_str().to_owned()
     }
@@ -726,19 +730,28 @@ pub async fn watch_bluetooth(connection: Connection, bt: SharedBluetooth) {
         .await;
         match event {
             Wake::Signal => {
+                // Wait for a quiet moment, but never longer than DEBOUNCE_MAX (a scan sends a
+                // signal per device every second or so) and never past the scan's deadline.
+                let cap = Instant::now() + DEBOUNCE_MAX;
+                let cap = bt.scan_deadline().map_or(cap, |d| d.min(cap));
                 while future::or(async { stream.next().await.is_some() }, async {
-                    async_io::Timer::after(DEBOUNCE).await;
+                    let quiet = Instant::now() + DEBOUNCE;
+                    async_io::Timer::at(quiet.min(cap)).await;
                     false
                 })
                 .await
-                {}
+                {
+                    if Instant::now() >= cap {
+                        break;
+                    }
+                }
             }
-            Wake::ScanOver => {
-                let bt = bt.clone();
-                unblock(move || bt.tick(Instant::now())).await;
-            }
+            Wake::ScanOver => {}
             Wake::Closed => return,
         }
+        // Ends the scan if its time is up (a no-op otherwise), whatever woke us.
+        let bt2 = bt.clone();
+        unblock(move || bt2.tick(Instant::now())).await;
         let bt2 = bt.clone();
         match unblock(move || bt2.refresh()).await {
             Ok(changes) if changes.any() => {
