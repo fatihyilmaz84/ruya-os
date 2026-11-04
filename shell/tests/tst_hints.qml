@@ -19,6 +19,8 @@ Item {
         Item { objectName: "standInApp"; Keys.onPressed: event => { event.accepted = true } }
     }
 
+    Component { id: barePane; SettingsPane { } }
+
     Component {
         id: pinComponent
         PinPad { anchors.fill: parent }
@@ -121,6 +123,29 @@ Item {
             tryVerify(() => find("categoryList").activeFocus, 2000)
             compare(tc.shown(), "A Select|B Back")
         }
+
+        function test_panes_supply_their_own_hints() {
+            signInAsAda()
+            tc.shell.openPage("settings")
+            tryCompare(tc.shell, "currentPage", "settings")
+            tryVerify(() => find("categoryList").activeFocus, 2000)
+            find("paneProfiles").forceActiveFocus()
+            tryVerify(() => find("paneProfiles").activeFocus, 2000)
+            compare(tc.shown(), "A Select|B Back")
+            compare(shownOf(find("paneProfiles")), "A Select|B Back")
+            compare(shownOf(find("paneAbout")), "B Back")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => find("categoryList").activeFocus, 2000)
+            for (let i = 0; i < 8; ++i)
+                keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("paneAbout").activeFocus, 2000)
+            compare(tc.shown(), "B Back", "About's own hints")
+            // A pane that sets no hints gets the default.
+            const bare = createTemporaryObject(barePane, host)
+            compare(shownOf(bare), "A Select|B Back")
+        }
+        function shownOf(pane) { return pane.hints.map(h => h.button + " " + h.text).join("|") }
 
         function test_mock_badge_is_bottom_right_off_the_bar() {
             signInAsAda()

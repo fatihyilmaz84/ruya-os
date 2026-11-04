@@ -195,8 +195,7 @@ FocusScope {
             wrapMode: Text.Wrap
             text: qsTr("Let's get your console ready. It only takes a minute, and you only need your controller.")
             color: Theme.text
-            font.pixelSize: Theme.typeHeadline * setup.u
-            font.weight: Theme.weightDemiBold
+            font.pixelSize: Theme.typeBody * setup.u
         }
         Pill { anchors.horizontalCenter: parent.horizontalCenter; label: qsTr("Press A to start") }
     }
@@ -262,8 +261,7 @@ FocusScope {
             wrapMode: Text.Wrap
             text: qsTr("Network setup comes later. A wired connection works without any setup.")
             color: Theme.text
-            font.pixelSize: Theme.typeHeadline * setup.u
-            font.weight: Theme.weightDemiBold
+            font.pixelSize: Theme.typeBody * setup.u
         }
         Pill { anchors.horizontalCenter: parent.horizontalCenter; label: qsTr("Press A to continue") }
     }
@@ -342,8 +340,7 @@ FocusScope {
             wrapMode: Text.Wrap
             text: qsTr("Welcome, %1.").arg(setup.adminName.trim())
             color: Theme.text
-            font.pixelSize: Theme.typeHeadline * setup.u
-            font.weight: Theme.weightDemiBold
+            font.pixelSize: Theme.typeBody * setup.u
         }
         Pill { anchors.horizontalCenter: parent.horizontalCenter; label: qsTr("Press A to continue") }
     }

@@ -56,6 +56,8 @@ Item {
         }
 
         function cleanup() {
+            host.width = 1280
+            host.height = 720
             Bluetooth.mockReset()
             DeviceSettings.reducedMotion = false
             DeviceSettings.effectsQuality = "high"
@@ -388,6 +390,44 @@ Item {
             compare(find("rowOverscan").value, 3)
         }
 
+        // The last category (About) with its selected, focused pill ends above the hint bar and
+        // clear of every hint glyph, at the test size and at 1920x1080, in both effects tiers.
+        // (Unscrolled, the nine rows are 712 px at 1080 and overrun the bar.)
+        function test_last_category_clears_the_hint_bar() {
+            for (const size of [[1280, 720], [1920, 1080]]) {
+                for (const tier of ["high", "performance"]) {
+                    const what = size[0] + "x" + size[1] + " " + tier
+                    host.width = size[0]
+                    host.height = size[1]
+                    DeviceSettings.effectsQuality = tier
+                    tryCompare(tc.shell, "height", size[1])
+                    if (!find("categoryList"))
+                        openSettings()
+                    const list = find("categoryList")
+                    list.forceActiveFocus()
+                    selectCategory(tc.aboutIndex)
+                    tryVerify(() => list.currentItem && list.currentItem.focused, 2000, "About focused " + what)
+                    const bar = find("hintBar")
+                    verify(bar.visible, "bar shown " + what)
+                    const barTop = bar.mapToItem(tc.shell, 0, 0).y
+                    const pill = list.currentItem
+                    const pillBottom = pill.mapToItem(tc.shell, 0, pill.height).y
+                    verify(pillBottom <= barTop + 0.5, "About pill above the bar, " + what + ": " + pillBottom + " vs " + barTop)
+                    for (const b of ["A", "B"]) {
+                        const glyph = findChild(bar, "hint_" + b)
+                        if (glyph)
+                            verify(pillBottom <= glyph.mapToItem(tc.shell, 0, 0).y + 0.5, "clear of glyph " + b + ", " + what)
+                    }
+                    // The list shows whole rows only, and the first category is reachable again.
+                    const stride = list.stride
+                    const rows = (list.height + list.spacing) / stride
+                    verify(Math.abs(rows - Math.round(rows)) < 0.01, "whole rows, " + what + ": " + rows)
+                    selectCategory(0)
+                    tryVerify(() => list.currentItem.mapToItem(tc.shell, 0, 0).y >= list.mapToItem(tc.shell, 0, 0).y - 0.5)
+                }
+            }
+        }
+
         function test_about_shows_version() {
             openSettings()
             selectCategory(tc.aboutIndex)
@@ -440,6 +480,11 @@ Item {
             tryVerify(() => find("aboutVersion").activeFocus)
             wait(600)
             grabImage(tc.shell).save(shotsDir + "/8-settings-about.png")
+
+            keyClick(Qt.Key_Escape)                      // About selected on the list: the last pill vs the hint bar
+            tryVerify(() => find("categoryList").activeFocus)
+            wait(600)
+            grabImage(tc.shell).save(shotsDir + "/8b-settings-about-category.png")
         }
     }
 }

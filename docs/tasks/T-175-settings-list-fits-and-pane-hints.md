@@ -34,4 +34,12 @@ On Settings the last category ("About") stays clear of the hint bar at every tie
 - `SettingsPane`'s whole-row logic (`laidOutRows`, `ensureFocusedVisible`, `viewport`) is the pattern to copy for the category list. Don't duplicate it if it can be shared cleanly; if sharing is a refactor, copy it and say so.
 
 ## Outcome
-_Filled in by the implementer._
+Verified: host
+
+- **List fits:** `categoryList` in `SettingsPage.qml` now ends at the last whole row that fits the content area (`fitRows`), clips only when it overflows, and scrolls by rows with the selection (`positionViewAtIndex(..., Contain)`; row tops stay aligned because the height is n x stride - spacing). Not shared with `SettingsPane` (a ListView needed far less); no new token or size.
+- **Pane hints:** `SettingsPane.hints` (default A Select, B Back); `AboutPane` sets B Back only; `SettingsPage.hints` = `currentPane.hints` while the pane has focus, else the list hints, B Back only for a category with no pane. The `aboutPane.activeFocus` special case is gone.
+- **Setup prose:** the three explanatory texts (welcome, profile, done) use `typeBody`, no weight; step titles stay Display and the pill stays Headline.
+- Tests: `tst_settings::test_last_category_clears_the_hint_bar` (1280x720 and 1920x1080, tiers high and performance: About pill bottom vs hint bar top and glyphs, whole rows); `tst_hints::test_panes_supply_their_own_hints` (Profiles, About, a bare pane gets the default). Revert test: with the old list height/no scrolling the new test fails at 1280x720 ("658 vs 657.33"; at 1080 the overrun is about 10 px). Translations refreshed (3 new strings, Turkish done).
+- Screenshots: new `8b-settings-about-category.png` (About selected, pill clear of the hint bar) and `11-setup-welcome.png` read. `27-settings-storage.png` can't be reviewed: `shots` renders the sign-in picker there, and `shots` also fails `Lockout::test_wrong_pins_lock_the_profile` - both are identical on unmodified main (checked), so not caused by this task.
+- `test` ALL GREEN (329 passed, 28 skipped); `shots` not green because of the main-side failure above.
+
