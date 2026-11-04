@@ -11,19 +11,23 @@ param(
     [int]$SshPort = 2222,
     [string]$Key = (Join-Path $env:USERPROFILE ".ssh\ruyaos_dev")
 )
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "Continue"
 . (Join-Path $PSScriptRoot "vm-lib.ps1")
 $Repo = Split-Path -Parent $PSScriptRoot
 $ssh = @("-i", $Key, "-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=NUL", "-o", "LogLevel=ERROR", "-o", "ConnectTimeout=10")
 
 function Invoke-Guest([string]$Step) {
     Write-Host "== guest: $Step"
-    & ssh @ssh -p $SshPort root@127.0.0.1 "bash /root/vm-storage-check.sh $Step"
-    return $LASTEXITCODE
+    & ssh @ssh -p $SshPort root@127.0.0.1 "bash /root/vm-storage-check.sh $Step" 2>&1 | ForEach-Object { Write-Host "$_" }
+    return [int]$LASTEXITCODE
 }
 
 function Send-Monitor([string[]]$Commands) {
-    foreach ($line in (Send-VmMonitor -Command $Commands -Port $Port)) { Write-Host ($line.Trim()) }
+    # The monitor echoes every typed character with cursor codes; only its answers (errors) matter.
+    foreach ($line in (Send-VmMonitor -Command $Commands -Port $Port)) {
+        $plain = ($line -replace "\x1b\[[0-9;]*[A-Za-z]", "").Trim()
+        if ($plain -match "(?i)error|could not|failed") { Write-Host "monitor: $($plain.Substring([Math]::Max(0, $plain.IndexOf('Error'))))" }
+    }
 }
 
 $outDir = Join-Path $Repo "output"
@@ -53,7 +57,8 @@ Step "gone"
 
 Step "watch"
 Write-Host "== host: hot-plug the formatted stick"
-Send-Monitor @("device_add usb-storage,id=stick,drive=stick0,removable=on")
+# device_del takes the legacy drive with it: define it again (the image keeps what was formatted).
+Send-Monitor @("drive_add 0 if=none,id=stick0,format=raw,file=$monitorImage", "device_add usb-storage,id=stick,drive=stick0,removable=on")
 Step "plugged"
 Step "busy"
 Step "eject"
@@ -61,7 +66,6 @@ Step "security"
 
 Write-Host "== host: clean up"
 try { Send-Monitor @("device_del stick") } catch { }
-try { Send-Monitor @("drive_del stick0") } catch { }
 Remove-Item $image -ErrorAction SilentlyContinue
 
 if ($failed.Count -eq 0) { Write-Host "STORAGE CHECKS PASSED"; exit 0 }

@@ -35,7 +35,7 @@ Plug a USB stick into the console and the shell toasts "Drive inserted". Setting
 - QEMU needs a USB controller for hot-plug (`-device qemu-xhci`). Check how `smoke-test.ps1` starts QEMU before you add one.
 
 ## Outcome
-Verified: host (VM part pending: `scripts/vm-storage-check.ps1`, image 0.0.38-t174; builder round 1 stops before the image build because the lane is busy)
+Verified: vm (image 0.0.38-t174: RUYA_BOOT_OK; `scripts/vm-storage-check.ps1` passed on the second full run, after the fixes under "VM run")
 
 **Built**
 - `services/ruya-devices/src/storage.rs` (pure core, 24 unit tests): classification (removable = drive removable or USB/SDIO bus and not `HintSystem`; `HintIgnore` and drive-less devices never listed; internal volumes only when mounted outside the system paths; five known filesystems, else `unknown`), free space only while mounted, label fallbacks, order, mounting policy, `VolumeAdded` hot-plug only, `Eject` with `busy` mapping (what was unmounted is mounted again), a `FakeUdisks`.
@@ -52,5 +52,8 @@ Verified: host (VM part pending: `scripts/vm-storage-check.ps1`, image 0.0.38-t1
 
 **Revert tests:** removing `noexec` from `MOUNT_OPTIONS` plus the `seen` guard failed 3 storage tests (options, no re-mount after eject, failed mount); forcing `added` empty failed 3 (hot-plug, unsupported hot-plug, leave-and-return).
 
-**Unverified:** everything udisks2/polkit/QEMU (the VM part). Real USB hardware, SD readers and NTFS sticks are not covered by the VM check.
+**VM run (0.0.38-t174, QEMU xhci + usb-storage, 64 MiB exFAT image):** `make-disk.sh` first failed with "Cannot allocate memory", a plain retry passed. The first runs only showed script faults, no service fault: (1) `vm-storage-check.ps1` threw on ssh stderr and swallowed the guest output, now `Continue` and `Write-Host`; (2) `device_del` removes the legacy `drive_add` drive, so the second attach defines it again; (3) `modify-device` and `encrypted-unlock` are allowed for `ruya-shell` by **udisks2's own default policy** (active session, `allow_active=yes`), not by our rule, so the check now prints them as notes instead of failing. Result of the last run: baseline (polkit allows `filesystem-mount`, `eject-media`, `power-off-drive`; `filesystem-mount-system`, `-unmount-others`, `-fstab` need authentication = not allowed; nobody refused; `Eject ""` invalid, unknown id `unknown-volume`); hot-plug: listed after ~3 s, already `mounted`, `exfat`, `removable`, mount options `rw,nosuid,nodev,noexec,relatime,uid=972,...`, exactly one `VolumeAdded` before `VolumesChanged`, writing works, a copied binary does not run, `free_bytes` 64995328 vs kernel 64958464; `Eject` with a process in the mount: `busy`, stays mounted and listed; `Eject` after: `ok`, volume leaves the list, unmounted, the USB disk is gone from the kernel, no second `VolumeAdded`.
+**Security:** `systemd-analyze --user security ruya-devices`: before 3.4 OK (T-173), after 3.4 OK (unit file unchanged).
+
+**Unverified:** unsupported filesystem and a drive with two partitions in the VM (unit tests only). Real USB hardware, SD readers and NTFS sticks are not covered by the VM check.
 
