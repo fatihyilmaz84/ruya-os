@@ -15,7 +15,7 @@ Verification legend: **host** = built and tested on Windows · **host (vm pendin
 
 ## Board
 
-**NEXT → T-161** (image build: wait for the lead VM run to finish)
+**NEXT → T-173** (T-161 and T-175 are in flight)
 
 **How work runs (owner, 2026-11-04):** the lead dispatches `ruya-builder` agents, at most two at a time in their own worktrees and in different areas, has each branch reviewed by `ruya-reviewer`, and merges it (`docs/LEAD.md`, build loop). Dispatched builders never edit this file. At most one task with a "VM (this task)" criterion runs at a time. A builder session the owner starts directly takes NEXT in the main checkout, alone, and does the bookkeeping itself (`CLAUDE.md`).
 
@@ -27,7 +27,8 @@ Open work only (todo, in-progress, blocked), in the recommended order; when NEXT
 | [T-164](tasks/T-164-per-profile-wayland-sockets.md) | **[lead]** Per-profile Wayland sockets: a profile's app appears in the shell | todo | T-162 |
 | [T-165](tasks/T-165-profile-switch-freezes-apps.md) | Profile switch and sign-out freeze the profile's apps | todo | T-164 |
 | [T-147](tasks/T-147-fullscreen-app-flow.md) | Full-screen apps: launch splash, quick menu, return, close | todo | T-164 |
-| [T-161](tasks/T-161-controller-battery.md) | Controller battery: `Devices1` over UPower, status cluster, low-battery toast | todo | T-157 |
+| [T-175](tasks/T-175-settings-list-fits-and-pane-hints.md) | Settings: category list fits above the hint bar; panes supply their own hints | in-progress | — |
+| [T-161](tasks/T-161-controller-battery.md) | Controller battery: `Devices1` over UPower, status cluster, low-battery toast | in-progress | T-157 |
 | [T-173](tasks/T-173-devices-bluetooth-service.md) | `ruya-devices`: `Devices1.Bluetooth` over BlueZ | todo | — |
 | [T-174](tasks/T-174-devices-storage-service.md) | `ruya-devices`: `Devices1.Storage` over udisks2 | todo | T-137 |
 | [T-145](tasks/T-145-bundle-inter.md) | Bundle the Inter typeface | todo | T-142 |
@@ -44,11 +45,8 @@ Follow-ups and debt for the next planner, one line each: `- (source) what, and w
 - (T-163) Home says "Your library is empty" while apps are installed but none was played (`last_played` 0, Recent row only): fall back to installed items, or record `last_played` (T-162/T-147).
 - (T-163) `Store1` answers `already-installed` for an app removed outside the Store (`flatpak uninstall`): its installed cache is stale.
 - (T-163) Flatpak titles lack appstream names until the remote's appstream is fetched (the VM shows "TestGame").
-- (T-172 review) Settings panes expose their own `hints` (SettingsPage uses `currentPane.hints` while the pane has focus), instead of `SettingsPage.qml:46` special-casing `aboutPane.activeFocus`; also renumber `15-picker-tr`/`15-pin-locked`.
 - (T-171 review) Store: resume or re-query jobs after `ruya-store` comes back (needs a `ListJobs` in `Store1.xml`).
 - (T-170 review) Settings panes give no cue that more rows exist below the viewport, now that no cut row hints at it: decide on a scroll affordance (fade, chevron or peek) in 04 §5 (design, lead).
-- (T-144 review) Settings category list overflows at 1920x1080 (9 x 72 + 8 x 8 = 712 px, `clip: false`, `SettingsPage.qml:62-75`): About runs ~10 px into the hint bar; selected, its pill and ring will cover the A/B glyphs. Shrink the items or scroll in whole rows like `SettingsPane` (T-170).
-- (T-144 review) Setup's multi-line copy is `typeHeadline`, now DemiBold at 34 px: heavy for prose; consider `typeBody` Regular (04 §3.2, design).
 - (T-144) `tst_accessibility`: also walk Games, Store, AppDetail, PowerConfirm, the TextEntry keys, the profile add/manage flows and the wizard steps (Setup's key sink is just "Setup"); ProfileCard's name could say "PIN protected"; re-check the Accessibility category when its pane lands.
 - (T-144 review) `lint-tokens.ps1` weight rule can be fooled by a `font.weight` in a nested child or a comment, and misses a multi-line `font.pixelSize:`; none in the tree today.
 

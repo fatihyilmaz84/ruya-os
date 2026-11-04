@@ -1,6 +1,6 @@
 # T-161 — Controller battery: `Devices1` over UPower, status cluster, low-battery toast
 
-Status: todo · Phase: 2 · Depends: T-157 · Area: api, services, image, shell · Size: M · Owner: builder
+Status: in-progress · Phase: 2 · Depends: T-157 · Area: api, services, image, shell · Size: M · Owner: builder
 
 ## Goal
 The status cluster on Home shows the controller's battery, as the design asks (04 §2), from real data: `ruya-devices` reads UPower, and a controller running low raises a toast.
