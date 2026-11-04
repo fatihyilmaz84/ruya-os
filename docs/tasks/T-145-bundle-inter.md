@@ -39,7 +39,7 @@ The shell renders in Inter on every machine (Windows dev host, offscreen tests, 
 - Fedora also packages it (`rsms-inter-fonts`), but a Qt resource keeps Windows, CI and the image identical.
 
 ## Outcome
-Verified: host (vm pending: image build 0.0.36-t145 and VM home screenshot; shots pending: desktop locked)
+Verified: vm (0.0.36-t145: RUYA_BOOT_OK, /usr/share/licenses/ruyaos/OFL-Inter.txt present, VM home screenshot shows Inter); shots pending (desktop locked, lead runs them)
 
 Built: Inter 4.1 Regular, Light and SemiBold, subset to Latin + Latin Extended-A plus common punctuation (about 48 KB each), in `shell/fonts/` with the upstream OFL text as `OFL-Inter.txt`. `scripts/fetch-inter.sh` downloads the pinned release zip (github.com/rsms/inter v4.1; SHA-256 recorded from the first download, 9883fdd4...) into a temporary directory, verifies it, extracts a fixed list of four members and cuts the subsets. `main.cpp` and `tst_main.cpp` register the fonts and call `QGuiApplication::setFont(Inter)`, so every Text inherits it (Window has no font property, so the application font is the "root" application); `Theme.fontFamily` is `"Inter"`. The licence is installed by `cmake --install` (already used by the Containerfile) into `/usr/share/licenses/ruyaos/`; the About licence line now names Inter (en and tr strings, `tst_settings` updated).
 
