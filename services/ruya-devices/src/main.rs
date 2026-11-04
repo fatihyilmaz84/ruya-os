@@ -1,6 +1,6 @@
-//! ruya-devices: serves org.ruyaos.Devices1.Audio, .Network, .Bluetooth and .Batteries on the system bus, as a systemd
+//! ruya-devices: serves org.ruyaos.Devices1.Audio, .Network, .Bluetooth, .Storage and .Batteries on the system bus, as a systemd
 //! user unit of `ruya-shell` (ADR-010). With `--session` (development) it serves on the session
-//! bus over a fake PipeWire, NetworkManager, BlueZ and UPower.
+//! bus over a fake PipeWire, NetworkManager, BlueZ, udisks2 and UPower.
 
 use std::error::Error;
 use std::path::PathBuf;
@@ -10,12 +10,14 @@ use ruya_devices::audio::{Audio, FakePipeWire};
 use ruya_devices::battery::{Batteries, FakeUPower, RawDevice, KIND_GAMING_INPUT};
 use ruya_devices::bluetooth::{Bluetooth, FakeBluez};
 #[cfg(target_os = "linux")]
-use ruya_devices::dbus::{watch, watch_batteries, watch_bluetooth, watch_network};
+use ruya_devices::dbus::{watch, watch_batteries, watch_bluetooth, watch_network, watch_storage};
 use ruya_devices::dbus::{
-    AudioIface, BatteriesIface, BluetoothIface, DynBluez, DynNm, DynPipeWire, DynUPower,
-    NetworkIface, Shared, SharedBatteries, SharedBluetooth, SharedNet, BUS_NAME, OBJECT_PATH,
+    AudioIface, BatteriesIface, BluetoothIface, DynBluez, DynNm, DynPipeWire, DynUPower, DynUdisks,
+    NetworkIface, Shared, SharedBatteries, SharedBluetooth, SharedNet, SharedStorage, StorageIface,
+    BUS_NAME, OBJECT_PATH,
 };
 use ruya_devices::network::{FakeNetworkManager, Network};
+use ruya_devices::storage::{FakeUdisks, RawVolume, Storage};
 use ruya_devices::store::Store;
 
 fn main() {
@@ -68,6 +70,29 @@ fn upower(session: bool) -> Result<DynUPower, Box<dyn Error>> {
     }])))
 }
 
+fn udisks(session: bool) -> Result<DynUdisks, Box<dyn Error>> {
+    #[cfg(target_os = "linux")]
+    if !session {
+        return Ok(Box::new(ruya_devices::udisks::UdisksClient::connect()?));
+    }
+    let _ = session;
+    Ok(Box::new(FakeUdisks::new(vec![RawVolume {
+        id: "/fake/sdb1".to_owned(),
+        drive: "/fake/sdb".to_owned(),
+        label: "DEV STICK".to_owned(),
+        model: "Ruya Dev Stick".to_owned(),
+        id_type: "exfat".to_owned(),
+        size_bytes: 16_000_000_000,
+        free_bytes: 0,
+        hint_system: false,
+        hint_ignore: false,
+        drive_removable: true,
+        bus: "usb".to_owned(),
+        mount_points: Vec::new(),
+        read_only: false,
+    }])))
+}
+
 /// `RUYA_DEVICES_FILE`, else `$STATE_DIRECTORY/audio.toml` (systemd's StateDirectory=), else none.
 fn state_file() -> Option<PathBuf> {
     if let Some(p) = std::env::var_os("RUYA_DEVICES_FILE") {
@@ -86,6 +111,7 @@ async fn follow_system(
     net: SharedNet,
     batteries: SharedBatteries,
     bluetooth: SharedBluetooth,
+    storage: SharedStorage,
 ) {
     #[cfg(target_os = "linux")]
     futures_lite::future::zip(
@@ -94,14 +120,17 @@ async fn follow_system(
             watch_network(connection.clone(), net),
             futures_lite::future::zip(
                 watch_batteries(connection.clone(), batteries),
-                watch_bluetooth(connection, bluetooth),
+                futures_lite::future::zip(
+                    watch_bluetooth(connection.clone(), bluetooth),
+                    watch_storage(connection, storage),
+                ),
             ),
         ),
     )
     .await;
     #[cfg(not(target_os = "linux"))]
     {
-        let _keep = (connection, audio, net, batteries, bluetooth);
+        let _keep = (connection, audio, net, batteries, bluetooth, storage);
         futures_lite::future::pending::<()>().await;
     }
 }
@@ -137,6 +166,13 @@ fn run() -> Result<(), Box<dyn Error>> {
         eprintln!("ruya-devices: BlueZ not readable yet: {}", err.0);
     }
 
+    // udisks2 not up yet is retried by its signals. The first read mounts the removable volumes
+    // that are already plugged in (without announcing them as added).
+    let storage: SharedStorage = Arc::new(Storage::new(udisks(session)?));
+    if let Err(err) = storage.refresh() {
+        eprintln!("ruya-devices: udisks2 not readable yet: {err}");
+    }
+
     futures_lite::future::block_on(async {
         let builder = if session {
             zbus::connection::Builder::session()?
@@ -149,14 +185,15 @@ fn run() -> Result<(), Box<dyn Error>> {
             .serve_at(OBJECT_PATH, NetworkIface::new(net.clone()))?
             .serve_at(OBJECT_PATH, BatteriesIface::new(batteries.clone()))?
             .serve_at(OBJECT_PATH, BluetoothIface::new(bluetooth.clone()))?
+            .serve_at(OBJECT_PATH, StorageIface::new(storage.clone()))?
             .build()
             .await?;
         // The fakes have nothing to follow (they change only through calls): just stay up.
         if session {
-            let _keep = (connection, audio, net, batteries, bluetooth);
+            let _keep = (connection, audio, net, batteries, bluetooth, storage);
             futures_lite::future::pending::<()>().await;
         } else {
-            follow_system(connection, audio, net, batteries, bluetooth).await;
+            follow_system(connection, audio, net, batteries, bluetooth, storage).await;
         }
         Ok::<(), Box<dyn Error>>(())
     })

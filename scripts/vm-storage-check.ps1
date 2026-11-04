@@ -1,0 +1,73 @@
+# Drives scripts/vm-storage-check.sh (T-174, Devices1.Storage over udisks2) in a running VM and
+# hot-plugs a USB stick through the QEMU monitor (device_add usb-storage). Start the VM first:
+#   .\scripts\smoke-test.ps1 -Keep            (monitor on 127.0.0.1:4444, SSH on 2222, a qemu-xhci controller)
+#   .\scripts\vm-storage-check.ps1
+# Steps: baseline (no stick), attach a blank 64 MiB image, format it exFAT in the guest, detach it,
+# start recording signals, attach it again (the hot-plug under test), then plugged, busy and eject
+# checks, and finally systemd-analyze security. Exits 0 when every step passed.
+[CmdletBinding(PositionalBinding = $false)]
+param(
+    [int]$Port = 4444,
+    [int]$SshPort = 2222,
+    [string]$Key = (Join-Path $env:USERPROFILE ".ssh\ruyaos_dev")
+)
+$ErrorActionPreference = "Continue"
+. (Join-Path $PSScriptRoot "vm-lib.ps1")
+$Repo = Split-Path -Parent $PSScriptRoot
+$ssh = @("-i", $Key, "-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=NUL", "-o", "LogLevel=ERROR", "-o", "ConnectTimeout=10")
+
+function Invoke-Guest([string]$Step) {
+    Write-Host "== guest: $Step"
+    & ssh @ssh -p $SshPort root@127.0.0.1 "bash /root/vm-storage-check.sh $Step" 2>&1 | ForEach-Object { Write-Host "$_" }
+    return [int]$LASTEXITCODE
+}
+
+function Send-Monitor([string[]]$Commands) {
+    # The monitor echoes every typed character with cursor codes; only its answers (errors) matter.
+    foreach ($line in (Send-VmMonitor -Command $Commands -Port $Port)) {
+        $plain = ($line -replace "\x1b\[[0-9;]*[A-Za-z]", "").Trim()
+        if ($plain -match "(?i)error|could not|failed") { Write-Host "monitor: $($plain.Substring([Math]::Max(0, $plain.IndexOf('Error'))))" }
+    }
+}
+
+$outDir = Join-Path $Repo "output"
+New-Item -ItemType Directory -Force $outDir | Out-Null
+$image = Join-Path $outDir "stick.img"
+Remove-Item $image -ErrorAction SilentlyContinue
+$fs = [System.IO.File]::Create($image)
+$fs.SetLength(64MB)
+$fs.Close()
+$monitorImage = $image -replace "\\", "/"
+
+& scp @ssh -P $SshPort (Join-Path $PSScriptRoot "vm-storage-check.sh") "root@127.0.0.1:/root/" | Out-Null
+if ($LASTEXITCODE -ne 0) { throw "scp failed: is the VM running (smoke-test.ps1 -Keep)?" }
+
+$failed = @()
+function Step([string]$Name) { if ((Invoke-Guest $Name) -ne 0) { $script:failed += $Name } }
+
+Step "baseline"
+
+Write-Host "== host: attach the blank stick"
+Send-Monitor @("drive_add 0 if=none,id=stick0,format=raw,file=$monitorImage", "device_add usb-storage,id=stick,drive=stick0,removable=on")
+Step "format"
+
+Write-Host "== host: detach it again"
+Send-Monitor @("device_del stick")
+Step "gone"
+
+Step "watch"
+Write-Host "== host: hot-plug the formatted stick"
+# device_del takes the legacy drive with it: define it again (the image keeps what was formatted).
+Send-Monitor @("drive_add 0 if=none,id=stick0,format=raw,file=$monitorImage", "device_add usb-storage,id=stick,drive=stick0,removable=on")
+Step "plugged"
+Step "busy"
+Step "eject"
+Step "security"
+
+Write-Host "== host: clean up"
+try { Send-Monitor @("device_del stick") } catch { }
+Remove-Item $image -ErrorAction SilentlyContinue
+
+if ($failed.Count -eq 0) { Write-Host "STORAGE CHECKS PASSED"; exit 0 }
+Write-Host "STORAGE CHECKS FAILED: $($failed -join ', ')"
+exit 1
