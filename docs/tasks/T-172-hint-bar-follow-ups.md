@@ -1,6 +1,6 @@
 # T-172 — Hint bar follow-ups: one Sections hint, wizard hints, per-page overrides
 
-Status: todo · Phase: 2 · Depends: — · Area: shell · Size: S · Owner: builder
+Status: in-progress · Phase: 2 · Depends: — · Area: shell · Size: S · Owner: builder
 
 ## Goal
 The hint bar tells the truth on every screen. Home shows "LB RB Sections" as one hint, the setup wizard shows its own hints, and a page with nothing to select shows only Back. The dev badge no longer crowds the bar.
