@@ -1,6 +1,6 @@
 # T-158 — Hint bar with controller button glyphs
 
-Status: todo · Phase: 2 · Depends: T-157 · Area: shell · Size: M · Owner: builder
+Status: in-progress · Phase: 2 · Depends: T-157 · Area: shell · Size: M · Owner: builder
 
 ## Goal
 The bottom of every screen says what the buttons do right now ("A Select · B Back"), so a new player never has to guess.
