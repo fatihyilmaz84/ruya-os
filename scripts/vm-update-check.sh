@@ -116,8 +116,18 @@ current="$(field current)"
 echo "channel: $(field channel), state: $(field state), staged: '$(field staged)', rollback_available: $(field rollback_available)"
 [ "$(field state)" = idle ] && ok "idle at start" || echo "NOTE: state is $(field state), not idle (a restart is pending?)"
 
+# A start-up scheduled check (T-154) may still run, and one that finds an update downloads it:
+# Check and Download answer `busy` until then (T-160 review). Wait for it first.
+wait_state checking 120; wait_state downloading 900
+prestaged=no
+if [ "$(field state)" = staged ]; then
+    prestaged=yes
+    echo "NOTE: the scheduled check at start already found and staged an update"
+fi
+
 # Check against the dev registry.
-[ "$(call Check)" = ok ] && ok "Check started" || bad "Check did not answer ok"
+reply="$(call Check)"
+[ "$reply" = ok ] && ok "Check started" || bad "Check did not answer ok (answered '$reply', state $(field state))"
 [ "$(call Check)" = busy ] && ok "second Check while running: busy" || echo "NOTE: the check was already over before the second call"
 wait_state checking 120 && ok "check finished: state $(field state)" || bad "check still running after 120 s"
 available="$(field available)"
@@ -130,7 +140,14 @@ fi
 [ "$(field restart_at)" = 0 ] && ok "restart_at is 0 (no restart announced)" || bad "restart_at is $(field restart_at) before any restart rule held"
 
 # Download stages it.
-[ "$(call Download)" = ok ] && ok "Download started" || bad "Download did not answer ok"
+reply="$(call Download)"
+if [ "$reply" = ok ]; then
+    ok "Download started"
+elif [ "$prestaged" = yes ]; then
+    echo "NOTE: Download answered '$reply' with the update already staged by the scheduled run"
+else
+    bad "Download did not answer ok (answered '$reply', state $(field state))"
+fi
 wait_state downloading 900 && ok "download finished: state $(field state)" || bad "download still running after 900 s"
 [ "$(field state)" = staged ] && ok "state staged" || bad "state is $(field state), error '$(field error)'"
 staged="$(field staged)"

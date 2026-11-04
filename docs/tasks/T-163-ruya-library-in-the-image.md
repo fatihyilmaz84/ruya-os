@@ -1,6 +1,6 @@
 # T-163 — `ruya-library` in the image: installed Flatpaks over the real bus
 
-Status: in-progress · Phase: 2 · Depends: T-112, T-149 · Area: services, image · Size: M · Owner: builder
+Status: done · Phase: 2 · Depends: T-112, T-149 · Area: services, image · Size: M · Owner: builder
 
 ## Goal
 On the console, Home's Recent row and the Games page list the Flatpak apps and games really installed on the system (from the Store), served by `ruya-library` over the system bus, instead of the mock.

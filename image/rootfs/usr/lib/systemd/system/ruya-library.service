@@ -1,4 +1,4 @@
-﻿[Unit]
+[Unit]
 Description=RuyaOS library service (org.ruyaos.Library1)
 Before=ruya-compositor@tty1.service
 
