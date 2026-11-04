@@ -28,6 +28,7 @@ Open work only (todo, in-progress, blocked), in the recommended order; when NEXT
 | [T-165](tasks/T-165-profile-switch-freezes-apps.md) | Profile switch and sign-out freeze the profile's apps | todo | T-164 |
 | [T-147](tasks/T-147-fullscreen-app-flow.md) | Full-screen apps: launch splash, quick menu, return, close | todo | T-164 |
 | [T-173](tasks/T-173-devices-bluetooth-service.md) | `ruya-devices`: `Devices1.Bluetooth` over BlueZ | in-progress | — |
+| [T-177](tasks/T-177-devices-watchers-and-battery-polish.md) | `ruya-devices` watchers can't be starved; battery cluster and replies consistent | in-progress | — |
 | [T-174](tasks/T-174-devices-storage-service.md) | `ruya-devices`: `Devices1.Storage` over udisks2 | todo | T-137 |
 | [T-145](tasks/T-145-bundle-inter.md) | Bundle the Inter typeface | in-progress | T-142 |
 | [T-166](tasks/T-166-suspend-under-eglfs.md) | **[lead]** Suspend and resume with the shell on KMS (eglfs) | todo | — |
@@ -49,10 +50,7 @@ Follow-ups and debt for the next planner, one line each: `- (source) what, and w
 - (T-176) PowerConfirm's buttons are named "Cancel"/"Confirm": name them after the action ("Restart now") for screen readers; the wizard's create-name-and-PIN step and the profile add/manage flows are not walked by `tst_accessibility` yet.
 - (T-161 review) Real pads: confirm on hardware that DualSense (hid-playstation), Xbox (xpadneo or dongle) and 8BitDo pads show in UPower as kind 12 "gaming-input"; otherwise the kind-12 filter hides them (extend `KIND_GAMING_INPUT` in `battery.rs`). Pair with B-002 / T-173.
 - (T-161) A fake UPower device in the VM (umockdev or python-dbusmock on the system bus) would let `vm-devices-check.sh` cover a non-empty `ListBatteries`.
-- (T-161 review) `Batteries` cluster: on a tie, or when the lowest pad is charging, prefer the discharging pad so the warning state matches the toast; `DBusBatteryBackend` (and siblings): drop stale `ListBatteries` replies with a sequence counter.
 - (T-161) `image/bib/config.toml` (git-ignored, the dev SSH key) is missing in a fresh worktree, so `make-disk.sh` builds a disk ssh can't log into: make `make-disk.sh` fail loudly, and say in `dev-setup.md` to copy it from the main checkout.
-- (T-173 review) `watch_batteries` and `watch_network` use an unbounded trailing debounce (`dbus.rs` ~:353, ~:459): cap them like Bluetooth's `DEBOUNCE_MAX`.
-- (T-173 review) `bluez.rs` (and other Linux-only code) compiles only in the image build: run a Linux `cargo check` of `ruya-devices` in CI or `dev.ps1` via WSL, so host sessions catch errors there.
 - (T-173) Hardware check of the Bluetooth service: adapter, "just works" controller pairing, Battery1 values, rfkill-blocked `Powered`, hot-plugged USB adapter (B-002).
 
 ## Blocked (need something this host doesn't have)
