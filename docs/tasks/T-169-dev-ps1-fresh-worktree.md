@@ -1,6 +1,6 @@
 # T-169 — `dev.ps1 test` works first time in a fresh worktree and after a merge
 
-Status: todo · Phase: 2 · Depends: — · Area: scripts · Size: S · Owner: builder
+Status: in-progress · Phase: 2 · Depends: — · Area: scripts · Size: S · Owner: builder
 
 ## Goal
 Every builder lane starts in a fresh worktree, and every merge can add `.qml` files. Today both cost a red `test` and a manual fix. After this task, `.\scripts\dev.ps1 test` goes green on the first run in both cases, without hand-run commands.
