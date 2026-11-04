@@ -86,4 +86,7 @@ signals:
     // status: see the XML ("ok", "failed", "network", ...). A request the service refused
     // ("unknown-app", "busy", ...) is reported the same way, without any progress before it.
     void jobFinished(const QString &appId, const QString &status);
+    // The service's bus name lost its owner (it crashed or restarted): every job it ran is gone
+    // and will never report again. appIds: every app the backend had a job for, running or queued.
+    void serviceLost(const QStringList &appIds);
 };

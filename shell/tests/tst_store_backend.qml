@@ -120,6 +120,17 @@ Item {
             verify(!isInstalled(id))
         }
 
+        // T-171: the service vanishes mid-install; the job would never finish, so none is shown.
+        function test_service_loss_drops_running_jobs() {
+            const id = "org.example.Racer"
+            Store.install(id)
+            tryVerify(() => Store.jobs[id] !== undefined, 2000, "progress arrived")
+            Store.mockServiceLost()
+            compare(Object.keys(Store.jobs).length, 0)
+            wait(100)                                   // no late progress brings it back
+            compare(Object.keys(Store.jobs).length, 0)
+        }
+
         function test_install_failure() {
             Store.install("org.example.Broken")
             tryCompare(finished, "count", 1)

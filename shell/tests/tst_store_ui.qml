@@ -131,6 +131,34 @@ Item {
             compare(find("detailError").visible, false)
         }
 
+        // T-171: the service vanishes mid-install; the page must not wait for a job that is gone.
+        function test_service_loss_ends_the_job() {
+            openStore()
+            openApp("org.example.Racer")
+            keyClick(Qt.Key_Return)
+            verify(find("detailProgress").visible)
+            tryVerify(() => Store.jobs["org.example.Racer"] !== undefined, 2000, "progress arrived")
+            Store.mockServiceLost()
+            compare(Object.keys(Store.jobs).length, 0)
+            verify(!find("page_appDetail").working)
+            verify(!find("detailProgress").visible)
+            compare(find("detailError").visible, true)
+        }
+
+        // T-171: a job still queued behind another has no progress yet; it must end too.
+        function test_service_loss_ends_a_queued_job() {
+            openStore()
+            Store.install("org.example.Racer")          // runs first
+            tryVerify(() => Store.jobs["org.example.Racer"] !== undefined, 2000, "progress arrived")
+            openApp("org.example.Platformer")
+            keyClick(Qt.Key_Return)                     // queued behind Racer
+            verify(find("page_appDetail").working)
+            verify(Store.jobs["org.example.Platformer"] === undefined, "it has not reported progress")
+            Store.mockServiceLost()
+            verify(!find("page_appDetail").working)
+            verify(!find("detailProgress").visible)
+        }
+
         function test_install_error_inline() {
             openStore()
             openApp("org.example.Broken")
