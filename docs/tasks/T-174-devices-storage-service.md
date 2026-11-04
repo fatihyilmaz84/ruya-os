@@ -1,6 +1,6 @@
 # T-174 — `ruya-devices`: `Devices1.Storage` over udisks2
 
-Status: todo · Phase: 2 · Depends: T-137 · Area: services, image · Size: M · Owner: builder
+Status: in-progress · Phase: 2 · Depends: T-137 · Area: services, image · Size: M · Owner: builder
 
 ## Goal
 Plug a USB stick into the console and the shell toasts "Drive inserted". Settings → Storage lists it with its free space and ejects it safely. This is the real service behind T-137's mock.
