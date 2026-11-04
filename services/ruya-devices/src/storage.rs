@@ -248,20 +248,22 @@ impl<U: Udisks> Storage<U> {
     pub fn refresh(&self) -> Result<Changes, String> {
         let _ops = self.ops_lock();
         let mut raws = self.udisks.volumes()?;
-        let mut mounted_any = false;
-        {
+        // Decide under the lock, mount after releasing it: a mount is a blocking D-Bus call and
+        // ListVolumes must keep answering meanwhile.
+        let to_mount: Vec<String> = {
             let mut state = self.state_lock();
-            for raw in &raws {
-                let Some(v) = classify(raw) else { continue };
-                if !v.removable || v.filesystem == "unknown" {
-                    continue;
-                }
-                if state.seen.insert(v.id.clone()) && !v.mounted {
-                    match self.udisks.mount(&v.id, MOUNT_OPTIONS) {
-                        Ok(()) => mounted_any = true,
-                        Err(err) => eprintln!("ruya-devices: mounting {} failed: {err}", v.id),
-                    }
-                }
+            raws.iter()
+                .filter_map(classify)
+                .filter(|v| v.removable && v.filesystem != "unknown")
+                .filter(|v| state.seen.insert(v.id.clone()) && !v.mounted)
+                .map(|v| v.id)
+                .collect()
+        };
+        let mut mounted_any = false;
+        for id in &to_mount {
+            match self.udisks.mount(id, MOUNT_OPTIONS) {
+                Ok(()) => mounted_any = true,
+                Err(err) => eprintln!("ruya-devices: mounting {id} failed: {err}"),
             }
         }
         if mounted_any {
@@ -705,6 +707,54 @@ mod tests {
         let changes = s.refresh().expect("second");
         assert!(changes.added.is_empty());
         assert!(changes.changed);
+    }
+
+    #[test]
+    fn listing_is_not_blocked_while_a_mount_runs() {
+        use std::sync::{mpsc, Arc, Weak};
+        use std::time::Duration;
+
+        /// A udisks whose mount asks the storage for its list from another thread.
+        struct Probe {
+            fake: FakeUdisks,
+            storage: Mutex<Weak<Storage<Probe>>>,
+            answered: Mutex<Option<bool>>,
+        }
+        impl Udisks for Probe {
+            fn volumes(&self) -> Result<Vec<RawVolume>, String> {
+                self.fake.volumes()
+            }
+            fn mount(&self, id: &str, options: &str) -> Result<(), String> {
+                let storage = self.storage.lock().expect("lock").upgrade().expect("alive");
+                let (tx, rx) = mpsc::channel();
+                std::thread::spawn(move || {
+                    let _ = storage.list();
+                    let _ = tx.send(());
+                });
+                let ok = rx.recv_timeout(Duration::from_secs(2)).is_ok();
+                *self.answered.lock().expect("lock") = Some(ok);
+                self.fake.mount(id, options)
+            }
+            fn unmount(&self, id: &str) -> Result<(), UnmountError> {
+                self.fake.unmount(id)
+            }
+            fn power_off(&self, id: &str) -> Result<(), String> {
+                self.fake.power_off(id)
+            }
+        }
+
+        let storage = Arc::new(Storage::new(Probe {
+            fake: FakeUdisks::new(vec![stick("/b/sdb1", "/d/sdb")]),
+            storage: Mutex::new(Weak::new()),
+            answered: Mutex::new(None),
+        }));
+        *storage.udisks.storage.lock().expect("lock") = Arc::downgrade(&storage);
+        storage.refresh().expect("refresh");
+        assert_eq!(
+            *storage.udisks.answered.lock().expect("lock"),
+            Some(true),
+            "list() waited for the mount"
+        );
     }
 
     // ---- eject
