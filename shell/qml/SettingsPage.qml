@@ -38,6 +38,7 @@ Page {
                                               : current.key === "network" ? networkPane
                                               : current.key === "bluetooth" ? bluetoothPane
                                               : current.key === "audio" ? audioPane
+                                              : current.key === "storage" ? storagePane
                                               : current.key === "system" ? systemPane
                                               : current.key === "about" ? aboutPane : null
 
@@ -142,6 +143,15 @@ Page {
             anchors.fill: parent
             u: page.u
             visible: page.current.key === "audio"
+            enabled: visible
+            onExitRequested: page.leavePane()
+        }
+        StoragePane {
+            id: storagePane
+            objectName: "paneStorage"
+            anchors.fill: parent
+            u: page.u
+            visible: page.current.key === "storage"
             enabled: visible
             onExitRequested: page.leavePane()
         }

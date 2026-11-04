@@ -1053,7 +1053,7 @@
         <translation>Hakkında</translation>
     </message>
     <message>
-        <location line="+148"/>
+        <location line="+158"/>
         <source>Coming soon</source>
         <translation>Yakında</translation>
     </message>
@@ -1310,6 +1310,49 @@
         <location line="+92"/>
         <source>mock services</source>
         <translation>sahte hizmetler</translation>
+    </message>
+</context>
+<context>
+    <name>StoragePane</name>
+    <message>
+        <location filename="../qml/StoragePane.qml" line="+83"/>
+        <source>%1 is still in use. Close what uses it and try again.</source>
+        <translation>%1 hâlâ kullanımda. Kullanan uygulamayı kapatıp tekrar deneyin.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>That drive is no longer connected.</source>
+        <translation>Bu sürücü artık bağlı değil.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Could not eject %1.</source>
+        <translation>%1 çıkarılamadı.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>This drive&apos;s format is not supported. Format it as exFAT on a computer to use it here.</source>
+        <translation>Bu sürücünün biçimi desteklenmiyor. Burada kullanmak için bilgisayarda exFAT olarak biçimlendirin.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Not supported</source>
+        <translation>Desteklenmiyor</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>%1 free of %2</source>
+        <translation>%2 içinde %1 boş</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Read-only</source>
+        <translation>Salt okunur</translation>
+    </message>
+    <message>
+        <location line="+60"/>
+        <source>Eject %1</source>
+        <translation>%1 sürücüsünü çıkar</translation>
     </message>
 </context>
 <context>
@@ -1571,6 +1614,16 @@
         <location filename="../qml/ToastLayer.qml" line="+20"/>
         <source>%1: battery low (%2%)</source>
         <translation>%1: pil zayıf (%2%)</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Drive inserted: %1</source>
+        <translation>Sürücü takıldı: %1</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Safe to remove</source>
+        <translation>Çıkarmak güvenli</translation>
     </message>
 </context>
 <context>

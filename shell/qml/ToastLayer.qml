@@ -21,6 +21,19 @@ Item {
         }
     }
 
+    // A drive was plugged in (once per insert, when it is in the list), and an eject finished.
+    // No actions yet; nothing on the drive is opened or run.
+    Connections {
+        target: Storage
+        function onVolumeAdded(id, label) {
+            Notifications.show(qsTr("Drive inserted: %1").arg(label), "info")
+        }
+        function onFinished(op, id, status) {
+            if (op === "eject" && status === "ok")
+                Notifications.show(qsTr("Safe to remove"), "success")
+        }
+    }
+
     ListView {
         id: list
         objectName: "toastList"

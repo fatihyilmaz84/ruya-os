@@ -80,6 +80,8 @@ public:
         qputenv("RUYA_SETTINGS_EPHEMERAL", "1");
         // ...and the mock store installs in milliseconds.
         qputenv("RUYA_MOCK_FAST", "1");
+        // ...and the mock USB stick is only plugged in by the tests that want it.
+        qputenv("RUYA_MOCK_NO_STICK", "1");
     }
 
 public slots:
