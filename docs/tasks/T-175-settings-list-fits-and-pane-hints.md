@@ -1,6 +1,6 @@
 # T-175 — Settings: the category list fits above the hint bar; panes supply their own hints
 
-Status: in-progress · Phase: 2 · Depends: — · Area: shell · Size: S · Owner: builder
+Status: done · Phase: 2 · Depends: — · Area: shell · Size: S · Owner: builder
 
 ## Goal
 On Settings the last category ("About") stays clear of the hint bar at every tier. Its selected pill and focus ring never cover the A/B glyphs. Each pane says which hints it shows, so a new pane can't end up with the wrong ones. The setup wizard's prose reads as body text, not a bold headline.
@@ -39,7 +39,8 @@ Verified: host
 - **List fits:** `categoryList` in `SettingsPage.qml` now ends at the last whole row that fits the content area (`fitRows`), clips only when it overflows, and scrolls by rows with the selection (`positionViewAtIndex(..., Contain)`; row tops stay aligned because the height is n x stride - spacing). Not shared with `SettingsPane` (a ListView needed far less); no new token or size.
 - **Pane hints:** `SettingsPane.hints` (default A Select, B Back); `AboutPane` sets B Back only; `SettingsPage.hints` = `currentPane.hints` while the pane has focus, else the list hints, B Back only for a category with no pane. The `aboutPane.activeFocus` special case is gone.
 - **Setup prose:** the three explanatory texts (welcome, profile, done) use `typeBody`, no weight; step titles stay Display and the pill stays Headline.
-- Tests: `tst_settings::test_last_category_clears_the_hint_bar` (1280x720 and 1920x1080, tiers high and performance: About pill bottom vs hint bar top and glyphs, whole rows); `tst_hints::test_panes_supply_their_own_hints` (Profiles, About, a bare pane gets the default). Revert test: with the old list height/no scrolling the new test fails at 1280x720 ("658 vs 657.33"; at 1080 the overrun is about 10 px). Translations refreshed (3 new strings, Turkish done).
-- Screenshots: new `8b-settings-about-category.png` (About selected, pill clear of the hint bar) and `11-setup-welcome.png` read. `27-settings-storage.png` can't be reviewed: `shots` renders the sign-in picker there, and `shots` also fails `Lockout::test_wrong_pins_lock_the_profile` - both are identical on unmodified main (checked), so not caused by this task.
-- `test` ALL GREEN (329 passed, 28 skipped); `shots` not green because of the main-side failure above.
+- Tests: `tst_settings::test_last_category_clears_the_hint_bar` (1280x720 and 1920x1080, tiers high and performance: About pill bottom vs hint bar top and glyphs, whole rows); `tst_hints::test_panes_supply_their_own_hints` (Profiles, About, a bare pane gets the default). Revert test: with the old list height/no scrolling the new test fails at 1280x720 ("658 vs 657.33"); the reviewer's revert at 1920x1080 fails with "988 vs 986", 2 px past the bar top (26 px past the content area). Translations refreshed (3 new strings, Turkish done).
+- Screenshots: new `8b-settings-about-category.png` (About selected, pill clear of the hint bar) and `11-setup-welcome.png` read. The builder's `shots` run failed (`Lockout::test_wrong_pins_lock_the_profile`, the picker in `27-settings-storage.png`) because the Windows session was locked during it, not because of main or this task.
+- **Lead re-shoot after unlock (2026-11-04):** `shots` in the worktree ALL GREEN (69); `27-settings-storage.png` shows the Storage pane with the list ending at System, clear of the hint bar; `8b` shows About focused, clear of A/B.
+- `test` ALL GREEN (329 passed, 28 skipped); `shots` ALL GREEN (69).
 

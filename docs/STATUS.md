@@ -27,7 +27,6 @@ Open work only (todo, in-progress, blocked), in the recommended order; when NEXT
 | [T-164](tasks/T-164-per-profile-wayland-sockets.md) | **[lead]** Per-profile Wayland sockets: a profile's app appears in the shell | todo | T-162 |
 | [T-165](tasks/T-165-profile-switch-freezes-apps.md) | Profile switch and sign-out freeze the profile's apps | todo | T-164 |
 | [T-147](tasks/T-147-fullscreen-app-flow.md) | Full-screen apps: launch splash, quick menu, return, close | todo | T-164 |
-| [T-175](tasks/T-175-settings-list-fits-and-pane-hints.md) | Settings: category list fits above the hint bar; panes supply their own hints | in-progress | — |
 | [T-161](tasks/T-161-controller-battery.md) | Controller battery: `Devices1` over UPower, status cluster, low-battery toast | in-progress | T-157 |
 | [T-173](tasks/T-173-devices-bluetooth-service.md) | `ruya-devices`: `Devices1.Bluetooth` over BlueZ | todo | — |
 | [T-174](tasks/T-174-devices-storage-service.md) | `ruya-devices`: `Devices1.Storage` over udisks2 | todo | T-137 |
@@ -50,6 +49,7 @@ Follow-ups and debt for the next planner, one line each: `- (source) what, and w
 - (T-144) `tst_accessibility`: also walk Games, Store, AppDetail, PowerConfirm, the TextEntry keys, the profile add/manage flows and the wizard steps (Setup's key sink is just "Setup"); ProfileCard's name could say "PIN protected"; re-check the Accessibility category when its pane lands.
 - (T-144 review) `lint-tokens.ps1` weight rule can be fooled by a `font.weight` in a nested child or a comment, and misses a multi-line `font.pixelSize:`; none in the tree today.
 - (lead) `dev.ps1 shots` checks for a locked session (LogonUI) only at start: a lock during the run (or while waiting on the shots lock) gives a 10+ min hang or misleading failures (a Lockout test, the picker in `27-settings-storage.png`, T-175). Re-check LogonUI while waiting and after a failure, and print "session locked" instead.
+- (T-175 review) `tst_settings`: assert the category list ends inside the page content area (`Page.qml` bottom margin), not only above the hint bar top, so a regression fails by 26 px, not 2; and `verify(glyph)` instead of `if (glyph)`.
 
 ## Blocked (need something this host doesn't have)
 
