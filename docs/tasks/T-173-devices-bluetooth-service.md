@@ -1,6 +1,6 @@
 # T-173 — `ruya-devices`: `Devices1.Bluetooth` over BlueZ
 
-Status: todo · Phase: 2 · Depends: — · Area: services, image · Size: M · Owner: builder
+Status: in-progress · Phase: 2 · Depends: — · Area: services, image · Size: M · Owner: builder
 
 ## Goal
 The Bluetooth pane T-136 built against the mock talks to a real service. On a machine with an adapter, scanning, pairing a "just works" controller, connecting and forgetting go through BlueZ. With no adapter (as in the VM), the pane says Bluetooth is unavailable.
