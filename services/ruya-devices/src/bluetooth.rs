@@ -325,7 +325,9 @@ impl<B: Bluez> Bluetooth<B> {
     }
 
     pub fn stop_scan(&self) -> Status {
-        if self.read().is_err() || !self.discovering() {
+        // A scan we started is ended even before BlueZ reports Discovering (T-173 review).
+        let ours = self.lock().scan_until.is_some();
+        if self.read().is_err() || (!self.discovering() && !ours) {
             self.lock().scan_until = None;
             return Status::Ok;
         }
@@ -663,6 +665,21 @@ mod tests {
         assert_eq!(bt.scan_deadline(), Some(t0 + SCAN_LIMIT));
         assert!(bt.tick(t0 + SCAN_LIMIT));
         assert!(bt.bluez.calls().contains(&"stop".to_owned()));
+    }
+
+    #[test]
+    fn a_stop_before_bluez_reports_discovering_still_stops() {
+        let bt = bt();
+        bt.bluez.set_sticky_discovery(true);
+        let t0 = Instant::now();
+        assert_eq!(bt.start_scan(t0), Status::Ok);
+        // BlueZ has not reported Discovering yet when the stop arrives
+        assert_eq!(bt.stop_scan(), Status::Ok);
+        assert!(
+            bt.bluez.calls().contains(&"stop".to_owned()),
+            "StopDiscovery was called"
+        );
+        assert_eq!(bt.scan_deadline(), None);
     }
 
     #[test]

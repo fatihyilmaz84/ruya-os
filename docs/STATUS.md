@@ -32,7 +32,7 @@ Open work only (todo, in-progress, blocked), in the recommended order; when NEXT
 | [T-145](tasks/T-145-bundle-inter.md) | Bundle the Inter typeface | in-progress | T-142 |
 | [T-166](tasks/T-166-suspend-under-eglfs.md) | **[lead]** Suspend and resume with the shell on KMS (eglfs) | todo | — |
 
-**VM queue** (done on the host, VM check pending; the lead runs them with one image build): empty (T-159, T-160, T-171 verified 2026-11-04 on 0.0.32/0.0.33).
+**VM queue** (done on the host, VM check pending; the lead runs them with one image build): T-173 (`vm-devices-check.sh check` on an image after the org.bluez bus rule was dropped: `Powered`, `ListDevices`, `StartScan` must still answer; if not, the rule goes back). T-173 stays `in-progress` until then (VM-this-task criterion).
 
 ## Inbox
 
@@ -51,6 +51,9 @@ Follow-ups and debt for the next planner, one line each: `- (source) what, and w
 - (T-161) A fake UPower device in the VM (umockdev or python-dbusmock on the system bus) would let `vm-devices-check.sh` cover a non-empty `ListBatteries`.
 - (T-161 review) `Batteries` cluster: on a tie, or when the lowest pad is charging, prefer the discharging pad so the warning state matches the toast; `DBusBatteryBackend` (and siblings): drop stale `ListBatteries` replies with a sequence counter.
 - (T-161) `image/bib/config.toml` (git-ignored, the dev SSH key) is missing in a fresh worktree, so `make-disk.sh` builds a disk ssh can't log into: make `make-disk.sh` fail loudly, and say in `dev-setup.md` to copy it from the main checkout.
+- (T-173 review) `watch_batteries` and `watch_network` use an unbounded trailing debounce (`dbus.rs` ~:353, ~:459): cap them like Bluetooth's `DEBOUNCE_MAX`.
+- (T-173 review) `bluez.rs` (and other Linux-only code) compiles only in the image build: run a Linux `cargo check` of `ruya-devices` in CI or `dev.ps1` via WSL, so host sessions catch errors there.
+- (T-173) Hardware check of the Bluetooth service: adapter, "just works" controller pairing, Battery1 values, rfkill-blocked `Powered`, hot-plugged USB adapter (B-002).
 
 ## Blocked (need something this host doesn't have)
 
@@ -59,7 +62,7 @@ Follow-ups and debt for the next planner, one line each: `- (source) what, and w
 | B-002 | Install on a real low-tier machine; first frame-time numbers (spec 02 §8) | Hardware | Build a fresh dev ISO first (the 0.0.4 one was deleted to free space on 2026-11-02; it holds the dev SSH key: test machines only). Decide there: a failed boot takes ~100 s, so automatic rollback takes ~7 min; consider a shorter required-check timeout once real boot times are known. Also check the hint bar's spacing to the Settings list's last row at 1080p (T-158). |
 | B-003 | Compositor performance: blurred Guide overlay over a running game at ≥ 55 FPS on the mid tier (ADR-002) | A GPU | Functional part done in the VM (T-123) and the session built (T-130). Left: frame rates, dmabuf clients, blur over a client surface, gamescope nesting, volume-key `Shortcut`s with an app focused. |
 | B-006 | Replace the `ruya-inputd` stopgap with InputPlumber (ADR-003), grab and re-emit | Linux + controllers | Also owns key repeat (400 ms delay, then accelerating), stick repeat speed, Accept long-press and context menu (spec 02 §4.3), and Bluetooth PIN/passkey pairing, player assignment, button test and remapping (T-136). |
-| B-007 | `ruya-devices` remainder (BlueZ is now T-173): applying `ambient`/`media` levels to app streams, PipeWire for profile apps | `ruya-session` in the image (T-130 done) | Audio (T-128, by events since T-133) and network (T-132) are done and VM-verified. ADR-010. |
+| B-007 | `ruya-devices` remainder (BlueZ done in T-173, VM check queued): applying `ambient`/`media` levels to app streams, PipeWire for profile apps | `ruya-session` in the image (T-130 done) | Audio (T-128, by events since T-133) and network (T-132) are done and VM-verified. ADR-010. |
 
 ## Open owner decisions
 
