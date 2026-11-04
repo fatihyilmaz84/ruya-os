@@ -1,6 +1,6 @@
 # T-171 — Store: no ghost jobs when the service restarts; no null-binding warnings
 
-Status: in-progress · Phase: 2 · Depends: — · Area: shell · Size: S · Owner: builder
+Status: done · Phase: 2 · Depends: — · Area: shell · Size: S · Owner: builder
 
 ## Goal
 If `ruya-store` restarts or vanishes mid-install, the Store stops showing a job that will never finish. The Store page no longer logs TypeErrors while pages are pushed and popped.

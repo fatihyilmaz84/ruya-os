@@ -28,7 +28,6 @@ Open work only (todo, in-progress, blocked), in the recommended order; when NEXT
 | [T-164](tasks/T-164-per-profile-wayland-sockets.md) | **[lead]** Per-profile Wayland sockets: a profile's app appears in the shell | todo | T-162 |
 | [T-165](tasks/T-165-profile-switch-freezes-apps.md) | Profile switch and sign-out freeze the profile's apps | todo | T-164 |
 | [T-147](tasks/T-147-fullscreen-app-flow.md) | Full-screen apps: launch splash, quick menu, return, close | todo | T-164 |
-| [T-171](tasks/T-171-store-facade-robustness.md) | Store: no ghost jobs when the service restarts; no null-binding warnings | in-progress | — |
 | [T-170](tasks/T-170-settings-pane-polish.md) | Settings panes: no clipped top rows; Bluetooth and Storage pane fixes | in-progress | T-137 |
 | [T-161](tasks/T-161-controller-battery.md) | Controller battery: `Devices1` over UPower, status cluster, low-battery toast | todo | T-157 |
 | [T-173](tasks/T-173-devices-bluetooth-service.md) | `ruya-devices`: `Devices1.Bluetooth` over BlueZ | todo | — |
@@ -37,7 +36,7 @@ Open work only (todo, in-progress, blocked), in the recommended order; when NEXT
 | [T-144](tasks/T-144-contrast-and-accessible-names.md) | Design review: contrast over the backdrop, accessible names | todo | T-143 |
 | [T-166](tasks/T-166-suspend-under-eglfs.md) | **[lead]** Suspend and resume with the shell on KMS (eglfs) | todo | — |
 
-**VM queue** (done on the host, VM check pending; the lead runs them with one image build): T-159 (`vm-update-check.sh reboot`); T-160 (`vm-update-check.sh` ALL PASSED, drill fixed by the lead after review).
+**VM queue** (done on the host, VM check pending; the lead runs them with one image build): T-159 (`vm-update-check.sh reboot`); T-160 (`vm-update-check.sh` ALL PASSED, drill fixed by the lead after review); T-171 (`vm-store-check.sh check`, the restart step rewritten by the lead).
 
 ## Inbox
 
@@ -49,6 +48,7 @@ Follow-ups and debt for the next planner, one line each: `- (source) what, and w
 - (T-163) `Store1` answers `already-installed` for an app removed outside the Store (`flatpak uninstall`): its installed cache is stale.
 - (T-163) Flatpak titles lack appstream names until the remote's appstream is fetched (the VM shows "TestGame").
 - (T-172 review) Settings panes expose their own `hints` (SettingsPage uses `currentPane.hints` while the pane has focus), instead of `SettingsPage.qml:46` special-casing `aboutPane.activeFocus`; also renumber `15-picker-tr`/`15-pin-locked`.
+- (T-171 review) Store: resume or re-query jobs after `ruya-store` comes back (needs a `ListJobs` in `Store1.xml`).
 
 ## Blocked (need something this host doesn't have)
 
