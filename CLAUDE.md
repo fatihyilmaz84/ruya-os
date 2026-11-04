@@ -17,7 +17,7 @@ RuyaOS is an open-source, immutable (Fedora bootc) console OS for living-room PC
 
 ## Session workflow (do every step, in order)
 
-0. **Which session?** Asked for a **lead session**: follow `docs/LEAD.md`. A **planning session**: `docs/tasks/PLANNING.md`. A **builder** is normally the `ruya-builder` agent the lead dispatches with one task and its own worktree (`.claude/agents/ruya-builder.md`: steps, self-check, HANDOFF); it never edits `docs/STATUS.md` or the task's `Status:`. A builder session the **owner starts directly** works in the main checkout and also does the lead's bookkeeping (steps 3 and 6 below). Builders don't create tasks; follow-ups are Inbox lines (in the HANDOFF when dispatched).
+0. **Which session?** Lead: `docs/LEAD.md`. Planning: `docs/tasks/PLANNING.md`. A dispatched builder is the `ruya-builder` agent in its own worktree (`.claude/agents/ruya-builder.md`); it never edits `docs/STATUS.md` or the task's `Status:`. A builder session the **owner starts directly** works in the main checkout and also does steps 3 and 6. Builders don't create tasks; follow-ups are Inbox lines (in the HANDOFF when dispatched).
 1. **Orient** (direct sessions). Read `docs/STATUS.md`. Take **NEXT**, or else the first `todo` whose dependencies are all `done`. Skip **[lead]** tasks. **One task per session**, unless its file says it is small enough to pair.
    - `git status` shows changes you didn't make? Another session may be running: stop and tell the user.
    - Nothing qualifies? Stop and say the backlog needs a planning session. Don't invent work.
@@ -26,11 +26,11 @@ RuyaOS is an open-source, immutable (Fedora bootc) console OS for living-room PC
 4. **Build within scope.** Implement exactly the task's Scope.
    - **Every follow-up** you notice (debt, flaky build, missing feature, spec gap) is one Inbox line. A follow-up that exists only in prose is lost.
    - Crossing the shell/service boundary: **write or extend the D-Bus XML first**; the mock, the D-Bus client and the Rust service all follow it.
-   - **Contracts are drafts until the first release.** If the task can't be done cleanly within the contract, extend it: in the same commit update the XML, the Rust service and its tests, the mock and the D-Bus client, and explain it in the Outcome. No workarounds such as extra calls to recover missing data. This applies even if a task says "don't change the contract" (that means "no unnecessary changes"). Never break behaviour other code relies on.
+   - **Contracts are drafts until the first release.** If the task can't be done cleanly within the contract, extend it in the same commit (XML, Rust service and tests, mock, D-Bus client) and explain it in the Outcome; no workarounds such as extra calls to recover missing data. "Don't change the contract" in a task means "no unnecessary changes". Never break behaviour other code relies on.
 5. **Verify.**
    - `.\scripts\dev.ps1 test` must end with `ALL GREEN`. Its Qt Quick tests run **offscreen**, independent of the desktop. A red `test` is a real failure.
-   - UI change: also `.\scripts\dev.ps1 shots` (real GPU windows; only the tests that save a screenshot; it waits while another `shots` runs). Read the screenshots your task changed from `output\shell-shots\review\` (half size) against the criteria and `04-design-system.md` §8; open a full-size PNG only for small text. Fix what you see.
-   - `shots` needs an unlocked, undisturbed desktop: if it fails while `test` is green (`TEST WINDOW LOST ACTIVATION`), re-run first. Never edit a test to suit the desktop.
+   - UI change: also `.\scripts\dev.ps1 shots` (real GPU windows, screenshot tests only; waits for another `shots`). Read the changed screenshots in `output\shell-shots\review\` (half size) against the criteria and `04` §8; full-size PNGs only for small text. Fix what you see.
+   - `shots` needs an unlocked, undisturbed desktop: red while `test` is green (`TEST WINDOW LOST ACTIVATION`) → re-run. Never edit a test to suit the desktop.
    - Image builds: see Hard rules, **Host**.
 6. **Document.**
    - Task file: fill **Outcome**, starting with a `Verified:` line (host / host (vm pending: <check>) / vm / unverified / hw, legend in STATUS), then what was built, files, deviations.
@@ -50,8 +50,8 @@ RuyaOS is an open-source, immutable (Fedora bootc) console OS for living-room PC
 
 - **Decisions.** ADRs marked *Accepted* in `00-overview.md` are binding. If a task seems to need a different decision, or a new owner-level one (legal, licensing, product scope, spending, publishing), don't decide: add a *Proposed* ADR, mark the task `blocked` with the question, and stop.
 - **Host.** Windows, with a Fedora 44 WSL distribution for image builds and QEMU (WHPX) for boot tests (`docs/dev-setup.md`). Never install system software or change system settings; `dnf` inside the WSL distribution is fine.
-  - **Image builds (owner, 2026-11-03).** A task whose risk is in the image (Containerfile, `image/`, units, bus policies, packaging, hardening) has a **"VM (this task)"** criterion: build and boot-test it (`scripts/build.sh` + `make-disk.sh` in WSL, then `scripts\smoke-test.ps1`); it is not `done` until it boots with `RUYA_BOOT_OK`. A service or shell logic task has **"VM (lead run)"**: write or extend its `scripts/vm-*-check.sh`, start the Outcome with `Verified: host (vm pending: <check>)`; the lead runs the board's VM queue with one image build. One image build at a time on this host; every build, passed or failed, ends with `scripts\free-space.ps1` once the VM checks are done. Builds take 3–30 minutes: run them in the background.
-  - **Unverifiable here** (say so, never claim it works): real GPU/KPI numbers, controllers in the VM, audio output in the VM (no sound device unless `-Audio`), and the shell talking to services over D-Bus unless you test inside the VM over SSH.
+  - **Image builds (owner, 2026-11-03).** Risk in the image (Containerfile, `image/`, units, bus policies, packaging, hardening) → a **"VM (this task)"** criterion: `scripts/build.sh` + `make-disk.sh` in WSL, then `scripts\smoke-test.ps1`; not `done` until `RUYA_BOOT_OK`. Service or shell logic → **"VM (lead run)"**: write or extend its `scripts/vm-*-check.sh`, Outcome `Verified: host (vm pending: <check>)`; the lead runs the VM queue. One image build at a time; every build, passed or failed, ends with `scripts\free-space.ps1` after its VM checks. Builds take 3–30 minutes: run them in the background.
+  - **Unverifiable here** (say so): real GPU/KPI numbers, controllers in the VM, VM audio output (none unless `-Audio`), the shell over D-Bus unless tested in the VM over SSH.
 - **Tests are the spec's teeth.** Never weaken an assertion, add `skip()`, or delete a test to get green. If a test is wrong, fix it and say why in the Outcome.
 - **Security invariants:**
   - PIN hashes never leave `ruya-profiles`.
@@ -85,10 +85,10 @@ Areas: `shell`, `services`, `image`, `api`, `docs`, `scripts`, `ci`. Add the att
 ## Environment pitfalls (learned the hard way)
 
 - **Shells.** The PowerShell tool is **5.1** (no `&&`, no ternary); Git Bash is also available. `scripts\dev.ps1` already works around the quirks: use it. Commit messages: write a file, `git commit -F <file>` (5.1 can't pipe a here-string into `-F -`).
-- **Files get corrupted by host tools** (it reached `main` twice). Backslashes in text sent through Bash heredocs, `sed` or Python string literals become control characters: **write text containing backslashes (Windows paths, line continuations, regex) with the Write/Edit tools.** Python here reads and writes **cp1252**: pass `encoding="utf-8"` to every `open`, or use Edit. `scripts/lint-text.ps1` (in `dev.ps1 test` and CI) fails on invalid UTF-8, control characters and tabs in tracked text files (new files count once `git add`ed).
+- **Host tools corrupt files** (reached `main` twice). Backslashes sent through Bash heredocs, `sed` or Python literals become control characters: **write text with backslashes (Windows paths, regex) with Write/Edit.** Python defaults to **cp1252**: pass `encoding="utf-8"`. `scripts/lint-text.ps1` (in `test` and CI) fails on invalid UTF-8, control characters and tabs in tracked files.
 - **Qt** 6.10.3 (MSVC) at `D:\dev\Qt\6.10.3\msvc2022_64`; the image uses Fedora's Qt (≥ 6.8), so use no newer APIs. MSVC compiles C++17 (no `[=, this]`).
 - **Rendering.** Offscreen (tests, CI) is the software renderer, where `MultiEffect` draws nothing: assert properties (`visible`, `blurMax`, focus), never pixels. Only `shots` renders on the GPU.
 - **qmllint** needs the module response file and `--max-warnings 0`; `dev.ps1` does that.
 - **Line endings.** Files that reach the Linux image stay LF (`.gitattributes`). Shell scripts need the exec bit: `git update-index --chmod=+x <file>`.
-- **"X is not defined" for a new C++ QML type** should not happen (a build step regenerates the type registration, T-116); if it does, run `scripts\repro-first-build.ps1`, and as a last resort delete `shell\build-win`. Never "fix" it by changing tests.
+- **"X is not defined" for a new C++ QML type** (shouldn't happen since T-116): run `scripts\repro-first-build.ps1`, last resort delete `shell\build-win`. Never "fix" it in tests.
 - **Mock services.** Off Linux the shell uses mocks. Mock profiles: Player One (admin, PIN 1234), Ada (no PIN), Guest.
