@@ -5,5 +5,7 @@ Page {
 
     title: qsTr("Media")
 
+    hints: backOnlyHints     // nothing to select here
+
     ComingSoon { u: page.u }
 }

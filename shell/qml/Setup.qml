@@ -26,6 +26,17 @@ FocusScope {
     // though the profile list is no longer empty.
     readonly property bool committed: busy || created
 
+    // What A and B do on this step, for the shell's hint bar. Not on the first step (nothing
+    // before it) nor once the account exists (B does nothing); the keyboard and the PIN pad take B.
+    readonly property var hints: {
+        if (nameEntry.shown || pad.shown)
+            return [{ button: "B", text: qsTr("Cancel") }]
+        const a = { button: "A", text: step === 3 ? qsTr("Select") : qsTr("Next") }
+        if (step === 0 || step === 4 || busy)
+            return step === 0 || step === 4 ? [a] : []
+        return [a, { button: "B", text: qsTr("Back") }]
+    }
+
     signal finished()
 
     function start() {
@@ -326,15 +337,6 @@ FocusScope {
             font.pixelSize: Theme.typeHeadline * setup.u
         }
         Pill { anchors.horizontalCenter: parent.horizontalCenter; label: qsTr("Press A to continue") }
-    }
-
-    // Back hint (not on the first step, nor once the account exists).
-    Text {
-        visible: setup.step > 0 && setup.step < 4
-        anchors { left: parent.left; bottom: parent.bottom; leftMargin: Theme.spaceXxxl * setup.u; bottomMargin: Theme.spaceXxxl * setup.u }
-        text: qsTr("B  Back")
-        color: Theme.textDim
-        font.pixelSize: Theme.typeCaption * setup.u
     }
 
     // Full-screen layer for the keyboard and the PIN pad.

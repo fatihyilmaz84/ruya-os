@@ -867,12 +867,11 @@ FocusScope {
         if (hasAncestor(activeItem, modalLayer) || hasAncestor(activeItem, pinPadInPicker))
             return [{ button: "B", text: qsTr("Cancel") }]
         if (!signedIn)
-            return setupActive ? [] : [{ button: "A", text: qsTr("Select") }]
+            return setupActive ? setup.hints : [{ button: "A", text: qsTr("Select") }]
         if (pageOpen)       // slots and pageStack are updated one after the other
             return slots.length > 0 ? (slots[slots.length - 1].page?.hints ?? []) : []
         return [{ button: "A", text: qsTr("Select") },
-                { button: "LB", text: qsTr("Sections") },
-                { button: "RB", text: qsTr("Sections") }]
+                { buttons: ["LB", "RB"], text: qsTr("Sections") }]
     }
     readonly property Item pinPadInPicker: picker.pinPadItem
 
@@ -1040,6 +1039,8 @@ FocusScope {
 
     // Always-on version tag: the update/rollback checks read it off the screen.
     Text {
+        id: versionTag
+        objectName: "versionTag"
         anchors { right: parent.right; bottom: parent.bottom; margins: root.marginY / 2 }
         text: root.version
         color: Theme.textDim
@@ -1047,8 +1048,10 @@ FocusScope {
     }
 
     Badge {
+        objectName: "mockBadge"
         visible: Profiles.mock
-        anchors { left: parent.left; bottom: parent.bottom; margins: root.marginY / 2 }
+        // Bottom right, left of the version tag: the hint bar owns the bottom left.
+        anchors { right: versionTag.left; rightMargin: Theme.spaceS * root.u; verticalCenter: versionTag.verticalCenter }
         u: root.u
         kind: "warning"
         text: qsTr("mock services")

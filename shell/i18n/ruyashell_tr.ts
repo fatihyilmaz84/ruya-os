@@ -607,12 +607,13 @@
 <context>
     <name>Page</name>
     <message>
-        <location filename="../qml/Page.qml" line="+23"/>
+        <location filename="../qml/Page.qml" line="+24"/>
         <source>Select</source>
         <translation>Seç</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-2"/>
+        <location line="+3"/>
         <source>Back</source>
         <translation>Geri</translation>
     </message>
@@ -1053,7 +1054,17 @@
         <translation>Hakkında</translation>
     </message>
     <message>
-        <location line="+158"/>
+        <location line="+16"/>
+        <source>Select</source>
+        <translation>Seç</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Back</source>
+        <translation>Geri</translation>
+    </message>
+    <message>
+        <location line="+146"/>
         <source>Coming soon</source>
         <translation>Yakında</translation>
     </message>
@@ -1061,7 +1072,27 @@
 <context>
     <name>Setup</name>
     <message>
-        <location filename="../qml/Setup.qml" line="+73"/>
+        <location filename="../qml/Setup.qml" line="+33"/>
+        <source>Cancel</source>
+        <translation>İptal</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Select</source>
+        <translation>Seç</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Next</source>
+        <translation>İleri</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Back</source>
+        <translation>Geri</translation>
+    </message>
+    <message>
+        <location line="+47"/>
         <source>Enter a name first.</source>
         <translation>Önce bir ad girin.</translation>
     </message>
@@ -1163,11 +1194,6 @@
         <source>Welcome, %1.</source>
         <translation>Hoş geldin, %1.</translation>
     </message>
-    <message>
-        <location line="+11"/>
-        <source>B  Back</source>
-        <translation>B  Geri</translation>
-    </message>
 </context>
 <context>
     <name>Shell</name>
@@ -1197,12 +1223,12 @@
         <translation>Ses çıkışı: %1</translation>
     </message>
     <message>
-        <location line="+653"/>
+        <location line="+652"/>
         <source>Power</source>
         <translation>Güç</translation>
     </message>
     <message>
-        <location line="-645"/>
+        <location line="-644"/>
         <source>Update ready. Restart to finish.</source>
         <translation>Güncelleme hazır. Bitirmek için yeniden başlat.</translation>
     </message>
@@ -1260,7 +1286,6 @@
     </message>
     <message>
         <location line="+6"/>
-        <location line="+1"/>
         <source>Sections</source>
         <translation>Bölümler</translation>
     </message>
@@ -1280,8 +1305,8 @@
         <translation>Profil değiştir</translation>
     </message>
     <message>
-        <location line="-89"/>
-        <location line="+91"/>
+        <location line="-88"/>
+        <location line="+90"/>
         <source>Close</source>
         <translation>Kapat</translation>
     </message>
@@ -1301,13 +1326,13 @@
         <translation>Kapat</translation>
     </message>
     <message>
-        <location line="-97"/>
-        <location line="+98"/>
+        <location line="-96"/>
+        <location line="+97"/>
         <source>Back</source>
         <translation>Geri</translation>
     </message>
     <message>
-        <location line="+92"/>
+        <location line="+96"/>
         <source>mock services</source>
         <translation>sahte hizmetler</translation>
     </message>
