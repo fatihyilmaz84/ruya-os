@@ -36,4 +36,17 @@ Every builder lane starts in a fresh worktree, and every merge can add `.qml` fi
 - The lupdate project path is `Join-Path $ShellBuild ".lupdate\ruya-shell_lupdate_project.json"`.
 
 ## Outcome
-_Filled in by the implementer._
+Verified: host
+
+**Before** (this worktree, fresh, base 3f2f787): `dev.ps1 test` built everything, then ended `FAILED: translation lint` ("lupdate project not found ... .lupdate\ruya-shell_lupdate_project.json (build the shell first)"); the token lint printed the `Bad.qml:1: ...` sample.
+
+**What really fixes scope item 2.** The task text said "reconfigure"; that is not enough. Configure only writes `.lupdate\ruya-shell_lupdate_project.<Config>.cmake` (with the source list); the `.json` that `lupdate` reads is written by the build's `ruya-shell_lupdate` target (the one `update_translations` runs, which also rewrites the tracked `.ts`). `dev.ps1` now has `Update-LUpdateProject`: when the json is missing or older than `shell\CMakeLists.txt` it reconfigures (only if the `Release.cmake` is also older than CMakeLists) and regenerates the json by running Qt's `GenerateLUpdateProject.cmake` on the `Release.cmake`, the same script that target runs, without touching the `.ts` files.
+
+**After:**
+1. Fresh worktree (`git worktree add`, then `dev.ps1 test`, first run, no other command), tail: `Totals: 299 passed, 0 failed, 26 skipped, 0 blacklisted` / `ok: Qt Quick tests` / `ALL GREEN (test)`.
+2. Existing build, green; then added `qml/Dummy169.qml` (one `qsTr`), listed it in `CMakeLists.txt` and added its entry to both `.ts` by hand, touched CMakeLists: `dev.ps1 shell` ended `ALL GREEN (shell)`; the regenerated json contained `Dummy169`. Dummy removed afterwards. (Before the change, the same state is the lead's observed "vanished" failure.)
+3. CMake: `Find-CMake` takes `%ProgramFiles%\CMake\bin\cmake.exe`, else Visual Studio's bundled one, else PATH, and `dev.ps1` calls it explicitly (`& $script:CMake`) and puts its folder first on PATH for MSBuild. Run with devkitPro first on PATH (this host's normal shell): used `C:\Program Files\CMake\bin\cmake.exe`. `dev.ps1 check` prints the chosen path.
+4. Token lint: the pass run prints only `ok: token lint self-check`; with the fixture changed to clean text (temporary, extracted function) it printed `FAILED: token lint self-check`.
+5. Full `test` ALL GREEN ran in the fresh worktree of this branch (includes Rust, lints, Qt tests); not run in the main checkout, which the lead merges into.
+
+Files: `scripts/dev.ps1`, `docs/dev-setup.md`, `docs/LEAD.md` (4b `.ts` recipe: reconfigure step dropped). No `lint-*.ps1` changed. Not changed: `Status:`, STATUS.md.
