@@ -1,5 +1,7 @@
 #include "MockStorageBackend.h"
 
+#include <utility>
+
 namespace {
 const QString StickId = QStringLiteral("vol-stick");
 constexpr qint64 GB = 1000LL * 1000 * 1000;
@@ -23,6 +25,31 @@ void MockStorageBackend::refresh()
 }
 
 void MockStorageBackend::eject(const QString &id)
+{
+    ++m_ejectCalls;
+    if (m_holdEject) {
+        m_heldEjects.append(id);
+        return;
+    }
+    doEject(id);
+}
+
+void MockStorageBackend::holdEject(bool hold)
+{
+    m_holdEject = hold;
+    if (hold)
+        return;
+    const QStringList held = std::exchange(m_heldEjects, {});
+    for (const QString &id : held)
+        doEject(id);
+}
+
+void MockStorageBackend::republish()
+{
+    publish();
+}
+
+void MockStorageBackend::doEject(const QString &id)
 {
     const int at = indexOf(id);
     QString status = QStringLiteral("ok");
@@ -74,6 +101,9 @@ void MockStorageBackend::reset(bool plugStick)
 // No publishing here: the constructor runs before anybody listens. The stick is absent.
 void MockStorageBackend::initState()
 {
+    m_holdEject = false;
+    m_heldEjects.clear();
+    m_ejectCalls = 0;
     m_plugTimer.stop();
     auto entry = [](const char *id, const char *label, const char *fs, qint64 size, qint64 free, bool removable,
                     bool mounted, const char *mountPoint, bool present) {

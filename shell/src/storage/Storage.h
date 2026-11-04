@@ -43,6 +43,11 @@ public:
     Q_INVOKABLE void mockReset(bool plugStick = false);
     Q_INVOKABLE void mockPlugStick();
     Q_INVOKABLE void mockSetBusy(const QString &id, bool busy);
+    // mockHoldEject: eject() stays unanswered until released (false); mockEjectCalls counts the
+    // eject() calls since the last reset; mockRepublish publishes the unchanged list again.
+    Q_INVOKABLE void mockHoldEject(bool hold);
+    Q_INVOKABLE int mockEjectCalls() const;
+    Q_INVOKABLE void mockRepublish();
 
 signals:
     void volumesChanged();

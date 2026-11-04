@@ -317,14 +317,19 @@
         <translation>Bu cihaz artık kullanılamıyor.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+3"/>
         <source>Could not pair the device.</source>
         <translation>Cihaz eşleştirilemedi.</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="+1"/>
         <source>Could not connect.</source>
         <translation>Bağlanılamadı.</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Could not disconnect.</source>
+        <translation>Bağlantı kesilemedi.</translation>
     </message>
     <message>
         <location line="+5"/>
@@ -352,7 +357,7 @@
         <translation>Pil %1%</translation>
     </message>
     <message>
-        <location line="+37"/>
+        <location line="+39"/>
         <source>Bluetooth</source>
         <translation>Bluetooth</translation>
     </message>
@@ -1375,7 +1380,7 @@
         <translation>Salt okunur</translation>
     </message>
     <message>
-        <location line="+60"/>
+        <location line="+71"/>
         <source>Eject %1</source>
         <translation>%1 sürücüsünü çıkar</translation>
     </message>

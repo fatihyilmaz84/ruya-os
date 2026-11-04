@@ -50,6 +50,10 @@ public:
     // the initial state.
     Q_INVOKABLE void mockSetBattery(const QString &id, int percent);
     Q_INVOKABLE void mockReset();
+    // Hold pair() unanswered until released (false); mockPairCalls() counts the pair() calls
+    // since the last reset.
+    Q_INVOKABLE void mockHoldPairing(bool hold);
+    Q_INVOKABLE int mockPairCalls() const;
 
 signals:
     void stateChanged();

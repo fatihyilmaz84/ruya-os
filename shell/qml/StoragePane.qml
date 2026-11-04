@@ -100,6 +100,15 @@ SettingsPane {
         return parts.join(" · ")
     }
 
+    property string ejectingId         // the volume being ejected, "" if none
+
+    function ejectVolume(id) {
+        if (id === ejectingId)
+            return                     // already ejecting: a second Accept or a key repeat does nothing
+        ejectingId = id
+        Storage.eject(id)
+    }
+
     function activate(id, removable, mounted) {
         if (!mounted) {
             Sfx.back()
@@ -119,6 +128,8 @@ SettingsPane {
     Connections {
         target: Storage
         function onFinished(op, id, status) {
+            if (op === "eject" && id === pane.ejectingId)
+                pane.ejectingId = ""
             if (status === "ok")
                 return
             Sfx.back()
@@ -157,7 +168,7 @@ SettingsPane {
             visible: removable && mounted
             u: pane.u
             label: qsTr("Eject %1").arg(name)
-            onActivated: Storage.eject(volId)
+            onActivated: pane.ejectVolume(volId)
         }
     }
 }

@@ -1,6 +1,7 @@
 #include "MockBluetoothBackend.h"
 
 #include <algorithm>
+#include <utility>
 
 MockBluetoothBackend::MockBluetoothBackend(QObject *parent)
     : BluetoothBackend(parent)
@@ -72,6 +73,26 @@ void MockBluetoothBackend::endScan()
 }
 
 void MockBluetoothBackend::pair(const QString &id)
+{
+    ++m_pairCalls;
+    if (m_holdPairing) {
+        m_heldPairs.append(id);
+        return;
+    }
+    doPair(id);
+}
+
+void MockBluetoothBackend::holdPairing(bool hold)
+{
+    m_holdPairing = hold;
+    if (hold)
+        return;
+    const QStringList held = std::exchange(m_heldPairs, {});
+    for (const QString &id : held)
+        doPair(id);
+}
+
+void MockBluetoothBackend::doPair(const QString &id)
 {
     const int at = indexOf(id);
     QString status = QStringLiteral("ok");
@@ -163,6 +184,9 @@ void MockBluetoothBackend::reset()
 // No publishing here: the constructor runs before anybody listens.
 void MockBluetoothBackend::initState()
 {
+    m_holdPairing = false;
+    m_heldPairs.clear();
+    m_pairCalls = 0;
     m_scanTimer.stop();
     m_powered = true;
     m_discovering = false;

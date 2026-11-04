@@ -72,7 +72,9 @@ SettingsPane {
         case "unavailable": return qsTr("Bluetooth is off.")
         case "unknown-device": return qsTr("That device is no longer available.")
         }
-        return op === "pair" ? qsTr("Could not pair the device.") : qsTr("Could not connect.")
+        if (op === "pair")
+            return qsTr("Could not pair the device.")
+        return op === "disconnect" ? qsTr("Could not disconnect.") : qsTr("Could not connect.")
     }
 
     function deviceValue(busy, paired, connected, battery) {
@@ -87,6 +89,8 @@ SettingsPane {
     }
 
     function activate(id, paired, connected) {
+        if (id === busyId)
+            return                         // already pairing: a second Accept or a key repeat does nothing
         if (!paired) {
             busyId = id
             Bluetooth.pair(id)

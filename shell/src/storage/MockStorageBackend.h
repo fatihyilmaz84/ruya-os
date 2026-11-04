@@ -24,6 +24,10 @@ public:
     void reset(bool plugStick);
     void plugStick();
     void setBusy(const QString &id, bool busy);
+    // While held, eject() is counted but unanswered (an unmount takes seconds) until released.
+    void holdEject(bool hold);
+    int ejectCalls() const { return m_ejectCalls; }
+    void republish();   // publish the volume list again, unchanged
 
 private:
     struct Entry
@@ -34,10 +38,14 @@ private:
     };
 
     void initState();
+    void doEject(const QString &id);
     void publish();
     void answer(const QString &op, const QString &id, const QString &status);
     int indexOf(const QString &id) const;
 
     QList<Entry> m_entries;
     QTimer m_plugTimer;
+    bool m_holdEject = false;
+    QStringList m_heldEjects;
+    int m_ejectCalls = 0;
 };

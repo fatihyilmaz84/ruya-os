@@ -118,6 +118,19 @@ void Bluetooth::mockSetBattery(const QString &id, int percent)
         mock->setBattery(id, percent);
 }
 
+void Bluetooth::mockHoldPairing(bool hold)
+{
+    if (auto *mock = qobject_cast<MockBluetoothBackend *>(m_backend.get()))
+        mock->holdPairing(hold);
+}
+
+int Bluetooth::mockPairCalls() const
+{
+    if (auto *mock = qobject_cast<MockBluetoothBackend *>(m_backend.get()))
+        return mock->pairCalls();
+    return 0;
+}
+
 void Bluetooth::mockReset()
 {
     if (auto *mock = qobject_cast<MockBluetoothBackend *>(m_backend.get()))
