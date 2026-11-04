@@ -1,6 +1,6 @@
 # T-173 — `ruya-devices`: `Devices1.Bluetooth` over BlueZ
 
-Status: in-progress · Phase: 2 · Depends: — · Area: services, image · Size: M · Owner: builder
+Status: done · Phase: 2 · Depends: — · Area: services, image · Size: M · Owner: builder
 
 ## Goal
 The Bluetooth pane T-136 built against the mock talks to a real service. On a machine with an adapter, scanning, pairing a "just works" controller, connecting and forgetting go through BlueZ. With no adapter (as in the VM), the pane says Bluetooth is unavailable.
@@ -33,7 +33,7 @@ The Bluetooth pane T-136 built against the mock talks to a real service. On a ma
 - `03` §2.1 (as built, service side), `01` (packages, units), STATUS B-007 note.
 
 ## Outcome
-Verified: host (vm pending: vm-devices-check.sh bluetooth, after round 2 dropped the org.bluez bus rule). Round 1 was vm (image `0.0.35-t173` built and booted, `RUYA_BOOT_OK 0.0.35-t173`; `vm-devices-check.sh check`: ALL CHECKS PASSED, audio, network, batteries and the new Bluetooth part) and host (`dev.ps1 test` ALL GREEN). A real adapter and controller are **unverified** (none in the VM): scanning, pairing, Battery1, rfkill and the 20 s/30 s timers against real hardware were tested only against `FakeBluez`. `shots` not run: no UI file changed.
+Verified: vm (lead, 2026-11-04: image 0.0.37 of main at 0fe2337, `RUYA_BOOT_OK 0.0.37`; `vm-devices-check.sh check` ALL CHECKS PASSED, 41 passes, incl. the Bluetooth part without the dropped org.bluez rule: org.bluez on the bus, Powered false, ListDevices empty, StartScan/Pair unavailable, Pair("") invalid, Powered write a D-Bus error, nobody refused; `systemd-analyze security ruya-devices` 3.4 OK.)
 
 **What was built.**
 - `services/ruya-devices/src/bluetooth.rs`: pure core (`Bluetooth<B: Bluez>`, trait `Bluez`, `FakeBluez`). Ordering (paired first, then name, then id; unnamed unpaired devices left out), `kind` from BlueZ's `Icon`, battery from `Battery1.Percentage` (-1 when none), 30 s scan auto-stop (`start_scan(now)`, `scan_deadline()`, `tick(now)`; fake-clock tests), power-off clears list and scan, `map_error` for every `org.bluez.Error.*` name plus the bus errors, pair = Pair + Trusted + Connect.

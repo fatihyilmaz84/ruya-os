@@ -27,11 +27,10 @@ Open work only (todo, in-progress, blocked), in the recommended order; when NEXT
 | [T-164](tasks/T-164-per-profile-wayland-sockets.md) | **[lead]** Per-profile Wayland sockets: a profile's app appears in the shell | todo | T-162 |
 | [T-165](tasks/T-165-profile-switch-freezes-apps.md) | Profile switch and sign-out freeze the profile's apps | todo | T-164 |
 | [T-147](tasks/T-147-fullscreen-app-flow.md) | Full-screen apps: launch splash, quick menu, return, close | todo | T-164 |
-| [T-173](tasks/T-173-devices-bluetooth-service.md) | `ruya-devices`: `Devices1.Bluetooth` over BlueZ | in-progress | — |
 | [T-174](tasks/T-174-devices-storage-service.md) | `ruya-devices`: `Devices1.Storage` over udisks2 | in-progress | T-137 |
 | [T-166](tasks/T-166-suspend-under-eglfs.md) | **[lead]** Suspend and resume with the shell on KMS (eglfs) | todo | — |
 
-**VM queue** (done on the host, VM check pending; the lead runs them with one image build): T-173 (`vm-devices-check.sh check` on an image after the org.bluez bus rule was dropped: `Powered`, `ListDevices`, `StartScan` must still answer; if not, the rule goes back). T-173 stays `in-progress` until then (VM-this-task criterion); T-177 (`vm-devices-check.sh check`).
+**VM queue** (done on the host, VM check pending; the lead runs them with one image build): empty (T-173, T-177 verified 2026-11-04 on 0.0.37).
 
 ## Inbox
 

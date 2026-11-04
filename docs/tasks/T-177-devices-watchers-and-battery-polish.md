@@ -31,7 +31,7 @@ A stream of D-Bus signals can't hold off a refresh indefinitely: busy Wi-Fi, a P
 - `docs/dev-setup.md` if the `rust` step changes; `03` §2 (debounce rule) if it describes the watchers.
 
 ## Outcome
-Verified: host (vm pending: vm-devices-check.sh check)
+Verified: vm (lead, 2026-11-04: image 0.0.37 of main at 0fe2337, `RUYA_BOOT_OK 0.0.37`; `vm-devices-check.sh check` ALL CHECKS PASSED, 41 passes, incl. the Bluetooth part without the dropped org.bluez rule: org.bluez on the bus, Powered false, ListDevices empty, StartScan/Pair unavailable, Pair("") invalid, Powered write a D-Bus error, nobody refused; `systemd-analyze security ruya-devices` 3.4 OK.)
 
 Built:
 - `services/ruya-devices/src/debounce.rs` (new, platform independent): `Debounce` (pure rule: quiet 300 ms, maximum 1 s, optional nearer limit) and `settle()` (the async wait). `watch_network`, `watch_batteries` and `watch_bluetooth` all use it (one helper, no copy); the BlueZ watcher passes the scan deadline as the limit as before. Tests: a signal every 100 ms on a fake clock fires within 1 s; a quiet bus fires after the quiet time; a nearer limit wins; `settle` returns on a never-quiet real stream. Revert test: with `MAX_WAIT` set to 3600 s the first test fails ("fired after 1000.3s"). (My first draft compared against `MAX_WAIT` itself and passed uncapped; fixed to the literal 1 s.)
