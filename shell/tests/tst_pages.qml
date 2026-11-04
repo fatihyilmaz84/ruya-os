@@ -323,6 +323,19 @@ Item {
             grabImage(tc.shell).save(shotsDir + "/5-page-placeholder.png")
         }
 
+        function test_zz_screenshots_settings_focus() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            openSection("settings")
+            tryVerify(() => find("categoryList").activeFocus)
+            keyClick(Qt.Key_Up)
+            tryVerify(() => find("sectionNav").activeFocus)
+            compare(find("sectionNav").currentKey, "settings")
+            verify(find("navPillRing_settings").visible)
+            wait(800)
+            grabImage(tc.shell).save(shotsDir + "/5c-settings-nav-focus.png")
+        }
+
         function test_zz_screenshots_settings() {
             if (!shotsDir)
                 skip("set RUYA_SHOTS_DIR to save screenshots")

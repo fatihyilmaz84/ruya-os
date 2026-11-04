@@ -755,9 +755,10 @@ FocusScope {
         onDownRequested: root.leaveNavDown()
         onStepRequested: direction => root.stepSection(direction)
         onBackRequested: {
-            Sfx.back()
-            if (root.pageOpen)
+            if (root.pageOpen) {
+                Sfx.back()
                 root.closePage()
+            }
         }
     }
 
