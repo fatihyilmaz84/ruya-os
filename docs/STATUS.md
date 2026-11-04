@@ -57,6 +57,9 @@ Follow-ups and debt for the next planner, one line each: `- (source) what, and w
 - (T-174) A stick with several partitions gives one `VolumeAdded` per partition, so the shell toasts once per partition: group them. Also cover a two-partition stick and an unsupported filesystem in `vm-storage-check` (unit tests only today).
 - (T-174) Media access for profile users and Flatpak apps on `/run/media/ruya-shell/...` belongs to the Media task (mounts belong to `ruya-shell`, not the active profile).
 - (lead) `vm-goto.ps1`, `vm-reboot-check.ps1` and `vm-storage-check.ps1` now use a scratch `output\vm-known_hosts` (UserKnownHostsFile=NUL made MSYS2's ssh write a file named `NUL`); not yet exercised against a VM: confirm at the next VM run.
+- (lead, 0.0.40 try-out) **Dev ISO installs a system that boots to text mode** (`multi-user.target`): the shell never starts, greenboot reboots in a loop. `systemctl set-default graphical.target` fixes it by hand. Fix in the image or the ISO config, and add an install-and-boot check to the VM queue. Blocks putting the ISO on the Dell (B-002).
+- (0.0.40 try-out) The dev ISO erases every disk in the machine without asking, puts the dev SSH key on root, and tracks `localhost/ruyaos:dev` (no updates until pointed at a registry): decide for the B-002 test machine.
+- (0.0.40 try-out) Backspace doesn't act as B on pages (spec 02 says it should); Store cards show the developer name twice ("divVerentdivVerent"); boot menus say "Fedora Linux 44", not RuyaOS; the VM clock shows UTC.
 
 ## Blocked (need something this host doesn't have)
 
