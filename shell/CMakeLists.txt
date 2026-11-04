@@ -65,6 +65,8 @@ qt_add_qml_module(ruyashell
         qml/ToastLayer.qml
         qml/VolumeOsd.qml
         qml/Badge.qml
+        qml/ButtonGlyph.qml
+        qml/HintBar.qml
         qml/Backdrop.qml
         qml/FpsMeter.qml
         qml/ProfilePicker.qml

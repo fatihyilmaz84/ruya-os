@@ -517,6 +517,19 @@
     </message>
 </context>
 <context>
+    <name>Page</name>
+    <message>
+        <location filename="../qml/Page.qml" line="+23"/>
+        <source>Select</source>
+        <translation>Select</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Back</source>
+        <translation>Back</translation>
+    </message>
+</context>
+<context>
     <name>PinPad</name>
     <message>
         <location filename="../qml/PinPad.qml" line="+127"/>
@@ -667,7 +680,7 @@
 <context>
     <name>ProfilePicker</name>
     <message>
-        <location filename="../qml/ProfilePicker.qml" line="+27"/>
+        <location filename="../qml/ProfilePicker.qml" line="+28"/>
         <source>Who&apos;s playing?</source>
         <translation>Who&apos;s playing?</translation>
     </message>
@@ -1098,12 +1111,12 @@
         <translation>Audio output: %1</translation>
     </message>
     <message>
-        <location line="+612"/>
+        <location line="+653"/>
         <source>Power</source>
         <translation>Power</translation>
     </message>
     <message>
-        <location line="-604"/>
+        <location line="-645"/>
         <source>Update ready. Restart to finish.</source>
         <translation>Update ready. Restart to finish.</translation>
     </message>
@@ -1148,7 +1161,25 @@
         <translation>Starting %1…</translation>
     </message>
     <message>
-        <location line="+265"/>
+        <location line="+231"/>
+        <location line="+7"/>
+        <location line="+3"/>
+        <source>Select</source>
+        <translation>Select</translation>
+    </message>
+    <message>
+        <location line="-5"/>
+        <source>Cancel</source>
+        <translation>Cancel</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <location line="+1"/>
+        <source>Sections</source>
+        <translation>Sections</translation>
+    </message>
+    <message>
+        <location line="+63"/>
         <source>System</source>
         <translation>System</translation>
     </message>
@@ -1163,7 +1194,8 @@
         <translation>Switch profile</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="-89"/>
+        <location line="+91"/>
         <source>Close</source>
         <translation>Close</translation>
     </message>
@@ -1183,7 +1215,8 @@
         <translation>Power off</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-97"/>
+        <location line="+98"/>
         <source>Back</source>
         <translation>Back</translation>
     </message>

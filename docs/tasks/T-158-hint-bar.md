@@ -40,4 +40,10 @@ The bottom of every screen says what the buttons do right now ("A Select · B Ba
 - `04-design-system.md` §2 and §5 (built), `02-shell.md` (hints), `shell/PATTERNS.md` (a page's hints, one line in "adding a page").
 
 ## Outcome
-_Filled in by the implementer. Start with a `Verified:` line._
+Verified: host
+
+Built `ButtonGlyph.qml` (letter on a `primaryFill` circle, a pill for `LB`/`RB`/`Start`; new token `glyphSize` 40) and `HintBar.qml` (a row of up to four `{ button, text }`, bottom-left in the safe area, `enabled: false` so it never takes focus). One bar sits in `Shell.qml`'s top layer (z 30); `hintList` decides what it says: the Guide overlay (`A` Select, `B` Close; `B` Back in the power choices), an app focused (hidden), a modal (focus inside `modalLayer`, or the picker's PIN pad via `ProfilePicker.pinPadItem`) `B` Cancel, the picker `A` Select, a page `Page.hints` (default `A` Select, `B` Back, overridable), Home `A` Select, `LB`/`RB` Sections. Home's Recent row moved up by the bar's height plus `spaceM`; `Page`'s content area also ends above the bar (not in the Scope, needed so the Settings list does not run into it). Turkish and English strings added (Seç, Bölümler, İptal, Geri, Kapat).
+
+Tests: `tests/tst_hints.qml` (home, page, overlay, modal PIN pad, picker PIN pad, layout at "high" and "performance" tiers, hidden with a stand-in app; focus unchanged throughout). Revert test: undoing the Recent-row move made `test_home_layout` fail. `dev.ps1 test` ALL GREEN; `shots` ALL GREEN, reviewed `01-home.png`, `01-home-tr.png`, `2-pin.png`, new `hints-page.png`.
+
+Deviations: LB and RB are two hints (so Home shows three, not "LB/RB" as one). On Home the hint bar overlaps the dev-only "MOCK SERVICES" badge at the bottom left (mock builds only). The setup wizard shows no hints. Files: ButtonGlyph.qml, HintBar.qml, Shell.qml, Page.qml, ProfilePicker.qml, Theme.qml, CMakeLists.txt, tests/tst_hints.qml, i18n, specs 02/04, PATTERNS.md.

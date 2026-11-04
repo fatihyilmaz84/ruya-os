@@ -82,6 +82,7 @@ QtObject {
     readonly property real tileWidth: 400
     readonly property real tileHeight: 260
     readonly property real avatarSize: 200
+    readonly property real glyphSize: 40    // controller button glyph (hint bar)
     readonly property real focusRingWidth: 4
     readonly property real focusRingOffset: 7
     readonly property real hairline: 1      // outline of unfocused glass and neutral badges

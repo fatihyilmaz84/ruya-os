@@ -20,7 +20,7 @@ Rüya is Turkish for *dream*: a dark room lit by the thing you are about to play
 
 - **Design pixels:** every size is written at 1080p and multiplied by `u` (`height / 1080`), so the same numbers serve 720p and 4K (`shell/CLAUDE.md`).
 - **Safe area:** the outer margin is `Theme.safeArea` (overscan, default 5 % = 96 × 54 px at 1080p), never a spacing token. Nothing focusable or readable sits outside it; backdrops and scrims fill the whole screen.
-- **Home (art-led, built T-146):** full-bleed hero art of the focused game (L0) with a left legibility scrim (`heroScrim`) and a bottom fade; top bar in the safe area: section nav (Home, Games, Media, Store, Settings icon) left, status cluster (controller battery, clock, profile) right, both glass pills; the same top bar stays on the four section pages (T-168, lead decision 2026-11-03) and is hidden on detail pages, modals, the picker and the wizard; hero block left (eyebrow, title `typeHero` Bold, meta, Play + Details); the Recent row of art cards along the bottom; hint bar under it (proposed, not built). As built: the status cluster is profile and clock (no controller battery yet), and the Settings pill is the `settings` icon from the bundled font (T-157), outlined, filled while Settings is the current section.
+- **Home (art-led, built T-146):** full-bleed hero art of the focused game (L0) with a left legibility scrim (`heroScrim`) and a bottom fade; top bar in the safe area: section nav (Home, Games, Media, Store, Settings icon) left, status cluster (controller battery, clock, profile) right, both glass pills; the same top bar stays on the four section pages (T-168, lead decision 2026-11-03) and is hidden on detail pages, modals, the picker and the wizard; hero block left (eyebrow, title `typeHero` Bold, meta, Play + Details); the Recent row of art cards along the bottom; hint bar under it (built, T-158; the Recent row sits above it, both inside the safe area). As built: the status cluster is profile and clock (no controller battery yet), and the Settings pill is the `settings` icon from the bundled font (T-157), outlined, filled while Settings is the current section.
 - **Pages** (Settings, Store, …): top bar as on Home, page title `typeTitle`, content, hint bar. The backdrop stays the last hero art, blurred and dimmed. Two-pane pages (Settings): list 520 px, gap `spaceXxl`, pane on a `radiusL` glass panel with `spaceXl` padding.
 - **Running app:** nothing of the shell is drawn except the quick menu (Guide), the volume OSD and critical toasts (§5.1).
 
@@ -67,7 +67,7 @@ Turkish runs about 30 % longer than English: rows elide on the right (`Text.Elid
 
 - **Spacing** (8 px grid): `spaceXxs` 4, `spaceXs` 8, `spaceS` 16, `spaceM` 24, `spaceL` 36, `spaceXl` 48, `spaceXxl` 64, `spaceXxxl` 96. Rows in a list `spaceS`; tiles in a row `spaceL`; panel padding `spaceXl`; between sections `spaceXxl`.
 - **Radius:** `radiusS` 12 (keys), `radiusM` 18 (tiles, art, toasts, the text-entry field), `radiusL` 32 (panels, dialogs); pills are `height / 2` (rows, buttons, badges, OSD).
-- **Sizes:** `rowHeight` 84, `buttonHeight` 76, `tileWidth` 400 × `tileHeight` 260, `avatarSize` 200, `focusRingWidth` 4, `focusRingOffset` 7, `hairline` 1 (use `Theme.hairlineAt(u)`, never thinner than a pixel: unfocused glass, buttons and neutral badges).
+- **Sizes:** `rowHeight` 84, `buttonHeight` 76, `tileWidth` 400 × `tileHeight` 260, `avatarSize` 200, `glyphSize` 40, `focusRingWidth` 4, `focusRingOffset` 7, `hairline` 1 (use `Theme.hairlineAt(u)`, never thinner than a pixel: unfocused glass, buttons and neutral badges).
 
 ### 3.4 Motion (built)
 
@@ -133,9 +133,9 @@ Each entry: file, status, and the rules a change must keep. A new component gets
 | Guide overlay | `Shell.qml` | built | `scrimOverlay` + `panel` card `radiusL`, title `typeTitle`, actions as rows |
 | Backdrop | `Backdrop.qml` | built | Tint from focus, three drifting blobs, `tintMs` cross-fade |
 | Badge | `Badge.qml` | built (T-143) | `typeMicro` DemiBold caps, pill (`text`, `kind` neutral/success/info/warning); neutral = `background` fill, `glassBorder` outline, `textDim`; the others `badgeFill()` (kind colour at `badgeFillAlpha` 18 %) and text in the kind colour; used for PIN and mock services; source badges Official (success colour), Community (info), Dev (warning) on a 18 % fill of their colour |
-| Hint bar | `HintBar.qml` | planned (T-158) | Bottom-left in the safe area, one `ButtonGlyph` + verb (`typeCaption`, `text`) per action the focused screen accepts, `spaceS` between glyph and verb, `spaceL` between hints, no background over art (the bottom fade carries it); at most four hints; letters until pad-type glyphs (B-006) |
+| Hint bar | `HintBar.qml` | built (T-158) | Bottom-left in the safe area, one `ButtonGlyph` + verb (`typeCaption`, `text`) per action the focused screen accepts, `spaceS` between glyph and verb, `spaceL` between hints, no background over art (the bottom fade carries it); at most four hints; letters until pad-type glyphs (B-006) |
 | Icon | `Icon.qml` | built (T-157) | A Material Symbols glyph by name, `iconM`/`iconL`, colour from text tokens, `filled` for the current state (§3.7) |
-| Button glyph | `ButtonGlyph.qml` | planned (T-158) | Controller button letter on a `primaryFill` circle, `glyphSize`, `typeMicro`, `onPrimary` (§3.7) |
+| Button glyph | `ButtonGlyph.qml` | built (T-158) | Controller button letter on a `primaryFill` circle, `glyphSize`, `typeMicro`, `onPrimary` (§3.7) |
 
 ### 5.1 Full-screen apps (look; behaviour in `02-shell.md` §1.5)
 
