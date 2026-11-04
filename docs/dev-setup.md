@@ -11,7 +11,7 @@ Edit on Windows, build in a Fedora WSL distribution, boot in QEMU for Windows (W
 5. **Dev VM access:**
    - an SSH key at `%USERPROFILE%\.ssh\ruyaos_dev` (`ssh-keygen -t ed25519 -N "" -f ...`);
    - `image/bib/config.toml` (git-ignored, copied from `config.toml.example`), which puts that key on `root` in test disks.
-6. Optional but recommended: a spare **low-tier mini-PC** for hardware checks. Flash it from `output/anaconda-iso/` with Fedora Media Writer or Rufus (DD mode).
+6. Optional but recommended: a spare **low-tier mini-PC** for hardware checks. Flash it from `output/bootiso/install.iso` ("Installer ISO" below) with Fedora Media Writer or Rufus (DD mode).
 
 ## Build → disk → boot
 
@@ -33,6 +33,20 @@ Then, on Windows:
 ssh -i $env:USERPROFILE\.ssh\ruyaos_dev -p 2222 root@127.0.0.1   # use 127.0.0.1, not localhost (IPv6)
 .\scripts\run-vm.ps1                    # with a window, to look at the shell (software rendering)
 ```
+
+### Trying it in a window
+
+`.\scripts\run-vm.ps1` opens the VM in a QEMU window (SDL) with sound. Start it only after `make-disk.sh` has finished: it boots `output\qcow2\disk.qcow2` itself, not a snapshot, so what you do there (the wizard's profile, settings) stays on that disk until the next `make-disk.sh`. Close the window to stop the VM. The real services run, no mocks. Expect it to be slow (software rendering, no GPU) and to start with the first-boot wizard on a fresh disk. Keys: arrows move, Enter = A, Esc = B, Super = Guide (hold it for the power choices), PgUp/PgDn = LB/RB. (Spec 02 §4.2 also lists Backspace as Back, but pages ignore it as of 0.0.40.)
+
+### Installer ISO (real hardware)
+
+In WSL, after `build.sh`: `scripts/make-disk.sh anaconda-iso` writes `output/bootiso/install.iso` (about 3.3 GiB, ~3 min). Write it to a USB stick with Fedora Media Writer or Rufus (DD mode).
+- **The install is fully automatic and erases every disk in the machine** (bootc-image-builder's kickstart: `clearpart --all`, autopart, xfs, reboot). Unplug any disk you want to keep.
+- It carries the dev SSH key from `image/bib/config.toml` on `root`: **for test machines only**.
+- The installed system tracks `localhost/ruyaos:dev`, so it does not update until you `bootc switch` it to a registry.
+- **Known problem (0.0.40):** Anaconda sets `/etc/systemd/system/default.target` to `multi-user.target`, so the compositor (`WantedBy=graphical.target`) never starts, greenboot's shell check fails after 90 s and reboots, over and over. Workaround until the image fixes it: during a boot, `ssh root@<machine>` with the dev key and run `systemctl set-default graphical.target`; the next boot reaches the shell (verified in QEMU, 2026-11-04).
+
+To test an ISO in QEMU: create a blank disk (`qemu-img create -f qcow2 output\iso-test.qcow2 64G`), start QEMU as `smoke-test.ps1` does but with that disk plus `-drive file=output\bootiso\install.iso,media=cdrom,readonly=on` (about 4 minutes; the serial log ends with `Install finished` and QEMU exits because of `-no-reboot`), then `.\scripts\smoke-test.ps1 -Disk output\iso-test.qcow2 -Persistent` (not a snapshot: the first boots write to the disk). Delete the test disk afterwards.
 
 ### Disk space: one working VM disk, no stale images
 
