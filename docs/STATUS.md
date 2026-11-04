@@ -25,7 +25,6 @@ Open work only (todo, in-progress, blocked), in the recommended order; when NEXT
 |---|---|---|---|
 | [T-160](tasks/T-160-greenboot-wanted-check.md) | Greenboot: no failing wanted check on a healthy boot | in-progress | — |
 | [T-163](tasks/T-163-ruya-library-in-the-image.md) | `ruya-library` in the image: installed Flatpaks over the real bus | in-progress | — |
-| [T-168](tasks/T-168-section-nav-on-section-pages.md) | Section nav on every section page | in-progress | T-157 |
 | [T-158](tasks/T-158-hint-bar.md) | Hint bar with controller button glyphs | todo | T-157 |
 | [T-162](tasks/T-162-ruya-session-in-the-image.md) | **[lead]** `ruya-session` in the image: real spawner, unit, bus policy | todo | — |
 | [T-164](tasks/T-164-per-profile-wayland-sockets.md) | **[lead]** Per-profile Wayland sockets: a profile's app appears in the shell | todo | T-162 |
@@ -47,8 +46,10 @@ Follow-ups and debt for the next planner, one line each: `- (source) what, and w
 - (lead, T-163) Steam libraries per profile: `ruya-library` cannot read profile homes (`ProtectHome`); design how the active profile's Steam list reaches the shell (a per-profile user unit started by `ruya-session`, or `ruya-session` handing the library a directory fd).
 - (T-159) `image/build/90-initramfs.sh` prints `dracut-install: ERROR: installing '/root'` (the initramfs is still written); check at the next VM boot whether it matters, else silence it.
 - (T-167) Store facade: with the real D-Bus backend, `m_jobs` is never cleared if `ruya-store` restarts or vanishes mid-job without `JobFinished`; clear the jobs when the bus name owner changes, or the UI shows a ghost job.
-- (T-167) In a fresh worktree `dev.ps1 test`'s translation lint fails until the `update_translations` target was built once; `dev.ps1` should build it itself (costs every new builder lane a re-run).
+- (T-167) In a fresh worktree `dev.ps1 test`'s translation lint fails until the `update_translations` target was built once; `dev.ps1` should build it itself (costs every new builder lane a re-run). Building it by hand needs `%ProgramFiles%\CMake\bin` first on PATH: devkitPro's cmake can't use the VS generator (T-168); same for `git` (lead).
 - (lead) `tst_pages::test_back_walks_the_stack` logs ~30 `StorePage.qml:185/186 TypeError ... of null` (`sourceText`/`sourceKind`) warnings: a binding on a destroyed or not-yet-set item; noise that hides real warnings.
+- (T-168 review) `shell/PATTERNS.md` (pages): document `Page.qml`'s `upFromTop` and `stepRequested` (Up at a page's top row reaches the nav, LB/RB switch sections); every page now swallows unaccepted Up/PageUp/PageDown.
+- (T-168 review) Add a screenshot of the Home nav with focus, so the ring on the filled Home pill is reviewed on Home too.
 - (T-167) Token-lint self-check text: the builder flagged its wording as misleading; re-read `lint-tokens` output when touching it.
 
 ## Blocked (need something this host doesn't have)
