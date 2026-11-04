@@ -30,7 +30,6 @@ Open work only (todo, in-progress, blocked), in the recommended order; when NEXT
 | [T-147](tasks/T-147-fullscreen-app-flow.md) | Full-screen apps: launch splash, quick menu, return, close | todo | T-164 |
 | [T-171](tasks/T-171-store-facade-robustness.md) | Store: no ghost jobs when the service restarts; no null-binding warnings | in-progress | — |
 | [T-170](tasks/T-170-settings-pane-polish.md) | Settings panes: no clipped top rows; Bluetooth and Storage pane fixes | in-progress | T-137 |
-| [T-172](tasks/T-172-hint-bar-follow-ups.md) | Hint bar follow-ups: one Sections hint, wizard hints, per-page overrides | in-progress | — |
 | [T-161](tasks/T-161-controller-battery.md) | Controller battery: `Devices1` over UPower, status cluster, low-battery toast | todo | T-157 |
 | [T-173](tasks/T-173-devices-bluetooth-service.md) | `ruya-devices`: `Devices1.Bluetooth` over BlueZ | todo | — |
 | [T-174](tasks/T-174-devices-storage-service.md) | `ruya-devices`: `Devices1.Storage` over udisks2 | todo | T-137 |
@@ -49,6 +48,7 @@ Follow-ups and debt for the next planner, one line each: `- (source) what, and w
 - (T-163) Home says "Your library is empty" while apps are installed but none was played (`last_played` 0, Recent row only): fall back to installed items, or record `last_played` (T-162/T-147).
 - (T-163) `Store1` answers `already-installed` for an app removed outside the Store (`flatpak uninstall`): its installed cache is stale.
 - (T-163) Flatpak titles lack appstream names until the remote's appstream is fetched (the VM shows "TestGame").
+- (T-172 review) Settings panes expose their own `hints` (SettingsPage uses `currentPane.hints` while the pane has focus), instead of `SettingsPage.qml:46` special-casing `aboutPane.activeFocus`; also renumber `15-picker-tr`/`15-pin-locked`.
 
 ## Blocked (need something this host doesn't have)
 
