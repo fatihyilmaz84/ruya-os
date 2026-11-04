@@ -15,7 +15,7 @@ Verification legend: **host** = built and tested on Windows · **host (vm pendin
 
 ## Board
 
-**NEXT → T-170** (T-160 + T-163 are in flight as one image build)
+**NEXT → T-161** (image build: wait for the lead VM run to finish)
 
 **How work runs (owner, 2026-11-04):** the lead dispatches `ruya-builder` agents, at most two at a time in their own worktrees and in different areas, has each branch reviewed by `ruya-reviewer`, and merges it (`docs/LEAD.md`, build loop). Dispatched builders never edit this file. At most one task with a "VM (this task)" criterion runs at a time. A builder session the owner starts directly takes NEXT in the main checkout, alone, and does the bookkeeping itself (`CLAUDE.md`).
 
@@ -28,7 +28,6 @@ Open work only (todo, in-progress, blocked), in the recommended order; when NEXT
 | [T-164](tasks/T-164-per-profile-wayland-sockets.md) | **[lead]** Per-profile Wayland sockets: a profile's app appears in the shell | todo | T-162 |
 | [T-165](tasks/T-165-profile-switch-freezes-apps.md) | Profile switch and sign-out freeze the profile's apps | todo | T-164 |
 | [T-147](tasks/T-147-fullscreen-app-flow.md) | Full-screen apps: launch splash, quick menu, return, close | todo | T-164 |
-| [T-170](tasks/T-170-settings-pane-polish.md) | Settings panes: no clipped top rows; Bluetooth and Storage pane fixes | in-progress | T-137 |
 | [T-161](tasks/T-161-controller-battery.md) | Controller battery: `Devices1` over UPower, status cluster, low-battery toast | todo | T-157 |
 | [T-173](tasks/T-173-devices-bluetooth-service.md) | `ruya-devices`: `Devices1.Bluetooth` over BlueZ | todo | — |
 | [T-174](tasks/T-174-devices-storage-service.md) | `ruya-devices`: `Devices1.Storage` over udisks2 | todo | T-137 |
@@ -49,6 +48,7 @@ Follow-ups and debt for the next planner, one line each: `- (source) what, and w
 - (T-163) Flatpak titles lack appstream names until the remote's appstream is fetched (the VM shows "TestGame").
 - (T-172 review) Settings panes expose their own `hints` (SettingsPage uses `currentPane.hints` while the pane has focus), instead of `SettingsPage.qml:46` special-casing `aboutPane.activeFocus`; also renumber `15-picker-tr`/`15-pin-locked`.
 - (T-171 review) Store: resume or re-query jobs after `ruya-store` comes back (needs a `ListJobs` in `Store1.xml`).
+- (T-170 review) Settings panes give no cue that more rows exist below the viewport, now that no cut row hints at it: decide on a scroll affordance (fade, chevron or peek) in 04 §5 (design, lead).
 
 ## Blocked (need something this host doesn't have)
 
