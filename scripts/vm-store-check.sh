@@ -228,6 +228,21 @@ check)
     grep -a -q "installed=1" "$work/probe.log" && ok "the shell saw the app installed (InstalledChanged -> ListInstalled)" || bad "the shell never saw the installed app"
     grep -a "installed=1" "$work/probe.log" | head -1 | grep -q "$app(installed)" && ok "and its catalogue flag changed" || bad "catalogue flag did not change"
     grep -a "installed=" "$work/probe.log" | tail -1 | grep -q "installed=0" && ok "the shell saw it uninstalled again" || bad "the shell still shows it installed"
+    echo "--- the service restarts during an install (T-171): the shell drops the job"
+    out="$(as_shell busctl --system call "$svc" "$path" "$ifc" Install s "$app")"
+    case "$out" in 'ss "ok"'*) ok "Install queued for the restart test";; *) bad "Install before restart: $out";; esac
+    n=0
+    until grep -a "jobs=" "$work/probe.log" | tail -1 | grep -q "\"$app\""; do
+        [ "$n" -ge 60 ] && break; sleep 1; n=$((n + 1))
+    done
+    grep -a "jobs=" "$work/probe.log" | tail -1 | grep -q "\"$app\"" && ok "the shell showed the job" || bad "the shell never showed the job"
+    systemctl restart ruya-store
+    n=0
+    until grep -a "jobs=" "$work/probe.log" | tail -1 | grep -q 'jobs={}'; do
+        [ "$n" -ge 30 ] && break; sleep 1; n=$((n + 1))
+    done
+    grep -a "jobs=" "$work/probe.log" | tail -1 | grep -q 'jobs={}' && ok "after the restart the shell's job list is empty" || bad "the shell still shows a job of the old service"
+    flatpak uninstall --system -y "$app" >/dev/null 2>&1 || true   # an install cut short may have left it
     grep -a -i "warn\|Store1.*failed" "$work/probe.log" | head -5
     ;;
 esac

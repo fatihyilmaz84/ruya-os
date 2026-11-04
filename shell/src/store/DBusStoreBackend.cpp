@@ -80,8 +80,14 @@ QList<AppInfo> parseApps(const QDBusArgument &arg)
 DBusStoreBackend::DBusStoreBackend(QObject *parent)
     : StoreBackend(parent)
     , m_bus(chooseBus())
-    , m_watcher(Service, m_bus, QDBusServiceWatcher::WatchForRegistration, this)
+    , m_watcher(Service, m_bus, QDBusServiceWatcher::WatchForOwnerChange, this)
 {
+    connect(&m_watcher, &QDBusServiceWatcher::serviceUnregistered, this, [this] {
+        // Jobs and early signals belonged to the old process.
+        m_jobApps.clear();
+        m_early.clear();
+        emit serviceLost();
+    });
     connect(&m_watcher, &QDBusServiceWatcher::serviceRegistered, this, [this] {
         refresh();
         search(QString(), false, 0);

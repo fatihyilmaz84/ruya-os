@@ -32,4 +32,13 @@ If `ruya-store` restarts or vanishes mid-install, the Store stops showing a job 
 - Qt 6.8 has `QTest::failOnWarning` and QML `TestCase.failOnWarning`: use them to make the warning check a real test.
 
 ## Outcome
-_Filled in by the implementer._
+Verified: host (vm pending: vm-store-check.sh)
+
+- `StoreBackend::serviceLost()` (new). `DBusStoreBackend` now watches the name with `WatchForOwnerChange`; on `serviceUnregistered` it clears its job map and early-signal buffer and emits it. `MockStoreBackend::loseService()` simulates it; `Store.mockServiceLost()` exposes that to tests.
+- `Store` on `serviceLost`: clears `jobs`, emits `jobsChanged`, then `jobFinished(id, "failed")` per dropped job. Without that, `AppDetailPage` kept `working` true with its progress bar (it only leaves that state on `jobFinished`), so clearing `jobs` alone would not hide the row's progress. This is the one choice beyond the literal scope.
+- `StorePage.qml` card badge: `page ? page.sourceText(..) : ""` (and `"info"` for kind).
+- Tests: `tst_store_backend::test_service_loss_drops_running_jobs`, `tst_store_ui::test_service_loss_ends_the_job` (both fail when the `serviceLost` handler is made a no-op: undone change, checked); `tst_pages::test_back_walks_the_stack` now calls `failOnWarning(/StorePage\.qml.*TypeError/)` (checked it bites by logging a matching warning: FAIL).
+- Honest note on the TypeError: I could not reproduce it offscreen on this checkout. With the QML guard reverted, `grep -c TypeError shell/build-win/ruya-qmltest.txt` was 0 for the whole suite, so the `failOnWarning` test passes with and without the guard; the guard is defensive and the test a tripwire. The warning may only occur under `shots` or different timing.
+- VM: `scripts/vm-store-check.sh` (check mode) starts a second Install after the existing checks, waits for the probe to show the job, runs `systemctl restart ruya-store`, and expects the probe's `jobs={}`; then a best-effort `flatpak uninstall`. Not run (lead run). Risk: the probe has `timeout 170`, so on a slow VM it may have exited by then and the step would report a failure; the lead may raise the timeout.
+- Spec: `03` Store paragraph.
+- Files: shell/src/store/{StoreBackend.h,DBusStoreBackend.cpp,MockStoreBackend.h,Store.h,Store.cpp}, shell/qml/StorePage.qml, shell/tests/{tst_store_backend,tst_store_ui,tst_pages}.qml, scripts/vm-store-check.sh, docs/specs/03-services-and-apps.md.

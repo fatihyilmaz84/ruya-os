@@ -74,6 +74,17 @@ Store::Store(std::unique_ptr<StoreBackend> backend, QObject *parent)
             emit jobsChanged();
         emit jobFinished(id, status);
     });
+    connect(m_backend.get(), &StoreBackend::serviceLost, this, [this] {
+        // A job of the lost service never finishes; do not show it for ever. Pages waiting for
+        // its result get "failed" so that they stop working.
+        if (m_jobs.isEmpty())
+            return;
+        const QStringList ids = m_jobs.keys();
+        m_jobs.clear();
+        emit jobsChanged();
+        for (const QString &id : ids)
+            emit jobFinished(id, QStringLiteral("failed"));
+    });
     m_backend->refresh();
     m_backend->search(QString(), false, 0);
 }
@@ -217,6 +228,12 @@ void Store::mockReset()
         m_jobs.clear();
         emit jobsChanged();
     }
+}
+
+void Store::mockServiceLost()
+{
+    if (auto *mock = qobject_cast<MockStoreBackend *>(m_backend.get()))
+        mock->loseService();
 }
 
 int Store::mockSearchCount() const

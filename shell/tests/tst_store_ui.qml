@@ -131,6 +131,20 @@ Item {
             compare(find("detailError").visible, false)
         }
 
+        // T-171: the service vanishes mid-install; the page must not wait for a job that is gone.
+        function test_service_loss_ends_the_job() {
+            openStore()
+            openApp("org.example.Racer")
+            keyClick(Qt.Key_Return)
+            verify(find("detailProgress").visible)
+            tryVerify(() => Store.jobs["org.example.Racer"] !== undefined, 2000, "progress arrived")
+            Store.mockServiceLost()
+            compare(Object.keys(Store.jobs).length, 0)
+            verify(!find("page_appDetail").working)
+            verify(!find("detailProgress").visible)
+            compare(find("detailError").visible, true)
+        }
+
         function test_install_error_inline() {
             openStore()
             openApp("org.example.Broken")

@@ -66,9 +66,13 @@ public:
     // The record of an app from the catalogue, or an empty object.
     Q_INVOKABLE QVariantMap app(const QString &appId) const;
 
+    // The service lost its bus name (crash, restart): jobs are dropped and each ends with
+    // jobFinished(id, "failed"). Resuming is not attempted.
+
     // Tests only, and only with the mock backend (otherwise false / no-op).
     Q_INVOKABLE bool mockDataDeleted(const QString &appId) const;
     Q_INVOKABLE void mockReset();
+    Q_INVOKABLE void mockServiceLost();
     Q_INVOKABLE int mockSearchCount() const;
     Q_INVOKABLE void mockCatalogChanged();
 

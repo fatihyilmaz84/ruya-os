@@ -29,6 +29,8 @@ public:
     // Tests only: whether an uninstall of this app asked for its data to be deleted.
     bool dataDeleted(const QString &id) const { return m_dataDeleted.contains(id); }
     void reset();
+    // Tests only: the service went away mid-job; running jobs vanish without a JobFinished.
+    void loseService() { m_timer.stop(); m_jobs.clear(); emit serviceLost(); }
     int searchCount() const { return m_searchCount; }
     void announceCatalogChanged() { emit catalogChanged(); }
 

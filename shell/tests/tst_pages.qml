@@ -173,6 +173,7 @@ Item {
         }
 
         function test_back_walks_the_stack() {
+            failOnWarning(/StorePage\.qml.*TypeError/)   // T-171: the cards read a page that was gone
             openSection("store")
             tryVerify(() => find("storeCards_featured").activeFocus)
             openDetail({})
