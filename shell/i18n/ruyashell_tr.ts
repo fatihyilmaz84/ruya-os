@@ -4,7 +4,12 @@
 <context>
     <name>AboutPane</name>
     <message>
-        <location filename="../qml/AboutPane.qml" line="+13"/>
+        <location filename="../qml/AboutPane.qml" line="+11"/>
+        <source>Back</source>
+        <translation>Geri</translation>
+    </message>
+    <message>
+        <location line="+5"/>
         <source>Image version</source>
         <translation>Sistem sürümü</translation>
     </message>
@@ -1019,12 +1024,12 @@
     <name>SettingsPage</name>
     <message>
         <location filename="../qml/SettingsPage.qml" line="+12"/>
-        <location line="+51"/>
+        <location line="+54"/>
         <source>Settings</source>
         <translation>Ayarlar</translation>
     </message>
     <message>
-        <location line="-40"/>
+        <location line="-43"/>
         <source>Profiles</source>
         <translation>Profiller</translation>
     </message>
@@ -1079,9 +1084,22 @@
         <translation>Geri</translation>
     </message>
     <message>
-        <location line="+152"/>
+        <location line="+163"/>
         <source>Coming soon</source>
         <translation>Yakında</translation>
+    </message>
+</context>
+<context>
+    <name>SettingsPane</name>
+    <message>
+        <location filename="../qml/SettingsPane.qml" line="+17"/>
+        <source>Select</source>
+        <translation>Seç</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Back</source>
+        <translation>Geri</translation>
     </message>
 </context>
 <context>
@@ -1137,7 +1155,7 @@
         <translation>Konsolunuzu hazırlayalım. Bir dakika sürer ve yalnızca kolunuz yeterli.</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+4"/>
         <source>Press A to start</source>
         <translation>Başlamak için A&apos;ya basın</translation>
     </message>
@@ -1154,13 +1172,13 @@
     </message>
     <message>
         <location line="+16"/>
-        <location line="+28"/>
-        <location line="+80"/>
+        <location line="+27"/>
+        <location line="+79"/>
         <source>Press A to continue</source>
         <translation>Devam etmek için A&apos;ya basın</translation>
     </message>
     <message>
-        <location line="-94"/>
+        <location line="-92"/>
         <source>Network</source>
         <translation>Ağ</translation>
     </message>
@@ -1170,7 +1188,7 @@
         <translation>Ağ kurulumu daha sonra gelecek. Kablolu bağlantı herhangi bir kurulum olmadan çalışır.</translation>
     </message>
     <message>
-        <location line="+18"/>
+        <location line="+17"/>
         <source>Create your profile</source>
         <translation>Profilinizi oluşturun</translation>
     </message>

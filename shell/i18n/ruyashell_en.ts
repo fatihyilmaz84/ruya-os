@@ -4,7 +4,12 @@
 <context>
     <name>AboutPane</name>
     <message>
-        <location filename="../qml/AboutPane.qml" line="+13"/>
+        <location filename="../qml/AboutPane.qml" line="+11"/>
+        <source>Back</source>
+        <translation>Back</translation>
+    </message>
+    <message>
+        <location line="+5"/>
         <source>Image version</source>
         <translation>Image version</translation>
     </message>
@@ -1021,12 +1026,12 @@
     <name>SettingsPage</name>
     <message>
         <location filename="../qml/SettingsPage.qml" line="+12"/>
-        <location line="+51"/>
+        <location line="+54"/>
         <source>Settings</source>
         <translation>Settings</translation>
     </message>
     <message>
-        <location line="-40"/>
+        <location line="-43"/>
         <source>Profiles</source>
         <translation>Profiles</translation>
     </message>
@@ -1081,9 +1086,22 @@
         <translation>Back</translation>
     </message>
     <message>
-        <location line="+152"/>
+        <location line="+163"/>
         <source>Coming soon</source>
         <translation>Coming soon</translation>
+    </message>
+</context>
+<context>
+    <name>SettingsPane</name>
+    <message>
+        <location filename="../qml/SettingsPane.qml" line="+17"/>
+        <source>Select</source>
+        <translation>Select</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Back</source>
+        <translation>Back</translation>
     </message>
 </context>
 <context>
@@ -1139,7 +1157,7 @@
         <translation>Let&apos;s get your console ready. It only takes a minute, and you only need your controller.</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+4"/>
         <source>Press A to start</source>
         <translation>Press A to start</translation>
     </message>
@@ -1156,13 +1174,13 @@
     </message>
     <message>
         <location line="+16"/>
-        <location line="+28"/>
-        <location line="+80"/>
+        <location line="+27"/>
+        <location line="+79"/>
         <source>Press A to continue</source>
         <translation>Press A to continue</translation>
     </message>
     <message>
-        <location line="-94"/>
+        <location line="-92"/>
         <source>Network</source>
         <translation>Network</translation>
     </message>
@@ -1172,7 +1190,7 @@
         <translation>Network setup comes later. A wired connection works without any setup.</translation>
     </message>
     <message>
-        <location line="+18"/>
+        <location line="+17"/>
         <source>Create your profile</source>
         <translation>Create your profile</translation>
     </message>

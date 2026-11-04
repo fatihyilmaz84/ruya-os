@@ -42,9 +42,12 @@ Page {
                                               : current.key === "system" ? systemPane
                                               : current.key === "about" ? aboutPane : null
 
-    // Nothing to select in About, nor on a category without a pane yet (A does nothing there).
-    hints: (aboutPane.activeFocus || currentPane === null) ? backOnlyHints
-         : [{ button: "A", text: qsTr("Select") }, { button: "B", text: qsTr("Back") }]
+    // The focused pane says which hints it shows (SettingsPane.hints); the category list and a
+    // category without a pane yet (A does nothing there) have their own.
+    readonly property var listHints: [{ button: "A", text: qsTr("Select") }, { button: "B", text: qsTr("Back") }]
+    hints: currentPane === null ? backOnlyHints
+         : currentPane.activeFocus ? currentPane.hints
+         : listHints
 
     function enterPane() {
         if (!currentPane)
@@ -61,17 +64,25 @@ Page {
         objectName: "categoryList"
         Accessible.role: Accessible.List
         Accessible.name: currentItem ? currentItem.Accessible.name : qsTr("Settings")
-        anchors { left: parent.left; top: parent.top; bottom: parent.bottom }
+        // Whole rows only: when the nine categories don't fit above the hint bar the list ends at
+        // the last row that does and scrolls by rows (the focused row is always in view).
+        readonly property real availableHeight: parent.height     // the content area, above the hint bar
+        readonly property real rowHeight: 72 * page.u
+        readonly property real stride: rowHeight + spacing
+        readonly property int fitRows: Math.max(1, Math.floor((categoryList.availableHeight + spacing) / stride))
+        anchors { left: parent.left; top: parent.top }
         width: 470 * page.u
+        height: Math.min(categoryList.availableHeight, count * stride - spacing, fitRows * stride - spacing)
         spacing: Theme.spaceXs * page.u
         focus: true
         interactive: false
         keyNavigationEnabled: true
         keyNavigationWraps: false
-        clip: false
+        clip: contentHeight > height + 0.5
         model: page.categories
 
-        onCurrentIndexChanged: Sfx.navigate()
+        onCurrentIndexChanged: { Sfx.navigate(); positionViewAtIndex(currentIndex, ListView.Contain) }
+        onHeightChanged: positionViewAtIndex(currentIndex, ListView.Contain)
         Keys.onReturnPressed: page.enterPane()
         Keys.onEnterPressed: page.enterPane()
         Keys.onRightPressed: page.enterPane()
@@ -88,7 +99,7 @@ Page {
             Accessible.selected: selected
 
             width: categoryList.width
-            height: 72 * page.u
+            height: categoryList.rowHeight
             radius: height / 2
             color: focused ? Theme.focusFill : selected ? Theme.selectedFill : "transparent"
             border.width: focused ? Theme.focusRingWidth * page.u : selected ? Theme.hairlineAt(page.u) : 0

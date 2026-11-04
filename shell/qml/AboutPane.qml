@@ -7,6 +7,9 @@ SettingsPane {
 
     property string version
 
+    // Nothing to select here.
+    hints: [{ button: "B", text: qsTr("Back") }]
+
     SettingRow {
         objectName: "aboutVersion"
         u: pane.u

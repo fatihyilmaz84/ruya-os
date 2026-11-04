@@ -12,6 +12,10 @@ FocusScope {
 
     property real u: 1
 
+    // What the buttons do while this pane has focus (the hint bar, T-158): a list of
+    // { button, text }. A pane with nothing to select sets `hints: [{ button: "B", text: qsTr("Back") }]`.
+    property var hints: [{ button: "A", text: qsTr("Select") }, { button: "B", text: qsTr("Back") }]
+
     default property alias rows: column.data
 
     signal exitRequested()
