@@ -136,7 +136,7 @@ check)
     mon=$!
     # The shell's own Store singleton (D-Bus backend) watches the same service meanwhile.
     cp /root/vm-store-probe.qml "$work/probe.qml" && chmod 755 "$work" && chmod 644 "$work/probe.qml"
-    pkill -f "probe[.]qml" 2>/dev/null   # a probe left over from an earlier run
+    pkill -f "probe2?[.]qml" 2>/dev/null   # a probe left over from an earlier run
     : > "$work/probe.log"; chmod 666 "$work/probe.log"
     as_shell env XDG_RUNTIME_DIR="/run/user/$uid" QT_QPA_PLATFORM=offscreen QT_FORCE_STDERR_LOGGING=1 \
         timeout 170 ruya-shell --load "$work/probe.qml" > "$work/probe.log" 2>&1 &
@@ -232,23 +232,33 @@ check)
     # A fresh probe: the first one has used up its timeout by now.
     pkill -f "probe[.]qml" 2>/dev/null
     : > "$work/probe2.log"; chmod 666 "$work/probe2.log"
-    as_shell env XDG_RUNTIME_DIR="/run/user/$uid" QT_QPA_PLATFORM=offscreen QT_FORCE_STDERR_LOGGING=1         timeout 150 ruya-shell --load "$work/probe.qml" > "$work/probe2.log" 2>&1 &
+    # The probe's own Store must start the install: the shell's D-Bus backend only tracks jobs it
+    # started (an Install by busctl would leave its job list empty and the test vacuous).
+    sed "s/property string installApp: \"\"/property string installApp: \"$app\"/" "$work/probe.qml" > "$work/probe2.qml"
+    chmod 644 "$work/probe2.qml"
+    grep -q "installApp: \"$app\"" "$work/probe2.qml" || bad "could not set installApp in the probe copy"
+    as_shell env XDG_RUNTIME_DIR="/run/user/$uid" QT_QPA_PLATFORM=offscreen QT_FORCE_STDERR_LOGGING=1 \
+        timeout 240 ruya-shell --load "$work/probe2.qml" > "$work/probe2.log" 2>&1 &
+    # Restart only once the job is in the shell's Store.jobs (from its own JobProgress): then a
+    # cut-short install can end only through the service-lost path, not the Install error reply.
     n=0
-    until grep -a -q "available=true" "$work/probe2.log" || [ "$n" -ge 90 ]; do sleep 1; n=$((n + 1)); done
-    # Restart right after the Install reply: the install cannot have finished (it needs a download),
-    # and only the service-lost path can produce a jobFinished for it.
-    out="$(as_shell busctl --system call "$svc" "$path" "$ifc" Install s "$app")"
-    case "$out" in 'ss "ok"'*) ok "Install queued for the restart test";; *) bad "Install before restart: $out";; esac
+    until grep -a -q "store-probe: jobsChanged {\"$app\"" "$work/probe2.log" || [ "$n" -ge 120 ]; do sleep 0.2; n=$((n + 1)); done
+    grep -a -q "store-probe: install requested $app" "$work/probe2.log" && ok "the shell's Store requested the install" || bad "the probe never requested the install"
+    if grep -a -q "store-probe: jobsChanged {\"$app\"" "$work/probe2.log"; then
+        ok "the job is in the shell's Store.jobs"
+    else
+        bad "the job never reached the shell's Store.jobs"; grep -a "store-probe" "$work/probe2.log" | tail -5
+    fi
     systemctl restart ruya-store
     n=0
     until grep -a -q "store-probe: jobFinished $app failed" "$work/probe2.log" || [ "$n" -ge 40 ]; do sleep 1; n=$((n + 1)); done
     grep -a -q "store-probe: jobFinished $app failed" "$work/probe2.log" && ok "the shell ended the cut-short install as failed" || bad "the shell never ended the job of the old service"
     grep -a -q "store-probe: jobFinished $app ok" "$work/probe2.log" && bad "the install finished ok before the restart; the test proved nothing" || ok "no ok for that install"
     sleep 4
-    grep -a "jobs=" "$work/probe2.log" | tail -1 | grep -q 'jobs={}' && ok "the shell's job list is empty after the restart" || bad "the shell still shows a job of the old service"
-    pkill -f "probe[.]qml" 2>/dev/null
+    grep -a " jobs=" "$work/probe2.log" | tail -1 | grep -q 'jobs={}' && ok "the shell's job list is empty after the restart" || bad "the shell still shows a job of the old service"
+    pkill -f "probe2[.]qml" 2>/dev/null
     flatpak uninstall --system -y "$app" >/dev/null 2>&1 || true   # an install cut short may have left it
-    grep -a -i "warn\|Store1.*failed" "$work/probe.log" | head -5
+    grep -a -i "warn\|Store1.*failed" "$work/probe2.log" | grep -v "store-probe" | head -5
     ;;
 esac
 [ "$fail" = 0 ] && echo "ALL CHECKS PASSED" || echo "SOME CHECKS FAILED"
