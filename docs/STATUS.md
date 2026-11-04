@@ -55,6 +55,9 @@ Follow-ups and debt for the next planner, one line each: `- (source) what, and w
 - (T-145 review) `google-noto-sans-fonts` (`image/build/20-base.sh`) is now only a fallback for the shell: keep it for Flatpak apps and future scripts, or drop it (lead, design).
 - (T-145) The next image build carries the round-2 fonts (Bold, ‹ ›): check a VM home screenshot with a library entry, so the hero title is seen in real Bold on the image.
 - (lead) `vm-goto.ps1` and the other `scripts/vm-*.ps1` SSH helpers fail on a fresh disk's new host key: give them `-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null` for the local dev VM (127.0.0.1:2222 only).
+- (T-174 review) Audit `50-ruyaos-network.rules`: it returns `NOT_HANDLED` too, so NetworkManager's default `allow_active` actions beyond the four listed stay open to `ruya-shell`; deny the rest as T-174 round 2 does for udisks2.
+- (T-174) A stick with several partitions gives one `VolumeAdded` per partition, so the shell toasts once per partition: group them. Also cover a two-partition stick and an unsupported filesystem in `vm-storage-check` (unit tests only today).
+- (T-174) Media access for profile users and Flatpak apps on `/run/media/ruya-shell/...` belongs to the Media task (mounts belong to `ruya-shell`, not the active profile).
 
 ## Blocked (need something this host doesn't have)
 
