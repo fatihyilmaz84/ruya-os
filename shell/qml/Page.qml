@@ -18,7 +18,8 @@ FocusScope {
     property real marginY: 0
 
     // What the buttons do on this page, for the shell's hint bar (T-158): a list of { button, text }.
-    // Override it for a page with nothing to select.
+    // Override it for a page with nothing to select: `hints: page.backOnlyHints`.
+    readonly property var backOnlyHints: [{ button: "B", text: qsTr("Back") }]
     property var hints: [
         { button: "A", text: qsTr("Select") },
         { button: "B", text: qsTr("Back") }

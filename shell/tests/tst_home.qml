@@ -272,6 +272,17 @@ Item {
             grabImage(tc.shell).save(shotsDir + "/01-home-recent.png")
         }
 
+        function test_zz_screenshots_nav_focus() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            start("")
+            keyClick(Qt.Key_Up)
+            tryVerify(() => find("sectionNav").activeFocus, 2000, "Up from the hero goes to the nav")
+            verify(find("navPillRing_home").visible, "the ring shows outside the filled Home pill")
+            wait(900)
+            grabImage(tc.shell).save(shotsDir + "/01-home-nav.png")
+        }
+
         function test_zz_screenshots_performance() {
             if (!shotsDir)
                 skip("set RUYA_SHOTS_DIR to save screenshots")

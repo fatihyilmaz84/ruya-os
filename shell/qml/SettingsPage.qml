@@ -42,6 +42,10 @@ Page {
                                               : current.key === "system" ? systemPane
                                               : current.key === "about" ? aboutPane : null
 
+    // Nothing to select in About, nor on a category without a pane yet (A does nothing there).
+    hints: (aboutPane.activeFocus || currentPane === null) ? backOnlyHints
+         : [{ button: "A", text: qsTr("Select") }, { button: "B", text: qsTr("Back") }]
+
     function enterPane() {
         if (!currentPane)
             return

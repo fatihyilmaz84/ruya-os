@@ -7,5 +7,7 @@ Page {
 
     title: Library.item(params.id ?? "").title ?? qsTr("Details")
 
+    hints: backOnlyHints     // nothing to select here
+
     ComingSoon { u: page.u }
 }

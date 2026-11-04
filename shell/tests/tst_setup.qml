@@ -280,6 +280,46 @@ Item {
             compare(Profiles.profiles.length, 1)
         }
 
+        // The hint bar as "A Next|B Back", from the bar's own delegates.
+        function hintsShown() {
+            const bar = find("hintBar")
+            if (!bar.visible)
+                return ""
+            const parts = []
+            for (const b of ["A", "B"]) {
+                const h = findChild(bar, "hint_" + b)
+                if (h)
+                    parts.push(b + " " + h.verb)
+            }
+            return parts.join("|")
+        }
+
+        function test_hints_follow_the_step() {
+            startShell()
+            compare(hintsShown(), "A Next", "welcome: nothing to go back to")
+            goToStep(1)
+            compare(hintsShown(), "A Next|B Back")
+            goToStep(2)
+            compare(hintsShown(), "A Next|B Back")
+            goToStep(3)
+            compare(hintsShown(), "A Select|B Back")
+            keyClick(Qt.Key_Return)                           // the name row opens the keyboard
+            tryVerify(() => find("setupNameEntry").shown, 2000, "the keyboard opens")
+            compare(hintsShown(), "B Cancel")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !find("setupNameEntry").shown, 2000)
+            compare(hintsShown(), "A Select|B Back")
+            setup().adminName = "Owner"
+            keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("setupPinPad").shown, 2000)
+            compare(hintsShown(), "B Cancel")
+            enterPin("2468")
+            enterPin("2468")
+            tryCompare(setup(), "step", 4)
+            compare(hintsShown(), "A Next", "done: the account exists, no Back")
+        }
+
         function test_zz_screenshots() {
             if (!shotsDir)
                 skip("set RUYA_SHOTS_DIR to save screenshots")
