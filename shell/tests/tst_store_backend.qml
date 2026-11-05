@@ -9,6 +9,14 @@ Item {
     height: 240
 
     SignalSpy { id: finished; target: Store; signalName: "jobFinished" }
+    SignalSpy { id: reconciled; target: Store; signalName: "jobsReconciled" }
+
+    // The jobs the facade showed at the moment the service's job table had been applied.
+    property var jobsAtReconcile: []
+    Connections {
+        target: Store
+        function onJobsReconciled() { host.jobsAtReconcile = Object.keys(Store.jobs) }
+    }
 
     TestCase {
         id: tc
@@ -21,6 +29,8 @@ Item {
             tryVerify(() => Store.catalogue.length === 12)
             tryVerify(() => Store.installed.length === 3)
             finished.clear()
+            reconciled.clear()
+            host.jobsAtReconcile = []
         }
 
         function isInstalled(id) { return Store.installed.some(a => a.id === id) }
@@ -129,6 +139,87 @@ Item {
             compare(Object.keys(Store.jobs).length, 0)
             wait(100)                                   // no late progress brings it back
             compare(Object.keys(Store.jobs).length, 0)
+        }
+
+        // T-188: the service restarts mid-install. It cannot resume Flatpak's transaction, so the job
+        // is failed (interrupted); the facade already said so when it lost the service and says
+        // nothing more when the new service's job table agrees.
+        function test_restart_keeps_an_interrupted_job_failed() {
+            const id = "org.example.Racer"
+            Store.install(id)
+            tryVerify(() => Store.jobs[id] !== undefined, 2000, "progress arrived")
+            Store.mockServiceLost()
+            compare(finished.count, 1)
+            compare(finished.signalArguments[0][0], id)
+            compare(finished.signalArguments[0][1], "failed")
+            Store.mockServiceRegained()
+            tryCompare(reconciled, "count", 1)
+            compare(host.jobsAtReconcile.length, 0)
+            compare(Object.keys(Store.jobs).length, 0)
+            compare(finished.count, 1, "no second verdict for the same job")
+            verify(!isInstalled(id))
+        }
+
+        // T-188: Flatpak completed the install while the service was away; the hung "installing"
+        // becomes "installed", not "failed, retry".
+        function test_restart_finds_the_install_flatpak_completed() {
+            const id = "org.example.Racer"
+            Store.install(id)
+            tryVerify(() => Store.jobs[id] !== undefined, 2000, "progress arrived")
+            Store.mockServiceLost()
+            compare(finished.signalArguments[0][1], "failed", "given up at once")
+            Store.mockServiceRegained([id])
+            tryCompare(finished, "count", 2)
+            compare(finished.signalArguments[1][0], id)
+            compare(finished.signalArguments[1][1], "ok")
+            tryVerify(() => isInstalled(id))
+            tryVerify(() => Store.app(id).installed === true)
+            compare(Object.keys(Store.jobs).length, 0)
+        }
+
+        // T-188: a job the new service runs is shown from its job table.
+        function test_restart_shows_the_jobs_the_new_service_runs() {
+            Store.install("org.example.Racer")
+            tryVerify(() => Store.jobs["org.example.Racer"] !== undefined, 2000, "progress arrived")
+            Store.mockServiceLost()
+            Store.install("org.example.Platformer")      // asked of the new service at once
+            Store.mockServiceRegained()
+            tryCompare(reconciled, "count", 1)
+            compare(host.jobsAtReconcile.join(), "org.example.Platformer", "only the job that runs")
+            tryCompare(finished, "count", 2)             // Racer failed at the loss, Platformer ends
+            compare(finished.signalArguments[1][0], "org.example.Platformer")
+            compare(finished.signalArguments[1][1], "ok")
+            compare(Object.keys(Store.jobs).length, 0)
+        }
+
+        // T-188: what the facade shows is replaced by the job table, also when it missed a JobFinished.
+        function test_job_table_replaces_a_stale_entry() {
+            const id = "org.example.Racer"
+            Store.install(id)
+            tryVerify(() => Store.jobs[id] !== undefined, 2000, "progress arrived")
+            Store.mockForgetJobs()                       // the service ended it; no signal reached us
+            verify(Store.jobs[id] !== undefined, "the facade still shows it")
+            Store.mockServiceRegained()
+            tryCompare(reconciled, "count", 1)
+            compare(Object.keys(Store.jobs).length, 0)
+            compare(finished.count, 0, "an app that was not given up has no verdict to correct")
+        }
+
+        // T-188: a reply that comes late must not put back what a newer reply took away.
+        function test_a_late_job_table_is_dropped() {
+            const id = "org.example.Racer"
+            Store.install(id)
+            tryVerify(() => Store.jobs[id] !== undefined, 2000, "progress arrived")
+            Store.mockListJobsDelayed(300)               // a snapshot in which Racer is still running
+            compare(Store.mockPendingJobLists(), 1)
+            Store.mockServiceLost()
+            Store.mockServiceRegained()                  // the newer table: Racer interrupted
+            tryCompare(reconciled, "count", 1)
+            compare(Object.keys(Store.jobs).length, 0)
+            tryVerify(() => Store.mockPendingJobLists() === 0, 2000)
+            wait(50)
+            compare(reconciled.count, 1, "the late reply was not reported")
+            compare(Object.keys(Store.jobs).length, 0, "and did not bring the job back")
         }
 
         function test_install_failure() {

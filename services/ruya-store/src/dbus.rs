@@ -15,6 +15,7 @@ use crate::app::App;
 use crate::flatpak::{
     Appstream, Flatpak, FlatpakError, InstalledApp, Operation, Progress, RemoteApp, RemoteInfo,
 };
+use crate::jobs::JobInfo;
 use crate::service::{Event, SearchOptions, Store};
 
 pub const BUS_NAME: &str = "org.ruyaos.Store1";
@@ -191,6 +192,19 @@ fn record(app: &App) -> Dict {
     dict(entries)
 }
 
+fn job_record(job: &JobInfo) -> Dict {
+    dict(vec![
+        ("id", Value::from(job.id.clone())),
+        ("app", Value::from(job.app.clone())),
+        ("kind", Value::from(job.kind.as_str())),
+        ("state", Value::from(job.state.as_str())),
+        ("status", Value::from(job.status.map_or("", |s| s.as_str()))),
+        ("reason", Value::from(job.reason())),
+        ("percent", Value::from(job.percent)),
+        ("phase", Value::from(job.phase.as_str())),
+    ])
+}
+
 #[interface(name = "org.ruyaos.Store1")]
 impl StoreIface {
     fn search(&self, query: &str, options: Dict) -> fdo::Result<Vec<Dict>> {
@@ -233,6 +247,13 @@ impl StoreIface {
 
     fn list_installed(&self) -> Vec<Dict> {
         self.store.list_installed().iter().map(record).collect()
+    }
+
+    async fn list_jobs(&self) -> Vec<Dict> {
+        let store = self.store.clone();
+        // The first call after a restart settles the jobs of the last run with `flatpak list`.
+        let jobs = blocking::unblock(move || store.list_jobs()).await;
+        jobs.iter().map(job_record).collect()
     }
 
     fn install(&self, id: &str) -> (String, String) {

@@ -5,6 +5,7 @@
 #include <QHash>
 #include <QObject>
 #include <QQmlEngine>
+#include <QSet>
 #include <QVariantList>
 #include <QVariantMap>
 
@@ -34,7 +35,10 @@ class Store : public QObject
     Q_PROPERTY(QVariantList results READ results NOTIFY resultsChanged)
     // App id -> { percent, phase } for every job that has reported progress and not finished.
     // When the service loses its bus name (crash, restart) the jobs are dropped and every job it
-    // ran or queued ends with jobFinished(id, "failed"); resuming is not attempted.
+    // ran or queued ends with jobFinished(id, "failed"); resuming is not attempted. When the
+    // service is back, its job table (ListJobs) replaces this map and corrects the apps whose job
+    // ended differently than "failed": a job Flatpak completed after all ends with jobFinished(id,
+    // "ok"). The same read happens when the shell starts, so a job running then is shown at once.
     Q_PROPERTY(QVariantMap jobs READ jobs NOTIFY jobsChanged)
     // True once the service has answered (always, for the mock).
     Q_PROPERTY(bool available READ isAvailable NOTIFY availableChanged)
@@ -72,6 +76,14 @@ public:
     Q_INVOKABLE bool mockDataDeleted(const QString &appId) const;
     Q_INVOKABLE void mockReset();
     Q_INVOKABLE void mockServiceLost();
+    // The service is back: the backend reads the lists and the job table again. finishedApps: apps
+    // whose running install or remove Flatpak completed while the service was away.
+    Q_INVOKABLE void mockServiceRegained(const QStringList &finishedApps = {});
+    // The service ended its running jobs without the shell hearing of it (nothing is emitted).
+    Q_INVOKABLE void mockForgetJobs();
+    // A job-table read whose reply arrives after ms, and how many such replies are still due.
+    Q_INVOKABLE void mockListJobsDelayed(int ms);
+    Q_INVOKABLE int mockPendingJobLists() const;
     Q_INVOKABLE int mockSearchCount() const;
     Q_INVOKABLE void mockCatalogChanged();
 
@@ -87,6 +99,8 @@ signals:
     void jobFinished(const QString &appId, const QString &status);
     void appLoaded(const QString &appId);
     void appLoadFailed(const QString &appId);
+    // The service's job table was applied (after a start or a restart of the service).
+    void jobsReconciled();
 
 private:
     QVariantList toList(const QList<AppInfo> &apps) const;
@@ -100,6 +114,7 @@ private:
     QVariantList m_installed;
     QVariantList m_results;
     QVariantMap m_jobs;
+    QSet<QString> m_lost; // apps whose job was given up as failed when the service was lost
     QHash<QString, QStringList> m_added; // app id -> what its update adds, from loadApp
     QString m_lastQuery;
     bool m_gamepadOnly = false;
