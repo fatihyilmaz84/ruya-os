@@ -197,6 +197,22 @@ Item {
             tryCompare(tc.shell, "currentPage", "settings")
         }
 
+        function test_an_older_reply_arriving_late_is_dropped() {
+            // Wired and connected. Ask again (the replies, a snapshot of that, are held back), then
+            // the cable goes and Cafe Guest is joined: the late replies must not put the cable and
+            // the idle network list back. The state and the list are two kinds of reply.
+            Network.mockRefreshDelayed(150)
+            compare(Network.mockPendingReplies(), 2)
+            Network.mockSetCable(false)
+            Network.connectWifi("wifi-cafe", "")
+            tryCompare(Network.primary, "kind", "wifi")
+            tryVerify(() => network("wifi-cafe").active)
+            tryVerify(() => Network.mockPendingReplies() === 0)
+            compare(Network.primary.kind, "wifi", "the late wired state was dropped")
+            compare(Network.primary.name, "Cafe Guest")
+            verify(network("wifi-cafe").active, "the late list without an active network was dropped")
+        }
+
         function test_zz_screenshots() {
             if (!shotsDir)
                 skip("set RUYA_SHOTS_DIR to save screenshots")

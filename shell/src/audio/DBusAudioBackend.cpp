@@ -109,8 +109,9 @@ void DBusAudioBackend::refreshState()
 {
     auto msg = QDBusMessage::createMethodCall(Service, Path, PropertiesInterface, QStringLiteral("GetAll"));
     msg << Interface;
+    const quint64 request = beginStateRequest();
     auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
-    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this](QDBusPendingCallWatcher *w) {
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, request](QDBusPendingCallWatcher *w) {
         w->deleteLater();
         const QDBusMessage reply = w->reply();
         if (reply.type() != QDBusMessage::ReplyMessage || reply.arguments().isEmpty()) {
@@ -121,22 +122,23 @@ void DBusAudioBackend::refreshState()
         bool muted = false;
         QVariantMap channels;
         parseState(parseDict(reply.arguments().constFirst().value<QDBusArgument>()), &volume, &muted, &channels);
-        emit stateChanged(volume, muted, channels);
+        deliverState(request, volume, muted, channels);
     });
 }
 
 void DBusAudioBackend::refreshSinks()
 {
     auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("ListSinks"));
+    const quint64 request = beginSinksRequest();
     auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
-    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this](QDBusPendingCallWatcher *w) {
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, request](QDBusPendingCallWatcher *w) {
         w->deleteLater();
         const QDBusMessage reply = w->reply();
         if (reply.type() != QDBusMessage::ReplyMessage || reply.arguments().isEmpty()) {
             qWarning("ruya-shell: Devices1.Audio ListSinks failed: %s", qPrintable(reply.errorMessage()));
             return;
         }
-        emit sinksListed(parseSinks(reply.arguments().constFirst().value<QDBusArgument>()));
+        deliverSinks(request, parseSinks(reply.arguments().constFirst().value<QDBusArgument>()));
     });
 }
 

@@ -28,6 +28,10 @@ public:
     void holdEject(bool hold);
     int ejectCalls() const { return m_ejectCalls; }
     void republish();   // publish the volume list again, unchanged
+    // Replies to refresh() arrive after `ms` (0: at once), with the list as it was when asked; the
+    // number of replies still on their way. Lets a test play an old reply landing after a new one.
+    void setReplyDelay(int ms) { m_delay = ms; }
+    int pendingReplies() const { return m_pending; }
 
 private:
     struct Entry
@@ -39,7 +43,7 @@ private:
 
     void initState();
     void doEject(const QString &id);
-    void publish();
+    void publish(int delayMs = 0);
     void answer(const QString &op, const QString &id, const QString &status);
     int indexOf(const QString &id) const;
 
@@ -48,4 +52,6 @@ private:
     bool m_holdEject = false;
     QStringList m_heldEjects;
     int m_ejectCalls = 0;
+    int m_delay = 0;
+    int m_pending = 0;
 };

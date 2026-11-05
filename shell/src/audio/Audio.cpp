@@ -150,3 +150,18 @@ void Audio::mockReset()
     if (auto *mock = qobject_cast<MockAudioBackend *>(m_backend.get()))
         mock->reset();
 }
+
+void Audio::mockRefreshDelayed(int ms)
+{
+    if (auto *mock = qobject_cast<MockAudioBackend *>(m_backend.get())) {
+        mock->setReplyDelay(ms);
+        mock->refresh();
+        mock->setReplyDelay(0);
+    }
+}
+
+int Audio::mockPendingReplies() const
+{
+    auto *mock = qobject_cast<MockAudioBackend *>(m_backend.get());
+    return mock ? mock->pendingReplies() : 0;
+}

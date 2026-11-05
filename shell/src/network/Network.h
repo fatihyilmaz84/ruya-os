@@ -47,6 +47,10 @@ public:
     Q_INVOKABLE QString mockPassword() const;
     Q_INVOKABLE void mockSetCable(bool plugged);
     Q_INVOKABLE void mockReset();
+    // Asks the backend for the state and the networks; the replies arrive after `ms` and show them
+    // as they are now. mockPendingReplies: how many are still on their way.
+    Q_INVOKABLE void mockRefreshDelayed(int ms);
+    Q_INVOKABLE int mockPendingReplies() const;
 
 signals:
     void stateChanged();

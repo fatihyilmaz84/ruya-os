@@ -21,7 +21,7 @@ MockStorageBackend::MockStorageBackend(QObject *parent)
 
 void MockStorageBackend::refresh()
 {
-    publish();
+    publish(m_delay);
 }
 
 void MockStorageBackend::eject(const QString &id)
@@ -136,14 +136,21 @@ int MockStorageBackend::indexOf(const QString &id) const
 }
 
 // Asynchronous like the real service; the internal disk comes first, the rest in a stable order.
-void MockStorageBackend::publish()
+void MockStorageBackend::publish(int delayMs)
 {
     QList<StorageVolume> list;
     for (const Entry &e : std::as_const(m_entries)) {
         if (e.present)
             list.append(e.vol);
     }
-    QTimer::singleShot(0, this, [this, list] { emit volumesListed(list); });
+    const quint64 request = beginRequest();
+    if (delayMs > 0)
+        ++m_pending;
+    QTimer::singleShot(delayMs, this, [this, request, list, delayMs] {
+        if (delayMs > 0)
+            --m_pending;
+        deliver(request, list);
+    });
 }
 
 void MockStorageBackend::answer(const QString &op, const QString &id, const QString &status)

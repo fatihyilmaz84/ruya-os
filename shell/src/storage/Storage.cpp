@@ -104,6 +104,21 @@ void Storage::mockRepublish()
         mock->republish();
 }
 
+void Storage::mockRefreshDelayed(int ms)
+{
+    if (auto *mock = qobject_cast<MockStorageBackend *>(m_backend.get())) {
+        mock->setReplyDelay(ms);
+        mock->refresh();
+        mock->setReplyDelay(0);
+    }
+}
+
+int Storage::mockPendingReplies() const
+{
+    auto *mock = qobject_cast<MockStorageBackend *>(m_backend.get());
+    return mock ? mock->pendingReplies() : 0;
+}
+
 void Storage::mockSetBusy(const QString &id, bool busy)
 {
     if (auto *mock = qobject_cast<MockStorageBackend *>(m_backend.get()))

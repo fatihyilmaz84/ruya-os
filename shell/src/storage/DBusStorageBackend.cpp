@@ -71,15 +71,16 @@ DBusStorageBackend::DBusStorageBackend(QObject *parent)
 void DBusStorageBackend::refresh()
 {
     auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("ListVolumes"));
+    const quint64 request = beginRequest();
     auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
-    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this](QDBusPendingCallWatcher *w) {
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, request](QDBusPendingCallWatcher *w) {
         w->deleteLater();
         const QDBusMessage reply = w->reply();
         if (reply.type() != QDBusMessage::ReplyMessage || reply.arguments().isEmpty()) {
             qWarning("ruya-shell: Devices1.Storage ListVolumes failed: %s", qPrintable(reply.errorMessage()));
             return;
         }
-        emit volumesListed(parseVolumes(reply.arguments().constFirst().value<QDBusArgument>()));
+        deliver(request, parseVolumes(reply.arguments().constFirst().value<QDBusArgument>()));
     });
 }
 

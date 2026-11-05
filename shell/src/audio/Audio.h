@@ -58,6 +58,10 @@ public:
     Q_INVOKABLE bool mockPlug(const QString &id);
     Q_INVOKABLE void mockUnplug(const QString &id);
     Q_INVOKABLE void mockReset();
+    // Asks the backend for the state and the outputs; the replies arrive after `ms` and show them
+    // as they are now. mockPendingReplies: how many are still on their way.
+    Q_INVOKABLE void mockRefreshDelayed(int ms);
+    Q_INVOKABLE int mockPendingReplies() const;
 
 signals:
     void volumeChanged();

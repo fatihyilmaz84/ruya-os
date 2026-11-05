@@ -314,6 +314,20 @@ Item {
             tryCompare(tc.shell, "currentPage", "settings")
         }
 
+        function test_an_older_reply_arriving_late_is_dropped() {
+            // Powered, three devices. Ask again (the replies, a snapshot of that, are held back),
+            // then Bluetooth is switched off: the late replies must not power it on again or bring
+            // the devices back. The state and the list are two kinds of reply.
+            Bluetooth.mockRefreshDelayed(150)
+            compare(Bluetooth.mockPendingReplies(), 1)
+            Bluetooth.setPowered(false)
+            tryCompare(Bluetooth, "powered", false)
+            tryVerify(() => Bluetooth.devices.length === 0)
+            tryVerify(() => Bluetooth.mockPendingReplies() === 0)
+            compare(Bluetooth.powered, false, "the late powered state was dropped")
+            compare(Bluetooth.devices.length, 0, "the late device list was dropped")
+        }
+
         function test_zz_screenshots() {
             if (!shotsDir)
                 skip("set RUYA_SHOTS_DIR to save screenshots")

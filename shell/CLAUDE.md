@@ -11,6 +11,7 @@ Specs: `docs/specs/02-shell.md` (behaviour) and `docs/specs/04-design-system.md`
   - `XxxBackend.h`: an abstract `QObject` with virtual methods and result **signals**.
   - `MockXxxBackend`: in-memory, deterministic, asynchronous (results delivered via `QTimer::singleShot(0, …)`), so QML behaves as it will over D-Bus.
   - `DBusXxxBackend`: a QtDBus client of `api/dbus/org.ruyaos.Xxx1.xml`.
+  - **Late replies.** Every async refresh whose reply replaces a model goes through a `RequestSequence` (`src/backend/RequestSequence.h`, T-181): the base class owns one per kind of reply (state, list) and offers `beginRequest()`/`deliver…()` that emit only the newest reply. The D-Bus client and the mock both use them. Test: give the mock a reply delay (`mockRefreshDelayed`, see `tst_battery.qml`) and change the data before the late reply lands.
   - `Xxx`: a `QML_ELEMENT QML_SINGLETON` facade. `create()` picks the backend from `RUYA_SERVICES` (`mock`/`dbus`; the default is D-Bus on Linux, the mock elsewhere). Expose `bool mock`.
   - Follow `src/profiles/` exactly as the reference implementation.
 - `tests/`: Qt Quick Test. `tst_main.cpp` forces `RUYA_SERVICES=mock`; each `tst_*.qml` gets a fresh engine (and so fresh singletons).

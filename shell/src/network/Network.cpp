@@ -84,3 +84,18 @@ void Network::mockReset()
     if (auto *mock = qobject_cast<MockNetworkBackend *>(m_backend.get()))
         mock->reset();
 }
+
+void Network::mockRefreshDelayed(int ms)
+{
+    if (auto *mock = qobject_cast<MockNetworkBackend *>(m_backend.get())) {
+        mock->setReplyDelay(ms);
+        mock->refresh();
+        mock->setReplyDelay(0);
+    }
+}
+
+int Network::mockPendingReplies() const
+{
+    auto *mock = qobject_cast<MockNetworkBackend *>(m_backend.get());
+    return mock ? mock->pendingReplies() : 0;
+}

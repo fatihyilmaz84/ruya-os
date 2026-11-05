@@ -10,8 +10,8 @@ MockNetworkBackend::MockNetworkBackend(QObject *parent)
 
 void MockNetworkBackend::refresh()
 {
-    publishState();
-    publishNetworks();
+    publishState(m_delay);
+    publishNetworks(m_delay);
 }
 
 void MockNetworkBackend::scan()
@@ -93,7 +93,7 @@ int MockNetworkBackend::indexOf(const QString &id) const
 
 // Asynchronous like the real service, so QML behaves the same with either backend. A cable
 // wins over Wi-Fi as the primary connection.
-void MockNetworkBackend::publishState()
+void MockNetworkBackend::publishState(int delayMs)
 {
     QString state = QStringLiteral("disconnected");
     QVariantMap primary;
@@ -113,11 +113,25 @@ void MockNetworkBackend::publishState()
             }
         }
     }
-    QTimer::singleShot(0, this, [this, state, primary] { emit stateChanged(state, primary); });
+    const quint64 request = beginStateRequest();
+    if (delayMs > 0)
+        ++m_pending;
+    QTimer::singleShot(delayMs, this, [this, request, state, primary, delayMs] {
+        if (delayMs > 0)
+            --m_pending;
+        deliverState(request, state, primary);
+    });
 }
 
-void MockNetworkBackend::publishNetworks()
+void MockNetworkBackend::publishNetworks(int delayMs)
 {
     const QList<WifiInfo> networks = m_networks;
-    QTimer::singleShot(0, this, [this, networks] { emit networksListed(networks); });
+    const quint64 request = beginNetworksRequest();
+    if (delayMs > 0)
+        ++m_pending;
+    QTimer::singleShot(delayMs, this, [this, request, networks, delayMs] {
+        if (delayMs > 0)
+            --m_pending;
+        deliverNetworks(request, networks);
+    });
 }

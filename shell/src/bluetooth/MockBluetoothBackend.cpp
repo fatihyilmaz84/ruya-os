@@ -14,7 +14,7 @@ MockBluetoothBackend::MockBluetoothBackend(QObject *parent)
 
 void MockBluetoothBackend::refresh()
 {
-    publish();
+    publish(m_delay);
 }
 
 void MockBluetoothBackend::setPowered(bool on)
@@ -228,7 +228,7 @@ int MockBluetoothBackend::indexOf(const QString &id) const
 
 // Asynchronous like the real service. Paired devices come first, otherwise in a stable order;
 // nothing is listed while Bluetooth is off.
-void MockBluetoothBackend::publish()
+void MockBluetoothBackend::publish(int delayMs)
 {
     QList<BtDevice> list;
     if (m_powered) {
@@ -240,9 +240,16 @@ void MockBluetoothBackend::publish()
     }
     const bool powered = m_powered;
     const bool discovering = m_discovering;
-    QTimer::singleShot(0, this, [this, powered, discovering, list] {
-        emit stateChanged(powered, discovering);
-        emit devicesListed(list);
+    // Two requests, as on the bus: the state and the list.
+    const quint64 stateRequest = beginStateRequest();
+    const quint64 devicesRequest = beginDevicesRequest();
+    if (delayMs > 0)
+        ++m_pending;
+    QTimer::singleShot(delayMs, this, [this, stateRequest, devicesRequest, powered, discovering, list, delayMs] {
+        if (delayMs > 0)
+            --m_pending;
+        deliverState(stateRequest, powered, discovering);
+        deliverDevices(devicesRequest, list);
     });
 }
 

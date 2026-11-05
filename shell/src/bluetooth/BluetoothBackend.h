@@ -1,5 +1,7 @@
 #pragma once
 
+#include "RequestSequence.h"
+
 #include <QList>
 #include <QObject>
 #include <QString>
@@ -41,4 +43,25 @@ signals:
     // op: "power" | "scan" | "pair" | "forget" | "connect" | "disconnect"; id: "" for power and
     // scan; status: see the XML ("ok", "pairing-failed", "timeout", ...).
     void finished(const QString &op, const QString &id, const QString &status);
+
+protected:
+    // Replies can arrive out of order: number each request when it is sent and report a reply only
+    // if no newer one of the same kind has been reported already (the state and the device list
+    // are two kinds). RequestSequence.h.
+    quint64 beginStateRequest() { return m_stateSeq.begin(); }
+    void deliverState(quint64 request, bool powered, bool discovering)
+    {
+        if (m_stateSeq.accept(request))
+            emit stateChanged(powered, discovering);
+    }
+    quint64 beginDevicesRequest() { return m_devicesSeq.begin(); }
+    void deliverDevices(quint64 request, const QList<BtDevice> &devices)
+    {
+        if (m_devicesSeq.accept(request))
+            emit devicesListed(devices);
+    }
+
+private:
+    RequestSequence m_stateSeq;
+    RequestSequence m_devicesSeq;
 };

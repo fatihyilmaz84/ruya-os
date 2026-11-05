@@ -31,6 +31,11 @@ public:
     // While held, pair() is counted but unanswered (a pairing that takes a while) until released.
     void holdPairing(bool hold);
     int pairCalls() const { return m_pairCalls; }
+    // Replies to refresh() arrive after `ms` (0: at once), with the state as it was when asked;
+    // the number of replies still on their way. Lets a test play an old reply landing after a
+    // new one.
+    void setReplyDelay(int ms) { m_delay = ms; }
+    int pendingReplies() const { return m_pending; }
 
 private:
     struct Entry
@@ -44,7 +49,7 @@ private:
 
     void initState();
     void doPair(const QString &id);
-    void publish();
+    void publish(int delayMs = 0);
     void answer(const QString &op, const QString &id, const QString &status);
     int indexOf(const QString &id) const;
     void endScan();
@@ -54,6 +59,8 @@ private:
     bool m_holdPairing = false;
     QStringList m_heldPairs;
     int m_pairCalls = 0;
+    int m_delay = 0;
+    int m_pending = 0;
     int m_scans = 0;
     QList<Entry> m_entries;
     QTimer m_scanTimer;

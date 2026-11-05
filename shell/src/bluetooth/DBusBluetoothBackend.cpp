@@ -78,8 +78,9 @@ void DBusBluetoothBackend::refreshState()
 {
     auto msg = QDBusMessage::createMethodCall(Service, Path, PropertiesInterface, QStringLiteral("GetAll"));
     msg << Interface;
+    const quint64 request = beginStateRequest();
     auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
-    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this](QDBusPendingCallWatcher *w) {
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, request](QDBusPendingCallWatcher *w) {
         w->deleteLater();
         const QDBusMessage reply = w->reply();
         if (reply.type() != QDBusMessage::ReplyMessage || reply.arguments().isEmpty()) {
@@ -87,23 +88,24 @@ void DBusBluetoothBackend::refreshState()
             return;
         }
         const QVariantMap props = parseDict(reply.arguments().constFirst().value<QDBusArgument>());
-        emit stateChanged(props.value(QStringLiteral("Powered")).toBool(),
-                          props.value(QStringLiteral("Discovering")).toBool());
+        deliverState(request, props.value(QStringLiteral("Powered")).toBool(),
+                     props.value(QStringLiteral("Discovering")).toBool());
     });
 }
 
 void DBusBluetoothBackend::refreshDevices()
 {
     auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("ListDevices"));
+    const quint64 request = beginDevicesRequest();
     auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
-    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this](QDBusPendingCallWatcher *w) {
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, request](QDBusPendingCallWatcher *w) {
         w->deleteLater();
         const QDBusMessage reply = w->reply();
         if (reply.type() != QDBusMessage::ReplyMessage || reply.arguments().isEmpty()) {
             qWarning("ruya-shell: Devices1.Bluetooth ListDevices failed: %s", qPrintable(reply.errorMessage()));
             return;
         }
-        emit devicesListed(parseDevices(reply.arguments().constFirst().value<QDBusArgument>()));
+        deliverDevices(request, parseDevices(reply.arguments().constFirst().value<QDBusArgument>()));
     });
 }
 
