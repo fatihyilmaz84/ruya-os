@@ -545,6 +545,13 @@ impl FakeFlatpak {
         self.state().fail_next = Some(error);
     }
 
+    /// An app removed behind the Store's back (`flatpak uninstall` by hand).
+    pub fn remove_installed(&self, id: &str) {
+        let mut state = self.state();
+        state.installed.retain(|a| a.id != id);
+        state.updates.retain(|u| u != id);
+    }
+
     pub fn ran(&self) -> Vec<Operation> {
         self.state().ran.clone()
     }

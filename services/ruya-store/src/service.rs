@@ -243,7 +243,33 @@ impl<F: Flatpak> Store<F> {
         }
     }
 
+    /// Reads which apps Flatpak has installed now and corrects the catalogue's flags, so an app
+    /// removed (or added) outside the Store, with `flatpak uninstall` for instance, is not
+    /// answered from a stale cache. Chosen over a time-based or event-based invalidation because
+    /// it is correct at the moment that matters and costs one `flatpak list`, which is fast
+    /// next to the transactions and the remote reads the same calls lead to. A failing read
+    /// keeps what the catalogue says.
+    fn sync_installed(&self) {
+        let Ok(installed) = self.flatpak.installed() else {
+            return;
+        };
+        let mut state = self.state();
+        for app in &mut state.catalogue {
+            match installed.iter().find(|i| i.id == app.id) {
+                Some(i) => {
+                    app.installed = true;
+                    app.installed_size = app.installed_size.max(i.installed_size);
+                }
+                None => {
+                    app.installed = false;
+                    app.update_available = false;
+                }
+            }
+        }
+    }
+
     pub fn list_installed(&self) -> Vec<App> {
+        self.sync_installed();
         self.state()
             .catalogue
             .iter()
@@ -262,6 +288,8 @@ impl<F: Flatpak> Store<F> {
         if !valid_app_id(id) {
             return (Status::Invalid, String::new());
         }
+        // Flatpak decides what is installed, not the cache of the last refresh.
+        self.sync_installed();
         let mut state = self.state();
         let Some(app) = state.catalogue.iter().find(|a| a.id == id).cloned() else {
             return (Status::UnknownApp, String::new());
@@ -586,6 +614,35 @@ mod tests {
         assert!(s.get_app("org.ruya.Racer").1.installed);
         assert_eq!(s.list_installed().len(), 1);
         assert_eq!(s.install("org.ruya.Racer").0, Status::AlreadyInstalled);
+    }
+
+    #[test]
+    fn an_app_removed_outside_the_store_can_be_installed_again() {
+        let s = store(fake());
+        s.install("org.ruya.Racer");
+        drain(&s);
+        assert_eq!(s.install("org.ruya.Racer").0, Status::AlreadyInstalled);
+        // `flatpak uninstall` by hand: the Store is not told.
+        s.flatpak.remove_installed("org.ruya.Racer");
+        assert!(
+            s.list_installed().is_empty(),
+            "the installed list follows Flatpak"
+        );
+        let (status, job) = s.install("org.ruya.Racer");
+        assert_eq!((status, job.is_empty()), (Status::Ok, false));
+        drain(&s);
+        assert_eq!(s.list_installed().len(), 1);
+        // And the other way round: removed outside, Uninstall says so.
+        s.flatpak.remove_installed("org.ruya.Racer");
+        assert_eq!(s.uninstall("org.ruya.Racer", false).0, Status::NotInstalled);
+    }
+
+    #[test]
+    fn install_is_accepted_after_an_outside_removal_even_without_a_list_call() {
+        let s = store(fake().with_installed("ruyaos", "org.ruya.Racer", 5_000_000));
+        assert!(s.get_app("org.ruya.Racer").1.installed);
+        s.flatpak.remove_installed("org.ruya.Racer");
+        assert_eq!(s.install("org.ruya.Racer").0, Status::Ok);
     }
 
     #[test]

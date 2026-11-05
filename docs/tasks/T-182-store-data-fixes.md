@@ -35,4 +35,14 @@ Two things the 0.0.40 try-out and the T-163 review found in `ruya-store`: a Stor
 - Don't build an image: the lead runs the VM queue.
 
 ## Outcome
-_Filled in by the implementer. First line: `Verified: host | vm | unverified | hw` (say what ran where). Then: what was built, files, deviations, follow-ups (each also an Inbox line)._
+Verified: host (vm pending: vm-store-check.sh)
+
+**Developer name once.** `appstream.rs`: `<developer_name>` now goes into its own `Builder.developer_name`; `<developer><name>` fills `developer` as before; `finish()` uses `developer_name` only when `developer` is empty. Translated variants stay ignored. Test `the_developer_is_named_once_whichever_elements_carry_it` covers both elements (either order), each alone, none, and a translated `developer_name`. Revert check: restoring `b.c.developer.push_str` for `developer_name` fails it ("both: the current element").
+
+**Installed state follows Flatpak.** `service.rs`: new `Store::sync_installed()` runs `flatpak list` (the existing `Flatpak::installed()`) and corrects every catalogue entry's `installed` flag (and clears `update_available` for one that is gone). It runs at the start of `queue()` (so `Install`, `Uninstall`, `Update` and `Rollback`, after id validation) and in `list_installed()`. Why this and not a TTL or event invalidation: it is correct at the moment the answer is given and costs one `flatpak list` next to calls that already start a transaction or read remotes; a TTL leaves a window of wrong answers and a watcher is more machinery than the task asks for. A failing `flatpak list` keeps the catalogue as it was. The `flatpak` call happens before the state lock is taken. `FakeFlatpak::remove_installed` simulates `flatpak uninstall` by hand. Tests: `an_app_removed_outside_the_store_can_be_installed_again` (installed, `already-installed`, removed outside, `ListInstalled` empty, `Install` accepted, and `Uninstall` of an app removed outside gives `not-installed`) and `install_is_accepted_after_an_outside_removal_even_without_a_list_call`. Revert check: removing the two `sync_installed()` calls fails both.
+
+**VM check (not run, lead run).** `scripts/vm-store-check.sh` has a new last section "removed outside the Store (T-182)": after the T-171 restart section it waits for the catalogue, installs the app, expects `already-installed` on a second Install, `flatpak uninstall` by hand, expects `ListInstalled` to be empty and `Install` to be accepted and to finish ok, then cleans up. It starts its own `busctl monitor` on a truncated `signals.log` because job ids restart after the service restart. Only `bash -n` was run here.
+
+Files: `services/ruya-store/src/appstream.rs`, `service.rs`, `flatpak.rs`, `scripts/vm-store-check.sh`, `docs/specs/03-services-and-apps.md` (Store "As built" paragraph).
+
+Deviations: none. Follow-up (Inbox): a correction made by `sync_installed` sends no `InstalledChanged`, so a shell that had the app listed as installed keeps showing it until its next read; it learns from the `ListInstalled`/`Install` answer only if it asks.

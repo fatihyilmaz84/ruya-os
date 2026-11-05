@@ -52,10 +52,15 @@ struct Builder {
     worst: u8,
     adult: bool,
     cached_icon: String,
+    /// The older `<developer_name>`; used only when there is no `<developer><name>`.
+    developer_name: String,
 }
 
 impl Builder {
     fn finish(mut self) -> Component {
+        if self.c.developer.is_empty() {
+            self.c.developer = self.developer_name;
+        }
         self.c.description = self.paragraphs.join("\n\n");
         self.c.controller =
             if matches!(self.custom_controller.as_str(), "full" | "partial" | "none") {
@@ -183,7 +188,7 @@ fn on_text(b: &mut Builder, stack: &[Open], text: &str, icon_base: &str) {
         }
         ("name", "component") if !top.translated => b.c.name.push_str(text),
         ("summary", "component") if !top.translated => b.c.summary.push_str(text),
-        ("developer_name", "component") if !top.translated => b.c.developer.push_str(text),
+        ("developer_name", "component") if !top.translated => b.developer_name.push_str(text),
         ("name", "developer") if !top.translated => b.c.developer.push_str(text),
         ("p" | "li", _) if in_description && !top.translated => b.paragraphs.push(text.to_owned()),
         ("icon", "component") => match top.kind.as_str() {
@@ -362,6 +367,29 @@ mod tests {
             racer.icon,
             "file:///var/lib/flatpak/appstream/ruyaos/x86_64/active/icons/128x128/org.example.Racer.png"
         );
+    }
+
+    #[test]
+    fn the_developer_is_named_once_whichever_elements_carry_it() {
+        let one = |inner: &str| {
+            let xml = format!(
+                "<components><component><id>org.example.D</id><name>D</name>{inner}</component></components>"
+            );
+            parse(&xml, "/icons").remove(0).developer
+        };
+        let old = "<developer_name>Old Name</developer_name>";
+        let new = "<developer><name>New Name</name></developer>";
+        assert_eq!(
+            one(&format!("{old}{new}")),
+            "New Name",
+            "both: the current element"
+        );
+        assert_eq!(one(&format!("{new}{old}")), "New Name", "in either order");
+        assert_eq!(one(old), "Old Name");
+        assert_eq!(one(new), "New Name");
+        assert_eq!(one(""), "");
+        let translated = "<developer_name xml:lang=\"tr\">Eski</developer_name>";
+        assert_eq!(one(&format!("{old}{translated}")), "Old Name");
     }
 
     #[test]
