@@ -246,7 +246,7 @@ Item {
             compare(checkRowsInside(pane), 0, "scrolled back to the top")
         }
 
-        // Scroll cue (T-185): the edge where rows continue fades; nothing fades when all rows fit.
+        // Scroll cue (T-185): the first / last visible row is dimmed while rows exist beyond it.
         function fillBluetoothPane() {
             for (let scan = 0; scan < 2; ++scan) {
                 Bluetooth.startScan()
@@ -260,50 +260,69 @@ Item {
             return pane
         }
 
-        function test_scroll_cue_follows_the_scroll_position() {
+        // The focused row is whole, undimmed and inside the viewport; returns the dimmed rows.
+        function checkFocusedRowClear(pane, label) {
+            const row = pane.focusableRows().find(r => r.activeFocus)
+            verify(row, label + ": a row has focus")
+            tryCompare(row, "opacity", 1, 2000, label + ": the focused row is not dimmed")
+            verify(row !== pane.peekAbove && row !== pane.peekBelow, label + ": the focused row is not a peek row")
+            const y = row.mapToItem(pane.viewport, 0, 0).y
+            verify(y >= -0.5 && y + row.height <= pane.viewport.height + 0.5, label + ": the focused row is inside the viewport")
+            return row
+        }
+
+        // Every row's settled opacity: peekOpacity for the peek rows, 1 for all others.
+        function checkPeekOpacities(pane, label) {
+            for (const r of pane.laidOutRows()) {
+                const peek = r === pane.peekAbove || r === pane.peekBelow
+                tryCompare(r, "opacity", peek ? Theme.peekOpacity : 1, 2000, label + ": " + r.objectName)
+            }
+        }
+
+        function test_scroll_cue_walks_down_and_up() {
             openSettings()
             const pane = fillBluetoothPane()
-            const above = findChild(pane, "fadeAbove")
-            const below = findChild(pane, "fadeBelow")
-            verify(above !== null && below !== null)
-            verify(pane.viewport.height < pane.height + 0.5)
-            // At the top: more below, nothing above.
-            compare(pane.scrollY, 0)
-            compare(pane.moreAbove, false)
-            compare(pane.moreBelow, true)
-            tryCompare(above, "opacity", 0)
-            tryCompare(below, "opacity", 1)
-            compare(above.visible, false)
-            compare(below.visible, true)
-            verify(below.y + below.height <= pane.viewport.height + 0.5, "the fade lies inside the viewport")
-            compare(below.y + below.height, pane.viewport.height, "and sits on its bottom edge")
-            compare(above.y, 0)
-            // In the middle: both.
             const rows = pane.focusableRows()
-            const mid = Math.floor(rows.length / 2)
-            for (let i = 0; i < mid; ++i)
+            const all = pane.laidOutRows()
+            // First row: nothing above it, the last visible row is the peek row.
+            checkFocusedRowClear(pane, "first row")
+            compare(pane.scrollY, 0)
+            compare(pane.peekAbove, null)
+            verify(pane.peekBelow !== null, "rows exist below the first screenful")
+            verify(pane.peekBelow.mapToItem(pane.viewport, 0, 0).y + pane.peekBelow.height >= pane.viewport.height - 0.5,
+                   "the peek row is the last visible one")
+            checkPeekOpacities(pane, "top")
+            let sawBoth = false
+            for (let i = 1; i < rows.length; ++i) {      // down, one row at a time
                 keyClick(Qt.Key_Down)
-            tryVerify(() => rows[mid].activeFocus, 2000, "focus is in the middle")
-            verify(pane.scrollY > 0, "the pane scrolled")
-            compare(pane.moreAbove, true)
-            compare(pane.moreBelow, true)
-            tryCompare(above, "opacity", 1)
-            tryCompare(below, "opacity", 1)
-            // At the end: more above, nothing below.
-            for (let i = mid; i < rows.length + 2; ++i)
-                keyClick(Qt.Key_Down)
-            tryVerify(() => rows[rows.length - 1].activeFocus, 2000, "the last row has focus")
-            compare(pane.moreAbove, true)
-            compare(pane.moreBelow, false)
-            tryCompare(above, "opacity", 1)
-            tryCompare(below, "opacity", 0)
-            compare(below.visible, false)
-            // And back to the top.
-            for (let i = 0; i < rows.length + 2; ++i)
+                tryVerify(() => rows[i].activeFocus, 2000, "down to row " + i)
+                const f = checkFocusedRowClear(pane, "down " + i)
+                const at = all.indexOf(f)
+                if (at < all.length - 1) {
+                    const next = all[at + 1]
+                    verify(next.mapToItem(pane.viewport, 0, 0).y + next.height <= pane.viewport.height + 0.5,
+                           "down " + i + ": the next row below is visible too")
+                }
+                checkPeekOpacities(pane, "down " + i)
+                sawBoth = sawBoth || (pane.peekAbove !== null && pane.peekBelow !== null)
+            }
+            verify(sawBoth, "mid-scroll both edges peek")
+            // Last row: nothing below it, no peek below; the row above the viewport peeks.
+            compare(pane.peekBelow, null)
+            verify(pane.peekAbove !== null)
+            checkPeekOpacities(pane, "end")
+            for (let i = rows.length - 2; i >= 0; --i) { // and up
                 keyClick(Qt.Key_Up)
-            tryVerify(() => rows[0].activeFocus, 2000, "the first row has focus")
-            tryCompare(above, "opacity", 0)
-            tryCompare(below, "opacity", 1)
+                tryVerify(() => rows[i].activeFocus, 2000, "up to row " + i)
+                const f = checkFocusedRowClear(pane, "up " + i)
+                const at = all.indexOf(f)
+                if (at > 0)
+                    verify(all[at - 1].mapToItem(pane.viewport, 0, 0).y >= -0.5,
+                           "up " + i + ": the row above is visible too")
+                checkPeekOpacities(pane, "up " + i)
+            }
+            compare(pane.scrollY, 0)
+            compare(pane.peekAbove, null)
         }
 
         function test_scroll_cue_hidden_when_everything_fits() {
@@ -313,26 +332,46 @@ Item {
             tryVerify(() => find("rowQuality").activeFocus)
             const pane = find("paneDisplay")
             verify(pane.laidOutRows().length > 0)
-            compare(pane.moreAbove, false)
-            compare(pane.moreBelow, false)
-            tryCompare(findChild(pane, "fadeAbove"), "opacity", 0)
-            tryCompare(findChild(pane, "fadeBelow"), "opacity", 0)
-            compare(findChild(pane, "fadeBelow").visible, false)
+            compare(pane.peekAbove, null)
+            compare(pane.peekBelow, null)
+            for (const r of pane.laidOutRows())
+                tryCompare(r, "opacity", 1)
+            for (let i = 0; i < 4; ++i) {
+                keyClick(Qt.Key_Down)
+                for (const r of pane.laidOutRows())
+                    tryCompare(r, "opacity", 1)
+            }
         }
 
         function test_scroll_cue_has_no_animation_under_reduced_motion() {
             DeviceSettings.reducedMotion = true
             openSettings()
             const pane = fillBluetoothPane()
-            const below = findChild(pane, "fadeBelow")
-            compare(pane.moreBelow, true)
-            compare(below.opacity, 1, "appears at once")
+            verify(pane.peekBelow !== null)
+            compare(pane.peekBelow.opacity, Theme.peekOpacity, "dims at once")
             const rows = pane.focusableRows()
             for (let i = 0; i < rows.length + 2; ++i)
                 keyClick(Qt.Key_Down)
             tryVerify(() => rows[rows.length - 1].activeFocus, 2000)
-            compare(pane.moreBelow, false)
-            compare(below.opacity, 0, "disappears at once")
+            compare(pane.peekBelow, null)
+            for (const r of pane.laidOutRows())
+                compare(r.opacity, r === pane.peekAbove ? Theme.peekOpacity : 1, "settled at once: " + r.objectName)
+        }
+
+        function test_look_ahead_keeps_whole_rows_and_the_first_and_last_row_reachable() {
+            openSettings()
+            const pane = fillBluetoothPane()
+            const rows = pane.focusableRows()
+            for (let i = 0; i < rows.length + 2; ++i)
+                keyClick(Qt.Key_Down)
+            tryVerify(() => rows[rows.length - 1].activeFocus, 2000, "the last row takes focus")
+            checkFocusedRowClear(pane, "last")
+            checkRowsInside(pane)
+            for (let i = 0; i < rows.length + 2; ++i)
+                keyClick(Qt.Key_Up)
+            tryVerify(() => rows[0].activeFocus, 2000, "the first row takes focus")
+            checkFocusedRowClear(pane, "first")
+            compare(checkRowsInside(pane), 0)
         }
 
         function test_pane_remembers_last_row() {

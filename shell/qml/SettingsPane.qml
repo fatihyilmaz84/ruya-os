@@ -25,9 +25,10 @@ FocusScope {
     // bottom of the last row that fits. Its height is therefore at most the pane's.
     readonly property Item viewport: view
     readonly property real scrollY: flick.contentY
-    // Rows exist above / below the viewport (the scroll cue fades that edge, T-185).
-    readonly property bool moreAbove: !flick.atYBeginning
-    readonly property bool moreBelow: flick.contentY + view.height < column.height - 0.5
+    // Scroll cue (T-185): while rows exist beyond the first / last visible row, that row (the peek
+    // row) is drawn at Theme.peekOpacity. Never the focused row. Set by updatePeek().
+    property Item peekAbove: null
+    property Item peekBelow: null
 
     // Visible rows (and spacers) of the column in order, with a height.
     function laidOutRows() {
@@ -49,6 +50,31 @@ FocusScope {
                 best = Math.max(best, r.y + r.height - flick.contentY)
         }
         view.height = best > 0 ? best : pane.height
+        updatePeek()
+    }
+
+    // The first / last visible row is the peek row when rows exist beyond it; a row that is not
+    // a peek row, or holds focus, is drawn whole. Rows ease their opacity (SettingControl).
+    function updatePeek() {
+        const list = laidOutRows()
+        let first = -1
+        let last = -1
+        for (let k = 0; k < list.length; ++k) {
+            const r = list[k]
+            if (r.y + r.height > flick.contentY + 0.5 && first < 0)
+                first = k
+            if (r.y + r.height <= flick.contentY + view.height + 0.5)
+                last = k
+        }
+        const above = first > 0 ? list[first] : null
+        const below = last >= 0 && last < list.length - 1 ? list[last] : null
+        peekAbove = above && !above.activeFocus ? above : null
+        peekBelow = below && !below.activeFocus ? below : null
+        for (let i = 0; i < column.children.length; ++i) {
+            const c = column.children[i]
+            if (c && c.opacity !== undefined)
+                c.opacity = (c === peekAbove || c === peekBelow) ? Theme.peekOpacity : 1
+        }
     }
 
     // After the rows or the pane size changed: put the top edge on a row's top again.
@@ -63,24 +89,43 @@ FocusScope {
         updateView()
     }
 
-    // Scrolls so the focused row is fully visible. Called after every move and when the
-    // pane gains focus; call it after changing focus from code.
+    // Scrolls so the focused row is fully visible and, when there is room, so is the row above
+    // and the row below it (look-ahead, T-185): a focused row touches the pane edge only when it
+    // is the first or last row, so the peek row (dimmed by updatePeek) is never the focused one.
+    // Scrolls in whole rows and as little as possible. Called after every move and when the pane
+    // gains focus; call it after changing focus from code.
     function ensureFocusedVisible() {
         const row = focusableRows().find(r => r.activeFocus)
         if (!row)
             return
-        if (row.y < flick.contentY) {
-            flick.contentY = row.y
-        } else if (row.y + row.height > flick.contentY + pane.height) {
-            // The first row boundary that brings the bottom of the focused row into view.
-            const need = row.y + row.height - pane.height
-            let top = row.y
-            for (const r of laidOutRows()) {
-                if (r.y >= need - 0.5 && r.y < top)
-                    top = r.y
-            }
-            flick.contentY = top
+        const list = laidOutRows()
+        const i = list.indexOf(row)
+        if (i < 0)
+            return
+        let cur = 0                                // the row on top now
+        for (let k = 0; k < list.length; ++k) {
+            if (list[k].y <= flick.contentY + 0.5)
+                cur = k
         }
+        // The last row that fits whole when row t is on top.
+        const lastFit = t => {
+            let b = t
+            for (let k = t; k < list.length && list[k].y + list[k].height <= list[t].y + pane.height + 0.5; ++k)
+                b = k
+            return b
+        }
+        // The top row nearest to the current one that shows rows lo..hi whole, or -1.
+        const place = (lo, hi) => {
+            for (let t = 0; t <= lo; ++t) {
+                if (lastFit(t) >= hi)
+                    return Math.max(t, Math.min(cur, lo))
+            }
+            return -1
+        }
+        let top = place(Math.max(0, i - 1), Math.min(list.length - 1, i + 1))
+        if (top < 0)
+            top = place(i, i)
+        flick.contentY = list[top < 0 ? i : top].y
         updateView()
     }
     // On entering the pane: if no row holds focus (the remembered row is hidden, or there is
@@ -144,29 +189,6 @@ FocusScope {
                 onHeightChanged: Qt.callLater(pane.relayout)
             }
         }
-
-        // Scroll cue (T-185): the edge where rows continue fades into the page colour. It sits
-        // inside the clip, so it follows the viewport, and covers no more than the focus ring's
-        // margin plus half a row (Theme.spaceXl).
-        component EdgeFade: Rectangle {
-            id: fade
-            required property bool atTop
-            required property bool shown
-            required property real unit
-            anchors { left: parent.left; right: parent.right }
-            height: Theme.spaceXl * fade.unit
-            opacity: shown ? 1 : 0
-            visible: opacity > 0
-            enabled: false
-            gradient: Gradient {
-                orientation: Gradient.Vertical
-                GradientStop { position: 0; color: fade.atTop ? Theme.edgeFade : Theme.edgeFadeClear }
-                GradientStop { position: 1; color: fade.atTop ? Theme.edgeFadeClear : Theme.edgeFade }
-            }
-            Behavior on opacity { NumberAnimation { duration: Theme.focusMs } }   // 0 under reduced motion: just appears
-        }
-        EdgeFade { objectName: "fadeAbove"; unit: pane.u; atTop: true; shown: pane.moreAbove; anchors.top: parent.top }
-        EdgeFade { objectName: "fadeBelow"; unit: pane.u; atTop: false; shown: pane.moreBelow; anchors.bottom: parent.bottom }
     }
     onHeightChanged: Qt.callLater(relayout)
 
