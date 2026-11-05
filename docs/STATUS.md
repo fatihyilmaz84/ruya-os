@@ -24,8 +24,7 @@ Open work only (todo, in-progress, blocked), in the recommended order; when NEXT
 | ID | Title | Status | Depends |
 |---|---|---|---|
 | [T-184](tasks/T-184-devices-volume-grouping-and-watcher-debounce.md) | One toast per USB stick; PipeWire watcher debounce | todo | — |
-| [T-185](tasks/T-185-scroll-affordance.md) | Scroll cue on long Settings panes (edge fade) | todo | — |
-| [T-181](tasks/T-181-shell-backend-stale-replies.md) | Shell backends: a late reply never overwrites newer data | in-progress | — |
+| [T-185](tasks/T-185-scroll-affordance.md) | Scroll cue on long Settings panes (edge fade) | in-progress | — |
 | [T-187](tasks/T-187-ci-and-make-disk-hygiene.md) | CI runs the font check; `make-disk.sh` needs the dev key file | todo | — |
 | [T-180](tasks/T-180-network-polkit-deny-by-default.md) | NetworkManager polkit: refuse every action the shell doesn't need | in-progress | — |
 | [T-186](tasks/T-186-accessibility-walk-flows.md) | Action-named confirm buttons; accessibility walk of wizard/profile flows | todo | T-179 |
@@ -50,6 +49,7 @@ Follow-ups and debt for the next planner, one line each: `- (source) what, and w
 - (T-183 review) `ruya-library` `desktop_name` doesn't unescape desktop-entry escapes (`\s`): cosmetic. `vm-library-check.sh` early `exit 1` leaves the monitor and test repo behind (use a `trap`).
 - (T-178) The ISO's own boot menu still says "Install Fedora Linux 44" (bib has no product-name setting): cosmetic, low priority. A fresh worktree rebuilds the shell and services image stages from scratch (30+ min): budget that for image-lane builders. `vm-iso-check.ps1` reads greenboot state over SSH with the dev key: needs another way (serial console) once the dev key leaves the ISO.
 - (T-178 review) `vm-iso-check.ps1`: print the installed disk's boot entry titles; resolve an absolute `-Disk` properly and refuse paths outside `output\` (it deletes the target first).
+- (T-181 review) `DBusProfilesBackend` still emits `listed` straight from an async `ListProfiles` reply: give it a `RequestSequence`; check Store, Library and Update backends too. The guard wiring in the four `DBus*Backend.cpp` was only exercised through the mock: add a shell-over-D-Bus VM step that triggers a refresh by signal.
 - (0.0.40 try-out) The VM clock shows UTC: there is no time-zone setting yet (wizard or System pane); plan it with the OOBE/installer work.
 
 ## Blocked (need something this host doesn't have)

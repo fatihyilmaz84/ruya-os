@@ -1,6 +1,6 @@
 # T-185 — Scroll cue: a long Settings pane shows that more rows exist
 
-Status: todo · Phase: 2 · Depends: — · Area: shell · Size: S · Owner: builder
+Status: in-progress · Phase: 2 · Depends: — · Area: shell · Size: S · Owner: builder
 
 ## Goal
 Since T-170 and T-175 no half-cut row hints that a Settings pane continues below the viewport. A viewer on the sofa can't tell. Add the cue the lead chose (design decision below).
