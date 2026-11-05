@@ -68,6 +68,12 @@ struct State {
     queue: Queue,
     /// Permissions by (app id, remote): metadata is read once per app, not on every refresh.
     permissions: HashMap<(String, String), Vec<String>>,
+    /// The installed set and update flags the clients were last told about (or read first):
+    /// `refresh` compares against this, not against the catalogue, which `sync_installed` may
+    /// have corrected in between, so a job's change is never swallowed.
+    announced: Vec<(String, bool)>,
+    /// Bumped by every `refresh`; `sync_installed` drops a read that a refresh overtook.
+    generation: u64,
 }
 
 pub struct Store<F: Flatpak> {
@@ -153,7 +159,10 @@ impl<F: Flatpak> Store<F> {
         catalogue.sort_by_key(|a| a.name.to_lowercase());
 
         let mut state = self.state();
-        let changed = signature(&state.catalogue) != signature(&catalogue);
+        let now = owned_signature(&catalogue);
+        let changed = state.announced != now;
+        state.announced = now;
+        state.generation += 1;
         state.catalogue = catalogue;
         Ok(changed)
     }
@@ -243,7 +252,38 @@ impl<F: Flatpak> Store<F> {
         }
     }
 
+    /// Reads which apps Flatpak has installed now and corrects the catalogue's flags, so an app
+    /// removed (or added) outside the Store, with `flatpak uninstall` for instance, is not
+    /// answered from a stale cache. Chosen over a time-based or event-based invalidation because
+    /// it is correct at the moment that matters and costs one `flatpak list`, which is fast
+    /// next to the transactions and the remote reads the same calls lead to. A failing read
+    /// keeps what the catalogue says.
+    fn sync_installed(&self) {
+        let generation = self.state().generation;
+        let Ok(installed) = self.flatpak.installed() else {
+            return;
+        };
+        let mut state = self.state();
+        if state.generation != generation {
+            // A refresh finished while `flatpak list` ran: its catalogue is newer than this read.
+            return;
+        }
+        for app in &mut state.catalogue {
+            match installed.iter().find(|i| i.id == app.id) {
+                Some(i) => {
+                    app.installed = true;
+                    app.installed_size = app.installed_size.max(i.installed_size);
+                }
+                None => {
+                    app.installed = false;
+                    app.update_available = false;
+                }
+            }
+        }
+    }
+
     pub fn list_installed(&self) -> Vec<App> {
+        self.sync_installed();
         self.state()
             .catalogue
             .iter()
@@ -262,6 +302,8 @@ impl<F: Flatpak> Store<F> {
         if !valid_app_id(id) {
             return (Status::Invalid, String::new());
         }
+        // Flatpak decides what is installed, not the cache of the last refresh.
+        self.sync_installed();
         let mut state = self.state();
         let Some(app) = state.catalogue.iter().find(|a| a.id == id).cloned() else {
             return (Status::UnknownApp, String::new());
@@ -468,11 +510,11 @@ fn fallback_name(id: &str) -> String {
 }
 
 /// What `InstalledChanged` is about: which apps are installed and which have an update.
-fn signature(catalogue: &[App]) -> Vec<(&str, bool)> {
+fn owned_signature(catalogue: &[App]) -> Vec<(String, bool)> {
     let mut sig: Vec<_> = catalogue
         .iter()
         .filter(|a| a.installed)
-        .map(|a| (a.id.as_str(), a.update_available))
+        .map(|a| (a.id.clone(), a.update_available))
         .collect();
     sig.sort_unstable();
     sig
@@ -586,6 +628,86 @@ mod tests {
         assert!(s.get_app("org.ruya.Racer").1.installed);
         assert_eq!(s.list_installed().len(), 1);
         assert_eq!(s.install("org.ruya.Racer").0, Status::AlreadyInstalled);
+    }
+
+    #[test]
+    fn an_app_removed_outside_the_store_can_be_installed_again() {
+        let s = store(fake());
+        s.install("org.ruya.Racer");
+        drain(&s);
+        assert_eq!(s.install("org.ruya.Racer").0, Status::AlreadyInstalled);
+        // `flatpak uninstall` by hand: the Store is not told.
+        s.flatpak.remove_installed("org.ruya.Racer");
+        assert!(
+            s.list_installed().is_empty(),
+            "the installed list follows Flatpak"
+        );
+        let (status, job) = s.install("org.ruya.Racer");
+        assert_eq!((status, job.is_empty()), (Status::Ok, false));
+        drain(&s);
+        assert_eq!(s.list_installed().len(), 1);
+        // And the other way round: removed outside, Uninstall says so.
+        s.flatpak.remove_installed("org.ruya.Racer");
+        assert_eq!(s.uninstall("org.ruya.Racer", false).0, Status::NotInstalled);
+    }
+
+    #[test]
+    fn install_is_accepted_after_an_outside_removal_even_without_a_list_call() {
+        let s = store(fake().with_installed("ruyaos", "org.ruya.Racer", 5_000_000));
+        assert!(s.get_app("org.ruya.Racer").1.installed);
+        s.flatpak.remove_installed("org.ruya.Racer");
+        assert_eq!(s.install("org.ruya.Racer").0, Status::Ok);
+    }
+
+    #[test]
+    fn a_job_that_ends_during_a_query_still_sends_installed_changed() {
+        let s = store(fake());
+        // The job's `flatpak install` has returned; its refresh has not run yet.
+        s.flatpak
+            .run(
+                &Operation::Install {
+                    id: "org.ruya.Racer".into(),
+                    remote: "ruyaos".into(),
+                },
+                &mut |_| {},
+            )
+            .unwrap();
+        // A query in that window corrects the catalogue ...
+        assert_eq!(s.list_installed().len(), 1);
+        // ... but the clients were not told yet: the refresh must still announce it.
+        assert_eq!(s.refresh(), Ok(true));
+        assert_eq!(s.refresh(), Ok(false), "and only once");
+    }
+
+    #[test]
+    fn a_failing_flatpak_list_keeps_the_installed_flags() {
+        let s = store(fake().with_installed("ruyaos", "org.ruya.Racer", 5_000_000));
+        s.flatpak.set_installed_fails(true);
+        assert_eq!(s.list_installed().len(), 1);
+        assert_eq!(s.install("org.ruya.Racer").0, Status::AlreadyInstalled);
+        s.flatpak.set_installed_fails(false);
+        s.flatpak.remove_installed("org.ruya.Racer");
+        assert_eq!(s.install("org.ruya.Racer").0, Status::Ok);
+    }
+
+    #[test]
+    fn a_list_read_overtaken_by_a_refresh_is_dropped() {
+        let s = std::sync::Arc::new(store(fake().with_installed(
+            "ruyaos",
+            "org.ruya.Racer",
+            5_000_000,
+        )));
+        assert!(s.get_app("org.ruya.Racer").1.installed);
+        // While `flatpak list` runs (it has already answered "installed"), the app is removed
+        // and a job's refresh rebuilds the catalogue. The older read must not undo that.
+        let later = std::sync::Arc::downgrade(&s);
+        s.flatpak.after_next_installed(move || {
+            let s = later.upgrade().unwrap();
+            s.flatpak.remove_installed("org.ruya.Racer");
+            s.refresh().unwrap();
+        });
+        assert!(s.list_installed().is_empty());
+        assert!(!s.get_app("org.ruya.Racer").1.installed);
     }
 
     #[test]

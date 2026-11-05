@@ -259,6 +259,30 @@ check)
     pkill -f "probe2[.]qml" 2>/dev/null
     flatpak uninstall --system -y "$app" >/dev/null 2>&1 || true   # an install cut short may have left it
     grep -a -i "warn\|Store1.*failed" "$work/probe2.log" | grep -v "store-probe" | head -5
+    echo "--- removed outside the Store (T-182): Install is accepted again"
+    # The service was restarted above: wait until it has read the catalogue again.
+    n=0
+    until as_shell busctl --system call "$svc" "$path" "$ifc" Search sa{sv} "TestApp" 0 | grep -q "$app" || [ "$n" -ge 120 ]; do sleep 1; n=$((n + 1)); done
+    # Job ids start again after a restart: read only the signals from here on.
+    : > "$work/signals.log"
+    busctl --system --json=short monitor "$svc" >> "$work/signals.log" 2>&1 &
+    mon=$!
+    sleep 2
+    out="$(as_shell busctl --system call "$svc" "$path" "$ifc" Install s "$app")"
+    job="$(echo "$out" | sed -n 's/^ss "ok" "\(.*\)"$/\1/p')"
+    [ -n "$job" ] && ok "Install queued $job" || bad "Install before the outside removal: $out"
+    fin="$(wait_job "$job" 180)" && echo "$fin" | grep -q '"ok"' && ok "the install finished ok" || bad "the install did not finish ok"
+    case "$(as_shell busctl --system call "$svc" "$path" "$ifc" Install s "$app")" in 'ss "already-installed"'*) ok "Install of the installed app: already-installed";; *) bad "Install of the installed app";; esac
+    flatpak uninstall --system -y "$app" >/dev/null 2>&1 && ok "flatpak uninstall by hand" || bad "flatpak uninstall by hand failed"
+    as_shell busctl --system call "$svc" "$path" "$ifc" ListInstalled | grep -q "$app" && bad "ListInstalled still lists the app removed by hand" || ok "ListInstalled follows Flatpak"
+    out="$(as_shell busctl --system call "$svc" "$path" "$ifc" Install s "$app")"
+    echo "Install after the outside removal: $out"
+    job="$(echo "$out" | sed -n 's/^ss "ok" "\(.*\)"$/\1/p')"
+    [ -n "$job" ] && ok "Install is accepted after flatpak uninstall (no restart)" || bad "Install after the outside removal: $out"
+    fin="$(wait_job "$job" 180)" && echo "$fin" | grep -q '"ok"' && ok "the second install finished ok" || bad "the second install did not finish ok"
+    flatpak list --system --app | grep -q "$app" && ok "flatpak has the app again" || bad "flatpak does not have the app"
+    kill "$mon" 2>/dev/null
+    flatpak uninstall --system -y "$app" >/dev/null 2>&1 || true
     ;;
 esac
 [ "$fail" = 0 ] && echo "ALL CHECKS PASSED" || echo "SOME CHECKS FAILED"
