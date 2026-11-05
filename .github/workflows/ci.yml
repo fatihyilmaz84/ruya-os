@@ -16,7 +16,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Mirrors the `dev.ps1` steps "text lint" and "token lint". Outside the Fedora container: pwsh is on the runner.
+  # Mirrors the `dev.ps1` steps "text lint", "token lint", "icon lint" and "font coverage". Outside the Fedora container: pwsh is on the runner.
   lint:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -28,6 +28,12 @@ jobs:
         run: pwsh -NoProfile -File scripts/lint-tokens.ps1
       - name: Icon lint
         run: pwsh -NoProfile -File scripts/lint-icons.ps1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Font coverage
+        # Standard library only; mirrors the "font coverage" step of dev.ps1 test (T-145).
+        run: python -I scripts/check-font-coverage.py .
       - name: Translation lint
         run: pwsh -NoProfile -File scripts/lint-translations.ps1
       - name: Board lint
@@ -86,6 +92,9 @@ jobs:
         run: scripts/build.sh "0.0.0-ci.${GITHUB_RUN_NUMBER}"
 
       - name: Build qcow2
+        # image/bib/config.toml (the dev SSH key) is git-ignored and absent here: a keyless disk is intended.
+        env:
+          RUYA_NO_DEV_KEY: "1"
         run: scripts/make-disk.sh qcow2
 
       - name: Install QEMU

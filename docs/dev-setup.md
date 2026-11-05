@@ -10,7 +10,7 @@ Edit on Windows, build in a Fedora WSL distribution, boot in QEMU for Windows (W
 4. **`%USERPROFILE%\.wslconfig`**: `memory=8GB` and `nestedVirtualization=false`. (It was 20 GB with nested virtualization on until 2026-10-27, when WSL's `ext4` kept going read-only during builds; after lowering it and recreating the distro, builds ran clean. Nested virtualization has no effect on this AMD host anyway: `/dev/kvm` stays absent in WSL, so VMs run in Windows QEMU, not inside WSL.) If `dmesg` in WSL shows `ext4` errors, recreate the distro (`wsl --unregister FedoraLinux-44`, step 2 again; it holds only packages).
 5. **Dev VM access:**
    - an SSH key at `%USERPROFILE%\.ssh\ruyaos_dev` (`ssh-keygen -t ed25519 -N "" -f ...`);
-   - `image/bib/config.toml` (git-ignored, copied from `config.toml.example`), which puts that key on `root` in test disks.
+   - `image/bib/config.toml` (git-ignored, copied from `config.toml.example`), which puts that key on `root` in test disks. A git-ignored file is not in a fresh worktree: copy it from the main checkout first, or `make-disk.sh` stops with an error (`make-disk.sh --check-config` tests this without building; `RUYA_NO_DEV_KEY=1` builds a keyless disk on purpose, as CI does).
 6. Optional but recommended: a spare **low-tier mini-PC** for hardware checks. Flash it from `output/bootiso/install.iso` ("Installer ISO" below) with Fedora Media Writer or Rufus (DD mode).
 
 ## Build → disk → boot
@@ -195,10 +195,10 @@ It prints `pkcheck` verdicts for the six `login1` actions for the `ruya-shell` p
 
 | CI job | Runs | Local equivalent |
 |---|---|---|
-| `lint` | `pwsh scripts/lint-text.ps1`, `lint-board.ps1`, `lint-tokens.ps1`, `lint-translations.ps1` | the "text lint" and "board lint" steps of `dev.ps1 test` and the "token lint" and "translation lint" steps of `dev.ps1 shell` |
+| `lint` | `pwsh scripts/lint-text.ps1`, `lint-board.ps1`, `lint-tokens.ps1`, `lint-icons.ps1`, `lint-translations.ps1`, `lint-tests.ps1`, and `python -I scripts/check-font-coverage.py .` | the "text lint" and "board lint" steps of `dev.ps1 test` and the token, icon, font coverage, translation and test lint steps of `dev.ps1 shell` |
 | `services` | `cargo fmt --check`, `clippy -D warnings`, `cargo test` (Ubuntu, Rust **1.92.0**, the host's version: when you update the host's Rust, bump `ci.yml` in the same commit) | `dev.ps1 rust` |
 | `shell` | build with Fedora's Qt (Fedora 44 container), `qmllint --max-warnings 0`, Qt Quick tests offscreen | `dev.ps1 shell` (Qt 6.10.3 on MSVC here; CI also proves that no API newer than Qt 6.8 crept in) |
-| `image` | needs the three jobs above; `scripts/build.sh`, `make-disk.sh qcow2`, `smoke-test.sh` under KVM (about 20 minutes); uploads `serial.log` | the WSL build and `smoke-test.ps1` (image section above) |
+| `image` | needs the three jobs above; `scripts/build.sh`, `RUYA_NO_DEV_KEY=1 make-disk.sh qcow2`, `smoke-test.sh` under KVM (about 20 minutes); uploads `serial.log` | the WSL build and `smoke-test.ps1` (image section above) |
 
 The `image` job has no local equivalent in `dev.ps1 test`; run the WSL recipe for image changes.
 
