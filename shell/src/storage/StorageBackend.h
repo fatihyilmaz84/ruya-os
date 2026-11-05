@@ -1,5 +1,7 @@
 #pragma once
 
+#include "RequestSequence.h"
+
 #include <QList>
 #include <QObject>
 #include <QString>
@@ -37,4 +39,17 @@ signals:
     void volumeAdded(const QString &id);
     // op: "eject"; status: see the XML ("ok", "busy", ...).
     void finished(const QString &op, const QString &id, const QString &status);
+
+protected:
+    // Replies can arrive out of order: number each request when it is sent and report a reply only
+    // if no newer one has been reported already. RequestSequence.h.
+    quint64 beginRequest() { return m_listSeq.begin(); }
+    void deliver(quint64 request, const QList<StorageVolume> &volumes)
+    {
+        if (m_listSeq.accept(request))
+            emit volumesListed(volumes);
+    }
+
+private:
+    RequestSequence m_listSeq;
 };

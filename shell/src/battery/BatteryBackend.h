@@ -1,5 +1,7 @@
 #pragma once
 
+#include "RequestSequence.h"
+
 #include <QList>
 #include <QObject>
 #include <QString>
@@ -31,16 +33,13 @@ signals:
 protected:
     // Replies can arrive out of order: number each request when it is sent and report a reply only
     // if no newer one has been reported already.
-    quint64 beginRequest() { return ++m_issued; }
+    quint64 beginRequest() { return m_listSeq.begin(); }
     void deliver(quint64 request, const QList<ControllerBattery> &controllers)
     {
-        if (request <= m_applied)
-            return;
-        m_applied = request;
-        emit listed(controllers);
+        if (m_listSeq.accept(request))
+            emit listed(controllers);
     }
 
 private:
-    quint64 m_issued = 0;
-    quint64 m_applied = 0;
+    RequestSequence m_listSeq;
 };

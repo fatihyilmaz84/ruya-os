@@ -268,6 +268,17 @@ Item {
             tryVerify(() => find("storageVol_vol-old").activeFocus, 2000, "focus moves to a valid row")
         }
 
+        function test_an_older_reply_arriving_late_is_dropped() {
+            // Two volumes. Ask again (the reply, a snapshot of that, is held back), then the stick is
+            // plugged in: the late reply must not take it off the list again.
+            Storage.mockRefreshDelayed(150)
+            compare(Storage.mockPendingReplies(), 1)
+            Storage.mockPlugStick()
+            tryVerify(() => Storage.volumes.length === 3)
+            tryVerify(() => Storage.mockPendingReplies() === 0)
+            compare(Storage.volumes.length, 3, "the late two-volume reply was dropped")
+        }
+
         function test_zz_screenshots() {
             if (!shotsDir)
                 skip("set RUYA_SHOTS_DIR to save screenshots")

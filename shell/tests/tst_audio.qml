@@ -306,6 +306,22 @@ Item {
             compare(icon.name, "volume_up")
         }
 
+        function test_an_older_reply_arriving_late_is_dropped() {
+            // Volume 50 on the TV. Ask again (the replies, a snapshot of that, are held back), then
+            // the volume is raised and a headset plugged in: the late replies must not put 50 and
+            // the TV back. The state and the output list are two kinds of reply.
+            Audio.mockRefreshDelayed(150)
+            compare(Audio.mockPendingReplies(), 2)
+            Audio.setVolume(70)
+            verify(Audio.mockPlug("usb-headset"))
+            tryCompare(Audio, "volume", 70)
+            tryCompare(Audio, "defaultSink", "usb-headset")
+            tryVerify(() => Audio.mockPendingReplies() === 0)
+            compare(Audio.volume, 70, "the late state was dropped")
+            compare(Audio.defaultSink, "usb-headset", "the late output list was dropped")
+            compare(Audio.sinks.length, 3)
+        }
+
         function test_zz_screenshots() {
             if (!shotsDir)
                 skip("set RUYA_SHOTS_DIR to save screenshots")

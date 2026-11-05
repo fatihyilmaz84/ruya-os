@@ -138,3 +138,18 @@ void Bluetooth::mockReset()
     if (auto *mock = qobject_cast<MockBluetoothBackend *>(m_backend.get()))
         mock->reset();
 }
+
+void Bluetooth::mockRefreshDelayed(int ms)
+{
+    if (auto *mock = qobject_cast<MockBluetoothBackend *>(m_backend.get())) {
+        mock->setReplyDelay(ms);
+        mock->refresh();
+        mock->setReplyDelay(0);
+    }
+}
+
+int Bluetooth::mockPendingReplies() const
+{
+    auto *mock = qobject_cast<MockBluetoothBackend *>(m_backend.get());
+    return mock ? mock->pendingReplies() : 0;
+}

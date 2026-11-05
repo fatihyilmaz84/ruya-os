@@ -35,4 +35,17 @@ The Network, Bluetooth, Storage and Audio D-Bus clients refresh asynchronously. 
 - If a backend has no seam to feed a fake reply, add the smallest one the battery test uses; don't restructure the backend.
 
 ## Outcome
-_Filled in by the implementer. First line: `Verified: host | vm | unverified | hw` (say what ran where). Then: what was built, files, deviations, follow-ups (each also an Inbox line)._
+Verified: host (`dev.ps1 test` ALL GREEN, offscreen; the D-Bus clients themselves cannot run on this machine, see below).
+
+Built:
+- `shell/src/backend/RequestSequence.h`: a header-only class, `begin()` numbers a request, `accept(n)` is true only for a reply newer than any already reported. Moved out of `BatteryBackend`, which now holds one.
+- Each backend base class (`NetworkBackend`, `BluetoothBackend`, `StorageBackend`, `AudioBackend`, like `BatteryBackend` already) owns one `RequestSequence` per kind of reply that replaces a model: Network state + networks, Bluetooth state + devices, Storage volumes, Audio state + sinks. It offers `begin...Request()` and `deliver...()` that emit the signal only for the newest reply. The D-Bus client (`refreshState`, `refreshNetworks`, `refreshDevices`, `refreshSinks`, `refresh`) numbers the request when it sends it and delivers through the base class; so does the mock, so a test with the mock exercises the same guard.
+- Seam, copied from the battery test: each mock got `setReplyDelay(ms)`/`pendingReplies()` (only `refresh()` replies are delayed; the mock's own change notifications stay immediate), and each facade `mockRefreshDelayed(ms)`/`mockPendingReplies()`. Bluetooth's mock now sends its state and its device list as two requests, like the bus.
+- Tests (`test_an_older_reply_arriving_late_is_dropped` in `tst_network`, `tst_bluetooth`, `tst_storage`, `tst_audio`): the reply to an old refresh is held back, the data changes (cable unplugged and Cafe Guest joined; Bluetooth switched off; stick plugged in; volume raised and headset plugged in), the late reply lands and the model keeps the newer data. `tst_battery` is unchanged and passes.
+- Docs: one bullet in `shell/CLAUDE.md` (backend pattern).
+
+Revert check (done twice): (1) removed the `accept()` guard from all four base classes, so the four tests failed (Audio "the late state was dropped", Bluetooth "the late powered state was dropped", Network "the late wired state was dropped", Storage "the late two-volume reply was dropped"), everything else passed; (2) removed it only from the second kind of reply (networks, devices, sinks), so the Network, Bluetooth and Audio tests failed on their list assertion ("the late output list was dropped", ...). Guards restored afterwards.
+
+Not verifiable here: the guard code in the `DBus*Backend.cpp` files is exercised only on Linux (no bus on this host); the tests cover the shared guard through the mock, which calls the same base-class `deliver` functions. The D-Bus clients are a mechanical change (number at send, deliver at reply).
+
+Files: see the commit. Deviations: none. No contract change. A signal-driven refresh (`NetworksChanged`, `PropertiesChanged`, ...) is itself a new request, so a pushed update is also protected against an older reply.

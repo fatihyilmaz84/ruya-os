@@ -77,8 +77,9 @@ void DBusNetworkBackend::refreshState()
 {
     auto msg = QDBusMessage::createMethodCall(Service, Path, PropertiesInterface, QStringLiteral("GetAll"));
     msg << Interface;
+    const quint64 request = beginStateRequest();
     auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
-    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this](QDBusPendingCallWatcher *w) {
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, request](QDBusPendingCallWatcher *w) {
         w->deleteLater();
         const QDBusMessage reply = w->reply();
         if (reply.type() != QDBusMessage::ReplyMessage || reply.arguments().isEmpty()) {
@@ -90,22 +91,23 @@ void DBusNetworkBackend::refreshState()
         const QVariant raw = props.value(QStringLiteral("Primary"));
         if (raw.canConvert<QDBusArgument>())
             primary = parseDict(raw.value<QDBusArgument>());
-        emit stateChanged(props.value(QStringLiteral("State"), QStringLiteral("disconnected")).toString(), primary);
+        deliverState(request, props.value(QStringLiteral("State"), QStringLiteral("disconnected")).toString(), primary);
     });
 }
 
 void DBusNetworkBackend::refreshNetworks()
 {
     auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("ListWifi"));
+    const quint64 request = beginNetworksRequest();
     auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
-    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this](QDBusPendingCallWatcher *w) {
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, request](QDBusPendingCallWatcher *w) {
         w->deleteLater();
         const QDBusMessage reply = w->reply();
         if (reply.type() != QDBusMessage::ReplyMessage || reply.arguments().isEmpty()) {
             qWarning("ruya-shell: Devices1.Network ListWifi failed: %s", qPrintable(reply.errorMessage()));
             return;
         }
-        emit networksListed(parseNetworks(reply.arguments().constFirst().value<QDBusArgument>()));
+        deliverNetworks(request, parseNetworks(reply.arguments().constFirst().value<QDBusArgument>()));
     });
 }
 

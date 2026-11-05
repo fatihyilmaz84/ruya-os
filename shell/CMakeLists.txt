@@ -19,6 +19,7 @@ qt_add_qml_module(ruyashell
     VERSION 1.0
     OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/RuyaShell   # lets qmllint resolve the module
     SOURCES
+        src/backend/RequestSequence.h
         src/profiles/ProfilesBackend.h
         src/profiles/MockProfilesBackend.h src/profiles/MockProfilesBackend.cpp
         src/profiles/DBusProfilesBackend.h src/profiles/DBusProfilesBackend.cpp
@@ -134,7 +135,7 @@ qt_add_qml_module(ruyashell
 )
 
 # qmltyperegistrar includes the QML_ELEMENT headers by file name.
-target_include_directories(ruyashell PUBLIC src/profiles src/settings src/audio src/network src/bluetooth src/battery src/storage src/system src/power src/store src/library src/update src/session src/input)
+target_include_directories(ruyashell PUBLIC src/backend src/profiles src/settings src/audio src/network src/bluetooth src/battery src/storage src/system src/power src/store src/library src/update src/session src/input)
 target_link_libraries(ruyashell PRIVATE Qt6::Quick Qt6::Multimedia Qt6::DBus)
 
 # Translations: the .ts files in i18n/ are compiled to .qm and embedded as :/i18n/ruyashell_<lang>.qm.

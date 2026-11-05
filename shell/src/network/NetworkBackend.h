@@ -1,5 +1,7 @@
 #pragma once
 
+#include "RequestSequence.h"
+
 #include <QList>
 #include <QObject>
 #include <QString>
@@ -39,4 +41,25 @@ signals:
     // status: see the XML ("ok", "wrong-password", "unsupported", ...).
     void connectFinished(const QString &id, const QString &status);
     void forgetFinished(const QString &id, const QString &status);
+
+protected:
+    // Replies can arrive out of order: number each request when it is sent and report a reply only
+    // if no newer one of the same kind has been reported already (the state and the network list
+    // are two kinds). RequestSequence.h.
+    quint64 beginStateRequest() { return m_stateSeq.begin(); }
+    void deliverState(quint64 request, const QString &state, const QVariantMap &primary)
+    {
+        if (m_stateSeq.accept(request))
+            emit stateChanged(state, primary);
+    }
+    quint64 beginNetworksRequest() { return m_networksSeq.begin(); }
+    void deliverNetworks(quint64 request, const QList<WifiInfo> &networks)
+    {
+        if (m_networksSeq.accept(request))
+            emit networksListed(networks);
+    }
+
+private:
+    RequestSequence m_stateSeq;
+    RequestSequence m_networksSeq;
 };

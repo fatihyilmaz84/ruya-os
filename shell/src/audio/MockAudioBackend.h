@@ -27,11 +27,16 @@ public:
     bool plug(const QString &id);
     void unplug(const QString &id);
     void reset();
+    // Replies to refresh() arrive after `ms` (0: at once), with the state as it was when asked;
+    // the number of replies still on their way. Lets a test play an old reply landing after a
+    // new one.
+    void setReplyDelay(int ms) { m_delay = ms; }
+    int pendingReplies() const { return m_pending; }
 
 private:
     void initState();
-    void publishState();
-    void publishSinks();
+    void publishState(int delayMs = 0);
+    void publishSinks(int delayMs = 0);
     int indexOf(const QString &id) const;
     void makeDefault(const QString &id);
 
@@ -40,4 +45,6 @@ private:
     QVariantMap m_channels;
     QList<SinkInfo> m_sinks;
     QStringList m_previous; // earlier defaults, most recent last
+    int m_delay = 0;
+    int m_pending = 0;
 };

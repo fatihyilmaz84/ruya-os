@@ -36,8 +36,8 @@ MockAudioBackend::MockAudioBackend(QObject *parent)
 
 void MockAudioBackend::refresh()
 {
-    publishState();
-    publishSinks();
+    publishState(m_delay);
+    publishSinks(m_delay);
 }
 
 void MockAudioBackend::setVolume(int volume)
@@ -151,16 +151,30 @@ void MockAudioBackend::makeDefault(const QString &id)
 }
 
 // Asynchronous like the real service, so QML behaves the same with either backend.
-void MockAudioBackend::publishState()
+void MockAudioBackend::publishState(int delayMs)
 {
     const int volume = m_volume;
     const bool muted = m_muted;
     const QVariantMap channels = m_channels;
-    QTimer::singleShot(0, this, [this, volume, muted, channels] { emit stateChanged(volume, muted, channels); });
+    const quint64 request = beginStateRequest();
+    if (delayMs > 0)
+        ++m_pending;
+    QTimer::singleShot(delayMs, this, [this, request, volume, muted, channels, delayMs] {
+        if (delayMs > 0)
+            --m_pending;
+        deliverState(request, volume, muted, channels);
+    });
 }
 
-void MockAudioBackend::publishSinks()
+void MockAudioBackend::publishSinks(int delayMs)
 {
     const QList<SinkInfo> sinks = m_sinks;
-    QTimer::singleShot(0, this, [this, sinks] { emit sinksListed(sinks); });
+    const quint64 request = beginSinksRequest();
+    if (delayMs > 0)
+        ++m_pending;
+    QTimer::singleShot(delayMs, this, [this, request, sinks, delayMs] {
+        if (delayMs > 0)
+            --m_pending;
+        deliverSinks(request, sinks);
+    });
 }

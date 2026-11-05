@@ -48,6 +48,10 @@ public:
     Q_INVOKABLE void mockHoldEject(bool hold);
     Q_INVOKABLE int mockEjectCalls() const;
     Q_INVOKABLE void mockRepublish();
+    // Asks the backend for the list; its reply arrives after `ms` and shows the list as it is now.
+    // mockPendingReplies: how many replies are still on their way.
+    Q_INVOKABLE void mockRefreshDelayed(int ms);
+    Q_INVOKABLE int mockPendingReplies() const;
 
 signals:
     void volumesChanged();
