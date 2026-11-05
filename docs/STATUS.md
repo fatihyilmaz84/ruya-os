@@ -50,6 +50,7 @@ Follow-ups and debt for the next planner, one line each: `- (source) what, and w
 - (T-178) The ISO's own boot menu still says "Install Fedora Linux 44" (bib has no product-name setting): cosmetic, low priority. A fresh worktree rebuilds the shell and services image stages from scratch (30+ min): budget that for image-lane builders. `vm-iso-check.ps1` reads greenboot state over SSH with the dev key: needs another way (serial console) once the dev key leaves the ISO.
 - (T-178 review) `vm-iso-check.ps1`: print the installed disk's boot entry titles; resolve an absolute `-Disk` properly and refuse paths outside `output\` (it deletes the target first).
 - (T-181 review) `DBusProfilesBackend` still emits `listed` straight from an async `ListProfiles` reply: give it a `RequestSequence`; check Store, Library and Update backends too. The guard wiring in the four `DBus*Backend.cpp` was only exercised through the mock: add a shell-over-D-Bus VM step that triggers a refresh by signal.
+- (T-185 review) design: update the canvas board for the Settings scroll cue (peek-row opacity) per 04 §8 once round 2 settles; Store grid and Games lists have the same hidden-continuation problem (extract the cue from `SettingsPane` first).
 - (0.0.40 try-out) The VM clock shows UTC: there is no time-zone setting yet (wizard or System pane); plan it with the OOBE/installer work.
 
 ## Blocked (need something this host doesn't have)
