@@ -5,7 +5,8 @@
 # check (default): unit active, name owned by ruya-shell, ListSinks, a MasterVolume write reaches
 # PipeWire, a call from another user is refused; then the network part: State is connected, Primary is
 # the ethernet link with an IPv4 address, ListWifi and Scan answer, unknown ids are refused, another
-# user is refused; then the batteries part: upower is installed and answers on the bus, ListBatteries answers an
+# user is refused, pkcheck as the service's process allows the four NetworkManager actions it needs and
+# refuses twelve others (T-180); then the batteries part: upower is installed and answers on the bus, ListBatteries answers an
 # empty list (no controller in the VM; a real controller's battery is NOT checked here), another user is
 # refused; then the Bluetooth part: bluetooth.service is active and org.bluez is on the bus, Powered is false,
 # ListDevices answers an empty list, StartScan/Pair/Connect answer unavailable (no adapter in the VM; a real
@@ -191,6 +192,21 @@ check)
         bad "nobody could call ListWifi: $out"
     else
         echo "$out"; ok "network call from nobody refused"
+    fi
+    # T-180: polkit as the service's own process. pkcheck exit 0 = authorized without a prompt,
+    # 1 = not authorized, 2 = would ask for a password. The allowed four are what network.rs
+    # calls; everything else in the NetworkManager namespace is refused outright (exit 1), which
+    # also overrides NetworkManager's own default for an active session.
+    pid="$(pgrep -u ruya-shell -x ruya-devices | head -1)"
+    if [ -z "$pid" ]; then bad "no ruya-devices process"; else
+        for a in wifi.scan network-control settings.modify.system settings.modify.own; do
+            pkcheck --action-id "org.freedesktop.NetworkManager.$a" --process "$pid" >/dev/null 2>&1; rc=$?
+            [ "$rc" = 0 ] && ok "polkit allows ruya-devices: NetworkManager $a" || bad "polkit verdict for NetworkManager $a: exit $rc (want 0)"
+        done
+        for a in enable-disable-network enable-disable-wifi enable-disable-wwan enable-disable-connectivity-check enable-disable-statistics sleep-wake reload settings.modify.hostname settings.modify.global-dns checkpoint-rollback wifi.share.open wifi.share.protected; do
+            pkcheck --action-id "org.freedesktop.NetworkManager.$a" --process "$pid" >/dev/null 2>&1; rc=$?
+            [ "$rc" = 1 ] && ok "polkit refuses ruya-devices: NetworkManager $a" || bad "polkit verdict for NetworkManager $a: exit $rc (want 1)"
+        done
     fi
 
     echo "--- batteries (T-161): UPower behind Devices1.Batteries"
