@@ -65,6 +65,31 @@ AppInfo toApp(const QVariantMap &d)
     return a;
 }
 
+StoreJob toJob(const QVariantMap &d)
+{
+    StoreJob j;
+    j.id = d.value(QStringLiteral("id")).toString();
+    j.appId = d.value(QStringLiteral("app")).toString();
+    j.kind = d.value(QStringLiteral("kind")).toString();
+    j.state = d.value(QStringLiteral("state")).toString();
+    j.status = d.value(QStringLiteral("status")).toString();
+    j.reason = d.value(QStringLiteral("reason")).toString();
+    j.percent = d.value(QStringLiteral("percent")).toUInt();
+    j.phase = d.value(QStringLiteral("phase")).toString();
+    return j;
+}
+
+// aa{sv}
+QList<StoreJob> parseJobs(const QDBusArgument &arg)
+{
+    QList<StoreJob> out;
+    arg.beginArray();
+    while (!arg.atEnd())
+        out.append(toJob(parseDict(arg)));
+    arg.endArray();
+    return out;
+}
+
 // aa{sv}
 QList<AppInfo> parseApps(const QDBusArgument &arg)
 {
@@ -95,6 +120,7 @@ DBusStoreBackend::DBusStoreBackend(QObject *parent)
     connect(&m_watcher, &QDBusServiceWatcher::serviceRegistered, this, [this] {
         refresh();
         search(QString(), false, 0);
+        listJobs(); // what became of the jobs the old owner took with it
     });
     m_bus.connect(Service, Path, Interface, QStringLiteral("InstalledChanged"), this, SIGNAL(installedChanged()));
     m_bus.connect(Service, Path, Interface, QStringLiteral("CatalogChanged"), this, SIGNAL(catalogChanged()));
@@ -115,6 +141,33 @@ void DBusStoreBackend::refresh()
             return;
         }
         emit installedListed(parseApps(reply.arguments().constFirst().value<QDBusArgument>()));
+    });
+}
+
+void DBusStoreBackend::listJobs()
+{
+    const quint64 request = beginJobsRequest();
+    auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("ListJobs"));
+    auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, request](QDBusPendingCallWatcher *w) {
+        w->deleteLater();
+        const QDBusMessage reply = w->reply();
+        if (reply.type() != QDBusMessage::ReplyMessage || reply.arguments().isEmpty()) {
+            qWarning("ruya-shell: Store1 ListJobs failed: %s", qPrintable(reply.errorMessage()));
+            return;
+        }
+        if (!acceptJobs(request))
+            return;
+        const QList<StoreJob> jobs = parseJobs(reply.arguments().constFirst().value<QDBusArgument>());
+        // Signals of the jobs that are still going map to their apps from now on; the others have
+        // nothing more to say.
+        for (const StoreJob &j : jobs) {
+            if (j.state == QLatin1String("finished"))
+                m_jobApps.remove(j.id);
+            else
+                m_jobApps.insert(j.id, j.appId);
+        }
+        emit jobsListed(jobs);
     });
 }
 

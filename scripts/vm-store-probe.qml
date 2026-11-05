@@ -45,6 +45,10 @@ QtObject {
         function onJobsChanged() {
             console.warn("store-probe: jobsChanged " + JSON.stringify(Store.jobs));
         }
+        // T-188: the service's job table was applied (once at start, once per new service owner).
+        function onJobsReconciled() {
+            console.warn("store-probe: jobsReconciled jobs=" + JSON.stringify(Store.jobs));
+        }
         function onCatalogueChanged() {
             root.maybeInstall();
         }

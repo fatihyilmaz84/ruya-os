@@ -3,6 +3,7 @@
 //! apps.
 
 use std::error::Error;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use ruya_store::dbus::{forward, spawn_sync, DynFlatpak, StoreIface, BUS_NAME, OBJECT_PATH};
@@ -40,9 +41,23 @@ fn flatpak(session: bool) -> DynFlatpak {
     )
 }
 
+/// `RUYA_STORE_JOBS_FILE`, else `jobs` in `$STATE_DIRECTORY` (systemd's StateDirectory=, the first
+/// of a colon-separated list), else none: the job table is then kept in memory only.
+fn jobs_file() -> Option<PathBuf> {
+    if let Some(path) = std::env::var_os("RUYA_STORE_JOBS_FILE") {
+        return Some(PathBuf::from(path));
+    }
+    let dirs = std::env::var_os("STATE_DIRECTORY")?;
+    let dir = std::env::split_paths(&dirs).next()?;
+    Some(dir.join("jobs"))
+}
+
 fn run() -> Result<(), Box<dyn Error>> {
     let session = std::env::args().any(|a| a == "--session");
-    let store: Arc<Store<DynFlatpak>> = Arc::new(Store::new(flatpak(session)));
+    let store: Arc<Store<DynFlatpak>> = Arc::new(match jobs_file() {
+        Some(path) => Store::with_jobs_file(flatpak(session), path),
+        None => Store::new(flatpak(session)),
+    });
     let (events, receiver) = async_channel::unbounded();
     // The first read of the catalogue can take a while (remotes are asked over the network):
     // the name is taken first and clients are told when the lists are ready. A failing flatpak

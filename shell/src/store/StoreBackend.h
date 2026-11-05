@@ -1,5 +1,7 @@
 #pragma once
 
+#include "RequestSequence.h"
+
 #include <QList>
 #include <QObject>
 #include <QString>
@@ -50,6 +52,19 @@ struct AppInfo
     }
 };
 
+// One record of ListJobs (api/dbus/org.ruyaos.Store1.xml, "ListJobs").
+struct StoreJob
+{
+    QString id;     // the service's name for the job
+    QString appId;
+    QString kind;   // "install" | "remove" | "update" | "rollback"
+    QString state;  // "queued" | "running" | "finished"
+    QString status; // "" unless finished: "ok", "failed", ...
+    QString reason; // "" or "interrupted" (the service died while it ran)
+    uint percent = 0;
+    QString phase;
+};
+
 // Transport behind the Store QML singleton: org.ruyaos.Store1 over D-Bus, or an in-memory mock.
 // Results arrive asynchronously through signals. The backend, not the facade, maps the service's
 // job ids to app ids.
@@ -71,6 +86,10 @@ public:
     // One app with its permissions and, for an installed app with an update, what the update adds.
     // Answers with appLoaded or appLoadFailed.
     virtual void getApp(const QString &id) = 0;
+    // Asks the service for its job table (jobs queued or running and the last finished ones, oldest
+    // first). Called at start and whenever the service's name has a new owner; answers with
+    // jobsListed. A reply older than one already reported is dropped.
+    virtual void listJobs() = 0;
 
 signals:
     void appLoaded(const AppInfo &app);
@@ -89,4 +108,22 @@ signals:
     // The service's bus name lost its owner (it crashed or restarted): every job it ran is gone
     // and will never report again. appIds: every app the backend had a job for, running or queued.
     void serviceLost(const QStringList &appIds);
+    // The service's job table. The facade shows its running jobs and nothing else, and corrects
+    // the apps whose jobs it had given up on when the service was lost.
+    void jobsListed(const QList<StoreJob> &jobs);
+
+protected:
+    // Replies can arrive out of order: number each ListJobs request when it is sent and report a
+    // reply only if no newer one has been reported already (RequestSequence.h, T-181).
+    quint64 beginJobsRequest() { return m_jobsSeq.begin(); }
+    // True when this reply is the newest so far (and is reported by deliverJobs).
+    bool acceptJobs(quint64 request) { return m_jobsSeq.accept(request); }
+    void deliverJobs(quint64 request, const QList<StoreJob> &jobs)
+    {
+        if (acceptJobs(request))
+            emit jobsListed(jobs);
+    }
+
+private:
+    RequestSequence m_jobsSeq;
 };

@@ -15,6 +15,7 @@ Item {
     }
 
     SignalSpy { id: jobsSpy; target: Store; signalName: "jobsChanged" }
+    SignalSpy { id: reconciledSpy; target: Store; signalName: "jobsReconciled" }
 
     TestCase {
         id: tc
@@ -42,6 +43,7 @@ Item {
             tryCompare(Profiles, "activeProfile", "p2")
             tryVerify(() => find("homePlay").activeFocus, 2000, "Play takes focus after sign-in")
             jobsSpy.clear()
+            reconciledSpy.clear()
         }
 
         function openStore() {
@@ -157,6 +159,40 @@ Item {
             Store.mockServiceLost()
             verify(!find("page_appDetail").working)
             verify(!find("detailProgress").visible)
+        }
+
+        // T-188: the service restarts mid-install and its job table says the job was interrupted:
+        // the page offers Install again, with the error shown.
+        function test_restart_with_an_interrupted_job_offers_retry() {
+            openStore()
+            openApp("org.example.Racer")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => Store.jobs["org.example.Racer"] !== undefined, 2000, "progress arrived")
+            Store.mockServiceLost()
+            Store.mockServiceRegained()
+            tryCompare(reconciledSpy, "count", 1)
+            compare(Object.keys(Store.jobs).length, 0)
+            verify(!find("page_appDetail").working)
+            compare(find("detailError").visible, true)
+            compare(find("detailPrimary").text, "Install")
+            verify(find("detailPrimary").active, "a retry is possible")
+        }
+
+        // T-188: Flatpak completed the install while the service was away: no error, the app is
+        // installed and the page says Open.
+        function test_restart_after_flatpak_completed_the_install() {
+            openStore()
+            openApp("org.example.Racer")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => Store.jobs["org.example.Racer"] !== undefined, 2000, "progress arrived")
+            Store.mockServiceLost()
+            compare(find("detailError").visible, true, "given up at first")
+            Store.mockServiceRegained(["org.example.Racer"])
+            tryCompare(reconciledSpy, "count", 1)
+            tryVerify(() => !find("detailError").visible, 2000, "the error went")
+            tryVerify(() => find("detailPrimary").text === "Open")
+            verify(!find("page_appDetail").working)
+            verify(find("detailUninstall").visible)
         }
 
         function test_install_error_inline() {

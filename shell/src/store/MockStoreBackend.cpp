@@ -74,6 +74,7 @@ void MockStoreBackend::reset()
 {
     m_timer.stop();
     m_jobs.clear();
+    m_finishedJobs.clear();
     m_dataDeleted.clear();
     initState();
     emit installedChanged();
@@ -158,7 +159,7 @@ void MockStoreBackend::startJob(const QString &id, Job::Kind kind)
             return;
         }
     }
-    m_jobs.append({id, kind, 0});
+    m_jobs.append({id, kind, 0, QStringLiteral("mock-%1").arg(++m_jobCounter)});
     if (!m_timer.isActive())
         m_timer.start();
 }
@@ -242,5 +243,92 @@ void MockStoreBackend::step()
 
 void MockStoreBackend::finish(const Job &job, const QString &status)
 {
+    m_finishedJobs.append({job.jobId, job.id, kindName(job.kind), QStringLiteral("finished"), status, QString(),
+                           status == QLatin1String("ok") ? 100u : uint(job.percent), QString()});
     emit jobFinished(job.id, status);
+}
+
+QString MockStoreBackend::kindName(Job::Kind kind)
+{
+    return kind == Job::Install ? QStringLiteral("install")
+         : kind == Job::Update  ? QStringLiteral("update")
+                                : QStringLiteral("remove");
+}
+
+QList<StoreJob> MockStoreBackend::jobTable() const
+{
+    QList<StoreJob> out = m_finishedJobs;
+    for (int i = 0; i < m_jobs.size(); ++i) {
+        const Job &j = m_jobs.at(i);
+        const QString phase = j.kind == Job::Update ? QStringLiteral("update")
+                            : j.kind == Job::Uninstall ? QStringLiteral("remove")
+                            : j.percent < 50 ? QStringLiteral("download") : QStringLiteral("install");
+        out.append({j.jobId, j.id, kindName(j.kind), i == 0 ? QStringLiteral("running") : QStringLiteral("queued"),
+                    QString(), QString(), uint(j.percent), phase});
+    }
+    return out;
+}
+
+void MockStoreBackend::listJobs()
+{
+    const quint64 request = beginJobsRequest();
+    const QList<StoreJob> table = jobTable();
+    QTimer::singleShot(0, this, [this, request, table] { deliverJobs(request, table); });
+}
+
+void MockStoreBackend::listJobsDelayed(int ms)
+{
+    const quint64 request = beginJobsRequest();
+    const QList<StoreJob> table = jobTable();
+    ++m_pendingJobLists;
+    QTimer::singleShot(ms, this, [this, request, table] {
+        --m_pendingJobLists;
+        deliverJobs(request, table);
+    });
+}
+
+void MockStoreBackend::loseService()
+{
+    QStringList ids;
+    for (const Job &j : std::as_const(m_jobs)) {
+        ids.append(j.id);
+        // The service cannot resume Flatpak's transaction: the job ends as failed, interrupted.
+        m_finishedJobs.append({j.jobId, j.id, kindName(j.kind), QStringLiteral("finished"), QStringLiteral("failed"),
+                               QStringLiteral("interrupted"), uint(j.percent), QString()});
+    }
+    m_timer.stop();
+    m_jobs.clear();
+    emit serviceLost(ids);
+}
+
+void MockStoreBackend::forgetJobs()
+{
+    for (const Job &j : std::as_const(m_jobs)) {
+        m_finishedJobs.append({j.jobId, j.id, kindName(j.kind), QStringLiteral("finished"), QStringLiteral("failed"),
+                               QString(), uint(j.percent), QString()});
+    }
+    m_timer.stop();
+    m_jobs.clear();
+}
+
+void MockStoreBackend::regainService(const QStringList &finishedApps)
+{
+    for (StoreJob &j : m_finishedJobs) {
+        const bool install = j.kind == QLatin1String("install");
+        if (j.reason != QLatin1String("interrupted") || !finishedApps.contains(j.appId)
+            || (!install && j.kind != QLatin1String("remove")))
+            continue;
+        // Flatpak completed it after all: what the service sees now is the result.
+        j.status = QStringLiteral("ok");
+        j.reason.clear();
+        j.percent = 100;
+        const int i = indexOf(j.appId);
+        if (i >= 0) {
+            m_apps[i].installed = install;
+            m_apps[i].updateAvailable = false;
+        }
+    }
+    refresh();
+    search(QString(), false, 0);
+    listJobs();
 }

@@ -52,6 +52,18 @@ impl JobStatus {
             JobStatus::DiskFull => "disk-full",
         }
     }
+
+    pub fn parse(text: &str) -> Option<Self> {
+        Some(match text {
+            "ok" => JobStatus::Ok,
+            "failed" => JobStatus::Failed,
+            "network" => JobStatus::Network,
+            "signature" => JobStatus::Signature,
+            "missing-runtime" => JobStatus::MissingRuntime,
+            "disk-full" => JobStatus::DiskFull,
+            _ => return None,
+        })
+    }
 }
 
 /// One app of the catalogue. Empty strings mean "not known" (the contract allows "" for the art).

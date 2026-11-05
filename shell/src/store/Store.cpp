@@ -86,11 +86,39 @@ Store::Store(std::unique_ptr<StoreBackend> backend, QObject *parent)
             m_jobs.clear();
             emit jobsChanged();
         }
-        for (const QString &id : ids)
+        for (const QString &id : ids) {
+            m_lost.insert(id);
             emit jobFinished(id, QStringLiteral("failed"));
+        }
+    });
+    connect(m_backend.get(), &StoreBackend::jobsListed, this, [this](const QList<StoreJob> &jobs) {
+        // The table is the truth: it replaces what was shown, which may be stale.
+        QVariantMap running;
+        for (const StoreJob &j : jobs) {
+            if (j.state == QLatin1String("running"))
+                running.insert(j.appId, QVariantMap{{QStringLiteral("percent"), int(j.percent)}, {QStringLiteral("phase"), j.phase}});
+        }
+        if (running != m_jobs) {
+            m_jobs = running;
+            emit jobsChanged();
+        }
+        // An app whose job was given up as failed may have a different result: Flatpak finished
+        // it, or it failed for another reason. What is "failed" already needs no second word.
+        for (const QString &app : std::as_const(m_lost)) {
+            const StoreJob *last = nullptr;
+            for (const StoreJob &j : jobs) {
+                if (j.appId == app)
+                    last = &j;
+            }
+            if (last && last->state == QLatin1String("finished") && last->status != QLatin1String("failed"))
+                emit jobFinished(app, last->status);
+        }
+        m_lost.clear();
+        emit jobsReconciled();
     });
     m_backend->refresh();
     m_backend->search(QString(), false, 0);
+    m_backend->listJobs();
 }
 
 Store::~Store() = default;
@@ -226,6 +254,7 @@ void Store::mockReset()
     if (!mock)
         return;
     mock->reset();
+    m_lost.clear();
     // The reset drops the mock's running jobs without a JobFinished, so the jobs this facade
     // already saw progress for would stay in `jobs` for ever (T-167).
     if (!m_jobs.isEmpty()) {
@@ -238,6 +267,30 @@ void Store::mockServiceLost()
 {
     if (auto *mock = qobject_cast<MockStoreBackend *>(m_backend.get()))
         mock->loseService();
+}
+
+void Store::mockServiceRegained(const QStringList &finishedApps)
+{
+    if (auto *mock = qobject_cast<MockStoreBackend *>(m_backend.get()))
+        mock->regainService(finishedApps);
+}
+
+void Store::mockForgetJobs()
+{
+    if (auto *mock = qobject_cast<MockStoreBackend *>(m_backend.get()))
+        mock->forgetJobs();
+}
+
+void Store::mockListJobsDelayed(int ms)
+{
+    if (auto *mock = qobject_cast<MockStoreBackend *>(m_backend.get()))
+        mock->listJobsDelayed(ms);
+}
+
+int Store::mockPendingJobLists() const
+{
+    auto *mock = qobject_cast<MockStoreBackend *>(m_backend.get());
+    return mock ? mock->pendingJobLists() : 0;
 }
 
 int Store::mockSearchCount() const

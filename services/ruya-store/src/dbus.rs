@@ -1,7 +1,7 @@
 //! org.ruyaos.Store1 on D-Bus. Thin adapter: the rules live in `service.rs`. Jobs run on their own
 //! thread (flatpak blocks); their events come back over a channel and become signals here.
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -15,6 +15,7 @@ use crate::app::App;
 use crate::flatpak::{
     Appstream, Flatpak, FlatpakError, InstalledApp, Operation, Progress, RemoteApp, RemoteInfo,
 };
+use crate::jobs::JobInfo;
 use crate::service::{Event, SearchOptions, Store};
 
 pub const BUS_NAME: &str = "org.ruyaos.Store1";
@@ -151,7 +152,9 @@ async fn active_profile_is_admin(connection: &Connection) -> bool {
     profiles.iter().any(|p| p.0 == active && p.3 == "admin")
 }
 
-type Dict = HashMap<String, OwnedValue>;
+// Sorted keys: the replies (and busctl output, logs) read the same every time. Clients must not
+// rely on it - a{sv} has no order.
+type Dict = BTreeMap<String, OwnedValue>;
 
 fn dict(entries: Vec<(&str, Value<'_>)>) -> Dict {
     entries
@@ -189,6 +192,19 @@ fn record(app: &App) -> Dict {
         entries.push(("age_rating", Value::from(app.age_rating.clone())));
     }
     dict(entries)
+}
+
+fn job_record(job: &JobInfo) -> Dict {
+    dict(vec![
+        ("id", Value::from(job.id.clone())),
+        ("app", Value::from(job.app.clone())),
+        ("kind", Value::from(job.kind.as_str())),
+        ("state", Value::from(job.state.as_str())),
+        ("status", Value::from(job.status.map_or("", |s| s.as_str()))),
+        ("reason", Value::from(job.reason())),
+        ("percent", Value::from(job.percent)),
+        ("phase", Value::from(job.phase.as_str())),
+    ])
 }
 
 #[interface(name = "org.ruyaos.Store1")]
@@ -233,6 +249,13 @@ impl StoreIface {
 
     fn list_installed(&self) -> Vec<Dict> {
         self.store.list_installed().iter().map(record).collect()
+    }
+
+    async fn list_jobs(&self) -> Vec<Dict> {
+        let store = self.store.clone();
+        // The first call after a restart settles the jobs of the last run with `flatpak list`.
+        let jobs = blocking::unblock(move || store.list_jobs()).await;
+        jobs.iter().map(job_record).collect()
     }
 
     fn install(&self, id: &str) -> (String, String) {

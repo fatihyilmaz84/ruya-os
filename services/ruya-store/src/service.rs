@@ -3,11 +3,13 @@
 //! side effects go through the `Flatpak` trait; the D-Bus adapter only converts and emits.
 
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
 
 use crate::app::{valid_app_id, valid_commit, valid_remote_name, App, JobStatus, Status};
 use crate::appstream::{self, Component};
 use crate::flatpak::{Flatpak, FlatpakError, Operation, Phase, Progress, RemoteInfo};
+use crate::jobs::{self, JobInfo, JobKind, JobState};
 use crate::queue::{Monotone, Queue};
 
 /// What a running job tells the outside world, in the order it must be sent.
@@ -74,11 +76,17 @@ struct State {
     announced: Vec<(String, bool)>,
     /// Bumped by every `refresh`; `sync_installed` drops a read that a refresh overtook.
     generation: u64,
+    /// The job table (`ListJobs`): active jobs and the last finished ones, oldest first.
+    jobs: Vec<JobInfo>,
+    /// Jobs a previous run of the service left queued or running; `recover` settles them.
+    stale: Vec<String>,
 }
 
 pub struct Store<F: Flatpak> {
     flatpak: F,
     state: Mutex<State>,
+    /// Where the job table is kept across restarts; `None` keeps it in memory only.
+    jobs_file: Option<PathBuf>,
 }
 
 impl<F: Flatpak> Store<F> {
@@ -86,6 +94,29 @@ impl<F: Flatpak> Store<F> {
         Store {
             flatpak,
             state: Mutex::new(State::default()),
+            jobs_file: None,
+        }
+    }
+
+    /// Like `new`, with the job table kept in `path`: what a previous run wrote is loaded (its
+    /// unfinished jobs are settled by `recover`) and job names continue after its last one.
+    pub fn with_jobs_file(flatpak: F, path: PathBuf) -> Self {
+        let text = std::fs::read_to_string(&path).unwrap_or_default();
+        let (counter, jobs) = jobs::decode(&text);
+        let stale = jobs
+            .iter()
+            .filter(|j| j.is_active())
+            .map(|j| j.id.clone())
+            .collect();
+        Store {
+            flatpak,
+            state: Mutex::new(State {
+                queue: Queue::starting_at(counter),
+                jobs,
+                stale,
+                ..State::default()
+            }),
+            jobs_file: Some(path),
         }
     }
 
@@ -190,6 +221,7 @@ impl<F: Flatpak> Store<F> {
     /// installed set or an update flag differs from before (an install does not re-send the
     /// catalogue, a refresh does not re-send the installed list).
     pub fn sync(&self, emit: &mut dyn FnMut(Event)) {
+        self.recover();
         let announce = |result: Result<bool, String>, emit: &mut dyn FnMut(Event)| match result {
             Ok(installed_changed) => {
                 if installed_changed {
@@ -311,8 +343,14 @@ impl<F: Flatpak> Store<F> {
         if let Some(refused) = check(&app) {
             return (refused, String::new());
         }
-        match state.queue.enqueue(op(&app)) {
-            Some(job) => (Status::Ok, job),
+        let op = op(&app);
+        let record = op.clone();
+        match state.queue.enqueue(op) {
+            Some(job) => {
+                state.jobs.push(JobInfo::queued(&job, &record));
+                self.changed_jobs(&mut state);
+                (Status::Ok, job)
+            }
             None => (Status::Busy, String::new()),
         }
     }
@@ -419,15 +457,89 @@ impl<F: Flatpak> Store<F> {
         }
     }
 
+    /// The job table for `ListJobs`, oldest first. A job a previous run left unfinished is settled
+    /// first (`recover`), so a reply never claims the service is working on something it is not.
+    pub fn list_jobs(&self) -> Vec<JobInfo> {
+        self.recover();
+        self.state().jobs.clone()
+    }
+
+    /// Settles the jobs a previous run of the service left queued or running (once). The service
+    /// cannot resume Flatpak's transaction, so each becomes `failed` with the reason `interrupted`,
+    /// except a running install whose app is installed now and a running remove whose app is gone:
+    /// Flatpak finished those, they are `ok`. If Flatpak cannot be read, nothing is assumed done.
+    pub fn recover(&self) {
+        if self.state().stale.is_empty() {
+            return;
+        }
+        let installed = self.flatpak.installed().ok();
+        let mut state = self.state();
+        let stale = std::mem::take(&mut state.stale);
+        for job in state.jobs.iter_mut().filter(|j| stale.contains(&j.id)) {
+            let present = installed
+                .as_ref()
+                .map(|list| list.iter().any(|a| a.id == job.app));
+            let done = job.state == JobState::Running
+                && match (job.kind, present) {
+                    (JobKind::Install, Some(present)) => present,
+                    (JobKind::Remove, Some(present)) => !present,
+                    _ => false,
+                };
+            if done {
+                job.finish(JobStatus::Ok);
+            } else {
+                job.interrupted = true;
+                job.finish(JobStatus::Failed);
+            }
+        }
+        self.changed_jobs(&mut state);
+    }
+
+    fn set_running(&self, id: &str) {
+        let mut state = self.state();
+        if let Some(info) = state.jobs.iter_mut().find(|j| j.id == id) {
+            info.state = JobState::Running;
+        }
+        self.changed_jobs(&mut state);
+    }
+
+    /// Progress is kept for `ListJobs` but not written: a job that was running when the service
+    /// died is settled by `recover`, whatever its percentage was.
+    fn note_progress(&self, id: &str, percent: u32, phase: Phase) {
+        if let Some(info) = self.state().jobs.iter_mut().find(|j| j.id == id) {
+            info.percent = percent;
+            info.phase = phase;
+        }
+    }
+
+    /// Trims the table and writes it down. A failing write is logged: the job still runs, only
+    /// its trace after a restart is lost.
+    fn changed_jobs(&self, state: &mut State) {
+        jobs::trim(&mut state.jobs);
+        let Some(path) = &self.jobs_file else {
+            return;
+        };
+        let text = jobs::encode(state.queue.counter(), &state.jobs);
+        let tmp = path.with_extension("tmp");
+        // Synced before the rename: after a power cut the name must never point at a file whose
+        // data did not reach the disk (the rename can be persisted before the data).
+        let written = write_synced(&tmp, &text).and_then(|()| std::fs::rename(&tmp, path));
+        if let Err(err) = written {
+            eprintln!("ruya-store: writing {} failed: {err}", path.display());
+        }
+    }
+
     /// Runs the oldest queued job to its end (blocking) unless one is already running, sending
     /// its events in order. Returns whether a job ran.
     pub fn run_next(&self, emit: &mut dyn FnMut(Event)) -> bool {
         let Some(job) = self.state().queue.take_next() else {
             return false;
         };
+        self.set_running(&job.id);
         let mut monotone = Monotone::default();
         let mut report = |percent: u32, phase: Phase, emit: &mut dyn FnMut(Event)| {
             if let Some(percent) = monotone.next(percent, phase) {
+                self.note_progress(&job.id, percent, phase);
                 emit(Event::Progress {
                     job: job.id.clone(),
                     percent,
@@ -453,7 +565,14 @@ impl<F: Flatpak> Store<F> {
         };
         // Free the app before the catalogue is rebuilt, so a client reacting to the signals can
         // queue the next job for it at once.
-        self.state().queue.finish(&job.id);
+        {
+            let mut state = self.state();
+            state.queue.finish(&job.id);
+            if let Some(info) = state.jobs.iter_mut().find(|j| j.id == job.id) {
+                info.finish(status);
+            }
+            self.changed_jobs(&mut state);
+        }
         if status == JobStatus::Ok {
             match self.refresh() {
                 Ok(true) => emit(Event::InstalledChanged),
@@ -467,6 +586,13 @@ impl<F: Flatpak> Store<F> {
         });
         true
     }
+}
+
+fn write_synced(path: &std::path::Path, text: &str) -> std::io::Result<()> {
+    use std::io::Write;
+    let mut file = std::fs::File::create(path)?;
+    file.write_all(text.as_bytes())?;
+    file.sync_all()
 }
 
 /// `https://` or `file://`; nothing that could be read as an option or a different scheme.
@@ -524,6 +650,7 @@ fn owned_signature(catalogue: &[App]) -> Vec<(String, bool)> {
 mod tests {
     use super::*;
     use crate::flatpak::FakeFlatpak;
+    use crate::jobs::JobInfo;
 
     const XML: &str = r#"<components origin="ruyaos">
       <component type="desktop-application"><id>org.ruya.Racer.desktop</id><name>Turbo Racer</name>
@@ -1090,5 +1217,229 @@ mod tests {
         events.clear();
         s.sync(&mut |e| events.push(e));
         assert_eq!(events, [Event::CatalogChanged, Event::CatalogChanged]);
+    }
+    // --- ListJobs and the restart (T-188) ---
+
+    fn file_store(f: FakeFlatpak, file: &std::path::Path) -> Store<FakeFlatpak> {
+        let s = Store::with_jobs_file(f, file.to_path_buf());
+        s.refresh().unwrap();
+        s
+    }
+
+    /// A jobs file as a service that died mid-job leaves it.
+    fn left_behind(file: &std::path::Path, kind: JobKind, state: JobState, app: &str) {
+        let job = JobInfo {
+            id: "job-7".into(),
+            app: app.into(),
+            kind,
+            state,
+            status: None,
+            interrupted: false,
+            percent: 40,
+            phase: kind.phase(),
+        };
+        std::fs::write(file, jobs::encode(7, &[job])).unwrap();
+    }
+
+    #[test]
+    fn list_jobs_follows_a_job_from_queued_to_finished() {
+        let s = store(fake());
+        assert!(s.list_jobs().is_empty());
+        let (_, id) = s.install("org.ruya.Racer");
+        let queued = s.list_jobs();
+        assert_eq!(queued.len(), 1);
+        assert_eq!(
+            (
+                queued[0].id.as_str(),
+                queued[0].app.as_str(),
+                queued[0].kind
+            ),
+            (id.as_str(), "org.ruya.Racer", JobKind::Install)
+        );
+        assert_eq!(
+            (queued[0].state, queued[0].status),
+            (JobState::Queued, None)
+        );
+        drain(&s);
+        let done = s.list_jobs();
+        assert_eq!(done.len(), 1, "a finished job stays listed");
+        assert_eq!(done[0].state, JobState::Finished);
+        assert_eq!(done[0].status, Some(JobStatus::Ok));
+        assert_eq!((done[0].percent, done[0].interrupted), (100, false));
+        s.uninstall("org.ruya.Racer", false);
+        drain(&s);
+        let kinds: Vec<_> = s.list_jobs().iter().map(|j| j.kind).collect();
+        assert_eq!(kinds, [JobKind::Install, JobKind::Remove], "oldest first");
+    }
+
+    #[test]
+    fn a_failed_job_is_listed_with_its_status() {
+        let f = fake();
+        f.fail_next(FlatpakError::DiskFull);
+        let s = store(f);
+        s.install("org.ruya.Racer");
+        drain(&s);
+        let jobs = s.list_jobs();
+        assert_eq!(jobs[0].status, Some(JobStatus::DiskFull));
+        assert!(!jobs[0].interrupted, "it failed, it was not interrupted");
+    }
+
+    #[test]
+    fn a_restart_keeps_finished_jobs_and_never_reuses_a_name() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("jobs");
+        let first = file_store(fake(), &file);
+        let (_, id) = first.install("org.ruya.Racer");
+        drain(&first);
+        drop(first);
+
+        let second = file_store(fake(), &file);
+        let jobs = second.list_jobs();
+        assert_eq!(jobs.len(), 1);
+        assert_eq!(
+            (jobs[0].id.as_str(), jobs[0].status),
+            (id.as_str(), Some(JobStatus::Ok))
+        );
+        let (status, next) = second.install("org.ruya.Puzzle");
+        assert_eq!(status, Status::Ok);
+        assert_ne!(next, id, "job-1 would be mistaken for the old job");
+        assert_eq!(next, "job-2");
+    }
+
+    #[test]
+    fn a_job_that_was_only_queued_is_interrupted_after_a_restart() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("jobs");
+        let first = file_store(fake(), &file);
+        first.install("org.ruya.Racer"); // never ran: the service died first
+        drop(first);
+
+        // Even if the app is there by now, a job that never started was not what installed it.
+        let second = file_store(fake().with_installed("ruyaos", "org.ruya.Racer", 1), &file);
+        let jobs = second.list_jobs();
+        assert_eq!(jobs.len(), 1);
+        assert_eq!(jobs[0].state, JobState::Finished);
+        assert_eq!(jobs[0].status, Some(JobStatus::Failed));
+        assert!(jobs[0].interrupted);
+    }
+
+    #[test]
+    fn a_running_job_is_interrupted_unless_flatpak_finished_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("jobs");
+        let racer = "org.ruya.Racer";
+        // (kind, the app is installed when the service is back, expected status, interrupted)
+        let cases = [
+            (JobKind::Install, false, JobStatus::Failed, true),
+            (JobKind::Install, true, JobStatus::Ok, false),
+            (JobKind::Remove, true, JobStatus::Failed, true),
+            (JobKind::Remove, false, JobStatus::Ok, false),
+            // Nothing in the installed set tells an update or a rollback from its absence.
+            (JobKind::Update, true, JobStatus::Failed, true),
+            (JobKind::Rollback, true, JobStatus::Failed, true),
+        ];
+        for (kind, installed, status, interrupted) in cases {
+            left_behind(&file, kind, JobState::Running, racer);
+            let f = if installed {
+                fake().with_installed("ruyaos", racer, 1)
+            } else {
+                fake()
+            };
+            let s = file_store(f, &file);
+            let jobs = s.list_jobs();
+            let what = format!("{kind:?} with the app installed: {installed}");
+            assert_eq!(jobs.len(), 1, "{what}");
+            assert_eq!(jobs[0].state, JobState::Finished, "{what}");
+            assert_eq!(jobs[0].status, Some(status), "{what}");
+            assert_eq!(jobs[0].interrupted, interrupted, "{what}");
+            assert_eq!(
+                jobs[0].reason(),
+                if interrupted { "interrupted" } else { "" }
+            );
+        }
+    }
+
+    #[test]
+    fn an_unreadable_installed_set_assumes_nothing_was_finished() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("jobs");
+        left_behind(&file, JobKind::Install, JobState::Running, "org.ruya.Racer");
+        let f = fake().with_installed("ruyaos", "org.ruya.Racer", 1);
+        f.set_installed_fails(true);
+        let s = Store::with_jobs_file(f, file.clone());
+        let jobs = s.list_jobs();
+        assert_eq!(jobs[0].status, Some(JobStatus::Failed));
+        assert!(jobs[0].interrupted);
+    }
+
+    #[test]
+    fn the_settled_state_is_written_so_a_second_restart_agrees() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("jobs");
+        left_behind(&file, JobKind::Install, JobState::Running, "org.ruya.Racer");
+        let first = file_store(fake(), &file);
+        let settled = first.list_jobs();
+        drop(first);
+        // The app appearing later does not turn the old interruption into a success.
+        let second = file_store(fake().with_installed("ruyaos", "org.ruya.Racer", 1), &file);
+        assert_eq!(second.list_jobs(), settled);
+    }
+
+    #[test]
+    fn recovery_leaves_the_jobs_of_this_run_alone() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("jobs");
+        left_behind(
+            &file,
+            JobKind::Install,
+            JobState::Running,
+            "org.ruya.Puzzle",
+        );
+        let s = file_store(fake(), &file);
+        // The shell is faster than the first ListJobs: a new job is queued before it.
+        let (status, id) = s.install("org.ruya.Racer");
+        assert_eq!((status, id.as_str()), (Status::Ok, "job-8"));
+        let jobs = s.list_jobs();
+        assert_eq!(jobs.len(), 2);
+        assert_eq!(
+            jobs[0].status,
+            Some(JobStatus::Failed),
+            "the old job is settled"
+        );
+        assert_eq!(
+            jobs[1].state,
+            JobState::Queued,
+            "the new one is still ahead"
+        );
+        assert!(!jobs[1].interrupted);
+        drain(&s);
+        assert_eq!(s.list_jobs()[1].status, Some(JobStatus::Ok));
+    }
+
+    #[test]
+    fn sync_settles_the_jobs_of_the_last_run_without_a_client_asking() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("jobs");
+        left_behind(&file, JobKind::Install, JobState::Running, "org.ruya.Racer");
+        let f = fake().with_installed("ruyaos", "org.ruya.Racer", 1);
+        let s = Store::with_jobs_file(f, file.clone());
+        s.sync(&mut |_| {});
+        let (_, on_disk) = jobs::decode(&std::fs::read_to_string(&file).unwrap());
+        assert_eq!(on_disk[0].status, Some(JobStatus::Ok));
+    }
+
+    #[test]
+    fn only_the_newest_finished_jobs_are_listed() {
+        let s = store(fake());
+        for _ in 0..(jobs::FINISHED_KEPT + 5) {
+            s.install("org.ruya.Racer");
+            drain(&s);
+            s.uninstall("org.ruya.Racer", false);
+            drain(&s);
+        }
+        let list = s.list_jobs();
+        assert_eq!(list.len(), jobs::FINISHED_KEPT);
+        let last = list.last().unwrap();
+        assert_eq!(last.id, format!("job-{}", 2 * (jobs::FINISHED_KEPT + 5)));
     }
 }

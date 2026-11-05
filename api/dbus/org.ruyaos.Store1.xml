@@ -118,6 +118,32 @@
     </method>
 
     <!--
+      The service's job table: the jobs queued or running and the last finished ones (the 20 most
+      recent), oldest first. The shell calls it when it (re)connects, because a client that was away
+      (the service restarted, or the shell did) has missed the signals, and replaces what it shows
+      by the answer. One dictionary per job:
+        id       s   the job name returned by Install/Uninstall/Update/Rollback
+        app      s   Flatpak application id
+        kind     s   "install" | "remove" (Uninstall) | "update" | "rollback"
+        state    s   "queued" | "running" | "finished"
+        status   s   "" unless state is "finished", then the JobFinished status ("ok", "failed", ...)
+        reason   s   "" or "interrupted": the service died while the job was queued or running and
+                     cannot resume Flatpak's transaction. The job then reports state "finished",
+                     status "failed" - unless its result is visible in Flatpak (a running install of
+                     an installed app, a running remove of an app that is gone): that is status "ok"
+                     with no reason. A restarted service never reports a job as queued or running
+                     that it did not start itself.
+        percent  u   0-100 (100 for an "ok" job, 0 for a queued one)
+        phase    s   as JobProgress ("download" | "install" | "update" | "remove")
+      Job names continue after a restart (they are never reused). The table is kept in the service's
+      state directory, so a finished job can be listed after a restart too. No signal announces a
+      restart-time correction: the new bus name owner is the announcement.
+    -->
+    <method name="ListJobs">
+      <arg name="jobs" type="aa{sv}" direction="out"/>
+    </method>
+
+    <!--
       Software sources (spec §4.2), one dictionary each:
         name     s   remote name ("ruyaos", "flathub")
         title    s   display name

@@ -21,6 +21,20 @@ pub struct Queue {
 }
 
 impl Queue {
+    /// An empty queue whose next job is numbered after `counter` (names are never reused, also
+    /// across a restart of the service).
+    pub fn starting_at(counter: u64) -> Self {
+        Queue {
+            counter,
+            ..Queue::default()
+        }
+    }
+
+    /// The number of the job queued last.
+    pub fn counter(&self) -> u64 {
+        self.counter
+    }
+
     /// Queues a transaction; `None` when the app already has a job queued or running.
     pub fn enqueue(&mut self, op: Operation) -> Option<String> {
         if self.busy(op.app()) {
@@ -109,6 +123,13 @@ mod tests {
         q.finish(&b);
         assert!(q.take_next().is_none());
         assert!(q.is_idle());
+    }
+
+    #[test]
+    fn numbering_continues_after_the_given_counter() {
+        let mut q = Queue::starting_at(41);
+        assert_eq!(q.enqueue(install("org.a.One")).unwrap(), "job-42");
+        assert_eq!(q.counter(), 42);
     }
 
     #[test]
