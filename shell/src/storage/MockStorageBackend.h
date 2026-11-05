@@ -7,7 +7,10 @@
 // In-memory storage. Present at start: the internal disk (ext4) and "Old Drive", a USB drive
 // whose filesystem is not supported (listed, never mounted). A USB exFAT stick, "Ruya Stick",
 // is plugged in a moment after the start (3 s; 30 ms with RUYA_MOCK_FAST=1; never with RUYA_MOCK_NO_STICK=1, which the tests set) and announced with
-// volumeAdded. Ejecting it removes it (the tests can plug it in again); a stick marked busy
+// volumeAdded. Not plugged in at the start, for the tests: "vol-stick-2" (a second exFAT
+// partition of the same drive), "vol-stick-raw" (a third partition there that is not supported),
+// "vol-card" (an SD card on a drive of its own) and "vol-odd" (a drive that is not supported at
+// all); see plug(). Ejecting it removes it (the tests can plug it in again); a stick marked busy
 // answers "busy" and stays. Nothing is ever read from or run on a mock volume.
 class MockStorageBackend final : public StorageBackend
 {
@@ -23,6 +26,8 @@ public:
     // Tests only.
     void reset(bool plugStick);
     void plugStick();
+    // Plugs these volumes in together: one list, one announcement each (in the order given).
+    void plug(const QStringList &ids);
     void setBusy(const QString &id, bool busy);
     // While held, eject() is counted but unanswered (an unmount takes seconds) until released.
     void holdEject(bool hold);

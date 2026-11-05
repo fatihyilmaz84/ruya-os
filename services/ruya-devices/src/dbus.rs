@@ -158,6 +158,7 @@ pub async fn watch(connection: Connection, audio: Shared) {
         |delay| async move {
             async_io::Timer::after(delay).await;
         },
+        std::time::Instant::now,
         || async {
             refresh_audio(&connection, &audio).await;
             true
@@ -813,6 +814,7 @@ impl StorageIface {
                 let own = |v: Value<'_>| OwnedValue::try_from(v).ok();
                 [
                     ("id", own(Value::from(v.id.clone()))),
+                    ("drive", own(Value::from(v.drive.clone()))),
                     ("label", own(Value::from(v.label.clone()))),
                     ("filesystem", own(Value::from(v.filesystem))),
                     ("size_bytes", own(Value::from(v.size_bytes))),

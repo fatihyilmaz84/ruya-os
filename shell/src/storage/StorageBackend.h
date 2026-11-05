@@ -9,6 +9,7 @@
 struct StorageVolume
 {
     QString id;
+    QString drive; // the drive it lives on; partitions of one stick share it (may be empty)
     QString label;
     QString filesystem = QStringLiteral("unknown"); // "ext4" | "btrfs" | "exfat" | "vfat" | "ntfs" | "unknown"
     qint64 sizeBytes = 0;

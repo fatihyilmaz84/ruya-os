@@ -5,12 +5,13 @@
 #include <QObject>
 #include <QQmlEngine>
 #include <QSet>
+#include <QTimer>
 #include <QVariantList>
 
 #include <memory>
 
 // QML face of org.ruyaos.Devices1.Storage: the volume list, eject, and the "drive inserted"
-// signal. Backend: RUYA_SERVICES=mock|dbus; the default is D-Bus on Linux (the service is a
+// signal (one per drive, however many partitions it has). Backend: RUYA_SERVICES=mock|dbus; the default is D-Bus on Linux (the service is a
 // later task) and the mock elsewhere, like Audio, Network and Bluetooth.
 class Storage : public QObject
 {
@@ -18,11 +19,14 @@ class Storage : public QObject
     QML_ELEMENT
     QML_SINGLETON
 
-    // [{ id, label, filesystem, sizeBytes, freeBytes, removable, mounted, mountPoint, readOnly }]
+    // [{ id, drive, label, filesystem, sizeBytes, freeBytes, removable, mounted, mountPoint, readOnly }]
     Q_PROPERTY(QVariantList volumes READ volumes NOTIFY volumesChanged)
     Q_PROPERTY(bool mock READ isMock CONSTANT)
 
 public:
+    // How long after the first announced volume the others of the same drive are waited for.
+    static constexpr int groupWindowMs = 400;
+
     explicit Storage(std::unique_ptr<StorageBackend> backend, QObject *parent = nullptr);
     ~Storage() override;
 
@@ -42,6 +46,9 @@ public:
     // start does); mockPlugStick inserts it now; mockSetBusy makes ejecting a volume answer "busy".
     Q_INVOKABLE void mockReset(bool plugStick = false);
     Q_INVOKABLE void mockPlugStick();
+    // Plugs in these mock volumes together (ids: vol-stick, vol-stick-2, vol-stick-raw, vol-card,
+    // vol-odd), announced in the order given, one list for all.
+    Q_INVOKABLE void mockPlug(const QStringList &ids);
     Q_INVOKABLE void mockSetBusy(const QString &id, bool busy);
     // mockHoldEject: eject() stays unanswered until released (false); mockEjectCalls counts the
     // eject() calls since the last reset; mockRepublish publishes the unchanged list again.
@@ -55,13 +62,28 @@ public:
 
 signals:
     void volumesChanged();
-    // A volume was plugged in and is now in the list; once per insert.
-    void volumeAdded(const QString &id, const QString &label);
+    // A drive was plugged in and its volumes are in the list; once per drive and insert. `label`
+    // names the first volume with a supported filesystem, `volumeCount` counts those volumes
+    // (partitions with a filesystem we do not mount stay listed but are not counted; a drive that
+    // has none of the supported kind gives no signal). Volumes announced within
+    // `groupWindowMs` of the first one are grouped by their drive.
+    void driveAdded(const QString &drive, const QString &label, int volumeCount);
     // op: "eject"; status: see api/dbus/org.ruyaos.Devices1.xml
     void finished(const QString &op, const QString &id, const QString &status);
 
 private:
+    // A volume that is in the list and was announced: held back for the group window so that
+    // the other partitions of its drive can join it.
+    struct Arrival
+    {
+        QString drive;
+        QList<StorageVolume> volumes;
+    };
+    void flushArrivals();
+
     std::unique_ptr<StorageBackend> m_backend;
     QVariantList m_volumes;
     QSet<QString> m_pendingAdded; // announced, waiting for the list that holds them
+    QList<Arrival> m_arrivals;    // by drive, in the order they came
+    QTimer m_groupTimer;
 };

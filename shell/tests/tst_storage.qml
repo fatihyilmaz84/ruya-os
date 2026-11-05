@@ -19,7 +19,7 @@ Item {
         function onFinished(op, id, status) { host.answers = host.answers.concat([{ op: op, id: id, status: status }]) }
     }
 
-    SignalSpy { id: addedSpy; target: Storage; signalName: "volumeAdded" }
+    SignalSpy { id: addedSpy; target: Storage; signalName: "driveAdded" }
     SignalSpy { id: listedSpy; target: Storage; signalName: "volumesChanged" }
 
     Component {
@@ -145,8 +145,55 @@ Item {
             listedSpy.clear()
             Storage.mockRepublish()
             tryCompare(listedSpy, "count", 1, 2000, "the list was published again")
-            compare(addedSpy.count, 1, "no second volumeAdded")
+            compare(addedSpy.count, 1, "no second driveAdded")
             compare(toastCount("Drive inserted: Ruya Stick"), 1, "still one toast")
+        }
+
+        // A stick with two partitions: one toast naming the first and counting the second.
+        function test_two_partitions_of_one_drive_give_one_toast() {
+            Storage.mockPlug(["vol-stick", "vol-stick-2"])
+            tryVerify(() => toastCount("Drive inserted: Ruya Stick (and 1 more)") === 1, 2000, "one toast")
+            wait(Storage.groupWindowMs + 200)            // a second toast would have come by now
+            compare(addedSpy.count, 1, "one driveAdded")
+            compare(addedSpy.signalArguments[0][0], "drive-stick")
+            compare(addedSpy.signalArguments[0][2], 2)
+            compare(toastTexts().filter(t => t.startsWith("Drive inserted")).length, 1, "no other drive toast")
+            verify(volume("vol-stick") !== undefined && volume("vol-stick-2") !== undefined, "both listed")
+            compare(volume("vol-stick-2").drive, volume("vol-stick").drive)
+        }
+
+        // Partitions that arrive in separate lists, inside the window, still join the first.
+        function test_a_partition_that_follows_inside_the_window_joins_the_toast() {
+            Storage.mockPlug(["vol-stick"])
+            Storage.mockPlug(["vol-stick-2"])
+            tryVerify(() => toastCount("Drive inserted: Ruya Stick (and 1 more)") === 1, 2000, "one toast")
+            wait(Storage.groupWindowMs + 200)
+            compare(addedSpy.count, 1)
+        }
+
+        function test_two_different_drives_give_two_toasts() {
+            Storage.mockPlug(["vol-stick", "vol-card"])
+            tryVerify(() => toastCount("Drive inserted: Ruya Stick") === 1, 2000, "the stick")
+            tryVerify(() => toastCount("Drive inserted: Camera Card") === 1, 2000, "the card")
+            wait(Storage.groupWindowMs + 200)
+            compare(addedSpy.count, 2)
+            compare(toastTexts().filter(t => t.startsWith("Drive inserted")).length, 2)
+        }
+
+        // A partition we do not mount stays listed but is not counted; a drive that has nothing
+        // else gives no toast.
+        function test_unsupported_partitions_are_listed_but_not_counted() {
+            Storage.mockPlug(["vol-stick", "vol-stick-raw"])
+            tryVerify(() => toastCount("Drive inserted: Ruya Stick") === 1, 2000, "no count for the raw partition")
+            tryVerify(() => volume("vol-stick-raw") !== undefined, 2000, "still listed")
+            compare(volume("vol-stick-raw").filesystem, "unknown")
+            compare(addedSpy.signalArguments[0][2], 1)
+            addedSpy.clear()
+            Storage.mockPlug(["vol-odd"])
+            tryVerify(() => volume("vol-odd") !== undefined, 2000, "listed")
+            wait(Storage.groupWindowMs + 200)
+            compare(addedSpy.count, 0, "no driveAdded")
+            compare(toastTexts().filter(t => t.startsWith("Drive inserted")).length, 1, "no toast for the unsupported drive")
         }
 
         function test_contract_statuses() {

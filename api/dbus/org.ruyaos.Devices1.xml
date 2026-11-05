@@ -248,6 +248,9 @@
       order. Only removable volumes with a supported filesystem are mounted, by the service, once
       per plug-in, nosuid,nodev,noexec. One dictionary per volume:
         id           s   stable id, opaque to the shell (e.g. the udisks object name)
+        drive        s   the drive this volume lives on (the udisks drive object), opaque to the shell;
+                         partitions of one stick share it, so the shell can show one "Drive inserted"
+                         for a stick with several partitions
         label        s   display name; the service falls back to the model or "USB drive"
         filesystem   s   "ext4" | "btrfs" | "exfat" | "vfat" | "ntfs" | "unknown" (not supported)
         size_bytes   x   total size
@@ -275,7 +278,9 @@
 
     <!--
       A volume was plugged in (not sent for the volumes present at start). Sent before
-      VolumesChanged; the shell shows "Drive inserted" once the volume is in the list.
+      VolumesChanged; one signal per volume (also for a partition with a filesystem we do not
+      mount). The shell waits until the volume is in the list and shows one "Drive inserted" per
+      drive (the "drive" key of ListVolumes), not one per partition.
     -->
     <signal name="VolumeAdded">
       <arg name="id" type="s"/>
