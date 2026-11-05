@@ -1,6 +1,6 @@
 # T-181 — Shell D-Bus backends: a late reply never overwrites newer data
 
-Status: todo · Phase: 2 · Depends: — · Area: shell · Size: M · Owner: builder
+Status: in-progress · Phase: 2 · Depends: — · Area: shell · Size: M · Owner: builder
 
 ## Goal
 The Network, Bluetooth, Storage and Audio D-Bus clients refresh asynchronously. A slow reply to an old request must not replace what a newer request (or a pushed signal) already delivered. The battery backend got this guard in T-177; give the other four the same, from one shared piece instead of five copies.

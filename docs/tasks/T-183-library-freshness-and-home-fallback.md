@@ -1,6 +1,6 @@
 # T-183 — Library stays fresh and Home never says "empty" over installed apps
 
-Status: in-progress · Phase: 2 · Depends: — · Area: services, shell · Size: M · Owner: builder
+Status: done · Phase: 2 · Depends: — · Area: services, shell · Size: M · Owner: builder
 
 ## Goal
 Three small T-163 findings about the library: it rescans when a Flatpak app is renamed or recategorised (not only added or removed), Home does not say "Your library is empty" while apps are installed but none has been played, and Flatpak titles use the real app name instead of the id-derived placeholder ("TestGame").

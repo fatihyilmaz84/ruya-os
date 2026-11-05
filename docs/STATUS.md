@@ -24,10 +24,9 @@ Open work only (todo, in-progress, blocked), in the recommended order; when NEXT
 | ID | Title | Status | Depends |
 |---|---|---|---|
 | [T-178](tasks/T-178-iso-install-boots-to-shell.md) | An installed ISO boots to the shell with no manual step (+ dracut noise, boot-menu name) | in-progress | — |
-| [T-183](tasks/T-183-library-freshness-and-home-fallback.md) | Library stays fresh; Home falls back to installed apps | in-progress | — |
 | [T-184](tasks/T-184-devices-volume-grouping-and-watcher-debounce.md) | One toast per USB stick; PipeWire watcher debounce | todo | — |
 | [T-185](tasks/T-185-scroll-affordance.md) | Scroll cue on long Settings panes (edge fade) | todo | — |
-| [T-181](tasks/T-181-shell-backend-stale-replies.md) | Shell backends: a late reply never overwrites newer data | todo | — |
+| [T-181](tasks/T-181-shell-backend-stale-replies.md) | Shell backends: a late reply never overwrites newer data | in-progress | — |
 | [T-187](tasks/T-187-ci-and-make-disk-hygiene.md) | CI runs the font check; `make-disk.sh` needs the dev key file | todo | — |
 | [T-180](tasks/T-180-network-polkit-deny-by-default.md) | NetworkManager polkit: refuse every action the shell doesn't need | todo | T-178 |
 | [T-186](tasks/T-186-accessibility-walk-flows.md) | Action-named confirm buttons; accessibility walk of wizard/profile flows | todo | T-179 |
@@ -38,7 +37,7 @@ Open work only (todo, in-progress, blocked), in the recommended order; when NEXT
 | [T-147](tasks/T-147-fullscreen-app-flow.md) | Full-screen apps: launch splash, quick menu, return, close | todo | T-164 |
 | [T-166](tasks/T-166-suspend-under-eglfs.md) | **[lead]** Suspend and resume with the shell on KMS (eglfs) | todo | — |
 
-**VM queue** (done on the host, VM check pending; the lead runs them with one image build): T-182 (`vm-store-check.sh`, last section). Last verified: T-173, T-177 on 0.0.37 (2026-11-04).
+**VM queue** (done on the host, VM check pending; the lead runs them with one image build): T-182 (`vm-store-check.sh`, last section), T-183 (`vm-library-check.sh`, update step). Last verified: T-173, T-177 on 0.0.37 (2026-11-04).
 
 ## Inbox
 
@@ -48,6 +47,9 @@ Follow-ups and debt for the next planner, one line each: `- (source) what, and w
 - (T-179 review) Add a Backspace test for the Guide overlay (`Shell.qml:1024`/`1027`: power mode back to actions, then close).
 - (T-182 review) ruya-store: run the flatpak-calling D-Bus handlers (Install/Uninstall/Update/Rollback/ListInstalled/ListRemotes) through `blocking::unblock`, off the zbus executor (`dbus.rs`).
 - (T-182) `sync_installed` corrections send no `InstalledChanged`: a shell showing an app installed after an outside `flatpak uninstall` stays stale until its next read; return a "changed" flag and let the D-Bus layer emit it.
+- (T-183) Home's Installed row could show a played/unplayed mix (played first, then installed, up to 8); today it is either one: product decision.
+- (T-183 review) `ruya-library` `desktop_name` doesn't unescape desktop-entry escapes (`\s`): cosmetic. `vm-library-check.sh` early `exit 1` leaves the monitor and test repo behind (use a `trap`).
+- (T-178) The ISO's own boot menu still says "Install Fedora Linux 44" (bib has no product-name setting): cosmetic, low priority. A fresh worktree rebuilds the shell and services image stages from scratch (30+ min): budget that for image-lane builders. `vm-iso-check.ps1` reads greenboot state over SSH with the dev key: needs another way (serial console) once the dev key leaves the ISO.
 - (0.0.40 try-out) The VM clock shows UTC: there is no time-zone setting yet (wizard or System pane); plan it with the OOBE/installer work.
 
 ## Blocked (need something this host doesn't have)
