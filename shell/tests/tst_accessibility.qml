@@ -283,7 +283,7 @@ Item {
             tryVerify(() => find("powerSuspend") && find("powerSuspend").activeFocus, 2000)
             const expected = [["suspend", "powerSuspend", "Suspend now"],
                               ["restart", "powerRestart", "Restart now"],
-                              ["poweroff", "powerOff", "Shut down now"]]
+                              ["poweroff", "powerOff", "Power off now"]]
             const dialog = find("powerConfirmDialog")
             for (const [action, row, name] of expected) {
                 for (let i = 0; i < 4 && !find(row).activeFocus; ++i)

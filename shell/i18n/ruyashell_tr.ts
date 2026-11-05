@@ -709,7 +709,7 @@
     </message>
     <message>
         <location line="+2"/>
-        <source>Shut down now</source>
+        <source>Power off now</source>
         <translation>Şimdi kapat</translation>
     </message>
     <message>

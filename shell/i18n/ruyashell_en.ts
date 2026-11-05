@@ -710,8 +710,8 @@
     </message>
     <message>
         <location line="+2"/>
-        <source>Shut down now</source>
-        <translation>Shut down now</translation>
+        <source>Power off now</source>
+        <translation>Power off now</translation>
     </message>
     <message>
         <location line="+95"/>

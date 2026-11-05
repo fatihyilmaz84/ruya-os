@@ -38,7 +38,7 @@ FocusScope {
         if (action === "restart")
             return qsTr("Restart now")
         if (action === "poweroff")
-            return qsTr("Shut down now")
+            return qsTr("Power off now")
         if (action === "custom" && customConfirmName.length > 0)
             return customConfirmName
         return qsTr("Confirm")
