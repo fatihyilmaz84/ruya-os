@@ -15,7 +15,7 @@ Verification legend: **host** = built and tested on Windows · **host (vm pendin
 
 ## Board
 
-**NEXT → T-162** ([lead], the critical path: the image lane is free); builders run T-185 (round 2) and T-188
+**NEXT → T-162** ([lead], the critical path: the image lane is free); builders run T-188 and T-186
 
 **How work runs (owner, 2026-11-04):** the lead dispatches `ruya-builder` agents, at most two at a time in their own worktrees and in different areas, has each branch reviewed by `ruya-reviewer`, and merges it (`docs/LEAD.md`, build loop). Dispatched builders never edit this file. At most one task with a "VM (this task)" criterion runs at a time. A builder session the owner starts directly takes NEXT in the main checkout, alone, and does the bookkeeping itself (`CLAUDE.md`).
 
@@ -24,9 +24,8 @@ Open work only (todo, in-progress, blocked), in the recommended order; when NEXT
 | ID | Title | Status | Depends |
 |---|---|---|---|
 | [T-184](tasks/T-184-devices-volume-grouping-and-watcher-debounce.md) | One toast per USB stick; PipeWire watcher debounce | todo | — |
-| [T-185](tasks/T-185-scroll-affordance.md) | Scroll cue on long Settings panes (edge fade) | in-progress | — |
 | [T-187](tasks/T-187-ci-and-make-disk-hygiene.md) | CI runs the font check; `make-disk.sh` needs the dev key file | todo | — |
-| [T-186](tasks/T-186-accessibility-walk-flows.md) | Action-named confirm buttons; accessibility walk of wizard/profile flows | todo | T-179 |
+| [T-186](tasks/T-186-accessibility-walk-flows.md) | Action-named confirm buttons; accessibility walk of wizard/profile flows | in-progress | — |
 | [T-188](tasks/T-188-store-jobs-survive-restart.md) | Store: the shell finds its running installs after a service restart | in-progress | — |
 | [T-162](tasks/T-162-ruya-session-in-the-image.md) | **[lead]** `ruya-session` in the image: real spawner, unit, bus policy | todo | — |
 | [T-164](tasks/T-164-per-profile-wayland-sockets.md) | **[lead]** Per-profile Wayland sockets: a profile's app appears in the shell | todo | T-162 |
@@ -49,7 +48,8 @@ Follow-ups and debt for the next planner, one line each: `- (source) what, and w
 - (T-178) The ISO's own boot menu still says "Install Fedora Linux 44" (bib has no product-name setting): cosmetic, low priority. A fresh worktree rebuilds the shell and services image stages from scratch (30+ min): budget that for image-lane builders. `vm-iso-check.ps1` reads greenboot state over SSH with the dev key: needs another way (serial console) once the dev key leaves the ISO.
 - (T-178 review) `vm-iso-check.ps1`: print the installed disk's boot entry titles; resolve an absolute `-Disk` properly and refuse paths outside `output\` (it deletes the target first).
 - (T-181 review) `DBusProfilesBackend` still emits `listed` straight from an async `ListProfiles` reply: give it a `RequestSequence`; check Store, Library and Update backends too. The guard wiring in the four `DBus*Backend.cpp` was only exercised through the mock: add a shell-over-D-Bus VM step that triggers a refresh by signal.
-- (T-185 review) design: update the canvas board for the Settings scroll cue (peek-row opacity) per 04 §8 once round 2 settles; Store grid and Games lists have the same hidden-continuation problem (extract the cue from `SettingsPane` first).
+- (T-185) Owner/design: update the canvas board "Settings" with the peek-row cue (04 §8). Store grid and Games lists have the same hidden-continuation problem (extract the cue from `SettingsPane` first).
+- (T-185 review) `SettingsPane.relayout()` keeps whole rows but not look-ahead (rows inserted or a message appearing below the focused row): re-run `ensureFocusedVisible` while the pane has focus. Rows have `activeFocusOnTab`: Tab moves focus without scrolling or updating the peek rows (handle Tab/Backtab or drop it). The peek text over a light backdrop blob is low-contrast: revisit `peekOpacity` if it reads badly on hardware.
 - (T-180 review) `vm-devices-check.sh`/`vm-storage-check.sh`: check each "refused" polkit action id is registered (`pkaction --action-id X`) before expecting pkcheck exit 1. Hardware: a real Wi-Fi connect (new network with password, a saved one) and forget under the deny-by-default rule (B-002; the VM has no Wi-Fi adapter).
 - (0.0.40 try-out) The VM clock shows UTC: there is no time-zone setting yet (wizard or System pane); plan it with the OOBE/installer work.
 

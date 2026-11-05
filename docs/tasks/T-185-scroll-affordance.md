@@ -1,6 +1,6 @@
 # T-185 — Scroll cue: a long Settings pane shows that more rows exist
 
-Status: in-progress · Phase: 2 · Depends: — · Area: shell · Size: S · Owner: builder
+Status: done · Phase: 2 · Depends: — · Area: shell · Size: S · Owner: builder
 
 ## Goal
 Since T-170 and T-175 no half-cut row hints that a Settings pane continues below the viewport. A viewer on the sofa can't tell. Add the cue the lead chose (design decision below).
@@ -23,11 +23,11 @@ Since T-170 and T-175 no half-cut row hints that a Settings pane continues below
 ## Out of scope
 - Scrollbars, chevrons, other scrolling lists (Store grid, Games). (Focus scrolling may change as in the design decision; keep T-170/T-175's whole-row and `checkRowsInside` guarantees.)
 
-## Acceptance criteria
-- [ ] `tst_settings.qml`: a pane taller than the viewport reports "more below" at the top, both cues once scrolled to the middle, "more above" only at the end; a short pane shows none. Properties asserted (`visible`/`opacity`), not pixels.
-- [ ] Revert check: the test fails without the binding.
-- [ ] `dev.ps1 shots`: a long pane (e.g. Audio or Storage with several rows) at top and scrolled, read against `04` §8: the fade is visible, doesn't cover the focus ring of the focused row, the last row is still fully readable when scrolled to the end.
-- [ ] `.\scripts\dev.ps1 test` ALL GREEN.
+## Acceptance criteria (as revised after the round-1 review; met in round 2)
+- [x] `tst_settings.qml`: walking Down and Up through a long pane, the focused row is whole, at full opacity and never the peek row; the row beyond it is whole in view; peek rows are at `Theme.peekOpacity`, only while rows exist beyond them; a short pane shows none; no animation under reduced motion.
+- [x] Revert checks: the tests fail without the dimming and without the look-ahead.
+- [x] `dev.ps1 shots`: 28a/28b/28c read against `04` §8: the focus ring is fully white, the backdrop shows through the peek rows, no hard line or smudge.
+- [x] `.\scripts\dev.ps1 test` ALL GREEN.
 
 ## Verification
 ```powershell
