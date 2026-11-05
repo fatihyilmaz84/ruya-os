@@ -15,7 +15,7 @@ Verification legend: **host** = built and tested on Windows · **host (vm pendin
 
 ## Board
 
-**NEXT → T-178** (image lane; T-182 runs beside it in the services lane; T-162 [lead] follows once T-178's image build is done)
+**NEXT → T-178** (image lane; T-162 [lead] follows once T-178's image build is done)
 
 **How work runs (owner, 2026-11-04):** the lead dispatches `ruya-builder` agents, at most two at a time in their own worktrees and in different areas, has each branch reviewed by `ruya-reviewer`, and merges it (`docs/LEAD.md`, build loop). Dispatched builders never edit this file. At most one task with a "VM (this task)" criterion runs at a time. A builder session the owner starts directly takes NEXT in the main checkout, alone, and does the bookkeeping itself (`CLAUDE.md`).
 
@@ -24,8 +24,7 @@ Open work only (todo, in-progress, blocked), in the recommended order; when NEXT
 | ID | Title | Status | Depends |
 |---|---|---|---|
 | [T-178](tasks/T-178-iso-install-boots-to-shell.md) | An installed ISO boots to the shell with no manual step (+ dracut noise, boot-menu name) | in-progress | — |
-| [T-182](tasks/T-182-store-data-fixes.md) | Store data fixes: developer name once, installed state follows Flatpak | in-progress | — |
-| [T-183](tasks/T-183-library-freshness-and-home-fallback.md) | Library stays fresh; Home falls back to installed apps | todo | — |
+| [T-183](tasks/T-183-library-freshness-and-home-fallback.md) | Library stays fresh; Home falls back to installed apps | in-progress | — |
 | [T-184](tasks/T-184-devices-volume-grouping-and-watcher-debounce.md) | One toast per USB stick; PipeWire watcher debounce | todo | — |
 | [T-185](tasks/T-185-scroll-affordance.md) | Scroll cue on long Settings panes (edge fade) | todo | — |
 | [T-181](tasks/T-181-shell-backend-stale-replies.md) | Shell backends: a late reply never overwrites newer data | todo | — |
@@ -39,7 +38,7 @@ Open work only (todo, in-progress, blocked), in the recommended order; when NEXT
 | [T-147](tasks/T-147-fullscreen-app-flow.md) | Full-screen apps: launch splash, quick menu, return, close | todo | T-164 |
 | [T-166](tasks/T-166-suspend-under-eglfs.md) | **[lead]** Suspend and resume with the shell on KMS (eglfs) | todo | — |
 
-**VM queue** (done on the host, VM check pending; the lead runs them with one image build): empty (T-173, T-177 verified 2026-11-04 on 0.0.37).
+**VM queue** (done on the host, VM check pending; the lead runs them with one image build): T-182 (`vm-store-check.sh`, last section). Last verified: T-173, T-177 on 0.0.37 (2026-11-04).
 
 ## Inbox
 
@@ -48,6 +47,7 @@ Follow-ups and debt for the next planner, one line each: `- (source) what, and w
 - (T-179 review) B-006: a held Backspace or Esc auto-repeats Back and can walk the page stack to Home; decide whether page-level Back ignores `isAutoRepeat` (the Guide overlay does).
 - (T-179 review) Add a Backspace test for the Guide overlay (`Shell.qml:1024`/`1027`: power mode back to actions, then close).
 - (T-182 review) ruya-store: run the flatpak-calling D-Bus handlers (Install/Uninstall/Update/Rollback/ListInstalled/ListRemotes) through `blocking::unblock`, off the zbus executor (`dbus.rs`).
+- (T-182) `sync_installed` corrections send no `InstalledChanged`: a shell showing an app installed after an outside `flatpak uninstall` stays stale until its next read; return a "changed" flag and let the D-Bus layer emit it.
 - (0.0.40 try-out) The VM clock shows UTC: there is no time-zone setting yet (wizard or System pane); plan it with the OOBE/installer work.
 
 ## Blocked (need something this host doesn't have)

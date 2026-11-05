@@ -1,6 +1,6 @@
 # T-182 — Store data fixes: developer name once, installed state follows Flatpak
 
-Status: in-progress · Phase: 2 · Depends: — · Area: services · Size: S · Owner: builder
+Status: done · Phase: 2 · Depends: — · Area: services · Size: S · Owner: builder
 
 ## Goal
 Two things the 0.0.40 try-out and the T-163 review found in `ruya-store`: a Store card shows the developer name twice ("divVerentdivVerent"), and the Store answers `already-installed` for an app that was removed outside the Store (`flatpak uninstall`) because its installed-apps cache is stale.
