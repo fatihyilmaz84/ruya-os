@@ -30,12 +30,15 @@ Item {
         }
     }
 
-    // A drive was plugged in (once per insert, when it is in the list), and an eject finished.
+    // A drive was plugged in (once per drive and insert, when its volumes are in the list; a stick
+    // with several partitions names the first and counts the rest), and an eject finished.
     // No actions yet; nothing on the drive is opened or run.
     Connections {
         target: Storage
-        function onVolumeAdded(id, label) {
-            Notifications.show(qsTr("Drive inserted: %1").arg(label), "info")
+        function onDriveAdded(drive, label, volumeCount) {
+            Notifications.show(volumeCount > 1
+                               ? qsTr("Drive inserted: %1 (and %n more)", "", volumeCount - 1).arg(label)
+                               : qsTr("Drive inserted: %1").arg(label), "info")
         }
         function onFinished(op, id, status) {
             if (op === "eject" && status === "ok")

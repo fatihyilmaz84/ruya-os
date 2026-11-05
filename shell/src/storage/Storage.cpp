@@ -5,16 +5,23 @@
 
 #include <QLocale>
 
+#include <algorithm>
+#include <utility>
+
 Storage::Storage(std::unique_ptr<StorageBackend> backend, QObject *parent)
     : QObject(parent)
     , m_backend(std::move(backend))
 {
+    m_groupTimer.setSingleShot(true);
+    m_groupTimer.setInterval(GroupWindowMs);
+    connect(&m_groupTimer, &QTimer::timeout, this, &Storage::flushArrivals);
     connect(m_backend.get(), &StorageBackend::volumeAdded, this, [this](const QString &id) { m_pendingAdded.insert(id); });
     connect(m_backend.get(), &StorageBackend::volumesListed, this, [this](const QList<StorageVolume> &list) {
         QVariantList out;
         for (const StorageVolume &v : list) {
             out.append(QVariantMap{
                 {QStringLiteral("id"), v.id},
+                {QStringLiteral("drive"), v.drive},
                 {QStringLiteral("label"), v.label},
                 {QStringLiteral("filesystem"), v.filesystem},
                 {QStringLiteral("sizeBytes"), v.sizeBytes},
@@ -28,8 +35,18 @@ Storage::Storage(std::unique_ptr<StorageBackend> backend, QObject *parent)
         m_volumes = out;
         emit volumesChanged();
         for (const StorageVolume &v : list) {
-            if (m_pendingAdded.remove(v.id))
-                emit volumeAdded(v.id, v.label);
+            if (!m_pendingAdded.remove(v.id))
+                continue;
+            // A drive without an id (an old service) is its own group.
+            const QString drive = v.drive.isEmpty() ? v.id : v.drive;
+            auto it = std::find_if(m_arrivals.begin(), m_arrivals.end(), [&](const Arrival &a) { return a.drive == drive; });
+            if (it == m_arrivals.end()) {
+                m_arrivals.append({drive, {}});
+                it = m_arrivals.end() - 1;
+            }
+            it->volumes.append(v);
+            if (!m_groupTimer.isActive())
+                m_groupTimer.start();
         }
     });
     connect(m_backend.get(), &StorageBackend::finished, this, &Storage::finished);
@@ -37,6 +54,28 @@ Storage::Storage(std::unique_ptr<StorageBackend> backend, QObject *parent)
 }
 
 Storage::~Storage() = default;
+
+void Storage::flushArrivals()
+{
+    const QList<Arrival> arrivals = std::exchange(m_arrivals, {});
+    QSet<QString> listed; // what is in the list now: a stick pulled within the window is not announced
+    for (const QVariant &v : std::as_const(m_volumes))
+        listed.insert(v.toMap().value(QStringLiteral("id")).toString());
+    for (const Arrival &a : arrivals) {
+        // Partitions we do not mount (filesystem "unknown") stay in the list but do not announce
+        // the drive.
+        QList<StorageVolume> usable;
+        QSet<QString> counted; // a volume plugged in twice within the window counts once
+        for (const StorageVolume &v : a.volumes) {
+            if (v.filesystem != QLatin1String("unknown") && listed.contains(v.id) && !counted.contains(v.id)) {
+                counted.insert(v.id);
+                usable.append(v);
+            }
+        }
+        if (!usable.isEmpty())
+            emit driveAdded(a.drive, usable.constFirst().label, int(usable.size()));
+    }
+}
 
 Storage *Storage::create(QQmlEngine *, QJSEngine *)
 {
@@ -73,8 +112,17 @@ void Storage::eject(const QString &id)
     m_backend->eject(id);
 }
 
+void Storage::mockPlug(const QStringList &ids)
+{
+    if (auto *mock = qobject_cast<MockStorageBackend *>(m_backend.get()))
+        mock->plug(ids);
+}
+
 void Storage::mockReset(bool plugStick)
 {
+    m_arrivals.clear();
+    m_groupTimer.stop();
+    m_pendingAdded.clear();
     if (auto *mock = qobject_cast<MockStorageBackend *>(m_backend.get()))
         mock->reset(plugStick);
 }

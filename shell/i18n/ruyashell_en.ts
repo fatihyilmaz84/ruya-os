@@ -1737,8 +1737,16 @@
         <source>Controller battery low (%1%)</source>
         <translation>Controller battery low (%1%)</translation>
     </message>
+    <message numerus="yes">
+        <location line="+11"/>
+        <source>Drive inserted: %1 (and %n more)</source>
+        <translation>
+            <numerusform>Drive inserted: %1 (and %n more)</numerusform>
+            <numerusform>Drive inserted: %1 (and %n more)</numerusform>
+        </translation>
+    </message>
     <message>
-        <location line="+9"/>
+        <location line="+1"/>
         <source>Drive inserted: %1</source>
         <translation>Drive inserted: %1</translation>
     </message>

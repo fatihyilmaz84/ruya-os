@@ -1,17 +1,24 @@
 //! Following PipeWire by events instead of polling (T-133). `pw-dump --monitor` stays running and
 //! prints one JSON array per batch of changes; a batch that is not only client chatter means "read
 //! the graph again". The rules are here and tested on any host: splitting the stream into
-//! batches, telling changes from chatter, the debounce that turns a burst into one refresh, and
-//! the restart back-off. The child process itself is Linux-only.
+//! batches, telling changes from chatter, the debounce that turns a burst into one refresh (with
+//! the shared one-second cap of `debounce.rs`), and the restart back-off. The child process
+//! itself is Linux-only.
 
 use std::collections::HashSet;
 use std::future::Future;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use futures_lite::future;
 use serde_json::Value;
 
-/// A burst of graph updates (a device appearing changes many objects) gives one refresh.
+use crate::debounce::{Debounce, MAX_WAIT};
+
+/// A burst of graph updates (a device appearing changes many objects) gives one refresh once it
+/// has been quiet this long. Shorter than the other watchers' `debounce::QUIET` on purpose: a
+/// graph read is cheap and a changed volume or output should show quickly. The cap
+/// (`debounce::MAX_WAIT`) is the shared one: a graph that never goes quiet is still read once a
+/// second.
 pub const DEBOUNCE: Duration = Duration::from_millis(100);
 /// First wait before the monitor is started again; doubles up to `BACKOFF_MAX`.
 pub const BACKOFF_START: Duration = Duration::from_secs(1);
@@ -141,16 +148,21 @@ pub trait EventSource {
 
 /// Calls `refresh` once on every (re)connect and once per quiet burst of events, for ever. A
 /// source that cannot be started, or that ends, is started again after `Backoff`; each restart
-/// is logged once. `refresh` returns `false` to stop (tests); `sleep` is injected for the same
-/// reason.
-pub async fn follow<S, C, R, RFut, Sl, SlFut>(mut connect: C, mut sleep: Sl, mut refresh: R)
-where
+/// is logged once. `refresh` returns `false` to stop (tests); `sleep` and `now` are injected for
+/// the same reason.
+pub async fn follow<S, C, R, RFut, Sl, SlFut, N>(
+    mut connect: C,
+    mut sleep: Sl,
+    mut now: N,
+    mut refresh: R,
+) where
     S: EventSource,
     C: FnMut() -> Result<S, String>,
     R: FnMut() -> RFut,
     RFut: Future<Output = bool>,
     Sl: FnMut(Duration) -> SlFut,
     SlFut: Future<Output = ()>,
+    N: FnMut() -> Instant,
 {
     let mut backoff = Backoff::default();
     loop {
@@ -159,7 +171,15 @@ where
                 if !refresh().await {
                     return;
                 }
-                match drain(&mut source, &mut sleep, &mut refresh, &mut backoff).await {
+                match drain(
+                    &mut source,
+                    &mut sleep,
+                    &mut now,
+                    &mut refresh,
+                    &mut backoff,
+                )
+                .await
+                {
                     Some(why) => why,
                     None => return,
                 }
@@ -173,9 +193,10 @@ where
 }
 
 /// Runs one source until it dies (`Some(why)`) or `refresh` asks to stop (`None`).
-async fn drain<S, R, RFut, Sl, SlFut>(
+async fn drain<S, R, RFut, Sl, SlFut, N>(
     source: &mut S,
     sleep: &mut Sl,
+    now: &mut N,
     refresh: &mut R,
     backoff: &mut Backoff,
 ) -> Option<String>
@@ -185,6 +206,7 @@ where
     RFut: Future<Output = bool>,
     Sl: FnMut(Duration) -> SlFut,
     SlFut: Future<Output = ()>,
+    N: FnMut() -> Instant,
 {
     loop {
         if let Err(why) = source.next().await {
@@ -192,15 +214,24 @@ where
         }
         // It delivered, so the next death starts the back-off from the beginning again.
         backoff.reset();
-        // Swallow the rest of the burst: the refresh comes when it has been quiet for DEBOUNCE.
+        // Swallow the rest of the burst: the refresh comes when it has been quiet for DEBOUNCE, or
+        // when the burst has lasted MAX_WAIT, however busy the graph stays.
+        let started = now();
+        let rule = Debounce::new(started, DEBOUNCE, MAX_WAIT, None);
+        let mut last = started;
         loop {
+            let at = now();
+            if rule.exhausted(at) {
+                break;
+            }
+            let wait = rule.deadline(last).saturating_duration_since(at);
             let step = future::or(async { Some(source.next().await) }, async {
-                sleep(DEBOUNCE).await;
+                sleep(wait).await;
                 None
             })
             .await;
             match step {
-                Some(Ok(())) => {}
+                Some(Ok(())) => last = now(),
                 Some(Err(why)) => return Some(why),
                 None => break,
             }
@@ -297,7 +328,7 @@ mod linux {
 
 #[cfg(test)]
 mod tests {
-    use std::cell::RefCell;
+    use std::cell::{Cell, RefCell};
     use std::collections::VecDeque;
     use std::rc::Rc;
 
@@ -366,6 +397,8 @@ mod tests {
     #[derive(Clone, Copy)]
     enum Step {
         Event,
+        /// An event that arrives this long after the previous one (the fake clock moves on).
+        EventAfter(Duration),
         Die,
         /// Nothing more ever happens.
         Silence,
@@ -373,25 +406,45 @@ mod tests {
 
     struct Fake {
         steps: VecDeque<Step>,
+        clock: Rc<Cell<Instant>>,
+        /// Set once the source has nothing more to say: the run ends with the next refresh.
+        idle: Rc<Cell<bool>>,
     }
 
     impl EventSource for Fake {
         async fn next(&mut self) -> Result<(), String> {
             match self.steps.pop_front() {
                 Some(Step::Event) => Ok(()),
+                Some(Step::EventAfter(gap)) => {
+                    self.clock.set(self.clock.get() + gap);
+                    Ok(())
+                }
                 Some(Step::Die) => Err("gone".to_owned()),
-                Some(Step::Silence) | None => future::pending().await,
+                Some(Step::Silence) | None => {
+                    self.idle.set(true);
+                    future::pending().await
+                }
             }
         }
     }
 
     /// Runs `follow` over the sources (one per connect; `None` is a connect that fails) and
-    /// returns the sleeps and the number of refreshes. The `stop_after`-th refresh ends the run.
+    /// returns the sleeps and the number of refreshes. The `stop_after`-th refresh ends the run, or
+    /// the first one after a source has run out of things to say. The clock is fake: it only moves with `Step::EventAfter`.
     fn run(sources: Vec<Option<Vec<Step>>>, stop_after: usize) -> (Vec<Duration>, usize) {
         let sleeps = Rc::new(RefCell::new(Vec::new()));
         let refreshes = Rc::new(RefCell::new(0usize));
+        let clock = Rc::new(Cell::new(Instant::now()));
         let mut sources: VecDeque<Option<Vec<Step>>> = sources.into();
-        let (s, r) = (sleeps.clone(), refreshes.clone());
+        let idle = Rc::new(Cell::new(false));
+        let (s, r, c1, c2, i1, i2) = (
+            sleeps.clone(),
+            refreshes.clone(),
+            clock.clone(),
+            clock.clone(),
+            idle.clone(),
+            idle.clone(),
+        );
         future::block_on(follow(
             move || {
                 sources
@@ -399,6 +452,8 @@ mod tests {
                     .flatten()
                     .map(|steps| Fake {
                         steps: steps.into(),
+                        clock: c1.clone(),
+                        idle: i1.clone(),
                     })
                     .ok_or_else(|| "no pw-dump".to_owned())
             },
@@ -407,9 +462,10 @@ mod tests {
                 // Sleeping costs nothing in a test: the debounce window ends when nothing is ready.
                 async {}
             },
+            move || c2.get(),
             move || {
                 *r.borrow_mut() += 1;
-                let go = *r.borrow() < stop_after;
+                let go = *r.borrow() < stop_after && !i2.get();
                 async move { go }
             },
         ));
@@ -433,6 +489,22 @@ mod tests {
             sleeps,
             [DEBOUNCE],
             "one debounce window for the whole burst"
+        );
+    }
+
+    #[test]
+    fn a_flood_of_events_is_read_at_most_once_per_cap() {
+        // An event every 50 ms for 10 s: never quiet for DEBOUNCE, so without the cap this would
+        // be one refresh at the very end. With it the graph is read about once per MAX_WAIT.
+        let gap = Duration::from_millis(50);
+        let mut steps = vec![Step::EventAfter(gap); 200];
+        steps.push(Step::Silence);
+        // Refresh 1 is the connect; the last refresh follows the quiet after the flood.
+        let (_, refreshes) = run(vec![Some(steps)], usize::MAX);
+        let during = refreshes - 2; // the connect and the one after the flood
+        assert!(
+            (8..=11).contains(&during),
+            "{during} refreshes during a 10 s flood"
         );
     }
 

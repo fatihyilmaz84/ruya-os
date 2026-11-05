@@ -4,7 +4,10 @@
 #   .\scripts\vm-storage-check.ps1
 # Steps: baseline (no stick), attach a blank 64 MiB image, format it exFAT in the guest, detach it,
 # start recording signals, attach it again (the hot-plug under test), then plugged, busy and eject
-# checks, and finally systemd-analyze security. Exits 0 when every step passed.
+# checks; then (T-184) a second 96 MiB stick with three partitions, two exFAT and one ext2: every
+# partition is listed with the same "drive", the ext2 one stays unmounted, one VolumeAdded per
+# partition, and Eject of one partition takes the whole drive off. Finally systemd-analyze security.
+# Exits 0 when every step passed.
 [CmdletBinding(PositionalBinding = $false)]
 param(
     [int]$Port = 4444,
@@ -40,6 +43,8 @@ $fs = [System.IO.File]::Create($image)
 $fs.SetLength(64MB)
 $fs.Close()
 $monitorImage = $image -replace "\\", "/"
+$image2 = Join-Path $outDir "stick2.img"
+$monitorImage2 = $image2 -replace "\\", "/"
 
 & scp @ssh -P $SshPort (Join-Path $PSScriptRoot "vm-storage-check.sh") "root@127.0.0.1:/root/" | Out-Null
 if ($LASTEXITCODE -ne 0) { throw "scp failed: is the VM running (smoke-test.ps1 -Keep)?" }
@@ -64,11 +69,35 @@ Send-Monitor @("drive_add 0 if=none,id=stick0,format=raw,file=$monitorImage", "d
 Step "plugged"
 Step "busy"
 Step "eject"
+
+# T-184: a stick with three partitions (two exFAT, one ext2 the service does not mount). The first
+# stick is detached first (QEMU keeps the device after the guest powered it off).
+Write-Host "== host: detach the first stick, attach a blank second one"
+Send-Monitor @("device_del stick")
+Step "gone"
+Remove-Item $image2 -ErrorAction SilentlyContinue
+$fs = [System.IO.File]::Create($image2)
+$fs.SetLength(96MB)
+$fs.Close()
+Send-Monitor @("drive_add 0 if=none,id=stick1,format=raw,file=$monitorImage2", "device_add usb-storage,id=stick2,drive=stick1,removable=on")
+Step "mformat"
+
+Write-Host "== host: detach it again"
+Send-Monitor @("device_del stick2")
+Step "gone"
+Step "watch"
+Write-Host "== host: hot-plug the partitioned stick"
+Send-Monitor @("drive_add 0 if=none,id=stick1,format=raw,file=$monitorImage2", "device_add usb-storage,id=stick2,drive=stick1,removable=on")
+Step "mplugged"
+Step "meject"
+
 Step "security"
 
 Write-Host "== host: clean up"
 try { Send-Monitor @("device_del stick") } catch { }
+try { Send-Monitor @("device_del stick2") } catch { }
 Remove-Item $image -ErrorAction SilentlyContinue
+Remove-Item $image2 -ErrorAction SilentlyContinue
 
 if ($failed.Count -eq 0) { Write-Host "STORAGE CHECKS PASSED"; exit 0 }
 Write-Host "STORAGE CHECKS FAILED: $($failed -join ', ')"

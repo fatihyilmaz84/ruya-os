@@ -43,6 +43,7 @@ QList<StorageVolume> parseVolumes(const QDBusArgument &arg)
         const QVariantMap d = parseDict(arg);
         StorageVolume v;
         v.id = d.value(QStringLiteral("id")).toString();
+        v.drive = d.value(QStringLiteral("drive")).toString();
         v.label = d.value(QStringLiteral("label")).toString();
         v.filesystem = d.value(QStringLiteral("filesystem"), v.filesystem).toString();
         v.sizeBytes = d.value(QStringLiteral("size_bytes")).toLongLong();

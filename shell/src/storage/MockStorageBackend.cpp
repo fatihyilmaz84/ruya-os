@@ -64,7 +64,12 @@ void MockStorageBackend::doEject(const QString &id)
     } else if (m_entries.at(at).busy) {
         status = QStringLiteral("busy");
     } else {
-        m_entries[at].present = false;
+        // Ejecting powers the drive off: all its partitions go.
+        const QString drive = m_entries.at(at).vol.drive;
+        for (Entry &e : m_entries) {
+            if (e.vol.drive == drive)
+                e.present = false;
+        }
         publish();
     }
     answer(QStringLiteral("eject"), id, status);
@@ -73,13 +78,27 @@ void MockStorageBackend::doEject(const QString &id)
 void MockStorageBackend::plugStick()
 {
     m_plugTimer.stop();
-    const int at = indexOf(StickId);
-    if (at < 0 || m_entries.at(at).present)
+    plug({StickId});
+}
+
+void MockStorageBackend::plug(const QStringList &ids)
+{
+    QStringList added;
+    for (const QString &id : ids) {
+        const int at = indexOf(id);
+        if (at < 0 || m_entries.at(at).present)
+            continue;
+        m_entries[at].present = true;
+        m_entries[at].busy = false;
+        added.append(id);
+    }
+    if (added.isEmpty())
         return;
-    m_entries[at].present = true;
-    m_entries[at].busy = false;
-    // Announced before the list that holds it, like the D-Bus signals.
-    QTimer::singleShot(0, this, [this] { emit volumeAdded(StickId); });
+    // Announced before the list that holds them, like the D-Bus signals.
+    QTimer::singleShot(0, this, [this, added] {
+        for (const QString &id : added)
+            emit volumeAdded(id);
+    });
     publish();
 }
 
@@ -105,10 +124,11 @@ void MockStorageBackend::initState()
     m_heldEjects.clear();
     m_ejectCalls = 0;
     m_plugTimer.stop();
-    auto entry = [](const char *id, const char *label, const char *fs, qint64 size, qint64 free, bool removable,
-                    bool mounted, const char *mountPoint, bool present) {
+    auto entry = [](const char *id, const char *drive, const char *label, const char *fs, qint64 size, qint64 free,
+                    bool removable, bool mounted, const char *mountPoint, bool present) {
         Entry e;
         e.vol.id = QString::fromLatin1(id);
+        e.vol.drive = QString::fromLatin1(drive);
         e.vol.label = QString::fromLatin1(label);
         e.vol.filesystem = QString::fromLatin1(fs);
         e.vol.sizeBytes = size;
@@ -120,9 +140,13 @@ void MockStorageBackend::initState()
         return e;
     };
     m_entries = {
-        entry("vol-internal", "Internal disk", "ext4", 512 * GB, 318 * GB, false, true, "/var", true),
-        entry("vol-old", "Old Drive", "unknown", 64 * GB, 0, true, false, "", true),
-        entry("vol-stick", "Ruya Stick", "exfat", 32 * GB, 21 * GB + GB / 2, true, true, "/run/media/mock/Ruya Stick", false),
+        entry("vol-internal", "drive-internal", "Internal disk", "ext4", 512 * GB, 318 * GB, false, true, "/var", true),
+        entry("vol-old", "drive-old", "Old Drive", "unknown", 64 * GB, 0, true, false, "", true),
+        entry("vol-stick", "drive-stick", "Ruya Stick", "exfat", 32 * GB, 21 * GB + GB / 2, true, true, "/run/media/mock/Ruya Stick", false),
+        entry("vol-stick-2", "drive-stick", "Ruya Photos", "exfat", 16 * GB, 9 * GB, true, true, "/run/media/mock/Ruya Photos", false),
+        entry("vol-stick-raw", "drive-stick", "Ruya Raw", "unknown", 8 * GB, 0, true, false, "", false),
+        entry("vol-card", "drive-card", "Camera Card", "vfat", 64 * GB, 40 * GB, true, true, "/run/media/mock/Camera Card", false),
+        entry("vol-odd", "drive-odd", "Odd Drive", "unknown", 4 * GB, 0, true, false, "", false),
     };
 }
 

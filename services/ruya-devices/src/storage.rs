@@ -63,6 +63,8 @@ pub struct RawVolume {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Volume {
     pub id: String,
+    /// The udisks drive object the volume lives on; partitions of one stick share it.
+    pub drive: String,
     pub label: String,
     pub filesystem: &'static str,
     pub size_bytes: i64,
@@ -124,6 +126,7 @@ pub fn classify(raw: &RawVolume) -> Option<Volume> {
     };
     Some(Volume {
         id: raw.id.clone(),
+        drive: raw.drive.clone(),
         label: label.to_owned(),
         filesystem,
         size_bytes: i64::try_from(raw.size_bytes).unwrap_or(i64::MAX),
@@ -585,6 +588,18 @@ mod tests {
         assert!(v.mounted);
         assert_eq!(v.free_bytes, 123);
         assert_eq!(v.size_bytes, 8_000_000_000);
+    }
+
+    #[test]
+    fn partitions_of_one_stick_share_the_drive_and_other_sticks_do_not() {
+        let list = listed(&[
+            stick("/b/sdb1", "/d/sdb"),
+            stick("/b/sdb2", "/d/sdb"),
+            raw("/b/sdb3", "/d/sdb", "f2fs"),
+            stick("/b/sdc1", "/d/sdc"),
+        ]);
+        let drives: Vec<&str> = list.iter().map(|v| v.drive.as_str()).collect();
+        assert_eq!(drives, ["/d/sdb", "/d/sdb", "/d/sdb", "/d/sdc"]);
     }
 
     #[test]
