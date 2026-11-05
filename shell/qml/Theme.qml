@@ -29,6 +29,8 @@ QtObject {
     readonly property color onPrimary: "#05070d"                    // text on primaryFill
     readonly property color heroScrim: "#bf05070d"                  // left legibility scrim over hero art (75 %, fades to 0 over 75 % of the width)
     readonly property color artCaptionFade: "#d905070d"             // caption fade at the bottom of an art card (85 % to 0)
+    readonly property color edgeFade: "#9905070d"                   // scroll cue: page colour at 60 % on the edge where rows continue
+    readonly property color edgeFadeClear: "#0005070d"              // the same colour at 0 %, the far end of that fade (keeps the hue)
     readonly property color errorText: "#ff8a80"
     readonly property real disabledOpacity: 0.4                     // unavailable controls (PIN-pad OK, locked pad)
     readonly property color warningText: "#ffb74d"

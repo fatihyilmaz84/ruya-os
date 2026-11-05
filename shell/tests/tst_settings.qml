@@ -246,6 +246,95 @@ Item {
             compare(checkRowsInside(pane), 0, "scrolled back to the top")
         }
 
+        // Scroll cue (T-185): the edge where rows continue fades; nothing fades when all rows fit.
+        function fillBluetoothPane() {
+            for (let scan = 0; scan < 2; ++scan) {
+                Bluetooth.startScan()
+                tryCompare(Bluetooth, "discovering", true)
+                tryCompare(Bluetooth, "discovering", false, 3000)
+            }
+            selectCategory(2)                            // Bluetooth & controllers
+            keyClick(Qt.Key_Right)
+            const pane = find("paneBluetooth")
+            tryVerify(() => pane.activeFocus && pane.laidOutRows().length > 12, 2000, "the pane is filled")
+            return pane
+        }
+
+        function test_scroll_cue_follows_the_scroll_position() {
+            openSettings()
+            const pane = fillBluetoothPane()
+            const above = findChild(pane, "fadeAbove")
+            const below = findChild(pane, "fadeBelow")
+            verify(above !== null && below !== null)
+            verify(pane.viewport.height < pane.height + 0.5)
+            // At the top: more below, nothing above.
+            compare(pane.scrollY, 0)
+            compare(pane.moreAbove, false)
+            compare(pane.moreBelow, true)
+            tryCompare(above, "opacity", 0)
+            tryCompare(below, "opacity", 1)
+            compare(above.visible, false)
+            compare(below.visible, true)
+            verify(below.y + below.height <= pane.viewport.height + 0.5, "the fade lies inside the viewport")
+            compare(below.y + below.height, pane.viewport.height, "and sits on its bottom edge")
+            compare(above.y, 0)
+            // In the middle: both.
+            const rows = pane.focusableRows()
+            const mid = Math.floor(rows.length / 2)
+            for (let i = 0; i < mid; ++i)
+                keyClick(Qt.Key_Down)
+            tryVerify(() => rows[mid].activeFocus, 2000, "focus is in the middle")
+            verify(pane.scrollY > 0, "the pane scrolled")
+            compare(pane.moreAbove, true)
+            compare(pane.moreBelow, true)
+            tryCompare(above, "opacity", 1)
+            tryCompare(below, "opacity", 1)
+            // At the end: more above, nothing below.
+            for (let i = mid; i < rows.length + 2; ++i)
+                keyClick(Qt.Key_Down)
+            tryVerify(() => rows[rows.length - 1].activeFocus, 2000, "the last row has focus")
+            compare(pane.moreAbove, true)
+            compare(pane.moreBelow, false)
+            tryCompare(above, "opacity", 1)
+            tryCompare(below, "opacity", 0)
+            compare(below.visible, false)
+            // And back to the top.
+            for (let i = 0; i < rows.length + 2; ++i)
+                keyClick(Qt.Key_Up)
+            tryVerify(() => rows[0].activeFocus, 2000, "the first row has focus")
+            tryCompare(above, "opacity", 0)
+            tryCompare(below, "opacity", 1)
+        }
+
+        function test_scroll_cue_hidden_when_everything_fits() {
+            openSettings()
+            selectCategory(tc.displayIndex)
+            keyClick(Qt.Key_Right)
+            tryVerify(() => find("rowQuality").activeFocus)
+            const pane = find("paneDisplay")
+            verify(pane.laidOutRows().length > 0)
+            compare(pane.moreAbove, false)
+            compare(pane.moreBelow, false)
+            tryCompare(findChild(pane, "fadeAbove"), "opacity", 0)
+            tryCompare(findChild(pane, "fadeBelow"), "opacity", 0)
+            compare(findChild(pane, "fadeBelow").visible, false)
+        }
+
+        function test_scroll_cue_has_no_animation_under_reduced_motion() {
+            DeviceSettings.reducedMotion = true
+            openSettings()
+            const pane = fillBluetoothPane()
+            const below = findChild(pane, "fadeBelow")
+            compare(pane.moreBelow, true)
+            compare(below.opacity, 1, "appears at once")
+            const rows = pane.focusableRows()
+            for (let i = 0; i < rows.length + 2; ++i)
+                keyClick(Qt.Key_Down)
+            tryVerify(() => rows[rows.length - 1].activeFocus, 2000)
+            compare(pane.moreBelow, false)
+            compare(below.opacity, 0, "disappears at once")
+        }
+
         function test_pane_remembers_last_row() {
             openSettings()
             selectCategory(tc.displayIndex)
@@ -506,6 +595,27 @@ Item {
             tryVerify(() => find("categoryList").activeFocus)
             wait(600)
             grabImage(tc.shell).save(shotsDir + "/8b-settings-about-category.png")
+        }
+
+        // A pane longer than the screen at the top, in the middle and at the end (T-185).
+        function test_zz_screenshots_scroll_cue() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            openSettings()
+            const pane = fillBluetoothPane()
+            const rows = pane.focusableRows()
+            tryVerify(() => rows[0].activeFocus, 2000, "first row")
+            wait(600)
+            grabImage(tc.shell).save(shotsDir + "/28a-settings-scroll-top.png")
+            for (let i = 0; i < Math.floor(rows.length / 2); ++i)
+                keyClick(Qt.Key_Down)
+            wait(600)
+            grabImage(tc.shell).save(shotsDir + "/28b-settings-scroll-middle.png")
+            for (let i = 0; i < rows.length; ++i)
+                keyClick(Qt.Key_Down)
+            tryVerify(() => rows[rows.length - 1].activeFocus, 2000, "last row")
+            wait(600)
+            grabImage(tc.shell).save(shotsDir + "/28c-settings-scroll-end.png")
         }
     }
 }

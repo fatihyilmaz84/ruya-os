@@ -25,6 +25,9 @@ FocusScope {
     // bottom of the last row that fits. Its height is therefore at most the pane's.
     readonly property Item viewport: view
     readonly property real scrollY: flick.contentY
+    // Rows exist above / below the viewport (the scroll cue fades that edge, T-185).
+    readonly property bool moreAbove: !flick.atYBeginning
+    readonly property bool moreBelow: flick.contentY + view.height < column.height - 0.5
 
     // Visible rows (and spacers) of the column in order, with a height.
     function laidOutRows() {
@@ -141,6 +144,29 @@ FocusScope {
                 onHeightChanged: Qt.callLater(pane.relayout)
             }
         }
+
+        // Scroll cue (T-185): the edge where rows continue fades into the page colour. It sits
+        // inside the clip, so it follows the viewport, and covers no more than the focus ring's
+        // margin plus half a row (Theme.spaceXl).
+        component EdgeFade: Rectangle {
+            id: fade
+            required property bool atTop
+            required property bool shown
+            required property real unit
+            anchors { left: parent.left; right: parent.right }
+            height: Theme.spaceXl * fade.unit
+            opacity: shown ? 1 : 0
+            visible: opacity > 0
+            enabled: false
+            gradient: Gradient {
+                orientation: Gradient.Vertical
+                GradientStop { position: 0; color: fade.atTop ? Theme.edgeFade : Theme.edgeFadeClear }
+                GradientStop { position: 1; color: fade.atTop ? Theme.edgeFadeClear : Theme.edgeFade }
+            }
+            Behavior on opacity { NumberAnimation { duration: Theme.focusMs } }   // 0 under reduced motion: just appears
+        }
+        EdgeFade { objectName: "fadeAbove"; unit: pane.u; atTop: true; shown: pane.moreAbove; anchors.top: parent.top }
+        EdgeFade { objectName: "fadeBelow"; unit: pane.u; atTop: false; shown: pane.moreBelow; anchors.bottom: parent.bottom }
     }
     onHeightChanged: Qt.callLater(relayout)
 

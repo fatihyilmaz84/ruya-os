@@ -12,7 +12,7 @@ Read this when your task adds a page, a settings row, a modal, text input or a t
 
 ## Controls (`qml/controls/`)
 
-Reusable settings rows. All extend `SettingControl` (a `FocusScope` with the label, the glass bar and a focus ring; pass `u` and `label`). Put rows in a `SettingsPane` (`qml/SettingsPane.qml`): it moves between rows with Up/Down, and Left/Back leave it (`exitRequested`). Rows handle only their own keys and let everything else bubble.
+Reusable settings rows. All extend `SettingControl` (a `FocusScope` with the label, the glass bar and a focus ring; pass `u` and `label`). Put rows in a `SettingsPane` (`qml/SettingsPane.qml`): it moves between rows with Up/Down, and Left/Back leave it (`exitRequested`). Rows handle only their own keys and let everything else bubble. A pane taller than the screen shows its scroll cue (an edge fade, T-185) by itself; nothing to set.
 
 | Control | Keys it consumes | Value and signal |
 |---|---|---|
