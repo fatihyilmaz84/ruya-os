@@ -15,7 +15,7 @@ Verification legend: **host** = built and tested on Windows · **host (vm pendin
 
 ## Board
 
-**NEXT → T-178** (image lane; T-162 [lead] follows once T-178's image build is done)
+**NEXT → T-180** (image lane, polkit); T-162 [lead] is the critical path and takes the image lane next
 
 **How work runs (owner, 2026-11-04):** the lead dispatches `ruya-builder` agents, at most two at a time in their own worktrees and in different areas, has each branch reviewed by `ruya-reviewer`, and merges it (`docs/LEAD.md`, build loop). Dispatched builders never edit this file. At most one task with a "VM (this task)" criterion runs at a time. A builder session the owner starts directly takes NEXT in the main checkout, alone, and does the bookkeeping itself (`CLAUDE.md`).
 
@@ -23,12 +23,11 @@ Open work only (todo, in-progress, blocked), in the recommended order; when NEXT
 
 | ID | Title | Status | Depends |
 |---|---|---|---|
-| [T-178](tasks/T-178-iso-install-boots-to-shell.md) | An installed ISO boots to the shell with no manual step (+ dracut noise, boot-menu name) | in-progress | — |
 | [T-184](tasks/T-184-devices-volume-grouping-and-watcher-debounce.md) | One toast per USB stick; PipeWire watcher debounce | todo | — |
 | [T-185](tasks/T-185-scroll-affordance.md) | Scroll cue on long Settings panes (edge fade) | todo | — |
 | [T-181](tasks/T-181-shell-backend-stale-replies.md) | Shell backends: a late reply never overwrites newer data | in-progress | — |
 | [T-187](tasks/T-187-ci-and-make-disk-hygiene.md) | CI runs the font check; `make-disk.sh` needs the dev key file | todo | — |
-| [T-180](tasks/T-180-network-polkit-deny-by-default.md) | NetworkManager polkit: refuse every action the shell doesn't need | todo | T-178 |
+| [T-180](tasks/T-180-network-polkit-deny-by-default.md) | NetworkManager polkit: refuse every action the shell doesn't need | in-progress | — |
 | [T-186](tasks/T-186-accessibility-walk-flows.md) | Action-named confirm buttons; accessibility walk of wizard/profile flows | todo | T-179 |
 | [T-188](tasks/T-188-store-jobs-survive-restart.md) | Store: the shell finds its running installs after a service restart | todo | T-182 |
 | [T-162](tasks/T-162-ruya-session-in-the-image.md) | **[lead]** `ruya-session` in the image: real spawner, unit, bus policy | todo | — |
@@ -50,6 +49,7 @@ Follow-ups and debt for the next planner, one line each: `- (source) what, and w
 - (T-183) Home's Installed row could show a played/unplayed mix (played first, then installed, up to 8); today it is either one: product decision.
 - (T-183 review) `ruya-library` `desktop_name` doesn't unescape desktop-entry escapes (`\s`): cosmetic. `vm-library-check.sh` early `exit 1` leaves the monitor and test repo behind (use a `trap`).
 - (T-178) The ISO's own boot menu still says "Install Fedora Linux 44" (bib has no product-name setting): cosmetic, low priority. A fresh worktree rebuilds the shell and services image stages from scratch (30+ min): budget that for image-lane builders. `vm-iso-check.ps1` reads greenboot state over SSH with the dev key: needs another way (serial console) once the dev key leaves the ISO.
+- (T-178 review) `vm-iso-check.ps1`: print the installed disk's boot entry titles; resolve an absolute `-Disk` properly and refuse paths outside `output\` (it deletes the target first).
 - (0.0.40 try-out) The VM clock shows UTC: there is no time-zone setting yet (wizard or System pane); plan it with the OOBE/installer work.
 
 ## Blocked (need something this host doesn't have)

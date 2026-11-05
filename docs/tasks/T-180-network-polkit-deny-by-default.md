@@ -1,6 +1,6 @@
 # T-180 — NetworkManager polkit: refuse every action `ruya-shell` doesn't need
 
-Status: todo · Phase: 2 · Depends: T-178 (one image build at a time) · Area: image, services · Size: S · Owner: builder
+Status: in-progress · Phase: 2 · Depends: -- (T-178 is merged; one image build at a time) · Area: image, services · Size: S · Owner: builder
 
 ## Goal
 `50-ruyaos-network.rules` allows four NetworkManager actions for `ruya-shell` but returns `NOT_HANDLED` for the rest, so NetworkManager's own defaults (an active session may do many things without a password) stay open to the shell's user. Close it the way T-174 round 2 closed udisks2.

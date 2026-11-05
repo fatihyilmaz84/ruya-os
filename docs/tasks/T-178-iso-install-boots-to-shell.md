@@ -1,6 +1,6 @@
 # T-178 — A freshly installed ISO boots to the shell (no manual step)
 
-Status: in-progress · Phase: 0 · Depends: — · Area: image, scripts · Size: M · Owner: builder
+Status: done · Phase: 0 · Depends: — · Area: image, scripts · Size: M · Owner: builder
 
 ## Goal
 Write the installer ISO to a USB stick, install, reboot: the machine reaches the shell and greenboot passes, with nobody logging in to fix anything. Today the install boots to text mode (the 0.0.40 try-out), greenboot reboots it in a loop, and the ISO cannot go on the Dell (B-002).
