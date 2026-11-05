@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# Checks ruya-library (org.ruyaos.Library1, T-112 / T-163) inside a running VM, as root. It builds a
+# Checks ruya-library (org.ruyaos.Library1, T-112 / T-163 / T-183) inside a running VM, as root. It builds a
 # tiny signed Flatpak repository (one runtime, a game and an app, no download, like
 # vm-store-check.sh), adds it through Store1, installs and uninstalls through Store1 and watches
 # Library1 over the system bus. Copy and run:
 #   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-library-check.sh root@127.0.0.1:/root/
 #   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-library-check.sh [check|seed|security|clean]
-#   check     the whole cycle (install, ItemsChanged, uninstall, refused callers), cleans up after
+#   check     the whole cycle (install, title, update without Rescan, ItemsChanged, uninstall,
+#             refused callers), cleans up after
 #   seed      leaves the test game and app installed, for a screenshot of the shell (clean removes)
 #   security  prints systemd-analyze security ruya-library
 # Boot the VM with plain smoke-test.ps1 -Keep (or -Work -Keep for the screenshot).
@@ -101,6 +102,16 @@ wait_listed() {
     return 1
 }
 
+# wait_record <id> <text> <seconds>: until the item's record contains <text> (no Rescan is sent)
+wait_record() {
+    local n=0
+    while [ "$n" -lt "$3" ]; do
+        if record_of "$1" | grep -q "$2"; then echo "$n"; return 0; fi
+        sleep 1; n=$((n + 1))
+    done
+    return 1
+}
+
 case "${1:-check}" in
 security)
     systemd-analyze security ruya-library --no-pager | tail -14
@@ -157,7 +168,9 @@ check)
     rec="$(record_of "$game")"
     echo "$rec" | head -c 600; echo
     echo "$rec" | grep -q '"kind" s "game"' && ok "kind is game (Categories has Game)" || bad "kind of the test game: $rec"
-    echo "$rec" | grep -q '"title" s "TestGame"' && ok "title from flatpak list (no appstream data in the test repository: the name is the id's last part)" || bad "title: $rec"
+    # `flatpak list` prints the id's last part ("TestGame") because the test repository has no
+    # appstream catalogue; the service takes the name from the exported desktop entry (T-183).
+    echo "$rec" | grep -q '"title" s "Test Game"' && ok "title is the desktop entry's Name, not the id's last part" || bad "title: $rec"
     echo "$rec" | grep -q '"source" s "flatpak"' && ok "source is flatpak" || bad "source"
     echo "$rec" | grep -q "\"launch\" s \"flatpak:$game\"" && ok "launch spec" || bad "launch"
 
@@ -166,6 +179,17 @@ check)
     wait_listed "$notes" yes 120 >/dev/null && ok "the second app is listed" || bad "the second app never appeared"
     rec="$(record_of "$notes")"
     echo "$rec" | grep -q '"kind" s "app"' && ok "kind is app (no Game category)" || bad "kind of the test app: $rec"
+
+    echo "--- Update: a renamed and recategorised app is seen without Rescan (T-183)"
+    before="$(signals)"
+    make_app "$game" "Test Game Reloaded" "Utility;" || bad "cannot build the new version"
+    flatpak build-update-repo $sign "$work/repo" >/dev/null 2>&1
+    flatpak update --system -y --noninteractive "$game" && ok "flatpak update of the test game" || bad "flatpak update failed"
+    s="$(wait_record "$game" '"title" s "Test Game Reloaded"' 60)" && ok "the new title is listed after about $s s, no Rescan" || bad "the title did not change: $(record_of "$game")"
+    record_of "$game" | grep -q '"kind" s "app"' && ok "the new category made it an app" || bad "kind after the update: $(record_of "$game")"
+    sleep 1
+    after="$(signals)"
+    [ "$after" -gt "$before" ] && ok "ItemsChanged fired for the update ($before -> $after)" || bad "no ItemsChanged after the update"
 
     echo "--- Uninstall: the app disappears, ItemsChanged fires"
     before="$(signals)"

@@ -15,12 +15,18 @@ pub trait AppLister: Send + Sync {
     fn desktop_entry(&self, _id: &str) -> Option<String> {
         None
     }
+
+    /// The text of the installed appstream metainfo of an application id, if there is one.
+    fn metainfo(&self, _id: &str) -> Option<String> {
+        None
+    }
 }
 
 /// Fixed output, for tests and `--session` development.
 pub struct FixtureLister {
     list: String,
     desktops: HashMap<String, String>,
+    metainfos: HashMap<String, String>,
 }
 
 impl FixtureLister {
@@ -28,12 +34,19 @@ impl FixtureLister {
         FixtureLister {
             list: list.to_owned(),
             desktops: HashMap::new(),
+            metainfos: HashMap::new(),
         }
     }
 
     /// Adds the desktop entry of an application id.
     pub fn with_desktop(mut self, id: &str, text: &str) -> Self {
         self.desktops.insert(id.to_owned(), text.to_owned());
+        self
+    }
+
+    /// Adds the appstream metainfo of an application id.
+    pub fn with_metainfo(mut self, id: &str, text: &str) -> Self {
+        self.metainfos.insert(id.to_owned(), text.to_owned());
         self
     }
 }
@@ -45,6 +58,10 @@ impl AppLister for FixtureLister {
 
     fn desktop_entry(&self, id: &str) -> Option<String> {
         self.desktops.get(id).cloned()
+    }
+
+    fn metainfo(&self, id: &str) -> Option<String> {
+        self.metainfos.get(id).cloned()
     }
 }
 
@@ -80,13 +97,37 @@ impl AppLister for FlatpakCli {
         if id.contains('/') || id.contains('\\') {
             return None;
         }
-        let path = std::path::Path::new(SYSTEM_INSTALLATION)
-            .join("exports/share/applications")
-            .join(format!("{id}.desktop"));
-        std::fs::read(path)
-            .ok()
-            .map(|b| String::from_utf8_lossy(&b).into_owned())
+        read_text(
+            &std::path::Path::new(SYSTEM_INSTALLATION)
+                .join("exports/share/applications")
+                .join(format!("{id}.desktop")),
+        )
     }
+
+    fn metainfo(&self, id: &str) -> Option<String> {
+        if id.contains('/') || id.contains('\\') {
+            return None;
+        }
+        // Flatpak exports the metainfo next to the desktop entry; the app's own files are the
+        // fallback (the `current` branch's active deployment).
+        let root = std::path::Path::new(SYSTEM_INSTALLATION);
+        [
+            root.join(format!("exports/share/metainfo/{id}.metainfo.xml")),
+            root.join(format!("exports/share/appdata/{id}.appdata.xml")),
+            root.join(format!(
+                "app/{id}/current/active/files/share/metainfo/{id}.metainfo.xml"
+            )),
+        ]
+        .iter()
+        .find_map(|p| read_text(p))
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn read_text(path: &std::path::Path) -> Option<String> {
+    std::fs::read(path)
+        .ok()
+        .map(|b| String::from_utf8_lossy(&b).into_owned())
 }
 
 /// True when the `[Desktop Entry]` group's `Categories` list contains `Game`. Other groups and
@@ -107,8 +148,72 @@ pub fn is_game(desktop: &str) -> bool {
     false
 }
 
+/// The unlocalized `Name=` of the `[Desktop Entry]` group (`Name[de]=` is a different key).
+pub fn desktop_name(desktop: &str) -> Option<String> {
+    let mut in_entry = false;
+    for line in desktop.lines().map(str::trim) {
+        if line.starts_with('[') {
+            in_entry = line == "[Desktop Entry]";
+        } else if in_entry {
+            if let Some((key, value)) = line.split_once('=') {
+                if key.trim() == "Name" {
+                    return Some(value.trim().to_owned()).filter(|v| !v.is_empty());
+                }
+            }
+        }
+    }
+    None
+}
+
+fn unescape(text: &str) -> String {
+    text.replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&apos;", "'")
+        .replace("&amp;", "&")
+}
+
+/// The unlocalized `<name>` of an appstream metainfo. A `<developer>` block has a `<name>` of its
+/// own (who made the app, not what it is called) and is skipped; `<name xml:lang="de">` has an
+/// attribute and does not match. Not an XML parser: a metainfo that is not plain text of this
+/// shape gives `None` and the next source is tried.
+pub fn metainfo_name(xml: &str) -> Option<String> {
+    let mut rest = xml.to_owned();
+    while let Some(start) = rest.find("<developer") {
+        match rest[start..].find("</developer>") {
+            Some(end) => rest.replace_range(start..start + end + "</developer>".len(), ""),
+            None => rest.truncate(start),
+        }
+    }
+    let start = rest.find("<name>")? + "<name>".len();
+    let len = rest[start..].find("</name>")?;
+    Some(unescape(rest[start..start + len].trim())).filter(|n| !n.is_empty())
+}
+
+/// What `flatpak list` prints when the app has no appstream name: the last part of the id.
+fn is_placeholder(listed: &str, id: &str) -> bool {
+    listed.is_empty() || id.rsplit('.').next() == Some(listed)
+}
+
+/// The title of an app. `flatpak list` reads the name from the remote's appstream catalog; when
+/// that has none (a local or test repository, a sideload) it prints the id's last part, which is
+/// no name. Then the app's own exported files are asked, in this order: the desktop entry's
+/// `Name=` (every launchable app has one, and it is the name the app calls itself), then the
+/// installed metainfo `<name>`; the id is the last resort. A listed name that merely equals the
+/// last id part ("Notes" for `org.ruyaos.Notes`) is kept when the files do not say otherwise.
+fn title_of(id: &str, listed: &str, lister: &dyn AppLister) -> String {
+    if !is_placeholder(listed, id) {
+        return listed.to_owned();
+    }
+    lister
+        .desktop_entry(id)
+        .and_then(|d| desktop_name(&d))
+        .or_else(|| lister.metainfo(id).and_then(|m| metainfo_name(&m)))
+        .unwrap_or_else(|| if listed.is_empty() { id } else { listed }.to_owned())
+}
+
 /// One item per row. A row without an application id is skipped; a missing name falls back to
-/// the id. The origin column is not used yet. The kind is `game` when the desktop entry's
+/// the id (see `title_of`). The origin column is not used yet. The kind is `game` when the desktop entry's
 /// categories say so (`is_game`), else `app`.
 pub fn parse_list(output: &str, lister: &dyn AppLister) -> Vec<Item> {
     output
@@ -116,7 +221,7 @@ pub fn parse_list(output: &str, lister: &dyn AppLister) -> Vec<Item> {
         .filter_map(|line| {
             let mut cols = line.split('\t').map(str::trim);
             let id = cols.next().filter(|id| !id.is_empty())?;
-            let title = cols.next().filter(|t| !t.is_empty()).unwrap_or(id);
+            let title = title_of(id, cols.next().unwrap_or(""), lister);
             Some(Item {
                 id: format!("flatpak:{id}"),
                 kind: if lister.desktop_entry(id).is_some_and(|d| is_game(&d)) {
@@ -124,7 +229,7 @@ pub fn parse_list(output: &str, lister: &dyn AppLister) -> Vec<Item> {
                 } else {
                     Kind::App
                 },
-                title: title.to_owned(),
+                title,
                 source: Source::Flatpak,
                 launch: format!("flatpak:{id}"),
                 art: Vec::new(),
@@ -183,6 +288,77 @@ mod tests {
     fn localized_and_similar_keys_are_ignored() {
         let d = "[Desktop Entry]\nCategories[de]=Game;\nXCategories=Game;\nCategories=Utility;\n";
         assert_eq!(kind_of(Some(d)), Kind::App);
+    }
+
+    fn title_with(row: &str, desktop: Option<&str>, metainfo: Option<&str>) -> String {
+        let mut lister = FixtureLister::new(row);
+        if let Some(text) = desktop {
+            lister = lister.with_desktop("org.example.TestGame", text);
+        }
+        if let Some(text) = metainfo {
+            lister = lister.with_metainfo("org.example.TestGame", text);
+        }
+        parse_list(row, &lister)[0].title.clone()
+    }
+
+    const PLACEHOLDER: &str = "org.example.TestGame\tTestGame\ttest\n";
+
+    #[test]
+    fn a_placeholder_title_becomes_the_desktop_entry_name() {
+        let d = "[Desktop Entry]\nName[de]=Testspiel\nName=Test Game\nCategories=Game;\n";
+        assert_eq!(title_with(PLACEHOLDER, Some(d), None), "Test Game");
+        // No name column at all is a placeholder too.
+        assert_eq!(
+            title_with("org.example.TestGame\t\ttest\n", Some(d), None),
+            "Test Game"
+        );
+    }
+
+    #[test]
+    fn without_a_desktop_name_the_metainfo_name_is_used() {
+        let m = "<component>\n <id>org.example.TestGame</id>\n <name xml:lang=\"de\">Testspiel</name>\n <name>Test &amp; Game</name>\n</component>";
+        assert_eq!(title_with(PLACEHOLDER, None, Some(m)), "Test & Game");
+        let no_name = "[Desktop Entry]\nCategories=Game;\n";
+        assert_eq!(
+            title_with(PLACEHOLDER, Some(no_name), Some(m)),
+            "Test & Game"
+        );
+        let dev = "<component><developer><name>Some Studio</name></developer><name>Real Name</name></component>";
+        assert_eq!(title_with(PLACEHOLDER, None, Some(dev)), "Real Name");
+        let only_dev = "<component><developer><name>Some Studio</name></developer></component>";
+        assert_eq!(title_with(PLACEHOLDER, None, Some(only_dev)), "TestGame");
+    }
+
+    #[test]
+    fn the_desktop_name_wins_over_the_metainfo_and_a_real_listed_name_over_both() {
+        let d = "[Desktop Entry]\nName=From Desktop\n";
+        let m = "<component><name>From Metainfo</name></component>";
+        assert_eq!(title_with(PLACEHOLDER, Some(d), Some(m)), "From Desktop");
+        assert_eq!(
+            title_with(
+                "org.example.TestGame\tListed Name\ttest\n",
+                Some(d),
+                Some(m)
+            ),
+            "Listed Name"
+        );
+    }
+
+    #[test]
+    fn no_source_keeps_the_listed_name_or_the_id() {
+        assert_eq!(title_with(PLACEHOLDER, None, None), "TestGame");
+        assert_eq!(
+            title_with("org.example.TestGame\t\ttest\n", None, None),
+            "org.example.TestGame"
+        );
+        assert_eq!(
+            title_with(
+                PLACEHOLDER,
+                Some("[Desktop Entry]\nName=\n"),
+                Some("<broken")
+            ),
+            "TestGame"
+        );
     }
 
     #[test]

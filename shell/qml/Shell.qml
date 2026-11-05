@@ -564,7 +564,7 @@ FocusScope {
             width: Math.min(960 * root.u, root.width * 0.55)
             anchors { left: parent.left; leftMargin: root.marginX; bottom: recentRow.top; bottomMargin: Theme.spaceL * root.u }
 
-            eyebrow: root.libraryEmpty ? "" : qsTr("Continue playing")
+            eyebrow: root.libraryEmpty ? "" : (root.recentIsFallback ? qsTr("Installed") : qsTr("Continue playing"))
             title: root.libraryEmpty ? qsTr("Your library is empty") : (root.heroItem.title ?? "")
             meta: root.libraryEmpty ? "" : root.sourceLabel(root.heroItem.source ?? "")
             primaryText: root.libraryEmpty ? qsTr("Open Store") : qsTr("Play")
@@ -576,12 +576,13 @@ FocusScope {
             onDownRequested: if (!root.libraryEmpty) { Sfx.navigate(); recentRow.forceActiveFocus() }
         }
 
-        // Recent: the eight last played items. Moving along it changes the hero.
+        // Recent: the eight last played items (else the first installed ones, `recentIsFallback`).
+        // Moving along it changes the hero.
         ListView {
             id: recentRow
             objectName: "recentRow"
             Accessible.role: Accessible.List
-            Accessible.name: currentItem ? currentItem.Accessible.name : qsTr("Recent")
+            Accessible.name: currentItem ? currentItem.Accessible.name : (root.recentIsFallback ? qsTr("Installed") : qsTr("Recent"))
             anchors { left: parent.left; right: parent.right; bottom: parent.bottom; bottomMargin: root.marginY + hintBar.height + Theme.spaceM * root.u }
             leftMargin: root.marginX
             rightMargin: root.marginX
@@ -624,8 +625,12 @@ FocusScope {
         }
     }
 
-    // What Home shows. The Recent row holds ids; the hero follows its current item.
-    readonly property var recentIds: Library.recent.map(r => r.id)
+    // What Home shows. The row holds ids; the hero follows its current item. Nothing played yet
+    // (no `lastPlayed`) but something installed: the row falls back to the first eight installed
+    // items, in the order the Games page uses (the library's: played first, then by title). The
+    // empty state is for a library with nothing installed (T-183).
+    readonly property bool recentIsFallback: Library.recent.length === 0 && Library.items.length > 0
+    readonly property var recentIds: (recentIsFallback ? Library.items.slice(0, 8) : Library.recent).map(r => r.id)
     readonly property bool libraryEmpty: recentIds.length === 0
     readonly property var heroItem: libraryEmpty ? ({}) : Library.item(recentIds[Math.max(0, Math.min(recentRow.currentIndex, recentIds.length - 1))])
     onHeroItemChanged: heroArt.show(libraryEmpty ? null : heroItem)
