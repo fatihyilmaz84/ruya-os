@@ -36,11 +36,14 @@ fn names(dir: &Path, prefix: &str, out: &mut Fingerprint) {
 
 fn subdirs(dir: &Path) -> Vec<String> {
     // `file_type` does not follow symlinks: `current` and `active` are not directories here.
+    // Hidden names are skipped: flatpak checks a deployment out into `.<checksum>-XXXXXX` and
+    // renames it when it is complete.
     let mut out = Vec::new();
     if let Ok(entries) = std::fs::read_dir(dir) {
         for entry in entries.flatten() {
-            if entry.file_type().is_ok_and(|t| t.is_dir()) {
-                out.push(entry.file_name().to_string_lossy().into_owned());
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if entry.file_type().is_ok_and(|t| t.is_dir()) && !name.starts_with('.') {
+                out.push(name);
             }
         }
     }
@@ -179,6 +182,18 @@ mod tests {
         let partial = root.join("app/org.example.Racer/x86_64/stable/bbbb/files");
         std::fs::create_dir_all(partial).unwrap();
         assert_eq!(before, fingerprint(root), "no deploy file yet");
+    }
+
+    #[test]
+    fn a_hidden_checkout_directory_is_not_a_commit() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        install(root, "org.example.Racer");
+        deploy(root, "org.example.Racer", "aaaa");
+        let before = fingerprint(root);
+        // Flatpak's temporary checkout; even a `deploy` file in it must not count.
+        deploy(root, "org.example.Racer", ".bbbb-AbC123");
+        assert_eq!(before, fingerprint(root));
     }
 
     #[cfg(unix)]

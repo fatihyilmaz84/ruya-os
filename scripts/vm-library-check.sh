@@ -32,9 +32,12 @@ list_items() { as_shell busctl --system call "$svc" "$path" "$ifc" ListItems; }
 record_of() { list_items | sed 's/ 7 "/\n&/g' | grep "\"flatpak:$1\""; }
 signals() { local n; n="$(grep -c '"member":"ItemsChanged"' "$work/signals.log" 2>/dev/null)"; echo "${n:-0}"; }
 
-# make_app <id> <name> <categories>: an app with a desktop entry in the repository
+# make_app <id> <name> <categories>: an app with a desktop entry in the repository. Every call
+# builds the directory from scratch (build-finish refuses one that is already finalized), so a
+# second call exports a new commit on `stable`.
 make_app() {
     local id="$1" name="$2" cats="$3" dir="$work/app-$1"
+    rm -rf "$dir"
     mkdir -p "$dir/files/bin" "$dir/files/share/applications" "$dir/files/share/metainfo" "$dir/var"
     printf '[Application]\nname=%s\nruntime=%s/x86_64/stable\nsdk=%s/x86_64/stable\ncommand=hello\n' "$id" "$rt" "$rt" > "$dir/metadata"
     printf '#!/bin/sh\necho hello\n' > "$dir/files/bin/hello"; chmod 755 "$dir/files/bin/hello"
@@ -182,9 +185,18 @@ check)
 
     echo "--- Update: a renamed and recategorised app is seen without Rescan (T-183)"
     before="$(signals)"
-    make_app "$game" "Test Game Reloaded" "Utility;" || bad "cannot build the new version"
-    flatpak build-update-repo $sign "$work/repo" >/dev/null 2>&1
-    flatpak update --system -y --noninteractive "$game" && ok "flatpak update of the test game" || bad "flatpak update failed"
+    commit_before="$(flatpak info --system --show-commit "$game")"
+    make_app "$game" "Test Game Reloaded" "Utility;" && ok "a new version was exported" || { bad "cannot build the new version"; exit 1; }
+    flatpak build-update-repo $sign "$work/repo" >/dev/null 2>&1 && ok "repository summary updated" || { bad "build-update-repo failed"; exit 1; }
+    out="$(flatpak update --system -y --noninteractive "$game" 2>&1)" && ok "flatpak update of the test game" || { echo "$out"; bad "flatpak update failed"; exit 1; }
+    echo "$out" | tail -5
+    # The check proves nothing unless the installed commit really changed.
+    commit_after="$(flatpak info --system --show-commit "$game")"
+    echo "commit $commit_before -> $commit_after"
+    if echo "$out" | grep -qi "nothing to do" || [ -z "$commit_after" ] || [ "$commit_after" = "$commit_before" ]; then
+        bad "flatpak update installed no new commit: the update check cannot run"; exit 1
+    fi
+    ok "the installed commit changed"
     s="$(wait_record "$game" '"title" s "Test Game Reloaded"' 60)" && ok "the new title is listed after about $s s, no Rescan" || bad "the title did not change: $(record_of "$game")"
     record_of "$game" | grep -q '"kind" s "app"' && ok "the new category made it an app" || bad "kind after the update: $(record_of "$game")"
     sleep 1

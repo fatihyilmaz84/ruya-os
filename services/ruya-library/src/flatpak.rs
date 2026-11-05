@@ -173,21 +173,48 @@ fn unescape(text: &str) -> String {
         .replace("&amp;", "&")
 }
 
+/// The position of the next opening tag `<tag>` or `<tag attr...>` at or after `from` (not
+/// `<tag_other>`, not a self-closing `<tag/>`), and the end of that tag.
+fn open_tag(xml: &str, tag: &str, from: usize) -> Option<(usize, usize)> {
+    let needle = format!("<{tag}");
+    let mut at = from;
+    while let Some(found) = xml[at..].find(&needle) {
+        let start = at + found;
+        let after = start + needle.len();
+        let end = after + xml[after..].find('>')?;
+        let next = xml[after..].chars().next()?;
+        if (next == '>' || next.is_whitespace()) && !xml[..end].ends_with('/') {
+            return Some((start, end + 1));
+        }
+        at = after;
+    }
+    None
+}
+
 /// The unlocalized `<name>` of an appstream metainfo. A `<developer>` block has a `<name>` of its
-/// own (who made the app, not what it is called) and is skipped; `<name xml:lang="de">` has an
-/// attribute and does not match. Not an XML parser: a metainfo that is not plain text of this
-/// shape gives `None` and the next source is tried.
+/// own (who made the app, not what it is called) and is skipped; `<name xml:lang="de">` is a
+/// translation and is skipped, while other attributes (`translatable="no"`) are fine. Not an XML
+/// parser: a metainfo that is not plain text of this shape gives `None` and the next source is
+/// tried.
 pub fn metainfo_name(xml: &str) -> Option<String> {
     let mut rest = xml.to_owned();
-    while let Some(start) = rest.find("<developer") {
-        match rest[start..].find("</developer>") {
-            Some(end) => rest.replace_range(start..start + end + "</developer>".len(), ""),
+    while let Some((start, tag_end)) = open_tag(&rest, "developer", 0) {
+        match rest[tag_end..].find("</developer>") {
+            Some(end) => rest.replace_range(start..tag_end + end + "</developer>".len(), ""),
             None => rest.truncate(start),
         }
     }
-    let start = rest.find("<name>")? + "<name>".len();
-    let len = rest[start..].find("</name>")?;
-    Some(unescape(rest[start..start + len].trim())).filter(|n| !n.is_empty())
+    let mut from = 0;
+    while let Some((start, tag_end)) = open_tag(&rest, "name", from) {
+        from = tag_end;
+        if rest[start..tag_end].contains("xml:lang") {
+            continue;
+        }
+        let len = rest[tag_end..].find("</name>")?;
+        let name = unescape(rest[tag_end..tag_end + len].trim());
+        return Some(name).filter(|n| !n.is_empty());
+    }
+    None
 }
 
 /// What `flatpak list` prints when the app has no appstream name: the last part of the id.
@@ -327,6 +354,25 @@ mod tests {
         assert_eq!(title_with(PLACEHOLDER, None, Some(dev)), "Real Name");
         let only_dev = "<component><developer><name>Some Studio</name></developer></component>";
         assert_eq!(title_with(PLACEHOLDER, None, Some(only_dev)), "TestGame");
+    }
+
+    #[test]
+    fn metainfo_name_takes_other_attributes_but_not_translations() {
+        let m = "<component><name xml:lang=\"de\">Testspiel</name><name translatable=\"no\">Test Game</name></component>";
+        assert_eq!(title_with(PLACEHOLDER, None, Some(m)), "Test Game");
+        let only_translated = "<component><name xml:lang=\"de\">Testspiel</name></component>";
+        assert_eq!(
+            title_with(PLACEHOLDER, None, Some(only_translated)),
+            "TestGame"
+        );
+        // `<developer_name>` is not a `<developer>` block and must not cut the document short.
+        let m =
+            "<component><developer_name>Studio</developer_name><name>Real Name</name></component>";
+        assert_eq!(title_with(PLACEHOLDER, None, Some(m)), "Real Name");
+        assert_eq!(
+            metainfo_name("<names>x</names><name/><name>Y</name>").as_deref(),
+            Some("Y")
+        );
     }
 
     #[test]
