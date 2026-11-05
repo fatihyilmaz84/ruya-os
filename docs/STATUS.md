@@ -47,6 +47,7 @@ Follow-ups and debt for the next planner, one line each: `- (source) what, and w
 
 - (T-179 review) B-006: a held Backspace or Esc auto-repeats Back and can walk the page stack to Home; decide whether page-level Back ignores `isAutoRepeat` (the Guide overlay does).
 - (T-179 review) Add a Backspace test for the Guide overlay (`Shell.qml:1024`/`1027`: power mode back to actions, then close).
+- (T-182 review) ruya-store: run the flatpak-calling D-Bus handlers (Install/Uninstall/Update/Rollback/ListInstalled/ListRemotes) through `blocking::unblock`, off the zbus executor (`dbus.rs`).
 - (0.0.40 try-out) The VM clock shows UTC: there is no time-zone setting yet (wizard or System pane); plan it with the OOBE/installer work.
 
 ## Blocked (need something this host doesn't have)
