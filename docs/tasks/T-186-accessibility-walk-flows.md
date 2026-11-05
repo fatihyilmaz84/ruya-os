@@ -36,4 +36,14 @@ A screen reader says "Restart now", not "Confirm". And `tst_accessibility` walks
 - No screenshot change expected; if a visible label changes, run `shots` and read it.
 
 ## Outcome
-_Filled in by the implementer. First line: `Verified: host | vm | unverified | hw` (say what ran where). Then: what was built, files, deviations, follow-ups (each also an Inbox line)._
+Verified: host (`dev.ps1 test` ALL GREEN, offscreen; no visible label changed, so no `shots`).
+
+Built:
+- `PowerConfirm`: new `confirmName` (read-only, by action) is the Confirm button's `Accessible.name`: "Suspend now", "Restart now", "Shut down now"; for `custom` the caller sets the new `customConfirmName` (`ProfileManageFlow`: "Delete Ada"; `SystemPane` rollback: "Roll back now"), falling back to "Confirm". Visible labels are unchanged. Cancel stays "Cancel". Turkish and English `.ts` entries added.
+- `tst_accessibility`: `test_power_confirm_names_follow_the_action` (suspend, restart, power off; none may be "Confirm"); `test_power_confirm_buttons` now expects "Restart now"; `test_setup_wizard_create_step` (wizard name and PIN step: both rows, name keyboard, PIN pad, focus restored); `test_profiles_add_flow` (Add profile form rows, name keyboard, admin PIN pad) and `test_profiles_manage_flow` (profile row, Rename / Delete rows, rename keyboard, delete confirmation, PIN pad). Every focused item is checked for a non-empty name. The walk found no unnamed control besides the Confirm button.
+- Revert test: temporarily putting `Accessible.name: qsTr("Confirm")` back made `test_power_confirm_buttons`, `test_power_confirm_names_follow_the_action` and `test_profiles_manage_flow` fail; restored.
+- Docs: 04 section 7 and 02 (Power page) describe the names.
+
+Deviations: the task lists "Sign out" among the names, but no confirmation for signing out exists ("Switch profile" in the Guide acts without one), so there is nothing to name; the `customConfirmName` hook covers any future custom confirmation. "Shut down now" follows the task text although the visible rows say "Power off".
+
+Files: shell/qml/PowerConfirm.qml, ProfileManageFlow.qml, SystemPane.qml, shell/tests/tst_accessibility.qml, shell/i18n/ruyashell_en.ts, ruyashell_tr.ts, docs/specs/02-shell.md, 04-design-system.md.
