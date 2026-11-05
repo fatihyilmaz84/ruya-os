@@ -1,6 +1,6 @@
 # T-187 — CI runs the font check; `make-disk.sh` doesn't silently build a disk you can't log into
 
-Status: in-progress · Phase: 0 · Depends: — · Area: ci, scripts · Size: S · Owner: builder
+Status: done · Phase: 0 · Depends: — · Area: ci, scripts · Size: S · Owner: builder
 
 ## Goal
 Two small guards. CI runs `scripts/check-font-coverage.py` (T-145) next to the icon lint, so a dropped glyph fails on GitHub too. And `scripts/make-disk.sh` stops quietly falling back to `disk.toml` (no SSH key) when `image/bib/config.toml` is missing, which happens in every fresh worktree.
