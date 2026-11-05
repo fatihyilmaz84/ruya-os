@@ -14,7 +14,7 @@ Rüya is Turkish for *dream*: a dark room lit by the thing you are about to play
 2. **Focus is never ambiguous.** The focused item always has the white ring (and the 1.08 scale for cards), at every quality tier and under reduced motion.
 3. **Art first.** Large key art is the main visual (Home hero, art cards, launch splash). Chrome is white text on blurred glass over it; colour comes from art, avatars and the category tints, never from buttons or text.
 4. **Apps own the screen.** Apps and games run full screen with no shell chrome; the Guide button is the one way back (§5.1). Motion is ease-out, under 300 ms for anything the user waits on (launch excepted), and off under reduced motion.
-5. **Degrade, never break.** The Performance tier swaps blur for opaque glass; layout, sizes and focus are identical on every tier.
+5. **Degrade, never break.** Blur and shadows are the default look wherever the GPU supports them (owner, 2026-11-06): richer depth is a goal, not something to trade away early. The tiers are the fallback for hardware that can't carry them: the Performance tier swaps blur for opaque glass and drops shadows; layout, sizes and focus are identical on every tier.
 
 ## 2. Units and layout
 
@@ -75,6 +75,8 @@ Turkish runs about 30 % longer than English: rows elide on the right (`Text.Elid
 `focusMs` 140, `pageMs` 300 (slide `pageSlide` 60), `overlayMs` 200, `tintMs` 700 (also the hero art cross-fade), `launchMs` 400 (planned, T-147), pulse 0.94 over 70 + 180 ms, wrong-PIN shake 18 px over 45 / 90 ms, ambient drift 18–29 s periods. Easing: `OutCubic` for focus, pages and overlays, `InOutQuad` for tints, `InOutSine` for drift, `OutQuad`/`OutBack` for the pulse. Reduced motion: every duration 0, no pulse, no shake, no drift (`02-shell.md` §3.2). Only `opacity`, `scale`, `x`/`y` and colour animate.
 
 ### 3.5 Depth
+
+Shadows belong to depth (focused and raised elements, glass panels, modals) and are on at the High and Balanced tiers, off at Performance (the same switch as blur); the shadow tokens are planned, none are built yet. Effects are never removed on hardware that supports them just to keep the implementation simple.
 
 | Layer | z | Contents | Rule |
 |---|---|---|---|
