@@ -15,7 +15,7 @@ Verification legend: **host** = built and tested on Windows · **host (vm pendin
 
 ## Board
 
-**NEXT → T-162** ([lead], the critical path: the image lane is free); builders: T-188 in review
+**NEXT → T-162** ([lead], the critical path: the image lane is free); builders: T-188 (round 2), T-184
 
 **How work runs (owner, 2026-11-04):** the lead dispatches `ruya-builder` agents, at most two at a time in their own worktrees and in different areas, has each branch reviewed by `ruya-reviewer`, and merges it (`docs/LEAD.md`, build loop). Dispatched builders never edit this file. At most one task with a "VM (this task)" criterion runs at a time. A builder session the owner starts directly takes NEXT in the main checkout, alone, and does the bookkeeping itself (`CLAUDE.md`).
 
@@ -23,7 +23,7 @@ Open work only (todo, in-progress, blocked), in the recommended order; when NEXT
 
 | ID | Title | Status | Depends |
 |---|---|---|---|
-| [T-184](tasks/T-184-devices-volume-grouping-and-watcher-debounce.md) | One toast per USB stick; PipeWire watcher debounce | todo | — |
+| [T-184](tasks/T-184-devices-volume-grouping-and-watcher-debounce.md) | One toast per USB stick; PipeWire watcher debounce | in-progress | — |
 | [T-188](tasks/T-188-store-jobs-survive-restart.md) | Store: the shell finds its running installs after a service restart | in-progress | — |
 | [T-162](tasks/T-162-ruya-session-in-the-image.md) | **[lead]** `ruya-session` in the image: real spawner, unit, bus policy | todo | — |
 | [T-164](tasks/T-164-per-profile-wayland-sockets.md) | **[lead]** Per-profile Wayland sockets: a profile's app appears in the shell | todo | T-162 |

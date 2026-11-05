@@ -1,6 +1,6 @@
 # T-184 — USB stick with several partitions: one notification; PipeWire watcher debounce
 
-Status: todo · Phase: 2 · Depends: — · Area: services, shell · Size: S · Owner: builder
+Status: in-progress · Phase: 2 · Depends: — · Area: services, shell · Size: S · Owner: builder
 
 ## Goal
 A stick with two partitions shows one "volume added" toast, not two. And the PipeWire watcher in `ruya-devices` gets the same flood protection as the other watchers.
