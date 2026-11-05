@@ -2,7 +2,7 @@
 
 **Read this first in every session; update it last.** Rules: root `CLAUDE.md`. Roles (Opus lead, Sonnet builders): `docs/LEAD.md`. Task format: `docs/tasks/README.md`. Finished work: each task's own file (`Status: done`, Outcome starting with `Verified:`); history before T-132 in [`STATUS-done.md`](STATUS-done.md). `scripts/lint-board.ps1` (part of `dev.ps1 test`) keeps this board and the task files in step.
 
-Last updated: 2026-11-04 (Opus 5.5, lead)
+Last updated: 2026-11-05 (Sonnet 5.5, lead)
 
 ## Where we are
 
@@ -15,7 +15,7 @@ Verification legend: **host** = built and tested on Windows · **host (vm pendin
 
 ## Board
 
-**NEXT → T-162** ([lead]: builders have no ready task left besides T-174 and T-145 in flight; plan more from the Inbox)
+**NEXT → T-178** (image lane; T-179 runs beside it in the shell lane; T-162 [lead] follows once T-178's image build is done)
 
 **How work runs (owner, 2026-11-04):** the lead dispatches `ruya-builder` agents, at most two at a time in their own worktrees and in different areas, has each branch reviewed by `ruya-reviewer`, and merges it (`docs/LEAD.md`, build loop). Dispatched builders never edit this file. At most one task with a "VM (this task)" criterion runs at a time. A builder session the owner starts directly takes NEXT in the main checkout, alone, and does the bookkeeping itself (`CLAUDE.md`).
 
@@ -23,6 +23,17 @@ Open work only (todo, in-progress, blocked), in the recommended order; when NEXT
 
 | ID | Title | Status | Depends |
 |---|---|---|---|
+| [T-178](tasks/T-178-iso-install-boots-to-shell.md) | An installed ISO boots to the shell with no manual step (+ dracut noise, boot-menu name) | in-progress | — |
+| [T-179](tasks/T-179-backspace-is-back.md) | Backspace is Back on pages and dialogs | in-progress | — |
+| [T-182](tasks/T-182-store-data-fixes.md) | Store data fixes: developer name once, installed state follows Flatpak | todo | — |
+| [T-183](tasks/T-183-library-freshness-and-home-fallback.md) | Library stays fresh; Home falls back to installed apps | todo | — |
+| [T-184](tasks/T-184-devices-volume-grouping-and-watcher-debounce.md) | One toast per USB stick; PipeWire watcher debounce | todo | — |
+| [T-185](tasks/T-185-scroll-affordance.md) | Scroll cue on long Settings panes (edge fade) | todo | — |
+| [T-181](tasks/T-181-shell-backend-stale-replies.md) | Shell backends: a late reply never overwrites newer data | todo | — |
+| [T-187](tasks/T-187-ci-and-make-disk-hygiene.md) | CI runs the font check; `make-disk.sh` needs the dev key file | todo | — |
+| [T-180](tasks/T-180-network-polkit-deny-by-default.md) | NetworkManager polkit: refuse every action the shell doesn't need | todo | T-178 |
+| [T-186](tasks/T-186-accessibility-walk-flows.md) | Action-named confirm buttons; accessibility walk of wizard/profile flows | todo | T-179 |
+| [T-188](tasks/T-188-store-jobs-survive-restart.md) | Store: the shell finds its running installs after a service restart | todo | T-182 |
 | [T-162](tasks/T-162-ruya-session-in-the-image.md) | **[lead]** `ruya-session` in the image: real spawner, unit, bus policy | todo | — |
 | [T-164](tasks/T-164-per-profile-wayland-sockets.md) | **[lead]** Per-profile Wayland sockets: a profile's app appears in the shell | todo | T-162 |
 | [T-165](tasks/T-165-profile-switch-freezes-apps.md) | Profile switch and sign-out freeze the profile's apps | todo | T-164 |
@@ -35,44 +46,21 @@ Open work only (todo, in-progress, blocked), in the recommended order; when NEXT
 
 Follow-ups and debt for the next planner, one line each: `- (source) what, and why it matters`. Dispatched builders put them in their HANDOFF; the lead copies them here. Plan at 5+ items.
 
-- (T-159) `image/build/90-initramfs.sh` prints `dracut-install: ERROR: installing '/root'` (the initramfs is still written); 0.0.32 and 0.0.33 print it once each and boot fine (`RUYA_BOOT_OK`, greenboot passed): it doesn't matter, silence it (small image task).
-- (T-163 review) `ruya-library`: rescan on Flatpak updates too (the fingerprint is names only; put the deploy commit in it), so a renamed or recategorised app refreshes without `Rescan`.
-- (T-163) Home says "Your library is empty" while apps are installed but none was played (`last_played` 0, Recent row only): fall back to installed items, or record `last_played` (T-162/T-147).
-- (T-163) `Store1` answers `already-installed` for an app removed outside the Store (`flatpak uninstall`): its installed cache is stale.
-- (T-163) Flatpak titles lack appstream names until the remote's appstream is fetched (the VM shows "TestGame").
-- (T-171 review) Store: resume or re-query jobs after `ruya-store` comes back (needs a `ListJobs` in `Store1.xml`).
-- (T-170 review) Settings panes give no cue that more rows exist below the viewport, now that no cut row hints at it: decide on a scroll affordance (fade, chevron or peek) in 04 §5 (design, lead).
-- (T-176 review) lint-tokens weight rule: also handle grouped `font { pixelSize: ... }` and values spread over three or more lines (none in the tree).
-- (T-176) PowerConfirm's buttons are named "Cancel"/"Confirm": name them after the action ("Restart now") for screen readers; the wizard's create-name-and-PIN step and the profile add/manage flows are not walked by `tst_accessibility` yet.
-- (T-161 review) Real pads: confirm on hardware that DualSense (hid-playstation), Xbox (xpadneo or dongle) and 8BitDo pads show in UPower as kind 12 "gaming-input"; otherwise the kind-12 filter hides them (extend `KIND_GAMING_INPUT` in `battery.rs`). Pair with B-002 / T-173.
-- (T-161) A fake UPower device in the VM (umockdev or python-dbusmock on the system bus) would let `vm-devices-check.sh` cover a non-empty `ListBatteries`.
-- (T-161) `image/bib/config.toml` (git-ignored, the dev SSH key) is missing in a fresh worktree, so `make-disk.sh` builds a disk ssh can't log into: make `make-disk.sh` fail loudly, and say in `dev-setup.md` to copy it from the main checkout.
-- (T-173) Hardware check of the Bluetooth service: adapter, "just works" controller pairing, Battery1 values, rfkill-blocked `Powered`, hot-plugged USB adapter (B-002).
-- (T-177 review) Network, Bluetooth, Storage and Audio D-Bus clients have the same unguarded async refresh as batteries had: a late reply can overwrite newer data. Move `beginRequest`/`deliver` (from `BatteryBackend`) into each backend base or a shared helper.
-- (T-177) The PipeWire watcher (`events.rs`) has its own 100 ms debounce; check whether it needs the same 1 s cap as `debounce.rs`.
-- (T-145) Run `scripts/check-font-coverage.py` in `.github/workflows/ci.yml` next to `lint-icons.ps1` (it's pure standard-library Python).
-- (T-145 review) `google-noto-sans-fonts` (`image/build/20-base.sh`) is now only a fallback for the shell: keep it for Flatpak apps and future scripts, or drop it (lead, design).
-- (T-145) The next image build carries the round-2 fonts (Bold, ‹ ›): check a VM home screenshot with a library entry, so the hero title is seen in real Bold on the image.
-- (T-174 review) Audit `50-ruyaos-network.rules`: it returns `NOT_HANDLED` too, so NetworkManager's default `allow_active` actions beyond the four listed stay open to `ruya-shell`; deny the rest as T-174 round 2 does for udisks2.
-- (T-174) A stick with several partitions gives one `VolumeAdded` per partition, so the shell toasts once per partition: group them. Also cover a two-partition stick and an unsupported filesystem in `vm-storage-check` (unit tests only today).
-- (T-174) Media access for profile users and Flatpak apps on `/run/media/ruya-shell/...` belongs to the Media task (mounts belong to `ruya-shell`, not the active profile).
-- (lead) `vm-goto.ps1`, `vm-reboot-check.ps1` and `vm-storage-check.ps1` now use a scratch `output\vm-known_hosts` (UserKnownHostsFile=NUL made MSYS2's ssh write a file named `NUL`); not yet exercised against a VM: confirm at the next VM run.
-- (lead, 0.0.40 try-out) **Dev ISO installs a system that boots to text mode** (`multi-user.target`): the shell never starts, greenboot reboots in a loop. `systemctl set-default graphical.target` fixes it by hand. Fix in the image or the ISO config, and add an install-and-boot check to the VM queue. Blocks putting the ISO on the Dell (B-002).
-- (0.0.40 try-out) The dev ISO erases every disk in the machine without asking, puts the dev SSH key on root, and tracks `localhost/ruyaos:dev` (no updates until pointed at a registry): decide for the B-002 test machine.
-- (0.0.40 try-out) Backspace doesn't act as B on pages (spec 02 says it should); Store cards show the developer name twice ("divVerentdivVerent"); boot menus say "Fedora Linux 44", not RuyaOS; the VM clock shows UTC.
+- (0.0.40 try-out) The VM clock shows UTC: there is no time-zone setting yet (wizard or System pane); plan it with the OOBE/installer work.
 
 ## Blocked (need something this host doesn't have)
 
 | ID | What | Needs | Notes |
 |---|---|---|---|
-| B-002 | Install on a real low-tier machine; first frame-time numbers (spec 02 §8) | Hardware | Build a fresh dev ISO first (the 0.0.4 one was deleted to free space on 2026-11-02; it holds the dev SSH key: test machines only). Decide there: a failed boot takes ~100 s, so automatic rollback takes ~7 min; consider a shorter required-check timeout once real boot times are known. Also check the hint bar's spacing to the Settings list's last row at 1080p (T-158). |
+| B-002 | Install on a real low-tier machine; first frame-time numbers (spec 02 §8) | Hardware | Build a fresh dev ISO first (the 0.0.4 one was deleted to free space on 2026-11-02; it holds the dev SSH key: test machines only). Decide there: a failed boot takes ~100 s, so automatic rollback takes ~7 min; consider a shorter required-check timeout once real boot times are known. Also check the hint bar's spacing to the Settings list's last row at 1080p (T-158). Hardware checks queued here: pads in UPower as kind 12 "gaming-input" (DualSense, Xbox, 8BitDo; else extend `KIND_GAMING_INPUT` in `battery.rs`), a fake UPower device for `vm-devices-check.sh` (umockdev or dbusmock, optional), Bluetooth (adapter, "just works" pairing, Battery1, rfkill-blocked `Powered`, hot-plugged USB adapter). Needs T-178 first (the ISO must boot to the shell). |
 | B-003 | Compositor performance: blurred Guide overlay over a running game at ≥ 55 FPS on the mid tier (ADR-002) | A GPU | Functional part done in the VM (T-123) and the session built (T-130). Left: frame rates, dmabuf clients, blur over a client surface, gamescope nesting, volume-key `Shortcut`s with an app focused. |
 | B-006 | Replace the `ruya-inputd` stopgap with InputPlumber (ADR-003), grab and re-emit | Linux + controllers | Also owns key repeat (400 ms delay, then accelerating), stick repeat speed, Accept long-press and context menu (spec 02 §4.3), and Bluetooth PIN/passkey pairing, player assignment, button test and remapping (T-136). |
-| B-007 | `ruya-devices` remainder (BlueZ done in T-173, VM check queued): applying `ambient`/`media` levels to app streams, PipeWire for profile apps | `ruya-session` in the image (T-130 done) | Audio (T-128, by events since T-133) and network (T-132) are done and VM-verified. ADR-010. |
+| B-007 | `ruya-devices` remainder (BlueZ done in T-173, VM check queued): applying `ambient`/`media` levels to app streams, PipeWire for profile apps | `ruya-session` in the image (T-130 done) | Audio (T-128, by events since T-133) and network (T-132) are done and VM-verified. ADR-010. Also: media access for profile users and Flatpak apps on `/run/media/ruya-shell/...` belongs to the Media task (mounts belong to `ruya-shell`, not the active profile). |
 
 ## Open owner decisions
 
 - **Host disk or RAM, watch it:** WSL `ext4` errors (gone since the distro was recreated with `memory=8GB`, `nestedVirtualization=false` on 2026-10-27) and a zeroed cargo file (2026-10-28), both on C:. Recommendation: Windows Memory Diagnostic and the drive maker's SMART check; not blocking. If `ext4` errors return, move the VHD to the D: SSD (clear `output/` first); Claude recreates the distro itself (owner said so).
+- **Dev ISO on the test machine (B-002, the Dell):** the ISO erases every disk in the machine without asking, puts the dev SSH key on root, and tracks `localhost/ruyaos:dev` (no updates until pointed at a registry). Recommendation: acceptable for a dedicated test machine with nothing on it (unplug other disks), never for anyone else's; a real installer with disk choice is Phase 3. Not blocking T-178.
 - **Real hardware (B-002):** is a spare low-tier x86-64 PC (Intel/AMD iGPU) available for the dev ISO? It unblocks the Phase 0 hardware item, the first KPIs and the ADR-002 performance check. Recommendation: yes, a test machine only.
 - **One admin or several?** Overview §2 says one admin, `03` §1.1 says one or more. The service supports several; the UI offers Standard and Guest. Recommendation: one admin in the UI for the MVP (as the overview says); revisit after the first user test. Not blocking.
 - **Turkish wording review** (`shell/i18n/ruyashell_tr.ts`, written by AI): a native review before the first release. Not blocking; best done after the Settings panes settle (T-135..T-137).
