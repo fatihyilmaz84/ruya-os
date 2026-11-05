@@ -426,6 +426,9 @@ struct FakeState {
     metadata: HashMap<String, String>,
     installed_metadata: HashMap<String, String>,
     fail_next: Option<FlatpakError>,
+    installed_fails: bool,
+    /// Runs once, right after the next `installed()` read, with the state unlocked.
+    after_installed: Option<Box<dyn FnOnce() + Send>>,
     progress: Vec<u32>,
     ran: Vec<Operation>,
     added: Vec<(String, String)>,
@@ -545,6 +548,17 @@ impl FakeFlatpak {
         self.state().fail_next = Some(error);
     }
 
+    /// Whether `installed()` (`flatpak list`) fails from now on.
+    pub fn set_installed_fails(&self, fails: bool) {
+        self.state().installed_fails = fails;
+    }
+
+    /// Runs `hook` once after the next `installed()` returned its list: lets a test play out
+    /// what else happens while `flatpak list` runs.
+    pub fn after_next_installed(&self, hook: impl FnOnce() + Send + 'static) {
+        self.state().after_installed = Some(Box::new(hook));
+    }
+
     /// An app removed behind the Store's back (`flatpak uninstall` by hand).
     pub fn remove_installed(&self, id: &str) {
         let mut state = self.state();
@@ -567,7 +581,17 @@ impl Flatpak for FakeFlatpak {
     }
 
     fn installed(&self) -> Result<Vec<InstalledApp>, String> {
-        Ok(self.state().installed.clone())
+        let mut state = self.state();
+        if state.installed_fails {
+            return Err("flatpak list failed".to_owned());
+        }
+        let list = state.installed.clone();
+        let hook = state.after_installed.take();
+        drop(state);
+        if let Some(hook) = hook {
+            hook();
+        }
+        Ok(list)
     }
 
     fn updates(&self) -> Result<Vec<String>, String> {
