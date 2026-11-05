@@ -7,10 +7,15 @@
 //   settings.modify.system     AddAndActivateConnection (a saved network is system-wide), Delete
 //   settings.modify.own        the same for a connection owned by the user
 //
-// Nothing else: not hostname changes, enabling or disabling networking or Wi-Fi, Wi-Fi sharing,
-// reloading, checkpoints. polkit cannot tell connection types apart, so the service itself only
-// ever touches Wi-Fi connections (ruya-devices, network.rs). Other users (profile users,
-// Flatpak apps) keep the default policy.
+// Nothing else: every other NetworkManager action is refused for this user (NO, which also
+// overrides NetworkManager's own default that an active session may do many of them without a
+// password): not hostname or global DNS changes, not enabling or disabling networking, Wi-Fi,
+// WWAN or the connectivity check, not Wi-Fi sharing, reloading, sleep/wake or checkpoints. polkit
+// cannot tell connection types apart, so the service itself only ever touches Wi-Fi connections
+// (ruya-devices, network.rs). Other users (profile users, Flatpak apps) keep the default policy.
+// The list is what network.rs calls (RequestScan, ActivateConnection, AddAndActivateConnection,
+// Settings.Connection.Delete); scripts/vm-devices-check.sh asks pkcheck for the verdicts as the
+// service's own process (the VM has no Wi-Fi adapter, so the calls themselves cannot be run).
 polkit.addRule(function(action, subject) {
     if (subject.user !== "ruya-shell")
         return polkit.Result.NOT_HANDLED;
@@ -23,5 +28,7 @@ polkit.addRule(function(action, subject) {
     ];
     if (allowed.indexOf(action.id) >= 0)
         return polkit.Result.YES;
+    if (action.id.indexOf("org.freedesktop.NetworkManager.") === 0)
+        return polkit.Result.NO;
     return polkit.Result.NOT_HANDLED;
 });
