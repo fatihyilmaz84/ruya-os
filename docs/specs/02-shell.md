@@ -103,6 +103,8 @@ Physical pad → input daemon (ADR-003) → shell. While the shell has input foc
 | Tab switch | LB/RB | L1/R1 | `Q`/`E`, PgUp/PgDn |
 | Fast scroll | LT/RT, stick held | L2/R2 | Home/End |
 
+As built (T-179): the singleton `BackKey` (`shell/qml/BackKey.qml`) is the one definition of which keys are Back. `BackKey.isBackOrBackspace(key)` (Back, Esc, Backspace) is what pages, Settings panes, the section nav, the setup wizard, the Guide overlay and the confirm dialogs use. The text fields (`TextEntry`, `PinPad`) use `BackKey.isBack(key)` (Back, Esc) only, because there Backspace deletes a character and never goes back. Back acts on every key event, as Esc always did; it does not filter auto-repeat.
+
 ### 4.3 Rules
 - Every screen has exactly one `FocusScope` root, and every interactive item is reachable with the D-pad. Directional navigation uses `KeyNavigation` or a small spatial-navigation helper (nearest item in the direction pressed).
 - Focus is never lost. When the focused item disappears, focus moves to the nearest sibling, else to the scope's default.
@@ -121,7 +123,7 @@ Physical pad → input daemon (ADR-003) → shell. While the shell has input foc
 |---|---|
 | D-pad / stick | Move over the keys. Left/Right wrap within a row; Up/Down go to the key whose centre is nearest in x (ties go left; no wrap vertically) |
 | Accept (A, `Return`) | Press the focused key |
-| Back (B, `Escape`) | Delete one character; cancel when the field is empty |
+| Back (B, `Escape`) | Delete one character; cancel when the field is empty (`Backspace` never cancels, see below) |
 | Start (`Menu`) / keypad `Enter` | Done (does nothing while the field is empty) |
 | LB / RB (`PageUp` / `PageDown`) | Jump to Del / Space |
 | Shift key | One-shot capital for the next character |

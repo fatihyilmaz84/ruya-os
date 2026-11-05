@@ -413,6 +413,14 @@ FocusScope {
     }
 
     Keys.onPressed: event => {
+        if (BackKey.isBack(event.key)) {    // Back (B) -- or Esc on a physical keyboard
+            if (keyboardMode)
+                cancel()
+            else
+                back()
+            event.accepted = true           // modal: nothing reaches the page underneath
+            return
+        }
         switch (event.key) {
         case Qt.Key_Left:
             keyboardMode = false
@@ -448,14 +456,7 @@ FocusScope {
         case Qt.Key_Menu:               // Start
             finish()
             break
-        case Qt.Key_Escape:             // Back (B) -- or Esc on a physical keyboard
-        case Qt.Key_Back:
-            if (keyboardMode)
-                cancel()
-            else
-                back()
-            break
-        case Qt.Key_Backspace:
+        case Qt.Key_Backspace:         // deletes here; it is Back everywhere else (BackKey)
             keyboardMode = true
             Sfx.back()
             backspace()

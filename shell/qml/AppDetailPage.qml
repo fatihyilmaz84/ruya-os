@@ -550,7 +550,7 @@ Page {
         }
 
         Keys.onPressed: event => {
-            if (event.key === Qt.Key_Escape || event.key === Qt.Key_Back) {
+            if (BackKey.isBackOrBackspace(event.key)) {
                 Sfx.back()
                 confirm.close()
             }

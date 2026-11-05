@@ -146,6 +146,24 @@ Item {
             compare(find("sectionNav").currentKey, "settings")
         }
 
+        // T-179: Backspace is Back, like Esc (docs/specs/02-shell.md section 4.2).
+        function test_backspace_is_back() {
+            openSettings()
+            const list = find("categoryList")
+            selectCategory(tc.displayIndex)
+            keyClick(Qt.Key_Right)
+            tryVerify(() => find("rowQuality").activeFocus, 2000, "first row takes focus")
+            keyClick(Qt.Key_Backspace)                   // pane -> list
+            tryVerify(() => list.activeFocus)
+            compare(list.currentIndex, tc.displayIndex)
+            compare(tc.shell.currentPage, "settings")
+
+            keyClick(Qt.Key_Backspace)                   // list -> Home
+            tryCompare(tc.shell, "currentPage", "")
+            tryVerify(() => find("sectionNav").activeFocus, 2000, "the nav regains focus")
+            compare(find("sectionNav").currentKey, "settings")
+        }
+
         function test_pane_rows_navigate_and_clamp() {
             openSettings()
             selectCategory(tc.displayIndex)

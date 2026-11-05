@@ -25,6 +25,29 @@ Item {
             signalName: "switchFinished"
         }
 
+        // T-179: Backspace is Back on pages, but on the PIN pad it deletes one digit and never cancels.
+        // Declared first: it sends no PIN, so the lockout state of the test below is untouched.
+        function test_backspace_deletes_a_digit_and_never_cancels() {
+            const shell = createTemporaryObject(shellComponent, host)
+            shell.forceActiveFocus()
+            tryVerify(() => Profiles.profiles.length === 3)
+            const pad = findChild(shell, "pinPad")
+
+            keyClick(Qt.Key_Return)                    // Player One
+            tryVerify(() => pad.shown)
+            keyClick("1")
+            keyClick("2")
+            compare(pad.entered, "12")
+            keyClick(Qt.Key_Backspace)
+            compare(pad.entered, "1")
+            keyClick(Qt.Key_Backspace)
+            compare(pad.entered, "")
+            keyClick(Qt.Key_Backspace)                 // empty: still no Back
+            compare(pad.entered, "")
+            verify(pad.shown, "the pad stays open")
+            verify(findChild(shell, "pinKeys").activeFocus)
+        }
+
         function test_wrong_pins_lock_the_profile() {
             const shell = createTemporaryObject(shellComponent, host)
             shell.forceActiveFocus()

@@ -36,7 +36,7 @@ ssh -i $env:USERPROFILE\.ssh\ruyaos_dev -p 2222 root@127.0.0.1   # use 127.0.0.1
 
 ### Trying it in a window
 
-`.\scripts\run-vm.ps1` opens the VM in a QEMU window (SDL) with sound. Start it only after `make-disk.sh` has finished: it boots `output\qcow2\disk.qcow2` itself, not a snapshot, so what you do there (the wizard's profile, settings) stays on that disk until the next `make-disk.sh`. Close the window to stop the VM. The real services run, no mocks. Expect it to be slow (software rendering, no GPU) and to start with the first-boot wizard on a fresh disk. Keys: arrows move, Enter = A, Esc = B, Super = Guide (hold it for the power choices), PgUp/PgDn = LB/RB. (Spec 02 §4.2 also lists Backspace as Back, but pages ignore it as of 0.0.40.)
+`.\scripts\run-vm.ps1` opens the VM in a QEMU window (SDL) with sound. Start it only after `make-disk.sh` has finished: it boots `output\qcow2\disk.qcow2` itself, not a snapshot, so what you do there (the wizard's profile, settings) stays on that disk until the next `make-disk.sh`. Close the window to stop the VM. The real services run, no mocks. Expect it to be slow (software rendering, no GPU) and to start with the first-boot wizard on a fresh disk. Keys: arrows move, Enter = A, Esc or Backspace = B (in a text field Backspace deletes), Super = Guide (hold it for the power choices), PgUp/PgDn = LB/RB.
 
 ### Installer ISO (real hardware)
 

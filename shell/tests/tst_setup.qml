@@ -205,6 +205,19 @@ Item {
             tryCompare(Profiles, "activeProfile", "p1")
         }
 
+        // T-179: Backspace is Back, like Esc.
+        function test_backspace_goes_back_a_step() {
+            startShell()
+            goToStep(2)
+            keyClick(Qt.Key_Backspace)
+            tryCompare(setup(), "step", 1)
+            tryVerify(() => find("setupLanguageRow").activeFocus)
+            keyClick(Qt.Key_Backspace)
+            tryCompare(setup(), "step", 0)
+            keyClick(Qt.Key_Backspace)                        // nothing before the welcome step
+            compare(setup().step, 0)
+        }
+
         function test_back_navigation() {
             startShell()
             keyClick(Qt.Key_Escape)                           // nothing before the welcome step

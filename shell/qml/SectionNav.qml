@@ -139,7 +139,7 @@ FocusScope {
         } else if (event.key === Qt.Key_PageDown || event.key === Qt.Key_PageUp) {
             nav.stepRequested(event.key === Qt.Key_PageDown ? 1 : -1)
             event.accepted = true
-        } else if (event.key === Qt.Key_Escape || event.key === Qt.Key_Back) {
+        } else if (BackKey.isBackOrBackspace(event.key)) {
             nav.backRequested()
             event.accepted = true
         } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {

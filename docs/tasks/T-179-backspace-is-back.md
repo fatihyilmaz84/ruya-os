@@ -36,4 +36,28 @@ On a keyboard, `Backspace` does what the spec says: it is Back (B), like `Esc`. 
 - `TextEntry.qml:451` and `PinPad.qml:292` show how text handling distinguishes controller Esc from keyboard typing.
 
 ## Outcome
-_Filled in by the implementer. First line: `Verified: host | vm | unverified | hw` (say what ran where). Then: what was built, files, deviations, follow-ups (each also an Inbox line)._
+Verified: host (`.\scripts\dev.ps1 test` ALL GREEN, offscreen Qt Quick tests; no image, no VM, no screenshots: no visual change).
+
+**Built.** A new singleton `shell/qml/BackKey.qml` (registered as a singleton in `shell/CMakeLists.txt`) is the one definition of "is a Back key":
+- `BackKey.isBack(key)`: `Key_Escape` or `Key_Back`. Used by the text fields (`TextEntry`, `PinPad`), where Backspace keeps deleting.
+- `BackKey.isBackOrBackspace(key)`: the above plus `Key_Backspace`. Used by `Page`, `SectionNav`, `SettingsPane`, `StorePage` (leaving a search), `AppDetailPage` (uninstall confirm), `PowerConfirm`, `Setup`, and `Shell` (Home, the Guide overlay and its power choices).
+
+I chose a QML singleton over `Shell.isBackKey` because `Page` and the other components have no `Shell` in scope. `TextEntry` now tests Back before its key `switch` (its `case Escape/Back` pair is gone); `SettingsPane` handles Back and Left in its `default` branch. Behaviour for Esc / Back is unchanged.
+
+**Auto-repeat (Scope 2).** The existing Escape paths never looked at `event.isAutoRepeat` (only the Guide overlay ignores repeats of the Guide key, as before), so by the task's rule Backspace does not either; no auto-repeat filter was added. A held Backspace therefore repeats Back exactly like a held Esc does. Key-repeat design is B-006 (out of scope).
+
+**Grep for the criterion** (`Key_Escape \|\| .*Key_Back|Key_Back.*Key_Escape` in `shell/`, build dirs excluded): the only hit is `BackKey.qml` itself. `Key_Back` appears elsewhere in `shell/qml` only in comments.
+
+**Tests added** (each a Backspace twin of an Esc test, focus asserted after each step):
+- `tst_settings.qml::test_backspace_is_back`: pane -> list -> Home, nav pill focused.
+- `tst_pages.qml::test_backspace_walks_the_stack`: nested page -> Settings pane row (same row focused) -> list -> Home; Backspace on Home does nothing.
+- `tst_store_ui.qml::test_backspace_is_back` (detail -> Store on the same card, search -> rows, Store -> Home) and `test_backspace_closes_the_uninstall_dialog`.
+- `tst_power.qml::test_backspace_is_back`: the `PowerConfirm` dialog closes (row focused, page stays), then the page.
+- `tst_setup.qml::test_backspace_goes_back_a_step`.
+- Guards that Backspace still only deletes: `tst_textentry.qml::test_backspace_deletes_and_never_goes_back` (also on an empty field, no cancel, no key leaks to the page) and `tst_lockout.qml::test_backspace_deletes_a_digit_and_never_cancels` (PIN pad).
+
+**Revert checks (run, then restored).** (1) `isBackOrBackspace` without the Backspace term: 6 new tests fail (Pages, Power, Settings, Setup, StoreUi x2). (2) `isBack` with a Backspace term (what a text field would see if the helper were shared): the 3 TextEntry tests fail (the new one, `test_max_length`, `test_physical_keyboard`). The PIN pad guard in `tst_lockout.qml` does not fail under (2), because `PinPad` checks `Key_Backspace` before it asks `isBack`; it pins the behaviour, not the helper split.
+
+**Docs.** `docs/dev-setup.md` ("Trying it in a window": Backspace is B, the "pages ignore it" note is gone), `docs/specs/02-shell.md` (§4.2 note on `BackKey`, §4.4 row), `shell/PATTERNS.md` (use the helper).
+
+**Deviations.** None. Follow-ups: none new (the OSK key grid is part of `TextEntry`, which keeps its own Backspace; nothing else needed).

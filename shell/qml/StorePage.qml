@@ -218,7 +218,7 @@ Page {
 
         // Back leaves a search first; only then the page.
         Keys.onPressed: event => {
-            if (page.searching && (event.key === Qt.Key_Escape || event.key === Qt.Key_Back)) {
+            if (page.searching && BackKey.isBackOrBackspace(event.key)) {
                 Sfx.back()
                 page.endSearch()
                 event.accepted = true
