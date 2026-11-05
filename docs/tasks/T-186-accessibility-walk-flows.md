@@ -1,6 +1,6 @@
 # T-186 — Accessible names: action-named buttons and the remaining flows
 
-Status: in-progress · Phase: 2 · Depends: — (T-179 is merged) · Area: shell · Size: S · Owner: builder
+Status: done · Phase: 2 · Depends: — (T-179 is merged) · Area: shell · Size: S · Owner: builder
 
 ## Goal
 A screen reader says "Restart now", not "Confirm". And `tst_accessibility` walks the flows it skipped: the first-boot wizard's create-name-and-PIN step and the profile add / manage flows, so every focusable control there has a name.
