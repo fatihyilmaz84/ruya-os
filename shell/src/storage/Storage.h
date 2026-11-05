@@ -22,10 +22,12 @@ class Storage : public QObject
     // [{ id, drive, label, filesystem, sizeBytes, freeBytes, removable, mounted, mountPoint, readOnly }]
     Q_PROPERTY(QVariantList volumes READ volumes NOTIFY volumesChanged)
     Q_PROPERTY(bool mock READ isMock CONSTANT)
+    // How long the volumes of one drive are waited for (tests wait this long to see "no second toast").
+    Q_PROPERTY(int groupWindowMs READ groupWindowMs CONSTANT)
 
 public:
     // How long after the first announced volume the others of the same drive are waited for.
-    static constexpr int groupWindowMs = 400;
+    static constexpr int GroupWindowMs = 400;
 
     explicit Storage(std::unique_ptr<StorageBackend> backend, QObject *parent = nullptr);
     ~Storage() override;
@@ -34,6 +36,7 @@ public:
 
     QVariantList volumes() const { return m_volumes; }
     bool isMock() const { return m_backend->isMock(); }
+    int groupWindowMs() const { return GroupWindowMs; }
 
     // The one place sizes are formatted: "1.5 GB" in the user's locale (decimal sign, unit
     // names), SI units (1 GB = 10^9 bytes) like disk makers and TVs.
@@ -66,7 +69,8 @@ signals:
     // names the first volume with a supported filesystem, `volumeCount` counts those volumes
     // (partitions with a filesystem we do not mount stay listed but are not counted; a drive that
     // has none of the supported kind gives no signal). Volumes announced within
-    // `groupWindowMs` of the first one are grouped by their drive.
+    // `groupWindowMs` of the first one are grouped by their drive; a volume that left the list
+    // again before the window ended is not counted.
     void driveAdded(const QString &drive, const QString &label, int volumeCount);
     // op: "eject"; status: see api/dbus/org.ruyaos.Devices1.xml
     void finished(const QString &op, const QString &id, const QString &status);

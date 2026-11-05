@@ -124,6 +124,7 @@ plugged() {
     [ "$(field filesystem)" = exfat ] && ok "filesystem exfat" || bad "filesystem $(field filesystem)"
     [ "$(field removable)" = true ] && ok "removable: true" || bad "removable $(field removable)"
     case "$(field drive)" in /org/freedesktop/UDisks2/drives/*) ok "drive: $(field drive)";; *) bad "drive '$(field drive)'";; esac
+    field drive > /tmp/storage-first-drive # mplugged compares the second stick's drive with it
     [ -n "$mp" ] && [ -d "$mp" ] && ok "the mount point exists: $mp" || bad "mount point '$mp'"
     opts="$(findmnt -no OPTIONS "$mp" 2>/dev/null)"
     echo "mount options: $opts"
@@ -232,7 +233,10 @@ mplugged() {
     [ "$(field_of "$rawpart" filesystem)" = unknown ] && ok "the ext2 partition is listed as unknown" || bad "ext2 partition filesystem '$(field_of "$rawpart" filesystem)'"
     [ "$(field_of "$rawpart" mounted)" = false ] && ok "the ext2 partition is not mounted" || bad "ext2 partition mounted='$(field_of "$rawpart" mounted)'"
     [ "$(field_of "$rawpart" removable)" = true ] && ok "the ext2 partition is removable" || bad "ext2 partition removable"
-    if [ -n "$d1" ] && [ "$d1" != "$(field_of "$label" drive)" ]; then ok "not the same drive as the first stick"; fi
+    first="$(cat /tmp/storage-first-drive 2>/dev/null)"
+    if [ -z "$first" ]; then bad "no drive recorded for the first stick (plugged did not run)"
+    elif [ "$d1" != "$first" ]; then ok "not the same drive as the first stick ($first)"
+    else bad "the partitioned stick has the first stick's drive: $d1"; fi
     # Signals: one VolumeAdded per partition, each before the VolumesChanged that lists it.
     sleep 1
     added="$(grep -ic "member=VolumeAdded" "$log")"

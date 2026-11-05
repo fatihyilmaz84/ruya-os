@@ -151,6 +151,7 @@ Item {
 
         // A stick with two partitions: one toast naming the first and counting the second.
         function test_two_partitions_of_one_drive_give_one_toast() {
+            verify(Storage.groupWindowMs > 0, "the window is visible to QML (the waits below depend on it)")
             Storage.mockPlug(["vol-stick", "vol-stick-2"])
             tryVerify(() => toastCount("Drive inserted: Ruya Stick (and 1 more)") === 1, 2000, "one toast")
             wait(Storage.groupWindowMs + 200)            // a second toast would have come by now
@@ -194,6 +195,30 @@ Item {
             wait(Storage.groupWindowMs + 200)
             compare(addedSpy.count, 0, "no driveAdded")
             compare(toastTexts().filter(t => t.startsWith("Drive inserted")).length, 1, "no toast for the unsupported drive")
+        }
+
+        // A stick pulled again inside the grouping window is never announced.
+        function test_a_drive_ejected_inside_the_window_gives_no_toast() {
+            Storage.mockPlugStick()
+            Storage.eject("vol-stick")
+            tryVerify(() => answerFor("eject", "vol-stick") !== undefined, 2000, "ejected")
+            wait(Storage.groupWindowMs + 200)
+            compare(addedSpy.count, 0, "no driveAdded")
+            compare(toastTexts().filter(t => t.startsWith("Drive inserted")).length, 0, "no toast")
+            verify(volume("vol-stick") === undefined)
+        }
+
+        // Plugged in, pulled and plugged in again inside the window: one volume, not "and 1 more".
+        function test_a_volume_plugged_in_twice_inside_the_window_counts_once() {
+            Storage.mockPlugStick()
+            Storage.eject("vol-stick")
+            Storage.mockPlugStick()
+            tryVerify(() => toastCount("Drive inserted: Ruya Stick") === 1, 2000, "one toast")
+            wait(Storage.groupWindowMs + 200)
+            compare(addedSpy.count, 1)
+            compare(addedSpy.signalArguments[0][2], 1, "one volume")
+            compare(toastTexts().filter(t => t.startsWith("Drive inserted")).length, 1)
+            verify(volume("vol-stick") !== undefined)
         }
 
         function test_contract_statuses() {

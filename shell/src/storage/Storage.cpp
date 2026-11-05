@@ -13,7 +13,7 @@ Storage::Storage(std::unique_ptr<StorageBackend> backend, QObject *parent)
     , m_backend(std::move(backend))
 {
     m_groupTimer.setSingleShot(true);
-    m_groupTimer.setInterval(groupWindowMs);
+    m_groupTimer.setInterval(GroupWindowMs);
     connect(&m_groupTimer, &QTimer::timeout, this, &Storage::flushArrivals);
     connect(m_backend.get(), &StorageBackend::volumeAdded, this, [this](const QString &id) { m_pendingAdded.insert(id); });
     connect(m_backend.get(), &StorageBackend::volumesListed, this, [this](const QList<StorageVolume> &list) {
@@ -58,13 +58,19 @@ Storage::~Storage() = default;
 void Storage::flushArrivals()
 {
     const QList<Arrival> arrivals = std::exchange(m_arrivals, {});
+    QSet<QString> listed; // what is in the list now: a stick pulled within the window is not announced
+    for (const QVariant &v : std::as_const(m_volumes))
+        listed.insert(v.toMap().value(QStringLiteral("id")).toString());
     for (const Arrival &a : arrivals) {
         // Partitions we do not mount (filesystem "unknown") stay in the list but do not announce
         // the drive.
         QList<StorageVolume> usable;
+        QSet<QString> counted; // a volume plugged in twice within the window counts once
         for (const StorageVolume &v : a.volumes) {
-            if (v.filesystem != QLatin1String("unknown"))
+            if (v.filesystem != QLatin1String("unknown") && listed.contains(v.id) && !counted.contains(v.id)) {
+                counted.insert(v.id);
                 usable.append(v);
+            }
         }
         if (!usable.isEmpty())
             emit driveAdded(a.drive, usable.constFirst().label, int(usable.size()));
