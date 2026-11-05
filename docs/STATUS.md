@@ -15,7 +15,7 @@ Verification legend: **host** = built and tested on Windows · **host (vm pendin
 
 ## Board
 
-**NEXT → T-180** (image lane, polkit); T-162 [lead] is the critical path and takes the image lane next
+**NEXT → T-162** ([lead], the critical path: the image lane is free); builders run T-185 (round 2) and T-188
 
 **How work runs (owner, 2026-11-04):** the lead dispatches `ruya-builder` agents, at most two at a time in their own worktrees and in different areas, has each branch reviewed by `ruya-reviewer`, and merges it (`docs/LEAD.md`, build loop). Dispatched builders never edit this file. At most one task with a "VM (this task)" criterion runs at a time. A builder session the owner starts directly takes NEXT in the main checkout, alone, and does the bookkeeping itself (`CLAUDE.md`).
 
@@ -26,9 +26,8 @@ Open work only (todo, in-progress, blocked), in the recommended order; when NEXT
 | [T-184](tasks/T-184-devices-volume-grouping-and-watcher-debounce.md) | One toast per USB stick; PipeWire watcher debounce | todo | — |
 | [T-185](tasks/T-185-scroll-affordance.md) | Scroll cue on long Settings panes (edge fade) | in-progress | — |
 | [T-187](tasks/T-187-ci-and-make-disk-hygiene.md) | CI runs the font check; `make-disk.sh` needs the dev key file | todo | — |
-| [T-180](tasks/T-180-network-polkit-deny-by-default.md) | NetworkManager polkit: refuse every action the shell doesn't need | in-progress | — |
 | [T-186](tasks/T-186-accessibility-walk-flows.md) | Action-named confirm buttons; accessibility walk of wizard/profile flows | todo | T-179 |
-| [T-188](tasks/T-188-store-jobs-survive-restart.md) | Store: the shell finds its running installs after a service restart | todo | T-182 |
+| [T-188](tasks/T-188-store-jobs-survive-restart.md) | Store: the shell finds its running installs after a service restart | in-progress | — |
 | [T-162](tasks/T-162-ruya-session-in-the-image.md) | **[lead]** `ruya-session` in the image: real spawner, unit, bus policy | todo | — |
 | [T-164](tasks/T-164-per-profile-wayland-sockets.md) | **[lead]** Per-profile Wayland sockets: a profile's app appears in the shell | todo | T-162 |
 | [T-165](tasks/T-165-profile-switch-freezes-apps.md) | Profile switch and sign-out freeze the profile's apps | todo | T-164 |
@@ -51,13 +50,14 @@ Follow-ups and debt for the next planner, one line each: `- (source) what, and w
 - (T-178 review) `vm-iso-check.ps1`: print the installed disk's boot entry titles; resolve an absolute `-Disk` properly and refuse paths outside `output\` (it deletes the target first).
 - (T-181 review) `DBusProfilesBackend` still emits `listed` straight from an async `ListProfiles` reply: give it a `RequestSequence`; check Store, Library and Update backends too. The guard wiring in the four `DBus*Backend.cpp` was only exercised through the mock: add a shell-over-D-Bus VM step that triggers a refresh by signal.
 - (T-185 review) design: update the canvas board for the Settings scroll cue (peek-row opacity) per 04 §8 once round 2 settles; Store grid and Games lists have the same hidden-continuation problem (extract the cue from `SettingsPane` first).
+- (T-180 review) `vm-devices-check.sh`/`vm-storage-check.sh`: check each "refused" polkit action id is registered (`pkaction --action-id X`) before expecting pkcheck exit 1. Hardware: a real Wi-Fi connect (new network with password, a saved one) and forget under the deny-by-default rule (B-002; the VM has no Wi-Fi adapter).
 - (0.0.40 try-out) The VM clock shows UTC: there is no time-zone setting yet (wizard or System pane); plan it with the OOBE/installer work.
 
 ## Blocked (need something this host doesn't have)
 
 | ID | What | Needs | Notes |
 |---|---|---|---|
-| B-002 | Install on a real low-tier machine; first frame-time numbers (spec 02 §8) | Hardware | Build a fresh dev ISO first (the 0.0.4 one was deleted to free space on 2026-11-02; it holds the dev SSH key: test machines only). Decide there: a failed boot takes ~100 s, so automatic rollback takes ~7 min; consider a shorter required-check timeout once real boot times are known. Also check the hint bar's spacing to the Settings list's last row at 1080p (T-158). Hardware checks queued here: pads in UPower as kind 12 "gaming-input" (DualSense, Xbox, 8BitDo; else extend `KIND_GAMING_INPUT` in `battery.rs`), a fake UPower device for `vm-devices-check.sh` (umockdev or dbusmock, optional), Bluetooth (adapter, "just works" pairing, Battery1, rfkill-blocked `Powered`, hot-plugged USB adapter). Needs T-178 first (the ISO must boot to the shell). |
+| B-002 | Install on a real low-tier machine; first frame-time numbers (spec 02 §8) | Hardware | Build a fresh dev ISO first (the 0.0.4 one was deleted to free space on 2026-11-02; it holds the dev SSH key: test machines only). Decide there: a failed boot takes ~100 s, so automatic rollback takes ~7 min; consider a shorter required-check timeout once real boot times are known. Also check the hint bar's spacing to the Settings list's last row at 1080p (T-158). Hardware checks queued here: Wi-Fi connect/forget under the NetworkManager deny rule (T-180), pads in UPower as kind 12 "gaming-input" (DualSense, Xbox, 8BitDo; else extend `KIND_GAMING_INPUT` in `battery.rs`), a fake UPower device for `vm-devices-check.sh` (umockdev or dbusmock, optional), Bluetooth (adapter, "just works" pairing, Battery1, rfkill-blocked `Powered`, hot-plugged USB adapter). Needs T-178 first (the ISO must boot to the shell). |
 | B-003 | Compositor performance: blurred Guide overlay over a running game at ≥ 55 FPS on the mid tier (ADR-002) | A GPU | Functional part done in the VM (T-123) and the session built (T-130). Left: frame rates, dmabuf clients, blur over a client surface, gamescope nesting, volume-key `Shortcut`s with an app focused. |
 | B-006 | Replace the `ruya-inputd` stopgap with InputPlumber (ADR-003), grab and re-emit | Linux + controllers | Also owns key repeat (400 ms delay, then accelerating), stick repeat speed, Accept long-press and context menu (spec 02 §4.3), and Bluetooth PIN/passkey pairing, player assignment, button test and remapping (T-136). |
 | B-007 | `ruya-devices` remainder (BlueZ done in T-173, VM check queued): applying `ambient`/`media` levels to app streams, PipeWire for profile apps | `ruya-session` in the image (T-130 done) | Audio (T-128, by events since T-133) and network (T-132) are done and VM-verified. ADR-010. Also: media access for profile users and Flatpak apps on `/run/media/ruya-shell/...` belongs to the Media task (mounts belong to `ruya-shell`, not the active profile). |

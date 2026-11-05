@@ -1,6 +1,6 @@
 # T-188 — Store: the shell finds its running installs again after `ruya-store` restarts
 
-Status: todo · Phase: 2 · Depends: T-182 (same crate) · Area: services, shell · Size: M · Owner: builder
+Status: in-progress · Phase: 2 · Depends: T-182 (same crate) · Area: services, shell · Size: M · Owner: builder
 
 ## Goal
 If `ruya-store` restarts (crash, update) while an install is running, the shell today loses the job: the progress bar hangs. After a restart the shell asks the service which jobs exist and shows their real state.

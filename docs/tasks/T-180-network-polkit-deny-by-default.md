@@ -1,6 +1,6 @@
 # T-180 — NetworkManager polkit: refuse every action `ruya-shell` doesn't need
 
-Status: in-progress · Phase: 2 · Depends: -- (T-178 is merged; one image build at a time) · Area: image, services · Size: S · Owner: builder
+Status: done · Phase: 2 · Depends: -- (T-178 is merged; one image build at a time) · Area: image, services · Size: S · Owner: builder
 
 ## Goal
 `50-ruyaos-network.rules` allows four NetworkManager actions for `ruya-shell` but returns `NOT_HANDLED` for the rest, so NetworkManager's own defaults (an active session may do many things without a password) stay open to the shell's user. Close it the way T-174 round 2 closed udisks2.
@@ -35,7 +35,7 @@ Image recipe in `docs/dev-setup.md` (`build.sh`, `make-disk.sh qcow2`, `smoke-te
 - `pkcheck --action-id X --process <pid>` exit 0 = allowed, 1 = refused, 2 = would ask for a password.
 
 ## Outcome
-Verified: vm (image 0.0.6-t180: `RUYA_BOOT_OK 0.0.6-t180`; `vm-devices-check.sh check` ALL CHECKS PASSED, 58 PASS lines, 0 FAIL; `dev.ps1 test` ALL GREEN).
+Verified: vm (image 0.0.6-t180: `RUYA_BOOT_OK 0.0.6-t180`; `vm-devices-check.sh check` ALL CHECKS PASSED, 57 PASS lines, 0 FAIL; `dev.ps1 test` ALL GREEN).
 
 Built:
 - `50-ruyaos-network.rules`: the four allowed actions (`wifi.scan`, `network-control`, `settings.modify.system`, `settings.modify.own`) are unchanged, they are what `network.rs` calls (RequestScan, ActivateConnection, AddAndActivateConnection, Settings.Connection.Delete); the check proved none more is needed. Every other `org.freedesktop.NetworkManager.*` action of `ruya-shell` now returns `polkit.Result.NO`; only non-NetworkManager actions and other users return `NOT_HANDLED`. Header comment rewritten (it said the rest "stays" default).

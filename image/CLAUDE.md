@@ -39,3 +39,5 @@ Builds take 3–30 minutes (the NVIDIA step is cached unless `image/build/` or e
   - use `127.0.0.1`, not `localhost`, for SSH;
   - the VM reaches a WSL registry only through WSL's IP;
   - software rendering is expected, and the VM has no sound card unless you boot with `smoke-test.ps1 -Audio` (`dev-setup.md`, "Audio in the VM"); the three `QSoundEffect: playback of this format is not supported` lines at the first shell start are a benign race with WirePlumber.
+  - a polkit rule in `/etc/polkit-1/rules.d` does not shadow the one in `/usr/share/...` (both load), and a copied rule needs the right SELinux label: for experiments bind-mount a rule over the original and `chcon --reference` it, then restart polkit;
+  - `make-disk.sh` can fail with "Cannot allocate memory" when `dev.ps1 test` or another heavy build runs at the same time (WSL has 8 GB): run image builds alone.
