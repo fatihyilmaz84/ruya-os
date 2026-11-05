@@ -10,4 +10,5 @@ Type=oneshot
 ExecStart=/bin/sh -c 'if /usr/libexec/ruyaos/wait-shell-ready 120; then echo "RUYA_BOOT_OK $(cat /usr/lib/ruyaos/version)" > /dev/ttyS0; else echo "RUYA_BOOT_FAIL $(cat /usr/lib/ruyaos/version)" > /dev/ttyS0; fi'
 
 [Install]
-WantedBy=graphical.target
+# Both targets: an installer (Anaconda) leaves default.target at multi-user.target (T-178).
+WantedBy=graphical.target multi-user.target
