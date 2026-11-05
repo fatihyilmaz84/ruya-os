@@ -163,6 +163,7 @@ SettingsPane {
                 pane.rollbackStep = "confirm"
                 rollbackConfirm.customTitle = qsTr("Roll back to the previous version?")
                 rollbackConfirm.detail = qsTr("The console starts the previous version the next time it restarts.")
+                rollbackConfirm.customConfirmName = qsTr("Roll back now")
                 rollbackConfirm.open("custom")
             } else {
                 Sfx.back()

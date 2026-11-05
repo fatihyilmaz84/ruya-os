@@ -684,7 +684,7 @@
 <context>
     <name>PowerConfirm</name>
     <message>
-        <location filename="../qml/PowerConfirm.qml" line="+26"/>
+        <location filename="../qml/PowerConfirm.qml" line="+29"/>
         <source>Suspend now?</source>
         <translation>Suspend now?</translation>
     </message>
@@ -699,14 +699,29 @@
         <translation>Power off now?</translation>
     </message>
     <message>
-        <location line="+92"/>
+        <location line="+6"/>
+        <source>Suspend now</source>
+        <translation>Suspend now</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Restart now</source>
+        <translation>Restart now</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Power off now</source>
+        <translation>Power off now</translation>
+    </message>
+    <message>
+        <location line="+95"/>
         <location line="+10"/>
         <source>Cancel</source>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location line="+14"/>
-        <location line="+10"/>
+        <location line="-102"/>
+        <location line="+126"/>
         <source>Confirm</source>
         <translation>Confirm</translation>
     </message>
@@ -783,6 +798,11 @@
         <location line="+1"/>
         <source>Their saved data and settings are removed. This can&apos;t be undone.</source>
         <translation>Their saved data and settings are removed. This can&apos;t be undone.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Delete %1</source>
+        <translation>Delete %1</translation>
     </message>
     <message>
         <location line="+10"/>
@@ -1520,18 +1540,18 @@
     <name>SystemPane</name>
     <message>
         <location filename="../qml/SystemPane.qml" line="+27"/>
-        <location line="+219"/>
+        <location line="+220"/>
         <source>Beta</source>
         <translation>Beta</translation>
     </message>
     <message>
-        <location line="-219"/>
-        <location line="+218"/>
+        <location line="-220"/>
+        <location line="+219"/>
         <source>Stable</source>
         <translation>Stable</translation>
     </message>
     <message>
-        <location line="-213"/>
+        <location line="-214"/>
         <source>Last checked %1</source>
         <translation>Last checked %1</translation>
     </message>
@@ -1604,6 +1624,11 @@
         <location line="+1"/>
         <source>The console starts the previous version the next time it restarts.</source>
         <translation>The console starts the previous version the next time it restarts.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Roll back now</source>
+        <translation>Roll back now</translation>
     </message>
     <message>
         <location line="+20"/>

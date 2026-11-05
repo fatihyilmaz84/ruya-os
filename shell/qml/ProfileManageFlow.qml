@@ -51,6 +51,7 @@ QtObject {
         step = "confirm"
         confirm.customTitle = qsTr("Delete %1?").arg(name)
         confirm.detail = qsTr("Their saved data and settings are removed. This can't be undone.")
+        confirm.customConfirmName = qsTr("Delete %1").arg(name)
         confirm.open("custom")
     }
 

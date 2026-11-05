@@ -683,7 +683,7 @@
 <context>
     <name>PowerConfirm</name>
     <message>
-        <location filename="../qml/PowerConfirm.qml" line="+26"/>
+        <location filename="../qml/PowerConfirm.qml" line="+29"/>
         <source>Suspend now?</source>
         <translation>Şimdi askıya alınsın mı?</translation>
     </message>
@@ -698,14 +698,29 @@
         <translation>Şimdi kapatılsın mı?</translation>
     </message>
     <message>
-        <location line="+92"/>
+        <location line="+6"/>
+        <source>Suspend now</source>
+        <translation>Şimdi askıya al</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Restart now</source>
+        <translation>Şimdi yeniden başlat</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Power off now</source>
+        <translation>Şimdi kapat</translation>
+    </message>
+    <message>
+        <location line="+95"/>
         <location line="+10"/>
         <source>Cancel</source>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="+14"/>
-        <location line="+10"/>
+        <location line="-102"/>
+        <location line="+126"/>
         <source>Confirm</source>
         <translation>Onayla</translation>
     </message>
@@ -782,6 +797,11 @@
         <location line="+1"/>
         <source>Their saved data and settings are removed. This can&apos;t be undone.</source>
         <translation>Kayıtlı verileri ve ayarları silinir. Bu geri alınamaz.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Delete %1</source>
+        <translation>%1 profilini sil</translation>
     </message>
     <message>
         <location line="+10"/>
@@ -1518,18 +1538,18 @@
     <name>SystemPane</name>
     <message>
         <location filename="../qml/SystemPane.qml" line="+27"/>
-        <location line="+219"/>
+        <location line="+220"/>
         <source>Beta</source>
         <translation>Beta</translation>
     </message>
     <message>
-        <location line="-219"/>
-        <location line="+218"/>
+        <location line="-220"/>
+        <location line="+219"/>
         <source>Stable</source>
         <translation>Kararlı</translation>
     </message>
     <message>
-        <location line="-213"/>
+        <location line="-214"/>
         <source>Last checked %1</source>
         <translation>Son kontrol: %1</translation>
     </message>
@@ -1602,6 +1622,11 @@
         <location line="+1"/>
         <source>The console starts the previous version the next time it restarts.</source>
         <translation>Konsol, bir sonraki yeniden başlatmada önceki sürümü açar.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Roll back now</source>
+        <translation>Şimdi önceki sürüme dön</translation>
     </message>
     <message>
         <location line="+20"/>

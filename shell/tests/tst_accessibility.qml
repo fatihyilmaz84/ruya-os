@@ -268,14 +268,43 @@ Item {
             keyClick(Qt.Key_Right)
             tryVerify(() => find("powerConfirm").activeFocus, 2000, "Confirm has focus")
             checkFocused("power Confirm")
-            verify(seen.indexOf("powerCancel: Cancel") >= 0 && seen.indexOf("powerConfirm: Confirm") >= 0,
+            verify(seen.indexOf("powerCancel: Cancel") >= 0 && seen.indexOf("powerConfirm: Restart now") >= 0,
                    "both buttons are named: " + seen)
             keyClick(Qt.Key_Left)
             keyClick(Qt.Key_Return)                      // Cancel
             tryVerify(() => !find("powerConfirmDialog").shown)
         }
 
-        function test_setup_wizard_steps() {
+        // The Confirm button is named after the action, never the bare word "Confirm" (T-186).
+        function test_power_confirm_names_follow_the_action() {
+            signInAsAda()
+            tc.shell.openPage("power")
+            tryCompare(tc.shell, "currentPage", "power")
+            tryVerify(() => find("powerSuspend") && find("powerSuspend").activeFocus, 2000)
+            const expected = [["suspend", "powerSuspend", "Suspend now"],
+                              ["restart", "powerRestart", "Restart now"],
+                              ["poweroff", "powerOff", "Power off now"]]
+            const dialog = find("powerConfirmDialog")
+            for (const [action, row, name] of expected) {
+                for (let i = 0; i < 4 && !find(row).activeFocus; ++i)
+                    keyClick(Qt.Key_Down)
+                tryVerify(() => find(row).activeFocus, 2000, row + " has focus")
+                keyClick(Qt.Key_Return)
+                tryVerify(() => dialog.shown, 2000, action + ": the dialog opens")
+                tryVerify(() => find("powerCancel").activeFocus, 2000, action + ": Cancel has focus")
+                compare(dialog.action, action)
+                keyClick(Qt.Key_Right)
+                tryVerify(() => find("powerConfirm").activeFocus, 2000, action + ": Confirm has focus")
+                compare(focused().Accessible.name, name, action)
+                verify(focused().Accessible.name !== "Confirm", action + ": not the bare word Confirm")
+                compare(find("powerCancel").Accessible.name, "Cancel")
+                keyClick(Qt.Key_Escape)                  // Back cancels: nothing powers off
+                tryVerify(() => !dialog.shown, 2000, action + ": the dialog closes")
+            }
+        }
+
+        // Resets to a console without profiles and walks the wizard to step 3 (name and PIN).
+        function startWizardAtNameStep() {
             Profiles.resetMockForTests("empty")
             tryVerify(() => Profiles.profiles.length === 0)
             tc.shell.destroy()
@@ -297,13 +326,190 @@ Item {
             tryCompare(setup, "step", 3)
             tryVerify(() => find("setupNameRow").activeFocus)
             checkFocused("setup name")
-            // The create flow (name, PIN) is tst_setup's; here only the last step is named.
+            return setup
+        }
+
+        // The wizard's create-name-and-PIN step: its two rows, the name keyboard and the PIN pad.
+        function test_setup_wizard_create_step() {
+            startWizardAtNameStep()
+            compare(focused().Accessible.name, "Name, Not set")
+            keyClick(Qt.Key_Down)
+            tryVerify(() => find("setupCreateRow").activeFocus)
+            checkFocused("setup create row")
+            compare(focused().Accessible.name, "Choose a PIN and finish")
+            keyClick(Qt.Key_Up)
+            tryVerify(() => find("setupNameRow").activeFocus)
+
+            // The name keyboard: its name follows the focused key.
+            keyClick(Qt.Key_Return)
+            const entry = find("setupNameEntry")
+            tryVerify(() => entry.shown && entry.activeFocus, 2000, "the keyboard opens with focus")
+            verifyNamesChange(namesAlong(Qt.Key_Right, 4, "wizard keyboard"), "wizard keyboard")
+            keyClick(Qt.Key_Down)
+            checkFocused("wizard keyboard, next row")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !entry.shown && find("setupNameRow").activeFocus, 2000, "Cancel gives focus back")
+
+            // The PIN pad needs a name first.
+            entry.accepted("Zed")
+            tryVerify(() => find("setupCreateRow").activeFocus, 2000, "an accepted name moves to Create")
+            checkFocused("wizard create row after the name")
+            keyClick(Qt.Key_Return)
+            const pad = find("setupPinPad")
+            tryVerify(() => pad.shown, 2000, "the PIN pad opens")
+            tryVerify(() => findChild(pad, "pinKeys").activeFocus, 2000, "the keypad has focus")
+            walk(Qt.Key_Right, 3, "wizard pin row")
+            walk(Qt.Key_Down, 4, "wizard pin column")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !pad.shown && find("setupCreateRow").activeFocus, 2000, "the pad returns to Create")
+            checkFocused("wizard create row after the pad")
+            compare(Profiles.profiles.length, 0, "nothing was created")
+            verify(seen.indexOf("setupNameRow: Name, Not set") >= 0, "the name row is named: " + seen)
+        }
+
+        function test_setup_wizard_steps() {
+            const setup = startWizardAtNameStep()
+            // The create flow (name, PIN) is test_setup_wizard_create_step; here the last step.
             setup.step = 4
             setup.focusStep()
             tryVerify(() => !find("setupNameRow").activeFocus && setup.activeFocus)
             checkFocused("setup done")
             compare(focused().Accessible.name, "You're all set")
             verify(seen.indexOf(": Setup") < 0, "no step is just 'Setup': " + seen)
+        }
+
+        function signInAsAdmin() {
+            Profiles.switchTo("p1", "1234")
+            tryCompare(Profiles, "activeProfile", "p1")
+            tryVerify(() => find("homePlay").activeFocus, 2000, "Play takes focus after sign-in")
+        }
+
+        function openProfilesPane() {
+            keyClick(Qt.Key_Up)                          // the section nav
+            for (let i = 0; i < 4; ++i)
+                keyClick(Qt.Key_Right)
+            keyClick(Qt.Key_Return)
+            tryCompare(tc.shell, "currentPage", "settings")
+            tryVerify(() => find("categoryList") && find("categoryList").activeFocus, 2000)
+            compare(find("categoryList").currentIndex, 0, "Profiles is the first category")
+            keyClick(Qt.Key_Right)
+            tryVerify(() => find("paneProfiles").activeFocus, 2000, "the pane has focus")
+            tryVerify(() => find("paneProfiles").focusableRows().some(r => r.activeFocus), 2000)
+        }
+
+        function goToRow(name, key) {
+            for (let i = 0; i < 20 && !(find(name) && find(name).activeFocus); ++i) {
+                keyClick(key ?? Qt.Key_Down)
+                checkFocused("on the way to " + name)
+            }
+            tryVerify(() => find(name) && find(name).activeFocus, 2000, "reached " + name)
+        }
+
+        // A PIN pad opened by the Profiles pane: walk its keys, then Back closes it.
+        function walkProfilesPad(where) {
+            const pad = find("profilesPinPad")
+            tryVerify(() => pad.shown, 2000, where + ": the PIN pad opens")
+            tryVerify(() => findChild(pad, "pinKeys").activeFocus, 2000, where + ": the keypad has focus")
+            walk(Qt.Key_Right, 3, where + " pin row")
+            walk(Qt.Key_Down, 4, where + " pin column")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !pad.shown, 2000, where + ": the pad closes")
+        }
+
+        // Settings -> Profiles as an admin: Add profile with its form, the name keyboard and the PIN pad.
+        function test_profiles_add_flow() {
+            signInAsAdmin()
+            openProfilesPane()
+            goToRow("rowAdd")
+            checkFocused("profiles add row")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("rowNewName").activeFocus, 2000, "the form opens on the name row")
+            checkFocused("add form name")
+            compare(focused().Accessible.name, "Name, Not set")
+            keyClick(Qt.Key_Down)
+            tryVerify(() => find("rowNewRole").activeFocus)
+            checkFocused("add form role")
+            keyClick(Qt.Key_Down)
+            tryVerify(() => find("rowNewPin").activeFocus)
+            checkFocused("add form PIN toggle")
+            keyClick(Qt.Key_Down)
+            tryVerify(() => find("rowCreate").activeFocus)
+            checkFocused("add form create")
+            verify(seen.indexOf("rowNewRole: Role, Standard") >= 0, "the role row names its value: " + seen)
+            verify(seen.indexOf("rowCreate: Create profile") >= 0, "Create is named: " + seen)
+
+            // The name keyboard.
+            goToRow("rowNewName", Qt.Key_Up)
+            keyClick(Qt.Key_Return)
+            const entry = find("profileNameEntry")
+            tryVerify(() => entry.shown && entry.activeFocus, 2000, "the keyboard opens with focus")
+            verifyNamesChange(namesAlong(Qt.Key_Right, 4, "add keyboard"), "add keyboard")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => find("rowNewName").activeFocus, 2000, "Cancel gives focus back")
+
+            // The admin PIN pad, reached through Create (a name is set so Create goes ahead).
+            entry.accepted("Kit")
+            tryVerify(() => find("rowNewName").activeFocus, 2000)
+            goToRow("rowCreate")
+            keyClick(Qt.Key_Return)
+            walkProfilesPad("add profile")
+            tryVerify(() => find("rowCreate").activeFocus, 2000, "focus returns to Create")
+            checkFocused("add form create after the pad")
+            walk(Qt.Key_Down, 8, "rows below the form")
+            compare(Profiles.profiles.length, 3, "nothing was created")
+        }
+
+        // Settings -> Profiles as an admin: select a profile, Rename (keyboard) and Delete (confirmation, PIN pad).
+        function test_profiles_manage_flow() {
+            signInAsAdmin()
+            openProfilesPane()
+            const row = find("profileRow_p2")
+            verify(row, "Ada is listed")
+            for (let i = 0; i < 8 && !row.activeFocus; ++i)
+                keyClick(Qt.Key_Down)
+            tryVerify(() => row.activeFocus, 2000, "the Ada row has focus")
+            checkFocused("profile row")
+            compare(focused().Accessible.name.indexOf("Ada"), 0, "the row starts with the profile name")
+            keyClick(Qt.Key_Return)                      // select: Rename and Delete appear
+            tryVerify(() => find("rowRename").activeFocus, 2000, "Rename takes focus")
+            checkFocused("manage rename")
+            compare(focused().Accessible.name, "Rename Ada")
+            keyClick(Qt.Key_Down)
+            tryVerify(() => find("rowDelete").activeFocus)
+            checkFocused("manage delete")
+            compare(focused().Accessible.name, "Delete Ada")
+
+            // Rename: the keyboard.
+            keyClick(Qt.Key_Up)
+            keyClick(Qt.Key_Return)
+            const entry = find("profileRenameEntry")
+            tryVerify(() => entry.shown && entry.activeFocus, 2000, "the rename keyboard opens")
+            verifyNamesChange(namesAlong(Qt.Key_Right, 4, "rename keyboard"), "rename keyboard")
+            // Back deletes a letter of "Ada" first and cancels once the field is empty.
+            for (let i = 0; i < 4 && entry.shown; ++i)
+                keyClick(Qt.Key_Escape)
+            tryVerify(() => find("rowRename").activeFocus, 2000, "Cancel gives focus back: " + describe(focused()))
+
+            // Delete: the confirmation names its action, then the admin PIN pad.
+            keyClick(Qt.Key_Down)
+            tryVerify(() => find("rowDelete").activeFocus)
+            keyClick(Qt.Key_Return)
+            const confirm = find("profileDeleteConfirm")
+            tryVerify(() => confirm.shown, 2000, "the delete confirmation opens")
+            const cancel = findChild(confirm, "powerCancel")
+            tryVerify(() => cancel.activeFocus, 2000, "Cancel has focus")
+            checkFocused("delete cancel")
+            compare(focused().Accessible.name, "Cancel")
+            keyClick(Qt.Key_Right)
+            const ok = findChild(confirm, "powerConfirm")
+            tryVerify(() => ok.activeFocus, 2000, "Confirm has focus")
+            checkFocused("delete confirm")
+            compare(focused().Accessible.name, "Delete Ada")
+            keyClick(Qt.Key_Return)
+            walkProfilesPad("delete profile")
+            tryVerify(() => find("rowDelete").activeFocus, 2000, "focus returns to Delete")
+            checkFocused("manage delete after the pad")
+            compare(Profiles.profiles.length, 3, "nothing was deleted")
         }
 
         function test_guide_overlay() {

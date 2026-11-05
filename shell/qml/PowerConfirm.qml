@@ -15,6 +15,9 @@ FocusScope {
     // Confirm then only emits confirmed("custom") and the caller does the work.
     property string customTitle: ""
     property string detail: ""
+    // Accessible name of the Confirm button for action "custom" (e.g. "Delete Ada"); the
+    // visible label stays "Confirm". Empty falls back to "Confirm".
+    property string customConfirmName: ""
     property bool shown: false
     property Item returnTo: null
 
@@ -27,6 +30,19 @@ FocusScope {
         restart: qsTr("Restart now?"),
         poweroff: qsTr("Power off now?")
     })
+
+    // What a screen reader says for the Confirm button: the action, not the word "Confirm".
+    readonly property string confirmName: {
+        if (action === "suspend")
+            return qsTr("Suspend now")
+        if (action === "restart")
+            return qsTr("Restart now")
+        if (action === "poweroff")
+            return qsTr("Power off now")
+        if (action === "custom" && customConfirmName.length > 0)
+            return customConfirmName
+        return qsTr("Confirm")
+    }
 
     function open(which) {
         returnTo = Window.activeFocusItem
@@ -141,7 +157,7 @@ FocusScope {
                 id: confirmButton
                 objectName: "powerConfirm"
                 Accessible.role: Accessible.Button
-                Accessible.name: qsTr("Confirm")
+                Accessible.name: dialog.confirmName
                 Accessible.focusable: true
                 width: 300 * dialog.u
                 height: Theme.buttonHeight * dialog.u
