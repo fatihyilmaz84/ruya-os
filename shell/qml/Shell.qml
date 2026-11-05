@@ -550,7 +550,7 @@ FocusScope {
             } else if (event.key === Qt.Key_PageUp) {
                 root.stepSection(-1)
                 event.accepted = true
-            } else if (event.key === Qt.Key_Escape || event.key === Qt.Key_Back) {
+            } else if (BackKey.isBackOrBackspace(event.key)) {
                 Sfx.back()
                 event.accepted = true
             }
@@ -1021,10 +1021,10 @@ FocusScope {
                         decrementCurrentIndex()
                     } else if (event.isAutoRepeat) {
                         // Holding Guide repeats the key: not a second press that would close us.
-                    } else if (systemPanel.powerMode && (event.key === Qt.Key_Escape || event.key === Qt.Key_Back)) {
+                    } else if (systemPanel.powerMode && BackKey.isBackOrBackspace(event.key)) {
                         Sfx.back()
                         activate("back")
-                    } else if (event.key === Qt.Key_Escape || event.key === Qt.Key_Back || root.isGuideKey(event.key)) {
+                    } else if (BackKey.isBackOrBackspace(event.key) || root.isGuideKey(event.key)) {
                         systemPanel.open = false
                         Sfx.back()
                     }

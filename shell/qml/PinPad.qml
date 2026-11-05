@@ -293,7 +293,7 @@ FocusScope {
             press("del")
         } else if (event.key === Qt.Key_Enter || event.key === Qt.Key_Menu) {
             submit()
-        } else if (event.key === Qt.Key_Escape || event.key === Qt.Key_Back) {
+        } else if (BackKey.isBack(event.key)) {   // Backspace above deletes: it is not Back in a text field
             Sfx.back()
             if (entered.length > 0)
                 press("del")

@@ -188,6 +188,31 @@ Item {
             tryVerify(() => find("pageSlot_detail") === null, 2000, "popped page is destroyed")
         }
 
+        // T-179: Backspace is Back, like Esc.
+        function test_backspace_walks_the_stack() {
+            openSection("settings")
+            tryVerify(() => find("categoryList").activeFocus)
+            for (let i = 0; i < 8; ++i)
+                keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Right)                      // into the About pane
+            tryVerify(() => find("aboutVersion").activeFocus, 2000, "first About row has focus")
+            openDetail({})
+            tryVerify(() => find("detailItem").activeFocus, 2000, "detail takes focus")
+            keyClick(Qt.Key_Backspace)                  // nested page -> Settings, same pane row
+            tryCompare(tc.shell, "currentPage", "settings")
+            tryVerify(() => find("aboutVersion").activeFocus, 2000, "the pane row has focus again")
+            keyClick(Qt.Key_Backspace)                  // pane -> list
+            tryVerify(() => find("categoryList").activeFocus)
+            compare(tc.shell.currentPage, "settings")
+            keyClick(Qt.Key_Backspace)                  // list -> Home, the nav pill
+            tryCompare(tc.shell, "currentPage", "")
+            tryVerify(() => find("sectionNav").activeFocus, 2000, "the nav regains focus")
+            compare(find("sectionNav").currentKey, "settings")
+            keyClick(Qt.Key_Backspace)                  // Back on Home does nothing
+            compare(tc.shell.currentPage, "")
+            verify(find("sectionNav").activeFocus)
+        }
+
         function test_overlay_over_nested_page() {
             openSection("media")
             tryVerify(() => find("pagePlaceholder").activeFocus)

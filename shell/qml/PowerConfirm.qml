@@ -164,7 +164,7 @@ FocusScope {
     }
 
     Keys.onPressed: event => {
-        if (event.key === Qt.Key_Escape || event.key === Qt.Key_Back)
+        if (BackKey.isBackOrBackspace(event.key))
             dialog.cancel()
         event.accepted = true      // modal: nothing leaks to the page or the overlay underneath
     }

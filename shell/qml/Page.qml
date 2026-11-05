@@ -59,7 +59,7 @@ FocusScope {
     // up (the shell opens the Guide overlay from any page). Content items that use Up or
     // LB/RB themselves accept the key first.
     Keys.onPressed: event => {
-        if (event.key === Qt.Key_Escape || event.key === Qt.Key_Back) {
+        if (BackKey.isBackOrBackspace(event.key)) {
             Sfx.back()
             page.backRequested()
             event.accepted = true

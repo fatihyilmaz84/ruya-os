@@ -104,6 +104,23 @@ Item {
             tryVerify(() => find("powerRestart").activeFocus)
         }
 
+        // T-179: Backspace is Back, like Esc.
+        function test_backspace_is_back() {
+            openPowerPage()
+            keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Return)                    // Restart
+            tryVerify(() => find("powerCancel").activeFocus)
+            keyClick(Qt.Key_Backspace)                 // the dialog closes, not the page
+            tryVerify(() => !find("powerConfirmDialog").shown)
+            tryVerify(() => find("powerRestart").activeFocus, 2000, "focus returns to the row")
+            compare(tc.shell.currentPage, "power")
+            compare(Power.actionCount, 0)
+
+            keyClick(Qt.Key_Backspace)                 // then the page
+            tryCompare(tc.shell, "currentPage", "")
+            tryVerify(() => find("homePlay").activeFocus, 2000, "Play regains focus")
+        }
+
         function test_each_action_is_requested() {
             openPowerPage()
             keyClick(Qt.Key_Return)                    // Suspend

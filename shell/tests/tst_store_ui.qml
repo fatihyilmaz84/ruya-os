@@ -368,6 +368,46 @@ Item {
             compare(cards.model[cards.currentIndex], id)
         }
 
+        // T-179: Backspace is Back, like Esc.
+        function test_backspace_is_back() {
+            openStore()
+            keyClick(Qt.Key_Right)
+            keyClick(Qt.Key_Right)
+            const cards = find("storeCards_featured")
+            keyClick(Qt.Key_Return)
+            tryCompare(tc.shell, "currentPage", "appDetail")
+            keyClick(Qt.Key_Backspace)                 // detail -> Store, on the same card
+            tryCompare(tc.shell, "currentPage", "store")
+            tryVerify(() => cards.activeFocus, 2000, "same row has focus again")
+            compare(cards.currentIndex, 2)
+
+            keyClick(Qt.Key_Up)                        // a search is left by Back first
+            verify(find("storeSearch").activeFocus)
+            find("storeSearchEntry").accepted("chess")
+            tryVerify(() => find("storeResults").visible, 2000, "results replace the rows")
+            tryVerify(() => find("storeResults").activeFocus, 2000)
+            keyClick(Qt.Key_Backspace)
+            compare(tc.shell.currentPage, "store")
+            tryVerify(() => find("storeRows").visible)
+            tryVerify(() => find("storeCards_featured").activeFocus, 2000)
+
+            keyClick(Qt.Key_Backspace)                 // Store -> Home
+            tryCompare(tc.shell, "currentPage", "")
+            tryVerify(() => find("sectionNav").activeFocus, 2000, "the nav regains focus")
+        }
+
+        function test_backspace_closes_the_uninstall_dialog() {
+            openStore()
+            openApp("org.example.Puzzle")
+            keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("uninstallCancel").activeFocus)
+            keyClick(Qt.Key_Backspace)
+            tryVerify(() => find("detailUninstall").activeFocus, 2000, "back on the detail page")
+            compare(tc.shell.currentPage, "appDetail")
+            verify(Store.app("org.example.Puzzle").installed)
+        }
+
         function test_search_replaces_rows_until_back() {
             openStore()
             keyClick(Qt.Key_Up)

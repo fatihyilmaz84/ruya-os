@@ -169,14 +169,11 @@ FocusScope {
             break
         case Qt.Key_Right:
             break                      // nothing to the right of a row; stay put
-        case Qt.Key_Left:
-        case Qt.Key_Escape:
-        case Qt.Key_Back:
+        default:
+            if (!BackKey.isBackOrBackspace(event.key) && event.key !== Qt.Key_Left)
+                return                 // Guide/Menu and the rest bubble up
             Sfx.back()
             exitRequested()
-            break
-        default:
-            return                     // Guide/Menu and the rest bubble up
         }
         event.accepted = true
     }

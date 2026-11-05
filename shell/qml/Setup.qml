@@ -92,7 +92,7 @@ FocusScope {
         if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
             if (step !== 3)
                 next()
-        } else if (event.key === Qt.Key_Escape || event.key === Qt.Key_Back) {
+        } else if (BackKey.isBackOrBackspace(event.key)) {
             back()
         }
         event.accepted = true           // modal: nothing leaks to the picker or the home shelf

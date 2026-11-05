@@ -123,6 +123,20 @@ Item {
             compare(cancelledSpy.count, 1, "cancelled() is emitted exactly once")
         }
 
+        // T-179: Backspace is Back on pages, but in a text field it only deletes.
+        function test_backspace_deletes_and_never_goes_back() {
+            openEntry("Name", "ab")
+            keyClick(Qt.Key_Backspace)
+            compare(entry.text, "a")
+            keyClick(Qt.Key_Backspace)
+            compare(entry.text, "")
+            keyClick(Qt.Key_Backspace)                 // empty: still no Back
+            compare(entry.text, "")
+            compare(cancelledSpy.count, 0)
+            verify(entry.shown, "still open on an empty field")
+            compare(page.keysSeen, 0, "no key leaked to the page")
+        }
+
         function test_shift_one_shot() {
             openEntry("Name", "")
             compare(entry.shift, false)
