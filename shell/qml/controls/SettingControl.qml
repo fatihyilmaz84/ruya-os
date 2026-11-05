@@ -19,6 +19,7 @@ FocusScope {
     width: parent ? parent.width : 900 * u
     height: Theme.rowHeight * u
     activeFocusOnTab: true
+    Behavior on opacity { NumberAnimation { duration: Theme.focusMs } }   // the pane's peek-row cue (T-185); instant under reduced motion
 
     // What a screen reader says after the label: the subtype sets it (a value, "on"/"off").
     property string accessibleValue

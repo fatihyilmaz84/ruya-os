@@ -31,6 +31,7 @@ QtObject {
     readonly property color artCaptionFade: "#d905070d"             // caption fade at the bottom of an art card (85 % to 0)
     readonly property color errorText: "#ff8a80"
     readonly property real disabledOpacity: 0.4                     // unavailable controls (PIN-pad OK, locked pad)
+    readonly property real peekOpacity: 0.5                         // scroll cue: the first / last visible row while more rows exist beyond it (not disabledOpacity, which means unavailable)
     readonly property color warningText: "#ffb74d"
     readonly property color blobHighlight: "#ffffff"                // faint third backdrop blob
 

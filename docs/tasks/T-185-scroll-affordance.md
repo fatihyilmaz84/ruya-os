@@ -42,4 +42,19 @@ Since T-170 and T-175 no half-cut row hints that a Settings pane continues below
 - Offscreen tests run the software renderer: assert state, not pixels.
 
 ## Outcome
-_Filled in by the implementer. First line: `Verified: host | vm | unverified | hw` (say what ran where). Then: what was built, files, deviations, follow-ups (each also an Inbox line)._
+Verified: host (`dev.ps1 test` ALL GREEN; `dev.ps1 shots` ALL GREEN, screenshots read). No VM needed.
+
+Round 2 (after the round-1 review and the revised design decision). Built:
+- **Look-ahead scrolling** in `SettingsPane.ensureFocusedVisible()`: it scrolls, in whole rows and as little as possible, so the row above and the row below the focused one are whole in view when such rows exist; when the pane cannot show three rows it falls back to the focused row alone. The focused row therefore touches the pane edge only as the first or last row.
+- **The cue is the peek row's opacity.** `updatePeek()` (called from `updateView()`) sets `peekAbove` / `peekBelow` (the first / last visible row while rows exist beyond it; never the focused row) and sets every column child's opacity to `Theme.peekOpacity` (new token, 0.5) for those and 1 for the rest. `SettingControl` has `Behavior on opacity` with `Theme.focusMs` (0 under reduced motion: no animation). Nothing is dimmed when everything fits. A pane must not bind `opacity` on a row (noted in PATTERNS).
+- Removed round 1's gradient rectangles, `moreAbove`/`moreBelow` and the `edgeFade`/`edgeFadeClear` tokens.
+
+Screenshots read (`output/shell-shots/review/28a-, 28b-, 28c-settings-scroll-*.png`, Bluetooth pane filled): top (the focused first row is clear, the last visible row is dimmed), middle (the focused row is one row above the dimmed bottom peek row, its ring fully white, the top peek row dimmed), end (focused last row clear, only the top peek row dimmed). 0.5 reads as a clear "more" cue and the peek text is still legible, so the start value stayed. The backdrop shows through, no hard line, no square corners.
+
+Tests (`tst_settings.qml`): `test_scroll_cue_walks_down_and_up` walks Down then Up through the filled Bluetooth pane and at every step asserts the focused row's opacity is 1, that it is not a peek row, that it lies whole inside the viewport, that the row below (down) / above (up) is whole in view too, and that every row's opacity is `peekOpacity` for the peek rows and 1 otherwise; at the first row there is no top peek, at the last no bottom peek. `test_scroll_cue_hidden_when_everything_fits` (Display pane, walked), `test_scroll_cue_has_no_animation_under_reduced_motion`, `test_look_ahead_keeps_whole_rows_and_the_first_and_last_row_reachable` (reuses `checkRowsInside`), `test_zz_screenshots_scroll_cue`. Revert checks: (a) the dimming line set to `opacity = 1` fails the walk test and the reduced-motion test; (b) look-ahead reduced to the old minimal scrolling (`place(i, i)`) fails the walk test at "down 5: the next row below is visible too". Both restored. No existing test needed changing: the T-170/T-175 whole-row tests (`checkRowsInside`) pass unchanged with look-ahead.
+
+Files: `shell/qml/SettingsPane.qml`, `shell/qml/controls/SettingControl.qml`, `shell/qml/Theme.qml`, `shell/tests/tst_settings.qml`, `docs/specs/04-design-system.md` (3.1 token row "Peek", 5 Settings pane row), `shell/PATTERNS.md`.
+
+Deviations from the first design (round 1, the near-black gradient overlay): replaced by peek-row opacity and look-ahead scrolling as the revised decision says; the overlay hid the focused row's ring and did not match the tinted backdrop. The old "Known limit" (ring dimmed at the edge) no longer exists: the focused row is never under the cue. Peek rows are chosen over laid-out rows (any visible child of the column), not only focusable ones.
+
+Canvas: this changes the design system, so the owner's design canvas board "Settings" needs the peek-row cue (first / last visible row of a long pane at `peekOpacity` 0.5, look-ahead focus scrolling); 04 section 8.
