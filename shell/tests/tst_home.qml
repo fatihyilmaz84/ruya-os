@@ -42,6 +42,8 @@ Item {
             tryVerify(() => Library.available)
             if (scenario === "empty")
                 tryVerify(() => Library.items.length === 0)
+            else if (scenario === "unplayed")
+                tryVerify(() => find("heroTitle").text === "Block Puzzle")
             else
                 tryVerify(() => find("heroTitle").text === "Portal 2")
         }
@@ -230,6 +232,7 @@ Item {
         function test_empty_library() {
             start("empty")
             compare(find("heroTitle").text, "Your library is empty")
+            compare(Library.items.length, 0, "the empty state is for nothing installed")
             compare(find("homePlay").Accessible.name, "Open Store")
             verify(!find("homeDetails").visible)
             compare(find("recentRow").count, 0)
@@ -242,6 +245,35 @@ Item {
             keyClick(Qt.Key_Escape)
             tryCompare(tc.shell, "currentPage", "")
             tryVerify(() => find("homePlay").activeFocus, 2000)
+        }
+
+        // Installed but never started (every `lastPlayed` is 0): Home shows the installed items,
+        // in the Games page order (by title when nothing was played), not "Your library is empty".
+        function test_installed_but_unplayed_items_fill_the_row() {
+            start("unplayed")
+            compare(Library.recent.length, 0, "nothing was played")
+            verify(Library.items.length > 8)
+            verify(find("homePlay").activeFocus, "focus starts on Play")
+            compare(find("heroTitle").text, "Block Puzzle")
+            compare(find("homePlay").Accessible.name, "Play")
+            verify(find("homeDetails").visible)
+            compare(find("heroEyebrow").text, "INSTALLED")
+            compare(find("recentRow").count, 8, "the first eight installed items")
+            keyClick(Qt.Key_Down)
+            tryVerify(() => find("recentRow").activeFocus, 2000, "Down goes to the row")
+            compare(find("recentRow").currentIndex, 0, "focus lands on the first card")
+            verify(find("recentCard_flatpak:org.example.Puzzle").focused, "the first card is focused")
+            keyClick(Qt.Key_Right)
+            tryCompare(find("heroTitle"), "text", "Counter Strike")
+            keyClick(Qt.Key_Return)
+            tryCompare(launchSpy, "count", 1)
+            compare(launchSpy.signalArguments[0][0], "steam:730")
+        }
+
+        function test_played_items_still_win_over_the_installed_fallback() {
+            start("")
+            compare(find("heroEyebrow").text, "CONTINUE PLAYING")
+            compare(find("heroTitle").text, "Portal 2", "the played order, not the title order")
         }
 
         function test_performance_tier_keeps_the_layout() {
@@ -298,6 +330,14 @@ Item {
             start("empty")
             wait(900)
             grabImage(tc.shell).save(shotsDir + "/01-home-empty.png")
+        }
+
+        function test_zz_screenshots_unplayed() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            start("unplayed")
+            wait(900)
+            grabImage(tc.shell).save(shotsDir + "/01-home-unplayed.png")
         }
 
         function test_zz_screenshots_turkish() {

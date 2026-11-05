@@ -1266,12 +1266,12 @@
         <translation>Audio output: %1</translation>
     </message>
     <message>
-        <location line="+683"/>
+        <location line="+688"/>
         <source>Power</source>
         <translation>Power</translation>
     </message>
     <message>
-        <location line="-675"/>
+        <location line="-680"/>
         <source>Update ready. Restart to finish.</source>
         <translation>Update ready. Restart to finish.</translation>
     </message>
@@ -1296,7 +1296,13 @@
         <translation>Continue playing</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+0"/>
+        <location line="+18"/>
+        <source>Installed</source>
+        <translation>Installed</translation>
+    </message>
+    <message>
+        <location line="-17"/>
         <source>Your library is empty</source>
         <translation>Your library is empty</translation>
     </message>
@@ -1316,12 +1322,12 @@
         <translation>Details</translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+14"/>
         <source>Recent</source>
         <translation>Recent</translation>
     </message>
     <message>
-        <location line="+77"/>
+        <location line="+81"/>
         <source>Starting %1…</source>
         <translation>Starting %1…</translation>
     </message>

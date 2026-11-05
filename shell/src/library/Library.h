@@ -49,7 +49,8 @@ public:
     // The record of an item, or an empty object.
     Q_INVOKABLE QVariantMap item(const QString &id) const;
 
-    // Tests only, and only with the mock backend (otherwise a no-op). scenario: "" or "empty".
+    // Tests only, and only with the mock backend (otherwise a no-op). scenario: "" (the default library), "empty" (nothing installed) or "unplayed" (the default
+    // items, none with a last played time).
     Q_INVOKABLE void resetMockForTests(const QString &scenario);
 
 signals:

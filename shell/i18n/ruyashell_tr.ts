@@ -1264,12 +1264,12 @@
         <translation>Ses çıkışı: %1</translation>
     </message>
     <message>
-        <location line="+683"/>
+        <location line="+688"/>
         <source>Power</source>
         <translation>Güç</translation>
     </message>
     <message>
-        <location line="-675"/>
+        <location line="-680"/>
         <source>Update ready. Restart to finish.</source>
         <translation>Güncelleme hazır. Bitirmek için yeniden başlat.</translation>
     </message>
@@ -1294,7 +1294,13 @@
         <translation>Oynamaya devam et</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+0"/>
+        <location line="+18"/>
+        <source>Installed</source>
+        <translation>Kurulu</translation>
+    </message>
+    <message>
+        <location line="-17"/>
         <source>Your library is empty</source>
         <translation>Kitaplığın boş</translation>
     </message>
@@ -1314,12 +1320,12 @@
         <translation>Ayrıntılar</translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+14"/>
         <source>Recent</source>
         <translation>Son oynananlar</translation>
     </message>
     <message>
-        <location line="+77"/>
+        <location line="+81"/>
         <source>Starting %1…</source>
         <translation>%1 başlatılıyor…</translation>
     </message>

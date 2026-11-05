@@ -51,6 +51,11 @@ void MockLibraryBackend::reset(const QString &scenario)
             item("flatpak:org.example.Player", "app", "Open Player", 1760000000),
             item("flatpak:org.example.Browser", "app", "Web Browser", 0),
         };
+        // "unplayed": all installed, nothing started yet (a fresh image, Home's fallback row).
+        if (scenario == QLatin1String("unplayed")) {
+            for (LibraryItem &i : m_items)
+                i.lastPlayed = 0;
+        }
         std::sort(m_items.begin(), m_items.end(), before);
     }
     emit itemsChanged();
