@@ -1,6 +1,6 @@
 # T-179 — Backspace is Back on pages and dialogs
 
-Status: in-progress · Phase: 2 · Depends: — · Area: shell · Size: S · Owner: builder
+Status: done · Phase: 2 · Depends: — · Area: shell · Size: S · Owner: builder
 
 ## Goal
 On a keyboard, `Backspace` does what the spec says: it is Back (B), like `Esc`. The 0.0.40 try-out found that pages ignore it. Where a field takes text (`TextEntry`, `PinPad`), Backspace keeps deleting.

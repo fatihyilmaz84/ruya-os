@@ -15,7 +15,7 @@ Verification legend: **host** = built and tested on Windows · **host (vm pendin
 
 ## Board
 
-**NEXT → T-178** (image lane; T-179 runs beside it in the shell lane; T-162 [lead] follows once T-178's image build is done)
+**NEXT → T-178** (image lane; T-182 runs beside it in the services lane; T-162 [lead] follows once T-178's image build is done)
 
 **How work runs (owner, 2026-11-04):** the lead dispatches `ruya-builder` agents, at most two at a time in their own worktrees and in different areas, has each branch reviewed by `ruya-reviewer`, and merges it (`docs/LEAD.md`, build loop). Dispatched builders never edit this file. At most one task with a "VM (this task)" criterion runs at a time. A builder session the owner starts directly takes NEXT in the main checkout, alone, and does the bookkeeping itself (`CLAUDE.md`).
 
@@ -24,8 +24,7 @@ Open work only (todo, in-progress, blocked), in the recommended order; when NEXT
 | ID | Title | Status | Depends |
 |---|---|---|---|
 | [T-178](tasks/T-178-iso-install-boots-to-shell.md) | An installed ISO boots to the shell with no manual step (+ dracut noise, boot-menu name) | in-progress | — |
-| [T-179](tasks/T-179-backspace-is-back.md) | Backspace is Back on pages and dialogs | in-progress | — |
-| [T-182](tasks/T-182-store-data-fixes.md) | Store data fixes: developer name once, installed state follows Flatpak | todo | — |
+| [T-182](tasks/T-182-store-data-fixes.md) | Store data fixes: developer name once, installed state follows Flatpak | in-progress | — |
 | [T-183](tasks/T-183-library-freshness-and-home-fallback.md) | Library stays fresh; Home falls back to installed apps | todo | — |
 | [T-184](tasks/T-184-devices-volume-grouping-and-watcher-debounce.md) | One toast per USB stick; PipeWire watcher debounce | todo | — |
 | [T-185](tasks/T-185-scroll-affordance.md) | Scroll cue on long Settings panes (edge fade) | todo | — |
@@ -46,6 +45,8 @@ Open work only (todo, in-progress, blocked), in the recommended order; when NEXT
 
 Follow-ups and debt for the next planner, one line each: `- (source) what, and why it matters`. Dispatched builders put them in their HANDOFF; the lead copies them here. Plan at 5+ items.
 
+- (T-179 review) B-006: a held Backspace or Esc auto-repeats Back and can walk the page stack to Home; decide whether page-level Back ignores `isAutoRepeat` (the Guide overlay does).
+- (T-179 review) Add a Backspace test for the Guide overlay (`Shell.qml:1024`/`1027`: power mode back to actions, then close).
 - (0.0.40 try-out) The VM clock shows UTC: there is no time-zone setting yet (wizard or System pane); plan it with the OOBE/installer work.
 
 ## Blocked (need something this host doesn't have)
