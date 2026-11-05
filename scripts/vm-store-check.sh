@@ -260,26 +260,53 @@ check)
     [ "$(grep -a -c 'store-probe: jobsReconciled' "$work/probe2.log")" -ge 2 ] && ok "the shell read the restarted service's job table" || bad "the shell never applied the job table after the restart"
     grep -a 'store-probe: jobsReconciled' "$work/probe2.log" | tail -1 | grep -q 'jobs={}' && ok "and shows no running job from it" || bad "the shell shows a running job after the restart"
     echo "--- ListJobs after the restart (T-188): the cut-short install is settled, nothing runs"
-    jl="$(as_shell busctl --system call "$svc" "$path" "$ifc" ListJobs)"
+    # --json=short, and python3 picks fields by name: the order of the keys inside a record is
+    # not part of the contract (the service's dictionaries have no order).
+    jl="$(as_shell busctl --system --json=short call "$svc" "$path" "$ifc" ListJobs)"
     echo "$jl" | head -c 1500; echo
-    echo "$jl" | grep -q '"state" s "running"\|"state" s "queued"' && bad "ListJobs shows a job of the old service as running or queued" || ok "ListJobs lists no running or queued job"
-    # One record per line, oldest first: the last one naming the app is the install just cut short.
-    mine="$(echo "$jl" | sed 's/ "id" s /\n"id" s /g' | grep "\"app\" s \"$app\"" | tail -1)"
-    [ -n "$mine" ] && ok "ListJobs lists the cut-short install" || bad "ListJobs has no job for $app"
-    echo "$mine" | grep -q '"kind" s "install"' && ok "its kind is install" || bad "its kind: $mine"
-    echo "$mine" | grep -q '"state" s "finished"' && ok "its state is finished" || bad "its state: $mine"
-    if echo "$mine" | grep -q '"status" s "failed" "reason" s "interrupted"'; then
+    # Prints "key=value" lines: counts of queued/running and finished records, then the fields of
+    # the last record whose app is $1 (the list is oldest first, so that is the install just cut
+    # short). A record without that app prints found=0.
+    summarize_jobs() { # app; reads the JSON of ListJobs on stdin
+        python3 -c '
+import json, sys
+app = sys.argv[1]
+jobs = [{k: v["data"] for k, v in rec.items()} for rec in json.load(sys.stdin)["data"][0]]
+print("active=%d" % sum(1 for j in jobs if j.get("state") in ("queued", "running")))
+print("finished=%d" % sum(1 for j in jobs if j.get("state") == "finished"))
+mine = [j for j in jobs if j.get("app") == app]
+if not mine:
+    print("found=0")
+else:
+    j = mine[-1]
+    print("found=1")
+    for key in ("id", "kind", "state", "status", "reason"):
+        print("%s=%s" % (key, j.get(key, "")))
+    print("number=%s" % j.get("id", "").replace("job-", ""))
+' "$1"
+    }
+    summary="$(echo "$jl" | summarize_jobs "$app")" || summary=""
+    echo "$summary"
+    jfield() { echo "$summary" | sed -n "s/^$1=//p" | head -1; }
+    [ "$(jfield active)" = "0" ] && ok "ListJobs lists no running or queued job" || bad "ListJobs shows a job of the old service as running or queued (active=$(jfield active))"
+    [ "$(jfield found)" = "1" ] && ok "ListJobs lists the cut-short install" || bad "ListJobs has no job for $app"
+    [ "$(jfield kind)" = "install" ] && ok "its kind is install" || bad "its kind: $(jfield kind)"
+    [ "$(jfield state)" = "finished" ] && ok "its state is finished" || bad "its state: $(jfield state)"
+    if [ "$(jfield status)" = "failed" ] && [ "$(jfield reason)" = "interrupted" ]; then
         ok "ListJobs reports it as failed, interrupted"
-    elif echo "$mine" | grep -q '"status" s "ok" "reason" s ""' && flatpak list --system --app | grep -q "$app"; then
+    elif [ "$(jfield status)" = "ok" ] && [ -z "$(jfield reason)" ] && flatpak list --system --app | grep -q "$app"; then
         ok "Flatpak had finished the install: ListJobs reports ok and the app is installed"
     else
-        bad "the settled job is neither failed/interrupted nor ok with the app installed: $mine"
+        bad "the settled job is neither failed/interrupted nor ok with the app installed: status=$(jfield status) reason=$(jfield reason)"
     fi
-    old_job_num="$(echo "$mine" | sed -n 's/^"id" s "job-\([0-9]*\)".*/\1/p')"
-    [ -n "$old_job_num" ] && ok "the job is named job-$old_job_num" || bad "no job number in: $mine"
+    old_job_num="$(jfield number)"
+    case "$old_job_num" in
+        ''|*[!0-9]*) bad "no job number in the job id '$(jfield id)'"; old_job_num="" ;;
+        *) ok "the job is named job-$old_job_num" ;;
+    esac
     [ -s /var/lib/ruya-store/jobs ] && ok "the job table is kept in the state directory" || bad "/var/lib/ruya-store/jobs is missing or empty"
     ls -l /var/lib/ruya-store/jobs 2>/dev/null
-    echo "$jl" | grep -q '"state" s "finished"' && ok "ListJobs still lists finished jobs of before the restart" || bad "no finished job listed"
+    [ "$(jfield finished)" -ge 1 ] 2>/dev/null && ok "ListJobs lists finished jobs" || bad "no finished job listed"
     pkill -f "probe2[.]qml" 2>/dev/null
     flatpak uninstall --system -y "$app" >/dev/null 2>&1 || true   # an install cut short may have left it
     grep -a -i "warn\|Store1.*failed" "$work/probe2.log" | grep -v "store-probe" | head -5
@@ -295,7 +322,9 @@ check)
     out="$(as_shell busctl --system call "$svc" "$path" "$ifc" Install s "$app")"
     job="$(echo "$out" | sed -n 's/^ss "ok" "\(.*\)"$/\1/p')"
     [ -n "$job" ] && ok "Install queued $job" || bad "Install before the outside removal: $out"
-    [ -n "${old_job_num:-}" ] && [ "${job#job-}" -gt "$old_job_num" ] && ok "job names continue after the restart ($job follows job-$old_job_num)" || bad "job name $job after job-${old_job_num:-?}: names must not be reused"
+    new_job_num="${job#job-}"
+    case "$new_job_num" in ''|*[!0-9]*) new_job_num=0 ;; esac
+    [ -n "${old_job_num:-}" ] && [ "$new_job_num" -gt "$old_job_num" ] && ok "job names continue after the restart ($job follows job-$old_job_num)" || bad "job name $job after job-${old_job_num:-?}: names must not be reused"
     fin="$(wait_job "$job" 180)" && echo "$fin" | grep -q '"ok"' && ok "the install finished ok" || bad "the install did not finish ok"
     case "$(as_shell busctl --system call "$svc" "$path" "$ifc" Install s "$app")" in 'ss "already-installed"'*) ok "Install of the installed app: already-installed";; *) bad "Install of the installed app";; esac
     flatpak uninstall --system -y "$app" >/dev/null 2>&1 && ok "flatpak uninstall by hand" || bad "flatpak uninstall by hand failed"

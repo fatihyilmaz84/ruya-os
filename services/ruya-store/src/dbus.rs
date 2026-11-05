@@ -1,7 +1,7 @@
 //! org.ruyaos.Store1 on D-Bus. Thin adapter: the rules live in `service.rs`. Jobs run on their own
 //! thread (flatpak blocks); their events come back over a channel and become signals here.
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -152,7 +152,9 @@ async fn active_profile_is_admin(connection: &Connection) -> bool {
     profiles.iter().any(|p| p.0 == active && p.3 == "admin")
 }
 
-type Dict = HashMap<String, OwnedValue>;
+// Sorted keys: the replies (and busctl output, logs) read the same every time. Clients must not
+// rely on it - a{sv} has no order.
+type Dict = BTreeMap<String, OwnedValue>;
 
 fn dict(entries: Vec<(&str, Value<'_>)>) -> Dict {
     entries

@@ -521,7 +521,9 @@ impl<F: Flatpak> Store<F> {
         };
         let text = jobs::encode(state.queue.counter(), &state.jobs);
         let tmp = path.with_extension("tmp");
-        let written = std::fs::write(&tmp, text).and_then(|()| std::fs::rename(&tmp, path));
+        // Synced before the rename: after a power cut the name must never point at a file whose
+        // data did not reach the disk (the rename can be persisted before the data).
+        let written = write_synced(&tmp, &text).and_then(|()| std::fs::rename(&tmp, path));
         if let Err(err) = written {
             eprintln!("ruya-store: writing {} failed: {err}", path.display());
         }
@@ -584,6 +586,13 @@ impl<F: Flatpak> Store<F> {
         });
         true
     }
+}
+
+fn write_synced(path: &std::path::Path, text: &str) -> std::io::Result<()> {
+    use std::io::Write;
+    let mut file = std::fs::File::create(path)?;
+    file.write_all(text.as_bytes())?;
+    file.sync_all()
 }
 
 /// `https://` or `file://`; nothing that could be read as an option or a different scheme.
