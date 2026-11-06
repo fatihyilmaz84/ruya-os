@@ -43,7 +43,7 @@ mkdir -p output
 # The installer ISO also gets its own kickstart (image/bib/iso-kickstart.toml: use the whole disk
 # for /, which Anaconda's autopart does not), appended to the chosen config in a scratch copy.
 if [[ "${type}" == "anaconda-iso" ]]; then
-    cat "$config_file" image/bib/iso-kickstart.toml > output/bib-iso-config.toml
+    python3 scripts/bib-iso-config.py "$config_file" image/bib/iso-kickstart.toml output/bib-iso-config.toml
     config_file=output/bib-iso-config.toml
     echo "config: + image/bib/iso-kickstart.toml (whole-disk root)"
 fi

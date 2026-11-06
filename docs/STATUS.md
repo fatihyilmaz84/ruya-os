@@ -42,6 +42,13 @@ Open work only (todo, in-progress, blocked), in the recommended order; when NEXT
 | [T-213](tasks/T-213-time-zone-setting.md) | Time zone: choose it in setup and Settings (clock, update window, bedtimes use local time) | todo | — |
 | [T-215](tasks/T-215-save-backup-and-keep-data.md) | **[lead]** Saves: back up/restore to USB, "Keep saves?" on uninstall, per-app data usage (04 spec 03 §4.5a) | todo | — |
 | [T-216](tasks/T-216-network-connection-options.md) | **[lead]** Network options: DHCP/manual IP, DNS (+DoT), proxy, metered, hidden Wi-Fi, MAC randomisation, details, test, console name | todo | — |
+| [T-217](tasks/T-217-controller-input-mapping.md) | **[lead]** Controller mapping: InputPlumber spike and integration, Controllers pane, button test, player numbers, A/B layout, dead zones, remapping (B-006) | todo | — |
+| [T-218](tasks/T-218-hdr-feasibility-spike.md) | **[lead]** HDR on Linux: feasibility spike on the Dell (gamescope, KMS, Qt eglfs), ADR and plan | todo | — |
+| [T-219](tasks/T-219-audio-formats-and-surround.md) | **[lead]** Audio formats and surround: HDMI capabilities (ELD), 5.1/7.1, passthrough (AC-3/E-AC-3/DTS/TrueHD), lip-sync delay | todo | — |
+| [T-220](tasks/T-220-privacy-settings.md) | Privacy settings: policy statement, network visibility, per-app permissions with overrides (Flatpak), clear my activity | todo | — |
+| [T-221](tasks/T-221-app-management.md) | App management: Settings -> Apps (sizes, free up space, update, remove), Options menu on cards, bulk remove | todo | — |
+| [T-222](tasks/T-222-refresh-rate-matching-and-vrr.md) | **[lead]** Refresh-rate matching and VRR: spike, ADR, first step (after T-198) | todo | T-198 |
+| [T-223](tasks/T-223-status-cluster-device-batteries.md) | Top-right status: one battery chip per connected device with the right glyph and level | todo | — |
 | [T-211](tasks/T-211-parental-controls-service.md) | **[lead]** Parental controls, service side: age limit by OARS rating, install approval, daily play time and bedtime enforced in the services | todo | T-210, T-213 |
 | [T-212](tasks/T-212-parental-controls-screens.md) | Parental controls screens: Settings -> Parental, "Ask a parent", "Time is up", Store marks | todo | T-211 |
 | [T-214](tasks/T-214-developer-guide.md) | **Priority.** Developer guide: the complete set in `docs/developers/` and a sample game that follows it | in-progress | — |
@@ -77,6 +84,8 @@ Follow-ups and debt for the next planner, one line each: `- (source) what, and w
 - (T-210) Later: photo avatars from a USB drive and illustrated avatar packs, profile ordering, per-profile language/theme/wallpaper (need profile preferences), age ratings with parental controls (Phase 3).
 - (Dell, 2026-11-06) The Dell's hostname became its IPv6-derived DHCP name and BlueZ used it as the Bluetooth name: T-216 adds the console name setting (static hostname).
 - (T-214/T-215) Later: a shared per-device content store for large downloadable game content; cloud sync; per-app clear-data in Storage (in T-215).
+- (owner decisions needed, T-219/T-220) Using the names "Dolby" and "DTS" (and their logos) in the UI needs a licence: until you decide, the UI says "Surround (AC-3)", "Surround Plus (E-AC-3)", "DTS". And the privacy statement (no telemetry, crash reports off and opt-in) should be confirmed by the owner before it is shown to players.
+- (T-218/T-222) HDR and VRR are decisions after the spikes (ADR Proposed): they may need different hardware (Gen11+ Intel or AMD) to test.
 - (0.0.40 try-out) The VM and the Dell clock show UTC: T-213 adds the time zone setting (setup step and Settings -> System).
 
 ## Blocked (need something this host doesn't have)
