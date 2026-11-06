@@ -43,6 +43,7 @@ Follow-ups and debt for the next planner, one line each: `- (source) what, and w
 - (T-162) `ruya-session` forgets running apps when it restarts (they keep running; a relaunch then fails with `launch-failed`, the unit name is taken): adopt `ruya-app-*` units of every profile manager on start.
 - (T-162) An app whose binary cannot be executed (exec 203) reports `crashed` with code 203, not `launch-failed`: map exec failures.
 - (2026-11-06) Owner's new F: drive (NTFS, 119 GiB, USB): move `output/` (qcow2, ISO) to it with a junction when no VM or build runs; keep cargo and podman caches internal.
+- (Dell, 2026-11-06) `bootloader-update.service` fails on the Dell: Secure Boot is on and the firmware lacks the Microsoft UEFI CA 2023 (bootupctl refuses to update). Harmless to booting, but a red unit on every boot: decide on tolerating it (a drop-in with `SuccessExitStatus=1`?) or documenting Secure Boot as off for test machines. Also the Dell's hostname became its IPv6 address (DHCP hostname): set a static `ruyaos` hostname.
 - (0.0.40 try-out) The VM clock shows UTC: there is no time-zone setting yet (wizard or System pane); plan it with the OOBE/installer work.
 
 ## Blocked (need something this host doesn't have)
