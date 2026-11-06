@@ -21,11 +21,23 @@ $ErrorActionPreference = "Continue"
 $Repo = Split-Path -Parent $PSScriptRoot
 Set-Location $Repo
 
+# T-193: the script deletes the scratch disk first and at the end, so -Disk must be a file strictly
+# inside <repo>\output\. A relative path is taken from the repository root, an absolute one as it is
+# (Join-Path would glue it to the root); ".." parts are resolved before the comparison.
+function Resolve-ScratchDisk([string]$Path, [string]$Root) {
+    $full = if ([System.IO.Path]::IsPathRooted($Path)) { [System.IO.Path]::GetFullPath($Path) } else { [System.IO.Path]::GetFullPath((Join-Path $Root $Path)) }
+    $outDir = [System.IO.Path]::GetFullPath((Join-Path $Root "output")).TrimEnd('\') + '\'
+    if (-not $full.StartsWith($outDir, [System.StringComparison]::OrdinalIgnoreCase) -or $full.Length -le $outDir.Length) {
+        throw "refusing -Disk '$Path' (resolves to $full): it is deleted before and after the check, so it must be a file inside $outDir"
+    }
+    return $full
+}
+$diskFull = Resolve-ScratchDisk $Disk $Repo
+
 $qemu = Join-Path $QemuDir "qemu-system-x86_64.exe"
 $qemuImg = Join-Path $QemuDir "qemu-img.exe"
 $ovmf = Join-Path $QemuDir "share\edk2-x86_64-code.fd"
 foreach ($f in $qemu, $qemuImg, $ovmf, $Iso, $Key) { if (-not (Test-Path $f)) { throw "missing: $f" } }
-$diskFull = Join-Path $Repo $Disk
 $isoFull = (Resolve-Path $Iso).Path
 $installLog = Join-Path $Repo "output\iso-install-serial.log"
 $KnownHosts = Join-Path $Repo "output\vm-known_hosts"
@@ -88,6 +100,7 @@ try {
         'echo "default.target: $(systemctl get-default)"',
         'echo "etc default.target link: $(readlink /etc/systemd/system/default.target)"',
         'echo "version: $(cat /usr/lib/ruyaos/version)"',
+        'for f in /boot/loader/entries/*.conf; do [ -e "$f" ] || { echo "boot entries: none in /boot/loader/entries"; break; }; echo "boot entry $(basename "$f"): $(sed -n "s/^title[[:space:]]*//p" "$f")"; done',
         '. /usr/lib/os-release; echo "pretty name: $PRETTY_NAME"',
         'echo "greenboot-healthcheck: $(systemctl is-active greenboot-healthcheck.service)"',
         'echo "boot-complete.target: $(systemctl is-active boot-complete.target)"',
