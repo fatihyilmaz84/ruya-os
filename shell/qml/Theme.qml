@@ -153,6 +153,8 @@ QtObject {
     readonly property color glassTint: Qt.rgba(0x12 / 255, 0x10 / 255, 0x18 / 255, 0.44)   // #121018 at 44 %: sheets and modals over bright art
     readonly property real glassGrainOpacity: 1.0                    // the tile carries white 2 % / black 2.4 % noise in its alpha; this scales it
 
+    readonly property color shadowColor: Qt.rgba(0, 0, 0, 1)         // colour of every shadow (alpha is in the shadow tokens)
+
     // Shadows: offset and blur in design px (multiply by u), alpha of black. The pill's offset and
     // blur follow its height: offset 0.18 h, blur min(0.6 h, 40).
     readonly property var shadowLift: ({ offsetY: 14, blur: 34, alpha: 0.60 })    // focused card

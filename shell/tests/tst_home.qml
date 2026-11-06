@@ -112,6 +112,14 @@ Item {
                 verify(!findChild(find(name), "artMonogram").visible, name)
         }
 
+        function test_hero_art_does_not_shimmer() {
+            start("")
+            for (const name of ["heroArtA", "heroArtB"]) {
+                find(name).imageStatus = Image.Loading
+                compare(find(name).shimmering, false, name)
+            }
+        }
+
         function test_play_launches_the_hero_item() {
             start("")
             keyClick(Qt.Key_Return)

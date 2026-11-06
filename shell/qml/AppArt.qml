@@ -12,12 +12,13 @@ Rectangle {
     property string appName
     property string picture      // path from the app record (tile or hero), may be empty
     property bool monogram: true // the letter; off for full-screen art (the Home hero)
+    property bool shimmer: true  // the gleam while loading; off for the Home hero (it fades in over the backdrop)
 
     // The picture's load state. While it loads (not when it failed or is absent) a gleam crosses
     // the placeholder (04 §3.8): not under reduced motion or on the Performance tier.
     property int imageStatus: image.status
     readonly property bool pending: picture.length > 0 && imageStatus === Image.Loading
-    readonly property bool shimmering: pending && Theme.shimmerOn
+    readonly property bool shimmering: shimmer && pending && Theme.shimmerOn
 
     readonly property real hue: {
         let h = 0

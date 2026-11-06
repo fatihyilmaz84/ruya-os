@@ -16,6 +16,14 @@ Item {
     Component { id: pillComponent; GlassPill { width: 400; height: 80 } }
     Component { id: cardComponent; ArtCard { itemId: "steam:620"; title: "Portal 2"; width: 320 } }
     Component { id: artComponent; AppArt { width: 320; height: 180; appId: "x"; appName: "X"; picture: "/nonexistent.png" } }
+    Component {
+        id: translucentComponent
+        Item {
+            width: 400; height: 225
+            GlassShadow { anchors.fill: parent; radius: 32; kind: "panel" }
+            Rectangle { anchors.fill: parent; radius: 32; color: Theme.glass }
+        }
+    }
     Component { id: sourceComponent; Rectangle { width: 400; height: 80; color: "#336699" } }
 
     // The stage of the screenshots. Outside the TestCase, which is invisible itself.
@@ -144,6 +152,15 @@ Item {
             compare(s.visible, true, "the fade is instant, the shadow stays")
         }
 
+        function test_shadow_fades_out_instead_of_vanishing() {
+            const s = createTemporaryObject(shadowComponent, host)
+            compare(s.visible, true)
+            s.active = false
+            compare(s.visible, true, "the fade-out is still running: effect and layers stay")
+            tryCompare(s, "visible", false)
+            compare(s.opacity, 0)
+        }
+
         function test_inactive_shadow_is_hidden() {
             const s = createTemporaryObject(shadowComponent, host, { active: false })
             compare(s.shown, false)
@@ -208,6 +225,21 @@ Item {
             compare(findChild(card, "cardSheen").visible, false)
             compare(findChild(card, "cardLiftShadow").shown, false)
             compare(art.border.width, 0)
+        }
+
+        // The Accept pulse shrinks the art only; the lift shadow must shrink with it, or its
+        // (cut-out) shape would not match the art (T-155 look).
+        function test_lift_shadow_follows_the_pulse() {
+            const card = createTemporaryObject(cardComponent, host)
+            const art = findChild(card, "artMonogram").parent
+            const shadow = findChild(card, "cardLiftShadow")
+            card.focused = true
+            compare(shadow.scale, 1)
+            card.pulse()
+            tryVerify(() => art.scale < 0.99, 2000, "the pulse shrinks the art")
+            compare(shadow.scale, art.scale, "the shadow follows the art mid-pulse")
+            tryCompare(art, "scale", 1, 2000)
+            compare(shadow.scale, 1)
         }
 
         function test_glare_is_skipped_when_focus_moved_within_300_ms() {
@@ -282,6 +314,14 @@ Item {
             compare(anim.running, false, "a loaded picture does not shimmer")
         }
 
+        function test_shimmer_switch_turns_it_off() {
+            const art = createTemporaryObject(artComponent, host, { shimmer: false })
+            art.imageStatus = Image.Loading
+            compare(art.pending, true)
+            compare(art.shimmering, false, "the Home hero art does not shimmer")
+            compare(findChild(art, "artShimmerAnimation").running, false)
+        }
+
         function test_no_shimmer_when_there_is_nothing_to_wait_for() {
             const art = createTemporaryObject(artComponent, host, { picture: "" })
             art.imageStatus = Image.Loading
@@ -322,8 +362,21 @@ Item {
             tryCompare(glareAnim(right), "running", false)
             wait(200)
             grabImage(stage).save(shotsDir + "/glass-card-focus.png")
+            // Mid-pulse: the art is smaller than the card; no black frame may show around it.
+            right.pulse()
+            const rightArt = findChild(right, "artMonogram").parent
+            tryVerify(() => rightArt.scale < 0.96, 2000)
+            grabImage(stage).save(shotsDir + "/glass-card-pulse.png")
+            tryCompare(rightArt, "scale", 1, 2000)
             left.destroy()
             right.destroy()
+
+            // A shadow under a translucent surface: only the outside is shadowed, the inside is
+            // the stage seen through the glass (no dark box).
+            const sheet = createTemporaryObject(translucentComponent, stage, { x: 520, y: 120 })
+            wait(0)
+            grabImage(stage).save(shotsDir + "/glass-shadow-translucent.png")
+            sheet.destroy()
 
             // The placeholder, mid-gleam.
             const art = createTemporaryObject(artComponent, stage, { x: 60, y: 120, width: 400, height: 225, appId: "steam:620", appName: "Portal 2" })

@@ -132,6 +132,7 @@ Item {
             fuzzyCompare(Theme.glassTint.g, 0x10 / 255, 0.001)
             fuzzyCompare(Theme.glassTint.b, 0x18 / 255, 0.001)
             compare(Theme.glassGrainOpacity, 1.0)
+            compare(Theme.shadowColor, Qt.rgba(0, 0, 0, 1))
             fuzzyCompare(Theme.cardSheen.a, 0.09, 0.0001)
             fuzzyCompare(Theme.glarePeak.a, 0.6, 0.0001)
             compare(Theme.glareGapMs, 300)

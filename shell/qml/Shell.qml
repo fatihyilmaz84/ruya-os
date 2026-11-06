@@ -380,6 +380,7 @@ FocusScope {
                 radius: 0
                 clip: false
                 monogram: false
+                shimmer: false
                 Behavior on opacity { NumberAnimation { duration: Theme.tintMs; easing.type: Easing.InOutQuad } }
             }
             ArtLayer { id: artA; objectName: "heroArtA"; u: root.u; opacity: heroArt.showB ? 0 : 1 }

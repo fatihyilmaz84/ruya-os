@@ -51,6 +51,7 @@ Item {
         radius: Theme.radiusM * card.u
         kind: "lift"
         active: card.focused
+        scale: art.scale          // the Accept pulse shrinks the art; the shadow follows it
     }
 
     AppArt {
