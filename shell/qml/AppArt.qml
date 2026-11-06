@@ -32,8 +32,8 @@ Rectangle {
     clip: true
     // `bare`: both stops clear. (Setting `gradient` to null instead leaves a white rectangle on a GPU window.)
     gradient: Gradient {
-        GradientStop { position: 0.0; color: art.bare ? "transparent" : Qt.hsla(art.hue, 0.55, 0.42, 1) }
-        GradientStop { position: 1.0; color: art.bare ? "transparent" : Qt.hsla(art.hue, 0.6, 0.18, 1) }
+        GradientStop { position: 0.0; color: art.bare ? "transparent" : Theme.artTop(art.hue) }
+        GradientStop { position: 1.0; color: art.bare ? "transparent" : Theme.artBottom(art.hue) }
     }
 
     Text {

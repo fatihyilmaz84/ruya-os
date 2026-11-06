@@ -51,6 +51,8 @@ Item {
             DeviceSettings.wallpaperDim = 0.2
             DeviceSettings.effectsQuality = "high"
             DeviceSettings.reducedMotion = false
+            DeviceSettings.theme = "dreamglass"
+            tryCompare(Theme, "mix", 1, 3000)
             Wallpapers.mockSetCopyDelay(0)
             Wallpapers.mockReset()
             Storage.mockReset(false)
@@ -83,8 +85,8 @@ Item {
         // Settings -> Display & motion -> the Wallpaper row -> Accept: the picker, on the current tile.
         function openPicker() {
             openSettingsDisplay()
-            for (let i = 0; i < 3; ++i)
-                keyClick(Qt.Key_Down)
+            for (let i = 0; i < 4; ++i)
+                keyClick(Qt.Key_Down)                    // Quality, Motion, Screen edge, Theme (T-209), Wallpaper
             verify(find("rowWallpaper").activeFocus, "the Wallpaper row")
             keyClick(Qt.Key_Return)
             tryVerify(() => find("wallpaperPicker").shown)
@@ -101,6 +103,19 @@ Item {
         function lum(c) {
             const f = v => v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)
             return 0.2126 * f(c.r) + 0.7152 * f(c.g) + 0.0722 * f(c.b)
+        }
+
+        function contrast(a, b) {
+            return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)
+        }
+
+        // The contrast of `text` over a grey of luminance `grey` under a layer of colour `layer` at `alpha`,
+        // composited in sRGB (what the scene graph does).
+        function contrastUnder(text, layer, grey, alpha) {
+            const toS = l => l <= 0.0031308 ? 12.92 * l : 1.055 * Math.pow(l, 1 / 2.4) - 0.055
+            const s = toS(grey)
+            const mixed = Qt.rgba((1 - alpha) * s + alpha * layer.r, (1 - alpha) * s + alpha * layer.g, (1 - alpha) * s + alpha * layer.b, 1)
+            return contrast(lum(text), lum(mixed))
         }
 
         function selectBundled(id) {
@@ -308,41 +323,134 @@ Item {
         function test_usb_import_refuses_what_it_should() {
             const root = Wallpapers.mockPrepareUsb()
             const dir = root + "/Ruya Stick/Wallpapers/"
-            Wallpapers.importFile(dir + "huge.png")
+            Wallpapers.mockImportAny(dir + "huge.png", Theme.background)
             tryCompare(copySpy, "count", 1, 5000)
             compare(copySpy.signalArguments[0][0], "too-large", "over 40 megapixels")
-            Wallpapers.importFile(dir + "broken.jpg")
+            Wallpapers.mockImportAny(dir + "broken.jpg", Theme.background)
             tryCompare(copySpy, "count", 2, 5000)
             compare(copySpy.signalArguments[1][0], "unreadable")
-            Wallpapers.importFile(dir + "notes.txt")
+            Wallpapers.mockImportAny(dir + "notes.txt", Theme.background)
             tryCompare(copySpy, "count", 3, 5000)
             compare(copySpy.signalArguments[2][0], "unreadable")
-            Wallpapers.importFile(dir + "old.bmp")
+            Wallpapers.mockImportAny(dir + "old.bmp", Theme.background)
             tryCompare(copySpy, "count", 4, 5000)
             compare(copySpy.signalArguments[3][0], "unsupported", "a picture, but not jpg/png/webp")
-            Wallpapers.importFile(root + "/does-not-exist.jpg")
+            Wallpapers.mockImportAny(root + "/does-not-exist.jpg", Theme.background)
             tryCompare(copySpy, "count", 5, 5000)
             compare(copySpy.signalArguments[4][0], "unreadable")
             compare(Wallpapers.user.length, 0, "nothing was stored")
             compare(Wallpapers.copyState, "idle")
         }
 
+        // The mock stick's pictures, listed (importFile takes only a listed path).
+        function scanMock() {
+            Wallpapers.scanUsb(["/run/media/mock/Ruya Stick"])
+            tryVerify(() => Wallpapers.usbImages.length === 4, 5000)
+        }
+        function listedPath(name) {
+            return Wallpapers.usbImages.find(e => e.name === name).path
+        }
+
         function test_the_same_picture_twice_is_one_copy() {
-            const root = Wallpapers.mockPrepareUsb()
-            Wallpapers.importFile(root + "/Ruya Stick/Pictures/photo.jpg")
+            Wallpapers.mockPrepareUsb()
+            scanMock()
+            Wallpapers.importFile(listedPath("photo"), Theme.background)
             tryCompare(copySpy, "count", 1, 5000)
-            Wallpapers.importFile(root + "/Ruya Stick/Pictures/photo.jpg")
+            Wallpapers.importFile(listedPath("photo"), Theme.background)
             tryCompare(copySpy, "count", 2, 5000)
             compare(copySpy.signalArguments[1][0], "ok")
             compare(copySpy.signalArguments[1][1], copySpy.signalArguments[0][1])
             compare(Wallpapers.user.length, 1)
         }
 
-        function test_the_copy_limit_and_delete_one_to_add_another() {
+        function test_import_takes_only_a_listed_path() {
             const root = Wallpapers.mockPrepareUsb()
+            scanMock()
+            Wallpapers.importFile(root + "/Ruya Stick/Other/hidden.jpg", Theme.background)   // a picture, but not listed
+            tryCompare(copySpy, "count", 1, 5000)
+            compare(copySpy.signalArguments[0][0], "unreadable")
+            Wallpapers.importFile("C:/Windows/win.ini", Theme.background)
+            tryCompare(copySpy, "count", 2, 5000)
+            compare(copySpy.signalArguments[1][0], "unreadable")
+            compare(Wallpapers.user.length, 0)
+            Wallpapers.importFile(listedPath("tiny"), Theme.background)
+            tryCompare(copySpy, "count", 3, 5000)
+            compare(copySpy.signalArguments[2][0], "ok")
+        }
+
+        function test_the_settings_survive_a_restart() {
+            compare(wallpaperPersistence, "", "a restart keeps the wallpaper and dim, a bad stored value falls back: " + wallpaperPersistence)
+        }
+
+        function test_the_focused_tile_has_a_ring_outside_the_art() {
+            openPicker()
+            const u = tc.shell.u
+            const grid = find("wallpaperGrid")
+            const ring = find("wallpaperRing_")
+            const art = find("wallpaperTile_")
+            tryVerify(() => ring.visible, 2000, "the focused (default) tile has the ring")
+            compare(ring.border.width, Theme.focusRingWidth * u)
+            compare(ring.border.color, Theme.focusRing)
+            verify(Math.abs((ring.width - art.width) - 2 * Theme.focusRingOffset * u) < 0.01, "outside the art at focusRingOffset")
+            compare(find("wallpaperRing_dusk").visible, false)
+            keyClick(Qt.Key_Right)
+            compare(grid.currentIndex, 1)
+            verify(find("wallpaperRing_dusk").visible)
+            compare(ring.visible, false, "only the focused tile")
+            // The ring is not clipped at the edge: the first tile's ring lies inside the clipping frame.
+            keyClick(Qt.Key_Left)
+            const frame = find("wallpaperGridFrame")
+            const p = ring.mapToItem(frame, 0, 0)
+            verify(p.x >= 0 && p.y >= 0, "inside the frame: " + p.x + "," + p.y)
+            compare(frame.clip, true)
+            compare(grid.count, 7)
+            compare(Math.round(grid.width / grid.cellWidth), 4, "four columns")
+            // Focus on the buttons: no ring on any tile (the highlighted tile keeps a hairline).
+            Wallpapers.mockPrepareUsb()
+            Storage.mockPlugStick()
+            tryVerify(() => find("wallpaperAddUsb").visible, 5000)
+            keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Down)
+            verify(find("wallpaperAddUsb").activeFocus)
+            compare(ring.visible, false)
+        }
+
+        function test_the_ring_reads_against_the_panel_in_every_theme() {
+            for (const key of Themes.keys) {
+                DeviceSettings.theme = key
+                tryCompare(Theme, "mix", 1, 3000)
+                compare(Theme.panel.a, 1, key + ": the panel is opaque")
+                const c = contrast(lum(Theme.focusRing), lum(Theme.panel))
+                verify(c >= 3, key + ": ring against the panel " + c.toFixed(2))
+            }
+        }
+
+        function test_pulling_the_drive_moves_focus_off_the_add_button() {
+            openPicker()
+            Wallpapers.mockPrepareUsb()
+            Storage.mockPlugStick()
+            tryVerify(() => find("wallpaperAddUsb").visible, 5000)
+            for (let i = 0; i < 2; ++i)
+                keyClick(Qt.Key_Down)
+            verify(find("wallpaperAddUsb").activeFocus)
+            Storage.mockReset(false)
+            tryVerify(() => !find("wallpaperAddUsb").visible, 5000)
+            verify(find("wallpaperGrid").activeFocus, "focus is on the grid, not on a hidden button")
+        }
+
+        function test_names_from_a_drive_are_plain_text() {
+            openPicker()
+            const label = find("wallpaperLabel_dusk")
+            compare(label.textFormat, Text.PlainText)
+            compare(findChild(find("rowWallpaper"), "value").textFormat, Text.PlainText)
+        }
+
+        function test_the_copy_limit_and_delete_one_to_add_another() {
+            Wallpapers.mockPrepareUsb()
+            scanMock()
             Wallpapers.mockFillUser(12)
             compare(Wallpapers.user.length, 12)
-            Wallpapers.importFile(root + "/Ruya Stick/Pictures/photo.jpg")
+            Wallpapers.importFile(listedPath("photo"), Theme.background)
             tryCompare(copySpy, "count", 1, 5000)
             compare(copySpy.signalArguments[0][0], "limit")
             compare(Wallpapers.user.length, 12)
@@ -470,29 +578,71 @@ Item {
             tryCompare(layer, "decoded", 1, 3000)
         }
 
-        function test_a_bright_wallpaper_is_dimmed_until_text_is_legible() {
-            const textLum = lum(Theme.text)
-            compare(Wallpapers.requiredDim(0.02), 0, "a dark picture needs none")
-            verify(Wallpapers.requiredDim(1.0) > 0.5 && Wallpapers.requiredDim(1.0) <= 0.75)
-            for (const b of Wallpapers.bundled) {
-                setWallpaper(b.id)
-                const layer = find("wallpaperLayer")
-                tryCompare(layer, "decoded", 1, 5000)
-                // Worst case: white text over the picture's brightest part, darkened by the layer
-                // (alpha a leaves (1 - a)^2.2 of the luminance).
-                const under = b.peak * Math.pow(1 - layer.effectiveDim, 2.2)
-                const contrast = (textLum + 0.05) / (under + 0.05)
-                verify(contrast >= 4.5, b.id + ": contrast " + contrast.toFixed(2) + " at dim " + layer.effectiveDim.toFixed(2))
+        function test_every_wallpaper_is_legible_under_every_theme() {
+            const lines = []
+            for (const key of Themes.keys) {
+                DeviceSettings.theme = key
+                tryCompare(Theme, "mix", 1, 3000)
+                const lightTheme = lum(Theme.text) < lum(Theme.background)
+                for (const b of Wallpapers.bundled) {
+                    DeviceSettings.wallpaper = b.id
+                    const layer = find("wallpaperLayer")
+                    tryCompare(layer, "target", b.source)
+                    // The worst part: the brightest for light text, the darkest for dark text.
+                    const worst = lightTheme ? b.floor : b.peak
+                    const c = contrastUnder(Theme.text, Theme.background, worst, layer.effectiveDim)
+                    verify(c >= 4.5, key + " / " + b.id + ": " + c.toFixed(2) + ":1 at dim " + layer.effectiveDim.toFixed(3))
+                    compare(layer.effectiveDim, Math.max(DeviceSettings.wallpaperDim, layer.requiredDim))
+                    lines.push(key + "/" + b.id + " dim " + layer.effectiveDim.toFixed(3) + " " + c.toFixed(2))
+                }
             }
-            setWallpaper("daybreak")
-            verify(find("wallpaperLayer").requiredDim > 0.4, "the bright one is dimmed hard")
-            // The owner's dim never goes below the rule, and may go above it.
+            console.info(lines.join(" | "))
+        }
+
+        function test_the_dim_rule_follows_the_theme() {
+            // Dreamglass: a dark picture needs nothing, Daybreak a heavy dim, and the layer is the
+            // background colour, not black: the old black model gave 4.30:1 at its 52 %.
+            DeviceSettings.wallpaper = "daybreak"
+            const layer = find("wallpaperLayer")
+            tryCompare(layer, "target", Wallpapers.bundled.find(b => b.id === "daybreak").source)
+            verify(layer.requiredDim > 0.52, "more than the black model needs: " + layer.requiredDim)
+            verify(contrastUnder(Theme.text, Qt.color("#000000"), 0.8217, 0.523) > 4.5, "black at 52.3 % was the (wrong) model")
+            verify(contrastUnder(Theme.text, Theme.background, 0.8217, 0.523) < 4.5, "the real layer at 52.3 % is below 4.5:1")
             DeviceSettings.wallpaperDim = 0
-            compare(find("wallpaperLayer").effectiveDim, find("wallpaperLayer").requiredDim)
-            setWallpaper("dusk")
-            compare(find("wallpaperLayer").requiredDim, 0)
+            compare(layer.effectiveDim, layer.requiredDim, "the slider never goes below the rule")
+            DeviceSettings.wallpaper = "dusk"
+            tryCompare(layer, "target", Wallpapers.bundled.find(b => b.id === "dusk").source)
+            compare(layer.requiredDim, 0, "a dark picture under a dark theme needs none")
             DeviceSettings.wallpaperDim = 0.5
-            compare(find("wallpaperLayer").effectiveDim, 0.5)
+            compare(layer.effectiveDim, 0.5, "and the owner may dim it anyway")
+            // Daylight turns it round: dark text, a light wash over a dark picture, nothing over a bright one.
+            DeviceSettings.wallpaperDim = 0
+            DeviceSettings.theme = "daylight"
+            tryCompare(Theme, "mix", 1, 3000)
+            verify(layer.requiredDim > 0.4, "a light wash over Dusk under Daylight: " + layer.requiredDim)
+            DeviceSettings.wallpaper = "daybreak"
+            tryCompare(layer, "target", Wallpapers.bundled.find(b => b.id === "daybreak").source)
+            compare(layer.requiredDim, 0, "Daybreak's darkest part already carries dark text")
+            // The numbers behind it, straight from the function.
+            compare(Wallpapers.requiredDim(0.02, 0.01, "#05070d", "#f2f4f8"), 0)
+            verify(Wallpapers.requiredDim(1, 1, "#05070d", "#f2f4f8") > 0.5)
+            verify(Wallpapers.requiredDim(1, 1, "#05070d", "#f2f4f8") <= 0.85)
+            verify(Wallpapers.requiredDim(0.02, 0.01, "#eef1f7", "#0f1420") > 0.4)
+        }
+
+        function test_the_theme_fade_moves_the_dim_colour_with_it() {
+            DeviceSettings.wallpaper = "dusk"
+            const layer = find("wallpaperLayer")
+            tryCompare(layer, "covering", true, 5000)
+            const dim = find("wallpaperDim")
+            compare(dim.color, Theme.background)
+            DeviceSettings.theme = "daylight"
+            tryVerify(() => Theme.mix > 0 && Theme.mix < 1, 2000, "the cross-fade runs")
+            compare(dim.color, Theme.background, "the dim layer follows the blended background")
+            tryCompare(Theme, "mix", 1, 3000)
+            compare(dim.color, Theme.background)
+            verify(lum(dim.color) > 0.5, "a light wash")
+            compare(layer.covering, true, "the picture stays")
         }
 
         function test_the_dim_row() {
@@ -500,10 +650,8 @@ Item {
             verify(!find("rowWallpaperDim").visible, "the default look has nothing to dim")
             DeviceSettings.wallpaper = "dusk"
             tryVerify(() => find("rowWallpaperDim").visible)
-            keyClick(Qt.Key_Down)
-            keyClick(Qt.Key_Down)
-            keyClick(Qt.Key_Down)
-            keyClick(Qt.Key_Down)
+            for (let i = 0; i < 5; ++i)
+                keyClick(Qt.Key_Down)                    // ... Theme, Wallpaper, Dim wallpaper
             verify(find("rowWallpaperDim").activeFocus)
             compare(find("rowWallpaperDim").value, 20)
             keyClick(Qt.Key_Right)
@@ -569,6 +717,36 @@ Item {
             wait(900)
             grabImage(tc.shell).save(shotsDir + "/70-wallpaper-page-default.png")
 
+            // Daylight (a light theme): Dusk gets a light wash, Daybreak none; Home and a page.
+            DeviceSettings.theme = "daylight"
+            tryCompare(Theme, "mix", 1, 3000)
+            setWallpaper("dusk")
+            wait(1200)
+            grabImage(tc.shell).save(shotsDir + "/70-wallpaper-page-dusk-daylight.png")
+            setWallpaper("daybreak")
+            wait(1200)
+            grabImage(tc.shell).save(shotsDir + "/70-wallpaper-page-daybreak-daylight.png")
+            keyClick(Qt.Key_Escape)                      // pane -> list
+            tryVerify(() => find("categoryList").activeFocus)
+            keyClick(Qt.Key_Escape)                      // list -> Home
+            tryCompare(tc.shell, "currentPage", "")
+            wait(1200)
+            grabImage(tc.shell).save(shotsDir + "/70-wallpaper-home-daybreak-daylight.png")
+            setWallpaper("dusk")
+            wait(1200)
+            grabImage(tc.shell).save(shotsDir + "/70-wallpaper-home-dusk-daylight.png")
+            DeviceSettings.theme = "dreamglass"
+            tryCompare(Theme, "mix", 1, 3000)
+            DeviceSettings.wallpaper = ""
+            tryVerify(() => find("sectionNav").activeFocus)
+            keyClick(Qt.Key_Return)                      // the nav is on Settings
+            tryCompare(tc.shell, "currentPage", "settings")
+            tryVerify(() => find("categoryList").activeFocus)
+            for (let i = 0; i < 3; ++i)
+                keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Right)
+            tryVerify(() => find("rowQuality").activeFocus)
+
             // The picker: the library with copies, then the drive's pictures.
             keyClick(Qt.Key_Escape)
             tryVerify(() => find("categoryList").activeFocus)
@@ -578,7 +756,7 @@ Item {
             tryVerify(() => Wallpapers.usbImages.length === 4, 5000)
             keyClick(Qt.Key_Right)
             tryVerify(() => find("rowQuality").activeFocus)
-            for (let i = 0; i < 3; ++i)
+            for (let i = 0; i < 4; ++i)
                 keyClick(Qt.Key_Down)
             keyClick(Qt.Key_Return)
             tryVerify(() => find("wallpaperPicker").shown)
@@ -600,6 +778,16 @@ Item {
             wait(600)
             grabImage(tc.shell).save(shotsDir + "/70-wallpaper-picker-usb-tr.png")
             DeviceSettings.language = "en"
+            // Daylight: the dark ring on the white and the dark thumbnails.
+            DeviceSettings.theme = "daylight"
+            tryCompare(Theme, "mix", 1, 3000)
+            wait(600)
+            grabImage(tc.shell).save(shotsDir + "/70-wallpaper-picker-usb-daylight.png")
+            keyClick(Qt.Key_Escape)                      // back to the library
+            compare(find("wallpaperPicker").mode, "library")
+            keyClick(Qt.Key_Right)
+            wait(600)
+            grabImage(tc.shell).save(shotsDir + "/70-wallpaper-picker-daylight.png")
         }
     }
 }

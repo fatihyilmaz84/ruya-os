@@ -37,7 +37,7 @@ Close the races the T-181 and T-188 reviews found in the shell's D-Bus clients, 
 - `shell/CLAUDE.md` if the late-reply rule changes; `03-services-and-apps.md` §4.3 only if behaviour described there changes.
 
 ## Outcome
-Verified: host (vm pending: vm-store-check.sh). `dev.ps1 test` is green on Windows with the mock backends; the D-Bus clients compile but only run on Linux, where `vm-store-check.sh` (one check added) is the proof.
+Verified: vm (lead run, 2026-11-06). vm-store-check.sh on 0.0.48-lead: 71 PASS, 0 FAIL; the cut-short install is reported once and the job table does not repeat it. Earlier line: host (vm pending: vm-store-check
 
 **What was built**
 

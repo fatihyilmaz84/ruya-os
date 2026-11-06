@@ -13,8 +13,9 @@ import RuyaShell
 //   (`ShaderEffectSource`), the shared blurred L0 of 04 §3.6, never a second full-screen blur. Without
 //   blur (Performance tier) the picture stays sharp and is darkened to at least
 //   `Theme.wallpaperDimUnblurred`.
-// - The dim is the owner's `DeviceSettings.wallpaperDim`, raised for a bright picture until white text keeps
-//   4.5:1 over its bright part (`Wallpapers.requiredDim`, 04 §7).
+// - The dim is a layer of the theme's background colour at the owner's `DeviceSettings.wallpaperDim`, raised
+//   until the theme's text keeps 4.5:1 over the picture's worst part (`Wallpapers.requiredDim`, 04 §7): over
+//   the brightest part for a dark theme, over the darkest part for Daylight (a light wash).
 // - A picture that cannot be loaded (or an id that no longer exists) emits `failed`; the shell
 //   toasts and goes back to the default look.
 Item {
@@ -35,7 +36,7 @@ Item {
     readonly property int decoded: (picA.source.toString().length > 0 ? 1 : 0) + (picB.source.toString().length > 0 ? 1 : 0)
 
     readonly property bool blurActive: blurred && Theme.blurMax > 0
-    readonly property real requiredDim: Wallpapers.requiredDim(entry.peak ?? 0)
+    readonly property real requiredDim: Wallpapers.requiredDim(entry.peak ?? 0, entry.floor ?? 0, Theme.background, Theme.text)
     readonly property real effectiveDim: Math.max(dim, requiredDim, blurred && Theme.blurMax <= 0 ? Theme.wallpaperDimUnblurred : 0)
 
     signal failed(string id, string reason)
@@ -82,6 +83,10 @@ Item {
             return
         }
         if (front && front.source.toString() === target) {
+            // Back to the picture that is shown: whatever the other one was loading is not wanted.
+            const other = front === picA ? picB : picA
+            if (!other.on)
+                other.source = ""
             pending = null
             return
         }

@@ -1,7 +1,7 @@
 # RuyaOS — Overview, Architecture & Decisions
 
 Status: **Draft v1** (consolidated 2026-10-22 from the three research docs; see `docs/REVIEW.md`).
-Companion specs: [01-platform](01-platform.md) · [02-shell](02-shell.md) · [03-services-and-apps](03-services-and-apps.md) · [04-design-system](04-design-system.md)
+Companion specs: [01-platform](01-platform.md) · [02-shell](02-shell.md) · [03-services-and-apps](03-services-and-apps.md) · [04-design-system](04-design-system.md) · [05-play-packages](05-play-packages.md) (draft)
 
 ## 1. Vision
 
@@ -27,7 +27,7 @@ RuyaOS is an immutable, image-based Linux OS for living-room PCs. It boots strai
 - Gaming: Steam (Proton) and RetroArch are **separate apps** too (owner, 2026-11-06), not part of the first MVP. The MVP proves the gaming building blocks with a sample Flatpak game: launch, controller input, the Guide overlay over the running game, audio routing, and save locations that survive an OS update.
 
 ### Later / stretch
-SDK and public developer programme, optical media, HDMI-CEC, HDR/VRR, cloud saves, parental controls UI, web-app runtime, custom "console bundle" format.
+SDK and public developer programme, optical media, HDMI-CEC, HDR/VRR, cloud saves, parental controls UI, web-app runtime, custom "console bundle" format (the `.play` package: ADR-014 *Accepted, spike first; parked*, [`05-play-packages.md`](05-play-packages.md), epic T-228).
 
 ### Explicit non-goals
 - Our own sandbox, package manager or display protocol.
@@ -126,7 +126,7 @@ Wayland has no gamepad protocol, so games read evdev/hidraw directly. **Recommen
 - The PIN is a profile lock, checked by `ruya-profiles` (argon2id hash, 5 attempts then exponential back-off). It is a security boundary only together with full-disk encryption (01 §3.4).
 
 ### ADR-005 — Application format — *Accepted (2026-10-22)*
-**Flatpak is the only third-party format.** Console-specific metadata uses **AppStream** (localized name/description, screenshots, categories, OARS content rating, `<supports><control>gamepad</control>`), plus a small set of `x-ruya-*` custom keys (hero art, logo, background art, launch hints). Sources are Flatpak remotes: Official (ours, signed), Community (Flathub, filtered to gamepad-capable apps by default), Developer. A custom `.cbundle` archive is deferred until a concrete need appears. If one does, it will be a Flatpak bundle plus artwork, not a new runtime.
+**Flatpak is the only third-party format.** Console-specific metadata uses **AppStream** (localized name/description, screenshots, categories, OARS content rating, `<supports><control>gamepad</control>`), plus a small set of `x-ruya-*` custom keys (hero art, logo, background art, launch hints). Sources are Flatpak remotes: Official (ours, signed), Community (Flathub, filtered to gamepad-capable apps by default), Developer. A custom `.cbundle` archive is deferred until a concrete need appears. If one does, it will be a Flatpak bundle plus artwork, not a new runtime. *See ADR-014 (Accepted, parked): the `.play` container.*
 
 ### ADR-006 — OS updates — *Accepted*
 bootc images signed with cosign, served from an OCI registry, verified via `containers-policy.json`. greenboot health checks give automatic rollback. Channels are tags (`stable`, `beta`, `dev`). Details are in 01 §4.
@@ -182,3 +182,17 @@ The shell's look is defined by one design system, [`04-design-system.md`](04-des
 
 ### ADR-013 — Icon set: Material Symbols Rounded — *Accepted (owner, 2026-11-01)*
 Shell icons come from Google's **Material Symbols Rounded** (Apache-2.0), bundled as a Qt resource font holding only the glyphs the shell uses (a subset made from the upstream variable font, the source commit and checksum recorded), so Windows, the offscreen tests and the image draw the same thing. The rounded style matches the pill shapes of ADR-012. Icons are drawn by name through one component, colour from the text tokens, never an emoji or a font the host happens to have. Controller buttons (A, B, LB, …) are not icons: they are drawn as letters in circles until pad-type glyphs exist (B-006). The licence text ships in the repo and the image. Details: [`04-design-system.md`](04-design-system.md) §3.7.
+
+### ADR-014 — `.play` packages: a self-contained container for games and apps — *Accepted (owner, 2026-11-06), conditional on the T-229 spike confirming the Flatpak route; implementation parked by the owner*
+**Question.** ADR-005 makes Flatpak the only third-party format and defers a custom bundle "until a concrete need appears; if one does, a Flatpak bundle plus artwork, not a new runtime". The owner now asks for a developer-made, self-contained format (the macOS `.app`-in-a-`.dmg` idea) that can carry a game together with its Wine or Proton build or its emulator, plus artwork, video, metadata, links, a permission request and update information, and can be a folder or a `.play.zip`.
+
+**Proposal.** Adopt `.play` as specified in [`05-play-packages.md`](05-play-packages.md), under these constraints, which keep ADR-005's spirit and the security invariants:
+1. A `.play` is a **container, not a runtime**. Installing it imports it as a system Flatpak app (`play.<id>`) built by `ruya-play`; it runs only in the Flatpak sandbox, as the profile's user. The package never supplies Flatpak metadata; permissions are a closed vocabulary (05 §8). If the spike (T-229) shows this route cannot work, the fallback is the same sandbox driven by bubblewrap and this ADR is amended before anything is built.
+2. **Nothing in a package runs at install time.** All parsing and unpacking happens in an unprivileged, network-less helper; a package is untrusted data.
+3. **Signed.** Ed25519 signature over a file table of SHA-256 hashes; tiers `official` (our store countersigns), `developer` (key continuity, trust on first use) and `unverified` (admin's developer mode only, low and medium permissions). Revocation list. Updates must come from the same key; the Store is the update channel for Store packages, an opt-in signed feed for sideloaded ones.
+4. **System runners** (Wine first) are Flatpak extensions published on the `ruyaos` remote and updated independently of the OS; a package may bundle its own runner, use the system one, or take the newer of the two.
+5. Flatpak and Flathub remain the normal way to distribute apps. `.play` is for self-contained games, Windows games under Wine/Proton, emulated titles and developer testing.
+
+**Consequences.** New services and tools: `ruya-play` (import, verify, feeds), `ruya-pack` (developer CLI), a launcher and runner extensions; a shell "install from USB" flow and a package page; Xwayland or Wine's Wayland driver becomes a prerequisite for Windows games (no Xwayland today). Maintenance cost: the Play platform extensions, the runner builds, the review process for the Official tier. RuyaOS ships only Wine as a system runner; emulators, Proton/Steam runtime, firmware and disc images are supplied by packagers and carry no distribution duty for RuyaOS (owner, 2026-11-06; 05 §14). If RuyaOS hosts packages itself, that remote's acceptance rules are a separate later decision.
+**Alternatives rejected.** (a) Flatpak only, with Heroic/Lutris for Windows games (no single-file distribution, no console art/permission model, per-launcher prefixes outside our control). (b) A new runtime and sandbox (an ADR-005 non-goal, security cost). (c) AppImage-style run-in-place (no sandbox, no verification before use, no deduplication).
+**Status of the rest.** Owner, 2026-11-06: accepted; RuyaOS provides Wine as the only system runner and the image preinstalls it; the epic (T-228) is **parked** (stays `blocked`) behind the current visual-polish lanes and T-164, and no `.play` code is written yet. Spec 05 describes the design, not the code.

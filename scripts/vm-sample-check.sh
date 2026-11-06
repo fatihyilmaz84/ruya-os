@@ -102,6 +102,8 @@ flatpak install --system -y --noninteractive flathub "$runtime" >"$work/install.
     || { cat "$work/install.log"; bad "cannot install $runtime from flathub (is the guest online?)"; exit 1; }
 flatpak install --system -y --noninteractive "$remote" "$app" >>"$work/install.log" 2>&1 \
     && ok "$app installed system-wide" || { cat "$work/install.log"; bad "flatpak install of $app failed"; exit 1; }
+# The Store learns apps it did not install itself only on a refresh: restart it so Uninstall knows the game.
+systemctl restart ruya-store; sleep 3
 flatpak override --system --env=SDL_VIDEODRIVER=dummy --env=SDL_AUDIODRIVER=dummy "$app"
 rm -rf "/var/home/$user/.var/app/$app"
 

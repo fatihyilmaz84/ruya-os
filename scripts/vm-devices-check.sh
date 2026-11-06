@@ -223,7 +223,15 @@ STATEOF
     du_apps="$(du -s --block-size=1 -x /var/lib/flatpak 2>/dev/null | awk '{print $1}')"
     echo "du -sx /var/lib/flatpak (hard links counted once): $du_apps"
     if [ -n "$du_apps" ] && [ "$du_apps" -gt 0 ]; then
-        d=$((apps - du_apps)); [ "$d" -lt 0 ] && d=$((0 - d))
+        # The service caches apps_bytes (60 s) and a Flathub appstream refresh can land after its first
+        # walk (0.0.48-lead: 7.9 MB against 175 MB): ask again for a while before calling it a mismatch.
+        n=0
+        while :; do
+            d=$((apps - du_apps)); [ "$d" -lt 0 ] && d=$((0 - d))
+            if [ "$d" -le "$((du_apps / 20 + 4000000))" ] || [ "$n" -ge 8 ]; then break; fi
+            sleep 20; n=$((n + 1)); apps="$(usage_key apps_bytes)"
+            du_apps="$(du -s --block-size=1 -x /var/lib/flatpak 2>/dev/null | awk '{print $1}')"
+        done
         if [ "$d" -le "$((du_apps / 20 + 4000000))" ]; then ok "apps_bytes is close to du of /var/lib/flatpak"; else bad "apps_bytes $apps vs du $du_apps"; fi
     fi
     if out="$(runuser -u nobody -- busctl --system call "$svc" "$path" "$stor" GetSystemUsage 2>&1)"; then
@@ -265,8 +273,8 @@ STATEOF
 thermal_cpu_value() {
     busctl --system --json=short call "$svc" "$path" "$therm" ListSensors \
         | sed 's/},{"class"/}\n{"class"/g' \
-        | sed -n -E 's/.*"class":\{"type":"s","data":"cpu"\}.*"value":\{"type":"d","data":(-?[0-9.]+)\}.*/\1/p' \
-        | awk '{printf "%.1f", $1}'      # sd-json prints 40.0 as 40
+        | sed -n -E 's/.*"class":\{"type":"s","data":"cpu"\}.*"value":\{"type":"d","data":(-?[0-9.]+([eE][+-]?[0-9]+)?)\}.*/\1/p' \
+        | awk '{printf "%.1f", $1}'      # sd-json prints 40.0 as 40, or as 4.00e+01
 }
 
 # The processor temperature the kernel shows, in degrees (empty when the VM has none).

@@ -38,6 +38,9 @@ FocusScope {
     readonly property bool canDelete: !usbMode && currentEntry !== null && currentEntry.kind === "user"
     readonly property bool canAdd: !usbMode && Wallpapers.usbImages.length > 0
     readonly property bool copying: Wallpapers.copyState === "copying"
+    // A button that goes away (the drive is pulled, the highlighted copy is deleted) must not keep focus.
+    onCanAddChanged: if (!canAdd && addButton.activeFocus) grid.forceActiveFocus()
+    onCanDeleteChanged: if (!canDelete && deleteButton.activeFocus) grid.forceActiveFocus()
 
     // The display name of a wallpaper id ("" is the default look); a copy keeps its file's name.
     function nameOf(id) {
@@ -117,7 +120,7 @@ FocusScope {
         if (usbMode) {
             message = ""
             awaitingCopy = true
-            Wallpapers.importFile(entry.path)
+            Wallpapers.importFile(entry.path, Theme.background)
         } else {
             DeviceSettings.wallpaper = entry.id
             close()
@@ -170,13 +173,13 @@ FocusScope {
         const lastRow = Math.floor((grid.count - 1) / columns)
         if (key === Qt.Key_Left) {
             if (before % columns > 0)
-                grid.moveCurrentIndexLeft()
+                grid.currentIndex = before - 1
         } else if (key === Qt.Key_Right) {
             if (before % columns < columns - 1 && before + 1 < grid.count)
-                grid.moveCurrentIndexRight()
+                grid.currentIndex = before + 1
         } else if (key === Qt.Key_Up) {
             if (row > 0)
-                grid.moveCurrentIndexUp()
+                grid.currentIndex = before - columns
         } else if (key === Qt.Key_Down) {
             if (row < lastRow)
                 grid.currentIndex = Math.min(grid.count - 1, before + columns)
@@ -232,7 +235,7 @@ FocusScope {
         id: panel
         objectName: "wallpaperPanel"
         anchors.centerIn: parent
-        width: grid.width + 2 * Theme.spaceXl * picker.u
+        width: gridFrame.width + 2 * Theme.spaceXl * picker.u
         height: content.height + 2 * Theme.spaceXl * picker.u
         radius: Theme.radiusL * picker.u
         color: Theme.panel
@@ -253,9 +256,21 @@ FocusScope {
             font.weight: Theme.weightDemiBold
         }
 
+        // The grid sits in a clipping frame that is `ringPad` larger on every side, so the focus ring, which is
+        // drawn outside the art, is never cut at the edge of the first row or column.
+        Item {
+            id: gridFrame
+            objectName: "wallpaperGridFrame"
+            readonly property real ringPad: (Theme.focusRingOffset + Theme.focusRingWidth) * picker.u
+            width: grid.width + 2 * ringPad
+            height: grid.height + 2 * ringPad
+            clip: true
+
         GridView {
             id: grid
             objectName: "wallpaperGrid"
+            x: gridFrame.ringPad
+            y: gridFrame.ringPad
             readonly property real tileWidth: 320 * picker.u
             readonly property real tileHeight: 180 * picker.u
             readonly property real captionHeight: Theme.typeCaption * picker.u * 1.5
@@ -266,7 +281,7 @@ FocusScope {
             // cut-off row says "scroll".
             readonly property int rows: Math.max(1, Math.ceil(grid.count / picker.columns))
             height: rows > 2 ? cellHeight * 2.5 : cellHeight * rows
-            clip: true
+            clip: false                          // the frame clips (a view's own clip would cut the ring)
             interactive: false
             keyNavigationEnabled: false          // the picker moves the selection (modal: it takes every key)
             keyNavigationWraps: false
@@ -300,7 +315,7 @@ FocusScope {
                     clip: true
                     // The default look: the backdrop's gradient and two soft blobs.
                     gradient: Gradient {
-                        GradientStop { position: 0.0; color: Qt.darker(Theme.defaultTint, 3.2) }
+                        GradientStop { position: 0.0; color: Theme.backdropTop(Theme.defaultTint) }
                         GradientStop { position: 1.0; color: Theme.background }
                     }
                     Rectangle {
@@ -322,12 +337,13 @@ FocusScope {
                         fillMode: Image.PreserveAspectCrop
                         sourceSize: Qt.size(grid.tileWidth, grid.tileHeight)
                     }
+                    // Selected but focus is elsewhere (the buttons): a hairline.
                     Rectangle {
                         anchors.fill: parent
                         radius: parent.radius
                         color: "transparent"
-                        border.width: tile.focused ? Theme.focusRingWidth * picker.u : (tile.isCurrent ? Theme.hairlineAt(picker.u) : 0)
-                        border.color: tile.focused ? Theme.focusRing : Theme.glassBorder
+                        border.width: tile.isCurrent && !tile.focused ? Theme.hairlineAt(picker.u) : 0
+                        border.color: Theme.glassBorder
                     }
                     Badge {
                         objectName: "wallpaperCurrent_" + tile.modelData.id
@@ -338,19 +354,39 @@ FocusScope {
                         kind: "info"
                     }
                 }
+                // The focus ring: outside the art at `focusRingOffset`, as on the primary buttons (04 §4), so it
+                // reads on a white thumbnail and in either ring colour.
+                Rectangle {
+                    objectName: "wallpaperRing_" + (picker.usbMode ? tile.index : tile.modelData.id)
+                    visible: tile.focused
+                    x: art.x - Theme.focusRingOffset * picker.u
+                    y: art.y - Theme.focusRingOffset * picker.u
+                    width: art.width + 2 * Theme.focusRingOffset * picker.u
+                    height: art.height + 2 * Theme.focusRingOffset * picker.u
+                    radius: art.radius + Theme.focusRingOffset * picker.u
+                    color: "transparent"
+                    border.width: Theme.focusRingWidth * picker.u
+                    border.color: Theme.focusRing
+                }
                 Text {
                     anchors { top: art.bottom; topMargin: Theme.spaceXs * picker.u; left: art.left; right: art.right }
+                    objectName: "wallpaperLabel_" + (picker.usbMode ? tile.index : tile.modelData.id)
+                    textFormat: Text.PlainText      // a name from a drive is never markup
                     text: tile.label
                     color: Theme.text
                     font.pixelSize: Theme.typeCaption * picker.u
                     elide: Text.ElideRight
                 }
             }
+        }
 
             // While a copy runs the grid shows only that.
             Rectangle {
                 objectName: "wallpaperCopying"
-                anchors.fill: parent
+                x: grid.x
+                y: grid.y
+                width: grid.width
+                height: grid.height
                 visible: picker.copying
                 radius: Theme.radiusM * picker.u
                 color: Theme.panel
@@ -368,7 +404,7 @@ FocusScope {
         Text {
             objectName: "wallpaperMessage"
             visible: picker.usbMode
-            width: grid.width
+            width: gridFrame.width
             text: picker.message.length > 0 ? picker.message
                 : qsTr("Choose a picture to copy to this console. It is shrunk to fit the screen.")
             color: picker.message.length > 0 ? Theme.errorText : Theme.textDim

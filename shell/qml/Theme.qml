@@ -6,46 +6,132 @@ import RuyaShell
 // window's unit (height / 1080), so the layout scales to 720p, 1080p and 4K alike.
 // Motion and effect tokens follow the per-device settings (reduced motion, quality tier).
 QtObject {
-    readonly property color background: "#05070d"
-    readonly property color text: "#f2f4f8"
-    readonly property color textDim: "#a3abbd"
-    readonly property color glass: "#1fffffff"
-    readonly property color glassOpaque: "#e6182033"   // shelf panel when there is no blur behind it
-    readonly property color glassBorder: "#33ffffff"
-    readonly property color glassStrong: "#1fffffff"    // top bar and quick menu: white 12 %, blurred with a saturation boost
-    readonly property color focusRing: "#ffffff"
+    id: root
 
-    // Fills and overlays. White at a given alpha marks focus, selection and key caps.
-    readonly property color focusFill: Qt.rgba(1, 1, 1, 0.2)        // focused row, pill, action
-    readonly property color selectedFill: Qt.rgba(1, 1, 1, 0.1)     // selected but not focused
-    readonly property color keyFocusFill: Qt.rgba(1, 1, 1, 0.22)    // focused PIN-pad key
-    readonly property color entryKeyFocusFill: Qt.rgba(1, 1, 1, 0.24)   // focused on-screen-keyboard key
-    readonly property color entryKeyActiveFill: Qt.rgba(1, 1, 1, 0.3)   // latched key (Shift, symbols)
-    readonly property color scrim: "#d0000000"                      // behind PIN pad and keyboard
-    readonly property color scrimOverlay: "#d8000000"               // behind the Guide overlay
-    readonly property color panel: "#1a1d26"                        // card of the Guide overlay
-    readonly property color dangerFill: "#8f2d2d"                   // confirm button of restart / power off
-    readonly property color primaryFill: "#f2f4f8"                  // the one main verb per screen (Play, Open Store)
-    readonly property color onPrimary: "#05070d"                    // text on primaryFill
-    readonly property color heroScrim: "#bf05070d"                  // left legibility scrim over hero art (75 %, fades to 0 over 75 % of the width)
-    readonly property color artCaptionFade: "#d905070d"             // caption fade at the bottom of an art card (85 % to 0)
-    readonly property color errorText: "#ff8a80"
-    readonly property real disabledOpacity: 0.4                     // unavailable controls (PIN-pad OK, locked pad)
-    readonly property real peekOpacity: 0.5                         // scroll cue: the first / last visible row while more rows exist beyond it (not disabledOpacity, which means unavailable)
-    readonly property color warningText: "#ffb74d"
-    readonly property color blobHighlight: "#ffffff"                // faint third backdrop blob
+    // --- Theme switching (T-209) ---
+    // `shownSet` is the ThemeSet the tokens are heading for. When it changes, `fromColors` keeps
+    // what was on screen and `mix` runs 0 -> 1 over tintMs, so every token is a blend of the two
+    // (a switch in mid-fade starts from the blended look: no jump). Under reduced motion tintMs
+    // is 0 and the switch is immediate.
+    property var shownSet: Themes.byKey(Themes.defaultKey)   // replaced by the stored theme in onCompleted
+    property var fromColors: null
+    property real mix: 1
 
-    // Accent colours: the backdrop default (also the fallback avatar colour) and the home tiles.
-    readonly property color defaultTint: "#3a5bd9"
-    function tileAccent(key) {
-        switch (key) {
-        case "games": return "#3a5bd9"
-        case "media": return "#d9483a"
-        case "store": return "#2fa37a"
-        case "settings": return "#7a5bd9"
-        default: return "#5a6478"      // power
+    function tok(name) {
+        const to = shownSet[name]
+        if (mix >= 1 || fromColors === null)
+            return to
+        return ThemeMath.blend(fromColors[name], to, mix)
+    }
+
+    // Starts a switch to the set `key` (an unknown key means the default).
+    function switchTo(key) {
+        const next = Themes.byKey(key)
+        if (next === shownSet)
+            return
+        fromColors = currentLook()
+        shownSet = next
+        fade.stop()
+        if (tintMs <= 0) {
+            mix = 1
+            return
+        }
+        mix = 0
+        fade.start()
+    }
+    // What is on screen right now (the target set, or the blend of the last two).
+    function currentLook() {
+        const o = {}
+        for (let i = 0; i < Themes.tokenNames.length; ++i)
+            o[Themes.tokenNames[i]] = tok(Themes.tokenNames[i])
+        return o
+    }
+
+    property NumberAnimation fade: NumberAnimation {
+        target: root
+        property: "mix"
+        from: 0
+        to: 1
+        duration: root.tintMs
+        easing.type: Easing.InOutQuad
+    }
+
+    // Reduced motion switched on during a fade: finish it now.
+    onTintMsChanged: {
+        if (tintMs <= 0 && mix < 1) {
+            fade.stop()
+            mix = 1
         }
     }
+
+    property Connections follow: Connections {
+        target: DeviceSettings
+        function onThemeChanged() { root.switchTo(DeviceSettings.theme) }
+    }
+    Component.onCompleted: {
+        shownSet = Themes.byKey(DeviceSettings.theme)
+    }
+
+    // --- Colour (04 §3.1, T-209) ---
+    // Every colour below comes from the current ThemeSet (qml/themes/Themes.qml) and cross-fades
+    // over tintMs when DeviceSettings.theme changes (at once under reduced motion). The names are
+    // the ones components always used, so no screen changes with the theme.
+    readonly property string themeKey: shownSet.key
+    readonly property bool lightTheme: lightness >= 0.5
+    readonly property real lightness: tok("lightness")
+
+    readonly property color background: tok("background")
+    readonly property color text: tok("text")
+    readonly property color textDim: tok("textDim")
+    readonly property color glass: tok("glass")
+    readonly property color glassOpaque: tok("glassOpaque")        // shelf panel when there is no blur behind it
+    readonly property color glassBorder: tok("glassBorder")
+    readonly property color glassStrong: tok("glassStrong")        // top bar and quick menu, blurred with a saturation boost
+    readonly property color focusRing: tok("focusRing")            // white on the dark themes, dark on Daylight (04 §4)
+
+    // Fills and overlays. A translucent mark of the ring colour marks focus, selection and key caps.
+    readonly property color focusFill: tok("focusFill")            // focused row, pill, action
+    readonly property color selectedFill: tok("selectedFill")      // selected but not focused
+    readonly property color keyFocusFill: tok("keyFocusFill")      // focused PIN-pad key
+    readonly property color entryKeyFocusFill: tok("entryKeyFocusFill")   // focused on-screen-keyboard key
+    readonly property color entryKeyActiveFill: tok("entryKeyActiveFill") // latched key (Shift, symbols)
+    readonly property color scrim: tok("scrim")                    // behind PIN pad and keyboard
+    readonly property color scrimOverlay: tok("scrimOverlay")      // behind the Guide overlay
+    readonly property color panel: tok("panel")                    // card of the Guide overlay
+    readonly property color dangerFill: tok("dangerFill")          // confirm button of restart / power off
+    readonly property color primaryFill: tok("primaryFill")        // the one main verb per screen (Play, Open Store)
+    readonly property color onPrimary: tok("onPrimary")            // text on primaryFill
+    readonly property color heroScrim: tok("heroScrim")            // left legibility scrim over hero art (75 %, fades to 0 over 75 % of the width)
+    readonly property color artCaptionFade: tok("artCaptionFade")  // caption fade at the bottom of an art card (85 % to 0)
+    // The clear ends of those two fades: the same colour at alpha 0 (plain "transparent" fades through black).
+    readonly property color heroScrimClear: Qt.rgba(heroScrim.r, heroScrim.g, heroScrim.b, 0)
+    readonly property color artCaptionFadeClear: Qt.rgba(artCaptionFade.r, artCaptionFade.g, artCaptionFade.b, 0)
+    readonly property color errorText: tok("errorText")
+    readonly property real disabledOpacity: 0.4                     // unavailable controls (PIN-pad OK, locked pad)
+    readonly property real peekOpacity: 0.5                         // scroll cue: the first / last visible row while more rows exist beyond it (not disabledOpacity, which means unavailable)
+    readonly property color warningText: tok("warningText")
+    readonly property color blobHighlight: tok("blobHighlight")   // faint third backdrop blob
+
+    // Accent colours: the backdrop default (also the fallback avatar colour) and the home tiles.
+    readonly property color defaultTint: tok("defaultTint")
+    function tileAccent(key) {
+        switch (key) {
+        case "games": return tok("tileGames")
+        case "media": return tok("tileMedia")
+        case "store": return tok("tileStore")
+        case "settings": return tok("tileSettings")
+        default: return tok("tileOther")      // power
+        }
+    }
+
+    // Backdrop (Backdrop.qml): the top of its gradient for a tint, and the three blob opacities.
+    function backdropTop(tint) { return ThemeMath.backdropTop(tint, background, lightness) }
+    readonly property real blobOpacityA: ThemeMath.blobOpacityA * tok("blobStrength")
+    readonly property real blobOpacityB: ThemeMath.blobOpacityB * tok("blobStrength")
+    readonly property real blobOpacityC: ThemeMath.blobOpacityC * tok("blobStrength")
+    // The art placeholder gradient (AppArt) for a hue 0..1: top and bottom.
+    function artTop(hue) { return ThemeMath.artColor(hue, 0.55, tok("artLightTop")) }
+    function artBottom(hue) { return ThemeMath.artColor(hue, 0.6, tok("artLightBottom")) }
 
     // Type scale (04 §3.2): design px, multiplied by `u` at the call site.
     readonly property string fontFamily: "Inter"   // bundled (T-145); main.cpp and the test host make it the application font
@@ -125,11 +211,11 @@ QtObject {
     readonly property int osdMs: 1500        // how long the volume OSD stays after the last change
     readonly property int guideHoldMs: 2000  // holding Guide this long opens the power menu (spec 01 §2.2)
 
-    readonly property color toastInfo: "#6ea8ff"
-    readonly property color toastSuccess: "#4cc38a"
-    readonly property color toastWarning: "#ffb74d"
-    readonly property color toastError: "#ff6b6b"
-    readonly property color toastBackground: "#f0161a24"
+    readonly property color toastInfo: tok("toastInfo")
+    readonly property color toastSuccess: tok("toastSuccess")
+    readonly property color toastWarning: tok("toastWarning")
+    readonly property color toastError: tok("toastError")
+    readonly property color toastBackground: tok("toastBackground")
 
     readonly property real pageSlide: 60 * motionScale   // design px the shelf/page slide during a page transition
 
@@ -145,21 +231,21 @@ QtObject {
     readonly property bool glareOn: ambientMotion                                         // card glare and shimmer: motion on, not Performance
     readonly property bool shimmerOn: ambientMotion
 
-    readonly property color glassSheen: Qt.rgba(1, 1, 1, 0.06)       // top of a panel, fades to 0 over glassSheenSpan
+    readonly property color glassSheen: tok("glassSheen")       // top of a panel, fades to 0 over glassSheenSpan
     readonly property color glassSheenEnd: Qt.rgba(1, 1, 1, 0)      // the clear end of white gradients (plain "transparent" would fade through black)
     readonly property real glassSheenSpan: 0.35
-    readonly property color glassRim: Qt.rgba(1, 1, 1, 0.15)         // 1 px ring (replaces the flat glassBorder on glass)
-    readonly property color glassRimLit: Qt.rgba(1, 1, 1, 0.30)      // on the top-left half (light from 135 deg)
-    readonly property color glassTint: Qt.rgba(0x12 / 255, 0x10 / 255, 0x18 / 255, 0.44)   // #121018 at 44 %: sheets and modals over bright art
+    readonly property color glassRim: tok("glassRim")         // 1 px ring (replaces the flat glassBorder on glass)
+    readonly property color glassRimLit: tok("glassRimLit")      // on the top-left half (light from 135 deg)
+    readonly property color glassTint: tok("glassTint")   // Dreamglass: #121018 at 44 %: sheets and modals over bright art. Never carries text (04 §3.6)
     readonly property real glassGrainOpacity: 1.0                    // the tile carries white 2 % / black 2.4 % noise in its alpha; this scales it
 
-    readonly property color shadowColor: Qt.rgba(0, 0, 0, 1)         // colour of every shadow (alpha is in the shadow tokens)
+    readonly property color shadowColor: tok("shadowColor")         // colour of every shadow (alpha is in the shadow tokens)
 
     // Shadows: offset and blur in design px (multiply by u), alpha of black. The pill's offset and
     // blur follow its height: offset 0.18 h, blur min(0.6 h, 40).
-    readonly property var shadowLift: ({ offsetY: 14, blur: 34, alpha: 0.60 })    // focused card
-    readonly property var shadowPanel: ({ offsetY: 10, blur: 30, alpha: 0.35 })   // glass panels, modals, toasts
-    readonly property var shadowPill: ({ offsetFactor: 0.18, blurFactor: 0.6, blurMax: 40, alpha: 0.27 })   // top bar, pills
+    readonly property var shadowLift: ({ offsetY: 14, blur: 34, alpha: 0.60 * tok("shadowStrength") })    // focused card
+    readonly property var shadowPanel: ({ offsetY: 10, blur: 30, alpha: 0.35 * tok("shadowStrength") })   // glass panels, modals, toasts
+    readonly property var shadowPill: ({ offsetFactor: 0.18, blurFactor: 0.6, blurMax: 40, alpha: 0.27 * tok("shadowStrength") })   // top bar, pills
 
     // Card focus: a white top sheen (all tiers) and a one-time glare sweep (04 §3.8).
     readonly property color cardSheen: Qt.rgba(1, 1, 1, 0.09)

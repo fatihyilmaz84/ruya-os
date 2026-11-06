@@ -2,31 +2,37 @@
   {
     "id": "dusk",
     "file": "dusk.jpg",
-    "peak": 0.0356
+    "peak": 0.0356,
+    "floor": 0.0084
   },
   {
     "id": "aurora",
     "file": "aurora.jpg",
-    "peak": 0.0436
+    "peak": 0.0436,
+    "floor": 0.0047
   },
   {
     "id": "ember",
     "file": "ember.jpg",
-    "peak": 0.0673
+    "peak": 0.0673,
+    "floor": 0.0053
   },
   {
     "id": "lagoon",
     "file": "lagoon.jpg",
-    "peak": 0.0903
+    "peak": 0.0903,
+    "floor": 0.017
   },
   {
     "id": "orchid",
     "file": "orchid.jpg",
-    "peak": 0.0522
+    "peak": 0.0522,
+    "floor": 0.0113
   },
   {
     "id": "daybreak",
     "file": "daybreak.jpg",
-    "peak": 0.8217
+    "peak": 0.8217,
+    "floor": 0.6228
   }
 ]

@@ -36,7 +36,7 @@ The `scripts/vm-*` checks are only as good as their ability to fail. Reviews of 
 - Scripts stay LF with the exec bit; no Windows-mangled backslashes (write with Write/Edit).
 
 ## Outcome
-Verified: host (vm pending: vm-devices-check, vm-storage-check, vm-library-check, vm-iso-check)
+Verified: vm (lead run, 2026-11-06). 0.0.48-lead: vm-storage-check.ps1 every mode 87 PASS (the ListVolumes JSON parses with 0, 1 and 3 volumes; exposure 3.4 OK), vm-devices-check, vm-library-check 35 PASS. vm-iso-check was run on 0.0.47-combined (T-195/T-162 sessions). Earlier line: host (vm pending: vm-devices-check, vm-storage-check, vm-library-check, vm-iso-check)
 
 What each change catches now:
 1. **Registered polkit ids.** `vm-devices-check.sh` (`polkit_expect <id> <pid> <want-exit> <text>`) and `vm-storage-check.sh` (`polkit_expect <id> <pid> allow|deny <text>`) run `pkaction --action-id X` first; an id polkit does not know prints `FAIL: polkit action X is not registered ...` instead of passing as "refused" (pkcheck also answers 1 for unknown ids). Both the "allowed" and the "refused" loops use it.

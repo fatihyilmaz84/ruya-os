@@ -17,9 +17,10 @@ Item {
     readonly property bool drifting: blobA.drifting || blobB.drifting || blobC.drifting
 
     Rectangle {
+        objectName: "backdropGradient"
         anchors.fill: parent
         gradient: Gradient {
-            GradientStop { position: 0.0; color: Qt.darker(backdrop.tint, 3.2) }
+            GradientStop { position: 0.0; color: Theme.backdropTop(backdrop.tint) }
             GradientStop { position: 1.0; color: Theme.background }
         }
     }
@@ -32,7 +33,7 @@ Item {
         width: backdrop.width * 0.55
         height: width
         radius: width / 2
-        opacity: 0.55
+        opacity: Theme.blobOpacityA
         readonly property bool drifting: xAnim.running || yAnim.running
 
         SequentialAnimation on driftX {
@@ -53,23 +54,26 @@ Item {
 
     Blob {
         id: blobA
+        objectName: "blobA"
         color: backdrop.tint
         x: backdrop.width * (-0.1 + 0.25 * driftX)
         y: backdrop.height * (-0.3 + 0.2 * driftY)
     }
     Blob {
         id: blobB
+        objectName: "blobB"
         color: Qt.lighter(backdrop.tint, 1.4)
         period: 23000
-        opacity: 0.35
+        opacity: Theme.blobOpacityB
         x: backdrop.width * (0.55 - 0.2 * driftX)
         y: backdrop.height * (0.1 + 0.25 * driftY)
     }
     Blob {
         id: blobC
+        objectName: "blobC"
         color: Theme.blobHighlight
         period: 29000
-        opacity: 0.08
+        opacity: Theme.blobOpacityC
         width: backdrop.width * 0.35
         x: backdrop.width * (0.3 + 0.3 * driftX)
         y: backdrop.height * (0.5 - 0.3 * driftY)

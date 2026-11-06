@@ -53,6 +53,18 @@ SettingsPane {
     }
     Binding { target: overscan; property: "value"; value: Math.round(DeviceSettings.overscan * 100) }
 
+    ThemeRow {
+        id: themeRow
+        objectName: "rowTheme"
+        u: pane.u
+        label: qsTr("Theme")
+        onEdited: v => {
+            DeviceSettings.theme = v
+            themeRow.value = DeviceSettings.theme
+        }
+    }
+    Binding { target: themeRow; property: "value"; value: DeviceSettings.theme }
+
     SettingRow {
         id: wallpaper
         objectName: "rowWallpaper"

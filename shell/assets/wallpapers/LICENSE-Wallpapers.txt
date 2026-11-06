@@ -8,7 +8,7 @@ pseudo-random dither. No photograph, stock image, model output or other third-pa
 is used or was used as a reference image.
 
 Licence: CC0 1.0 Universal (public domain dedication),
-https://creativecommons.org/publicdomain/zero/1.0/
+https://creativecommons.org/publicdomain/zero/1.0/ (the full legal text is LICENSES/CC0-1.0.txt in the repository)
 To the extent possible under law, the RuyaOS contributors have waived all copyright and
 related or neighbouring rights to these pictures. You can copy, modify, distribute and use
 them, also commercially, without asking.

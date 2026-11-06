@@ -78,7 +78,7 @@ Item {
             height: parent.height * 0.5
             radius: parent.radius
             gradient: Gradient {
-                GradientStop { position: 0.0; color: "transparent" }
+                GradientStop { position: 0.0; color: Theme.artCaptionFadeClear }
                 GradientStop { position: 1.0; color: Theme.artCaptionFade }
             }
         }

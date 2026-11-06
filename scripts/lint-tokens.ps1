@@ -1,6 +1,10 @@
 # Token lint: components take durations and colours from Theme tokens (shell/CLAUDE.md).
-# Flags, in shell/qml outside Theme.qml: a literal "duration: <non-zero number>", a quoted
-# hex colour, Qt.rgba(...), a literal "font.pixelSize: <digit>" (use Theme.type*). A line opts out with a trailing "// token-ok: <reason>".
+# Flags, in shell/qml outside Theme.qml and the theme sets (qml/themes/): a literal
+# "duration: <non-zero number>", a quoted hex colour, a quoted colour name ("white", "black", ... ;
+# "transparent" is allowed), Qt.rgba(...), Qt.hsla(...), Qt.hsva(...), a literal "font.pixelSize: <digit>"
+# (use Theme.type*). Colours must come from Theme so every colour theme (T-209) reaches every screen.
+# A line opts out with a trailing "// token-ok: <reason>". It also checks that the token list of the
+# themes (Themes.tokenNames) is exactly the `required property` list of ThemeSet.qml.
 #
 # Used by dev.ps1 (shell, test) and by the CI workflow. Works on Windows PowerShell 5.1 and
 # on pwsh (Linux). Exit code 0 = clean, 1 = findings.
@@ -14,10 +18,14 @@ $Repo = Split-Path -Parent $PSScriptRoot
 if (-not $QmlDir) { $QmlDir = Join-Path (Join-Path $Repo "shell") "qml" }
 $QmlDir = (Resolve-Path $QmlDir).Path
 
-$patterns = 'duration\s*:\s*\d*[1-9]', '["'']#[0-9a-fA-F]{3,8}["'']', 'Qt\.rgba\(', 'font\.pixelSize\s*:\s*\(?\s*\d'
+$colourNames = 'white|black|red|green|blue|yellow|orange|purple|violet|pink|brown|gray|grey|cyan|magenta|navy|teal|silver|gold|lime|maroon|olive|aqua|fuchsia|indigo|crimson|coral|salmon|tomato|khaki'
+$patterns = 'duration\s*:\s*\d*[1-9]', '["'']#[0-9a-fA-F]{3,8}["'']', "[`"']($colourNames)[`"']", 'Qt\.(rgba|hsla|hsva)\(', 'font\.pixelSize\s*:\s*\(?\s*\d'
+# Theme.qml and the theme sets are where colours are defined.
+# "themes" counts only as a directory directly under the scanned root, not anywhere in the path.
+function Test-Skipped($f) { return ($f.Name -eq "Theme.qml") -or ($f.FullName.Substring($QmlDir.Length) -match '^[\\/]themes[\\/]') }
 $hits = @(Get-ChildItem $QmlDir -Recurse -Filter *.qml |
-    Where-Object { $_.Name -ne "Theme.qml" } |
-    Select-String -Pattern $patterns |
+    Where-Object { -not (Test-Skipped $_) } |
+    Select-String -Pattern $patterns -CaseSensitive |
     Where-Object { $_.Line -notmatch 'token-ok:' })
 foreach ($h in $hits) {
     $rel = $h.Path
@@ -27,7 +35,7 @@ foreach ($h in $hits) {
 # Weight rule (04 section 3.2): the innermost { } block that sizes text with Theme.typeHero,
 # typeDisplay, typeTitle, typeHeadline or typeMicro needs a font.weight.
 $weightHits = @()
-foreach ($f in (Get-ChildItem $QmlDir -Recurse -Filter *.qml | Where-Object { $_.Name -ne "Theme.qml" })) {
+foreach ($f in (Get-ChildItem $QmlDir -Recurse -Filter *.qml | Where-Object { -not (Test-Skipped $_) })) {
     $raw = [IO.File]::ReadAllText($f.FullName)
     # Comments become spaces (same offsets, newlines kept), so a commented-out font.weight can't count.
     $sb = New-Object System.Text.StringBuilder
@@ -80,9 +88,22 @@ foreach ($f in (Get-ChildItem $QmlDir -Recurse -Filter *.qml | Where-Object { $_
 foreach ($w in $weightHits) { Write-Host "    $w" -ForegroundColor Yellow }
 if ($weightHits.Count -gt 0) { Write-Host "    Add font.weight: Theme.weightLight (Hero, Display) or Theme.weightDemiBold (Title, Headline, Micro)." }
 if ($hits.Count -gt 0) {
-    Write-Host "    Move these into Theme.qml tokens, or add '// token-ok: <reason>'."
+    Write-Host "    Move these into Theme.qml tokens (and the theme sets), or add '// token-ok: <reason>'."
 }
-if ($hits.Count -gt 0 -or $weightHits.Count -gt 0) {
+# Theme sets: ThemeSet.qml (required properties) and Themes.tokenNames must list the same tokens.
+$setFile = Join-Path (Join-Path $QmlDir "themes") "ThemeSet.qml"
+$setsFile = Join-Path (Join-Path $QmlDir "themes") "Themes.qml"
+$setHits = @()
+if ((Test-Path $setFile) -and (Test-Path $setsFile)) {
+    $declared = @([regex]::Matches([IO.File]::ReadAllText($setFile), 'required\s+property\s+(?:color|real|bool|int)\s+(\w+)') | ForEach-Object { $_.Groups[1].Value })
+    $listText = [regex]::Match([IO.File]::ReadAllText($setsFile), 'tokenNames:\s*\[(.*?)\]', 'Singleline').Groups[1].Value
+    $listed = @([regex]::Matches($listText, '"(\w+)"') | ForEach-Object { $_.Groups[1].Value })
+    foreach ($n in $declared) { if ($n -ne "key" -and $n -ne "label" -and $listed -notcontains $n) { $setHits += "ThemeSet.qml declares '$n' but Themes.tokenNames does not list it" } }
+    foreach ($n in $listed) { if ($declared -notcontains $n) { $setHits += "Themes.tokenNames lists '$n' which ThemeSet.qml does not declare" } }
+    foreach ($g in ($listed | Group-Object | Where-Object { $_.Count -gt 1 })) { $setHits += "Themes.tokenNames lists '$($g.Name)' twice" }
+}
+foreach ($w in $setHits) { Write-Host "    $w" -ForegroundColor Yellow }
+if ($hits.Count -gt 0 -or $weightHits.Count -gt 0 -or $setHits.Count -gt 0) {
     exit 1
 }
 exit 0

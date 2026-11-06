@@ -1,6 +1,10 @@
+#include "DeviceSettings.h"
+
 #include <QFontDatabase>
 #include <QGuiApplication>
 #include <QPointer>
+#include <QSettings>
+#include <QTemporaryDir>
 #include <QQmlContext>
 #include <QQmlEngine>
 #include <QQuickWindow>
@@ -67,6 +71,75 @@ private:
     QPointer<QQuickWindow> m_last;
 };
 
+// DeviceSettings.theme survives a restart (T-209): a second instance on the same store reads what
+// the first wrote, and a stored value that is not a theme falls back to the default. Runs against an
+// ini file in a temporary directory (DeviceSettings(iniPath)), never the developer's real store.
+// Returns "" or what went wrong; the QML test tst_themes.qml asserts it (`themePersistence`).
+static QString checkThemePersistence()
+{
+    QTemporaryDir dir;
+    if (!dir.isValid())
+        return QStringLiteral("no temporary directory");
+    const QString path = dir.filePath(QStringLiteral("shell.ini"));
+    QString problem;
+    {
+        DeviceSettings first(path);
+        if (first.theme() != QLatin1String("dreamglass"))
+            problem = QStringLiteral("the default theme is not dreamglass: ") + first.theme();
+        first.setTheme(QStringLiteral("ember"));
+    }
+    {
+        DeviceSettings second(path);
+        if (second.theme() != QLatin1String("ember"))
+            problem += QStringLiteral(" a restart lost the theme: ") + second.theme();
+    }
+    {
+        QSettings raw(path, QSettings::IniFormat);
+        raw.setValue(QStringLiteral("display/theme"), QStringLiteral("nonsense"));
+    }
+    {
+        DeviceSettings third(path);
+        if (third.theme() != QLatin1String("dreamglass"))
+            problem += QStringLiteral(" a stored non-theme was accepted: ") + third.theme();
+    }
+    return problem.trimmed();
+}
+
+// DeviceSettings.wallpaper and wallpaperDim survive a restart (T-208), and a stored value that is not
+// a wallpaper id (a path, a value out of range) falls back. Same hermetic store as above.
+// Returns "" or what went wrong; tst_wallpaper.qml asserts it (`wallpaperPersistence`).
+static QString checkWallpaperPersistence()
+{
+    QTemporaryDir dir;
+    if (!dir.isValid())
+        return QStringLiteral("no temporary directory");
+    const QString path = dir.filePath(QStringLiteral("shell.ini"));
+    QString problem;
+    {
+        DeviceSettings first(path);
+        if (!first.wallpaper().isEmpty() || !qFuzzyCompare(first.wallpaperDim(), 0.2))
+            problem = QStringLiteral("the defaults are not the default look and 20 %");
+        first.setWallpaper(QStringLiteral("aurora"));
+        first.setWallpaperDim(0.35);
+    }
+    {
+        DeviceSettings second(path);
+        if (second.wallpaper() != QLatin1String("aurora") || !qFuzzyCompare(second.wallpaperDim(), 0.35))
+            problem += QStringLiteral(" a restart lost the wallpaper: ") + second.wallpaper();
+    }
+    {
+        QSettings raw(path, QSettings::IniFormat);
+        raw.setValue(QStringLiteral("display/wallpaper"), QStringLiteral("../../etc/passwd"));
+        raw.setValue(QStringLiteral("display/wallpaperDim"), 0.9);
+    }
+    {
+        DeviceSettings third(path);
+        if (!third.wallpaper().isEmpty() || !qFuzzyCompare(third.wallpaperDim(), 0.2))
+            problem += QStringLiteral(" a stored bad wallpaper was accepted: ") + third.wallpaper();
+    }
+    return problem.trimmed();
+}
+
 class Setup : public QObject
 {
     Q_OBJECT
@@ -105,6 +178,10 @@ public slots:
             QGuiApplication::setFont(QFont(QStringLiteral("Inter")));
         }
         // Set RUYA_SHOTS_DIR to have the screenshot test save PNGs there.
+        static const QString persistence = checkThemePersistence();
+        engine->rootContext()->setContextProperty(QStringLiteral("themePersistence"), persistence);
+        static const QString wallpaperCheck = checkWallpaperPersistence();
+        engine->rootContext()->setContextProperty(QStringLiteral("wallpaperPersistence"), wallpaperCheck);
         engine->rootContext()->setContextProperty(QStringLiteral("windowGuard"), new WindowGuard(engine));
         engine->rootContext()->setContextProperty(QStringLiteral("shotsDir"),
                                                   qEnvironmentVariable("RUYA_SHOTS_DIR"));

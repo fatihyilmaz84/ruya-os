@@ -19,6 +19,7 @@ SettingControl {
         return -1
     }
     readonly property string currentLabel: currentIndex >= 0 ? options[currentIndex].label : ""
+    readonly property alias valueText: valueLabel   // the "‹ value ›" text, for subtypes that decorate it
 
     signal edited(var value)
 
@@ -36,6 +37,7 @@ SettingControl {
     }
 
     Text {
+        id: valueLabel
         objectName: "value"
         anchors { right: parent.right; rightMargin: Theme.spaceL * row.u; verticalCenter: parent.verticalCenter }
         text: "‹  " + row.currentLabel + "  ›"

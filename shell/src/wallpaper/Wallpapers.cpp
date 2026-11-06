@@ -29,10 +29,8 @@
 namespace {
 
 constexpr int JpegQuality = 88;
-// Relative luminance at which text of the Theme.text colour (#f2f4f8, 0.90) has 4.5:1 over it:
-// (0.90 + 0.05) / 4.5 - 0.05.
-constexpr qreal TextContrastLuminance = 0.161;
-constexpr qreal MaxRequiredDim = 0.75;
+constexpr qreal TargetContrast = 4.52;    // 04 §7 asks 4.5; the margin keeps colour rounding (16-bit channels) above it
+constexpr qreal MaxRequiredDim = 0.85;
 const QString UserPrefix = QStringLiteral("user:");
 
 bool useMock()
@@ -82,9 +80,15 @@ Probe probe(const QString &path, QSize *size)
     return Probe::Ok;
 }
 
+// A name from a drive: no control characters, one line, at most 40 characters.
 QString safeName(QString name)
 {
-    name = name.simplified();
+    QString printable;
+    for (const QChar c : std::as_const(name)) {
+        if (c.isPrint())
+            printable.append(c);
+    }
+    name = printable.simplified();
     if (name.size() > 40)
         name = name.left(40).trimmed();
     return name.isEmpty() ? QStringLiteral("Wallpaper") : name;
@@ -98,6 +102,7 @@ struct Wallpapers::Encoded
     QByteArray jpeg;
     QString name;
     qreal peak = 0;
+    qreal floor = 0;
     QSize size;
 };
 
@@ -148,11 +153,12 @@ void Wallpapers::loadBundled()
             {QStringLiteral("name"), name},
             {QStringLiteral("source"), QStringLiteral("qrc") + base + o.value(QStringLiteral("file")).toString()},
             {QStringLiteral("peak"), o.value(QStringLiteral("peak")).toDouble()},
+            {QStringLiteral("floor"), o.value(QStringLiteral("floor")).toDouble()},
         });
     }
 }
 
-QVariantMap Wallpapers::userEntry(const QString &dir, const QString &file, const QString &name, qreal peak,
+QVariantMap Wallpapers::userEntry(const QString &dir, const QString &file, const QString &name, qreal peak, qreal floor,
                                   const QSize &size, qint64 bytes)
 {
     return QVariantMap{
@@ -160,6 +166,7 @@ QVariantMap Wallpapers::userEntry(const QString &dir, const QString &file, const
         {QStringLiteral("name"), name},
         {QStringLiteral("source"), QUrl::fromLocalFile(dir + QLatin1Char('/') + file).toString()},
         {QStringLiteral("peak"), peak},
+        {QStringLiteral("floor"), floor},
         {QStringLiteral("width"), size.width()},
         {QStringLiteral("height"), size.height()},
         {QStringLiteral("sizeBytes"), bytes},
@@ -186,7 +193,8 @@ void Wallpapers::loadUser()
                 continue;
             QImageReader reader(info.filePath());
             m_user.append(userEntry(m_dir, name, o.value(QStringLiteral("name")).toString(),
-                                    o.value(QStringLiteral("peak")).toDouble(), reader.size(), info.size()));
+                                    o.value(QStringLiteral("peak")).toDouble(), o.value(QStringLiteral("floor")).toDouble(),
+                                    reader.size(), info.size()));
             kept.append(name);
         }
     }
@@ -207,6 +215,7 @@ void Wallpapers::saveIndex() const
             {QStringLiteral("file"), m.value(QStringLiteral("id")).toString().mid(UserPrefix.size())},
             {QStringLiteral("name"), m.value(QStringLiteral("name")).toString()},
             {QStringLiteral("peak"), m.value(QStringLiteral("peak")).toDouble()},
+            {QStringLiteral("floor"), m.value(QStringLiteral("floor")).toDouble()},
         });
     }
     QSaveFile file(m_dir + QStringLiteral("/index.json"));
@@ -219,33 +228,74 @@ void Wallpapers::saveIndex() const
         qWarning("ruya-shell: cannot write the wallpaper index");
 }
 
-qreal Wallpapers::requiredDim(qreal peak)
+namespace {
+
+double toLinear(double s)
 {
-    if (!(peak > TextContrastLuminance))
-        return 0;
-    // A black layer of alpha a leaves (1 - a) of each sRGB value, about (1 - a)^2.2 of the luminance.
-    return std::min(MaxRequiredDim, 1.0 - std::pow(TextContrastLuminance / peak, 1.0 / 2.2));
+    return s <= 0.04045 ? s / 12.92 : std::pow((s + 0.055) / 1.055, 2.4);
 }
 
-// The 95th percentile of the relative luminance of a 64x36 reduction.
-qreal Wallpapers::peakOf(const QImage &image)
+double toSrgb(double l)
+{
+    return l <= 0.0031308 ? l * 12.92 : 1.055 * std::pow(l, 1.0 / 2.4) - 0.055;
+}
+
+double luminanceOf(double r, double g, double b)   // sRGB channels 0..1
+{
+    return 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
+}
+
+double contrastOf(double a, double b)
+{
+    const double hi = std::max(a, b);
+    const double lo = std::min(a, b);
+    return (hi + 0.05) / (lo + 0.05);
+}
+
+// The luminance of a grey of luminance `grey` under a layer of colour `layer` at alpha `a` (sRGB blend).
+double underLayer(double grey, const QColor &layer, double a)
+{
+    const double s = toSrgb(grey);
+    auto mix = [&](double c) { return (1 - a) * s + a * c; };
+    return luminanceOf(mix(layer.redF()), mix(layer.greenF()), mix(layer.blueF()));
+}
+
+} // namespace
+
+qreal Wallpapers::requiredDim(qreal peak, qreal floor, const QColor &background, const QColor &text)
+{
+    const double textLum = luminanceOf(text.redF(), text.greenF(), text.blueF());
+    const double layerLum = luminanceOf(background.redF(), background.greenF(), background.blueF());
+    const double worst = textLum >= layerLum ? peak : floor;   // lighter text: the bright part is worst
+    auto passes = [&](double a) { return contrastOf(textLum, underLayer(worst, background, a)) >= TargetContrast; };
+    if (passes(0))
+        return 0;
+    if (!passes(MaxRequiredDim))
+        return MaxRequiredDim;
+    double lo = 0;
+    double hi = MaxRequiredDim;    // hi always passes
+    for (int i = 0; i < 32; ++i) {
+        const double mid = (lo + hi) / 2;
+        (passes(mid) ? hi : lo) = mid;
+    }
+    return hi;
+}
+
+// The 5th and 95th percentile of the relative luminance of a 64x36 reduction.
+void Wallpapers::extremesOf(const QImage &image, qreal *floor, qreal *peak)
 {
     const QImage small = image.scaled(64, 36, Qt::IgnoreAspectRatio, Qt::SmoothTransformation).convertToFormat(QImage::Format_RGB32);
     std::vector<double> values;
     values.reserve(size_t(small.width()) * small.height());
-    auto linear = [](int channel) {
-        const double s = channel / 255.0;
-        return s <= 0.04045 ? s / 12.92 : std::pow((s + 0.055) / 1.055, 2.4);
-    };
     for (int y = 0; y < small.height(); ++y) {
         const QRgb *line = reinterpret_cast<const QRgb *>(small.constScanLine(y));
         for (int x = 0; x < small.width(); ++x)
-            values.push_back(0.2126 * linear(qRed(line[x])) + 0.7152 * linear(qGreen(line[x])) + 0.0722 * linear(qBlue(line[x])));
+            values.push_back(luminanceOf(qRed(line[x]) / 255.0, qGreen(line[x]) / 255.0, qBlue(line[x]) / 255.0));
     }
     std::sort(values.begin(), values.end());
-    if (values.empty())
-        return 0;
-    return values[std::min(values.size() - 1, size_t(std::floor(0.95 * (values.size() - 1) + 0.5)))];
+    auto at = [&](double q) { return values.empty() ? 0.0 : values[std::min(values.size() - 1, size_t(std::floor(q * (values.size() - 1) + 0.5)))]; };
+    *floor = at(0.05);
+    *peak = at(0.95);
 }
 
 QSize Wallpapers::targetSize() const
@@ -286,9 +336,12 @@ void Wallpapers::scanUsb(const QStringList &mountPoints)
                     continue;
                 const QDir dir(root.filePath(folder));
                 const QFileInfoList files = dir.entryInfoList(QDir::Files | QDir::NoSymLinks, QDir::Name | QDir::IgnoreCase);
+                int probed = 0;
                 for (const QFileInfo &info : files) {
                     if (!isPictureName(info.fileName()) || info.size() <= 0 || info.size() > MaxSourceBytes)
                         continue;
+                    if (++probed > MaxProbedPerFolder)
+                        break;                   // a folder of thousands: look at the first ones only
                     QSize size;
                     if (probe(info.filePath(), &size) != Probe::Ok)
                         continue;
@@ -307,9 +360,7 @@ void Wallpapers::scanUsb(const QStringList &mountPoints)
         });
         while (found.size() > MaxListed)
             found.removeLast();
-        if (!self)
-            return;
-        QMetaObject::invokeMethod(self.data(), [self, serial, found] {
+        QMetaObject::invokeMethod(qApp, [self, serial, found] {
             if (!self || serial != self->m_scanSerial)
                 return;                      // a newer scan was asked for meanwhile
             self->m_usbImages = found;
@@ -325,7 +376,29 @@ void Wallpapers::finish(const QString &status, const QString &id, const QString 
     emit copyFinished(status, id, name);
 }
 
-void Wallpapers::importFile(const QString &path)
+void Wallpapers::importFile(const QString &path, const QColor &flatten)
+{
+    // Only what the list offered: the shell never reads another path on a caller's say-so.
+    bool listed = false;
+    for (const QVariant &v : std::as_const(m_usbImages))
+        listed = listed || v.toMap().value(QStringLiteral("path")).toString() == path;
+    if (!listed && !m_copying) {
+        m_copying = true;
+        emit copyStateChanged();
+        qWarning("ruya-shell: wallpaper import refused: not a listed picture");
+        QMetaObject::invokeMethod(this, [this] { finish(QStringLiteral("unreadable")); }, Qt::QueuedConnection);
+        return;
+    }
+    startImport(path, flatten);
+}
+
+void Wallpapers::mockImportAny(const QString &path, const QColor &flatten)
+{
+    if (m_mock)
+        startImport(path, flatten);
+}
+
+void Wallpapers::startImport(const QString &path, const QColor &flatten)
 {
     if (m_copying)
         return;
@@ -339,7 +412,7 @@ void Wallpapers::importFile(const QString &path)
     const QSize target = targetSize();
     const int delay = m_copyDelayMs;
     QPointer<Wallpapers> self(this);
-    QThreadPool::globalInstance()->start([self, path, target, delay] {
+    QThreadPool::globalInstance()->start([self, path, target, delay, flatten] {
         Encoded out;
         if (delay > 0)
             QThread::msleep(ulong(delay));
@@ -370,7 +443,7 @@ void Wallpapers::importFile(const QString &path)
                 break;
             }
             QImage flat(image.size(), QImage::Format_RGB32);
-            flat.fill(QColor(0x05, 0x07, 0x0d));
+            flat.fill(flatten.isValid() ? flatten : QColor(Qt::black));
             {
                 QPainter painter(&flat);
                 painter.drawImage(0, 0, image);
@@ -383,14 +456,13 @@ void Wallpapers::importFile(const QString &path)
             }
             out.status = QStringLiteral("ok");
             out.size = flat.size();
-            out.peak = peakOf(flat);
+            extremesOf(flat, &out.floor, &out.peak);
             out.name = safeName(QFileInfo(path).completeBaseName());
             break;
         }
         }
-        if (!self)
-            return;
-        QMetaObject::invokeMethod(self.data(), [self, out] {
+        // Back on the GUI thread through the application object; the QPointer is read only there.
+        QMetaObject::invokeMethod(qApp, [self, out] {
             if (self)
                 self->finishImport(out);
         }, Qt::QueuedConnection);
@@ -425,7 +497,7 @@ void Wallpapers::finishImport(const Encoded &result)
         finish(QStringLiteral("io"));
         return;
     }
-    m_user.append(userEntry(m_dir, file, result.name, result.peak, result.size, result.jpeg.size()));
+    m_user.append(userEntry(m_dir, file, result.name, result.peak, result.floor, result.size, result.jpeg.size()));
     saveIndex();
     emit userChanged();
     finish(QStringLiteral("ok"), id, result.name);
@@ -507,7 +579,7 @@ QString Wallpapers::mockPlantCorrupt()
     if (out.open(QIODevice::WriteOnly))
         out.write("not a picture");
     out.close();
-    m_user.append(userEntry(m_dir, file, QStringLiteral("Corrupt"), 0.0, QSize(), 13));
+    m_user.append(userEntry(m_dir, file, QStringLiteral("Corrupt"), 0.0, 0.0, QSize(), 13));
     saveIndex();
     emit userChanged();
     return UserPrefix + file;
@@ -521,7 +593,7 @@ void Wallpapers::mockFillUser(int count)
         const QString file = QStringLiteral("u-fill-%1.jpg").arg(i);
         const QImage picture = testPicture(64, 36, QColor(10 + i * 10, 40, 90), QColor(200, 30 + i * 8, 60));
         picture.save(m_dir + QLatin1Char('/') + file, "JPEG", 80);
-        m_user.append(userEntry(m_dir, file, QStringLiteral("Filler %1").arg(i + 1), 0.1, picture.size(), QFileInfo(m_dir + QLatin1Char('/') + file).size()));
+        m_user.append(userEntry(m_dir, file, QStringLiteral("Filler %1").arg(i + 1), 0.1, 0.01, picture.size(), QFileInfo(m_dir + QLatin1Char('/') + file).size()));
     }
     saveIndex();
     emit userChanged();

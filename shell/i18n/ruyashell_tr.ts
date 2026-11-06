@@ -453,6 +453,11 @@
     </message>
     <message>
         <location line="+16"/>
+        <source>Theme</source>
+        <translation>Tema</translation>
+    </message>
+    <message>
+        <location line="+12"/>
         <source>Wallpaper</source>
         <translation>Duvar kağıdı</translation>
     </message>
@@ -1800,6 +1805,34 @@
     </message>
 </context>
 <context>
+    <name>Themes</name>
+    <message>
+        <location filename="../qml/themes/Themes.qml" line="+50"/>
+        <source>Dreamglass</source>
+        <translation>Dreamglass</translation>
+    </message>
+    <message>
+        <location line="+51"/>
+        <source>Midnight</source>
+        <translation>Gece yarısı</translation>
+    </message>
+    <message>
+        <location line="+51"/>
+        <source>Aurora</source>
+        <translation>Aurora</translation>
+    </message>
+    <message>
+        <location line="+51"/>
+        <source>Ember</source>
+        <translation>Köz</translation>
+    </message>
+    <message>
+        <location line="+51"/>
+        <source>Daylight</source>
+        <translation>Gün ışığı</translation>
+    </message>
+</context>
+<context>
     <name>ThermalNotice</name>
     <message>
         <location filename="../qml/ThermalNotice.qml" line="+72"/>
@@ -2008,7 +2041,7 @@
     </message>
     <message>
         <location line="+0"/>
-        <location line="+24"/>
+        <location line="+26"/>
         <source>Wallpaper</source>
         <translation>Duvar kağıdı</translation>
     </message>

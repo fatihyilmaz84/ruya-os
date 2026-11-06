@@ -12,7 +12,7 @@ qt_standard_project_setup(REQUIRES 6.8)
 # Everything except main() is a static QML module, so the app and the tests share it.
 qt_add_library(ruyashell STATIC)
 
-set_source_files_properties(qml/Theme.qml qml/Sfx.qml qml/Notifications.qml qml/ProfileStatus.qml qml/BackKey.qml qml/ThermalText.qml qml/GlareGate.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
+set_source_files_properties(qml/Theme.qml qml/Sfx.qml qml/Notifications.qml qml/ProfileStatus.qml qml/BackKey.qml qml/ThermalText.qml qml/GlareGate.qml qml/themes/Themes.qml qml/themes/ThemeMath.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 
 qt_add_qml_module(ruyashell
     URI RuyaShell
@@ -76,6 +76,9 @@ qt_add_qml_module(ruyashell
         qml/Main.qml
         qml/Shell.qml
         qml/Theme.qml
+        qml/themes/ThemeSet.qml
+        qml/themes/Themes.qml
+        qml/themes/ThemeMath.qml
         qml/Sfx.qml
         qml/BackKey.qml
         qml/ThermalText.qml
@@ -137,6 +140,7 @@ qt_add_qml_module(ruyashell
         qml/controls/ToggleRow.qml
         qml/controls/ChoiceRow.qml
         qml/controls/SliderRow.qml
+        qml/controls/ThemeRow.qml
     RESOURCES
         sounds/navigate.wav
         sounds/select.wav
@@ -221,6 +225,7 @@ if(RUYA_BUILD_TESTS)
     enable_testing()
     qt_add_executable(tst_ruyashell tests/tst_main.cpp)
     target_link_libraries(tst_ruyashell PRIVATE Qt6::Quick Qt6::QuickTest ruyashellplugin)
+    target_include_directories(tst_ruyashell PRIVATE src/settings)   # the theme-persistence check in tst_main.cpp
     target_compile_definitions(tst_ruyashell PRIVATE QUICK_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests")
     add_test(NAME qml COMMAND tst_ruyashell)
     set_tests_properties(qml PROPERTIES ENVIRONMENT "RUYA_SERVICES=mock")

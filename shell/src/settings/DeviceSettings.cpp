@@ -14,8 +14,21 @@ constexpr qreal kMaxWallpaperDim = 0.60;
 DeviceSettings::DeviceSettings(bool persistent, QObject *parent)
     : QObject(parent)
 {
-    if (persistent) {
+    if (persistent)
         m_store = std::make_unique<QSettings>(QStringLiteral("ruyaos"), QStringLiteral("shell"));
+    init();
+}
+
+DeviceSettings::DeviceSettings(const QString &iniPath, QObject *parent)
+    : QObject(parent)
+    , m_store(std::make_unique<QSettings>(iniPath, QSettings::IniFormat))
+{
+    init();
+}
+
+void DeviceSettings::init()
+{
+    if (m_store) {
         m_reducedMotion = m_store->value(QStringLiteral("display/reducedMotion"), false).toBool();
         const QString quality = m_store->value(QStringLiteral("display/effectsQuality"), m_quality).toString();
         if (isValidQuality(quality))
@@ -30,6 +43,9 @@ DeviceSettings::DeviceSettings(bool persistent, QObject *parent)
         const qreal dim = m_store->value(QStringLiteral("display/wallpaperDim"), m_wallpaperDim).toReal(&ok);
         if (ok && dim >= 0.0 && dim <= kMaxWallpaperDim)
             m_wallpaperDim = dim;
+        const QString theme = m_store->value(QStringLiteral("display/theme"), m_theme).toString();
+        if (isValidTheme(theme))
+            m_theme = theme;
         const QString language = m_store->value(QStringLiteral("general/language")).toString();
         if (isValidLanguage(language)) {
             m_language = language;
@@ -99,6 +115,31 @@ bool DeviceSettings::isValidWallpaper(const QString &value)
     static const QRegularExpression bundled(QStringLiteral("^[a-z0-9-]{1,32}$"));
     static const QRegularExpression user(QStringLiteral("^user:[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"));
     return bundled.match(value).hasMatch() || user.match(value).hasMatch();
+}
+
+QStringList DeviceSettings::availableThemes()
+{
+    return {QStringLiteral("dreamglass"), QStringLiteral("midnight"), QStringLiteral("aurora"),
+            QStringLiteral("ember"), QStringLiteral("daylight")};
+}
+
+bool DeviceSettings::isValidTheme(const QString &value)
+{
+    return availableThemes().contains(value);
+}
+
+void DeviceSettings::setTheme(const QString &value)
+{
+    if (!isValidTheme(value)) {
+        qWarning("ruya-shell: rejecting invalid theme '%s'", qPrintable(value));
+        return;
+    }
+    if (value == m_theme)
+        return;
+    m_theme = value;
+    if (m_store)
+        m_store->setValue(QStringLiteral("display/theme"), value);
+    emit themeChanged();
 }
 
 bool DeviceSettings::reducedMotion() const

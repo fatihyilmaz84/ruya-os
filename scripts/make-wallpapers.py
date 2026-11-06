@@ -8,10 +8,10 @@ discs) and a seeded pseudo-random dither; no photograph, stock image or third-pa
 used, so the pictures are the project's own work and are released as CC0 1.0 (see
 shell/assets/wallpapers/LICENSE-Wallpapers.txt).
 
-Also writes catalog.json: for each wallpaper its id, file and `peak`, the 95th percentile of
-the relative luminance (0..1, linear light) of a 64x36 reduction. The shell raises the dim
-layer over a picture until white text stays at 4.5:1 over that peak (Wallpapers::requiredDim,
-04 section 3.5).
+Also writes catalog.json: for each wallpaper its id, file, `peak` and `floor`, the 95th and 5th
+percentile of the relative luminance (0..1, linear light) of a 64x36 reduction. The shell raises
+the dim layer (the theme's background colour) over a picture until the theme's text keeps 4.5:1
+over the peak (dark themes) or over the floor (Daylight): Wallpapers::requiredDim, 04 section 3.5.
 
 Needs Pillow and numpy. The output depends on the libjpeg that Pillow bundles, so the committed
 files are what one version of Pillow made; a different version may differ in a few bytes.
@@ -144,13 +144,13 @@ WALLPAPERS = [
 ]
 
 
-def peak_luminance(pixels):
-    """95th percentile of the relative luminance of a 64x36 box reduction (linear light)."""
+def luminance_extremes(pixels):
+    """(floor, peak): the 5th and 95th percentile of the relative luminance of a 64x36 box reduction (linear light)."""
     small = Image.fromarray(pixels).resize((64, 36), Image.BOX)
     s = np.asarray(small, dtype=np.float32) / 255.0
     lin = np.where(s <= 0.04045, s / 12.92, ((s + 0.055) / 1.055) ** 2.4)
     y = 0.2126 * lin[..., 0] + 0.7152 * lin[..., 1] + 0.0722 * lin[..., 2]
-    return float(np.percentile(y, 95))
+    return float(np.percentile(y, 5)), float(np.percentile(y, 95))
 
 
 def main():
@@ -160,9 +160,9 @@ def main():
         pixels = finish(make(), seed)
         path = OUT / f"{wid}.jpg"
         Image.fromarray(pixels).save(path, "JPEG", quality=86, optimize=True, subsampling=0)
-        peak = round(peak_luminance(pixels), 4)
-        catalog.append({"id": wid, "file": f"{wid}.jpg", "peak": peak})
-        print(f"{wid}: {path.stat().st_size // 1024} KiB, peak {peak}")
+        floor, peak = (round(v, 4) for v in luminance_extremes(pixels))
+        catalog.append({"id": wid, "file": f"{wid}.jpg", "peak": peak, "floor": floor})
+        print(f"{wid}: {path.stat().st_size // 1024} KiB, floor {floor}, peak {peak}")
     with open(OUT / "catalog.json", "w", encoding="utf-8", newline="\n") as f:   # LF on every host
         f.write(json.dumps(catalog, indent=2) + "\n")
     return 0
