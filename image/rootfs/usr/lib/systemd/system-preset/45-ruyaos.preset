@@ -1,0 +1,20 @@
+# RuyaOS presets (T-195). Fedora's own presets enable these; a console does not need them.
+# 96-services.sh applies `systemctl preset` to every unit named here while the image builds, and
+# masks the ones listed in MASKED there. The reason for each is in docs/image-packages.md.
+
+# User accounts over D-Bus for desktop greeters (Flatpak pulls the package in); profiles are plain
+# Unix users from useradd (ruya-profiles), not systemd-homed users.
+disable accounts-daemon.service
+disable systemd-homed.service
+disable systemd-homed-activate.service
+# Software RAID monitor and its monthly check (mdadm stays for udisks2's libblockdev).
+disable mdmonitor.service
+disable raid-check.timer
+# No sssd/authselect profile switching; FIPS mode is not a RuyaOS feature.
+disable authselect-apply-changes.service
+disable fips-crypto-policy-overlay.service
+# Fedora's usage counter (a network call to Fedora once a week).
+disable rpm-ostree-countme.timer
+# bootc's own unattended `bootc upgrade --apply`, which reboots: ruya-update owns the update
+# policy (check, download, announce, restart at night when idle).
+disable bootc-fetch-apply-updates.timer

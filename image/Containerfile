@@ -40,6 +40,12 @@ RUN --mount=type=bind,source=image/build,target=/ctx/build \
     && /ctx/build/30-codecs.sh \
     && /ctx/build/40-nvidia.sh
 
+# Slim the image (T-195): remove what fedora-bootc ships and a console never uses. A layer of its
+# own after the NVIDIA one, so a failed removal shows up here and not inside the long chain below.
+# (Any edit under image/build/ changes the bind mount of the first RUN too and rebuilds from there.)
+RUN --mount=type=bind,source=image/build,target=/ctx/build \
+    /ctx/build/50-slim.sh
+
 COPY --from=shell-build /out/ /
 COPY --from=services-build /out/ /
 
@@ -61,9 +67,11 @@ RUN --mount=type=bind,source=image/build,target=/ctx/build \
     && systemctl --global enable ruya-devices.service \
     && systemctl enable greenboot-healthcheck.service greenboot-set-rollback-trigger.service \
     && systemctl set-default graphical.target \
+    && /ctx/build/96-services.sh \
     && /ctx/build/90-initramfs.sh \
     && /ctx/build/92-branding.sh \
     && /ctx/build/95-var-tmpfiles.sh \
+    && /ctx/build/98-guard.sh \
     && /ctx/build/99-cleanup.sh
 
 LABEL containers.bootc=1 \

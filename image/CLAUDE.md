@@ -15,13 +15,14 @@ Builds take 3–30 minutes (the NVIDIA step is cached unless `image/build/` or e
 ## Layout
 
 - `Containerfile`: a multi-stage build. Shell and services are built in Fedora containers, then copied onto `quay.io/fedora/fedora-bootc`.
-- `build/NN-*.sh`: ordered build steps, bind-mounted (not shipped): repos → base packages → codecs → NVIDIA → initramfs → cleanup. Add steps by number; keep each idempotent and `set -euo pipefail`.
+- `build/NN-*.sh`: ordered build steps, bind-mounted (not shipped): repos → base packages → codecs → NVIDIA → slim (`50`) → services (`96`) → initramfs → branding → guard (`98`) → cleanup. Add steps by number; keep each idempotent and `set -euo pipefail`.
 - `rootfs/`: files installed into the image by a `cp --no-preserve=mode` in the Containerfile (not `COPY`: a Windows checkout is all 0777, and a directory a layer introduces keeps that mode on the deployed disk). Files end up 0644, directories 0755; make a script executable with a `chmod 0755` in the same `RUN`. The build fails if anything from `rootfs/` is group- or world-writable. **Prefer `/usr` over `/etc`** (`/usr/lib/systemd/system`, `/usr/lib/sysusers.d`, `/usr/lib/tmpfiles.d`, `/usr/share/dbus-1/system.d`). `/etc` is persistent and 3-way-merged on update. Never put files in `/var`; create them with `tmpfiles.d`.
 - `bib/`: bootc-image-builder config. `config.toml` is git-ignored because it holds dev credentials.
 
 ## Rules
 
 - **Never ship private keys or credentials.** The NVIDIA step deletes the akmods private key and asserts that it's gone; keep that assertion.
+- **Keep the image small (T-195).** Every package group has a reason in `docs/image-packages.md`; a new package or enabled unit needs a row there. `98-guard.sh` fails the build on a banned package (desktop environments, printing, `sssd`, `samba` (except the four libs ffmpeg needs), `qemu-user`, `firewalld`, `cockpit`, ...) and on any enabled unit that is not in `build/enabled-units.txt`. Removals go in `50-slim.sh` only, which refuses a transaction that contains a protected package (`bootc`, `systemd`, `NetworkManager`, `flatpak`, ...) or one nobody asked for; units that stay installed but are off go in `rootfs/usr/lib/systemd/system-preset/45-ruyaos.preset`. Test a change to these scripts in seconds with `podman run --rm -v $PWD/image/build:/b:ro localhost/ruyaos:dev bash /b/50-slim.sh` before a full build.
 - Package choices follow ADR-009 (ship all codecs and drivers). Never add `pulseaudio` or `jack-audio-connection-kit` (they conflict with PipeWire), a desktop environment, or a display manager.
 - Shell scripts:
   - stay LF (`.gitattributes`);
