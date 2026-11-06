@@ -1,6 +1,6 @@
 # T-204 — Dreamglass materials and motion v2: glass layers, grain, shadows, card focus, easing
 
-Status: in-progress · Phase: 2 · Depends: — · Area: shell · Size: M · Owner: builder
+Status: done · Phase: 2 · Depends: — · Area: shell · Size: M · Owner: builder
 
 ## Goal
 The shell gets the richer glass and motion decided in `docs/specs/04-design-system.md` §3.8 (owner, 2026-11-06: "I like the animations and the glass effect" of a reference TV app): glass panels with a sheen, a lit rim and fine grain over their blur; real shadows under focused cards and panels; a one-time glare on card focus; the new easing and a global motion scale; shimmering art placeholders. Everything stays on our tokens and components, degrades per quality tier and is off or calmer under reduced motion.

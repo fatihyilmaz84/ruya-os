@@ -31,7 +31,6 @@ Open work only, in the recommended order; when NEXT is blocked take the first `t
 | [T-201](tasks/T-201-recover-from-stuck-processes.md) | **[lead]** Recover from stuck processes (watchdogs, OOM) | todo | — |
 | [T-202](tasks/T-202-screen-saver-and-power-saving.md) | Screen saver and power saving | todo | — |
 | [T-203](tasks/T-203-pair-a-controller-without-a-keyboard.md) | Pair a controller with no keyboard | todo | — |
-| [T-204](tasks/T-204-dreamglass-materials-and-motion.md) | Dreamglass materials and motion v2 | in-progress | — |
 | [T-205](tasks/T-205-gliding-highlight-and-liquid-pills.md) | **[lead]** Gliding highlight, liquid-glass pills | todo | T-204 |
 | [T-207](tasks/T-207-faster-bluetooth-controller-reconnect.md) | **[lead]** Faster Bluetooth controller reconnect | todo | — |
 | [T-208](tasks/T-208-wallpaper-support.md) | Wallpapers: bundled set, USB, Settings picker | todo | — |
@@ -73,6 +72,7 @@ One line each: `- (source) what, and why it matters`. Dispatched builders put th
 - (T-200 review) Capture the Dell's real `/sys/class/hwmon` and `thermal_zone` layout into `services/ruya-devices/tests/fixtures/` (today's fixture is written from the task text). The hint bar should show `ThermalNotice`'s own hints (A OK) while it is open. A `tst_thermal` case: Display shows the owner's quality while limited. The critical level does not navigate to Home (spec says so now): decide if it should.
 - (T-214 review) `dev.ps1` lint self-check lacks a fixture for the `/* sample: <path> */` C-block rule; the AppStream example in `appstream-metadata.md` is not checked against the sample's metainfo; `vm-sample-check.sh` exits early without `cleanup` on some failures (add `trap cleanup EXIT`) and its "within 5 s" poll may need 6 s.
 - (T-206 review) `subset-icons.sh`: install `skia-pathops` with `--require-hashes` (the only unchecked download); `check-font-coverage.py` catches only identical coincident contours, not any overlap. **Dell check pending:** the top-bar gear on the active pill should be a solid cog (the artefact was seen on the Windows GPU only; if still bad under eglfs the suspect is FreeType hinting).
+- (T-204, design, decide) `glassTint` (44 %) gives white text only 2.5:1 over pure-white art (04 §7 wants 4.5:1): until decided `tint` carries no text (options: stronger tint ~64 %, a lightness cap on hero art, a dark text variant). Untinted pills over near-white hero art are 0.9:1 (pre-existing). Edge accent band (§3.8) not built; ProfileCard/PinPad/keyboard keys have only the new easing; the canvas boards need the glass layers, shadows and glare (Focus/depth/motion, Home, art and play components, Settings, system components). Dell frame time (B-002): if 33 ms is missed drop the pill shadow on Balanced, then the glare mask, then a pre-blurred 9-patch lift shadow. T-147's quick menu uses `GlassLayers tint: true` + `GlassShadow` panel.
 - (0.0.40) The VM and the Dell clock show UTC: T-213.
 
 ## Blocked (need something this host doesn't have)
