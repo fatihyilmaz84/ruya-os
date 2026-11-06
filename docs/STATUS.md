@@ -38,6 +38,7 @@ Open work only (todo, in-progress, blocked), in the recommended order; when NEXT
 | [T-207](tasks/T-207-faster-bluetooth-controller-reconnect.md) | **[lead]** Controllers reconnect faster after Bluetooth off/on: measure on the Dell, tune (FastConnectable, reconnect policy, autosuspend) | todo | — |
 | [T-208](tasks/T-208-wallpaper-support.md) | Wallpapers: bundled set and from a USB drive, shared blur, Settings picker | todo | — |
 | [T-209](tasks/T-209-ui-colour-themes.md) | UI colour themes (Dreamglass, Midnight, Aurora, Ember, Daylight), runtime switch, contrast gate | todo | — |
+| [T-210](tasks/T-210-profile-customisation.md) | Profile customisation: avatar (built-in set), colour, name, nickname, start-up behaviour; `Profiles1` becomes extensible | todo | — |
 | [T-164](tasks/T-164-per-profile-wayland-sockets.md) | **[lead]** Per-profile Wayland sockets: a profile's app appears in the shell | todo | T-162 |
 | [T-165](tasks/T-165-profile-switch-freezes-apps.md) | Profile switch and sign-out freeze the profile's apps | todo | T-164 |
 | [T-147](tasks/T-147-fullscreen-app-flow.md) | Full-screen apps: launch splash, quick menu, return, close | todo | T-164 |
@@ -67,6 +68,7 @@ Follow-ups and debt for the next planner, one line each: `- (source) what, and w
 - (T-195 review) `50-slim.sh`: compare the number of parsed dnf transaction lines with dnf's "Removing: N packages" summary and fail on a mismatch (a reformatted dnf line would skip the protected check; the closure rule is the backstop); `check-image-manifest.sh` should also check the explicit install lists of `20-base.sh`/`30-codecs.sh`, not only `dnf leaves`; `irqbalance` was removed (performance call, lead agreed for single-socket machines).
 - (owner, 2026-11-06, design) The material/motion study of a GPL-3.0 C TV app is recorded in 04 §3.8 as decisions (no code taken). Open: compare its artwork-colour extraction (19 hue bins, vibrant/dark/light/muted swatches scored by lightness and saturation) with our hero tint extraction; the canvas boards need the new glass layers and shadows when T-204 lands.
 - (T-208/T-209) Per-profile wallpaper and theme need profile preferences from a root service (profile homes are 0700, the shell cannot read them): a `ruya-profiles` preferences field. An accent/theme from the wallpaper or the running game: compare the study's extraction (04 §3.8). A user-editable theme or accent picker.
+- (T-210) Later: photo avatars from a USB drive and illustrated avatar packs, profile ordering, per-profile language/theme/wallpaper (need profile preferences), age ratings with parental controls (Phase 3).
 - (0.0.40 try-out) The VM clock shows UTC: there is no time-zone setting yet (wizard or System pane); plan it with the OOBE/installer work.
 
 ## Blocked (need something this host doesn't have)
