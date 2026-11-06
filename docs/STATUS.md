@@ -32,6 +32,7 @@ Open work only (todo, in-progress, blocked), in the recommended order; when NEXT
 | [T-199](tasks/T-199-device-icons.md) | Device icons in the Bluetooth pane and toasts: gamepad, headset, keyboard...; controller family glyphs when known, generic otherwise | todo | — |
 | [T-200](tasks/T-200-system-monitoring-thermal.md) | System monitoring: temperatures and fans, safe defaults (warm/hot/critical), values in Settings | todo | — |
 | [T-201](tasks/T-201-recover-from-stuck-processes.md) | **[lead]** Recover from stuck processes: shell watchdog, OOM/CPU protection, hardware watchdog, force-close a hung app | todo | — |
+| [T-202](tasks/T-202-screen-saver-and-power-saving.md) | Screen saver and power saving: dim/saver, display off, sleep, idle controllers, inhibitors, Settings | todo | — |
 | [T-164](tasks/T-164-per-profile-wayland-sockets.md) | **[lead]** Per-profile Wayland sockets: a profile's app appears in the shell | todo | T-162 |
 | [T-165](tasks/T-165-profile-switch-freezes-apps.md) | Profile switch and sign-out freeze the profile's apps | todo | T-164 |
 | [T-147](tasks/T-147-fullscreen-app-flow.md) | Full-screen apps: launch splash, quick menu, return, close | todo | T-164 |
