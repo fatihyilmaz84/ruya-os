@@ -2,7 +2,7 @@
 
 **Read this first in every session; update it last.** Rules: root `CLAUDE.md`. Roles (Opus lead, Sonnet builders): `docs/LEAD.md`. Task format: `docs/tasks/README.md`. Finished work: each task's own file (`Status: done`, Outcome starting with `Verified:`); history before T-132 in [`STATUS-done.md`](STATUS-done.md), old sessions in [`STATUS-log.md`](STATUS-log.md), parked Inbox lines and decided records in [`STATUS-parked.md`](STATUS-parked.md). `scripts/lint-board.ps1` (part of `dev.ps1 test`) keeps this board and the task files in step.
 
-Last updated: 2026-11-06 (Sonnet 5.5, lead)
+Last updated: 2026-11-06 (Sonnet 5.5, planning)
 
 ## Where we are
 
@@ -56,6 +56,23 @@ Open work only, in the recommended order; when NEXT is blocked take the first `t
 | [T-166](tasks/T-166-suspend-under-eglfs.md) | **[lead]** Suspend and resume under eglfs | todo | — |
 | [T-226](tasks/T-226-system-information.md) | System information screen (CPU, RAM, GPU, storage...) and USB report | todo | — |
 | [T-227](tasks/T-227-ui-sounds-and-ambient-themes.md) | UI sounds and ambient atmosphere: sound themes, one bundled theme, maker guide | todo | — |
+| [T-228](tasks/T-228-epic-play-packages.md) | **[lead]** EPIC: `.play` packages (ADR-014 accepted; parked by the owner until visual polish and T-164) | blocked | owner |
+| [T-229](tasks/T-229-play-feasibility-spike.md) | **[lead]** Spike: `.play` as a generated Flatpak, Wine display, Proton nesting | todo | T-228, T-164 |
+| [T-230](tasks/T-230-play-format-crate.md) | `.play` format: schema, parser, hostile-package tests | todo | T-228 |
+| [T-231](tasks/T-231-play-signing-and-trust.md) | **[lead]** `.play` signing, trust tiers, key continuity, revocation | todo | T-230 |
+| [T-232](tasks/T-232-play-art-and-video-vetting.md) | `.play` art and video vetting (decode, check, re-encode) | todo | T-230 |
+| [T-233](tasks/T-233-ruya-pack-cli.md) | `ruya-pack` developer CLI | todo | T-230, T-231, T-232 |
+| [T-234](tasks/T-234-play1-contract-mock-client.md) | `Play1` contract, mock, shell client | todo | T-230, T-231 |
+| [T-235](tasks/T-235-package-page-design-step.md) | **[lead]** Design step: package page and install-flow components | todo | T-228 |
+| [T-236](tasks/T-236-install-from-usb-and-package-page.md) | Shell: Install from USB and the package page | todo | T-234, T-235 |
+| [T-237](tasks/T-237-play-importer-core.md) | `ruya-play` importer core (staging, unpack, verify; fakes) | todo | T-230, T-231, T-232 |
+| [T-238](tasks/T-238-ruya-play-service-in-the-image.md) | **[lead]** `ruya-play` service in the image (VM) | todo | T-229, T-234, T-237 |
+| [T-239](tasks/T-239-play-launcher-and-runner-resolution.md) | **[lead]** Launcher and runner resolution (bundled, system, newest) | todo | T-229, T-238 |
+| [T-240](tasks/T-240-play-permissions-mapping-and-gate.md) | `.play` permissions: mapping, ceilings, admin gate | todo | T-231, T-238 |
+| [T-241](tasks/T-241-play-updates.md) | **[lead]** `.play` updates: signed feeds, same-key rule, rollback | todo | T-231, T-238, T-240 |
+| [T-242](tasks/T-242-play-library-home-and-preview.md) | `.play` in Library and Home: art, preview loop, save paths | todo | T-232, T-238 |
+| [T-243](tasks/T-243-play-developer-guide-and-samples.md) | `.play` developer guide and two samples | todo | T-233 |
+| [T-244](tasks/T-244-system-wine-runner-pack.md) | **[lead]** System Wine runner pack on the `ruyaos` remote | todo | T-229, T-239 |
 
 **VM queue** (host-done, VM check pending; the lead runs them with one image build): empty after `0.0.48-lead` (T-191, T-192, T-193, T-196, T-200, T-214 verified; T-200 sensors on the Dell are still open). Devices checks need `-Audio`.
 
@@ -88,6 +105,7 @@ One line each: `- (source) what, and why it matters`. Dispatched builders put th
 ## Open owner decisions
 
 - **Telemetry (T-224/T-225; asked for 2026-11-06).** (1) Consent model: recommendation = an explicit first-boot choice (Share / Don't share, equal buttons, nothing sent before the answer); "on unless turned off" needs legal advice. (2) Backend and who pays: the code ships an open protocol and a reference receiver; the production endpoint is yours. (3) Retention proposed 13 months hardware / 90 days crashes, no IPs. (4) Privacy notice text and a data-processing agreement before any release that enables it. (5) Whether "App usage" may ever be asked. Until you answer, T-220's statement and the first-boot screen follow the recommendation.
+- **`.play` packages (T-228; asked for 2026-11-06).** **Decided 2026-11-06, work parked until you say start:** D1 ADR-014 accepted (a `.play` is a container that installs as a sandboxed Flatpak, amending ADR-005), conditional on the T-229 spike. D2 (decided 2026-11-06): RuyaOS ships no emulators, Proton/Steam runtime, firmware or discs; packagers do and carry the duty; only Wine is a system runner. Left open only if RuyaOS ever hosts packages (an Official remote). D3: the image preinstalls the Wine runner. Remaining open questions: `docs/specs/05-play-packages.md` §16.
 - **Dolby/DTS names (T-219):** the UI needs a licence to use the names and logos. Until decided: "Surround (AC-3)", "Surround Plus (E-AC-3)", "DTS".
 - **Update size vs the unshrunk image (T-195):** the slimmed image is not smaller on disk or in the update download (layers). Rechunking or flattening is a trade-off (update size). Recommendation: spike rechunking after the first release candidate.
 - **Controller brand art (T-199):** pictures of Sony/Microsoft/Nintendo pads need a legal decision; the task draws its own silhouettes.
@@ -101,6 +119,8 @@ One line each: `- (source) what, and why it matters`. Dispatched builders put th
 
 One entry per session, at most 700 characters (`lint-board.ps1`): date · model · tasks · what happened · numbers · follow-ups. Detail belongs in the task Outcome.
 
+- 2026-11-06 · Sonnet 5.5 · Planning (owner request: `.play` packages; no code) · Wrote spec `05-play-packages.md` (format, runners bundled/system/newest, closed permissions, signing and trust tiers, updates), Proposed ADR-014 (a container that installs as a sandboxed Flatpak, amends ADR-005) and epic T-228 with T-229..T-244. Epic is `blocked` on the owner (ADR-014, D1-D3). Open: Xwayland or Wine Wayland (none today), Proton nesting, emulator content policy. Inbox untouched.
+
 - 2026-11-06 · Sonnet 5.5 · Lead (T-162 by the lead; no lanes; range had only docs) · `ruya-session` runs in the image: `systemd-run --machine=` per app, status file, scope-aware Stop/kill, linger; unit exposure 1.1; deleting a profile ends its manager. VM `0.0.44-t162`: smoke OK, session check 45 PASS, devices 57. `test` 381 QML + 30 skips, Rust green. VM found: SELinux refuses PID 1 a service's pipe; Flatpak apps live in their own scope; PipeWire was not masked for profiles. New F: drive formatted NTFS, holds the ISO. Process: image/CLAUDE.md quirk.
 
 - 2026-11-05 · Sonnet 5.5 · Lead (build loop from `4c0e713`: T-178..T-188 merged, 11 tasks; 6 CHANGES_REQUESTED, T-187 lead-read) · `test` 381 QML + 30 skips. VM `0.0.42-lead`: smoke, devices 57, store 67, library, storage 98: all PASS (devices needs `-Audio`). Planned T-178..T-194 (T-189..T-194 not dispatched). Owner: media and streaming apps out of the first MVP; blur and shadows stay the default; no new tasks after those in flight. Process: builders run dev.ps1 in their worktree; VM scripts parse JSON, not key order.
@@ -109,4 +129,3 @@ One entry per session, at most 700 characters (`lint-board.ps1`): date · model 
 
 - 2026-11-04 · Opus 5.5 · Lead (review `9b77857..4bd0c66`: T-155, T-157, T-130 diff; T-159 skimmed) · `test` ALL GREEN (267 QML + 21 skips, 242 Rust), `shots` 56, CI green at `945a60f` (one shell flake at `18a342a` → T-167); 0 review findings. Disks full twice: WSL disk grew 7 → 29 GB per build; `free-space.ps1` + `wsl --manage --compact`. Owner: builder agents in worktrees (2 lanes), Opus review before merge, lead-only STATUS, image builds only in image tasks (VM queue). Planned T-162..T-168. Paused by the owner mid-loop: see LEAD-NOTES.
 
-- 2026-11-04 · Sonnet 5.5 · T-159 · `ruya-update` announces the automatic restart (`restart_at`, 120 s grace in `Schedule::restart_step`; input, setting off or nothing staged calls it off) and retries a failed scheduled download after an hour (manual ones never). Shell: sticky warning toast (`Notifications.showSticky`), every press reported while pending; Turkish. Build fix in `99-cleanup.sh` (kernel 7.2.15 leftovers in /boot and /var/lib/rpm-state; `0.0.29-t159a` passed the lint). `test` ALL GREEN (271 QML + 22 skips, 70 Rust in the crate), `shots` 56 reviewed. VM PENDING: lead runs `vm-update-check.sh reboot`. Inbox +2.
