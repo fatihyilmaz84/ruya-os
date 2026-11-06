@@ -170,4 +170,8 @@ QtObject {
     // Shimmer of an art placeholder: a gleam of this alpha at this speed (design px per second).
     readonly property color shimmerPeak: Qt.rgba(1, 1, 1, 0.085)   // centre of the gleam
     readonly property real shimmerSpeed: 760
+
+    // Wallpaper (04 §3.5, T-208): the least dim over a wallpaper that is shown without the blur (the
+    // Performance tier, on a page). With the blur the picture is soft and the owner's dim is enough.
+    readonly property real wallpaperDimUnblurred: 0.35
 }

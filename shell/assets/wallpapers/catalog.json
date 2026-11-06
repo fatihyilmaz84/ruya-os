@@ -1,0 +1,32 @@
+[
+  {
+    "id": "dusk",
+    "file": "dusk.jpg",
+    "peak": 0.0356
+  },
+  {
+    "id": "aurora",
+    "file": "aurora.jpg",
+    "peak": 0.0436
+  },
+  {
+    "id": "ember",
+    "file": "ember.jpg",
+    "peak": 0.0673
+  },
+  {
+    "id": "lagoon",
+    "file": "lagoon.jpg",
+    "peak": 0.0903
+  },
+  {
+    "id": "orchid",
+    "file": "orchid.jpg",
+    "peak": 0.0522
+  },
+  {
+    "id": "daybreak",
+    "file": "daybreak.jpg",
+    "peak": 0.8217
+  }
+]

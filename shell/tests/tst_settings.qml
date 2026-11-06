@@ -175,8 +175,10 @@ Item {
             verify(find("rowReducedMotion").activeFocus)
             keyClick(Qt.Key_Down)
             verify(find("rowOverscan").activeFocus)
+            keyClick(Qt.Key_Down)
+            verify(find("rowWallpaper").activeFocus)     // T-208: the wallpaper row follows (its dim row is hidden with the default look)
             keyClick(Qt.Key_Down)                        // clamped at the last row
-            verify(find("rowOverscan").activeFocus)
+            verify(find("rowWallpaper").activeFocus)
             verify(find("homePlay").activeFocus === false)
         }
 

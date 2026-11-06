@@ -13,6 +13,7 @@ Rectangle {
     property string picture      // path from the app record (tile or hero), may be empty
     property bool monogram: true // the letter; off for full-screen art (the Home hero)
     property bool shimmer: true  // the gleam while loading; off for the Home hero (it fades in over the backdrop)
+    property bool bare: false    // no fallback fill: the Home hero over a wallpaper shows the wallpaper until the picture is there (T-208)
 
     // The picture's load state. While it loads (not when it failed or is absent) a gleam crosses
     // the placeholder (04 §3.8): not under reduced motion or on the Performance tier.
@@ -29,9 +30,10 @@ Rectangle {
 
     radius: Theme.radiusM * u
     clip: true
+    // `bare`: both stops clear. (Setting `gradient` to null instead leaves a white rectangle on a GPU window.)
     gradient: Gradient {
-        GradientStop { position: 0.0; color: Qt.hsla(art.hue, 0.55, 0.42, 1) }
-        GradientStop { position: 1.0; color: Qt.hsla(art.hue, 0.6, 0.18, 1) }
+        GradientStop { position: 0.0; color: art.bare ? "transparent" : Qt.hsla(art.hue, 0.55, 0.42, 1) }
+        GradientStop { position: 1.0; color: art.bare ? "transparent" : Qt.hsla(art.hue, 0.6, 0.18, 1) }
     }
 
     Text {

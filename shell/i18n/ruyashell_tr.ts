@@ -251,7 +251,7 @@
 <context>
     <name>ArtCard</name>
     <message>
-        <location filename="../qml/ArtCard.qml" line="+19"/>
+        <location filename="../qml/ArtCard.qml" line="+20"/>
         <source>Running</source>
         <translation>Çalışıyor</translation>
     </message>
@@ -422,7 +422,7 @@
 <context>
     <name>DisplayPane</name>
     <message>
-        <location filename="../qml/DisplayPane.qml" line="+13"/>
+        <location filename="../qml/DisplayPane.qml" line="+15"/>
         <source>Effects quality</source>
         <translation>Efekt kalitesi</translation>
     </message>
@@ -450,6 +450,16 @@
         <location line="+12"/>
         <source>Screen edge</source>
         <translation>Ekran kenarı</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Wallpaper</source>
+        <translation>Duvar kağıdı</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Dim wallpaper</source>
+        <translation>Duvar kağıdını karart</translation>
     </message>
 </context>
 <context>
@@ -1109,7 +1119,7 @@
         <translation>Geri</translation>
     </message>
     <message>
-        <location line="+176"/>
+        <location line="+177"/>
         <source>Coming soon</source>
         <translation>Yakında</translation>
     </message>
@@ -1284,12 +1294,12 @@
         <translation>Ses çıkışı: %1</translation>
     </message>
     <message>
-        <location line="+688"/>
+        <location line="+720"/>
         <source>Power</source>
         <translation>Güç</translation>
     </message>
     <message>
-        <location line="-680"/>
+        <location line="-712"/>
         <source>Update ready. Restart to finish.</source>
         <translation>Güncelleme hazır. Bitirmek için yeniden başlat.</translation>
     </message>
@@ -1304,7 +1314,12 @@
         <translation>%1 beklenmedik şekilde durdu</translation>
     </message>
     <message>
-        <location line="+112"/>
+        <location line="+44"/>
+        <source>Wallpaper could not be loaded</source>
+        <translation>Duvar kağıdı yüklenemedi</translation>
+    </message>
+    <message>
+        <location line="+84"/>
         <source>Controller battery %1%</source>
         <translation>Kumanda pili %1%</translation>
     </message>
@@ -1367,7 +1382,7 @@
         <translation>Bölümler</translation>
     </message>
     <message>
-        <location line="+63"/>
+        <location line="+79"/>
         <location line="+8"/>
         <source>System</source>
         <translation>Sistem</translation>
@@ -1383,8 +1398,8 @@
         <translation>Profil değiştir</translation>
     </message>
     <message>
-        <location line="-90"/>
-        <location line="+92"/>
+        <location line="-106"/>
+        <location line="+108"/>
         <source>Close</source>
         <translation>Kapat</translation>
     </message>
@@ -1404,8 +1419,8 @@
         <translation>Kapat</translation>
     </message>
     <message>
-        <location line="-98"/>
-        <location line="+99"/>
+        <location line="-114"/>
+        <location line="+115"/>
         <source>Back</source>
         <translation>Geri</translation>
     </message>
@@ -1519,12 +1534,12 @@
     <message>
         <location line="+1"/>
         <location line="+136"/>
-        <location line="+39"/>
+        <location line="+56"/>
         <source>Installed</source>
         <translation>Kurulu</translation>
     </message>
     <message>
-        <location line="-151"/>
+        <location line="-168"/>
         <source>Official</source>
         <translation>Resmi</translation>
     </message>
@@ -1540,7 +1555,7 @@
     </message>
     <message>
         <location line="+111"/>
-        <location line="+39"/>
+        <location line="+56"/>
         <source>Update available</source>
         <translation>Güncelleme var</translation>
     </message>
@@ -1912,6 +1927,120 @@
         <location filename="../qml/VolumeOsd.qml" line="+56"/>
         <source>Muted</source>
         <translation>Sessiz</translation>
+    </message>
+</context>
+<context>
+    <name>WallpaperPicker</name>
+    <message>
+        <location filename="../qml/WallpaperPicker.qml" line="+45"/>
+        <source>Default (animated blobs)</source>
+        <translation>Varsayılan (hareketli lekeler)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Dusk</source>
+        <translation>Alacakaranlık</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Aurora</source>
+        <translation>Kutup ışığı</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Ember</source>
+        <translation>Kor</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Lagoon</source>
+        <translation>Lagün</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Orchid</source>
+        <translation>Orkide</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Daybreak</source>
+        <translation>Şafak</translation>
+    </message>
+    <message>
+        <location line="+85"/>
+        <source>Wallpaper deleted</source>
+        <translation>Duvar kağıdı silindi</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>You can keep up to %1 wallpapers. Delete one first.</source>
+        <translation>En fazla %1 duvar kağıdı saklayabilirsiniz. Önce birini silin.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This picture is too large.</source>
+        <translation>Bu resim çok büyük.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This kind of picture is not supported.</source>
+        <translation>Bu tür resim desteklenmiyor.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>This picture could not be copied.</source>
+        <translation>Bu resim kopyalanamadı.</translation>
+    </message>
+    <message>
+        <location line="+68"/>
+        <source>Wallpaper added</source>
+        <translation>Duvar kağıdı eklendi</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Could not add the wallpaper</source>
+        <translation>Duvar kağıdı eklenemedi</translation>
+    </message>
+    <message>
+        <location line="+30"/>
+        <source>Pictures on the USB drive</source>
+        <translation>USB sürücüdeki resimler</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <location line="+24"/>
+        <source>Wallpaper</source>
+        <translation>Duvar kağıdı</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>%1, current</source>
+        <translation>%1, geçerli</translation>
+    </message>
+    <message>
+        <location line="+46"/>
+        <source>Current</source>
+        <translation>Geçerli</translation>
+    </message>
+    <message>
+        <location line="+23"/>
+        <source>Copying…</source>
+        <translation>Kopyalanıyor…</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Choose a picture to copy to this console. It is shrunk to fit the screen.</source>
+        <translation>Bu konsola kopyalanacak bir resim seçin. Resim ekrana sığacak şekilde küçültülür.</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Add from USB drive…</source>
+        <translation>USB sürücüden ekle…</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Delete</source>
+        <translation>Sil</translation>
     </message>
 </context>
 </TS>
