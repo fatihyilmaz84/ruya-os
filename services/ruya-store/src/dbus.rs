@@ -102,6 +102,24 @@ impl StoreIface {
         });
     }
 
+    /// Runs a Store call that reads Flatpak (`flatpak list` and friends block) on a thread of
+    /// the `blocking` pool, so the zbus executor keeps answering other calls and sending
+    /// signals. `emit` hands the signals the call wants sent (`InstalledChanged` for a
+    /// correction) to `forward`, which sends them in order.
+    async fn off_executor<T: Send + 'static>(
+        &self,
+        call: impl FnOnce(&Store<DynFlatpak>, &mut dyn FnMut(Event)) -> T + Send + 'static,
+    ) -> T {
+        let store = self.store.clone();
+        let events = self.events.clone();
+        blocking::unblock(move || {
+            call(&store, &mut |event| {
+                let _ = events.send_blocking(event);
+            })
+        })
+        .await
+    }
+
     fn started(&self, (status, job): (crate::app::Status, String)) -> (String, String) {
         if status == crate::app::Status::Ok {
             self.kick();
@@ -247,8 +265,12 @@ impl StoreIface {
         (status.as_str().to_owned(), app)
     }
 
-    fn list_installed(&self) -> Vec<Dict> {
-        self.store.list_installed().iter().map(record).collect()
+    async fn list_installed(&self) -> Vec<Dict> {
+        // `flatpak list` runs here, and a correction it finds is announced.
+        let apps = self
+            .off_executor(|store, emit| store.list_installed(emit))
+            .await;
+        apps.iter().map(record).collect()
     }
 
     async fn list_jobs(&self) -> Vec<Dict> {
@@ -258,25 +280,41 @@ impl StoreIface {
         jobs.iter().map(job_record).collect()
     }
 
-    fn install(&self, id: &str) -> (String, String) {
-        self.started(self.store.install(id))
+    async fn install(&self, id: &str) -> (String, String) {
+        let id = id.to_owned();
+        let started = self
+            .off_executor(move |store, emit| store.install(&id, emit))
+            .await;
+        self.started(started)
     }
 
-    fn uninstall(&self, id: &str, delete_data: bool) -> (String, String) {
-        self.started(self.store.uninstall(id, delete_data))
+    async fn uninstall(&self, id: &str, delete_data: bool) -> (String, String) {
+        let id = id.to_owned();
+        let started = self
+            .off_executor(move |store, emit| store.uninstall(&id, delete_data, emit))
+            .await;
+        self.started(started)
     }
 
-    fn update(&self, id: &str) -> (String, String) {
-        self.started(self.store.update(id))
+    async fn update(&self, id: &str) -> (String, String) {
+        let id = id.to_owned();
+        let started = self
+            .off_executor(move |store, emit| store.update(&id, emit))
+            .await;
+        self.started(started)
     }
 
-    fn rollback(&self, id: &str, commit: &str) -> (String, String) {
-        self.started(self.store.rollback(id, commit))
+    async fn rollback(&self, id: &str, commit: &str) -> (String, String) {
+        let (id, commit) = (id.to_owned(), commit.to_owned());
+        let started = self
+            .off_executor(move |store, emit| store.rollback(&id, &commit, emit))
+            .await;
+        self.started(started)
     }
 
-    fn list_remotes(&self) -> Vec<Dict> {
-        self.store
-            .list_remotes()
+    async fn list_remotes(&self) -> Vec<Dict> {
+        let remotes = self.off_executor(|store, _| store.list_remotes()).await;
+        remotes
             .into_iter()
             .map(|(remote, trust)| {
                 dict(vec![
@@ -359,5 +397,131 @@ pub async fn forward(connection: Connection, events: Receiver<Event>) {
         if let Err(err) = sent {
             eprintln!("ruya-store: emitting a signal failed: {err}");
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::flatpak::FakeFlatpak;
+    use futures_lite::future::{block_on, poll_once};
+    use std::sync::mpsc;
+
+    /// The test keeps a handle on the fake (to block it, to change what it lists) while the
+    /// Store owns a boxed one.
+    struct Handle(Arc<FakeFlatpak>);
+
+    impl Flatpak for Handle {
+        fn remote_apps(&self) -> Result<Vec<RemoteApp>, String> {
+            self.0.remote_apps()
+        }
+        fn installed(&self) -> Result<Vec<InstalledApp>, String> {
+            self.0.installed()
+        }
+        fn updates(&self) -> Result<Vec<String>, String> {
+            self.0.updates()
+        }
+        fn remotes(&self) -> Result<Vec<RemoteInfo>, String> {
+            self.0.remotes()
+        }
+        fn appstream(&self, remote: &str) -> Option<Appstream> {
+            self.0.appstream(remote)
+        }
+        fn metadata(&self, remote: &str, id: &str) -> Option<String> {
+            self.0.metadata(remote, id)
+        }
+        fn installed_metadata(&self, id: &str) -> Option<String> {
+            self.0.installed_metadata(id)
+        }
+        fn run(
+            &self,
+            op: &Operation,
+            progress: &mut dyn FnMut(Progress),
+        ) -> Result<(), FlatpakError> {
+            self.0.run(op, progress)
+        }
+        fn add_remote(&self, name: &str, url: &str) -> Result<(), FlatpakError> {
+            self.0.add_remote(name, url)
+        }
+        fn update_appstream(&self, remote: &str) -> Result<(), String> {
+            self.0.update_appstream(remote)
+        }
+    }
+
+    const RACER: &str = "org.ruya.Racer";
+
+    fn setup() -> (Arc<FakeFlatpak>, StoreIface, Receiver<Event>) {
+        let fake = Arc::new(
+            FakeFlatpak::default()
+                .with_remote("ruyaos", "RuyaOS", true)
+                .with_app("ruyaos", RACER, 5_000_000)
+                .with_installed("ruyaos", RACER, 5_000_000),
+        );
+        let boxed: DynFlatpak = Box::new(Handle(fake.clone()));
+        let store: Shared = Arc::new(Store::new(boxed));
+        store.refresh().unwrap();
+        let (events, receiver) = async_channel::unbounded();
+        (fake.clone(), StoreIface::new(store, events, true), receiver)
+    }
+
+    /// The handler path of the blocking calls: a `flatpak list` that does not return must leave
+    /// the executor free for other calls (it is what every client and every signal waits on).
+    #[test]
+    fn a_flatpak_call_that_blocks_does_not_stop_another_call_from_being_answered() {
+        let (fake, iface, events) = setup();
+        let (reached_tx, reached_rx) = mpsc::channel::<()>();
+        let (release_tx, release_rx) = mpsc::channel::<()>();
+        // `flatpak list` hangs until the test lets it go (a safety timeout ends a broken run).
+        fake.remove_installed(RACER);
+        fake.after_next_installed(move || {
+            let _ = reached_tx.send(());
+            let _ = release_rx.recv_timeout(Duration::from_secs(3));
+        });
+
+        // One thread plays the executor. The slow call must give it back at its first poll.
+        let mut slow = Box::pin(iface.list_installed());
+        assert!(
+            block_on(poll_once(&mut slow)).is_none(),
+            "the call is still waiting for flatpak, the executor is free"
+        );
+        reached_rx
+            .recv_timeout(Duration::from_secs(3))
+            .expect("flatpak is being read now");
+
+        // Other calls are answered while it hangs.
+        let (status, app) = block_on(iface.get_app(RACER));
+        assert_eq!(status, "ok");
+        assert!(app.contains_key("name"));
+        assert_eq!(block_on(iface.list_remotes()).len(), 1);
+        assert!(events.try_recv().is_err(), "nothing was announced yet");
+
+        // Released, the slow call ends with its answer, and the correction it found is announced.
+        release_tx.send(()).unwrap();
+        assert!(block_on(slow).is_empty());
+        assert_eq!(events.try_recv(), Ok(Event::InstalledChanged));
+        assert!(events.try_recv().is_err(), "once");
+    }
+
+    #[test]
+    fn install_does_not_hold_the_executor_and_a_correction_reaches_the_signals() {
+        let (fake, iface, events) = setup();
+        let (reached_tx, reached_rx) = mpsc::channel::<()>();
+        let (release_tx, release_rx) = mpsc::channel::<()>();
+        fake.remove_installed(RACER);
+        fake.after_next_installed(move || {
+            let _ = reached_tx.send(());
+            let _ = release_rx.recv_timeout(Duration::from_secs(3));
+        });
+        let mut slow = Box::pin(iface.install(RACER));
+        assert!(block_on(poll_once(&mut slow)).is_none());
+        reached_rx.recv_timeout(Duration::from_secs(3)).unwrap();
+        assert_eq!(block_on(iface.list_remotes()).len(), 1);
+        release_tx.send(()).unwrap();
+        let (status, job) = block_on(slow);
+        assert_eq!((status.as_str(), job.is_empty()), ("ok", false));
+        // The removal was corrected before the request was checked: announced, once.
+        // (The job thread starts 100 ms later; its progress events follow, so only the first
+        // event is looked at.)
+        assert_eq!(events.try_recv(), Ok(Event::InstalledChanged));
     }
 }

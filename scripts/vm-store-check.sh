@@ -327,8 +327,37 @@ else:
     [ -n "${old_job_num:-}" ] && [ "$new_job_num" -gt "$old_job_num" ] && ok "job names continue after the restart ($job follows job-$old_job_num)" || bad "job name $job after job-${old_job_num:-?}: names must not be reused"
     fin="$(wait_job "$job" 180)" && echo "$fin" | grep -q '"ok"' && ok "the install finished ok" || bad "the install did not finish ok"
     case "$(as_shell busctl --system call "$svc" "$path" "$ifc" Install s "$app")" in 'ss "already-installed"'*) ok "Install of the installed app: already-installed";; *) bad "Install of the installed app";; esac
+    # InstalledChanged signals the monitor has seen from line $1 of the log on. The monitor's
+    # --json=short lines are parsed, not matched: the order of the keys is not part of the output.
+    count_installed_changed() {
+        python3 -c '
+import json, sys
+n = 0
+for i, line in enumerate(open(sys.argv[1], encoding="utf-8", errors="replace")):
+    if i < int(sys.argv[2]):
+        continue
+    try:
+        msg = json.loads(line)
+    except ValueError:
+        continue
+    if isinstance(msg, dict) and msg.get("member") == "InstalledChanged":
+        n += 1
+print(n)
+' "$work/signals.log" "$1"
+    }
+    sleep 2   # the Install above has settled: its signals are in the log
+    mark="$(wc -l < "$work/signals.log")"
     flatpak uninstall --system -y "$app" >/dev/null 2>&1 && ok "flatpak uninstall by hand" || bad "flatpak uninstall by hand failed"
     as_shell busctl --system call "$svc" "$path" "$ifc" ListInstalled | grep -q "$app" && bad "ListInstalled still lists the app removed by hand" || ok "ListInstalled follows Flatpak"
+    # T-192: the correction announces itself, so a client does not show the removed app as
+    # installed until its next read - and does so once.
+    sleep 2
+    seen="$(count_installed_changed "$mark")"
+    [ "$seen" = 1 ] && ok "the correction after the outside removal sent InstalledChanged once" || bad "InstalledChanged seen $seen times after the outside removal (want 1)"
+    as_shell busctl --system call "$svc" "$path" "$ifc" ListInstalled >/dev/null
+    sleep 2
+    seen="$(count_installed_changed "$mark")"
+    [ "$seen" = 1 ] && ok "a second ListInstalled found nothing to correct and sent nothing" || bad "InstalledChanged seen $seen times after a second ListInstalled (want 1)"
     out="$(as_shell busctl --system call "$svc" "$path" "$ifc" Install s "$app")"
     echo "Install after the outside removal: $out"
     job="$(echo "$out" | sed -n 's/^ss "ok" "\(.*\)"$/\1/p')"
