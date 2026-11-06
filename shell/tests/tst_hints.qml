@@ -31,7 +31,7 @@ Item {
         name: "Hints"
         when: windowShown
 
-        property Item shell: null
+        property Shell shell: null
 
         function find(name) { return findChild(tc.shell, name) }
 
@@ -77,7 +77,9 @@ Item {
             tryCompare(tc.shell, "currentPage", "settings")
             compare(tc.shown(), "A Select|B Back")
             verify(!find("hintBar").activeFocus)
-            verify(tc.shell.activeFocusItem !== find("hintBar"))
+            // T-189: this read `tc.shell.activeFocusItem`, which Shell does not have, so it was
+            // `undefined !== ...` and always true; the window has the property.
+            verify(tc.shell.Window.window.activeFocusItem !== find("hintBar"))
 
             keyClick(Qt.Key_Escape)
             tryCompare(tc.shell, "currentPage", "")
@@ -94,9 +96,18 @@ Item {
             compare(findChild(tc.shell, "hint_RB"), null)
             // the glyphs sit in a Repeater inside the hint row
             const found = []
-            const collect = it => { for (const c of it.children) { if (c.button !== undefined) found.push(c.button); else collect(c) } }
-            collect(hint)
+            collectGlyphs(hint, found)
             compare(found.join(","), "LB,RB")
+        }
+
+        // A top-level function: qmllint goes blind on a local declared inside a nested function (T-189).
+        function collectGlyphs(it, found) {
+            for (const c of it.children) {
+                if (c.button !== undefined)
+                    found.push(c.button)
+                else
+                    collectGlyphs(c, found)
+            }
         }
 
         function test_placeholder_page_and_about_show_only_back() {

@@ -27,7 +27,7 @@ Item {
         name: "Update"
         when: windowShown
 
-        property Item shell: null
+        property Shell shell: null
         readonly property int systemIndex: 7
 
         function find(name) { return findChild(tc.shell, name) }
@@ -288,6 +288,9 @@ Item {
             enterPin("1234")
             tryVerify(() => confirm.shown)
             keyClick(Qt.Key_Right)
+            const confirmButton = findChild(confirm, "powerConfirm")
+            tryVerify(() => confirmButton.activeFocus, 2000, "Right moves to the confirm button")
+            compare(confirmButton.Accessible.name, "Roll back now", "the confirmation says what it does (T-189)")
             keyClick(Qt.Key_Return)
             tryCompare(Update, "state", "staged")
             compare(Update.mockRollbackCount(), 1)

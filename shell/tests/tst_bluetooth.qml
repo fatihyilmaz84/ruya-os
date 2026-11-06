@@ -30,7 +30,7 @@ Item {
         name: "Bluetooth"
         when: windowShown
 
-        property Item shell: null
+        property Shell shell: null
 
         function find(name) { return findChild(tc.shell, name) }
 
@@ -111,17 +111,20 @@ Item {
             return host.answers.find(a => a.op === op && a.id === id)
         }
 
+        // Runs one command and returns the status of its answer. A top-level function: qmllint
+        // goes blind on a local declared inside a nested one (T-189, scripts/lint-test-members.ps1).
+        function runCommand(seen, op, id, call) {
+            host.answers = []
+            call()
+            tryVerify(() => answerFor(op, id) !== undefined, 2000, op + " " + id + " answered")
+            const status = answerFor(op, id).status
+            seen.add(status)
+            return status
+        }
+
         function test_contract_statuses() {
             const seen = new Set()
-            // Runs one command and returns the status of its answer.
-            function run(op, id, call) {
-                host.answers = []
-                call()
-                tryVerify(() => answerFor(op, id) !== undefined, 2000, op + " " + id + " answered")
-                const status = answerFor(op, id).status
-                seen.add(status)
-                return status
-            }
+            const run = (op, id, call) => runCommand(seen, op, id, call)
             compare(run("pair", "", () => Bluetooth.pair("")), "invalid")
             compare(run("pair", "nope", () => Bluetooth.pair("nope")), "unknown-device")
             compare(run("scan", "", () => Bluetooth.startScan()), "ok")

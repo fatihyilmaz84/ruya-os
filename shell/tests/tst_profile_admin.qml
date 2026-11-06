@@ -26,7 +26,7 @@ Item {
         name: "ProfileAdmin"
         when: windowShown
 
-        property Item shell: null
+        property Shell shell: null
 
         function find(name) { return findChild(tc.shell, name) }
         function padKeys() { return findChild(find("profilesPinPad"), "pinKeys") }

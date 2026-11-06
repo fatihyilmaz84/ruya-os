@@ -32,7 +32,7 @@ Item {
         name: "Storage"
         when: windowShown
 
-        property Item shell: null
+        property Shell shell: null
 
         function find(name) { return findChild(tc.shell, name) }
 
@@ -221,16 +221,20 @@ Item {
             verify(volume("vol-stick") !== undefined)
         }
 
+        // Ejects `id` and returns the status of the answer. A top-level function: qmllint goes
+        // blind on a local declared inside a nested one (T-189, scripts/lint-test-members.ps1).
+        function ejectStatus(seen, id) {
+            host.answers = []
+            Storage.eject(id)
+            tryVerify(() => answerFor("eject", id) !== undefined, 2000, "eject " + id + " answered")
+            const status = answerFor("eject", id).status
+            seen.add(status)
+            return status
+        }
+
         function test_contract_statuses() {
             const seen = new Set()
-            function run(id) {
-                host.answers = []
-                Storage.eject(id)
-                tryVerify(() => answerFor("eject", id) !== undefined, 2000, "eject " + id + " answered")
-                const status = answerFor("eject", id).status
-                seen.add(status)
-                return status
-            }
+            const run = (id) => ejectStatus(seen, id)
             compare(run(""), "invalid")
             compare(run("nope"), "unknown-volume")
             compare(run("vol-stick"), "unknown-volume", "not plugged in yet")

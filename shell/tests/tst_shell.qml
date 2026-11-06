@@ -20,7 +20,7 @@ Item {
         name: "Shell"
         when: windowShown
 
-        property Item shell: null
+        property Shell shell: null
 
         function find(name) { return findChild(tc.shell, name) }
 
