@@ -15,7 +15,7 @@ Verification legend: **host** = built and tested on Windows · **host (vm pendin
 
 ## Board
 
-**NEXT → T-164** ([lead], the critical path: per-profile Wayland sockets, so an app's window appears). **Owner, 2026-11-06: after the tasks in flight, no new tasks are created and none is dispatched until the owner says so.** T-189..T-194 (planned earlier the same day) stay `todo` and are not dispatched; no builder is running.
+**NEXT → T-164** ([lead], the critical path: per-profile Wayland sockets, so an app's window appears). **Owner, 2026-11-06 (later): the hold is lifted for T-189..T-194, dispatch them; still no new tasks are created until the owner says so.** Lanes: T-189 and T-192.
 
 **How work runs (owner, 2026-11-04):** the lead dispatches `ruya-builder` agents, at most two at a time in their own worktrees and in different areas, has each branch reviewed by `ruya-reviewer`, and merges it (`docs/LEAD.md`, build loop). Dispatched builders never edit this file. At most one task with a "VM (this task)" criterion runs at a time. A builder session the owner starts directly takes NEXT in the main checkout, alone, and does the bookkeeping itself (`CLAUDE.md`).
 
@@ -23,8 +23,8 @@ Open work only (todo, in-progress, blocked), in the recommended order; when NEXT
 
 | ID | Title | Status | Depends |
 |---|---|---|---|
-| [T-189](tasks/T-189-test-gate-vacuous-assertions.md) | Test gate: catch assertions that cannot fail (undefined reads, NaN waits) | todo | — |
-| [T-192](tasks/T-192-store-service-async-and-changed-signal.md) | ruya-store: Flatpak calls off the D-Bus executor; corrections announce themselves | todo | — |
+| [T-189](tasks/T-189-test-gate-vacuous-assertions.md) | Test gate: catch assertions that cannot fail (undefined reads, NaN waits) | in-progress | — |
+| [T-192](tasks/T-192-store-service-async-and-changed-signal.md) | ruya-store: Flatpak calls off the D-Bus executor; corrections announce themselves | in-progress | — |
 | [T-193](tasks/T-193-vm-script-robustness.md) | VM scripts: no false passes, no leftovers | todo | — |
 | [T-190](tasks/T-190-settings-pane-focus-follow-ups.md) | Settings panes: look-ahead after relayout, Tab, peek legibility | todo | — |
 | [T-191](tasks/T-191-shell-backend-race-follow-ups.md) | Shell backends: Profiles guard, Store reconcile races, `working` from the job list | todo | — |

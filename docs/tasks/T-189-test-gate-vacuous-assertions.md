@@ -1,6 +1,6 @@
 # T-189 — Test gate: catch assertions that cannot fail (undefined reads, NaN waits)
 
-Status: todo · Phase: 2 · Depends: — · Area: shell, scripts · Size: M · Owner: builder
+Status: in-progress · Phase: 2 · Depends: — · Area: shell, scripts · Size: M · Owner: builder
 
 ## Goal
 Three reviews in a row found shell tests that could not fail: `wait(Storage.groupWindowMs + 200)` waited nothing because `groupWindowMs` was `undefined` in QML (T-184); similar cases in T-167 and T-176. Add an automatic check so the next one fails the gate, then close the small test gaps the reviews listed.
