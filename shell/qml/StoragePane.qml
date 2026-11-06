@@ -3,7 +3,8 @@ import QtQuick
 import RuyaShell
 
 // Settings -> Storage. First "This console" (T-196): how full the console's own storage is (the
-// free space with a usage bar, then what the apps and games, the profile data and the system take;
+// free space with a usage bar, then what the apps and games take and the rest ("Other"; with the
+// profile data known, "Profile data" and "System");
 // Storage.internal, from Devices1.Storage.GetSystemUsage). Then one row per volume (USB drives,
 // and an internal disk mounted outside the system paths) with its
 // filesystem and "x GB free of y GB", and an "Eject" row for each mounted removable one. Accept
@@ -17,6 +18,12 @@ SettingsPane {
     readonly property var internal: Storage.internal
     // Less than this much free and the usage bar turns to the warning colour.
     readonly property real lowFreeFraction: 0.10
+
+    // The profile data is unknown today (the profile homes are 0700 users' directories the service
+    // cannot read): the rest is then shown as one row, "Other".
+    function dataKnown() {
+        return internal.dataBytes >= 0
+    }
 
     function internalKnown() {
         return internal.valid && internal.totalBytes > 0 && internal.freeBytes >= 0
@@ -127,9 +134,14 @@ SettingsPane {
         ensureFocusedVisible()
     }
 
+    // Free space changes without a signal: read the numbers when this pane is shown (not when
+    // Settings opens: the pane is created then, hidden).
+    onVisibleChanged: if (visible) Storage.refreshInternal()
+
     Component.onCompleted: {
         syncVolumes()
-        Storage.refreshInternal()       // free space changes without a signal: read it when shown
+        if (visible)
+            Storage.refreshInternal()
     }
 
     function labelOf(id) {
@@ -237,6 +249,7 @@ SettingsPane {
 
     SettingRow {
         objectName: "storageData"
+        visible: pane.dataKnown()
         u: pane.u
         label: qsTr("Profile data")
         value: pane.sizeText(pane.internal.dataBytes)
@@ -245,7 +258,7 @@ SettingsPane {
     SettingRow {
         objectName: "storageSystem"
         u: pane.u
-        label: qsTr("System")
+        label: pane.dataKnown() ? qsTr("System") : qsTr("Other")
         value: pane.sizeText(pane.internal.systemBytes)
     }
 

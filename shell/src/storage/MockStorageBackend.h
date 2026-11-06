@@ -4,7 +4,8 @@
 
 #include <QTimer>
 
-// In-memory storage. The console's own storage (refreshUsage) is a 464 GB disk with 450 GB free; a
+// In-memory storage. The console's own storage (refreshUsage) is a 464 GB disk with 450 GB free and
+// the profile data unknown (-1), as the real service reports it; a
 // test can change the numbers (setUsage, lowSpace), which is published like the service's
 // SystemUsageChanged. Present at start in the volume list: a second internal disk (ext4, the "games
 // disk" mounted outside the system paths) and "Old Drive", a USB drive
@@ -33,6 +34,7 @@ public:
     void setUsage(qint64 total, qint64 free, qint64 apps, qint64 data);
     // The 464 GB disk almost full (6 % free) or back to 450 GB free.
     void lowSpace(bool low);
+    int usageCalls() const { return m_usageCalls; } // refreshUsage() calls since the start
     void reset(bool plugStick);
     void plugStick();
     // Plugs these volumes in together: one list, one announcement each (in the order given).
@@ -64,6 +66,7 @@ private:
 
     QList<Entry> m_entries;
     SystemUsage m_usage;
+    int m_usageCalls = 0;
     QTimer m_plugTimer;
     bool m_holdEject = false;
     QStringList m_heldEjects;

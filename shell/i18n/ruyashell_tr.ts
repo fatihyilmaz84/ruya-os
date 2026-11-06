@@ -1418,7 +1418,7 @@
 <context>
     <name>StoragePane</name>
     <message>
-        <location filename="../qml/StoragePane.qml" line="+156"/>
+        <location filename="../qml/StoragePane.qml" line="+168"/>
         <source>%1 is still in use. Close what uses it and try again.</source>
         <translation>%1 hâlâ kullanımda. Kullanan uygulamayı kapatıp tekrar deneyin.</translation>
     </message>
@@ -1443,8 +1443,8 @@
         <translation>Desteklenmiyor</translation>
     </message>
     <message>
-        <location line="-133"/>
-        <location line="+134"/>
+        <location line="-138"/>
+        <location line="+139"/>
         <source>%1 free of %2</source>
         <translation>%2 içinde %1 boş</translation>
     </message>
@@ -1469,7 +1469,7 @@
         <translation>Uygulamalar ve oyunlar</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+8"/>
         <source>Profile data</source>
         <translation>Profil verileri</translation>
     </message>
@@ -1477,6 +1477,11 @@
         <location line="+7"/>
         <source>System</source>
         <translation>Sistem</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Other</source>
+        <translation>Diğer</translation>
     </message>
     <message>
         <location line="+9"/>

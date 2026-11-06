@@ -203,6 +203,12 @@ void Storage::mockSetInternal(double total, double free, double apps, double dat
         mock->setUsage(qint64(total), qint64(free), qint64(apps), qint64(data));
 }
 
+int Storage::mockUsageCalls() const
+{
+    auto *mock = qobject_cast<MockStorageBackend *>(m_backend.get());
+    return mock ? mock->usageCalls() : 0;
+}
+
 void Storage::mockLowSpace(bool low)
 {
     if (auto *mock = qobject_cast<MockStorageBackend *>(m_backend.get()))

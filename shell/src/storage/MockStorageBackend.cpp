@@ -14,8 +14,10 @@ SystemUsage usageOf(qint64 total, qint64 free, qint64 apps, qint64 data)
     u.freeBytes = free;
     u.appsBytes = apps;
     u.dataBytes = data;
-    const bool known = total >= 0 && free >= 0 && apps >= 0 && data >= 0;
-    u.systemBytes = known ? std::max<qint64>(0, total - free - apps - data) : -1;
+    // As the service computes it: without the profile data (unknown today) the rest is everything
+    // used that is not apps.
+    const bool known = total >= 0 && free >= 0 && apps >= 0;
+    u.systemBytes = known ? std::max<qint64>(0, total - free - apps - std::max<qint64>(0, data)) : -1;
     return u;
 }
 }
@@ -39,6 +41,7 @@ void MockStorageBackend::refresh()
 
 void MockStorageBackend::refreshUsage()
 {
+    ++m_usageCalls;
     publishUsage(m_delay);
 }
 
@@ -51,9 +54,9 @@ void MockStorageBackend::setUsage(qint64 total, qint64 free, qint64 apps, qint64
 void MockStorageBackend::lowSpace(bool low)
 {
     if (low)
-        setUsage(464 * GB, 28 * GB, 188 * GB, 142 * GB);
+        setUsage(464 * GB, 28 * GB, 188 * GB, -1);
     else
-        setUsage(464 * GB, 450 * GB, 6 * GB + GB / 2, 3 * GB + GB / 5);
+        setUsage(464 * GB, 450 * GB, 6 * GB + GB / 2, -1);
 }
 
 void MockStorageBackend::eject(const QString &id)
@@ -157,7 +160,7 @@ void MockStorageBackend::initState()
     m_heldEjects.clear();
     m_ejectCalls = 0;
     m_plugTimer.stop();
-    m_usage = usageOf(464 * GB, 450 * GB, 6 * GB + GB / 2, 3 * GB + GB / 5);
+    m_usage = usageOf(464 * GB, 450 * GB, 6 * GB + GB / 2, -1);
     auto entry = [](const char *id, const char *drive, const char *label, const char *fs, qint64 size, qint64 free,
                     bool removable, bool mounted, const char *mountPoint, bool present) {
         Entry e;

@@ -7,6 +7,13 @@
 //! finds the cache stale answers with the old numbers at once and starts a recompute (the service
 //! then sends `SystemUsageChanged`). `system` is what is left of the used space.
 //!
+//! A walk that could not read everything it walked is not reported: its number would count only
+//! what the service may read, so the part is unknown (`-1`). That is the case for `data` today:
+//! every profile is a Unix user with a 0700 home under `/var/home` and the service runs as
+//! `ruya-shell`, so it sees the directories and none of their files. `system` is then everything
+//! that is not free and not apps (`total - free - apps`); with `data` known it is
+//! `total - free - apps - data`.
+//!
 //! The core is pure: [`SystemSource`] (statvfs and tree sizes) and [`Clock`] are traits, with
 //! fakes for the tests; [`LinuxSource`] is the real thing. The directory walk counts allocated
 //! blocks (`st_blocks * 512`, so sparse files and block rounding are right), counts a hard-linked
@@ -50,7 +57,8 @@ impl Usage {
 }
 
 /// The size of a directory tree. `partial` is set when parts of it could not be read (another
-/// user's private files): the number is then a lower bound.
+/// user's private files): the number then counts only what was readable, and [`SystemUsage`]
+/// reports the part as unknown instead.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TreeSize {
     pub bytes: u64,
@@ -174,11 +182,12 @@ impl<S: SystemSource, C: Clock> SystemUsage<S, C> {
         let free = fs.map(|(t, f)| to_i64(f.min(t)));
         let apps = apps.map(to_i64);
         let data = data.map(to_i64);
-        let system = match (total, free, apps, data) {
-            (Some(t), Some(f), Some(a), Some(d)) => Some(
+        // What is used and is not apps (and not profile data, when that is known).
+        let system = match (total, free, apps) {
+            (Some(t), Some(f), Some(a)) => Some(
                 t.saturating_sub(f)
                     .saturating_sub(a)
-                    .saturating_sub(d)
+                    .saturating_sub(data.unwrap_or(0))
                     .max(0),
             ),
             _ => None,
@@ -240,6 +249,10 @@ impl<S: SystemSource, C: Clock> SystemUsage<S, C> {
 
     fn walk(&self, path: &str) -> Option<u64> {
         match self.source.tree(path) {
+            Ok(size) if size.partial => {
+                eprintln!("ruya-devices: {path} is not fully readable: its size is unknown");
+                None
+            }
             Ok(size) => Some(size.bytes),
             Err(err) => {
                 eprintln!("ruya-devices: measuring {path} failed: {err}");
@@ -451,6 +464,13 @@ mod tests {
 
     const GB: u64 = 1_000_000_000;
 
+    fn partial(bytes: u64) -> Result<TreeSize, String> {
+        Ok(TreeSize {
+            bytes,
+            partial: true,
+        })
+    }
+
     fn tree(bytes: u64) -> Result<TreeSize, String> {
         Ok(TreeSize {
             bytes,
@@ -517,8 +537,64 @@ mod tests {
         let now = usage.current();
         assert_eq!((now.total_bytes, now.free_bytes), (100, 60));
         assert_eq!((now.apps_bytes, now.data_bytes), (-1, 10));
-        // System cannot be told without all the parts.
+        // System cannot be told without the apps.
         assert_eq!(now.system_bytes, -1);
+    }
+
+    // The profile homes are 0700 users' directories: the walk sees them and nothing in them, so
+    // the number would be a few kB and say nothing. It is unknown, and the rest is not hidden.
+    #[test]
+    fn a_partly_unreadable_data_walk_is_unknown_and_system_is_the_rest() {
+        let source = FakeSource::new(464 * GB, 450 * GB, 8 * GB, 0);
+        source.set_data(partial(8_192));
+        let (_, usage) = core(source);
+        assert_eq!(usage.refresh(), Refresh::Changed);
+        assert_eq!(
+            usage.current(),
+            Usage {
+                total_bytes: (464 * GB) as i64,
+                free_bytes: (450 * GB) as i64,
+                apps_bytes: (8 * GB) as i64,
+                data_bytes: -1,
+                // 464 - 450 - 8: everything used that is not apps
+                system_bytes: (6 * GB) as i64,
+            }
+        );
+    }
+
+    #[test]
+    fn a_fully_readable_data_walk_is_a_number_and_system_is_the_remainder() {
+        let source = FakeSource::new(464 * GB, 450 * GB, 8 * GB, 2 * GB);
+        source.set_data(tree(2 * GB));
+        let (_, usage) = core(source);
+        usage.refresh();
+        let now = usage.current();
+        assert_eq!(
+            (now.data_bytes, now.system_bytes),
+            ((2 * GB) as i64, (4 * GB) as i64)
+        );
+    }
+
+    #[test]
+    fn a_partly_unreadable_apps_walk_is_unknown_too() {
+        let source = FakeSource::new(100, 60, 10, 10);
+        source.set_apps(partial(3));
+        let (_, usage) = core(source);
+        usage.refresh();
+        let now = usage.current();
+        assert_eq!(
+            (now.apps_bytes, now.data_bytes, now.system_bytes),
+            (-1, 10, -1)
+        );
+    }
+
+    #[test]
+    fn system_without_data_is_never_negative() {
+        let source = FakeSource::new(100, 60, 50, 0);
+        source.set_data(partial(1));
+        let (_, usage) = core(source);
+        usage.refresh();
+        assert_eq!(usage.current().system_bytes, 0);
     }
 
     #[test]

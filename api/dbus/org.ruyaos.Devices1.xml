@@ -272,17 +272,21 @@
         free_bytes    x   what is still free for the shell's user (statvfs; read on every call)
         apps_bytes    x   the system Flatpak installation, /var/lib/flatpak (apps and runtimes;
                           files that are hard links to each other count once)
-        data_bytes    x   profile homes, /var/home. The service runs as the shell's user and cannot
-                          read the private files of the other profiles: this is what it can read,
-                          so it is a lower bound (a profile's own directory is always counted)
+        data_bytes    x   profile homes, /var/home. Unknown (-1) today: every profile is a Unix user
+                          with a 0700 home and the service runs as the shell's user, so it can see
+                          the directories but none of their files. A directory that was not fully
+                          readable is never reported as a number (it would count only what the
+                          service may read). Exact per-profile sizes need a root source
+                          (ruya-profiles); until then clients show "other" instead of this part
         system_bytes  x   the rest of what is used: total - free - apps - data, never negative;
-                          -1 while any of those four is unknown
+                          while data_bytes is -1 it is everything that is neither free nor apps
+                          (total - free - apps); -1 while total, free or apps is unknown
       apps_bytes and data_bytes are directory sizes (allocated blocks, symlinks not followed,
       other mounts not entered) computed in the background and kept for 60 s. They are -1 until the
       first measurement has finished (the call never waits for it); a call that finds them older
       than 60 s answers with what it has and starts a new measurement. They are measured again
-      when the Store reports InstalledChanged. A directory that cannot be measured at all is -1
-      again; it never makes the call fail.
+      when the Store reports InstalledChanged. A directory that cannot be measured, or not fully
+      read, is -1; it never makes the call fail.
     -->
     <method name="GetSystemUsage">
       <arg name="usage" type="a{sv}" direction="out"/>

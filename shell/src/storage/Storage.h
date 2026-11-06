@@ -24,8 +24,9 @@ class Storage : public QObject
     Q_PROPERTY(QVariantList volumes READ volumes NOTIFY volumesChanged)
     // The console's own storage (the filesystem that holds /var): { valid, totalBytes, freeBytes,
     // appsBytes, dataBytes, systemBytes }. `valid` is false until the first reply; a part that is
-    // not known is -1 (the apps and profile data sizes are measured in the background and are -1
-    // for a moment after the service starts; profile data is a lower bound).
+    // not known is -1 (the apps size is measured in the background and is -1 for a moment after
+    // the service starts). dataBytes is -1 today (the profile homes are 0700 and owned by the
+    // profile users); systemBytes is then everything used that is not apps.
     Q_PROPERTY(QVariantMap internal READ internal NOTIFY internalChanged)
     Q_PROPERTY(bool mock READ isMock CONSTANT)
     // How long the volumes of one drive are waited for (tests wait this long to see "no second toast").
@@ -76,6 +77,8 @@ public:
     // publishes them. mockLowSpace(true): a 464 GB disk with 6 % free; false: 450 GB free.
     Q_INVOKABLE void mockSetInternal(double total, double free, double apps, double data);
     Q_INVOKABLE void mockLowSpace(bool low);
+    // How many times the internal storage numbers were asked for since the start.
+    Q_INVOKABLE int mockUsageCalls() const;
     // Asks for the internal storage numbers; the reply arrives after `ms` showing them as they are
     // now (counted in mockPendingReplies).
     Q_INVOKABLE void mockRefreshInternalDelayed(int ms);
