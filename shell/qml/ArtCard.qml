@@ -3,7 +3,8 @@ import RuyaShell
 
 // Art card (04 §5): 16:9 art edge to edge (AppArt: the picture, else initials on a tint from
 // the id hash), the title on a caption fade at the bottom, a state pill in words and the card
-// focus (ring and scale). The owner sets `focused` from its view and handles Accept.
+// focus (ring, scale, lift shadow, top sheen and a one-time glare: 04 §3.8). The owner sets
+// `focused` from its view and handles Accept.
 Item {
     id: card
 
@@ -23,7 +24,7 @@ Item {
     implicitHeight: width * 9 / 16      // stays 16:9 when a grid or row sets the width
     scale: focused ? Theme.focusScale : 1.0
     z: focused ? 1 : 0
-    Behavior on scale { NumberAnimation { duration: Theme.focusMs; easing.type: Easing.OutCubic } }
+    Behavior on scale { NumberAnimation { duration: Theme.focusMs; easing.type: Easing.Bezier; easing.bezierCurve: Theme.easeGlide } }
 
     Accessible.role: Accessible.Button
     Accessible.name: stateText.length > 0 ? title + ", " + stateText : title
@@ -39,7 +40,17 @@ Item {
         id: pulseAnimation
         objectName: "pulseAnimation"
         NumberAnimation { target: art; property: "scale"; to: Theme.pulseScale; duration: Theme.pulseDownMs; easing.type: Easing.OutQuad }
-        NumberAnimation { target: art; property: "scale"; to: 1.0; duration: Theme.pulseUpMs; easing.type: Easing.OutBack }
+        NumberAnimation { target: art; property: "scale"; to: 1.0; duration: Theme.pulseUpMs; easing.type: Easing.OutBack; easing.overshoot: Theme.popOvershoot }
+    }
+
+    GlassShadow {
+        id: liftShadow
+        objectName: "cardLiftShadow"
+        anchors.fill: parent
+        u: card.u
+        radius: Theme.radiusM * card.u
+        kind: "lift"
+        active: card.focused
     }
 
     AppArt {
@@ -51,6 +62,15 @@ Item {
         picture: card.picture
         border.width: card.focused ? Theme.focusRingWidth * card.u : 0
         border.color: Theme.focusRing
+
+        CardFocusLayers {
+            id: focusLayers
+            objectName: "cardFocusLayers"
+            anchors.fill: parent
+            u: card.u
+            radius: art.radius
+            focused: card.focused
+        }
 
         Rectangle {
             anchors { left: parent.left; right: parent.right; bottom: parent.bottom }

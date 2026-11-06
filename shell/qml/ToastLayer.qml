@@ -90,8 +90,22 @@ Item {
             height: 92 * layer.u
             radius: Theme.radiusM * layer.u
             color: Theme.toastBackground
-            border.width: Theme.hairlineAt(layer.u)
-            border.color: Theme.glassBorder
+
+            GlassShadow {
+                objectName: "toastShadow"
+                z: -1                   // behind the toast's own fill
+                anchors.fill: parent
+                u: layer.u
+                radius: toast.radius
+                kind: "panel"
+            }
+            GlassLayers {
+                objectName: "toastLayers"
+                anchors.fill: parent
+                u: layer.u
+                radius: toast.radius
+                grain: false            // a toast is not blurred
+            }
 
             Rectangle {
                 id: bar

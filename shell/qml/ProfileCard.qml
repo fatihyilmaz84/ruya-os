@@ -16,7 +16,7 @@ Item {
     width: 260 * u
     height: 320 * u
     scale: focused ? Theme.focusScale : 1.0
-    Behavior on scale { NumberAnimation { duration: Theme.focusMs; easing.type: Easing.OutCubic } }
+    Behavior on scale { NumberAnimation { duration: Theme.focusMs; easing.type: Easing.Bezier; easing.bezierCurve: Theme.easeGlide } }
 
     Rectangle {
         id: avatar

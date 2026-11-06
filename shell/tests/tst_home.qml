@@ -324,6 +324,15 @@ Item {
             grabImage(tc.shell).save(shotsDir + "/01-home-performance.png")
         }
 
+        function test_zz_screenshots_balanced() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            start("")
+            DeviceSettings.effectsQuality = "balanced"
+            wait(900)
+            grabImage(tc.shell).save(shotsDir + "/01-home-balanced.png")
+        }
+
         function test_zz_screenshots_empty() {
             if (!shotsDir)
                 skip("set RUYA_SHOTS_DIR to save screenshots")

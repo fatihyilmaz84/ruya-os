@@ -4,7 +4,9 @@ import RuyaShell
 
 // Glass pill (04 §3.6): `glassStrong` over a blurred crop of `source` (the shared L0 layer),
 // rounded by a mask. `sourceX/Y` is where this item sits in the source's coordinates. With no
-// blur (the Performance tier) it is `glassOpaque`, never translucent over sharp art.
+// blur (the Performance tier) it is `glassOpaque`, never translucent over sharp art. On top:
+// the sheen, grain and lit rim of 04 §3.8 (GlassLayers) and, behind, the pill shadow
+// (GlassShadow; High and Balanced).
 Item {
     id: glass
 
@@ -12,6 +14,14 @@ Item {
     property Item source
     property real sourceX: 0
     property real sourceY: 0
+
+    GlassShadow {
+        objectName: "glassShadow"
+        anchors.fill: parent
+        u: glass.u
+        radius: height / 2
+        kind: "pill"
+    }
 
     ShaderEffectSource {
         id: crop
@@ -46,7 +56,11 @@ Item {
         anchors.fill: parent
         radius: height / 2
         color: Theme.blurMax > 0 ? Theme.glassStrong : Theme.glassOpaque
-        border.width: Theme.hairlineAt(glass.u)
-        border.color: Theme.glassBorder
+    }
+    GlassLayers {
+        objectName: "glassLayers"
+        anchors.fill: parent
+        u: glass.u
+        radius: height / 2
     }
 }

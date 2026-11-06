@@ -73,6 +73,8 @@ The script downloads the variable font from a pinned upstream commit into a temp
 
 The typeface (Inter 4.1, OFL-1.1) is cut the same way: `scripts/fetch-inter.sh` in WSL (`python3-fonttools`, `unzip`) downloads the pinned release zip into a temporary directory, checks its SHA-256, extracts a fixed list of members and writes the three subset TTFs and `OFL-Inter.txt` to `shell/fonts/`.
 
+The glass grain tile (`shell/assets/glass-grain.png`, 128x128, T-204) is made by `python -I scripts/make-grain.py` (standard library only, a fixed pseudo-random sequence, so the PNG is reproducible; `--check` says whether the committed file matches). There is no switch to turn the glass layers off one by one; to see a surface without them, set the tier: `ruya-shell.exe --windowed --effects performance` has no grain, no shadows, no glare or shimmer, `--reduced-motion` has no glare or shimmer.
+
 ## Update / rollback drill (Phase 0 items 6–7; passed 2026-10-22)
 
 1. Boot the working disk: `.\scripts\smoke-test.ps1 -Work -Keep` (delete `output\qcow2\work.qcow2` first for a fresh one). `vm-reboot-check.ps1` needs `-Disk output\qcow2\work.qcow2` then.
