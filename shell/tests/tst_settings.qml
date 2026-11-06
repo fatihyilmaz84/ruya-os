@@ -36,7 +36,7 @@ Item {
         name: "Settings"
         when: windowShown
 
-        property Item shell: null
+        property Shell shell: null
 
         function find(name) { return findChild(tc.shell, name) }
 
@@ -225,7 +225,7 @@ Item {
             const wholeBottom = whole * stride - gap
             tryVerify(() => Math.abs(pane.viewport.height - wholeBottom) < 1, 2000, "the viewport ends at the last whole row")
             verify(pane.viewport.height < pane.height - 1, "a partial row is clipped away")
-            function onRowTop() { return pane.laidOutRows().some(r => Math.abs(r.y - pane.scrollY) < 0.5) }
+            const onRowTop = () => pane.laidOutRows().some(r => Math.abs(r.y - pane.scrollY) < 0.5)
             verify(onRowTop())
             checkRowsInside(pane)
             const rows = pane.focusableRows()

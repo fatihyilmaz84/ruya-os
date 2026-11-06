@@ -99,7 +99,8 @@ Item {
             const id = "org.example.Racer"
             verify(!isInstalled(id))
             const percents = []
-            const onJobs = () => { const j = Store.jobs[id]; if (j) percents.push(j.percent) }
+            // No local inside this closure: qmllint goes blind on one (T-189, scripts/lint-test-members.ps1).
+            const onJobs = () => { if (Store.jobs[id]) percents.push(Store.jobs[id].percent) }
             Store.jobsChanged.connect(onJobs)
             Store.install(id)
             tryCompare(finished, "count", 1)

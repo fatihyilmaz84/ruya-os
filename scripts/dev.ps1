@@ -279,6 +279,46 @@ function Test-QmlTests {
     Record "test lint" ($LASTEXITCODE -eq 0)
 }
 
+# The rules live in scripts\lint-test-members.ps1 (shared with CI). It needs the shell build's
+# qmllint response file, so it runs after Do-Build.
+function Test-TestMembers {
+    Step "test member lint (no test reads a member QML cannot see)"
+    $rspFile = Join-Path $ShellBuild ".rcc\qmllint\ruyashell.rsp"
+    $lint = Join-Path $PSScriptRoot "lint-test-members.ps1"
+    & $lint -RspFile $rspFile
+    Record "test member lint" ($LASTEXITCODE -eq 0)
+
+    # Self-check: the lint must reject a test that waits on a member Storage does not expose (the
+    # T-184 round-1 mistake: `wait(Storage.groupWindowMs + 200)` waited nothing because QML could
+    # not see the member), a wait whose timeout is NaN from a typo on the shell, and accept
+    # the same test reading a member that exists.
+    $fixture = Join-Path ([IO.Path]::GetTempPath()) ("ruya-lint-" + [guid]::NewGuid().ToString("N"))
+    New-Item -ItemType Directory -Path $fixture | Out-Null
+    $bad = Join-Path $fixture "tst_bad.qml"
+    $head = "import QtQuick`nimport QtTest`nimport RuyaShell`nItem {`n    TestCase {`n        name: `"Fixture`"`n"
+    $tail = "    }`n}`n"
+    $cases = @{
+        "an unexposed singleton member" = "        function test_x() { wait(Storage.noSuchWindowMs + 200) }`n"
+        "a misspelled shell property" = "        property Shell shell: null`n        function test_x() { tryVerify(() => shell.currentPag === `"`") }`n"
+        "a nested function (qmllint stops checking the file)" = "        function test_x() {`n            function run(id) { const s = id.status }`n            run(1)`n        }`n"
+    }
+    $allRejected = $true
+    foreach ($k in $cases.Keys) {
+        [IO.File]::WriteAllText($bad, $head + $cases[$k] + $tail, (New-Object System.Text.UTF8Encoding($false)))
+        & $lint -RspFile $rspFile -TestDir $fixture 6>&1 | Out-Null
+        if ($LASTEXITCODE -ne 1) { Write-Host "    lint accepted: $k" -ForegroundColor Yellow; $allRejected = $false }
+    }
+    # The same tests reading members that exist, and the two context properties of the test
+    # engine, are clean.
+    $good = "        property Shell shell: null`n        function test_x() {`n            verify(windowGuard.ensureActive() === `"`")`n            wait(Storage.groupWindowMs + 200)`n            tryVerify(() => shell.currentPage === `"`")`n            if (shotsDir) skip(`"x`")`n        }`n"
+    [IO.File]::WriteAllText($bad, $head + $good + $tail, (New-Object System.Text.UTF8Encoding($false)))
+    $goodOut = & $lint -RspFile $rspFile -TestDir $fixture 6>&1
+    $accepted = ($LASTEXITCODE -eq 0)
+    Remove-Item -Recurse -Force $fixture
+    if (-not $accepted) { $goodOut | ForEach-Object { Write-Host "    $_" } }
+    Record "test member lint self-check (rejects unexposed reads, accepts exposed ones)" ($allRejected -and $accepted)
+}
+
 # The rules live in scripts\lint-icons.ps1 (shared with CI).
 function Test-Icons {
     Step "icon lint (shell\fonts\icons.txt and the Icon.qml table agree)"
@@ -306,6 +346,7 @@ function Do-Shell {
     Test-FontCoverage
     Test-Translations
     Test-QmlTests
+    Test-TestMembers
     Step "qmllint (module context)"
     # --max-warnings 0: without it qmllint exits 0 even when it reports warnings.
     Invoke-Native "qmllint" { qmllint --max-warnings 0 "@$ShellBuild\.rcc\qmllint\ruyashell.rsp" }

@@ -20,7 +20,7 @@ Item {
         name: "Power"
         when: windowShown
 
-        property Item shell: null
+        property Shell shell: null
 
         function find(name) { return findChild(tc.shell, name) }
 
@@ -246,6 +246,25 @@ Item {
             keyClick(Qt.Key_Escape)                    // closes the overlay
             tryVerify(() => !find("systemPanel").open)
             tryVerify(() => find("homePlay").activeFocus)
+            compare(Power.actionCount, 0)
+        }
+
+        // T-189: Backspace is Back in the Guide overlay too (T-179 tested it on the Power page only).
+        function test_overlay_backspace_is_back() {
+            keyClick(Qt.Key_HomePage)
+            tryVerify(() => find("systemActions").activeFocus)
+            keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Return)                    // Power
+            tryCompare(find("systemPanel"), "powerMode", true)
+            verify(find("systemActions").activeFocus)
+            keyClick(Qt.Key_Backspace)                 // Back: the system actions again, on "Power"
+            tryCompare(find("systemPanel"), "powerMode", false)
+            compare(find("systemPanel").open, true, "the first Backspace only leaves the power choices")
+            compare(find("systemActions").currentIndex, 1)
+            verify(find("systemActions").activeFocus)
+            keyClick(Qt.Key_Backspace)                 // closes the overlay
+            tryVerify(() => !find("systemPanel").open)
+            tryVerify(() => find("homePlay").activeFocus, 2000, "focus returns to the shelf")
             compare(Power.actionCount, 0)
         }
 

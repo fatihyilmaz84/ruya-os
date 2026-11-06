@@ -23,7 +23,7 @@ Item {
         name: "Setup"
         when: windowShown
 
-        property Item shell: null
+        property Shell shell: null
 
         function find(name) { return findChild(tc.shell, name) }
         function setup() { return find("setup") }

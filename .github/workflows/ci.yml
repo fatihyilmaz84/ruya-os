@@ -69,6 +69,10 @@ jobs:
       - name: qmllint
         # Direct call: the all_qmllint target does not fail on warnings; --max-warnings 0 does.
         run: /usr/lib64/qt6/bin/qmllint --max-warnings 0 @shell/build/.rcc/qmllint/ruyashell.rsp
+      - name: Test member lint
+        # A test that reads a member QML cannot see is `undefined` at run time (T-189); the same
+        # two checks as `dev.ps1` runs (scripts/lint-test-members.ps1).
+        run: bash scripts/lint-test-members.sh shell/build/.rcc/qmllint/ruyashell.rsp /usr/lib64/qt6/bin/qmllint
       - name: Qt Quick tests
         # offscreen uses the software renderer: effects are skipped, focus/flow logic is tested.
         env:

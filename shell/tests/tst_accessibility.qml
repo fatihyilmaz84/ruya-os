@@ -20,7 +20,7 @@ Item {
         name: "Accessibility"
         when: windowShown
 
-        property Item shell: null
+        property Shell shell: null
         property var seen: []           // "objectName: name" of every focused item visited
 
         function find(name) { return findChild(tc.shell, name) }
@@ -30,12 +30,15 @@ Item {
             return (item.objectName || String(item)) + " [" + item.Accessible.role + "]"
         }
 
-        // The focused item must carry a name; remember it for the coverage checks.
+        // The focused item must carry a name and a role (T-189: describe() prints the role, but
+        // nothing asserted it); remember it for the coverage checks.
         function checkFocused(where) {
             const item = focused()
             verify(item !== null, where + ": nothing has focus")
             verify(item.Accessible.name.length > 0,
                    where + ": focused item without Accessible.name: " + describe(item))
+            verify(item.Accessible.role !== Accessible.NoRole,
+                   where + ": focused item without Accessible.role: " + describe(item))
             seen.push(item.objectName + ": " + item.Accessible.name)
         }
 

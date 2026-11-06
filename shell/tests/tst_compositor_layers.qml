@@ -51,8 +51,8 @@ Item {
         name: "CompositorLayers"
         when: windowShown
 
-        property Item shell: null
-        property Item app: null
+        property Shell shell: null
+        property var app: null
 
         function find(name) { return findChild(tc.shell, name) }
 
