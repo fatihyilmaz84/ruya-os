@@ -29,6 +29,7 @@ Open work only (todo, in-progress, blocked), in the recommended order; when NEXT
 | [T-196](tasks/T-196-storage-pane-internal-storage.md) | Settings -> Storage shows the internal storage (free space, apps and games, profile data) next to the drives | in-progress | — |
 | [T-197](tasks/T-197-shell-crash-on-bluetooth-audio-disconnect.md) | **[lead]** The shell crashes when a Bluetooth headset disconnects (Qt PipeWire audio thread) | in-progress | — |
 | [T-198](tasks/T-198-display-resolution-and-dpi.md) | **[lead]** Display: pick resolution and refresh, UI scale to the screen (DPI), keep/revert dialog | todo | — |
+| [T-199](tasks/T-199-device-icons.md) | Device icons in the Bluetooth pane and toasts: gamepad, headset, keyboard...; controller family glyphs when known, generic otherwise | todo | — |
 | [T-164](tasks/T-164-per-profile-wayland-sockets.md) | **[lead]** Per-profile Wayland sockets: a profile's app appears in the shell | todo | T-162 |
 | [T-165](tasks/T-165-profile-switch-freezes-apps.md) | Profile switch and sign-out freeze the profile's apps | todo | T-164 |
 | [T-147](tasks/T-147-fullscreen-app-flow.md) | Full-screen apps: launch splash, quick menu, return, close | todo | T-164 |
@@ -51,6 +52,8 @@ Follow-ups and debt for the next planner, one line each: `- (source) what, and w
 - (Dell, 2026-11-06) The installer ISO makes a 70 GiB root/`/var` on a 465 GB disk and leaves ~395 GB unallocated (Anaconda's autopart caps `/` at 70 GiB and `--nohome` leaves the rest unused). Flatpak apps and games live in `/var`, so a console would be limited to ~64 GB of games. Fix in the ISO's kickstart (grow the root partition to the whole disk; `image/bib`). The Dell was grown by hand with `growpart /dev/sda 3` + `xfs_growfs /var`.
 - (T-191) Session `ListRunning` -> `runningListed` is an unguarded model-replacing reply (interacts with `AppStarted`/`AppExited`): guard it. A queued job adopted at start does not show as working on its page (`Store.jobs` holds running jobs only); a `ListJobs` reply drops the progress of a job started after the request was sent. The mocks repeat `mock*Delayed` + `mockPendingReplies` on each facade: a shared helper.
 - (Dell, 2026-11-06) A headset paired before the pairing fix is `Paired: yes, Bonded: no` and only reconnects in pairing mode: forget and pair it again (done by hand on the Dell). Consider: the shell could offer "Pair again" for such a device, or `Forget`+`Pair` automatically when `Bonded` is false (needs `bonded` in `ListDevices`).
+- (owner, 2026-11-06) T-199 device icons: real brand art (Sony/Microsoft/Nintendo pad pictures) would need an owner/legal decision; the task draws its own silhouettes.
+- (T-162 session) The ISO's kickstart now partitions by hand (`image/bib/iso-kickstart.toml`, whole-disk `/`): UNTESTED, verify with `vm-iso-check.ps1` on a disk larger than 70 GiB (the check makes a 64 GiB disk; use 128 GiB) and that bib accepts `customizations.installer.kickstart`, and check `/var` is ~the whole disk.
 - (0.0.40 try-out) The VM clock shows UTC: there is no time-zone setting yet (wizard or System pane); plan it with the OOBE/installer work.
 
 ## Blocked (need something this host doesn't have)

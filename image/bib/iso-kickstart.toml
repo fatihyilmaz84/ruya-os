@@ -1,0 +1,15 @@
+# Appended to the bootc-image-builder config by scripts/make-disk.sh for anaconda-iso builds only
+# (qcow2/raw disks take their root size from [[customizations.filesystem]] instead).
+#
+# Why: the default kickstart is `autopart --nohome`, and Anaconda's autopart gives `/` at most
+# 70 GiB and, with --nohome, leaves the rest of the disk unused. Flatpak apps and games live in
+# /var on that root, so a 465 GB disk allowed ~64 GB of games (found on the Dell, 2026-11-06).
+# Partition by hand instead: EFI (reqpart), a 2 GiB /boot, and / on the whole rest of the disk.
+[customizations.installer.kickstart]
+contents = """
+clearpart --all --initlabel --disklabel=gpt
+reqpart --add-boot
+part /boot --fstype=xfs --size=2048
+part / --fstype=xfs --grow
+reboot --eject
+"""

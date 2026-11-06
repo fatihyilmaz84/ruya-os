@@ -40,6 +40,13 @@ bib="${BIB_IMAGE:-quay.io/centos-bootc/bootc-image-builder:latest}"
 
 choose_config   # before anything slow or visible: fail fast
 mkdir -p output
+# The installer ISO also gets its own kickstart (image/bib/iso-kickstart.toml: use the whole disk
+# for /, which Anaconda's autopart does not), appended to the chosen config in a scratch copy.
+if [[ "${type}" == "anaconda-iso" ]]; then
+    cat "$config_file" image/bib/iso-kickstart.toml > output/bib-iso-config.toml
+    config_file=output/bib-iso-config.toml
+    echo "config: + image/bib/iso-kickstart.toml (whole-disk root)"
+fi
 config_args=(-v "$PWD/$config_file:/config.toml:ro")
 
 # bootc-image-builder needs a rootful podman and the image in root's storage.
