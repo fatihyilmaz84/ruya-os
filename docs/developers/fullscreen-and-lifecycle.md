@@ -54,7 +54,7 @@ Then it announces `AppExited(instance, app_id, exit_code, reason)` and the shell
 | `quit` | after `Stop`, the app ended within the grace (by itself with any exit code, or by the SIGTERM); or, without a `Stop`, exit status 0 | nothing |
 | `killed` | the 5 seconds passed and the console had to kill it; or something outside killed it (a signal, the out-of-memory killer) | nothing in v1, an unsaved game may be lost |
 | `crashed` | it exited with a non-zero status without being stopped | the toast "<name> stopped unexpectedly" |
-| `launch-failed` | it never got as far as running (for instance no window could be opened) | the same toast |
+| `launch-failed` | it never got as far as running (for instance its Flatpak runtime is missing; a game that starts and then fails exits non-zero and is `crashed`) | the same toast |
 
 So: **exit with status 0 when you finish normally**, and handle `SIGTERM` by saving and exiting ([Saves and data](saves-and-data.md)). The sample's handler only sets a flag; the main loop sees it within a frame, saves, closes the window and returns 0:
 

@@ -55,7 +55,7 @@ Everything not in the table (Wayland, DRI, `--share=ipc`, `--talk-name=` for oth
 ## Files: use the data directory and portals
 
 - Your own data goes in `$XDG_DATA_HOME`, `$XDG_CONFIG_HOME` and `$XDG_CACHE_HOME` and needs **no permission** ([Saves and data](saves-and-data.md)). Never ask for `--filesystem=home` to store saves.
-- A file the *player* chooses (a ROM, a mod, a picture) is meant to go through the **file chooser portal**: the sandbox gets the one file the player picked, with no permission in the manifest. **The portal backend that draws such dialogs in the shell, controller-navigable, is not built yet** (spec 03 section 4.4, "Gap to spike"). Until it exists, do not depend on a file chooser; read from a folder inside your data directory, or from removable media (media access for Flatpak apps is left to the Media work, backlog item B-007) and say so in your README.
+- A file the *player* chooses (a ROM, a mod, a picture) is meant to go through the **file chooser portal**: the sandbox gets the one file the player picked, with no permission in the manifest. **The portal backend that draws such dialogs in the shell, controller-navigable, is not built yet** (spec 03 section 4.4, "Gap to spike"). Until it exists, do not depend on a file chooser; read from a folder inside your data directory, or from removable media (media access for Flatpak apps is left to the Media work) and say so in your README.
 - Removable media never auto-runs anything.
 
 ## The rest of the sandbox

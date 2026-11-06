@@ -24,7 +24,7 @@ Everything here is open source (docs: CC-BY-4.0). Found something wrong or missi
 ## Quick facts
 
 - **Format:** Flatpak only. The console installs apps system-wide; the **data is per profile** (each profile is a Unix user).
-- **Run:** the shell starts your app as the profile's user in its own systemd unit, full screen. The Guide button is the player's way back; your app does not draw a home button.
+- **Run:** the shell starts your app as the profile's user in its own systemd unit, full screen (the window and Play are not built yet: see above). The Guide button is the player's way back; your app does not draw a home button.
 - **Stop:** the console sends `SIGTERM`, waits **5 seconds**, then `SIGKILL`. Save and exit within that time.
 - **Input:** controllers first; keyboard and mouse work too. Do not assume a keyboard.
 - **Data:** `~/.var/app/<your-app-id>/` as seen by your app through the XDG variables (`$XDG_DATA_HOME`, `$XDG_CONFIG_HOME`, `$XDG_CACHE_HOME`). See [Saves and data](saves-and-data.md).

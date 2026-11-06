@@ -25,7 +25,7 @@
   </categories>
 
   <!-- A controller is the main way to play; the keyboard works too. The console's Store reads
-       the first line to say "Uses game controllers" and to pass its controller filter. -->
+       the first line for its controller-support label and to pass its controller filter. -->
   <supports>
     <control>gamepad</control>
     <control>keyboard</control>
