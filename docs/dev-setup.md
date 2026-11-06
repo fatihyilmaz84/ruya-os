@@ -256,6 +256,8 @@ $env:PATH = "D:\dev\Qt\6.10.3\msvc2022_64\bin;$env:PATH"; shell\build-win\Releas
 
 Without `--windowed` the shell takes the whole screen; quit with Alt+F4.
 
+The `qtshadertools` module above is also what compiles the shell's shader (`shell/shaders/liquid.frag`, T-205, `qt_add_shaders` in `shell/CMakeLists.txt`); the Fedora image build needs `qt6-qtshadertools-devel` (in `image/Containerfile`). Without it the build still succeeds and the liquid pill falls back to the plain pill.
+
 **Adding C++ QML types.** The Visual Studio generator puts "collect metatypes JSON" and "run `qmltyperegistrar`" in one MSBuild batch, and MSBuild decides what is stale before the batch runs. Without help, the first incremental build after adding, editing or removing a `QML_ELEMENT` header would reuse the old registration ("X is not defined", qmllint "Member not found", or a compile error for a removed type). `shell/CMakeLists.txt` therefore adds a target, `ruyashell_invalidate_stale_qmltypes` (script: `shell/cmake/InvalidateStaleQmlTypes.cmake`), that deletes the registrar outputs when `CMakeLists.txt` or a module header is newer than them. It is only added for Visual Studio generators. It costs well under a second per build.
 
 **Mock services.** Off Linux, the shell uses in-memory stand-ins for the system services automatically. On Linux, pass `--mock-services`, or set `RUYA_SERVICES=mock`. The mock profiles are:

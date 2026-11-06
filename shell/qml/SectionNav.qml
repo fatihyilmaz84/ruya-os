@@ -7,6 +7,7 @@ import RuyaShell
 // Left/Right move between pills, Accept emits `activated(key)`, Down leaves downwards, LB/RB
 // ask for the next/previous section (`stepRequested`), Back asks to go back (`backRequested`).
 // One instance lives in the shell's top layer and is shown on Home and the section pages.
+// One FocusGlide highlight glides under the pills to the focused one (04 §3.8).
 // The glass blurs a crop of `blurSource` (the shared backdrop layer); with no blur (the
 // Performance tier) it is `glassOpaque`.
 FocusScope {
@@ -56,12 +57,25 @@ FocusScope {
         sourceY: nav.blurY
     }
 
+    // One highlight glides to the focused pill (04 §3.8, T-205). It is a picture under the pills:
+    // focus, keys and names stay on the nav and the pills, and each pill keeps its own ring. When
+    // the highlight is not drawn (the nav has no focus) a pill shows its own focus fill.
+    FocusGlide {
+        id: glide
+        objectName: "navGlide"
+        u: nav.u
+        target: repeater.count > 0 ? repeater.itemAt(nav.currentIndex) : null
+        shown: nav.activeFocus
+    }
+
     Row {
         id: pills
+        objectName: "navPills"
         anchors.centerIn: parent
         spacing: Theme.spaceXxs * nav.u
 
         Repeater {
+            id: repeater
             model: nav.keys
 
             delegate: Item {
@@ -81,9 +95,10 @@ FocusScope {
                 Accessible.selected: isSection
 
                 Rectangle {
+                    objectName: "navPillFill_" + pill.modelData
                     anchors.fill: parent
                     radius: height / 2
-                    color: pill.isSection ? Theme.primaryFill : (pill.focused ? Theme.focusFill : "transparent")
+                    color: pill.isSection ? Theme.primaryFill : (pill.focused && !glide.active ? Theme.focusFill : "transparent")
                     border.width: pill.focused && !pill.isSection ? Theme.focusRingWidth * nav.u : 0
                     border.color: Theme.focusRing
                 }

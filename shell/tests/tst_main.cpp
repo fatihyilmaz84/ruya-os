@@ -120,6 +120,9 @@ public:
         qputenv("RUYA_MOCK_FAST", "1");
         // ...and the mock USB stick is only plugged in by the tests that want it.
         qputenv("RUYA_MOCK_NO_STICK", "1");
+        // ...and a test may read a resource of the module with XMLHttpRequest (tst_glide.qml checks
+        // that the liquid pill's compiled shader is in it).
+        qputenv("QML_XHR_ALLOW_FILE_READ", "1");
     }
 
 public slots:

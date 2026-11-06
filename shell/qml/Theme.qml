@@ -190,6 +190,13 @@ QtObject {
     readonly property int tintMs: Math.round(700 * motionScale)
     readonly property int overlayMs: Math.round(200 * motionScale)   // Guide overlay fade
 
+    // Gliding highlight (04 §3.8, T-205): one highlight glides between the rows of a single-row
+    // selector in `glideMs` with `easeGlide` and stretches with speed.
+    readonly property int glideMs: Math.round(280 * motionScale)
+    readonly property real glideSpeedRef: 2600    // design px per second that stretches the highlight fully
+    readonly property real glideSmoothing: 14     // per second: how fast the stretch follows the speed
+    readonly property real glideStretchMax: 0.5   // extra length at full stretch, as a fraction of the highlight's length
+
     // Easing curves (04 §3.8) as Easing.Bezier arrays [c1x, c1y, c2x, c2y, 1, 1]. Use them as
     // `easing.type: Easing.Bezier; easing.bezierCurve: Theme.easeGlide`.
     readonly property var easeGlide: [0.25, 1, 0.5, 1, 1, 1]   // positions, lifts, the gliding highlight
@@ -231,11 +238,24 @@ QtObject {
     readonly property bool glareOn: ambientMotion                                         // card glare and shimmer: motion on, not Performance
     readonly property bool shimmerOn: ambientMotion
 
+    // Liquid pill (04 §3.8, T-205): the top-bar pills refract the blur behind them and carry a slow
+    // specular. `liquidPill` is the one switch (the default is decided on the Dell, B-002); the
+    // pill also needs the High tier and a shader that compiled (GlassPill falls back to the plain
+    // pill otherwise).
+    property bool liquidPill: true
+    readonly property bool liquidOn: liquidPill && DeviceSettings.effectsQuality === "high"
+    readonly property real liquidBendFactor: 0.5   // refraction depth at the edge, as a fraction of the pill height ...
+    readonly property real liquidBendMax: 30       // ... at most this many design px
+    readonly property real liquidBlurFactor: 0.4   // the liquid pill blurs less (times blurMax), so there is detail to bend at the edge
+    readonly property var liquidPeriods: [9, 15, 23]   // seconds of the three sines that move the specular
+    readonly property int liquidCycleMs: 1035000       // their common period (lcm of 9, 15, 23 = 1035 s): the time uniform loops here
+
     readonly property color glassSheen: tok("glassSheen")       // top of a panel, fades to 0 over glassSheenSpan
     readonly property color glassSheenEnd: Qt.rgba(1, 1, 1, 0)      // the clear end of white gradients (plain "transparent" would fade through black)
     readonly property real glassSheenSpan: 0.35
     readonly property color glassRim: tok("glassRim")         // 1 px ring (replaces the flat glassBorder on glass)
     readonly property color glassRimLit: tok("glassRimLit")      // on the top-left half (light from 135 deg)
+    readonly property color glassSpecular: tok("glassSpecular")   // peak colour of the liquid pill's moving specular (High tier, 04 §3.8)
     readonly property color glassTint: tok("glassTint")   // Dreamglass: #121018 at 44 %: sheets and modals over bright art. Never carries text (04 §3.6)
     readonly property real glassGrainOpacity: 1.0                    // the tile carries white 2 % / black 2.4 % noise in its alpha; this scales it
 

@@ -7,6 +7,9 @@ option(RUYA_BUILD_TESTS "Build the Qt Quick tests" ON)
 option(RUYA_COMPOSITOR "Build ruya-shell as the Wayland compositor (Linux)" OFF)
 
 find_package(Qt6 6.8 REQUIRED COMPONENTS Gui Quick Multimedia DBus LinguistTools)
+# ShaderTools builds the liquid pill's shader (T-205). It is optional: without it the .qsb is not
+# in the module, the ShaderEffect reports an error and GlassPill shows the plain pill.
+find_package(Qt6 6.8 OPTIONAL_COMPONENTS ShaderTools)
 qt_standard_project_setup(REQUIRES 6.8)
 
 # Everything except main() is a static QML module, so the app and the tests share it.
@@ -107,6 +110,8 @@ qt_add_qml_module(ruyashell
         qml/PrimaryButton.qml
         qml/SecondaryButton.qml
         qml/SectionNav.qml
+        qml/FocusGlide.qml
+        qml/LiquidGlass.qml
         qml/GlassPill.qml
         qml/GlassLayers.qml
         qml/GlassRim.qml
@@ -150,6 +155,17 @@ qt_add_qml_module(ruyashell
         fonts/Inter-SemiBold.ttf
         fonts/Inter-Bold.ttf
 )
+
+# Precompiled shaders (04 §3.8 liquid pill, T-205): GLSL 440 -> .qsb for every backend, embedded at
+# qrc:/qt/qml/RuyaShell/qml/shaders/, next to the QML files. Never inline GLSL in QML.
+if(TARGET Qt6::ShaderTools)
+    qt_add_shaders(ruyashell "ruyashell_shaders"
+        PREFIX "/qt/qml/RuyaShell/qml"
+        FILES shaders/liquid.frag
+    )
+else()
+    message(WARNING "Qt6 ShaderTools not found: the liquid pill falls back to the plain pill")
+endif()
 
 # qmltyperegistrar includes the QML_ELEMENT headers by file name.
 target_include_directories(ruyashell PUBLIC src/backend src/profiles src/settings src/audio src/network src/bluetooth src/battery src/thermal src/storage src/system src/power src/store src/library src/update src/session src/input)

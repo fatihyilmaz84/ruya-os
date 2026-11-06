@@ -87,8 +87,22 @@ Page {
         Keys.onEnterPressed: page.enterPane()
         Keys.onRightPressed: page.enterPane()
 
+        // One highlight glides to the focused category (04 §3.8, T-205). It lives in the content
+        // item (declared children of a ListView are not put there), so it scrolls with the rows; the rows keep their ring and, without the
+        // highlight, their own focus fill.
+        FocusGlide {
+            id: glide
+            objectName: "categoryGlide"
+            parent: categoryList.contentItem
+            u: page.u
+            orientation: Qt.Vertical
+            target: categoryList.currentItem
+            shown: categoryList.activeFocus
+        }
+
         delegate: Rectangle {
             id: category
+            objectName: "category_" + modelData.key
             required property int index
             required property var modelData
             readonly property bool selected: ListView.isCurrentItem
@@ -104,7 +118,7 @@ Page {
             width: categoryList.width
             height: categoryList.rowHeight
             radius: height / 2
-            color: focused ? Theme.focusFill : selected ? Theme.selectedFill : "transparent"
+            color: focused ? (glide.active ? "transparent" : Theme.focusFill) : selected ? Theme.selectedFill : "transparent"
             border.width: focused ? Theme.focusRingWidth * page.u : selected ? Theme.hairlineAt(page.u) : 0
             border.color: focused ? Theme.focusRing : Theme.glassBorder
             Behavior on color { ColorAnimation { duration: Theme.focusMs } }

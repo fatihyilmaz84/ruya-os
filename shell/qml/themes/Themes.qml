@@ -20,7 +20,7 @@ QtObject {
         "heroScrim", "artCaptionFade", "errorText", "warningText", "blobHighlight",
         "defaultTint", "tileGames", "tileMedia", "tileStore", "tileSettings", "tileOther",
         "toastInfo", "toastSuccess", "toastWarning", "toastError", "toastBackground",
-        "glassSheen", "glassRim", "glassRimLit", "glassTint", "shadowColor",
+        "glassSheen", "glassRim", "glassRimLit", "glassTint", "glassSpecular", "shadowColor",
         "blobStrength", "shadowStrength", "artLightTop", "artLightBottom"
     ]
 
@@ -88,6 +88,7 @@ QtObject {
         glassRim: Qt.rgba(1, 1, 1, 0.15)
         glassRimLit: Qt.rgba(1, 1, 1, 0.30)
         glassTint: Qt.rgba(0x12 / 255, 0x10 / 255, 0x18 / 255, 0.44)
+        glassSpecular: Qt.rgba(1, 1, 1, 0.22)
         shadowColor: Qt.rgba(0, 0, 0, 1)
         blobStrength: 1
         shadowStrength: 1
@@ -139,6 +140,7 @@ QtObject {
         glassRim: Qt.rgba(1, 1, 1, 0.14)
         glassRimLit: Qt.rgba(1, 1, 1, 0.28)
         glassTint: Qt.rgba(0, 0, 0, 0.5)
+        glassSpecular: Qt.rgba(1, 1, 1, 0.20)
         shadowColor: Qt.rgba(0, 0, 0, 1)
         blobStrength: 0.45
         shadowStrength: 1
@@ -190,6 +192,7 @@ QtObject {
         glassRim: Qt.rgba(0.8, 1, 0.95, 0.16)
         glassRimLit: Qt.rgba(0.85, 1, 0.97, 0.32)
         glassTint: Qt.rgba(0.02, 0.07, 0.1, 0.44)
+        glassSpecular: Qt.rgba(0.85, 1, 0.97, 0.24)
         shadowColor: Qt.rgba(0, 0.03, 0.05, 1)
         blobStrength: 0.85
         shadowStrength: 1
@@ -241,6 +244,7 @@ QtObject {
         glassRim: Qt.rgba(1, 0.85, 0.7, 0.16)
         glassRimLit: Qt.rgba(1, 0.9, 0.78, 0.32)
         glassTint: Qt.rgba(0.1, 0.04, 0.03, 0.44)
+        glassSpecular: Qt.rgba(1, 0.9, 0.78, 0.24)
         shadowColor: Qt.rgba(0.05, 0, 0, 1)
         blobStrength: 0.85
         shadowStrength: 1
@@ -292,6 +296,7 @@ QtObject {
         glassRim: Qt.rgba(0x0f / 255, 0x14 / 255, 0x20 / 255, 0.14)
         glassRimLit: Qt.rgba(1, 1, 1, 0.95)
         glassTint: Qt.rgba(1, 1, 1, 0.55)
+        glassSpecular: Qt.rgba(1, 1, 1, 0.70)
         shadowColor: Qt.rgba(0x0f / 255, 0x14 / 255, 0x20 / 255, 1)
         blobStrength: 0.45
         shadowStrength: 0.45
