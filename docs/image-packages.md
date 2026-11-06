@@ -84,6 +84,7 @@ that is not NVIDIA, and by the VM (software rendering).
 | `alsa-sof-firmware`, `alsa-firmware`, `alsa-tools-firmware` | sound chips (Sound Open Firmware, T-162) |
 | `intel-vsc-firmware` | Intel Visual Sensing Controller (laptops) |
 | `microcode_ctl` | CPU microcode |
+| `exfatprogs`, `ntfs-3g` | installed on purpose by `20-base.sh`: `ruya-devices` formats/mounts exFAT and NTFS sticks (weakly required, so `dnf leaves` does not list them) |
 | `nvme-cli`, `sg3_utils` | disk tools for support and `udisks2`'s SMART/NVMe plugins |
 | `ethtool`, `net-tools`, `iproute-tc`, `iptables-utils`, `bind-utils` | network debugging |
 | `fwupd`, `fwupd-plugin-modem-manager`, `fwupd-plugin-uefi-capsule-data` | firmware updates from the LVFS (UEFI capsules; no shell UI yet). Not enabled, D-Bus activated |

@@ -52,6 +52,7 @@ protected=(
     wireplumber ffmpeg ffmpeg-libs 'qt6-*' 'xorg-x11-drv-nvidia*' 'mesa-*' 'linux-firmware*'
     bootupd dracut grub2-efi-x64 shim-x64 mdadm libblockdev-mdraid cryptsetup 'libsmbclient'
     samba-client-libs libwbclient cloud-utils-growpart plymouth
+    pipewire-pulseaudio exfatprogs ntfs-3g 'iwl*-firmware' mediatek-firmware libertas-firmware alsa-sof-firmware
 )
 
 # Names of packages that may appear in the transaction without matching `remove`: dependents

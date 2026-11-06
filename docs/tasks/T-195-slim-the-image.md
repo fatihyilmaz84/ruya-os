@@ -1,6 +1,6 @@
 # T-195 — Slim the image: ship what the UI, the services and gaming need, and say why
 
-Status: in-progress · Phase: 2 · Depends: — · Area: image · Size: M · Owner: builder
+Status: done · Phase: 2 · Depends: — · Area: image · Size: M · Owner: builder
 
 ## Goal
 The image holds no desktop environment, no printing, no enterprise identity or cloud tooling and no CPU emulators, and every remaining package group has a stated reason (UI, services, gaming, drivers, base/bootc). Driver and firmware support stays complete (ADR-009). Owner, 2026-11-06: minimise it; printer support is not needed.

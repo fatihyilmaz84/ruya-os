@@ -2,7 +2,7 @@
 # installed disk and require that it reaches the shell and greenboot's success with no manual step.
 #   .\scripts\vm-iso-check.ps1 [-Iso output\bootiso\install.iso] [-Disk output\iso-test.qcow2]
 #                              [-InstallTimeoutSec 1800] [-BootTimeoutSec 900] [-KeepDisk]
-# Steps: 1. blank 64G qcow2  2. QEMU boots the ISO (it installs automatically and erases the disk;
+# Steps: 1. blank 128G (sparse) qcow2  2. QEMU boots the ISO (it installs automatically and erases the disk;
 # the serial log ends with "Install finished" and -no-reboot makes QEMU exit)  3. smoke-test.ps1
 # -Disk ... -Persistent -Keep must print RUYA_BOOT_OK  4. over SSH: default.target, greenboot's
 # health check, the version. The scratch disk is deleted at the end, also on failure (-KeepDisk keeps it).
@@ -13,6 +13,8 @@ param(
     [string]$Disk = "output\iso-test.qcow2",
     [int]$InstallTimeoutSec = 1800,
     [int]$BootTimeoutSec = 900,
+    # Larger than Anaconda's 70 GiB root cap on purpose: the check proves / uses the whole disk.
+    [int]$DiskGiB = 128,
     [string]$QemuDir = "C:\Program Files\qemu",
     [string]$Key = (Join-Path $env:USERPROFILE ".ssh\ruyaos_dev"),
     [switch]$KeepDisk
@@ -52,7 +54,7 @@ $ok = $false
 try {
     # 1. blank disk (sparse; the ISO's kickstart partitions it)
     Remove-Item $diskFull, $installLog -ErrorAction SilentlyContinue
-    & $qemuImg create -f qcow2 $diskFull 64G | Out-Null
+    & $qemuImg create -f qcow2 $diskFull ${DiskGiB}G | Out-Null
     if (-not (Test-Path $diskFull)) { throw "could not create $diskFull" }
 
     # 2. install. The disk is blank, so UEFI falls through to the ISO. No monitor or port forward:
@@ -102,6 +104,7 @@ try {
         'echo "version: $(cat /usr/lib/ruyaos/version)"',
         'for f in /boot/loader/entries/*.conf; do [ -e "$f" ] || { echo "boot entries: none in /boot/loader/entries"; break; }; echo "boot entry $(basename "$f"): $(sed -n "s/^title[[:space:]]*//p" "$f")"; done',
         '. /usr/lib/os-release; echo "pretty name: $PRETTY_NAME"',
+        'echo "var size: $(df -B1G --output=size /var | tail -1 | tr -d " ") GiB, disk: $(lsblk -dn -o SIZE -b $(findmnt -n -o SOURCE /var | sed "s/[0-9]*$//") 2>/dev/null)"',
         'echo "greenboot-healthcheck: $(systemctl is-active greenboot-healthcheck.service)"',
         'echo "boot-complete.target: $(systemctl is-active boot-complete.target)"',
         'echo "greenboot-success.target: $(systemctl is-active greenboot-success.target)"',
@@ -121,7 +124,11 @@ try {
     $report["state"] = $state
     $okGreenboot = ($state -match "greenboot-healthcheck: active") -and ($state -match "greenboot-success.target: active")
     $report["greenboot"] = if ($okGreenboot) { "success" } else { "NOT reported as success" }
-    $ok = $okGreenboot
+    # The root partition must use (almost) the whole disk, not Anaconda's 70 GiB cap.
+    $okSize = $false
+    if ($state -match "var size: (\d+) GiB") { $okSize = ([int]$Matches[1] -ge [int]($DiskGiB * 0.85)) }
+    $report["varsize"] = if ($okSize) { "uses the whole disk" } else { "TOO SMALL (expected at least 85% of $DiskGiB GiB)" }
+    $ok = $okGreenboot -and $okSize
 } catch {
     Write-Host "FAILED: $_"
 } finally {
@@ -130,7 +137,7 @@ try {
 }
 
 Write-Host ""
-Write-Host "vm-iso-check: install=$($report['install']); boot=$($report['boot']); greenboot=$($report['greenboot'])"
+Write-Host "vm-iso-check: install=$($report['install']); boot=$($report['boot']); greenboot=$($report['greenboot']); root=$($report['varsize'])"
 if ($ok) { Write-Host "ISO CHECK PASSED"; exit 0 }
 Write-Host "ISO CHECK FAILED"
 exit 1

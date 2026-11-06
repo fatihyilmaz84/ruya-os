@@ -41,7 +41,7 @@ for scope in "" "--global"; do
     while read -r unit _; do
         [ -n "$unit" ] || continue
         if ! grep -qxF "$unit" <<<"$allowed"; then
-            echo "98-guard: enabled unit without a reason: $unit ${scope:+(user)}"
+            echo "98-guard: enabled unit without a reason: $unit ${scope:+(user)} (add it to image/build/enabled-units.txt with a reason, or disable it in system-preset/45-ruyaos.preset)"
             found=1
         fi
     done < <(systemctl $scope list-unit-files --state=enabled --no-legend)

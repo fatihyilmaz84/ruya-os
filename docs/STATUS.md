@@ -15,7 +15,7 @@ Verification legend: **host** = built and tested on Windows · **host (vm pendin
 
 ## Board
 
-**NEXT → T-164** ([lead], the critical path: per-profile Wayland sockets, so an app's window appears). **Owner, 2026-11-06 (later): the hold is lifted for T-189..T-194, dispatch them; still no new tasks are created until the owner says so.** Lanes: T-195 (in review) and T-200.
+**NEXT → T-164** ([lead], the critical path: per-profile Wayland sockets, so an app's window appears). **Owner, 2026-11-06 (later): the hold is lifted for T-189..T-194, dispatch them; still no new tasks are created until the owner says so.** Lanes: T-200.
 
 **How work runs (owner, 2026-11-04):** the lead dispatches `ruya-builder` agents, at most two at a time in their own worktrees and in different areas, has each branch reviewed by `ruya-reviewer`, and merges it (`docs/LEAD.md`, build loop). Dispatched builders never edit this file. At most one task with a "VM (this task)" criterion runs at a time. A builder session the owner starts directly takes NEXT in the main checkout, alone, and does the bookkeeping itself (`CLAUDE.md`).
 
@@ -25,7 +25,6 @@ Open work only (todo, in-progress, blocked), in the recommended order; when NEXT
 |---|---|---|---|
 | [T-190](tasks/T-190-settings-pane-focus-follow-ups.md) | Settings panes: look-ahead after relayout, Tab, peek legibility | todo | — |
 | [T-194](tasks/T-194-confirm-buttons-name-the-action.md) | Confirm dialogs: the button says the action; TextEntry cancel cue | todo | — |
-| [T-195](tasks/T-195-slim-the-image.md) | Slim the image: only what the UI, the services and gaming need; a manifest with reasons | in-progress | — |
 | [T-197](tasks/T-197-shell-crash-on-bluetooth-audio-disconnect.md) | **[lead]** The shell crashes when a Bluetooth headset disconnects (Qt PipeWire audio thread) | in-progress | — |
 | [T-198](tasks/T-198-display-resolution-and-dpi.md) | **[lead]** Display: pick resolution and refresh, UI scale to the screen (DPI), keep/revert dialog | todo | — |
 | [T-199](tasks/T-199-device-icons.md) | Device icons in the Bluetooth pane and toasts: gamepad, headset, keyboard...; controller family glyphs when known, generic otherwise | todo | — |
@@ -58,6 +57,7 @@ Follow-ups and debt for the next planner, one line each: `- (source) what, and w
 - (T-162 session) The ISO's kickstart now partitions by hand (`image/bib/iso-kickstart.toml`, whole-disk `/`): UNTESTED, verify with `vm-iso-check.ps1` on a disk larger than 70 GiB (the check makes a 64 GiB disk; use 128 GiB) and that bib accepts `customizations.installer.kickstart`, and check `/var` is ~the whole disk.
 - (T-196) Exact per-profile sizes need a root source (`ruya-profiles`): the profile homes are 0700 users' directories, so `data_bytes` is -1 and the pane shows "Other"; "Apps and games" counts only `/var/lib/flatpak` (game libraries under a profile's `~/.var/app`/`~/.local/share/Steam` count as Other). Extract `ProgressBar.qml` (second user of the bar: `AppDetailPage` and the Storage pane, 04 §8). Per-app sizes and uninstall/clear data from the Storage pane. Check the service's RSS on the Dell after a full walk (hard-link set).
 - (T-195) The slimmed image is not smaller on disk or in the update download: the removals are a layer on the base, which bootc keeps. Rechunking (per-package layers) or flattening is an owner-level trade-off (update size). Also: ffmpeg links libsmbclient (samba libs stay), `fwupd` has no UI (decide), the image manifest check is manual (add to the CI image job).
+- (T-195 review) `50-slim.sh`: compare the number of parsed dnf transaction lines with dnf's "Removing: N packages" summary and fail on a mismatch (a reformatted dnf line would skip the protected check; the closure rule is the backstop); `check-image-manifest.sh` should also check the explicit install lists of `20-base.sh`/`30-codecs.sh`, not only `dnf leaves`; `irqbalance` was removed (performance call, lead agreed for single-socket machines).
 - (0.0.40 try-out) The VM clock shows UTC: there is no time-zone setting yet (wizard or System pane); plan it with the OOBE/installer work.
 
 ## Blocked (need something this host doesn't have)
