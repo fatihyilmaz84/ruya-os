@@ -178,6 +178,10 @@ pub fn list_of(raw: &[RawDevice]) -> Vec<Device> {
 pub trait Bluez: Send + Sync {
     fn snapshot(&self) -> Result<Raw, BtError>;
     fn set_powered(&self, on: bool) -> Result<(), BtError>;
+    /// The adapter's `Pairable` property. BlueZ 5.87 keeps it off, and an adapter that is not
+    /// pairable answers a pairing with "No Bonding": the pairing succeeds but no link key is
+    /// kept (`Bonded: no`), and BlueZ's HID plugin then rejects the pad (T-162 session, Dell).
+    fn set_pairable(&self, on: bool) -> Result<(), BtError>;
     fn start_discovery(&self) -> Result<(), BtError>;
     fn stop_discovery(&self) -> Result<(), BtError>;
     fn pair(&self, address: &str, timeout: Duration) -> Result<(), BtError>;
@@ -383,7 +387,15 @@ impl<B: Bluez> Bluetooth<B> {
         let end = clock() + CALL_TIMEOUT;
         let left = || end.saturating_duration_since(clock());
         if !dev.paired {
-            if let Err(e) = self.bluez.pair(&dev.id, left()) {
+            // Bondable only for the pairing itself, and off again whatever it ends with.
+            if let Err(e) = self.bluez.set_pairable(true) {
+                return map_error(&e.0, false);
+            }
+            let paired = self.bluez.pair(&dev.id, left());
+            if let Err(e) = self.bluez.set_pairable(false) {
+                eprintln!("ruya-devices: Pairable off again failed: {}", e.0);
+            }
+            if let Err(e) = paired {
                 return map_error(&e.0, true);
             }
         }
@@ -451,6 +463,8 @@ struct FakeInner {
     sticky_discovery: bool,
     /// Time that `pair` and `connect` use up on this clock.
     spend: Option<(std::sync::Arc<Mutex<Instant>>, Duration)>,
+    /// `set_pairable(true)` fails (the adapter refuses).
+    pairable_fails: bool,
 }
 
 impl FakeBluez {
@@ -463,6 +477,7 @@ impl FakeBluez {
                 timeouts: Vec::new(),
                 sticky_discovery: false,
                 spend: None,
+                pairable_fails: false,
             }),
         }
     }
@@ -504,6 +519,10 @@ impl FakeBluez {
 
     pub fn timeouts(&self) -> Vec<Duration> {
         self.inner().timeouts.clone()
+    }
+
+    pub fn fail_pairable(&self) {
+        self.inner().pairable_fails = true;
     }
 
     pub fn set_sticky_discovery(&self, on: bool) {
@@ -559,6 +578,15 @@ impl Bluez for FakeBluez {
         })?;
         if self.inner().raw.adapter.is_none() {
             return Err(BtError::new("org.bluez.Error.NotReady"));
+        }
+        Ok(())
+    }
+    fn set_pairable(&self, on: bool) -> Result<(), BtError> {
+        // Not through `act`: a queued `fail_next` is meant for the pairing itself.
+        let mut i = self.inner();
+        i.calls.push(format!("pairable {on}"));
+        if on && i.pairable_fails {
+            return Err(BtError::new("org.bluez.Error.Failed"));
         }
         Ok(())
     }
@@ -953,7 +981,9 @@ mod tests {
         assert_eq!(
             calls,
             [
+                "pairable true",
                 "pair AA:00:00:00:00:02",
+                "pairable false",
                 "trust AA:00:00:00:00:02",
                 "connect AA:00:00:00:00:02"
             ]
@@ -988,7 +1018,40 @@ mod tests {
     fn pair_of_a_paired_device_skips_pairing() {
         let bt = bt();
         assert_eq!(bt.pair("AA:00:00:00:00:01", Instant::now), Status::Ok);
-        assert!(!bt.bluez.calls().iter().any(|c| c.starts_with("pair ")));
+        let calls = bt.bluez.calls();
+        assert!(!calls.iter().any(|c| c.starts_with("pair ")));
+        // Nothing to bond, so the adapter is not opened for it either.
+        assert!(!calls.iter().any(|c| c.starts_with("pairable")));
+    }
+
+    #[test]
+    fn the_adapter_is_pairable_only_while_a_pairing_runs() {
+        // A failed pairing closes it again too.
+        let bt = bt();
+        bt.bluez.fail_next("org.bluez.Error.AuthenticationFailed");
+        assert_eq!(
+            bt.pair("AA:00:00:00:00:02", Instant::now),
+            Status::PairingFailed
+        );
+        assert_eq!(
+            bt.bluez.calls(),
+            ["pairable true", "pair AA:00:00:00:00:02", "pairable false"]
+        );
+        bt.bluez.fail_next(LOCAL_TIMEOUT);
+        assert_eq!(bt.pair("AA:00:00:00:00:02", Instant::now), Status::Timeout);
+        let calls = bt.bluez.calls();
+        assert_eq!(calls.last().map(String::as_str), Some("pairable false"));
+        let on = calls.iter().filter(|c| *c == "pairable true").count();
+        let off = calls.iter().filter(|c| *c == "pairable false").count();
+        assert_eq!((on, off), (2, 2));
+    }
+
+    #[test]
+    fn a_refused_pairable_means_no_pairing_attempt() {
+        let bt = bt();
+        bt.bluez.fail_pairable();
+        assert_eq!(bt.pair("AA:00:00:00:00:02", Instant::now), Status::Failed);
+        assert_eq!(bt.bluez.calls(), ["pairable true"]);
     }
 
     #[test]

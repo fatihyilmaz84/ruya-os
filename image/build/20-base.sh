@@ -12,3 +12,13 @@ dnf -y install --setopt=install_weak_deps=False \
     greenboot greenboot-default-health-checks \
     plymouth plymouth-theme-spinner \
     google-noto-sans-fonts
+
+# Firmware for the radios and sound chips a living-room PC has. linux-firmware only recommends
+# part of it and this image installs without weak dependencies: before this, an Intel Bluetooth
+# dongle (ibt-*.sfi) never initialised and Intel Wi-Fi would not have worked either (found on the
+# Dell, T-162 session). ADR-009: ship all drivers.
+dnf -y install --setopt=install_weak_deps=False     iwlbluetooth-firmware iwlwifi-dvm-firmware iwlwifi-mld-firmware iwlwifi-mvm-firmware     iwlegacy-firmware mediatek-firmware libertas-firmware atmel-firmware zd1211-firmware     intel-vsc-firmware alsa-sof-firmware alsa-firmware
+# Fail the build if the one that mattered is missing (a renamed package would otherwise only
+# show on a machine with the hardware).
+test -e /usr/lib/firmware/intel/ibt-19-0-4.sfi.xz
+compgen -G '/usr/lib/firmware/iwlwifi-*' > /dev/null

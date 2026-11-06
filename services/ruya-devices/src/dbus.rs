@@ -484,6 +484,9 @@ impl Bluez for DynBluez {
     fn set_powered(&self, on: bool) -> Result<(), BtError> {
         (**self).set_powered(on)
     }
+    fn set_pairable(&self, on: bool) -> Result<(), BtError> {
+        (**self).set_pairable(on)
+    }
     fn start_discovery(&self) -> Result<(), BtError> {
         (**self).start_discovery()
     }

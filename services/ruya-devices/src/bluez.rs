@@ -204,6 +204,13 @@ impl Bluez for BluezClient {
         })
     }
 
+    fn set_pairable(&self, on: bool) -> Result<(), BtError> {
+        future::block_on(async {
+            let adapter = self.adapter_path().await?;
+            self.set(&adapter, ADAPTER, "Pairable", on).await
+        })
+    }
+
     fn start_discovery(&self) -> Result<(), BtError> {
         future::block_on(async {
             let adapter = self.adapter_path().await?;
