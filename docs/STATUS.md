@@ -57,6 +57,7 @@ Open work only, in the recommended order; when NEXT is blocked take the first `t
 | [T-147](tasks/T-147-fullscreen-app-flow.md) | Full-screen apps: launch, quick menu, return, close | todo | T-164 |
 | [T-166](tasks/T-166-suspend-under-eglfs.md) | **[lead]** Suspend and resume under eglfs | todo | — |
 | [T-226](tasks/T-226-system-information.md) | System information screen (CPU, RAM, GPU, storage...) and USB report | todo | — |
+| [T-227](tasks/T-227-ui-sounds-and-ambient-themes.md) | UI sounds and ambient atmosphere: sound themes, one bundled theme, maker guide | todo | — |
 
 **VM queue** (host-done, VM check pending; the lead runs them with one image build): T-192 (`vm-store-check.sh`: one `InstalledChanged` after the outside removal); T-191 (`vm-store-check.sh`: a cut-short install reported once); T-196 (`vm-devices-check.sh` storage part: `GetSystemUsage` against `stat -f /var`, `SystemUsageChanged`, `nobody` refused); T-193 (`vm-storage-check.sh baseline`: the `ListVolumes` JSON parser; also `vm-devices-check.sh`, `vm-library-check.sh`); T-200 (`vm-devices-check.sh thermal` and `thermal-fake`); T-214 (`vm-sample-check.sh` with the repo tarball). Devices checks need `-Audio`.
 
