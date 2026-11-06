@@ -1,10 +1,23 @@
 #include "MockStorageBackend.h"
 
+#include <algorithm>
 #include <utility>
 
 namespace {
 const QString StickId = QStringLiteral("vol-stick");
 constexpr qint64 GB = 1000LL * 1000 * 1000;
+
+SystemUsage usageOf(qint64 total, qint64 free, qint64 apps, qint64 data)
+{
+    SystemUsage u;
+    u.totalBytes = total;
+    u.freeBytes = free;
+    u.appsBytes = apps;
+    u.dataBytes = data;
+    const bool known = total >= 0 && free >= 0 && apps >= 0 && data >= 0;
+    u.systemBytes = known ? std::max<qint64>(0, total - free - apps - data) : -1;
+    return u;
+}
 }
 
 MockStorageBackend::MockStorageBackend(QObject *parent)
@@ -22,6 +35,25 @@ MockStorageBackend::MockStorageBackend(QObject *parent)
 void MockStorageBackend::refresh()
 {
     publish(m_delay);
+}
+
+void MockStorageBackend::refreshUsage()
+{
+    publishUsage(m_delay);
+}
+
+void MockStorageBackend::setUsage(qint64 total, qint64 free, qint64 apps, qint64 data)
+{
+    m_usage = usageOf(total, free, apps, data);
+    publishUsage();
+}
+
+void MockStorageBackend::lowSpace(bool low)
+{
+    if (low)
+        setUsage(464 * GB, 28 * GB, 188 * GB, 142 * GB);
+    else
+        setUsage(464 * GB, 450 * GB, 6 * GB + GB / 2, 3 * GB + GB / 5);
 }
 
 void MockStorageBackend::eject(const QString &id)
@@ -113,6 +145,7 @@ void MockStorageBackend::reset(bool plugStick)
 {
     initState();
     publish();
+    publishUsage();
     if (plugStick)
         m_plugTimer.start();
 }
@@ -124,6 +157,7 @@ void MockStorageBackend::initState()
     m_heldEjects.clear();
     m_ejectCalls = 0;
     m_plugTimer.stop();
+    m_usage = usageOf(464 * GB, 450 * GB, 6 * GB + GB / 2, 3 * GB + GB / 5);
     auto entry = [](const char *id, const char *drive, const char *label, const char *fs, qint64 size, qint64 free,
                     bool removable, bool mounted, const char *mountPoint, bool present) {
         Entry e;
@@ -140,7 +174,7 @@ void MockStorageBackend::initState()
         return e;
     };
     m_entries = {
-        entry("vol-internal", "drive-internal", "Internal disk", "ext4", 512 * GB, 318 * GB, false, true, "/var", true),
+        entry("vol-internal", "drive-internal", "Games disk", "ext4", 512 * GB, 318 * GB, false, true, "/var/mnt/games", true),
         entry("vol-old", "drive-old", "Old Drive", "unknown", 64 * GB, 0, true, false, "", true),
         entry("vol-stick", "drive-stick", "Ruya Stick", "exfat", 32 * GB, 21 * GB + GB / 2, true, true, "/run/media/mock/Ruya Stick", false),
         entry("vol-stick-2", "drive-stick", "Ruya Photos", "exfat", 16 * GB, 9 * GB, true, true, "/run/media/mock/Ruya Photos", false),
@@ -174,6 +208,19 @@ void MockStorageBackend::publish(int delayMs)
         if (delayMs > 0)
             --m_pending;
         deliver(request, list);
+    });
+}
+
+void MockStorageBackend::publishUsage(int delayMs)
+{
+    const quint64 request = beginUsageRequest();
+    const SystemUsage usage = m_usage;
+    if (delayMs > 0)
+        ++m_pending;
+    QTimer::singleShot(delayMs, this, [this, request, usage, delayMs] {
+        if (delayMs > 0)
+            --m_pending;
+        deliverUsage(request, usage);
     });
 }
 

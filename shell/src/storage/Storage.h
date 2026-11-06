@@ -7,6 +7,7 @@
 #include <QSet>
 #include <QTimer>
 #include <QVariantList>
+#include <QVariantMap>
 
 #include <memory>
 
@@ -21,6 +22,11 @@ class Storage : public QObject
 
     // [{ id, drive, label, filesystem, sizeBytes, freeBytes, removable, mounted, mountPoint, readOnly }]
     Q_PROPERTY(QVariantList volumes READ volumes NOTIFY volumesChanged)
+    // The console's own storage (the filesystem that holds /var): { valid, totalBytes, freeBytes,
+    // appsBytes, dataBytes, systemBytes }. `valid` is false until the first reply; a part that is
+    // not known is -1 (the apps and profile data sizes are measured in the background and are -1
+    // for a moment after the service starts; profile data is a lower bound).
+    Q_PROPERTY(QVariantMap internal READ internal NOTIFY internalChanged)
     Q_PROPERTY(bool mock READ isMock CONSTANT)
     // How long the volumes of one drive are waited for (tests wait this long to see "no second toast").
     Q_PROPERTY(int groupWindowMs READ groupWindowMs CONSTANT)
@@ -35,6 +41,7 @@ public:
     static Storage *create(QQmlEngine *qmlEngine, QJSEngine *jsEngine);
 
     QVariantList volumes() const { return m_volumes; }
+    QVariantMap internal() const { return m_internal; }
     bool isMock() const { return m_backend->isMock(); }
     int groupWindowMs() const { return GroupWindowMs; }
 
@@ -43,6 +50,9 @@ public:
     Q_INVOKABLE static QString formatBytes(qint64 bytes);
 
     Q_INVOKABLE void eject(const QString &id);
+    // Reads the internal storage numbers again (free space changes without a signal: ask when
+    // showing it).
+    Q_INVOKABLE void refreshInternal();
 
     // Tests only, and only with the mock backend (otherwise no-ops). mockReset puts the volumes
     // back with the USB stick not plugged in (plugStick starts the delayed insert, as a fresh
@@ -62,9 +72,17 @@ public:
     // mockPendingReplies: how many replies are still on their way.
     Q_INVOKABLE void mockRefreshDelayed(int ms);
     Q_INVOKABLE int mockPendingReplies() const;
+    // Replaces the internal storage numbers (bytes; system is worked out as the service does) and
+    // publishes them. mockLowSpace(true): a 464 GB disk with 6 % free; false: 450 GB free.
+    Q_INVOKABLE void mockSetInternal(double total, double free, double apps, double data);
+    Q_INVOKABLE void mockLowSpace(bool low);
+    // Asks for the internal storage numbers; the reply arrives after `ms` showing them as they are
+    // now (counted in mockPendingReplies).
+    Q_INVOKABLE void mockRefreshInternalDelayed(int ms);
 
 signals:
     void volumesChanged();
+    void internalChanged();
     // A drive was plugged in and its volumes are in the list; once per drive and insert. `label`
     // names the first volume with a supported filesystem, `volumeCount` counts those volumes
     // (partitions with a filesystem we do not mount stay listed but are not counted; a drive that
@@ -84,9 +102,11 @@ private:
         QList<StorageVolume> volumes;
     };
     void flushArrivals();
+    static QVariantMap unknownInternal();
 
     std::unique_ptr<StorageBackend> m_backend;
     QVariantList m_volumes;
+    QVariantMap m_internal;
     QSet<QString> m_pendingAdded; // announced, waiting for the list that holds them
     QList<Arrival> m_arrivals;    // by drive, in the order they came
     QTimer m_groupTimer;

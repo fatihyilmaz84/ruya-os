@@ -2,7 +2,10 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import RuyaShell
 
-// Settings -> Storage: one row per volume (the internal disk and USB drives) with its
+// Settings -> Storage. First "This console" (T-196): how full the console's own storage is (the
+// free space with a usage bar, then what the apps and games, the profile data and the system take;
+// Storage.internal, from Devices1.Storage.GetSystemUsage). Then one row per volume (USB drives,
+// and an internal disk mounted outside the system paths) with its
 // filesystem and "x GB free of y GB", and an "Eject" row for each mounted removable one. Accept
 // on a removable volume moves to its Eject row; on a drive whose filesystem is not supported it
 // says why it can't be used. Nothing on a volume is opened or run from here. Everything goes
@@ -10,6 +13,73 @@ import RuyaShell
 // Storage.formatBytes. The "safe to remove" and "drive inserted" toasts are in ToastLayer.
 SettingsPane {
     id: pane
+
+    readonly property var internal: Storage.internal
+    // Less than this much free and the usage bar turns to the warning colour.
+    readonly property real lowFreeFraction: 0.10
+
+    function internalKnown() {
+        return internal.valid && internal.totalBytes > 0 && internal.freeBytes >= 0
+    }
+
+    // The part of the disk that is used, 0..1; 0 while it is not known.
+    function usedFraction() {
+        return internalKnown() ? Math.min(1, Math.max(0, 1 - internal.freeBytes / internal.totalBytes)) : 0
+    }
+
+    function isLow() {
+        return internalKnown() && internal.freeBytes / internal.totalBytes < lowFreeFraction
+    }
+
+    function freeText() {
+        return internalKnown()
+            ? qsTr("%1 free of %2").arg(Storage.formatBytes(internal.freeBytes)).arg(Storage.formatBytes(internal.totalBytes))
+            : "—"
+    }
+
+    // A size that may not be known (-1): a dash until it is.
+    function sizeText(bytes) {
+        return bytes >= 0 ? Storage.formatBytes(bytes) : "—"
+    }
+
+    // A settings row with a usage bar between the label and the value. Read-only.
+    component UsageRow: SettingControl {
+        id: usage
+        property string value
+        property real fraction          // used part, 0..1
+        property bool low               // turns the bar to the warning colour
+        readonly property color fillColor: low ? Theme.warningText : Theme.text
+        accessibleValue: value
+
+        Text {
+            id: usageValue
+            objectName: "value"
+            anchors { right: parent.right; rightMargin: Theme.spaceL * usage.u; verticalCenter: parent.verticalCenter }
+            text: usage.value
+            color: Theme.text
+            font.pixelSize: Theme.typeBody * usage.u
+        }
+
+        Rectangle {
+            objectName: "usageTrack"
+            anchors { right: usageValue.left; rightMargin: Theme.spaceM * usage.u; verticalCenter: parent.verticalCenter }
+            width: 260 * usage.u
+            height: Theme.spaceS * usage.u
+            radius: height / 2
+            color: Theme.glass
+            border.width: Theme.hairlineAt(usage.u)
+            border.color: Theme.glassBorder
+
+            Rectangle {
+                objectName: "usageFill"
+                width: parent.width * usage.fraction
+                height: parent.height
+                radius: height / 2
+                color: usage.fillColor
+                Behavior on width { NumberAnimation { duration: Theme.focusMs } }
+            }
+        }
+    }
 
     // Rows follow Storage.volumes by id (updated in place), so focus stays on a row when the
     // list is re-published, e.g. after free space changes.
@@ -57,7 +127,10 @@ SettingsPane {
         ensureFocusedVisible()
     }
 
-    Component.onCompleted: syncVolumes()
+    Component.onCompleted: {
+        syncVolumes()
+        Storage.refreshInternal()       // free space changes without a signal: read it when shown
+    }
 
     function labelOf(id) {
         for (let i = 0; i < volumeModel.count; ++i) {
@@ -136,6 +209,54 @@ SettingsPane {
             Notifications.show(pane.statusText(status, pane.labelOf(id)), "warning")
         }
         function onVolumesChanged() { pane.syncVolumes() }
+    }
+
+    Text {
+        objectName: "storageHeadingInternal"
+        width: parent ? parent.width : 0
+        text: qsTr("This console")
+        color: Theme.text
+        font.pixelSize: Theme.typeBody * pane.u
+    }
+
+    UsageRow {
+        objectName: "storageInternal"
+        u: pane.u
+        label: qsTr("Free space")
+        value: pane.freeText()
+        fraction: pane.usedFraction()
+        low: pane.isLow()
+    }
+
+    SettingRow {
+        objectName: "storageApps"
+        u: pane.u
+        label: qsTr("Apps and games")
+        value: pane.sizeText(pane.internal.appsBytes)
+    }
+
+    SettingRow {
+        objectName: "storageData"
+        u: pane.u
+        label: qsTr("Profile data")
+        value: pane.sizeText(pane.internal.dataBytes)
+    }
+
+    SettingRow {
+        objectName: "storageSystem"
+        u: pane.u
+        label: qsTr("System")
+        value: pane.sizeText(pane.internal.systemBytes)
+    }
+
+    Text {
+        objectName: "storageHeadingDrives"
+        width: parent ? parent.width : 0
+        visible: volumeModel.count > 0
+        topPadding: Theme.spaceS * pane.u
+        text: qsTr("Drives")
+        color: Theme.text
+        font.pixelSize: Theme.typeBody * pane.u
     }
 
     Repeater {

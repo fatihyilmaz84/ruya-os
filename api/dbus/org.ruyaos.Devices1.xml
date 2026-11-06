@@ -41,7 +41,7 @@
     "invalid"         malformed argument (an empty id)
     "failed"          internal error, or Connect/Disconnect on a device that is not paired
 
-  org.ruyaos.Devices1.Storage status strings (udisks2 behind it; nothing is ever run from a volume):
+  org.ruyaos.Devices1.Storage status strings (udisks2 behind it, statvfs for GetSystemUsage; nothing is ever run from a volume):
     "ok"              success (Eject: unmounted and powered off; the volume leaves the list)
     "unknown-volume"  no volume with that id in the list (Eject)
     "busy"            something still uses the volume (Eject); it stays mounted and listed
@@ -263,6 +263,37 @@
     <method name="ListVolumes">
       <arg name="volumes" type="aa{sv}" direction="out"/>
     </method>
+
+    <!--
+      How full the console's own storage is: the filesystem that holds /var, where apps, games and
+      profile data live (the OS image is read-only and small and not counted as a volume; this is
+      what is left to use). One dictionary, every value x (bytes); a part that is not known is -1:
+        total_bytes   x   size of the filesystem (statvfs; read on every call)
+        free_bytes    x   what is still free for the shell's user (statvfs; read on every call)
+        apps_bytes    x   the system Flatpak installation, /var/lib/flatpak (apps and runtimes;
+                          files that are hard links to each other count once)
+        data_bytes    x   profile homes, /var/home. The service runs as the shell's user and cannot
+                          read the private files of the other profiles: this is what it can read,
+                          so it is a lower bound (a profile's own directory is always counted)
+        system_bytes  x   the rest of what is used: total - free - apps - data, never negative;
+                          -1 while any of those four is unknown
+      apps_bytes and data_bytes are directory sizes (allocated blocks, symlinks not followed,
+      other mounts not entered) computed in the background and kept for 60 s. They are -1 until the
+      first measurement has finished (the call never waits for it); a call that finds them older
+      than 60 s answers with what it has and starts a new measurement. They are measured again
+      when the Store reports InstalledChanged. A directory that cannot be measured at all is -1
+      again; it never makes the call fail.
+    -->
+    <method name="GetSystemUsage">
+      <arg name="usage" type="a{sv}" direction="out"/>
+    </method>
+
+    <!--
+      A measurement finished and apps_bytes or data_bytes differ from the one before (also the
+      first). Call GetSystemUsage again. Not sent for free space alone: it changes all the time,
+      so clients read it when they show it.
+    -->
+    <signal name="SystemUsageChanged"/>
 
     <!--
       Unmount and power off a removable volume. Answers when done or failed. See the status

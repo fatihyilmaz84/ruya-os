@@ -2,7 +2,8 @@ import QtQuick
 import QtTest
 import RuyaShell
 
-// Settings -> Storage against the mock backend: the size formatter, every status string of the
+// Settings -> Storage against the mock backend: the console's own storage ("This console", T-196:
+// numbers, rows updated in place, the low-space bar, a late reply), the size formatter, every status string of the
 // contract, a drive appearing (one toast, the list updates, focus stays valid), eject by keys
 // ("Safe to remove"), a busy drive staying listed with a message, and Back on the unsupported
 // drive. Signs in as "Ada" (p2, no PIN). The mock is reset before every test (the USB stick
@@ -89,7 +90,7 @@ Item {
             compare(list.currentIndex, 5)
             keyClick(Qt.Key_Right)
             tryVerify(() => find("paneStorage").visible)
-            tryVerify(() => find("storageVol_vol-internal").activeFocus, 2000, "the first volume takes focus")
+            tryVerify(() => find("storageInternal").activeFocus, 2000, "the first row (This console) takes focus")
         }
 
         // Down (or else up) to the named row (which must exist), asserting that the pane keeps focus.
@@ -355,15 +356,140 @@ Item {
             compare(Storage.volumes.length, 3, "the late two-volume reply was dropped")
         }
 
+        // The share of the bar that is filled, 0..1 (the fill eases its width, so callers wait).
+        function barFill() {
+            return find("usageFill").width / find("usageTrack").width
+        }
+
+        function test_internal_storage_numbers_from_the_mock() {
+            tryCompare(Storage.internal, "valid", true)
+            compare(Storage.internal.totalBytes, 464000000000)
+            compare(Storage.internal.freeBytes, 450000000000)
+            compare(Storage.internal.appsBytes, 6500000000)
+            compare(Storage.internal.dataBytes, 3200000000)
+            compare(Storage.internal.systemBytes, 4300000000, "the rest of what is used")
+        }
+
+        function test_pane_shows_this_console_first() {
+            tryCompare(Storage.internal, "valid", true)
+            openStoragePane()
+            compare(find("storageHeadingInternal").text, "This console")
+            compare(find("storageInternal").label, "Free space")
+            compare(find("storageInternal").value, "450 GB free of 464 GB")
+            compare(find("storageApps").label, "Apps and games")
+            compare(find("storageApps").value, "6.5 GB")
+            compare(find("storageData").label, "Profile data")
+            compare(find("storageData").value, "3.2 GB")
+            compare(find("storageSystem").label, "System")
+            compare(find("storageSystem").value, "4.3 GB")
+            tryVerify(() => Math.abs(barFill() - 14 / 464) < 0.003, 2000, "the bar shows 14 of 464 GB used")
+            compare(find("storageInternal").fillColor, Theme.text, "plenty free: the plain colour")
+            verify(find("storageInternal").y < find("storageApps").y && find("storageApps").y < find("storageData").y
+                   && find("storageData").y < find("storageSystem").y, "in this order")
+            verify(find("storageSystem").y < find("storageVol_vol-internal").y, "above the drives")
+            compare(find("storageHeadingDrives").text, "Drives")
+        }
+
+        // New numbers change the rows' text and bar in place: the same row objects, focus kept.
+        function test_updating_internal_changes_the_rows_in_place_and_focus_stays() {
+            tryCompare(Storage.internal, "valid", true)
+            openStoragePane()
+            goTo("storageApps")
+            const apps = find("storageApps")
+            const free = find("storageInternal")
+            Storage.mockSetInternal(464000000000, 300000000000, 100000000000, 50000000000)
+            tryCompare(apps, "value", "100 GB")
+            compare(free.value, "300 GB free of 464 GB")
+            compare(find("storageData").value, "50 GB")
+            compare(find("storageSystem").value, "14 GB")
+            tryVerify(() => Math.abs(barFill() - 164 / 464) < 0.003, 2000, "the bar follows")
+            verify(find("storageApps") === apps && find("storageInternal") === free, "the rows were not recreated")
+            verify(apps.activeFocus, "focus stays on the row")
+            verify(find("paneStorage").activeFocus)
+            keyClick(Qt.Key_Down)                        // and the keys still move on from it
+            tryVerify(() => find("storageData").activeFocus, 2000, "Down moves on")
+        }
+
+        function test_low_space_turns_the_bar_to_the_warning_colour() {
+            tryCompare(Storage.internal, "valid", true)
+            openStoragePane()
+            compare(find("storageInternal").fillColor, Theme.text)
+            Storage.mockLowSpace(true)
+            tryCompare(find("storageInternal"), "fillColor", Theme.warningText)
+            compare(find("storageInternal").value, "28 GB free of 464 GB")
+            tryVerify(() => Math.abs(barFill() - 436 / 464) < 0.003, 2000, "nearly full")
+            verify(find("storageInternal").activeFocus, "focus stays")
+            // Exactly 10 % free is not low yet; just under is.
+            Storage.mockSetInternal(464000000000, 46500000000, 1000000000, 1000000000)
+            tryCompare(find("storageInternal"), "fillColor", Theme.text)
+            Storage.mockSetInternal(464000000000, 46300000000, 1000000000, 1000000000)
+            tryCompare(find("storageInternal"), "fillColor", Theme.warningText)
+            Storage.mockLowSpace(false)
+            tryCompare(find("storageInternal"), "fillColor", Theme.text)
+        }
+
+        function test_unknown_parts_show_a_dash() {
+            tryCompare(Storage.internal, "valid", true)
+            Storage.mockSetInternal(464000000000, 450000000000, -1, -1)  // not measured yet
+            tryCompare(Storage.internal, "appsBytes", -1)
+            openStoragePane()
+            compare(find("storageInternal").value, "450 GB free of 464 GB")
+            compare(find("storageApps").value, "—")
+            compare(find("storageData").value, "—")
+            compare(find("storageSystem").value, "—")
+            Storage.mockSetInternal(464000000000, 450000000000, 6500000000, -1)
+            tryCompare(find("storageApps"), "value", "6.5 GB")
+            compare(find("storageSystem").value, "—", "the rest is not known while a part is missing")
+        }
+
+        // The answer to an older question must not put old numbers back (T-191).
+        function test_a_late_usage_reply_is_dropped() {
+            tryCompare(Storage.internal, "valid", true)
+            compare(Storage.internal.freeBytes, 450000000000)
+            Storage.mockRefreshInternalDelayed(300)       // a snapshot with 450 GB free is on its way
+            compare(Storage.mockPendingReplies(), 1)
+            Storage.mockLowSpace(true)                    // the service says SystemUsageChanged: 28 GB
+            tryCompare(Storage.internal, "freeBytes", 28000000000)
+            tryVerify(() => Storage.mockPendingReplies() === 0, 2000)
+            compare(Storage.internal.freeBytes, 28000000000, "the late snapshot was dropped")
+            Storage.mockLowSpace(false)
+        }
+
         function test_zz_screenshots() {
             if (!shotsDir)
                 skip("set RUYA_SHOTS_DIR to save screenshots")
             Storage.mockPlugStick()
             tryVerify(() => volume("vol-stick") !== undefined)
             openStoragePane()
-            goTo("storageVol_vol-stick")
             wait(800)
             grabImage(tc.shell).save(shotsDir + "/27-settings-storage.png")
+            goTo("storageVol_vol-stick")
+            wait(800)
+            grabImage(tc.shell).save(shotsDir + "/27-settings-storage-stick.png")
+        }
+
+        function test_zz_screenshots_low_space() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            Storage.mockPlugStick()
+            tryVerify(() => volume("vol-stick") !== undefined)
+            Storage.mockLowSpace(true)
+            tryCompare(Storage.internal, "freeBytes", 28000000000)
+            openStoragePane()
+            wait(800)
+            grabImage(tc.shell).save(shotsDir + "/27-settings-storage-low.png")
+            Storage.mockLowSpace(false)
+        }
+
+        function test_zz_screenshots_turkish() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            Storage.mockPlugStick()
+            tryVerify(() => volume("vol-stick") !== undefined)
+            DeviceSettings.language = "tr"
+            openStoragePane()
+            wait(800)
+            grabImage(tc.shell).save(shotsDir + "/27-settings-storage-tr.png")
         }
     }
 }

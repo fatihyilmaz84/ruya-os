@@ -47,7 +47,7 @@
 <context>
     <name>AppDetailPage</name>
     <message>
-        <location filename="../qml/AppDetailPage.qml" line="+45"/>
+        <location filename="../qml/AppDetailPage.qml" line="+49"/>
         <source>Official</source>
         <translation>Official</translation>
     </message>
@@ -1420,7 +1420,7 @@
 <context>
     <name>StoragePane</name>
     <message>
-        <location filename="../qml/StoragePane.qml" line="+83"/>
+        <location filename="../qml/StoragePane.qml" line="+156"/>
         <source>%1 is still in use. Close what uses it and try again.</source>
         <translation>%1 is still in use. Close what uses it and try again.</translation>
     </message>
@@ -1445,7 +1445,8 @@
         <translation>Not supported</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-133"/>
+        <location line="+134"/>
         <source>%1 free of %2</source>
         <translation>%1 free of %2</translation>
     </message>
@@ -1455,7 +1456,37 @@
         <translation>Read-only</translation>
     </message>
     <message>
-        <location line="+71"/>
+        <location line="+45"/>
+        <source>This console</source>
+        <translation>This console</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Free space</source>
+        <translation>Free space</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Apps and games</source>
+        <translation>Apps and games</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Profile data</source>
+        <translation>Profile data</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>System</source>
+        <translation>System</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Drives</source>
+        <translation>Drives</translation>
+    </message>
+    <message>
+        <location line="+34"/>
         <source>Eject %1</source>
         <translation>Eject %1</translation>
     </message>

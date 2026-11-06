@@ -47,7 +47,7 @@
 <context>
     <name>AppDetailPage</name>
     <message>
-        <location filename="../qml/AppDetailPage.qml" line="+45"/>
+        <location filename="../qml/AppDetailPage.qml" line="+49"/>
         <source>Official</source>
         <translation>Resmi</translation>
     </message>
@@ -1418,7 +1418,7 @@
 <context>
     <name>StoragePane</name>
     <message>
-        <location filename="../qml/StoragePane.qml" line="+83"/>
+        <location filename="../qml/StoragePane.qml" line="+156"/>
         <source>%1 is still in use. Close what uses it and try again.</source>
         <translation>%1 hâlâ kullanımda. Kullanan uygulamayı kapatıp tekrar deneyin.</translation>
     </message>
@@ -1443,7 +1443,8 @@
         <translation>Desteklenmiyor</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-133"/>
+        <location line="+134"/>
         <source>%1 free of %2</source>
         <translation>%2 içinde %1 boş</translation>
     </message>
@@ -1453,7 +1454,37 @@
         <translation>Salt okunur</translation>
     </message>
     <message>
-        <location line="+71"/>
+        <location line="+45"/>
+        <source>This console</source>
+        <translation>Bu konsol</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Free space</source>
+        <translation>Boş alan</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Apps and games</source>
+        <translation>Uygulamalar ve oyunlar</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Profile data</source>
+        <translation>Profil verileri</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>System</source>
+        <translation>Sistem</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Drives</source>
+        <translation>Sürücüler</translation>
+    </message>
+    <message>
+        <location line="+34"/>
         <source>Eject %1</source>
         <translation>%1 sürücüsünü çıkar</translation>
     </message>

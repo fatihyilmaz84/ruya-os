@@ -49,11 +49,41 @@ Storage::Storage(std::unique_ptr<StorageBackend> backend, QObject *parent)
                 m_groupTimer.start();
         }
     });
+    connect(m_backend.get(), &StorageBackend::usageListed, this, [this](const SystemUsage &u) {
+        m_internal = QVariantMap{
+            {QStringLiteral("valid"), true},
+            {QStringLiteral("totalBytes"), u.totalBytes},
+            {QStringLiteral("freeBytes"), u.freeBytes},
+            {QStringLiteral("appsBytes"), u.appsBytes},
+            {QStringLiteral("dataBytes"), u.dataBytes},
+            {QStringLiteral("systemBytes"), u.systemBytes},
+        };
+        emit internalChanged();
+    });
     connect(m_backend.get(), &StorageBackend::finished, this, &Storage::finished);
+    m_internal = unknownInternal();
     m_backend->refresh();
+    m_backend->refreshUsage();
 }
 
 Storage::~Storage() = default;
+
+QVariantMap Storage::unknownInternal()
+{
+    return QVariantMap{
+        {QStringLiteral("valid"), false},
+        {QStringLiteral("totalBytes"), qint64(-1)},
+        {QStringLiteral("freeBytes"), qint64(-1)},
+        {QStringLiteral("appsBytes"), qint64(-1)},
+        {QStringLiteral("dataBytes"), qint64(-1)},
+        {QStringLiteral("systemBytes"), qint64(-1)},
+    };
+}
+
+void Storage::refreshInternal()
+{
+    m_backend->refreshUsage();
+}
 
 void Storage::flushArrivals()
 {
@@ -165,6 +195,27 @@ int Storage::mockPendingReplies() const
 {
     auto *mock = qobject_cast<MockStorageBackend *>(m_backend.get());
     return mock ? mock->pendingReplies() : 0;
+}
+
+void Storage::mockSetInternal(double total, double free, double apps, double data)
+{
+    if (auto *mock = qobject_cast<MockStorageBackend *>(m_backend.get()))
+        mock->setUsage(qint64(total), qint64(free), qint64(apps), qint64(data));
+}
+
+void Storage::mockLowSpace(bool low)
+{
+    if (auto *mock = qobject_cast<MockStorageBackend *>(m_backend.get()))
+        mock->lowSpace(low);
+}
+
+void Storage::mockRefreshInternalDelayed(int ms)
+{
+    if (auto *mock = qobject_cast<MockStorageBackend *>(m_backend.get())) {
+        mock->setReplyDelay(ms);
+        mock->refreshUsage();
+        mock->setReplyDelay(0);
+    }
 }
 
 void Storage::mockSetBusy(const QString &id, bool busy)
