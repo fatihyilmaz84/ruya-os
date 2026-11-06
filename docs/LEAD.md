@@ -119,6 +119,22 @@ Before the handoff, ask what made this range slower or worse than it needed to b
 4. What the next builder sessions will do (the top 3 of the board), and when the next lead session is due.
 5. Process changes from step 6b (builders, lead, tests), or "none".
 
+## Budgets: when the lead must stop and hand off (owner, 2026-11-06)
+
+A lead session that runs too long loses detail (auto-compact starts at 97 % of the context) and burns the plan limits that the builders share. Check with the usage tool (`mcp__ccd_session_mgmt__get_usage`, `self`) **at the start, after every merge and before every dispatch**, and act on these thresholds (the owner may change them here):
+
+| Signal | At | Action |
+|---|---|---|
+| Lead context | **60 %** | No new planning or task writing. Finish the merges and reviews in flight. |
+| Lead context | **75 %** | **Hand off now**: no new dispatch, rewrite `LEAD-NOTES.md` (what is in flight, worktrees, pending reviews, VM queue, owner decisions), commit, push, final report. The owner starts a fresh lead session. Never wait for auto-compaction. |
+| Plan, 5-hour window | **80 %** | Dispatch nothing new; let running builders finish; say so in the report. |
+| Plan, 5-hour window | **95 %** | Pause: no dispatch, no reviews started; tell the owner when the window resets. |
+| Plan, weekly | **70 %** | Tell the owner; run one lane instead of two; no spikes. |
+| A builder, one task | **300k tokens** in a round without a HANDOFF | The lead looks at what it is doing (a stall, a loop, a task too large) and splits, narrows or takes it over. |
+| A task over two rounds | **500k tokens** in total | Stop it, write what is done into the task file and split the rest (or do it as lead work). |
+
+Reference figures from the 2026-11-05/06 sessions (one builder round): T-189 160k, T-191 235k + round 2 (small), T-195 290k, T-196 220k + 280k, T-200 335k, T-162 (lead, with VM debugging) several hundred thousand. A lead session of about 25 merges and a lot of planning reached 87 % of 1M.
+
 ## Authority
 
 | The lead may | The lead may not |

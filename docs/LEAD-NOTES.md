@@ -1,42 +1,46 @@
 # Lead notes (handoff between lead sessions)
 
-The procedure is in [`LEAD.md`](LEAD.md). **Rewrite this file at the end of every lead session**; keep it under about a page. History lives in the STATUS session log and git.
+The procedure is in [`LEAD.md`](LEAD.md) (**read its new "Budgets" section: stop at 75 % context**). **Rewrite this file at the end of every lead session**; keep it under about a page. History lives in the STATUS session log and git.
 
-## Lanes at handoff (2026-11-06)
+## Handed off at 87 % context (2026-11-06). First, in this order
 
-None running; `git worktree list` shows only the main checkout. **Owner, 2026-11-06: no new tasks are created or dispatched until the owner says so.** T-189..T-194 exist as `todo` (planned before that instruction) and must not be dispatched without the owner's word. T-162 was done by the lead this session (it is `[lead]` work).
+1. **The ISO for the Dell.** `localhost/ruyaos:dev` is `0.0.47-combined` (slim image + Bluetooth firmware + pairing fix + `QT_AUDIO_BACKEND=pulseaudio`). Building the installer ISO with the whole-disk kickstart (`image/bib/iso-kickstart.toml`, key injected by `scripts/bib-iso-config.py` because bib refuses generated users next to a custom kickstart) was being retried: `make-disk.sh anaconda-iso > output/iso-comb4.log` (a monitor was waiting for `DONE rc=`). Earlier attempts: kickstart/users error (fixed), then an osbuild failure at the squashfs stage with no message, and the qcow2 failed with `Cannot allocate memory` (a **partial `output/qcow2/disk.qcow2` must be rebuilt**). Suspect: memory contention with builders' `dev.ps1`/cargo and WSL page cache; run **nothing else heavy** while `make-disk.sh` runs (`echo 3 > /proc/sys/vm/drop_caches` in WSL first). When `output/bootiso/install.iso` exists: `scripts\vm-iso-check.ps1` (now uses a 128 GiB disk and **fails unless `/var` is at least 85 % of it**: this proves the whole-disk kickstart; if bib ignored it, the ISO check fails loudly). Then copy the ISO to `F:\RuyaOS\` and tell the owner. If the custom kickstart cannot work, fall back: drop it, keep the 70 GiB cap, and tell the owner the disk is grown by hand (`growpart /dev/sdaN`, `xfs_growfs /var`, done on the Dell already).
+2. **Push.** 37 local commits are unpushed. `scripts\push-main.ps1` (runs `dev.ps1 test`: not during an image build).
+3. **Review T-200** (thermal; branch `t/T-200-thermal` at `f863c1b`, worktree `D:\dev\RuyaOS-worktrees\T-200`; the builder's HANDOFF says done, 420 QML + 231 Rust, shots reviewed; open: VM check `vm-devices-check.sh thermal`/`thermal-fake`, the Dell). Dispatch `ruya-reviewer` when no image build runs.
+4. **T-214** (developer guide, priority) builder is running in `D:\dev\RuyaOS-worktrees\T-214`; its HANDOFF comes by notification. It also writes `scripts/lint-dev-docs.ps1`; `vm-sample-check.sh` is a lead run.
+5. **T-197** (shell crash on Bluetooth headset disconnect; lead): the fix is in the repo (`ruya-compositor@.service` has `QT_AUDIO_BACKEND=pulseaudio`) and on the Dell as an `/etc` drop-in; the owner says the crash is gone. Left: five connect/disconnect cycles counted, `vm-audio-check.sh` on the new image, the Outcome, set `done`.
+6. **VM queue** (one image, then each check; `STATUS.md` lists it): T-191, T-192, T-193, T-196, T-200 checks plus T-195's items already done by its builder. Needs `-Audio` for devices. Free space after: `scripts\free-space.ps1`; WSL `.vhdx` is ~48 GB on C: (13 GB free): `wsl --manage FedoraLinux-44 --compact` between builds, never while a build runs. F: (NTFS 119 GiB, owner's) holds only the ISO so far.
 
-## Review range
-
-- **Last reviewed commit: the handoff commit of this session.** The range since `372fa87` held only docs commits plus T-162, which the lead wrote itself (no reviewer; the VM check is its test).
-- **Last VM verification: image `0.0.44-t162` of the working tree at the T-162 commit** (smoke `RUYA_BOOT_OK`, `vm-session-check.sh` 45 PASS, `vm-devices-check.sh` 57 PASS with `-Audio`). Store, library, storage and update checks were not rerun (nothing they test changed; the new PipeWire drop-ins only touch `ruya-shell`'s audio, which the devices check covers).
+## The Dell (owner's test machine, 192.168.178.109, root with the dev key; may be off)
+Installed from the 0.0.44 ISO, runs that image plus **overlays that vanish on reboot**: Bluetooth firmware (`dnf install iwlbluetooth-firmware` in `bootc usroverlay`), the fixed `ruya-devices` binary (`output/ovl/ruya-devices`), and a real file `/etc/systemd/system/ruya-compositor@.service.d/10-audio-backend.conf`. `/var` grown by hand to 464 GB. Controller (DualSense, bonded) works; the WH-1000XM4 headset must be re-paired once with the fixed code (`Bonded: yes`). After the new ISO is installed, nothing needs overlays; the pad must be paired again (T-203 removes the need for a keyboard).
 
 ## Concerns (ranked)
+1. **STATUS.md is 23 KB** (budget ~10 KB): prune the Inbox, Open owner decisions and the Decided paragraph first (move to the archive); the board itself has ~40 rows.
+2. **Critical path T-164** (per-profile Wayland sockets; lead; T-162 is done and vm/hw-verified) -> T-165/T-147. Not started; needs a whole session and the image lane; the Dell is the GL test (no `EGL_WL_bind_wayland_display` on KMS: pick a dmabuf integration).
+3. **Image lane and memory**: one image build at a time and nothing heavy beside `make-disk.sh` (this wasted ~1.5 h this session). Consider telling builders to avoid `dev.ps1 test` while the lead builds, or lowering parallel lanes to one during image work.
+4. **Owner decisions waiting** (all in `STATUS.md`): telemetry consent/backend/retention/privacy notice (T-224/T-225), Dolby/DTS names (T-219), update size vs the unshrunk image (rechunk/flatten, from T-195), real brand art for controllers (T-199), HDR/VRR after the spikes.
+5. Unchanged: compositor performance (B-003), suspend (T-166), Turkish review, `caller_is_admin` copied in two services.
 
-1. **Critical path: T-164 -> T-165/T-147** (`[lead]`). T-162 is done: `Session1.Launch` starts a real Flatpak as the profile user. T-164 gives that app a Wayland socket and shows its window in the shell. Read T-162's Outcome first: the app lives in `app-flatpak-*.scope` (not in our unit), the spawner's stderr is a file (SELinux), and `WAYLAND_DISPLAY` is not passed yet (`main.rs` passes an empty env: T-164 sets it per profile, through `Session::new`'s `env`, which is a fixed list today, so it needs a per-launch hook).
-2. **The Dell (B-002).** The owner installed the 4 Nov ISO (0.0.40) and got a text login (the T-178 bug). A fresh ISO of `0.0.44-t162` is on `F:\RuyaOS\` (built from `localhost/ruyaos:dev`; `vm-iso-check.ps1` passed on it: installs in QEMU, boots to the shell, greenboot success). Wait for the owner's report from real hardware (first KPIs, GPU, controllers, Wi-Fi under the NetworkManager deny rule).
-3. **Tests that cannot fail** (T-189 planned, undispatched; PLANNING.md Lessons has the rule). This session's lesson: a check that "passed" `Stop` while the app still ran, because it looked at the unit and not the process. Assert the thing, not its proxy.
-4. **Owner scope decisions** (recorded): media/streaming apps, Steam (Proton) and RetroArch are separate Store apps, out of the first MVP; blur and shadows stay the default look; design pass wanted but no tasks written.
-5. **F: drive** (owner, 2026-11-06, NTFS, 119 GiB, USB, full control granted; memory `f-drive-for-images`): only the ISO is on it. Moving `output/` there is an Inbox line; do it with a junction when no VM or build runs.
-6. **STATUS is ~14 KB** (budget ~10 KB): prune the Open owner decisions and the "Decided" paragraph when planning resumes.
-7. Older: compositor gaps (B-003, suspend T-166), `caller_is_admin` copied in two services, stale canvas boards, Turkish wording review, the registry of `ruya-session` is lost on a restart (Inbox).
+## Board at handoff (todo, in the order added; builder unless marked)
+T-190, T-194, T-164 [lead], T-165, T-147, T-166 [lead], **T-214 (priority, running)**, T-197 [lead, in progress], T-198 [lead] display resolution/DPI, T-199 device icons, T-201 [lead] stuck-process recovery, T-202 screen saver/power saving, T-203 pair a controller without a keyboard, T-204/T-205 Dreamglass v2 (205 lead), T-206 gear icon, T-207 [lead] faster BT reconnect, T-208 wallpapers, T-209 colour themes, T-210 profile customisation, T-211 [lead]/T-212 parental controls, T-213 time zone, T-215 [lead] saves backup, T-216 [lead] network options, T-217..T-219 [lead] input mapping / HDR spike / audio formats, T-220 privacy, T-221 app management, T-222 [lead] refresh-rate/VRR, T-223 status batteries, T-224/T-225 [lead] telemetry and crash reports. Suggested next dispatches (two lanes, no image build): T-206 (small) + T-223; then T-203 + T-213; keep the image lane for the lead (ISO, VM queue, then T-164).
+
+## Merged this session (with `ruya-reviewer` unless noted)
+T-189, T-192, T-193, T-191, T-196 (round 2), T-195 (+ my hardening commit); T-162 and the Bluetooth/audio/installer fixes by the lead; many task files written (T-197..T-225) from the owner's requests. Owner scope decisions: media apps separate; blur/shadows default; hold on new tasks lifted; F: drive for images; telemetry wanted with user control; developer docs a priority.
 
 ## Host facts learned
-
-- `systemd-run`/`systemctl --machine=<user>@.host` hands its stderr to PID 1; SELinux lets PID 1 write a pipe of an unconfined shell but not a service's pipe or a file in `/root` (call hangs or "Connection reset by peer"). In scripts: `2>&1 | cat`; in a service: a file in its `RuntimeDirectory`. Recorded in `image/CLAUDE.md`.
-- Fast loop for a service change without a 30-minute image build: build in WSL (`CARGO_TARGET_DIR=/root/ruya-target cargo build --release --locked -p <crate>`), `bootc usroverlay` in the VM, `scp` the binary, unit and policy, `restorecon`, restart. Discarded on reboot. Always finish with a real image build (a missing `install` line in the Containerfile only showed there).
-- `vm-devices-check.sh` needs `smoke-test.ps1 -Audio`; an `ssh ... bash script` may not return if the script leaves background jobs (read the log from a second ssh).
-- `git worktree remove` can fail "Directory not empty": `rm -rf` from Git Bash, then `git worktree prune`. Never overlap an image build with `dev.ps1 test` or `vm-iso-check.ps1`.
-- `diskpart /s` formats a USB drive even when its output is empty (PowerShell `Format-Volume` said "Invalid Parameter").
+- A `systemd-run`/`systemctl --machine=<user>@.host` call hands its stderr to PID 1: SELinux accepts a pipe of an unconfined shell (`2>&1 | cat`) but not a service's pipe or a file in `/root` (`image/CLAUDE.md`). `ruya-session` uses a file in its `RuntimeDirectory`.
+- Fast service loop without an image build: build in WSL (`CARGO_TARGET_DIR=/root/ruya-target`), `bootc usroverlay` on the target, `scp`, `restorecon`, restart. Discarded on reboot.
+- `make-disk.sh` ignores osbuild failures in its exit code (the `DONE rc=0` line lies): read the log.
+- bootc-image-builder: a custom kickstart replaces its default and cannot be combined with `[[customizations.user]]`.
+- A fresh worktree rebuilds from scratch; `git worktree remove` may need `rm -rf` then `git worktree prune`.
+- `diskpart /s` formats a USB drive when `Format-Volume` says "Invalid Parameter".
 
 ## Quality signals (one row per lead session)
 
 | Date | Range reviewed | Tasks | Findings (fixed / filed) | `dev.ps1 test` | VM |
 |---|---|---|---|---|---|
-| 2026-11-04 | 9b77857..b4733f4 | T-155, T-157, T-159 (+ T-130 fresh read) | 0 / 7 tasks planned (T-162..T-168). Process: builder/reviewer agents, worktree lanes, lead-only STATUS, VM queue, `free-space.ps1`, shots lock (owner) | 271 + 22 skipped QML, 242 Rust | not run |
-| 2026-11-04 | 2c134ce..handoff | 12 merged: T-167, T-168, T-136, T-158, T-137, T-169, T-163, T-160, T-171, T-172, T-170, T-144 | 6 CHANGES_REQUESTED, 3 lead fixes | 327 + 28 skipped QML | `0.0.32`/`0.0.33` ok |
-| 2026-11-04 (late) | handoff..223d7ed | +7: T-175, T-176, T-161, T-173, T-145, T-177, T-174 (19 in the session) | 10 CHANGES_REQUESTED in the session; lead fixes: T-173 stop_scan, T-176 shots log, scratch known_hosts | 346 + 28 skipped QML | lead `0.0.37` ok |
-| 2026-11-05 | 4c0e713..handoff | 11 merged: T-178..T-188 | 6 CHANGES_REQUESTED (a real regression in T-182, a vacuous test in T-184, VM checks that could not pass in T-183 and T-188, a design miss in T-185); 6 tasks planned (T-189..T-194), not dispatched | 381 + 30 skipped QML | lead `0.0.42` ok: smoke, devices 57, store 67, library, storage 98 |
-| 2026-11-06 | 372fa87..handoff | T-162 (lead-written) | 0 reviews (no builder); 5 defects found by the VM check in my own work (stderr pipe, scope, linger race, Containerfile install line, check script stderr) | 381 + 30 skipped QML, Rust green | `0.0.44-t162`: smoke, session 45, devices 57 |
+| 2026-11-05 | 4c0e713..handoff | 11 merged: T-178..T-188 | 6 CHANGES_REQUESTED | 381 + 30 skipped QML | lead `0.0.42` ok |
+| 2026-11-06 | 372fa87..handoff | T-162 (lead) | 5 defects found by the VM check in my own work | 381 + 30 skipped QML | `0.0.44-t162`: smoke, session 45, devices 57, ISO ok; session check also 45 PASS on the Dell |
+| 2026-11-06 (build loop) | handoff..653c8ed | T-189, T-192, T-193, T-191, T-196, T-195 merged; T-200 reviewed pending; T-214 running | 3 CHANGES_REQUESTED (T-191 test order, T-196 wrong "profile data" claim, T-189/T-195 non-blocking); lead fixes: library trap, ISO guard, slim-script protections | 403 QML + 33 skipped (T-196), 420 + 38 (T-200 branch) | image `0.0.47-combined` built; ISO/VM checks pending |
 
 Older rows: git history of this file.
