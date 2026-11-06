@@ -15,7 +15,7 @@ Verification legend: **host** = built and tested on Windows · **host (vm pendin
 
 ## Board
 
-**NEXT → T-164** ([lead], the critical path: per-profile Wayland sockets). Owner, 2026-11-06: no new tasks until the owner says so; developer documentation is a priority.
+**NEXT → T-164** ([lead], the critical path: per-profile Wayland sockets). Owner, 2026-11-06: developer documentation (T-214) and then the visual polish come first: **T-204, T-206, T-205, then T-209, T-208** are the first builder lanes; T-164 stays the lead's critical path.
 
 **How work runs (owner, 2026-11-04):** the lead dispatches `ruya-builder` agents, at most two at a time in their own worktrees and in different areas, has each branch reviewed by `ruya-reviewer`, and merges it (`docs/LEAD.md`, build loop). Dispatched builders never edit this file. At most one task with a "VM (this task)" criterion runs at a time. A builder session the owner starts directly takes NEXT in the main checkout, alone, and does the bookkeeping itself (`CLAUDE.md`).
 
@@ -28,11 +28,10 @@ Open work only, in the recommended order; when NEXT is blocked take the first `t
 | [T-197](tasks/T-197-shell-crash-on-bluetooth-audio-disconnect.md) | **[lead]** Shell crash when a Bluetooth headset disconnects | in-progress | — |
 | [T-198](tasks/T-198-display-resolution-and-dpi.md) | **[lead]** Display: resolution, refresh, UI scale (DPI) | todo | — |
 | [T-199](tasks/T-199-device-icons.md) | Device icons in the Bluetooth pane and toasts | todo | — |
-| [T-200](tasks/T-200-system-monitoring-thermal.md) | System monitoring: temperatures, fans, safe defaults | in-progress | — |
 | [T-201](tasks/T-201-recover-from-stuck-processes.md) | **[lead]** Recover from stuck processes (watchdogs, OOM) | todo | — |
 | [T-202](tasks/T-202-screen-saver-and-power-saving.md) | Screen saver and power saving | todo | — |
 | [T-203](tasks/T-203-pair-a-controller-without-a-keyboard.md) | Pair a controller with no keyboard | todo | — |
-| [T-204](tasks/T-204-dreamglass-materials-and-motion.md) | Dreamglass materials and motion v2 | todo | — |
+| [T-204](tasks/T-204-dreamglass-materials-and-motion.md) | Dreamglass materials and motion v2 | in-progress | — |
 | [T-205](tasks/T-205-gliding-highlight-and-liquid-pills.md) | **[lead]** Gliding highlight, liquid-glass pills | todo | T-204 |
 | [T-206](tasks/T-206-settings-gear-icon-active-state.md) | The Settings gear looks wrong when active | todo | — |
 | [T-207](tasks/T-207-faster-bluetooth-controller-reconnect.md) | **[lead]** Faster Bluetooth controller reconnect | todo | — |
@@ -58,6 +57,7 @@ Open work only, in the recommended order; when NEXT is blocked take the first `t
 | [T-165](tasks/T-165-profile-switch-freezes-apps.md) | Profile switch and sign-out freeze the profile's apps | todo | T-164 |
 | [T-147](tasks/T-147-fullscreen-app-flow.md) | Full-screen apps: launch, quick menu, return, close | todo | T-164 |
 | [T-166](tasks/T-166-suspend-under-eglfs.md) | **[lead]** Suspend and resume under eglfs | todo | — |
+| [T-226](tasks/T-226-system-information.md) | System information screen (CPU, RAM, GPU, storage...) and USB report | todo | — |
 
 **VM queue** (host-done, VM check pending; the lead runs them with one image build): T-192 (`vm-store-check.sh`: one `InstalledChanged` after the outside removal); T-191 (`vm-store-check.sh`: a cut-short install reported once); T-196 (`vm-devices-check.sh` storage part: `GetSystemUsage` against `stat -f /var`, `SystemUsageChanged`, `nobody` refused); T-193 (`vm-storage-check.sh baseline`: the `ListVolumes` JSON parser; also `vm-devices-check.sh`, `vm-library-check.sh`); T-200 (`vm-devices-check.sh thermal` and `thermal-fake`); T-214 (`vm-sample-check.sh` with the repo tarball). Devices checks need `-Audio`.
 
@@ -71,6 +71,7 @@ One line each: `- (source) what, and why it matters`. Dispatched builders put th
 - (T-214 findings) `Library.launch` only emits `launchRequested` (Play does nothing: T-164/T-147); games as `ruya-p<N>` cannot open `/dev/input/event*` and `ruya-inputd` does not grab (B-006); `ruya-store` age label: `gambling` should be `money-gambling`, "Not rated" vs "All ages"; no Flatpak runtime in the image (owner-level, size); the shell cannot add a developer remote. Details in `STATUS-parked.md`.
 - (T-192 review) `ruya-store` `sync_installed`: overlapping reads can apply out of order; give each read a ticket.
 - (Dell) Headsets paired before the pairing fix are `Bonded: no`: the shell could offer "Pair again" (needs `bonded` in `ListDevices`).
+- (T-200 review) Capture the Dell's real `/sys/class/hwmon` and `thermal_zone` layout into `services/ruya-devices/tests/fixtures/` (today's fixture is written from the task text). The hint bar should show `ThermalNotice`'s own hints (A OK) while it is open. A `tst_thermal` case: Display shows the owner's quality while limited. The critical level does not navigate to Home (spec says so now): decide if it should.
 - (0.0.40) The VM and the Dell clock show UTC: T-213.
 
 ## Blocked (need something this host doesn't have)
