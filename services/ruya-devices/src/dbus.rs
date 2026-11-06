@@ -21,6 +21,7 @@ use crate::bluetooth::{self, Bluetooth, Bluez, BtError};
 use crate::debounce;
 use crate::network::{self, Network, NetworkManager};
 use crate::storage::{self, Storage, Udisks};
+use crate::sysusage::{MonotonicClock, Refresh, SystemSource, SystemUsage};
 
 /// Chosen at runtime: `wpctl` on Linux, a fake in `--session` development.
 pub type DynPipeWire = Box<dyn crate::audio::PipeWire>;
@@ -783,13 +784,19 @@ impl Udisks for DynUdisks {
 
 pub type SharedStorage = Arc<Storage<DynUdisks>>;
 
+/// Chosen at runtime: statvfs and directory walks on Linux, a scripted fake in `--session`.
+pub type DynSource = Box<dyn SystemSource>;
+
+pub type SharedUsage = Arc<SystemUsage<DynSource, MonotonicClock>>;
+
 pub struct StorageIface {
     storage: SharedStorage,
+    usage: SharedUsage,
 }
 
 impl StorageIface {
-    pub fn new(storage: SharedStorage) -> Self {
-        StorageIface { storage }
+    pub fn new(storage: SharedStorage, usage: SharedUsage) -> Self {
+        StorageIface { storage, usage }
     }
 
     /// `VolumeAdded` first, then `VolumesChanged` (the contract's order).
@@ -834,6 +841,44 @@ impl StorageIface {
             .collect()
     }
 
+    /// Total and free are read on every call (one syscall, still off the executor); apps and
+    /// profile data are the cached directory sizes, unknown (-1) until the first walk finishes.
+    /// When the cache is stale the call answers with what it has and starts the walk, which ends
+    /// in `SystemUsageChanged`; the walk never runs on the executor.
+    async fn get_system_usage(
+        &self,
+        #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
+    ) -> BTreeMap<String, OwnedValue> {
+        let usage = self.usage.clone();
+        let now = unblock(move || usage.current()).await;
+        if self.usage.needs_refresh() {
+            let connection = emitter.connection().clone();
+            let usage = self.usage.clone();
+            emitter
+                .connection()
+                .executor()
+                .spawn(
+                    refresh_usage(connection, usage),
+                    "ruya-devices system usage",
+                )
+                .detach();
+        }
+        [
+            ("total_bytes", now.total_bytes),
+            ("free_bytes", now.free_bytes),
+            ("apps_bytes", now.apps_bytes),
+            ("data_bytes", now.data_bytes),
+            ("system_bytes", now.system_bytes),
+        ]
+        .into_iter()
+        .filter_map(|(k, v)| {
+            OwnedValue::try_from(Value::from(v))
+                .ok()
+                .map(|v| (k.to_owned(), v))
+        })
+        .collect()
+    }
+
     async fn eject(&self, id: &str, #[zbus(signal_emitter)] emitter: SignalEmitter<'_>) -> String {
         let (storage, id) = (self.storage.clone(), id.to_owned());
         let status = unblock(move || storage.eject(&id)).await;
@@ -851,6 +896,63 @@ impl StorageIface {
 
     #[zbus(signal)]
     async fn volume_added(emitter: &SignalEmitter<'_>, id: String) -> zbus::Result<()>;
+
+    #[zbus(signal)]
+    async fn system_usage_changed(emitter: &SignalEmitter<'_>) -> zbus::Result<()>;
+}
+
+/// Recomputes the directory sizes on the blocking pool if they are stale and sends
+/// `SystemUsageChanged` when they differ. A change signal that came in during a walk leaves the
+/// result stale, so it goes round again (a few times at most).
+pub async fn refresh_usage(connection: Connection, usage: SharedUsage) {
+    for _ in 0..3 {
+        let walking = usage.clone();
+        let result = unblock(move || walking.refresh()).await;
+        if result == Refresh::Changed {
+            match connection
+                .object_server()
+                .interface::<_, StorageIface>(OBJECT_PATH)
+                .await
+            {
+                Ok(iface) => {
+                    if let Err(err) =
+                        StorageIface::system_usage_changed(iface.signal_emitter()).await
+                    {
+                        eprintln!("ruya-devices: emitting SystemUsageChanged failed: {err}");
+                    }
+                }
+                Err(err) => eprintln!("ruya-devices: emitting SystemUsageChanged failed: {err}"),
+            }
+        }
+        if result == Refresh::Skipped || !usage.needs_refresh() {
+            return;
+        }
+    }
+}
+
+/// The Store sends `InstalledChanged` after an install, update or uninstall: the app sizes are
+/// stale. Measures once at start so the first reader finds numbers, then follows the Store's
+/// signal (no polling). Runs forever.
+#[cfg(target_os = "linux")]
+pub async fn watch_installed(connection: Connection, usage: SharedUsage) {
+    let rule = MatchRule::builder()
+        .msg_type(zbus::message::Type::Signal)
+        .sender("org.ruyaos.Store1")
+        .and_then(|b| b.member("InstalledChanged"))
+        .map(|b| b.build());
+    let Ok(rule) = rule else {
+        return eprintln!("ruya-devices: cannot follow the Store");
+    };
+    let mut stream = match MessageStream::for_match_rule(rule, &connection, None).await {
+        Ok(stream) => stream,
+        Err(err) => return eprintln!("ruya-devices: cannot follow the Store: {err}"),
+    };
+    refresh_usage(connection.clone(), usage.clone()).await;
+    while stream.next().await.is_some() {
+        debounce::settle(&mut stream, debounce::QUIET, debounce::MAX_WAIT, None).await;
+        usage.invalidate();
+        refresh_usage(connection.clone(), usage.clone()).await;
+    }
 }
 
 /// Follows udisks2's signals (objects added or removed, properties changed) and udisks2 itself

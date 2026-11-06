@@ -57,6 +57,12 @@ QList<StorageVolume> parseVolumes(const QDBusArgument &arg)
     arg.endArray();
     return out;
 }
+
+qint64 number(const QVariantMap &d, const char *key)
+{
+    const QVariant v = d.value(QString::fromLatin1(key));
+    return v.isValid() ? v.toLongLong() : -1;
+}
 } // namespace
 
 DBusStorageBackend::DBusStorageBackend(QObject *parent)
@@ -64,9 +70,13 @@ DBusStorageBackend::DBusStorageBackend(QObject *parent)
     , m_bus(chooseBus())
     , m_watcher(Service, m_bus, QDBusServiceWatcher::WatchForRegistration, this)
 {
-    connect(&m_watcher, &QDBusServiceWatcher::serviceRegistered, this, [this] { refresh(); });
+    connect(&m_watcher, &QDBusServiceWatcher::serviceRegistered, this, [this] {
+        refresh();
+        refreshUsage();
+    });
     m_bus.connect(Service, Path, Interface, QStringLiteral("VolumesChanged"), this, SLOT(onVolumesChanged()));
     m_bus.connect(Service, Path, Interface, QStringLiteral("VolumeAdded"), this, SLOT(onVolumeAdded(QString)));
+    m_bus.connect(Service, Path, Interface, QStringLiteral("SystemUsageChanged"), this, SLOT(onUsageChanged()));
 }
 
 void DBusStorageBackend::refresh()
@@ -82,6 +92,30 @@ void DBusStorageBackend::refresh()
             return;
         }
         deliver(request, parseVolumes(reply.arguments().constFirst().value<QDBusArgument>()));
+    });
+}
+
+void DBusStorageBackend::refreshUsage()
+{
+    auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("GetSystemUsage"));
+    const quint64 request = beginUsageRequest();
+    auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, request](QDBusPendingCallWatcher *w) {
+        w->deleteLater();
+        const QDBusMessage reply = w->reply();
+        if (reply.type() != QDBusMessage::ReplyMessage || reply.arguments().isEmpty()) {
+            qWarning("ruya-shell: Devices1.Storage GetSystemUsage failed: %s", qPrintable(reply.errorMessage()));
+            acceptUsage(request); // an outcome too: an older reply must not land after it
+            return;
+        }
+        const QVariantMap d = parseDict(reply.arguments().constFirst().value<QDBusArgument>());
+        SystemUsage usage;
+        usage.totalBytes = number(d, "total_bytes");
+        usage.freeBytes = number(d, "free_bytes");
+        usage.appsBytes = number(d, "apps_bytes");
+        usage.dataBytes = number(d, "data_bytes");
+        usage.systemBytes = number(d, "system_bytes");
+        deliverUsage(request, usage);
     });
 }
 
@@ -102,6 +136,11 @@ void DBusStorageBackend::eject(const QString &id)
 void DBusStorageBackend::onVolumesChanged()
 {
     refresh();
+}
+
+void DBusStorageBackend::onUsageChanged()
+{
+    refreshUsage();
 }
 
 void DBusStorageBackend::onVolumeAdded(const QString &id)

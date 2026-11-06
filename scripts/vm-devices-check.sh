@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Checks the Devices service (audio T-128, network T-132, controller batteries T-161, Bluetooth T-173) inside a running VM booted with sound. Copy and run as root:
 #   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-devices-check.sh root@127.0.0.1:/root/
-#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-devices-check.sh [check|events|security|state|batteries|bluetooth]
+#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-devices-check.sh [check|events|security|state|batteries|bluetooth|storage]
 # check (default): unit active, name owned by ruya-shell, ListSinks, a MasterVolume write reaches
 # PipeWire, a call from another user is refused; then the network part: State is connected, Primary is
 # the ethernet link with an IPv4 address, ListWifi and Scan answer, unknown ids are refused, another
@@ -12,6 +12,11 @@
 # ListDevices answers an empty list, StartScan/Pair/Connect answer unavailable (no adapter in the VM; a real
 # adapter and controller are NOT checked here), unknown ids and empty ids are refused, another user is
 # refused. Needs the shell logged in (VM booted with -Audio).
+# Then the storage part (T-196): GetSystemUsage matches `stat -f /var` (within 1 %), apps_bytes and data_bytes
+# are measured in the background (data_bytes is -1 for now: the profile homes are 0700 profile users'),
+# free + apps (+ data when known) + system add up to total, apps_bytes is close to du of
+# /var/lib/flatpak, another user is refused, and installing a signed 80 MB test app through the Store makes
+# apps_bytes grow and sends SystemUsageChanged (SKIP_APPS_GROWTH=1 skips the install; `storage` runs only this part).
 # events: only the PipeWire event checks (T-133); IDLE=60 adds the idle-process count (also part of check; samples the process list for IDLE seconds).
 # state: prints State and Primary (for the link test, see docs/dev-setup.md).
 set -u
@@ -132,6 +137,123 @@ bluetooth_check() {
     as_shell systemctl --user is-active ruya-devices >/dev/null && ok "ruya-devices still active after the Bluetooth calls" || bad "ruya-devices not active"
 }
 
+# T-196: Devices1.Storage.GetSystemUsage, the console's own storage. Compares the filesystem numbers
+# with `stat -f /var`, waits for the first background measurement, checks that the parts add up,
+# and that installing an app (a signed 80 MB test repository through the Store) makes apps_bytes
+# grow and sends SystemUsageChanged. SKIP_APPS_GROWTH=1 leaves the install out.
+stor=org.ruyaos.Devices1.Storage
+store_svc=org.ruyaos.Store1
+store_path=/org/ruyaos/Store1
+usage_work=/var/lib/ruya-devices-usage-test
+usage_remote=ruyaos-usage-test
+usage_app=org.ruyaos.UsageTestApp
+usage_rt=org.ruyaos.UsageTestRuntime
+
+# usage_key <key>: one number out of `busctl call ... GetSystemUsage` (prints -2 when it cannot be read).
+usage_key() {
+    local line num
+    line="$(busctl --system call "$svc" "$path" "$stor" GetSystemUsage 2>/dev/null)" || { echo -2; return; }
+    num="$(echo "$line" | grep -o "\"$1\" x -\?[0-9]*" | head -1 | awk '{print $3}')"
+    echo "${num:--2}"
+}
+
+usage_build_repo() {
+    rm -rf "$usage_work"; mkdir -p "$usage_work/gpg" "$usage_work/rt/usr/share/ruya-test" "$usage_work/app/files/bin" "$usage_work/rt/files" "$usage_work/rt/var" "$usage_work/app/var"
+    chmod 700 "$usage_work/gpg"
+    gpg --homedir "$usage_work/gpg" --batch --pinentry-mode loopback --passphrase '' \
+        --quick-generate-key "ruya-devices-usage-test <test@example.org>" default default never >/dev/null 2>&1 || return 1
+    local key
+    key="$(gpg --homedir "$usage_work/gpg" --list-keys --with-colons | awk -F: '/^pub/ {k=$5} END {print k}')"
+    echo hello > "$usage_work/rt/usr/share/ruya-test/hello"
+    head -c 80000000 /dev/urandom > "$usage_work/app/files/payload.bin"   # incompressible: apps_bytes must grow by about this
+    printf '[Runtime]\nname=%s\nruntime=%s/x86_64/stable\nsdk=%s/x86_64/stable\n' "$usage_rt" "$usage_rt" "$usage_rt" > "$usage_work/rt/metadata"
+    printf '#!/bin/sh\necho hello\n' > "$usage_work/app/files/bin/hello"; chmod 755 "$usage_work/app/files/bin/hello"
+    printf '[Application]\nname=%s\nruntime=%s/x86_64/stable\nsdk=%s/x86_64/stable\ncommand=hello\n' "$usage_app" "$usage_rt" "$usage_rt" > "$usage_work/app/metadata"
+    local sign="--gpg-sign=$key --gpg-homedir=$usage_work/gpg"
+    flatpak build-export --runtime $sign "$usage_work/repo" "$usage_work/rt" stable || return 1
+    flatpak build-finish --command=hello "$usage_work/app" || return 1
+    flatpak build-export $sign "$usage_work/repo" "$usage_work/app" stable || return 1
+    flatpak build-update-repo $sign "$usage_work/repo" >/dev/null 2>&1
+    {
+        printf '[Flatpak Repo]\nTitle=Usage check\nUrl=file://%s/repo\n' "$usage_work"
+        printf 'GPGKey=%s\n' "$(gpg --homedir "$usage_work/gpg" --export "$key" | base64 -w0)"
+    } > "$usage_work/test.flatpakrepo"
+}
+
+usage_clean() {
+    flatpak uninstall --system -y "$usage_app" "$usage_rt" >/dev/null 2>&1
+    flatpak remote-delete --system --force "$usage_remote" >/dev/null 2>&1
+    rm -rf "$usage_work"
+}
+
+storage_usage_check() {
+    echo "--- storage usage (T-196): GetSystemUsage"
+    local raw total free apps data system n sum du_apps d mon before after out s_blocks s_unit s_avail s_total s_free tol
+    raw="$(busctl --system call "$svc" "$path" "$stor" GetSystemUsage)"
+    echo "GetSystemUsage: $raw"
+    case "$raw" in 'a{sv} 5 '*) ok "GetSystemUsage answers five keys";; *) bad "GetSystemUsage did not answer five keys"; return;; esac
+    total="$(usage_key total_bytes)"; free="$(usage_key free_bytes)"
+    read -r s_blocks s_unit s_avail <<STATEOF
+$(stat -f -c '%b %S %a' /var)
+STATEOF
+    s_total=$((s_blocks * s_unit)); s_free=$((s_avail * s_unit)); tol=$((s_total / 100))
+    echo "service: total=$total free=$free; stat -f /var: total=$s_total free=$s_free (tolerance $tol)"
+    if [ "$total" -ge 0 ] && [ "$((total - s_total))" -le "$tol" ] && [ "$((s_total - total))" -le "$tol" ]; then ok "total_bytes matches stat -f /var within 1 %"; else bad "total_bytes $total vs stat -f $s_total"; fi
+    if [ "$free" -ge 0 ] && [ "$((free - s_free))" -le "$tol" ] && [ "$((s_free - free))" -le "$tol" ]; then ok "free_bytes matches stat -f /var within 1 % of the disk"; else bad "free_bytes $free vs stat -f $s_free"; fi
+
+    # The first measurement runs in the background (the call never waits for it): -1 until done.
+    n=0
+    until [ "$(usage_key apps_bytes)" -ge 0 ] || [ "$n" -ge 120 ]; do sleep 1; n=$((n + 1)); done
+    apps="$(usage_key apps_bytes)"; data="$(usage_key data_bytes)"; system="$(usage_key system_bytes)"
+    total="$(usage_key total_bytes)"; free="$(usage_key free_bytes)"
+    echo "measured after about $n s: apps=$apps data=$data system=$system"
+    if [ "$apps" -ge 0 ]; then ok "apps_bytes was measured"; else bad "apps_bytes=$apps after $n s"; return; fi
+    # The profile homes are 0700 users' directories the service (ruya-shell) cannot read: unknown, not a small number.
+    if [ "$data" = -1 ]; then ok "data_bytes is -1 (the profile homes are not readable by the service)"; elif [ "$data" -ge 0 ]; then ok "data_bytes is known ($data): the homes were readable"; else bad "data_bytes=$data"; fi
+    if [ "$system" -ge 0 ]; then ok "system_bytes is not negative"; else bad "system_bytes=$system"; fi
+    sum=$((free + apps + system)); [ "$data" -gt 0 ] && sum=$((sum + data))
+    if [ "$system" = 0 ] || { [ "$sum" -le "$total" ] && [ "$((total - sum))" -le "$((total / 100))" ]; }; then ok "free + apps + data + system add up to total (system is the rest)"; else bad "free+apps+data+system=$sum vs total=$total (data=$data)"; fi
+    du_apps="$(du -s --block-size=1 -x /var/lib/flatpak 2>/dev/null | awk '{print $1}')"
+    echo "du -sx /var/lib/flatpak (hard links counted once): $du_apps"
+    if [ -n "$du_apps" ] && [ "$du_apps" -gt 0 ]; then
+        d=$((apps - du_apps)); [ "$d" -lt 0 ] && d=$((0 - d))
+        if [ "$d" -le "$((du_apps / 20 + 4000000))" ]; then ok "apps_bytes is close to du of /var/lib/flatpak"; else bad "apps_bytes $apps vs du $du_apps"; fi
+    fi
+    if out="$(runuser -u nobody -- busctl --system call "$svc" "$path" "$stor" GetSystemUsage 2>&1)"; then
+        bad "nobody could call GetSystemUsage: $out"
+    else
+        echo "$out"; ok "GetSystemUsage from nobody refused"
+    fi
+    as_shell systemctl --user is-active ruya-devices >/dev/null && ok "ruya-devices still active after GetSystemUsage" || bad "ruya-devices not active"
+
+    if [ "${SKIP_APPS_GROWTH:-0}" = 1 ]; then echo "(SKIP_APPS_GROWTH=1: no install)"; return; fi
+    echo "--- storage usage (T-196): apps_bytes grows after an install"
+    usage_clean
+    if usage_build_repo; then ok "test repository built"; else bad "cannot build the test repository"; usage_clean; return; fi
+    busctl --system --json=short monitor "$svc" > "$usage_work/signals.log" 2>&1 &
+    mon=$!
+    sleep 1
+    before="$(usage_key apps_bytes)"
+    out="$(busctl --system call "$store_svc" "$store_path" "$store_svc" AddRemote ss "$usage_remote" "file://$usage_work/test.flatpakrepo")"
+    case "$out" in 's "ok"') ok "test remote added";; *) bad "AddRemote: $out"; kill "$mon" 2>/dev/null; usage_clean; return;; esac
+    n=0
+    until as_shell busctl --system call "$store_svc" "$store_path" "$store_svc" Search sa{sv} "UsageTestApp" 0 | grep -q "$usage_app" || [ "$n" -ge 90 ]; do sleep 1; n=$((n + 1)); done
+    out="$(as_shell busctl --system call "$store_svc" "$store_path" "$store_svc" Install s "$usage_app")"
+    echo "Install: $out"
+    n=0
+    until flatpak list --system --app --columns=application 2>/dev/null | grep -qx "$usage_app" || [ "$n" -ge 180 ]; do sleep 1; n=$((n + 1)); done
+    if flatpak list --system --app --columns=application 2>/dev/null | grep -qx "$usage_app"; then ok "the test app is installed (after about $n s)"; else bad "the test app did not install"; fi
+    # InstalledChanged -> the service measures again and sends SystemUsageChanged.
+    n=0
+    until [ "$(usage_key apps_bytes)" -gt "$((before + 40000000))" ] || [ "$n" -ge 90 ]; do sleep 1; n=$((n + 1)); done
+    after="$(usage_key apps_bytes)"
+    echo "apps_bytes before=$before after=$after (about $n s after the install)"
+    if [ "$after" -gt "$((before + 40000000))" ]; then ok "apps_bytes grew by $((after - before)) bytes after the install"; else bad "apps_bytes did not grow (before $before, after $after)"; fi
+    kill "$mon" 2>/dev/null; wait "$mon" 2>/dev/null
+    if grep -q '"member":"SystemUsageChanged"' "$usage_work/signals.log"; then ok "SystemUsageChanged was sent"; else bad "no SystemUsageChanged was seen"; fi
+    usage_clean
+}
+
 case "${1:-check}" in
 security)
     as_shell systemd-analyze --user security ruya-devices --no-pager | tail -15
@@ -240,10 +362,15 @@ check)
 
     bluetooth_check
 
+    storage_usage_check
+
     events_check "${IDLE:-60}"
     ;;
 bluetooth)
     bluetooth_check
+    ;;
+storage)
+    storage_usage_check
     ;;
 events)
     events_check "${IDLE:-0}"

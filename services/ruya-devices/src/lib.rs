@@ -3,7 +3,8 @@
 //! `wpctl`/`pw-dump` side in `pipewire.rs`, PipeWire's events in `events.rs`, the NetworkManager
 //! side in `networkmanager.rs` and the UPower side (controller batteries, `battery.rs`) in
 //! `upower.rs`; the BlueZ side (`bluetooth.rs`) in `bluez.rs`; the udisks2 side (drives and volumes,
-//! `storage.rs`) in `udisks.rs`.
+//! `storage.rs`) in `udisks.rs`; how full the console's own storage is (`sysusage.rs`) is read from
+//! `statvfs` and directory walks.
 
 pub mod audio;
 pub mod battery;
@@ -18,6 +19,7 @@ pub mod networkmanager;
 pub mod pipewire;
 pub mod storage;
 pub mod store;
+pub mod sysusage;
 #[cfg(target_os = "linux")]
 pub mod udisks;
 #[cfg(target_os = "linux")]

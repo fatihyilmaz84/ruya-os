@@ -20,6 +20,17 @@ struct StorageVolume
     bool readOnly = false;
 };
 
+// How full the console's own storage is (Devices1.Storage.GetSystemUsage): the filesystem that
+// holds /var and what the apps, the profile data and the system take of it. -1: not known (yet).
+struct SystemUsage
+{
+    qint64 totalBytes = -1;
+    qint64 freeBytes = -1;
+    qint64 appsBytes = -1;
+    qint64 dataBytes = -1;
+    qint64 systemBytes = -1;
+};
+
 // Transport behind the Storage QML singleton: org.ruyaos.Devices1.Storage over D-Bus
 // (api/dbus/org.ruyaos.Devices1.xml), or an in-memory mock. Results arrive asynchronously
 // through signals. Nothing here ever runs content from a volume.
@@ -33,9 +44,11 @@ public:
     virtual bool isMock() const = 0;
     virtual void refresh() = 0; // reports the volumes
     virtual void eject(const QString &id) = 0;
+    virtual void refreshUsage() = 0; // reports the internal storage numbers
 
 signals:
     void volumesListed(const QList<StorageVolume> &volumes);
+    void usageListed(const SystemUsage &usage);
     // A volume was plugged in; sent before the list that contains it.
     void volumeAdded(const QString &id);
     // op: "eject"; status: see the XML ("ok", "busy", ...).
@@ -51,6 +64,17 @@ protected:
             emit volumesListed(volumes);
     }
 
+    // The same for the internal storage numbers. A request that failed is an outcome too: call
+    // acceptUsage for it, so an older reply landing after the failure is dropped.
+    quint64 beginUsageRequest() { return m_usageSeq.begin(); }
+    bool acceptUsage(quint64 request) { return m_usageSeq.accept(request); }
+    void deliverUsage(quint64 request, const SystemUsage &usage)
+    {
+        if (m_usageSeq.accept(request))
+            emit usageListed(usage);
+    }
+
 private:
     RequestSequence m_listSeq;
+    RequestSequence m_usageSeq;
 };

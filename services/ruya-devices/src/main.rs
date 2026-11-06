@@ -10,15 +10,20 @@ use ruya_devices::audio::{Audio, FakePipeWire};
 use ruya_devices::battery::{Batteries, FakeUPower, RawDevice, KIND_GAMING_INPUT};
 use ruya_devices::bluetooth::{Bluetooth, FakeBluez};
 #[cfg(target_os = "linux")]
-use ruya_devices::dbus::{watch, watch_batteries, watch_bluetooth, watch_network, watch_storage};
 use ruya_devices::dbus::{
-    AudioIface, BatteriesIface, BluetoothIface, DynBluez, DynNm, DynPipeWire, DynUPower, DynUdisks,
-    NetworkIface, Shared, SharedBatteries, SharedBluetooth, SharedNet, SharedStorage, StorageIface,
-    BUS_NAME, OBJECT_PATH,
+    watch, watch_batteries, watch_bluetooth, watch_installed, watch_network, watch_storage,
+};
+use ruya_devices::dbus::{
+    AudioIface, BatteriesIface, BluetoothIface, DynBluez, DynNm, DynPipeWire, DynSource, DynUPower,
+    DynUdisks, NetworkIface, Shared, SharedBatteries, SharedBluetooth, SharedNet, SharedStorage,
+    SharedUsage, StorageIface, BUS_NAME, OBJECT_PATH,
 };
 use ruya_devices::network::{FakeNetworkManager, Network};
 use ruya_devices::storage::{FakeUdisks, RawVolume, Storage};
 use ruya_devices::store::Store;
+#[cfg(target_os = "linux")]
+use ruya_devices::sysusage::LinuxSource;
+use ruya_devices::sysusage::{FakeSource, MonotonicClock, SystemUsage};
 
 fn main() {
     if let Err(err) = run() {
@@ -93,6 +98,21 @@ fn udisks(session: bool) -> Result<DynUdisks, Box<dyn Error>> {
     }])))
 }
 
+fn usage_source(session: bool) -> DynSource {
+    #[cfg(target_os = "linux")]
+    if !session {
+        return Box::new(LinuxSource);
+    }
+    let _ = session;
+    // A believable disk for development: 464 GB, 450 GB free.
+    Box::new(FakeSource::new(
+        464_000_000_000,
+        450_000_000_000,
+        8_000_000_000,
+        2_000_000_000,
+    ))
+}
+
 /// `RUYA_DEVICES_FILE`, else `$STATE_DIRECTORY/audio.toml` (systemd's StateDirectory=), else none.
 fn state_file() -> Option<PathBuf> {
     if let Some(p) = std::env::var_os("RUYA_DEVICES_FILE") {
@@ -112,6 +132,7 @@ async fn follow_system(
     batteries: SharedBatteries,
     bluetooth: SharedBluetooth,
     storage: SharedStorage,
+    usage: SharedUsage,
 ) {
     #[cfg(target_os = "linux")]
     futures_lite::future::zip(
@@ -122,7 +143,10 @@ async fn follow_system(
                 watch_batteries(connection.clone(), batteries),
                 futures_lite::future::zip(
                     watch_bluetooth(connection.clone(), bluetooth),
-                    watch_storage(connection, storage),
+                    futures_lite::future::zip(
+                        watch_storage(connection.clone(), storage),
+                        watch_installed(connection, usage),
+                    ),
                 ),
             ),
         ),
@@ -130,7 +154,7 @@ async fn follow_system(
     .await;
     #[cfg(not(target_os = "linux"))]
     {
-        let _keep = (connection, audio, net, batteries, bluetooth, storage);
+        let _keep = (connection, audio, net, batteries, bluetooth, storage, usage);
         futures_lite::future::pending::<()>().await;
     }
 }
@@ -173,6 +197,13 @@ fn run() -> Result<(), Box<dyn Error>> {
         eprintln!("ruya-devices: udisks2 not readable yet: {err}");
     }
 
+    // Directory sizes are measured off the executor, cached, and re-measured when the Store says
+    // the installed apps changed (`sysusage.rs`).
+    let usage: SharedUsage = Arc::new(SystemUsage::new(
+        usage_source(session),
+        MonotonicClock::new(),
+    ));
+
     futures_lite::future::block_on(async {
         let builder = if session {
             zbus::connection::Builder::session()?
@@ -185,15 +216,18 @@ fn run() -> Result<(), Box<dyn Error>> {
             .serve_at(OBJECT_PATH, NetworkIface::new(net.clone()))?
             .serve_at(OBJECT_PATH, BatteriesIface::new(batteries.clone()))?
             .serve_at(OBJECT_PATH, BluetoothIface::new(bluetooth.clone()))?
-            .serve_at(OBJECT_PATH, StorageIface::new(storage.clone()))?
+            .serve_at(
+                OBJECT_PATH,
+                StorageIface::new(storage.clone(), usage.clone()),
+            )?
             .build()
             .await?;
         // The fakes have nothing to follow (they change only through calls): just stay up.
         if session {
-            let _keep = (connection, audio, net, batteries, bluetooth, storage);
+            let _keep = (connection, audio, net, batteries, bluetooth, storage, usage);
             futures_lite::future::pending::<()>().await;
         } else {
-            follow_system(connection, audio, net, batteries, bluetooth, storage).await;
+            follow_system(connection, audio, net, batteries, bluetooth, storage, usage).await;
         }
         Ok::<(), Box<dyn Error>>(())
     })
