@@ -6,10 +6,12 @@ Status: **Draft v1** · Parent: [00-overview](00-overview.md)
 
 ### 1.1 Base
 - `FROM quay.io/fedora/fedora-bootc:<N>`, pinned to a Fedora major release. Track N and N+1 in CI so rebases happen deliberately.
-- **One image for all hardware** (ADR-009): RPM Fusion codecs and the NVIDIA driver are always included. Build steps are ordered scripts in `image/build/NN-*.sh` (repos → base → codecs → NVIDIA → initramfs → cleanup), bind-mounted at build time so they aren't shipped.
+- **One image for all hardware** (ADR-009): RPM Fusion codecs and the NVIDIA driver are always included. Build steps are ordered scripts in `image/build/NN-*.sh` (repos → base → codecs → NVIDIA → slim → services → initramfs → branding → guard → cleanup), bind-mounted at build time so they aren't shipped.
 - Every build runs `bootc container lint` and fails if it reports problems.
 
 ### 1.2 Package set (starting point; verify names against the target Fedora release)
+
+**What the image really holds** is in [`docs/image-packages.md`](../image-packages.md): every package group and every leaf of the built image with the reason it is there, what the slim step removed and why, and the enabled units. This table is the design intent.
 
 | Area | Packages |
 |---|---|
@@ -24,7 +26,7 @@ Status: **Draft v1** · Parent: [00-overview](00-overview.md)
 | Input | `inputplumber` (per ADR-003; may need a COPR or our own build) |
 | Gaming | `gamescope` (Phase 5) |
 
-The build excludes any desktop environment, display manager, `kdeconnect` and `pulseaudio`.
+The build excludes any desktop environment, display manager, `kdeconnect` and `pulseaudio`, and (T-195, owner decision 2026-11-06: minimise it, no printing) CPU emulators (`qemu-user-static*`), the cloud SDK (`python3-botocore`), enterprise identity (`sssd*`, `clevis*`, `adcli`), NFS, LVM, `avahi`, `toolbox` and kernel crash dumps. `image/build/50-slim.sh` removes what `fedora-bootc` ships of these (refusing any transaction that touches a protected package such as `bootc`, `systemd`, `NetworkManager` or `flatpak`), `96-services.sh` disables the units that stay installed (preset `45-ruyaos.preset`), and `98-guard.sh` **fails the build** when a banned package is installed or a unit outside `image/build/enabled-units.txt` is enabled, and prints the package count and the size of `/usr`. Firmware, GPU drivers, codecs and Bluetooth/Wi-Fi support are not trimmed (ADR-009).
 
 ### 1.3 Filesystem semantics (what to rely on)
 - `/usr`: read-only, comes from the image.

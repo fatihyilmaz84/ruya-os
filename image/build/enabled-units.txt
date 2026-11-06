@@ -1,0 +1,67 @@
+# Units that may be enabled in the image (T-195), with the reason; 98-guard.sh fails the build
+# for any other enabled unit (`systemctl list-unit-files --state=enabled`, system and --global).
+# A new line needs a reason and a row in docs/image-packages.md. Format: <unit> <reason...>
+
+# --- ruya services and boot health
+ruya-boot-marker.service      greenboot waits for the marker the shell writes
+ruya-compositor@.service      the shell, a Wayland compositor on KMS
+ruya-flathub-remote.service   adds the Flathub remote once
+ruya-inputd.service           controller input
+ruya-library.service          library service
+ruya-profiles.service         profiles and PINs
+ruya-session.service          launches apps for the profiles
+ruya-store.service            Flatpak store
+ruya-update.service           updates
+ruya-devices.service          audio, network, Bluetooth, batteries (user unit)
+greenboot-healthcheck.service           automatic rollback
+greenboot-set-rollback-trigger.service  automatic rollback
+
+# --- hardware and drivers
+bluetooth.service             bluez (Bluetooth controllers, headsets)
+udisks2.service               USB storage
+upower.service                controller batteries
+NetworkManager.service        network
+NetworkManager-dispatcher.service  network
+NetworkManager-wait-online.service network-online.target for update checks
+nvidia-hibernate.service      NVIDIA suspend and resume hooks
+nvidia-resume.service         NVIDIA suspend and resume hooks
+nvidia-suspend.service        NVIDIA suspend and resume hooks
+nvidia-suspend-then-hibernate.service NVIDIA suspend and resume hooks
+nvidia-powerd.service         NVIDIA dynamic boost on laptops (idles elsewhere)
+rtkit-daemon.service          realtime priority for PipeWire
+wireplumber.service           audio session manager (user unit)
+pipewire.socket               audio (user unit)
+pipewire-pulse.socket         audio for apps that speak PulseAudio (user unit)
+
+# --- base, bootc and systemd
+bootloader-update.service     bootupd
+chronyd.service               clock (TLS, update checks)
+dbus-broker.service           bus
+dbus.socket                   bus
+getty@.service                text console on tty2 and up, for support
+ostree-remount.service        ostree /sysroot and /var
+rpmdb-rebuild.service         rpm database after an update
+selinux-autorelabel-mark.service SELinux
+sshd.service                  SSH for support and the dev loop
+systemd-boot-clear-sysfail.service systemd
+systemd-confext.service       systemd
+systemd-sysext.service        systemd
+systemd-network-generator.service systemd
+systemd-oomd.service          out-of-memory killer
+systemd-oomd.socket           out-of-memory killer
+systemd-pstore.service        crash logs
+systemd-resolved.service      DNS
+systemd-resolved-monitor.socket systemd
+systemd-resolved-varlink.socket systemd
+systemd-tpm2-clear.service    systemd
+systemd-userdbd.socket        user database
+systemd-journald-audit.socket systemd
+systemd-tmpfiles-setup.service systemd (user)
+systemd-tmpfiles-clean.timer  systemd (user)
+fstrim.timer                  SSD trim
+logrotate.timer               rotates /var/log leftovers
+reboot.target                 systemd
+remote-cryptsetup.target      systemd
+remote-fs.target              systemd
+remote-integritysetup.target  systemd
+remote-veritysetup.target     systemd

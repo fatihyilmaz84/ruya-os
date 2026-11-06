@@ -23,7 +23,9 @@ scripts/build.sh 0.0.5        # -> localhost/ruyaos:dev; first build ~30 min, la
 scripts/make-disk.sh qcow2    # -> output/qcow2/disk.qcow2, ~9 min, 40 GiB sparse root
 ```
 
-The build runs `bootc container lint --fatal-warnings`: any lint warning fails it.
+The build runs `bootc container lint --fatal-warnings`: any lint warning fails it. Since T-195 it also runs `image/build/98-guard.sh`, which fails the build for a banned package (desktop environment, printing daemon, `sssd`, `samba`, `qemu-user`, ...) or an enabled unit that is not in `image/build/enabled-units.txt`, and prints `98-guard: <n> packages, /usr <n> MiB`. Any edit under `image/build/` rebuilds from the first `RUN` (the NVIDIA step, ~15 min); to try a change to `50-slim.sh`, `96-services.sh` or `98-guard.sh` first, run it in the last image: `podman run --rm -v $PWD/image/build:/b:ro localhost/ruyaos:dev bash /b/50-slim.sh` (a throw-away container; it prints the dnf transaction and refuses a protected package).
+
+After a build, `scripts/check-image-manifest.sh` (in WSL, repo root, ~10 s) compares `dnf leaves` of `localhost/ruyaos:dev` with the packages named in `docs/image-packages.md` and fails for a leaf nobody gave a reason; add the row there when you add a package.
 
 Then, on Windows:
 

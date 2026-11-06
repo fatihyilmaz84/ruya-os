@@ -135,6 +135,14 @@ gone() {
     echo "--- gone: the host detached the stick"
     n=0; while [ -n "$(usb_disk)" ] && [ "$n" -lt 30 ]; do sleep 1; n=$((n + 1)); done
     [ -z "$(usb_disk)" ] && ok "the USB disk is gone" || bad "the USB disk is still there"
+    # The kernel is ahead of the service: ruya-devices publishes the removal (a VolumesChanged)
+    # after its debounce. `watch` starts right after this step and would record that late signal
+    # as the first VolumesChanged of the next plug, and the "signal order" check of mplugged fails
+    # (it did on 0.0.46-t195, where logins are fast enough to start the recording within 0.3 s of
+    # the detach). So wait until the service's own list is empty and its quiet time has passed.
+    n=0; while [ "$(volume_count)" != 0 ] && [ "$n" -lt 30 ]; do sleep 1; n=$((n + 1)); done
+    [ "$(volume_count)" = 0 ] && ok "the service lists no volume" || bad "the service still lists volumes"
+    sleep 2
 }
 
 watch() {
