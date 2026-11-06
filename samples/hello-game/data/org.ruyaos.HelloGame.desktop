@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Hello Game
+Comment=A tiny sample game for RuyaOS
+Exec=hello-game
+Icon=org.ruyaos.HelloGame
+Terminal=false
+Categories=Game;ArcadeGame;

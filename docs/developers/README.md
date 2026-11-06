@@ -6,23 +6,25 @@ For people who make games and apps for RuyaOS, a living-room console OS: control
 
 | Chapter | Status | Backlog |
 |---|---|---|
+| [Getting started](getting-started.md): your first game as a Flatpak, built, installed on a RuyaOS dev machine and seen in the Games row | **written** (2026-11-06) | the Play button and the game window: T-147, T-164 |
+| [AppStream metadata](appstream-metadata.md): name, art, categories, content rating (age), controller support, the `x-ruya-*` keys | **written** (2026-11-06) | age limits: T-211; `x-ruya-launch-mode`, `x-ruya-save-paths`: not read yet |
+| [Controller input](controller-input.md): what your game receives, the Guide button, hot-plug, Steam Input | **written** (2026-11-06) | pad access for profile games, InputPlumber: B-006 |
+| [Full screen and lifecycle](fullscreen-and-lifecycle.md): how your game starts, loses focus and stops; screens for the sofa | **written** (2026-11-06) | display for profile apps: T-164; quick menu: T-147; profile switch: T-165 |
 | [Saves and data](saves-and-data.md): where to write saves, save states, settings and caches; atomic writes; what happens on SIGTERM; what the console backs up | **written** (2026-11-06) | backup and restore: T-215 |
-| Getting started: your first game as a Flatpak, run on a RuyaOS dev machine | planned | T-214 |
-| AppStream metadata: name, art, categories, content rating (age), controller support, the `x-ruya-*` keys | planned | T-214 |
-| Controller input: what your app receives, the Guide button, hot-plug, Steam Input | planned | T-214 |
-| Full screen, lifecycle, suspend and the Guide overlay: how your app starts, loses focus and stops | planned | T-214 |
-| Permissions and sandbox rules (what the Store shows to players, what is refused) | planned | T-214 |
-| Audio and video: the PipeWire output, HDR/VRR (not yet), hardware decode | planned | T-214 |
-| Testing on the dev image (QEMU) and on hardware; the dev SSH key; logs | planned | T-214 |
-| Publishing: the `ruyaos` remote and review | planned (Phase 7) | T-214 |
-| A sample game (`samples/`) that follows every chapter | planned | T-214 |
+| [Permissions and sandbox rules](permissions-and-sandbox.md): what the Store shows to players, what is high risk, portals | **written** (2026-11-06) | portal backend for file dialogs: not started |
+| [Audio and video](audio-and-video.md): PipeWire, the pulse route, codecs, hardware decode, HDR/VRR (not yet) | **written** (2026-11-06) | audio for profile games: B-007 |
+| [Testing and debugging](testing-and-debugging.md): the dev image (QEMU) and hardware, the dev SSH key, logs, how to break your game on purpose | **written** (2026-11-06) | |
+| [Publishing](publishing.md): the routes today, the `ruyaos` remote and review (planned), a self-review checklist | **written** (2026-11-06); the remote and review: planned (Phase 7) | |
+| [A sample game](../../samples/hello-game/README.md) (`samples/hello-game/`, CC0): follows every chapter, builds with `flatpak-builder` | **written** (2026-11-06) | VM check pending: `scripts/vm-sample-check.sh` |
+
+**Read the status column first.** The console is in development: you can build, install, list, start (through the session service), stop and uninstall a game today, but **a game does not get a window, controllers or sound yet** when the console starts it for a profile (per-profile Wayland sockets T-164, InputPlumber B-006, audio B-007). Every chapter says what that means for you and how to test in the meantime. Each chapter ends with a "Sources" list of the code and specs it was checked against, with the date; `scripts\lint-dev-docs.ps1` (part of `dev.ps1 test`) checks the links, the code blocks and that footer.
 
 Everything here is open source (docs: CC-BY-4.0). Found something wrong or missing? Open an issue or a pull request against `docs/developers/`.
 
 ## Quick facts
 
 - **Format:** Flatpak only. The console installs apps system-wide; the **data is per profile** (each profile is a Unix user).
-- **Run:** the shell starts your app as the profile's user in its own systemd unit, full screen. The Guide button is the player's way back; your app does not draw a home button.
+- **Run:** the shell starts your app as the profile's user in its own systemd unit, full screen (the window and Play are not built yet: see above). The Guide button is the player's way back; your app does not draw a home button.
 - **Stop:** the console sends `SIGTERM`, waits **5 seconds**, then `SIGKILL`. Save and exit within that time.
 - **Input:** controllers first; keyboard and mouse work too. Do not assume a keyboard.
 - **Data:** `~/.var/app/<your-app-id>/` as seen by your app through the XDG variables (`$XDG_DATA_HOME`, `$XDG_CONFIG_HOME`, `$XDG_CACHE_HOME`). See [Saves and data](saves-and-data.md).

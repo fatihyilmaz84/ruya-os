@@ -1,0 +1,5 @@
+build-dir/
+repo/
+.flatpak-builder/
+*.flatpak
+hello-game.bin

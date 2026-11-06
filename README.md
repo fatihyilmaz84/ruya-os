@@ -11,6 +11,7 @@ An immutable, Fedora-bootc-based console OS for living-room PCs. It boots straig
 | `docs/tasks/` | Work items with acceptance criteria |
 | `docs/specs/` | The specs. Start with [00-overview](docs/specs/00-overview.md), which holds the decisions (ADRs) |
 | `docs/dev-setup.md` | Host setup, build/run/test, update drills |
+| `docs/developers/` | **Build for RuyaOS:** the developer guide for people who make games and apps (start at its [README](docs/developers/README.md)), with a sample game in `samples/hello-game/` |
 | `CLAUDE.md` | Rules for AI contributors (also read by humans) |
 | `api/dbus/` | D-Bus contracts between the shell and services |
 | `shell/` | `ruya-shell`: Qt 6 / QML console UI, with Qt Quick tests in `shell/tests/` |
