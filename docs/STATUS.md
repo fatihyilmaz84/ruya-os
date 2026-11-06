@@ -39,6 +39,9 @@ Open work only (todo, in-progress, blocked), in the recommended order; when NEXT
 | [T-208](tasks/T-208-wallpaper-support.md) | Wallpapers: bundled set and from a USB drive, shared blur, Settings picker | todo | — |
 | [T-209](tasks/T-209-ui-colour-themes.md) | UI colour themes (Dreamglass, Midnight, Aurora, Ember, Daylight), runtime switch, contrast gate | todo | — |
 | [T-210](tasks/T-210-profile-customisation.md) | Profile customisation: avatar (built-in set), colour, name, nickname, start-up behaviour; `Profiles1` becomes extensible | todo | — |
+| [T-213](tasks/T-213-time-zone-setting.md) | Time zone: choose it in setup and Settings (clock, update window, bedtimes use local time) | todo | — |
+| [T-211](tasks/T-211-parental-controls-service.md) | **[lead]** Parental controls, service side: age limit by OARS rating, install approval, daily play time and bedtime enforced in the services | todo | T-210, T-213 |
+| [T-212](tasks/T-212-parental-controls-screens.md) | Parental controls screens: Settings -> Parental, "Ask a parent", "Time is up", Store marks | todo | T-211 |
 | [T-164](tasks/T-164-per-profile-wayland-sockets.md) | **[lead]** Per-profile Wayland sockets: a profile's app appears in the shell | todo | T-162 |
 | [T-165](tasks/T-165-profile-switch-freezes-apps.md) | Profile switch and sign-out freeze the profile's apps | todo | T-164 |
 | [T-147](tasks/T-147-fullscreen-app-flow.md) | Full-screen apps: launch splash, quick menu, return, close | todo | T-164 |
@@ -69,7 +72,7 @@ Follow-ups and debt for the next planner, one line each: `- (source) what, and w
 - (owner, 2026-11-06, design) The material/motion study of a GPL-3.0 C TV app is recorded in 04 §3.8 as decisions (no code taken). Open: compare its artwork-colour extraction (19 hue bins, vibrant/dark/light/muted swatches scored by lightness and saturation) with our hero tint extraction; the canvas boards need the new glass layers and shadows when T-204 lands.
 - (T-208/T-209) Per-profile wallpaper and theme need profile preferences from a root service (profile homes are 0700, the shell cannot read them): a `ruya-profiles` preferences field. An accent/theme from the wallpaper or the running game: compare the study's extraction (04 §3.8). A user-editable theme or accent picker.
 - (T-210) Later: photo avatars from a USB drive and illustrated avatar packs, profile ordering, per-profile language/theme/wallpaper (need profile preferences), age ratings with parental controls (Phase 3).
-- (0.0.40 try-out) The VM clock shows UTC: there is no time-zone setting yet (wizard or System pane); plan it with the OOBE/installer work.
+- (0.0.40 try-out) The VM and the Dell clock show UTC: T-213 adds the time zone setting (setup step and Settings -> System).
 
 ## Blocked (need something this host doesn't have)
 

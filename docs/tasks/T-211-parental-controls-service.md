@@ -1,0 +1,40 @@
+# T-211 — Parental controls, service side: age limits, install approval, play time and bedtime
+
+Status: todo · Phase: 3 · Depends: T-210, T-213 · Area: api, services · Size: M · Owner: lead
+
+## Goal
+A parent can restrict a child's profile and the console enforces it where it cannot be talked around: apps above the profile's age limit do not launch, a restricted profile cannot install without a parent, play time per day and a bedtime window end a session politely and on time. Owner request, 2026-11-06. Spec 03 §1.3 already says "per-profile age limit for store and launch, plus a 'requires admin to install' toggle"; this task builds the services; T-212 builds the screens.
+
+## Read first
+- `docs/specs/03-services-and-apps.md` §1 (profiles, roles, PIN rules, `VerifyAdmin`), §1.3, §4.1 (`Session1`, T-162 spawner), §4.3 permissions; `docs/specs/00-overview.md` (OARS, Phase 3 scope)
+- `api/dbus/org.ruyaos.Profiles1.xml`, `org.ruyaos.Session1.xml`, `org.ruyaos.Store1.xml` (`age_rating`: "all" | "7+" | "12+" | "16+" | "18+" already comes from OARS, `services/ruya-store/src/appstream.rs`)
+- `services/ruya-profiles` (pure core + store, T-210's extensible record), `services/ruya-session` (`session.rs` core, `systemd.rs` spawner), `services/ruya-store` (install paths and `caller_is_admin`), `services/CLAUDE.md`, root `CLAUDE.md` security invariants
+- Spec text suggests `malcontent`; evaluate it against our own small implementation on the existing rating strings and decide (record why): our own is expected, `malcontent` pulls accountsservice/polkit policy we do not use.
+
+## Scope
+1. **Policy per profile** (stored in `profiles.toml`, root-only, extended by T-210's record): `age_limit` (`none` | `all` | `7+` | `12+` | `16+`: an app whose `age_rating` is above it is restricted), `require_admin_to_install` (bool), `daily_minutes` (`weekday`, `weekend`; none = unlimited), `bedtime` (`start`, `end` as local `HH:MM`, none = off), per-app overrides (`allow` and `block` lists of app ids: an admin can allow one app above the limit, or block one below it). Apply to Standard profiles; admins are never restricted; the Guest profile gets a device-level policy (age limit and bedtime) set by an admin.
+2. **Contract (drafts): `Profiles1`:** `GetPolicy(id) -> a{sv}` (callable by `ruya-shell` and root; contains no PIN data), `SetPolicy(admin_id, admin_pin, id, policy a{sv})` (admin PIN rules and lockout as for the other admin calls; validation in the pure core: limits, times, list sizes, unknown keys `invalid`), `PolicyChanged(id)` signal.
+3. **Launch enforcement (`ruya-session`):** before every `Launch` it reads the profile's policy (fresh, as it does for the profile list) and the app's `age_rating` (from `Store1.GetApp` or a cached catalogue read), and refuses with new status strings: `age-restricted`, `time-limit` (daily budget used up), `bedtime`. The refusal is in the pure core with tests; the unknown rating of an app is treated as the strictest (`18+`) for restricted profiles.
+4. **Play time:** `ruya-session` counts, per profile and local day, the time its apps run in the foreground of an active (not locked, not suspended) session; persisted in `/var/lib/ruya-session/` (atomic, root-only, 30 days kept, readable through `Session1.GetUsage(profile, days) -> aa{sv}` for the parent's report). Warnings through a `PlaytimeWarning(profile, minutes_left)` signal at 15, 5 and 1 minutes; at zero (or when the bedtime starts) it stops the profile's apps (`Stop`, then the existing kill after the grace) with `AppExited` reason `time-limit` or `bedtime`, and sends `PlaytimeEnded(profile, reason)` so the shell can show the "Time is up" screen and lock the profile. A parent grants more time through `Session1.ExtendTime(admin_id, admin_pin, profile, minutes)` (today only; admin check as elsewhere).
+5. **Install approval (`ruya-store`):** for an active restricted profile with `require_admin_to_install`, `Install`, `Update` and `Uninstall` answer `needs-admin` unless the call carries an admin approval; the approval is `Profiles1.ApproveAction(admin_id, admin_pin) -> token` valid for 120 s and one call, checked by the Store through `Profiles1` (the shell asks the parent for the PIN and passes the token). An app above the age limit cannot be installed even with approval for that profile unless it is in the profile's `allow` list. Rules in the Store's pure core with tests.
+6. **Time:** day boundaries and the bedtime use the device time zone (T-213); a clock far in the past or future (no NTP yet) must not reset budgets: use the monotonic clock for counting and the wall clock only to roll the day, never backwards.
+7. **VM check** `scripts/vm-parental-check.sh` (copy `vm-session-check.sh`: the local Flatpak test apps with `org.ruyaos.Test*` ids and a rating): launch refused above the limit, allowed at or below, `allow` override, the daily budget runs out and the app is stopped with reason `time-limit` (use a small test budget and an injectable clock/env for the day), bedtime blocks, `ExtendTime` by a parent, install refused for a restricted profile and accepted with a token, admins unaffected, a non-`ruya-shell` caller refused.
+
+## Out of scope
+- The screens (T-212), web/network filtering, per-app time limits, remote management from a phone, contact/communication limits, purchases (no payments exist yet), geolocation, device-wide "family" accounts.
+
+## Acceptance criteria
+- [ ] Rust tests (profiles, session, store cores): policy validation, authorisation, every refusal status and its precedence (`bedtime` / `time-limit` / `age-restricted`), unknown-rating handling, allow/block overrides, the daily rollover, the counter with a fake clock (budget, warnings at 15/5/1, end, extension, a backwards clock), the approval token (valid once, expires, wrong admin), no PIN data in any reply, persisted usage file modes and atomic writes.
+- [ ] XML contract + mock-ready documentation in the same commit (T-212 consumes it); `Profiles1`, `Session1`, `Store1` headers list the new statuses and methods.
+- [ ] VM (this task; image build) or `VM (lead run)` if the lead agrees: `vm-parental-check.sh` ALL PASSED; `systemd-analyze security` of the touched units not worse; `dev.ps1 test` ALL GREEN.
+
+## Docs to update
+- `03` §1.3 (replace the "later" text with what is built), the three XML contracts, `docs/dev-setup.md`, `docs/specs/01-platform.md` if a unit changes.
+
+## Hints
+- Keep decisions pure and injectable (clock, policy source, rating source); the D-Bus adapters stay thin.
+- The shell is the only caller of these services (bus policy), so server-side checks guard against *UI bugs and a compromised app*, not a malicious shell; say so in the security notes.
+- A child can still use a second device or the Guest profile: the Guest policy is the parent's tool for that; say it plainly in the user docs.
+
+## Outcome
+_Filled in by the implementer. First line: `Verified: host | vm | unverified | hw`. Then: what was built, files, deviations, follow-ups._
