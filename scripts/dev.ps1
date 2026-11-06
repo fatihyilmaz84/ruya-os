@@ -228,6 +228,16 @@ function Test-Tokens {
     & (Join-Path $PSScriptRoot "lint-tokens.ps1") -QmlDir $fixture 6>&1 | Out-Null
     $listAccepted = ($LASTEXITCODE -eq 0)
     Remove-Item -Recurse -Force $fixture
+    # "themes" exempts only the directory directly under the scanned root: a root that merely has
+    # "themes" somewhere in its path (a checkout in a folder called themes) is still checked.
+    $fixture = Join-Path ([IO.Path]::GetTempPath()) ("ruya-lint-" + [guid]::NewGuid().ToString("N"))
+    $inner = Join-Path (Join-Path $fixture "themes") "app"
+    New-Item -ItemType Directory -Path $inner | Out-Null
+    Set-Content -Path (Join-Path $inner "Colour.qml") -Value 'Rectangle { color: "#336699" }'
+    & (Join-Path $PSScriptRoot "lint-tokens.ps1") -QmlDir $inner 6>&1 | Out-Null
+    $pathThemesRejected = ($LASTEXITCODE -eq 1)
+    Remove-Item -Recurse -Force $fixture
+    Record "token lint self-check (a root with 'themes' in its path is not exempt)" $pathThemesRejected
     Record "token lint self-check (rejects a hard-coded colour: hex, name, Qt.rgba, Qt.hsla; accepts tokens, transparent and the theme sets)" ($allColoursRejected -and $tokensAccepted -and $themesAccepted)
     Record "token lint self-check (ThemeSet.qml and Themes.tokenNames must agree)" ($listRejected -and $listAccepted)
 

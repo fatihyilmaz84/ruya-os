@@ -12,8 +12,21 @@ constexpr qreal kMaxOverscan = 0.10;
 DeviceSettings::DeviceSettings(bool persistent, QObject *parent)
     : QObject(parent)
 {
-    if (persistent) {
+    if (persistent)
         m_store = std::make_unique<QSettings>(QStringLiteral("ruyaos"), QStringLiteral("shell"));
+    init();
+}
+
+DeviceSettings::DeviceSettings(const QString &iniPath, QObject *parent)
+    : QObject(parent)
+    , m_store(std::make_unique<QSettings>(iniPath, QSettings::IniFormat))
+{
+    init();
+}
+
+void DeviceSettings::init()
+{
+    if (m_store) {
         m_reducedMotion = m_store->value(QStringLiteral("display/reducedMotion"), false).toBool();
         const QString quality = m_store->value(QStringLiteral("display/effectsQuality"), m_quality).toString();
         if (isValidQuality(quality))

@@ -100,7 +100,9 @@ Item {
 
             row(rows, "onPrimary on primaryFill", t.onPrimary, t.primaryFill, 4.5)
             row(rows, "text on dangerFill", t.text, t.dangerFill, 4.5)
-            row(rows, "ring on primaryFill", t.focusRing, ThemeMath.over(t.glass, t.background), 3)
+            // The ring of a primary button or the current nav pill sits outside it with a gap (PrimaryButton,
+            // SectionNav), so it is measured against what surrounds it: glass over the ground.
+            row(rows, "ring around primaryFill, on glass over the ground", t.focusRing, ThemeMath.over(t.glass, t.background), 3)
             // Badges: the kind colour on its own 18 % fill over the panel.
             for (const kind of ["toastInfo", "toastSuccess", "toastWarning"]) {
                 const tone = t[kind]

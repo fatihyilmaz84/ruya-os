@@ -46,6 +46,8 @@ class DeviceSettings : public QObject
 public:
     // `persistent == false` keeps everything in memory.
     explicit DeviceSettings(bool persistent, QObject *parent = nullptr);
+    // Persistent, in an explicit ini file instead of the system store (tests: a temporary file).
+    explicit DeviceSettings(const QString &iniPath, QObject *parent = nullptr);
     ~DeviceSettings() override;
 
     static DeviceSettings *create(QQmlEngine *qmlEngine, QJSEngine *jsEngine);
@@ -83,6 +85,7 @@ signals:
     void themeChanged();
 
 private:
+    void init();   // reads the stored values (when there is a store) and the command-line overrides
     std::unique_ptr<QSettings> m_store; // null when ephemeral
     QPointer<QQmlEngine> m_engine;
     QTranslator m_translator;
