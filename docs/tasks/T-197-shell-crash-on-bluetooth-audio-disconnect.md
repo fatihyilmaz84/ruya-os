@@ -15,6 +15,9 @@ Switching a Bluetooth headset off, or out of range, never takes the shell down. 
 2. Pick the least invasive fix and prove it with the same steps (at least 5 connect/disconnect cycles, with and without a cue playing at the moment of the disconnect): first try `QT_AUDIO_BACKEND=pulseaudio` in `ruya-compositor@.service` (the shell then speaks the PulseAudio protocol to `pipewire-pulse` instead of linking the native PipeWire client). If that does not hold, route the cues another way (for example recreate the `SoundEffect`s when the default sink changes, or play them through the PulseAudio backend only), or isolate audio in a helper process so a fault cannot take the compositor with it.
 3. Whatever the fix is, the compositor must restart without losing the session when the shell does die for any reason (check `Restart=` and that a crash shows the picker again within seconds; report what the user sees).
 
+## Progress (lead, 2026-11-06)
+- Dell, `QT_AUDIO_BACKEND=pulseaudio` set by a drop-in in `/etc`: the `QAudioContext` thread is gone (`QPulseAudioEngine` instead) and the owner reports the crash no longer happens on headset disconnects. The setting is now in `ruya-compositor@.service` in the repo; it reaches the image with the next build. Left: the 5-cycle count, `vm-audio-check.sh` with the new image (cues still play), the Outcome.
+
 ## Out of scope
 - Fixing Qt or PipeWire upstream (file a report if the fault is theirs: version, backtrace); changes to the audio device list (`ruya-devices`).
 
