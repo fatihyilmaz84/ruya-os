@@ -29,6 +29,7 @@ Open work only (todo, in-progress, blocked), in the recommended order; when NEXT
 | [T-190](tasks/T-190-settings-pane-focus-follow-ups.md) | Settings panes: look-ahead after relayout, Tab, peek legibility | todo | — |
 | [T-191](tasks/T-191-shell-backend-race-follow-ups.md) | Shell backends: Profiles guard, Store reconcile races, `working` from the job list | todo | — |
 | [T-194](tasks/T-194-confirm-buttons-name-the-action.md) | Confirm dialogs: the button says the action; TextEntry cancel cue | todo | — |
+| [T-195](tasks/T-195-slim-the-image.md) | Slim the image: only what the UI, the services and gaming need; a manifest with reasons | todo | — |
 | [T-164](tasks/T-164-per-profile-wayland-sockets.md) | **[lead]** Per-profile Wayland sockets: a profile's app appears in the shell | todo | T-162 |
 | [T-165](tasks/T-165-profile-switch-freezes-apps.md) | Profile switch and sign-out freeze the profile's apps | todo | T-164 |
 | [T-147](tasks/T-147-fullscreen-app-flow.md) | Full-screen apps: launch splash, quick menu, return, close | todo | T-164 |
