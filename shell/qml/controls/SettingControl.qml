@@ -32,9 +32,17 @@ FocusScope {
         anchors.fill: parent
         radius: height / 2
         color: control.activeFocus ? Theme.focusFill : Theme.glass
-        border.width: control.activeFocus ? Theme.focusRingWidth * control.u : Math.max(1, control.u)
-        border.color: control.activeFocus ? Theme.focusRing : Theme.glassBorder
+        border.width: control.activeFocus ? Theme.focusRingWidth * control.u : 0     // unfocused: the lit rim below
+        border.color: Theme.focusRing
         Behavior on color { ColorAnimation { duration: Theme.focusMs } }
+    }
+    GlassLayers {
+        objectName: "rowLayers"
+        anchors.fill: parent
+        u: control.u
+        radius: height / 2
+        grain: false                // a row is not blurred
+        rim: !control.activeFocus   // the focus ring replaces the rim
     }
 
     Rectangle {

@@ -44,7 +44,7 @@ FocusScope {
     visible: opacity > 0
     opacity: shown ? 1 : 0
     enabled: shown
-    Behavior on opacity { NumberAnimation { duration: Theme.pageMs; easing.type: Easing.OutCubic } }
+    Behavior on opacity { NumberAnimation { duration: Theme.pageMs; easing.type: Easing.Bezier; easing.bezierCurve: Theme.easeSnap } }
 
     Rectangle {
         anchors.fill: parent

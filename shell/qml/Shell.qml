@@ -380,6 +380,7 @@ FocusScope {
                 radius: 0
                 clip: false
                 monogram: false
+                shimmer: false
                 Behavior on opacity { NumberAnimation { duration: Theme.tintMs; easing.type: Easing.InOutQuad } }
             }
             ArtLayer { id: artA; objectName: "heroArtA"; u: root.u; opacity: heroArt.showB ? 0 : 1 }
@@ -508,7 +509,7 @@ FocusScope {
         opacity: shown ? 1 : 0
         visible: shown || opacity > 0      // visible at once, so focus can be given in the same step
         enabled: shown
-        Behavior on opacity { NumberAnimation { duration: Theme.pageMs; easing.type: Easing.OutCubic } }
+        Behavior on opacity { NumberAnimation { duration: Theme.pageMs; easing.type: Easing.Bezier; easing.bezierCurve: Theme.easeSnap } }
     }
 
     Setup {
@@ -535,10 +536,10 @@ FocusScope {
         opacity: shown ? 1 : 0
         visible: shown || opacity > 0      // visible at once, so focus can be given in the same step
         enabled: shown                     // disabled while a page is open: no focus, no keys
-        Behavior on opacity { NumberAnimation { duration: Theme.pageMs; easing.type: Easing.OutCubic } }
+        Behavior on opacity { NumberAnimation { duration: Theme.pageMs; easing.type: Easing.Bezier; easing.bezierCurve: Theme.easeSnap } }
         transform: Translate {
             x: home.shown ? 0 : -Theme.pageSlide * root.u
-            Behavior on x { NumberAnimation { duration: Theme.pageMs; easing.type: Easing.OutCubic } }
+            Behavior on x { NumberAnimation { duration: Theme.pageMs; easing.type: Easing.Bezier; easing.bezierCurve: Theme.easeSnap } }
         }
 
         // LB / RB switch sections from anywhere on Home (the nav handles them itself); Back does
@@ -784,7 +785,7 @@ FocusScope {
         opacity: root.navShown ? 1 : 0
         visible: root.navShown || opacity > 0     // visible at once, so focus can be given in the same step
         enabled: root.navShown && !systemPanel.open
-        Behavior on opacity { NumberAnimation { duration: Theme.pageMs; easing.type: Easing.OutCubic } }
+        Behavior on opacity { NumberAnimation { duration: Theme.pageMs; easing.type: Easing.Bezier; easing.bezierCurve: Theme.easeSnap } }
         onActivated: key => root.openSection(key)
         onDownRequested: root.leaveNavDown()
         onStepRequested: direction => root.stepSection(direction)
@@ -825,10 +826,10 @@ FocusScope {
             opacity: shown ? 1 : 0
             visible: shown || opacity > 0
             enabled: shown
-            Behavior on opacity { NumberAnimation { duration: Theme.pageMs; easing.type: Easing.OutCubic } }
+            Behavior on opacity { NumberAnimation { duration: Theme.pageMs; easing.type: Easing.Bezier; easing.bezierCurve: Theme.easeSnap } }
             transform: Translate {
                 x: slot.shown ? 0 : Theme.pageSlide * root.u
-                Behavior on x { NumberAnimation { duration: Theme.pageMs; easing.type: Easing.OutCubic } }
+                Behavior on x { NumberAnimation { duration: Theme.pageMs; easing.type: Easing.Bezier; easing.bezierCurve: Theme.easeSnap } }
             }
             onOpacityChanged: reapIfDone()
             onClosingChanged: reapIfDone()
@@ -940,7 +941,7 @@ FocusScope {
         color: Theme.scrimOverlay
         opacity: open ? 1 : 0
         visible: opacity > 0
-        Behavior on opacity { NumberAnimation { duration: Theme.overlayMs; easing.type: Easing.OutCubic } }
+        Behavior on opacity { NumberAnimation { duration: Theme.overlayMs; easing.type: Easing.Bezier; easing.bezierCurve: Theme.easeSnap } }
         onOpenChanged: {
             powerMode = false
             if (open) {
@@ -955,13 +956,29 @@ FocusScope {
             }
         }
 
+        GlassShadow {
+            objectName: "guideShadow"
+            anchors.fill: guidePanel
+            u: root.u
+            radius: Theme.radiusL * root.u
+            kind: "panel"
+        }
         Rectangle {
+            id: guidePanel
+            objectName: "guidePanel"
             anchors.centerIn: parent
             width: panelColumn.width + 96 * root.u
             height: panelColumn.height + 96 * root.u
             radius: Theme.radiusL * root.u
             color: Theme.panel
-            border.color: Theme.glassBorder
+
+            GlassLayers {
+                objectName: "guideLayers"
+                anchors.fill: parent
+                u: root.u
+                radius: parent.radius
+                grain: false            // the panel is opaque, nothing is blurred behind it
+            }
         }
 
         Column {

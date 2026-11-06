@@ -73,6 +73,8 @@ The script downloads the variable font from a pinned upstream commit into a temp
 
 The typeface (Inter 4.1, OFL-1.1) is cut the same way: `scripts/fetch-inter.sh` in WSL (`python3-fonttools`, `unzip`) downloads the pinned release zip into a temporary directory, checks its SHA-256, extracts a fixed list of members and writes the three subset TTFs and `OFL-Inter.txt` to `shell/fonts/`.
 
+The glass grain tile (`shell/assets/glass-grain.png`, 128x128, T-204) is made by `python -I scripts/make-grain.py` (standard library only, a fixed pseudo-random sequence, so the PNG is reproducible; `--check` says whether the committed file matches). There is no switch to turn the glass layers off one by one; to see a surface without them, set the tier: `ruya-shell.exe --windowed --effects performance` has no grain, no shadows, no glare or shimmer, `--reduced-motion` has no glare or shimmer.
+
 ## Developer guide and the sample game (T-214)
 
 `docs/developers/` is the guide for people who make games for RuyaOS; `samples/hello-game/` is the sample it describes (C, SDL 3, CC0). Two checks belong to it:

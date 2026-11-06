@@ -112,6 +112,14 @@ Item {
                 verify(!findChild(find(name), "artMonogram").visible, name)
         }
 
+        function test_hero_art_does_not_shimmer() {
+            start("")
+            for (const name of ["heroArtA", "heroArtB"]) {
+                find(name).imageStatus = Image.Loading
+                compare(find(name).shimmering, false, name)
+            }
+        }
+
         function test_play_launches_the_hero_item() {
             start("")
             keyClick(Qt.Key_Return)
@@ -322,6 +330,15 @@ Item {
             DeviceSettings.effectsQuality = "performance"
             wait(900)
             grabImage(tc.shell).save(shotsDir + "/01-home-performance.png")
+        }
+
+        function test_zz_screenshots_balanced() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            start("")
+            DeviceSettings.effectsQuality = "balanced"
+            wait(900)
+            grabImage(tc.shell).save(shotsDir + "/01-home-balanced.png")
         }
 
         function test_zz_screenshots_empty() {

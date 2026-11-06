@@ -169,7 +169,16 @@ Page {
         height: page.cardHeight
         scale: focused ? Theme.focusScale : 1.0
         z: focused ? 1 : 0
-        Behavior on scale { NumberAnimation { duration: Theme.focusMs; easing.type: Easing.OutCubic } }
+        Behavior on scale { NumberAnimation { duration: Theme.focusMs; easing.type: Easing.Bezier; easing.bezierCurve: Theme.easeGlide } }
+
+        GlassShadow {
+            objectName: "cardLiftShadow"
+            anchors.fill: art
+            u: card.u
+            radius: Theme.radiusM * card.u
+            kind: "lift"
+            active: card.focused
+        }
 
         AppArt {
             id: art
@@ -181,6 +190,14 @@ Page {
             picture: card.app.tile ?? ""
             border.width: card.focused ? Theme.focusRingWidth * card.u : 0
             border.color: Theme.focusRing
+
+            CardFocusLayers {
+                objectName: "cardFocusLayers"
+                anchors.fill: parent
+                u: card.u
+                radius: art.radius
+                focused: card.focused
+            }
 
             Badge {
                 anchors { left: parent.left; bottom: parent.bottom; margins: Theme.spaceXs * card.u }
