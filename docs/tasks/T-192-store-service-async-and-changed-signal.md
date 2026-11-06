@@ -1,6 +1,6 @@
 # T-192 — ruya-store: Flatpak calls off the D-Bus executor; corrections announce themselves
 
-Status: in-progress · Phase: 2 · Depends: — · Area: services, shell · Size: S · Owner: builder
+Status: done · Phase: 2 · Depends: — · Area: services, shell · Size: S · Owner: builder
 
 ## Goal
 Two follow-ups of T-182: the handlers that now run `flatpak list` (Install, Uninstall, Update, Rollback, ListInstalled, ListRemotes) must not block the zbus executor (every other call and signal waits behind them), and a correction that `sync_installed` makes after an outside `flatpak uninstall` must tell the shell (`InstalledChanged`), so it doesn't show a removed app as installed until its next read.

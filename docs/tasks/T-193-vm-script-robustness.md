@@ -1,6 +1,6 @@
 # T-193 — VM scripts: no false passes, no leftovers
 
-Status: todo · Phase: 0 · Depends: — · Area: scripts · Size: S · Owner: builder
+Status: in-progress · Phase: 0 · Depends: — · Area: scripts · Size: S · Owner: builder
 
 ## Goal
 The `scripts/vm-*` checks are only as good as their ability to fail. Reviews of T-178, T-180, T-183 and T-184 found places where a check could pass without testing anything, or leave state behind. Tighten them; the lead runs them in the VM later (nothing here needs an image).

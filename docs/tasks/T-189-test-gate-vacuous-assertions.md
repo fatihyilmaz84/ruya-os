@@ -1,6 +1,6 @@
 # T-189 — Test gate: catch assertions that cannot fail (undefined reads, NaN waits)
 
-Status: in-progress · Phase: 2 · Depends: — · Area: shell, scripts · Size: M · Owner: builder
+Status: done · Phase: 2 · Depends: — · Area: shell, scripts · Size: M · Owner: builder
 
 ## Goal
 Three reviews in a row found shell tests that could not fail: `wait(Storage.groupWindowMs + 200)` waited nothing because `groupWindowMs` was `undefined` in QML (T-184); similar cases in T-167 and T-176. Add an automatic check so the next one fails the gate, then close the small test gaps the reviews listed.
@@ -51,7 +51,7 @@ Verified: host (`dev.ps1 test` ALL GREEN on Windows; the CI step `scripts/lint-t
 
 **Findings on the tree, all fixed (criterion 2)**
 - `tst_hints.qml` `test_home_and_page`: `verify(tc.shell.activeFocusItem !== find("hintBar"))` read a member `Shell` does not have, so it was `undefined !== ...`, always true. Now `tc.shell.Window.window.activeFocusItem`. (A genuinely vacuous assertion, the same class as T-184.)
-- Blind files: nested functions with locals lifted or reduced without changing what the tests check: `tst_bluetooth` and `tst_storage` `test_contract_statuses` (`run` became the top-level `runCommand`/`ejectStatus`, `run` is a one-line arrow calling it), `tst_hints` (`collect` became top-level `collectGlyphs`), `tst_store_backend` `test_install_lifecycle` (`onJobs` has no local), `tst_settings` (`onRowTop` as arrow).
+- Blind files: nested functions with locals lifted or reduced without changing what the tests check: `tst_bluetooth` and `tst_storage` `test_contract_statuses` (`run` became the top-level `runCommand`/`ejectStatus`, `run` is a one-line arrow calling it), `tst_hints` (`collect` became top-level `collectGlyphs`), `tst_store_backend` `test_install_lifecycle` (`onJobs` has no local), `tst_settings` (`onRowTop` as arrow; the file was not blind, this change is optional: review of 2026-11-06).
 - Everything else qmllint reported was the untyped shell (above) or the two context properties.
 
 **Small tests (criterion 3)**, revert checks run together (one rebuild, then the three tests): 

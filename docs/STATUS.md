@@ -15,7 +15,7 @@ Verification legend: **host** = built and tested on Windows · **host (vm pendin
 
 ## Board
 
-**NEXT → T-164** ([lead], the critical path: per-profile Wayland sockets, so an app's window appears). **Owner, 2026-11-06 (later): the hold is lifted for T-189..T-194, dispatch them; still no new tasks are created until the owner says so.** Lanes: T-189 and T-192.
+**NEXT → T-164** ([lead], the critical path: per-profile Wayland sockets, so an app's window appears). **Owner, 2026-11-06 (later): the hold is lifted for T-189..T-194, dispatch them; still no new tasks are created until the owner says so.** Lanes: T-193 and T-191.
 
 **How work runs (owner, 2026-11-04):** the lead dispatches `ruya-builder` agents, at most two at a time in their own worktrees and in different areas, has each branch reviewed by `ruya-reviewer`, and merges it (`docs/LEAD.md`, build loop). Dispatched builders never edit this file. At most one task with a "VM (this task)" criterion runs at a time. A builder session the owner starts directly takes NEXT in the main checkout, alone, and does the bookkeeping itself (`CLAUDE.md`).
 
@@ -23,11 +23,9 @@ Open work only (todo, in-progress, blocked), in the recommended order; when NEXT
 
 | ID | Title | Status | Depends |
 |---|---|---|---|
-| [T-189](tasks/T-189-test-gate-vacuous-assertions.md) | Test gate: catch assertions that cannot fail (undefined reads, NaN waits) | in-progress | — |
-| [T-192](tasks/T-192-store-service-async-and-changed-signal.md) | ruya-store: Flatpak calls off the D-Bus executor; corrections announce themselves | in-progress | — |
-| [T-193](tasks/T-193-vm-script-robustness.md) | VM scripts: no false passes, no leftovers | todo | — |
+| [T-193](tasks/T-193-vm-script-robustness.md) | VM scripts: no false passes, no leftovers | in-progress | — |
 | [T-190](tasks/T-190-settings-pane-focus-follow-ups.md) | Settings panes: look-ahead after relayout, Tab, peek legibility | todo | — |
-| [T-191](tasks/T-191-shell-backend-race-follow-ups.md) | Shell backends: Profiles guard, Store reconcile races, `working` from the job list | todo | — |
+| [T-191](tasks/T-191-shell-backend-race-follow-ups.md) | Shell backends: Profiles guard, Store reconcile races, `working` from the job list | in-progress | — |
 | [T-194](tasks/T-194-confirm-buttons-name-the-action.md) | Confirm dialogs: the button says the action; TextEntry cancel cue | todo | — |
 | [T-195](tasks/T-195-slim-the-image.md) | Slim the image: only what the UI, the services and gaming need; a manifest with reasons | todo | — |
 | [T-164](tasks/T-164-per-profile-wayland-sockets.md) | **[lead]** Per-profile Wayland sockets: a profile's app appears in the shell | todo | T-162 |
@@ -35,7 +33,7 @@ Open work only (todo, in-progress, blocked), in the recommended order; when NEXT
 | [T-147](tasks/T-147-fullscreen-app-flow.md) | Full-screen apps: launch splash, quick menu, return, close | todo | T-164 |
 | [T-166](tasks/T-166-suspend-under-eglfs.md) | **[lead]** Suspend and resume with the shell on KMS (eglfs) | todo | — |
 
-**VM queue** (done on the host, VM check pending; the lead runs them with one image build): empty (T-182, T-183, T-184, T-188 verified 2026-11-06 on `0.0.42-lead`).
+**VM queue** (done on the host, VM check pending; the lead runs them with one image build): T-192 (`vm-store-check.sh`: the new step after the outside removal, exactly one `InstalledChanged`).
 
 ## Inbox
 
@@ -46,6 +44,8 @@ Follow-ups and debt for the next planner, one line each: `- (source) what, and w
 - (2026-11-06) Owner's new F: drive (NTFS, 119 GiB, USB): move `output/` (qcow2, ISO) to it with a junction when no VM or build runs; keep cargo and podman caches internal.
 - (Dell, 2026-11-06) `bootloader-update.service` fails on the Dell: Secure Boot is on and the firmware lacks the Microsoft UEFI CA 2023 (bootupctl refuses to update). Harmless to booting, but a red unit on every boot: decide on tolerating it (a drop-in with `SuccessExitStatus=1`?) or documenting Secure Boot as off for test machines. Also the Dell's hostname became its IPv6 address (DHCP hostname): set a static `ruyaos` hostname.
 - (Dell, 2026-11-06) On real Intel hardware the shell logs `Failed to initialize EGL display. There is no EGL_WL_bind_wayland_display extension` (as in the VM): GL clients cannot hand buffers to the compositor that way. T-164 must pick a Qt Wayland hardware integration that works on the KMS display (`linux-dmabuf-v1` / dmabuf) and test a GL client on the Dell, not only the software test client (B-003).
+- (T-192 review) `ruya-store` `sync_installed`: two overlapping reads can now apply out of order (handlers run concurrently); give each read a ticket so a stale `flatpak list` cannot undo a newer correction (`service.rs`).
+- (T-189) Runtime guard for tests: a shared `RuyaTestCase` that fails `wait`/`tryCompare` on NaN/undefined and a spy `count` check without a wait (qmllint cannot see `var` objects and `data.*` rows). Only if a fourth vacuous wait turns up. Also: the first CI push must show the new `Test member lint` step green on Fedora's qmllint (not run there yet).
 - (0.0.40 try-out) The VM clock shows UTC: there is no time-zone setting yet (wizard or System pane); plan it with the OOBE/installer work.
 
 ## Blocked (need something this host doesn't have)
