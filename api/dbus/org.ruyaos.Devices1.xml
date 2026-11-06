@@ -1,13 +1,13 @@
 <!DOCTYPE node PUBLIC "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
  "http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
 <!--
-  org.ruyaos.Devices1 — audio outputs and volumes, the network, Bluetooth, storage and controller batteries.
+  org.ruyaos.Devices1 — audio outputs and volumes, the network, Bluetooth, storage, controller batteries and temperatures.
   Served by ruya-devices on the system bus at /org/ruyaos/Devices1 (blocker B-007: the service
   has Audio, Network, Bluetooth and Batteries; the shell's mock backends follow this contract).
   Contract between shell (Qt/QML) and services (Rust); see docs/specs/03-services-and-apps.md §2.3.
 
   One bus name and one object, one interface per device class: org.ruyaos.Devices1.Audio now,
-  org.ruyaos.Devices1.Network, .Bluetooth, .Storage and .Batteries next to it. A new
+  org.ruyaos.Devices1.Network, .Bluetooth, .Storage, .Batteries and .Thermal next to it. A new
   class is a new interface, so existing clients and their PropertiesChanged filters (which match
   the interface name) are not touched, and each class can be mocked, implemented and tested on
   its own. Shared rules for every interface of this object:
@@ -341,6 +341,60 @@
 
     <!-- A controller appeared, disappeared or changed (percent, state); call ListBatteries again. -->
     <signal name="BatteriesChanged"/>
+
+  </interface>
+  <interface name="org.ruyaos.Devices1.Thermal">
+
+    <!--
+      The console's temperatures and fans, read from the kernel's hwmon (and, for the processor, the
+      thermal zones as a fallback), and the level they add up to. Read-only, no statuses. The
+      service measures and classifies (thresholds in /usr/lib/ruyaos/thermal.toml, replaced value
+      by value by /etc/ruyaos/thermal.toml; docs/specs/01-platform.md "Thermal policy"); what the
+      console does at each level is the shell's. Fans are never controlled.
+
+      Levels (strings, stable): "normal" | "warm" | "hot" | "critical". A level counts after the
+      reading has stayed at or above its threshold for 10 s and clears when it is 5 degrees below it.
+      Readings outside -20..125 degrees are ignored.
+
+      One dictionary per sensor, ordered processor, graphics, drives, fans:
+        id        s   stable id built from the chip name, the label and the device (never hwmonN),
+                      opaque to the shell
+        label     s   English role: "Processor" | "Graphics" | "Drive" | "Fan" (the shell translates
+                      by class)
+        class     s   "cpu" | "gpu" | "ssd" (NVMe, SATA SSD) | "hdd" | "fan"
+        value     d   degrees Celsius; rpm for class "fan"
+        level     s   this sensor's level; a fan is "normal" except "hot" when it was seen spinning,
+                      reads 0 rpm for 30 s and the processor is "warm" or worse
+        max_seen  d   the highest valid value since the service started
+      The cores, the board's other temperatures and the chip sensors without a threshold are not
+      listed. A machine without sensors (a VM) answers an empty list and level "normal".
+      Answered from the last reading (sensors are read every 5 s, every 1 s while the level is above
+      normal), so the call never waits for the hardware.
+    -->
+    <method name="ListSensors">
+      <arg name="sensors" type="aa{sv}" direction="out"/>
+    </method>
+
+    <!-- The worst level of all listed sensors. -->
+    <property name="Level" type="s" access="read">
+      <annotation name="org.freedesktop.DBus.Property.EmitsChangedSignal" value="true"/>
+    </property>
+
+    <!--
+      Level changed. sensor_id is the sensor that holds the new level (the one with the highest
+      level; for "normal": the sensor that held the level before). Not repeated while the level
+      stays the same, also when another sensor takes it over. Sent after SensorsChanged.
+    -->
+    <signal name="LevelChanged">
+      <arg name="level" type="s"/>
+      <arg name="sensor_id" type="s"/>
+    </signal>
+
+    <!--
+      The list differs from the one before as shown: a sensor appeared or left, a level changed, a
+      temperature by a whole degree or a fan by 10 rpm. Call ListSensors again.
+    -->
+    <signal name="SensorsChanged"/>
 
   </interface>
 

@@ -1111,7 +1111,7 @@
         <translation>Back</translation>
     </message>
     <message>
-        <location line="+163"/>
+        <location line="+176"/>
         <source>Coming soon</source>
         <translation>Coming soon</translation>
     </message>
@@ -1412,7 +1412,7 @@
         <translation>Back</translation>
     </message>
     <message>
-        <location line="+100"/>
+        <location line="+110"/>
         <source>mock services</source>
         <translation>mock services</translation>
     </message>
@@ -1575,7 +1575,7 @@
 <context>
     <name>SystemPane</name>
     <message>
-        <location filename="../qml/SystemPane.qml" line="+27"/>
+        <location filename="../qml/SystemPane.qml" line="+129"/>
         <location line="+220"/>
         <source>Beta</source>
         <translation>Beta</translation>
@@ -1687,13 +1687,38 @@
         <translation>The update could not be started.</translation>
     </message>
     <message>
-        <location line="-9"/>
+        <location line="+103"/>
+        <source>Device health</source>
+        <translation>Device health</translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>No temperature sensors were found on this device.</source>
+        <translation>No temperature sensors were found on this device.</translation>
+    </message>
+    <message>
+        <location line="-131"/>
         <location line="+8"/>
         <source>Only an admin can do this.</source>
         <translation>Only an admin can do this.</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="-184"/>
+        <source>The console is warm. Nothing needs to be done.</source>
+        <translation>The console is warm. Nothing needs to be done.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The console is running hot. Visual effects are reduced until it cools down.</source>
+        <translation>The console is running hot. Visual effects are reduced until it cools down.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The console is too hot. Apps are closed and it powers off if it does not cool down.</source>
+        <translation>The console is too hot. Apps are closed and it powers off if it does not cool down.</translation>
+    </message>
+    <message>
+        <location line="+196"/>
         <source>Language</source>
         <translation>Language</translation>
     </message>
@@ -1759,6 +1784,99 @@
         <location line="+12"/>
         <source>Shift</source>
         <translation>Shift</translation>
+    </message>
+</context>
+<context>
+    <name>ThermalNotice</name>
+    <message>
+        <location filename="../qml/ThermalNotice.qml" line="+72"/>
+        <source>The console is too hot</source>
+        <translation>The console is too hot</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+21"/>
+        <source>Apps are being closed. If the console does not cool down, it powers off in %n second(s).</source>
+        <translation>
+            <numerusform>Apps are being closed. If the console does not cool down, it powers off in %n second.</numerusform>
+            <numerusform>Apps are being closed. If the console does not cool down, it powers off in %n seconds.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Apps are being closed.</source>
+        <translation>Apps are being closed.</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <location line="+10"/>
+        <source>OK</source>
+        <translation>OK</translation>
+    </message>
+</context>
+<context>
+    <name>ThermalPolicy</name>
+    <message>
+        <location filename="../qml/ThermalPolicy.qml" line="+37"/>
+        <source>%1 is at %2</source>
+        <translation>%1 is at %2</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>The console is running hot (%1). Effects are reduced.</source>
+        <translation>The console is running hot (%1). Effects are reduced.</translation>
+    </message>
+</context>
+<context>
+    <name>ThermalText</name>
+    <message>
+        <location filename="../qml/ThermalText.qml" line="+11"/>
+        <source>Processor</source>
+        <translation>Processor</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Graphics</source>
+        <translation>Graphics</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Drive</source>
+        <translation>Drive</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Fan</source>
+        <translation>Fan</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>%1 %2</source>
+        <translation>%1 %2</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>%1 rpm</source>
+        <translation>%1 rpm</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>%1 °C</source>
+        <translation>%1 °C</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Warm</source>
+        <translation>Warm</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Hot</source>
+        <translation>Hot</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Critical</source>
+        <translation>Critical</translation>
     </message>
 </context>
 <context>

@@ -95,7 +95,10 @@ Page {
             readonly property bool focused: selected && categoryList.activeFocus
 
             Accessible.role: Accessible.ListItem
-            Accessible.name: page.labelFor(modelData.key)
+            // Settings -> System carries the console's heat status (T-200): a mark while it is warm or hotter.
+            readonly property bool heatMarked: modelData.key === "system" && Thermal.level !== "normal"
+            Accessible.name: heatMarked ? page.labelFor(modelData.key) + ", " + ThermalText.levelText(Thermal.level)
+                                        : page.labelFor(modelData.key)
             Accessible.selected: selected
 
             width: categoryList.width
@@ -112,6 +115,16 @@ Page {
                 color: Theme.text
                 font.pixelSize: Theme.typeBody * page.u
                 elide: Text.ElideRight
+            }
+
+            Rectangle {
+                objectName: "categoryHeatMark_" + category.modelData.key
+                visible: category.heatMarked
+                anchors { right: parent.right; rightMargin: Theme.spaceM * page.u; verticalCenter: parent.verticalCenter }
+                width: Theme.spaceM * page.u
+                height: width
+                radius: width / 2
+                color: ThermalText.levelColor(Thermal.level)
             }
         }
     }

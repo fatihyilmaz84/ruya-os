@@ -18,10 +18,10 @@ SettingsPane {
         ]
         onEdited: v => {
             DeviceSettings.effectsQuality = v
-            quality.value = DeviceSettings.effectsQuality
+            quality.value = DeviceSettings.storedEffectsQuality
         }
     }
-    Binding { target: quality; property: "value"; value: DeviceSettings.effectsQuality }
+    Binding { target: quality; property: "value"; value: DeviceSettings.storedEffectsQuality }
 
     ToggleRow {
         id: motion

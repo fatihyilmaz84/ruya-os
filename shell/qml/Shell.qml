@@ -1076,6 +1076,16 @@ FocusScope {
         onClosed: if (systemPanel.open) actions.forceActiveFocus()
     }
 
+    // What the console does about heat: a toast and fewer effects when hot, a notice, stopping the
+    // apps and a power-off when critical. Above the overlay and its confirmation, below the volume OSD.
+    ThermalPolicy {
+        id: thermalPolicy
+        objectName: "thermalPolicy"
+        anchors.fill: parent
+        z: 26
+        u: root.u
+    }
+
     // Always-on version tag: the update/rollback checks read it off the screen.
     Text {
         id: versionTag

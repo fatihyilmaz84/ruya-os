@@ -9,6 +9,11 @@ import RuyaShell
 // download (with progress), "Restart to finish". A rollback to the previous image, the
 // channel and "Restart automatically for updates" are for admins; the rollback asks for the admin's PIN (Profiles.verifyAdmin), then
 // a confirmation, then calls Update.rollback().
+//
+// The Device health section (T-200, Thermal, org.ruyaos.Devices1.Thermal) comes last: one read-only
+// row per sensor ("Processor 33 °C", "Fan 1820 rpm", "Drive 41 °C") with a mark when its level is
+// not normal. Rows follow Thermal.sensors by id and are updated in place, so focus stays on a row
+// while the values change.
 SettingsPane {
     id: pane
 
@@ -22,6 +27,103 @@ SettingsPane {
     property bool messageIsError: false
     property string rollbackStep: "idle"     // idle | pin | confirm | working
     property Item returnTo: null
+
+    // A sensor row: label, a mark and its word when the level is not normal, and the value.
+    component HealthRow: SettingControl {
+        id: health
+        property string value
+        property string level: "normal"
+        readonly property bool marked: level !== "normal"
+        accessibleValue: marked ? value + ", " + ThermalText.levelText(level) : value
+
+        Text {
+            id: healthValue
+            objectName: "value"
+            anchors { right: parent.right; rightMargin: Theme.spaceL * health.u; verticalCenter: parent.verticalCenter }
+            text: health.value
+            color: Theme.text
+            font.pixelSize: Theme.typeBody * health.u
+        }
+
+        Text {
+            id: healthLevel
+            objectName: "levelText"
+            visible: health.marked
+            anchors { right: healthValue.left; rightMargin: Theme.spaceM * health.u; verticalCenter: parent.verticalCenter }
+            text: ThermalText.levelText(health.level)
+            color: ThermalText.levelColor(health.level)
+            font.pixelSize: Theme.typeBody * health.u
+        }
+
+        Rectangle {
+            objectName: "levelMark"
+            visible: health.marked
+            anchors { right: healthLevel.left; rightMargin: Theme.spaceS * health.u; verticalCenter: parent.verticalCenter }
+            width: Theme.spaceM * health.u
+            height: width
+            radius: width / 2
+            color: ThermalText.levelColor(health.level)
+        }
+    }
+
+    // Rows follow Thermal.sensors by id (updated in place), so focus stays on a row while the
+    // numbers change.
+    ListModel { id: sensorModel }
+
+    function syncSensors() {
+        const before = pane.activeFocus ? focusableRows().findIndex(r => r.activeFocus) : -1
+        const list = Thermal.sensors
+        for (let i = sensorModel.count - 1; i >= 0; --i) {
+            const id = sensorModel.get(i).sensorId
+            if (!list.some(s => s.id === id))
+                sensorModel.remove(i)
+        }
+        for (let i = 0; i < list.length; ++i) {
+            const s = list[i]
+            const entry = { sensorId: s.id, sensorClass: s.cls, reading: s.value, sensorLevel: s.level }
+            let at = -1
+            for (let j = 0; j < sensorModel.count; ++j) {
+                if (sensorModel.get(j).sensorId === s.id) {
+                    at = j
+                    break
+                }
+            }
+            if (at < 0) {
+                sensorModel.insert(i, entry)
+            } else {
+                sensorModel.set(at, entry)
+                if (at !== i)
+                    sensorModel.move(at, i, 1)
+            }
+        }
+        Qt.callLater(pane.refocus, before)
+    }
+
+    // After a list update: if the focused row vanished, focus the row now at its place (or the last).
+    function refocus(index) {
+        if (!pane.activeFocus || index < 0)
+            return
+        const rows = focusableRows()
+        if (rows.length > 0 && !rows.some(r => r.activeFocus))
+            rows[Math.min(index, rows.length - 1)].forceActiveFocus()
+        ensureFocusedVisible()
+    }
+
+    // One line for the worst level, so a warm console is told as such (no toast, nothing changes).
+    function healthLine() {
+        switch (Thermal.level) {
+        case "warm": return qsTr("The console is warm. Nothing needs to be done.")
+        case "hot": return qsTr("The console is running hot. Visual effects are reduced until it cools down.")
+        case "critical": return qsTr("The console is too hot. Apps are closed and it powers off if it does not cool down.")
+        }
+        return ""
+    }
+
+    Connections {
+        target: Thermal
+        function onSensorsChanged() { pane.syncSensors() }
+    }
+    Component.onCompleted: syncSensors()
 
     function channelLabel(channel) {
         return channel === "beta" ? qsTr("Beta") : qsTr("Stable")
@@ -292,5 +394,50 @@ SettingsPane {
         color: pane.messageIsError ? Theme.errorText : Theme.toastSuccess
         font.pixelSize: Theme.typeBody * pane.u
         wrapMode: Text.Wrap
+    }
+
+    Text {
+        objectName: "healthHeading"
+        width: parent ? parent.width : 0
+        topPadding: Theme.spaceS * pane.u
+        text: qsTr("Device health")
+        color: Theme.text
+        font.pixelSize: Theme.typeBody * pane.u
+    }
+
+    Text {
+        objectName: "healthLine"
+        width: parent ? parent.width : 0
+        visible: Thermal.level !== "normal"
+        text: pane.healthLine()
+        color: ThermalText.levelColor(Thermal.level)
+        font.pixelSize: Theme.typeBody * pane.u
+        wrapMode: Text.Wrap
+    }
+
+    Text {
+        objectName: "healthNone"
+        width: parent ? parent.width : 0
+        visible: sensorModel.count === 0
+        text: qsTr("No temperature sensors were found on this device.")
+        color: Theme.textDim
+        font.pixelSize: Theme.typeBody * pane.u
+        wrapMode: Text.Wrap
+    }
+
+    Repeater {
+        model: sensorModel
+        HealthRow {
+            required property string sensorId
+            required property string sensorClass
+            required property real reading
+            required property string sensorLevel
+            objectName: "health_" + sensorId
+            u: pane.u
+            // Bindings, not model data: the words follow the UI language live.
+            label: ThermalText.nameOf(sensorId)
+            value: ThermalText.valueText({ cls: sensorClass, value: reading })
+            level: sensorLevel
+        }
     }
 }

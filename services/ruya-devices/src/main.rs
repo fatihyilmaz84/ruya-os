@@ -1,6 +1,6 @@
-//! ruya-devices: serves org.ruyaos.Devices1.Audio, .Network, .Bluetooth, .Storage and .Batteries on the system bus, as a systemd
+//! ruya-devices: serves org.ruyaos.Devices1.Audio, .Network, .Bluetooth, .Storage, .Batteries and .Thermal on the system bus, as a systemd
 //! user unit of `ruya-shell` (ADR-010). With `--session` (development) it serves on the session
-//! bus over a fake PipeWire, NetworkManager, BlueZ, udisks2 and UPower.
+//! bus over a fake PipeWire, NetworkManager, BlueZ, udisks2, UPower and sensors.
 
 use std::error::Error;
 use std::path::PathBuf;
@@ -12,11 +12,13 @@ use ruya_devices::bluetooth::{Bluetooth, FakeBluez};
 #[cfg(target_os = "linux")]
 use ruya_devices::dbus::{
     watch, watch_batteries, watch_bluetooth, watch_installed, watch_network, watch_storage,
+    watch_thermal,
 };
 use ruya_devices::dbus::{
-    AudioIface, BatteriesIface, BluetoothIface, DynBluez, DynNm, DynPipeWire, DynSource, DynUPower,
-    DynUdisks, NetworkIface, Shared, SharedBatteries, SharedBluetooth, SharedNet, SharedStorage,
-    SharedUsage, StorageIface, BUS_NAME, OBJECT_PATH,
+    AudioIface, BatteriesIface, BluetoothIface, DynBluez, DynNm, DynPipeWire, DynSource,
+    DynThermal, DynUPower, DynUdisks, NetworkIface, Shared, SharedBatteries, SharedBluetooth,
+    SharedNet, SharedStorage, SharedThermal, SharedUsage, StorageIface, ThermalIface, BUS_NAME,
+    OBJECT_PATH,
 };
 use ruya_devices::network::{FakeNetworkManager, Network};
 use ruya_devices::storage::{FakeUdisks, RawVolume, Storage};
@@ -24,6 +26,10 @@ use ruya_devices::store::Store;
 #[cfg(target_os = "linux")]
 use ruya_devices::sysusage::LinuxSource;
 use ruya_devices::sysusage::{FakeSource, MonotonicClock, SystemUsage};
+use ruya_devices::thermal::{
+    Class, Config as ThermalConfig, FakeSource as FakeSensors, Monitor, RawSensor, SysfsSource,
+    LOCAL_CONFIG, SYSTEM_CONFIG,
+};
 
 fn main() {
     if let Err(err) = run() {
@@ -113,6 +119,28 @@ fn usage_source(session: bool) -> DynSource {
     ))
 }
 
+/// The sensors: the kernel's sysfs (`RUYA_THERMAL_SYSFS` points it at a made-up tree to try the
+/// policy, see docs/dev-setup.md), or fixed believable values in `--session`.
+fn thermal_source(session: bool) -> DynThermal {
+    if session {
+        let sensor = |id: &str, class, value| RawSensor {
+            id: id.to_owned(),
+            class,
+            value,
+            crit: None,
+        };
+        return Box::new(FakeSensors::new(vec![
+            sensor("fake:cpu", Class::Cpu, 41.0),
+            sensor("fake:ssd", Class::Ssd, 38.0),
+            sensor("fake:fan", Class::Fan, 1820.0),
+        ]));
+    }
+    match std::env::var_os("RUYA_THERMAL_SYSFS") {
+        Some(root) => Box::new(SysfsSource::new(root, "/proc/stat")),
+        None => Box::new(SysfsSource::system()),
+    }
+}
+
 /// `RUYA_DEVICES_FILE`, else `$STATE_DIRECTORY/audio.toml` (systemd's StateDirectory=), else none.
 fn state_file() -> Option<PathBuf> {
     if let Some(p) = std::env::var_os("RUYA_DEVICES_FILE") {
@@ -125,6 +153,7 @@ fn state_file() -> Option<PathBuf> {
 }
 
 /// PipeWire's events, NetworkManager's, BlueZ's and UPower's signals, until the process is stopped.
+#[allow(clippy::too_many_arguments)]
 async fn follow_system(
     connection: zbus::Connection,
     audio: Shared,
@@ -133,6 +162,7 @@ async fn follow_system(
     bluetooth: SharedBluetooth,
     storage: SharedStorage,
     usage: SharedUsage,
+    thermal: SharedThermal,
 ) {
     #[cfg(target_os = "linux")]
     futures_lite::future::zip(
@@ -145,7 +175,10 @@ async fn follow_system(
                     watch_bluetooth(connection.clone(), bluetooth),
                     futures_lite::future::zip(
                         watch_storage(connection.clone(), storage),
-                        watch_installed(connection, usage),
+                        futures_lite::future::zip(
+                            watch_installed(connection.clone(), usage),
+                            watch_thermal(connection, thermal),
+                        ),
                     ),
                 ),
             ),
@@ -154,7 +187,9 @@ async fn follow_system(
     .await;
     #[cfg(not(target_os = "linux"))]
     {
-        let _keep = (connection, audio, net, batteries, bluetooth, storage, usage);
+        let _keep = (
+            connection, audio, net, batteries, bluetooth, storage, usage, thermal,
+        );
         futures_lite::future::pending::<()>().await;
     }
 }
@@ -204,6 +239,15 @@ fn run() -> Result<(), Box<dyn Error>> {
         MonotonicClock::new(),
     ));
 
+    // The thresholds: the image's file, then the owner's own.
+    let monitor: SharedThermal = Arc::new(Monitor::new(
+        thermal_source(session),
+        ThermalConfig::load(&[PathBuf::from(SYSTEM_CONFIG), PathBuf::from(LOCAL_CONFIG)]),
+    ));
+    if let Err(err) = monitor.poll() {
+        eprintln!("ruya-devices: sensors not readable yet: {err}");
+    }
+
     futures_lite::future::block_on(async {
         let builder = if session {
             zbus::connection::Builder::session()?
@@ -220,14 +264,20 @@ fn run() -> Result<(), Box<dyn Error>> {
                 OBJECT_PATH,
                 StorageIface::new(storage.clone(), usage.clone()),
             )?
+            .serve_at(OBJECT_PATH, ThermalIface::new(monitor.clone()))?
             .build()
             .await?;
         // The fakes have nothing to follow (they change only through calls): just stay up.
         if session {
-            let _keep = (connection, audio, net, batteries, bluetooth, storage, usage);
+            let _keep = (
+                connection, audio, net, batteries, bluetooth, storage, usage, monitor,
+            );
             futures_lite::future::pending::<()>().await;
         } else {
-            follow_system(connection, audio, net, batteries, bluetooth, storage, usage).await;
+            follow_system(
+                connection, audio, net, batteries, bluetooth, storage, usage, monitor,
+            )
+            .await;
         }
         Ok::<(), Box<dyn Error>>(())
     })
