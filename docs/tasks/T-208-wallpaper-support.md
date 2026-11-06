@@ -1,6 +1,6 @@
 # T-208 — Wallpapers: choose the picture behind the shell
 
-Status: todo · Phase: 2 · Depends: — · Area: shell, services · Size: M · Owner: builder
+Status: in-progress · Phase: 2 · Depends: — · Area: shell, services · Size: M · Owner: builder
 
 ## Goal
 The owner can pick a wallpaper in Settings. It is the picture behind Home when there is no hero art and, blurred, behind pages and glass (`04` §3.5 layer L0, §3.6). Owner request, 2026-11-06. Today L0 is the hero art or the tinted blobs.

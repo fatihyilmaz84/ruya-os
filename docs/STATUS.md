@@ -33,8 +33,8 @@ Open work only, in the recommended order; when NEXT is blocked take the first `t
 | [T-203](tasks/T-203-pair-a-controller-without-a-keyboard.md) | Pair a controller with no keyboard | todo | — |
 | [T-205](tasks/T-205-gliding-highlight-and-liquid-pills.md) | **[lead]** Gliding highlight, liquid-glass pills | todo | T-204 |
 | [T-207](tasks/T-207-faster-bluetooth-controller-reconnect.md) | **[lead]** Faster Bluetooth controller reconnect | todo | — |
-| [T-208](tasks/T-208-wallpaper-support.md) | Wallpapers: bundled set, USB, Settings picker | todo | — |
-| [T-209](tasks/T-209-ui-colour-themes.md) | UI colour themes, runtime switch, contrast gate | todo | — |
+| [T-208](tasks/T-208-wallpaper-support.md) | Wallpapers: bundled set, USB, Settings picker | in-progress | — |
+| [T-209](tasks/T-209-ui-colour-themes.md) | UI colour themes, runtime switch, contrast gate | in-progress | — |
 | [T-210](tasks/T-210-profile-customisation.md) | Profile customisation: avatar, colour, name | todo | — |
 | [T-213](tasks/T-213-time-zone-setting.md) | Time zone in setup and Settings | todo | — |
 | [T-215](tasks/T-215-save-backup-and-keep-data.md) | **[lead]** Saves: back up/restore, keep on uninstall | todo | — |
