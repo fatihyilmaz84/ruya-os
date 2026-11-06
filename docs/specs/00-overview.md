@@ -24,7 +24,7 @@ RuyaOS is an immutable, image-based Linux OS for living-room PCs. It boots strai
 - Network (Ethernet, Wi-Fi), audio output switching, USB storage.
 - Apps from Flatpak remotes (official plus a filtered Flathub).
 - Media and streaming clients (Jellyfin, Kodi, Plex, Moonlight, Steam Link and the like) are **separate apps**, installed from the Store, and are not part of the first MVP (owner, 2026-11-06). The MVP provides the building blocks they need: launching and the Guide overlay over a running app, controller input, audio routing, hardware decode (ADR-009) and output switching. The focus is the OS, the shell UI and those building blocks.
-- Gaming: Steam (Proton), RetroArch. *Scope under review: the owner's 2026-11-06 decision that streaming and media apps ship separately may cover these too (STATUS, Open owner decisions).*
+- Gaming: Steam (Proton) and RetroArch are **separate apps** too (owner, 2026-11-06), not part of the first MVP. The MVP proves the gaming building blocks with a sample Flatpak game: launch, controller input, the Guide overlay over the running game, audio routing, and save locations that survive an OS update.
 
 ### Later / stretch
 SDK and public developer programme, optical media, HDMI-CEC, HDR/VRR, cloud saves, parental controls UI, web-app runtime, custom "console bundle" format.
@@ -169,7 +169,7 @@ Phases are gated by their exit criteria. Durations are rough estimates for a sma
 | **6 Release** | Shippable | Controller-driven installer, signing, update channels, SBOM and licence audit, factory reset, recovery | Install from USB on all three tiers, OTA update, auto-rollback demo, factory reset | 4–6 wk |
 | **7 Ecosystem** | Third parties | SDK docs, app templates, official remote, review process | An external developer publishes an app to the Developer remote | ongoing |
 
-Phases 4 and 5 follow the 2026-11-06 scope decision (§2): the exit criteria are met with the building blocks (hardware decode, audio following the output, controller mapping and save locations) proven with a sample app or game, not with the named third-party apps; those become separate Store apps (Phase 7 material).
+Phases 4 and 5 follow the 2026-11-06 scope decisions (§2): their exit criteria are met with the building blocks (hardware decode, audio following the output, controller mapping and save locations) proven with a sample app or game, not with Plex, Steam Link, Jellyfin, Kodi, Moonlight, Steam (Proton) or RetroArch; those become separate Store apps (Phase 7 material).
 
 ## 7. Glossary
 **bootc**: tool that boots and updates an OS from an OCI container image. **greenboot**: health checks that trigger rollback. **OOBE**: out-of-box (first-boot) experience. **OARS**: Open Age Ratings Service, the content-rating vocabulary used in AppStream. **Overlay**: the shell UI drawn over a running app (Guide menu).
