@@ -76,7 +76,7 @@ Turkish runs about 30 % longer than English: rows elide on the right (`Text.Elid
 
 ### 3.5 Depth
 
-Shadows belong to depth (focused and raised elements, glass panels, modals) and are on at the High and Balanced tiers, off at Performance (the same switch as blur); the shadow tokens are planned, none are built yet. Effects are never removed on hardware that supports them just to keep the implementation simple.
+Shadows belong to depth (focused and raised elements, glass panels, modals) and are on at the High and Balanced tiers, off at Performance (the same switch as blur); the shadow tokens are decided in §3.8 and planned, none are built yet. Effects are never removed on hardware that supports them just to keep the implementation simple.
 
 | Layer | z | Contents | Rule |
 |---|---|---|---|
@@ -89,6 +89,24 @@ Shadows belong to depth (focused and raised elements, glass panels, modals) and 
 ### 3.6 Glass and blur
 
 Glass is translucent white over a **Gaussian blur** of what is behind it (`MultiEffect`, `blurMax` per tier: High 64, Balanced 32, Performance 0). Rules: glass always comes with blur, or it turns opaque (`glassOpaque`): never translucent glass over sharp art. One shared blurred copy of L0 (downscaled), sampled by every glass panel; never a second fullscreen blur. `glassStrong` (built, T-146: white 12 %, with a saturation boost of 0.3 on the blur) is for the top bar and the quick menu. As built, each glass pill (`GlassPill.qml`: section nav, status cluster) blurs its own quarter-resolution crop of L0 through a rounded mask, not one shared texture; both are small, never fullscreen. Glass over a **running app** blurs a downscaled copy of the app surface; until that is measured on a GPU (B-003) the quick menu uses `glassOpaque` on every tier.
+
+### 3.8 Material and motion v2 (decided, lead, 2026-11-06; all planned, built by T-204 / T-205)
+
+Owner, 2026-11-06: "I like the animations and the glass effect" of an open-source native TV app for LG webOS (GPL-3.0, written in C on SDL2/OpenGL). It cannot be ported (C and raw GL, not QML), and no code or assets are taken: its *techniques and parameters* were studied and are re-built here in Qt Quick on our tokens (its glass look credits the MIT `liquid-glass-react`; credit as inspiration, never its name or brand in the UI). What we adopt, with the numbers (px at the 1080p design unit):
+
+| What | Decision | Tiers |
+|---|---|---|
+| **Glass layers** (on top of the blur of §3.6) | `glassSheen`: white 6 % fading to 0 over the top 35 % of the panel. `glassRim`: 1 px ring, white 15 % (30 % on the top-left half, a light from 135 deg) instead of one flat border. `glassTint`: dark neutral `#121018` at 44 % for sheets and modals over bright art (keeps white text legible). Optional edge accent: the page tint at 5 % in a band 30 % wide at the sides | sheen, rim and tint on every tier (cheap gradients; also on opaque glass); accent High and Balanced |
+| **Grain** | `glassGrain`: one 128x128 noise tile (alpha noise, white 2 % and black 2.4 % overlays) over every blurred surface. Purpose: break the banding of a blurred gradient on 8-bit TV panels | High and Balanced |
+| **Shadows** (the planned tokens of §3.5) | `shadowLift` (focused card): offset y 14, blur 34, black 60 %. `shadowPanel` (glass panels, modals): offset y 10, blur 30, black 35 %. `shadowPill` (top bar, pills): offset y 0.18 x height, blur min(0.6 x height, 40), black 27 %. Reduced motion does not remove them | High and Balanced (Performance: none, as before) |
+| **Card focus** | On top of the 1.08 scale and the ring: `shadowLift` and a white top sheen (9 % over the top third); a one-time **glare** sweep (a soft white diagonal band crossing the card in 550 ms, alpha peak 0.6, `InOutQuad`) that plays when focus *enters* a card and not again if focus moves on within 300 ms (so fast scrolling stays calm); no resting glare. The ring never fades (§4) | lift shadow and glare: High and Balanced; sheen: all |
+| **Easing** | Add `easeGlide` = cubic-bezier (0.25, 1, 0.5, 1) for positions, lifts and the gliding highlight; `easeSnap` = (0.23, 1, 0.32, 1) for pages and overlays; keep `OutCubic` where it already is until each screen is revisited. Pops (badges, the PIN-key pulse) use `OutBack` with overshoot 0.94 (about 3 %). One global `motionScale` (default 1.0, 0 under reduced motion) multiplies every duration; the study ran everything at 0.83 | all |
+| **Gliding highlight** (T-205) | For the section nav, the Settings category list and other single-row selectors: one highlight that **glides** between rows in 280 ms with `easeGlide` instead of each row fading its own fill, and **stretches** with speed (length factor from |dx|/dt normalised by 2600 units/s, clamped 0..1, smoothed at 14 per s) so a fast scroll reads as a stroke. Grids of cards keep the per-card ring (§4) | all (stretch off under reduced motion) |
+| **Liquid pill** (T-205) | The top-bar pills get an optional refraction at their edges (bend min(0.5 x height, 30)) and a slow-moving specular (three sine periods 9, 15, 23 s). A shader on one small texture per pill, **High tier only**, behind a measured frame-time budget on real hardware (B-002/B-003); every other tier shows the plain `glassStrong` pill | High only |
+| **Loading placeholders** | Art placeholders get a shimmer: a gleam peaking at 8.5 % white moving at 760 units/s, drawn from one cached strip, none under reduced motion | all but Performance |
+| **Bake, don't redraw** | Sheets and modals blur their backdrop once when they open (downscaled to 1/4, then 1/8 for the blur; result kept at half size, width capped at 1024) and draw one textured quad per frame. This is the same rule as §3.6 (one shared blurred copy, never a second fullscreen blur) | all with blur |
+
+Not adopted: a per-frame blur, chromatic aberration (not in the study either), glass over a running app before B-003 is measured, resting glare, replacing the per-card ring by a gliding one on grids. The study's artwork-colour extraction (19 hue bins, vibrant / dark / light / muted swatches, a score favouring lightness 0.5 and saturation) is an Inbox item to compare with our own tint extraction, not part of this change.
 
 ### 3.7 Icons (decided ADR-013; built, T-157)
 
