@@ -19,61 +19,21 @@ Verification legend: **host** = built and tested on Windows · **host (vm pendin
 
 **How work runs (owner, 2026-11-04):** the lead dispatches `ruya-builder` agents, at most two at a time in their own worktrees and in different areas, has each branch reviewed by `ruya-reviewer`, and merges it (`docs/LEAD.md`, build loop). Dispatched builders never edit this file. At most one task with a "VM (this task)" criterion runs at a time. A builder session the owner starts directly takes NEXT in the main checkout, alone, and does the bookkeeping itself (`CLAUDE.md`).
 
-Open work only, in the recommended order; when NEXT is blocked take the first `todo` whose dependencies are `done`. `[lead]` tasks are skipped by builders. If nothing qualifies, **stop and ask for a planning session** (`docs/tasks/PLANNING.md`).
+Open work only (the front of the board; the rest is in `STATUS-backlog.md`), in the recommended order; when NEXT is blocked take the first `todo` whose dependencies are `done`. `[lead]` tasks are skipped by builders. If nothing qualifies, **stop and ask for a planning session** (`docs/tasks/PLANNING.md`).
 
 | ID | Title | Status | Depends |
 |---|---|---|---|
 | [T-190](tasks/T-190-settings-pane-focus-follow-ups.md) | Settings panes: look-ahead, Tab, peek legibility | todo | — |
 | [T-194](tasks/T-194-confirm-buttons-name-the-action.md) | Confirm dialogs: the button says the action | todo | — |
 | [T-197](tasks/T-197-shell-crash-on-bluetooth-audio-disconnect.md) | **[lead]** Shell crash when a Bluetooth headset disconnects | in-progress | — |
-| [T-198](tasks/T-198-display-resolution-and-dpi.md) | **[lead]** Display: resolution, refresh, UI scale (DPI) | todo | — |
 | [T-199](tasks/T-199-device-icons.md) | Device icons in the Bluetooth pane and toasts | todo | — |
-| [T-201](tasks/T-201-recover-from-stuck-processes.md) | **[lead]** Recover from stuck processes (watchdogs, OOM) | todo | — |
 | [T-202](tasks/T-202-screen-saver-and-power-saving.md) | Screen saver and power saving | todo | — |
 | [T-203](tasks/T-203-pair-a-controller-without-a-keyboard.md) | Pair a controller with no keyboard | todo | — |
 | [T-205](tasks/T-205-gliding-highlight-and-liquid-pills.md) | Gliding highlight, liquid-glass pills | in-progress | T-204 |
-| [T-207](tasks/T-207-faster-bluetooth-controller-reconnect.md) | **[lead]** Faster Bluetooth controller reconnect | todo | — |
-| [T-210](tasks/T-210-profile-customisation.md) | Profile customisation: avatar, colour, name | todo | — |
-| [T-213](tasks/T-213-time-zone-setting.md) | Time zone in setup and Settings | todo | — |
-| [T-215](tasks/T-215-save-backup-and-keep-data.md) | **[lead]** Saves: back up/restore, keep on uninstall | todo | — |
-| [T-216](tasks/T-216-network-connection-options.md) | **[lead]** Network options: IP, DNS, proxy, hidden Wi-Fi | todo | — |
-| [T-217](tasks/T-217-controller-input-mapping.md) | **[lead]** Controller mapping (InputPlumber, B-006) | todo | — |
-| [T-218](tasks/T-218-hdr-feasibility-spike.md) | **[lead]** HDR feasibility spike | todo | — |
-| [T-219](tasks/T-219-audio-formats-and-surround.md) | **[lead]** Audio formats and surround, passthrough | todo | — |
-| [T-220](tasks/T-220-privacy-settings.md) | Privacy settings and per-app permissions | todo | — |
-| [T-221](tasks/T-221-app-management.md) | App management: sizes, update, remove, bulk | todo | — |
-| [T-222](tasks/T-222-refresh-rate-matching-and-vrr.md) | **[lead]** Refresh-rate matching and VRR | todo | T-198 |
 | [T-223](tasks/T-223-status-cluster-device-batteries.md) | Top-right status: one battery chip per device | todo | — |
-| [T-224](tasks/T-224-telemetry-service-and-consent.md) | **[lead]** Telemetry service and consent | todo | — |
-| [T-225](tasks/T-225-crash-reporting.md) | **[lead]** Crash reporting | todo | T-224 |
-| [T-211](tasks/T-211-parental-controls-service.md) | **[lead]** Parental controls, service side | todo | T-210, T-213, T-247 |
-| [T-212](tasks/T-212-parental-controls-screens.md) | Parental controls screens | todo | T-211 |
 | [T-164](tasks/T-164-per-profile-wayland-sockets.md) | **[lead]** Per-profile Wayland sockets | todo | T-162 |
-| [T-165](tasks/T-165-profile-switch-freezes-apps.md) | Profile switch and sign-out freeze the profile's apps | todo | T-164 |
-| [T-147](tasks/T-147-fullscreen-app-flow.md) | Full-screen apps: launch, quick menu, return, close | todo | T-164 |
-| [T-166](tasks/T-166-suspend-under-eglfs.md) | **[lead]** Suspend and resume under eglfs | todo | — |
-| [T-226](tasks/T-226-system-information.md) | System information screen (CPU, RAM, GPU, storage...) and USB report | todo | — |
-| [T-227](tasks/T-227-ui-sounds-and-ambient-themes.md) | UI sounds and ambient atmosphere: sound themes, one bundled theme, maker guide | todo | — |
-| [T-245](tasks/T-245-notification-centre.md) | **[lead]** Notification centre: history, quiet mode, notifications from apps (bridge) | todo | — |
-| [T-246](tasks/T-246-achievements.md) | **[lead]** Achievements: portal for games, per-profile service, unlock moment | todo | T-245, T-164 |
-| [T-247](tasks/T-247-play-statistics.md) | Play statistics: per-profile session ledger and Activity pages (T-211 reads it) | todo | — |
-| [T-228](tasks/T-228-epic-play-packages.md) | **[lead]** EPIC: `.play` packages (ADR-014 accepted; parked by the owner until visual polish and T-164) | blocked | owner |
-| [T-229](tasks/T-229-play-feasibility-spike.md) | **[lead]** Spike: `.play` as a generated Flatpak, Wine display, Proton nesting | todo | T-228, T-164 |
-| [T-230](tasks/T-230-play-format-crate.md) | `.play` format: schema, parser, hostile-package tests | todo | T-228 |
-| [T-231](tasks/T-231-play-signing-and-trust.md) | **[lead]** `.play` signing, trust tiers, key continuity, revocation | todo | T-230 |
-| [T-232](tasks/T-232-play-art-and-video-vetting.md) | `.play` art and video vetting (decode, check, re-encode) | todo | T-230 |
-| [T-233](tasks/T-233-ruya-pack-cli.md) | `ruya-pack` developer CLI | todo | T-230, T-231, T-232 |
-| [T-234](tasks/T-234-play1-contract-mock-client.md) | `Play1` contract, mock, shell client | todo | T-230, T-231 |
-| [T-235](tasks/T-235-package-page-design-step.md) | **[lead]** Design step: package page and install-flow components | todo | T-228 |
-| [T-236](tasks/T-236-install-from-usb-and-package-page.md) | Shell: Install from USB and the package page | todo | T-234, T-235 |
-| [T-237](tasks/T-237-play-importer-core.md) | `ruya-play` importer core (staging, unpack, verify; fakes) | todo | T-230, T-231, T-232 |
-| [T-238](tasks/T-238-ruya-play-service-in-the-image.md) | **[lead]** `ruya-play` service in the image (VM) | todo | T-229, T-234, T-237 |
-| [T-239](tasks/T-239-play-launcher-and-runner-resolution.md) | **[lead]** Launcher and runner resolution (bundled, system, newest) | todo | T-229, T-238 |
-| [T-240](tasks/T-240-play-permissions-mapping-and-gate.md) | `.play` permissions: mapping, ceilings, admin gate | todo | T-231, T-238 |
-| [T-241](tasks/T-241-play-updates.md) | **[lead]** `.play` updates: signed feeds, same-key rule, rollback | todo | T-231, T-238, T-240 |
-| [T-242](tasks/T-242-play-library-home-and-preview.md) | `.play` in Library and Home: art, preview loop, save paths | todo | T-232, T-238 |
-| [T-243](tasks/T-243-play-developer-guide-and-samples.md) | `.play` developer guide and two samples | todo | T-233 |
-| [T-244](tasks/T-244-system-wine-runner-pack.md) | **[lead]** System Wine runner pack on the `ruyaos` remote | todo | T-229, T-239 |
+
+Later (ordered): [`STATUS-backlog.md`](STATUS-backlog.md) holds the rest of the open board, same columns; `lint-board.ps1` reads both. A planner or the lead moves rows up when they become ready.
 
 **VM queue** (host-done, VM check pending; the lead runs them with one image build): empty after `0.0.48-lead` (T-191, T-192, T-193, T-196, T-200, T-214 verified; T-200 sensors on the Dell are still open). Devices checks need `-Audio`.
 
