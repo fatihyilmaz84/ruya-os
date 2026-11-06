@@ -31,7 +31,7 @@ Two follow-ups of T-182: the handlers that now run `flatpak list` (Install, Unin
 - `03-services-and-apps.md` Store section (when `InstalledChanged` is sent).
 
 ## Outcome
-Verified: host (vm pending: vm-store-check.sh). `dev.ps1 rust` and the Rust tests ran on the host; the extended VM step was written but not run.
+Verified: vm (lead run, 2026-11-06). vm-store-check.sh on 0.0.48-lead: 71 PASS; exactly one InstalledChanged after the outside removal. Earlier line: host (vm pending: vm-store-check
 
 Built:
 - `Store::sync_installed` returns whether the correction changed the installed set or an update flag, and records the corrected set as `announced` (so the next `refresh()` returns `Ok(false)` for it). `list_installed`, `install`, `uninstall`, `update` and `rollback` take an `emit: &mut dyn FnMut(Event)` (the idiom of `sync` and `run_next`) and send `Event::InstalledChanged` through it when the correction changed something.

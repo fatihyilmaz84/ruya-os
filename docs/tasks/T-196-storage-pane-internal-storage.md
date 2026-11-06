@@ -46,7 +46,7 @@ Settings → Storage shows the internal storage first (how much is free, and how
 - The Dell test machine has a 464 GB `/var` (grown by hand on 2026-11-06); the ISO's 70 GiB cap is a separate Inbox item.
 
 ## Outcome
-Verified: host (vm pending: vm-devices-check.sh). `dev.ps1 test` ALL GREEN (403 QML tests + 33 skipped screenshot functions, Rust 139 in `ruya-devices`), `dev.ps1 shots` ALL GREEN, screenshots read. The D-Bus client, the Linux walk tests (symlink, hard link, unreadable directory: `cfg(unix)`, type-checked by clippy for Linux only), `statvfs` and the Store signal watcher have not run here.
+Verified: vm (lead run, 2026-11-06). vm-devices-check.sh on 0.0.48-lead: 76 PASS; the one FAIL (apps_bytes 7.9 MB vs du 175 MB) was a race in the script (a Flathub appstream refresh landed after the service cached its first walk; a re-run of `storage` was all PASS, apps_bytes equal to du); the script now retries for up to 160 s. Earlier line: host (vm pending: vm-devices-check
 
 **Built.**
 - **Contract** (`api/dbus/org.ruyaos.Devices1.xml`): `Devices1.Storage.GetSystemUsage() -> a{sv}` with `total_bytes`, `free_bytes`, `apps_bytes`, `data_bytes`, `system_bytes` (all `x`, `-1` unknown) and the signal `SystemUsageChanged` (sent when `apps_bytes` or `data_bytes` change after a measurement, not for free space alone). `ListVolumes` is unchanged.

@@ -53,7 +53,7 @@ What it does at each level:
 - The Dell test machine is a good fixture source: capture its `/sys` hwmon layout into `services/ruya-devices/tests/fixtures/` (names, labels, values only).
 
 ## Outcome
-Verified: host (vm pending: vm-devices-check.sh)
+Verified: vm (lead run, 2026-11-06). vm-devices-check.sh thermal PASS (QEMU has no sensor: empty list, Level normal); thermal-fake: the level walk passed (normal at 40, hot after 14 s, critical after 11 s, normal again, 3 LevelChanged); its one FAIL was the script: busctl prints doubles as 4.0e+01, now parsed. Not yet run on the Dell hardware sensors. Earlier line: host (vm pending: vm-devices-check
 
 **Built.**
 - **Contract** (`api/dbus/org.ruyaos.Devices1.xml`, interface `org.ruyaos.Devices1.Thermal`): `ListSensors() -> aa{sv}` (`id`, `label`, `class` `cpu|gpu|ssd|hdd|fan`, `value` d, `level`, `max_seen` d), property `Level`, signals `LevelChanged(level, sensor_id)` and `SensorsChanged`. No status strings (nothing can fail).
