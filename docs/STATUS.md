@@ -47,7 +47,7 @@ Open work only, in the recommended order; when NEXT is blocked take the first `t
 | [T-223](tasks/T-223-status-cluster-device-batteries.md) | Top-right status: one battery chip per device | todo | — |
 | [T-224](tasks/T-224-telemetry-service-and-consent.md) | **[lead]** Telemetry service and consent | todo | — |
 | [T-225](tasks/T-225-crash-reporting.md) | **[lead]** Crash reporting | todo | T-224 |
-| [T-211](tasks/T-211-parental-controls-service.md) | **[lead]** Parental controls, service side | todo | T-210, T-213 |
+| [T-211](tasks/T-211-parental-controls-service.md) | **[lead]** Parental controls, service side | todo | T-210, T-213, T-247 |
 | [T-212](tasks/T-212-parental-controls-screens.md) | Parental controls screens | todo | T-211 |
 | [T-164](tasks/T-164-per-profile-wayland-sockets.md) | **[lead]** Per-profile Wayland sockets | todo | T-162 |
 | [T-165](tasks/T-165-profile-switch-freezes-apps.md) | Profile switch and sign-out freeze the profile's apps | todo | T-164 |
@@ -57,6 +57,7 @@ Open work only, in the recommended order; when NEXT is blocked take the first `t
 | [T-227](tasks/T-227-ui-sounds-and-ambient-themes.md) | UI sounds and ambient atmosphere: sound themes, one bundled theme, maker guide | todo | — |
 | [T-245](tasks/T-245-notification-centre.md) | **[lead]** Notification centre: history, quiet mode, notifications from apps (bridge) | todo | — |
 | [T-246](tasks/T-246-achievements.md) | **[lead]** Achievements: portal for games, per-profile service, unlock moment | todo | T-245, T-164 |
+| [T-247](tasks/T-247-play-statistics.md) | Play statistics: per-profile session ledger and Activity pages (T-211 reads it) | todo | — |
 | [T-228](tasks/T-228-epic-play-packages.md) | **[lead]** EPIC: `.play` packages (ADR-014 accepted; parked by the owner until visual polish and T-164) | blocked | owner |
 | [T-229](tasks/T-229-play-feasibility-spike.md) | **[lead]** Spike: `.play` as a generated Flatpak, Wine display, Proton nesting | todo | T-228, T-164 |
 | [T-230](tasks/T-230-play-format-crate.md) | `.play` format: schema, parser, hostile-package tests | todo | T-228 |
