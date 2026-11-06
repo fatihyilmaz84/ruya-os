@@ -10,14 +10,14 @@ use zbus::object_server::SignalEmitter;
 use zbus::zvariant::{OwnedValue, Value};
 use zbus::{interface, Connection};
 
-use crate::directory::ProfileSnapshot;
+use crate::directory::{profile_ids, ProfileRow, ProfileSnapshot};
 use crate::session::{Notice, RunningApp, Session};
 use crate::spawner::{Spawner, UnitEvent};
 
 pub const BUS_NAME: &str = "org.ruyaos.Session1";
 pub const OBJECT_PATH: &str = "/org/ruyaos/Session1";
 
-/// Chosen at runtime: the fake in `--session`; the real spawner does not exist yet (T-139).
+/// Chosen at runtime: the fake in `--session`, `systemd::SystemdSpawner` on the system bus.
 pub type DynSpawner = Box<dyn Spawner + Send>;
 pub type Shared = Arc<Mutex<Session<DynSpawner, ProfileSnapshot>>>;
 
@@ -59,8 +59,8 @@ pub async fn fetch_profile_ids(connection: &Connection) -> zbus::Result<Vec<Stri
             &(),
         )
         .await?;
-    let rows: Vec<(String, String, String, String, bool)> = reply.body().deserialize()?;
-    Ok(rows.into_iter().map(|r| r.0).collect())
+    let rows: Vec<ProfileRow> = reply.body().deserialize()?;
+    Ok(profile_ids(rows))
 }
 
 pub struct SessionIface {

@@ -1,9 +1,7 @@
 //! ruya-session: launches installed apps as a profile (`org.ruyaos.Session1`).
 //!
-//! NOT IN THE IMAGE YET (T-139): there is no systemd unit, no D-Bus policy and no Containerfile
-//! change, and the real spawner (`systemd-run`, see `spawner::launch_command`) is only a command
-//! builder with tests. The service runs on a development host with `--session` and a fake
-//! spawner. The unit, policy and VM check follow T-130.
+//! In the image (T-162) it runs as root on the system bus over `systemd::SystemdSpawner`; on a
+//! development host `--session` serves the session bus over a fake spawner (T-139).
 //!
 //! The rules (registry, state machine, exit reasons) are in `session.rs` and need no OS; the OS
 //! sits behind `Spawner` (`spawner.rs`) and `ProfileDirectory` (`directory.rs`); `dbus.rs` is the
@@ -13,3 +11,5 @@ pub mod dbus;
 pub mod directory;
 pub mod session;
 pub mod spawner;
+#[cfg(target_os = "linux")]
+pub mod systemd;

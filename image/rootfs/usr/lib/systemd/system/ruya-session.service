@@ -1,0 +1,47 @@
+[Unit]
+Description=RuyaOS session service (org.ruyaos.Session1)
+Before=ruya-compositor@tty1.service
+
+[Service]
+Type=dbus
+BusName=org.ruyaos.Session1
+ExecStart=/usr/bin/ruya-session
+Restart=on-failure
+# Where each running app's `systemd-run` writes its status lines (a file: a pipe would be refused
+# by SELinux when systemd-run passes it on to PID 1, see systemd.rs).
+RuntimeDirectory=ruya-session
+RuntimeDirectoryMode=0700
+# Starts apps as the profile users with `systemd-run --machine=ruya-<id>@.host` (root needs no
+# capability for it: systemd-machined and the user's manager do the work) and keeps their
+# managers alive with `loginctl enable-linger`. It writes nothing itself and only reads
+# /var/lib/flatpak to see what is installed; the apps run in the profile's own manager, outside
+# this unit.
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateNetwork=yes
+PrivateDevices=yes
+PrivateIPC=yes
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+SystemCallArchitectures=native
+UMask=0077
+ProtectProc=invisible
+ProcSubset=pid
+ProtectClock=yes
+ProtectHostname=yes
+ProtectKernelLogs=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+
+[Install]
+WantedBy=multi-user.target

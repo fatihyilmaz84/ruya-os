@@ -1,6 +1,6 @@
 # T-162 — `ruya-session` in the image: real spawner, unit, bus policy
 
-Status: todo · Phase: 2 · Depends: T-130, T-139 · Area: services, image · Size: M · Owner: lead
+Status: done · Phase: 2 · Depends: T-130, T-139 · Area: services, image · Size: M · Owner: lead
 
 ## Goal
 `Session1.Launch` over the real system bus starts an app in the profile user's systemd user manager, and `AppStarted`/`AppExited` report it correctly. This is the first half of "launch an app from the shell" (the Wayland half is T-164).
@@ -40,4 +40,17 @@ Then the image recipe in `docs/dev-setup.md`, `scripts\smoke-test.ps1`, `vm-sess
 - Flathub needs network in the VM; `vm-store-check.sh` already installs from it.
 
 ## Outcome
-_Filled in by the implementer. First line: `Verified: host | vm | unverified | hw` (say what ran where). Then: what was built, files, deviations, follow-ups (each also an Inbox line)._
+Verified: vm (image `0.0.44-t162`: `RUYA_BOOT_OK`; `vm-session-check.sh` ALL CHECKS PASSED on the fresh disk, 45 checks incl. the profile deletion; `vm-devices-check.sh` 57 PASS with `-Audio`, unchanged by the PipeWire drop-ins; `vm-iso-check.ps1` on the installer ISO built from it: ISO CHECK PASSED, install 951 s, boots to the shell, greenboot success). `dev.ps1 test` ALL GREEN (381 QML + 30 skips; 36 session tests, 67 + 70 in other crates). `systemd-analyze security ruya-session`: **1.1 OK** (`ruya-profiles` 1.6).
+
+Built (lead, no builder): the real spawner `systemd.rs` (Linux), `spawner.rs` (pure: `launch_command`, `parse_run_line`, `RunFollower`, `LineTail`, `scope_pattern`, `flatpak_app_installed`), `directory::profile_ids`, system mode in `main.rs`, unit `ruya-session.service` (root, **empty** `CapabilityBoundingSet`, `PrivateNetwork`, `AF_UNIX`, `ProtectHome=yes`, `RuntimeDirectory=ruya-session`), bus policy, Containerfile, `scripts/vm-session-check.sh` + `vm-session-probe.qml`, `ruya-profiles` deletes a lingering profile's manager before `userdel`, PipeWire/WirePlumber user units limited to `ruya-shell`. Specs: 03 §4.1, 01, 00 (ADR-010), `dev-setup.md`, Session1 XML header, `image/CLAUDE.md`.
+
+What the VM taught (all in 03 §4.1; each cost an iteration):
+- **Stderr must not be a pipe of the service.** `systemd-run --machine=` passes its stderr to PID 1; SELinux refuses PID 1 a pipe made by a service (or a file in `/root`): "Connection reset by peer". The spawner gives it a file in the runtime directory and tails it.
+- **The app is not in our unit.** `flatpak run` moves itself into `app-flatpak-<id>-<n>.scope`; stopping the unit left the app running (a first check "passed" `Stop` while the process lived). Stop and kill now address the scope too; the check asserts the process is gone.
+- **Linger, then wait for the manager.** Without linger the manager and the app die ~10 s after the call's session closes. `enable-linger` followed at once by a `--machine=` call hangs the start for 45 s, so the spawner runs `systemctl start user@<uid>` in between.
+- **PipeWire for profile users was not masked** (ADR-010 said so, the image did not): drop-ins with `ConditionUser=ruya-shell`.
+- The Containerfile edit first missed the `install` line (unit failed 203/EXEC in the first image); caught by the check, not by `lint`.
+
+Deviations: Scope 5 "an app that exits non-zero gives crashed" and "Stop gives quit" are checks; the kill after the 5 s grace is **not** VM-tested (a Flatpak sandbox dies at the scope's SIGTERM, so no test app can ignore it; the core's tests cover it) and replaced by "SIGKILL from outside gives killed". No `WAYLAND_DISPLAY` is passed yet (T-164). Test apps come from a local unsigned repository built in the guest (no download).
+
+Follow-ups (Inbox): the registry is empty after a restart of `ruya-session` while apps keep running (adopt `ruya-app-*` units on start); a missing binary in an app (exec 203) shows as `crashed`, not `launch-failed`; `ruya-profiles` deletion should be covered by its own VM check besides this one.

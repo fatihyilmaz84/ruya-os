@@ -25,6 +25,7 @@ RUN cd /src/services \
     && install -Dm755 target/release/ruya-profiles /out/usr/bin/ruya-profiles \
     && install -Dm755 target/release/ruya-devices /out/usr/bin/ruya-devices \
     && install -Dm755 target/release/ruya-library /out/usr/bin/ruya-library \
+    && install -Dm755 target/release/ruya-session /out/usr/bin/ruya-session \
     && install -Dm755 target/release/ruya-store /out/usr/bin/ruya-store \
     && install -Dm755 target/release/ruya-update /out/usr/bin/ruya-update
 
@@ -56,7 +57,7 @@ RUN --mount=type=bind,source=image/build,target=/ctx/build \
     && chmod 0755 /usr/libexec/ruyaos/wait-shell-ready /usr/lib/greenboot/check/required.d/*.sh \
     && (cd /ctx/rootfs && find . -mindepth 1 ! -type l -print0 | xargs -0 -I{} find "/{}" -maxdepth 0 -perm /022 > /tmp/writable \
         && test ! -s /tmp/writable || { echo "group/world-writable files shipped from image/rootfs:"; cat /tmp/writable; exit 1; }) \
-    && systemctl enable ruya-compositor@tty1.service ruya-inputd.service ruya-profiles.service ruya-library.service ruya-store.service ruya-update.service ruya-flathub-remote.service ruya-boot-marker.service bluetooth.service \
+    && systemctl enable ruya-compositor@tty1.service ruya-inputd.service ruya-profiles.service ruya-session.service ruya-library.service ruya-store.service ruya-update.service ruya-flathub-remote.service ruya-boot-marker.service bluetooth.service \
     && systemctl --global enable ruya-devices.service \
     && systemctl enable greenboot-healthcheck.service greenboot-set-rollback-trigger.service \
     && systemctl set-default graphical.target \

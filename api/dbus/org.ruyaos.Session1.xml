@@ -2,8 +2,9 @@
  "http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
 <!--
   org.ruyaos.Session1 — launch installed apps as a profile, stop them, list what runs.
-  Served by ruya-session on the system bus at /org/ruyaos/Session1 (service: T-139; the shell's
-  mock backend follows this contract too).
+  Served by ruya-session on the system bus at /org/ruyaos/Session1 (core T-139, in the image T-162;
+  the shell's mock backend follows this contract too). It runs as root; an app is a transient unit
+  of the profile user's own systemd manager, and `instance` is that unit's name.
   Contract between shell (Qt/QML) and services (Rust); see docs/specs/03-services-and-apps.md §4.1.
 
   Trust: the `profile` argument of Launch is trusted. The bus policy lets only ruya-shell and root

@@ -35,6 +35,14 @@ impl Accounts for NoAccounts {
     }
 }
 
+#[cfg(target_os = "linux")]
+fn userdel(user: &str) -> io::Result<std::process::ExitStatus> {
+    std::process::Command::new("userdel")
+        .arg("--remove")
+        .arg(user)
+        .status()
+}
+
 /// Creates real users with `useradd`. Homes live in /var/home (persistent on bootc).
 #[cfg(target_os = "linux")]
 #[derive(Debug, Default)]
@@ -65,10 +73,27 @@ impl Accounts for UnixAccounts {
 
     fn remove(&self, profile_id: &str) -> io::Result<()> {
         let user = unix_user(profile_id);
-        let status = std::process::Command::new("userdel")
-            .arg("--remove")
-            .arg(&user)
-            .status()?;
+        // `ruya-session` keeps a profile's systemd manager running (linger) once an app was
+        // launched as it, and userdel refuses a user with processes. End the manager and its
+        // apps and drop the linger first; both are no-ops for a user that never launched.
+        for args in [
+            ["terminate-user", user.as_str()],
+            ["disable-linger", user.as_str()],
+        ] {
+            match std::process::Command::new("loginctl").args(args).status() {
+                Ok(_) => {}
+                Err(err) => eprintln!("ruya-profiles: loginctl {}: {err}", args[0]),
+            }
+        }
+        // terminate-user returns before the processes are gone: userdel exits 8 until they are.
+        let mut status = userdel(&user)?;
+        for _ in 0..10 {
+            if status.code() != Some(8) {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(500));
+            status = userdel(&user)?;
+        }
         // userdel exits 6 when the user does not exist: nothing left to remove.
         if status.success() || status.code() == Some(6) {
             Ok(())

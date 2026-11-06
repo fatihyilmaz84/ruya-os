@@ -1,8 +1,13 @@
 //! Starting and stopping app units. The trait is the only door to the OS; the fake serves tests
-//! and `--session`. The real spawner is not written yet: `launch_command` is the pure part of it
-//! (the exact `systemd-run` argument list), tested here and executed by a later task.
+//! and `--session`, `systemd::SystemdSpawner` (Linux) is the real one. The pure parts of the real
+//! one live here and are tested on every host: the `systemd-run` argument list
+//! (`launch_command`), the reading of its output (`parse_run_line`) and the unit events made from
+//! it (`RunFollower`).
 
 use std::collections::HashSet;
+use std::fs::File;
+use std::io::Read;
+use std::path::Path;
 use std::sync::Mutex;
 
 use async_channel::Sender;
@@ -81,10 +86,31 @@ pub fn unit_name(user: &str, app_id: &str) -> String {
     format!("ruya-app-{user}-{app_id}.service")
 }
 
-/// The argument list that starts `flatpak run <app_id>` as `user` in that user's systemd manager.
-/// Pure: nothing is executed. Every value is validated again here (the core has checked them
-/// already), so the list holds only plain identifiers, and the application id comes after `--`
-/// so it can never be read as an option.
+/// The pattern of the scope `flatpak run` puts the sandbox in (`app-flatpak-<id>-<number>.scope`,
+/// in the user's manager). The processes of the app live there, not in our unit: `flatpak run`
+/// moves itself into the scope and the sandbox starts from it, so stopping the unit alone leaves
+/// the app running. `systemctl stop|kill` take this pattern next to the unit name. The id is
+/// checked again: only `[A-Za-z0-9_.-]` can be in it, so the only glob character is the `*`.
+pub fn scope_pattern(app_id: &str) -> Result<String, String> {
+    if !valid_app_id(app_id) {
+        return Err(format!("not an application id: {app_id:?}"));
+    }
+    Ok(format!("app-flatpak-{app_id}-*.scope"))
+}
+
+/// Is the application in the system Flatpak installation under `root` (`/var/lib/flatpak`)?
+/// Flatpak keeps `app/<id>/current` (a link to `<arch>/<branch>`) for an installed app and
+/// removes the directory on uninstall. A file check, so no process is started per launch.
+pub fn flatpak_app_installed(root: &Path, app_id: &str) -> bool {
+    valid_app_id(app_id) && root.join("app").join(app_id).join("current").exists()
+}
+
+/// The argument list that starts `flatpak run <app_id>` as `user` in that user's systemd manager
+/// and waits for it (`--wait`: the process lives as long as the app does, and prints the
+/// start and the end on stderr, see `parse_run_line`). `Type=exec` makes the start line mean
+/// "the program was executed". Pure: nothing is executed. Every value is validated again here
+/// (the core has checked them already), so the list holds only plain identifiers, and the
+/// application id comes after `--` so it can never be read as an option.
 pub fn launch_command(
     user: &str,
     app_id: &str,
@@ -99,8 +125,9 @@ pub fn launch_command(
     let mut args: Vec<String> = [
         "systemd-run",
         "--user",
-        "--quiet",
+        "--wait",
         "--collect",
+        "--property=Type=exec",
         "--property=KillMode=control-group",
     ]
     .into_iter()
@@ -126,6 +153,127 @@ pub fn launch_command(
     args.extend(["--", "flatpak", "run"].map(str::to_owned));
     args.push(app_id.to_owned());
     Ok(args)
+}
+
+/// What one line of `systemd-run --wait` says (it writes them to stderr):
+///   `Running as unit: <unit>[; invocation ID: ...]`                 the program was executed
+///   `Main processes terminated with: code=exited, status=3/NOTIMPLEMENTED`   (or `code=killed,
+///   status=15/TERM`; `status` is the exit status, or the signal number after `killed`/`dumped`)
+/// Other lines (result, runtime, CPU) say nothing we need.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RunLine {
+    Running,
+    Ended { code: i32, signaled: bool },
+}
+
+pub fn parse_run_line(line: &str) -> Option<RunLine> {
+    let line = line.trim();
+    if line.starts_with("Running as unit:") {
+        return Some(RunLine::Running);
+    }
+    let rest = line.strip_prefix("Main process")?;
+    let rest = rest.split_once("terminated with:")?.1;
+    let mut code_kind = None;
+    let mut status = None;
+    for part in rest.split(',') {
+        let part = part.trim();
+        if let Some(kind) = part.strip_prefix("code=") {
+            code_kind = Some(kind.trim());
+        } else if let Some(num) = part.strip_prefix("status=") {
+            // "3/NOTIMPLEMENTED": the number comes first.
+            status = num.split('/').next().and_then(|n| n.trim().parse().ok());
+        }
+    }
+    let code = status?;
+    match code_kind? {
+        "exited" => Some(RunLine::Ended {
+            code,
+            signaled: false,
+        }),
+        "killed" | "dumped" => Some(RunLine::Ended {
+            code,
+            signaled: true,
+        }),
+        _ => None,
+    }
+}
+
+/// Turns the lines of one `systemd-run --wait` process, and its own end, into `UnitEvent`s: one
+/// `Started` at most, and exactly one `Exited`. The end the unit reported wins over the exit
+/// status of `systemd-run` itself (which is only a copy of it, and the only thing there is when
+/// the start failed before a unit existed).
+pub struct RunFollower {
+    unit: String,
+    started: bool,
+    ended: Option<(i32, bool)>,
+}
+
+impl RunFollower {
+    pub fn new(unit: &str) -> Self {
+        RunFollower {
+            unit: unit.to_owned(),
+            started: false,
+            ended: None,
+        }
+    }
+
+    pub fn line(&mut self, line: &str) -> Option<UnitEvent> {
+        match parse_run_line(line)? {
+            RunLine::Running if !self.started => {
+                self.started = true;
+                Some(UnitEvent::Started {
+                    unit: self.unit.clone(),
+                })
+            }
+            RunLine::Running => None,
+            RunLine::Ended { code, signaled } => {
+                self.ended.get_or_insert((code, signaled));
+                None
+            }
+        }
+    }
+
+    /// `systemd-run` ended: with this exit code, or (`signaled`) killed by this signal.
+    pub fn finish(self, code: i32, signaled: bool) -> UnitEvent {
+        let (code, signaled) = self.ended.unwrap_or((code, signaled));
+        UnitEvent::Exited {
+            unit: self.unit,
+            code,
+            signaled,
+        }
+    }
+}
+
+/// Reads the lines a process appends to a file, a bit at a time: `poll` returns the complete
+/// lines that came since the last call and keeps a half-written one for the next.
+pub struct LineTail {
+    file: File,
+    partial: Vec<u8>,
+}
+
+impl LineTail {
+    pub fn open(path: &Path) -> std::io::Result<Self> {
+        Ok(LineTail {
+            file: File::open(path)?,
+            partial: Vec::new(),
+        })
+    }
+
+    pub fn poll(&mut self) -> Vec<String> {
+        let mut chunk = [0u8; 4096];
+        loop {
+            match self.file.read(&mut chunk) {
+                Ok(0) | Err(_) => break,
+                Ok(n) => self.partial.extend_from_slice(&chunk[..n]),
+            }
+        }
+        let mut lines = Vec::new();
+        while let Some(end) = self.partial.iter().position(|&b| b == b'\n') {
+            let line: Vec<u8> = self.partial.drain(..=end).collect();
+            lines.push(String::from_utf8_lossy(&line[..end]).into_owned());
+        }
+        lines
+    }
 }
 
 /// For tests and `--session`. Records the calls; with an event channel it behaves like a quick
@@ -274,8 +422,9 @@ mod tests {
             [
                 "systemd-run",
                 "--user",
-                "--quiet",
+                "--wait",
                 "--collect",
+                "--property=Type=exec",
                 "--property=KillMode=control-group",
                 "--machine=ruya-p1@.host",
                 "--unit=ruya-app-ruya-p1-org.ruyaos.Racer.service",
@@ -321,6 +470,177 @@ mod tests {
                 "{k:?}={v:?}"
             );
         }
+    }
+
+    #[test]
+    fn run_lines_as_systemd_run_prints_them() {
+        let ended = |code, signaled| Some(RunLine::Ended { code, signaled });
+        assert_eq!(
+            parse_run_line(
+                "Running as unit: a.service; invocation ID: 565dbc8a2c7b4b568f99fdbe17b4469f"
+            ),
+            Some(RunLine::Running)
+        );
+        assert_eq!(
+            parse_run_line("Running as unit: a.service"),
+            Some(RunLine::Running)
+        );
+        assert_eq!(
+            parse_run_line("Main processes terminated with: code=exited, status=3/NOTIMPLEMENTED"),
+            ended(3, false)
+        );
+        assert_eq!(
+            parse_run_line("Main processes terminated with: code=exited, status=0/SUCCESS"),
+            ended(0, false)
+        );
+        assert_eq!(
+            parse_run_line("Main processes terminated with: code=killed, status=15/TERM"),
+            ended(15, true)
+        );
+        assert_eq!(
+            parse_run_line("Main processes terminated with: code=dumped, status=11/SEGV"),
+            ended(11, true)
+        );
+        // The padding systemd-run puts in front, and a single process.
+        assert_eq!(
+            parse_run_line("  Main process terminated with: code=exited, status=203/EXEC "),
+            ended(203, false)
+        );
+        for other in [
+            "",
+            "          Finished with result: exit-code",
+            "            Service runtime: 1.034s",
+            "Failed to start transient service unit: Remote peer disconnected",
+            "Main processes terminated with: code=exited",
+            "Main processes terminated with: code=weird, status=1/X",
+            "Main processes terminated with: code=exited, status=x/FAIL",
+        ] {
+            assert_eq!(parse_run_line(other), None, "{other:?}");
+        }
+    }
+
+    fn follow(lines: &[&str], code: i32, signaled: bool) -> Vec<UnitEvent> {
+        let mut follower = RunFollower::new("u.service");
+        let mut events: Vec<UnitEvent> = lines.iter().filter_map(|l| follower.line(l)).collect();
+        events.push(follower.finish(code, signaled));
+        events
+    }
+
+    fn started() -> UnitEvent {
+        UnitEvent::Started {
+            unit: "u.service".to_owned(),
+        }
+    }
+
+    fn exited(code: i32, signaled: bool) -> UnitEvent {
+        UnitEvent::Exited {
+            unit: "u.service".to_owned(),
+            code,
+            signaled,
+        }
+    }
+
+    #[test]
+    fn follower_reports_the_exit_code_of_the_app() {
+        let lines = [
+            "Running as unit: u.service",
+            "          Finished with result: exit-code",
+            "Main processes terminated with: code=exited, status=3/NOTIMPLEMENTED",
+        ];
+        // systemd-run's own status (3 too, here) is not what decides.
+        assert_eq!(follow(&lines, 99, false), [started(), exited(3, false)]);
+    }
+
+    #[test]
+    fn follower_reports_a_signal() {
+        let lines = [
+            "Running as unit: u.service; invocation ID: 1",
+            "Main processes terminated with: code=killed, status=9/KILL",
+        ];
+        assert_eq!(follow(&lines, 255, false), [started(), exited(9, true)]);
+    }
+
+    #[test]
+    fn follower_never_started() {
+        // The bus hop failed: no start line, systemd-run exits 1.
+        let lines = ["Failed to start transient service unit: Remote peer disconnected"];
+        assert_eq!(follow(&lines, 1, false), [exited(1, false)]);
+        assert_eq!(follow(&[], 1, true), [exited(1, true)]);
+    }
+
+    #[test]
+    fn follower_without_the_end_line_uses_the_exit_of_systemd_run() {
+        let lines = ["Running as unit: u.service"];
+        assert_eq!(follow(&lines, 15, true), [started(), exited(15, true)]);
+    }
+
+    #[test]
+    fn follower_starts_once_and_keeps_the_first_end() {
+        let lines = [
+            "Running as unit: u.service",
+            "Running as unit: u.service",
+            "Main processes terminated with: code=exited, status=1/FAILURE",
+            "Main processes terminated with: code=exited, status=2/INVALIDARGUMENT",
+        ];
+        assert_eq!(follow(&lines, 0, false), [started(), exited(1, false)]);
+    }
+
+    #[test]
+    fn installed_means_a_current_link_in_the_system_installation() {
+        let root = std::env::temp_dir().join(format!("ruya-session-fp-{}", std::process::id()));
+        let app = "org.ruyaos.Racer";
+        let _ = std::fs::remove_dir_all(&root);
+        assert!(!flatpak_app_installed(&root, app));
+        // Half-removed: the directory without its `current`.
+        std::fs::create_dir_all(root.join("app").join(app)).expect("mkdir");
+        assert!(!flatpak_app_installed(&root, app));
+        std::fs::create_dir_all(root.join("app").join(app).join("current")).expect("mkdir");
+        assert!(flatpak_app_installed(&root, app));
+        assert!(!flatpak_app_installed(&root, "org.ruyaos.Puzzle"));
+        // Never a path out of the installation, whatever the caller passes.
+        assert!(!flatpak_app_installed(&root, "../../x"));
+        assert!(!flatpak_app_installed(&root, "org.ruyaos.Racer/../.."));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn scope_pattern_for_flatpak_runs() {
+        assert_eq!(
+            scope_pattern("org.ruyaos.Racer").as_deref(),
+            Ok("app-flatpak-org.ruyaos.Racer-*.scope")
+        );
+        for bad in [
+            "",
+            "x",
+            "org.ruyaos.*",
+            "org.ruyaos.[a]",
+            "a.b.c?",
+            "a.b.c d",
+        ] {
+            assert!(scope_pattern(bad).is_err(), "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn line_tail_returns_complete_lines_only() {
+        use std::io::Write;
+        let path = std::env::temp_dir().join(format!("ruya-session-tail-{}", std::process::id()));
+        let mut out = File::create(&path).expect("create");
+        let mut tail = LineTail::open(&path).expect("open");
+        assert!(tail.poll().is_empty());
+        write!(out, "Running as unit: a\nMain proc").expect("write");
+        assert_eq!(tail.poll(), ["Running as unit: a"]);
+        assert!(tail.poll().is_empty());
+        writeln!(out, "esses terminated with: code=exited, status=0/SUCCESS").expect("write");
+        write!(out, "\nlast").expect("write");
+        assert_eq!(
+            tail.poll(),
+            [
+                "Main processes terminated with: code=exited, status=0/SUCCESS",
+                ""
+            ]
+        );
+        let _ = std::fs::remove_file(&path);
     }
 
     #[test]

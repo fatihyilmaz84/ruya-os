@@ -1,6 +1,6 @@
 [package]
 name = "ruya-session"
-description = "RuyaOS session: launch installed apps as a profile (org.ruyaos.Session1); dev mode only, not in the image yet"
+description = "RuyaOS session: launch installed apps as a profile (org.ruyaos.Session1)"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
