@@ -65,5 +65,12 @@ Verified: host (vm pending: vm-store-check.sh). `dev.ps1 test` is green on Windo
 - No contract (`Store1.xml`) or service change. `StoreBackend::serviceLost` (internal signal) changed its argument from a list of app ids to job id -> app id, which the by-id correction needs.
 - The StoreJob struct moved from `StoreBackend.h` to `JobBook.h` (still included by `StoreBackend.h`).
 
+**Known limits**
+- A queued job adopted at start (found by `ListJobs`) does not show as working on its app's page: `Store.jobs` holds running jobs only.
+- A `ListJobs` reply drops the progress of a job started after the request was sent, until that job's next `JobProgress`.
+
+**Round 2 (review):** `init()` of `tst_store_backend.qml` now also waits for `Store.mockPendingReplies() === 0`, so `test_a_late_installed_list_is_dropped` and `test_a_late_catalogue_is_dropped` no longer depend on test order. Comments added in `Store.cpp` (one tracked job per app) and on `test_job_table_replaces_a_stale_entry`.
+
 **Follow-ups (Inbox)**
+- (T-191) The two known limits above.
 - (T-191) Session `ListRunning` -> `runningListed` is an unguarded model-replacing reply; guard it together with its `AppStarted`/`AppExited` interplay.

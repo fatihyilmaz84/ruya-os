@@ -89,8 +89,10 @@ Store::Store(std::unique_ptr<StoreBackend> backend, QObject *parent)
             m_jobs.clear();
             emit jobsChanged();
         }
+        // The job by its id: its app may get others. key() assumes one tracked job per app, which
+        // holds because the service refuses a second job of an app with "busy".
         for (const QString &id : ids)
-            m_lost.insert(id, jobApps.key(id)); // the job by its id: its app may get others
+            m_lost.insert(id, jobApps.key(id));
         for (const QString &id : ids)
             emit jobFinished(id, QStringLiteral("failed"));
     });

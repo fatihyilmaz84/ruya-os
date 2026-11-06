@@ -28,6 +28,7 @@ Item {
             Store.mockReset()
             tryVerify(() => Store.catalogue.length === 12)
             tryVerify(() => Store.installed.length === 3)
+            tryVerify(() => Store.mockPendingReplies() === 0)   // the reset's own replies have landed
             finished.clear()
             reconciled.clear()
             host.jobsAtReconcile = []
@@ -194,6 +195,8 @@ Item {
         }
 
         // T-188: what the facade shows is replaced by the job table, also when it missed a JobFinished.
+        // Covers a finished job the shell does NOT track (mockForgetJobs untracks it since T-191): no
+        // verdict. The tracked variant is test_a_tracked_job_the_table_lists_as_finished_is_reported.
         function test_job_table_replaces_a_stale_entry() {
             const id = "org.example.Racer"
             Store.install(id)
