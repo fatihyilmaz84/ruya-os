@@ -193,6 +193,54 @@ function Test-Tokens {
     if (-not $rejected) { $selfOut | ForEach-Object { Write-Host "    $_" } }
     Record "token lint self-check (rejects a literal font size)" $rejected
 
+    # Self-check (T-209): a hard-coded colour of any spelling is rejected outside Theme.qml and the
+    # theme sets, "transparent" and Theme tokens are fine, and the theme sets may hold colours.
+    $fixture = Join-Path ([IO.Path]::GetTempPath()) ("ruya-lint-" + [guid]::NewGuid().ToString("N"))
+    New-Item -ItemType Directory -Path $fixture | Out-Null
+    New-Item -ItemType Directory -Path (Join-Path $fixture "themes") | Out-Null
+    $bad = Join-Path $fixture "Colour.qml"
+    $colourCases = @{
+        "hex"        = 'Rectangle { color: "#336699" }'
+        "name"       = 'Rectangle { color: "white" }'
+        "single"     = "Rectangle { color: 'black' }"
+        "Qt.rgba"    = 'Rectangle { color: Qt.rgba(1, 1, 1, 0.2) }'
+        "Qt.hsla"    = 'Rectangle { color: Qt.hsla(0.5, 0.5, 0.5, 1) }'
+    }
+    $allColoursRejected = $true
+    foreach ($k in $colourCases.Keys) {
+        Set-Content -Path $bad -Value $colourCases[$k]
+        & (Join-Path $PSScriptRoot "lint-tokens.ps1") -QmlDir $fixture 6>&1 | Out-Null
+        if ($LASTEXITCODE -ne 1) { Write-Host "    lint accepted a hard-coded colour: $k" -ForegroundColor Yellow; $allColoursRejected = $false }
+    }
+    Set-Content -Path $bad -Value 'Rectangle { color: Theme.panel; border.color: "transparent" }'
+    & (Join-Path $PSScriptRoot "lint-tokens.ps1") -QmlDir $fixture 6>&1 | Out-Null
+    $tokensAccepted = ($LASTEXITCODE -eq 0)
+    Remove-Item $bad
+    Set-Content -Path (Join-Path (Join-Path $fixture "themes") "OneTheme.qml") -Value 'QtObject { property color background: "#05070d" }'
+    & (Join-Path $PSScriptRoot "lint-tokens.ps1") -QmlDir $fixture 6>&1 | Out-Null
+    $themesAccepted = ($LASTEXITCODE -eq 0)
+    # A token that ThemeSet.qml declares but Themes.tokenNames forgets is a finding.
+    Set-Content -Path (Join-Path (Join-Path $fixture "themes") "ThemeSet.qml") -Value "QtObject {`n    required property color background`n    required property color text`n}"
+    Set-Content -Path (Join-Path (Join-Path $fixture "themes") "Themes.qml") -Value "QtObject {`n    readonly property var tokenNames: [`"background`"]`n}"
+    & (Join-Path $PSScriptRoot "lint-tokens.ps1") -QmlDir $fixture 6>&1 | Out-Null
+    $listRejected = ($LASTEXITCODE -eq 1)
+    Set-Content -Path (Join-Path (Join-Path $fixture "themes") "Themes.qml") -Value "QtObject {`n    readonly property var tokenNames: [`"background`", `"text`"]`n}"
+    & (Join-Path $PSScriptRoot "lint-tokens.ps1") -QmlDir $fixture 6>&1 | Out-Null
+    $listAccepted = ($LASTEXITCODE -eq 0)
+    Remove-Item -Recurse -Force $fixture
+    # "themes" exempts only the directory directly under the scanned root: a root that merely has
+    # "themes" somewhere in its path (a checkout in a folder called themes) is still checked.
+    $fixture = Join-Path ([IO.Path]::GetTempPath()) ("ruya-lint-" + [guid]::NewGuid().ToString("N"))
+    $inner = Join-Path (Join-Path $fixture "themes") "app"
+    New-Item -ItemType Directory -Path $inner | Out-Null
+    Set-Content -Path (Join-Path $inner "Colour.qml") -Value 'Rectangle { color: "#336699" }'
+    & (Join-Path $PSScriptRoot "lint-tokens.ps1") -QmlDir $inner 6>&1 | Out-Null
+    $pathThemesRejected = ($LASTEXITCODE -eq 1)
+    Remove-Item -Recurse -Force $fixture
+    Record "token lint self-check (a root with 'themes' in its path is not exempt)" $pathThemesRejected
+    Record "token lint self-check (rejects a hard-coded colour: hex, name, Qt.rgba, Qt.hsla; accepts tokens, transparent and the theme sets)" ($allColoursRejected -and $tokensAccepted -and $themesAccepted)
+    Record "token lint self-check (ThemeSet.qml and Themes.tokenNames must agree)" ($listRejected -and $listAccepted)
+
     # Self-check: the lint must reject a type step without a weight, and accept one with it.
     $fixture = Join-Path ([IO.Path]::GetTempPath()) ("ruya-lint-" + [guid]::NewGuid().ToString("N"))
     New-Item -ItemType Directory -Path $fixture | Out-Null

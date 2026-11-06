@@ -5,13 +5,14 @@
 #include <QQmlEngine>
 #include <QSettings>
 #include <QString>
+#include <QStringList>
 #include <QTranslator>
 
 #include <memory>
 #include <optional>
 
 // Per-device settings (not per profile): reduced motion, effects quality tier, the
-// overscan-safe margin and the UI language (setting it installs the matching QTranslator and
+// overscan-safe margin, the colour theme and the UI language (setting it installs the matching QTranslator and
 // retranslates the QML engine, so the UI follows live). Persisted with QSettings (ruyaos/shell). With
 // RUYA_SETTINGS_EPHEMERAL=1 values live in memory only (tests).
 //
@@ -34,6 +35,10 @@ class DeviceSettings : public QObject
     Q_PROPERTY(QString storedEffectsQuality READ storedEffectsQuality NOTIFY effectsQualityChanged)
     // Safe-area margin as a fraction of the screen, 0.0 - 0.10.
     Q_PROPERTY(qreal overscan READ overscan WRITE setOverscan NOTIFY overscanChanged)
+    // Colour theme (04 §3.1, T-209): one of availableThemes, default "dreamglass". Stored per device.
+    // qml/themes/Themes.qml defines the sets; tst_theme.qml checks that the two lists agree.
+    Q_PROPERTY(QString theme READ theme WRITE setTheme NOTIFY themeChanged)
+    Q_PROPERTY(QStringList availableThemes READ availableThemes CONSTANT)
     // UI language: "en" | "tr". Chosen in first-boot setup or Settings -> System.
     // Default: the stored value, else the system locale (persistent mode), else "en"; ephemeral = "en".
     Q_PROPERTY(QString language READ language WRITE setLanguage NOTIFY languageChanged)
@@ -41,6 +46,8 @@ class DeviceSettings : public QObject
 public:
     // `persistent == false` keeps everything in memory.
     explicit DeviceSettings(bool persistent, QObject *parent = nullptr);
+    // Persistent, in an explicit ini file instead of the system store (tests: a temporary file).
+    explicit DeviceSettings(const QString &iniPath, QObject *parent = nullptr);
     ~DeviceSettings() override;
 
     static DeviceSettings *create(QQmlEngine *qmlEngine, QJSEngine *jsEngine);
@@ -51,6 +58,8 @@ public:
     bool thermalLimited() const { return m_thermalLimited; }
     qreal overscan() const { return m_overscan; }
     QString language() const { return m_language; }
+    QString theme() const { return m_theme; }
+    static QStringList availableThemes();
 
     // Invalid values are rejected (warning logged) and leave the old value.
     void setReducedMotion(bool value);
@@ -58,12 +67,14 @@ public:
     void setThermalLimited(bool limited);
     void setOverscan(qreal value);
     void setLanguage(const QString &value);
+    void setTheme(const QString &value);
 
     // Installs the translator for m_language and, when `retranslate`, refreshes the engine's bindings.
     void applyLanguage(bool retranslate);
 
     static bool isValidQuality(const QString &value);
     static bool isValidLanguage(const QString &value);
+    static bool isValidTheme(const QString &value);
 
 signals:
     void reducedMotionChanged();
@@ -71,8 +82,10 @@ signals:
     void thermalLimitedChanged();
     void overscanChanged();
     void languageChanged();
+    void themeChanged();
 
 private:
+    void init();   // reads the stored values (when there is a store) and the command-line overrides
     std::unique_ptr<QSettings> m_store; // null when ephemeral
     QPointer<QQmlEngine> m_engine;
     QTranslator m_translator;
@@ -80,6 +93,7 @@ private:
     QString m_quality = QStringLiteral("high");
     qreal m_overscan = 0.05;
     QString m_language = QStringLiteral("en");
+    QString m_theme = QStringLiteral("dreamglass");
     std::optional<bool> m_forcedMotion;
     std::optional<QString> m_forcedQuality;
     bool m_thermalLimited = false;

@@ -402,14 +402,14 @@ FocusScope {
                 gradient: Gradient {
                     orientation: Gradient.Horizontal
                     GradientStop { position: 0.0; color: Theme.heroScrim }
-                    GradientStop { position: 1.0; color: "transparent" }
+                    GradientStop { position: 1.0; color: Theme.heroScrimClear }
                 }
             }
             Rectangle {
                 anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
                 height: parent.height * 0.45
                 gradient: Gradient {
-                    GradientStop { position: 0.0; color: "transparent" }
+                    GradientStop { position: 0.0; color: Theme.artCaptionFadeClear }
                     GradientStop { position: 1.0; color: Theme.artCaptionFade }
                 }
             }

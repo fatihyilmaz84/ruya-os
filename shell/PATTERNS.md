@@ -25,6 +25,14 @@ Reusable settings rows. All extend `SettingControl` (a `FocusScope` with the lab
 
 A control changes its own value, then emits the signal; the owner writes the setting, resyncs the control, and keeps a `Binding` on it so external changes show (see `DisplayPane.qml`). `Sfx.navigateCount`/`selectCount`/`backCount` count cue requests so tests can check the sound path.
 
+## Colour themes (T-209)
+
+Colours live in `qml/themes/` and nowhere else: `ThemeSet.qml` (every themeable token as a `required property`), `Themes.qml` (the five sets and `tokenNames`), `Theme.qml` (the same names components always used, `readonly property color x: tok("x")`, blended during a switch). `scripts/lint-tokens.ps1` rejects a hex colour, a quoted colour name (`"transparent"` is fine), `Qt.rgba`, `Qt.hsla` and `Qt.hsva` outside `Theme.qml` and `qml/themes/`.
+- **New colour token:** a `required property color` in `ThemeSet.qml`, its name in `Themes.tokenNames`, a value in every set in `Themes.qml` (the compiler and the lint stop you if one is missing), a `tok("name")` property in `Theme.qml`, and a row in `tests/tst_theme_contrast.qml` for the surface it is drawn on.
+- **Text colour follows the surface.** A light theme (Daylight) turns `text` dark, so `Theme.text` is only for `background`, glass, `panel`, scrims, the hero and caption washes, toasts. On a fill of its own use the matching token (`onPrimary` on `primaryFill`; `text` on `dangerFill` is gated) and add the pair to the gate. Art placeholders take their lightness from `Theme.artTop()`/`artBottom()`.
+- **A white overlay is not a token of its own:** use `focusFill`, `selectedFill` or the key fills (they are dark on Daylight). The art effects `cardSheen`, `glarePeak` and `shimmerPeak` stay white (they sit on art).
+- **Switching** is `DeviceSettings.theme = key`; `Theme` cross-fades over `tintMs` and is immediate under reduced motion. A component never needs to know; if it computes a colour from a token, derive it in a binding (it re-evaluates on every blend step), as `Backdrop.qml` does with `Theme.backdropTop(tint)`.
+
 ## Modals from pages
 
 A page that needs a full-screen modal (PIN pad, `TextEntry`) declares it as `parent: page.overlay` (the shell's `modalLayer`) with `width/height` taken from that parent, not as a child of the page, so it covers the whole screen and sits above toasts. Save `Window.activeFocusItem` before opening and refocus it when the modal closes (see `ProfilesPane.qml`); `TextEntry` does this itself. `PinPad` has three modes: `open(profile)` verifies with `Profiles.switchTo`; `collect(prompt, confirm)` hands the PIN back through `collected(pin)` (and `cancelled()`), calling no service. Multi-step flows are small state machines in their own non-visual file (`ProfileAddFlow.qml`, `ChangePinFlow.qml`).
