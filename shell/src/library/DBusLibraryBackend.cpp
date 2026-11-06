@@ -77,13 +77,15 @@ DBusLibraryBackend::DBusLibraryBackend(QObject *parent)
 
 void DBusLibraryBackend::listItems()
 {
+    const quint64 request = beginListRequest();
     auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("ListItems"));
     auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
-    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this](QDBusPendingCallWatcher *w) {
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, request](QDBusPendingCallWatcher *w) {
         w->deleteLater();
         const QDBusMessage reply = w->reply();
         if (reply.type() != QDBusMessage::ReplyMessage || reply.arguments().isEmpty()) {
             qWarning("ruya-shell: Library1 ListItems failed: %s", qPrintable(reply.errorMessage()));
+            acceptList(request); // a failure is an outcome too: an older reply after it is stale
             return;
         }
         QList<LibraryItem> items;
@@ -92,7 +94,7 @@ void DBusLibraryBackend::listItems()
         while (!arg.atEnd())
             items.append(toItem(parseDict(arg)));
         arg.endArray();
-        emit itemsListed(items);
+        deliverList(request, items);
     });
 }
 

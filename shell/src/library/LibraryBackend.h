@@ -1,5 +1,7 @@
 #pragma once
 
+#include "RequestSequence.h"
+
 #include <QList>
 #include <QMap>
 #include <QObject>
@@ -53,4 +55,18 @@ signals:
     // The list changed in the service: the facade lists again.
     void itemsChanged();
     void rescanFinished();
+
+protected:
+    // Replies can arrive out of order: number each ListItems request when it is sent and report a
+    // reply only if no newer one was reported already (RequestSequence.h, T-181, T-191).
+    quint64 beginListRequest() { return m_listSeq.begin(); }
+    bool acceptList(quint64 request) { return m_listSeq.accept(request); }
+    void deliverList(quint64 request, const QList<LibraryItem> &items)
+    {
+        if (acceptList(request))
+            emit itemsListed(items);
+    }
+
+private:
+    RequestSequence m_listSeq;
 };

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "RequestSequence.h"
+
 #include <QObject>
 #include <QString>
 
@@ -44,4 +46,19 @@ signals:
     // method: "check" | "download" | "rollback" | "setChannel" | "setAutoRestart"; status: see the XML header
     // ("ok", "busy", "unavailable", "invalid", "forbidden", "failed").
     void requestFinished(const QString &method, const QString &status);
+
+protected:
+    // Replies can arrive out of order (a StatusChanged crosses a GetStatus reply): number each
+    // status request when it is sent and report a reply only if no newer one was reported already
+    // (RequestSequence.h, T-181, T-191).
+    quint64 beginStatusRequest() { return m_statusSeq.begin(); }
+    bool acceptStatus(quint64 request) { return m_statusSeq.accept(request); }
+    void deliverStatus(quint64 request, const UpdateStatus &status)
+    {
+        if (acceptStatus(request))
+            emit statusChanged(status);
+    }
+
+private:
+    RequestSequence m_statusSeq;
 };

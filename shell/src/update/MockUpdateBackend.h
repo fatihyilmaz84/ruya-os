@@ -19,6 +19,9 @@ public:
 
     bool isMock() const override { return true; }
     void refresh() override;
+    // Tests only: ask for the status, but deliver the reply (a snapshot of now) after ms.
+    void refreshDelayed(int ms) { publishAfter(ms); }
+    int pendingReplies() const { return m_pending; }
     void check() override;
     void download() override;
     void rollback() override;
@@ -47,12 +50,14 @@ private:
     bool isRunning() const;
     void finish(const QString &method, const QString &status);
     void publish();
+    void publishAfter(int ms);
     void step();
 
     UpdateStatus m_status;
     QTimer m_timer;
     int m_stepMs = 100;
     int m_checkTicks = 0;
+    int m_pending = 0; // status replies not delivered yet
     bool m_updateExists = true;
     bool m_failNext = false;
     int m_pauseAt = -1;

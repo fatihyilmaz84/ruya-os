@@ -1,5 +1,7 @@
 #pragma once
 
+#include "RequestSequence.h"
+
 #include <QList>
 #include <QObject>
 #include <QString>
@@ -51,4 +53,21 @@ signals:
     void deleteFinished(const QString &id, const QString &status, int attemptsLeft, int retryAfterSecs);
     void verifyAdminFinished(const QString &adminId, const QString &status, int attemptsLeft, int retryAfterSecs);
     void availabilityChanged(bool available);
+
+protected:
+    // Replies can arrive out of order (and a ProfilesChanged can cross a reply): number each list
+    // request when it is sent; only the newest outcome so far is reported (RequestSequence.h,
+    // T-181, T-191). The availability follows the same outcome as the list.
+    quint64 beginListRequest() { return m_listSeq.begin(); }
+    // True when this outcome is the newest so far (a failure counts, so an older success that
+    // arrives after a newer failure is dropped).
+    bool acceptList(quint64 request) { return m_listSeq.accept(request); }
+    void deliverList(quint64 request, const QList<ProfileInfo> &profiles)
+    {
+        if (acceptList(request))
+            emit listed(profiles);
+    }
+
+private:
+    RequestSequence m_listSeq;
 };

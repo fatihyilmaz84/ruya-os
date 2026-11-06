@@ -53,6 +53,10 @@ public:
     // Tests only, and only with the mock backend (otherwise a no-op that returns false):
     // "seeded" (the three default profiles) or "empty" (first boot).
     Q_INVOKABLE bool resetMockForTests(const QString &state);
+    // A list request whose reply (a snapshot of now) arrives after ms, and how many replies are
+    // still due. No-ops with the D-Bus backend.
+    Q_INVOKABLE void mockRefreshDelayed(int ms);
+    Q_INVOKABLE int mockPendingReplies() const;
 
 signals:
     void profilesChanged();

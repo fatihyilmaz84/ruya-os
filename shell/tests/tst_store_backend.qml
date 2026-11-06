@@ -28,6 +28,7 @@ Item {
             Store.mockReset()
             tryVerify(() => Store.catalogue.length === 12)
             tryVerify(() => Store.installed.length === 3)
+            tryVerify(() => Store.mockPendingReplies() === 0)   // the reset's own replies have landed
             finished.clear()
             reconciled.clear()
             host.jobsAtReconcile = []
@@ -194,6 +195,8 @@ Item {
         }
 
         // T-188: what the facade shows is replaced by the job table, also when it missed a JobFinished.
+        // Covers a finished job the shell does NOT track (mockForgetJobs untracks it since T-191): no
+        // verdict. The tracked variant is test_a_tracked_job_the_table_lists_as_finished_is_reported.
         function test_job_table_replaces_a_stale_entry() {
             const id = "org.example.Racer"
             Store.install(id)
@@ -221,6 +224,111 @@ Item {
             wait(50)
             compare(reconciled.count, 1, "the late reply was not reported")
             compare(Object.keys(Store.jobs).length, 0, "and did not bring the job back")
+        }
+
+        // T-191: the job table is a snapshot. A JobFinished that reached the shell before the reply
+        // must not be undone by the reply, which still lists the job as running.
+        function test_a_job_finished_before_the_table_reply_stays_finished() {
+            const id = "org.example.Racer"
+            Store.install(id)
+            tryVerify(() => Store.jobs[id] !== undefined, 2000, "progress arrived")
+            Store.mockListJobsDelayed(600)               // a snapshot in which Racer still runs
+            compare(Store.mockPendingJobLists(), 1)
+            tryCompare(finished, "count", 1)             // the JobFinished comes first
+            compare(finished.signalArguments[0][1], "ok")
+            tryVerify(() => Store.mockPendingJobLists() === 0, 3000)
+            tryCompare(reconciled, "count", 1)
+            compare(Object.keys(Store.jobs).length, 0, "the reply did not bring a finished job back")
+            compare(host.jobsAtReconcile.length, 0, "it was never shown as running after the reply")
+            compare(finished.count, 1)
+        }
+
+        // T-191: a newer read that fails ends the older one too: its reply is stale.
+        function test_an_old_job_table_after_a_failed_newer_one_is_dropped() {
+            const id = "org.example.Racer"
+            Store.install(id)
+            tryVerify(() => Store.jobs[id] !== undefined, 2000, "progress arrived")
+            Store.mockListJobsDelayed(400)               // an older snapshot in which Racer runs
+            Store.mockServiceLost()                      // the service restarted: Racer is gone
+            compare(Object.keys(Store.jobs).length, 0)
+            Store.mockListJobsFailing()                  // the newer read fails
+            tryVerify(() => Store.mockPendingJobLists() === 0, 3000)
+            compare(reconciled.count, 0, "the old table was not applied")
+            compare(Object.keys(Store.jobs).length, 0, "and did not bring the job back")
+        }
+
+        // T-191: a job the shell tracks that the table lists as finished, whose JobFinished never
+        // reached it, is reported (a page waiting for it would hang), not forgotten.
+        function test_a_tracked_job_the_table_lists_as_finished_is_reported() {
+            const id = "org.example.Racer"
+            Store.install(id)
+            tryVerify(() => Store.jobs[id] !== undefined, 2000, "progress arrived")
+            Store.mockEndJobsUnheard("network")          // it ended; the signal never came
+            compare(finished.count, 0)
+            Store.mockServiceRegained()                  // the table is read again
+            tryCompare(reconciled, "count", 1)
+            tryCompare(finished, "count", 1)
+            compare(finished.signalArguments[0][0], id)
+            compare(finished.signalArguments[0][1], "network")
+            compare(Object.keys(Store.jobs).length, 0)
+        }
+
+        // T-191: a lost job is corrected by its own id, not by the last job its app has in the table.
+        function test_a_lost_job_is_corrected_by_its_id() {
+            const id = "org.example.Racer"
+            Store.install(id)
+            tryVerify(() => Store.jobs[id] !== undefined, 2000, "progress arrived")
+            Store.mockServiceLost()
+            compare(finished.count, 1)
+            compare(finished.signalArguments[0][1], "failed")
+            Store.mockRecordFinishedJob(id, "remove", "failed")   // another client's job, later
+            Store.mockServiceRegained([id])              // Flatpak completed the install after all
+            tryCompare(finished, "count", 2)
+            compare(finished.signalArguments[1][0], id)
+            compare(finished.signalArguments[1][1], "ok", "the install, not the later remove")
+            tryVerify(() => isInstalled(id))
+        }
+
+        // T-191: once a later job of the app is reported, the lost one is history.
+        function test_a_lost_job_is_forgotten_when_the_app_gets_a_new_one() {
+            const id = "org.example.Racer"
+            Store.install(id)
+            tryVerify(() => Store.jobs[id] !== undefined, 2000, "progress arrived")
+            Store.mockServiceLost()
+            compare(finished.count, 1)
+            Store.install(id)                            // the new service runs a new job
+            tryVerify(() => Store.jobs[id] !== undefined, 2000, "the new job reports progress")
+            Store.mockPauseJobs(true)
+            Store.mockServiceRegained([id])              // the table finds the lost install completed
+            tryCompare(reconciled, "count", 1)
+            compare(finished.count, 1, "no verdict for the old job while a new one runs")
+            verify(Store.jobs[id] !== undefined, "the new job is the one shown")
+        }
+
+        // T-191: the installed list is a snapshot too (ruya-store answers concurrently, and
+        // InstalledChanged can come before the reply of the call that caused it).
+        function test_a_late_installed_list_is_dropped() {
+            verify(isInstalled("org.example.Puzzle"))
+            Store.mockInstalledDelayed(400)              // a snapshot with Puzzle installed
+            compare(Store.mockPendingReplies(), 1)
+            Store.uninstall("org.example.Puzzle", false)
+            tryCompare(finished, "count", 1)
+            tryVerify(() => !isInstalled("org.example.Puzzle"))
+            tryVerify(() => Store.mockPendingReplies() === 0, 3000)
+            verify(!isInstalled("org.example.Puzzle"), "the late snapshot was dropped")
+            compare(Store.installed.length, 2)
+        }
+
+        // T-191: the same for a catalogue read that is overtaken by a newer one.
+        function test_a_late_catalogue_is_dropped() {
+            Store.mockCatalogueDelayed(400)              // a snapshot with Puzzle installed
+            compare(Store.mockPendingReplies(), 1)
+            Store.uninstall("org.example.Puzzle", false)
+            tryCompare(finished, "count", 1)
+            tryVerify(() => Store.app("org.example.Puzzle").installed === false)
+            Store.search("")                             // a newer read of the whole catalogue
+            tryVerify(() => Store.mockPendingReplies() === 0, 3000)
+            compare(Store.app("org.example.Puzzle").installed, false, "the late snapshot was dropped")
         }
 
         function test_install_failure() {

@@ -68,8 +68,18 @@ bool MockUpdateBackend::isRunning() const
 // Asynchronous like the real service, so QML behaves the same with either backend.
 void MockUpdateBackend::publish()
 {
+    publishAfter(0);
+}
+
+void MockUpdateBackend::publishAfter(int ms)
+{
+    const quint64 request = beginStatusRequest();
     const UpdateStatus copy = m_status;
-    QTimer::singleShot(0, this, [this, copy] { emit statusChanged(copy); });
+    ++m_pending;
+    QTimer::singleShot(ms, this, [this, request, copy] {
+        --m_pending;
+        deliverStatus(request, copy);
+    });
 }
 
 void MockUpdateBackend::finish(const QString &method, const QString &status)

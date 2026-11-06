@@ -76,10 +76,25 @@ MockProfilesBackend::Entry *MockProfilesBackend::find(const QString &id)
 
 void MockProfilesBackend::refresh()
 {
+    refreshAfter(0);
+}
+
+void MockProfilesBackend::refreshDelayed(int ms)
+{
+    refreshAfter(ms);
+}
+
+void MockProfilesBackend::refreshAfter(int ms)
+{
+    const quint64 request = beginListRequest();
     QList<ProfileInfo> list;
     for (const Entry &e : std::as_const(m_entries))
         list.append(e.info);
-    QTimer::singleShot(0, this, [this, list] {
+    ++m_pending;
+    QTimer::singleShot(ms, this, [this, request, list] {
+        --m_pending;
+        if (!acceptList(request))
+            return;
         emit availabilityChanged(true);
         emit listed(list);
         emit activeChanged(m_active);
@@ -91,7 +106,8 @@ void MockProfilesBackend::publishList()
     QList<ProfileInfo> list;
     for (const Entry &e : std::as_const(m_entries))
         list.append(e.info);
-    emit listed(list);
+    // The service says ProfilesChanged and the shell lists again: the newest list so far.
+    deliverList(beginListRequest(), list);
 }
 
 void MockProfilesBackend::resetForTests(bool empty)

@@ -63,7 +63,17 @@ void MockLibraryBackend::reset(const QString &scenario)
 
 void MockLibraryBackend::listItems()
 {
-    QTimer::singleShot(0, this, [this] { emit itemsListed(m_items); });
+    listItemsDelayed(0);
+}
+
+void MockLibraryBackend::listItemsDelayed(int ms)
+{
+    const quint64 request = beginListRequest();
+    ++m_pending;
+    QTimer::singleShot(ms, this, [this, request, snapshot = m_items] {
+        --m_pending;
+        deliverList(request, snapshot);
+    });
 }
 
 void MockLibraryBackend::rescan()

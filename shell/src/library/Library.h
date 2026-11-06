@@ -52,6 +52,10 @@ public:
     // Tests only, and only with the mock backend (otherwise a no-op). scenario: "" (the default library), "empty" (nothing installed) or "unplayed" (the default
     // items, none with a last played time).
     Q_INVOKABLE void resetMockForTests(const QString &scenario);
+    // A list request whose reply (a snapshot of now) arrives after ms, and how many replies are
+    // still due. No-ops with the D-Bus backend.
+    Q_INVOKABLE void mockListDelayed(int ms);
+    Q_INVOKABLE int mockPendingReplies() const;
 
 signals:
     void itemsChanged();

@@ -46,7 +46,7 @@ qt_add_qml_module(ruyashell
         src/storage/MockStorageBackend.h src/storage/MockStorageBackend.cpp
         src/storage/DBusStorageBackend.h src/storage/DBusStorageBackend.cpp
         src/storage/Storage.h src/storage/Storage.cpp
-        src/store/StoreBackend.h
+        src/store/StoreBackend.h src/store/JobBook.h src/store/JobBook.cpp
         src/store/MockStoreBackend.h src/store/MockStoreBackend.cpp
         src/store/DBusStoreBackend.h src/store/DBusStoreBackend.cpp
         src/store/Store.h src/store/Store.cpp

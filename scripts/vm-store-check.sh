@@ -255,6 +255,10 @@ check)
     grep -a -q "store-probe: jobFinished $app failed" "$work/probe2.log" && ok "the shell ended the cut-short install as failed" || bad "the shell never ended the job of the old service"
     grep -a -q "store-probe: jobFinished $app ok" "$work/probe2.log" && bad "the install finished ok before the restart; the test proved nothing" || ok "no ok for that install"
     sleep 4
+    # T-191: the job table the shell reads once the service is back lists the same job as failed
+    # (interrupted); the shell has said so already and must not say it twice.
+    failed_n="$(grep -a -c "store-probe: jobFinished $app failed" "$work/probe2.log")"
+    [ "$failed_n" = "1" ] && ok "the shell reported the cut-short install once; the job table did not repeat it" || bad "the shell reported the cut-short install $failed_n times"
     grep -a " jobs=" "$work/probe2.log" | tail -1 | grep -q 'jobs={}' && ok "the shell's job list is empty after the restart" || bad "the shell still shows a job of the old service"
     # Once at its start, once more when the restarted service took the name (ListJobs, T-188).
     [ "$(grep -a -c 'store-probe: jobsReconciled' "$work/probe2.log")" -ge 2 ] && ok "the shell read the restarted service's job table" || bad "the shell never applied the job table after the restart"

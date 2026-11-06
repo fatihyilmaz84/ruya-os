@@ -121,3 +121,15 @@ bool Profiles::resetMockForTests(const QString &state)
     mock->resetForTests(state == QLatin1String("empty"));
     return true;
 }
+
+void Profiles::mockRefreshDelayed(int ms)
+{
+    if (auto *mock = qobject_cast<MockProfilesBackend *>(m_backend.get()))
+        mock->refreshDelayed(ms);
+}
+
+int Profiles::mockPendingReplies() const
+{
+    auto *mock = qobject_cast<MockProfilesBackend *>(m_backend.get());
+    return mock ? mock->pendingReplies() : 0;
+}

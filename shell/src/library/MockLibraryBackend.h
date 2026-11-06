@@ -13,6 +13,9 @@ public:
 
     bool isMock() const override { return true; }
     void listItems() override;
+    // Tests only: ask for the list, but deliver the reply (a snapshot of now) after ms.
+    void listItemsDelayed(int ms);
+    int pendingReplies() const { return m_pending; }
     void rescan() override;
 
     // Tests only.
@@ -20,4 +23,5 @@ public:
 
 private:
     QList<LibraryItem> m_items;
+    int m_pending = 0; // list replies not delivered yet
 };
