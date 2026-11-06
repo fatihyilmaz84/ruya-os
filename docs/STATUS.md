@@ -34,6 +34,10 @@ Open work only (todo, in-progress, blocked), in the recommended order; when NEXT
 | [T-203](tasks/T-203-pair-a-controller-without-a-keyboard.md) | Pair a controller with no keyboard: pairing window + agent, wizard step, picker hint; reconnect at the login screen | todo | — |
 | [T-204](tasks/T-204-dreamglass-materials-and-motion.md) | Dreamglass materials and motion v2 (04 §3.8): glass layers, grain, shadows, card focus glare, easing, shimmer | todo | — |
 | [T-205](tasks/T-205-gliding-highlight-and-liquid-pills.md) | **[lead]** Gliding highlight with velocity stretch, liquid-glass pills (High tier) | todo | T-204 |
+| [T-206](tasks/T-206-settings-gear-icon-active-state.md) | The Settings gear looks wrong when active (filled glyph at opsz 40): fix and test | todo | — |
+| [T-207](tasks/T-207-faster-bluetooth-controller-reconnect.md) | **[lead]** Controllers reconnect faster after Bluetooth off/on: measure on the Dell, tune (FastConnectable, reconnect policy, autosuspend) | todo | — |
+| [T-208](tasks/T-208-wallpaper-support.md) | Wallpapers: bundled set and from a USB drive, shared blur, Settings picker | todo | — |
+| [T-209](tasks/T-209-ui-colour-themes.md) | UI colour themes (Dreamglass, Midnight, Aurora, Ember, Daylight), runtime switch, contrast gate | todo | — |
 | [T-164](tasks/T-164-per-profile-wayland-sockets.md) | **[lead]** Per-profile Wayland sockets: a profile's app appears in the shell | todo | T-162 |
 | [T-165](tasks/T-165-profile-switch-freezes-apps.md) | Profile switch and sign-out freeze the profile's apps | todo | T-164 |
 | [T-147](tasks/T-147-fullscreen-app-flow.md) | Full-screen apps: launch splash, quick menu, return, close | todo | T-164 |
@@ -62,6 +66,7 @@ Follow-ups and debt for the next planner, one line each: `- (source) what, and w
 - (T-195) The slimmed image is not smaller on disk or in the update download: the removals are a layer on the base, which bootc keeps. Rechunking (per-package layers) or flattening is an owner-level trade-off (update size). Also: ffmpeg links libsmbclient (samba libs stay), `fwupd` has no UI (decide), the image manifest check is manual (add to the CI image job).
 - (T-195 review) `50-slim.sh`: compare the number of parsed dnf transaction lines with dnf's "Removing: N packages" summary and fail on a mismatch (a reformatted dnf line would skip the protected check; the closure rule is the backstop); `check-image-manifest.sh` should also check the explicit install lists of `20-base.sh`/`30-codecs.sh`, not only `dnf leaves`; `irqbalance` was removed (performance call, lead agreed for single-socket machines).
 - (owner, 2026-11-06, design) The material/motion study of a GPL-3.0 C TV app is recorded in 04 §3.8 as decisions (no code taken). Open: compare its artwork-colour extraction (19 hue bins, vibrant/dark/light/muted swatches scored by lightness and saturation) with our hero tint extraction; the canvas boards need the new glass layers and shadows when T-204 lands.
+- (T-208/T-209) Per-profile wallpaper and theme need profile preferences from a root service (profile homes are 0700, the shell cannot read them): a `ruya-profiles` preferences field. An accent/theme from the wallpaper or the running game: compare the study's extraction (04 §3.8). A user-editable theme or accent picker.
 - (0.0.40 try-out) The VM clock shows UTC: there is no time-zone setting yet (wizard or System pane); plan it with the OOBE/installer work.
 
 ## Blocked (need something this host doesn't have)
