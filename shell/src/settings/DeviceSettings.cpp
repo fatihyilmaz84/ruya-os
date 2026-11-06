@@ -22,6 +22,9 @@ DeviceSettings::DeviceSettings(bool persistent, QObject *parent)
         const qreal overscan = m_store->value(QStringLiteral("display/overscan"), m_overscan).toReal(&ok);
         if (ok && overscan >= 0.0 && overscan <= kMaxOverscan)
             m_overscan = overscan;
+        const QString theme = m_store->value(QStringLiteral("display/theme"), m_theme).toString();
+        if (isValidTheme(theme))
+            m_theme = theme;
         const QString language = m_store->value(QStringLiteral("general/language")).toString();
         if (isValidLanguage(language)) {
             m_language = language;
@@ -82,6 +85,31 @@ bool DeviceSettings::isValidQuality(const QString &value)
 bool DeviceSettings::isValidLanguage(const QString &value)
 {
     return value == QLatin1String("en") || value == QLatin1String("tr");
+}
+
+QStringList DeviceSettings::availableThemes()
+{
+    return {QStringLiteral("dreamglass"), QStringLiteral("midnight"), QStringLiteral("aurora"),
+            QStringLiteral("ember"), QStringLiteral("daylight")};
+}
+
+bool DeviceSettings::isValidTheme(const QString &value)
+{
+    return availableThemes().contains(value);
+}
+
+void DeviceSettings::setTheme(const QString &value)
+{
+    if (!isValidTheme(value)) {
+        qWarning("ruya-shell: rejecting invalid theme '%s'", qPrintable(value));
+        return;
+    }
+    if (value == m_theme)
+        return;
+    m_theme = value;
+    if (m_store)
+        m_store->setValue(QStringLiteral("display/theme"), value);
+    emit themeChanged();
 }
 
 bool DeviceSettings::reducedMotion() const

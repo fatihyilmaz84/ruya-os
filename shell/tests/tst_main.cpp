@@ -1,6 +1,10 @@
+#include "DeviceSettings.h"
+
 #include <QFontDatabase>
 #include <QGuiApplication>
 #include <QPointer>
+#include <QSettings>
+#include <QTemporaryDir>
 #include <QQmlContext>
 #include <QQmlEngine>
 #include <QQuickWindow>
@@ -67,6 +71,42 @@ private:
     QPointer<QQuickWindow> m_last;
 };
 
+// DeviceSettings.theme survives a restart (T-209): a second instance on the same store reads what
+// the first wrote, and a stored value that is not a theme falls back to the default. Runs against an
+// ini file in a temporary directory, never the real store. Returns "" or what went wrong; the
+// QML test tst_themes.qml asserts it (`themePersistence`).
+static QString checkThemePersistence()
+{
+    QTemporaryDir dir;
+    if (!dir.isValid())
+        return QStringLiteral("no temporary directory");
+    QSettings::setDefaultFormat(QSettings::IniFormat);
+    QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, dir.path());
+    QString problem;
+    {
+        DeviceSettings first(true);
+        if (first.theme() != QLatin1String("dreamglass"))
+            problem = QStringLiteral("the default theme is not dreamglass: ") + first.theme();
+        first.setTheme(QStringLiteral("ember"));
+    }
+    {
+        DeviceSettings second(true);
+        if (second.theme() != QLatin1String("ember"))
+            problem += QStringLiteral(" a restart lost the theme: ") + second.theme();
+    }
+    {
+        QSettings raw(QStringLiteral("ruyaos"), QStringLiteral("shell"));
+        raw.setValue(QStringLiteral("display/theme"), QStringLiteral("nonsense"));
+    }
+    {
+        DeviceSettings third(true);
+        if (third.theme() != QLatin1String("dreamglass"))
+            problem += QStringLiteral(" a stored non-theme was accepted: ") + third.theme();
+    }
+    QSettings::setDefaultFormat(QSettings::NativeFormat);
+    return problem.trimmed();
+}
+
 class Setup : public QObject
 {
     Q_OBJECT
@@ -105,6 +145,8 @@ public slots:
             QGuiApplication::setFont(QFont(QStringLiteral("Inter")));
         }
         // Set RUYA_SHOTS_DIR to have the screenshot test save PNGs there.
+        static const QString persistence = checkThemePersistence();
+        engine->rootContext()->setContextProperty(QStringLiteral("themePersistence"), persistence);
         engine->rootContext()->setContextProperty(QStringLiteral("windowGuard"), new WindowGuard(engine));
         engine->rootContext()->setContextProperty(QStringLiteral("shotsDir"),
                                                   qEnvironmentVariable("RUYA_SHOTS_DIR"));

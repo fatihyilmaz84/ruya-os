@@ -175,8 +175,10 @@ Item {
             verify(find("rowReducedMotion").activeFocus)
             keyClick(Qt.Key_Down)
             verify(find("rowOverscan").activeFocus)
+            keyClick(Qt.Key_Down)                        // the Theme row (T-209) is the last
+            verify(find("rowTheme").activeFocus)
             keyClick(Qt.Key_Down)                        // clamped at the last row
-            verify(find("rowOverscan").activeFocus)
+            verify(find("rowTheme").activeFocus)
             verify(find("homePlay").activeFocus === false)
         }
 

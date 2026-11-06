@@ -251,7 +251,7 @@
 <context>
     <name>ArtCard</name>
     <message>
-        <location filename="../qml/ArtCard.qml" line="+19"/>
+        <location filename="../qml/ArtCard.qml" line="+20"/>
         <source>Running</source>
         <translation>Running</translation>
     </message>
@@ -450,6 +450,11 @@
         <location line="+12"/>
         <source>Screen edge</source>
         <translation>Screen edge</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Theme</source>
+        <translation>Theme</translation>
     </message>
 </context>
 <context>
@@ -1286,12 +1291,12 @@
         <translation>Audio output: %1</translation>
     </message>
     <message>
-        <location line="+688"/>
+        <location line="+705"/>
         <source>Power</source>
         <translation>Power</translation>
     </message>
     <message>
-        <location line="-680"/>
+        <location line="-697"/>
         <source>Update ready. Restart to finish.</source>
         <translation>Update ready. Restart to finish.</translation>
     </message>
@@ -1306,7 +1311,7 @@
         <translation>%1 stopped unexpectedly</translation>
     </message>
     <message>
-        <location line="+112"/>
+        <location line="+113"/>
         <source>Controller battery %1%</source>
         <translation>Controller battery %1%</translation>
     </message>
@@ -1369,7 +1374,7 @@
         <translation>Sections</translation>
     </message>
     <message>
-        <location line="+63"/>
+        <location line="+79"/>
         <location line="+8"/>
         <source>System</source>
         <translation>System</translation>
@@ -1385,8 +1390,8 @@
         <translation>Switch profile</translation>
     </message>
     <message>
-        <location line="-90"/>
-        <location line="+92"/>
+        <location line="-106"/>
+        <location line="+108"/>
         <source>Close</source>
         <translation>Close</translation>
     </message>
@@ -1406,8 +1411,8 @@
         <translation>Power off</translation>
     </message>
     <message>
-        <location line="-98"/>
-        <location line="+99"/>
+        <location line="-114"/>
+        <location line="+115"/>
         <source>Back</source>
         <translation>Back</translation>
     </message>
@@ -1521,12 +1526,12 @@
     <message>
         <location line="+1"/>
         <location line="+136"/>
-        <location line="+39"/>
+        <location line="+56"/>
         <source>Installed</source>
         <translation>Installed</translation>
     </message>
     <message>
-        <location line="-151"/>
+        <location line="-168"/>
         <source>Official</source>
         <translation>Official</translation>
     </message>
@@ -1542,7 +1547,7 @@
     </message>
     <message>
         <location line="+111"/>
-        <location line="+39"/>
+        <location line="+56"/>
         <source>Update available</source>
         <translation>Update available</translation>
     </message>
@@ -1784,6 +1789,34 @@
         <location line="+12"/>
         <source>Shift</source>
         <translation>Shift</translation>
+    </message>
+</context>
+<context>
+    <name>Themes</name>
+    <message>
+        <location filename="../qml/themes/Themes.qml" line="+50"/>
+        <source>Dreamglass</source>
+        <translation>Dreamglass</translation>
+    </message>
+    <message>
+        <location line="+51"/>
+        <source>Midnight</source>
+        <translation>Midnight</translation>
+    </message>
+    <message>
+        <location line="+51"/>
+        <source>Aurora</source>
+        <translation>Aurora</translation>
+    </message>
+    <message>
+        <location line="+51"/>
+        <source>Ember</source>
+        <translation>Ember</translation>
+    </message>
+    <message>
+        <location line="+51"/>
+        <source>Daylight</source>
+        <translation>Daylight</translation>
     </message>
 </context>
 <context>

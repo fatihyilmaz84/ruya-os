@@ -251,7 +251,7 @@
 <context>
     <name>ArtCard</name>
     <message>
-        <location filename="../qml/ArtCard.qml" line="+19"/>
+        <location filename="../qml/ArtCard.qml" line="+20"/>
         <source>Running</source>
         <translation>Çalışıyor</translation>
     </message>
@@ -450,6 +450,11 @@
         <location line="+12"/>
         <source>Screen edge</source>
         <translation>Ekran kenarı</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Theme</source>
+        <translation>Tema</translation>
     </message>
 </context>
 <context>
@@ -1284,12 +1289,12 @@
         <translation>Ses çıkışı: %1</translation>
     </message>
     <message>
-        <location line="+688"/>
+        <location line="+705"/>
         <source>Power</source>
         <translation>Güç</translation>
     </message>
     <message>
-        <location line="-680"/>
+        <location line="-697"/>
         <source>Update ready. Restart to finish.</source>
         <translation>Güncelleme hazır. Bitirmek için yeniden başlat.</translation>
     </message>
@@ -1304,7 +1309,7 @@
         <translation>%1 beklenmedik şekilde durdu</translation>
     </message>
     <message>
-        <location line="+112"/>
+        <location line="+113"/>
         <source>Controller battery %1%</source>
         <translation>Kumanda pili %1%</translation>
     </message>
@@ -1367,7 +1372,7 @@
         <translation>Bölümler</translation>
     </message>
     <message>
-        <location line="+63"/>
+        <location line="+79"/>
         <location line="+8"/>
         <source>System</source>
         <translation>Sistem</translation>
@@ -1383,8 +1388,8 @@
         <translation>Profil değiştir</translation>
     </message>
     <message>
-        <location line="-90"/>
-        <location line="+92"/>
+        <location line="-106"/>
+        <location line="+108"/>
         <source>Close</source>
         <translation>Kapat</translation>
     </message>
@@ -1404,8 +1409,8 @@
         <translation>Kapat</translation>
     </message>
     <message>
-        <location line="-98"/>
-        <location line="+99"/>
+        <location line="-114"/>
+        <location line="+115"/>
         <source>Back</source>
         <translation>Geri</translation>
     </message>
@@ -1519,12 +1524,12 @@
     <message>
         <location line="+1"/>
         <location line="+136"/>
-        <location line="+39"/>
+        <location line="+56"/>
         <source>Installed</source>
         <translation>Kurulu</translation>
     </message>
     <message>
-        <location line="-151"/>
+        <location line="-168"/>
         <source>Official</source>
         <translation>Resmi</translation>
     </message>
@@ -1540,7 +1545,7 @@
     </message>
     <message>
         <location line="+111"/>
-        <location line="+39"/>
+        <location line="+56"/>
         <source>Update available</source>
         <translation>Güncelleme var</translation>
     </message>
@@ -1782,6 +1787,34 @@
         <location line="+12"/>
         <source>Shift</source>
         <translation>Shift</translation>
+    </message>
+</context>
+<context>
+    <name>Themes</name>
+    <message>
+        <location filename="../qml/themes/Themes.qml" line="+50"/>
+        <source>Dreamglass</source>
+        <translation>Dreamglass</translation>
+    </message>
+    <message>
+        <location line="+51"/>
+        <source>Midnight</source>
+        <translation>Gece yarısı</translation>
+    </message>
+    <message>
+        <location line="+51"/>
+        <source>Aurora</source>
+        <translation>Aurora</translation>
+    </message>
+    <message>
+        <location line="+51"/>
+        <source>Ember</source>
+        <translation>Köz</translation>
+    </message>
+    <message>
+        <location line="+51"/>
+        <source>Daylight</source>
+        <translation>Gün ışığı</translation>
     </message>
 </context>
 <context>
