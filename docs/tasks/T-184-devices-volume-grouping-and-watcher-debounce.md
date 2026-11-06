@@ -22,7 +22,7 @@ A stick with two partitions shows one "volume added" toast, not two. And the Pip
 ## Acceptance criteria
 - [ ] Rust or QML test: two `VolumeAdded` for one drive give one toast; two different drives give two (fails without the grouping).
 - [ ] Rust test: a burst of PipeWire events yields at most N refreshes in the window the debounce defines.
-- [ ] VM (lead run): `vm-storage-check.sh` two-partition and unsupported cases. Outcome: `Verified: host (vm pending: vm-storage-check)`.
+- [ ] VM (lead run): `vm-storage-check.sh` two-partition and unsupported cases. Outcome: `Verified: vm (lead, image `0.0.42-lead`, 2026-11-06): `vm-storage-check.ps1` STORAGE CHECKS PASSED (98 PASS, 0 FAIL), including the three-partition stick (one non-empty drive value for all three, exFAT mounted, ext2 listed as unknown and not mounted) and the not-the-same-drive check; `vm-devices-check.sh check` 57 PASS with the PipeWire watcher change (needs `smoke-test.ps1 -Audio`). Earlier: host`.
 - [ ] `.\scripts\dev.ps1 test` ALL GREEN.
 
 ## Verification

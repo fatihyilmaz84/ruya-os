@@ -20,7 +20,7 @@ Two things the 0.0.40 try-out and the T-163 review found in `ruya-store`: a Stor
 ## Acceptance criteria
 - [ ] Rust tests: an appstream snippet with both elements gives one developer name (fails if either `push_str` is restored); with only one of the two it gives that one.
 - [ ] A Rust test (fake installed-state source, as the crate already fakes Flatpak) shows: installed, then removed outside the Store, then `Install` is accepted instead of `already-installed`.
-- [ ] VM (lead run): extend `scripts/vm-store-check.sh` with: install an app, `flatpak uninstall` it, Install again is accepted. Outcome says `Verified: host (vm pending: vm-store-check.sh)`.
+- [ ] VM (lead run): extend `scripts/vm-store-check.sh` with: install an app, `flatpak uninstall` it, Install again is accepted. Outcome says `Verified: vm (lead, image `0.0.42-lead`, 2026-11-06): `vm-store-check.sh check` 67 PASS, 0 FAIL, including the new section (an app removed with `flatpak uninstall` can be installed again: `ss "ok" "job-5"`). Earlier: host`.
 - [ ] `.\scripts\dev.ps1 test` ALL GREEN.
 
 ## Verification

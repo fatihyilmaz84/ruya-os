@@ -22,7 +22,7 @@ If `ruya-store` restarts (crash, update) while an install is running, the shell 
 - [ ] Rust tests for `ListJobs` and the post-restart mapping (running becomes `failed`/`interrupted`, or `installed` when the app is present); revert check noted.
 - [ ] `tst_store_backend.qml`/`tst_store_ui.qml`: after a simulated service restart (name owner lost and regained) the job model matches `ListJobs`, not the stale list.
 - [ ] Contract, mock, D-Bus client and service agree (names, argument order, state strings).
-- [ ] VM (lead run): extend `scripts/vm-store-check.sh`'s restart-mid-install step to assert `ListJobs` after the restart. Outcome: `Verified: host (vm pending: vm-store-check.sh)`.
+- [ ] VM (lead run): extend `scripts/vm-store-check.sh`'s restart-mid-install step to assert `ListJobs` after the restart. Outcome: `Verified: vm (lead, image `0.0.42-lead`, 2026-11-06): `vm-store-check.sh check` 67 PASS, 0 FAIL: after the restart the shell read the job table, ListJobs listed no running or queued job, the cut-short install is settled (`ok`, Flatpak had finished it), `/var/lib/ruya-store/jobs` is kept, job names continue (`job-4` follows `job-3`). Earlier: host`.
 - [ ] `.\scripts\dev.ps1 test` ALL GREEN.
 
 ## Verification

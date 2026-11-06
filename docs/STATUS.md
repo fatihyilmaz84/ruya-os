@@ -35,7 +35,7 @@ Open work only (todo, in-progress, blocked), in the recommended order; when NEXT
 | [T-147](tasks/T-147-fullscreen-app-flow.md) | Full-screen apps: launch splash, quick menu, return, close | todo | T-164 |
 | [T-166](tasks/T-166-suspend-under-eglfs.md) | **[lead]** Suspend and resume with the shell on KMS (eglfs) | todo | — |
 
-**VM queue** (done on the host, VM check pending; the lead runs them with one image build): T-182 and T-188 (`vm-store-check.sh`: outside removal, restart ListJobs), T-184 (`vm-storage-check.ps1`: three-partition stick), T-183 (`vm-library-check.sh`, update step). Last verified: T-173, T-177 on 0.0.37 (2026-11-04).
+**VM queue** (done on the host, VM check pending; the lead runs them with one image build): empty (T-182, T-183, T-184, T-188 verified 2026-11-06 on `0.0.42-lead`).
 
 ## Inbox
 
@@ -68,6 +68,8 @@ Follow-ups and debt for the next planner, one line each: `- (source) what, and w
 
 One entry per session, at most 700 characters (`lint-board.ps1`): date · model · tasks · what happened · numbers · follow-ups. Detail belongs in the task Outcome.
 
+- 2026-11-05 · Sonnet 5.5 · Lead (build loop from `4c0e713`: T-178..T-188 merged, 11 tasks; 6 CHANGES_REQUESTED, T-187 lead-read) · `test` 381 QML + 30 skips. VM `0.0.42-lead`: smoke, devices 57, store 67, library, storage 98: all PASS (devices needs `-Audio`). Planned T-178..T-194 (T-189..T-194 not dispatched). Owner: media and streaming apps out of the first MVP; blur and shadows stay the default; no new tasks after those in flight. Process: builders run dev.ps1 in their worktree; VM scripts parse JSON, not key order.
+
 - 2026-11-04 · Opus 5.5 · Lead (build loop; from `2c134ce`: T-167, T-168, T-136, T-158, T-137, T-169, T-163, T-160, T-171, T-172, T-170, T-144, T-175, T-176, T-161, T-173, T-145, T-177, T-174 merged after `ruya-reviewer`, 10 CHANGES_REQUESTED) · `test` 346 QML + 28 skips. VM `0.0.32/.33/.37` (lead), `.34/.36/.38/.39` (builders): update drill + idle reboot, store, devices, BlueZ, UPower, udisks2 all PASS. Lead fixes: drill, store and Bluetooth stop-scan, polkit deny-by-default (review). Owner: Inter download OK. Process: devkitPro git/cmake/ssh, per-checkout log, lane counts to merge.
 
 - 2026-11-04 · Opus 5.5 · Lead (review `9b77857..4bd0c66`: T-155, T-157, T-130 diff; T-159 skimmed) · `test` ALL GREEN (267 QML + 21 skips, 242 Rust), `shots` 56, CI green at `945a60f` (one shell flake at `18a342a` → T-167); 0 review findings. Disks full twice: WSL disk grew 7 → 29 GB per build; `free-space.ps1` + `wsl --manage --compact`. Owner: builder agents in worktrees (2 lanes), Opus review before merge, lead-only STATUS, image builds only in image tasks (VM queue). Planned T-162..T-168. Paused by the owner mid-loop: see LEAD-NOTES.
@@ -75,5 +77,3 @@ One entry per session, at most 700 characters (`lint-board.ps1`): date · model 
 - 2026-11-04 · Sonnet 5.5 · T-159 · `ruya-update` announces the automatic restart (`restart_at`, 120 s grace in `Schedule::restart_step`; input, setting off or nothing staged calls it off) and retries a failed scheduled download after an hour (manual ones never). Shell: sticky warning toast (`Notifications.showSticky`), every press reported while pending; Turkish. Build fix in `99-cleanup.sh` (kernel 7.2.15 leftovers in /boot and /var/lib/rpm-state; `0.0.29-t159a` passed the lint). `test` ALL GREEN (271 QML + 22 skips, 70 Rust in the crate), `shots` 57 reviewed. VM PENDING: lead runs `vm-update-check.sh reboot`. Inbox +2.
 
 - 2026-11-03 · Sonnet 5.5 · T-157 · Material Symbols Rounded subset (3 icons, two static cuts, ~2 KB each) via `scripts/subset-icons.sh` (pinned commit, SHA-256), `Icon.qml` + `Theme` icon tokens, `lint-icons.ps1`; the Settings pill and volume OSD use it; licence in `/usr/share/licenses/ruyaos/`. `test` ALL GREEN (267 QML + 21 skips), `shots` reviewed. VM `0.0.28-t157`: `RUYA_BOOT_OK`, licence present, gear drawn. Test host loads fonts in `qmlEngineAvailable` (Setup precedes QGuiApplication). Inbox +2. Lead review due after 2-3 more tasks.
-
-- 2026-11-02 · Sonnet 5.5 · T-155 · Accept pulse moved from `Tile` into `ArtCard.pulse()` (the art shrinks to `pulseScale`, so no clash with the focus scale), run on Accept in the Home Recent row (`playRecent`) and the Games grid (`acceptCurrent`); `Tile.qml` deleted. Reduced-motion test retargeted to `ArtCard`; new Accept tests in `tst_motion` (Recent, plus launch still happens under reduced motion) and `tst_games`. `test` ALL GREEN (258 QML + 21 skips); no screenshot change. Lead review due after 2-4 more tasks.
