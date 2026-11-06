@@ -1,5 +1,5 @@
-//! org.ruyaos.Devices1.Audio, .Network, .Bluetooth, .Storage and .Batteries on D-Bus. Thin adapter: the rules live in
-//! `audio.rs`, `network.rs`, `bluetooth.rs`, `storage.rs` and `battery.rs`.
+//! org.ruyaos.Devices1.Audio, .Network, .Bluetooth, .Storage, .Batteries and .Thermal on D-Bus. Thin adapter: the rules live in
+//! `audio.rs`, `network.rs`, `bluetooth.rs`, `storage.rs`, `battery.rs` and `thermal.rs`.
 
 use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -22,6 +22,7 @@ use crate::debounce;
 use crate::network::{self, Network, NetworkManager};
 use crate::storage::{self, Storage, Udisks};
 use crate::sysusage::{MonotonicClock, Refresh, SystemSource, SystemUsage};
+use crate::thermal::{self, Monitor, Source};
 
 /// Chosen at runtime: `wpctl` on Linux, a fake in `--session` development.
 pub type DynPipeWire = Box<dyn crate::audio::PipeWire>;
@@ -1007,5 +1008,103 @@ async fn announce_storage(connection: &Connection, changes: &storage::Changes) -
         .interface::<_, StorageIface>(OBJECT_PATH)
         .await?;
     StorageIface::emit(iface.signal_emitter(), changes).await;
+    Ok(())
+}
+
+/// Chosen at runtime: sysfs on Linux, a fixed fake in `--session` development.
+pub type DynThermal = Box<dyn Source>;
+
+pub type SharedThermal = Arc<Monitor<DynThermal>>;
+
+pub struct ThermalIface {
+    monitor: SharedThermal,
+}
+
+impl ThermalIface {
+    pub fn new(monitor: SharedThermal) -> Self {
+        ThermalIface { monitor }
+    }
+}
+
+#[interface(name = "org.ruyaos.Devices1.Thermal")]
+impl ThermalIface {
+    /// From the last reading: a short lock, no sysfs access, so it never holds up the executor.
+    fn list_sensors(&self) -> Vec<BTreeMap<String, OwnedValue>> {
+        self.monitor
+            .list()
+            .into_iter()
+            .map(|s| {
+                let own = |v: Value<'_>| OwnedValue::try_from(v).ok();
+                [
+                    ("id", own(Value::from(s.id.clone()))),
+                    ("label", own(Value::from(s.label))),
+                    ("class", own(Value::from(s.class.as_str()))),
+                    ("value", own(Value::from(s.value))),
+                    ("level", own(Value::from(s.level.as_str()))),
+                    ("max_seen", own(Value::from(s.max_seen))),
+                ]
+                .into_iter()
+                .filter_map(|(k, v)| v.map(|v| (k.to_owned(), v)))
+                .collect()
+            })
+            .collect()
+    }
+
+    #[zbus(property)]
+    fn level(&self) -> String {
+        self.monitor.level().as_str().to_owned()
+    }
+
+    // Not `level_changed`: that is the generated name of the property's change notification.
+    #[zbus(signal, name = "LevelChanged")]
+    async fn level_change(
+        emitter: &SignalEmitter<'_>,
+        level: String,
+        sensor_id: String,
+    ) -> zbus::Result<()>;
+
+    #[zbus(signal)]
+    async fn sensors_changed(emitter: &SignalEmitter<'_>) -> zbus::Result<()>;
+}
+
+/// Reads the sensors on the blocking pool, now and then (every 5 s, every 1 s while the level is
+/// above normal), and sends what changed: `SensorsChanged`, then `LevelChanged` and the `Level`
+/// property. Runs forever.
+pub async fn watch_thermal(connection: Connection, monitor: SharedThermal) {
+    loop {
+        let polling = monitor.clone();
+        match unblock(move || polling.poll()).await {
+            Ok(update) => {
+                if let Err(err) = announce_thermal(&connection, &update).await {
+                    eprintln!("ruya-devices: emitting thermal signals failed: {err}");
+                }
+            }
+            Err(err) => eprintln!("ruya-devices: reading the sensors failed: {err}"),
+        }
+        async_io::Timer::after(monitor.interval()).await;
+    }
+}
+
+async fn announce_thermal(connection: &Connection, update: &thermal::Update) -> zbus::Result<()> {
+    if !update.sensors_changed && update.level.is_none() {
+        return Ok(());
+    }
+    let iface = connection
+        .object_server()
+        .interface::<_, ThermalIface>(OBJECT_PATH)
+        .await?;
+    let emitter = iface.signal_emitter();
+    if update.sensors_changed {
+        ThermalIface::sensors_changed(emitter).await?;
+    }
+    if let Some(change) = &update.level {
+        ThermalIface::level_change(
+            emitter,
+            change.level.as_str().to_owned(),
+            change.sensor.clone(),
+        )
+        .await?;
+        iface.get().await.level_changed(emitter).await?;
+    }
     Ok(())
 }

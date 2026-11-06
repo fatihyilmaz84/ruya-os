@@ -1109,7 +1109,7 @@
         <translation>Geri</translation>
     </message>
     <message>
-        <location line="+163"/>
+        <location line="+176"/>
         <source>Coming soon</source>
         <translation>Yakında</translation>
     </message>
@@ -1410,7 +1410,7 @@
         <translation>Geri</translation>
     </message>
     <message>
-        <location line="+100"/>
+        <location line="+110"/>
         <source>mock services</source>
         <translation>sahte hizmetler</translation>
     </message>
@@ -1573,7 +1573,7 @@
 <context>
     <name>SystemPane</name>
     <message>
-        <location filename="../qml/SystemPane.qml" line="+27"/>
+        <location filename="../qml/SystemPane.qml" line="+129"/>
         <location line="+220"/>
         <source>Beta</source>
         <translation>Beta</translation>
@@ -1685,13 +1685,38 @@
         <translation>Güncelleme başlatılamadı.</translation>
     </message>
     <message>
-        <location line="-9"/>
+        <location line="+103"/>
+        <source>Device health</source>
+        <translation>Cihaz sağlığı</translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>No temperature sensors were found on this device.</source>
+        <translation>Bu cihazda sıcaklık sensörü bulunamadı.</translation>
+    </message>
+    <message>
+        <location line="-131"/>
         <location line="+8"/>
         <source>Only an admin can do this.</source>
         <translation>Bunu yalnızca bir yönetici yapabilir.</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="-184"/>
+        <source>The console is warm. Nothing needs to be done.</source>
+        <translation>Konsol sıcak. Yapılması gereken bir şey yok.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The console is running hot. Visual effects are reduced until it cools down.</source>
+        <translation>Konsol çok sıcak. Soğuyana kadar görsel efektler azaltıldı.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The console is too hot. Apps are closed and it powers off if it does not cool down.</source>
+        <translation>Konsol aşırı sıcak. Uygulamalar kapatıldı; soğumazsa konsol kapanır.</translation>
+    </message>
+    <message>
+        <location line="+196"/>
         <source>Language</source>
         <translation>Dil</translation>
     </message>
@@ -1757,6 +1782,98 @@
         <location line="+12"/>
         <source>Shift</source>
         <translation>Shift</translation>
+    </message>
+</context>
+<context>
+    <name>ThermalNotice</name>
+    <message>
+        <location filename="../qml/ThermalNotice.qml" line="+72"/>
+        <source>The console is too hot</source>
+        <translation>Konsol aşırı sıcak</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+21"/>
+        <source>Apps are being closed. If the console does not cool down, it powers off in %n second(s).</source>
+        <translation>
+            <numerusform>Uygulamalar kapatılıyor. Konsol soğumazsa %n saniye içinde kapanacak.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Apps are being closed.</source>
+        <translation>Uygulamalar kapatılıyor.</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <location line="+10"/>
+        <source>OK</source>
+        <translation>Tamam</translation>
+    </message>
+</context>
+<context>
+    <name>ThermalPolicy</name>
+    <message>
+        <location filename="../qml/ThermalPolicy.qml" line="+37"/>
+        <source>%1 is at %2</source>
+        <translation>%1: %2</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>The console is running hot (%1). Effects are reduced.</source>
+        <translation>Konsol çok sıcak (%1). Efektler azaltıldı.</translation>
+    </message>
+</context>
+<context>
+    <name>ThermalText</name>
+    <message>
+        <location filename="../qml/ThermalText.qml" line="+11"/>
+        <source>Processor</source>
+        <translation>İşlemci</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Graphics</source>
+        <translation>Grafik</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Drive</source>
+        <translation>Sürücü</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Fan</source>
+        <translation>Fan</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>%1 %2</source>
+        <translation>%1 %2</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>%1 rpm</source>
+        <translation>%1 dev/dk</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>%1 °C</source>
+        <translation>%1 °C</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Warm</source>
+        <translation>Sıcak</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Hot</source>
+        <translation>Çok sıcak</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Critical</source>
+        <translation>Kritik</translation>
     </message>
 </context>
 <context>

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Checks the Devices service (audio T-128, network T-132, controller batteries T-161, Bluetooth T-173) inside a running VM booted with sound. Copy and run as root:
 #   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-devices-check.sh root@127.0.0.1:/root/
-#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-devices-check.sh [check|events|security|state|batteries|bluetooth|storage]
+#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-devices-check.sh [check|events|security|state|batteries|bluetooth|storage|thermal|thermal-fake]
 # check (default): unit active, name owned by ruya-shell, ListSinks, a MasterVolume write reaches
 # PipeWire, a call from another user is refused; then the network part: State is connected, Primary is
 # the ethernet link with an IPv4 address, ListWifi and Scan answer, unknown ids are refused, another
@@ -17,6 +17,12 @@
 # free + apps (+ data when known) + system add up to total, apps_bytes is close to du of
 # /var/lib/flatpak, another user is refused, and installing a signed 80 MB test app through the Store makes
 # apps_bytes grow and sends SystemUsageChanged (SKIP_APPS_GROWTH=1 skips the install; `storage` runs only this part).
+# Then the thermal part (T-200): ListSensors answers; with a processor sensor in /sys (coretemp, k10temp or the
+# x86_pkg_temp thermal zone) there is a cpu entry whose value is within 3 degrees of /sys, Level is normal when the
+# VM idles; QEMU may expose no sensor at all: then there is no cpu entry (the list is empty) and Level is normal.
+# Another user is refused. `thermal` runs only this part. `thermal-fake` (not part of check) points the service at a
+# made-up sysfs tree (RUYA_THERMAL_SYSFS) and walks one sensor through normal, hot, critical and back, checking
+# Level and the LevelChanged signal; it restarts ruya-devices twice and removes the tree.
 # events: only the PipeWire event checks (T-133); IDLE=60 adds the idle-process count (also part of check; samples the process list for IDLE seconds).
 # state: prints State and Primary (for the link test, see docs/dev-setup.md).
 set -u
@@ -25,6 +31,7 @@ path=/org/ruyaos/Devices1
 ifc=org.ruyaos.Devices1.Audio
 net=org.ruyaos.Devices1.Network
 bat=org.ruyaos.Devices1.Batteries
+therm=org.ruyaos.Devices1.Thermal
 bt=org.ruyaos.Devices1.Bluetooth
 uid="$(id -u ruya-shell)"
 as_shell() { runuser -u ruya-shell -- env XDG_RUNTIME_DIR="/run/user/$uid" "$@"; }
@@ -254,6 +261,106 @@ STATEOF
     usage_clean
 }
 
+# T-200: the cpu entry of ListSensors (its value), printed; nothing when there is none.
+thermal_cpu_value() {
+    busctl --system --json=short call "$svc" "$path" "$therm" ListSensors \
+        | sed -n -E 's/.*"class":\{"type":"s","data":"cpu"\}[^]]*"value":\{"type":"d","data":(-?[0-9.]+)\}.*/\1/p' \
+        | awk '{printf "%.1f", $1}'      # sd-json prints 40.0 as 40
+}
+
+# The processor temperature the kernel shows, in degrees (empty when the VM has none).
+thermal_sys_cpu() {
+    local h name f z
+    for h in /sys/class/hwmon/hwmon*; do
+        name="$(cat "$h/name" 2>/dev/null)"
+        case "$name" in
+        coretemp)
+            for f in "$h"/temp*_label; do
+                case "$(cat "$f" 2>/dev/null)" in "Package id"*) awk '{printf "%.1f", $1 / 1000}' "${f%_label}_input"; return;; esac
+            done;;
+        k10temp) awk '{printf "%.1f", $1 / 1000}' "$h/temp1_input"; return;;
+        esac
+    done
+    for z in /sys/class/thermal/thermal_zone*; do
+        [ "$(cat "$z/type" 2>/dev/null)" = x86_pkg_temp ] && { awk '{printf "%.1f", $1 / 1000}' "$z/temp"; return; }
+    done
+}
+
+thermal_level() { busctl --system get-property "$svc" "$path" "$therm" Level; }
+
+thermal_check() {
+    echo "--- thermal (T-200): Devices1.Thermal"
+    local raw lvl svc_cpu sys_cpu d out
+    raw="$(busctl --system call "$svc" "$path" "$therm" ListSensors)"
+    echo "ListSensors: $raw" | cut -c1-300
+    case "$raw" in 'aa{sv} '*) ok "ListSensors answers an array of dictionaries";; *) bad "ListSensors did not answer aa{sv}"; return;; esac
+    lvl="$(thermal_level)"; echo "Level: $lvl"
+    case "$lvl" in 's "normal"') ok "Level is normal";; 's "warm"'|'s "hot"'|'s "critical"') bad "Level is $lvl on an idle VM";; *) bad "Level did not answer a level: $lvl";; esac
+    sys_cpu="$(thermal_sys_cpu)"; svc_cpu="$(thermal_cpu_value)"
+    echo "processor: service='$svc_cpu' sysfs='$sys_cpu'"
+    if [ -z "$sys_cpu" ]; then
+        if [ -z "$svc_cpu" ]; then ok "no processor sensor in /sys (QEMU): no cpu entry (the list may be empty)"; else bad "a cpu entry ($svc_cpu) without a sensor in /sys"; fi
+    elif [ -z "$svc_cpu" ]; then
+        bad "/sys has a processor sensor ($sys_cpu) but ListSensors has no cpu entry"
+    else
+        d="$(awk -v a="$svc_cpu" -v b="$sys_cpu" 'BEGIN { d = a - b; if (d < 0) d = -d; print (d <= 3) ? "ok" : "far" }')"
+        if [ "$d" = ok ]; then ok "the cpu entry ($svc_cpu) is within 3 degrees of /sys ($sys_cpu)"; else bad "the cpu entry $svc_cpu is not within 3 degrees of /sys $sys_cpu"; fi
+    fi
+    if out="$(runuser -u nobody -- busctl --system call "$svc" "$path" "$therm" ListSensors 2>&1)"; then
+        bad "nobody could call ListSensors: $out"
+    else
+        echo "$out"; ok "ListSensors from nobody refused"
+    fi
+    as_shell systemctl --user is-active ruya-devices >/dev/null && ok "ruya-devices still active after the thermal calls" || bad "ruya-devices not active"
+}
+
+# Waits up to $2 seconds for Level to read $1; prints how long it took.
+thermal_wait_level() {
+    local n=0
+    while [ "$n" -le "$2" ]; do
+        [ "$(thermal_level)" = "s \"$1\"" ] && { echo "$n"; return 0; }
+        sleep 1; n=$((n + 1))
+    done
+    return 1
+}
+
+# T-200: the policy over D-Bus, with a made-up sysfs. /sys cannot be replaced, so the service is
+# pointed at a tree under /var/lib (its unit has a private /tmp) through RUYA_THERMAL_SYSFS.
+thermal_fake_check() {
+    echo "--- thermal (T-200): a made-up sysfs walks a sensor through the levels"
+    local root=/var/lib/ruyaos-fakesys mon took d signals=/var/tmp/thermal-signals.log
+    local hw="$root/class/hwmon/hwmon9"
+    rm -rf "$root"; mkdir -p "$hw"
+    echo coretemp > "$hw/name"; echo 'Package id 0' > "$hw/temp1_label"
+    echo 40000 > "$hw/temp1_input"; echo 100000 > "$hw/temp1_crit"
+    echo 1820 > "$hw/fan1_input"
+    chmod -R a+rX "$root"
+    as_shell systemctl --user set-environment RUYA_THERMAL_SYSFS="$root"
+    as_shell systemctl --user restart ruya-devices
+    d=0; until [ "$(thermal_cpu_value)" = 40.0 ] || [ "$d" -ge 30 ]; do sleep 1; d=$((d + 1)); done
+    if [ "$(thermal_cpu_value)" = 40.0 ]; then ok "the service reads the made-up tree (cpu 40.0)"; else bad "the service did not pick up RUYA_THERMAL_SYSFS (cpu='$(thermal_cpu_value)')"; fi
+    if [ "$(thermal_level)" = 's "normal"' ]; then ok "Level is normal at 40"; else bad "Level at 40: $(thermal_level)"; fi
+    busctl --system --json=short monitor "$svc" > "$signals" 2>&1 &
+    mon=$!
+    sleep 1
+    echo 92000 > "$hw/temp1_input"
+    if took="$(thermal_wait_level hot 40)"; then ok "Level became hot after about $took s"; else bad "Level did not become hot at 92 ($(thermal_level))"; took=0; fi
+    # The 10 s debounce: a reading at 92 for less than that never counts (5 s polls, so at least 9).
+    if [ "$took" -ge 9 ]; then ok "not before the debounce ($took s)"; else bad "hot after only $took s: no debounce"; fi
+    echo 97000 > "$hw/temp1_input"
+    if took="$(thermal_wait_level critical 40)"; then ok "Level became critical after about $took s"; else bad "Level did not become critical at 97 ($(thermal_level))"; fi
+    echo 40000 > "$hw/temp1_input"
+    if took="$(thermal_wait_level normal 40)"; then ok "Level is normal again after about $took s"; else bad "Level did not return to normal ($(thermal_level))"; fi
+    sleep 1
+    kill "$mon" 2>/dev/null; wait "$mon" 2>/dev/null
+    if grep -q '"member":"LevelChanged"' "$signals"; then ok "LevelChanged was sent"; else bad "no LevelChanged was seen"; fi
+    grep -o '"member":"LevelChanged"' "$signals" | wc -l | xargs echo "LevelChanged signals:"
+    rm -f "$signals"
+    as_shell systemctl --user unset-environment RUYA_THERMAL_SYSFS
+    as_shell systemctl --user restart ruya-devices
+    rm -rf "$root"
+}
+
 case "${1:-check}" in
 security)
     as_shell systemd-analyze --user security ruya-devices --no-pager | tail -15
@@ -364,6 +471,8 @@ check)
 
     storage_usage_check
 
+    thermal_check
+
     events_check "${IDLE:-60}"
     ;;
 bluetooth)
@@ -371,6 +480,12 @@ bluetooth)
     ;;
 storage)
     storage_usage_check
+    ;;
+thermal)
+    thermal_check
+    ;;
+thermal-fake)
+    thermal_fake_check
     ;;
 events)
     events_check "${IDLE:-0}"

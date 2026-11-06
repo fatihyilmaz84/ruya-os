@@ -91,7 +91,20 @@ bool DeviceSettings::reducedMotion() const
 
 QString DeviceSettings::effectsQuality() const
 {
+    if (m_thermalLimited)
+        return QStringLiteral("performance");
     return m_forcedQuality.value_or(m_quality);
+}
+
+void DeviceSettings::setThermalLimited(bool limited)
+{
+    if (limited == m_thermalLimited)
+        return;
+    const QString before = effectsQuality();
+    m_thermalLimited = limited;
+    emit thermalLimitedChanged();
+    if (effectsQuality() != before)
+        emit effectsQualityChanged();
 }
 
 void DeviceSettings::setReducedMotion(bool value)
@@ -114,11 +127,12 @@ void DeviceSettings::setEffectsQuality(const QString &value)
     }
     if (value == m_quality)
         return;
-    const QString before = effectsQuality();
+    const QString before = storedEffectsQuality();
     m_quality = value;
     if (m_store)
         m_store->setValue(QStringLiteral("display/effectsQuality"), value);
-    if (effectsQuality() != before)
+    // Also while the console is limited for heat: the effective value stays, the stored one moved.
+    if (storedEffectsQuality() != before)
         emit effectsQualityChanged();
 }
 

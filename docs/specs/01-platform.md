@@ -56,6 +56,27 @@ The build excludes any desktop environment, display manager, `kdeconnect` and `p
 - NVIDIA modules are built during the image build (akmods, `image/build/40-nvidia.sh`) and signed. The public cert ships at `/usr/share/ruyaos/secureboot/akmods-nvidia.der`. Today the key is ephemeral per build; Phase 6 moves it to a stable **project MOK key** held in CI secrets. First boot runs `mokutil` enrollment, which requires a one-time UEFI MOK screen. This is documented in the installer UX. The approach follows Universal Blue's.
 - Out-of-tree controller drivers (`xone` for the Xbox wireless dongle, `xpadneo`) are handled the same way. They're optional, and the in-kernel `xpad` and `hid-playstation` cover wired Xbox and DualSense.
 
+### 2.4 Thermal policy (T-200)
+The console watches its own temperatures and fans. Normal use shows nothing; a warm console says so, a hot one protects itself in steps, and a critical one is never a surprise crash. **The service measures and classifies, the shell acts.** `ruya-devices` (`org.ruyaos.Devices1.Thermal`, `services/ruya-devices/src/thermal.rs`) reads sysfs read-only, with no new privilege (the unit is unchanged), every 5 s on the blocking pool (every 1 s while a level above normal holds), and sends `SensorsChanged` and `LevelChanged` only on change. Fans are never controlled: the firmware does that.
+
+- **Sensors.** One for the processor package (`coretemp`, `k10temp`, `zenpower`; the thermal zone `x86_pkg_temp` when none of them exists), one per graphics chip (`amdgpu`, `nouveau`, `nvidia`), one per NVMe drive (`Composite`) and SATA drive (`drivetemp`; an SSD, by the block device's `rotational` flag, is classed with the NVMe drives), and every fan (`fan*_input`). Cores and the board's other temperatures (`acpitz`, `pch_*`, the many `dell_smm` ones) have no threshold and are not listed. Sensors are keyed by chip name, label and device (never `hwmonN`, which renumbers), so a sensor that appears late (a hot-plugged drive) joins the list. A machine without sensors (a VM) has an empty list and level `normal`.
+- **Thresholds** (degrees Celsius; `/usr/lib/ruyaos/thermal.toml` ships them, `/etc/ruyaos/thermal.toml` replaces single values, a file with a mistake is ignored whole and the journal says why):
+
+| Class | warm | hot | critical |
+|---|---|---|---|
+| Processor (`cpu`) | 80 | 90 | the sensor's own `crit` (the zone's critical, else last trip point) minus 5, 100 without one |
+| Graphics (`gpu`) | 80 | 90 | the sensor's `crit` minus 5, 100 without one |
+| NVMe / SSD (`ssd`) | 70 | 75 | 80 |
+| SATA disk (`hdd`) | 50 | 55 | 60 |
+
+  A critical level is never at or under `hot`. A pad's battery is not monitored here (UPower, T-161).
+- **Filtering.** A level counts after the reading has been at or above its threshold for 10 s, and clears when it is 5 degrees below that threshold (`hysteresis`, `debounce_seconds`). Readings outside -20..125 degrees are ignored (the `dell_smm` sensor that reads 126), and a sensor not heard from for 30 s leaves the list. A temperature below its warm threshold that does not change at all for 5 minutes while the processor is busy the whole time is a stuck sensor and is ignored. **A fan** that was seen spinning, reads 0 rpm for 30 s while the processor is `warm` or worse is `hot` (a fan that never turned is an unused header, not a fault).
+- **What the shell does** (`qml/ThermalPolicy.qml`):
+  1. **warm:** nothing changes. Settings -> System shows a mark on the category, a line and the sensor row's mark (02 §1.2).
+  2. **hot:** one toast "The console is running hot (Processor). Effects are reduced." (names the sensor); the effects quality drops to `performance` (no blur) for the session (`DeviceSettings.thermalLimited`; the owner's setting is not rewritten, and Settings -> Display shows it) and stays until the level is **normal** again. No second toast within one incident (the level has to return to normal first).
+  3. **critical:** a notice (`ThermalNotice`, one "OK" button that hides it) says what is happening and counts down; every running app is asked to stop (`Session.stop`, also an app started meanwhile), the shell shows Home without effects; if the level still holds **60 s** later, `Power.powerOff()` (logind). If it falls below critical first, the notice goes and nothing is powered off. The kernel's own hard limit still applies underneath.
+- **Trying it** (no sensor is hot on demand): `docs/dev-setup.md`, "Fake a hot sensor".
+
 ## 3. Security baseline
 1. SELinux enforcing. We write custom policy modules for our services when needed.
 2. Rust services run with systemd hardening (`ProtectSystem=strict`, `NoNewPrivileges`, `DynamicUser` where possible). A service that must run as root gets a `CapabilityBoundingSet` limited to what it needs, `SystemCallFilter=@system-service` and `UMask=0077`; `ruya-profiles` (root for `useradd`) scores 1.6 OK in `systemd-analyze security` (T-126). `ruya-session` (T-162) is root with an empty `CapabilityBoundingSet` (it only asks systemd to start apps as the profile users), `PrivateNetwork`, `AF_UNIX` only, `ProtectHome=yes`, `RuntimeDirectory=ruya-session`, exposure 1.1 OK. `ruya-library` (T-163) needs no privilege at all: it runs as its own system user `ruya-library` (sysusers), with no capabilities, `ProtectHome=yes`, no network (`PrivateNetwork=yes`, `AF_UNIX` only) and `MemoryDenyWriteExecute`, and only reads the system Flatpak installation.

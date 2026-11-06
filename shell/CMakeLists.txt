@@ -12,7 +12,7 @@ qt_standard_project_setup(REQUIRES 6.8)
 # Everything except main() is a static QML module, so the app and the tests share it.
 qt_add_library(ruyashell STATIC)
 
-set_source_files_properties(qml/Theme.qml qml/Sfx.qml qml/Notifications.qml qml/ProfileStatus.qml qml/BackKey.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
+set_source_files_properties(qml/Theme.qml qml/Sfx.qml qml/Notifications.qml qml/ProfileStatus.qml qml/BackKey.qml qml/ThermalText.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 
 qt_add_qml_module(ruyashell
     URI RuyaShell
@@ -42,6 +42,10 @@ qt_add_qml_module(ruyashell
         src/battery/MockBatteryBackend.h src/battery/MockBatteryBackend.cpp
         src/battery/DBusBatteryBackend.h src/battery/DBusBatteryBackend.cpp
         src/battery/Batteries.h src/battery/Batteries.cpp
+        src/thermal/ThermalBackend.h
+        src/thermal/MockThermalBackend.h src/thermal/MockThermalBackend.cpp
+        src/thermal/DBusThermalBackend.h src/thermal/DBusThermalBackend.cpp
+        src/thermal/Thermal.h src/thermal/Thermal.cpp
         src/storage/StorageBackend.h
         src/storage/MockStorageBackend.h src/storage/MockStorageBackend.cpp
         src/storage/DBusStorageBackend.h src/storage/DBusStorageBackend.cpp
@@ -73,6 +77,7 @@ qt_add_qml_module(ruyashell
         qml/Theme.qml
         qml/Sfx.qml
         qml/BackKey.qml
+        qml/ThermalText.qml
         qml/Notifications.qml
         qml/ProfileStatus.qml
         qml/Setup.qml
@@ -105,6 +110,8 @@ qt_add_qml_module(ruyashell
         qml/SettingsPage.qml
         qml/PowerPage.qml
         qml/PowerConfirm.qml
+        qml/ThermalNotice.qml
+        qml/ThermalPolicy.qml
         qml/SettingsPane.qml
         qml/ProfilesPane.qml
         qml/ProfileAddFlow.qml
@@ -135,7 +142,7 @@ qt_add_qml_module(ruyashell
 )
 
 # qmltyperegistrar includes the QML_ELEMENT headers by file name.
-target_include_directories(ruyashell PUBLIC src/backend src/profiles src/settings src/audio src/network src/bluetooth src/battery src/storage src/system src/power src/store src/library src/update src/session src/input)
+target_include_directories(ruyashell PUBLIC src/backend src/profiles src/settings src/audio src/network src/bluetooth src/battery src/thermal src/storage src/system src/power src/store src/library src/update src/session src/input)
 target_link_libraries(ruyashell PRIVATE Qt6::Quick Qt6::Multimedia Qt6::DBus)
 
 # Translations: the .ts files in i18n/ are compiled to .qm and embedded as :/i18n/ruyashell_<lang>.qm.
