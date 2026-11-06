@@ -3,10 +3,12 @@
 #include <QCoreApplication>
 #include <QLocale>
 #include <QMetaObject>
+#include <QRegularExpression>
 #include <QtMath>
 
 namespace {
 constexpr qreal kMaxOverscan = 0.10;
+constexpr qreal kMaxWallpaperDim = 0.60;
 }
 
 DeviceSettings::DeviceSettings(bool persistent, QObject *parent)
@@ -35,6 +37,12 @@ void DeviceSettings::init()
         const qreal overscan = m_store->value(QStringLiteral("display/overscan"), m_overscan).toReal(&ok);
         if (ok && overscan >= 0.0 && overscan <= kMaxOverscan)
             m_overscan = overscan;
+        const QString wallpaper = m_store->value(QStringLiteral("display/wallpaper")).toString();
+        if (isValidWallpaper(wallpaper))
+            m_wallpaper = wallpaper;
+        const qreal dim = m_store->value(QStringLiteral("display/wallpaperDim"), m_wallpaperDim).toReal(&ok);
+        if (ok && dim >= 0.0 && dim <= kMaxWallpaperDim)
+            m_wallpaperDim = dim;
         const QString theme = m_store->value(QStringLiteral("display/theme"), m_theme).toString();
         if (isValidTheme(theme))
             m_theme = theme;
@@ -98,6 +106,15 @@ bool DeviceSettings::isValidQuality(const QString &value)
 bool DeviceSettings::isValidLanguage(const QString &value)
 {
     return value == QLatin1String("en") || value == QLatin1String("tr");
+}
+
+bool DeviceSettings::isValidWallpaper(const QString &value)
+{
+    if (value.isEmpty())
+        return true;
+    static const QRegularExpression bundled(QStringLiteral("^[a-z0-9-]{1,32}$"));
+    static const QRegularExpression user(QStringLiteral("^user:[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"));
+    return bundled.match(value).hasMatch() || user.match(value).hasMatch();
 }
 
 QStringList DeviceSettings::availableThemes()
@@ -189,6 +206,34 @@ void DeviceSettings::setOverscan(qreal value)
     if (m_store)
         m_store->setValue(QStringLiteral("display/overscan"), value);
     emit overscanChanged();
+}
+
+void DeviceSettings::setWallpaper(const QString &value)
+{
+    if (!isValidWallpaper(value)) {
+        qWarning("ruya-shell: rejecting invalid wallpaper '%s'", qPrintable(value));
+        return;
+    }
+    if (value == m_wallpaper)
+        return;
+    m_wallpaper = value;
+    if (m_store)
+        m_store->setValue(QStringLiteral("display/wallpaper"), value);
+    emit wallpaperChanged();
+}
+
+void DeviceSettings::setWallpaperDim(qreal value)
+{
+    if (qIsNaN(value) || value < 0.0 || value > kMaxWallpaperDim) {
+        qWarning("ruya-shell: rejecting out-of-range wallpaperDim %g", value);
+        return;
+    }
+    if (qFuzzyCompare(value + 1.0, m_wallpaperDim + 1.0))
+        return;
+    m_wallpaperDim = value;
+    if (m_store)
+        m_store->setValue(QStringLiteral("display/wallpaperDim"), value);
+    emit wallpaperDimChanged();
 }
 
 void DeviceSettings::setLanguage(const QString &value)

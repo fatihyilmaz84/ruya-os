@@ -175,10 +175,12 @@ Item {
             verify(find("rowReducedMotion").activeFocus)
             keyClick(Qt.Key_Down)
             verify(find("rowOverscan").activeFocus)
-            keyClick(Qt.Key_Down)                        // the Theme row (T-209) is the last
+            keyClick(Qt.Key_Down)                        // the Theme row (T-209)
             verify(find("rowTheme").activeFocus)
+            keyClick(Qt.Key_Down)
+            verify(find("rowWallpaper").activeFocus)     // T-208: the wallpaper row follows (its dim row is hidden with the default look)
             keyClick(Qt.Key_Down)                        // clamped at the last row
-            verify(find("rowTheme").activeFocus)
+            verify(find("rowWallpaper").activeFocus)
             verify(find("homePlay").activeFocus === false)
         }
 

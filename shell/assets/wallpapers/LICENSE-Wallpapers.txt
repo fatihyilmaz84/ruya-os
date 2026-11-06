@@ -1,0 +1,17 @@
+RuyaOS bundled wallpapers (T-208)
+
+Files: dusk.jpg, aurora.jpg, ember.jpg, lagoon.jpg, orchid.jpg, daybreak.jpg, catalog.json
+
+Source: made for this project by scripts/make-wallpapers.py in the RuyaOS repository.
+The pictures are computed from gradients, gaussian fields, feathered discs and a seeded
+pseudo-random dither. No photograph, stock image, model output or other third-party material
+is used or was used as a reference image.
+
+Licence: CC0 1.0 Universal (public domain dedication),
+https://creativecommons.org/publicdomain/zero/1.0/ (the full legal text is LICENSES/CC0-1.0.txt in the repository)
+To the extent possible under law, the RuyaOS contributors have waived all copyright and
+related or neighbouring rights to these pictures. You can copy, modify, distribute and use
+them, also commercially, without asking.
+
+The generator script is part of the project and is licensed GPL-3.0-or-later like the rest
+of scripts/ (LICENSE.md).

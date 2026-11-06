@@ -71,6 +71,7 @@ qt_add_qml_module(ruyashell
         src/power/DBusPowerBackend.h src/power/DBusPowerBackend.cpp
         src/power/Power.h src/power/Power.cpp
         src/input/KeyRouter.h src/input/KeyRouter.cpp
+        src/wallpaper/Wallpapers.h src/wallpaper/Wallpapers.cpp
     QML_FILES
         qml/Main.qml
         qml/Shell.qml
@@ -90,6 +91,8 @@ qt_add_qml_module(ruyashell
         qml/ButtonGlyph.qml
         qml/HintBar.qml
         qml/Backdrop.qml
+        qml/WallpaperLayer.qml
+        qml/WallpaperPicker.qml
         qml/FpsMeter.qml
         qml/ProfilePicker.qml
         qml/ProfileCard.qml
@@ -143,6 +146,13 @@ qt_add_qml_module(ruyashell
         sounds/select.wav
         sounds/back.wav
         assets/glass-grain.png
+        assets/wallpapers/catalog.json
+        assets/wallpapers/dusk.jpg
+        assets/wallpapers/aurora.jpg
+        assets/wallpapers/ember.jpg
+        assets/wallpapers/lagoon.jpg
+        assets/wallpapers/orchid.jpg
+        assets/wallpapers/daybreak.jpg
         fonts/MaterialSymbolsRounded.ttf
         fonts/MaterialSymbolsRoundedFilled.ttf
         fonts/Inter-Regular.ttf
@@ -152,7 +162,7 @@ qt_add_qml_module(ruyashell
 )
 
 # qmltyperegistrar includes the QML_ELEMENT headers by file name.
-target_include_directories(ruyashell PUBLIC src/backend src/profiles src/settings src/audio src/network src/bluetooth src/battery src/thermal src/storage src/system src/power src/store src/library src/update src/session src/input)
+target_include_directories(ruyashell PUBLIC src/backend src/profiles src/settings src/audio src/network src/bluetooth src/battery src/thermal src/storage src/system src/power src/store src/library src/update src/session src/input src/wallpaper)
 target_link_libraries(ruyashell PRIVATE Qt6::Quick Qt6::Multimedia Qt6::DBus)
 
 # Translations: the .ts files in i18n/ are compiled to .qm and embedded as :/i18n/ruyashell_<lang>.qm.
@@ -207,8 +217,8 @@ endif()
 
 include(GNUInstallDirs)
 install(TARGETS ruya-shell RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
-# Licences of the bundled fonts (T-157, T-145).
-install(FILES fonts/LICENSE-MaterialSymbols.txt fonts/OFL-Inter.txt DESTINATION share/licenses/ruyaos)
+# Licences of the bundled fonts (T-157, T-145) and wallpapers (T-208).
+install(FILES fonts/LICENSE-MaterialSymbols.txt fonts/OFL-Inter.txt assets/wallpapers/LICENSE-Wallpapers.txt DESTINATION share/licenses/ruyaos)
 
 if(RUYA_BUILD_TESTS)
     find_package(Qt6 REQUIRED COMPONENTS QuickTest)

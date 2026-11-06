@@ -6,6 +6,8 @@ import RuyaShell
 SettingsPane {
     id: pane
 
+    property Item overlay        // the shell's modal layer: the wallpaper picker lives there
+
     ChoiceRow {
         id: quality
         objectName: "rowQuality"
@@ -62,4 +64,39 @@ SettingsPane {
         }
     }
     Binding { target: themeRow; property: "value"; value: DeviceSettings.theme }
+
+    SettingRow {
+        id: wallpaper
+        objectName: "rowWallpaper"
+        u: pane.u
+        label: qsTr("Wallpaper")
+        value: picker.nameOf(DeviceSettings.wallpaper)
+        onActivated: picker.open()
+    }
+
+    SliderRow {
+        id: dim
+        objectName: "rowWallpaperDim"
+        u: pane.u
+        visible: DeviceSettings.wallpaper !== ""      // the default look has nothing to dim
+        label: qsTr("Dim wallpaper")
+        from: 0
+        to: 60
+        stepSize: 5
+        unit: "%"
+        onEdited: v => {
+            DeviceSettings.wallpaperDim = v / 100
+            dim.value = Math.round(DeviceSettings.wallpaperDim * 100)
+        }
+    }
+    Binding { target: dim; property: "value"; value: Math.round(DeviceSettings.wallpaperDim * 100) }
+
+    WallpaperPicker {
+        id: picker
+        objectName: "wallpaperPicker"
+        parent: pane.overlay
+        width: parent ? parent.width : 0
+        height: parent ? parent.height : 0
+        u: pane.u
+    }
 }

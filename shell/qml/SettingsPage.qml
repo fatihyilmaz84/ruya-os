@@ -148,6 +148,7 @@ Page {
             objectName: "paneDisplay"
             anchors.fill: parent
             u: page.u
+            overlay: page.overlay
             visible: page.current.key === "display"
             enabled: visible
             onExitRequested: page.leavePane()
