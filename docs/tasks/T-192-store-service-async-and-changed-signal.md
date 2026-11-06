@@ -31,4 +31,19 @@ Two follow-ups of T-182: the handlers that now run `flatpak list` (Install, Unin
 - `03-services-and-apps.md` Store section (when `InstalledChanged` is sent).
 
 ## Outcome
-_Filled in by the implementer. First line: `Verified: host | vm | unverified | hw` (say what ran where). Then: what was built, files, deviations, follow-ups (each also an Inbox line)._
+Verified: host (vm pending: vm-store-check.sh). `dev.ps1 rust` and the Rust tests ran on the host; the extended VM step was written but not run.
+
+Built:
+- `Store::sync_installed` returns whether the correction changed the installed set or an update flag, and records the corrected set as `announced` (so the next `refresh()` returns `Ok(false)` for it). `list_installed`, `install`, `uninstall`, `update` and `rollback` take an `emit: &mut dyn FnMut(Event)` (the idiom of `sync` and `run_next`) and send `Event::InstalledChanged` through it when the correction changed something.
+- `dbus.rs`: `Install`, `Uninstall`, `Update`, `Rollback`, `ListInstalled` and `ListRemotes` are `async` and run through one helper, `StoreIface::off_executor`, which uses `blocking::unblock` and hands `emit` to the same events channel `forward` sends signals from (so order is kept). `Started` (queue kick) still runs on the executor after the call. The `generation` check in `sync_installed` is unchanged.
+- Existing test `a_job_that_ends_during_a_query_still_sends_installed_changed` described the old behaviour (the query corrects silently and the refresh announces); it is now `a_job_that_ends_during_a_query_is_announced_once` (the query announces, the refresh then sends nothing more). The guarantee it protected, that the change is announced at all, still holds and is asserted.
+- `vm-store-check.sh`, outside-removal step: marks the signal log, runs `flatpak uninstall` by hand and `ListInstalled`, then parses the `busctl monitor --json=short` lines with `python3` (member name, not key order) and requires exactly one `InstalledChanged`, and still one after a second `ListInstalled`.
+
+Tests (Rust, `ruya-store`):
+- `service::tests::a_correction_after_an_outside_removal_is_announced_exactly_once`, `a_job_that_ends_during_a_query_is_announced_once`, `every_call_that_reads_the_installed_set_announces_its_correction` (install, uninstall, update, rollback). Revert check: with `sync_installed` returning `false` always, these three fail; with `state.announced = now` removed, the first two fail.
+- `dbus::tests::a_flatpak_call_that_blocks_does_not_stop_another_call_from_being_answered` and `install_does_not_hold_the_executor_and_a_correction_reaches_the_signals`: integration-style, on the handler path (the `StoreIface` methods are called directly, without a bus, because a bus connection does not exist on the host). The fake's `after_next_installed` hook blocks `flatpak list`; one thread plays the executor, the slow handler is polled once and must be `Pending` (it is `Ready` after the hook's 3 s timeout when it runs inline), then `get_app` and `list_remotes` are answered while it hangs, then it is released and ends with its answer and one `InstalledChanged`. Revert check: with `off_executor` running the call inline instead of `blocking::unblock`, both fail (after the 3 s safety timeout).
+- Test helper in `dbus.rs`: `Handle(Arc<FakeFlatpak>)` implements `Flatpak` so the test keeps a handle on the fake.
+
+Contract: the XML only gains a comment (`InstalledChanged` is also sent for such a correction, may arrive before the call's reply); no signature changed. Spec 03 Store section updated.
+
+Not covered here: `AddRemote`, `GetApp` and `ListJobs` were already off the executor; the shell side (T-191) is untouched. A new `Sender` is cloned per call (cheap).

@@ -176,7 +176,9 @@
 
     <!-- The set of installed apps, or an app's update flag, changed: call ListInstalled again (the
          installed and update_available flags of apps already held change with it). Not sent for a
-         catalogue re-read that changed no installed state. -->
+         catalogue re-read that changed no installed state. Also sent when a call that reads Flatpak
+         (Install, Uninstall, Update, Rollback, ListInstalled) finds the installed set changed outside
+         the Store (flatpak uninstall by hand), once per change; it may arrive before that call's reply. -->
     <signal name="InstalledChanged"/>
 
     <!-- The catalogue was (re)read: after the service first read it, after an AppStream refresh and

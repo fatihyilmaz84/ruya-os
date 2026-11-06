@@ -70,9 +70,9 @@ struct State {
     queue: Queue,
     /// Permissions by (app id, remote): metadata is read once per app, not on every refresh.
     permissions: HashMap<(String, String), Vec<String>>,
-    /// The installed set and update flags the clients were last told about (or read first):
-    /// `refresh` compares against this, not against the catalogue, which `sync_installed` may
-    /// have corrected in between, so a job's change is never swallowed.
+    /// The installed set and update flags the clients were last told about (or read first).
+    /// `refresh` and `sync_installed` compare against this and set it, so a change is announced
+    /// once, by whichever of them sees it first.
     announced: Vec<(String, bool)>,
     /// Bumped by every `refresh`; `sync_installed` drops a read that a refresh overtook.
     generation: u64,
@@ -290,15 +290,19 @@ impl<F: Flatpak> Store<F> {
     /// it is correct at the moment that matters and costs one `flatpak list`, which is fast
     /// next to the transactions and the remote reads the same calls lead to. A failing read
     /// keeps what the catalogue says.
-    fn sync_installed(&self) {
+    ///
+    /// Returns whether the correction changed the installed set or an update flag, i.e. whether
+    /// the clients have to be told (`InstalledChanged`). The change is recorded as announced, so
+    /// the next `refresh` does not report it a second time.
+    fn sync_installed(&self) -> bool {
         let generation = self.state().generation;
         let Ok(installed) = self.flatpak.installed() else {
-            return;
+            return false;
         };
         let mut state = self.state();
         if state.generation != generation {
             // A refresh finished while `flatpak list` ran: its catalogue is newer than this read.
-            return;
+            return false;
         }
         for app in &mut state.catalogue {
             match installed.iter().find(|i| i.id == app.id) {
@@ -312,10 +316,23 @@ impl<F: Flatpak> Store<F> {
                 }
             }
         }
+        let now = owned_signature(&state.catalogue);
+        let changed = state.announced != now;
+        state.announced = now;
+        changed
     }
 
-    pub fn list_installed(&self) -> Vec<App> {
-        self.sync_installed();
+    /// `sync_installed`, telling the clients through `emit` when it corrected something.
+    fn sync_and_announce(&self, emit: &mut dyn FnMut(Event)) {
+        if self.sync_installed() {
+            emit(Event::InstalledChanged);
+        }
+    }
+
+    /// The installed apps as Flatpak has them now. A correction of the catalogue (an app changed
+    /// outside the Store) is announced through `emit`.
+    pub fn list_installed(&self, emit: &mut dyn FnMut(Event)) -> Vec<App> {
+        self.sync_and_announce(emit);
         self.state()
             .catalogue
             .iter()
@@ -328,6 +345,7 @@ impl<F: Flatpak> Store<F> {
     fn queue(
         &self,
         id: &str,
+        emit: &mut dyn FnMut(Event),
         check: impl FnOnce(&App) -> Option<Status>,
         op: impl FnOnce(&App) -> Operation,
     ) -> (Status, String) {
@@ -335,7 +353,7 @@ impl<F: Flatpak> Store<F> {
             return (Status::Invalid, String::new());
         }
         // Flatpak decides what is installed, not the cache of the last refresh.
-        self.sync_installed();
+        self.sync_and_announce(emit);
         let mut state = self.state();
         let Some(app) = state.catalogue.iter().find(|a| a.id == id).cloned() else {
             return (Status::UnknownApp, String::new());
@@ -355,9 +373,10 @@ impl<F: Flatpak> Store<F> {
         }
     }
 
-    pub fn install(&self, id: &str) -> (Status, String) {
+    pub fn install(&self, id: &str, emit: &mut dyn FnMut(Event)) -> (Status, String) {
         self.queue(
             id,
+            emit,
             |app| app.installed.then_some(Status::AlreadyInstalled),
             |app| Operation::Install {
                 id: app.id.clone(),
@@ -366,9 +385,15 @@ impl<F: Flatpak> Store<F> {
         )
     }
 
-    pub fn uninstall(&self, id: &str, delete_data: bool) -> (Status, String) {
+    pub fn uninstall(
+        &self,
+        id: &str,
+        delete_data: bool,
+        emit: &mut dyn FnMut(Event),
+    ) -> (Status, String) {
         self.queue(
             id,
+            emit,
             |app| (!app.installed).then_some(Status::NotInstalled),
             |app| Operation::Uninstall {
                 id: app.id.clone(),
@@ -377,9 +402,10 @@ impl<F: Flatpak> Store<F> {
         )
     }
 
-    pub fn update(&self, id: &str) -> (Status, String) {
+    pub fn update(&self, id: &str, emit: &mut dyn FnMut(Event)) -> (Status, String) {
         self.queue(
             id,
+            emit,
             |app| {
                 if !app.installed {
                     Some(Status::NotInstalled)
@@ -393,12 +419,18 @@ impl<F: Flatpak> Store<F> {
         )
     }
 
-    pub fn rollback(&self, id: &str, commit: &str) -> (Status, String) {
+    pub fn rollback(
+        &self,
+        id: &str,
+        commit: &str,
+        emit: &mut dyn FnMut(Event),
+    ) -> (Status, String) {
         if !valid_commit(commit) {
             return (Status::Invalid, String::new());
         }
         self.queue(
             id,
+            emit,
             |app| (!app.installed).then_some(Status::NotInstalled),
             |app| Operation::Rollback {
                 id: app.id.clone(),
@@ -735,9 +767,9 @@ mod tests {
     #[test]
     fn install_runs_a_job_and_reports_in_order() {
         let s = store(fake());
-        let (status, job) = s.install("org.ruya.Racer");
+        let (status, job) = s.install("org.ruya.Racer", &mut |_| {});
         assert_eq!((status, job.as_str()), (Status::Ok, "job-1"));
-        assert_eq!(s.install("org.ruya.Racer").0, Status::Busy);
+        assert_eq!(s.install("org.ruya.Racer", &mut |_| {}).0, Status::Busy);
         let events = drain(&s);
         let last_two = &events[events.len() - 2..];
         assert_eq!(last_two[0], Event::InstalledChanged, "before JobFinished");
@@ -753,29 +785,38 @@ mod tests {
             .iter()
             .any(|e| matches!(e, Event::Progress { percent: 100, .. })));
         assert!(s.get_app("org.ruya.Racer").1.installed);
-        assert_eq!(s.list_installed().len(), 1);
-        assert_eq!(s.install("org.ruya.Racer").0, Status::AlreadyInstalled);
+        assert_eq!(s.list_installed(&mut |_| {}).len(), 1);
+        assert_eq!(
+            s.install("org.ruya.Racer", &mut |_| {}).0,
+            Status::AlreadyInstalled
+        );
     }
 
     #[test]
     fn an_app_removed_outside_the_store_can_be_installed_again() {
         let s = store(fake());
-        s.install("org.ruya.Racer");
+        s.install("org.ruya.Racer", &mut |_| {});
         drain(&s);
-        assert_eq!(s.install("org.ruya.Racer").0, Status::AlreadyInstalled);
+        assert_eq!(
+            s.install("org.ruya.Racer", &mut |_| {}).0,
+            Status::AlreadyInstalled
+        );
         // `flatpak uninstall` by hand: the Store is not told.
         s.flatpak.remove_installed("org.ruya.Racer");
         assert!(
-            s.list_installed().is_empty(),
+            s.list_installed(&mut |_| {}).is_empty(),
             "the installed list follows Flatpak"
         );
-        let (status, job) = s.install("org.ruya.Racer");
+        let (status, job) = s.install("org.ruya.Racer", &mut |_| {});
         assert_eq!((status, job.is_empty()), (Status::Ok, false));
         drain(&s);
-        assert_eq!(s.list_installed().len(), 1);
+        assert_eq!(s.list_installed(&mut |_| {}).len(), 1);
         // And the other way round: removed outside, Uninstall says so.
         s.flatpak.remove_installed("org.ruya.Racer");
-        assert_eq!(s.uninstall("org.ruya.Racer", false).0, Status::NotInstalled);
+        assert_eq!(
+            s.uninstall("org.ruya.Racer", false, &mut |_| {}).0,
+            Status::NotInstalled
+        );
     }
 
     #[test]
@@ -783,11 +824,11 @@ mod tests {
         let s = store(fake().with_installed("ruyaos", "org.ruya.Racer", 5_000_000));
         assert!(s.get_app("org.ruya.Racer").1.installed);
         s.flatpak.remove_installed("org.ruya.Racer");
-        assert_eq!(s.install("org.ruya.Racer").0, Status::Ok);
+        assert_eq!(s.install("org.ruya.Racer", &mut |_| {}).0, Status::Ok);
     }
 
     #[test]
-    fn a_job_that_ends_during_a_query_still_sends_installed_changed() {
+    fn a_job_that_ends_during_a_query_is_announced_once() {
         let s = store(fake());
         // The job's `flatpak install` has returned; its refresh has not run yet.
         s.flatpak
@@ -799,22 +840,67 @@ mod tests {
                 &mut |_| {},
             )
             .unwrap();
-        // A query in that window corrects the catalogue ...
-        assert_eq!(s.list_installed().len(), 1);
-        // ... but the clients were not told yet: the refresh must still announce it.
-        assert_eq!(s.refresh(), Ok(true));
-        assert_eq!(s.refresh(), Ok(false), "and only once");
+        // A query in that window corrects the catalogue and tells the clients ...
+        let mut events = Vec::new();
+        assert_eq!(s.list_installed(&mut |e| events.push(e)).len(), 1);
+        assert_eq!(events, [Event::InstalledChanged]);
+        // ... so the job's refresh has nothing left to announce: once, not twice.
+        assert_eq!(s.refresh(), Ok(false));
+    }
+
+    #[test]
+    fn a_correction_after_an_outside_removal_is_announced_exactly_once() {
+        let s = store(fake().with_installed("ruyaos", "org.ruya.Racer", 5_000_000));
+        let mut events = Vec::new();
+        // Nothing changed: nothing to tell.
+        assert_eq!(s.list_installed(&mut |e| events.push(e)).len(), 1);
+        assert!(events.is_empty());
+        // `flatpak uninstall` by hand: the first call that looks corrects and announces ...
+        s.flatpak.remove_installed("org.ruya.Racer");
+        assert!(s.list_installed(&mut |e| events.push(e)).is_empty());
+        assert_eq!(events, [Event::InstalledChanged]);
+        // ... the next one finds nothing to correct, and neither does the next refresh.
+        assert!(s.list_installed(&mut |e| events.push(e)).is_empty());
+        assert_eq!(events.len(), 1);
+        assert_eq!(s.refresh(), Ok(false));
+    }
+
+    #[test]
+    fn every_call_that_reads_the_installed_set_announces_its_correction() {
+        fn announces<R>(
+            call: impl FnOnce(&Store<FakeFlatpak>, &mut dyn FnMut(Event)) -> R,
+        ) -> Vec<Event> {
+            let s = store(fake().with_installed("ruyaos", "org.ruya.Racer", 5_000_000));
+            s.flatpak.remove_installed("org.ruya.Racer");
+            let mut events = Vec::new();
+            call(&s, &mut |e| events.push(e));
+            events
+        }
+        let once = [Event::InstalledChanged];
+        assert_eq!(announces(|s, e| s.install("org.ruya.Racer", e)), once);
+        assert_eq!(
+            announces(|s, e| s.uninstall("org.ruya.Racer", false, e)),
+            once
+        );
+        assert_eq!(announces(|s, e| s.update("org.ruya.Racer", e)), once);
+        assert_eq!(
+            announces(|s, e| s.rollback("org.ruya.Racer", "abcdef123456", e)),
+            once
+        );
     }
 
     #[test]
     fn a_failing_flatpak_list_keeps_the_installed_flags() {
         let s = store(fake().with_installed("ruyaos", "org.ruya.Racer", 5_000_000));
         s.flatpak.set_installed_fails(true);
-        assert_eq!(s.list_installed().len(), 1);
-        assert_eq!(s.install("org.ruya.Racer").0, Status::AlreadyInstalled);
+        assert_eq!(s.list_installed(&mut |_| {}).len(), 1);
+        assert_eq!(
+            s.install("org.ruya.Racer", &mut |_| {}).0,
+            Status::AlreadyInstalled
+        );
         s.flatpak.set_installed_fails(false);
         s.flatpak.remove_installed("org.ruya.Racer");
-        assert_eq!(s.install("org.ruya.Racer").0, Status::Ok);
+        assert_eq!(s.install("org.ruya.Racer", &mut |_| {}).0, Status::Ok);
     }
 
     #[test]
@@ -833,14 +919,14 @@ mod tests {
             s.flatpak.remove_installed("org.ruya.Racer");
             s.refresh().unwrap();
         });
-        assert!(s.list_installed().is_empty());
+        assert!(s.list_installed(&mut |_| {}).is_empty());
         assert!(!s.get_app("org.ruya.Racer").1.installed);
     }
 
     #[test]
     fn progress_never_decreases_whatever_flatpak_prints() {
         let s = store(fake().with_progress(&[10, 60, 30, 60, 100, 90]));
-        s.install("org.ruya.Racer");
+        s.install("org.ruya.Racer", &mut |_| {});
         let seen: Vec<u32> = drain(&s)
             .into_iter()
             .filter_map(|e| match e {
@@ -854,8 +940,8 @@ mod tests {
     #[test]
     fn jobs_run_one_at_a_time_in_order() {
         let s = store(fake());
-        let (_, a) = s.install("org.ruya.Racer");
-        let (_, b) = s.install("org.ruya.Puzzle");
+        let (_, a) = s.install("org.ruya.Racer", &mut |_| {});
+        let (_, b) = s.install("org.ruya.Puzzle", &mut |_| {});
         let finished: Vec<_> = drain(&s)
             .into_iter()
             .filter_map(|e| match e {
@@ -878,7 +964,7 @@ mod tests {
             let f = fake();
             f.fail_next(error);
             let s = store(f);
-            s.install("org.ruya.Racer");
+            s.install("org.ruya.Racer", &mut |_| {});
             let events = drain(&s);
             assert_eq!(
                 events.last(),
@@ -890,7 +976,7 @@ mod tests {
             assert!(!events.contains(&Event::InstalledChanged), "{want:?}");
             assert!(!s.get_app("org.ruya.Racer").1.installed);
             assert_eq!(
-                s.install("org.ruya.Racer").0,
+                s.install("org.ruya.Racer", &mut |_| {}).0,
                 Status::Ok,
                 "free again after {want:?}"
             );
@@ -900,15 +986,27 @@ mod tests {
     #[test]
     fn uninstall_update_and_rollback_need_an_installed_app() {
         let s = store(fake());
-        assert_eq!(s.uninstall("org.ruya.Racer", false).0, Status::NotInstalled);
-        assert_eq!(s.update("org.ruya.Racer").0, Status::NotInstalled);
         assert_eq!(
-            s.rollback("org.ruya.Racer", "abcdef123456").0,
+            s.uninstall("org.ruya.Racer", false, &mut |_| {}).0,
             Status::NotInstalled
         );
-        assert_eq!(s.install("org.nope.Missing").0, Status::UnknownApp);
-        assert_eq!(s.install("not an id").0, Status::Invalid);
-        assert_eq!(s.rollback("org.ruya.Racer", "--user").0, Status::Invalid);
+        assert_eq!(
+            s.update("org.ruya.Racer", &mut |_| {}).0,
+            Status::NotInstalled
+        );
+        assert_eq!(
+            s.rollback("org.ruya.Racer", "abcdef123456", &mut |_| {}).0,
+            Status::NotInstalled
+        );
+        assert_eq!(
+            s.install("org.nope.Missing", &mut |_| {}).0,
+            Status::UnknownApp
+        );
+        assert_eq!(s.install("not an id", &mut |_| {}).0, Status::Invalid);
+        assert_eq!(
+            s.rollback("org.ruya.Racer", "--user", &mut |_| {}).0,
+            Status::Invalid
+        );
     }
 
     #[test]
@@ -918,8 +1016,11 @@ mod tests {
             .with_update("org.ruya.Racer");
         let s = store(f);
         assert!(s.get_app("org.ruya.Racer").1.update_available);
-        assert_eq!(s.update("org.ruya.Puzzle").0, Status::NotInstalled);
-        let (status, _) = s.update("org.ruya.Racer");
+        assert_eq!(
+            s.update("org.ruya.Puzzle", &mut |_| {}).0,
+            Status::NotInstalled
+        );
+        let (status, _) = s.update("org.ruya.Racer", &mut |_| {});
         assert_eq!(status, Status::Ok);
         let events = drain(&s);
         assert!(
@@ -927,7 +1028,7 @@ mod tests {
             "the update flag changed"
         );
         assert!(!s.get_app("org.ruya.Racer").1.update_available);
-        assert_eq!(s.update("org.ruya.Racer").0, Status::NoUpdate);
+        assert_eq!(s.update("org.ruya.Racer", &mut |_| {}).0, Status::NoUpdate);
     }
 
     #[test]
@@ -1011,7 +1112,7 @@ mod tests {
     fn uninstall_and_rollback_are_queued_with_their_arguments() {
         let f = fake().with_installed("ruyaos", "org.ruya.Racer", 1);
         let s = store(f);
-        s.uninstall("org.ruya.Racer", true);
+        s.uninstall("org.ruya.Racer", true, &mut |_| {});
         drain(&s);
         assert_eq!(
             s.flatpak.ran(),
@@ -1020,13 +1121,16 @@ mod tests {
                 delete_data: true
             }]
         );
-        assert!(s.list_installed().is_empty());
+        assert!(s.list_installed(&mut |_| {}).is_empty());
     }
 
     #[test]
     fn rollback_passes_the_commit() {
         let s = store(fake().with_installed("ruyaos", "org.ruya.Racer", 1));
-        assert_eq!(s.rollback("org.ruya.Racer", "abcdef123456").0, Status::Ok);
+        assert_eq!(
+            s.rollback("org.ruya.Racer", "abcdef123456", &mut |_| {}).0,
+            Status::Ok
+        );
         drain(&s);
         assert_eq!(
             s.flatpak.ran(),
@@ -1194,7 +1298,7 @@ mod tests {
     #[test]
     fn a_job_sends_installed_changed_and_never_catalog_changed() {
         let s = store(fake());
-        s.install("org.ruya.Racer");
+        s.install("org.ruya.Racer", &mut |_| {});
         let events = drain(&s);
         assert!(events.contains(&Event::InstalledChanged));
         assert!(!events.contains(&Event::CatalogChanged));
@@ -1245,7 +1349,7 @@ mod tests {
     fn list_jobs_follows_a_job_from_queued_to_finished() {
         let s = store(fake());
         assert!(s.list_jobs().is_empty());
-        let (_, id) = s.install("org.ruya.Racer");
+        let (_, id) = s.install("org.ruya.Racer", &mut |_| {});
         let queued = s.list_jobs();
         assert_eq!(queued.len(), 1);
         assert_eq!(
@@ -1266,7 +1370,7 @@ mod tests {
         assert_eq!(done[0].state, JobState::Finished);
         assert_eq!(done[0].status, Some(JobStatus::Ok));
         assert_eq!((done[0].percent, done[0].interrupted), (100, false));
-        s.uninstall("org.ruya.Racer", false);
+        s.uninstall("org.ruya.Racer", false, &mut |_| {});
         drain(&s);
         let kinds: Vec<_> = s.list_jobs().iter().map(|j| j.kind).collect();
         assert_eq!(kinds, [JobKind::Install, JobKind::Remove], "oldest first");
@@ -1277,7 +1381,7 @@ mod tests {
         let f = fake();
         f.fail_next(FlatpakError::DiskFull);
         let s = store(f);
-        s.install("org.ruya.Racer");
+        s.install("org.ruya.Racer", &mut |_| {});
         drain(&s);
         let jobs = s.list_jobs();
         assert_eq!(jobs[0].status, Some(JobStatus::DiskFull));
@@ -1289,7 +1393,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let file = dir.path().join("jobs");
         let first = file_store(fake(), &file);
-        let (_, id) = first.install("org.ruya.Racer");
+        let (_, id) = first.install("org.ruya.Racer", &mut |_| {});
         drain(&first);
         drop(first);
 
@@ -1300,7 +1404,7 @@ mod tests {
             (jobs[0].id.as_str(), jobs[0].status),
             (id.as_str(), Some(JobStatus::Ok))
         );
-        let (status, next) = second.install("org.ruya.Puzzle");
+        let (status, next) = second.install("org.ruya.Puzzle", &mut |_| {});
         assert_eq!(status, Status::Ok);
         assert_ne!(next, id, "job-1 would be mistaken for the old job");
         assert_eq!(next, "job-2");
@@ -1311,7 +1415,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let file = dir.path().join("jobs");
         let first = file_store(fake(), &file);
-        first.install("org.ruya.Racer"); // never ran: the service died first
+        first.install("org.ruya.Racer", &mut |_| {}); // never ran: the service died first
         drop(first);
 
         // Even if the app is there by now, a job that never started was not what installed it.
@@ -1397,7 +1501,7 @@ mod tests {
         );
         let s = file_store(fake(), &file);
         // The shell is faster than the first ListJobs: a new job is queued before it.
-        let (status, id) = s.install("org.ruya.Racer");
+        let (status, id) = s.install("org.ruya.Racer", &mut |_| {});
         assert_eq!((status, id.as_str()), (Status::Ok, "job-8"));
         let jobs = s.list_jobs();
         assert_eq!(jobs.len(), 2);
@@ -1432,9 +1536,9 @@ mod tests {
     fn only_the_newest_finished_jobs_are_listed() {
         let s = store(fake());
         for _ in 0..(jobs::FINISHED_KEPT + 5) {
-            s.install("org.ruya.Racer");
+            s.install("org.ruya.Racer", &mut |_| {});
             drain(&s);
-            s.uninstall("org.ruya.Racer", false);
+            s.uninstall("org.ruya.Racer", false, &mut |_| {});
             drain(&s);
         }
         let list = s.list_jobs();
