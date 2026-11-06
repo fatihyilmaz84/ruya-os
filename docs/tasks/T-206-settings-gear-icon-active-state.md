@@ -1,6 +1,6 @@
 # T-206 — The Settings gear looks wrong when it is the active section
 
-Status: todo · Phase: 2 · Depends: — · Area: shell · Size: S · Owner: builder
+Status: in-progress · Phase: 2 · Depends: — · Area: shell · Size: S · Owner: builder
 
 ## Goal
 The gear pill in the top bar (`SectionNav.qml`, the `Icon { name: "settings"; filled: pill.isSection }`) is crisp, centred, the same visual size as in its inactive state and clearly legible on the white active pill. Owner report, 2026-11-06 (first real-hardware run): "the settings gear icon is rendered bad when it's active".

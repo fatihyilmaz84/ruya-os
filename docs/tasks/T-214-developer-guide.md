@@ -1,6 +1,6 @@
 # T-214 — Developer guide: the complete set, with a sample game that follows it
 
-Status: in-progress · Phase: 2 · Depends: — · Area: docs, scripts · Size: M · Owner: builder
+Status: done · Phase: 2 · Depends: — · Area: docs, scripts · Size: M · Owner: builder
 
 ## Goal
 A developer who has never seen RuyaOS can build a game or app, run it on a RuyaOS dev machine, make it behave well (controller, full screen, saves, stop), and publish it, using only `docs/developers/`. **Priority task** (owner, 2026-11-06: "make the developer documentation also a priority"): outside developers are the way the console gets games. `docs/developers/README.md` is the index and `saves-and-data.md` is written (by the lead, the model for tone and depth: short rules, examples that run, a checklist, a clear line between "built" and "planned").
