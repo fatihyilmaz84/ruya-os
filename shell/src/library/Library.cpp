@@ -89,3 +89,15 @@ void Library::resetMockForTests(const QString &scenario)
     if (auto *mock = qobject_cast<MockLibraryBackend *>(m_backend.get()))
         mock->reset(scenario);
 }
+
+void Library::mockListDelayed(int ms)
+{
+    if (auto *mock = qobject_cast<MockLibraryBackend *>(m_backend.get()))
+        mock->listItemsDelayed(ms);
+}
+
+int Library::mockPendingReplies() const
+{
+    auto *mock = qobject_cast<MockLibraryBackend *>(m_backend.get());
+    return mock ? mock->pendingReplies() : 0;
+}

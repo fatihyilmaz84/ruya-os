@@ -81,6 +81,18 @@ void Update::noteActivity(bool appRunning)
     m_backend->reportActivity(appRunning);
 }
 
+void Update::mockRefreshDelayed(int ms)
+{
+    if (auto *mock = qobject_cast<MockUpdateBackend *>(m_backend.get()))
+        mock->refreshDelayed(ms);
+}
+
+int Update::mockPendingReplies() const
+{
+    auto *mock = qobject_cast<MockUpdateBackend *>(m_backend.get());
+    return mock ? mock->pendingReplies() : 0;
+}
+
 void Update::mockReset()
 {
     m_lastReport.invalidate();

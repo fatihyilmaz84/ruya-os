@@ -13,7 +13,8 @@
 // InstalledChanged and ok. "org.example.Broken" always fails part-way. Like the service it keeps a
 // job table (listJobs): the jobs queued or running and a record of each finished one. Losing the
 // service ends its jobs as "failed, interrupted"; regainService() plays the new service owner:
-// it reads the lists and the job table again.
+// it reads the lists and the job table again. Its job signals go through the same JobBook as the
+// D-Bus client's (T-191), under job names of its own, so the races of the job table can be tested.
 class MockStoreBackend final : public StoreBackend
 {
     Q_OBJECT
@@ -40,11 +41,26 @@ public:
     // the shell's side of a new owner: read the installed list, the catalogue and the job table.
     void regainService(const QStringList &finishedApps);
     // Tests only: the service ended its running jobs and the shell heard nothing of it (a lost
-    // signal): they are in the job table as failed, with no JobFinished.
+    // signal) and does not track them (it never knew them): they are in the job table as failed,
+    // with no JobFinished.
     void forgetJobs();
+    // Tests only: running jobs stand still (no progress, no end) until resumed.
+    void pauseJobs(bool paused);
+    // Tests only: the same, but the shell tracks the jobs (it started them) and the job table says
+    // how they ended: status. The app records stay as they are.
+    void endJobsUnheard(const QString &status);
+    // Tests only: the job table has one more finished job (another client ran it), after the others.
+    void recordFinishedJob(const QString &appId, const QString &kind, const QString &status);
     // Tests only: ask for the job table, but deliver the reply after ms (a slow service).
     void listJobsDelayed(int ms);
+    // Tests only: ask for the job table, and the call fails.
+    void listJobsFailing();
+    // Tests only: ask for the installed list / the whole catalogue, but deliver the reply (a
+    // snapshot of now) after ms.
+    void refreshDelayed(int ms);
+    void searchDelayed(int ms);
     int pendingJobLists() const { return m_pendingJobLists; }
+    int pendingReplies() const { return m_pendingReplies; }
     int searchCount() const { return m_searchCount; }
     void announceCatalogChanged() { emit catalogChanged(); }
 
@@ -62,6 +78,8 @@ private:
     void startJob(const QString &id, Job::Kind kind);
     void step();
     void finish(const Job &job, const QString &status);
+    void refreshAfter(int ms);
+    void searchAfter(const QString &query, bool gamepadOnly, uint limit, int ms);
     void reject(const QString &id, const QString &status);
     QList<AppInfo> installedApps() const;
     QList<StoreJob> jobTable() const;
@@ -73,8 +91,10 @@ private:
     QList<StoreJob> m_finishedJobs; // the service's record of jobs that ended
     int m_jobCounter = 0;
     int m_pendingJobLists = 0;
+    int m_pendingReplies = 0; // installed list and search replies not delivered yet
     QSet<QString> m_dataDeleted;
     QTimer m_timer;
     int m_stepMs = 100;
     int m_searchCount = 0;
+    bool m_paused = false;
 };

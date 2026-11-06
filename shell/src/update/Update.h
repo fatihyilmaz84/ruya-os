@@ -73,6 +73,10 @@ public:
 
     // Tests only, and only with the mock backend (otherwise a no-op / 0).
     Q_INVOKABLE void mockReset();
+    // A status request whose reply (a snapshot of now) arrives after ms, and how many replies are
+    // still due.
+    Q_INVOKABLE void mockRefreshDelayed(int ms);
+    Q_INVOKABLE int mockPendingReplies() const;
     Q_INVOKABLE void mockSetUpdateExists(bool exists);
     Q_INVOKABLE void mockSetRollbackAvailable(bool available);
     Q_INVOKABLE void mockFailNextCheck();

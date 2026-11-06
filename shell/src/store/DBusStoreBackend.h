@@ -4,7 +4,6 @@
 
 #include <QDBusConnection>
 #include <QDBusServiceWatcher>
-#include <QHash>
 
 // Client of org.ruyaos.Store1 (api/dbus/org.ruyaos.Store1.xml) on the system bus, or the session
 // bus when RUYA_DBUS=session. The service may start after the shell, so the lists and the job
@@ -36,18 +35,4 @@ private:
 
     QDBusConnection m_bus;
     QDBusServiceWatcher m_watcher;
-    QHash<QString, QString> m_jobApps; // job id -> app id
-
-    // A signal can overtake the reply that names its job. While an Install/Uninstall/Update call
-    // is unanswered, signals of unknown jobs are kept and replayed once the reply maps the id.
-    struct EarlySignal
-    {
-        bool finished = false;
-        uint percent = 0;
-        QString phase;
-        QString status;
-    };
-    void replay(const QString &job, const QString &appId);
-    QHash<QString, QList<EarlySignal>> m_early;
-    int m_pendingCalls = 0;
 };

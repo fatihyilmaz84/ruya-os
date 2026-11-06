@@ -5,7 +5,6 @@
 #include <QDBusPendingCallWatcher>
 #include <QDBusPendingReply>
 #include <QDBusVariant>
-#include <QScopeGuard>
 
 namespace {
 const QString Service = QStringLiteral("org.ruyaos.Store1");
@@ -112,10 +111,7 @@ DBusStoreBackend::DBusStoreBackend(QObject *parent)
             [this](const QString &, const QString &oldOwner, const QString &) {
         if (oldOwner.isEmpty())
             return;
-        const QStringList ids = m_jobApps.values(); // running and queued jobs the client knows
-        m_jobApps.clear();
-        m_early.clear();
-        emit serviceLost(ids);
+        emit serviceLost(jobBook().lose()); // running and queued jobs the client knows
     });
     connect(&m_watcher, &QDBusServiceWatcher::serviceRegistered, this, [this] {
         refresh();
@@ -131,22 +127,26 @@ DBusStoreBackend::DBusStoreBackend(QObject *parent)
 
 void DBusStoreBackend::refresh()
 {
+    // InstalledChanged can arrive before the reply of the call that caused it, and the service
+    // answers concurrently, so two replies can arrive out of order: the newest one wins.
+    const quint64 request = beginInstalledRequest();
     auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("ListInstalled"));
     auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
-    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this](QDBusPendingCallWatcher *w) {
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, request](QDBusPendingCallWatcher *w) {
         w->deleteLater();
         const QDBusMessage reply = w->reply();
         if (reply.type() != QDBusMessage::ReplyMessage || reply.arguments().isEmpty()) {
             qWarning("ruya-shell: Store1 ListInstalled failed: %s", qPrintable(reply.errorMessage()));
+            acceptInstalled(request); // a failure is an outcome too: an older reply after it is stale
             return;
         }
-        emit installedListed(parseApps(reply.arguments().constFirst().value<QDBusArgument>()));
+        deliverInstalled(request, parseApps(reply.arguments().constFirst().value<QDBusArgument>()));
     });
 }
 
 void DBusStoreBackend::listJobs()
 {
-    const quint64 request = beginJobsRequest();
+    const quint64 request = jobBook().listSent();
     auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("ListJobs"));
     auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
     connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, request](QDBusPendingCallWatcher *w) {
@@ -154,20 +154,10 @@ void DBusStoreBackend::listJobs()
         const QDBusMessage reply = w->reply();
         if (reply.type() != QDBusMessage::ReplyMessage || reply.arguments().isEmpty()) {
             qWarning("ruya-shell: Store1 ListJobs failed: %s", qPrintable(reply.errorMessage()));
+            jobBook().listFailed(request);
             return;
         }
-        if (!acceptJobs(request))
-            return;
-        const QList<StoreJob> jobs = parseJobs(reply.arguments().constFirst().value<QDBusArgument>());
-        // Signals of the jobs that are still going map to their apps from now on; the others have
-        // nothing more to say.
-        for (const StoreJob &j : jobs) {
-            if (j.state == QLatin1String("finished"))
-                m_jobApps.remove(j.id);
-            else
-                m_jobApps.insert(j.id, j.appId);
-        }
-        emit jobsListed(jobs);
+        jobBook().listAnswered(request, parseJobs(reply.arguments().constFirst().value<QDBusArgument>()));
     });
 }
 
@@ -180,15 +170,17 @@ void DBusStoreBackend::search(const QString &query, bool gamepadOnly, uint limit
     if (limit != 0)
         options.insert(QStringLiteral("limit"), limit);
     msg << query << options;
+    const quint64 request = beginSearchRequest(query, gamepadOnly);
     auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
-    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, query, gamepadOnly](QDBusPendingCallWatcher *w) {
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, query, gamepadOnly, request](QDBusPendingCallWatcher *w) {
         w->deleteLater();
         const QDBusMessage reply = w->reply();
         if (reply.type() != QDBusMessage::ReplyMessage || reply.arguments().isEmpty()) {
             qWarning("ruya-shell: Store1 Search failed: %s", qPrintable(reply.errorMessage()));
+            acceptSearch(query, gamepadOnly, request); // a failure is an outcome too
             return;
         }
-        emit searchFinished(query, gamepadOnly, parseApps(reply.arguments().constFirst().value<QDBusArgument>()));
+        deliverSearch(query, gamepadOnly, request, parseApps(reply.arguments().constFirst().value<QDBusArgument>()));
     });
 }
 
@@ -215,30 +207,26 @@ void DBusStoreBackend::startJob(const QString &method, const QString &id, const 
 {
     auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, method);
     msg.setArguments(args);
-    ++m_pendingCalls;
+    jobBook().callSent(); // signals of the job it names may arrive before its reply (JobBook.h)
     auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
     connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, method, id](QDBusPendingCallWatcher *w) {
         w->deleteLater();
         QDBusPendingReply<QString, QString> reply = *w;
-        // Signals that arrived before this reply belong to the job it names (below), or to no one.
-        const auto done = qScopeGuard([this] {
-            if (--m_pendingCalls == 0)
-                m_early.clear();
-        });
         if (!reply.isValid()) {
             qWarning("ruya-shell: Store1 %s %s failed: %s", qPrintable(method), qPrintable(id),
                      qPrintable(reply.error().message()));
+            jobBook().callEnded();
             emit jobFinished(id, QStringLiteral("failed"));
             return;
         }
         const QString status = reply.argumentAt<0>();
         const QString job = reply.argumentAt<1>();
-        if (status == QLatin1String("ok") && !job.isEmpty())
-        {
-            m_jobApps.insert(job, id); // progress and the result arrive as signals
-            replay(job, id);
-        } else
+        if (status == QLatin1String("ok") && !job.isEmpty()) {
+            jobBook().callAnswered(job, id); // progress and the result arrive as signals
+        } else {
+            jobBook().callEnded();
             emit jobFinished(id, status);
+        }
     });
 }
 
@@ -257,33 +245,12 @@ void DBusStoreBackend::update(const QString &id)
     startJob(QStringLiteral("Update"), id, {id});
 }
 
-void DBusStoreBackend::replay(const QString &job, const QString &appId)
-{
-    const QList<EarlySignal> early = m_early.take(job);
-    for (const EarlySignal &e : early) {
-        if (e.finished) {
-            m_jobApps.remove(job);
-            emit jobFinished(appId, e.status);
-        } else {
-            emit jobProgress(appId, int(e.percent), e.phase);
-        }
-    }
-}
-
 void DBusStoreBackend::onJobProgress(const QString &job, uint percent, const QString &phase)
 {
-    const auto it = m_jobApps.constFind(job);
-    if (it != m_jobApps.cend())
-        emit jobProgress(it.value(), int(percent), phase);
-    else if (m_pendingCalls > 0)
-        m_early[job].append({false, percent, phase, QString()});
+    jobBook().onProgress(job, percent, phase);
 }
 
 void DBusStoreBackend::onJobFinished(const QString &job, const QString &status)
 {
-    const QString id = m_jobApps.take(job);
-    if (!id.isEmpty())
-        emit jobFinished(id, status);
-    else if (m_pendingCalls > 0)
-        m_early[job].append({true, 0, QString(), status});
+    jobBook().onFinished(job, status);
 }

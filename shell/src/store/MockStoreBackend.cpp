@@ -73,7 +73,9 @@ void MockStoreBackend::initState()
 void MockStoreBackend::reset()
 {
     m_timer.stop();
+    m_paused = false;
     m_jobs.clear();
+    jobBook().forgetAll();
     m_finishedJobs.clear();
     m_dataDeleted.clear();
     initState();
@@ -126,13 +128,39 @@ void MockStoreBackend::getApp(const QString &id)
 
 void MockStoreBackend::refresh()
 {
+    refreshAfter(0);
+}
+
+void MockStoreBackend::refreshDelayed(int ms)
+{
+    refreshAfter(ms);
+}
+
+void MockStoreBackend::refreshAfter(int ms)
+{
+    const quint64 request = beginInstalledRequest();
     const QList<AppInfo> list = installedApps();
-    QTimer::singleShot(0, this, [this, list] { emit installedListed(list); });
+    ++m_pendingReplies;
+    QTimer::singleShot(ms, this, [this, request, list] {
+        --m_pendingReplies;
+        deliverInstalled(request, list);
+    });
 }
 
 void MockStoreBackend::search(const QString &query, bool gamepadOnly, uint limit)
 {
+    searchAfter(query, gamepadOnly, limit, 0);
+}
+
+void MockStoreBackend::searchDelayed(int ms)
+{
+    searchAfter(QString(), false, 0, ms);
+}
+
+void MockStoreBackend::searchAfter(const QString &query, bool gamepadOnly, uint limit, int ms)
+{
     ++m_searchCount;
+    const quint64 request = beginSearchRequest(query, gamepadOnly);
     QList<AppInfo> out;
     for (const AppInfo &a : std::as_const(m_apps)) {
         if (limit != 0 && uint(out.size()) >= limit)
@@ -143,7 +171,11 @@ void MockStoreBackend::search(const QString &query, bool gamepadOnly, uint limit
             || a.summary.contains(query, Qt::CaseInsensitive) || a.id.contains(query, Qt::CaseInsensitive))
             out.append(listed(a));
     }
-    QTimer::singleShot(0, this, [this, query, gamepadOnly, out] { emit searchFinished(query, gamepadOnly, out); });
+    ++m_pendingReplies;
+    QTimer::singleShot(ms, this, [this, query, gamepadOnly, request, out] {
+        --m_pendingReplies;
+        deliverSearch(query, gamepadOnly, request, out);
+    });
 }
 
 void MockStoreBackend::reject(const QString &id, const QString &status)
@@ -160,7 +192,17 @@ void MockStoreBackend::startJob(const QString &id, Job::Kind kind)
         }
     }
     m_jobs.append({id, kind, 0, QStringLiteral("mock-%1").arg(++m_jobCounter)});
-    if (!m_timer.isActive())
+    jobBook().track(m_jobs.last().jobId, id); // as the D-Bus client does once the call is answered
+    if (!m_paused && !m_timer.isActive())
+        m_timer.start();
+}
+
+void MockStoreBackend::pauseJobs(bool paused)
+{
+    m_paused = paused;
+    if (paused)
+        m_timer.stop();
+    else if (!m_jobs.isEmpty())
         m_timer.start();
 }
 
@@ -217,7 +259,7 @@ void MockStoreBackend::step()
         phase = QStringLiteral("update");
     else if (job.kind == Job::Install)
         phase = job.percent < 50 ? QStringLiteral("download") : QStringLiteral("install");
-    emit jobProgress(job.id, job.percent, phase);
+    jobBook().onProgress(job.jobId, uint(job.percent), phase);
 
     if (job.id == Broken && job.kind == Job::Install && job.percent >= 60) {
         const Job done = m_jobs.takeFirst();
@@ -245,7 +287,7 @@ void MockStoreBackend::finish(const Job &job, const QString &status)
 {
     m_finishedJobs.append({job.jobId, job.id, kindName(job.kind), QStringLiteral("finished"), status, QString(),
                            status == QLatin1String("ok") ? 100u : uint(job.percent), QString()});
-    emit jobFinished(job.id, status);
+    jobBook().onFinished(job.jobId, status);
 }
 
 QString MockStoreBackend::kindName(Job::Kind kind)
@@ -271,44 +313,64 @@ QList<StoreJob> MockStoreBackend::jobTable() const
 
 void MockStoreBackend::listJobs()
 {
-    const quint64 request = beginJobsRequest();
+    const quint64 request = jobBook().listSent();
     const QList<StoreJob> table = jobTable();
-    QTimer::singleShot(0, this, [this, request, table] { deliverJobs(request, table); });
+    QTimer::singleShot(0, this, [this, request, table] { jobBook().listAnswered(request, table); });
 }
 
 void MockStoreBackend::listJobsDelayed(int ms)
 {
-    const quint64 request = beginJobsRequest();
+    const quint64 request = jobBook().listSent();
     const QList<StoreJob> table = jobTable();
     ++m_pendingJobLists;
     QTimer::singleShot(ms, this, [this, request, table] {
         --m_pendingJobLists;
-        deliverJobs(request, table);
+        jobBook().listAnswered(request, table);
+    });
+}
+
+void MockStoreBackend::listJobsFailing()
+{
+    const quint64 request = jobBook().listSent();
+    ++m_pendingJobLists;
+    QTimer::singleShot(0, this, [this, request] {
+        --m_pendingJobLists;
+        jobBook().listFailed(request);
     });
 }
 
 void MockStoreBackend::loseService()
 {
-    QStringList ids;
     for (const Job &j : std::as_const(m_jobs)) {
-        ids.append(j.id);
         // The service cannot resume Flatpak's transaction: the job ends as failed, interrupted.
         m_finishedJobs.append({j.jobId, j.id, kindName(j.kind), QStringLiteral("finished"), QStringLiteral("failed"),
                                QStringLiteral("interrupted"), uint(j.percent), QString()});
     }
     m_timer.stop();
     m_jobs.clear();
-    emit serviceLost(ids);
+    emit serviceLost(jobBook().lose());
 }
 
 void MockStoreBackend::forgetJobs()
 {
+    endJobsUnheard(QStringLiteral("failed"));
+    jobBook().forgetAll();
+}
+
+void MockStoreBackend::endJobsUnheard(const QString &status)
+{
     for (const Job &j : std::as_const(m_jobs)) {
-        m_finishedJobs.append({j.jobId, j.id, kindName(j.kind), QStringLiteral("finished"), QStringLiteral("failed"),
-                               QString(), uint(j.percent), QString()});
+        m_finishedJobs.append({j.jobId, j.id, kindName(j.kind), QStringLiteral("finished"), status, QString(),
+                               status == QLatin1String("ok") ? 100u : uint(j.percent), QString()});
     }
     m_timer.stop();
     m_jobs.clear();
+}
+
+void MockStoreBackend::recordFinishedJob(const QString &appId, const QString &kind, const QString &status)
+{
+    m_finishedJobs.append({QStringLiteral("mock-other-%1").arg(++m_jobCounter), appId, kind, QStringLiteral("finished"),
+                           status, QString(), 0u, QString()});
 }
 
 void MockStoreBackend::regainService(const QStringList &finishedApps)

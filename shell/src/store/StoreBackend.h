@@ -1,7 +1,9 @@
 #pragma once
 
+#include "JobBook.h"
 #include "RequestSequence.h"
 
+#include <QHash>
 #include <QList>
 #include <QObject>
 #include <QString>
@@ -52,19 +54,6 @@ struct AppInfo
     }
 };
 
-// One record of ListJobs (api/dbus/org.ruyaos.Store1.xml, "ListJobs").
-struct StoreJob
-{
-    QString id;     // the service's name for the job
-    QString appId;
-    QString kind;   // "install" | "remove" | "update" | "rollback"
-    QString state;  // "queued" | "running" | "finished"
-    QString status; // "" unless finished: "ok", "failed", ...
-    QString reason; // "" or "interrupted" (the service died while it ran)
-    uint percent = 0;
-    QString phase;
-};
-
 // Transport behind the Store QML singleton: org.ruyaos.Store1 over D-Bus, or an in-memory mock.
 // Results arrive asynchronously through signals. The backend, not the facade, maps the service's
 // job ids to app ids.
@@ -73,7 +62,16 @@ class StoreBackend : public QObject
     Q_OBJECT
 
 public:
-    using QObject::QObject;
+    explicit StoreBackend(QObject *parent = nullptr)
+        : QObject(parent)
+        , m_jobs(this)
+    {
+        // The job book maps the service's job ids to app ids (and keeps the races of the job table
+        // apart, JobBook.h); what it reports is what the backend reports.
+        connect(&m_jobs, &JobBook::jobProgress, this, &StoreBackend::jobProgress);
+        connect(&m_jobs, &JobBook::jobFinished, this, &StoreBackend::jobFinished);
+        connect(&m_jobs, &JobBook::jobsListed, this, &StoreBackend::jobsListed);
+    }
 
     virtual bool isMock() const = 0;
     virtual void refresh() = 0;                           // reports the installed list
@@ -106,24 +104,48 @@ signals:
     // ("unknown-app", "busy", ...) is reported the same way, without any progress before it.
     void jobFinished(const QString &appId, const QString &status);
     // The service's bus name lost its owner (it crashed or restarted): every job it ran is gone
-    // and will never report again. appIds: every app the backend had a job for, running or queued.
-    void serviceLost(const QStringList &appIds);
-    // The service's job table. The facade shows its running jobs and nothing else, and corrects
-    // the apps whose jobs it had given up on when the service was lost.
+    // and will never report again. jobApps: every job the backend had (job id -> app id), running
+    // or queued.
+    void serviceLost(const QHash<QString, QString> &jobApps);
+    // The service's job table, brought up to date with the signals that arrived after it was asked
+    // for (JobBook.h). The facade shows its running jobs and nothing else, and corrects the apps
+    // whose jobs it had given up on when the service was lost.
     void jobsListed(const QList<StoreJob> &jobs);
 
 protected:
-    // Replies can arrive out of order: number each ListJobs request when it is sent and report a
-    // reply only if no newer one has been reported already (RequestSequence.h, T-181).
-    quint64 beginJobsRequest() { return m_jobsSeq.begin(); }
-    // True when this reply is the newest so far (and is reported by deliverJobs).
-    bool acceptJobs(quint64 request) { return m_jobsSeq.accept(request); }
-    void deliverJobs(quint64 request, const QList<StoreJob> &jobs)
+    // Replies can arrive out of order: number each request when it is sent and report a reply only
+    // if no newer one has been reported already; a failed request counts as reported (a failure is
+    // an outcome too) (RequestSequence.h, T-181, T-191). The installed list is one sequence, the
+    // job table is kept by the JobBook, and each search (query, filter) has its own.
+    quint64 beginInstalledRequest() { return m_installedSeq.begin(); }
+    bool acceptInstalled(quint64 request) { return m_installedSeq.accept(request); }
+    void deliverInstalled(quint64 request, const QList<AppInfo> &apps)
     {
-        if (acceptJobs(request))
-            emit jobsListed(jobs);
+        if (acceptInstalled(request))
+            emit installedListed(apps);
     }
+    quint64 beginSearchRequest(const QString &query, bool gamepadOnly)
+    {
+        return m_searchSeq[searchKey(query, gamepadOnly)].begin();
+    }
+    bool acceptSearch(const QString &query, bool gamepadOnly, quint64 request)
+    {
+        return m_searchSeq[searchKey(query, gamepadOnly)].accept(request);
+    }
+    void deliverSearch(const QString &query, bool gamepadOnly, quint64 request, const QList<AppInfo> &apps)
+    {
+        if (acceptSearch(query, gamepadOnly, request))
+            emit searchFinished(query, gamepadOnly, apps);
+    }
+    JobBook &jobBook() { return m_jobs; }
 
 private:
-    RequestSequence m_jobsSeq;
+    static QString searchKey(const QString &query, bool gamepadOnly)
+    {
+        return (gamepadOnly ? QStringLiteral("g:") : QStringLiteral("a:")) + query;
+    }
+
+    RequestSequence m_installedSeq;
+    QHash<QString, RequestSequence> m_searchSeq;
+    JobBook m_jobs;
 };

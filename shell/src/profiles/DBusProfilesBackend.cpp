@@ -45,16 +45,21 @@ DBusProfilesBackend::DBusProfilesBackend(QObject *parent)
 
 void DBusProfilesBackend::refresh()
 {
+    const quint64 request = beginListRequest();
     auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("ListProfiles"));
     auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
-    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this](QDBusPendingCallWatcher *w) {
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, request](QDBusPendingCallWatcher *w) {
         w->deleteLater();
         const QDBusMessage reply = w->reply();
         if (reply.type() != QDBusMessage::ReplyMessage || reply.arguments().isEmpty()) {
             qWarning("ruya-shell: Profiles1.ListProfiles failed: %s", qPrintable(reply.errorMessage()));
-            emit availabilityChanged(false);
+            // A failure is an outcome too: an older reply arriving after it must not undo it.
+            if (acceptList(request))
+                emit availabilityChanged(false);
             return;
         }
+        if (!acceptList(request))
+            return;
         emit availabilityChanged(true);
         emit listed(parseProfiles(reply.arguments().constFirst().value<QDBusArgument>()));
         fetchActive();

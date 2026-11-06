@@ -195,6 +195,26 @@ Item {
             verify(find("detailUninstall").visible)
         }
 
+        // T-191: a job the page did not start (found by the Store when the shell started, or started
+        // elsewhere) shows as working on the app's page; it ends like any other.
+        function test_a_job_the_page_did_not_start_shows_as_working() {
+            openStore()
+            Store.install("org.example.Racer")           // not from the page
+            tryVerify(() => Store.jobs["org.example.Racer"] !== undefined, 2000, "progress arrived")
+            Store.mockPauseJobs(true)
+            openApp("org.example.Racer")
+            verify(Store.jobs["org.example.Racer"] !== undefined)
+            verify(find("page_appDetail").working, "the page shows the running job")
+            verify(find("detailProgress").visible)
+            verify(!find("detailPrimary").active, "it cannot be started twice")
+            verify(!find("detailUninstall").visible)
+            Store.mockPauseJobs(false)
+            tryVerify(() => !find("page_appDetail").working, 5000, "the job ended")
+            tryVerify(() => find("detailPrimary").text === "Open")
+            verify(!find("detailProgress").visible)
+            compare(find("detailError").visible, false)
+        }
+
         function test_install_error_inline() {
             openStore()
             openApp("org.example.Broken")

@@ -20,6 +20,9 @@ public:
 
     bool isMock() const override { return true; }
     void refresh() override;
+    // Tests only: ask for the list, but deliver the reply (a snapshot of now) after ms.
+    void refreshDelayed(int ms);
+    int pendingReplies() const { return m_pending; }
     void switchTo(const QString &id, const QString &pin) override;
     void lock() override;
     void createProfile(const QString &adminId, const QString &adminPin, const QString &name,
@@ -51,6 +54,7 @@ private:
     };
 
     void seed();
+    void refreshAfter(int ms);
     Entry *find(const QString &id);
     // The single place PINs are checked; every failure counts towards lockout.
     Outcome authenticate(const QString &id, const QString &pin);
@@ -60,4 +64,5 @@ private:
     QList<Entry> m_entries;
     QString m_active;
     int m_nextId = 1; // ids are never reused
+    int m_pending = 0; // list replies not delivered yet
 };

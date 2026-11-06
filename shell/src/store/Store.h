@@ -81,9 +81,22 @@ public:
     Q_INVOKABLE void mockServiceRegained(const QStringList &finishedApps = {});
     // The service ended its running jobs without the shell hearing of it (nothing is emitted).
     Q_INVOKABLE void mockForgetJobs();
+    // Running jobs stand still until resumed (no progress, no end).
+    Q_INVOKABLE void mockPauseJobs(bool paused);
+    // The same, but the shell tracks the jobs (it started them): the job table says how they ended.
+    Q_INVOKABLE void mockEndJobsUnheard(const QString &status);
+    // The job table has one more finished job of an app, run by another client (after the others).
+    Q_INVOKABLE void mockRecordFinishedJob(const QString &appId, const QString &kind, const QString &status);
     // A job-table read whose reply arrives after ms, and how many such replies are still due.
     Q_INVOKABLE void mockListJobsDelayed(int ms);
     Q_INVOKABLE int mockPendingJobLists() const;
+    // A job-table read whose call fails.
+    Q_INVOKABLE void mockListJobsFailing();
+    // A read of the installed list / of the whole catalogue whose reply (a snapshot of now) arrives
+    // after ms, and how many such replies are still due.
+    Q_INVOKABLE void mockInstalledDelayed(int ms);
+    Q_INVOKABLE void mockCatalogueDelayed(int ms);
+    Q_INVOKABLE int mockPendingReplies() const;
     Q_INVOKABLE int mockSearchCount() const;
     Q_INVOKABLE void mockCatalogChanged();
 
@@ -114,7 +127,9 @@ private:
     QVariantList m_installed;
     QVariantList m_results;
     QVariantMap m_jobs;
-    QSet<QString> m_lost; // apps whose job was given up as failed when the service was lost
+    // Apps whose job was given up as failed when the service was lost -> the service's name for
+    // that job ("" if unknown). An app leaves it once a later job of it is reported.
+    QHash<QString, QString> m_lost;
     QHash<QString, QStringList> m_added; // app id -> what its update adds, from loadApp
     QString m_lastQuery;
     bool m_gamepadOnly = false;

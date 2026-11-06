@@ -63,17 +63,19 @@ DBusUpdateBackend::DBusUpdateBackend(QObject *parent)
 
 void DBusUpdateBackend::refresh()
 {
+    const quint64 request = beginStatusRequest();
     auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("GetStatus"));
     auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
-    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this](QDBusPendingCallWatcher *w) {
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, request](QDBusPendingCallWatcher *w) {
         w->deleteLater();
         const QDBusMessage message = w->reply();
         if (message.type() != QDBusMessage::ReplyMessage || message.arguments().isEmpty()) {
             qWarning("ruya-shell: Update1 GetStatus failed: %s", qPrintable(w->error().message()));
+            acceptStatus(request); // a failure is an outcome too: an older reply after it is stale
             return;
         }
         const QDBusArgument arg = message.arguments().at(0).value<QDBusArgument>();
-        emit statusChanged(toStatus(parseDict(arg)));
+        deliverStatus(request, toStatus(parseDict(arg)));
     });
 }
 

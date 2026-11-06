@@ -31,8 +31,12 @@ Page {
 
     property string pinStep: "idle"    // idle | pin | working
     property string adminId: ""
-    property bool working: false
-    property string kind: ""       // "install" | "update" | "uninstall" while working
+    // A request of this page is unanswered (it may be queued behind another job, with no progress
+    // yet), or a job of this app runs: started here, by another page, or found by the Store when
+    // the shell started (Store.jobs, T-191).
+    property bool requested: false
+    readonly property bool working: requested || job !== null
+    property string kind: ""       // "install" | "update" | "uninstall" while requested
     property string errorText: ""
 
     title: app.name ?? ""
@@ -96,7 +100,7 @@ Page {
             return
         page.errorText = ""
         page.kind = what
-        page.working = true
+        page.requested = true
         if (what === "install")
             Store.install(page.appId)
         else if (what === "update")
@@ -148,7 +152,7 @@ Page {
     function confirmUninstall(deleteData) {
         page.errorText = ""
         page.kind = "uninstall"
-        page.working = true
+        page.requested = true
         Store.uninstall(page.appId, deleteData)
     }
 
@@ -178,7 +182,7 @@ Page {
         function onJobFinished(id, status) {
             if (id !== page.appId)
                 return
-            page.working = false
+            page.requested = false
             page.errorText = status === "ok" ? "" : page.describe(status)
         }
     }

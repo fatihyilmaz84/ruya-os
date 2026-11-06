@@ -6,6 +6,7 @@
 #include <QHash>
 
 #include <algorithm>
+#include <utility>
 
 Store::Store(std::unique_ptr<StoreBackend> backend, QObject *parent)
     : QObject(parent)
@@ -66,19 +67,21 @@ Store::Store(std::unique_ptr<StoreBackend> backend, QObject *parent)
             m_backend->search(m_lastQuery, m_gamepadOnly, 0);
     });
     connect(m_backend.get(), &StoreBackend::jobProgress, this, [this](const QString &id, int percent, const QString &phase) {
+        m_lost.remove(id); // a job after the lost one: the lost one is history
         m_jobs.insert(id, QVariantMap{{QStringLiteral("percent"), percent}, {QStringLiteral("phase"), phase}});
         emit jobsChanged();
     });
     connect(m_backend.get(), &StoreBackend::jobFinished, this, [this](const QString &id, const QString &status) {
+        m_lost.remove(id);
         if (m_jobs.remove(id))
             emit jobsChanged();
         emit jobFinished(id, status);
     });
-    connect(m_backend.get(), &StoreBackend::serviceLost, this, [this](const QStringList &appIds) {
+    connect(m_backend.get(), &StoreBackend::serviceLost, this, [this](const QHash<QString, QString> &jobApps) {
         // A job of the lost service never finishes; do not show it for ever. Pages waiting for
         // its result get "failed" so that they stop working.
         QStringList ids = m_jobs.keys(); // running; a queued job has no progress yet
-        for (const QString &id : appIds) {
+        for (const QString &id : jobApps) {
             if (!ids.contains(id))
                 ids.append(id);
         }
@@ -86,10 +89,10 @@ Store::Store(std::unique_ptr<StoreBackend> backend, QObject *parent)
             m_jobs.clear();
             emit jobsChanged();
         }
-        for (const QString &id : ids) {
-            m_lost.insert(id);
+        for (const QString &id : ids)
+            m_lost.insert(id, jobApps.key(id)); // the job by its id: its app may get others
+        for (const QString &id : ids)
             emit jobFinished(id, QStringLiteral("failed"));
-        }
     });
     connect(m_backend.get(), &StoreBackend::jobsListed, this, [this](const QList<StoreJob> &jobs) {
         // The table is the truth: it replaces what was shown, which may be stale.
@@ -103,17 +106,16 @@ Store::Store(std::unique_ptr<StoreBackend> backend, QObject *parent)
             emit jobsChanged();
         }
         // An app whose job was given up as failed may have a different result: Flatpak finished
-        // it, or it failed for another reason. What is "failed" already needs no second word.
-        for (const QString &app : std::as_const(m_lost)) {
-            const StoreJob *last = nullptr;
-            for (const StoreJob &j : jobs) {
-                if (j.appId == app)
-                    last = &j;
-            }
-            if (last && last->state == QLatin1String("finished") && last->status != QLatin1String("failed"))
-                emit jobFinished(app, last->status);
+        // it, or it failed for another reason. That job is found by its id (the app may have had
+        // others since). What is "failed" already needs no second word.
+        const QHash<QString, QString> lost = std::exchange(m_lost, {});
+        for (auto it = lost.cbegin(); it != lost.cend(); ++it) {
+            if (it.value().isEmpty())
+                continue;
+            const auto job = std::find_if(jobs.cbegin(), jobs.cend(), [&it](const StoreJob &j) { return j.id == it.value(); });
+            if (job != jobs.cend() && job->state == QLatin1String("finished") && job->status != QLatin1String("failed"))
+                emit jobFinished(it.key(), job->status);
         }
-        m_lost.clear();
         emit jobsReconciled();
     });
     m_backend->refresh();
@@ -279,6 +281,48 @@ void Store::mockForgetJobs()
 {
     if (auto *mock = qobject_cast<MockStoreBackend *>(m_backend.get()))
         mock->forgetJobs();
+}
+
+void Store::mockPauseJobs(bool paused)
+{
+    if (auto *mock = qobject_cast<MockStoreBackend *>(m_backend.get()))
+        mock->pauseJobs(paused);
+}
+
+void Store::mockEndJobsUnheard(const QString &status)
+{
+    if (auto *mock = qobject_cast<MockStoreBackend *>(m_backend.get()))
+        mock->endJobsUnheard(status);
+}
+
+void Store::mockRecordFinishedJob(const QString &appId, const QString &kind, const QString &status)
+{
+    if (auto *mock = qobject_cast<MockStoreBackend *>(m_backend.get()))
+        mock->recordFinishedJob(appId, kind, status);
+}
+
+void Store::mockListJobsFailing()
+{
+    if (auto *mock = qobject_cast<MockStoreBackend *>(m_backend.get()))
+        mock->listJobsFailing();
+}
+
+void Store::mockInstalledDelayed(int ms)
+{
+    if (auto *mock = qobject_cast<MockStoreBackend *>(m_backend.get()))
+        mock->refreshDelayed(ms);
+}
+
+void Store::mockCatalogueDelayed(int ms)
+{
+    if (auto *mock = qobject_cast<MockStoreBackend *>(m_backend.get()))
+        mock->searchDelayed(ms);
+}
+
+int Store::mockPendingReplies() const
+{
+    auto *mock = qobject_cast<MockStoreBackend *>(m_backend.get());
+    return mock ? mock->pendingReplies() : 0;
 }
 
 void Store::mockListJobsDelayed(int ms)
