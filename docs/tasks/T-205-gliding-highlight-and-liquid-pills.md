@@ -1,6 +1,6 @@
 # T-205 — Gliding highlight with velocity stretch, and liquid-glass pills
 
-Status: todo · Phase: 2 · Depends: T-204 · Area: shell · Size: M · Owner: lead
+Status: in-progress · Phase: 2 · Depends: T-204 · Area: shell · Size: M · Owner: builder
 
 ## Goal
 Moving through the section nav and the Settings categories feels like one highlight gliding between rows (and stretching when you scroll fast) instead of each row switching its fill; on capable GPUs the top-bar pills refract what is behind them. Both from `04` §3.8 (owner, 2026-11-06). Riskier than T-204 (a different focus architecture, a shader), hence the lead.

@@ -31,7 +31,7 @@ Open work only, in the recommended order; when NEXT is blocked take the first `t
 | [T-201](tasks/T-201-recover-from-stuck-processes.md) | **[lead]** Recover from stuck processes (watchdogs, OOM) | todo | — |
 | [T-202](tasks/T-202-screen-saver-and-power-saving.md) | Screen saver and power saving | todo | — |
 | [T-203](tasks/T-203-pair-a-controller-without-a-keyboard.md) | Pair a controller with no keyboard | todo | — |
-| [T-205](tasks/T-205-gliding-highlight-and-liquid-pills.md) | **[lead]** Gliding highlight, liquid-glass pills | todo | T-204 |
+| [T-205](tasks/T-205-gliding-highlight-and-liquid-pills.md) | Gliding highlight, liquid-glass pills | in-progress | T-204 |
 | [T-207](tasks/T-207-faster-bluetooth-controller-reconnect.md) | **[lead]** Faster Bluetooth controller reconnect | todo | — |
 | [T-208](tasks/T-208-wallpaper-support.md) | Wallpapers: bundled set, USB, Settings picker | in-progress | — |
 | [T-210](tasks/T-210-profile-customisation.md) | Profile customisation: avatar, colour, name | todo | — |
