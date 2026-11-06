@@ -1,6 +1,6 @@
 # T-200 — System monitoring: temperatures, fans and drive health, with safe defaults and a place to see them
 
-Status: todo · Phase: 2 · Depends: — · Area: api, services, shell, image · Size: M · Owner: builder
+Status: in-progress · Phase: 2 · Depends: — · Area: api, services, shell, image · Size: M · Owner: builder
 
 ## Goal
 The console watches its own temperatures. Owner request, 2026-11-06: "when devices reach certain temperatures, what should it do; give it good defaults; also show the values somewhere to the user". Normal use shows nothing; a warm console says so, a hot one protects itself in steps the owner can predict, and a critical one never ends in a surprise hard crash without warning. The values are visible in Settings.

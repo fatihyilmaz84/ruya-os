@@ -15,7 +15,7 @@ Verification legend: **host** = built and tested on Windows · **host (vm pendin
 
 ## Board
 
-**NEXT → T-164** ([lead], the critical path: per-profile Wayland sockets, so an app's window appears). **Owner, 2026-11-06 (later): the hold is lifted for T-189..T-194, dispatch them; still no new tasks are created until the owner says so.** Lanes: T-195 and T-196.
+**NEXT → T-164** ([lead], the critical path: per-profile Wayland sockets, so an app's window appears). **Owner, 2026-11-06 (later): the hold is lifted for T-189..T-194, dispatch them; still no new tasks are created until the owner says so.** Lanes: T-195 (in review) and T-200.
 
 **How work runs (owner, 2026-11-04):** the lead dispatches `ruya-builder` agents, at most two at a time in their own worktrees and in different areas, has each branch reviewed by `ruya-reviewer`, and merges it (`docs/LEAD.md`, build loop). Dispatched builders never edit this file. At most one task with a "VM (this task)" criterion runs at a time. A builder session the owner starts directly takes NEXT in the main checkout, alone, and does the bookkeeping itself (`CLAUDE.md`).
 
@@ -26,11 +26,10 @@ Open work only (todo, in-progress, blocked), in the recommended order; when NEXT
 | [T-190](tasks/T-190-settings-pane-focus-follow-ups.md) | Settings panes: look-ahead after relayout, Tab, peek legibility | todo | — |
 | [T-194](tasks/T-194-confirm-buttons-name-the-action.md) | Confirm dialogs: the button says the action; TextEntry cancel cue | todo | — |
 | [T-195](tasks/T-195-slim-the-image.md) | Slim the image: only what the UI, the services and gaming need; a manifest with reasons | in-progress | — |
-| [T-196](tasks/T-196-storage-pane-internal-storage.md) | Settings -> Storage shows the internal storage (free space, apps and games, profile data) next to the drives | in-progress | — |
 | [T-197](tasks/T-197-shell-crash-on-bluetooth-audio-disconnect.md) | **[lead]** The shell crashes when a Bluetooth headset disconnects (Qt PipeWire audio thread) | in-progress | — |
 | [T-198](tasks/T-198-display-resolution-and-dpi.md) | **[lead]** Display: pick resolution and refresh, UI scale to the screen (DPI), keep/revert dialog | todo | — |
 | [T-199](tasks/T-199-device-icons.md) | Device icons in the Bluetooth pane and toasts: gamepad, headset, keyboard...; controller family glyphs when known, generic otherwise | todo | — |
-| [T-200](tasks/T-200-system-monitoring-thermal.md) | System monitoring: temperatures and fans, safe defaults (warm/hot/critical), values in Settings | todo | — |
+| [T-200](tasks/T-200-system-monitoring-thermal.md) | System monitoring: temperatures and fans, safe defaults (warm/hot/critical), values in Settings | in-progress | — |
 | [T-201](tasks/T-201-recover-from-stuck-processes.md) | **[lead]** Recover from stuck processes: shell watchdog, OOM/CPU protection, hardware watchdog, force-close a hung app | todo | — |
 | [T-202](tasks/T-202-screen-saver-and-power-saving.md) | Screen saver and power saving: dim/saver, display off, sleep, idle controllers, inhibitors, Settings | todo | — |
 | [T-164](tasks/T-164-per-profile-wayland-sockets.md) | **[lead]** Per-profile Wayland sockets: a profile's app appears in the shell | todo | T-162 |
@@ -38,7 +37,7 @@ Open work only (todo, in-progress, blocked), in the recommended order; when NEXT
 | [T-147](tasks/T-147-fullscreen-app-flow.md) | Full-screen apps: launch splash, quick menu, return, close | todo | T-164 |
 | [T-166](tasks/T-166-suspend-under-eglfs.md) | **[lead]** Suspend and resume with the shell on KMS (eglfs) | todo | — |
 
-**VM queue** (done on the host, VM check pending; the lead runs them with one image build): T-192 (`vm-store-check.sh`: the new step after the outside removal, exactly one `InstalledChanged`); T-191 (`vm-store-check.sh`: the cut-short install is reported exactly once; the real client's refresh through the new late-reply guards); T-193 (the first run of `vm-storage-check.sh baseline` shows whether the `ListVolumes` JSON parser holds; also `vm-devices-check.sh`, `vm-library-check.sh`, `vm-iso-check.ps1`).
+**VM queue** (done on the host, VM check pending; the lead runs them with one image build): T-192 (`vm-store-check.sh`: the new step after the outside removal, exactly one `InstalledChanged`); T-191 (`vm-store-check.sh`: the cut-short install is reported exactly once; the real client's refresh through the new late-reply guards); T-196 (`vm-devices-check.sh` storage part: `GetSystemUsage` against `stat -f /var`, apps growth after an install, `SystemUsageChanged`, `nobody` refused); T-193 (the first run of `vm-storage-check.sh baseline` shows whether the `ListVolumes` JSON parser holds; also `vm-devices-check.sh`, `vm-library-check.sh`, `vm-iso-check.ps1`).
 
 ## Inbox
 
@@ -57,6 +56,8 @@ Follow-ups and debt for the next planner, one line each: `- (source) what, and w
 - (Dell, 2026-11-06) A headset paired before the pairing fix is `Paired: yes, Bonded: no` and only reconnects in pairing mode: forget and pair it again (done by hand on the Dell). Consider: the shell could offer "Pair again" for such a device, or `Forget`+`Pair` automatically when `Bonded` is false (needs `bonded` in `ListDevices`).
 - (owner, 2026-11-06) T-199 device icons: real brand art (Sony/Microsoft/Nintendo pad pictures) would need an owner/legal decision; the task draws its own silhouettes.
 - (T-162 session) The ISO's kickstart now partitions by hand (`image/bib/iso-kickstart.toml`, whole-disk `/`): UNTESTED, verify with `vm-iso-check.ps1` on a disk larger than 70 GiB (the check makes a 64 GiB disk; use 128 GiB) and that bib accepts `customizations.installer.kickstart`, and check `/var` is ~the whole disk.
+- (T-196) Exact per-profile sizes need a root source (`ruya-profiles`): the profile homes are 0700 users' directories, so `data_bytes` is -1 and the pane shows "Other"; "Apps and games" counts only `/var/lib/flatpak` (game libraries under a profile's `~/.var/app`/`~/.local/share/Steam` count as Other). Extract `ProgressBar.qml` (second user of the bar: `AppDetailPage` and the Storage pane, 04 §8). Per-app sizes and uninstall/clear data from the Storage pane. Check the service's RSS on the Dell after a full walk (hard-link set).
+- (T-195) The slimmed image is not smaller on disk or in the update download: the removals are a layer on the base, which bootc keeps. Rechunking (per-package layers) or flattening is an owner-level trade-off (update size). Also: ffmpeg links libsmbclient (samba libs stay), `fwupd` has no UI (decide), the image manifest check is manual (add to the CI image job).
 - (0.0.40 try-out) The VM clock shows UTC: there is no time-zone setting yet (wizard or System pane); plan it with the OOBE/installer work.
 
 ## Blocked (need something this host doesn't have)

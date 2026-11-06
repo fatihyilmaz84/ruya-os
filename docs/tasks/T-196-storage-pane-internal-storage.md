@@ -1,6 +1,6 @@
 # T-196 — Settings → Storage shows the console's own storage
 
-Status: in-progress · Phase: 2 · Depends: — · Area: api, services, shell · Size: M · Owner: builder
+Status: done · Phase: 2 · Depends: — · Area: api, services, shell · Size: M · Owner: builder
 
 ## Goal
 Settings → Storage shows the internal storage first (how much is free, and how much the apps and games take), then the removable drives as today. Owner, 2026-11-06, after the first run on real hardware: with no USB stick the pane showed nothing, and a console needs to know how full it is. Today's pane skips every internal disk on purpose (T-174: the OS is not a "drive").
