@@ -138,7 +138,7 @@ on_exit() {
     fi
 }
 trap on_exit EXIT
-trap 'exit 1' INT TERM HUP
+trap 'fail=1; exit 1' INT TERM HUP
 
 case "${1:-check}" in
 security)

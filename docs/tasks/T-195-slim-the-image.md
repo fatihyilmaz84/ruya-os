@@ -1,6 +1,6 @@
 # T-195 — Slim the image: ship what the UI, the services and gaming need, and say why
 
-Status: todo · Phase: 2 · Depends: — · Area: image · Size: M · Owner: builder
+Status: in-progress · Phase: 2 · Depends: — · Area: image · Size: M · Owner: builder
 
 ## Goal
 The image holds no desktop environment, no printing, no enterprise identity or cloud tooling and no CPU emulators, and every remaining package group has a stated reason (UI, services, gaming, drivers, base/bootc). Driver and firmware support stays complete (ADR-009). Owner, 2026-11-06: minimise it; printer support is not needed.
@@ -48,6 +48,10 @@ Then the image recipe in `docs/dev-setup.md`, `smoke-test.ps1`, the VM checks ab
 - `bootc container lint --fatal-warnings` is the last step of the build and catches some breakage; the VM boot catches the rest.
 - Do it in small steps with a build each (a builder worktree rebuilds from scratch, 30+ minutes: the first build pays for the NVIDIA kmod). One image build at a time on this host.
 - Secure Boot, the akmods signing key and `bootupd` are outside this task (Inbox: `bootloader-update` fails on the Dell).
+
+## Keep (found by reviews)
+- `python3` and polkit (`pkaction`, `pkcheck`): `vm-update-check.sh` and `vm-storage-check.sh` need them in the guest (T-193 review). `udisks2`, `upower`, `bluez`, `NetworkManager`, `flatpak`, `bluetoothctl`/`btmon` (the Dell's Bluetooth debugging), `iwl*`/`mediatek`/`alsa-sof` firmware (T-162 session).
+- Do not remove the `ruya-session` runtime needs: `systemd-run`/`systemctl --machine=`, `loginctl`, `flatpak`, `bubblewrap`, `xdg-dbus-proxy`.
 
 ## Outcome
 _Filled in by the implementer. First line: `Verified: host | vm | unverified | hw` (say what ran where). Then: what was built, files, deviations, follow-ups (each also an Inbox line)._

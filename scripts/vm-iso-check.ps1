@@ -88,7 +88,7 @@ try {
     if (-not $finished) { throw "install did not finish; see $installLog" }
 
     # 3. first boot of the installed disk: persistent (the first boots write to it), VM kept for SSH.
-    & (Join-Path $PSScriptRoot "smoke-test.ps1") -Disk $Disk -Persistent -Keep -TimeoutSec $BootTimeoutSec
+    & (Join-Path $PSScriptRoot "smoke-test.ps1") -Disk $diskFull -Persistent -Keep -TimeoutSec $BootTimeoutSec
     $boot = $LASTEXITCODE
     $serial = Get-Content (Join-Path $Repo "output\serial.log") -Raw -ErrorAction SilentlyContinue
     $report["boot"] = if ($serial -match "RUYA_BOOT_(OK|FAIL)[^\r\n]*") { $Matches[0] } else { "no marker (exit $boot)" }
