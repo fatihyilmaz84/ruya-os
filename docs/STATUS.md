@@ -33,7 +33,6 @@ Open work only, in the recommended order; when NEXT is blocked take the first `t
 | [T-203](tasks/T-203-pair-a-controller-without-a-keyboard.md) | Pair a controller with no keyboard | todo | — |
 | [T-204](tasks/T-204-dreamglass-materials-and-motion.md) | Dreamglass materials and motion v2 | in-progress | — |
 | [T-205](tasks/T-205-gliding-highlight-and-liquid-pills.md) | **[lead]** Gliding highlight, liquid-glass pills | todo | T-204 |
-| [T-206](tasks/T-206-settings-gear-icon-active-state.md) | The Settings gear looks wrong when active | in-progress | — |
 | [T-207](tasks/T-207-faster-bluetooth-controller-reconnect.md) | **[lead]** Faster Bluetooth controller reconnect | todo | — |
 | [T-208](tasks/T-208-wallpaper-support.md) | Wallpapers: bundled set, USB, Settings picker | todo | — |
 | [T-209](tasks/T-209-ui-colour-themes.md) | UI colour themes, runtime switch, contrast gate | todo | — |
@@ -73,6 +72,7 @@ One line each: `- (source) what, and why it matters`. Dispatched builders put th
 - (Dell) Headsets paired before the pairing fix are `Bonded: no`: the shell could offer "Pair again" (needs `bonded` in `ListDevices`).
 - (T-200 review) Capture the Dell's real `/sys/class/hwmon` and `thermal_zone` layout into `services/ruya-devices/tests/fixtures/` (today's fixture is written from the task text). The hint bar should show `ThermalNotice`'s own hints (A OK) while it is open. A `tst_thermal` case: Display shows the owner's quality while limited. The critical level does not navigate to Home (spec says so now): decide if it should.
 - (T-214 review) `dev.ps1` lint self-check lacks a fixture for the `/* sample: <path> */` C-block rule; the AppStream example in `appstream-metadata.md` is not checked against the sample's metainfo; `vm-sample-check.sh` exits early without `cleanup` on some failures (add `trap cleanup EXIT`) and its "within 5 s" poll may need 6 s.
+- (T-206 review) `subset-icons.sh`: install `skia-pathops` with `--require-hashes` (the only unchecked download); `check-font-coverage.py` catches only identical coincident contours, not any overlap. **Dell check pending:** the top-bar gear on the active pill should be a solid cog (the artefact was seen on the Windows GPU only; if still bad under eglfs the suspect is FreeType hinting).
 - (0.0.40) The VM and the Dell clock show UTC: T-213.
 
 ## Blocked (need something this host doesn't have)
