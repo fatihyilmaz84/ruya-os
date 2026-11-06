@@ -34,7 +34,6 @@ Open work only, in the recommended order; when NEXT is blocked take the first `t
 | [T-205](tasks/T-205-gliding-highlight-and-liquid-pills.md) | **[lead]** Gliding highlight, liquid-glass pills | todo | T-204 |
 | [T-207](tasks/T-207-faster-bluetooth-controller-reconnect.md) | **[lead]** Faster Bluetooth controller reconnect | todo | — |
 | [T-208](tasks/T-208-wallpaper-support.md) | Wallpapers: bundled set, USB, Settings picker | in-progress | — |
-| [T-209](tasks/T-209-ui-colour-themes.md) | UI colour themes, runtime switch, contrast gate | in-progress | — |
 | [T-210](tasks/T-210-profile-customisation.md) | Profile customisation: avatar, colour, name | todo | — |
 | [T-213](tasks/T-213-time-zone-setting.md) | Time zone in setup and Settings | todo | — |
 | [T-215](tasks/T-215-save-backup-and-keep-data.md) | **[lead]** Saves: back up/restore, keep on uninstall | todo | — |
@@ -91,6 +90,7 @@ One line each: `- (source) what, and why it matters`. Dispatched builders put th
 - (T-206 review) `subset-icons.sh`: install `skia-pathops` with `--require-hashes` (the only unchecked download); `check-font-coverage.py` catches only identical coincident contours, not any overlap. Full text in `STATUS-parked.md`.
 - (T-204, design, decide) `glassTint` (44 %) gives white text only 2.5:1 over pure-white art (04 §7 wants 4.5:1): until decided `tint` carries no text (options: stronger tint ~64 %, a lightness cap on hero art, a dark text var. Full text in `STATUS-parked.md`.
 - (VM 0.0.48-lead) Re-run once on the next image: the three script fixes (`vm-devices-check.sh storage` with the retry, `thermal-fake` with the exponent parser, `vm-sample-check.sh` with the Store restart) are host-chec. Full text in `STATUS-parked.md`.
+- (T-209, design, decide) Dark themes + bright wallpaper/hero art: glass text 0.9:1 over white (T-208's dim rule covers wallpapers only); avatar palette vs themes: blob overlap on bright tints gives glass text 2.5-2.8:1 and initials on orange/cyan/green avatars 2.2-2.9:1 (gate per theme or an initial token); gate rows for text on the bare Backdrop. Later: one shared FocusRing + 2 px halo; High-contrast as a sixth theme (its shot is the deferred criterion); `--theme` override for `shots`; per-profile themes. Canvas boards need a theme row (all five palettes, Daylight). Dell: cycle the five themes and watch the 700 ms cross-fade.
 - (0.0.40) The VM and the Dell clock show UTC: T-213.
 
 ## Blocked (need something this host doesn't have)

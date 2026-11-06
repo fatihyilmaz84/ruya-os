@@ -1,6 +1,6 @@
 # T-209 — UI colour themes
 
-Status: in-progress · Phase: 2 · Depends: — · Area: shell · Size: M · Owner: builder
+Status: done · Phase: 2 · Depends: — · Area: shell · Size: M · Owner: builder
 
 ## Goal
 The owner can choose a colour theme in Settings; the whole shell changes with it at runtime, and every theme keeps the accessibility rules (legible text, an unmistakable focus ring). Owner request, 2026-11-06. Today `Theme.qml` is one fixed dark "Dreamglass" palette (plus the high-contrast variant, if built under Accessibility).
