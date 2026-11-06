@@ -1,6 +1,6 @@
 # T-191 — Shell backends: Profiles guard, Store reconcile races, `working` from the job list
 
-Status: in-progress · Phase: 2 · Depends: — · Area: shell · Size: M · Owner: builder
+Status: done · Phase: 2 · Depends: — · Area: shell · Size: M · Owner: builder
 
 ## Goal
 Close the races the T-181 and T-188 reviews found in the shell's D-Bus clients, so a late reply or a signal that crosses a reply can't leave a hung progress bar or a stale page.

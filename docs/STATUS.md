@@ -15,7 +15,7 @@ Verification legend: **host** = built and tested on Windows · **host (vm pendin
 
 ## Board
 
-**NEXT → T-164** ([lead], the critical path: per-profile Wayland sockets, so an app's window appears). **Owner, 2026-11-06 (later): the hold is lifted for T-189..T-194, dispatch them; still no new tasks are created until the owner says so.** Lanes: T-191 and T-195.
+**NEXT → T-164** ([lead], the critical path: per-profile Wayland sockets, so an app's window appears). **Owner, 2026-11-06 (later): the hold is lifted for T-189..T-194, dispatch them; still no new tasks are created until the owner says so.** Lanes: T-195 and T-196.
 
 **How work runs (owner, 2026-11-04):** the lead dispatches `ruya-builder` agents, at most two at a time in their own worktrees and in different areas, has each branch reviewed by `ruya-reviewer`, and merges it (`docs/LEAD.md`, build loop). Dispatched builders never edit this file. At most one task with a "VM (this task)" criterion runs at a time. A builder session the owner starts directly takes NEXT in the main checkout, alone, and does the bookkeeping itself (`CLAUDE.md`).
 
@@ -24,10 +24,9 @@ Open work only (todo, in-progress, blocked), in the recommended order; when NEXT
 | ID | Title | Status | Depends |
 |---|---|---|---|
 | [T-190](tasks/T-190-settings-pane-focus-follow-ups.md) | Settings panes: look-ahead after relayout, Tab, peek legibility | todo | — |
-| [T-191](tasks/T-191-shell-backend-race-follow-ups.md) | Shell backends: Profiles guard, Store reconcile races, `working` from the job list | in-progress | — |
 | [T-194](tasks/T-194-confirm-buttons-name-the-action.md) | Confirm dialogs: the button says the action; TextEntry cancel cue | todo | — |
 | [T-195](tasks/T-195-slim-the-image.md) | Slim the image: only what the UI, the services and gaming need; a manifest with reasons | in-progress | — |
-| [T-196](tasks/T-196-storage-pane-internal-storage.md) | Settings -> Storage shows the internal storage (free space, apps and games, profile data) next to the drives | todo | — |
+| [T-196](tasks/T-196-storage-pane-internal-storage.md) | Settings -> Storage shows the internal storage (free space, apps and games, profile data) next to the drives | in-progress | — |
 | [T-197](tasks/T-197-shell-crash-on-bluetooth-audio-disconnect.md) | **[lead]** The shell crashes when a Bluetooth headset disconnects (Qt PipeWire audio thread) | in-progress | — |
 | [T-198](tasks/T-198-display-resolution-and-dpi.md) | **[lead]** Display: pick resolution and refresh, UI scale to the screen (DPI), keep/revert dialog | todo | — |
 | [T-164](tasks/T-164-per-profile-wayland-sockets.md) | **[lead]** Per-profile Wayland sockets: a profile's app appears in the shell | todo | T-162 |
@@ -35,7 +34,7 @@ Open work only (todo, in-progress, blocked), in the recommended order; when NEXT
 | [T-147](tasks/T-147-fullscreen-app-flow.md) | Full-screen apps: launch splash, quick menu, return, close | todo | T-164 |
 | [T-166](tasks/T-166-suspend-under-eglfs.md) | **[lead]** Suspend and resume with the shell on KMS (eglfs) | todo | — |
 
-**VM queue** (done on the host, VM check pending; the lead runs them with one image build): T-192 (`vm-store-check.sh`: the new step after the outside removal, exactly one `InstalledChanged`); T-193 (the first run of `vm-storage-check.sh baseline` shows whether the `ListVolumes` JSON parser holds; also `vm-devices-check.sh`, `vm-library-check.sh`, `vm-iso-check.ps1`).
+**VM queue** (done on the host, VM check pending; the lead runs them with one image build): T-192 (`vm-store-check.sh`: the new step after the outside removal, exactly one `InstalledChanged`); T-191 (`vm-store-check.sh`: the cut-short install is reported exactly once; the real client's refresh through the new late-reply guards); T-193 (the first run of `vm-storage-check.sh baseline` shows whether the `ListVolumes` JSON parser holds; also `vm-devices-check.sh`, `vm-library-check.sh`, `vm-iso-check.ps1`).
 
 ## Inbox
 
@@ -50,6 +49,8 @@ Follow-ups and debt for the next planner, one line each: `- (source) what, and w
 - (T-189) Runtime guard for tests: a shared `RuyaTestCase` that fails `wait`/`tryCompare` on NaN/undefined and a spy `count` check without a wait (qmllint cannot see `var` objects and `data.*` rows). Only if a fourth vacuous wait turns up. Also: the first CI push must show the new `Test member lint` step green on Fedora's qmllint (not run there yet).
 - (T-193 review) `vm-storage-check.sh`: a refused action must be pkcheck exit 1, not any non-zero (needs one VM run to confirm); its "left the list" waits also pass when `ListVolumes` fails (check the call succeeded first). `vm-iso-check.ps1`: refuse `output\qcow2\disk.qcow2` and `work.qcow2` as `-Disk`.
 - (Dell, 2026-11-06) The installer ISO makes a 70 GiB root/`/var` on a 465 GB disk and leaves ~395 GB unallocated (Anaconda's autopart caps `/` at 70 GiB and `--nohome` leaves the rest unused). Flatpak apps and games live in `/var`, so a console would be limited to ~64 GB of games. Fix in the ISO's kickstart (grow the root partition to the whole disk; `image/bib`). The Dell was grown by hand with `growpart /dev/sda 3` + `xfs_growfs /var`.
+- (T-191) Session `ListRunning` -> `runningListed` is an unguarded model-replacing reply (interacts with `AppStarted`/`AppExited`): guard it. A queued job adopted at start does not show as working on its page (`Store.jobs` holds running jobs only); a `ListJobs` reply drops the progress of a job started after the request was sent. The mocks repeat `mock*Delayed` + `mockPendingReplies` on each facade: a shared helper.
+- (Dell, 2026-11-06) A headset paired before the pairing fix is `Paired: yes, Bonded: no` and only reconnects in pairing mode: forget and pair it again (done by hand on the Dell). Consider: the shell could offer "Pair again" for such a device, or `Forget`+`Pair` automatically when `Bonded` is false (needs `bonded` in `ListDevices`).
 - (0.0.40 try-out) The VM clock shows UTC: there is no time-zone setting yet (wizard or System pane); plan it with the OOBE/installer work.
 
 ## Blocked (need something this host doesn't have)
