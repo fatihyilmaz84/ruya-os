@@ -75,6 +75,20 @@ The typeface (Inter 4.1, OFL-1.1) is cut the same way: `scripts/fetch-inter.sh` 
 
 The glass grain tile (`shell/assets/glass-grain.png`, 128x128, T-204) is made by `python -I scripts/make-grain.py` (standard library only, a fixed pseudo-random sequence, so the PNG is reproducible; `--check` says whether the committed file matches). There is no switch to turn the glass layers off one by one; to see a surface without them, set the tier: `ruya-shell.exe --windowed --effects performance` has no grain, no shadows, no glare or shimmer, `--reduced-motion` has no glare or shimmer.
 
+## Developer guide and the sample game (T-214)
+
+`docs/developers/` is the guide for people who make games for RuyaOS; `samples/hello-game/` is the sample it describes (C, SDL 3, CC0). Two checks belong to it:
+
+- `scripts/lint-dev-docs.ps1` (part of `dev.ps1 test`, and the CI lint job): every relative link and `#anchor` in `docs/developers/` resolves, every chapter is listed in the README and the README lists only chapters that exist, `python` blocks parse (`ast`), `sh`/`bash` blocks pass `bash -n` (Git's bash on Windows, never the WSL launcher), `xml` blocks are well-formed, `json` blocks parse, a `c` block whose first line is `/* sample: <path> */` is made of lines of that file in order (`...` is a gap), and every chapter ends with `## Sources` naming a date. `dev.ps1 test` also feeds the lint a clean fixture folder and eight broken ones (a dead link, a dead anchor, bad Python, bad shell, bad XML, bad JSON, an unlisted chapter, no Sources) and requires the right verdict for each. Needs `python` and `bash` on PATH (Git for Windows has bash; Python 3 must be on PATH).
+- `scripts/vm-sample-check.sh` (guest, as root; a **lead run**, not part of `dev.ps1 test`): installs the sample from a local repository (the runtime `org.freedesktop.Platform//26.08` comes from Flathub, so the guest must be online), launches it for a profile through `Session1.Launch`, checks that it wrote `~/.var/app/org.ruyaos.HelloGame/data/saves/slot1.sav` (owned by the profile, home 0700), that `Stop` makes it save once more and exit within the 5 s grace with reason `quit`, that a second launch loads the save (`plays=2`), that a torn newest save falls back to the `.bak`, and that `Store1.Uninstall(delete_data=false)` keeps the save. The game runs with SDL's dummy video and audio drivers (a `flatpak override`, removed at the end) because profile apps have no Wayland socket yet (T-164). Build the repository in WSL as in `samples/hello-game/README.md`, `tar -C ~/hello-game -czf hello-repo.tgz repo`, then:
+
+```powershell
+scp -i $env:USERPROFILE\.ssh\ruyaos_dev -P 2222 hello-repo.tgz scripts\vm-sample-check.sh root@127.0.0.1:/root/
+ssh -i $env:USERPROFILE\.ssh\ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-sample-check.sh
+```
+
+Building the sample needs `flatpak`, `flatpak-builder` and `appstream` in the WSL distribution (`dnf -y install flatpak flatpak-builder appstream`) and network for the runtime and SDK (about 1 GB, kept in the WSL user's Flatpak installation). Keep build and repository directories out of the repository (`samples/hello-game/.gitignore` covers `build-dir/`, `repo/`, `.flatpak-builder/`); `flatpak-builder` on `/mnt/d` is slow and its `rofiles-fuse` mount can be left busy by a failed build, so build in a copy under the WSL home.
+
 ## Update / rollback drill (Phase 0 items 6–7; passed 2026-10-22)
 
 1. Boot the working disk: `.\scripts\smoke-test.ps1 -Work -Keep` (delete `output\qcow2\work.qcow2` first for a fresh one). `vm-reboot-check.ps1` needs `-Disk output\qcow2\work.qcow2` then.

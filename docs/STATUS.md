@@ -33,7 +33,7 @@ Open work only, in the recommended order; when NEXT is blocked take the first `t
 | [T-203](tasks/T-203-pair-a-controller-without-a-keyboard.md) | Pair a controller with no keyboard | todo | — |
 | [T-204](tasks/T-204-dreamglass-materials-and-motion.md) | Dreamglass materials and motion v2 | in-progress | — |
 | [T-205](tasks/T-205-gliding-highlight-and-liquid-pills.md) | **[lead]** Gliding highlight, liquid-glass pills | todo | T-204 |
-| [T-206](tasks/T-206-settings-gear-icon-active-state.md) | The Settings gear looks wrong when active | todo | — |
+| [T-206](tasks/T-206-settings-gear-icon-active-state.md) | The Settings gear looks wrong when active | in-progress | — |
 | [T-207](tasks/T-207-faster-bluetooth-controller-reconnect.md) | **[lead]** Faster Bluetooth controller reconnect | todo | — |
 | [T-208](tasks/T-208-wallpaper-support.md) | Wallpapers: bundled set, USB, Settings picker | todo | — |
 | [T-209](tasks/T-209-ui-colour-themes.md) | UI colour themes, runtime switch, contrast gate | todo | — |
@@ -52,12 +52,12 @@ Open work only, in the recommended order; when NEXT is blocked take the first `t
 | [T-225](tasks/T-225-crash-reporting.md) | **[lead]** Crash reporting | todo | T-224 |
 | [T-211](tasks/T-211-parental-controls-service.md) | **[lead]** Parental controls, service side | todo | T-210, T-213 |
 | [T-212](tasks/T-212-parental-controls-screens.md) | Parental controls screens | todo | T-211 |
-| [T-214](tasks/T-214-developer-guide.md) | **Priority.** Developer guide and sample game | in-progress | — |
 | [T-164](tasks/T-164-per-profile-wayland-sockets.md) | **[lead]** Per-profile Wayland sockets | todo | T-162 |
 | [T-165](tasks/T-165-profile-switch-freezes-apps.md) | Profile switch and sign-out freeze the profile's apps | todo | T-164 |
 | [T-147](tasks/T-147-fullscreen-app-flow.md) | Full-screen apps: launch, quick menu, return, close | todo | T-164 |
 | [T-166](tasks/T-166-suspend-under-eglfs.md) | **[lead]** Suspend and resume under eglfs | todo | — |
 | [T-226](tasks/T-226-system-information.md) | System information screen (CPU, RAM, GPU, storage...) and USB report | todo | — |
+| [T-227](tasks/T-227-ui-sounds-and-ambient-themes.md) | UI sounds and ambient atmosphere: sound themes, one bundled theme, maker guide | todo | — |
 
 **VM queue** (host-done, VM check pending; the lead runs them with one image build): T-192 (`vm-store-check.sh`: one `InstalledChanged` after the outside removal); T-191 (`vm-store-check.sh`: a cut-short install reported once); T-196 (`vm-devices-check.sh` storage part: `GetSystemUsage` against `stat -f /var`, `SystemUsageChanged`, `nobody` refused); T-193 (`vm-storage-check.sh baseline`: the `ListVolumes` JSON parser; also `vm-devices-check.sh`, `vm-library-check.sh`); T-200 (`vm-devices-check.sh thermal` and `thermal-fake`); T-214 (`vm-sample-check.sh` with the repo tarball). Devices checks need `-Audio`.
 
@@ -72,6 +72,7 @@ One line each: `- (source) what, and why it matters`. Dispatched builders put th
 - (T-192 review) `ruya-store` `sync_installed`: overlapping reads can apply out of order; give each read a ticket.
 - (Dell) Headsets paired before the pairing fix are `Bonded: no`: the shell could offer "Pair again" (needs `bonded` in `ListDevices`).
 - (T-200 review) Capture the Dell's real `/sys/class/hwmon` and `thermal_zone` layout into `services/ruya-devices/tests/fixtures/` (today's fixture is written from the task text). The hint bar should show `ThermalNotice`'s own hints (A OK) while it is open. A `tst_thermal` case: Display shows the owner's quality while limited. The critical level does not navigate to Home (spec says so now): decide if it should.
+- (T-214 review) `dev.ps1` lint self-check lacks a fixture for the `/* sample: <path> */` C-block rule; the AppStream example in `appstream-metadata.md` is not checked against the sample's metainfo; `vm-sample-check.sh` exits early without `cleanup` on some failures (add `trap cleanup EXIT`) and its "within 5 s" poll may need 6 s.
 - (0.0.40) The VM and the Dell clock show UTC: T-213.
 
 ## Blocked (need something this host doesn't have)

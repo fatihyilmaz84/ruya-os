@@ -272,6 +272,68 @@ function Test-Board {
     Record "board lint" ($LASTEXITCODE -eq 0)
 }
 
+# The rules live in scripts\lint-dev-docs.ps1 (shared with CI): the developer guide (T-214).
+function Test-DevDocs {
+    Step "developer guide lint (docs\developers: links, code blocks, sources)"
+    & (Join-Path $PSScriptRoot "lint-dev-docs.ps1")
+    Record "developer guide lint" ($LASTEXITCODE -eq 0)
+
+    # Self-check: a clean folder is accepted; each fixture below adds one mistake the lint must report.
+    $lint = Join-Path $PSScriptRoot "lint-dev-docs.ps1"
+    $chapter = @'
+# A
+
+Body, see [the other](other.md#other-chapter).
+
+```python
+print(1)
+```
+
+```xml
+<a><b/></a>
+```
+
+```sh
+if true; then echo hi; fi
+```
+
+```json
+{"a": 1}
+```
+
+## Sources
+
+Checked 2026-11-06.
+'@
+    $other = "# Other chapter`n`nText.`n`n## Sources`n`nChecked 2026-11-06.`n"
+    $fence = '```'
+    $cases = @(
+        @{ name = "a clean folder"; a = $chapter; other = $other; expect = 0; text = "" },
+        @{ name = "a broken link"; a = $chapter + "`n[x](missing.md)`n"; other = $other; expect = 1; text = "broken link: missing.md" },
+        @{ name = "a broken anchor"; a = $chapter + "`n[x](other.md#nowhere)`n"; other = $other; expect = 1; text = "broken anchor" },
+        @{ name = "a python syntax error"; a = $chapter + "`n${fence}python`ndef f(:`n${fence}`n"; other = $other; expect = 1; text = "python block does not parse" },
+        @{ name = "a shell syntax error"; a = $chapter + "`n${fence}sh`nif then fi (`n${fence}`n"; other = $other; expect = 1; text = "fails bash -n" },
+        @{ name = "ill-formed xml"; a = $chapter + "`n${fence}xml`n<a><b></a>`n${fence}`n"; other = $other; expect = 1; text = "not well-formed" },
+        @{ name = "invalid json"; a = $chapter + "`n${fence}json`n{`"a`": }`n${fence}`n"; other = $other; expect = 1; text = "json block does not parse" },
+        @{ name = "a chapter the README does not list"; a = $chapter; other = $other; extra = "orphan.md"; expect = 1; text = "is not listed" },
+        @{ name = "a chapter without a Sources footer"; a = $chapter; other = "# Other chapter`n`nText.`n"; expect = 1; text = "no '## Sources'" }
+    )
+    foreach ($c in $cases) {
+        $fx = Join-Path ([IO.Path]::GetTempPath()) ("ruya-devdocs-fx-" + [guid]::NewGuid().ToString("N"))
+        New-Item -ItemType Directory -Path $fx | Out-Null
+        [IO.File]::WriteAllText((Join-Path $fx "README.md"), "# Guide`n`n| Chapter |`n|---|`n| [A](a.md) |`n| [Other](other.md) |`n")
+        [IO.File]::WriteAllText((Join-Path $fx "a.md"), $c.a)
+        [IO.File]::WriteAllText((Join-Path $fx "other.md"), $c.other)
+        if ($c.extra) { [IO.File]::WriteAllText((Join-Path $fx $c.extra), $other) }
+        $out = & $lint -Dir $fx -Repo $fx *>&1 | Out-String
+        $code = $LASTEXITCODE
+        Remove-Item -Recurse -Force $fx
+        $ok = ($code -eq $c.expect) -and $out.Contains($c.text)
+        if (-not $ok) { Write-Host $out }
+        Record "developer guide lint self-check ($($c.name): $(if ($c.expect -eq 0) { 'accepted' } else { 'rejected' }))" $ok
+    }
+}
+
 # The rules live in scripts\lint-tests.ps1 (shared with CI).
 function Test-QmlTests {
     Step "test lint (no key presses in unbounded loops)"
@@ -359,7 +421,7 @@ switch ($Command) {
     "build" { Do-Build }
     "rust" { Do-Rust }
     "shell" { Do-Shell }
-    "test" { Test-Text; Test-Board; Do-Rust; Do-Shell }
+    "test" { Test-Text; Test-Board; Test-DevDocs; Do-Rust; Do-Shell }
     "shots" {
         if (Test-SessionLocked) { Stop-SessionLocked } else {
             Do-Build

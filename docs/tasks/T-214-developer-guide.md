@@ -1,6 +1,6 @@
 # T-214 — Developer guide: the complete set, with a sample game that follows it
 
-Status: in-progress · Phase: 2 · Depends: — · Area: docs, scripts · Size: M · Owner: builder
+Status: done · Phase: 2 · Depends: — · Area: docs, scripts · Size: M · Owner: builder
 
 ## Goal
 A developer who has never seen RuyaOS can build a game or app, run it on a RuyaOS dev machine, make it behave well (controller, full screen, saves, stop), and publish it, using only `docs/developers/`. **Priority task** (owner, 2026-11-06: "make the developer documentation also a priority"): outside developers are the way the console gets games. `docs/developers/README.md` is the index and `saves-and-data.md` is written (by the lead, the model for tone and depth: short rules, examples that run, a checklist, a clear line between "built" and "planned").
@@ -42,4 +42,34 @@ Write these chapters in `docs/developers/` (Markdown, one file each, linked from
 - Keep examples short; link to the sample for the full code.
 
 ## Outcome
-_Filled in by the implementer. First line: `Verified: host | vm | unverified | hw`. Then: what was built, files, deviations, follow-ups._
+Verified: host (vm pending: vm-sample-check.sh)
+
+**Built.** The developer guide in `docs/developers/`: README (index, status table, quick facts) and nine chapters (getting started, AppStream metadata, controller input, full screen and lifecycle, saves and data, permissions and sandbox, audio and video, testing and debugging, publishing), each with rules, examples, a checklist, "planned" marked with task ids, and a "## Sources" footer with the date. The sample game `samples/hello-game/` (C and SDL 3 on the freedesktop 26.08 runtime, CC0-1.0): Flatpak manifest (JSON), desktop entry, AppStream metainfo with every recommended key, controller (hot-plug, dead zone, D-pad) with keyboard fallback, 1920x1080 logical size with a safe area and 24 px text, a short sound effect, a text save with a CRC-32 in `$XDG_DATA_HOME/saves/slot1.sav`, written atomically with a `.bak`, loaded with fallback, a `SIGTERM` handler that saves and exits 0, `make test` (unit tests of the save code, no SDL; they also run inside the Flatpak build), store art and a `--screenshot` option (the screenshot is the game's own rendering). `scripts/lint-dev-docs.ps1` wired into `dev.ps1 test` (and the CI lint job) with a self-check of one clean and eight broken fixtures. `scripts/vm-sample-check.sh` (lead run).
+
+**Why C and SDL 3, not Python:** the freedesktop 26.08 runtime has SDL 3 (3.4.14) and SDL 2 (sdl2-compat) and its SDK has the compiler; pygame-ce is not in it, so Python would need modules for pygame and SDL. One manifest module, no downloads.
+
+**Sample build (WSL, Fedora 44, flatpak-builder 1.4.12, Flatpak 1.18.4, from a clean copy, the README's commands):**
+```
+flatpak-builder --force-clean --user --install-deps-from=flathub --repo=repo build-dir org.ruyaos.HelloGame.json
+Running: make test        hello-game tests: ok
+Running: make             (no warnings)
+Running: make install PREFIX=/app
+Running appstreamcli compose ... Success!
+Exporting org.ruyaos.HelloGame to repo   Commit: e38df155b5f440923737d0eb9b28f3b536948f95433f64eaa5d75cda29cdc0b7
+Exporting org.ruyaos.HelloGame.Debug to repo   exit 0
+appstreamcli validate --no-net data/org.ruyaos.HelloGame.metainfo.xml
+Validation was successful: pedantic: 1      (cid-contains-uppercase-letter: Flatpak ids have capitals)
+```
+`appstreamcli validate` without `--no-net` fails with two `url-not-reachable` and `screenshot-image-not-found` warnings until the files are on GitHub (the URLs point at `main` of the project repository); the README says so. The repo installed into a user installation and ran: headless (`SDL_VIDEODRIVER=dummy`) a screenshot was written, and 3 of 3 times a SIGTERM to every process of the running sandbox at once (what stopping the app's scope does) made the game log `SIGTERM, saving` and write `played=5`; SIGTERM to the game alone also saved; SIGTERM to the `flatpak run` command alone did **not** stop the sandbox; `flatpak kill` ended it with no save. In WSLg `--windowed` ran until the timeout (a window was created; its picture was not looked at). No display: `SDL_Init failed: No available video device`, exit 1. Revert tests of the sample's tests: no `.bak` kept, no CRC check, no `.bak` fallback each make `make test` fail on the matching assertion.
+
+**Lint.** `lint-dev-docs.ps1` checks: links and anchors, README <-> folder, `python` (ast), `sh`/`bash` (`bash -n`, Git's bash on Windows), `xml`, `json`, `c` blocks marked `/* sample: path */` must be lines of that file in order (so the saves example in `saves-and-data.md` is `save.c`, verbatim), and the Sources footer. Mutation checks (temporary copies): changing one line of the C block, breaking the Python block and breaking the shell block each fail the lint; a first version crashed on Python's stderr under `$ErrorActionPreference = Stop` in PowerShell 5.1 and was fixed (`Run-Native`).
+
+**Corrections to the lead's two chapters (code disagreed):** (1) "Keep saves?" at uninstall is not built: the Store's uninstall has an "Also delete my data" switch that starts off, and the service keeps data unless `delete_data` is true; "Keep saves?" and the per-profile choice stay planned (T-215); the delete removes the app's directory of every profile. (2) `SDL_GetPrefPath` and the other toolkit calls resolve to a folder *under* `$XDG_DATA_HOME`, not to it (Unity's was removed: not checked). (3) "the player quits from the Guide" and "time runs out" are planned (T-147, T-211). (4) The `<your-app-id>` placeholder in a `sh` block is a bash syntax error (`>`), now `org.example.Game`. (5) README: Play is not wired yet.
+
+**Findings while checking the code (all written into the guide as such, and in the HANDOFF inbox):** Play does nothing yet (`Library.launch` only emits `launchRequested`, nothing listens); profile apps get no `WAYLAND_DISPLAY` (T-164); a game running as `ruya-p<N>` cannot open `/dev/input/event*` (the `uaccess` rule covers only the shell's seat session and profile users have no extra groups); `ruya-inputd` does not grab, so every pad press also arrives as a key, B as Esc (the sample ignores keys while a pad is connected and quits on Esc only with `--windowed`); no audio path for profile apps (B-007); an app with no `<content_rating>` is shown as "All ages"; `x-ruya-launch-mode` is read by nothing; the ruya-store age label looks for `gambling*` but OARS 1.1 calls it `money-gambling`; the Store reads `x-ruya-logo` as the card picture (`tile`), the spec calls the logo transparent.
+
+**Deviations from the task.** Manifest is JSON, not YAML (the lint can check JSON without PyYAML). `scripts/vm-sample-check.sh` installs from a local repository tarball (like `vm-session-check.sh`) with a `flatpak override` for SDL's dummy drivers, because there is no Wayland socket for profile apps (T-164) and no pad in the VM; it asserts the lifecycle and the saves, not picture, sound or input. CI got one step (`Developer guide lint`), the same as `dev.ps1`. The check's journal lookup of the app's own output is a note, not a failure: that path is unverified.
+
+**Not verified.** The VM check was not run (lead run): in particular `Stop` through `ruya-session`/systemd with the Flatpak sandbox (the existing note in `dev-setup.md` says a bare sandbox dies at the scope's SIGTERM; our WSL test of the same signal, delivered by `kill`, did not kill the handler first), whether the profile's app output reaches `journalctl _UID=...`, and that `Store1.Uninstall` accepts an app from a local repository remote. The sample's gamepad code was compiled and read but never run with a pad. Windowed use was seen only in WSLg. The guide's statements about the shell's Guide overlay and the compositor are from the spec and code (T-123, T-150), not re-run.
+
+Files: `docs/developers/*` (README, 9 chapters), `samples/hello-game/*`, `scripts/lint-dev-docs.ps1`, `scripts/vm-sample-check.sh`, `scripts/dev.ps1` (Test-DevDocs), `.github/workflows/ci.yml`, `docs/specs/03-services-and-apps.md` (4.6), `docs/dev-setup.md`, `README.md`.
