@@ -6,8 +6,10 @@
 #   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-library-check.sh root@127.0.0.1:/root/
 #   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-library-check.sh [check|seed|security|clean]
 #   check     the whole cycle (install, title, update without Rescan, ItemsChanged, uninstall,
-#             refused callers), cleans up after
-#   seed      leaves the test game and app installed, for a screenshot of the shell (clean removes)
+#             refused callers), cleans up after (also when it stops early: an exit trap, T-193)
+#   seed      leaves the test game and app installed, for a screenshot of the shell (clean removes;
+#             a seed that failed cleans up itself)
+#   clean     removes the test remote, apps and repository
 #   security  prints systemd-analyze security ruya-library
 # Boot the VM with plain smoke-test.ps1 -Keep (or -Work -Keep for the screenshot).
 set -u
@@ -115,16 +117,38 @@ wait_record() {
     return 1
 }
 
+clean_all() {
+    flatpak uninstall --system -y "$game" "$notes" "$rt" >/dev/null 2>&1
+    flatpak remote-delete --system --force "$remote" >/dev/null 2>&1
+    rm -rf "$work"
+    need_clean=0
+}
+
+# T-193: whatever way check/seed ends (an early exit 1, Ctrl-C, ssh dropping), stop the signal
+# monitor and, when the test repository, remote or apps may exist, remove them. seed keeps its
+# apps when it succeeded (that is its purpose) and cleans up when it failed.
+mon=""
+need_clean=0
+keep_on_success=0
+on_exit() {
+    [ -n "$mon" ] && kill "$mon" 2>/dev/null
+    if [ "$need_clean" = 1 ] && { [ "$keep_on_success" = 0 ] || [ "$fail" != 0 ]; }; then
+        echo "--- clean up (trap)"
+        clean_all
+    fi
+}
+trap on_exit EXIT
+trap 'exit 1' INT TERM HUP
+
 case "${1:-check}" in
 security)
     systemd-analyze security ruya-library --no-pager | tail -14
     ;;
 clean)
-    flatpak uninstall --system -y "$game" "$notes" "$rt" >/dev/null 2>&1
-    flatpak remote-delete --system --force "$remote" >/dev/null 2>&1
-    rm -rf "$work"
+    clean_all
     ;;
 seed)
+    need_clean=1; keep_on_success=1
     build_repo && ok "repository built" || { bad "cannot build the test repository"; exit 1; }
     add_remote || exit 1
     install_app "$game"; install_app "$notes"
@@ -153,6 +177,7 @@ check)
     echo "$base" | grep -q "$game" && bad "the test game is there before it is installed" || ok "the test game is not installed yet"
 
     echo "--- build a signed test repository"
+    need_clean=1 # from here on the exit trap removes the repository, the remote and the apps
     build_repo && ok "repository built" || { bad "cannot build the test repository"; exit 1; }
     add_remote || exit 1
     stdbuf -oL busctl --system --json=short monitor "$svc" > "$work/signals.log" 2>&1 &
@@ -229,11 +254,11 @@ check)
         ok "the service account may not call it either"
     fi
     out="$(busctl --system call "$svc" "$path" "$ifc" ListItems 2>&1)" && ok "root may call ListItems" || bad "root refused: $out"
-    kill "$mon" 2>/dev/null
+    kill "$mon" 2>/dev/null; mon=""
     journalctl -u ruya-library -b --no-pager | tail -8
 
     echo "--- clean up"
-    "$0" clean
+    clean_all
     ;;
 esac
 [ "$fail" = 0 ] && echo "ALL CHECKS PASSED" || echo "SOME CHECKS FAILED"

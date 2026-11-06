@@ -27,6 +27,19 @@ fail=0
 ok() { echo "PASS: $*"; }
 bad() { echo "FAIL: $*"; fail=1; }
 
+# T-193: polkit_expect <action-id> <pid> <want-exit> <text>. pkcheck answers 1 ("not authorized") for
+# an id polkit does not know as well, so a mistyped or removed id would pass as "refused". The id
+# must be registered first (pkaction --action-id exits 0 only then); otherwise this is a FAIL.
+polkit_expect() {
+    local action="$1" pid="$2" want="$3" text="$4" rc
+    if ! pkaction --action-id "$action" >/dev/null 2>&1; then
+        bad "polkit action $action is not registered (pkaction --action-id fails): its verdict means nothing"
+        return
+    fi
+    pkcheck --action-id "$action" --process "$pid" >/dev/null 2>&1; rc=$?
+    if [ "$rc" = "$want" ]; then ok "$text"; else bad "polkit verdict for $action: exit $rc (want $want)"; fi
+}
+
 # T-133: PipeWire is followed by events (one long-running pw-dump --monitor), not polled.
 # $1 = seconds to watch the idle system for spawned processes (0 skips that part).
 events_check() {
@@ -200,12 +213,10 @@ check)
     pid="$(pgrep -u ruya-shell -x ruya-devices | head -1)"
     if [ -z "$pid" ]; then bad "no ruya-devices process"; else
         for a in wifi.scan network-control settings.modify.system settings.modify.own; do
-            pkcheck --action-id "org.freedesktop.NetworkManager.$a" --process "$pid" >/dev/null 2>&1; rc=$?
-            [ "$rc" = 0 ] && ok "polkit allows ruya-devices: NetworkManager $a" || bad "polkit verdict for NetworkManager $a: exit $rc (want 0)"
+            polkit_expect "org.freedesktop.NetworkManager.$a" "$pid" 0 "polkit allows ruya-devices: NetworkManager $a"
         done
         for a in enable-disable-network enable-disable-wifi enable-disable-wwan enable-disable-connectivity-check enable-disable-statistics sleep-wake reload settings.modify.hostname settings.modify.global-dns checkpoint-rollback wifi.share.open wifi.share.protected; do
-            pkcheck --action-id "org.freedesktop.NetworkManager.$a" --process "$pid" >/dev/null 2>&1; rc=$?
-            [ "$rc" = 1 ] && ok "polkit refuses ruya-devices: NetworkManager $a" || bad "polkit verdict for NetworkManager $a: exit $rc (want 1)"
+            polkit_expect "org.freedesktop.NetworkManager.$a" "$pid" 1 "polkit refuses ruya-devices: NetworkManager $a"
         done
     fi
 

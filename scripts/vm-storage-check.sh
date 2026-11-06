@@ -38,13 +38,48 @@ fail=0
 ok() { echo "PASS: $*"; }
 bad() { echo "FAIL: $*"; fail=1; }
 
+polkit_expect() { # polkit_expect <action-id> <pid> <allow|deny> <text>; T-193
+    local action="$1" pid="$2" want="$3" text="$4" rc
+    # pkcheck answers "not authorized" (1) for an id polkit does not know too, so a mistyped or
+    # removed id would pass as "refused": the id must be registered (pkaction exits 0) first.
+    if ! pkaction --action-id "$action" >/dev/null 2>&1; then
+        bad "polkit action $action is not registered (pkaction --action-id fails): its verdict means nothing"
+        return
+    fi
+    pkcheck --action-id "$action" --process "$pid" >/dev/null 2>&1; rc=$?
+    if [ "$want" = allow ]; then
+        [ "$rc" = 0 ] && ok "$text" || bad "polkit verdict for $action: exit $rc (want 0)"
+    else
+        [ "$rc" != 0 ] && ok "$text (exit $rc)" || bad "polkit allows $action, it must not"
+    fi
+}
+
 list() { busctl --system call "$svc" "$path" "$st" ListVolumes; }
-# The ListVolumes reply is one long line. The service writes each dictionary's keys in alphabetical
-# order, so every dictionary starts with "drive" (T-184): dict_labelled prints the one with a label.
-dict_labelled() { list | sed 's/"drive" s/\n&/g' | grep "\"label\" s \"$1\""; }
-# One field of the dictionary labelled $1: field_of LABEL KEY.
-field_of() { dict_labelled "$1" | grep -o "\"$2\" [a-z] \(\"[^\"]*\"\|[0-9a-z-]*\)" | head -1 | sed 's/^"[a-z_]*" [a-z] //; s/"//g'; }
-dict_of() { dict_labelled "$label"; }
+# T-193: ListVolumes is read as JSON (busctl --json=short, python3 as in vm-update-check.sh), so the
+# order of the keys in a dictionary does not matter. The reply is {"type":"aa{sv}","data":[[{key:
+# {"type":..,"data":..}, ...}, ...]]}.
+list_json() { busctl --system --json=short call "$svc" "$path" "$st" ListVolumes; }
+# volume_count: the number of volumes; fails (and prints nothing) when the reply is not that JSON.
+vol_count_py='
+import json, sys
+vols = json.load(sys.stdin)["data"][0]
+if not isinstance(vols, list) or not all(isinstance(v, dict) for v in vols):
+    sys.exit(1)
+print(len(vols))
+'
+volume_count() { list_json 2>/dev/null | python3 -c "$vol_count_py" 2>/dev/null; }
+# One field of the volume labelled $1: field_of LABEL KEY. Prints nothing when there is no such
+# volume or key; booleans print as true/false.
+vol_field_py='
+import json, sys
+label, key = sys.argv[1], sys.argv[2]
+for v in json.load(sys.stdin)["data"][0]:
+    if v.get("label", {}).get("data") == label:
+        x = v.get(key, {}).get("data", "")
+        print(str(x).lower() if isinstance(x, bool) else x)
+        break
+'
+field_of() { list_json 2>/dev/null | python3 -c "$vol_field_py" "$1" "$2" 2>/dev/null; }
 stick_id() { field_of "$label" id; }
 # One field of the stick's dictionary.
 field() { field_of "$label" "$1"; }
@@ -62,17 +97,17 @@ baseline() {
     if [ -z "$pid" ]; then bad "no ruya-devices process"; else
         # pkcheck: exit 0 = authorized without a prompt, 1 = not authorized, 2 = would ask for a password.
         for a in filesystem-mount eject-media power-off-drive; do
-            pkcheck --action-id "org.freedesktop.udisks2.$a" --process "$pid" >/dev/null 2>&1; rc=$?
-            [ "$rc" = 0 ] && ok "polkit allows ruya-devices: $a" || bad "polkit verdict for $a: exit $rc (want 0)"
+            polkit_expect "org.freedesktop.udisks2.$a" "$pid" allow "polkit allows ruya-devices: $a"
         done
         # Everything else is refused by the rule (NO), including what udisks2's default policy
         # would allow an active session: formatting, unlocking, loop devices.
         for a in filesystem-mount-system filesystem-unmount-others filesystem-fstab modify-device modify-device-system encrypted-unlock loop-setup rescan; do
-            pkcheck --action-id "org.freedesktop.udisks2.$a" --process "$pid" >/dev/null 2>&1; rc=$?
-            [ "$rc" != 0 ] && ok "polkit does not allow ruya-devices: $a (exit $rc)" || bad "polkit allows $a, it must not"
+            polkit_expect "org.freedesktop.udisks2.$a" "$pid" deny "polkit does not allow ruya-devices: $a"
         done
     fi
     echo "ListVolumes (no stick yet):"; list
+    # An empty answer below only means "no stick" if the reply parsed: a failed call or unparsable JSON is a FAIL.
+    if count="$(volume_count)"; then ok "ListVolumes answers parsable JSON ($count volumes)"; else bad "ListVolumes did not answer parsable JSON"; fi
     if [ -z "$(stick_id)" ]; then ok "the stick is not there yet"; else bad "a volume labelled $label exists already"; fi
     if out="$(runuser -u nobody -- busctl --system call "$svc" "$path" "$st" ListVolumes 2>&1)"; then
         bad "nobody could call ListVolumes: $out"
