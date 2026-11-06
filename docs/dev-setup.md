@@ -141,7 +141,7 @@ No sensor is hot on demand, and `/sys` cannot be replaced. The thermal policy (`
 d=/var/lib/ruyaos-fakesys/class/hwmon/hwmon9; mkdir -p $d
 echo coretemp > $d/name; echo 'Package id 0' > $d/temp1_label; echo 40000 > $d/temp1_input
 echo 100000 > $d/temp1_crit; echo 1820 > $d/fan1_input; chmod -R a+rX /var/lib/ruyaos-fakesys
-runuser -u ruya-shell -- env XDG_RUNTIME_DIR=/run/user/$(id -u ruya-shell) sh -c   'systemctl --user set-environment RUYA_THERMAL_SYSFS=/var/lib/ruyaos-fakesys; systemctl --user restart ruya-devices'
+runuser -u ruya-shell -- env XDG_RUNTIME_DIR=/run/user/$(id -u ruya-shell) sh -c 'systemctl --user set-environment RUYA_THERMAL_SYSFS=/var/lib/ruyaos-fakesys; systemctl --user restart ruya-devices'
 echo 92000 > $d/temp1_input     # hot after 10 s: the shell shows its toast and drops the effects
 echo 97000 > $d/temp1_input     # critical (95 with crit 100): the notice, apps stop, power off after 60 s
 echo 40000 > $d/temp1_input     # normal again (5 degrees of hysteresis below each threshold)

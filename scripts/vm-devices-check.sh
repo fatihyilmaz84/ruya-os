@@ -264,7 +264,8 @@ STATEOF
 # T-200: the cpu entry of ListSensors (its value), printed; nothing when there is none.
 thermal_cpu_value() {
     busctl --system --json=short call "$svc" "$path" "$therm" ListSensors \
-        | sed -n -E 's/.*"class":\{"type":"s","data":"cpu"\}[^]]*"value":\{"type":"d","data":(-?[0-9.]+)\}.*/\1/p' \
+        | sed 's/},{"class"/}\n{"class"/g' \
+        | sed -n -E 's/.*"class":\{"type":"s","data":"cpu"\}.*"value":\{"type":"d","data":(-?[0-9.]+)\}.*/\1/p' \
         | awk '{printf "%.1f", $1}'      # sd-json prints 40.0 as 40
 }
 

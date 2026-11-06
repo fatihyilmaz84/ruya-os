@@ -74,7 +74,7 @@ The console watches its own temperatures and fans. Normal use shows nothing; a w
 - **What the shell does** (`qml/ThermalPolicy.qml`):
   1. **warm:** nothing changes. Settings -> System shows a mark on the category, a line and the sensor row's mark (02 §1.2).
   2. **hot:** one toast "The console is running hot (Processor). Effects are reduced." (names the sensor); the effects quality drops to `performance` (no blur) for the session (`DeviceSettings.thermalLimited`; the owner's setting is not rewritten, and Settings -> Display shows it) and stays until the level is **normal** again. No second toast within one incident (the level has to return to normal first).
-  3. **critical:** a notice (`ThermalNotice`, one "OK" button that hides it) says what is happening and counts down; every running app is asked to stop (`Session.stop`, also an app started meanwhile), the shell shows Home without effects; if the level still holds **60 s** later, `Power.powerOff()` (logind). If it falls below critical first, the notice goes and nothing is powered off. The kernel's own hard limit still applies underneath.
+  3. **critical:** a notice (`ThermalNotice`, one "OK" button that hides it) says what is happening and counts down; every running app is asked to stop (`Session.stop`, also an app started meanwhile), the effects are off (as at hot) and the notice opens over the current page (the shell does not navigate to Home: Inbox); if the level still holds **60 s** later, `Power.powerOff()` (logind). If it falls below critical first, the notice goes and nothing is powered off. The kernel's own hard limit still applies underneath.
 - **Trying it** (no sensor is hot on demand): `docs/dev-setup.md`, "Fake a hot sensor".
 
 ## 3. Security baseline
