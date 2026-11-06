@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: CC0-1.0 -->
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <rect width="256" height="256" rx="48" fill="#0e1224"/>
+  <rect x="64" y="132" width="72" height="72" rx="8" fill="#5abeff"/>
+  <circle cx="168" cy="92" r="30" fill="#ffcd3c"/>
+</svg>

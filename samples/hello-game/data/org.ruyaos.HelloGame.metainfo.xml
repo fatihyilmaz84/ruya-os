@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: CC0-1.0 -->
+<component type="desktop-application">
+  <id>org.ruyaos.HelloGame</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>CC0-1.0</project_license>
+
+  <name>Hello Game</name>
+  <summary>Collect coins. A tiny sample game for RuyaOS</summary>
+  <developer id="org.ruyaos">
+    <name>RuyaOS contributors</name>
+  </developer>
+  <description>
+    <p>Move the blue square and collect the yellow coins. Your best score is saved on the console, separately for every profile.</p>
+    <p>Hello Game exists to show how a game for RuyaOS is put together: a controller or keyboard, full screen, safe saves and a clean stop. Its source is public domain: copy it and make your own game.</p>
+  </description>
+
+  <launchable type="desktop-id">org.ruyaos.HelloGame.desktop</launchable>
+  <url type="homepage">https://github.com/fatihyilmaz84/ruya-os/tree/main/samples/hello-game</url>
+  <url type="bugtracker">https://github.com/fatihyilmaz84/ruya-os/issues</url>
+
+  <categories>
+    <category>Game</category>
+    <category>ArcadeGame</category>
+  </categories>
+
+  <!-- A controller is the main way to play; the keyboard works too. The console's Store reads
+       the first line to say "Uses game controllers" and to pass its controller filter. -->
+  <supports>
+    <control>gamepad</control>
+    <control>keyboard</control>
+  </supports>
+
+  <!-- OARS 1.1 age rating. "none" for everything: the console shows "All ages". -->
+  <content_rating type="oars-1.1">
+    <content_attribute id="violence-cartoon">none</content_attribute>
+    <content_attribute id="violence-fantasy">none</content_attribute>
+    <content_attribute id="social-chat">none</content_attribute>
+    <content_attribute id="money-purchasing">none</content_attribute>
+  </content_rating>
+
+  <screenshots>
+    <screenshot type="default">
+      <image type="source" width="1920" height="1080">https://raw.githubusercontent.com/fatihyilmaz84/ruya-os/main/samples/hello-game/art/screenshot.png</image>
+      <caption>Collecting coins; the score is inside the safe area</caption>
+    </screenshot>
+  </screenshots>
+
+  <branding>
+    <color type="primary" scheme_preference="dark">#0e1224</color>
+  </branding>
+
+  <releases>
+    <release version="1.0.0" date="2026-11-06">
+      <description>
+        <p>First release.</p>
+      </description>
+    </release>
+  </releases>
+
+  <!-- RuyaOS keys (docs/developers/appstream-metadata.md) -->
+  <custom>
+    <value key="x-ruya-controller">full</value>
+    <value key="x-ruya-launch-mode">fullscreen</value>
+    <value key="x-ruya-hero">https://raw.githubusercontent.com/fatihyilmaz84/ruya-os/main/samples/hello-game/art/hero.png</value>
+    <value key="x-ruya-logo">https://raw.githubusercontent.com/fatihyilmaz84/ruya-os/main/samples/hello-game/art/logo.png</value>
+  </custom>
+</component>
