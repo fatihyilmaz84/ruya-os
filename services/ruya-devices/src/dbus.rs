@@ -1,4 +1,4 @@
-//! org.ruyaos.Devices1.Audio, .Network, .Bluetooth, .Storage, .Batteries, .Thermal, .Time and .System on D-Bus. Thin adapter: the rules live in
+//! org.ruyaos.Devices1.Audio, .Network, .Bluetooth, .Storage, .Batteries, .Thermal, .Time, .Display and .System on D-Bus. Thin adapter: the rules live in
 //! `audio.rs`, `network.rs`, `bluetooth.rs`, `storage.rs`, `battery.rs` and `thermal.rs`.
 
 use std::collections::{BTreeMap, HashMap};
@@ -20,6 +20,7 @@ use crate::audio::Changes;
 use crate::battery::{Batteries, UPower};
 use crate::bluetooth::{self, Bluetooth, Bluez, BtError};
 use crate::debounce;
+use crate::display::{Display, DynDrm, Mode, OutputView};
 #[cfg(target_os = "linux")]
 use crate::input::GamepadEvent;
 use crate::input::InputPresence;
@@ -1555,6 +1556,133 @@ async fn announce_time(connection: &Connection, changes: &time::Changes) {
         .await;
 }
 
+pub type SharedDisplay = Arc<Display<DynDrm>>;
+
+pub struct DisplayIface {
+    display: SharedDisplay,
+}
+
+impl DisplayIface {
+    pub fn new(display: SharedDisplay) -> Self {
+        DisplayIface { display }
+    }
+}
+
+fn dict(pairs: Vec<(&str, Value<'static>)>) -> BTreeMap<String, OwnedValue> {
+    pairs
+        .into_iter()
+        .filter_map(|(k, v)| OwnedValue::try_from(v).ok().map(|v| (k.to_owned(), v)))
+        .collect()
+}
+
+/// `modes` of one output as `aa{sv}`.
+fn mode_rows(modes: &[Mode], current: Option<usize>) -> Option<Value<'static>> {
+    let row_type = Signature::dict(Signature::Str, Signature::Variant);
+    let mut array = Array::new(&row_type);
+    for (i, m) in modes.iter().enumerate() {
+        let mut row = Dict::new(&Signature::Str, &Signature::Variant);
+        let fields: [(&str, Value<'static>); 5] = [
+            ("width", Value::from(m.width)),
+            ("height", Value::from(m.height)),
+            ("refresh_mhz", Value::from(m.refresh_mhz)),
+            ("preferred", Value::from(m.preferred)),
+            ("current", Value::from(current == Some(i))),
+        ];
+        for (k, v) in fields {
+            row.append(Value::from(k), Value::Value(Box::new(v))).ok()?;
+        }
+        array.append(Value::Dict(row)).ok()?;
+    }
+    Some(Value::Array(array))
+}
+
+fn output_row(view: &OutputView) -> BTreeMap<String, OwnedValue> {
+    let o = &view.output;
+    let mut pairs = vec![
+        ("id", Value::from(o.id.clone())),
+        ("name", Value::from(o.name.clone())),
+        ("width_mm", Value::from(o.width_mm)),
+        ("height_mm", Value::from(o.height_mm)),
+    ];
+    if let Some(modes) = mode_rows(&o.modes, view.current) {
+        pairs.push(("modes", modes));
+    }
+    dict(pairs)
+}
+
+#[interface(name = "org.ruyaos.Devices1.Display")]
+impl DisplayIface {
+    /// Reads the kernel's files now, off the executor.
+    async fn list_outputs(&self) -> Vec<BTreeMap<String, OwnedValue>> {
+        let display = self.display.clone();
+        match unblock(move || display.list()).await {
+            Ok(views) => views.iter().map(output_row).collect(),
+            Err(err) => {
+                eprintln!("ruya-devices: reading the outputs failed: {err}");
+                Vec::new()
+            }
+        }
+    }
+
+    async fn set_mode(&self, output: &str, width: u32, height: u32, refresh_mhz: u32) -> String {
+        let (display, output) = (self.display.clone(), output.to_owned());
+        unblock(move || display.set_mode(&output, width, height, refresh_mhz))
+            .await
+            .as_str()
+            .to_owned()
+    }
+
+    async fn get_pending(&self) -> BTreeMap<String, OwnedValue> {
+        let display = self.display.clone();
+        match unblock(move || display.pending()).await {
+            Some(p) => dict(vec![
+                ("output", Value::from(p.choice.output)),
+                ("width", Value::from(p.choice.width)),
+                ("height", Value::from(p.choice.height)),
+                ("refresh_mhz", Value::from(p.choice.refresh_mhz)),
+                ("starts", Value::from(p.starts)),
+            ]),
+            None => BTreeMap::new(),
+        }
+    }
+
+    async fn keep(&self) -> String {
+        let display = self.display.clone();
+        unblock(move || display.keep()).await.as_str().to_owned()
+    }
+
+    async fn revert(&self) -> String {
+        let display = self.display.clone();
+        unblock(move || display.revert()).await.as_str().to_owned()
+    }
+
+    async fn take_fallback_notice(&self) -> bool {
+        let display = self.display.clone();
+        unblock(move || display.take_fallback()).await
+    }
+
+    async fn set_ui_scale(
+        &self,
+        percent: u32,
+        #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
+    ) -> String {
+        let display = self.display.clone();
+        let (status, changed) = unblock(move || display.set_ui_scale(percent)).await;
+        if changed {
+            if let Err(err) = self.ui_scale_changed(&emitter).await {
+                eprintln!("ruya-devices: emitting UiScale failed: {err}");
+            }
+        }
+        status.as_str().to_owned()
+    }
+
+    #[zbus(property)]
+    fn ui_scale(&self) -> u32 {
+        // A small file read; the service's own state, never the kernel's.
+        self.display.ui_scale()
+    }
+}
+
 pub type SharedSystem = Arc<SystemInfo>;
 
 pub struct SystemIface {
@@ -1665,6 +1793,33 @@ mod tests {
         assert_eq!(signature("memory.total_bytes").as_deref(), Some("t"));
         assert_eq!(signature("console.secure_boot").as_deref(), Some("b"));
         assert_eq!(signature("storage.drives").as_deref(), Some("aa{sv}"));
+    }
+
+    #[test]
+    fn a_display_output_has_the_contracts_types() {
+        use crate::display::Output;
+        let view = OutputView {
+            output: Output {
+                id: "HDMI-A-1".to_owned(),
+                name: "TV".to_owned(),
+                width_mm: 1220,
+                height_mm: 690,
+                modes: vec![Mode {
+                    width: 1920,
+                    height: 1080,
+                    refresh_mhz: 60_000,
+                    preferred: true,
+                }],
+            },
+            current: Some(0),
+        };
+        let row = output_row(&view);
+        let signature = |key: &str| row.get(key).map(|v| v.value_signature().to_string());
+        assert_eq!(signature("id").as_deref(), Some("s"));
+        assert_eq!(signature("name").as_deref(), Some("s"));
+        assert_eq!(signature("width_mm").as_deref(), Some("u"));
+        assert_eq!(signature("height_mm").as_deref(), Some("u"));
+        assert_eq!(signature("modes").as_deref(), Some("aa{sv}"));
     }
 
     #[test]

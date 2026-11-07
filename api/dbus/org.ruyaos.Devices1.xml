@@ -7,7 +7,7 @@
   Contract between shell (Qt/QML) and services (Rust); see docs/specs/03-services-and-apps.md §2.3.
 
   One bus name and one object, one interface per device class: org.ruyaos.Devices1.Audio now,
-  org.ruyaos.Devices1.Network, .Bluetooth, .Storage, .Batteries, .Thermal, .Time and .System next to it. A new
+  org.ruyaos.Devices1.Network, .Bluetooth, .Storage, .Batteries, .Thermal, .Time, .Display and .System next to it. A new
   class is a new interface, so existing clients and their PropertiesChanged filters (which match
   the interface name) are not touched, and each class can be mocked, implemented and tested on
   its own. Shared rules for every interface of this object:
@@ -71,6 +71,16 @@
                  shell while the active profile is not an admin. Before the first profile exists
                  (first-boot setup) the shell may set it.
     "failed"     internal error (timedated or polkit refused)
+
+  org.ruyaos.Devices1.Display status strings (T-198; the connected screen's modes, KMS config and Qt eglfs behind it):
+    "ok"              success (SetMode: a change is pending; the shell asks the owner and restarts)
+    "unchanged"       SetMode asked for the mode already in use: nothing is pending, nothing restarts
+    "unknown-output"  no connected output with that id (SetMode)
+    "unknown-mode"    the output does not offer that width, height and refresh_mhz (SetMode)
+    "busy"            a change is still waiting for Keep or Revert (SetMode)
+    "no-pending"      nothing is waiting (Keep, Revert)
+    "invalid"         malformed argument (SetUiScale: not one of 0, 100, 125, 150, 200)
+    "failed"          internal error (the state or the config could not be written)
 
   org.ruyaos.Devices1.Batteries status strings: none. The list is the status (UPower behind it;
   an empty list when UPower is not on the bus, never an error).
@@ -612,6 +622,97 @@
 
     <!-- The zone changed (SetTimezone, or timedatectl run by someone else); call GetTimezone again. -->
     <signal name="TimezoneChanged"/>
+
+  </interface>
+  <interface name="org.ruyaos.Devices1.Display">
+
+    <!--
+      The connected screen's resolution and refresh rate, and the size of the UI (T-198). The shell is
+      the compositor (Qt eglfs on KMS), so the service cannot change the mode of the running shell.
+      A chosen mode is applied by writing the KMS config JSON that Qt reads at start
+      (QT_QPA_EGLFS_KMS_CONFIG, in the service's state directory) and having the shell restart; the
+      shell comes back on the same page. Safe switching:
+        1. SetMode writes a marker ("pending") and the new config, and answers "ok". The shell then
+           restarts itself (the compositor unit has Restart=always).
+        2. The shell, back on the new mode, finds GetPending non-empty and asks "Keep this
+           resolution?" with a 15 s countdown. Keep stores the mode; Revert (Back, or the countdown
+           running out) restores the stored one, and the shell restarts again.
+        3. Every compositor start runs `ruya-devices --display-guard` first. The first start with a
+           marker counts it; a second start with the marker still there means nobody confirmed (the
+           shell crashed, or the screen stayed black and the console was power-cycled): the choice
+           is dropped, the TV's preferred mode comes back, and TakeFallbackNotice answers true once.
+      No admin rule, like Audio and Network: the bus policy already lets only the shell and root call.
+    -->
+
+    <!--
+      The connected outputs, read from the kernel (/sys/class/drm: status, modes, edid) at every
+      call. One dictionary per output, in connector order:
+        id          s   the kernel's connector name ("HDMI-A-1"); also the name in the KMS config
+        name        s   the display's own name from its EDID ("DELL U2720Q"), else the id
+        width_mm    u   physical size of the picture from the EDID; 0 when it does not say
+        height_mm   u
+        modes       aa{sv}  in the kernel's order (the preferred mode first, then larger and faster
+                    ones first); progressive modes only; one entry per width, height and whole Hz:
+                      width u, height u,
+                      refresh_mhz u  frames per second times 1000 (60000); 0 when the EDID does not
+                                     say which rate a listed size has
+                      preferred b    the display's own choice (exactly one)
+                      current b      the mode in use: the owner's stored choice, else the default
+                                     (the preferred mode, capped at 3840x2160 and 60 Hz)
+      An empty list: nothing is connected, or the service cannot read the kernel's files.
+    -->
+    <method name="ListOutputs">
+      <arg name="outputs" type="aa{sv}" direction="out"/>
+    </method>
+
+    <!--
+      Asks for a mode. The three numbers must be those of one entry of ListOutputs, else
+      "unknown-mode". On "ok" a change is pending and the shell must restart to show it; nothing
+      is stored until Keep.
+    -->
+    <method name="SetMode">
+      <arg name="output" type="s" direction="in"/>
+      <arg name="width" type="u" direction="in"/>
+      <arg name="height" type="u" direction="in"/>
+      <arg name="refresh_mhz" type="u" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <!-- The change waiting for Keep or Revert, as a dictionary: output s, width u, height u,
+         refresh_mhz u, starts u (how many times the compositor has started with it; 0 until the
+         shell is back). Empty when nothing is waiting. -->
+    <method name="GetPending">
+      <arg name="pending" type="a{sv}" direction="out"/>
+    </method>
+
+    <!-- The owner confirmed: the pending mode becomes the stored choice. "no-pending" if none. -->
+    <method name="Keep">
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <!-- Back to the stored choice (or the default). The shell restarts after it. "no-pending" if none. -->
+    <method name="Revert">
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <!-- True once after a compositor start dropped a change nobody confirmed; false after that. -->
+    <method name="TakeFallbackNotice">
+      <arg name="happened" type="b" direction="out"/>
+    </method>
+
+    <!--
+      The size of the UI in percent of the 1080p reference: 0 is Auto (the shell derives the size
+      from the output's physical size and resolution), else 100, 125, 150 or 200. Applied live by
+      the shell (no restart). Stored with the mode. SetUiScale answers "invalid" for any other number.
+    -->
+    <method name="SetUiScale">
+      <arg name="percent" type="u" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <property name="UiScale" type="u" access="read">
+      <annotation name="org.freedesktop.DBus.Property.EmitsChangedSignal" value="true"/>
+    </property>
 
   </interface>
   <interface name="org.ruyaos.Devices1.System">

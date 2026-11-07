@@ -318,7 +318,7 @@
 <context>
     <name>BatteryChip</name>
     <message>
-        <location filename="../qml/BatteryChip.qml" line="+56"/>
+        <location filename="../qml/BatteryChip.qml" line="+52"/>
         <source>%1 battery %2 percent, low</source>
         <translation>%1 battery %2 percent, low</translation>
     </message>
@@ -615,12 +615,12 @@
     </message>
     <message>
         <location line="+36"/>
-        <location line="+163"/>
+        <location line="+164"/>
         <source>Other</source>
         <translation>Other</translation>
     </message>
     <message>
-        <location line="-126"/>
+        <location line="-127"/>
         <source>Press A to search again</source>
         <translation>Press A to search again</translation>
     </message>
@@ -655,7 +655,7 @@
         <translation>A: pair</translation>
     </message>
     <message>
-        <location line="+50"/>
+        <location line="+51"/>
         <source>%1 is connected. Press its buttons: they light up here.</source>
         <translation>%1 is connected. Press its buttons: they light up here.</translation>
     </message>
@@ -774,7 +774,7 @@
 <context>
     <name>DeviceIcons</name>
     <message>
-        <location filename="../qml/DeviceIcons.qml" line="+66"/>
+        <location filename="../qml/DeviceIcons.qml" line="+67"/>
         <source>PlayStation controller</source>
         <translation>PlayStation controller</translation>
     </message>
@@ -832,7 +832,7 @@
 <context>
     <name>DisplayPane</name>
     <message>
-        <location filename="../qml/DisplayPane.qml" line="+15"/>
+        <location filename="../qml/DisplayPane.qml" line="+19"/>
         <source>Effects quality</source>
         <translation>Effects quality</translation>
     </message>
@@ -875,6 +875,73 @@
         <location line="+10"/>
         <source>Dim wallpaper</source>
         <translation>Dim wallpaper</translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <location line="+16"/>
+        <source>Recommended</source>
+        <translation>Recommended</translation>
+    </message>
+    <message>
+        <location line="-14"/>
+        <location line="+16"/>
+        <source>Current</source>
+        <translation>Current</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <location line="+52"/>
+        <source>Resolution</source>
+        <translation>Resolution</translation>
+    </message>
+    <message>
+        <location line="-42"/>
+        <location line="+58"/>
+        <source>Refresh rate</source>
+        <translation>Refresh rate</translation>
+    </message>
+    <message>
+        <location line="-48"/>
+        <source>UI size</source>
+        <translation>UI size</translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>Close running games and apps first: changing the screen mode restarts the console.</source>
+        <translation>Close running games and apps first: changing the screen mode restarts the console.</translation>
+    </message>
+    <message>
+        <location line="+40"/>
+        <source>The screen mode could not be changed.</source>
+        <translation>The screen mode could not be changed.</translation>
+    </message>
+</context>
+<context>
+    <name>DisplayText</name>
+    <message>
+        <location filename="../qml/DisplayText.qml" line="+9"/>
+        <source>%1 × %2</source>
+        <translation>%1 × %2</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>%1 Hz</source>
+        <translation>%1 Hz</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>%1, %2</source>
+        <translation>%1, %2</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Auto</source>
+        <translation>Auto</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>%1 %</source>
+        <translation>%1 %</translation>
     </message>
 </context>
 <context>
@@ -935,6 +1002,47 @@
         <location filename="../qml/MediaPage.qml" line="+6"/>
         <source>Media</source>
         <translation>Media</translation>
+    </message>
+</context>
+<context>
+    <name>ModeConfirm</name>
+    <message>
+        <location filename="../qml/ModeConfirm.qml" line="+24"/>
+        <location line="+126"/>
+        <source>Keep</source>
+        <translation>Keep</translation>
+    </message>
+    <message>
+        <location line="-126"/>
+        <location line="+117"/>
+        <source>Revert</source>
+        <translation>Revert</translation>
+    </message>
+    <message>
+        <location line="-37"/>
+        <source>Keep this resolution?</source>
+        <translation>Keep this resolution?</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+21"/>
+        <source>If you do nothing, the previous setting comes back in %n second(s).</source>
+        <translation>
+            <numerusform>If you do nothing, the previous setting comes back in %n second.</numerusform>
+            <numerusform>If you do nothing, the previous setting comes back in %n seconds.</numerusform>
+        </translation>
+    </message>
+</context>
+<context>
+    <name>ModePicker</name>
+    <message>
+        <location filename="../qml/ModePicker.qml" line="+24"/>
+        <source>Select</source>
+        <translation>Select</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Cancel</source>
+        <translation>Cancel</translation>
     </message>
 </context>
 <context>
@@ -1475,12 +1583,12 @@
     <name>SettingsPage</name>
     <message>
         <location filename="../qml/SettingsPage.qml" line="+12"/>
-        <location line="+54"/>
+        <location line="+64"/>
         <source>Settings</source>
         <translation>Settings</translation>
     </message>
     <message>
-        <location line="-43"/>
+        <location line="-53"/>
         <source>Profiles</source>
         <translation>Profiles</translation>
     </message>
@@ -1535,7 +1643,7 @@
         <translation>Back</translation>
     </message>
     <message>
-        <location line="+192"/>
+        <location line="+203"/>
         <source>Coming soon</source>
         <translation>Coming soon</translation>
     </message>
@@ -1744,7 +1852,7 @@
         <translation>Audio output: %1</translation>
     </message>
     <message numerus="yes">
-        <location line="+232"/>
+        <location line="+253"/>
         <source>%n more device(s) with a battery: %1</source>
         <translation>
             <numerusform>%n more device with a battery: %1</numerusform>
@@ -1757,12 +1865,12 @@
         <translation>%1 %2 percent</translation>
     </message>
     <message>
-        <location line="+560"/>
+        <location line="+571"/>
         <source>Power</source>
         <translation>Power</translation>
     </message>
     <message>
-        <location line="-785"/>
+        <location line="-817"/>
         <source>Update ready. Restart to finish.</source>
         <translation>Update ready. Restart to finish.</translation>
     </message>
@@ -1775,6 +1883,11 @@
         <location line="+14"/>
         <source>%1 stopped unexpectedly</source>
         <translation>%1 stopped unexpectedly</translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <source>The screen did not answer, so the previous resolution is back.</source>
+        <translation>The screen did not answer, so the previous resolution is back.</translation>
     </message>
     <message>
         <location line="+45"/>
@@ -1823,15 +1936,15 @@
         <translation>Starting %1…</translation>
     </message>
     <message>
-        <location line="+241"/>
+        <location line="+252"/>
         <location line="+12"/>
         <location line="+3"/>
         <source>Select</source>
         <translation>Select</translation>
     </message>
     <message>
-        <location line="-19"/>
-        <location line="+14"/>
+        <location line="-21"/>
+        <location line="+16"/>
         <source>Cancel</source>
         <translation>Cancel</translation>
     </message>

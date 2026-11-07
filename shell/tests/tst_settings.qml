@@ -77,6 +77,7 @@ Item {
             DeviceSettings.theme = "dreamglass"
             DeviceSettings.effectsQuality = "high"
             DeviceSettings.overscan = 0.05
+            Display.mockReset()
         }
 
         function openSettings() {
@@ -194,8 +195,14 @@ Item {
             verify(find("rowTheme").activeFocus)
             keyClick(Qt.Key_Down)
             verify(find("rowWallpaper").activeFocus)     // T-208: the wallpaper row follows (its dim row is hidden with the default look)
+            keyClick(Qt.Key_Down)
+            verify(find("rowResolution").activeFocus)    // T-198: the connected screen's rows come last
+            keyClick(Qt.Key_Down)
+            verify(find("rowRefreshRate").activeFocus)
+            keyClick(Qt.Key_Down)
+            verify(find("rowUiSize").activeFocus)
             keyClick(Qt.Key_Down)                        // clamped at the last row
-            verify(find("rowWallpaper").activeFocus)
+            verify(find("rowUiSize").activeFocus)
             verify(find("homePlay").activeFocus === false)
         }
 
@@ -345,6 +352,10 @@ Item {
         }
 
         function test_scroll_cue_hidden_when_everything_fits() {
+            // No screen known (T-198: the Resolution, Refresh rate and UI size rows are only there
+            // with one): the older rows of the pane fit at this size.
+            verify(Display.mockUseScenario("none"))
+            tryCompare(Display, "available", false)
             openSettings()
             selectCategory(tc.displayIndex)
             keyClick(Qt.Key_Right)
