@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Checks the Devices service (audio T-128, network T-132, controller batteries T-161, Bluetooth T-173) inside a running VM booted with sound. Copy and run as root:
 #   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-devices-check.sh root@127.0.0.1:/root/
-#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-devices-check.sh [check|events|security|state|batteries|bluetooth|storage|thermal|thermal-fake]
+#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-devices-check.sh [check|events|security|state|batteries|bluetooth|storage|thermal|thermal-fake|time]
 # check (default): unit active, name owned by ruya-shell, ListSinks, a MasterVolume write reaches
 # PipeWire, a call from another user is refused; then the network part: State is connected, Primary is
 # the ethernet link with an IPv4 address, ListWifi and Scan answer, unknown ids are refused, another
@@ -25,6 +25,12 @@
 # Another user is refused. `thermal` runs only this part. `thermal-fake` (not part of check) points the service at a
 # made-up sysfs tree (RUYA_THERMAL_SYSFS) and walks one sensor through normal, hot, critical and back, checking
 # Level and the LevelChanged signal; it restarts ruya-devices twice and removes the tree.
+# Then the time part (T-213): GetTimezone and ListTimezones answer (the list has Europe/Istanbul and UTC), NtpSynchronised is a
+# boolean, an unknown or malformed name is invalid, a call from another user is refused, root sets Asia/Tokyo and timedatectl,
+# /etc/localtime and `date +%Z` follow, a zone set by timedatectl from outside shows in GetTimezone within 5 s (the service follows
+# timedated), the shell's own call is `forbidden` while profiles exist and nobody is signed in and `ok` while no profile exists
+# (first-boot setup), pkcheck as the service's process allows org.freedesktop.timedate1.set-timezone and refuses set-time, set-ntp
+# and set-local-rtc. The original zone is restored. `time` runs only this part.
 # events: only the PipeWire event checks (T-133); IDLE=60 adds the idle-process count (also part of check; samples the process list for IDLE seconds).
 # state: prints State and Primary (for the link test, see docs/dev-setup.md).
 set -u
@@ -391,6 +397,72 @@ thermal_fake_check() {
     rm -rf "$root"
 }
 
+# T-213: the time zone. Everything it changes is put back at the end.
+time_check() {
+    local tm=org.ruyaos.Devices1.Time orig now out profiles active pid want
+    echo "--- time zone (T-213): timedated behind Devices1.Time"
+    orig="$(timedatectl show -p Timezone --value)"
+    echo "timedatectl: $orig"
+    now="$(busctl --system call "$svc" "$path" "$tm" GetTimezone)"
+    echo "GetTimezone: $now"
+    [ "$now" = "s \"$orig\"" ] && ok "GetTimezone matches timedatectl" || bad "GetTimezone differs from timedatectl ($orig)"
+    out="$(busctl --system call "$svc" "$path" "$tm" ListTimezones)"
+    echo "ListTimezones: $(echo "$out" | wc -w) words"
+    echo "$out" | grep -q '"Europe/Istanbul"' && echo "$out" | grep -q '"UTC"' && ok "ListTimezones has Europe/Istanbul and UTC" || bad "ListTimezones misses Europe/Istanbul or UTC"
+    out="$(busctl --system get-property "$svc" "$path" "$tm" NtpSynchronised)"
+    echo "NtpSynchronised: $out"
+    case "$out" in "b true"|"b false") ok "NtpSynchronised is a boolean";; *) bad "NtpSynchronised: $out";; esac
+
+    for bad_name in "Mars/Olympus_Mons" "../../etc/passwd" "" "europe/istanbul"; do
+        out="$(busctl --system call "$svc" "$path" "$tm" SetTimezone s "$bad_name")"
+        [ "$out" = 's "invalid"' ] && ok "SetTimezone '$bad_name' is invalid" || bad "SetTimezone '$bad_name': $out"
+    done
+    [ "$(timedatectl show -p Timezone --value)" = "$orig" ] && ok "invalid names changed nothing" || bad "the zone changed after invalid names"
+
+    if out="$(runuser -u nobody -- busctl --system call "$svc" "$path" "$tm" SetTimezone s Asia/Tokyo 2>&1)"; then
+        bad "nobody could call SetTimezone: $out"
+    else
+        echo "$out"; ok "time call from nobody refused"
+    fi
+
+    out="$(busctl --system call "$svc" "$path" "$tm" SetTimezone s Asia/Tokyo)"
+    [ "$out" = 's "ok"' ] && ok "root SetTimezone Asia/Tokyo is ok" || bad "root SetTimezone: $out"
+    [ "$(timedatectl show -p Timezone --value)" = "Asia/Tokyo" ] && ok "timedatectl shows Asia/Tokyo" || bad "timedatectl: $(timedatectl show -p Timezone --value)"
+    [ "$(readlink -f /etc/localtime)" = "/usr/share/zoneinfo/Asia/Tokyo" ] && ok "/etc/localtime points at Asia/Tokyo" || bad "/etc/localtime: $(readlink -f /etc/localtime)"
+    [ "$(date +%Z)" = "JST" ] && ok "date prints JST" || bad "date prints $(date +%Z)"
+    [ "$(busctl --system call "$svc" "$path" "$tm" GetTimezone)" = 's "Asia/Tokyo"' ] && ok "GetTimezone says Asia/Tokyo" || bad "GetTimezone after the set"
+
+    # A zone set from outside (someone runs timedatectl) is followed through timedated's signal.
+    timedatectl set-timezone Europe/Istanbul
+    for i in 1 2 3 4 5 6 7 8 9 10; do
+        [ "$(busctl --system call "$svc" "$path" "$tm" GetTimezone)" = 's "Europe/Istanbul"' ] && break
+        sleep 0.5
+    done
+    [ "$(busctl --system call "$svc" "$path" "$tm" GetTimezone)" = 's "Europe/Istanbul"' ] && ok "a zone set by timedatectl shows within 5 s" || bad "GetTimezone did not follow timedatectl"
+
+    # The shell's own call: what the caller rule says depends on who is signed in.
+    profiles="$(busctl --system call org.ruyaos.Profiles1 /org/ruyaos/Profiles1 org.ruyaos.Profiles1 ListProfiles | cut -d' ' -f2)"
+    active="$(busctl --system get-property org.ruyaos.Profiles1 /org/ruyaos/Profiles1 org.ruyaos.Profiles1 ActiveProfile)"
+    out="$(as_shell busctl --system call "$svc" "$path" "$tm" SetTimezone s Pacific/Auckland 2>&1)"
+    echo "profiles: $profiles, active: $active, the shell's SetTimezone: $out"
+    if [ "$profiles" = "0" ]; then want='s "ok"'; elif [ "$active" = 's ""' ]; then want='s "forbidden"'; else want="$out"; fi
+    [ "$out" = "$want" ] && ok "the shell's SetTimezone answers $out (profiles $profiles, active $active)" || bad "the shell's SetTimezone: $out, want $want"
+    [ "$out" = 's "forbidden"' ] && [ "$(timedatectl show -p Timezone --value)" = "Europe/Istanbul" ] && ok "a forbidden call changed nothing"
+
+    pid="$(pgrep -u ruya-shell -x ruya-devices | head -1)"
+    if [ -n "$pid" ]; then
+        polkit_expect org.freedesktop.timedate1.set-timezone "$pid" 0 "polkit allows ruya-devices: timedate1 set-timezone"
+        for a in set-time set-ntp set-local-rtc; do
+            polkit_expect "org.freedesktop.timedate1.$a" "$pid" 1 "polkit refuses ruya-devices: timedate1 $a"
+        done
+    else
+        bad "no ruya-devices process for the polkit check"
+    fi
+
+    timedatectl set-timezone "$orig"
+    [ "$(timedatectl show -p Timezone --value)" = "$orig" ] && ok "zone restored to $orig" || bad "could not restore $orig"
+}
+
 case "${1:-check}" in
 security)
     as_shell systemd-analyze --user security ruya-devices --no-pager | tail -15
@@ -503,6 +575,8 @@ check)
 
     thermal_check
 
+    time_check
+
     events_check "${IDLE:-60}"
     ;;
 bluetooth)
@@ -516,6 +590,9 @@ thermal)
     ;;
 thermal-fake)
     thermal_fake_check
+    ;;
+time)
+    time_check
     ;;
 events)
     events_check "${IDLE:-0}"

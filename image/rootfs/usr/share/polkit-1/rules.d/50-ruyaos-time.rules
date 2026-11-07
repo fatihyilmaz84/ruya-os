@@ -1,0 +1,22 @@
+// ruya-devices (a user unit of ruya-shell, ADR-010) sets the console's time zone through
+// systemd-timedated (org.ruyaos.Devices1.Time, SetTimezone). timedated asks polkit for it, and
+// nobody is there to type a password on a TV, so exactly this action is allowed for the user
+// ruya-shell:
+//
+//   org.freedesktop.timedate1.set-timezone
+//
+// Nothing else of timedated is allowed: the clock itself (set-time), the RTC mode (set-local-rtc)
+// and NTP on or off (set-ntp) keep the default policy (administrator authentication), as does
+// every action for every other user (profile users, Flatpak apps). Who among
+// the people at the console may change the zone is decided by ruya-devices (an admin profile, or
+// nobody yet during the first-boot setup), the same way the shell asks for an admin's PIN
+// before it calls the update service.
+// scripts/vm-devices-check.sh asks pkcheck for the verdicts as the service's own process.
+polkit.addRule(function(action, subject) {
+    if (subject.user !== "ruya-shell")
+        return polkit.Result.NOT_HANDLED;
+
+    if (action.id === "org.freedesktop.timedate1.set-timezone")
+        return polkit.Result.YES;
+    return polkit.Result.NOT_HANDLED;
+});

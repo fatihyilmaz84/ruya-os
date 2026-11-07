@@ -582,11 +582,8 @@ FocusScope {
                 color: Theme.text
                 font.pixelSize: Theme.typeHeadline * root.u
                 font.weight: Theme.weightDemiBold
-                text: Qt.formatTime(new Date(), "HH:mm")
-                Timer {
-                    interval: 10000; running: true; repeat: true
-                    onTriggered: clock.text = Qt.formatTime(new Date(), "HH:mm")
-                }
+                objectName: "statusClock"
+                text: TimeZone.clockText     // the console's time zone (T-213), ticking in the singleton
             }
         }
     }

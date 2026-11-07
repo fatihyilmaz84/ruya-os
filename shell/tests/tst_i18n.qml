@@ -126,23 +126,33 @@ Item {
             tryCompare(setup, "step", 1)
             const row = find("setupLanguageRow")
             tryVerify(() => row.activeFocus)
-            compare(find("setupStepLabel").text, "Step 2 of 5")
+            compare(find("setupStepLabel").text, "Step 2 of 6")
 
             keyClick(Qt.Key_Right)                     // Türkçe: the wizard re-translates at once
             compare(DeviceSettings.language, "tr")
-            tryCompare(find("setupStepLabel"), "text", "Adım 2 / 5")
+            tryCompare(find("setupStepLabel"), "text", "Adım 2 / 6")
             tryCompare(find("setupLanguageTitle"), "text", "Dil")
-            keyClick(Qt.Key_Return)                    // -> network
+            keyClick(Qt.Key_Return)                    // -> time zone
             tryCompare(setup, "step", 2)
+            tryCompare(find("setupZoneTitle"), "text", "Neredesiniz?")
+            tryVerify(() => find("setupZoneRegion_Europe"), 2000, "the regions are listed")
+            tryCompare(find("setupZoneRegion_Europe"), "label", "Avrupa")
+            keyClick(Qt.Key_Menu)                      // Start: skip -> network
+            tryCompare(setup, "step", 3)
             tryCompare(find("setupNetworkTitle"), "text", "Ağ")
 
-            keyClick(Qt.Key_Escape)                    // back to the language step, choose English
+            keyClick(Qt.Key_Escape)                    // back to the time zone, then the language step, choose English
+            tryCompare(setup, "step", 2)
+            keyClick(Qt.Key_Escape)
             tryCompare(setup, "step", 1)
             keyClick(Qt.Key_Left)
             compare(DeviceSettings.language, "en")
-            tryCompare(find("setupStepLabel"), "text", "Step 2 of 5")
+            tryCompare(find("setupStepLabel"), "text", "Step 2 of 6")
             keyClick(Qt.Key_Return)
             tryCompare(setup, "step", 2)
+            tryCompare(find("setupZoneTitle"), "text", "Where are you?")
+            keyClick(Qt.Key_Menu)
+            tryCompare(setup, "step", 3)
             tryCompare(find("setupNetworkTitle"), "text", "Network")
         }
 

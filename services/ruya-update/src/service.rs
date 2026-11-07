@@ -609,7 +609,7 @@ fn available_version(host: &HostStatus, switching: bool, inner: &Inner) -> Strin
 mod tests {
     use super::*;
     use crate::bootc::{Deployment, FakeBootc};
-    use crate::schedule::{FakeClock, FakeReboot};
+    use crate::schedule::{FakeClock, FakeReboot, ZonedClock};
 
     fn dep(image: &str, version: &str, digest: &str) -> Deployment {
         Deployment {
@@ -1311,6 +1311,77 @@ mod tests {
         u.tick(&clock, &reboot, &mut || {});
         clock.set(T0 + IDLE, NIGHT);
         (u, clock, reboot)
+    }
+
+    /// A staged service that has been idle for the idle time at `start` (unix seconds) in the zone
+    /// `utc_offset` east of UTC, with the clock at `start + IDLE`.
+    fn quiet_service_in(
+        start: i64,
+        utc_offset: i64,
+    ) -> (Update<FakeBootc>, ZonedClock, FakeReboot) {
+        let u = staged_service();
+        let clock = ZonedClock::new(start, utc_offset);
+        let reboot = FakeReboot::default();
+        u.tick(&clock, &reboot, &mut || {});
+        clock.set_now(start + IDLE);
+        (u, clock, reboot)
+    }
+
+    #[test]
+    fn the_restart_window_is_local_time_not_utc() {
+        const HOUR: i64 = 3600;
+        const TOKYO: i64 = 9 * HOUR;
+        let utc_midnight = T0 - 8 * HOUR;
+
+        // 18:10 UTC: 03:10 in Tokyo, so it restarts there ...
+        let start = utc_midnight + 18 * HOUR + 10 * 60;
+        let (u, clock, reboot) = quiet_service_in(start, TOKYO);
+        u.tick(&clock, &reboot, &mut || {});
+        assert_eq!(
+            u.record().restart_at,
+            start + IDLE + GRACE,
+            "03:40 in Tokyo"
+        );
+        clock.set_now(start + IDLE + GRACE);
+        u.tick(&clock, &reboot, &mut || {});
+        assert_eq!(reboot.count(), 1);
+
+        // ... and not in London (UTC), where it is 18:40.
+        let (u, clock, reboot) = quiet_service_in(start, 0);
+        u.tick(&clock, &reboot, &mut || {});
+        assert_eq!(u.record().restart_at, 0);
+        clock.set_now(start + IDLE + GRACE);
+        u.tick(&clock, &reboot, &mut || {});
+        assert_eq!(reboot.count(), 0);
+
+        // 03:10 UTC is 12:10 in Tokyo: the UTC hour must not open the window there.
+        let start = utc_midnight + 3 * HOUR + 10 * 60;
+        let (u, clock, reboot) = quiet_service_in(start, TOKYO);
+        u.tick(&clock, &reboot, &mut || {});
+        assert_eq!(u.record().restart_at, 0);
+        clock.set_now(start + IDLE + GRACE);
+        u.tick(&clock, &reboot, &mut || {});
+        assert_eq!(reboot.count(), 0);
+    }
+
+    #[test]
+    fn choosing_another_zone_moves_the_window_at_once() {
+        const HOUR: i64 = 3600;
+        let start = T0 - 8 * HOUR + 18 * HOUR + 10 * 60;
+        let (u, clock, reboot) = quiet_service_in(start, 0);
+        u.tick(&clock, &reboot, &mut || {});
+        assert_eq!(u.record().restart_at, 0, "18:40 where the console was");
+
+        clock.set_zone(9 * HOUR); // the owner chose Tokyo: 03:40 now
+        u.tick(&clock, &reboot, &mut || {});
+        assert_eq!(u.record().restart_at, start + IDLE + GRACE);
+
+        clock.set_zone(0); // and back before the restart: it is called off
+        u.tick(&clock, &reboot, &mut || {});
+        assert_eq!(u.record().restart_at, 0);
+        clock.set_now(start + IDLE + GRACE);
+        u.tick(&clock, &reboot, &mut || {});
+        assert_eq!(reboot.count(), 0);
     }
 
     #[test]

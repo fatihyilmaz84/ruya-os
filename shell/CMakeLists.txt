@@ -45,6 +45,10 @@ qt_add_qml_module(ruyashell
         src/battery/MockBatteryBackend.h src/battery/MockBatteryBackend.cpp
         src/battery/DBusBatteryBackend.h src/battery/DBusBatteryBackend.cpp
         src/battery/Batteries.h src/battery/Batteries.cpp
+        src/time/TimeBackend.h
+        src/time/MockTimeBackend.h src/time/MockTimeBackend.cpp
+        src/time/DBusTimeBackend.h src/time/DBusTimeBackend.cpp
+        src/time/TimeZone.h src/time/TimeZone.cpp
         src/thermal/ThermalBackend.h
         src/thermal/MockThermalBackend.h src/thermal/MockThermalBackend.cpp
         src/thermal/DBusThermalBackend.h src/thermal/DBusThermalBackend.cpp
@@ -142,6 +146,8 @@ qt_add_qml_module(ruyashell
         qml/BluetoothPane.qml
         qml/StoragePane.qml
         qml/SystemPane.qml
+        qml/ZoneChooser.qml
+        qml/ZonePicker.qml
         qml/AboutPane.qml
         qml/controls/SettingControl.qml
         qml/controls/SettingRow.qml
@@ -181,7 +187,7 @@ else()
 endif()
 
 # qmltyperegistrar includes the QML_ELEMENT headers by file name.
-target_include_directories(ruyashell PUBLIC src/backend src/profiles src/settings src/audio src/network src/bluetooth src/battery src/thermal src/storage src/system src/power src/store src/library src/update src/session src/input src/wallpaper)
+target_include_directories(ruyashell PUBLIC src/backend src/profiles src/settings src/audio src/network src/bluetooth src/battery src/time src/thermal src/storage src/system src/power src/store src/library src/update src/session src/input src/wallpaper)
 target_link_libraries(ruyashell PRIVATE Qt6::Quick Qt6::Multimedia Qt6::DBus)
 
 # Translations: the .ts files in i18n/ are compiled to .qm and embedded as :/i18n/ruyashell_<lang>.qm.

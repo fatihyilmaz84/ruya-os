@@ -7,7 +7,7 @@
   Contract between shell (Qt/QML) and services (Rust); see docs/specs/03-services-and-apps.md §2.3.
 
   One bus name and one object, one interface per device class: org.ruyaos.Devices1.Audio now,
-  org.ruyaos.Devices1.Network, .Bluetooth, .Storage, .Batteries and .Thermal next to it. A new
+  org.ruyaos.Devices1.Network, .Bluetooth, .Storage, .Batteries, .Thermal and .Time next to it. A new
   class is a new interface, so existing clients and their PropertiesChanged filters (which match
   the interface name) are not touched, and each class can be mocked, implemented and tested on
   its own. Shared rules for every interface of this object:
@@ -53,6 +53,14 @@
                       (Eject: nothing to eject, it is safe to unplug)
     "invalid"         malformed argument (an empty id)
     "failed"          internal error, or Eject of a volume that is not removable
+
+  org.ruyaos.Devices1.Time status strings (systemd-timedated, org.freedesktop.timedate1, behind it):
+    "ok"         success (SetTimezone: the zone is set; TimezoneChanged follows)
+    "invalid"    malformed argument: a name that is not in ListTimezones (SetTimezone)
+    "forbidden"  the caller may not set the zone (SetTimezone): neither root nor the shell, or the
+                 shell while the active profile is not an admin. Before the first profile exists
+                 (first-boot setup) the shell may set it.
+    "failed"     internal error (timedated or polkit refused)
 
   org.ruyaos.Devices1.Batteries status strings: none. The list is the status (UPower behind it;
   an empty list when UPower is not on the bus, never an error).
@@ -467,6 +475,52 @@
       temperature by a whole degree or a fan by 10 rpm. Call ListSensors again.
     -->
     <signal name="SensorsChanged"/>
+
+  </interface>
+  <interface name="org.ruyaos.Devices1.Time">
+
+    <!--
+      The console's time zone (T-213), kept by systemd-timedated (/etc/localtime); the service is the
+      shell's narrow door to it. Everything that needs local time (the clock, the update restart
+      window, bedtimes) reads the system's zone, so a change here is a change for all of them.
+      The clock itself (UTC) is set by chronyd; there is no way to set it from here.
+    -->
+
+    <!-- The zone as an IANA name ("Europe/Istanbul", "UTC"); "UTC" when none is set. -->
+    <method name="GetTimezone">
+      <arg name="name" type="s" direction="out"/>
+    </method>
+
+    <!--
+      The names the system knows (timedated's ListTimezones, the same as `timedatectl list-timezones`):
+      "Region/City" or "Region/Area/City", sorted, plus "UTC". The service caches the list; the shell
+      groups it by the part before the first "/".
+    -->
+    <method name="ListTimezones">
+      <arg name="names" type="as" direction="out"/>
+    </method>
+
+    <!--
+      Sets the zone. name must be in ListTimezones, else "invalid". Allowed for root and for the shell
+      (the user the service runs as) while the active profile is an admin (Profiles1), and, for the
+      first-boot setup, while no profile exists yet; "forbidden" otherwise. Setting the zone it
+      already has is "ok" and sends no signal. The privileged call to timedated is authorised by
+      a polkit rule for the user ruya-shell and exactly the action
+      org.freedesktop.timedate1.set-timezone.
+    -->
+    <method name="SetTimezone">
+      <arg name="name" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <!-- The system clock is synchronised by NTP (timedated's NTPSynchronized). False on a console
+         that has not been online yet: its clock may be wrong, whatever the zone. -->
+    <property name="NtpSynchronised" type="b" access="read">
+      <annotation name="org.freedesktop.DBus.Property.EmitsChangedSignal" value="true"/>
+    </property>
+
+    <!-- The zone changed (SetTimezone, or timedatectl run by someone else); call GetTimezone again. -->
+    <signal name="TimezoneChanged"/>
 
   </interface>
 

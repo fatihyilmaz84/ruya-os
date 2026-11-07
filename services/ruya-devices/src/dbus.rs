@@ -25,6 +25,7 @@ use crate::network::{self, Network, NetworkManager};
 use crate::storage::{self, Storage, Udisks};
 use crate::sysusage::{MonotonicClock, Refresh, SystemSource, SystemUsage};
 use crate::thermal::{self, Monitor, Source};
+use crate::time::{self, ProfileState, Time, Timedate};
 
 /// Chosen at runtime: `wpctl` on Linux, a fake in `--session` development.
 pub type DynPipeWire = Box<dyn crate::audio::PipeWire>;
@@ -1264,4 +1265,201 @@ async fn announce_thermal(connection: &Connection, update: &thermal::Update) -> 
         iface.get().await.level_changed(emitter).await?;
     }
     Ok(())
+}
+
+/// Chosen at runtime: systemd-timedated on Linux, a fake in `--session` development.
+pub type DynTimedate = Box<dyn Timedate>;
+
+pub type SharedTime = Arc<Time<DynTimedate>>;
+
+pub struct TimeIface {
+    time: SharedTime,
+    /// Development (`--session`): every caller may set the zone, there is no Profiles1 to ask.
+    everyone_admin: bool,
+}
+
+impl TimeIface {
+    pub fn new(time: SharedTime, everyone_admin: bool) -> Self {
+        TimeIface {
+            time,
+            everyone_admin,
+        }
+    }
+
+    /// The caller rule (`time::caller_may_set`): root; the shell while the active profile is an
+    /// admin, or while no profile exists (first-boot setup). Fails closed.
+    async fn caller_may_set(&self, header: &Header<'_>, connection: &Connection) -> bool {
+        if self.everyone_admin {
+            return true;
+        }
+        let Some(sender) = header.sender() else {
+            return false;
+        };
+        let Ok(bus) = fdo::DBusProxy::new(connection).await else {
+            return false;
+        };
+        let caller = bus
+            .get_connection_unix_user(sender.clone().into())
+            .await
+            .ok();
+        let own = match connection.unique_name() {
+            Some(name) => bus
+                .get_connection_unix_user(name.inner().clone().into())
+                .await
+                .ok(),
+            None => None,
+        };
+        // Profiles1 is only asked for a caller that needs it.
+        let profiles = if caller.is_some() && caller == own {
+            profile_state(connection).await
+        } else {
+            ProfileState::Unknown
+        };
+        time::caller_may_set(caller, own, profiles)
+    }
+
+    async fn emit(&self, emitter: &SignalEmitter<'_>, changes: &time::Changes) {
+        let result = async {
+            if changes.timezone {
+                Self::timezone_changed(emitter).await?;
+            }
+            if changes.ntp {
+                self.ntp_synchronised_changed(emitter).await?;
+            }
+            Ok::<(), zbus::Error>(())
+        }
+        .await;
+        if let Err(err) = result {
+            eprintln!("ruya-devices: emitting time signals failed: {err}");
+        }
+    }
+}
+
+/// What Profiles1 says about who is signed in (the same questions `ruya-update` asks).
+async fn profile_state(connection: &Connection) -> ProfileState {
+    let Ok(proxy) = zbus::Proxy::new(
+        connection,
+        "org.ruyaos.Profiles1",
+        "/org/ruyaos/Profiles1",
+        "org.ruyaos.Profiles1",
+    )
+    .await
+    else {
+        return ProfileState::Unknown;
+    };
+    let Ok(profiles) = proxy
+        .call::<_, _, Vec<(String, String, String, String, bool)>>("ListProfiles", &())
+        .await
+    else {
+        return ProfileState::Unknown;
+    };
+    if profiles.is_empty() {
+        return ProfileState::NoProfiles;
+    }
+    let Ok(active) = proxy.get_property::<String>("ActiveProfile").await else {
+        return ProfileState::Unknown;
+    };
+    if active.is_empty() {
+        return ProfileState::NobodyActive;
+    }
+    ProfileState::Active {
+        admin: profiles.iter().any(|p| p.0 == active && p.3 == "admin"),
+    }
+}
+
+#[interface(name = "org.ruyaos.Devices1.Time")]
+impl TimeIface {
+    /// From the last read: no timedated call, so it never holds up the executor.
+    fn get_timezone(&self) -> String {
+        self.time.timezone()
+    }
+
+    async fn list_timezones(&self) -> Vec<String> {
+        let time = self.time.clone();
+        match unblock(move || time.list()).await {
+            Ok(list) => list,
+            Err(err) => {
+                eprintln!("ruya-devices: reading the time zones failed: {err}");
+                Vec::new()
+            }
+        }
+    }
+
+    async fn set_timezone(
+        &self,
+        name: &str,
+        #[zbus(header)] header: Header<'_>,
+        #[zbus(connection)] connection: &Connection,
+        #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
+    ) -> String {
+        let allowed = self.caller_may_set(&header, connection).await;
+        let (time, name) = (self.time.clone(), name.to_owned());
+        let (status, changes) = unblock(move || time.set(&name, allowed)).await;
+        self.emit(&emitter, &changes).await;
+        status.as_str().to_owned()
+    }
+
+    #[zbus(property)]
+    fn ntp_synchronised(&self) -> bool {
+        self.time.ntp_synchronised()
+    }
+
+    #[zbus(signal)]
+    async fn timezone_changed(emitter: &SignalEmitter<'_>) -> zbus::Result<()>;
+}
+
+/// Follows timedated's `PropertiesChanged` (a zone set by anyone, NTP found or lost), and
+/// timedated itself appearing, and after a quiet moment reads it again and announces what changed.
+/// No polling. Runs forever.
+#[cfg(target_os = "linux")]
+pub async fn watch_time(connection: Connection, time: SharedTime) {
+    use crate::timedate::TIMEDATE;
+
+    let signals = MatchRule::builder()
+        .msg_type(zbus::message::Type::Signal)
+        .sender(TIMEDATE)
+        .map(|b| b.build());
+    let owner = MatchRule::builder()
+        .msg_type(zbus::message::Type::Signal)
+        .sender("org.freedesktop.DBus")
+        .and_then(|b| b.member("NameOwnerChanged"))
+        .and_then(|b| b.arg(0, TIMEDATE))
+        .map(|b| b.build());
+    let (Ok(signals), Ok(owner)) = (signals, owner) else {
+        return eprintln!("ruya-devices: cannot follow timedated");
+    };
+    let (signals, owner) = match (
+        MessageStream::for_match_rule(signals, &connection, None).await,
+        MessageStream::for_match_rule(owner, &connection, None).await,
+    ) {
+        (Ok(a), Ok(b)) => (a, b),
+        (Err(err), _) | (_, Err(err)) => {
+            return eprintln!("ruya-devices: cannot follow timedated: {err}");
+        }
+    };
+    let mut stream = futures_lite::stream::or(signals, owner);
+    while stream.next().await.is_some() {
+        debounce::settle(&mut stream, debounce::QUIET, debounce::MAX_WAIT, None).await;
+        let refreshing = time.clone();
+        match unblock(move || refreshing.refresh()).await {
+            Ok(changes) => announce_time(&connection, &changes).await,
+            Err(err) => eprintln!("ruya-devices: reading timedated failed: {err}"),
+        }
+    }
+}
+
+#[cfg(target_os = "linux")]
+async fn announce_time(connection: &Connection, changes: &time::Changes) {
+    let Ok(iface) = connection
+        .object_server()
+        .interface::<_, TimeIface>(OBJECT_PATH)
+        .await
+    else {
+        return;
+    };
+    iface
+        .get()
+        .await
+        .emit(iface.signal_emitter(), changes)
+        .await;
 }

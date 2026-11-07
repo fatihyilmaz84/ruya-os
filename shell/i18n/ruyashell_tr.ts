@@ -1228,7 +1228,7 @@
 <context>
     <name>Setup</name>
     <message>
-        <location filename="../qml/Setup.qml" line="+66"/>
+        <location filename="../qml/Setup.qml" line="+75"/>
         <source>Cancel</source>
         <translation>İptal</translation>
     </message>
@@ -1243,12 +1243,13 @@
         <translation>İleri</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+4"/>
+        <location line="+1"/>
         <source>Back</source>
         <translation>Geri</translation>
     </message>
     <message>
-        <location line="+52"/>
+        <location line="+76"/>
         <source>Enter a name first.</source>
         <translation>Önce bir ad girin.</translation>
     </message>
@@ -1258,7 +1259,7 @@
         <translation>Bir PIN seçin</translation>
     </message>
     <message>
-        <location line="+101"/>
+        <location line="+104"/>
         <source>Step %1 of %2</source>
         <translation>Adım %1 / %2</translation>
     </message>
@@ -1291,30 +1292,31 @@
     </message>
     <message>
         <location line="+16"/>
-        <location line="+27"/>
+        <location line="+62"/>
         <location line="+79"/>
         <source>Press A to continue</source>
         <translation>Devam etmek için A&apos;ya basın</translation>
     </message>
     <message>
-        <location line="-273"/>
-        <location line="+181"/>
+        <location line="-308"/>
+        <location line="+216"/>
         <source>Network</source>
         <translation>Ağ</translation>
     </message>
     <message>
-        <location line="-278"/>
+        <location line="-342"/>
         <source>Try again</source>
         <translation>Yeniden dene</translation>
     </message>
     <message>
         <location line="+0"/>
         <location line="+1"/>
+        <location line="+7"/>
         <source>Skip</source>
         <translation>Atla</translation>
     </message>
     <message>
-        <location line="+94"/>
+        <location line="+116"/>
         <location line="+86"/>
         <source>Connect a controller</source>
         <translation>Bir kontrolcü bağlayın</translation>
@@ -1325,7 +1327,17 @@
         <translation>Yeniden denemek için A&apos;ya basın</translation>
     </message>
     <message>
-        <location line="+89"/>
+        <location line="+80"/>
+        <source>Where are you?</source>
+        <translation>Neredesiniz?</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Choose your region, then your city, so the clock is right. You can change this later in Settings.</source>
+        <translation>Saatin doğru olması için önce bölgenizi, sonra şehrinizi seçin. Bunu daha sonra Ayarlar&apos;dan değiştirebilirsiniz.</translation>
+    </message>
+    <message>
+        <location line="+35"/>
         <source>Network setup comes later. A wired connection works without any setup.</source>
         <translation>Ağ kurulumu daha sonra gelecek. Kablolu bağlantı herhangi bir kurulum olmadan çalışır.</translation>
     </message>
@@ -1365,8 +1377,8 @@
         <translation>Oluşturuluyor…</translation>
     </message>
     <message>
-        <location line="-235"/>
-        <location line="+261"/>
+        <location line="-270"/>
+        <location line="+296"/>
         <source>You&apos;re all set</source>
         <translation>Her şey hazır</translation>
     </message>
@@ -1404,7 +1416,7 @@
         <translation>Ses çıkışı: %1</translation>
     </message>
     <message numerus="yes">
-        <location line="+180"/>
+        <location line="+231"/>
         <source>%n more device(s) with a battery: %1</source>
         <translation>
             <numerusform>Pili olan %n cihaz daha: %1</numerusform>
@@ -1421,7 +1433,7 @@
         <translation>Güç</translation>
     </message>
     <message>
-        <location line="-718"/>
+        <location line="-769"/>
         <source>Update ready. Restart to finish.</source>
         <translation>Güncelleme hazır. Bitirmek için yeniden başlat.</translation>
     </message>
@@ -1441,7 +1453,7 @@
         <translation>Duvar kağıdı yüklenemedi</translation>
     </message>
     <message>
-        <location line="+211"/>
+        <location line="+262"/>
         <source>Continue playing</source>
         <translation>Oynamaya devam et</translation>
     </message>
@@ -1705,19 +1717,19 @@
 <context>
     <name>SystemPane</name>
     <message>
-        <location filename="../qml/SystemPane.qml" line="+129"/>
-        <location line="+220"/>
+        <location filename="../qml/SystemPane.qml" line="+133"/>
+        <location line="+270"/>
         <source>Beta</source>
         <translation>Beta</translation>
     </message>
     <message>
-        <location line="-220"/>
-        <location line="+219"/>
+        <location line="-270"/>
+        <location line="+269"/>
         <source>Stable</source>
         <translation>Kararlı</translation>
     </message>
     <message>
-        <location line="-214"/>
+        <location line="-264"/>
         <source>Last checked %1</source>
         <translation>Son kontrol: %1</translation>
     </message>
@@ -1817,7 +1829,27 @@
         <translation>Güncelleme başlatılamadı.</translation>
     </message>
     <message>
-        <location line="+103"/>
+        <location line="+31"/>
+        <source>Time zone</source>
+        <translation>Saat dilimi</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>The clock has not been set from the internet yet, so the time may be wrong.</source>
+        <translation>Saat henüz internetten ayarlanmadı, bu yüzden saat yanlış olabilir.</translation>
+    </message>
+    <message>
+        <location line="+26"/>
+        <source>Time zone set to %1</source>
+        <translation>Saat dilimi %1 olarak ayarlandı</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Could not change the time zone.</source>
+        <translation>Saat dilimi değiştirilemedi.</translation>
+    </message>
+    <message>
+        <location line="+83"/>
         <source>Device health</source>
         <translation>Cihaz sağlığı</translation>
     </message>
@@ -1827,13 +1859,14 @@
         <translation>Bu cihazda sıcaklık sensörü bulunamadı.</translation>
     </message>
     <message>
-        <location line="-131"/>
+        <location line="-181"/>
         <location line="+8"/>
+        <location line="+70"/>
         <source>Only an admin can do this.</source>
         <translation>Bunu yalnızca bir yönetici yapabilir.</translation>
     </message>
     <message>
-        <location line="-184"/>
+        <location line="-254"/>
         <source>The console is warm. Nothing needs to be done.</source>
         <translation>Konsol sıcak. Yapılması gereken bir şey yok.</translation>
     </message>
@@ -1853,7 +1886,7 @@
         <translation>Dil</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+66"/>
         <source>Updates</source>
         <translation>Güncellemeler</translation>
     </message>
@@ -2186,6 +2219,97 @@
         <location line="+8"/>
         <source>Delete</source>
         <translation>Sil</translation>
+    </message>
+</context>
+<context>
+    <name>ZoneChooser</name>
+    <message>
+        <location filename="../qml/ZoneChooser.qml" line="+43"/>
+        <source>Africa</source>
+        <translation>Afrika</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Americas</source>
+        <translation>Amerika</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Antarctica</source>
+        <translation>Antarktika</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Arctic</source>
+        <translation>Arktik</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Asia</source>
+        <translation>Asya</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Atlantic Ocean</source>
+        <translation>Atlas Okyanusu</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Australia</source>
+        <translation>Avustralya</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Europe</source>
+        <translation>Avrupa</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Indian Ocean</source>
+        <translation>Hint Okyanusu</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Pacific Ocean</source>
+        <translation>Pasifik Okyanusu</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Other</source>
+        <translation>Diğer</translation>
+    </message>
+    <message>
+        <location line="+118"/>
+        <source>Loading time zones…</source>
+        <translation>Saat dilimleri yükleniyor…</translation>
+    </message>
+    <message>
+        <location line="+20"/>
+        <source>%1, current</source>
+        <translation>%1, geçerli</translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>Current</source>
+        <translation>Geçerli</translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <source>Region</source>
+        <translation>Bölge</translation>
+    </message>
+    <message>
+        <location line="+28"/>
+        <source>City</source>
+        <translation>Şehir</translation>
+    </message>
+</context>
+<context>
+    <name>ZonePicker</name>
+    <message>
+        <location filename="../qml/ZonePicker.qml" line="+68"/>
+        <source>Time zone</source>
+        <translation>Saat dilimi</translation>
     </message>
 </context>
 </TS>

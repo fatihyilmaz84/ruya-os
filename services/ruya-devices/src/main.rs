@@ -1,6 +1,6 @@
-//! ruya-devices: serves org.ruyaos.Devices1.Audio, .Network, .Bluetooth, .Storage, .Batteries and .Thermal on the system bus, as a systemd
+//! ruya-devices: serves org.ruyaos.Devices1.Audio, .Network, .Bluetooth, .Storage, .Batteries, .Thermal and .Time on the system bus, as a systemd
 //! user unit of `ruya-shell` (ADR-010). With `--session` (development) it serves on the session
-//! bus over a fake PipeWire, NetworkManager, BlueZ, udisks2, UPower and sensors.
+//! bus over a fake PipeWire, NetworkManager, BlueZ, udisks2, UPower, sensors and timedated.
 
 use std::error::Error;
 use std::path::PathBuf;
@@ -12,13 +12,13 @@ use ruya_devices::bluetooth::{AgentHandler, AgentSlot, Bluetooth, FakeBluez};
 #[cfg(target_os = "linux")]
 use ruya_devices::dbus::{
     watch, watch_batteries, watch_bluetooth, watch_input, watch_installed, watch_network,
-    watch_storage, watch_thermal,
+    watch_storage, watch_thermal, watch_time,
 };
 use ruya_devices::dbus::{
     AudioIface, BatteriesIface, BluetoothIface, DynBluez, DynNm, DynPipeWire, DynSource,
-    DynThermal, DynUPower, DynUdisks, NetworkIface, Shared, SharedBatteries, SharedBluetooth,
-    SharedInput, SharedNet, SharedStorage, SharedThermal, SharedUsage, StorageIface, ThermalIface,
-    BUS_NAME, OBJECT_PATH,
+    DynThermal, DynTimedate, DynUPower, DynUdisks, NetworkIface, Shared, SharedBatteries,
+    SharedBluetooth, SharedInput, SharedNet, SharedStorage, SharedThermal, SharedTime, SharedUsage,
+    StorageIface, ThermalIface, TimeIface, BUS_NAME, OBJECT_PATH,
 };
 use ruya_devices::input::{DynInputSource, FakeInput, InputDevice, InputPresence};
 use ruya_devices::network::{FakeNetworkManager, Network};
@@ -31,6 +31,7 @@ use ruya_devices::thermal::{
     Class, Config as ThermalConfig, FakeSource as FakeSensors, Monitor, RawSensor, SysfsSource,
     LOCAL_CONFIG, SYSTEM_CONFIG,
 };
+use ruya_devices::time::{FakeTimedate, Time};
 
 fn main() {
     if let Err(err) = run() {
@@ -99,6 +100,15 @@ fn upower(session: bool) -> Result<DynUPower, Box<dyn Error>> {
         percentage: 60.0,
         state: 2,
     }])))
+}
+
+fn timedate(session: bool) -> Result<DynTimedate, Box<dyn Error>> {
+    #[cfg(target_os = "linux")]
+    if !session {
+        return Ok(Box::new(ruya_devices::timedate::TimedateClient::connect()?));
+    }
+    let _ = session;
+    Ok(Box::new(FakeTimedate::with_zones()))
 }
 
 fn udisks(session: bool) -> Result<DynUdisks, Box<dyn Error>> {
@@ -184,6 +194,7 @@ async fn follow_system(
     storage: SharedStorage,
     usage: SharedUsage,
     thermal: SharedThermal,
+    time: SharedTime,
 ) {
     #[cfg(target_os = "linux")]
     futures_lite::future::zip(
@@ -200,7 +211,10 @@ async fn follow_system(
                             watch_storage(connection.clone(), storage),
                             futures_lite::future::zip(
                                 watch_installed(connection.clone(), usage),
-                                watch_thermal(connection, thermal),
+                                futures_lite::future::zip(
+                                    watch_thermal(connection.clone(), thermal),
+                                    watch_time(connection, time),
+                                ),
                             ),
                         ),
                     ),
@@ -212,7 +226,7 @@ async fn follow_system(
     #[cfg(not(target_os = "linux"))]
     {
         let _keep = (
-            connection, audio, net, batteries, bluetooth, input, storage, usage, thermal,
+            connection, audio, net, batteries, bluetooth, input, storage, usage, thermal, time,
         );
         futures_lite::future::pending::<()>().await;
     }
@@ -280,6 +294,12 @@ fn run() -> Result<(), Box<dyn Error>> {
         eprintln!("ruya-devices: sensors not readable yet: {err}");
     }
 
+    // timedated not up yet is retried by its signals; its zone is read once now.
+    let time: SharedTime = Arc::new(Time::new(timedate(session)?));
+    if let Err(err) = time.refresh() {
+        eprintln!("ruya-devices: timedated not readable yet: {err}");
+    }
+
     futures_lite::future::block_on(async {
         let builder = if session {
             zbus::connection::Builder::session()?
@@ -300,17 +320,18 @@ fn run() -> Result<(), Box<dyn Error>> {
                 StorageIface::new(storage.clone(), usage.clone()),
             )?
             .serve_at(OBJECT_PATH, ThermalIface::new(monitor.clone()))?
+            .serve_at(OBJECT_PATH, TimeIface::new(time.clone(), session))?
             .build()
             .await?;
         // The fakes have nothing to follow (they change only through calls): just stay up.
         if session {
             let _keep = (
-                connection, audio, net, batteries, bluetooth, input, storage, usage, monitor,
+                connection, audio, net, batteries, bluetooth, input, storage, usage, monitor, time,
             );
             futures_lite::future::pending::<()>().await;
         } else {
             follow_system(
-                connection, audio, net, batteries, bluetooth, input, storage, usage, monitor,
+                connection, audio, net, batteries, bluetooth, input, storage, usage, monitor, time,
             )
             .await;
         }
