@@ -1,6 +1,6 @@
 # T-199 — Device icons: a controller, a headset, a keyboard... shown next to each device
 
-Status: in-progress · Phase: 2 · Depends: — · Area: shell, services, api · Size: M · Owner: builder
+Status: done · Phase: 2 · Depends: — · Area: shell, services, api · Size: M · Owner: builder
 
 ## Goal
 Every Bluetooth device in Settings → Bluetooth (and the "controller connected" toasts and the battery rows that name a device) shows an icon that says what it is: a gamepad, a headset, a speaker, a keyboard, a mouse. Where we can tell the controller family (PlayStation, Xbox, Nintendo), the icon is that family's pad; where we cannot, the generic gamepad icon is fine. Owner request, 2026-11-06 (first Dell run: the list is text only).
