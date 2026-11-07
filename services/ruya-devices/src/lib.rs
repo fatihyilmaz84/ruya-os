@@ -5,7 +5,9 @@
 //! `upower.rs`; the BlueZ side (`bluetooth.rs`) in `bluez.rs`; the udisks2 side (drives and volumes,
 //! `storage.rs`) in `udisks.rs`; how full the console's own storage is (`sysusage.rs`) is read from
 //! `statvfs` and directory walks; the temperatures and fans (`thermal.rs`) from sysfs; the time zone
-//! (`time.rs`) is kept by systemd-timedated (`timedate.rs`).
+//! (`time.rs`) is kept by systemd-timedated (`timedate.rs`); what the console is made of (`sysinfo.rs`,
+//! over the `ruya-sysinfo` crate) is read from `/proc` and `/sys`; a report is saved to a USB drive by
+//! `report.rs`.
 
 pub mod audio;
 pub mod battery;
@@ -21,8 +23,10 @@ pub mod network;
 pub mod networkmanager;
 pub mod pairing;
 pub mod pipewire;
+pub mod report;
 pub mod storage;
 pub mod store;
+pub mod sysinfo;
 pub mod sysusage;
 pub mod thermal;
 pub mod time;

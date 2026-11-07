@@ -3,6 +3,7 @@
 #include "RequestSequence.h"
 
 #include <QList>
+#include <QMap>
 #include <QObject>
 #include <QString>
 
@@ -44,6 +45,9 @@ public:
     virtual bool isMock() const = 0;
     virtual void refresh() = 0; // reports the volumes
     virtual void eject(const QString &id) = 0;
+    // Plain report files (name -> text) onto a mounted removable volume; reports finished() with op
+    // "saveReport". See Storage.SaveReport in the XML for the names and limits.
+    virtual void saveReport(const QString &id, const QMap<QString, QString> &files) = 0;
     virtual void refreshUsage() = 0; // reports the internal storage numbers
 
 signals:
@@ -51,7 +55,7 @@ signals:
     void usageListed(const SystemUsage &usage);
     // A volume was plugged in; sent before the list that contains it.
     void volumeAdded(const QString &id);
-    // op: "eject"; status: see the XML ("ok", "busy", ...).
+    // op: "eject" | "saveReport"; status: see the XML ("ok", "busy", "read-only", ...).
     void finished(const QString &op, const QString &id, const QString &status);
 
 protected:

@@ -1,0 +1,267 @@
+# A Dell desktop as the T-226 task describes it: Core i5-10500T, UHD 630, 8 GB, a 465 GB SATA drive,
+# an Intel Bluetooth dongle. Written from that description in the shape the kernel uses; NOT captured
+# from the machine (the values that the task does not give, such as the model number and the clocks,
+# are plausible inventions). Replace with a real capture when one is at hand.
+== file /etc/os-release
+NAME="RuyaOS"
+VERSION="0.0.50 (Fedora Linux 44)"
+ID=ruyaos
+ID_LIKE=fedora
+VERSION_ID=44
+PRETTY_NAME="RuyaOS 0.0.50"
+== file /usr/lib/ruyaos/version
+0.0.50
+== file /proc/sys/kernel/osrelease
+6.18.3-200.fc44.x86_64
+== file /proc/sys/kernel/arch
+x86_64
+== file /proc/cmdline
+BOOT_IMAGE=(hd0,gpt2)/boot/ostree/default-4d2a8b3c/vmlinuz-6.18.3-200.fc44.x86_64 rw root=UUID=2b1f0c5e-3f1a-4c76-9d0e-a1b2c3d4e5f6 ostree=/ostree/boot.1/default/9f3a1c7be2d4a05b6c8e1f203a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d/0 quiet
+== file /proc/uptime
+93784.12 1062340.55
+== mtime /etc/machine-id 1761955200
+== dir /sys/firmware/efi
+== bytes /sys/firmware/efi/efivars/SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c
+06 00 00 00 00
+== file /sys/class/dmi/id/sys_vendor
+Dell Inc.
+== file /sys/class/dmi/id/product_name
+OptiPlex 3080
+== file /sys/class/dmi/id/board_name
+0DCRT5
+== file /proc/cpuinfo
+processor : 0
+vendor_id : GenuineIntel
+cpu family : 6
+model  : 165
+model name : Intel(R) Core(TM) i5-10500T CPU @ 2.30GHz
+stepping : 3
+cpu MHz  : 2300.000
+cache size : 12288 KB
+physical id : 0
+siblings : 12
+core id  : 0
+cpu cores : 6
+
+processor : 1
+vendor_id : GenuineIntel
+cpu family : 6
+model  : 165
+model name : Intel(R) Core(TM) i5-10500T CPU @ 2.30GHz
+stepping : 3
+cpu MHz  : 1203.400
+cache size : 12288 KB
+physical id : 0
+siblings : 12
+core id  : 1
+cpu cores : 6
+
+processor : 2
+vendor_id : GenuineIntel
+cpu family : 6
+model  : 165
+model name : Intel(R) Core(TM) i5-10500T CPU @ 2.30GHz
+stepping : 3
+cpu MHz  : 3799.900
+cache size : 12288 KB
+physical id : 0
+siblings : 12
+core id  : 2
+cpu cores : 6
+
+processor : 3
+vendor_id : GenuineIntel
+cpu family : 6
+model  : 165
+model name : Intel(R) Core(TM) i5-10500T CPU @ 2.30GHz
+stepping : 3
+cpu MHz  : 800.000
+cache size : 12288 KB
+physical id : 0
+siblings : 12
+core id  : 3
+cpu cores : 6
+
+processor : 4
+vendor_id : GenuineIntel
+cpu family : 6
+model  : 165
+model name : Intel(R) Core(TM) i5-10500T CPU @ 2.30GHz
+stepping : 3
+cpu MHz  : 2891.200
+cache size : 12288 KB
+physical id : 0
+siblings : 12
+core id  : 4
+cpu cores : 6
+
+processor : 5
+vendor_id : GenuineIntel
+cpu family : 6
+model  : 165
+model name : Intel(R) Core(TM) i5-10500T CPU @ 2.30GHz
+stepping : 3
+cpu MHz  : 1500.600
+cache size : 12288 KB
+physical id : 0
+siblings : 12
+core id  : 5
+cpu cores : 6
+
+processor : 6
+vendor_id : GenuineIntel
+cpu family : 6
+model  : 165
+model name : Intel(R) Core(TM) i5-10500T CPU @ 2.30GHz
+stepping : 3
+cpu MHz  : 2300.000
+cache size : 12288 KB
+physical id : 0
+siblings : 12
+core id  : 0
+cpu cores : 6
+
+processor : 7
+vendor_id : GenuineIntel
+cpu family : 6
+model  : 165
+model name : Intel(R) Core(TM) i5-10500T CPU @ 2.30GHz
+stepping : 3
+cpu MHz  : 801.200
+cache size : 12288 KB
+physical id : 0
+siblings : 12
+core id  : 1
+cpu cores : 6
+
+processor : 8
+vendor_id : GenuineIntel
+cpu family : 6
+model  : 165
+model name : Intel(R) Core(TM) i5-10500T CPU @ 2.30GHz
+stepping : 3
+cpu MHz  : 3512.700
+cache size : 12288 KB
+physical id : 0
+siblings : 12
+core id  : 2
+cpu cores : 6
+
+processor : 9
+vendor_id : GenuineIntel
+cpu family : 6
+model  : 165
+model name : Intel(R) Core(TM) i5-10500T CPU @ 2.30GHz
+stepping : 3
+cpu MHz  : 1190.000
+cache size : 12288 KB
+physical id : 0
+siblings : 12
+core id  : 3
+cpu cores : 6
+
+processor : 10
+vendor_id : GenuineIntel
+cpu family : 6
+model  : 165
+model name : Intel(R) Core(TM) i5-10500T CPU @ 2.30GHz
+stepping : 3
+cpu MHz  : 2203.300
+cache size : 12288 KB
+physical id : 0
+siblings : 12
+core id  : 4
+cpu cores : 6
+
+processor : 11
+vendor_id : GenuineIntel
+cpu family : 6
+model  : 165
+model name : Intel(R) Core(TM) i5-10500T CPU @ 2.30GHz
+stepping : 3
+cpu MHz  : 1000.100
+cache size : 12288 KB
+physical id : 0
+siblings : 12
+core id  : 5
+cpu cores : 6
+
+== file /sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq
+2300000
+== file /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq
+3800000
+== file /sys/devices/system/cpu/cpu2/cpufreq/scaling_cur_freq
+3799912
+== file /sys/devices/system/cpu/cpu2/cpufreq/cpuinfo_max_freq
+3800000
+== file /sys/devices/system/cpu/cpu5/cpufreq/scaling_cur_freq
+1500600
+== file /sys/devices/system/cpu/cpu5/cpufreq/cpuinfo_max_freq
+3800000
+== file /proc/meminfo
+MemTotal:        7970348 kB
+MemFree:         1203352 kB
+MemAvailable:    5214420 kB
+Buffers:          212904 kB
+Cached:          3512160 kB
+SwapCached:            0 kB
+SwapTotal:       7970344 kB
+SwapFree:        7970344 kB
+== dir /sys/block/zram0
+== file /sys/block/zram0/disksize
+7970349056
+== link /sys/class/drm/card0/device /sys/devices/pci0000:00/0000:00:02.0
+== file /sys/devices/pci0000:00/0000:00:02.0/vendor
+0x8086
+== file /sys/devices/pci0000:00/0000:00:02.0/device
+0x9bc8
+== file /sys/devices/pci0000:00/0000:00:02.0/boot_vga
+1
+== link /sys/devices/pci0000:00/0000:00:02.0/driver /sys/bus/pci/drivers/i915
+== dir /sys/bus/pci/drivers/i915
+== file /run/udev/data/+pci:0000:00:02.0
+S:disk/by-path/pci-0000:00:02.0
+E:ID_VENDOR_FROM_DATABASE=Intel Corporation
+E:ID_MODEL_FROM_DATABASE=CometLake-S GT2 [UHD Graphics 630]
+== file /sys/class/drm/card0-HDMI-A-1/status
+connected
+== file /sys/class/drm/card0-HDMI-A-1/modes
+1920x1080
+1680x1050
+1280x720
+== file /sys/class/drm/card0-DP-1/status
+disconnected
+== file /sys/class/drm/card0-DP-1/modes
+== cmd rpm -q --qf %{VERSION} mesa-dri-drivers
+25.2.6
+== file /sys/block/sda/size
+976773168
+== file /sys/block/sda/removable
+0
+== file /sys/block/sda/queue/rotational
+0
+== file /sys/block/sda/device/model
+Samsung SSD 870 
+== file /sys/block/loop0/size
+0
+== file /proc/net/route
+Iface Destination Gateway Flags RefCnt Use Metric Mask MTU Window IRTT
+eno1 00000000 0100A8C0 0003 0 0 100 00000000 0 0 0
+eno1 0000A8C0 00000000 0001 0 0 100 00FFFFFF 0 0 0
+== file /sys/class/net/eno1/address
+c8:4b:d6:aa:bb:cc
+== file /sys/class/net/eno1/speed
+1000
+== link /sys/class/bluetooth/hci0 /sys/devices/pci0000:00/0000:00:14.0/usb1/1-10/1-10:1.0/bluetooth/hci0
+== dir /sys/devices/pci0000:00/0000:00:14.0/usb1/1-10/1-10:1.0/bluetooth/hci0
+== file /sys/devices/pci0000:00/0000:00:14.0/usb1/1-10/idVendor
+8087
+== file /sys/devices/pci0000:00/0000:00:14.0/usb1/1-10/idProduct
+0a2b
+== file /run/udev/data/+usb:1-10
+E:ID_VENDOR_FROM_DATABASE=Intel Corp.
+E:ID_MODEL_FROM_DATABASE=Bluetooth wireless interface
+== cmd bluetoothctl show
+Controller 9C:B6:D0:12:34:56 (public)
+ Name: dell
+ Powered: yes

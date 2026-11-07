@@ -155,6 +155,15 @@ FocusScope {
         return found
     }
 
+    // Lays the rows out now. A Column lays out when its window next polishes it, and a pane whose
+    // rows are created after the page opened (a Repeater over data, T-226) was seen to stay unlaid
+    // (every row at y 0, the viewport one row high) in a real window until the next repaint:
+    // such a pane calls this after changing its rows. Resizing follows through the Column's height.
+    function reflow() {
+        column.forceLayout()
+        Qt.callLater(relayout)
+    }
+
     function move(delta) {
         const list = focusableRows()
         if (list.length === 0)

@@ -142,6 +142,37 @@ void Storage::eject(const QString &id)
     m_backend->eject(id);
 }
 
+void Storage::saveReport(const QString &id, const QVariantMap &files)
+{
+    QMap<QString, QString> texts;
+    for (auto it = files.cbegin(); it != files.cend(); ++it)
+        texts.insert(it.key(), it.value().toString());
+    m_backend->saveReport(id, texts);
+}
+
+QVariantMap Storage::mockSavedFiles() const
+{
+    QVariantMap out;
+    if (auto *mock = qobject_cast<MockStorageBackend *>(m_backend.get())) {
+        const auto saved = mock->savedFiles();
+        for (auto it = saved.cbegin(); it != saved.cend(); ++it)
+            out.insert(it.key(), it.value());
+    }
+    return out;
+}
+
+int Storage::mockSaveCalls() const
+{
+    auto *mock = qobject_cast<MockStorageBackend *>(m_backend.get());
+    return mock ? mock->saveCalls() : 0;
+}
+
+void Storage::mockSetSaveStatus(const QString &status)
+{
+    if (auto *mock = qobject_cast<MockStorageBackend *>(m_backend.get()))
+        mock->setSaveStatus(status);
+}
+
 void Storage::mockPlug(const QStringList &ids)
 {
     if (auto *mock = qobject_cast<MockStorageBackend *>(m_backend.get()))

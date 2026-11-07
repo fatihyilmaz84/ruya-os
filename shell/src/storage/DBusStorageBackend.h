@@ -18,6 +18,7 @@ public:
     bool isMock() const override { return false; }
     void refresh() override;
     void eject(const QString &id) override;
+    void saveReport(const QString &id, const QMap<QString, QString> &files) override;
     void refreshUsage() override;
 
 private slots:

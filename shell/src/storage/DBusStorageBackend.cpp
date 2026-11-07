@@ -133,6 +133,31 @@ void DBusStorageBackend::eject(const QString &id)
     });
 }
 
+void DBusStorageBackend::saveReport(const QString &id, const QMap<QString, QString> &files)
+{
+    auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("SaveReport"));
+    // a{ss}
+    QDBusArgument map;
+    map.beginMap(QMetaType::fromType<QString>(), QMetaType::fromType<QString>());
+    for (auto it = files.cbegin(); it != files.cend(); ++it) {
+        map.beginMapEntry();
+        map << it.key() << it.value();
+        map.endMapEntry();
+    }
+    map.endMap();
+    msg << id << QVariant::fromValue(map);
+    auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, id](QDBusPendingCallWatcher *w) {
+        w->deleteLater();
+        const QDBusMessage reply = w->reply();
+        const bool ok = reply.type() == QDBusMessage::ReplyMessage && !reply.arguments().isEmpty();
+        if (!ok)
+            qWarning("ruya-shell: Devices1.Storage SaveReport failed: %s", qPrintable(reply.errorMessage()));
+        emit finished(QStringLiteral("saveReport"), id,
+                      ok ? reply.arguments().constFirst().toString() : QStringLiteral("failed"));
+    });
+}
+
 void DBusStorageBackend::onVolumesChanged()
 {
     refresh();
