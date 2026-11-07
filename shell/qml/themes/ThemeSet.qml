@@ -51,6 +51,7 @@ QtObject {
     required property color glassRim
     required property color glassRimLit
     required property color glassTint
+    required property color glassSpecular
     required property color shadowColor
 
     // Strength of the three Backdrop blobs (1 = as designed), of the shadow alphas, and the

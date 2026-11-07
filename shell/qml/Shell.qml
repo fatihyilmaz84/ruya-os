@@ -260,7 +260,24 @@ FocusScope {
         onGuidePressed: autoRepeat => { if (root.signedIn && !systemPanel.open) root.guideDown(autoRepeat) }
         onGuideReleased: autoRepeat => root.guideUp(autoRepeat)
         // The update service restarts the console only when nobody is using it.
-        onActivity: Update.noteActivity(root.appOpen)
+        onActivity: {
+            Update.noteActivity(root.appOpen)
+            LiquidGate.noteInput()
+        }
+    }
+
+    // The liquid pill's specular clock runs only with no app in front, the window shown and input
+    // within the idle period (LiquidGate, 04 §3.8): nothing keeps redrawing a still screen.
+    Binding {
+        target: LiquidGate
+        property: "appOpen"
+        value: root.appOpen
+    }
+    Binding {
+        target: LiquidGate
+        property: "screenShown"
+        value: root.Window.window !== null && root.Window.window.visibility !== Window.Hidden
+               && root.Window.window.visibility !== Window.Minimized
     }
 
     Keys.onPressed: event => {
