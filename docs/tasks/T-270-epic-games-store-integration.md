@@ -3,7 +3,7 @@
 Status: blocked · Phase: 5 · Depends: owner (ADR-018), T-229, T-244, T-251 · Area: docs, services, shell · Size: M · Owner: lead
 
 ## Goal
-A player signs in to their Epic Games account on the TV, sees their Epic library with art, installs and launches Windows games through the system Wine runner, with cloud saves, like Heroic Games Launcher does on Linux. Owner request, 2026-11-07: "integration with Epic store just like how Heroic does it". Parked until the owner answers ADR-018 (legal and product scope).
+A player signs in to their Epic Games account on the TV, sees their Epic library with art, installs and launches Windows games through the system Wine runner, with cloud saves, like Heroic Games Launcher does on Linux. Owner request, 2026-11-07: "integration with Epic store just like how Heroic does it". Parked until the owner answers ADR-018 (legal and product scope). Owner, 2026-11-07: "we will talk about 270 later, park it for now": do not plan, spike or dispatch it.
 
 ## Read first
 - `docs/specs/00-overview.md` ADR-018 (Proposed), ADR-014 and `05-play-packages.md` (Wine runner, sandboxed Flatpak apps), ADR-005, §2 scope (Steam and RetroArch are separate Store apps)
