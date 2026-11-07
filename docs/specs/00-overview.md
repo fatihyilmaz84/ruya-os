@@ -210,3 +210,11 @@ Shell icons come from Google's **Material Symbols Rounded** (Apache-2.0), bundle
 3. **No PIN** to assign a pad to a profile for play (no data access is gained). Admin features never come from a non-slot-1 pad.
 
 **Consequences.** New contract (registry, `Assign`/`Release`, signals), persistence root-only under `/var/lib`, a "Who's playing?" dialog and player chips, and, for apps to see slots in order, ordered virtual gamepads per slot with the physical pads hidden (needs the virtual-device layer of T-217/B-006). Epic and tasks: T-263 (spec), T-264 (services), T-265 (shell), T-266 (virtual pads), T-267 (default owner at login), T-268 (guest player).
+
+### ADR-018 — Epic Games Store on RuyaOS — *Proposed (2026-11-07), owner decision needed*
+**Question.** The owner asked for Epic Games Store integration the way Heroic does it. Heroic's Epic support is Legendary, an open-source (GPL-3.0) command-line client that uses Epic's unofficial web and launcher APIs; Epic offers no sanctioned third-party launcher API and may change or block it. Games run as Windows titles through Wine/Proton (no anti-cheat titles).
+
+**Options.** (a) **A first-party RuyaOS app** (Store-installed, sandboxed, built on RuyaKit, T-251) that drives Legendary and launches games through the system Wine runner of ADR-014; the OS image itself ships no Epic code, like Steam and RetroArch (§2). (b) Point players to the unmodified Heroic Flatpak from Flathub (no controller-first UI; costs nothing; may not suit the shell's input model). (c) Not at all.
+
+**Recommendation.** (a), after the `.play`/Wine spike (T-229) and the runner pack (T-244), as a Store app with its own release cycle, so a break in Epic's API never touches the OS. **Owner-level because** it depends on a third party's unofficial API and terms of service (legal), uses its trademark in the UI (use the neutral label "Epic Games" only in text; no logo until decided), and adds GPL-3.0 components (source offer). Until decided, T-270 stays `blocked` and no Epic code is written.
+
