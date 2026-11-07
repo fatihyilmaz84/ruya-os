@@ -20,6 +20,9 @@ pub const SCAN_LIMIT: Duration = Duration::from_secs(30);
 /// 25 s and the shell's client uses it, so the service has to answer first.
 pub const CALL_TIMEOUT: Duration = Duration::from_secs(20);
 
+/// The longest name `Rename` takes, in characters (the contract's 48).
+pub const MAX_NAME_CHARS: usize = 48;
+
 /// The error name the `Bluez` side reports when it gave up waiting for the device.
 pub const LOCAL_TIMEOUT: &str = "org.ruyaos.Error.Timeout";
 
@@ -234,6 +237,8 @@ pub trait Bluez: Send + Sync {
     fn connect(&self, address: &str, timeout: Duration) -> Result<(), BtError>;
     fn disconnect(&self, address: &str) -> Result<(), BtError>;
     fn remove(&self, address: &str) -> Result<(), BtError>;
+    /// The device's `Alias` (the name the user gave it).
+    fn set_alias(&self, address: &str, alias: &str) -> Result<(), BtError>;
 }
 
 /// What a refresh found different (so the signals are due).
@@ -614,6 +619,25 @@ impl<B: Bluez> Bluetooth<B> {
         match self.find(id) {
             Ok(d) if !d.paired => Status::Failed,
             Ok(d) => match self.bluez.disconnect(&d.id) {
+                Ok(()) => Status::Ok,
+                Err(e) => map_error(&e.0, false),
+            },
+            Err(s) => s,
+        }
+    }
+
+    /// Gives a device the name the user typed (BlueZ's `Alias`), T-260. The name is trimmed;
+    /// empty, longer than `MAX_NAME_CHARS` or with a control character is `invalid`.
+    pub fn rename(&self, id: &str, name: &str) -> Status {
+        let name = name.trim();
+        if name.is_empty()
+            || name.chars().count() > MAX_NAME_CHARS
+            || name.chars().any(char::is_control)
+        {
+            return Status::Invalid;
+        }
+        match self.ready_device(id) {
+            Ok(d) => match self.bluez.set_alias(&d.id, name) {
                 Ok(()) => Status::Ok,
                 Err(e) => map_error(&e.0, false),
             },
@@ -1254,6 +1278,11 @@ impl Bluez for FakeBluez {
             raw.devices.retain(|d| d.address != address);
         })
     }
+    fn set_alias(&self, address: &str, alias: &str) -> Result<(), BtError> {
+        self.act(format!("alias {address} {alias}"), |raw| {
+            with_device(raw, address, |d| d.alias = alias.to_owned());
+        })
+    }
 }
 
 #[cfg(test)]
@@ -1488,7 +1517,7 @@ mod tests {
         assert_eq!(
             pairs,
             [
-                ("AA:BB:CC:00:00:04", "controller", ""),
+                ("AA:BB:CC:00:00:04", "controller", "8bitdo"),
                 ("AA:BB:CC:00:00:07", "keyboard", ""),
                 ("AA:BB:CC:00:00:03", "controller", "nintendo"),
                 ("AA:BB:CC:00:00:05", "controller", ""),
@@ -1793,6 +1822,55 @@ mod tests {
         assert_eq!(bt.list().len(), 1);
         assert_eq!(bt.forget("AA:00:00:00:00:01"), Status::UnknownDevice);
         assert_eq!(bt.forget(""), Status::Invalid);
+    }
+
+    #[test]
+    fn rename_sets_the_alias_and_the_list_shows_it() {
+        let bt = bt();
+        assert_eq!(bt.rename("AA:00:00:00:00:01", "  Dad's pad  "), Status::Ok);
+        assert!(bt
+            .bluez
+            .calls()
+            .contains(&"alias AA:00:00:00:00:01 Dad's pad".to_owned()));
+        assert!(bt.refresh().expect("fake reads").devices);
+        assert!(bt
+            .list()
+            .iter()
+            .any(|d| d.id == "AA:00:00:00:00:01" && d.name == "Dad's pad"));
+    }
+
+    #[test]
+    fn rename_refuses_what_makes_no_name() {
+        let bt = bt();
+        let calls_before = bt.bluez.calls().len();
+        assert_eq!(bt.rename("AA:00:00:00:00:01", "   "), Status::Invalid);
+        assert_eq!(
+            bt.rename("AA:00:00:00:00:01", &"x".repeat(MAX_NAME_CHARS + 1)),
+            Status::Invalid
+        );
+        assert_eq!(bt.rename("AA:00:00:00:00:01", "a\nb"), Status::Invalid);
+        assert_eq!(bt.rename("", "Pad"), Status::Invalid);
+        assert_eq!(bt.rename("AA:00:00:00:00:99", "Pad"), Status::UnknownDevice);
+        assert_eq!(
+            bt.bluez.calls().len(),
+            calls_before,
+            "BlueZ was never asked"
+        );
+        // The longest name still passes; so does a name with Turkish letters.
+        assert_eq!(
+            bt.rename("AA:00:00:00:00:01", &"ş".repeat(MAX_NAME_CHARS)),
+            Status::Ok
+        );
+    }
+
+    #[test]
+    fn rename_with_bluetooth_off_is_unavailable_and_a_refusal_is_failed() {
+        let bt = bt();
+        bt.set_powered(false).expect("fake");
+        assert_eq!(bt.rename("AA:00:00:00:00:01", "Pad"), Status::Unavailable);
+        bt.set_powered(true).expect("fake");
+        bt.bluez.fail_next("org.bluez.Error.Failed");
+        assert_eq!(bt.rename("AA:00:00:00:00:01", "Pad"), Status::Failed);
     }
 
     #[test]

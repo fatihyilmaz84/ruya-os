@@ -309,6 +309,18 @@ impl BluezClient {
             .await
             .map(|_| ())
     }
+
+    async fn set_text(
+        &self,
+        path: &str,
+        iface: &str,
+        prop: &str,
+        text: &str,
+    ) -> Result<(), BtError> {
+        self.call(path, PROPERTIES, "Set", &(iface, prop, Value::from(text)))
+            .await
+            .map(|_| ())
+    }
 }
 
 /// Whether a bus error only says "BlueZ is not there" (not installed, cannot be started, gone
@@ -443,6 +455,14 @@ impl Bluez for BluezClient {
             self.call(&device_path(&adapter, address), DEVICE, "Disconnect", &())
                 .await
                 .map(|_| ())
+        })
+    }
+
+    fn set_alias(&self, address: &str, alias: &str) -> Result<(), BtError> {
+        future::block_on(async {
+            let adapter = self.adapter_path().await?;
+            self.set_text(&device_path(&adapter, address), DEVICE, "Alias", alias)
+                .await
         })
     }
 

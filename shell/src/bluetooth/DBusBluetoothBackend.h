@@ -24,12 +24,15 @@ public:
     void forget(const QString &id) override;
     void connectDevice(const QString &id) override;
     void disconnectDevice(const QString &id) override;
+    void rename(const QString &id, const QString &name) override;
     void startControllerPairing(int seconds) override;
     void stopControllerPairing() override;
 
 private slots:
     void onDevicesChanged();
     void onControllerRejected();
+    void onGamepadConnected(const QString &id, const QString &name, const QString &family, const QString &transport);
+    void onGamepadDisconnected(const QString &id, const QString &name, const QString &family, const QString &transport);
     void onPropertiesChanged(const QString &interface, const QVariantMap &changed, const QStringList &invalidated);
 
 private:

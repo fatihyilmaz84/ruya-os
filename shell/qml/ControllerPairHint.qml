@@ -11,8 +11,10 @@ import RuyaShell
 // its time is up (`timedOut`; with `autoRetry` it is opened again at once, for a screen on
 // which nobody can press Retry, but only `maxAutoWindows` windows in a row: then `exhausted`
 // says "Press A to start pairing" and `newSeries()` starts again), or when the service cannot
-// open it (`failed`). The words are in `message`: the one place to make them per controller
-// family (T-260).
+// open it (`failed`). The words are in `message` and, per controller family (T-260), in
+// `familySteps`: the one place for the pairing wording. `showFamilies` lists the steps of every
+// family under the message (the screens with nobody to press a button); ControllerOnboarding
+// shows the steps of the one family the player picks.
 Item {
     id: hint
 
@@ -20,6 +22,35 @@ Item {
     property bool active: false
     property bool autoRetry: false
     property int maxAutoWindows: 3
+    // Show the steps of every family under the message.
+    property bool showFamilies: false
+    // The screen was opened on purpose by somebody who already has an input device (Settings): the
+    // waiting message does not say that no controller or keyboard was found.
+    property bool onPurpose: false
+
+    // How to put a controller of each family into pairing mode. The order is the order shown; the
+    // last entry (family "") is every other pad. Titles come from DeviceIcons.kindText. The 8BitDo
+    // keys are from the pads' manuals (X-input and Switch mode), not tried here (T-261 checks them).
+    readonly property var familySteps: [
+        { family: "playstation",
+          steps: qsTr("Hold PS and Create (Share on a DualShock 4) until the light bar flashes.") },
+        { family: "xbox",
+          steps: qsTr("Press the pairing button on top until the Xbox logo flashes fast.") },
+        { family: "nintendo",
+          steps: qsTr("Press the small sync button on top until the lights run back and forth.") },
+        { family: "8bitdo",
+          steps: qsTr("Hold Start with X (X-input mode) or Y (Switch mode) to turn it on in Bluetooth mode, then hold the pair button until the light flashes fast.") },
+        { family: "",
+          steps: qsTr("Hold its pairing button until the light blinks. Pick the Bluetooth mode if it has several.") }
+    ]
+
+    function titleFor(family) {
+        return family === "" ? qsTr("Other controller") : DeviceIcons.kindText("controller", family)
+    }
+    function stepsFor(family) {
+        const entry = familySteps.find(e => e.family === family)
+        return entry ? entry.steps : familySteps[familySteps.length - 1].steps
+    }
 
     // The window ended because its time was up.
     readonly property bool timedOut: active && armed && sawOpen && Bluetooth.controllerPairing === "timeout"
@@ -43,6 +74,8 @@ Item {
             return qsTr("Could not start looking for controllers.")
         if (timedOut)
             return qsTr("No controller was found. Hold the pairing button on your controller (on a DualSense: PS + Create) and try again.")
+        if (onPurpose)
+            return qsTr("Looking for controllers in pairing mode…")
         return qsTr("No controller or keyboard found. Hold the pairing button on your controller (on a DualSense: PS + Create) until its light blinks.")
     }
 
@@ -173,6 +206,41 @@ Item {
             font.pixelSize: Theme.typeBody * hint.u
             Accessible.role: Accessible.StaticText
             Accessible.name: text
+        }
+        Column {
+            objectName: hint.objectName + "Families"
+            width: hint.width
+            visible: hint.showFamilies && !hint.succeeded
+            spacing: Theme.spaceXs * hint.u
+            Repeater {
+                model: hint.familySteps
+                delegate: Row {
+                    id: familyRow
+                    required property var modelData
+                    objectName: hint.objectName + "Family_" + (modelData.family === "" ? "other" : modelData.family)
+                    width: hint.width
+                    spacing: Theme.spaceM * hint.u
+                    Icon {
+                        id: familyGlyph
+                        u: hint.u
+                        size: Theme.typeCaption
+                        name: DeviceIcons.iconFor("controller", familyRow.modelData.family)
+                        color: Theme.textDim
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
+                    Text {
+                        objectName: "familyText"
+                        width: familyRow.width - familyGlyph.width - familyRow.spacing
+                        wrapMode: Text.Wrap
+                        text: "<b>" + hint.titleFor(familyRow.modelData.family) + ".</b> " + familyRow.modelData.steps
+                        textFormat: Text.StyledText
+                        color: Theme.textDim
+                        font.pixelSize: Theme.typeCaption * hint.u
+                        Accessible.role: Accessible.StaticText
+                        Accessible.name: hint.titleFor(familyRow.modelData.family) + ". " + familyRow.modelData.steps
+                    }
+                }
+            }
         }
         Text {
             objectName: hint.objectName + "Ignored"

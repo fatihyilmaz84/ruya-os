@@ -67,6 +67,10 @@ DBusBluetoothBackend::DBusBluetoothBackend(QObject *parent)
     m_bus.connect(Service, Path, Interface, QStringLiteral("DevicesChanged"), this, SLOT(onDevicesChanged()));
     m_bus.connect(Service, Path, Interface, QStringLiteral("ControllerPairingRejected"), this,
                   SLOT(onControllerRejected()));
+    m_bus.connect(Service, Path, Interface, QStringLiteral("GamepadConnected"), this,
+                  SLOT(onGamepadConnected(QString, QString, QString, QString)));
+    m_bus.connect(Service, Path, Interface, QStringLiteral("GamepadDisconnected"), this,
+                  SLOT(onGamepadDisconnected(QString, QString, QString, QString)));
     m_bus.connect(Service, Path, PropertiesInterface, QStringLiteral("PropertiesChanged"), this,
                   SLOT(onPropertiesChanged(QString, QVariantMap, QStringList)));
 }
@@ -175,6 +179,11 @@ void DBusBluetoothBackend::disconnectDevice(const QString &id)
     startCommand(QStringLiteral("Disconnect"), QStringLiteral("disconnect"), id, {id});
 }
 
+void DBusBluetoothBackend::rename(const QString &id, const QString &name)
+{
+    startCommand(QStringLiteral("Rename"), QStringLiteral("rename"), id, {id, name});
+}
+
 void DBusBluetoothBackend::startControllerPairing(int seconds)
 {
     startCommand(QStringLiteral("StartControllerPairing"), QStringLiteral("controller-pairing"), QStringLiteral("start"),
@@ -189,6 +198,18 @@ void DBusBluetoothBackend::stopControllerPairing()
 void DBusBluetoothBackend::onControllerRejected()
 {
     emit controllerRejected();
+}
+
+void DBusBluetoothBackend::onGamepadConnected(const QString &id, const QString &name, const QString &family,
+                                              const QString &transport)
+{
+    emit gamepadConnected(id, name, family, transport);
+}
+
+void DBusBluetoothBackend::onGamepadDisconnected(const QString &id, const QString &name, const QString &family,
+                                                 const QString &transport)
+{
+    emit gamepadDisconnected(id, name, family, transport);
 }
 
 void DBusBluetoothBackend::onDevicesChanged()

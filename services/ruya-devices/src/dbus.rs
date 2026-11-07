@@ -20,6 +20,8 @@ use crate::audio::Changes;
 use crate::battery::{Batteries, UPower};
 use crate::bluetooth::{self, Bluetooth, Bluez, BtError};
 use crate::debounce;
+#[cfg(target_os = "linux")]
+use crate::input::GamepadEvent;
 use crate::input::InputPresence;
 use crate::network::{self, Network, NetworkManager};
 use crate::storage::{self, Storage, Udisks};
@@ -514,6 +516,9 @@ impl Bluez for DynBluez {
     fn set_trusted(&self, address: &str) -> Result<(), BtError> {
         (**self).set_trusted(address)
     }
+    fn set_alias(&self, address: &str, alias: &str) -> Result<(), BtError> {
+        (**self).set_alias(address, alias)
+    }
     fn connect(&self, address: &str, timeout: Duration) -> Result<(), BtError> {
         (**self).connect(address, timeout)
     }
@@ -708,8 +713,39 @@ impl BluetoothIface {
         status.as_str().to_owned()
     }
 
+    async fn rename(
+        &self,
+        id: &str,
+        name: &str,
+        #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
+    ) -> String {
+        let (bt, id, name) = (self.bt.clone(), id.to_owned(), name.to_owned());
+        let status = unblock(move || bt.rename(&id, &name)).await;
+        self.settle(&emitter).await;
+        status.as_str().to_owned()
+    }
+
     #[zbus(signal)]
     async fn devices_changed(emitter: &SignalEmitter<'_>) -> zbus::Result<()>;
+
+    /// A game controller appeared (T-260). See `Devices1.xml`.
+    #[zbus(signal)]
+    async fn gamepad_connected(
+        emitter: &SignalEmitter<'_>,
+        id: &str,
+        name: &str,
+        family: &str,
+        transport: &str,
+    ) -> zbus::Result<()>;
+
+    #[zbus(signal)]
+    async fn gamepad_disconnected(
+        emitter: &SignalEmitter<'_>,
+        id: &str,
+        name: &str,
+        family: &str,
+        transport: &str,
+    ) -> zbus::Result<()>;
 
     #[zbus(property)]
     fn controller_pairing_state(&self) -> String {
@@ -892,7 +928,9 @@ pub async fn watch_input(connection: Connection, input: SharedInput) {
     loop {
         async_io::Timer::after(INPUT_POLL).await;
         let input2 = input.clone();
-        if !unblock(move || input2.refresh()).await {
+        let (changed, pads) =
+            unblock(move || (input2.refresh(), input2.take_gamepad_events())).await;
+        if !changed && pads.is_empty() {
             continue;
         }
         let announced = async {
@@ -900,12 +938,40 @@ pub async fn watch_input(connection: Connection, input: SharedInput) {
                 .object_server()
                 .interface::<_, BluetoothIface>(OBJECT_PATH)
                 .await?;
-            let this = iface.get().await;
-            this.input_present_changed(iface.signal_emitter()).await
+            let emitter = iface.signal_emitter();
+            if changed {
+                let this = iface.get().await;
+                this.input_present_changed(emitter).await?;
+            }
+            for event in &pads {
+                match event {
+                    GamepadEvent::Connected(p) => {
+                        BluetoothIface::gamepad_connected(
+                            emitter,
+                            &p.id,
+                            &p.name,
+                            p.family,
+                            p.transport,
+                        )
+                        .await?
+                    }
+                    GamepadEvent::Disconnected(p) => {
+                        BluetoothIface::gamepad_disconnected(
+                            emitter,
+                            &p.id,
+                            &p.name,
+                            p.family,
+                            p.transport,
+                        )
+                        .await?
+                    }
+                }
+            }
+            Ok::<(), zbus::Error>(())
         }
         .await;
         if let Err(err) = announced {
-            eprintln!("ruya-devices: emitting InputPresent failed: {err}");
+            eprintln!("ruya-devices: emitting the input changes failed: {err}");
         }
     }
 }

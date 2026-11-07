@@ -105,6 +105,48 @@ Item {
             verify(find("pickerControllerHintText").text.indexOf("Hold the pairing button") >= 0, "and the generic words")
         }
 
+        // T-260: with nobody able to press a button the picker lists the steps of every family.
+        function test_the_steps_of_every_family_are_listed() {
+            Bluetooth.mockSetInputPresent(false)
+            tryVerify(() => !Bluetooth.inputPresent)
+            startShell()
+            tryVerify(() => hint().visible, 2000)
+            verify(find("pickerControllerHintFamilies").visible)
+            const expected = [
+                ["playstation", "PlayStation controller. Hold PS and Create"],
+                ["xbox", "Xbox controller. Press the pairing button on top until the Xbox logo flashes fast."],
+                ["nintendo", "Nintendo controller. Press the small sync button"],
+                ["8bitdo", "8BitDo controller. Hold Start with X"],
+                ["other", "Other controller. Hold its pairing button"],
+            ]
+            for (const [family, words] of expected) {
+                const row = find("pickerControllerHintFamily_" + family)
+                verify(row !== null && row.visible, family + " has its steps")
+                verify(findChild(row, "familyText").Accessible.name.startsWith(words), family + ": " + findChild(row, "familyText").Accessible.name)
+            }
+            verify(find("profileList").activeFocus, "the picker keeps focus")
+        }
+
+        // The hint, with the steps of every family, has to fit above the hint bar at the size a real
+        // screen has (the picker's profiles move up to make room).
+        function test_the_hint_and_the_family_steps_fit_on_the_screen() {
+            startShell()
+            tryVerify(() => find("profileList").y > 100, 2000, "laid out")
+            compare(Math.round(find("profileList").anchors.verticalCenterOffset), 27, "the profiles rest below the middle with nothing to say")
+            Bluetooth.mockSetInputPresent(false)
+            tryVerify(() => hint().visible, 2000)
+            tryVerify(() => find("pickerControllerHintFamily_other").visible)
+            wait(500)
+            compare(Math.round(find("profileList").anchors.verticalCenterOffset), -100, "the profiles move up to make room")
+            const last = find("pickerControllerHintFamily_other")
+            const bottom = last.mapToItem(tc.shell, 0, last.height).y
+            const barTop = find("hintBar").mapToItem(tc.shell, 0, 0).y
+            verify(bottom <= barTop, "the last family line (" + bottom + ") ends above the hint bar (" + barTop + ")")
+            const list = find("profileList")
+            verify(list.mapToItem(tc.shell, 0, list.height).y <= hint().mapToItem(tc.shell, 0, 0).y + 1,
+                   "the profiles end where the hint starts")
+        }
+
         function test_a_stops_answer_is_not_taken_for_the_starts() {
             Bluetooth.mockSetInputPresent(false)
             Bluetooth.mockPairingScript("wait")
@@ -146,6 +188,10 @@ Item {
             tryCompare(Bluetooth, "controllerPairing", "open")
             wait(800)
             grabImage(tc.shell).save(shotsDir + "/10b-picker-no-controller.png")
+            DeviceSettings.language = "tr"
+            wait(600)
+            grabImage(tc.shell).save(shotsDir + "/10c-picker-no-controller-tr.png")
+            DeviceSettings.language = "en"
         }
     }
 }

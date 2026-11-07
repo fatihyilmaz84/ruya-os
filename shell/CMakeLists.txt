@@ -104,6 +104,9 @@ qt_add_qml_module(ruyashell
         qml/FpsMeter.qml
         qml/ProfilePicker.qml
         qml/ControllerPairHint.qml
+        qml/ControllerOnboarding.qml
+        qml/ControllerToasts.qml
+        qml/ButtonTest.qml
         qml/ProfileCard.qml
         qml/PinPad.qml
         qml/TextEntry.qml

@@ -24,6 +24,7 @@ public:
     void forget(const QString &id) override;
     void connectDevice(const QString &id) override;
     void disconnectDevice(const QString &id) override;
+    void rename(const QString &id, const QString &name) override;
     void startControllerPairing(int seconds) override;
     void stopControllerPairing() override;
 
@@ -37,6 +38,12 @@ public:
     void setInputPresent(bool present);
     int pairingStarts() const { return m_pairingStarts; }
     void setBattery(const QString &id, int percent);
+    // A device that was not in the list is "found" now, as if the window's scan saw it (T-260).
+    void reveal(const QString &id);
+    // A game controller appears or goes away (USB or Bluetooth), announced a moment later like the
+    // service's signal (T-260). Returns nothing; the shell reacts to gamepadConnected/Disconnected.
+    void gamepadEvent(bool connected, const QString &id, const QString &name, const QString &family,
+                      const QString &transport);
     // Adds one paired, connected device of every kind and every controller family the shell
     // draws, and one of a kind it does not know (icons: T-199). The ids are "bt-gallery-<what>".
     void populate();

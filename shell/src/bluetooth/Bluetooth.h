@@ -22,7 +22,7 @@ class Bluetooth : public QObject
     Q_PROPERTY(bool discovering READ discovering NOTIFY stateChanged)
     // [{ id, name, kind, family, paired, connected, trusted, battery }]; battery -1 = unknown;
     // kind: "controller" | "headset" | "speaker" | "keyboard" | "mouse" | "phone" | "other";
-    // family: "playstation" | "xbox" | "nintendo" for a controller, else ""
+    // family: "playstation" | "xbox" | "nintendo" | "8bitdo" for a controller, else ""
     Q_PROPERTY(QVariantList devices READ devices NOTIFY devicesChanged)
     // The controller pairing window (T-203): "idle" | "open" | "paired" | "timeout".
     Q_PROPERTY(QString controllerPairing READ controllerPairing NOTIFY controllerStateChanged)
@@ -58,6 +58,8 @@ public:
     Q_INVOKABLE void forget(const QString &id);
     Q_INVOKABLE void connectDevice(const QString &id);
     Q_INVOKABLE void disconnectDevice(const QString &id);
+    // Gives a device a name of the user's (BlueZ Alias); finished("rename", id, status).
+    Q_INVOKABLE void rename(const QString &id, const QString &name);
     // Opens the window in which a controller (or keyboard) can pair itself, and closes it. The
     // status of the start arrives as finished("controller-pairing", "start", status); the stop answers with id "stop".
     Q_INVOKABLE void startControllerPairing();
@@ -82,6 +84,10 @@ public:
     // present; how many times the window was started.
     Q_INVOKABLE void mockPairingScript(const QString &outcome);
     Q_INVOKABLE void mockSetInputPresent(bool present);
+    // A device that was hidden is found now; a game controller appears or goes away (T-260).
+    Q_INVOKABLE void mockReveal(const QString &id);
+    Q_INVOKABLE void mockGamepad(bool connected, const QString &id, const QString &name, const QString &family,
+                                 const QString &transport);
     Q_INVOKABLE int mockPairingStarts() const;
 
 signals:
@@ -90,7 +96,11 @@ signals:
     void controllerStateChanged();
     // A device that is not a controller tried to pair while the window was open.
     void controllerRejected();
-    // op: "power" | "scan" | "pair" | "forget" | "connect" | "disconnect" | "controller-pairing"; status: see
+    // A game controller appeared or went away (USB or Bluetooth, T-260). family: "playstation" | "xbox" |
+    // "nintendo" | "8bitdo" | ""; transport: "usb" | "bluetooth" | "other"; id is stable per pad.
+    void gamepadConnected(const QString &id, const QString &name, const QString &family, const QString &transport);
+    void gamepadDisconnected(const QString &id, const QString &name, const QString &family, const QString &transport);
+    // op: "power" | "scan" | "pair" | "forget" | "connect" | "disconnect" | "rename" | "controller-pairing"; status: see
     // api/dbus/org.ruyaos.Devices1.xml
     void finished(const QString &op, const QString &id, const QString &status);
     // A connected device's battery fell to Batteries::LowBatteryPercent or less; once per crossing.

@@ -182,6 +182,7 @@ Page {
             objectName: "paneBluetooth"
             anchors.fill: parent
             u: page.u
+            overlay: page.overlay
             visible: page.current.key === "bluetooth"
             enabled: visible
             onExitRequested: page.leavePane()

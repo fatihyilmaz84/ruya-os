@@ -229,6 +229,44 @@ void MockBluetoothBackend::disconnectDevice(const QString &id)
     answer(QStringLiteral("disconnect"), id, status);
 }
 
+void MockBluetoothBackend::rename(const QString &id, const QString &name)
+{
+    const int at = indexOf(id);
+    const QString trimmed = name.trimmed();
+    QString status = QStringLiteral("ok");
+    if (id.isEmpty() || trimmed.isEmpty() || trimmed.size() > 48)
+        status = QStringLiteral("invalid");
+    else if (!m_powered)
+        status = QStringLiteral("unavailable");
+    else if (at < 0 || !m_entries.at(at).listed)
+        status = QStringLiteral("unknown-device");
+    else {
+        m_entries[at].dev.name = trimmed;
+        publish();
+    }
+    answer(QStringLiteral("rename"), id, status);
+}
+
+void MockBluetoothBackend::reveal(const QString &id)
+{
+    const int at = indexOf(id);
+    if (at >= 0 && !m_entries.at(at).listed) {
+        m_entries[at].listed = true;
+        publish();
+    }
+}
+
+void MockBluetoothBackend::gamepadEvent(bool connected, const QString &id, const QString &name, const QString &family,
+                                        const QString &transport)
+{
+    QTimer::singleShot(0, this, [this, connected, id, name, family, transport] {
+        if (connected)
+            emit gamepadConnected(id, name, family, transport);
+        else
+            emit gamepadDisconnected(id, name, family, transport);
+    });
+}
+
 void MockBluetoothBackend::setBattery(const QString &id, int percent)
 {
     const int at = indexOf(id);

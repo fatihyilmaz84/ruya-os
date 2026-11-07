@@ -2,15 +2,19 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import RuyaShell
 
-// Settings -> Bluetooth & controllers: the power switch, "Add a device" (a scan) with a hint on
-// pairing mode, the devices found or paired, and a "Forget" row for each paired one. Accept on
-// a device pairs it (not paired), connects it (paired) or disconnects it (connected). With
-// Bluetooth off the pane says so and shows nothing else. Everything goes through the Bluetooth
-// singleton (org.ruyaos.Devices1.Bluetooth).
+// Settings -> Bluetooth & controllers: the power switch, "Add a device" (a scan), "Pair a new
+// controller" (the guided screen, ControllerOnboarding, T-260), the devices found or paired, and for
+// each paired one a "Forget" row (after a confirmation that names it) and, for a controller, a
+// "Rename" row (the on-screen keyboard; BlueZ keeps the name). Accept on a device pairs it (not
+// paired), connects it (paired) or disconnects it (connected). A controller says "Connected",
+// "Reconnects automatically" (paired and trusted, not connected: it comes back when switched on) or
+// "Paired". With Bluetooth off the pane says so and shows nothing else. Everything goes through
+// the Bluetooth singleton (org.ruyaos.Devices1.Bluetooth).
 SettingsPane {
     id: pane
 
     property string busyId     // the device being paired, "" if none
+    property Item overlay      // where the pairing screen, the keyboard and the confirmation are parented
 
     // Rows follow Bluetooth.devices by id (updated in place), so focus stays on a row when the
     // list is re-published, e.g. after a device connects or its battery changes.
@@ -28,7 +32,7 @@ SettingsPane {
         for (let i = 0; i < list.length; ++i) {
             const d = list[i]
             const entry = { devId: d.id, name: d.name, kind: d.kind, family: d.family ?? "", paired: d.paired,
-                            connected: d.connected, battery: d.battery }
+                            connected: d.connected, trusted: d.trusted ?? false, battery: d.battery }
             let at = -1
             for (let j = 0; j < deviceModel.count; ++j) {
                 if (deviceModel.get(j).devId === d.id) {
@@ -63,25 +67,32 @@ SettingsPane {
     onVisibleChanged: {
         if (!visible && Bluetooth.discovering)
             Bluetooth.stopScan()
-        if (!visible && Bluetooth.controllerPairing === "open")
-            Bluetooth.stopControllerPairing()
+        if (!visible && onboarding.shown)
+            onboarding.close()                  // closes its pairing window with it
     }
 
-    // The state of the controller pairing window as the "Pair a controller" row says it.
-    function controllerPairingValue(state) {
-        switch (state) {
-        case "open": return qsTr("Waiting for a controller…")
-        case "paired": return qsTr("Paired")
-        case "timeout": return qsTr("Nothing found")
-        }
-        return ""
+    // Focus is never lost to a modal that went away: back to the row that opened it.
+    property Item modalReturn: null
+    function beginModal() { modalReturn = Window.activeFocusItem }
+    function restoreFocus() {
+        const target = modalReturn
+        modalReturn = null
+        if (target && target.visible && target.enabled)
+            target.forceActiveFocus()
+        Qt.callLater(pane.ensureFocusedVisible)
     }
 
-    function toggleControllerPairing() {
-        if (Bluetooth.controllerPairing === "open")
-            Bluetooth.stopControllerPairing()
-        else
-            Bluetooth.startControllerPairing()
+    function askForget(id, name) {
+        forgetConfirm.customTitle = qsTr("Forget %1?").arg(name)
+        forgetConfirm.detail = qsTr("It will have to be paired again to be used.")
+        forgetConfirm.customConfirmName = qsTr("Forget %1").arg(name)
+        forgetConfirm.pendingId = id
+        forgetConfirm.open("custom")
+    }
+
+    function askRename(id, name) {
+        renameEntry.pendingId = id
+        renameEntry.open(qsTr("Controller name"), name, { maxLength: 48, layout: "text" })
     }
 
     // The single mapping from a service status to text.
@@ -97,12 +108,14 @@ SettingsPane {
         return op === "disconnect" ? qsTr("Could not disconnect.") : qsTr("Could not connect.")
     }
 
-    function deviceValue(busy, paired, connected, battery) {
+    function deviceValue(busy, paired, connected, battery, kind, trusted) {
         if (busy)
             return qsTr("Pairing…")
         if (!paired)
             return qsTr("Not paired")
-        const parts = [connected ? qsTr("Connected") : qsTr("Paired")]
+        // A paired, trusted controller that is off comes back by itself when it is switched on.
+        const idle = kind === "controller" && trusted ? qsTr("Reconnects automatically") : qsTr("Paired")
+        const parts = [connected ? qsTr("Connected") : idle]
         if (connected && battery >= 0)
             parts.push(qsTr("Battery %1%").arg(battery))
         return parts.join(" · ")
@@ -134,6 +147,12 @@ SettingsPane {
                 Sfx.back()
                 Notifications.show(status === "unavailable" ? qsTr("Bluetooth is off.")
                                                             : qsTr("Could not start looking for controllers."), "warning")
+                return
+            }
+            if (op === "rename" && status !== "ok") {
+                Sfx.back()
+                Notifications.show(status === "invalid" ? qsTr("That name does not work. Try another.")
+                                                          : qsTr("Could not rename the controller."), "warning")
                 return
             }
             if (op === "forget" || op === "scan" || op === "controller-pairing" || status === "ok")
@@ -179,17 +198,43 @@ SettingsPane {
         objectName: "rowBtPairController"
         visible: Bluetooth.powered
         u: pane.u
-        label: qsTr("Pair a controller")
-        value: pane.controllerPairingValue(Bluetooth.controllerPairing)
-        onActivated: pane.toggleControllerPairing()
+        label: qsTr("Pair a new controller")
+        onActivated: {
+            pane.beginModal()
+            onboarding.open()
+        }
     }
 
-    SettingRow {
-        objectName: "rowBtHint"
-        visible: Bluetooth.powered
-        enabled: false
+    ControllerOnboarding {
+        id: onboarding
+        objectName: "controllerOnboarding"
+        parent: pane.overlay
+        width: parent ? parent.width : 0
+        height: parent ? parent.height : 0
         u: pane.u
-        label: qsTr("Controller: hold its pairing button until the light blinks")
+        onClosed: pane.restoreFocus()
+    }
+
+    TextEntry {
+        id: renameEntry
+        objectName: "btRenameEntry"
+        parent: pane.overlay
+        width: parent ? parent.width : 0
+        height: parent ? parent.height : 0
+        u: pane.u
+        property string pendingId: ""
+        onAccepted: text => Bluetooth.rename(pendingId, text)
+    }
+
+    PowerConfirm {
+        id: forgetConfirm
+        objectName: "btForgetConfirm"
+        parent: pane.overlay
+        width: parent ? parent.width : 0
+        height: parent ? parent.height : 0
+        u: pane.u
+        property string pendingId: ""
+        onConfirmed: Bluetooth.forget(pendingId)
     }
 
     Repeater {
@@ -201,17 +246,33 @@ SettingsPane {
             required property string family
             required property bool paired
             required property bool connected
+            required property bool trusted
             required property int battery
             objectName: "btDev_" + devId
             visible: Bluetooth.powered
             u: pane.u
             label: name
             iconName: DeviceIcons.iconFor(kind, family)
-            value: pane.deviceValue(pane.busyId === devId, paired, connected, battery)
+            value: pane.deviceValue(pane.busyId === devId, paired, connected, battery, kind, trusted)
             // The screen reader says the name, what it is, then the state: "DualSense, PlayStation
             // controller, Connected".
             accessibleValue: DeviceIcons.kindText(kind, family) + ", " + value
             onActivated: pane.activate(devId, paired, connected)
+        }
+    }
+
+    Repeater {
+        model: deviceModel
+        SettingRow {
+            required property string devId
+            required property string name
+            required property string kind
+            required property bool paired
+            objectName: "btRename_" + devId
+            visible: paired && kind === "controller" && Bluetooth.powered
+            u: pane.u
+            label: qsTr("Rename %1").arg(name)
+            onActivated: pane.askRename(devId, name)
         }
     }
 
@@ -225,7 +286,7 @@ SettingsPane {
             visible: paired && Bluetooth.powered
             u: pane.u
             label: qsTr("Forget %1").arg(name)
-            onActivated: Bluetooth.forget(devId)
+            onActivated: pane.askForget(devId, name)
         }
     }
 }

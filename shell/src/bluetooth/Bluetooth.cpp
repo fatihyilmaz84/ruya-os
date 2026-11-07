@@ -26,6 +26,8 @@ Bluetooth::Bluetooth(std::unique_ptr<BluetoothBackend> backend, QObject *parent)
         emit controllerStateChanged();
     });
     connect(m_backend.get(), &BluetoothBackend::controllerRejected, this, &Bluetooth::controllerRejected);
+    connect(m_backend.get(), &BluetoothBackend::gamepadConnected, this, &Bluetooth::gamepadConnected);
+    connect(m_backend.get(), &BluetoothBackend::gamepadDisconnected, this, &Bluetooth::gamepadDisconnected);
     connect(m_backend.get(), &BluetoothBackend::devicesListed, this, [this](const QList<BtDevice> &list) {
         QVariantList out;
         for (const BtDevice &d : list) {
@@ -126,6 +128,11 @@ void Bluetooth::disconnectDevice(const QString &id)
     m_backend->disconnectDevice(id);
 }
 
+void Bluetooth::rename(const QString &id, const QString &name)
+{
+    m_backend->rename(id, name);
+}
+
 void Bluetooth::startControllerPairing()
 {
     m_backend->startControllerPairing(ControllerPairingSeconds);
@@ -140,6 +147,19 @@ void Bluetooth::mockPairingScript(const QString &outcome)
 {
     if (auto *mock = qobject_cast<MockBluetoothBackend *>(m_backend.get()))
         mock->setPairingScript(outcome);
+}
+
+void Bluetooth::mockReveal(const QString &id)
+{
+    if (auto *mock = qobject_cast<MockBluetoothBackend *>(m_backend.get()))
+        mock->reveal(id);
+}
+
+void Bluetooth::mockGamepad(bool connected, const QString &id, const QString &name, const QString &family,
+                            const QString &transport)
+{
+    if (auto *mock = qobject_cast<MockBluetoothBackend *>(m_backend.get()))
+        mock->gamepadEvent(connected, id, name, family, transport);
 }
 
 void Bluetooth::mockSetInputPresent(bool present)

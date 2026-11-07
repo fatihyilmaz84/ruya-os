@@ -6,7 +6,7 @@
 //! The source is the `Modalias` BlueZ reports from the device's Device ID record, for instance
 //! `usb:v054Cp0CE6d0100` (a DualSense: vendor 0x054C = Sony, product 0x0CE6) or `bluetooth:v012D...`.
 //! The vendor is the USB-IF id when the record says `usb:` and the Bluetooth SIG company id when it
-//! says `bluetooth:`. A vendor that is in the table decides; a vendor that is not (8BitDo, a
+//! says `bluetooth:`. A vendor that is in the table decides; a vendor that is not (a
 //! generic pad) is "" whatever the pad calls itself, because a third-party pad named "Xbox
 //! compatible" is not one. Only a pad that has no usable modalias is guessed from its name.
 //! The family only picks a picture and a sentence; nothing is trusted because of it.
@@ -14,12 +14,14 @@
 pub const PLAYSTATION: &str = "playstation";
 pub const XBOX: &str = "xbox";
 pub const NINTENDO: &str = "nintendo";
+pub const EIGHTBITDO: &str = "8bitdo";
 
 /// (modalias source, vendor id, family). Vendor ids as printed in the modalias.
 const VENDORS: &[(&str, u16, &str)] = &[
     ("usb", 0x054C, PLAYSTATION),       // Sony Interactive Entertainment
     ("usb", 0x045E, XBOX),              // Microsoft
     ("usb", 0x057E, NINTENDO),          // Nintendo
+    ("usb", 0x2DC8, EIGHTBITDO),        // 8BitDo (the USB-IF id it reports in every mode)
     ("bluetooth", 0x012D, PLAYSTATION), // Sony Corp. (Bluetooth SIG company id)
     ("bluetooth", 0x0006, XBOX),        // Microsoft (Bluetooth SIG company id)
     ("bluetooth", 0x0553, NINTENDO),    // Nintendo (Bluetooth SIG company id)
@@ -36,6 +38,7 @@ const NAMES: &[(&str, &str)] = &[
     ("pro controller", NINTENDO),
     ("joy-con", NINTENDO),
     ("nintendo", NINTENDO),
+    ("8bitdo", EIGHTBITDO),
     ("wireless controller", PLAYSTATION),
 ];
 
@@ -102,9 +105,21 @@ mod tests {
     }
 
     #[test]
+    fn an_8bitdo_pad_is_told_by_its_own_vendor_id_or_failing_that_its_name() {
+        assert_eq!(
+            family_of("usb:v2DC8p6001d0100", "8BitDo SN30 Pro"),
+            "8bitdo"
+        );
+        assert_eq!(family_of("", "8BitDo Pro 2"), "8bitdo");
+        // In X-input or Switch mode the pad reports Microsoft's or Nintendo's id and is
+        // that family to the system (the audit, T-261, says what that means for the steps).
+        assert_eq!(family_of("usb:v045Ep028Ed0114", "8BitDo Pro 2"), "xbox");
+    }
+
+    #[test]
     fn an_unknown_vendor_is_no_family_whatever_the_name_says() {
-        assert_eq!(family_of("usb:v2DC8p6001d0100", "8BitDo SN30 Pro"), "");
-        assert_eq!(family_of("usb:v2DC8p6001d0100", "Xbox compatible pad"), "");
+        assert_eq!(family_of("usb:v1234p6001d0100", "8BitDo SN30 Pro"), "");
+        assert_eq!(family_of("usb:v1234p6001d0100", "Xbox compatible pad"), "");
         assert_eq!(family_of("usb:v0000p0000d0000", "DualSense"), "");
     }
 

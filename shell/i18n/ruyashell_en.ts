@@ -320,7 +320,22 @@
 <context>
     <name>BluetoothPane</name>
     <message>
-        <location filename="../qml/BluetoothPane.qml" line="+90"/>
+        <location filename="../qml/BluetoothPane.qml" line="+85"/>
+        <source>Forget %1?</source>
+        <translation>Forget %1?</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>It will have to be paired again to be used.</source>
+        <translation>It will have to be paired again to be used.</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Controller name</source>
+        <translation>Controller name</translation>
+    </message>
+    <message>
+        <location line="+6"/>
         <source>Pairing failed. Put the device in pairing mode and try again.</source>
         <translation>Pairing failed. Put the device in pairing mode and try again.</translation>
     </message>
@@ -331,12 +346,12 @@
     </message>
     <message>
         <location line="+1"/>
-        <location line="+43"/>
+        <location line="+45"/>
         <source>Bluetooth is off.</source>
         <translation>Bluetooth is off.</translation>
     </message>
     <message>
-        <location line="-42"/>
+        <location line="-44"/>
         <source>That device is no longer available.</source>
         <translation>That device is no longer available.</translation>
     </message>
@@ -366,28 +381,32 @@
         <translation>Not paired</translation>
     </message>
     <message>
+        <location line="+2"/>
+        <source>Reconnects automatically</source>
+        <translation>Reconnects automatically</translation>
+    </message>
+    <message>
         <location line="+1"/>
         <source>Connected</source>
         <translation>Connected</translation>
     </message>
     <message>
-        <location line="-31"/>
-        <location line="+31"/>
+        <location line="+83"/>
+        <source>Pair a new controller</source>
+        <translation>Pair a new controller</translation>
+    </message>
+    <message>
+        <location line="+73"/>
+        <source>Rename %1</source>
+        <translation>Rename %1</translation>
+    </message>
+    <message>
+        <location line="-157"/>
         <source>Paired</source>
         <translation>Paired</translation>
     </message>
     <message>
-        <location line="-32"/>
-        <source>Waiting for a controller…</source>
-        <translation>Waiting for a controller…</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>Nothing found</source>
-        <translation>Nothing found</translation>
-    </message>
-    <message>
-        <location line="+32"/>
+        <location line="+3"/>
         <source>Battery %1%</source>
         <translation>Battery %1%</translation>
     </message>
@@ -395,6 +414,16 @@
         <location line="+29"/>
         <source>Could not start looking for controllers.</source>
         <translation>Could not start looking for controllers.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>That name does not work. Try another.</source>
+        <translation>That name does not work. Try another.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Could not rename the controller.</source>
+        <translation>Could not rename the controller.</translation>
     </message>
     <message>
         <location line="+10"/>
@@ -422,19 +451,63 @@
         <translation>Scanning…</translation>
     </message>
     <message>
-        <location line="+8"/>
-        <source>Pair a controller</source>
-        <translation>Pair a controller</translation>
+        <location line="-105"/>
+        <location line="+200"/>
+        <source>Forget %1</source>
+        <translation>Forget %1</translation>
+    </message>
+</context>
+<context>
+    <name>ButtonTest</name>
+    <message>
+        <location filename="../qml/ButtonTest.qml" line="+96"/>
+        <source>, pressed</source>
+        <translation>, pressed</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>, tried</source>
+        <translation>, tried</translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>LB</source>
+        <translation>LB</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>RB</source>
+        <translation>RB</translation>
     </message>
     <message>
         <location line="+10"/>
-        <source>Controller: hold its pairing button until the light blinks</source>
-        <translation>Controller: hold its pairing button until the light blinks</translation>
+        <source>Up</source>
+        <translation>Up</translation>
     </message>
     <message>
-        <location line="+35"/>
-        <source>Forget %1</source>
-        <translation>Forget %1</translation>
+        <location line="+3"/>
+        <source>Left</source>
+        <translation>Left</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Right</source>
+        <translation>Right</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Down</source>
+        <translation>Down</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>A</source>
+        <translation>A</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>D-pad and left stick are the arrows.</source>
+        <translation>D-pad and left stick are the arrows.</translation>
     </message>
 </context>
 <context>
@@ -465,9 +538,166 @@
     </message>
 </context>
 <context>
+    <name>ControllerOnboarding</name>
+    <message>
+        <location filename="../qml/ControllerOnboarding.qml" line="+35"/>
+        <source>Continue</source>
+        <translation>Continue</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <location line="+1"/>
+        <source>Close</source>
+        <translation>Close</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Select</source>
+        <translation>Select</translation>
+    </message>
+    <message>
+        <location line="+53"/>
+        <source>Pairing failed. Put the controller in pairing mode again.</source>
+        <translation>Pairing failed. Put the controller in pairing mode again.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The controller did not answer.</source>
+        <translation>The controller did not answer.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Bluetooth is off.</source>
+        <translation>Bluetooth is off.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The controller went away.</source>
+        <translation>The controller went away.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Could not pair the controller.</source>
+        <translation>Could not pair the controller.</translation>
+    </message>
+    <message>
+        <location line="+104"/>
+        <location line="+52"/>
+        <source>Try your controller</source>
+        <translation>Try your controller</translation>
+    </message>
+    <message>
+        <location line="-52"/>
+        <location line="+52"/>
+        <source>Pair a controller</source>
+        <translation>Pair a controller</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>What kind of controller is it?</source>
+        <translation>What kind of controller is it?</translation>
+    </message>
+    <message>
+        <location line="+36"/>
+        <location line="+157"/>
+        <source>Other</source>
+        <translation>Other</translation>
+    </message>
+    <message>
+        <location line="-120"/>
+        <source>Press A to search again</source>
+        <translation>Press A to search again</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Found nearby</source>
+        <translation>Found nearby</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Nothing found yet</source>
+        <translation>Nothing found yet</translation>
+    </message>
+    <message>
+        <location line="+40"/>
+        <source>Pairing…</source>
+        <translation>Pairing…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Connected, remembered · A: try its buttons</source>
+        <translation>Connected, remembered · A: try its buttons</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>%1 A: try again</source>
+        <translation>%1 A: try again</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>A: pair</source>
+        <translation>A: pair</translation>
+    </message>
+    <message>
+        <location line="+44"/>
+        <source>%1 is connected. Press its buttons: they light up here.</source>
+        <translation>%1 is connected. Press its buttons: they light up here.</translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <source>PlayStation</source>
+        <translation>PlayStation</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Xbox</source>
+        <translation>Xbox</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Switch</source>
+        <translation>Switch</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>8BitDo</source>
+        <translation>8BitDo</translation>
+    </message>
+</context>
+<context>
     <name>ControllerPairHint</name>
     <message>
-        <location filename="../qml/ControllerPairHint.qml" line="+37"/>
+        <location filename="../qml/ControllerPairHint.qml" line="+36"/>
+        <source>Hold PS and Create (Share on a DualShock 4) until the light bar flashes.</source>
+        <translation>Hold PS and Create (Share on a DualShock 4) until the light bar flashes.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Press the pairing button on top until the Xbox logo flashes fast.</source>
+        <translation>Press the pairing button on top until the Xbox logo flashes fast.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Press the small sync button on top until the lights run back and forth.</source>
+        <translation>Press the small sync button on top until the lights run back and forth.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Hold Start with X (X-input mode) or Y (Switch mode) to turn it on in Bluetooth mode, then hold the pair button until the light flashes fast.</source>
+        <translation>Hold Start with X (X-input mode) or Y (Switch mode) to turn it on in Bluetooth mode, then hold the pair button until the light flashes fast.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Hold its pairing button until the light blinks. Pick the Bluetooth mode if it has several.</source>
+        <translation>Hold its pairing button until the light blinks. Pick the Bluetooth mode if it has several.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Other controller</source>
+        <translation>Other controller</translation>
+    </message>
+    <message>
+        <location line="+20"/>
         <source>Controller connected.</source>
         <translation>Controller connected.</translation>
     </message>
@@ -492,14 +722,37 @@
         <translation>No controller was found. Hold the pairing button on your controller (on a DualSense: PS + Create) and try again.</translation>
     </message>
     <message>
+        <location line="+2"/>
+        <source>Looking for controllers in pairing mode…</source>
+        <translation>Looking for controllers in pairing mode…</translation>
+    </message>
+    <message>
         <location line="+1"/>
         <source>No controller or keyboard found. Hold the pairing button on your controller (on a DualSense: PS + Create) until its light blinks.</source>
         <translation>No controller or keyboard found. Hold the pairing button on your controller (on a DualSense: PS + Create) until its light blinks.</translation>
     </message>
     <message>
-        <location line="+137"/>
+        <location line="+171"/>
         <source>A device that is not a controller tried to connect and was ignored.</source>
         <translation>A device that is not a controller tried to connect and was ignored.</translation>
+    </message>
+</context>
+<context>
+    <name>ControllerToasts</name>
+    <message>
+        <location filename="../qml/ControllerToasts.qml" line="+94"/>
+        <source>%1 connected · battery %2%</source>
+        <translation>%1 connected · battery %2%</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>%1 connected</source>
+        <translation>%1 connected</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>%1 disconnected</source>
+        <translation>%1 disconnected</translation>
     </message>
 </context>
 <context>
@@ -518,6 +771,11 @@
         <location line="+1"/>
         <source>Nintendo controller</source>
         <translation>Nintendo controller</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>8BitDo controller</source>
+        <translation>8BitDo controller</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -1319,7 +1577,7 @@
     </message>
     <message>
         <location line="-66"/>
-        <location line="+114"/>
+        <location line="+115"/>
         <source>Welcome to RuyaOS</source>
         <translation>Welcome to RuyaOS</translation>
     </message>
@@ -1352,13 +1610,13 @@
         <translation>Press A to continue</translation>
     </message>
     <message>
-        <location line="-309"/>
-        <location line="+217"/>
+        <location line="-310"/>
+        <location line="+218"/>
         <source>Network</source>
         <translation>Network</translation>
     </message>
     <message>
-        <location line="-353"/>
+        <location line="-354"/>
         <source>Try again</source>
         <translation>Try again</translation>
     </message>
@@ -1376,7 +1634,7 @@
         <translation>Connect a controller</translation>
     </message>
     <message>
-        <location line="+17"/>
+        <location line="+18"/>
         <source>Press A to try again</source>
         <translation>Press A to try again</translation>
     </message>
@@ -1431,8 +1689,8 @@
         <translation>Creating…</translation>
     </message>
     <message>
-        <location line="-271"/>
-        <location line="+297"/>
+        <location line="-272"/>
+        <location line="+298"/>
         <source>You&apos;re all set</source>
         <translation>You&apos;re all set</translation>
     </message>
@@ -1445,7 +1703,7 @@
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+308"/>
+        <location filename="../qml/Shell.qml" line="+309"/>
         <source>Could not %1.</source>
         <translation>Could not %1.</translation>
     </message>
@@ -2149,7 +2407,7 @@
 <context>
     <name>ToastLayer</name>
     <message>
-        <location filename="../qml/ToastLayer.qml" line="+20"/>
+        <location filename="../qml/ToastLayer.qml" line="+27"/>
         <source>%1: battery low (%2%)</source>
         <translation>%1: battery low (%2%)</translation>
     </message>

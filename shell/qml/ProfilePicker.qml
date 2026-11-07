@@ -55,7 +55,8 @@ FocusScope {
         Behavior on opacity { NumberAnimation { duration: Theme.pageMs } }
 
         anchors.centerIn: parent
-        anchors.verticalCenterOffset: 40 * picker.u
+        // With the pairing hint and the steps of every family under it the profiles move up to make room.
+        anchors.verticalCenterOffset: controllerHint.visible ? -150 * picker.u : 40 * picker.u
         width: Math.min(contentWidth, picker.width * 0.9)
         height: 340 * picker.u
         orientation: ListView.Horizontal
@@ -88,12 +89,13 @@ FocusScope {
     ControllerPairHint {
         id: controllerHint
         objectName: "pickerControllerHint"
-        anchors { horizontalCenter: parent.horizontalCenter; top: list.bottom; topMargin: Theme.spaceXxl * picker.u }
-        width: Math.min(picker.width * 0.7, 1200 * picker.u)
+        anchors { horizontalCenter: parent.horizontalCenter; top: list.bottom; topMargin: Theme.spaceM * picker.u }
+        width: Math.min(picker.width * 0.8, 1500 * picker.u)
         u: picker.u
         visible: picker.needsController && !pinPad.shown
         active: picker.needsController
         autoRetry: true
+        showFamilies: true
     }
 
     PinPad {

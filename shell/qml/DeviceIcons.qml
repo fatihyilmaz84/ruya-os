@@ -39,6 +39,7 @@ QtObject {
             case "playstation": return qsTr("PlayStation controller")
             case "xbox": return qsTr("Xbox controller")
             case "nintendo": return qsTr("Nintendo controller")
+            case "8bitdo": return qsTr("8BitDo controller")
             }
             return qsTr("Controller")
         case "headset": return qsTr("Headset")
