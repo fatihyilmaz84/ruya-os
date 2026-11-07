@@ -46,3 +46,15 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | [T-242](tasks/T-242-play-library-home-and-preview.md) | `.play` in Library and Home: art, preview loop, save paths | todo | T-232, T-238 |
 | [T-243](tasks/T-243-play-developer-guide-and-samples.md) | `.play` developer guide and two samples | todo | T-233 |
 | [T-244](tasks/T-244-system-wine-runner-pack.md) | **[lead]** System Wine runner pack on the `ruyaos` remote | todo | T-229, T-239 |
+| [T-248](tasks/T-248-epic-first-party-apps.md) | **[lead]** EPIC: first-party apps (picture viewer, weather, media player, files, Jellyfin, browser, emulator frontend) and the platform they need | blocked | owner |
+| [T-249](tasks/T-249-hig-human-interface-guidelines.md) | **[lead]** Human Interface Guidelines for app authors (`docs/specs/06-hig.md`) | todo | — |
+| [T-250](tasks/T-250-app-platform-spike-and-adr.md) | **[lead]** Spike and ADR-015 (Proposed): how apps use the OS components (runtime extension, RuyaKit) | todo | — |
+| [T-251](tasks/T-251-ruyakit-shared-components.md) | RuyaKit: shared components as a module apps can use | todo | T-250 |
+| [T-252](tasks/T-252-app-template-ci-and-publish.md) | App template, CI recipe, publish to the Store | todo | T-250, T-251, T-214 |
+| [T-253](tasks/T-253-app-picture-viewer.md) | App: Picture viewer | todo | T-251, T-252 |
+| [T-254](tasks/T-254-app-weather.md) | App: Weather | todo | T-251, T-252 |
+| [T-255](tasks/T-255-app-media-player.md) | App: Media player (local files; codec situation) | todo | T-251, T-252, T-256 |
+| [T-256](tasks/T-256-app-file-manager.md) | App: File manager (and the shared folder browser) | todo | T-251, T-252 |
+| [T-257](tasks/T-257-app-jellyfin-client.md) | App: Jellyfin client | todo | T-251, T-252, T-255 |
+| [T-258](tasks/T-258-app-browser.md) | **[lead]** App: Browser: Proposed ADR-016 first | todo | T-250, T-252 |
+| [T-259](tasks/T-259-app-emulator-frontend.md) | App: Emulator frontend (no emulators, ROMs or BIOS shipped) | todo | T-251, T-252, T-256 |
