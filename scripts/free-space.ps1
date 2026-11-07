@@ -30,6 +30,16 @@ if (-not $KeepWork) {
     if (Test-Path $workDisk) { Remove-Item $workDisk -Force; Write-Host "  deleted output\qcow2\work.qcow2" }
 }
 
+# QEMU's -snapshot overlays (vl.XXXXXX in %TEMP%) leak when a VM check is killed or aborted: 25
+# files, 12 GiB by 2026-11-07. A running QEMU keeps its own locked, so only old unlocked ones go.
+$freed = 0
+foreach ($f in Get-ChildItem $env:TEMP -Filter "vl.*" -File -ErrorAction SilentlyContinue |
+         Where-Object { $_.LastWriteTime -lt (Get-Date).AddHours(-1) }) {
+    $size = $f.Length
+    try { Remove-Item $f.FullName -Force -ErrorAction Stop; $freed += $size } catch { }
+}
+if ($freed -gt 0) { Write-Host ("  deleted stale QEMU overlays in %TEMP%: {0:N1} GiB" -f ($freed / 1GB)) }
+
 wsl --shutdown
 Start-Sleep -Seconds 5
 wsl --manage $Distro --compact | Out-Null

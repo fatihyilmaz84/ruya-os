@@ -36,7 +36,7 @@ A console with no keyboard can be set up and used with a Bluetooth controller al
 - Reuse the 120 s `CALL_TIMEOUT` style deadline logic and the debounced `DevicesChanged` flow from T-173.
 
 ## Outcome
-Verified: host (vm pending: vm-devices-check.sh T-203; hardware pending: the Dell checks below). Rust tests with a fake BlueZ and a fake agent, the QML tests and the screenshots ran on the host; no adapter, no real BlueZ agent callbacks and no image were involved.
+Verified: host + vm (lead run, 2026-11-07, image 0.0.50). vm-devices-check.sh on 0.0.50: 106 PASS, 0 FAIL, including the Bluetooth part (InputPresent true, StartControllerPairing 0 -> unavailable, 301 -> invalid, state idle, Stop ok, nobody refused, ruya-devices active). Real BlueZ/adapter behaviour (the sweep, the agent) and the Dell checks 1-3 are still hardware-pending. Earlier: host (vm pending: vm-devices-check.sh T-203; hardware pending: the Dell checks below). Rust tests with a fake BlueZ and a fake agent, the QML tests and the screenshots ran on the host; no adapter, no real BlueZ agent callbacks and no image were involved.
 
 **What was built**
 
