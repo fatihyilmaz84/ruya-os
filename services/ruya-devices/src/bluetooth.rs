@@ -275,8 +275,6 @@ struct Window {
     /// came in during the window: an input device is the point of it, anything else is removed
     /// again (the kernel accepts a just-works pairing by itself, the agent is not asked).
     paired_before: HashSet<String>,
-    /// Strangers already removed.
-    swept: HashSet<String>,
     attempts: HashMap<String, u32>,
     in_flight: Option<String>,
 }
@@ -291,6 +289,8 @@ struct State {
     next_window: u64,
     /// A start is in progress (BlueZ is being asked); a second one is `busy`.
     starting: bool,
+    /// Manual pairings (`pair`) in progress: they hold `Pairable` open themselves.
+    manual_pairs: u32,
     /// The adapter was made not pairable and not discoverable once (after a crash in a window).
     secured: bool,
     pairing: PairingState,
@@ -361,7 +361,7 @@ impl<B: Bluez> Bluetooth<B> {
     fn secure_adapter(&self) {
         let adapter = {
             let mut st = self.lock();
-            if st.secured || st.window.is_some() || st.starting {
+            if st.secured || st.window.is_some() || st.starting || st.manual_pairs > 0 {
                 return;
             }
             let Some(adapter) = st.adapter else {
@@ -520,6 +520,15 @@ impl<B: Bluez> Bluetooth<B> {
     /// covers the whole call: connecting gets what pairing left, so the answer comes before the
     /// D-Bus default timeout.
     pub fn pair(&self, id: &str, clock: impl Fn() -> Instant) -> Status {
+        // While it runs, `refresh` must not close the `Pairable` it opens.
+        self.lock().manual_pairs += 1;
+        let status = self.pair_one(id, clock);
+        let mut st = self.lock();
+        st.manual_pairs = st.manual_pairs.saturating_sub(1);
+        status
+    }
+
+    fn pair_one(&self, id: &str, clock: impl Fn() -> Instant) -> Status {
         let dev = match self.ready_device(id) {
             Ok(d) => d,
             Err(s) => return s,
@@ -709,7 +718,6 @@ impl<B: Bluez> Bluetooth<B> {
             restore_pairable: !adapter.pairable,
             scan_ours,
             paired_before,
-            swept: HashSet::new(),
             attempts: HashMap::new(),
             in_flight: None,
         });
@@ -795,7 +803,7 @@ impl<B: Bluez> Bluetooth<B> {
                 }
                 if is_input_device(d.class, d.appearance) {
                     input.get_or_insert_with(|| d.address.clone());
-                } else if window.swept.insert(d.address.clone()) {
+                } else {
                     strangers.push(d.address.clone());
                 }
             }
@@ -931,13 +939,14 @@ impl<B: Bluez> Bluetooth<B> {
                     Some(w) => {
                         raw_devices.iter().any(|d| d.address == address && d.paired)
                             && !w.paired_before.contains(&address)
-                            && w.swept.insert(address.clone())
                     }
                     None => false,
                 }
             };
             if stranger {
-                self.bluez.remove(&address).ok();
+                if let Err(e) = self.bluez.remove(&address) {
+                    eprintln!("ruya-devices: removing {address} failed: {}", e.0);
+                }
             }
             self.lock().pending.rejected = true;
             self.notify();
@@ -1916,6 +1925,59 @@ mod tests {
             let n = bt.bluez.calls().iter().filter(|c| **c == removed).count();
             assert_eq!(n, 1, "{address}");
         }
+    }
+
+    #[test]
+    fn a_phone_that_bonds_again_is_removed_again() {
+        // The kernel accepts the second tap as it did the first.
+        let bt = window_bt();
+        open(&bt, Instant::now());
+        let removed = format!("remove {PHONE}");
+        for round in 1..=3 {
+            bt.bluez.bond(PHONE);
+            bt.refresh().expect("reads");
+            bt.pump();
+            let n = bt.bluez.calls().iter().filter(|c| **c == removed).count();
+            assert_eq!(n, round, "removed after bond number {round}");
+            assert!(
+                bt.refresh().expect("reads").rejected,
+                "announced again, round {round}"
+            );
+            // the fake drops a removed device; it comes back, paired, as it would from the phone
+            bt.bluez.add_device({
+                let mut phone = near(PHONE, "Some Phone", "phone", Some(0x5A020C));
+                phone.paired = true;
+                phone
+            });
+            bt.refresh().expect("reads");
+        }
+        assert_eq!(bt.pairing_state(), PairingState::Open);
+    }
+
+    #[test]
+    fn a_manual_pairing_is_not_closed_by_the_first_look_at_the_adapter() {
+        // The first sighting of the adapter comes from pair's own read; a refresh (the watcher)
+        // that runs while BlueZ pairs must not switch Pairable off under it.
+        let bt = Arc::new(Bluetooth::new(FakeBluez::with_devices()));
+        let b = bt.clone();
+        bt.bluez.set_hook(Box::new(move |what| {
+            if what == "pair" {
+                b.refresh().expect("reads");
+            }
+        }));
+        assert_eq!(bt.pair("AA:00:00:00:00:02", Instant::now), Status::Ok);
+        assert_eq!(
+            bt.bluez.calls(),
+            [
+                "pairable true",
+                "pair AA:00:00:00:00:02",
+                "pairable false",
+                "trust AA:00:00:00:00:02",
+                "connect AA:00:00:00:00:02"
+            ]
+        );
+        // afterwards the adapter is looked at (and is already closed)
+        bt.refresh().expect("reads");
     }
 
     #[test]
