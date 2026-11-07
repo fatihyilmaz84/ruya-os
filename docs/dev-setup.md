@@ -293,7 +293,7 @@ busctl --user call org.ruyaos.Profiles1 /org/ruyaos/Profiles1 org.ruyaos.Profile
 RUYA_DBUS=session RUYA_SERVICES=dbus shell/build/ruya-shell --windowed
 ```
 
-**On Linux:** you don't have to reflash for QML changes. On any Linux machine or VM with Qt ≥ 6.8 (`qt6-qtdeclarative-devel qt6-qtmultimedia-devel qt6-qttools-devel qt6-linguist`):
+**On Linux:** you don't have to reflash for QML changes. On any Linux machine or VM with Qt ≥ 6.8 (`qt6-qtdeclarative-devel qt6-qtmultimedia-devel qt6-qttools-devel qt6-linguist qt6-qtshadertools-devel`):
 
 ```bash
 cmake -S shell -B shell/build -G Ninja && cmake --build shell/build && shell/build/ruya-shell --mock-services

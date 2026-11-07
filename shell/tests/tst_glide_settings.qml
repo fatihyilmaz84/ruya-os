@@ -15,6 +15,8 @@ Item {
         Shell { anchors.fill: parent; version: "test"; focus: true }
     }
 
+    Component { id: appComponent; Item { objectName: "standInApp"; Keys.onPressed: event => { event.accepted = true } } }
+
     TestCase {
         id: tc
         name: "GlideSettings"
@@ -48,6 +50,29 @@ Item {
 
         function cleanup() {
             DeviceSettings.reducedMotion = false
+            LiquidGate.reset()
+        }
+
+        function test_liquid_clock_follows_the_app_and_the_idle_period() {
+            const glass = findChild(find("statusGlass"), "liquidGlass")
+            verify(glass, "the status pill carries the liquid look on High")
+            compare(LiquidGate.screenShown, true, "the shell feeds the gate: the window is shown")
+            compare(LiquidGate.appOpen, false)
+            tryCompare(glass, "clockWanted", true)
+            const app = createTemporaryObject(appComponent, host)
+            tc.shell.addApp(app)
+            tryCompare(LiquidGate, "appOpen", true, 2000, "an app in front")
+            compare(glass.clockWanted, false)
+            tc.shell.removeApp(app)
+            tryCompare(LiquidGate, "appOpen", false, 2000)
+            compare(glass.clockWanted, true)
+            // Idle, then input through the real key path (KeyRouter.activity).
+            LiquidGate.idleMs = 150
+            tryCompare(LiquidGate, "idle", true, 2000)
+            compare(glass.clockWanted, false)
+            keyClick(Qt.Key_Down)
+            compare(LiquidGate.idle, false, "a key press resumes the clock")
+            compare(glass.clockWanted, true)
         }
 
         function test_highlight_follows_the_focused_category() {

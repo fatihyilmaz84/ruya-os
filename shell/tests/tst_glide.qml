@@ -102,6 +102,8 @@ Item {
             DeviceSettings.effectsQuality = "high"
             DeviceSettings.theme = "dreamglass"
             Theme.liquidPill = true
+            Theme.motionFactor = 1
+            LiquidGate.reset()
         }
 
         function makeStrip() {
@@ -179,6 +181,7 @@ Item {
         }
 
         function test_retarget_mid_glide_does_not_jump() {
+            Theme.motionFactor = 4              // a 1120 ms glide: a wide window to retarget in, same assertions
             const s = makeStrip()
             settleOn(s, s.a)
             const start = s.glide.x
@@ -430,6 +433,44 @@ Item {
             verify(xhr.responseText.length > 100, "and is not empty: " + xhr.responseText.length)
         }
 
+        // --- the specular clock's idle gate (LiquidGate) --------------------------------------
+
+        function test_liquid_clock_runs_only_when_something_may_be_watching() {
+            const g = createTemporaryObject(liquidComponent, host, { width: 200, height: 80 })
+            compare(LiquidGate.running, true)
+            compare(g.clockWanted, true, "motion on, no app, screen shown, recent input")
+            LiquidGate.appOpen = true
+            compare(g.clockWanted, false, "an app in front")
+            LiquidGate.appOpen = false
+            compare(g.clockWanted, true)
+            LiquidGate.screenShown = false
+            compare(g.clockWanted, false, "screen not shown")
+            LiquidGate.screenShown = true
+            DeviceSettings.reducedMotion = true
+            compare(g.clockWanted, false, "reduced motion stands the specular still")
+        }
+
+        function test_liquid_clock_pauses_after_idle_and_resumes_on_input() {
+            LiquidGate.idleMs = 150
+            const g = createTemporaryObject(liquidComponent, host, { width: 200, height: 80 })
+            compare(LiquidGate.idle, false)
+            tryCompare(LiquidGate, "idle", true, 2000, "no input for the idle period")
+            compare(g.clockWanted, false)
+            LiquidGate.noteInput()
+            compare(LiquidGate.idle, false, "the next input resumes it")
+            compare(g.clockWanted, true)
+            tryCompare(LiquidGate, "idle", true, 2000, "and the idle period starts over")
+        }
+
+        function test_idle_period_does_not_run_while_an_app_is_open() {
+            LiquidGate.idleMs = 100
+            LiquidGate.appOpen = true
+            wait(400)
+            compare(LiquidGate.idle, false, "nothing to pause while paused already")
+            LiquidGate.appOpen = false
+            tryCompare(LiquidGate, "idle", true, 2000, "the period counts from when the app closes")
+        }
+
         function test_liquid_tokens() {
             compare(Theme.liquidPeriods.length, 3)
             compare(Theme.liquidPeriods[0], 9)
@@ -491,6 +532,18 @@ Item {
             const pill = findChild(stageNav, "sectionNavGlass")
             verify(pill.liquidWanted)
             verify(pill.liquid, "the liquid shader is drawing on this GPU")
+            // The clock really runs, holds its phase when paused and picks it up again.
+            const anim = findChild(stageNav, "liquidClock")
+            tryVerify(() => anim.running, 2000, "the specular clock runs")
+            const liquidItem = findChild(stageNav, "liquidGlass")
+            tryVerify(() => liquidItem.clock > 0)
+            LiquidGate.appOpen = true
+            tryVerify(() => !anim.running)
+            const held = liquidItem.clock
+            wait(300)
+            compare(liquidItem.clock, held, "paused: the phase holds")
+            LiquidGate.appOpen = false
+            tryVerify(() => anim.running && liquidItem.clock > held, 2000, "and moves on from there")
             const broken = createTemporaryObject(liquidComponent, stage, { shader: "shaders/missing.frag.qsb", width: 200, height: 80 })
             tryCompare(broken, "compiled", false, 3000, "a shader that is not there falls back")
             broken.destroy()

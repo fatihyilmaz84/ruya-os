@@ -246,6 +246,8 @@ QtObject {
     readonly property bool liquidOn: liquidPill && DeviceSettings.effectsQuality === "high"
     readonly property real liquidBendFactor: 0.5   // refraction depth at the edge, as a fraction of the pill height ...
     readonly property real liquidBendMax: 30       // ... at most this many design px
+    readonly property int liquidIdleMs: 30000       // no input for this long: the specular clock pauses (LiquidGate)
+    readonly property real liquidBrightnessLift: 0.08   // added to the pill's brightness while the liquid look is on (its lighter blur read darker and smokier)
     readonly property real liquidBlurFactor: 0.4   // the liquid pill blurs less (times blurMax), so there is detail to bend at the edge
     readonly property var liquidPeriods: [9, 15, 23]   // seconds of the three sines that move the specular
     readonly property int liquidCycleMs: 1035000       // their common period (lcm of 9, 15, 23 = 1035 s): the time uniform loops here

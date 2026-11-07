@@ -23,16 +23,21 @@ Item {
                                      && liquid.GraphicsInfo.api !== GraphicsInfo.Software
                                      && liquid.GraphicsInfo.api !== GraphicsInfo.Null
                                      && liquid.GraphicsInfo.api !== GraphicsInfo.Unknown
-    // Seconds on the specular's clock. It loops at the common period of the three sines, so the
-    // jump at the loop point is invisible; it stands still under reduced motion.
+    // Seconds on the specular's clock. It wraps at the common period of the three sines, so the
+    // wrap is invisible; it stands still under reduced motion.
     property real clock: 0
 
-    NumberAnimation on clock {
-        running: Theme.ambientMotion && liquid.compiled && liquid.visible
-        from: 0
-        to: Theme.liquidCycleMs / 1000
-        duration: Theme.liquidCycleMs
-        loops: Animation.Infinite
+    // The clock is wanted while motion is on and LiquidGate allows it (no app in front, screen
+    // shown, input within the idle period). Otherwise the frame loop stops: the specular holds its
+    // phase (`clock` is a plain property, so a restart carries on from it) and the pill asks for
+    // no frames. Only a shader that is drawing needs a clock at all.
+    readonly property bool clockWanted: Theme.ambientMotion && LiquidGate.running
+
+    FrameAnimation {
+        id: clockAnim
+        objectName: "liquidClock"
+        running: liquid.compiled && liquid.visible && liquid.clockWanted
+        onTriggered: liquid.clock = (liquid.clock + frameTime) % (Theme.liquidCycleMs / 1000)
     }
 
     ShaderEffectSource {

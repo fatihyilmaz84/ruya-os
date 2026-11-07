@@ -65,7 +65,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install Qt
-        run: dnf -y install --setopt=install_weak_deps=False cmake ninja-build gcc-c++ qt6-qtbase-devel qt6-qtdeclarative-devel qt6-qtmultimedia-devel qt6-qttools-devel qt6-linguist
+        run: dnf -y install --setopt=install_weak_deps=False cmake ninja-build gcc-c++ qt6-qtbase-devel qt6-qtdeclarative-devel qt6-qtmultimedia-devel qt6-qttools-devel qt6-linguist qt6-qtshadertools-devel
       - name: Build
         run: cmake -S shell -B shell/build -G Ninja -DCMAKE_BUILD_TYPE=Release && cmake --build shell/build
       - name: qmllint

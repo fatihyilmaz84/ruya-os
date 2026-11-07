@@ -56,7 +56,7 @@ Item {
         blurEnabled: true
         blur: 1.0
         blurMax: Theme.blurMax * (glass.liquid ? Theme.liquidBlurFactor : 1)   // a lighter blur keeps the detail the edge bends
-        brightness: -0.08
+        brightness: -0.08 + (glass.liquid ? Theme.liquidBrightnessLift : 0)   // the lighter blur of the liquid pill is brightened back to the plain pill's level
         saturation: 0.3
     }
     Loader {
