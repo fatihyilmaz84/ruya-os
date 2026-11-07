@@ -48,6 +48,15 @@ Item {
             }
         }
 
+        // A row drawn at `alpha` (group opacity) over the backdrop colour `b`: the text pixel and the
+        // glass pixel next to it.
+        function faded(c, alpha) { return Qt.rgba(c.r, c.g, c.b, alpha) }
+        function peekText(t, b, alpha) { return ThemeMath.over(faded(t.text, alpha === undefined ? Theme.peekOpacity : alpha), b) }
+        function peekGlass(t, b, alpha) {
+            const g = ThemeMath.over(t.glass, b)
+            return ThemeMath.over(faded(g, alpha === undefined ? Theme.peekOpacity : alpha), b)
+        }
+
         function row(rows, label, fg, bg, min) {
             rows.push({ label: label, ratio: ThemeMath.contrast(fg, bg), min: min })
         }
@@ -67,6 +76,15 @@ Item {
                 }
                 row(rows, "ring on backdrop " + i, t.focusRing, s, 3)
             }
+            // A Settings peek row (T-190) is the whole row at `peekOpacity` over the backdrop: its text
+            // pixel is `text` at that alpha over the backdrop, the glass beside it is the glass at that
+            // alpha. Row labels are body text (30 px at the 1080p design size: large text), so the floor
+            // is 3:1 over the gradient and each blob. The blob overlap is only held to 2:1 (04 §7): the dim
+            // cue cannot also reach 3:1 there on the bright dark themes, and the row is whole once focused.
+            const all = samples.strict.concat([samples.overlap])
+            for (let i = 0; i < all.length; ++i)
+                row(rows, "text in a peek row over backdrop " + i, peekText(t, all[i]), peekGlass(t, all[i]),
+                    i === all.length - 1 ? 2 : 3)
             row(rows, "text on glass in the blob overlap", t.text, ThemeMath.over(t.glass, samples.overlap), 3)
             row(rows, "ring on glass in the blob overlap", t.focusRing, ThemeMath.over(t.glass, samples.overlap), 3)
 
@@ -140,6 +158,20 @@ Item {
         function test_every_theme_passes_the_gate(data) {
             const bad = failures(Themes.snapshot(Themes.byKey(data.key)))
             verify(bad.length === 0, data.key + " fails: " + bad.join("; "))
+        }
+
+        // T-190: the peek rows were drawn at 0.5 before; at that opacity the gate's peek rows fail on
+        // the brightest dark theme, which is why peekOpacity is higher now (04 §3.1).
+        function test_peek_rows_are_legible_at_the_token_but_not_at_the_old_value() {
+            const aurora = Themes.snapshot(Themes.byKey("aurora"))
+            const spot = backdropSamples(aurora, aurora.defaultTint).strict[2]     // the first blob over the gradient
+            verify(ThemeMath.contrast(peekText(aurora, spot), peekGlass(aurora, spot)) >= 3)
+            verify(ThemeMath.contrast(peekText(aurora, spot, 0.5), peekGlass(aurora, spot, 0.5)) < 3, "at 0.5")
+            for (const s of Themes.all) {
+                const t = Themes.snapshot(s)
+                const ground = ThemeMath.contrast(peekText(t, t.background), peekGlass(t, t.background))
+                verify(ground >= 4.5, s.key + ": a peek row on the plain ground: " + ground)
+            }
         }
 
         function test_the_gate_measures_a_lot() {

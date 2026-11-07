@@ -1,6 +1,6 @@
 # T-203 — Pair a controller on a fresh install, with no keyboard (first boot and login screen)
 
-Status: todo · Phase: 2 · Depends: — · Area: services, shell, image · Size: M · Owner: builder
+Status: in-progress · Phase: 2 · Depends: — · Area: services, shell, image · Size: M · Owner: builder
 
 ## Goal
 A console with no keyboard can be set up and used with a Bluetooth controller alone. Today the first-boot setup (`Setup.qml`) and the profile picker have no way to pair a controller: Settings → Bluetooth exists only after sign-in, and signing in needs input. Owner report, 2026-11-06: "from a cold boot the controller doesn't connect when it is on the login screen". The firmware cause is fixed in the image (T-162 session); this is the other half: a bonded controller must reconnect at the login screen (verify), and a controller that is **not** paired yet must be able to pair itself there.

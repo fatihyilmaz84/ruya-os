@@ -1,47 +1,41 @@
 # Lead notes (handoff between lead sessions)
 
-The procedure is in [`LEAD.md`](LEAD.md) (**read its new "Budgets" section: stop at 75 % context**). **Rewrite this file at the end of every lead session**; keep it under about a page. History lives in the STATUS session log and git.
+The procedure is in [`LEAD.md`](LEAD.md) (**Budgets: stop at 75 % context**). **Rewrite this file at the end of every lead session**; keep it under about a page. History lives in the STATUS session log and git.
 
-## Handed off at 87 % context (2026-11-06). First, in this order
+## State at the end of the 2026-11-06/07 session (written at ~40 % context; update if more happens)
 
-1. **The ISO for the Dell is DONE and verified** (`0.0.47-combined`, `F:\RuyaOS
-uyaos-0.0.47-combined-install.iso`; `vm-iso-check.ps1` on 128 GiB: `/var` 126 GiB, install 246 s, boot ok, greenboot success). Still to do for that image: rebuild `disk.qcow2` (the one in `output/qcow2/` is partial; `make-disk.sh qcow2` alone, nothing heavy beside it) and run the VM queue checks on it. The owner has not yet installed it on the Dell (they said they would wait for it): ask for the result (cold boot with the Intel dongle, pad pairing, headset, the whole disk in `/var`).
-2. **Push.** 37 local commits are unpushed. `scripts\push-main.ps1` (runs `dev.ps1 test`: not during an image build).
-3. **Review two finished branches** (dispatch `ruya-reviewer`, one at a time, no image build running): **T-200** thermal (`t/T-200-thermal` at `f863c1b`, worktree `D:\dev\RuyaOS-worktrees\T-200`; 420 QML + 231 Rust, shots read; open: `vm-devices-check.sh thermal` and `thermal-fake`, the Dell) and **T-214** developer guide (`t/T-214-dev-guide` at `1299b12`, worktree `D:\dev\RuyaOS-worktrees\T-214`: 9 chapters + `samples/hello-game` (C, SDL3, CC0, built with flatpak-builder in WSL, `appstreamcli validate` ok) + `scripts/lint-dev-docs.ps1` in `dev.ps1 test`; 403 QML + 388 Rust green; it corrected my saves chapter where the code disagreed). T-214 VM step is a lead run: `scripts/vm-sample-check.sh` with the repo tarball `D:\dev\RuyaOS-worktrees\T-214\output\hello-repo.tgz` (copy it out before removing the worktree; the guest needs network once for `org.freedesktop.Platform//26.08`). Merge both only after their reviews.
-4. (T-214's builder killed stale `bwrap`/`rofiles-fuse` processes in WSL with a broad `pgrep`: if a later image build misbehaves, remember that.)
-5. **T-197** (shell crash on Bluetooth headset disconnect; lead): the fix is in the repo (`ruya-compositor@.service` has `QT_AUDIO_BACKEND=pulseaudio`) and on the Dell as an `/etc` drop-in; the owner says the crash is gone. Left: five connect/disconnect cycles counted, `vm-audio-check.sh` on the new image, the Outcome, set `done`.
-6. **VM queue** (one image, then each check; `STATUS.md` lists it): T-191, T-192, T-193, T-196, T-200 checks plus T-195's items already done by its builder. Needs `-Audio` for devices. Free space after: `scripts\free-space.ps1`; WSL `.vhdx` is ~48 GB on C: (13 GB free): `wsl --manage FedoraLinux-44 --compact` between builds, never while a build runs. F: (NTFS 119 GiB, owner's) holds only the ISO so far.
+- `main` is pushed up to `e7f7aff` (test ALL GREEN: 544 QML + 50 skips, Rust green). Image `0.0.49` and its ISO are **built and verified** (`vm-iso-check.ps1`: install 228 s, `RUYA_BOOT_OK 0.0.49`, `/var` 126 GiB, greenboot success); the ISO is `F:\RuyaOS\ruyaos-0.0.49-install.iso` (the owner reinstalls the Dell from it). It lacks T-205 (merged afterwards).
+- **In flight (builders, worktrees under `D:\dev\RuyaOS-worktrees\`):** T-223 (battery chips, branch `t/T-223-batteries`), T-190 (Settings focus follow-ups, `t/T-190-focus`). Dispatched at `e7f7aff`, round 1. Next: `ruya-reviewer` each, merge, `dev.ps1 test` on main.
+- **Merged this session** (all through `ruya-reviewer`): T-200 thermal (two lead fixes: VM parser, spec), T-214 developer guide (+ five wording fixes), T-206 gear (re-cut icon font), T-204 Dreamglass v2 (round 2: black frame in the pulse), T-209 colour themes (round 2: tests wrote to the real registry), T-208 wallpapers (round 2: contrast model, focus ring, Daylight), T-205 gliding highlight and liquid pill (round 2: CI package, idle clock). VM queue of `0.0.48-lead` all passed (devices 76, store 71, library 35, storage 87, sample 26; the three FAILs were script bugs, fixed).
+- **Written for the backlog (owner requests):** T-226 system information, T-227 UI sounds and ambient themes, T-245 notification centre, T-246 achievements, T-247 play statistics (the one usage ledger; T-211 reads it), the first-party apps epic T-248 (HIG T-249, platform spike/ADR-015 T-250, RuyaKit T-251, template T-252, apps T-253..T-259). The `.play` epic T-228..T-244 was written by the other lead session. The board is split: front in `STATUS.md`, the rest in `STATUS-backlog.md` (`lint-board.ps1` reads both).
 
-## The Dell (owner's test machine, 192.168.178.109, root with the dev key; may be off)
-Installed from the 0.0.44 ISO, runs that image plus **overlays that vanish on reboot**: Bluetooth firmware (`dnf install iwlbluetooth-firmware` in `bootc usroverlay`), the fixed `ruya-devices` binary (`output/ovl/ruya-devices`), and a real file `/etc/systemd/system/ruya-compositor@.service.d/10-audio-backend.conf`. `/var` grown by hand to 464 GB. Controller (DualSense, bonded) works; the WH-1000XM4 headset must be re-paired once with the fixed code (`Bonded: yes`). After the new ISO is installed, nothing needs overlays; the pad must be paired again (T-203 removes the need for a keyboard).
+## First, in this order
+1. Check `git worktree list` and the two builders' state (the notes above), review and merge them. T-205 is `done` but its image proof is pending: the **next image `0.0.50`** must boot (`qt6-qtshadertools-devel`, the `.qsb`, `GlassPill.liquid` true under a GPU session) and re-run the three fixed VM scripts plus `vm-audio-check.sh` (T-197 close-out). Build it when the builders' lanes are quiet; `free-space.ps1` after.
+2. **T-164** (per-profile Wayland sockets, lead, NEXT, critical path; needs a whole session plus the Dell as the GL test: no `EGL_WL_bind_wayland_display` on KMS, pick a dmabuf integration). Then T-165/T-147 (Play does nothing until then).
+3. Next builder tasks (two lanes): T-194, T-199, T-202, T-203 (image risk: one image lane, `VM (this task)`), T-213, T-226, T-227, then the lead tasks on the backlog file. Visual polish came first by the owner's order and is done except the Dell measurements.
+4. The Dell: the owner reinstalls from the 0.0.49 ISO and reports (gear, Dreamglass v2 and frame times, themes, wallpapers incl. a real USB stick, thermal rows). The T-205 frame-time check and the liquid-pill default follow after 0.0.50.
 
 ## Concerns (ranked)
-1. **STATUS.md is 23 KB** (budget ~10 KB): prune the Inbox, Open owner decisions and the Decided paragraph first (move to the archive); the board itself has ~40 rows.
-2. **Critical path T-164** (per-profile Wayland sockets; lead; T-162 is done and vm/hw-verified) -> T-165/T-147. Not started; needs a whole session and the image lane; the Dell is the GL test (no `EGL_WL_bind_wayland_display` on KMS: pick a dmabuf integration).
-3. **Image lane and memory**: one image build at a time and nothing heavy beside `make-disk.sh` (this wasted ~1.5 h this session). Consider telling builders to avoid `dev.ps1 test` while the lead builds, or lowering parallel lanes to one during image work.
-4. **Owner decisions waiting** (all in `STATUS.md`): telemetry consent/backend/retention/privacy notice (T-224/T-225), Dolby/DTS names (T-219), update size vs the unshrunk image (rechunk/flatten, from T-195), real brand art for controllers (T-199), HDR/VRR after the spikes.
-5. Unchanged: compositor performance (B-003), suspend (T-166), Turkish review, `caller_is_admin` copied in two services.
-
-## Board at handoff (todo, in the order added; builder unless marked)
-T-190, T-194, T-164 [lead], T-165, T-147, T-166 [lead], **T-214 (priority, running)**, T-197 [lead, in progress], T-198 [lead] display resolution/DPI, T-199 device icons, T-201 [lead] stuck-process recovery, T-202 screen saver/power saving, T-203 pair a controller without a keyboard, T-204/T-205 Dreamglass v2 (205 lead), T-206 gear icon, T-207 [lead] faster BT reconnect, T-208 wallpapers, T-209 colour themes, T-210 profile customisation, T-211 [lead]/T-212 parental controls, T-213 time zone, T-215 [lead] saves backup, T-216 [lead] network options, T-217..T-219 [lead] input mapping / HDR spike / audio formats, T-220 privacy, T-221 app management, T-222 [lead] refresh-rate/VRR, T-223 status batteries, T-224/T-225 [lead] telemetry and crash reports. Suggested next dispatches (two lanes, no image build): T-206 (small) + T-223; then T-203 + T-213; keep the image lane for the lead (ISO, VM queue, then T-164).
-
-## Merged this session (with `ruya-reviewer` unless noted)
-T-189, T-192, T-193, T-191, T-196 (round 2), T-195 (+ my hardening commit); T-162 and the Bluetooth/audio/installer fixes by the lead; many task files written (T-197..T-225) from the owner's requests. Owner scope decisions: media apps separate; blur/shadows default; hold on new tasks lifted; F: drive for images; telemetry wanted with user control; developer docs a priority.
+1. **STATUS.md is ~16 KB** (budget ~10): the board is split but the Open owner decisions and the session log are long; prune at the next session. 
+2. **Owner decisions waiting** (STATUS "Open owner decisions"): telemetry consent/backend, Dolby/DTS names, update size vs the unshrunk image, controller brand art, HDR/VRR, Flatpak runtime in the image, **ADR-015 app platform and ADR-016 browser (Proposed, T-250/T-258)**, which first-party apps first.
+3. Design decisions parked in the Inbox: `glassTint` gives text only 2.5:1 over white art, dark themes over bright art, avatar palette vs themes, the liquid pill's default and brightness.
+4. Image lane and memory: one image build at a time, nothing heavy beside `make-disk.sh` (drop WSL caches first); `make-disk.sh`'s exit code lies, read the log. Unchanged: compositor performance (B-003), suspend (T-166), Turkish review.
+5. Flaky: `Themes::test_switch_cross_fades_over_tintMs` was racy (fixed with `tryVerify`); "TEST WINDOW LOST ACTIVATION" appears sometimes in `shots` while passing.
 
 ## Host facts learned
-- A `systemd-run`/`systemctl --machine=<user>@.host` call hands its stderr to PID 1: SELinux accepts a pipe of an unconfined shell (`2>&1 | cat`) but not a service's pipe or a file in `/root` (`image/CLAUDE.md`). `ruya-session` uses a file in its `RuntimeDirectory`.
-- Fast service loop without an image build: build in WSL (`CARGO_TARGET_DIR=/root/ruya-target`), `bootc usroverlay` on the target, `scp`, `restorecon`, restart. Discarded on reboot.
-- `make-disk.sh` ignores osbuild failures in its exit code (the `DONE rc=0` line lies): read the log.
+- A `systemd-run`/`systemctl --machine=<user>@.host` call hands its stderr to PID 1: SELinux accepts a pipe of an unconfined shell but not a service's pipe or a file in `/root` (`image/CLAUDE.md`).
+- Fast service loop without an image build: build in WSL (`CARGO_TARGET_DIR=/root/ruya-target`), `bootc usroverlay` on the target, `scp`, `restorecon`, restart.
 - bootc-image-builder: a custom kickstart replaces its default and cannot be combined with `[[customizations.user]]`.
-- A fresh worktree rebuilds from scratch; `git worktree remove` may need `rm -rf` then `git worktree prune`.
-- `diskpart /s` formats a USB drive when `Format-Volume` says "Invalid Parameter".
+- `busctl --json=short` prints doubles as `4.0e+01`; SSH host keys change at every VM boot (use a scratch known_hosts); a leftover `rofiles-fuse` mount from a flatpak-builder run in WSL (`/root/hello-game*`) keeps a worktree under `/mnt/d` busy: `pkill -9 -f rofiles-fuse.*hello-game` then `fusermount -uz`.
+- QSettings(org, app) always uses the native store (the registry on Windows): tests must use `DeviceSettings(iniPath)`.
+- Heredocs with long markdown through the Bash tool can fail to parse: write task files with the Write tool.
+- `git worktree remove` needs the Bash tool (Git for Windows), not PowerShell.
 
 ## Quality signals (one row per lead session)
 
 | Date | Range reviewed | Tasks | Findings (fixed / filed) | `dev.ps1 test` | VM |
 |---|---|---|---|---|---|
-| 2026-11-05 | 4c0e713..handoff | 11 merged: T-178..T-188 | 6 CHANGES_REQUESTED | 381 + 30 skipped QML | lead `0.0.42` ok |
-| 2026-11-06 | 372fa87..handoff | T-162 (lead) | 5 defects found by the VM check in my own work | 381 + 30 skipped QML | `0.0.44-t162`: smoke, session 45, devices 57, ISO ok; session check also 45 PASS on the Dell |
-| 2026-11-06 (build loop) | handoff..653c8ed | T-189, T-192, T-193, T-191, T-196, T-195 merged; T-200 reviewed pending; T-214 running | 3 CHANGES_REQUESTED (T-191 test order, T-196 wrong "profile data" claim, T-189/T-195 non-blocking); lead fixes: library trap, ISO guard, slim-script protections | 403 QML + 33 skipped (T-196), 420 + 38 (T-200 branch) | image `0.0.47-combined` built; ISO/VM checks pending |
+| 2026-11-06 (build loop) | handoff..653c8ed | T-189, T-192, T-193, T-191, T-196, T-195 merged | 3 CHANGES_REQUESTED | 403 QML + 33 skips | image `0.0.47-combined` |
+| 2026-11-06/07 (build loop) | e73e081..e7f7aff | T-200, T-214, T-206, T-204, T-209, T-208, T-205 merged | 6 of 7 needed a round 2 (2 real defects: pulse black frame, registry pollution; 1 CI break prevented; theme/wallpaper contrast model) | 544 QML + 50 skips | `0.0.48-lead`: queue all PASS; `0.0.49` ISO verified |
 
 Older rows: git history of this file.
