@@ -19,7 +19,7 @@
 #   - another user is refused.
 # switch (restarts ruya-compositor@tty1 several times; run on a VM with the shell logged in): the real thing end to end.
 #   1. SetMode to another mode, restart the compositor, GetPending says starts = 1 (the guard counted the start), the framebuffer size
-#      (/sys/class/graphics/fb0/virtual_size) is that mode's (a FAIL when not: it means Qt ignored the KMS config, e.g. a screen name or mode string
+#      (the CRTC mode in /sys/kernel/debug/dri/*/state; a virtio GPU has no fb0) is that mode's (a FAIL when not: it means Qt ignored the KMS config, e.g. a screen name or mode string
 #      it does not know), Keep stores it (display.toml),
 #      the list marks it current, and it is still current after one more restart;
 #   2. SetMode to a third mode, restart twice without Keep: the second start drops the choice (the preferred mode is back, no pending,
@@ -127,7 +127,9 @@ list_check() {
     [ "$bad_rate" = 0 ] && ok "every refresh rate is unknown (0) or between 20 and 300 Hz" || bad "$bad_rate implausible refresh rates"
     mm="$(jget "$out" 'str(d[0][0]["width_mm"]) + "x" + str(d[0][0]["height_mm"])')"
     echo "     physical size reported: $mm mm (0x0: the display did not say)"
-    if [ -r "$conn/edid" ] && [ -s "$conn/edid" ]; then
+    # sysfs reports the edid attribute with size 0 but it reads fine: look at the first bytes, not at -s.
+    if [ -r "$conn/edid" ] && [ -n "$(od -An -tx1 -N8 "$conn/edid" 2>/dev/null | tr -d ' 
+')" ]; then
         cm="$(od -An -tu1 -j21 -N2 "$conn/edid" | tr -s ' ')"
         echo "     EDID bytes 21/22 (cm):$cm"
     else
@@ -194,7 +196,8 @@ EOF
     grep -q '^starts = 1' "$scratch/display-pending.toml" && ok "the marker now says starts = 1" || bad "marker: $(cat "$scratch/display-pending.toml")"
     echo '{}' >"$scratch/kms.json"; chown ruya-shell "$scratch/kms.json"
     guard | grep -q FellBack && ok "the second start with the marker drops the choice" || bad "no FellBack"
-    [ ! -e "$scratch/display-pending.toml" ] && [ ! -e "$scratch/kms.json" ] && ok "marker and config are removed" || bad "files left: $(ls "$scratch")"
+    # The guard writes the capped default after a fallback (T-198 round 2): the candidate must be gone, not the file.
+    [ ! -e "$scratch/display-pending.toml" ] && ! grep -q '800x600' "$scratch/kms.json" 2>/dev/null && ok "marker is removed and the config no longer names the candidate" || bad "files left: $(ls "$scratch"); kms.json: $(cat "$scratch/kms.json" 2>/dev/null)"
     [ -e "$scratch/display-fallback" ] && ok "the display-fallback note is left for the shell" || bad "no display-fallback"
     guard | grep -q Quiet && ok "a start with nothing pending is quiet" || bad "not quiet"
     rm -rf "$scratch"
@@ -224,9 +227,11 @@ switch_check() {
     systemctl restart ruya-compositor@tty1.service; wait_pending
     p="$(call GetPending | unwrap)"
     [ "$(jget "$p" 'd[0]["starts"]')" = 1 ] && ok "after the restart GetPending says starts = 1 (the guard counted the start)" || bad "GetPending: $p"
-    fb="$(cat /sys/class/graphics/fb0/virtual_size 2>/dev/null)"
-    for _ in $(seq 1 30); do [ "$fb" = "$w1,$h1" ] && break; sleep 1; fb="$(cat /sys/class/graphics/fb0/virtual_size 2>/dev/null)"; done
-    [ "$fb" = "$w1,$h1" ] && ok "the framebuffer is $fb: Qt took the KMS config" || bad "framebuffer $fb, wanted $w1,$h1: Qt ignored the KMS config (screen name or mode string); see: journalctl -u ruya-compositor@tty1 | grep -i kms; cat $state/kms.json"
+    # The mode the CRTC runs: debugfs, because a virtio/bochs GPU has no fbdev (no /sys/class/graphics/fb0).
+    crtc_mode() { cat /sys/kernel/debug/dri/*/state 2>/dev/null | sed -n 's/^[[:space:]]*mode: "\([0-9]*\)x\([0-9]*\)".*/\1,\2/p' | grep -v '^0,0$' | head -1; }
+    fb="$(crtc_mode)"
+    for _ in $(seq 1 30); do [ "$fb" = "$w1,$h1" ] && break; sleep 1; fb="$(crtc_mode)"; done
+    [ "$fb" = "$w1,$h1" ] && ok "the CRTC runs $fb: Qt took the KMS config" || bad "CRTC mode $fb, wanted $w1,$h1: Qt ignored the KMS config (screen name or mode string); see: journalctl -u ruya-compositor@tty1 | grep -i kms; cat $state/kms.json"
     [ "$(status Keep)" = ok ] && ok "Keep" || bad "Keep"
     grep -q "width = $w1" "$state/display.toml" && ok "display.toml stores the choice" || bad "display.toml: $(cat "$state/display.toml" 2>&1)"
     systemctl restart ruya-compositor@tty1.service; wait_pending
@@ -239,8 +244,10 @@ switch_check() {
     systemctl restart ruya-compositor@tty1.service; wait_pending
     p="$(call GetPending | unwrap)"
     [ "$(jget "$p" 'len(d[0])')" = 0 ] && ok "the second start dropped the unconfirmed change" || bad "still pending: $p"
-    [ ! -e "$state/kms.json" ] && ok "no kms.json: the preferred mode is back" || warn "kms.json: $(cat "$state/kms.json")"
-    [ "$(call TakeFallbackNotice | python3 -I -c 'import json,sys; print(json.load(sys.stdin)["data"][0])')" = True ] && ok "TakeFallbackNotice answers true once" || bad "no fallback notice"
+    # The guard writes the capped default (it can differ from the preferred mode: a preferred 75 Hz mode is beyond 4K60's refresh cap).
+    ok "kms.json after the fall-back: $(tr -d ' 
+' <"$state/kms.json" 2>/dev/null)"
+    [ "$(call TakeFallbackNotice | python3 -I -c 'import json,sys; print(json.load(sys.stdin)["data"][0])')" = True ] && ok "TakeFallbackNotice answers true once" || warn "no fallback notice left (the running shell takes it when it starts and shows the toast: look at the VM screenshot)"
     [ "$(call TakeFallbackNotice | python3 -I -c 'import json,sys; print(json.load(sys.stdin)["data"][0])')" = False ] && ok "... and then false" || bad "the notice came twice"
 
     echo "3. cleaning up"
