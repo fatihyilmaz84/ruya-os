@@ -172,7 +172,7 @@ FocusScope {
         anchors.centerIn: parent
         visible: chooser.loading
         text: qsTr("Loading time zones…")
-        color: Theme.textDim
+        color: Theme.text
         font.pixelSize: Theme.typeBody * chooser.u
     }
 

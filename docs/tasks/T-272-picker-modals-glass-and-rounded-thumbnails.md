@@ -28,4 +28,22 @@ The wallpaper picker looks like the rest of the shell: its panel is glass, and i
 - `04-design-system.md` §5 (picker rows) and §3.7 if the layer wording changes.
 
 ## Outcome
-_Filled in by the implementer. First line: `Verified: host`._
+Verified: host
+
+**Built.**
+- `GlassSheet.qml` (new, 04 §5 row): the glass card of a picker modal. `glassStrong` over a blurred quarter-size crop of L0 through a `radiusL` mask, `GlassLayers` with `tint`, `GlassShadow` kind `panel`. Baked: the crop is a non-live `ShaderEffectSource` captured when `shown` turns true (and if the sheet resizes); `bakeCount` counts captures. `glassOpaque` on the Performance tier, with no L0 and on the software renderer (`blurred`, `fillColor`; `gpu` is overridable so a test reaches the blurred branch offscreen).
+- `ModalLayer.qml` (new): the Shell's `modalLayer` is now one, with `glassSource: l0`; `GlassSheet` finds L0 by walking up its parents to a `ModalLayer`, so no pane or picker needed a new property (the pickers are already parented to it).
+- `WallpaperPicker`, `ZonePicker`, `ModePicker` (resolution and refresh rate) use `GlassSheet` (same `objectName`s as before). Text on the glass is `text`: the zone "Loading" line and the wallpaper USB hint were `textDim`.
+- Wallpaper tiles: `art` is an `Item` with `radius` = `radiusM * u`; its content (gradient, blobs, picture) is a hidden layer cut by a rounded mask through `MultiEffect` (as `CardFocusLayers`); on the software renderer the content is drawn unmasked (gradient still rounded). The hairline, the focus ring and the mask share the radius; the USB grid uses the same tile. The default tile now draws `Theme.blobTintA(Theme.defaultTint)` and `Theme.blobOpacityA` like the real Backdrop (lead's note; T-271 merged into this branch).
+- Docs: 04 §3.6 (tint now used), §3.7 L3 row, §5 (new Glass sheet row; wallpaper, zone and mode picker rows).
+
+**Not changed, on purpose.** `ProfilePicker` ("Who's playing?") has no panel: it is a full-screen chooser of profile cards on the backdrop, so there is nothing to put on glass. `PowerConfirm` and `ModeConfirm` are confirm dialogs, not pickers, and still draw `panel` (Inbox).
+
+**Tests** (revert test: each failed when I undid its change). `Glass::test_sheet_is_opaque_glass_without_blur`, `test_sheet_blurs_the_modal_layers_source_on_the_gpu`, `test_sheet_is_baked_when_it_opens_not_every_frame` (revert: `tint: false`, and the open-time bake removed); `Wallpaper::test_the_panel_is_glass_and_the_thumbnails_are_rounded` (revert 1: flat `Rectangle` panel; revert 2: mask radius 0; also all five themes: fill is `glassStrong`/`glassOpaque`, never `panel`, tint shown, ring radius = tile radius + offset, Current badge inside the corner, USB grid masked); `TimeZone::test_the_picker_panel_is_glass` (revert: flat panel, plus focus on the regions, Back closes and focus returns to the row); a glass assertion in `Display` for the resolution picker. In `shots` (GPU) the wallpaper screenshot test asserts `blurred` is true and `bakeCount` is 1 (L0 found, one capture).
+
+**Screenshots read** (`output\shell-shots\review\`): `70-wallpaper-picker.png`, `70-wallpaper-picker-daylight.png`, `70-wallpaper-picker-usb.png`, `70-wallpaper-picker-usb-daylight.png`, `17-settings-timezone-picker.png`, new `17-settings-timezone-picker-daylight.png`, `display-2-picker.png`, and for the profile picker `t209-daylight-1-picker.png`. Glass with blur, sheen and rim reads in Dreamglass and Daylight; the thumbnails, the hairline and the ring share one rounded shape (including the white "Bright" USB picture); the Current badge sits clear of the corner; text is `text`.
+
+UX notes: states reached: library grid (focus on a tile, on the Add button), USB grid, zone regions/cities, resolution list. Focus, Back and key handling are untouched (the existing tests for them are green): Back closes (or leaves the USB grid), focus returns to the row. Nothing new takes focus; the sheet is decoration. Doubts: the dark themes' tint is 2.5:1 for `text` over pure white art (04 §3.6 "Plainly"), but the sheet samples L0, which on a page is the blurred and dimmed wallpaper, and the contrast gate does not cover this surface; on Daylight the glass is light with dark text and reads fine. The error colour of the USB copy message on the glass is not in the contrast gate either.
+
+**Unverified:** the frame cost of the sheet on real GPU hardware (one baked quad plus the picture masks, 7 to 12 tile masks in the wallpaper grid); the Performance and Balanced tier looks were checked by property tests only, not screenshots.
+
