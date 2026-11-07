@@ -2,7 +2,8 @@
 
 #include "BatteryBackend.h"
 
-// In-memory batteries: one controller, "Ruya Pad Pro", at 60 % and discharging.
+// In-memory batteries: one controller, "Ruya Pad Pro", at 60 % and discharging (reset()); populate()
+// fills in a made-up household of devices for screenshots.
 class MockBatteryBackend final : public BatteryBackend
 {
     Q_OBJECT
@@ -14,11 +15,14 @@ public:
     void refresh() override;
 
     // Tests only.
-    // Changes a controller (keeping its name) or adds one named after its id.
-    void setController(const QString &id, int percent, const QString &state);
-    void removeController(const QString &id);
+    // percent -1: a device that reports no level (it is not shown). Changes a device (keeping its name and kind unless new ones are given) or adds one: `kind`
+    // defaults to "controller", the name to one made from the kind and the id.
+    void setDevice(const QString &id, int percent, const QString &state, const QString &kind = QString(),
+                   const QString &name = QString());
+    void removeDevice(const QString &id);
     void clear();
     void reset();
+    void populate();
     // Replies to refresh() arrive after `ms` (0: at once), with the list as it was when asked; the
     // number of replies still on their way. Lets a test play an old reply landing after a new one.
     void setReplyDelay(int ms) { m_delay = ms; }
@@ -27,7 +31,7 @@ public:
 private:
     void publish();
 
-    QList<ControllerBattery> m_list;
+    QList<DeviceBattery> m_list;
     int m_delay = 0;
     int m_pending = 0;
 };

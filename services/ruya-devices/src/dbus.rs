@@ -408,6 +408,7 @@ impl BatteriesIface {
                 [
                     ("id", own(Value::from(b.id.clone()))),
                     ("name", own(Value::from(b.name.clone()))),
+                    ("kind", own(Value::from(b.kind))),
                     ("percent", own(Value::from(b.percent))),
                     ("state", own(Value::from(b.state.as_str()))),
                 ]

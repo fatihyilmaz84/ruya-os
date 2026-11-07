@@ -48,6 +48,21 @@ Item {
             compare(icon.Accessible.ignored, true)
         }
 
+        // T-223: the battery steps and the device icons are in the table (that the font has a glyph
+        // for each is checked by scripts/check-font-coverage.py, which reads icons.txt and the cmaps).
+        function test_the_battery_and_device_glyphs_are_in_the_table() {
+            const names = ["battery_0_bar", "battery_1_bar", "battery_2_bar", "battery_3_bar", "battery_4_bar",
+                           "battery_5_bar", "battery_full", "battery_alert", "battery_charging_full",
+                           "sports_esports", "headphones", "speaker", "mouse", "keyboard", "bluetooth"]
+            const icon = createTemporaryObject(iconComponent, host)
+            verify(icon)
+            for (const name of names) {
+                icon.name = name
+                verify(icon.known, name + " is in the table")
+                verify(icon.implicitWidth > 0, name + " has a size")
+            }
+        }
+
         function test_unknown_name_draws_nothing_and_warns_once() {
             ignoreWarning(/unknown icon name 'no_such_icon'/)
             const icon = createTemporaryObject(iconComponent, host, { name: "no_such_icon" })

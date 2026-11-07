@@ -123,6 +123,7 @@ qt_add_qml_module(ruyashell
         qml/CardFocusLayers.qml
         qml/GlareGate.qml
         qml/Icon.qml
+        qml/BatteryChip.qml
         qml/LibraryDetailsPage.qml
         qml/SettingsPage.qml
         qml/PowerPage.qml

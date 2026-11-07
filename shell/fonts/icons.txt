@@ -8,3 +8,15 @@ volume_off e04f
 battery_full e1a5
 battery_alert e19c
 battery_charging_full e1a3
+battery_0_bar ebdc
+battery_1_bar f09c
+battery_2_bar f09d
+battery_3_bar f09e
+battery_4_bar f09f
+battery_5_bar f0a0
+sports_esports ea28
+headphones f01f
+speaker e32d
+mouse e323
+keyboard e312
+bluetooth e1a7

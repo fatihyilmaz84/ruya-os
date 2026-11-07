@@ -34,16 +34,17 @@ QVariantMap parseDict(const QDBusArgument &arg)
 }
 
 // aa{sv}
-QList<ControllerBattery> parseBatteries(const QDBusArgument &arg)
+QList<DeviceBattery> parseBatteries(const QDBusArgument &arg)
 {
-    QList<ControllerBattery> out;
+    QList<DeviceBattery> out;
     arg.beginArray();
     while (!arg.atEnd()) {
         const QVariantMap d = parseDict(arg);
-        ControllerBattery c;
+        DeviceBattery c;
         c.id = d.value(QStringLiteral("id")).toString();
         c.name = d.value(QStringLiteral("name")).toString();
-        c.percent = qBound(0, int(d.value(QStringLiteral("percent")).toUInt()), 100);
+        c.kind = d.value(QStringLiteral("kind"), c.kind).toString();
+        c.percent = d.contains(QStringLiteral("percent")) ? qBound(0, int(d.value(QStringLiteral("percent")).toUInt()), 100) : -1;
         c.state = d.value(QStringLiteral("state"), c.state).toString();
         out.append(c);
     }

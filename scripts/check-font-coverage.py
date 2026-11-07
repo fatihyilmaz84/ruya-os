@@ -9,7 +9,8 @@ the Windows host, in WSL and in CI:   python -I scripts/check-font-coverage.py [
 It also checks the two icon cuts (shell/fonts/MaterialSymbolsRounded*.ttf, T-206): no glyph may hold
 two contours with the same points. The variable font draws the filled gear as two coincident
 contours of opposite direction, which renders speckled on Windows; scripts/subset-icons.sh merges
-overlaps and this fails if a cut is made without it.
+overlaps and this fails if a cut is made without it. Every code point in shell/fonts/icons.txt must
+also have a glyph in both cuts (T-223): a name in the Icon.qml table without a glyph draws an empty box.
 """
 import glob
 import html
@@ -135,7 +136,18 @@ def main():
     icon_fonts = sorted(glob.glob(os.path.join(root, "shell/fonts/MaterialSymbolsRounded*.ttf")))
     if not icon_fonts:
         raise SystemExit("check-font-coverage: no shell/fonts/MaterialSymbolsRounded*.ttf")
+    wanted = []
+    with open(os.path.join(root, "shell/fonts/icons.txt"), encoding="utf-8") as listing:
+        for line in listing:
+            parts = line.split()
+            if len(parts) >= 2 and not parts[0].startswith("#"):
+                wanted.append((parts[0], int(parts[1], 16)))
     for font in icon_fonts:
+        cmap = cmap_of(font)
+        for name, code in wanted:
+            if code not in cmap:
+                bad += 1
+                print("%s lacks the glyph for %s (U+%04X); re-cut with scripts/subset-icons.sh" % (os.path.basename(font), name, code))
         for gid, a, b in coincident_contours(font):
             bad += 1
             print("%s: glyph %d has coincident contours %d and %d; re-cut with scripts/subset-icons.sh (overlaps are merged there)"

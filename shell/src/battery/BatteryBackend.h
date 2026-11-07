@@ -6,11 +6,12 @@
 #include <QObject>
 #include <QString>
 
-struct ControllerBattery
+struct DeviceBattery
 {
     QString id;
     QString name;
-    int percent = 0;                                // 0-100
+    QString kind = QStringLiteral("controller");    // "controller" | "headset" | "speaker" | "mouse" | "keyboard" | "other"
+    int percent = 0;                                // 0-100, -1: no reading (the cluster shows no chip)
     QString state = QStringLiteral("unknown");      // "charging" | "discharging" | "full" | "unknown"
 };
 
@@ -28,16 +29,16 @@ public:
     virtual void refresh() = 0; // reports the list
 
 signals:
-    void listed(const QList<ControllerBattery> &controllers);
+    void listed(const QList<DeviceBattery> &devices);
 
 protected:
     // Replies can arrive out of order: number each request when it is sent and report a reply only
     // if no newer one has been reported already.
     quint64 beginRequest() { return m_listSeq.begin(); }
-    void deliver(quint64 request, const QList<ControllerBattery> &controllers)
+    void deliver(quint64 request, const QList<DeviceBattery> &devices)
     {
         if (m_listSeq.accept(request))
-            emit listed(controllers);
+            emit listed(devices);
     }
 
 private:
