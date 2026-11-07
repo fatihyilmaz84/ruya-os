@@ -188,7 +188,10 @@ Item {
             tryVerify(() => find("rowAmbient").activeFocus)
             keyClick(Qt.Key_Left)
             tryVerify(() => Audio.channelVolumes.ambient === 95)
+            keyClick(Qt.Key_Down)                       // Ambient sound (T-227, the switch under its slider)
+            tryVerify(() => find("rowAmbientSound").activeFocus)
             keyClick(Qt.Key_Down)                       // Media
+            tryVerify(() => find("rowMedia").activeFocus)
             keyClick(Qt.Key_Left)
             keyClick(Qt.Key_Left)
             tryVerify(() => Audio.channelVolumes.media === 90)

@@ -144,20 +144,17 @@ SettingsPane {
                 return
             }
             if (op === "controller-pairing" && status !== "ok" && status !== "busy") {
-                Sfx.back()
                 Notifications.show(status === "unavailable" ? qsTr("Bluetooth is off.")
                                                             : qsTr("Could not start looking for controllers."), "warning")
                 return
             }
             if (op === "rename" && status !== "ok") {
-                Sfx.back()
                 Notifications.show(status === "invalid" ? qsTr("That name does not work. Try another.")
                                                           : qsTr("Could not rename the controller."), "warning")
                 return
             }
             if (op === "forget" || op === "scan" || op === "controller-pairing" || status === "ok")
                 return
-            Sfx.back()
             Notifications.show(pane.statusText(op, status), "warning")
         }
         function onControllerRejected() {

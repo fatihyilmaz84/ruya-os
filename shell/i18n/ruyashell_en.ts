@@ -166,7 +166,7 @@
         <translation>Your activity was cleared.</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+2"/>
         <source>Your activity could not be cleared.</source>
         <translation>Your activity could not be cleared.</translation>
     </message>
@@ -500,7 +500,22 @@ This can&apos;t be undone.</translation>
 <context>
     <name>AudioPane</name>
     <message>
-        <location filename="../qml/AudioPane.qml" line="+57"/>
+        <location filename="../qml/AudioPane.qml" line="+90"/>
+        <source>Sound theme: %1</source>
+        <translation>Sound theme: %1</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Too many sound themes are saved on this console.</source>
+        <translation>Too many sound themes are saved on this console.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>That sound theme could not be used.</source>
+        <translation>That sound theme could not be used.</translation>
+    </message>
+    <message>
+        <location line="+13"/>
         <source>Could not switch the audio output.</source>
         <translation>Could not switch the audio output.</translation>
     </message>
@@ -526,6 +541,11 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+13"/>
+        <source>Ambient sound</source>
+        <translation>Ambient sound</translation>
+    </message>
+    <message>
+        <location line="+9"/>
         <source>Media</source>
         <translation>Media</translation>
     </message>
@@ -533,6 +553,21 @@ This can&apos;t be undone.</translation>
         <location line="+13"/>
         <source>Mute</source>
         <translation>Mute</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Sound theme</source>
+        <translation>Sound theme</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>Use “%1” from the USB drive</source>
+        <translation>Use “%1” from the USB drive</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Copying…</source>
+        <translation>Copying…</translation>
     </message>
 </context>
 <context>
@@ -582,12 +617,12 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+45"/>
+        <location line="+44"/>
         <source>Bluetooth is off.</source>
         <translation>Bluetooth is off.</translation>
     </message>
     <message>
-        <location line="-44"/>
+        <location line="-43"/>
         <source>That device is no longer available.</source>
         <translation>That device is no longer available.</translation>
     </message>
@@ -627,7 +662,7 @@ This can&apos;t be undone.</translation>
         <translation>Connected</translation>
     </message>
     <message>
-        <location line="+83"/>
+        <location line="+80"/>
         <source>Pair a new controller</source>
         <translation>Pair a new controller</translation>
     </message>
@@ -637,7 +672,7 @@ This can&apos;t be undone.</translation>
         <translation>Rename %1</translation>
     </message>
     <message>
-        <location line="-157"/>
+        <location line="-154"/>
         <source>Paired</source>
         <translation>Paired</translation>
     </message>
@@ -647,12 +682,12 @@ This can&apos;t be undone.</translation>
         <translation>Battery %1%</translation>
     </message>
     <message>
-        <location line="+29"/>
+        <location line="+28"/>
         <source>Could not start looking for controllers.</source>
         <translation>Could not start looking for controllers.</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+4"/>
         <source>That name does not work. Try another.</source>
         <translation>That name does not work. Try another.</translation>
     </message>
@@ -662,7 +697,7 @@ This can&apos;t be undone.</translation>
         <translation>Could not rename the controller.</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+9"/>
         <source>A device that is not a controller was ignored.</source>
         <translation>A device that is not a controller was ignored.</translation>
     </message>
@@ -687,8 +722,8 @@ This can&apos;t be undone.</translation>
         <translation>Scanning…</translation>
     </message>
     <message>
-        <location line="-105"/>
-        <location line="+200"/>
+        <location line="-102"/>
+        <location line="+197"/>
         <source>Forget %1</source>
         <translation>Forget %1</translation>
     </message>
@@ -1414,7 +1449,7 @@ This can&apos;t be undone.</translation>
         <translation>Password for %1</translation>
     </message>
     <message>
-        <location line="+17"/>
+        <location line="+15"/>
         <source>Could not forget the network.</source>
         <translation>Could not forget the network.</translation>
     </message>
@@ -2253,7 +2288,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+346"/>
+        <location filename="../qml/Shell.qml" line="+345"/>
         <source>Could not %1.</source>
         <translation>Could not %1.</translation>
     </message>
@@ -2291,12 +2326,12 @@ This can&apos;t be undone.</translation>
         <translation>%1 %2 percent</translation>
     </message>
     <message>
-        <location line="+583"/>
+        <location line="+590"/>
         <source>Power</source>
         <translation>Power</translation>
     </message>
     <message>
-        <location line="-831"/>
+        <location line="-838"/>
         <source>Update ready. Restart to finish.</source>
         <translation>Update ready. Restart to finish.</translation>
     </message>
@@ -2362,14 +2397,19 @@ This can&apos;t be undone.</translation>
         <translation>Starting %1…</translation>
     </message>
     <message>
-        <location line="+264"/>
+        <location line="+267"/>
         <location line="+12"/>
         <location line="+3"/>
         <source>Select</source>
         <translation>Select</translation>
     </message>
     <message>
-        <location line="-21"/>
+        <location line="+235"/>
+        <source>The chosen sound theme can&apos;t be used. The standard one plays instead.</source>
+        <translation>The chosen sound theme can&apos;t be used. The standard one plays instead.</translation>
+    </message>
+    <message>
+        <location line="-256"/>
         <location line="+16"/>
         <source>Cancel</source>
         <translation>Cancel</translation>
@@ -2380,7 +2420,7 @@ This can&apos;t be undone.</translation>
         <translation>Sections</translation>
     </message>
     <message>
-        <location line="+79"/>
+        <location line="+83"/>
         <location line="+8"/>
         <source>System</source>
         <translation>System</translation>
@@ -2396,8 +2436,8 @@ This can&apos;t be undone.</translation>
         <translation>Switch profile</translation>
     </message>
     <message>
-        <location line="-111"/>
-        <location line="+113"/>
+        <location line="-115"/>
+        <location line="+117"/>
         <source>Close</source>
         <translation>Close</translation>
     </message>
@@ -2417,13 +2457,13 @@ This can&apos;t be undone.</translation>
         <translation>Power off</translation>
     </message>
     <message>
-        <location line="-119"/>
-        <location line="+120"/>
+        <location line="-123"/>
+        <location line="+124"/>
         <source>Back</source>
         <translation>Back</translation>
     </message>
     <message>
-        <location line="+110"/>
+        <location line="+109"/>
         <source>mock services</source>
         <translation>mock services</translation>
     </message>
@@ -2467,7 +2507,7 @@ This can&apos;t be undone.</translation>
         <translation>Read-only</translation>
     </message>
     <message>
-        <location line="+45"/>
+        <location line="+43"/>
         <source>This console</source>
         <translation>This console</translation>
     </message>
@@ -3077,18 +3117,18 @@ This can&apos;t be undone.</translation>
     <name>SystemPane</name>
     <message>
         <location filename="../qml/SystemPane.qml" line="+133"/>
-        <location line="+270"/>
+        <location line="+269"/>
         <source>Beta</source>
         <translation>Beta</translation>
     </message>
     <message>
-        <location line="-270"/>
-        <location line="+269"/>
+        <location line="-269"/>
+        <location line="+268"/>
         <source>Stable</source>
         <translation>Stable</translation>
     </message>
     <message>
-        <location line="-264"/>
+        <location line="-263"/>
         <source>Last checked %1</source>
         <translation>Last checked %1</translation>
     </message>
@@ -3203,7 +3243,7 @@ This can&apos;t be undone.</translation>
         <translation>Time zone set to %1</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+3"/>
         <source>Could not change the time zone.</source>
         <translation>Could not change the time zone.</translation>
     </message>
@@ -3218,14 +3258,14 @@ This can&apos;t be undone.</translation>
         <translation>No temperature sensors were found on this device.</translation>
     </message>
     <message>
-        <location line="-181"/>
+        <location line="-180"/>
         <location line="+8"/>
-        <location line="+70"/>
+        <location line="+69"/>
         <source>Only an admin can do this.</source>
         <translation>Only an admin can do this.</translation>
     </message>
     <message>
-        <location line="-254"/>
+        <location line="-253"/>
         <source>The console is warm. Nothing needs to be done.</source>
         <translation>The console is warm. Nothing needs to be done.</translation>
     </message>
@@ -3245,7 +3285,7 @@ This can&apos;t be undone.</translation>
         <translation>Language</translation>
     </message>
     <message>
-        <location line="+66"/>
+        <location line="+65"/>
         <source>Updates</source>
         <translation>Updates</translation>
     </message>
@@ -3483,7 +3523,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>VolumeOsd</name>
     <message>
-        <location filename="../qml/VolumeOsd.qml" line="+56"/>
+        <location filename="../qml/VolumeOsd.qml" line="+58"/>
         <source>Muted</source>
         <translation>Muted</translation>
     </message>
@@ -3566,7 +3606,7 @@ This can&apos;t be undone.</translation>
         <translation>Wallpaper added</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+4"/>
         <source>Could not add the wallpaper</source>
         <translation>Could not add the wallpaper</translation>
     </message>

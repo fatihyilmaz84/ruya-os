@@ -166,7 +166,7 @@
         <translation>Etkinliğiniz temizlendi.</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+2"/>
         <source>Your activity could not be cleared.</source>
         <translation>Etkinliğiniz temizlenemedi.</translation>
     </message>
@@ -498,7 +498,22 @@ Bu geri alınamaz.</translation>
 <context>
     <name>AudioPane</name>
     <message>
-        <location filename="../qml/AudioPane.qml" line="+57"/>
+        <location filename="../qml/AudioPane.qml" line="+90"/>
+        <source>Sound theme: %1</source>
+        <translation>Ses teması: %1</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Too many sound themes are saved on this console.</source>
+        <translation>Bu konsolda çok fazla ses teması kayıtlı.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>That sound theme could not be used.</source>
+        <translation>Bu ses teması kullanılamadı.</translation>
+    </message>
+    <message>
+        <location line="+13"/>
         <source>Could not switch the audio output.</source>
         <translation>Ses çıkışı değiştirilemedi.</translation>
     </message>
@@ -524,6 +539,11 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+13"/>
+        <source>Ambient sound</source>
+        <translation>Ortam sesi</translation>
+    </message>
+    <message>
+        <location line="+9"/>
         <source>Media</source>
         <translation>Medya</translation>
     </message>
@@ -531,6 +551,21 @@ Bu geri alınamaz.</translation>
         <location line="+13"/>
         <source>Mute</source>
         <translation>Sessiz</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Sound theme</source>
+        <translation>Ses teması</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>Use “%1” from the USB drive</source>
+        <translation>USB sürücüsündeki “%1” temasını kullan</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Copying…</source>
+        <translation>Kopyalanıyor…</translation>
     </message>
 </context>
 <context>
@@ -580,12 +615,12 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+45"/>
+        <location line="+44"/>
         <source>Bluetooth is off.</source>
         <translation>Bluetooth kapalı.</translation>
     </message>
     <message>
-        <location line="-44"/>
+        <location line="-43"/>
         <source>That device is no longer available.</source>
         <translation>Bu cihaz artık kullanılamıyor.</translation>
     </message>
@@ -625,7 +660,7 @@ Bu geri alınamaz.</translation>
         <translation>Bağlı</translation>
     </message>
     <message>
-        <location line="+83"/>
+        <location line="+80"/>
         <source>Pair a new controller</source>
         <translation>Yeni kontrolcü eşleştir</translation>
     </message>
@@ -635,7 +670,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 adını değiştir</translation>
     </message>
     <message>
-        <location line="-157"/>
+        <location line="-154"/>
         <source>Paired</source>
         <translation>Eşleşti</translation>
     </message>
@@ -645,12 +680,12 @@ Bu geri alınamaz.</translation>
         <translation>Pil %1%</translation>
     </message>
     <message>
-        <location line="+29"/>
+        <location line="+28"/>
         <source>Could not start looking for controllers.</source>
         <translation>Kontrolcü aramaya başlanamadı.</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+4"/>
         <source>That name does not work. Try another.</source>
         <translation>Bu ad olmaz. Başka bir ad deneyin.</translation>
     </message>
@@ -660,7 +695,7 @@ Bu geri alınamaz.</translation>
         <translation>Kontrolcünün adı değiştirilemedi.</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+9"/>
         <source>A device that is not a controller was ignored.</source>
         <translation>Kontrolcü olmayan bir cihaz yok sayıldı.</translation>
     </message>
@@ -685,8 +720,8 @@ Bu geri alınamaz.</translation>
         <translation>Taranıyor…</translation>
     </message>
     <message>
-        <location line="-105"/>
-        <location line="+200"/>
+        <location line="-102"/>
+        <location line="+197"/>
         <source>Forget %1</source>
         <translation>%1 cihazını unut</translation>
     </message>
@@ -1411,7 +1446,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 parolası</translation>
     </message>
     <message>
-        <location line="+17"/>
+        <location line="+15"/>
         <source>Could not forget the network.</source>
         <translation>Ağ unutulamadı.</translation>
     </message>
@@ -2246,7 +2281,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+346"/>
+        <location filename="../qml/Shell.qml" line="+345"/>
         <source>Could not %1.</source>
         <translation>%1 işlemi yapılamadı.</translation>
     </message>
@@ -2283,12 +2318,12 @@ Bu geri alınamaz.</translation>
         <translation>%1 yüzde %2</translation>
     </message>
     <message>
-        <location line="+583"/>
+        <location line="+590"/>
         <source>Power</source>
         <translation>Güç</translation>
     </message>
     <message>
-        <location line="-831"/>
+        <location line="-838"/>
         <source>Update ready. Restart to finish.</source>
         <translation>Güncelleme hazır. Bitirmek için yeniden başlat.</translation>
     </message>
@@ -2354,14 +2389,19 @@ Bu geri alınamaz.</translation>
         <translation>%1 başlatılıyor…</translation>
     </message>
     <message>
-        <location line="+264"/>
+        <location line="+267"/>
         <location line="+12"/>
         <location line="+3"/>
         <source>Select</source>
         <translation>Seç</translation>
     </message>
     <message>
-        <location line="-21"/>
+        <location line="+235"/>
+        <source>The chosen sound theme can&apos;t be used. The standard one plays instead.</source>
+        <translation>Seçilen ses teması kullanılamıyor. Bunun yerine standart tema çalıyor.</translation>
+    </message>
+    <message>
+        <location line="-256"/>
         <location line="+16"/>
         <source>Cancel</source>
         <translation>İptal</translation>
@@ -2372,7 +2412,7 @@ Bu geri alınamaz.</translation>
         <translation>Bölümler</translation>
     </message>
     <message>
-        <location line="+79"/>
+        <location line="+83"/>
         <location line="+8"/>
         <source>System</source>
         <translation>Sistem</translation>
@@ -2388,8 +2428,8 @@ Bu geri alınamaz.</translation>
         <translation>Profil değiştir</translation>
     </message>
     <message>
-        <location line="-111"/>
-        <location line="+113"/>
+        <location line="-115"/>
+        <location line="+117"/>
         <source>Close</source>
         <translation>Kapat</translation>
     </message>
@@ -2409,13 +2449,13 @@ Bu geri alınamaz.</translation>
         <translation>Kapat</translation>
     </message>
     <message>
-        <location line="-119"/>
-        <location line="+120"/>
+        <location line="-123"/>
+        <location line="+124"/>
         <source>Back</source>
         <translation>Geri</translation>
     </message>
     <message>
-        <location line="+110"/>
+        <location line="+109"/>
         <source>mock services</source>
         <translation>sahte hizmetler</translation>
     </message>
@@ -2459,7 +2499,7 @@ Bu geri alınamaz.</translation>
         <translation>Salt okunur</translation>
     </message>
     <message>
-        <location line="+45"/>
+        <location line="+43"/>
         <source>This console</source>
         <translation>Bu konsol</translation>
     </message>
@@ -3069,18 +3109,18 @@ Bu geri alınamaz.</translation>
     <name>SystemPane</name>
     <message>
         <location filename="../qml/SystemPane.qml" line="+133"/>
-        <location line="+270"/>
+        <location line="+269"/>
         <source>Beta</source>
         <translation>Beta</translation>
     </message>
     <message>
-        <location line="-270"/>
-        <location line="+269"/>
+        <location line="-269"/>
+        <location line="+268"/>
         <source>Stable</source>
         <translation>Kararlı</translation>
     </message>
     <message>
-        <location line="-264"/>
+        <location line="-263"/>
         <source>Last checked %1</source>
         <translation>Son kontrol: %1</translation>
     </message>
@@ -3195,7 +3235,7 @@ Bu geri alınamaz.</translation>
         <translation>Saat dilimi %1 olarak ayarlandı</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+3"/>
         <source>Could not change the time zone.</source>
         <translation>Saat dilimi değiştirilemedi.</translation>
     </message>
@@ -3210,14 +3250,14 @@ Bu geri alınamaz.</translation>
         <translation>Bu cihazda sıcaklık sensörü bulunamadı.</translation>
     </message>
     <message>
-        <location line="-181"/>
+        <location line="-180"/>
         <location line="+8"/>
-        <location line="+70"/>
+        <location line="+69"/>
         <source>Only an admin can do this.</source>
         <translation>Bunu yalnızca bir yönetici yapabilir.</translation>
     </message>
     <message>
-        <location line="-254"/>
+        <location line="-253"/>
         <source>The console is warm. Nothing needs to be done.</source>
         <translation>Konsol sıcak. Yapılması gereken bir şey yok.</translation>
     </message>
@@ -3237,7 +3277,7 @@ Bu geri alınamaz.</translation>
         <translation>Dil</translation>
     </message>
     <message>
-        <location line="+66"/>
+        <location line="+65"/>
         <source>Updates</source>
         <translation>Güncellemeler</translation>
     </message>
@@ -3473,7 +3513,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>VolumeOsd</name>
     <message>
-        <location filename="../qml/VolumeOsd.qml" line="+56"/>
+        <location filename="../qml/VolumeOsd.qml" line="+58"/>
         <source>Muted</source>
         <translation>Sessiz</translation>
     </message>
@@ -3556,7 +3596,7 @@ Bu geri alınamaz.</translation>
         <translation>Duvar kağıdı eklendi</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+4"/>
         <source>Could not add the wallpaper</source>
         <translation>Duvar kağıdı eklenemedi</translation>
     </message>

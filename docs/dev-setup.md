@@ -93,6 +93,18 @@ ssh -i $env:USERPROFILE\.ssh\ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-sam
 
 Building the sample needs `flatpak`, `flatpak-builder` and `appstream` in the WSL distribution (`dnf -y install flatpak flatpak-builder appstream`) and network for the runtime and SDK (about 1 GB, kept in the WSL user's Flatpak installation). Keep build and repository directories out of the repository (`samples/hello-game/.gitignore` covers `build-dir/`, `repo/`, `.flatpak-builder/`); `flatpak-builder` on `/mnt/d` is slow and its `rofiles-fuse` mount can be left busy by a failed build, so build in a copy under the WSL home.
 
+## Sound themes and the generator (T-227)
+
+The shell's UI sounds and ambient bed come from a sound theme (`docs/developers/sound-themes.md`, `02` §5.3). The bundled theme `shell/sounds/dreamglass/` and the example `samples/sound-theme-example/` are written by `scripts/make-sounds.py` (Python 3 with numpy; no other samples are used, so they are CC0):
+
+```powershell
+python -I scripts\make-sounds.py            # rewrite both from the numbers in the script
+python -I scripts\make-sounds.py --verify   # deterministic? within the limits? seams smooth? files up to date?
+.\scripts\lint-sound-themes.ps1             # --verify, then the shell's own checker over both themes and its fixtures
+```
+
+`dev.ps1 shell` (so `test`) runs `lint-sound-themes.ps1` after the build, because the checker is part of `ruya-shell` (`ruya-shell --check-sound-theme <folder>...`, `--check-sound-theme-fixtures`). A theme for the dev build: set `RUYA_SOUND_DIR` to a folder that holds your theme folders, and they are listed in Settings -> Audio -> Sound theme. `RUYA_SOUNDS_DIR` replaces the folder that holds the bundled theme (tests only); `RUYA_SOUNDS_DRY=1` gives the ambient players no file (the Qt Quick tests set it).
+
 ## Update / rollback drill (Phase 0 items 6–7; passed 2026-10-22)
 
 1. Boot the working disk: `.\scripts\smoke-test.ps1 -Work -Keep` (delete `output\qcow2\work.qcow2` first for a fresh one). `vm-reboot-check.ps1` needs `-Disk output\qcow2\work.qcow2` then.

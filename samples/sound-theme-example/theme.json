@@ -1,0 +1,29 @@
+{
+  "name": "Example theme",
+  "author": "The RuyaOS authors",
+  "licence": "CC0-1.0",
+  "version": "1.0.0",
+  "cues": {
+    "navigate": "navigate.wav",
+    "select": "select.wav",
+    "back": "back.wav",
+    "error": "error.wav",
+    "notification": "notification.wav",
+    "warning": "warning.wav",
+    "open": "open.wav",
+    "close": "close.wav",
+    "page": "page.wav",
+    "volume": "volume.wav",
+    "startup": "startup.wav",
+    "toggle-on": "toggle-on.wav",
+    "toggle-off": "toggle-off.wav"
+  },
+  "ambient": {
+    "file": "ambient.flac",
+    "loop": {
+      "start": 0,
+      "end": 8192
+    },
+    "gain": 0.7
+  }
+}

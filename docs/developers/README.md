@@ -14,6 +14,7 @@ For people who make games and apps for RuyaOS, a living-room console OS: control
 | [Permissions and sandbox rules](permissions-and-sandbox.md): what the Store shows to players, what is high risk, portals | **written** (2026-11-06) | portal backend for file dialogs: not started |
 | [What the console records about your game](play-time.md): the per-profile play history (times and the exit reason only), what counts as play time | **written** (2026-11-07) | parental limits: T-211; Steam's own play time: later |
 | [Audio and video](audio-and-video.md): PipeWire, the pulse route, codecs, hardware decode, HDR/VRR (not yet) | **written** (2026-11-06) | audio for profile games: B-007 |
+| [Sound themes](sound-themes.md): make the console's interface sounds and ambient bed; the theme folder, the cue list, the limits, trying one from a USB drive, the generator that makes the shipped theme (not about game audio) | **written** (2026-11-07) | listening check on a console: pending |
 | [Testing and debugging](testing-and-debugging.md): the dev image (QEMU) and hardware, the dev SSH key, logs, how to break your game on purpose | **written** (2026-11-06) | |
 | [Publishing](publishing.md): the routes today, the `ruyaos` remote and review (planned), a self-review checklist | **written** (2026-11-06); the remote and review: planned (Phase 7) | |
 | [A sample game](../../samples/hello-game/README.md) (`samples/hello-game/`, CC0): follows every chapter, builds with `flatpak-builder` | **written** (2026-11-06) | VM check pending: `scripts/vm-sample-check.sh` |

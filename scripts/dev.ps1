@@ -444,6 +444,14 @@ function Test-TestMembers {
     Record "test member lint self-check (rejects unexposed reads, accepts exposed ones)" ($allRejected -and $accepted)
 }
 
+# The rules live in scripts\lint-sound-themes.ps1 (T-227): the generator, the bundled and example
+# themes and the checker's fixtures. It runs the built ruya-shell, so it comes after the build.
+function Test-SoundThemes {
+    Step "sound themes (generator, bundled and example theme, checker fixtures)"
+    & (Join-Path $PSScriptRoot "lint-sound-themes.ps1") -Exe (Join-Path $ShellBuild "Release\ruya-shell.exe")
+    Record "sound theme lint" ($LASTEXITCODE -eq 0)
+}
+
 # The rules live in scripts\lint-icons.ps1 (shared with CI).
 function Test-Icons {
     Step "icon lint (shell\fonts\icons.txt and the Icon.qml table agree)"
@@ -468,6 +476,7 @@ function Do-Shell {
     Do-Build
     Test-Tokens
     Test-Icons
+    Test-SoundThemes
     Test-FontCoverage
     Test-Translations
     Test-QmlTests
