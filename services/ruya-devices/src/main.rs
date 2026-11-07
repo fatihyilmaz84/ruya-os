@@ -8,18 +8,19 @@ use std::sync::{Arc, Mutex};
 
 use ruya_devices::audio::{Audio, FakePipeWire};
 use ruya_devices::battery::{Batteries, FakeUPower, RawDevice, KIND_GAMING_INPUT};
-use ruya_devices::bluetooth::{Bluetooth, FakeBluez};
+use ruya_devices::bluetooth::{AgentHandler, AgentSlot, Bluetooth, FakeBluez};
 #[cfg(target_os = "linux")]
 use ruya_devices::dbus::{
-    watch, watch_batteries, watch_bluetooth, watch_installed, watch_network, watch_storage,
-    watch_thermal,
+    watch, watch_batteries, watch_bluetooth, watch_input, watch_installed, watch_network,
+    watch_storage, watch_thermal,
 };
 use ruya_devices::dbus::{
     AudioIface, BatteriesIface, BluetoothIface, DynBluez, DynNm, DynPipeWire, DynSource,
     DynThermal, DynUPower, DynUdisks, NetworkIface, Shared, SharedBatteries, SharedBluetooth,
-    SharedNet, SharedStorage, SharedThermal, SharedUsage, StorageIface, ThermalIface, BUS_NAME,
-    OBJECT_PATH,
+    SharedInput, SharedNet, SharedStorage, SharedThermal, SharedUsage, StorageIface, ThermalIface,
+    BUS_NAME, OBJECT_PATH,
 };
+use ruya_devices::input::{DynInputSource, FakeInput, InputDevice, InputPresence};
 use ruya_devices::network::{FakeNetworkManager, Network};
 use ruya_devices::storage::{FakeUdisks, RawVolume, Storage};
 use ruya_devices::store::Store;
@@ -57,13 +58,32 @@ fn network_manager(session: bool) -> Result<DynNm, Box<dyn Error>> {
     Ok(Box::new(FakeNetworkManager::new("ruya-wifi-pass")))
 }
 
-fn bluez(session: bool) -> Result<DynBluez, Box<dyn Error>> {
+/// BlueZ, and the slot where BlueZ's agent calls find the core once it exists.
+fn bluez(session: bool) -> Result<(DynBluez, AgentSlot), Box<dyn Error>> {
     #[cfg(target_os = "linux")]
     if !session {
-        return Ok(Box::new(ruya_devices::bluez::BluezClient::connect()?));
+        let client = ruya_devices::bluez::BluezClient::connect()?;
+        let slot = client.agent_slot();
+        return Ok((Box::new(client), slot));
     }
     let _ = session;
-    Ok(Box::new(FakeBluez::with_devices()))
+    Ok((Box::new(FakeBluez::with_devices()), AgentSlot::default()))
+}
+
+/// The kernel's input devices; in `--session` a keyboard is there unless
+/// `RUYA_DEVICES_NO_INPUT` is set (to try the shell's "no controller" screens).
+fn input_source(session: bool) -> DynInputSource {
+    #[cfg(target_os = "linux")]
+    if !session {
+        return Box::new(ruya_devices::input::SysfsInput::system());
+    }
+    let _ = session;
+    let devices: Vec<InputDevice> = if std::env::var_os("RUYA_DEVICES_NO_INPUT").is_some() {
+        Vec::new()
+    } else {
+        vec![FakeInput::keyboard()]
+    };
+    Box::new(FakeInput::new(devices))
 }
 
 fn upower(session: bool) -> Result<DynUPower, Box<dyn Error>> {
@@ -160,6 +180,7 @@ async fn follow_system(
     net: SharedNet,
     batteries: SharedBatteries,
     bluetooth: SharedBluetooth,
+    input: SharedInput,
     storage: SharedStorage,
     usage: SharedUsage,
     thermal: SharedThermal,
@@ -174,10 +195,13 @@ async fn follow_system(
                 futures_lite::future::zip(
                     watch_bluetooth(connection.clone(), bluetooth),
                     futures_lite::future::zip(
-                        watch_storage(connection.clone(), storage),
+                        watch_input(connection.clone(), input),
                         futures_lite::future::zip(
-                            watch_installed(connection.clone(), usage),
-                            watch_thermal(connection, thermal),
+                            watch_storage(connection.clone(), storage),
+                            futures_lite::future::zip(
+                                watch_installed(connection.clone(), usage),
+                                watch_thermal(connection, thermal),
+                            ),
                         ),
                     ),
                 ),
@@ -188,7 +212,7 @@ async fn follow_system(
     #[cfg(not(target_os = "linux"))]
     {
         let _keep = (
-            connection, audio, net, batteries, bluetooth, storage, usage, thermal,
+            connection, audio, net, batteries, bluetooth, input, storage, usage, thermal,
         );
         futures_lite::future::pending::<()>().await;
     }
@@ -220,10 +244,18 @@ fn run() -> Result<(), Box<dyn Error>> {
 
     // No adapter (or no BlueZ) is "unavailable" and an empty list; BlueZ not up yet is retried
     // by its signals.
-    let bluetooth: SharedBluetooth = Arc::new(Bluetooth::new(bluez(session)?));
+    let (bluez, agent) = bluez(session)?;
+    let bluetooth: SharedBluetooth = Arc::new(Bluetooth::new(bluez));
+    // BlueZ's questions to our agent (only while the pairing window is open) go to the core.
+    let handler: Arc<dyn AgentHandler> = bluetooth.clone();
+    let _ = agent.set(handler);
     if let Err(err) = bluetooth.refresh() {
         eprintln!("ruya-devices: BlueZ not readable yet: {}", err.0);
     }
+    // Keyboards and gamepads, from the kernel; no input at all is what the shell offers
+    // controller pairing for.
+    let input: SharedInput = Arc::new(InputPresence::new(input_source(session)));
+    input.refresh();
 
     // udisks2 not up yet is retried by its signals. The first read mounts the removable volumes
     // that are already plugged in (without announcing them as added).
@@ -259,7 +291,10 @@ fn run() -> Result<(), Box<dyn Error>> {
             .serve_at(OBJECT_PATH, AudioIface::new(audio.clone()))?
             .serve_at(OBJECT_PATH, NetworkIface::new(net.clone()))?
             .serve_at(OBJECT_PATH, BatteriesIface::new(batteries.clone()))?
-            .serve_at(OBJECT_PATH, BluetoothIface::new(bluetooth.clone()))?
+            .serve_at(
+                OBJECT_PATH,
+                BluetoothIface::new(bluetooth.clone(), input.clone()),
+            )?
             .serve_at(
                 OBJECT_PATH,
                 StorageIface::new(storage.clone(), usage.clone()),
@@ -270,12 +305,12 @@ fn run() -> Result<(), Box<dyn Error>> {
         // The fakes have nothing to follow (they change only through calls): just stay up.
         if session {
             let _keep = (
-                connection, audio, net, batteries, bluetooth, storage, usage, monitor,
+                connection, audio, net, batteries, bluetooth, input, storage, usage, monitor,
             );
             futures_lite::future::pending::<()>().await;
         } else {
             follow_system(
-                connection, audio, net, batteries, bluetooth, storage, usage, monitor,
+                connection, audio, net, batteries, bluetooth, input, storage, usage, monitor,
             )
             .await;
         }

@@ -24,9 +24,12 @@ public:
     void forget(const QString &id) override;
     void connectDevice(const QString &id) override;
     void disconnectDevice(const QString &id) override;
+    void startControllerPairing(int seconds) override;
+    void stopControllerPairing() override;
 
 private slots:
     void onDevicesChanged();
+    void onControllerRejected();
     void onPropertiesChanged(const QString &interface, const QVariantMap &changed, const QStringList &invalidated);
 
 private:

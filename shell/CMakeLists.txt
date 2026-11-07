@@ -98,6 +98,7 @@ qt_add_qml_module(ruyashell
         qml/WallpaperPicker.qml
         qml/FpsMeter.qml
         qml/ProfilePicker.qml
+        qml/ControllerPairHint.qml
         qml/ProfileCard.qml
         qml/PinPad.qml
         qml/TextEntry.qml

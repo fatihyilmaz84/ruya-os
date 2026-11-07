@@ -7,6 +7,11 @@ import RuyaShell
 //
 //   0 welcome -> 1 language -> 2 network (placeholder) -> 3 create the admin -> 4 done
 //
+// Before step 0, when the console has no keyboard or controller at all (Bluetooth.inputPresent
+// is false), comes the pairing stage (T-203): the controller pairing window is open and the
+// screen says to hold the pairing button. It ends when a controller pairs (the wizard goes on
+// to the welcome step), or with Back (skip). It is not one of the numbered steps.
+//
 // Step 3 collects a name (on-screen keyboard) and a PIN (PIN pad, entered twice), then calls
 // Profiles.createProfile with no admin credentials (the first profile needs none). The Done
 // step is the only way out (finished()), so the picker never flashes between "profile created"
@@ -26,9 +31,37 @@ FocusScope {
     // though the profile list is no longer empty.
     readonly property bool committed: busy || created
 
+    // The controller pairing stage (T-203). `pairingSkipped`: it was left, do not come back.
+    property bool pairingStage: false
+    property bool pairingSkipped: false
+    readonly property bool needsController: Bluetooth.inputKnown && !Bluetooth.inputPresent
+    onNeedsControllerChanged: maybeEnterPairing()
+
+    function maybeEnterPairing() {
+        if (!enabled || pairingStage || pairingSkipped || step !== 0 || committed || !needsController)
+            return
+        pairingStage = true
+        focusStep()
+    }
+
+    function leavePairing(skip) {
+        if (!pairingStage)
+            return
+        if (skip)
+            Sfx.back()
+        else
+            Sfx.select()
+        pairingStage = false
+        pairingSkipped = true
+        focusStep()
+    }
+
     // What A and B do on this step, for the shell's hint bar. Not on the first step (nothing
     // before it) nor once the account exists (B does nothing); the keyboard and the PIN pad take B.
     readonly property var hints: {
+        if (pairingStage)
+            return pairHint.timedOut ? [{ button: "A", text: qsTr("Try again") }, { button: "B", text: qsTr("Skip") }]
+                                     : [{ button: "B", text: qsTr("Skip") }]
         if (nameEntry.shown || pad.shown)
             return [{ button: "B", text: qsTr("Cancel") }]
         const a = { button: "A", text: step === 3 ? qsTr("Select") : qsTr("Next") }
@@ -45,7 +78,12 @@ FocusScope {
         message = ""
         busy = false
         created = false
+        // Starting again while the pairing stage shows leaves it, and its window, alone.
+        if (!(pairingStage && needsController))
+            pairingStage = false
+        pairingSkipped = false
         focusStep()
+        maybeEnterPairing()
     }
 
     function focusStep() {
@@ -89,6 +127,19 @@ FocusScope {
     }
 
     Keys.onPressed: event => {
+        if (pairingStage) {
+            // Nothing but Try again and Skip here; the pad that pairs ends the stage by itself.
+            if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter) && !event.isAutoRepeat) {
+                if (pairHint.timedOut) {
+                    Sfx.select()
+                    pairHint.retry()
+                }
+            } else if (BackKey.isBackOrBackspace(event.key) && !event.isAutoRepeat) {
+                leavePairing(true)
+            }
+            event.accepted = true
+            return
+        }
         if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
             if (step !== 3)
                 next()
@@ -104,7 +155,8 @@ FocusScope {
         focus: true
         Accessible.role: Accessible.Pane
         // Per step, so a screen reader says where the wizard is (steps 1 and 3 focus their own rows).
-        Accessible.name: setup.step === 4 ? qsTr("You're all set")
+        Accessible.name: setup.pairingStage ? qsTr("Connect a controller")
+                       : setup.step === 4 ? qsTr("You're all set")
                        : setup.step === 2 ? qsTr("Network")
                        : qsTr("Welcome to RuyaOS")
     }
@@ -149,6 +201,7 @@ FocusScope {
 
     // ---- progress ----
     Column {
+        visible: !setup.pairingStage
         anchors { top: parent.top; topMargin: 2 * Theme.spaceXxxl * setup.u; horizontalCenter: parent.horizontalCenter }
         spacing: Theme.spaceS * setup.u
 
@@ -177,10 +230,42 @@ FocusScope {
         }
     }
 
+    // ---- pairing stage: no keyboard or controller yet ----
+    Column {
+        objectName: "setupPairing"
+        visible: setup.pairingStage
+        anchors.centerIn: parent
+        width: 1000 * setup.u
+        spacing: Theme.spaceM * setup.u
+        Text {
+            objectName: "setupPairingTitle"
+            width: parent.width
+            horizontalAlignment: Text.AlignHCenter
+            text: qsTr("Connect a controller")
+            color: Theme.text
+            font.pixelSize: Theme.typeDisplay * setup.u
+            font.weight: Theme.weightLight
+        }
+        ControllerPairHint {
+            id: pairHint
+            objectName: "setupPairHint"
+            width: parent.width
+            u: setup.u
+            active: setup.pairingStage && setup.enabled
+            onPaired: setup.leavePairing(false)
+        }
+        Pill {
+            objectName: "setupPairRetry"
+            anchors.horizontalCenter: parent.horizontalCenter
+            visible: pairHint.timedOut
+            label: qsTr("Press A to try again")
+        }
+    }
+
     // ---- step 0: welcome ----
     Column {
         objectName: "setupWelcome"
-        visible: setup.step === 0
+        visible: setup.step === 0 && !setup.pairingStage
         anchors.centerIn: parent
         width: 1000 * setup.u
         spacing: Theme.spaceM * setup.u

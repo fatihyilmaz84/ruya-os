@@ -37,8 +37,12 @@
                       itself after 20 s, before the D-Bus default call timeout (25 s), so clients
                       keep the default timeout and Pair/Connect always get a status, never a
                       D-Bus error. The pairing is cancelled when it times out.
-    "unavailable"     Bluetooth is off or there is no adapter (StartScan, Pair, Connect)
-    "invalid"         malformed argument (an empty id)
+    "unavailable"     Bluetooth is off or there is no adapter (StartScan, Pair, Connect,
+                      StartControllerPairing)
+    "invalid"         malformed argument (an empty id; a controller-pairing window longer than 300 s)
+    "busy"            a controller-pairing window is already open (StartControllerPairing)
+    "refused"         the caller is neither root nor the user the service runs as
+                      (StartControllerPairing, StopControllerPairing)
     "failed"          internal error, or Connect/Disconnect on a device that is not paired
 
   org.ruyaos.Devices1.Storage status strings (udisks2 behind it, statvfs for GetSystemUsage; nothing is ever run from a volume):
@@ -238,6 +242,70 @@
 
     <!-- A device appeared, disappeared or changed (connected, battery, ...); call ListDevices again. -->
     <signal name="DevicesChanged"/>
+
+    <!--
+      Controller pairing window (T-203): pairing a controller with no keyboard, from the first-boot
+      wizard, the profile picker or Settings. While the window is open the adapter is pairable
+      (never discoverable: a pad in pairing mode advertises and is found by the scan, a bonded pad
+      pages the console), a scan runs, and a BlueZ agent (capability NoInputNoOutput, "just works")
+      is registered. The service then
+        - accepts an incoming pairing only from an input device (Class of Device major class
+          Peripheral 0x05: gamepad, keyboard, mouse; for a device without a class, a Bluetooth LE
+          appearance in the HID category), marks it trusted and lets the HID connection through;
+        - pairs, trusts and connects, by itself, a gamepad that the scan finds in pairing mode;
+        - rejects everything else (audio, phones, unknown classes), and every request for a PIN
+          or passkey (PIN pairing is not part of this window);
+        - removes (Adapter1.RemoveDevice) any device that has bonded during the window and is not an
+          input device, and announces it with ControllerPairingRejected: with this agent the kernel
+          accepts a just-works pairing by itself and BlueZ never asks the agent.
+      Residual risk: the class and the appearance are told by the remote device, so a device that
+      claims an input class inside the window can bond, be trusted and act as a keyboard or pad.
+      The window is short, never open by default, not discoverable, capped when the shell reopens
+      it by itself, and sweeps strangers; it is not a defence against a spoofing device in range.
+      The window closes by itself when a controller has paired, when its seconds are up, or on
+      StopControllerPairing, and then the adapter's Pairable is what it was before and the agent is
+      gone. When the service starts it switches Pairable and Discoverable off, in case a crashed
+      one left them on.
+    -->
+
+    <!--
+      "idle"     no window is open and none ended since the last start/stop
+      "open"     the window is open: hold the controller's pairing button
+      "paired"   the last window ended because a controller paired (until the next start/stop)
+      "timeout"  the last window ended because its time was up (until the next start/stop)
+    -->
+    <property name="ControllerPairingState" type="s" access="read">
+      <annotation name="org.freedesktop.DBus.Property.EmitsChangedSignal" value="true"/>
+    </property>
+
+    <!--
+      A keyboard or a gamepad is connected, over USB or Bluetooth (the console's own virtual
+      navigation keyboard does not count). The shell offers controller pairing when it is false.
+      Read from the kernel's input devices every two seconds; kept on this interface because the
+      shell asks it for the sake of the pairing window.
+    -->
+    <property name="InputPresent" type="b" access="read">
+      <annotation name="org.freedesktop.DBus.Property.EmitsChangedSignal" value="true"/>
+    </property>
+
+    <!--
+      Open the window for `seconds` (0 = the default, 120; at most 300). Status: "ok",
+      "unavailable", "invalid", "busy" (a window is open already; it is not changed), "refused"
+      (caller), "failed" (the agent or the adapter refused). Only root and the user the service
+      runs as (ruya-shell) may call it.
+    -->
+    <method name="StartControllerPairing">
+      <arg name="seconds" type="u" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <!-- Close the window now ("ok" also when none is open; the state becomes "idle"). Same callers. -->
+    <method name="StopControllerPairing">
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <!-- A device that is not an input device tried to pair during the window and was refused. -->
+    <signal name="ControllerPairingRejected"/>
 
   </interface>
   <interface name="org.ruyaos.Devices1.Storage">

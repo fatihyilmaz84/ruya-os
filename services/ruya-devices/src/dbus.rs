@@ -9,9 +9,10 @@ use blocking::unblock;
 #[cfg(target_os = "linux")]
 use futures_lite::future;
 use futures_lite::StreamExt;
+use zbus::message::Header;
 use zbus::object_server::SignalEmitter;
 use zbus::zvariant::{OwnedValue, Value};
-use zbus::{interface, Connection, MatchRule, MessageStream};
+use zbus::{fdo, interface, Connection, MatchRule, MessageStream};
 
 use crate::audio::Audio;
 #[cfg(target_os = "linux")]
@@ -19,6 +20,7 @@ use crate::audio::Changes;
 use crate::battery::{Batteries, UPower};
 use crate::bluetooth::{self, Bluetooth, Bluez, BtError};
 use crate::debounce;
+use crate::input::InputPresence;
 use crate::network::{self, Network, NetworkManager};
 use crate::storage::{self, Storage, Udisks};
 use crate::sysusage::{MonotonicClock, Refresh, SystemSource, SystemUsage};
@@ -490,6 +492,15 @@ impl Bluez for DynBluez {
     fn set_pairable(&self, on: bool) -> Result<(), BtError> {
         (**self).set_pairable(on)
     }
+    fn set_discoverable(&self, on: bool) -> Result<(), BtError> {
+        (**self).set_discoverable(on)
+    }
+    fn register_agent(&self) -> Result<(), BtError> {
+        (**self).register_agent()
+    }
+    fn unregister_agent(&self) -> Result<(), BtError> {
+        (**self).unregister_agent()
+    }
     fn start_discovery(&self) -> Result<(), BtError> {
         (**self).start_discovery()
     }
@@ -515,13 +526,44 @@ impl Bluez for DynBluez {
 
 pub type SharedBluetooth = Arc<Bluetooth<DynBluez>>;
 
+/// Whether a keyboard or a gamepad is connected (`InputPresent`).
+pub type SharedInput = Arc<InputPresence<crate::input::DynInputSource>>;
+
+/// How often the kernel's input devices are looked at. `ruya-inputd` rescans at the same pace.
+#[cfg(target_os = "linux")]
+const INPUT_POLL: Duration = Duration::from_secs(2);
+
 pub struct BluetoothIface {
     bt: SharedBluetooth,
+    input: SharedInput,
+}
+
+/// Root and the user the service runs as may open the controller pairing window (the bus policy
+/// lets no one else call at all; this is the service's own check). Fails closed.
+async fn caller_may_pair(header: &Header<'_>, connection: &Connection) -> bool {
+    let Some(sender) = header.sender() else {
+        return false;
+    };
+    let Ok(bus) = fdo::DBusProxy::new(connection).await else {
+        return false;
+    };
+    let caller = bus
+        .get_connection_unix_user(sender.clone().into())
+        .await
+        .ok();
+    let own = match connection.unique_name() {
+        Some(name) => bus
+            .get_connection_unix_user(name.inner().clone().into())
+            .await
+            .ok(),
+        None => None,
+    };
+    crate::pairing::caller_allowed(caller, own)
 }
 
 impl BluetoothIface {
-    pub fn new(bt: SharedBluetooth) -> Self {
-        BluetoothIface { bt }
+    pub fn new(bt: SharedBluetooth, input: SharedInput) -> Self {
+        BluetoothIface { bt, input }
     }
 
     async fn emit(&self, emitter: &SignalEmitter<'_>, changes: &bluetooth::Changes) {
@@ -534,6 +576,12 @@ impl BluetoothIface {
             }
             if changes.devices {
                 Self::devices_changed(emitter).await?;
+            }
+            if changes.pairing {
+                self.controller_pairing_state_changed(emitter).await?;
+            }
+            if changes.rejected {
+                Self::controller_pairing_rejected(emitter).await?;
             }
             Ok::<(), zbus::Error>(())
         }
@@ -660,6 +708,47 @@ impl BluetoothIface {
 
     #[zbus(signal)]
     async fn devices_changed(emitter: &SignalEmitter<'_>) -> zbus::Result<()>;
+
+    #[zbus(property)]
+    fn controller_pairing_state(&self) -> String {
+        self.bt.pairing_state().as_str().to_owned()
+    }
+
+    #[zbus(property)]
+    fn input_present(&self) -> bool {
+        self.input.present()
+    }
+
+    async fn start_controller_pairing(
+        &self,
+        seconds: u32,
+        #[zbus(header)] header: Header<'_>,
+        #[zbus(connection)] connection: &Connection,
+        #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
+    ) -> String {
+        let allowed = caller_may_pair(&header, connection).await;
+        let bt = self.bt.clone();
+        let status =
+            unblock(move || bt.start_controller_pairing(Instant::now(), seconds, allowed)).await;
+        self.settle(&emitter).await;
+        status.as_str().to_owned()
+    }
+
+    async fn stop_controller_pairing(
+        &self,
+        #[zbus(header)] header: Header<'_>,
+        #[zbus(connection)] connection: &Connection,
+        #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
+    ) -> String {
+        let allowed = caller_may_pair(&header, connection).await;
+        let bt = self.bt.clone();
+        let status = unblock(move || bt.stop_controller_pairing(allowed)).await;
+        self.settle(&emitter).await;
+        status.as_str().to_owned()
+    }
+
+    #[zbus(signal)]
+    async fn controller_pairing_rejected(emitter: &SignalEmitter<'_>) -> zbus::Result<()>;
 }
 
 #[cfg(target_os = "linux")]
@@ -699,9 +788,25 @@ pub async fn watch_bluetooth(connection: Connection, bt: SharedBluetooth) {
         }
     };
     let mut stream = futures_lite::stream::or(signals, owner);
+    // Things that happen outside any call (the agent refuses a device, the window pairs a pad
+    // by itself) are announced from here.
+    {
+        let (bt, connection) = (bt.clone(), connection.clone());
+        bt.clone()
+            .set_notifier(Arc::new(move || match bt.refresh() {
+                Ok(changes) if changes.any() => {
+                    if let Err(err) = future::block_on(announce_bluetooth(&connection, &changes)) {
+                        eprintln!("ruya-devices: emitting Bluetooth signals failed: {err}");
+                    }
+                }
+                Ok(_) => {}
+                Err(err) => eprintln!("ruya-devices: reading BlueZ failed: {}", err.0),
+            }));
+    }
     loop {
-        // Either a BlueZ signal or the end of the scan we started, whichever comes first.
-        let deadline = bt.scan_deadline();
+        // A BlueZ signal, the end of the scan we started, or the end of the pairing window,
+        // whichever comes first.
+        let deadline = next_deadline(&bt);
         let event = future::or(
             async {
                 if stream.next().await.is_some() {
@@ -729,18 +834,35 @@ pub async fn watch_bluetooth(connection: Connection, bt: SharedBluetooth) {
                     &mut stream,
                     debounce::QUIET,
                     debounce::MAX_WAIT,
-                    bt.scan_deadline(),
+                    next_deadline(&bt),
                 )
                 .await;
             }
             Wake::ScanOver => {}
             Wake::Closed => return,
         }
-        // Ends the scan if its time is up (a no-op otherwise), whatever woke us.
+        // Ends the scan and the window if their time is up (a no-op otherwise), whatever woke us.
         let bt2 = bt.clone();
         unblock(move || bt2.tick(Instant::now())).await;
         let bt2 = bt.clone();
-        match unblock(move || bt2.refresh()).await {
+        // Read, then let the window look at what was read (a controller paired, a gamepad in
+        // pairing mode); what that changed is announced with the rest.
+        let read = unblock(move || {
+            let changes = bt2.refresh();
+            let next = bt2.pump();
+            (changes.map(|c| c.merge(bt2.take_pending())), bt2, next)
+        })
+        .await;
+        let (changes, bt2, next) = read;
+        if let Some(address) = next {
+            // Pairing takes seconds: not in this loop. It announces its result itself.
+            unblock(move || {
+                bt2.window_pair(&address, Instant::now);
+                bt2.notify();
+            })
+            .detach();
+        }
+        match changes {
             Ok(changes) if changes.any() => {
                 if let Err(err) = announce_bluetooth(&connection, &changes).await {
                     eprintln!("ruya-devices: emitting Bluetooth signals failed: {err}");
@@ -748,6 +870,40 @@ pub async fn watch_bluetooth(connection: Connection, bt: SharedBluetooth) {
             }
             Ok(_) => {}
             Err(err) => eprintln!("ruya-devices: reading BlueZ failed: {}", err.0),
+        }
+    }
+}
+
+/// The earlier of the end of the scan we started and the end of the pairing window.
+#[cfg(target_os = "linux")]
+fn next_deadline(bt: &SharedBluetooth) -> Option<Instant> {
+    [bt.scan_deadline(), bt.window_deadline()]
+        .into_iter()
+        .flatten()
+        .min()
+}
+
+/// Looks at the kernel's input devices every `INPUT_POLL` and announces `InputPresent` when it
+/// changed. Runs forever.
+#[cfg(target_os = "linux")]
+pub async fn watch_input(connection: Connection, input: SharedInput) {
+    loop {
+        async_io::Timer::after(INPUT_POLL).await;
+        let input2 = input.clone();
+        if !unblock(move || input2.refresh()).await {
+            continue;
+        }
+        let announced = async {
+            let iface = connection
+                .object_server()
+                .interface::<_, BluetoothIface>(OBJECT_PATH)
+                .await?;
+            let this = iface.get().await;
+            this.input_present_changed(iface.signal_emitter()).await
+        }
+        .await;
+        if let Err(err) = announced {
+            eprintln!("ruya-devices: emitting InputPresent failed: {err}");
         }
     }
 }

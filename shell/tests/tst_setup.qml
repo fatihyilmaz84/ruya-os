@@ -30,6 +30,8 @@ Item {
 
         function init() {
             verify(windowGuard.ensureActive() === "", windowGuard.ensureActive())
+            Bluetooth.mockReset()
+            tryVerify(() => Bluetooth.inputKnown && Bluetooth.inputPresent && Bluetooth.controllerPairing === "idle")
             Profiles.lock()
             Profiles.resetMockForTests("empty")
             tryVerify(() => Profiles.profiles.length === 0)
@@ -333,9 +335,135 @@ Item {
             compare(hintsShown(), "A Next", "done: the account exists, no Back")
         }
 
+        // ---- T-203: pairing a controller with no keyboard ----
+
+        function pairingVisible() { return find("setupPairing").visible }
+
+        // The console has no input device: the wizard starts with the pairing stage.
+        function startWithoutInput(script) {
+            Bluetooth.mockSetInputPresent(false)
+            Bluetooth.mockPairingScript(script)
+            tryVerify(() => !Bluetooth.inputPresent)
+            startShell()
+        }
+
+        function test_no_pairing_stage_when_an_input_device_exists() {
+            startShell()
+            tryVerify(() => setup().visible)
+            verify(Bluetooth.inputPresent && Bluetooth.inputKnown)
+            verify(!pairingVisible(), "no controller step")
+            verify(find("setupWelcome").visible)
+            compare(Bluetooth.mockPairingStarts(), 0, "the window was never opened")
+            compare(Bluetooth.controllerPairing, "idle")
+            compare(hintsShown(), "A Next")
+        }
+
+        function test_pairing_stage_comes_first_when_there_is_no_input_device() {
+            startWithoutInput("wait")
+            tryVerify(() => pairingVisible(), 2000, "the controller step is shown")
+            verify(!find("setupWelcome").visible, "instead of the welcome step")
+            compare(setup().step, 0)
+            verify(setup().activeFocus, "the wizard keeps focus")
+            tryCompare(Bluetooth, "controllerPairing", "open")
+            compare(Bluetooth.mockPairingStarts(), 1)
+            verify(find("setupPairHintText").text.indexOf("Hold the pairing button") >= 0)
+            verify(!find("setupPairRetry").visible, "nothing to retry while waiting")
+            compare(hintsShown(), "B Skip")
+        }
+
+        function test_a_controller_that_pairs_moves_the_wizard_on_and_works() {
+            startWithoutInput("success")
+            tryVerify(() => pairingVisible(), 2000)
+            tryVerify(() => !pairingVisible(), 4000, "the step is left when the controller has paired")
+            verify(find("setupWelcome").visible)
+            verify(setup().activeFocus)
+            const pad = Bluetooth.devices.find(d => d.id === "bt-pad-new")
+            verify(pad && pad.paired && pad.connected, "the controller is paired and connected")
+            tryCompare(Bluetooth, "controllerPairing", "idle", 2000, "the window is closed")
+            compare(hintsShown(), "A Next", "the numbered steps are as before")
+            // the new controller can go on: A is Accept
+            keyClick(Qt.Key_Return)
+            tryCompare(setup(), "step", 1)
+            tryVerify(() => find("setupLanguageRow").activeFocus)
+            compare(find("setupStepLabel").text, "Step 2 of 5")
+        }
+
+        function test_a_timeout_offers_retry_with_the_pad() {
+            startWithoutInput("timeout")
+            tryVerify(() => find("setupPairRetry").visible, 4000, "Try again is offered")
+            compare(Bluetooth.controllerPairing, "timeout")
+            verify(pairingVisible(), "still on the step")
+            verify(find("setupPairHintText").text.indexOf("No controller was found") >= 0)
+            compare(hintsShown(), "A Try again|B Skip")
+            compare(Bluetooth.mockPairingStarts(), 1)
+            Bluetooth.mockPairingScript("success")
+            keyClick(Qt.Key_Return)                           // Try again
+            tryVerify(() => !pairingVisible(), 4000, "the second window found the controller")
+            compare(Bluetooth.mockPairingStarts(), 2)
+            verify(find("setupWelcome").visible)
+        }
+
+        function test_back_skips_the_stage_for_good() {
+            startWithoutInput("wait")
+            tryCompare(Bluetooth, "controllerPairing", "open")
+            keyClick(Qt.Key_Escape)                           // B
+            tryVerify(() => !pairingVisible(), 2000)
+            verify(find("setupWelcome").visible)
+            tryCompare(Bluetooth, "controllerPairing", "idle", 2000, "leaving closes the window")
+            verify(setup().activeFocus)
+            // the stage does not come back, and the rest of the wizard works
+            wait(300)
+            verify(!pairingVisible())
+            keyClick(Qt.Key_Return)
+            tryCompare(setup(), "step", 1)
+            keyClick(Qt.Key_Escape)
+            tryCompare(setup(), "step", 0)
+            verify(!pairingVisible(), "Back from step 1 goes to the welcome step, not to the pairing stage")
+            compare(Bluetooth.mockPairingStarts(), 1)
+        }
+
+        function test_a_keyboard_plugged_in_ends_the_stage() {
+            startWithoutInput("wait")
+            tryVerify(() => pairingVisible(), 2000)
+            tryCompare(Bluetooth, "controllerPairing", "open")
+            Bluetooth.mockSetInputPresent(true)
+            tryVerify(() => !pairingVisible(), 2000)
+            verify(find("setupWelcome").visible)
+            tryCompare(Bluetooth, "controllerPairing", "idle", 2000)
+        }
+
+        function test_a_device_that_is_not_a_controller_is_said_to_be_ignored() {
+            startWithoutInput("rejected")
+            tryVerify(() => find("setupPairHintIgnored").visible, 3000, "the rejected device is mentioned")
+            verify(pairingVisible(), "the window stays open")
+            compare(Bluetooth.controllerPairing, "open")
+        }
+
+        function test_a_stage_that_is_not_the_wizards_turn_does_not_steal_focus() {
+            // seeded profiles: the picker is up, the wizard is hidden. No input device appears.
+            Profiles.resetMockForTests("seeded")
+            tryVerify(() => Profiles.profiles.length === 3)
+            startShell()
+            tryVerify(() => find("profileList").activeFocus)
+            Bluetooth.mockSetInputPresent(false)
+            tryVerify(() => !Bluetooth.inputPresent)
+            verify(!setup().visible && !setup().pairingStage, "the wizard stays out of it")
+            tryVerify(() => find("profileList").activeFocus, 2000, "the picker keeps focus")
+        }
+
         function test_zz_screenshots() {
             if (!shotsDir)
                 skip("set RUYA_SHOTS_DIR to save screenshots")
+            startWithoutInput("wait")
+            tryVerify(() => pairingVisible(), 2000)
+            tryCompare(Bluetooth, "controllerPairing", "open")
+            wait(600)
+            grabImage(tc.shell).save(shotsDir + "/13-setup-controller.png")
+            Bluetooth.mockSetInputPresent(true)
+            tryVerify(() => !pairingVisible(), 2000)
+            tc.shell.destroy()
+            Bluetooth.mockReset()
+            tryVerify(() => Bluetooth.inputPresent)
             startShell()
             wait(600)
             grabImage(tc.shell).save(shotsDir + "/11-setup-welcome.png")
