@@ -32,36 +32,46 @@ Batteries *Batteries::create(QQmlEngine *, QJSEngine *)
     return new Batteries(std::move(backend));
 }
 
-void Batteries::apply(const QList<ControllerBattery> &list)
+void Batteries::apply(const QList<DeviceBattery> &input)
 {
-    QVariantList out;
-    for (const ControllerBattery &c : list) {
-        out.append(QVariantMap{
+    // Lowest first; on a tie the discharging one (it is the one that will run out), then by id.
+    QList<DeviceBattery> list;
+    for (const DeviceBattery &c : input) {
+        if (c.percent >= 0) // a device without a reading has no chip
+            list.append(c);
+    }
+    const auto discharging = [](const DeviceBattery &c) { return c.state == QLatin1String("discharging"); };
+    std::stable_sort(list.begin(), list.end(), [&](const DeviceBattery &a, const DeviceBattery &b) {
+        if (a.percent != b.percent)
+            return a.percent < b.percent;
+        if (discharging(a) != discharging(b))
+            return discharging(a);
+        return a.id < b.id;
+    });
+    QVariantList devices;
+    QVariantList shown;
+    for (const DeviceBattery &c : list) {
+        const bool low = discharging(c) && c.percent <= LowBatteryPercent;
+        const QVariantMap entry{
             {QStringLiteral("id"), c.id},
             {QStringLiteral("name"), c.name},
+            {QStringLiteral("kind"), c.kind},
             {QStringLiteral("percent"), c.percent},
             {QStringLiteral("state"), c.state},
-        });
+            {QStringLiteral("low"), low},
+        };
+        devices.append(entry);
+        // A full battery on the charger is not news: no chip (it comes back when it is unplugged).
+        const bool onCharger = c.state == QLatin1String("charging") || c.state == QLatin1String("full");
+        if (!(onCharger && c.percent >= 100))
+            shown.append(entry);
     }
-    // The cluster shows the lowest pad; on a tie, or when that pad is charging, the discharging one
-    // (lowest of those), so the warning colour agrees with the low-battery toast.
-    const auto discharging = [](const ControllerBattery &c) { return c.state == QLatin1String("discharging"); };
-    const ControllerBattery *shown = nullptr;
-    for (const ControllerBattery &c : list) {
-        if (!shown || c.percent < shown->percent)
-            shown = &c;
-    }
-    if (shown && !discharging(*shown)) {
-        for (const ControllerBattery &c : list) {
-            if (discharging(c) && (!discharging(*shown) || c.percent < shown->percent))
-                shown = &c;
-        }
-    }
-    const int lowest = shown ? shown->percent : -1;
-    const QString lowestState = shown ? shown->state : QString();
-    // The low-battery rule first, so a listener of controllersChanged sees the toast's reason.
-    for (const ControllerBattery &c : list) {
-        const bool low = c.state == QLatin1String("discharging") && c.percent <= LowBatteryPercent;
+    const QVariantList chips = shown.mid(0, MaxChips);
+    const QVariantList more = shown.mid(MaxChips);
+    // The low-battery rule first, so a listener of devicesChanged sees the toast's reason. Only
+    // controllers: the other kinds are Bluetooth.batteryLow's.
+    for (const DeviceBattery &c : list) {
+        const bool low = c.kind == QLatin1String("controller") && discharging(c) && c.percent <= LowBatteryPercent;
         if (!low) {
             m_lowReported.remove(c.id);
         } else if (!m_lowReported.contains(c.id)) {
@@ -71,28 +81,28 @@ void Batteries::apply(const QList<ControllerBattery> &list)
     }
     const QSet<QString> reported = m_lowReported; // forget controllers that left the list
     for (const QString &id : reported) {
-        const bool listed = std::any_of(list.begin(), list.end(), [&id](const ControllerBattery &c) { return c.id == id; });
+        const bool listed = std::any_of(list.begin(), list.end(), [&id](const DeviceBattery &c) { return c.id == id; });
         if (!listed)
             m_lowReported.remove(id);
     }
-    if (out == m_controllers)
+    if (devices == m_devices)
         return;
-    m_controllers = out;
-    m_lowest = lowest;
-    m_lowestState = lowestState;
-    emit controllersChanged();
+    m_devices = devices;
+    m_chips = chips;
+    m_more = more;
+    emit devicesChanged();
 }
 
-void Batteries::mockSet(const QString &id, int percent, const QString &state)
+void Batteries::mockSet(const QString &id, int percent, const QString &state, const QString &kind, const QString &name)
 {
     if (auto *mock = qobject_cast<MockBatteryBackend *>(m_backend.get()))
-        mock->setController(id, percent, state);
+        mock->setDevice(id, percent, state, kind, name);
 }
 
 void Batteries::mockRemove(const QString &id)
 {
     if (auto *mock = qobject_cast<MockBatteryBackend *>(m_backend.get()))
-        mock->removeController(id);
+        mock->removeDevice(id);
 }
 
 void Batteries::mockClear()
@@ -105,6 +115,12 @@ void Batteries::mockReset()
 {
     if (auto *mock = qobject_cast<MockBatteryBackend *>(m_backend.get()))
         mock->reset();
+}
+
+void Batteries::mockPopulate()
+{
+    if (auto *mock = qobject_cast<MockBatteryBackend *>(m_backend.get()))
+        mock->populate();
 }
 
 void Batteries::mockRefreshDelayed(int ms)

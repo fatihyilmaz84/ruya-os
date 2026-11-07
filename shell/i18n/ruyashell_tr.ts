@@ -300,6 +300,24 @@
     </message>
 </context>
 <context>
+    <name>BatteryChip</name>
+    <message>
+        <location filename="../qml/BatteryChip.qml" line="+62"/>
+        <source>%1 battery %2 percent, low</source>
+        <translation>%1 pili yüzde %2, düşük</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>%1 battery %2 percent, charging</source>
+        <translation>%1 pili yüzde %2, şarj oluyor</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>%1 battery %2 percent</source>
+        <translation>%1 pili yüzde %2</translation>
+    </message>
+</context>
+<context>
     <name>BluetoothPane</name>
     <message>
         <location filename="../qml/BluetoothPane.qml" line="+89"/>
@@ -1385,13 +1403,25 @@
         <source>Audio output: %1</source>
         <translation>Ses çıkışı: %1</translation>
     </message>
+    <message numerus="yes">
+        <location line="+180"/>
+        <source>%n more device(s) with a battery: %1</source>
+        <translation>
+            <numerusform>Pili olan %n cihaz daha: %1</numerusform>
+        </translation>
+    </message>
     <message>
-        <location line="+720"/>
+        <location line="+1"/>
+        <source>%1 %2 percent</source>
+        <translation>%1 yüzde %2</translation>
+    </message>
+    <message>
+        <location line="+545"/>
         <source>Power</source>
         <translation>Güç</translation>
     </message>
     <message>
-        <location line="-712"/>
+        <location line="-718"/>
         <source>Update ready. Restart to finish.</source>
         <translation>Güncelleme hazır. Bitirmek için yeniden başlat.</translation>
     </message>
@@ -1411,12 +1441,7 @@
         <translation>Duvar kağıdı yüklenemedi</translation>
     </message>
     <message>
-        <location line="+84"/>
-        <source>Controller battery %1%</source>
-        <translation>Kumanda pili %1%</translation>
-    </message>
-    <message>
-        <location line="+121"/>
+        <location line="+211"/>
         <source>Continue playing</source>
         <translation>Oynamaya devam et</translation>
     </message>

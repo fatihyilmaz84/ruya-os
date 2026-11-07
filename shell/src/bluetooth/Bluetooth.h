@@ -31,9 +31,8 @@ class Bluetooth : public QObject
     Q_PROPERTY(bool mock READ isMock CONSTANT)
 
 public:
-    // A connected device (not a controller: Batteries reports those) under this battery level is
-    // reported once by batteryLow().
-    static constexpr int LowBatteryPercent = 15;
+    // A connected device (not a controller: Batteries reports those) at or under
+    // Batteries::LowBatteryPercent is reported once by batteryLow().
     // How long the window the shell opens stays open (the service's default).
     static constexpr int ControllerPairingSeconds = 120;
 
@@ -89,7 +88,7 @@ signals:
     // op: "power" | "scan" | "pair" | "forget" | "connect" | "disconnect" | "controller-pairing"; status: see
     // api/dbus/org.ruyaos.Devices1.xml
     void finished(const QString &op, const QString &id, const QString &status);
-    // A connected device's battery fell under LowBatteryPercent; once per crossing.
+    // A connected device's battery fell to Batteries::LowBatteryPercent or less; once per crossing.
     void batteryLow(const QString &id, const QString &name, int percent);
 
 private:

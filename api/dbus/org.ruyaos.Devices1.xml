@@ -1,7 +1,7 @@
 <!DOCTYPE node PUBLIC "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
  "http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
 <!--
-  org.ruyaos.Devices1 — audio outputs and volumes, the network, Bluetooth, storage, controller batteries and temperatures.
+  org.ruyaos.Devices1 — audio outputs and volumes, the network, Bluetooth, storage, device batteries and temperatures.
   Served by ruya-devices on the system bus at /org/ruyaos/Devices1 (blocker B-007: the service
   has Audio, Network, Bluetooth and Batteries; the shell's mock backends follow this contract).
   Contract between shell (Qt/QML) and services (Rust); see docs/specs/03-services-and-apps.md §2.3.
@@ -393,21 +393,25 @@
   <interface name="org.ruyaos.Devices1.Batteries">
 
     <!--
-      Batteries of gaming controllers (UPower device type "gaming input"), sorted by id. The PC's
-      own battery, mice, keyboards and headsets are not listed. One dictionary per controller:
+      Batteries of wireless peripherals (UPower behind it), sorted by id: gaming controllers,
+      headsets and headphones, speakers, mice, keyboards, remotes and other Bluetooth devices
+      (T-223; until then controllers only). The PC's own battery, power supplies, UPSs, monitors
+      and phones are not listed. One dictionary per device:
         id       s   stable id, opaque to the shell (the UPower object path)
-        name     s   display name (the device model; "Controller" when it has none)
+        name     s   display name (the device model; a word for the kind when it has none)
+        kind     s   "controller" | "headset" | "speaker" | "mouse" | "keyboard" | "other"
         percent  u   0-100
         state    s   "charging" | "discharging" | "full" | "unknown"
-      A controller that has no battery reading, or is gone, is not listed. A controller can also
+      A device that has no battery reading, or is gone, is not listed. A Bluetooth device can also
       be in Devices1.Bluetooth.ListDevices (with its own "battery"); this list is the one the
-      status cluster and the low-battery toast use for controllers.
+      status cluster uses for every kind, and the low-battery toast for controllers (the other
+      kinds toast through Bluetooth).
     -->
     <method name="ListBatteries">
       <arg name="batteries" type="aa{sv}" direction="out"/>
     </method>
 
-    <!-- A controller appeared, disappeared or changed (percent, state); call ListBatteries again. -->
+    <!-- A device appeared, disappeared or changed (percent, state); call ListBatteries again. -->
     <signal name="BatteriesChanged"/>
 
   </interface>
