@@ -104,6 +104,9 @@ impl UPowerClient {
                 model: text(&d, "Model"),
                 percentage: float(&d, "Percentage"),
                 state: num(&d, "State"),
+                serial: text(&d, "Serial"),
+                native_path: text(&d, "NativePath"),
+                vendor: text(&d, "Vendor"),
             });
         }
         Ok(out)

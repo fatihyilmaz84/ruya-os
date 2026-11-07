@@ -31,6 +31,34 @@ QtObject {
         return "bluetooth"
     }
 
+    // A name a device gave itself, made fit for one line: control characters (a newline), bidirectional
+    // controls and zero-width characters become nothing, runs of white space one space. It is still
+    // text from outside: draw it with `textFormat: Text.PlainText`, never as markup.
+    // Keep in step with `pairing::clean_name` / `is_format_char` (services/ruya-devices/src/pairing.rs).
+    function plain(raw) {
+        let out = ""
+        for (const ch of String(raw ?? "")) {
+            const c = ch.codePointAt(0)
+            const hidden = c < 32 || (c >= 127 && c <= 159) || c === 0xad || c === 0x61c || c === 0x180e
+                           || (c >= 0x200b && c <= 0x200f) || (c >= 0x202a && c <= 0x202e)
+                           || (c >= 0x2060 && c <= 0x206f) || c === 0xfeff
+            out += hidden ? " " : ch
+        }
+        return out.replace(/ +/g, " ").trim()
+    }
+
+    // What to call a pad that connected: the alias of the Bluetooth device with that address (what the
+    // user renamed it to), else the family's words, else the name the pad gave itself.
+    function padName(id, name, family) {
+        const wanted = String(id).toLowerCase()
+        const paired = Bluetooth.devices.find(d => d.id.toLowerCase() === wanted)
+        if (paired)
+            return plain(paired.name)
+        if (family !== "")
+            return kindText("controller", family)
+        return plain(name)
+    }
+
     // The kind in words, for a screen reader and for text ("PlayStation controller", "Headset").
     function kindText(kind, family) {
         switch (kind) {
@@ -39,6 +67,7 @@ QtObject {
             case "playstation": return qsTr("PlayStation controller")
             case "xbox": return qsTr("Xbox controller")
             case "nintendo": return qsTr("Nintendo controller")
+            case "8bitdo": return qsTr("8BitDo controller")
             }
             return qsTr("Controller")
         case "headset": return qsTr("Headset")

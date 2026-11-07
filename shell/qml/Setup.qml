@@ -300,6 +300,7 @@ FocusScope {
             width: parent.width
             u: setup.u
             active: setup.pairingStage && setup.enabled
+            showFamilies: true
             onPaired: setup.leavePairing(false)
         }
         Pill {

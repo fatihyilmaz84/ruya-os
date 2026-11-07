@@ -2,18 +2,33 @@
 //! from the kernel's input devices in sysfs (`/sys/class/input/input*/name` and
 //! `capabilities/key`). USB and Bluetooth devices look the same there. The console's own virtual
 //! navigation keyboard (`ruya-inputd`) does not count, nor do buttons such as the power button.
-//! The rules are pure; `SysfsInput` is the only part that touches the disk.
+//! The same read tells which game controllers came and went (`GamepadConnected` /
+//! `GamepadDisconnected`, T-260). The rules are pure; `SysfsInput` is the only part that touches
+//! the disk.
 
 use std::path::PathBuf;
 use std::sync::Mutex;
+
+use crate::families::family_of;
+use crate::pairing::clean_name;
+
+/// The longest pad name or id the service reports, in characters.
+pub const MAX_NAME_CHARS: usize = 64;
 
 /// The name of the virtual keyboard `ruya-inputd` creates (`services/ruya-inputd`).
 pub const VIRTUAL_NAME: &str = "RuyaOS Navigation";
 
 /// One input device as sysfs shows it.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct InputDevice {
     pub name: String,
+    /// `uniq` (a Bluetooth pad's address) and `phys` (a USB pad's port), "" when there are none.
+    pub uniq: String,
+    pub phys: String,
+    /// `id/bustype` (3 = USB, 5 = Bluetooth), `id/vendor`, `id/product`; 0 when unreadable.
+    pub bustype: u16,
+    pub vendor: u16,
+    pub product: u16,
     /// `capabilities/key`: the supported key codes as hex words, most significant first, each
     /// word the size of the kernel's `long` (64 bits on x86_64).
     pub keys: String,
@@ -47,6 +62,71 @@ pub fn is_navigation_input(device: &InputDevice) -> bool {
     let keyboard = (1..32).all(|n| bit(&words, n));
     let gamepad = (0x120..0x13f).any(|n| bit(&words, n));
     keyboard || gamepad
+}
+
+/// A game controller, as `GamepadConnected` / `GamepadDisconnected` tell it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Gamepad {
+    /// Stable per pad and port: the Bluetooth address, else the USB port, else the name.
+    pub id: String,
+    pub name: String,
+    /// "playstation" | "xbox" | "nintendo" | "8bitdo" | "" (`families.rs`).
+    pub family: &'static str,
+    /// "usb" | "bluetooth" | "other"
+    pub transport: &'static str,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GamepadEvent {
+    Connected(Gamepad),
+    Disconnected(Gamepad),
+}
+
+/// The pad behind an input device, or `None` for anything that is not one (a keyboard, a mouse,
+/// a motion sensor, a touchpad, the console's own virtual keyboard).
+pub fn gamepad_of(device: &InputDevice) -> Option<Gamepad> {
+    if device.name == VIRTUAL_NAME {
+        return None;
+    }
+    let words = parse_words(&device.keys);
+    if !(0x120..0x13f).any(|n| bit(&words, n)) {
+        return None;
+    }
+    // A pad names itself: control and format characters are dropped and the length is capped
+    // before the name goes anywhere (T-260).
+    let name = clean_name(&device.name, MAX_NAME_CHARS);
+    let name = if name.is_empty() {
+        "Controller".to_owned()
+    } else {
+        name
+    };
+    // The vendor id a pad reports is the USB-IF one over USB and over Bluetooth alike.
+    let family = if device.vendor != 0 {
+        family_of(
+            &format!("usb:v{:04X}p{:04X}d0000", device.vendor, device.product),
+            &name,
+        )
+    } else {
+        family_of("", &name)
+    };
+    let id = [
+        clean_name(&device.uniq, MAX_NAME_CHARS),
+        clean_name(&device.phys, MAX_NAME_CHARS),
+        name.clone(),
+    ]
+    .into_iter()
+    .find(|s| !s.is_empty())
+    .unwrap_or_default();
+    Some(Gamepad {
+        id,
+        name,
+        family,
+        transport: match device.bustype {
+            3 => "usb",
+            5 => "bluetooth",
+            _ => "other",
+        },
+    })
 }
 
 /// The input devices there are now.
@@ -99,9 +179,21 @@ impl InputSource for SysfsInput {
                 // A device without keys (an accelerometer) simply has no such file.
                 let keys = std::fs::read_to_string(dir.join("capabilities").join("key"))
                     .unwrap_or_default();
+                let text = |file: &str| {
+                    std::fs::read_to_string(dir.join(file))
+                        .map(|t| t.trim().to_owned())
+                        .unwrap_or_default()
+                };
+                let number =
+                    |file: &str| u16::from_str_radix(&text(&format!("id/{file}")), 16).unwrap_or(0);
                 Some(InputDevice {
                     name: name.trim().to_owned(),
                     keys: keys.trim().to_owned(),
+                    uniq: text("uniq"),
+                    phys: text("phys"),
+                    bustype: number("bustype"),
+                    vendor: number("vendor"),
+                    product: number("product"),
                 })
             })
             .collect()
@@ -125,6 +217,7 @@ impl FakeInput {
         InputDevice {
             name: "Fake Keyboard".to_owned(),
             keys: "ffffffffffffffff".to_owned(),
+            ..InputDevice::default()
         }
     }
 
@@ -146,6 +239,8 @@ impl InputSource for FakeInput {
 pub struct InputPresence<S: InputSource> {
     source: S,
     present: Mutex<Option<bool>>,
+    pads: Mutex<Option<Vec<Gamepad>>>,
+    events: Mutex<Vec<GamepadEvent>>,
 }
 
 impl<S: InputSource> InputPresence<S> {
@@ -153,7 +248,35 @@ impl<S: InputSource> InputPresence<S> {
         InputPresence {
             source,
             present: Mutex::new(None),
+            pads: Mutex::new(None),
+            events: Mutex::new(Vec::new()),
         }
+    }
+
+    /// The controllers that appeared or went away since the last call, oldest first. The first
+    /// read only sets the baseline: pads that are already there are not news.
+    pub fn take_gamepad_events(&self) -> Vec<GamepadEvent> {
+        std::mem::take(&mut *self.events.lock().unwrap_or_else(|e| e.into_inner()))
+    }
+
+    fn follow_gamepads(&self, devices: &[InputDevice]) {
+        let mut pads: Vec<Gamepad> = Vec::new();
+        for pad in devices.iter().filter_map(gamepad_of) {
+            if !pads.iter().any(|p| p.id == pad.id) {
+                pads.push(pad);
+            }
+        }
+        let mut known = self.pads.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(before) = known.as_ref() {
+            let mut events = self.events.lock().unwrap_or_else(|e| e.into_inner());
+            for gone in before.iter().filter(|b| !pads.iter().any(|p| p.id == b.id)) {
+                events.push(GamepadEvent::Disconnected(gone.clone()));
+            }
+            for new in pads.iter().filter(|p| !before.iter().any(|b| b.id == p.id)) {
+                events.push(GamepadEvent::Connected(new.clone()));
+            }
+        }
+        *known = Some(pads);
     }
 
     /// The answer of the last `refresh`; false before the first one.
@@ -167,7 +290,9 @@ impl<S: InputSource> InputPresence<S> {
     /// Reads the devices. `true` when `InputPresent` is now different from what was announced
     /// (the first read counts as a change only when it finds something).
     pub fn refresh(&self) -> bool {
-        let now = self.source.devices().iter().any(is_navigation_input);
+        let devices = self.source.devices();
+        self.follow_gamepads(&devices);
+        let now = devices.iter().any(is_navigation_input);
         let mut present = self.present.lock().unwrap_or_else(|e| e.into_inner());
         let before = present.unwrap_or(false);
         *present = Some(now);
@@ -185,6 +310,7 @@ mod tests {
         InputDevice {
             name: name.to_owned(),
             keys: keys.to_owned(),
+            ..InputDevice::default()
         }
     }
 
@@ -251,6 +377,129 @@ mod tests {
         assert!(!presence.present());
     }
 
+    const PAD_KEYS: &str = "7cdb000000000000 0 0 0 0";
+
+    fn pad(name: &str, phys: &str, uniq: &str, bustype: u16, vendor: u16) -> InputDevice {
+        InputDevice {
+            name: name.to_owned(),
+            keys: PAD_KEYS.to_owned(),
+            phys: phys.to_owned(),
+            uniq: uniq.to_owned(),
+            bustype,
+            vendor,
+            product: 0x0ce6,
+        }
+    }
+
+    #[test]
+    fn a_pad_is_told_by_family_transport_and_a_stable_id() {
+        let usb = gamepad_of(&pad(
+            "Wireless Controller",
+            "usb-0000:00:14.0-2/input0",
+            "",
+            3,
+            0x054c,
+        ))
+        .expect("a pad");
+        assert_eq!(usb.family, "playstation");
+        assert_eq!(usb.transport, "usb");
+        assert_eq!(usb.id, "usb-0000:00:14.0-2/input0");
+        let bt = gamepad_of(&pad(
+            "Xbox Wireless Controller",
+            "AA:BB:CC:00:00:01",
+            "e4:17:d8:00:00:01",
+            5,
+            0x045e,
+        ))
+        .expect("a pad");
+        assert_eq!((bt.family, bt.transport), ("xbox", "bluetooth"));
+        assert_eq!(bt.id, "e4:17:d8:00:00:01", "the address wins over the port");
+        let eightbit = gamepad_of(&pad("8BitDo Pro 2", "", "", 3, 0x2dc8)).expect("a pad");
+        assert_eq!(eightbit.family, "8bitdo");
+        assert_eq!(eightbit.id, "8BitDo Pro 2", "no port, no address: the name");
+        // An unknown vendor is no family whatever it calls itself; no vendor at all is guessed.
+        let clone = gamepad_of(&pad("Xbox clone", "p", "", 3, 0x1234)).expect("pad");
+        assert_eq!(clone.family, "");
+        let guessed = gamepad_of(&pad("DualSense", "p", "", 0, 0)).expect("pad");
+        assert_eq!(guessed.family, "playstation");
+    }
+
+    #[test]
+    fn a_name_a_pad_gives_itself_is_cleaned_and_capped() {
+        let nasty = "<img src=\"http://x/y\">\n\u{202E}Pad\u{200B}\u{0007}";
+        let p = gamepad_of(&pad(nasty, "usb-1", "", 3, 0x1234)).expect("a pad");
+        assert_eq!(p.name, "<img src=\"http://x/y\">Pad");
+        assert!(!p.name.chars().any(|c| c.is_control() || c == '\u{202E}'));
+        let long = gamepad_of(&pad(&"x".repeat(500), "usb-1", "", 3, 0x1234)).expect("a pad");
+        assert_eq!(long.name.chars().count(), MAX_NAME_CHARS);
+        // Nothing left of the name: a plain word, and the id still works.
+        let empty = gamepad_of(&pad("\n\u{200B}", "", "", 3, 0x1234)).expect("a pad");
+        assert_eq!(empty.name, "Controller");
+        assert_eq!(empty.id, "Controller");
+        // The id from the port or the address is cleaned too.
+        let ported = gamepad_of(&pad("Pad", "usb-1\n/input0", "", 3, 0x1234)).expect("a pad");
+        assert_eq!(ported.id, "usb-1/input0");
+    }
+
+    #[test]
+    fn only_a_pad_is_a_pad() {
+        assert!(gamepad_of(&device("AT keyboard", KEYBOARD)).is_none());
+        assert!(gamepad_of(&device("USB Mouse", "10000 0 0 0 0")).is_none());
+        assert!(gamepad_of(&device("Wireless Controller Motion Sensors", "")).is_none());
+        assert!(gamepad_of(&device(VIRTUAL_NAME, PAD_KEYS)).is_none());
+    }
+
+    #[test]
+    fn pads_that_come_and_go_are_announced_once_after_the_baseline() {
+        let presence = InputPresence::new(FakeInput::new(vec![pad(
+            "Wireless Controller",
+            "usb-1",
+            "",
+            3,
+            0x054c,
+        )]));
+        presence.refresh();
+        assert!(
+            presence.take_gamepad_events().is_empty(),
+            "a pad that was there at the start is the baseline, not news"
+        );
+        presence.refresh();
+        assert!(presence.take_gamepad_events().is_empty(), "nothing changed");
+        presence.source.set(vec![
+            pad("Wireless Controller", "usb-1", "", 3, 0x054c),
+            pad("Xbox Wireless Controller", "usb-2", "", 3, 0x045e),
+            FakeInput::keyboard(),
+        ]);
+        presence.refresh();
+        let events = presence.take_gamepad_events();
+        assert_eq!(events.len(), 1, "the keyboard is no pad: {events:?}");
+        assert!(matches!(&events[0], GamepadEvent::Connected(p) if p.family == "xbox"));
+        assert!(presence.take_gamepad_events().is_empty(), "taken once");
+        presence.source.set(vec![pad(
+            "Xbox Wireless Controller",
+            "usb-2",
+            "",
+            3,
+            0x045e,
+        )]);
+        presence.refresh();
+        let events = presence.take_gamepad_events();
+        assert!(
+            matches!(events.as_slice(), [GamepadEvent::Disconnected(p)] if p.family == "playstation"),
+            "{events:?}"
+        );
+    }
+
+    #[test]
+    fn a_pad_with_several_input_nodes_is_one_pad() {
+        let node = pad("Wireless Controller", "usb-1", "", 3, 0x054c);
+        let presence = InputPresence::new(FakeInput::new(Vec::new()));
+        presence.refresh();
+        presence.source.set(vec![node.clone(), node]);
+        presence.refresh();
+        assert_eq!(presence.take_gamepad_events().len(), 1);
+    }
+
     #[test]
     fn sysfs_is_read_from_the_input_directories() {
         let dir = tempfile::tempdir().expect("temp dir");
@@ -270,6 +519,17 @@ mod tests {
             Some("7cdb000000000000 0 0 0 0"),
         );
         make("input4", "Motion Sensors", None);
+        // The ids a pad reports (T-260): vendor and bus in hex, the port, no address over USB.
+        let pad_dir = dir.path().join("input3");
+        std::fs::create_dir_all(pad_dir.join("id")).expect("id dir");
+        for (file, text) in [
+            ("id/vendor", "054c"),
+            ("id/product", "0ce6"),
+            ("id/bustype", "0003"),
+        ] {
+            std::fs::write(pad_dir.join(file), format!("{text}\n")).expect("id");
+        }
+        std::fs::write(pad_dir.join("phys"), "usb-0000:00:14.0-2/input0\n").expect("phys");
         make("event3", "not an input node", Some(KEYBOARD));
         let source = SysfsInput::at(dir.path());
         let mut names: Vec<String> = source.devices().into_iter().map(|d| d.name).collect();
@@ -277,6 +537,16 @@ mod tests {
         assert_eq!(
             names,
             ["Motion Sensors", "Power Button", "Wireless Controller"]
+        );
+        let pad = source
+            .devices()
+            .into_iter()
+            .find(|d| d.name == "Wireless Controller")
+            .and_then(|d| gamepad_of(&d))
+            .expect("the pad is found with its ids");
+        assert_eq!(
+            (pad.family, pad.transport, pad.id.as_str()),
+            ("playstation", "usb", "usb-0000:00:14.0-2/input0")
         );
         assert!(InputPresence::new(SysfsInput::at(dir.path())).refresh());
         assert!(SysfsInput::at(dir.path().join("missing"))

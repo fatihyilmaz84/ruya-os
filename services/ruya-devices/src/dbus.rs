@@ -20,6 +20,8 @@ use crate::audio::Changes;
 use crate::battery::{Batteries, UPower};
 use crate::bluetooth::{self, Bluetooth, Bluez, BtError};
 use crate::debounce;
+#[cfg(target_os = "linux")]
+use crate::input::GamepadEvent;
 use crate::input::InputPresence;
 use crate::network::{self, Network, NetworkManager};
 use crate::report;
@@ -394,11 +396,17 @@ pub type SharedBatteries = Arc<Batteries<DynUPower>>;
 
 pub struct BatteriesIface {
     batteries: SharedBatteries,
+    bluetooth: SharedBluetooth,
 }
 
 impl BatteriesIface {
-    pub fn new(batteries: SharedBatteries) -> Self {
-        BatteriesIface { batteries }
+    /// `bluetooth` is the list a controller's family is taken from, so Batteries and
+    /// `Bluetooth.ListDevices` agree (T-260).
+    pub fn new(batteries: SharedBatteries, bluetooth: SharedBluetooth) -> Self {
+        BatteriesIface {
+            batteries,
+            bluetooth,
+        }
     }
 }
 
@@ -406,7 +414,7 @@ impl BatteriesIface {
 impl BatteriesIface {
     fn list_batteries(&self) -> Vec<HashMap<String, OwnedValue>> {
         self.batteries
-            .list()
+            .list_with(&self.bluetooth.list())
             .into_iter()
             .map(|b| {
                 let own = |v: Value<'_>| OwnedValue::try_from(v).ok();
@@ -416,6 +424,7 @@ impl BatteriesIface {
                     ("kind", own(Value::from(b.kind))),
                     ("percent", own(Value::from(b.percent))),
                     ("state", own(Value::from(b.state.as_str()))),
+                    ("family", own(Value::from(b.family))),
                 ]
                 .into_iter()
                 .filter_map(|(k, v)| v.map(|v| (k.to_owned(), v)))
@@ -515,6 +524,9 @@ impl Bluez for DynBluez {
     }
     fn set_trusted(&self, address: &str) -> Result<(), BtError> {
         (**self).set_trusted(address)
+    }
+    fn set_alias(&self, address: &str, alias: &str) -> Result<(), BtError> {
+        (**self).set_alias(address, alias)
     }
     fn connect(&self, address: &str, timeout: Duration) -> Result<(), BtError> {
         (**self).connect(address, timeout)
@@ -710,8 +722,39 @@ impl BluetoothIface {
         status.as_str().to_owned()
     }
 
+    async fn rename(
+        &self,
+        id: &str,
+        name: &str,
+        #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
+    ) -> String {
+        let (bt, id, name) = (self.bt.clone(), id.to_owned(), name.to_owned());
+        let status = unblock(move || bt.rename(&id, &name)).await;
+        self.settle(&emitter).await;
+        status.as_str().to_owned()
+    }
+
     #[zbus(signal)]
     async fn devices_changed(emitter: &SignalEmitter<'_>) -> zbus::Result<()>;
+
+    /// A game controller appeared (T-260). See `Devices1.xml`.
+    #[zbus(signal)]
+    async fn gamepad_connected(
+        emitter: &SignalEmitter<'_>,
+        id: &str,
+        name: &str,
+        family: &str,
+        transport: &str,
+    ) -> zbus::Result<()>;
+
+    #[zbus(signal)]
+    async fn gamepad_disconnected(
+        emitter: &SignalEmitter<'_>,
+        id: &str,
+        name: &str,
+        family: &str,
+        transport: &str,
+    ) -> zbus::Result<()>;
 
     #[zbus(property)]
     fn controller_pairing_state(&self) -> String {
@@ -894,20 +937,56 @@ pub async fn watch_input(connection: Connection, input: SharedInput) {
     loop {
         async_io::Timer::after(INPUT_POLL).await;
         let input2 = input.clone();
-        if !unblock(move || input2.refresh()).await {
+        let (changed, pads) =
+            unblock(move || (input2.refresh(), input2.take_gamepad_events())).await;
+        if !changed && pads.is_empty() {
             continue;
         }
-        let announced = async {
-            let iface = connection
-                .object_server()
-                .interface::<_, BluetoothIface>(OBJECT_PATH)
-                .await?;
+        let iface = match connection
+            .object_server()
+            .interface::<_, BluetoothIface>(OBJECT_PATH)
+            .await
+        {
+            Ok(iface) => iface,
+            Err(err) => {
+                eprintln!("ruya-devices: the input changes cannot be announced: {err}");
+                continue;
+            }
+        };
+        let emitter = iface.signal_emitter();
+        // One signal that fails to go out must not take the rest of this tick's pads with it.
+        if changed {
             let this = iface.get().await;
-            this.input_present_changed(iface.signal_emitter()).await
+            if let Err(err) = this.input_present_changed(emitter).await {
+                eprintln!("ruya-devices: emitting InputPresent failed: {err}");
+            }
         }
-        .await;
-        if let Err(err) = announced {
-            eprintln!("ruya-devices: emitting InputPresent failed: {err}");
+        for event in &pads {
+            let sent = match event {
+                GamepadEvent::Connected(p) => {
+                    BluetoothIface::gamepad_connected(
+                        emitter,
+                        &p.id,
+                        &p.name,
+                        p.family,
+                        p.transport,
+                    )
+                    .await
+                }
+                GamepadEvent::Disconnected(p) => {
+                    BluetoothIface::gamepad_disconnected(
+                        emitter,
+                        &p.id,
+                        &p.name,
+                        p.family,
+                        p.transport,
+                    )
+                    .await
+                }
+            };
+            if let Err(err) = sent {
+                eprintln!("ruya-devices: emitting a gamepad change failed: {err}");
+            }
         }
     }
 }

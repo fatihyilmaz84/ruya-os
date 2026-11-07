@@ -58,6 +58,7 @@ void Batteries::apply(const QList<DeviceBattery> &input)
             {QStringLiteral("kind"), c.kind},
             {QStringLiteral("percent"), c.percent},
             {QStringLiteral("state"), c.state},
+            {QStringLiteral("family"), c.family},
             {QStringLiteral("low"), low},
         };
         devices.append(entry);
@@ -76,7 +77,7 @@ void Batteries::apply(const QList<DeviceBattery> &input)
             m_lowReported.remove(c.id);
         } else if (!m_lowReported.contains(c.id)) {
             m_lowReported.insert(c.id);
-            emit batteryLow(c.id, c.name, c.percent);
+            emit batteryLow(c.id, c.name, c.percent, c.family);
         }
     }
     const QSet<QString> reported = m_lowReported; // forget controllers that left the list
@@ -93,10 +94,11 @@ void Batteries::apply(const QList<DeviceBattery> &input)
     emit devicesChanged();
 }
 
-void Batteries::mockSet(const QString &id, int percent, const QString &state, const QString &kind, const QString &name)
+void Batteries::mockSet(const QString &id, int percent, const QString &state, const QString &kind, const QString &name,
+                        const QString &family)
 {
     if (auto *mock = qobject_cast<MockBatteryBackend *>(m_backend.get()))
-        mock->setDevice(id, percent, state, kind, name);
+        mock->setDevice(id, percent, state, kind, name, family);
 }
 
 void Batteries::mockRemove(const QString &id)

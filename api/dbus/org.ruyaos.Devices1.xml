@@ -39,7 +39,8 @@
                       D-Bus error. The pairing is cancelled when it times out.
     "unavailable"     Bluetooth is off or there is no adapter (StartScan, Pair, Connect,
                       StartControllerPairing)
-    "invalid"         malformed argument (an empty id; a controller-pairing window longer than 300 s)
+    "invalid"         malformed argument (an empty id; a controller-pairing window longer than 300 s;
+                      Rename: an empty, over-long or control-character name)
     "busy"            a controller-pairing window is already open (StartControllerPairing)
     "refused"         the caller is neither root nor the user the service runs as
                       (StartControllerPairing, StopControllerPairing)
@@ -219,7 +220,7 @@
                        audio-speakers), "keyboard", "mouse", "phone", "other" (anything else, and a
                        device that tells no Icon). The same words as Batteries' kind where both have one
         family     s   the controller family, for kind "controller" only: "playstation" | "xbox" |
-                       "nintendo", or "" when it cannot be told (every other kind, an unknown maker, a
+                       "nintendo" | "8bitdo", or "" when it cannot be told (every other kind, an unknown maker, a
                        third-party pad). From the Modalias BlueZ reports (the vendor id of the device's
                        Device ID record: Sony, Microsoft, Nintendo), by name only when the device has no
                        usable Modalias; the table is in the service (families.rs). Shells show a
@@ -333,6 +334,50 @@
 
     <!-- A device that is not an input device tried to pair during the window and was refused. -->
     <signal name="ControllerPairingRejected"/>
+
+    <!--
+      Rename a paired device (T-260): sets BlueZ's Alias, which ListDevices reports as `name`. The
+      name is trimmed and Unicode format characters (bidirectional overrides, zero-width) are dropped;
+      an empty one, one longer than 48 characters or one with a control character is "invalid".
+      "unknown-device" for an id that is not in the list, "unavailable" when Bluetooth is off,
+      "failed" when the device is not paired or BlueZ refused. The device keeps its pairing; the list follows
+      by DevicesChanged. Not limited to controllers.
+    -->
+    <method name="Rename">
+      <arg name="id" type="s" direction="in"/>
+      <arg name="name" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <!--
+      A game controller appeared or went away (T-260), over USB or Bluetooth, read from the kernel's
+      input devices every two seconds (the same read as InputPresent): a device with a button in the
+      gamepad range, not the console's own virtual keyboard, not a keyboard or mouse. The first read
+      after the service starts only sets the baseline: pads that are already there are not announced.
+        id         s   stable per pad: the Bluetooth address (the input device's `uniq`) when it has one,
+                       else the USB port (`phys`), else its name; a pad that is unplugged and plugged
+                       in again keeps it
+        name       s   the input device's name, as the kernel reports it ("Wireless Controller"), made
+                       fit to show: control and Unicode format characters dropped, at most 64
+                       characters. It is still text a device chose: draw it as plain text
+        family     s   as in ListDevices: "playstation" | "xbox" | "nintendo" | "8bitdo" | "", from the
+                       USB vendor id the device reports (the same table, families.rs)
+        transport  s   "usb" | "bluetooth" | "other"
+      The shell debounces a cable that flaps; nothing here says whether the pad is "in use".
+    -->
+    <signal name="GamepadConnected">
+      <arg name="id" type="s"/>
+      <arg name="name" type="s"/>
+      <arg name="family" type="s"/>
+      <arg name="transport" type="s"/>
+    </signal>
+
+    <signal name="GamepadDisconnected">
+      <arg name="id" type="s"/>
+      <arg name="name" type="s"/>
+      <arg name="family" type="s"/>
+      <arg name="transport" type="s"/>
+    </signal>
 
   </interface>
   <interface name="org.ruyaos.Devices1.Storage">
@@ -450,6 +495,12 @@
         kind     s   "controller" | "headset" | "speaker" | "mouse" | "keyboard" | "other"
         percent  u   0-100
         state    s   "charging" | "discharging" | "full" | "unknown"
+        family   s   for kind "controller": "playstation" | "xbox" | "nintendo" | "8bitdo" | "" (as in
+                     Bluetooth.ListDevices; "" for every other kind and for a pad whose maker cannot be
+                     told). The Bluetooth device with the same address (UPower's Serial or NativePath
+                     holds it for a BlueZ-fed pad) decides, so the two lists agree; a wired or dongle
+                     pad is guessed from UPower's vendor and model through the same table (families.rs).
+                     Clients treat a missing key or a family they do not know as ""
       A device that has no battery reading, or is gone, is not listed. A Bluetooth device can also
       be in Devices1.Bluetooth.ListDevices (with its own "battery"); this list is the one the
       status cluster uses for every kind, and the low-battery toast for controllers (the other

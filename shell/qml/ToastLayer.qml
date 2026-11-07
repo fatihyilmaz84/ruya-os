@@ -13,6 +13,13 @@ Item {
 
     readonly property int visibleCount: list.count
 
+    // A game controller was plugged in, paired or lost (T-260). The Shell tells it about every key
+    // so that "disconnected" is shown only for a pad that was in use.
+    readonly property ControllerToasts controllerToasts: ControllerToasts {
+        objectName: "controllerToasts"
+    }
+    function noteInput() { controllerToasts.noteInput() }
+
     // A connected Bluetooth device's battery is low (once per crossing, Bluetooth.batteryLow).
     Connections {
         target: Bluetooth
@@ -26,9 +33,9 @@ Item {
     // This is the only low-battery toast for controllers: Bluetooth.batteryLow skips them.
     Connections {
         target: Batteries
-        function onBatteryLow(id, name, percent) {
+        function onBatteryLow(id, name, percent, family) {
             Notifications.show(qsTr("Controller battery low (%1%)").arg(percent), "warning", "",
-                               DeviceIcons.iconFor("controller", ""))
+                               DeviceIcons.iconFor("controller", family))
         }
     }
 
@@ -143,7 +150,10 @@ Item {
                     right: parent.right; rightMargin: Theme.spaceM * layer.u
                     verticalCenter: parent.verticalCenter
                 }
+                objectName: "toastText"
                 text: toast.text
+                // A toast may carry a name a device gave itself: never markup (T-260).
+                textFormat: Text.PlainText
                 color: Theme.text
                 font.pixelSize: Theme.typeBody * layer.u
                 elide: Text.ElideRight

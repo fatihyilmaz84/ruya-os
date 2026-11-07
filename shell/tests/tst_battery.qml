@@ -121,14 +121,15 @@ Item {
             compare(c.levelIconFor(40, "charging", false), "battery_charging_full")
             compare(c.levelIconFor(5, "discharging", true), "battery_alert")
             compare(c.levelIconFor(90, "full", false), "battery_full")
-            compare(c.kindIconFor("controller"), "sports_esports")
-            compare(c.kindIconFor("headset"), "headphones")
-            compare(c.kindIconFor("speaker"), "speaker")
-            compare(c.kindIconFor("mouse"), "mouse")
-            compare(c.kindIconFor("keyboard"), "keyboard")
-            compare(c.kindIconFor("other"), "bluetooth")
-            compare(c.kindIconFor(""), "bluetooth")
-            compare(c.kindIconFor("toaster"), "bluetooth")
+            // The glyph is DeviceIcons' (one table for every screen); the chip asks it for kind and family.
+            compare(DeviceIcons.iconFor("controller", ""), "sports_esports")
+            compare(DeviceIcons.iconFor("headset", ""), "headphones")
+            compare(DeviceIcons.iconFor("speaker", ""), "speaker")
+            compare(DeviceIcons.iconFor("mouse", ""), "mouse")
+            compare(DeviceIcons.iconFor("keyboard", ""), "keyboard")
+            compare(DeviceIcons.iconFor("other", ""), "bluetooth")
+            compare(DeviceIcons.iconFor("", ""), "bluetooth")
+            compare(DeviceIcons.iconFor("toaster", ""), "bluetooth")
         }
 
         // Live, in the cluster. State "unknown" is neither low nor charging, so the level alone

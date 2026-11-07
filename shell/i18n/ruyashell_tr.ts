@@ -336,7 +336,22 @@
 <context>
     <name>BluetoothPane</name>
     <message>
-        <location filename="../qml/BluetoothPane.qml" line="+90"/>
+        <location filename="../qml/BluetoothPane.qml" line="+86"/>
+        <source>Forget %1?</source>
+        <translation>%1 unutulsun mu?</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>It will have to be paired again to be used.</source>
+        <translation>Kullanılması için yeniden eşleştirilmesi gerekir.</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Controller name</source>
+        <translation>Kontrolcü adı</translation>
+    </message>
+    <message>
+        <location line="+6"/>
         <source>Pairing failed. Put the device in pairing mode and try again.</source>
         <translation>Eşleştirme başarısız. Cihazı eşleştirme moduna alıp yeniden deneyin.</translation>
     </message>
@@ -347,12 +362,12 @@
     </message>
     <message>
         <location line="+1"/>
-        <location line="+43"/>
+        <location line="+45"/>
         <source>Bluetooth is off.</source>
         <translation>Bluetooth kapalı.</translation>
     </message>
     <message>
-        <location line="-42"/>
+        <location line="-44"/>
         <source>That device is no longer available.</source>
         <translation>Bu cihaz artık kullanılamıyor.</translation>
     </message>
@@ -382,28 +397,32 @@
         <translation>Eşleşmedi</translation>
     </message>
     <message>
+        <location line="+2"/>
+        <source>Reconnects automatically</source>
+        <translation>Kendiliğinden yeniden bağlanır</translation>
+    </message>
+    <message>
         <location line="+1"/>
         <source>Connected</source>
         <translation>Bağlı</translation>
     </message>
     <message>
-        <location line="-31"/>
-        <location line="+31"/>
+        <location line="+83"/>
+        <source>Pair a new controller</source>
+        <translation>Yeni kontrolcü eşleştir</translation>
+    </message>
+    <message>
+        <location line="+73"/>
+        <source>Rename %1</source>
+        <translation>%1 adını değiştir</translation>
+    </message>
+    <message>
+        <location line="-157"/>
         <source>Paired</source>
         <translation>Eşleşti</translation>
     </message>
     <message>
-        <location line="-32"/>
-        <source>Waiting for a controller…</source>
-        <translation>Kontrolcü bekleniyor…</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>Nothing found</source>
-        <translation>Hiçbir şey bulunamadı</translation>
-    </message>
-    <message>
-        <location line="+32"/>
+        <location line="+3"/>
         <source>Battery %1%</source>
         <translation>Pil %1%</translation>
     </message>
@@ -411,6 +430,16 @@
         <location line="+29"/>
         <source>Could not start looking for controllers.</source>
         <translation>Kontrolcü aramaya başlanamadı.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>That name does not work. Try another.</source>
+        <translation>Bu ad olmaz. Başka bir ad deneyin.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Could not rename the controller.</source>
+        <translation>Kontrolcünün adı değiştirilemedi.</translation>
     </message>
     <message>
         <location line="+10"/>
@@ -438,19 +467,63 @@
         <translation>Taranıyor…</translation>
     </message>
     <message>
-        <location line="+8"/>
-        <source>Pair a controller</source>
-        <translation>Kontrolcü eşleştir</translation>
+        <location line="-105"/>
+        <location line="+200"/>
+        <source>Forget %1</source>
+        <translation>%1 cihazını unut</translation>
+    </message>
+</context>
+<context>
+    <name>ButtonTest</name>
+    <message>
+        <location filename="../qml/ButtonTest.qml" line="+96"/>
+        <source>, pressed</source>
+        <translation>, basılı</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>, tried</source>
+        <translation>, denendi</translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>LB</source>
+        <translation>LB</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>RB</source>
+        <translation>RB</translation>
     </message>
     <message>
         <location line="+10"/>
-        <source>Controller: hold its pairing button until the light blinks</source>
-        <translation>Kontrolcü: ışık yanıp sönene kadar eşleştirme düğmesini basılı tutun</translation>
+        <source>Up</source>
+        <translation>Yukarı</translation>
     </message>
     <message>
-        <location line="+35"/>
-        <source>Forget %1</source>
-        <translation>%1 cihazını unut</translation>
+        <location line="+3"/>
+        <source>Left</source>
+        <translation>Sol</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Right</source>
+        <translation>Sağ</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Down</source>
+        <translation>Aşağı</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>A</source>
+        <translation>A</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>D-pad and left stick are the arrows. Other buttons are not shown here.</source>
+        <translation>Yön tuşları ve sol çubuk ok tuşlarıdır. Diğer düğmeler burada gösterilmez.</translation>
     </message>
 </context>
 <context>
@@ -481,9 +554,166 @@
     </message>
 </context>
 <context>
+    <name>ControllerOnboarding</name>
+    <message>
+        <location filename="../qml/ControllerOnboarding.qml" line="+35"/>
+        <source>Continue</source>
+        <translation>Devam</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <location line="+1"/>
+        <source>Close</source>
+        <translation>Kapat</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Select</source>
+        <translation>Seç</translation>
+    </message>
+    <message>
+        <location line="+53"/>
+        <source>Pairing failed. Put the controller in pairing mode again.</source>
+        <translation>Eşleştirme başarısız. Kontrolcüyü yeniden eşleştirme kipine alın.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The controller did not answer.</source>
+        <translation>Kontrolcü yanıt vermedi.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Bluetooth is off.</source>
+        <translation>Bluetooth kapalı.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The controller went away.</source>
+        <translation>Kontrolcü kayboldu.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Could not pair the controller.</source>
+        <translation>Kontrolcü eşleştirilemedi.</translation>
+    </message>
+    <message>
+        <location line="+104"/>
+        <location line="+54"/>
+        <source>Try your controller</source>
+        <translation>Kontrolcünüzü deneyin</translation>
+    </message>
+    <message>
+        <location line="-54"/>
+        <location line="+54"/>
+        <source>Pair a controller</source>
+        <translation>Kontrolcü eşleştir</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>What kind of controller is it?</source>
+        <translation>Bu ne tür bir kontrolcü?</translation>
+    </message>
+    <message>
+        <location line="+36"/>
+        <location line="+163"/>
+        <source>Other</source>
+        <translation>Diğer</translation>
+    </message>
+    <message>
+        <location line="-126"/>
+        <source>Press A to search again</source>
+        <translation>Yeniden aramak için A&apos;ya basın</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Found nearby</source>
+        <translation>Yakında bulunanlar</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Nothing found yet</source>
+        <translation>Henüz bir şey bulunamadı</translation>
+    </message>
+    <message>
+        <location line="+40"/>
+        <source>Pairing…</source>
+        <translation>Eşleştiriliyor…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Connected, remembered · A: try its buttons</source>
+        <translation>Bağlandı, hatırlandı · A: düğmelerini dene</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>%1 A: try again</source>
+        <translation>%1 A: yeniden dene</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>A: pair</source>
+        <translation>A: eşleştir</translation>
+    </message>
+    <message>
+        <location line="+50"/>
+        <source>%1 is connected. Press its buttons: they light up here.</source>
+        <translation>%1 bağlı. Düğmelerine basın: burada yanarlar.</translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <source>PlayStation</source>
+        <translation>PlayStation</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Xbox</source>
+        <translation>Xbox</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Switch</source>
+        <translation>Switch</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>8BitDo</source>
+        <translation>8BitDo</translation>
+    </message>
+</context>
+<context>
     <name>ControllerPairHint</name>
     <message>
-        <location filename="../qml/ControllerPairHint.qml" line="+37"/>
+        <location filename="../qml/ControllerPairHint.qml" line="+36"/>
+        <source>Hold PS and Create (Share on a DualShock 4) until the light bar flashes.</source>
+        <translation>Işık çubuğu yanıp sönene kadar PS ve Create düğmelerini (DualShock 4&apos;te Share) basılı tutun.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Press the pairing button on top until the Xbox logo flashes fast.</source>
+        <translation>Xbox logosu hızlı yanıp sönene kadar üstteki eşleştirme düğmesine basın.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Press the small sync button on top until the lights run back and forth.</source>
+        <translation>Işıklar ileri geri kayana kadar üstteki küçük eşleştirme düğmesine basın.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Hold Start with X (X-input mode) or Y (Switch mode) to turn it on in Bluetooth mode, then hold the pair button until the light flashes fast.</source>
+        <translation>Bluetooth kipinde açmak için Start ile birlikte X (X-input kipi) ya da Y (Switch kipi) düğmesini basılı tutun, sonra ışık hızlı yanıp sönene kadar eşleştirme düğmesini basılı tutun.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Hold its pairing button until the light blinks. Pick the Bluetooth mode if it has several.</source>
+        <translation>Işık yanıp sönene kadar eşleştirme düğmesini basılı tutun. Birkaç kipi varsa Bluetooth kipini seçin.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Other controller</source>
+        <translation>Diğer kontrolcü</translation>
+    </message>
+    <message>
+        <location line="+20"/>
         <source>Controller connected.</source>
         <translation>Kontrolcü bağlandı.</translation>
     </message>
@@ -508,20 +738,43 @@
         <translation>Kontrolcü bulunamadı. Kontrolcünüzün eşleştirme düğmesini basılı tutup (DualSense&apos;te: PS + Create) yeniden deneyin.</translation>
     </message>
     <message>
+        <location line="+2"/>
+        <source>Looking for controllers in pairing mode…</source>
+        <translation>Eşleştirme kipindeki kontrolcüler aranıyor…</translation>
+    </message>
+    <message>
         <location line="+1"/>
         <source>No controller or keyboard found. Hold the pairing button on your controller (on a DualSense: PS + Create) until its light blinks.</source>
         <translation>Kontrolcü ya da klavye bulunamadı. Kontrolcünüzün ışığı yanıp sönene kadar eşleştirme düğmesini basılı tutun (DualSense&apos;te: PS + Create).</translation>
     </message>
     <message>
-        <location line="+137"/>
+        <location line="+172"/>
         <source>A device that is not a controller tried to connect and was ignored.</source>
         <translation>Kontrolcü olmayan bir cihaz bağlanmaya çalıştı ve yok sayıldı.</translation>
     </message>
 </context>
 <context>
+    <name>ControllerToasts</name>
+    <message>
+        <location filename="../qml/ControllerToasts.qml" line="+88"/>
+        <source>%1 connected · battery %2%</source>
+        <translation>%1 bağlandı · pil %2%</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>%1 connected</source>
+        <translation>%1 bağlandı</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>%1 disconnected</source>
+        <translation>%1 bağlantısı kesildi</translation>
+    </message>
+</context>
+<context>
     <name>DeviceIcons</name>
     <message>
-        <location filename="../qml/DeviceIcons.qml" line="+39"/>
+        <location filename="../qml/DeviceIcons.qml" line="+66"/>
         <source>PlayStation controller</source>
         <translation>PlayStation kontrolcüsü</translation>
     </message>
@@ -534,6 +787,11 @@
         <location line="+1"/>
         <source>Nintendo controller</source>
         <translation>Nintendo kontrolcüsü</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>8BitDo controller</source>
+        <translation>8BitDo kontrolcüsü</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -983,7 +1241,7 @@
         <translation>Kim oynuyor?</translation>
     </message>
     <message>
-        <location line="+24"/>
+        <location line="+25"/>
         <source>Profiles</source>
         <translation>Profiller</translation>
     </message>
@@ -1333,7 +1591,7 @@
     </message>
     <message>
         <location line="-66"/>
-        <location line="+114"/>
+        <location line="+115"/>
         <source>Welcome to RuyaOS</source>
         <translation>RuyaOS&apos;a hoş geldiniz</translation>
     </message>
@@ -1366,13 +1624,13 @@
         <translation>Devam etmek için A&apos;ya basın</translation>
     </message>
     <message>
-        <location line="-309"/>
-        <location line="+217"/>
+        <location line="-310"/>
+        <location line="+218"/>
         <source>Network</source>
         <translation>Ağ</translation>
     </message>
     <message>
-        <location line="-353"/>
+        <location line="-354"/>
         <source>Try again</source>
         <translation>Yeniden dene</translation>
     </message>
@@ -1390,7 +1648,7 @@
         <translation>Bir kontrolcü bağlayın</translation>
     </message>
     <message>
-        <location line="+17"/>
+        <location line="+18"/>
         <source>Press A to try again</source>
         <translation>Yeniden denemek için A&apos;ya basın</translation>
     </message>
@@ -1445,8 +1703,8 @@
         <translation>Oluşturuluyor…</translation>
     </message>
     <message>
-        <location line="-271"/>
-        <location line="+297"/>
+        <location line="-272"/>
+        <location line="+298"/>
         <source>You&apos;re all set</source>
         <translation>Her şey hazır</translation>
     </message>
@@ -1459,7 +1717,7 @@
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+308"/>
+        <location filename="../qml/Shell.qml" line="+309"/>
         <source>Could not %1.</source>
         <translation>%1 işlemi yapılamadı.</translation>
     </message>
@@ -2651,7 +2909,7 @@
 <context>
     <name>ToastLayer</name>
     <message>
-        <location filename="../qml/ToastLayer.qml" line="+20"/>
+        <location filename="../qml/ToastLayer.qml" line="+27"/>
         <source>%1: battery low (%2%)</source>
         <translation>%1: pil zayıf (%2%)</translation>
     </message>

@@ -505,6 +505,15 @@ Item {
             compare(hintsShown(), "B Skip")
         }
 
+        function test_the_pairing_stage_lists_the_steps_of_every_family() {
+            startWithoutInput("wait")
+            tryVerify(() => pairingVisible(), 2000)
+            verify(find("setupPairHintFamilies").visible)
+            for (const family of ["playstation", "xbox", "nintendo", "8bitdo", "other"])
+                verify(find("setupPairHintFamily_" + family).visible, family)
+            verify(setup().activeFocus, "the wizard keeps focus")
+        }
+
         function test_a_controller_that_pairs_moves_the_wizard_on_and_works() {
             startWithoutInput("success")
             tryVerify(() => pairingVisible(), 2000)
@@ -593,6 +602,10 @@ Item {
             tryCompare(Bluetooth, "controllerPairing", "open")
             wait(600)
             grabImage(tc.shell).save(shotsDir + "/13-setup-controller.png")
+            DeviceSettings.language = "tr"
+            wait(600)
+            grabImage(tc.shell).save(shotsDir + "/13b-setup-controller-tr.png")
+            DeviceSettings.language = "en"
             Bluetooth.mockSetInputPresent(true)
             tryVerify(() => !pairingVisible(), 2000)
             tc.shell.destroy()

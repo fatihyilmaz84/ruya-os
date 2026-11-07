@@ -61,12 +61,20 @@ QList<BtDevice> parseDevices(const QDBusArgument &arg)
 DBusBluetoothBackend::DBusBluetoothBackend(QObject *parent)
     : BluetoothBackend(parent)
     , m_bus(chooseBus())
-    , m_watcher(Service, m_bus, QDBusServiceWatcher::WatchForRegistration, this)
+    , m_watcher(Service, m_bus, QDBusServiceWatcher::WatchForOwnerChange, this)
 {
-    connect(&m_watcher, &QDBusServiceWatcher::serviceRegistered, this, [this] { refresh(); });
+    connect(&m_watcher, &QDBusServiceWatcher::serviceRegistered, this, [this] {
+        emit gamepadsReset();       // a new instance: its first read is a baseline, nothing is announced
+        refresh();
+    });
+    connect(&m_watcher, &QDBusServiceWatcher::serviceUnregistered, this, [this] { emit gamepadsReset(); });
     m_bus.connect(Service, Path, Interface, QStringLiteral("DevicesChanged"), this, SLOT(onDevicesChanged()));
     m_bus.connect(Service, Path, Interface, QStringLiteral("ControllerPairingRejected"), this,
                   SLOT(onControllerRejected()));
+    m_bus.connect(Service, Path, Interface, QStringLiteral("GamepadConnected"), this,
+                  SLOT(onGamepadConnected(QString, QString, QString, QString)));
+    m_bus.connect(Service, Path, Interface, QStringLiteral("GamepadDisconnected"), this,
+                  SLOT(onGamepadDisconnected(QString, QString, QString, QString)));
     m_bus.connect(Service, Path, PropertiesInterface, QStringLiteral("PropertiesChanged"), this,
                   SLOT(onPropertiesChanged(QString, QVariantMap, QStringList)));
 }
@@ -175,6 +183,11 @@ void DBusBluetoothBackend::disconnectDevice(const QString &id)
     startCommand(QStringLiteral("Disconnect"), QStringLiteral("disconnect"), id, {id});
 }
 
+void DBusBluetoothBackend::rename(const QString &id, const QString &name)
+{
+    startCommand(QStringLiteral("Rename"), QStringLiteral("rename"), id, {id, name});
+}
+
 void DBusBluetoothBackend::startControllerPairing(int seconds)
 {
     startCommand(QStringLiteral("StartControllerPairing"), QStringLiteral("controller-pairing"), QStringLiteral("start"),
@@ -189,6 +202,18 @@ void DBusBluetoothBackend::stopControllerPairing()
 void DBusBluetoothBackend::onControllerRejected()
 {
     emit controllerRejected();
+}
+
+void DBusBluetoothBackend::onGamepadConnected(const QString &id, const QString &name, const QString &family,
+                                              const QString &transport)
+{
+    emit gamepadConnected(id, name, family, transport);
+}
+
+void DBusBluetoothBackend::onGamepadDisconnected(const QString &id, const QString &name, const QString &family,
+                                                 const QString &transport)
+{
+    emit gamepadDisconnected(id, name, family, transport);
 }
 
 void DBusBluetoothBackend::onDevicesChanged()

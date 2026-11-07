@@ -12,7 +12,7 @@ struct BtDevice
     QString name;
     // "controller" | "headset" | "speaker" | "keyboard" | "mouse" | "phone" | "other"
     QString kind = QStringLiteral("other");
-    // "playstation" | "xbox" | "nintendo" for a controller the service can place, else ""
+    // "playstation" | "xbox" | "nintendo" | "8bitdo" for a controller the service can place, else ""
     QString family;
     bool paired = false;
     bool connected = false;
@@ -39,6 +39,8 @@ public:
     virtual void forget(const QString &id) = 0;
     virtual void connectDevice(const QString &id) = 0;
     virtual void disconnectDevice(const QString &id) = 0;
+    // Gives a device a name of the user's (BlueZ Alias, T-260): finished("rename", id, status).
+    virtual void rename(const QString &id, const QString &name) = 0;
     // The controller pairing window (T-203): the status of the start arrives as
     // finished("controller-pairing", "start", status) (and "stop" for the stop); the state follows by controllerStateChanged.
     virtual void startControllerPairing(int seconds) = 0;
@@ -51,8 +53,15 @@ signals:
     void controllerStateChanged(const QString &pairing, bool inputPresent);
     // The window refused a device that is not an input device.
     void controllerRejected();
+    // A game controller appeared or went away, over USB or Bluetooth (T-260). id is stable per pad;
+    // family: "playstation" | "xbox" | "nintendo" | "8bitdo" | ""; transport: "usb" | "bluetooth" | "other".
+    void gamepadConnected(const QString &id, const QString &name, const QString &family, const QString &transport);
+    void gamepadDisconnected(const QString &id, const QString &name, const QString &family, const QString &transport);
+    // The service went away (or came back): what was said about pads before is void, the next read of
+    // the service is a new baseline.
+    void gamepadsReset();
     void devicesListed(const QList<BtDevice> &devices);
-    // op: "power" | "scan" | "pair" | "forget" | "connect" | "disconnect" | "controller-pairing";
+    // op: "power" | "scan" | "pair" | "forget" | "connect" | "disconnect" | "rename" | "controller-pairing";
     // id: "" for power and scan, "start" or "stop" for controller-pairing; status: see the XML ("ok", "pairing-failed", "timeout", ...).
     void finished(const QString &op, const QString &id, const QString &status);
 

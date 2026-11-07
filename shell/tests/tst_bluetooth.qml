@@ -107,6 +107,22 @@ Item {
 
         function device(id) { return Bluetooth.devices.find(d => d.id === id) }
 
+        function inConfirm(name) { return findChild(find("btForgetConfirm"), name) }
+
+        // Accept on a "Forget" row, then the confirmation that names the device: Cancel has focus,
+        // Right moves to the red button, Accept forgets.
+        function confirmForget(name) {
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("btForgetConfirm").shown, 2000, "the confirmation is up")
+            compare(inConfirm("powerConfirmTitle").text, "Forget " + name + "?")
+            tryVerify(() => inConfirm("powerCancel").activeFocus, 2000, "Cancel has focus first")
+            keyClick(Qt.Key_Right)
+            tryVerify(() => inConfirm("powerConfirm").activeFocus)
+            compare(inConfirm("powerConfirm").Accessible.name, "Forget " + name)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => !find("btForgetConfirm").shown, 2000)
+        }
+
         function answerFor(op, id) {
             return host.answers.find(a => a.op === op && a.id === id)
         }
@@ -253,27 +269,102 @@ Item {
             openBluetoothPane()
             compare(find("btDev_bt-pad-main").value, "Connected · Battery 80%")
             compare(find("btDev_bt-soundbar").value, "Connected", "no battery shown when unknown")
-            compare(find("btDev_bt-pad-old").value, "Paired")
+            compare(find("btDev_bt-pad-old").value, "Reconnects automatically")
             goTo("btDev_bt-pad-old")
             keyClick(Qt.Key_Return)
             tryCompare(find("btDev_bt-pad-old"), "value", "Connected")
             tryVerify(() => find("btDev_bt-pad-old").activeFocus)
             keyClick(Qt.Key_Return)                      // Accept on a connected device disconnects
-            tryCompare(find("btDev_bt-pad-old"), "value", "Paired")
+            tryCompare(find("btDev_bt-pad-old"), "value", "Reconnects automatically")
             tryVerify(() => find("btDev_bt-pad-old").activeFocus)
             compare(toastTexts().length, 0)
+        }
+
+        // The on-screen keyboard key with this value gets focus (a top-level function: T-189).
+        function keyboardGoTo(entry, value) {
+            let target = null
+            for (let r = 0; r < entry.rows.length && !target; ++r) {
+                const c = entry.rows[r].keys.findIndex(k => k.value === value)
+                if (c >= 0)
+                    target = { row: r, col: c }
+            }
+            verify(target !== null, "keyboard has '" + value + "'")
+            for (let step = 0; step < 60; ++step) {
+                if (entry.focusRow === target.row && entry.focusCol === target.col)
+                    return
+                if (entry.focusRow !== target.row) {
+                    keyClick(entry.focusRow < target.row ? Qt.Key_Down : Qt.Key_Up)
+                } else {
+                    const n = entry.rows[target.row].keys.length
+                    const right = (target.col - entry.focusCol + n) % n
+                    keyClick(right <= n - right ? Qt.Key_Right : Qt.Key_Left)
+                }
+            }
+            fail("could not reach '" + value + "'")
+        }
+
+        // T-260: the paired list. A paired controller offers Rename (the on-screen keyboard, stored
+        // as BlueZ's alias) and Forget (after a confirmation); other kinds only Forget.
+        function test_rename_a_controller() {
+            openBluetoothPane()
+            verify(!find("btRename_bt-soundbar").visible, "a speaker has no Rename row")
+            compare(find("btRename_bt-pad-old").label, "Rename Retro Pad")
+            goTo("btRename_bt-pad-old")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("btRenameEntry").shown, 2000)
+            compare(find("btRenameEntry").text, "Retro Pad", "pre-filled with the current name")
+            keyboardGoTo(find("btRenameEntry"), "x")
+            keyClick(Qt.Key_Return)
+            keyboardGoTo(find("btRenameEntry"), "done")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => device("bt-pad-old").name === "Retro Padx", 2000, "the service has the new name")
+            verify(device("bt-pad-old").paired, "still paired")
+            tryCompare(find("btRename_bt-pad-old"), "label", "Rename Retro Padx")
+            tryVerify(() => find("btRename_bt-pad-old").activeFocus, 2000, "focus is back on the row")
+            compare(toastTexts().length, 0)
+        }
+
+        function test_a_name_the_service_refuses_says_so() {
+            openBluetoothPane()
+            Bluetooth.rename("bt-pad-old", "   ")
+            tryVerify(() => toastTexts().includes("That name does not work. Try another."), 2000)
+            Bluetooth.rename("bt-pad-old", "a" + String.fromCharCode(7) + "b")      // a control character
+            tryVerify(() => host.answers.filter(a => a.op === "rename" && a.status === "invalid").length === 2, 2000)
+            Bluetooth.rename("bt-flaky", "Pad")                                      // found, not paired
+            Bluetooth.rename("nope", "Pad")
+            tryVerify(() => toastTexts().includes("Could not rename the controller."), 2000)
+            compare(device("bt-pad-old").name, "Retro Pad")
+        }
+
+        function test_cancelling_the_forget_confirmation_keeps_the_pairing() {
+            openBluetoothPane()
+            goTo("btForget_bt-pad-old")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("btForgetConfirm").shown, 2000)
+            tryVerify(() => inConfirm("powerCancel").activeFocus, 2000)
+            keyClick(Qt.Key_Return)                      // Cancel
+            tryVerify(() => !find("btForgetConfirm").shown, 2000)
+            tryVerify(() => find("btForget_bt-pad-old").activeFocus, 2000, "focus is back on the row")
+            verify(device("bt-pad-old") !== undefined && device("bt-pad-old").paired)
+            // B cancels as well
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("btForgetConfirm").shown, 2000)
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !find("btForgetConfirm").shown, 2000)
+            verify(device("bt-pad-old").paired)
+            tryVerify(() => find("btForget_bt-pad-old").activeFocus, 2000)
         }
 
         function test_forget_moves_focus_to_a_valid_row() {
             openBluetoothPane()
             goTo("btForget_bt-pad-old")
-            keyClick(Qt.Key_Return)
+            confirmForget("Retro Pad")
             tryVerify(() => device("bt-pad-old") === undefined, 2000, "the device is gone")
             tryVerify(() => find("btDev_bt-pad-old") === null, 2000, "its row is gone")
             tryVerify(() => find("btForget_bt-pad-old") === null)
             tryVerify(() => find("btForget_bt-soundbar").activeFocus, 2000, "focus moves to the next row")
             verify(find("paneBluetooth").activeFocus)
-            keyClick(Qt.Key_Return)                      // the last paired device but one
+            confirmForget("Soundbar")                    // the last paired device but one
             tryVerify(() => device("bt-soundbar") === undefined, 2000)
             tryVerify(() => find("btForget_bt-pad-main").activeFocus, 2000, "focus moves up from the last row")
             // A forgotten device has to be found again.
@@ -337,23 +428,22 @@ Item {
 
         // ---- T-203: the controller pairing window ----
 
-        function test_pair_a_controller_row_opens_the_window() {
+        function test_pair_a_new_controller_row_opens_the_guided_screen_and_its_window() {
             Bluetooth.mockPairingScript("wait")
             openBluetoothPane()
             goTo("rowBtPairController")
-            compare(find("rowBtPairController").value, "")
+            compare(find("rowBtPairController").label, "Pair a new controller")
             keyClick(Qt.Key_Return)
+            tryVerify(() => find("controllerOnboarding").shown, 2000)
             tryCompare(Bluetooth, "controllerPairing", "open")
-            tryCompare(find("rowBtPairController"), "value", "Waiting for a controller…")
             compare(Bluetooth.mockPairingStarts(), 1)
-            verify(find("rowBtPairController").activeFocus, "focus stays on the row")
+            tryVerify(() => find("onbChip_playstation").activeFocus, 2000, "focus is in the screen, on the first family")
             tryVerify(() => host.answers.some(a => a.op === "controller-pairing" && a.status === "ok"))
             compare(toastTexts().length, 0, "no error shown")
-            // A second Accept closes the window again
-            keyClick(Qt.Key_Return)
+            keyClick(Qt.Key_Escape)                      // B closes the screen and the window
+            tryVerify(() => !find("controllerOnboarding").shown, 2000)
             tryCompare(Bluetooth, "controllerPairing", "idle")
-            compare(find("rowBtPairController").value, "")
-            verify(find("rowBtPairController").activeFocus)
+            tryVerify(() => find("rowBtPairController").activeFocus, 2000, "focus is back on the row")
         }
 
         function test_a_controller_that_pairs_in_the_window_is_listed() {
@@ -361,10 +451,12 @@ Item {
             openBluetoothPane()
             goTo("rowBtPairController")
             keyClick(Qt.Key_Return)
-            tryCompare(find("rowBtPairController"), "value", "Paired", 3000)
+            tryVerify(() => find("onbRow_bt-pad-new") !== null, 3000, "the pad shows in the screen's list")
+            tryCompare(find("onbRowState_bt-pad-new"), "text", "Connected, remembered · A: try its buttons")
             tryVerify(() => device("bt-pad-new") !== undefined && device("bt-pad-new").paired, 2000)
+            keyClick(Qt.Key_Escape)
             tryVerify(() => find("btDev_bt-pad-new") !== null, 2000, "the pad is a row of the pane")
-            tryVerify(() => find("rowBtPairController").activeFocus, 2000, "focus did not move")
+            tryVerify(() => find("rowBtPairController").activeFocus, 2000, "focus is back on the row")
             compare(toastTexts().length, 0)
         }
 
@@ -373,10 +465,12 @@ Item {
             openBluetoothPane()
             goTo("rowBtPairController")
             keyClick(Qt.Key_Return)
-            tryCompare(find("rowBtPairController"), "value", "Nothing found", 3000)
-            keyClick(Qt.Key_Return)                      // again
+            tryVerify(() => find("onboardingSearchAgain").visible, 3000)
+            keyClick(Qt.Key_Return)                      // again (focus is on a family chip)
             tryVerify(() => Bluetooth.mockPairingStarts() === 2)
-            tryCompare(find("rowBtPairController"), "value", "Nothing found", 3000)
+            tryVerify(() => find("onboardingSearchAgain").visible, 3000)
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !find("controllerOnboarding").shown, 2000)
         }
 
         function test_a_rejected_device_is_toasted_and_the_window_stays_open() {
@@ -385,6 +479,7 @@ Item {
             goTo("rowBtPairController")
             keyClick(Qt.Key_Return)
             tryVerify(() => toastTexts().indexOf("A device that is not a controller was ignored.") >= 0, 3000)
+            tryVerify(() => find("onboardingHintIgnored").visible, 2000, "and the screen says so")
             compare(Bluetooth.controllerPairing, "open")
         }
 
@@ -394,11 +489,52 @@ Item {
             goTo("rowBtPairController")
             keyClick(Qt.Key_Return)
             tryCompare(Bluetooth, "controllerPairing", "open")
+            tryVerify(() => find("controllerOnboarding").shown)
+            // The pane goes away under the open screen without B (another category is selected from
+            // code, as a stray event could): the screen and the window must go with it. The pane is
+            // only hidden, not destroyed, so nothing else would close them.
+            find("categoryList").currentIndex = 1
+            tryVerify(() => !find("paneBluetooth").visible, 3000, "the pane is hidden")
+            tryVerify(() => !find("controllerOnboarding").shown, 2000, "the screen closed with it")
+            tryCompare(Bluetooth, "controllerPairing", "idle")
+        }
+
+        function test_B_closes_the_screen_and_the_window_and_the_pane_stays() {
+            Bluetooth.mockPairingScript("wait")
+            openBluetoothPane()
+            goTo("rowBtPairController")
+            keyClick(Qt.Key_Return)
+            tryCompare(Bluetooth, "controllerPairing", "open")
+            keyClick(Qt.Key_Escape)
+            tryCompare(Bluetooth, "controllerPairing", "idle")
+            tryVerify(() => find("rowBtPairController").activeFocus, 2000)
             keyClick(Qt.Key_Escape)
             tryVerify(() => find("categoryList").activeFocus, 2000)
             keyClick(Qt.Key_Up)                           // Network: the Bluetooth pane is hidden
             tryVerify(() => !find("paneBluetooth").visible, 2000)
             tryCompare(Bluetooth, "controllerPairing", "idle")
+        }
+
+        // A name a device chose is text, never markup (T-260): in the toast and in the pane's rows.
+        function test_a_pad_named_with_markup_is_shown_as_it_is() {
+            Bluetooth.mockGamepad(true, "usb-7", "<b>x</b>", "", "usb")
+            tryVerify(() => toastTexts().some(t => t.startsWith("<b>x</b> connected")), 4000)
+            tryVerify(() => find("toastText") !== null, 2000)
+            compare(find("toastText").textFormat, Text.PlainText)
+            Bluetooth.mockSetName("bt-pad-old", "<font size=7>big</font>")
+            openBluetoothPane()
+            tryVerify(() => find("btDev_bt-pad-old") !== null)
+            tryCompare(findChild(find("btDev_bt-pad-old"), "label"), "textFormat", Text.PlainText)
+            compare(find("btDev_bt-pad-old").label, "<font size=7>big</font>")
+        }
+
+        // T-260: the Shell hosts the toasts and tells them about every key, so "disconnected" is for a pad in use.
+        function test_the_shell_announces_a_pad_and_its_departure_after_use() {
+            Bluetooth.mockGamepad(true, "usb-1", "Wireless Controller", "playstation", "usb")
+            tryVerify(() => toastTexts().some(t => t.startsWith("PlayStation controller connected")), 4000)
+            keyClick(Qt.Key_Down)                         // somebody used the console
+            Bluetooth.mockGamepad(false, "usb-1", "Wireless Controller", "playstation", "usb")
+            tryVerify(() => toastTexts().includes("PlayStation controller disconnected"), 4000)
         }
 
         function test_the_window_statuses() {
@@ -421,6 +557,60 @@ Item {
         function rowIcon(id) {
             const row = find("btDev_" + id)
             return row ? findChild(row, "rowIcon") : null
+        }
+
+        function chipGlyph(id) {
+            const chip = find("batteryChip_" + id)
+            return chip ? findChild(chip, "batteryKindIcon").name : ""
+        }
+
+        // T-260 (owner bug, Dell 0.0.50): the same device had a different glyph in the status cluster
+        // than in Settings. One table (DeviceIcons) now serves the chip, the pane's rows (the paired
+        // list), the toasts and the pairing screens; this walks every kind and family through all of
+        // them. A family-less Batteries record would give the generic pad here and fail the first row.
+        function test_one_glyph_per_device_everywhere() {
+            const table = [
+                ["controller", "playstation", "bt-gallery-ps", "pad_playstation"],
+                ["controller", "xbox", "bt-gallery-xbox", "pad_xbox"],
+                ["controller", "nintendo", "bt-gallery-switch", "pad_switch"],
+                ["controller", "8bitdo", "bt-gallery-8bitdo", "sports_esports"],
+                ["controller", "", "bt-gallery-pad", "sports_esports"],
+                ["headset", "", "bt-gallery-headset", "headphones"],
+                ["speaker", "", "bt-gallery-speaker", "speaker"],
+                ["keyboard", "", "bt-gallery-keyboard", "keyboard"],
+                ["mouse", "", "bt-gallery-mouse", "mouse"],
+            ]
+            Bluetooth.mockPopulate()
+            tryVerify(() => device("bt-gallery-8bitdo") !== undefined, 2000)
+            openBluetoothPane()
+            for (let i = 0; i < table.length; ++i) {
+                const [kind, family, id, glyph] = table[i]
+                compare(DeviceIcons.iconFor(kind, family), glyph, "the table: " + id)
+                // the paired list in Settings
+                tryVerify(() => rowIcon(id) !== null, 2000, id + " has a row")
+                compare(rowIcon(id).name, glyph, "pane row of " + id)
+                // the chip in the status cluster, for a Batteries record of the same kind and family
+                const bat = "bat-" + i
+                Batteries.mockClear()
+                Batteries.mockSet(bat, 50, "discharging", kind, "Device " + i, family)
+                tryVerify(() => chipGlyph(bat) === glyph, 2000, "chip of " + id + ": " + chipGlyph(bat))
+                // the low-battery toast (controllers: Batteries; the other kinds: Bluetooth)
+                clearToasts()
+                if (kind === "controller")
+                    Batteries.mockSet(bat, 10, "discharging", kind, "Device " + i, family)
+                else
+                    Bluetooth.mockSetBattery(id, 10)
+                tryVerify(() => Notifications.model.count === 1 && Notifications.model.get(0).iconName === glyph, 3000,
+                          "low-battery toast of " + id)
+                // the connected toast and the pad's glyph there (controllers)
+                if (kind === "controller") {
+                    clearToasts()
+                    Bluetooth.mockGamepad(true, id, "Pad", family, "bluetooth")
+                    tryVerify(() => Notifications.model.count === 1 && Notifications.model.get(0).iconName === glyph, 4000,
+                              "connected toast of " + id)
+                }
+            }
+            Batteries.mockReset()
         }
 
         function test_every_kind_and_family_has_its_icon_in_the_pane() {
@@ -489,9 +679,11 @@ Item {
             goTo("rowBtPairController")
             keyClick(Qt.Key_Return)
             tryCompare(Bluetooth, "controllerPairing", "open")
+            Bluetooth.mockReveal("bt-flaky")
+            tryVerify(() => find("onbRow_bt-flaky") !== null, 2000)
             wait(800)
             grabImage(tc.shell).save(shotsDir + "/26b-settings-bluetooth-pair-controller.png")
-            keyClick(Qt.Key_Return)
+            keyClick(Qt.Key_Escape)
             tryCompare(Bluetooth, "controllerPairing", "idle")
             scan()
             scan()

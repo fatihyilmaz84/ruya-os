@@ -229,6 +229,67 @@ void MockBluetoothBackend::disconnectDevice(const QString &id)
     answer(QStringLiteral("disconnect"), id, status);
 }
 
+void MockBluetoothBackend::rename(const QString &id, const QString &name)
+{
+    const int at = indexOf(id);
+    const QString trimmed = name.trimmed();
+    QString status = QStringLiteral("ok");
+    bool control = false;
+    for (const QChar c : trimmed)
+        control = control || c.category() == QChar::Other_Control;
+    if (id.isEmpty() || trimmed.isEmpty() || trimmed.size() > 48 || control)
+        status = QStringLiteral("invalid");
+    else if (!m_powered)
+        status = QStringLiteral("unavailable");
+    else if (at < 0 || !m_entries.at(at).listed)
+        status = QStringLiteral("unknown-device");
+    else if (!m_entries.at(at).dev.paired)
+        status = QStringLiteral("failed");
+    else {
+        m_entries[at].dev.name = trimmed;
+        publish();
+    }
+    answer(QStringLiteral("rename"), id, status);
+}
+
+void MockBluetoothBackend::setName(const QString &id, const QString &name)
+{
+    const int at = indexOf(id);
+    if (at >= 0) {
+        m_entries[at].dev.name = name;
+        publish();
+    }
+}
+
+void MockBluetoothBackend::setFamily(const QString &id, const QString &family)
+{
+    const int at = indexOf(id);
+    if (at >= 0) {
+        m_entries[at].dev.family = family;
+        publish();
+    }
+}
+
+void MockBluetoothBackend::reveal(const QString &id)
+{
+    const int at = indexOf(id);
+    if (at >= 0 && !m_entries.at(at).listed) {
+        m_entries[at].listed = true;
+        publish();
+    }
+}
+
+void MockBluetoothBackend::gamepadEvent(bool connected, const QString &id, const QString &name, const QString &family,
+                                        const QString &transport)
+{
+    QTimer::singleShot(0, this, [this, connected, id, name, family, transport] {
+        if (connected)
+            emit gamepadConnected(id, name, family, transport);
+        else
+            emit gamepadDisconnected(id, name, family, transport);
+    });
+}
+
 void MockBluetoothBackend::setBattery(const QString &id, int percent)
 {
     const int at = indexOf(id);
@@ -247,6 +308,7 @@ void MockBluetoothBackend::populate()
         {"bt-gallery-ps", "DualSense", "controller", "playstation"},
         {"bt-gallery-xbox", "Xbox Wireless Controller", "controller", "xbox"},
         {"bt-gallery-switch", "Pro Controller", "controller", "nintendo"},
+        {"bt-gallery-8bitdo", "8BitDo Pro 2", "controller", "8bitdo"},
         {"bt-gallery-pad", "Generic Pad", "controller", ""},
         {"bt-gallery-headset", "WH-1000XM4", "headset", ""},
         {"bt-gallery-speaker", "Kitchen Speaker", "speaker", ""},

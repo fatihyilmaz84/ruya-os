@@ -35,18 +35,14 @@ Row {
         return "battery_0_bar"
     }
 
-    // The icon of the kind of device (the contract's `kind`); anything else is a Bluetooth device.
-    // Batteries knows no controller family, so a controller is the generic gamepad (T-199).
-    function kindIconFor(kind) {
-        return DeviceIcons.iconFor(kind, "")
-    }
-
     readonly property var device: Batteries.devices.find(d => d.id === chip.deviceId) ?? ({})
     readonly property string deviceName: chip.device.name ?? ""
     readonly property int percent: chip.device.percent ?? 0
     readonly property string chargeState: chip.device.state ?? "unknown"
     readonly property bool low: chip.device.low ?? false
-    readonly property string kindIcon: kindIconFor(chip.device.kind ?? "")
+    // The glyph of the device: the one table every screen uses (DeviceIcons), with the family the
+    // service told (T-260), so a pad looks the same here as in Settings and in the toasts.
+    readonly property string kindIcon: DeviceIcons.iconFor(chip.device.kind ?? "", chip.device.family ?? "")
     readonly property string levelIcon: levelIconFor(percent, chargeState, low)
     readonly property color tone: low ? Theme.warningText : Theme.text
 

@@ -17,8 +17,9 @@ public:
     // Tests only.
     // percent -1: a device that reports no level (it is not shown). Changes a device (keeping its name and kind unless new ones are given) or adds one: `kind`
     // defaults to "controller", the name to one made from the kind and the id.
+    // `family`: a controller's (T-260), only when given.
     void setDevice(const QString &id, int percent, const QString &state, const QString &kind = QString(),
-                   const QString &name = QString());
+                   const QString &name = QString(), const QString &family = QString());
     void removeDevice(const QString &id);
     void clear();
     void reset();

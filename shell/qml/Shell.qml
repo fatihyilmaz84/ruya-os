@@ -263,6 +263,7 @@ FocusScope {
         onActivity: {
             Update.noteActivity(root.appOpen)
             LiquidGate.noteInput()
+            toasts.noteInput()
         }
     }
 

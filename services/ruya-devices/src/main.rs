@@ -101,6 +101,7 @@ fn upower(session: bool) -> Result<DynUPower, Box<dyn Error>> {
         model: "Dev Pad".to_owned(),
         percentage: 60.0,
         state: 2,
+        ..RawDevice::default()
     }])))
 }
 
@@ -332,7 +333,10 @@ fn run() -> Result<(), Box<dyn Error>> {
             .name(BUS_NAME)?
             .serve_at(OBJECT_PATH, AudioIface::new(audio.clone()))?
             .serve_at(OBJECT_PATH, NetworkIface::new(net.clone()))?
-            .serve_at(OBJECT_PATH, BatteriesIface::new(batteries.clone()))?
+            .serve_at(
+                OBJECT_PATH,
+                BatteriesIface::new(batteries.clone(), bluetooth.clone()),
+            )?
             .serve_at(
                 OBJECT_PATH,
                 BluetoothIface::new(bluetooth.clone(), input.clone()),
