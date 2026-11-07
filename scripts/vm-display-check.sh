@@ -9,28 +9,48 @@
 #     is 0 or fits the EDID bytes 21/22 (centimetres) or the first detailed timing;
 #   - SetMode refuses an unknown output and an unknown mode, answers unchanged for the mode in use; Keep and Revert answer no-pending; SetUiScale
 #     refuses 130 and accepts 125 (UiScale follows, a PropertiesChanged-based read) and the original is restored;
-#   - a SetMode to another listed mode writes display-pending.toml and a kms.json that names the output and the mode as "WxH@Hz" (the golden
-#     shape of services/ruya-devices/tests/fixtures/kms-hdmi-1080p60.json), GetPending reports it with starts 0, Revert removes both and the
-#     list is as before;
+#   - the unit's start limit is StartLimitBurst=10 in 120 s (a deliberate restart must fit under it);
+#   - a SetMode to another listed mode writes display-pending.toml and a kms.json that names the output the way QT names its screens
+#     ("HDMI1" for the kernel's "HDMI-A-1", "Virtual1" for "Virtual-1": qkmsdevice.cpp nameForConnector) and also by the kernel's name, with
+#     the mode as "WxH@Hz" (the golden shape of services/ruya-devices/tests/fixtures/kms-hdmi-1080p60.json), GetPending reports it with
+#     starts 0, Revert removes both and the list is as before; Reset on a VM with nothing stored answers unchanged;
 #   - the guard, run as ruya-shell on a scratch state directory: a marker with starts = 1 (the shell never confirmed) is dropped, the config
 #     is removed, a display-fallback note is left and TakeFallbackNotice's twin (the file) is taken once; a marker with starts = 0 becomes 1;
 #   - another user is refused.
 # switch (restarts ruya-compositor@tty1 several times; run on a VM with the shell logged in): the real thing end to end.
 #   1. SetMode to another mode, restart the compositor, GetPending says starts = 1 (the guard counted the start), the framebuffer size
-#      (/sys/class/graphics/fb0/virtual_size) is that mode's (a WARN, not a FAIL: fbdev emulation may differ), Keep stores it (display.toml),
+#      (/sys/class/graphics/fb0/virtual_size) is that mode's (a FAIL when not: it means Qt ignored the KMS config, e.g. a screen name or mode string
+#      it does not know), Keep stores it (display.toml),
 #      the list marks it current, and it is still current after one more restart;
 #   2. SetMode to a third mode, restart twice without Keep: the second start drops the choice (the preferred mode is back, no pending,
 #      no kms.json, TakeFallbackNotice answers true once and then false);
-#   3. the state files are removed and ruya-devices restarted, so the VM is as it was.
+#   3. the state files are removed and ruya-devices restarted, so the VM is as it was;
+#   4. the recorded compositor starts (display-starts) stay under the unit's limit through all of it (about five starts), else FAIL.
 # What QEMU's virtual GPU says is not what a TV says: the Dell run (two modes, one deliberately unsupported that reverts) is by hand, see
-# the T-198 Outcome. Whether Qt's eglfs accepts "WxH@Hz" in its KMS config and names its screens as the kernel names its connectors is
-# proven only by `switch` (the fb size) and by the journal line "ruya-shell: ... screen" of the booted shell.
+# the T-198 Outcome. Whether Qt's eglfs follows the KMS config is proven only by `switch` (the fb size).
 set -u
 svc=org.ruyaos.Devices1
 path=/org/ruyaos/Devices1
 ifc=org.ruyaos.Devices1.Display
 uid="$(id -u ruya-shell)"
 state=/var/lib/ruya-shell/.local/state/ruya-devices
+# The name Qt's eglfs_kms gives the screen of a kernel connector (display.rs qt_output_name): HDMI-A-1 -> HDMI1, DP-1 -> DP1, Virtual-1 -> Virtual1.
+qt_name() {
+    local num="${1##*-}" kind="${1%-*}"
+    case "$kind" in HDMI-A|HDMI-B) kind=HDMI ;; DVI-I|DVI-D|DVI-A) kind=DVI ;; SVIDEO) kind=TV ;; Component) kind=CTV ;; 9PinDIN) kind=DIN ;; esac
+    echo "${kind}${num}"
+}
+# Compositor starts the guard has recorded within the last 120 s.
+recent_starts() {
+    python3 -I -c '
+import sys, time
+now = int(time.time())
+try:
+    times = [int(l) for l in open(sys.argv[1]).read().split()]
+except OSError:
+    times = []
+print(sum(1 for t in times if t + 120 > now))' "$state/display-starts"
+}
 as_shell() { runuser -u ruya-shell -- env XDG_RUNTIME_DIR="/run/user/$uid" "$@"; }
 fail=0
 ok() { echo "PASS: $*"; }
@@ -74,6 +94,8 @@ unit_check() {
     echo "$unit" | grep -q 'QT_QPA_EGLFS_KMS_CONFIG=/var/lib/ruya-shell/.local/state/ruya-devices/kms.json' \
         && ok "the unit points Qt at the KMS config in the service's state directory" || bad "no QT_QPA_EGLFS_KMS_CONFIG in the unit"
     echo "$unit" | grep -q 'ExecStartPre=-/usr/bin/ruya-devices --display-guard' && ok "the unit runs the guard before every start" || bad "no ExecStartPre guard"
+    [ "$(systemctl show 'ruya-compositor@tty1.service' -p StartLimitBurst --value)" = 10 ] && ok "StartLimitBurst is 10: a change and its revert fit under it" || bad "StartLimitBurst: $(systemctl show 'ruya-compositor@tty1.service' -p StartLimitBurst --value)"
+    [ "$(systemctl show 'ruya-compositor@tty1.service' -p StartLimitIntervalUSec --value)" = 2min ] && ok "StartLimitIntervalSec is 120" || bad "StartLimitIntervalUSec: $(systemctl show 'ruya-compositor@tty1.service' -p StartLimitIntervalUSec --value)"
     [ -d "$state" ] && ok "the state directory $state exists" || bad "no $state"
     [ "$(stat -c %U "$state" 2>/dev/null)" = ruya-shell ] && ok "it belongs to ruya-shell (the compositor and the service are the same user)" || bad "owner of $state: $(stat -c %U "$state" 2>&1)"
     as_shell /usr/bin/ruya-devices --display-list >/tmp/display-list.txt 2>&1 && ok "ruya-devices --display-list runs as ruya-shell" || bad "--display-list failed: $(cat /tmp/display-list.txt)"
@@ -133,6 +155,7 @@ contract_check() {
     [ "$(busctl --system get-property "$svc" "$path" "$ifc" UiScale)" = "u 125" ] && ok "UiScale reads 125" || bad "UiScale did not follow"
     prev="${before#u }"; status SetUiScale u "$prev" >/dev/null
 
+    r="$(status Reset)"; [ "$r" = unchanged ] && ok "Reset with nothing stored: $r" || bad "Reset on a fresh VM: $r"
     # A different listed mode, if there is one.
     other="$(jget "$out" '[m for m in d[0][0]["modes"] if not m["current"]][-1]' 2>/dev/null)"
     if [ -z "$other" ] || [ "$other" = "[]" ]; then warn "the output offers only one mode: no switch to try"; return; fi
@@ -141,7 +164,9 @@ contract_check() {
     [ -s "$state/display-pending.toml" ] && ok "the marker is written" || bad "no display-pending.toml"
     hz=$(( (orr + 500) / 1000 ))
     want="${ow}x${oh}@${hz}"; [ "$orr" = 0 ] && want="${ow}x${oh}"
-    grep -q "\"mode\": \"$want\"" "$state/kms.json" && grep -q "\"name\": \"$id\"" "$state/kms.json" && ok "kms.json names $id and mode $want" || bad "kms.json: $(cat "$state/kms.json" 2>&1)"
+    qn="$(qt_name "$id")"
+    grep -q "\"name\": \"$qn\"" "$state/kms.json" && ok "kms.json names the screen $qn (Qt's name for $id)" || bad "kms.json has no entry named $qn: $(cat "$state/kms.json" 2>&1)"
+    grep -q "\"mode\": \"$want\"" "$state/kms.json" && ok "kms.json has the mode $want" || bad "kms.json mode (want $want): $(cat "$state/kms.json" 2>&1)"
     p="$(call GetPending | unwrap)"
     [ "$(jget "$p" 'd[0]["starts"]')" = 0 ] && [ "$(jget "$p" 'd[0]["width"]')" = "$ow" ] && ok "GetPending reports it with starts 0" || bad "GetPending: $p"
     r="$(status SetMode suuu "$id" "$cw" "$ch" "$cr")"; [ "$r" = busy ] && ok "a second change meanwhile: $r" || bad "second SetMode: $r"
@@ -189,6 +214,7 @@ switch_check() {
     id="$(jget "$out" 'd[0][0]["id"]')"
     modes="$(jget "$out" '[m for m in d[0][0]["modes"] if not m["current"]]')"
     n="$(jget "$modes" 'len(d)')"
+    [ "$(recent_starts)" -lt 3 ] || { bad "the compositor started $(recent_starts) times in the last two minutes: wait and run again (the run needs about five starts of ten, and the service refuses a change from eight)"; return; }
     [ "$n" -ge 2 ] || { warn "need two modes besides the current one for the whole run; the output has $n"; return; }
     w1="$(jget "$modes" 'd[0]["width"]')"; h1="$(jget "$modes" 'd[0]["height"]')"; r1="$(jget "$modes" 'd[0]["refresh_mhz"]')"
     w2="$(jget "$modes" 'd[1]["width"]')"; h2="$(jget "$modes" 'd[1]["height"]')"; r2="$(jget "$modes" 'd[1]["refresh_mhz"]')"
@@ -199,7 +225,8 @@ switch_check() {
     p="$(call GetPending | unwrap)"
     [ "$(jget "$p" 'd[0]["starts"]')" = 1 ] && ok "after the restart GetPending says starts = 1 (the guard counted the start)" || bad "GetPending: $p"
     fb="$(cat /sys/class/graphics/fb0/virtual_size 2>/dev/null)"
-    [ "$fb" = "$w1,$h1" ] && ok "the framebuffer is $fb: Qt took the KMS config" || warn "framebuffer $fb, wanted $w1,$h1 (fbdev emulation may differ; look at the screen and the journal)"
+    for _ in $(seq 1 30); do [ "$fb" = "$w1,$h1" ] && break; sleep 1; fb="$(cat /sys/class/graphics/fb0/virtual_size 2>/dev/null)"; done
+    [ "$fb" = "$w1,$h1" ] && ok "the framebuffer is $fb: Qt took the KMS config" || bad "framebuffer $fb, wanted $w1,$h1: Qt ignored the KMS config (screen name or mode string); see: journalctl -u ruya-compositor@tty1 | grep -i kms; cat $state/kms.json"
     [ "$(status Keep)" = ok ] && ok "Keep" || bad "Keep"
     grep -q "width = $w1" "$state/display.toml" && ok "display.toml stores the choice" || bad "display.toml: $(cat "$state/display.toml" 2>&1)"
     systemctl restart ruya-compositor@tty1.service; wait_pending
@@ -221,6 +248,11 @@ switch_check() {
     as_shell systemctl --user restart ruya-devices.service
     systemctl restart ruya-compositor@tty1.service
     ok "state files removed, the service and the compositor restarted"
+    echo "4. the start limit"
+    sleep 5
+    ns="$(recent_starts)"
+    [ "$ns" -lt 10 ] && ok "$ns compositor starts in the window, under the unit's limit of 10" || bad "$ns compositor starts in the window: the limit of 10 was reached"
+    [ "$(systemctl is-active 'ruya-compositor@tty1.service')" = active ] && ok "the compositor unit is active (not start-limit-hit)" || bad "compositor unit: $(systemctl is-active 'ruya-compositor@tty1.service')"
 }
 
 case "${1:-check}" in

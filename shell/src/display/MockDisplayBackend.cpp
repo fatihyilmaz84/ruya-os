@@ -40,6 +40,10 @@ void MockDisplayBackend::reset()
 {
     m_uiScale = 0;
     m_failNext = false;
+    m_failRevertNext = false;
+    m_failKeepNext = false;
+    m_crowded = false;
+    m_resetCalls = 0;
     m_restarts = 0;
     m_setModeCalls = 0;
     useScenario(QStringLiteral("tv4k"));
@@ -130,6 +134,8 @@ void MockDisplayBackend::setMode(const QString &output, uint width, uint height,
             status = QStringLiteral("busy");
         } else if (at == currentIndex()) {
             status = QStringLiteral("unchanged");
+        } else if (m_crowded) {
+            status = QStringLiteral("busy");
         } else if (m_failNext) {
             m_failNext = false;
             status = QStringLiteral("failed");
@@ -148,6 +154,11 @@ void MockDisplayBackend::keep()
             emit keepFinished(QStringLiteral("no-pending"));
             return;
         }
+        if (m_failKeepNext) {
+            m_failKeepNext = false;
+            emit keepFinished(QStringLiteral("failed"));
+            return;
+        }
         for (int i = 0; i < m_screen.modes.size(); ++i) {
             const Mode &m = m_screen.modes.at(i);
             if (m.width == m_candidate.width && m.height == m_candidate.height && m.refreshMhz == m_candidate.refreshMhz)
@@ -164,6 +175,11 @@ void MockDisplayBackend::revert()
     QTimer::singleShot(0, this, [this] {
         if (!m_candidate.valid) {
             emit revertFinished(QStringLiteral("no-pending"));
+            return;
+        }
+        if (m_failRevertNext) {
+            m_failRevertNext = false;
+            emit revertFinished(QStringLiteral("failed"));
             return;
         }
         m_candidate = {};
@@ -185,6 +201,24 @@ void MockDisplayBackend::setUiScale(int percent)
     });
 }
 
+void MockDisplayBackend::resetSettings()
+{
+    ++m_resetCalls;
+    QTimer::singleShot(0, this, [this] {
+        QString status = QStringLiteral("unchanged");
+        if (m_candidate.valid || m_crowded) {
+            status = QStringLiteral("busy");
+        } else {
+            if (m_stored >= 0 && m_stored != defaultIndex())
+                status = QStringLiteral("ok");
+            m_stored = -1;
+            m_uiScale = 0;
+            publish();
+        }
+        emit resetFinished(status);
+    });
+}
+
 void MockDisplayBackend::takeFallbackNotice()
 {
     QTimer::singleShot(0, this, [this] {
@@ -197,10 +231,14 @@ void MockDisplayBackend::takeFallbackNotice()
 void MockDisplayBackend::restartShell()
 {
     ++m_restarts;
-    // The shell is back: a change that waited counts its first start, as the service's guard does.
+    // The shell is back, and the service's guard runs first: a change that waited counts its first
+    // start; one still waiting at a second start was never confirmed and is dropped.
     if (m_candidate.valid && m_candidate.starts == 0) {
         m_candidate.starts = 1;
         QTimer::singleShot(0, this, [this] { publish(); });
+    } else if (m_candidate.valid) {
+        simulateFallback();
+        takeFallbackNotice();       // the new shell asks once it is up
     }
 }
 

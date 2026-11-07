@@ -22,6 +22,7 @@ public:
     void keep() override;
     void revert() override;
     void setUiScale(int percent) override;
+    void resetSettings() override;
     void takeFallbackNotice() override;
     void restartShell() override;
 
@@ -33,6 +34,12 @@ public:
     // service's guard drops the choice and the preferred mode is back.
     void simulateFallback();
     void setFailNext(bool fail) { m_failNext = fail; }
+    // The next Revert (or Keep) answers "failed" and changes nothing: the service did not get to it.
+    void setFailRevertNext(bool fail) { m_failRevertNext = fail; }
+    void setFailKeepNext(bool fail) { m_failKeepNext = fail; }
+    // SetMode, Reset answer "busy" while this is set (the service's start-limit refusal).
+    void setCrowded(bool crowded) { m_crowded = crowded; }
+    int resetCalls() const { return m_resetCalls; }
     int restartCount() const { return m_restarts; }
     int setModeCalls() const { return m_setModeCalls; }
     // Replies to refresh() arrive after `ms` with the state as it was when asked; the number of
@@ -74,6 +81,10 @@ private:
     Candidate m_candidate;
     int m_uiScale = 0;
     bool m_failNext = false;
+    bool m_failRevertNext = false;
+    bool m_failKeepNext = false;
+    bool m_crowded = false;
+    int m_resetCalls = 0;
     bool m_fallback = false;
     int m_restarts = 0;
     int m_setModeCalls = 0;

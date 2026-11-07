@@ -201,8 +201,10 @@ Item {
             verify(find("rowRefreshRate").activeFocus)
             keyClick(Qt.Key_Down)
             verify(find("rowUiSize").activeFocus)
+            keyClick(Qt.Key_Down)
+            verify(find("rowResetDisplay").activeFocus)  // always there, with UI size, even without a screen
             keyClick(Qt.Key_Down)                        // clamped at the last row
-            verify(find("rowUiSize").activeFocus)
+            verify(find("rowResetDisplay").activeFocus)
             verify(find("homePlay").activeFocus === false)
         }
 
@@ -352,8 +354,9 @@ Item {
         }
 
         function test_scroll_cue_hidden_when_everything_fits() {
-            // No screen known (T-198: the Resolution, Refresh rate and UI size rows are only there
-            // with one): the older rows of the pane fit at this size.
+            // No screen known (T-198: the Resolution and Refresh rate rows are only there with one;
+            // UI size and Reset display settings are always): this test is about a pane that fits,
+            // and with a screen's two more rows the pane scrolls at this size.
             verify(Display.mockUseScenario("none"))
             tryCompare(Display, "available", false)
             openSettings()

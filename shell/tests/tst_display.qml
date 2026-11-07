@@ -20,6 +20,7 @@ Item {
     SignalSpy { id: setModeSpy; target: Display; signalName: "setModeFinished" }
     SignalSpy { id: keepSpy; target: Display; signalName: "keepFinished" }
     SignalSpy { id: revertSpy; target: Display; signalName: "revertFinished" }
+    SignalSpy { id: resetSpy; target: Display; signalName: "resetFinished" }
 
     TestCase {
         id: tc
@@ -34,12 +35,14 @@ Item {
             verify(windowGuard.ensureActive() === "", windowGuard.ensureActive())
             Display.mockReset()
             Display.countdownTickMs = 1000
+            Display.acceptGraceMs = 1          // the grace time has its own tests
             tryVerify(() => Display.available)
             tryCompare(Display, "pending", false)
             tryCompare(Display, "uiScalePercent", 0)
             setModeSpy.clear()
             keepSpy.clear()
             revertSpy.clear()
+            resetSpy.clear()
             Profiles.lock()
             tryCompare(Profiles, "activeProfile", "")
             tc.shell = createTemporaryObject(shellComponent, host)
@@ -57,6 +60,7 @@ Item {
             Session.mockReset()
             Display.mockReset()
             Display.countdownTickMs = 1000
+            Display.acceptGraceMs = 1000
             Notifications.durationMs = Theme.toastMs
             while (Notifications.model.count > 0)
                 Notifications.dismiss(Notifications.model.get(0).toastId)
@@ -71,6 +75,19 @@ Item {
             Display.chooseResolution(width, height)
             tryCompare(setModeSpy, "count", before + 1)
             return setModeSpy.signalArguments[before][0]
+        }
+
+        // The dialog takes Accept once the grace time has passed.
+        function waitForAccept() {
+            tryVerify(() => find("modeConfirm").acceptReady)
+        }
+
+        // Keep, the way an owner who sees the picture does it: Right, then Accept.
+        function answerKeep() {
+            waitForAccept()
+            keyClick(Qt.Key_Right)
+            verify(find("modeKeep").activeFocus, "Right reaches Keep")
+            keyClick(Qt.Key_Return)
         }
 
         function openDisplayPane() {
@@ -265,8 +282,8 @@ Item {
             chooseSize(1024, 768)
             tryCompare(Display, "confirming", true)
             compare(find("rowRefreshRate").visible, true, "the rows follow the mode in use, not the one on trial")
-            tryVerify(() => find("modeKeep").activeFocus)
-            keyClick(Qt.Key_Return)                      // Keep
+            tryVerify(() => find("modeRevert").activeFocus)
+            answerKeep()
             tryCompare(Display, "currentWidth", 1024)
             compare(find("rowRefreshRate").visible, false, "a size with no known rate has no choice to make")
             compare(find("rowResolution").value, "1024 × 768")
@@ -297,18 +314,20 @@ Item {
             compare(find("modeConfirmTitle").text, "Keep this resolution?")
             compare(find("modeConfirmMode").text, "1920 × 1080, 60 Hz")
             verify(find("modeConfirmDetail").text.indexOf("15 seconds") > 0, find("modeConfirmDetail").text)
-            tryVerify(() => find("modeKeep").activeFocus, 2000, "focus lands on Keep")
+            // Focus lands on Revert: a blind Accept on a screen that shows nothing goes back.
+            tryVerify(() => find("modeRevert").activeFocus, 2000, "focus lands on Revert")
+            compare(find("modeKeep").activeFocus, false)
 
-            // Left reaches Revert, Right comes back; nothing leaks to the pane underneath.
-            keyClick(Qt.Key_Left)
-            verify(find("modeRevert").activeFocus)
+            // Right reaches Keep, Left comes back; nothing leaks to the pane underneath.
             keyClick(Qt.Key_Right)
             verify(find("modeKeep").activeFocus)
+            keyClick(Qt.Key_Left)
+            verify(find("modeRevert").activeFocus)
             keyClick(Qt.Key_Down)
-            verify(find("modeKeep").activeFocus, "the dialog is modal")
+            verify(find("modeRevert").activeFocus, "the dialog is modal")
             compare(find("rowResolution").activeFocus, false)
 
-            keyClick(Qt.Key_Return)
+            answerKeep()
             tryCompare(Display, "pending", false)
             tryCompare(Display, "currentWidth", 1920)
             tryVerify(() => !dialog.visible)
@@ -323,7 +342,7 @@ Item {
             pickResolution("1280x720")
             tryCompare(Display, "confirming", true)
             const dialog = find("modeConfirm")
-            tryVerify(() => find("modeKeep").activeFocus)
+            tryVerify(() => find("modeRevert").activeFocus)
             keyClick(Qt.Key_Escape)                      // Back = Revert
             tryCompare(Display, "pending", false)
             tryVerify(() => !dialog.visible)
@@ -333,13 +352,110 @@ Item {
 
             pickResolution("1280x720")
             tryCompare(Display, "confirming", true)
-            tryVerify(() => find("modeKeep").activeFocus)
-            keyClick(Qt.Key_Left)
-            verify(find("modeRevert").activeFocus)
+            // The Revert button, and a blind Accept (nothing to see, nothing moved): it reverts.
+            tryVerify(() => find("modeRevert").activeFocus)
+            waitForAccept()
             keyClick(Qt.Key_Return)
             tryCompare(Display, "pending", false)
             compare(Display.currentWidth, 3840)
             compare(Display.mockRestartCount(), 4)
+        }
+
+        // The grace time: a double press on the picker's row must not keep a mode nobody has seen.
+        function test_accept_is_ignored_just_after_the_dialog_appears() {
+            Display.acceptGraceMs = 3000
+            openDisplayPane()
+            pickResolution("1920x1080")
+            tryCompare(Display, "confirming", true)
+            const dialog = find("modeConfirm")
+            tryVerify(() => find("modeRevert").activeFocus)
+            compare(dialog.acceptReady, false)
+            keyClick(Qt.Key_Return)                      // the second press of a double press
+            keyClick(Qt.Key_Right)
+            keyClick(Qt.Key_Return)                      // ... even on Keep
+            compare(dialog.acceptReady, false, "still inside the grace time")
+            compare(Display.confirming, true, "nothing was kept or reverted")
+            compare(Display.currentWidth, 3840)
+            compare(Display.mockRestartCount(), 1)
+            keyClick(Qt.Key_Escape)                      // Back is never delayed
+            tryCompare(Display, "pending", false)
+            compare(Display.mockRestartCount(), 2)
+
+            // Once it has passed, Accept counts.
+            Display.acceptGraceMs = 50
+            pickResolution("1920x1080")
+            tryCompare(Display, "confirming", true)
+            waitForAccept()
+            keyClick(Qt.Key_Return)
+            tryCompare(Display, "pending", false)
+        }
+
+        // The hint bar names what A does on the focused button.
+        function test_the_hint_bar_follows_the_focused_button() {
+            openDisplayPane()
+            pickResolution("1920x1080")
+            tryCompare(Display, "confirming", true)
+            tryVerify(() => find("modeRevert").activeFocus)
+            compare(tc.shell.hintList[0].button, "A")
+            compare(tc.shell.hintList[0].text, "Revert")
+            compare(tc.shell.hintList[1].text, "Revert")
+            keyClick(Qt.Key_Right)
+            verify(find("modeKeep").activeFocus)
+            compare(tc.shell.hintList[0].text, "Keep")
+            compare(tc.shell.hintList[1].button, "B")
+            keyClick(Qt.Key_Left)
+            compare(tc.shell.hintList[0].text, "Revert")
+        }
+
+        // A Keep the service refuses leaves no dead dialog: a toast, and the countdown reverts.
+        function test_a_keep_the_service_refuses_shows_a_toast_and_the_countdown_reverts() {
+            openDisplayPane()
+            pickResolution("1920x1080")
+            tryCompare(Display, "confirming", true)
+            tryVerify(() => find("modeRevert").activeFocus)
+            Display.mockFailKeepNext()
+            answerKeep()
+            tryCompare(keepSpy, "count", 1)
+            compare(keepSpy.signalArguments[0][0], "failed")
+            tryVerify(() => Notifications.model.count > 0)
+            compare(Notifications.model.get(0).kind, "error")
+            compare(Display.confirming, true, "the mode is not kept")
+            Display.countdownTickMs = 5
+            tryCompare(Display, "pending", false, 4000)
+            compare(Display.currentWidth, 3840, "the countdown reverted it")
+            compare(Display.mockRestartCount(), 2)
+        }
+
+        // Revert always restarts the shell, whatever the service answered: the mode on trial may be on
+        // screen, and the guard at the next start puts things right.
+        function test_a_revert_the_service_fails_restarts_the_shell_anyway() {
+            Display.countdownTickMs = 5
+            openDisplayPane()
+            Display.mockFailRevertNext()
+            pickResolution("1280x720")
+            tryCompare(revertSpy, "count", 1, 4000)
+            compare(revertSpy.signalArguments[0][0], "failed")
+            compare(Display.mockRestartCount(), 2, "the shell restarted after the failed revert too")
+            // The mock's guard saw a second start with the marker and dropped the change.
+            tryCompare(Display, "pending", false)
+            compare(Display.currentWidth, 3840)
+            tryVerify(() => Notifications.model.count > 0)
+            compare(Notifications.model.get(0).kind, "warning", "the new shell says the preferred mode is back")
+            tryVerify(() => !find("modeConfirm").visible)
+        }
+
+        // The service refuses a change that could trip the compositor's start limit.
+        function test_a_change_is_refused_while_restarts_are_crowded() {
+            openDisplayPane()
+            Display.mockSetCrowded(true)
+            pickResolution("1920x1080")
+            tryVerify(() => Notifications.model.count > 0)
+            compare(Notifications.model.get(0).kind, "warning")
+            verify(Notifications.model.get(0).text.indexOf("minute") > 0, Notifications.model.get(0).text)
+            compare(Display.mockSetModeCalls(), 1, "the service was asked and said busy")
+            compare(Display.mockRestartCount(), 0)
+            compare(Display.confirming, false)
+            tryVerify(() => find("rowResolution").activeFocus, 2000, "focus is back on the row")
         }
 
         function test_nobody_answering_reverts_when_the_countdown_runs_out() {
@@ -370,7 +486,7 @@ Item {
             tryCompare(Display, "confirming", true)
             // It has ticked below the start and the text says how many seconds are left now.
             tryVerify(() => countdownShows(14))
-            keyClick(Qt.Key_Return)                      // Keep before it ends
+            answerKeep()                                 // Keep before it ends
             tryCompare(Display, "pending", false)
             compare(Display.currentWidth, 1920)
             wait(150)
@@ -421,8 +537,8 @@ Item {
             tryCompare(tc.shell, "currentPage", "settings")
             tryCompare(find("categoryList"), "currentIndex", 3)
             tryCompare(find("modeConfirm"), "shown", true)
-            tryVerify(() => find("modeKeep").activeFocus, 2000, "focus lands on Keep")
-            keyClick(Qt.Key_Return)
+            tryVerify(() => find("modeRevert").activeFocus, 2000, "focus lands on Revert")
+            answerKeep()
             tryCompare(Display, "pending", false)
             tryVerify(() => find("categoryList").activeFocus || find("paneDisplay").activeFocus, 2000, "focus is back in Settings")
         }
@@ -444,11 +560,111 @@ Item {
             compare(Display.pendingWidth, 3840)
             compare(Display.pendingRefreshMhz, 30000)
             compare(find("modeConfirmMode").text, "3840 × 2160, 30 Hz")
-            tryVerify(() => find("modeKeep").activeFocus)
-            keyClick(Qt.Key_Return)
+            tryVerify(() => find("modeRevert").activeFocus)
+            answerKeep()
             tryCompare(Display, "currentRefreshMhz", 30000)
             tryVerify(() => find("rowRefreshRate").activeFocus, 2000, "focus returns to the row")
             compare(find("rowRefreshRate").value, "30 Hz")
+        }
+
+        // ---- Reset display settings, and the rows without a screen ----
+
+        function test_reset_puts_the_preferred_mode_and_auto_back() {
+            openDisplayPane()
+            pickResolution("1920x1080")
+            tryCompare(Display, "confirming", true)
+            tryVerify(() => find("modeRevert").activeFocus)
+            answerKeep()
+            tryCompare(Display, "currentWidth", 1920)
+            Display.setUiScale(150)
+            tryCompare(Display, "uiScalePercent", 150)
+            const restarts = Display.mockRestartCount()
+
+            downTo("rowResetDisplay")
+            const resets = Display.mockResetCalls()
+            keyClick(Qt.Key_Return)
+            tryCompare(Display, "currentWidth", 3840)
+            tryCompare(Display, "uiScalePercent", 0)
+            compare(Display.mockResetCalls(), resets + 1)
+            compare(Display.mockRestartCount(), restarts + 1, "the mode changed, so the shell restarts")
+            tryVerify(() => Notifications.model.count > 0)
+            compare(Notifications.model.get(0).kind, "info")
+            compare(Display.confirming, false, "the preferred mode needs no confirmation")
+            verify(find("rowResetDisplay").activeFocus)
+
+            // Nothing left to reset: no restart.
+            keyClick(Qt.Key_Return)
+            tryCompare(resetSpy, "count", 2)
+            compare(Display.mockRestartCount(), restarts + 1)
+        }
+
+        function test_reset_waits_for_a_running_app_when_the_mode_would_change() {
+            openDisplayPane()
+            pickResolution("1920x1080")
+            tryCompare(Display, "confirming", true)
+            tryVerify(() => find("modeRevert").activeFocus)
+            answerKeep()
+            tryCompare(Display, "currentWidth", 1920)
+            Session.launch("org.example.Racer", "p2")
+            tryVerify(() => Session.running.length === 1)
+            downTo("rowResetDisplay")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => Notifications.model.count > 0)
+            compare(Notifications.model.get(0).kind, "warning")
+            compare(Display.mockResetCalls(), 0)
+            compare(Display.currentWidth, 1920)
+        }
+
+        function test_the_ui_size_and_reset_rows_stay_without_a_screen() {
+            Display.setUiScale(200)
+            tryCompare(Display, "uiScalePercent", 200)
+            verify(Display.mockUseScenario("none"))
+            tryCompare(Display, "available", false)
+            compare(Display.uiScalePercent, 200, "the stored size is still known")
+            openDisplayPane()
+            compare(find("rowResolution").visible, false)
+            compare(find("rowRefreshRate").visible, false)
+            compare(find("rowUiSize").visible, true)
+            compare(find("rowResetDisplay").visible, true)
+            downTo("rowUiSize")
+            keyClick(Qt.Key_Right)                       // wraps to Auto
+            tryCompare(Display, "uiScalePercent", 0)
+            keyClick(Qt.Key_Right)
+            tryCompare(Display, "uiScalePercent", 100)
+            keyClick(Qt.Key_Down)
+            verify(find("rowResetDisplay").activeFocus)
+            keyClick(Qt.Key_Return)
+            tryCompare(Display, "uiScalePercent", 0)
+            compare(Display.mockRestartCount(), 0, "no screen, no mode to put back")
+        }
+
+        // ---- the biggest UI size ----
+
+        function test_the_dialog_fits_the_screen_at_200_percent() {
+            Display.setUiScale(200)
+            tryCompare(Display, "uiScalePercent", 200)
+            for (const language of ["en", "tr"]) {
+                DeviceSettings.language = language
+                openDisplayPane()
+                pickResolution("1920x1080")
+                tryCompare(Display, "confirming", true)
+                const panel = find("modeConfirmPanel")
+                tryVerify(() => find("modeConfirm").visible)
+                verify(panel.x >= 0 && panel.x + panel.width <= tc.shell.width, language + ": the card is inside the screen: " + panel.x + " " + panel.width)
+                for (const name of ["modeConfirmTitle", "modeConfirmMode", "modeConfirmDetail"]) {
+                    const text = find(name)
+                    verify(text.width <= panel.width, language + " " + name + " fits the card")
+                    verify(text.contentWidth <= text.width + 1, language + " " + name + " wraps instead of overflowing")
+                }
+                verify(find("modeKeep").mapToItem(panel, 0, 0).x + find("modeKeep").width <= panel.width, language + ": the buttons are in the card")
+                keyClick(Qt.Key_Escape)
+                tryCompare(Display, "pending", false)
+                tryVerify(() => !find("modeConfirm").visible)
+                keyClick(Qt.Key_Escape)                  // leave Settings for the next round
+                tryVerify(() => find("categoryList").activeFocus)
+                keyClick(Qt.Key_Escape)
+                tryCompare(tc.shell, "currentPage", "")
+            }
         }
 
         function test_turkish_labels() {
@@ -483,18 +699,18 @@ Item {
             grabImage(tc.shell).save(shotsDir + "/display-2-picker.png")
             keyClick(Qt.Key_Return)                      // 1920 x 1080
             tryCompare(Display, "confirming", true)
-            tryVerify(() => find("modeKeep").activeFocus)
+            tryVerify(() => find("modeRevert").activeFocus)
             Display.countdownTickMs = 100000             // hold the countdown for the picture
             wait(600)
             grabImage(tc.shell).save(shotsDir + "/display-3-confirm.png")
-            keyClick(Qt.Key_Return)
+            answerKeep()
             tryCompare(Display, "pending", false)
 
             DeviceSettings.language = "tr"
             Display.countdownTickMs = 1000
             Display.chooseRefresh(50000)
             tryCompare(Display, "confirming", true)
-            tryVerify(() => find("modeKeep").activeFocus)
+            tryVerify(() => find("modeRevert").activeFocus)
             Display.countdownTickMs = 100000
             wait(600)
             grabImage(tc.shell).save(shotsDir + "/display-4-confirm-tr.png")
@@ -517,6 +733,25 @@ Item {
             tryCompare(tc.shell, "currentPage", "")
             wait(600)
             grabImage(tc.shell).save(shotsDir + "/display-6-home-125.png")
+            // 200 %: the pane (the Resolution row's label and value) and the dialog.
+            Display.setUiScale(200)
+            tryCompare(Display, "uiScalePercent", 200)
+            openDisplayPane()
+            downTo("rowResolution")
+            wait(600)
+            grabImage(tc.shell).save(shotsDir + "/display-8-pane-200.png")
+            pickResolution("1280x720")
+            tryCompare(Display, "confirming", true)
+            tryVerify(() => find("modeRevert").activeFocus)
+            Display.countdownTickMs = 100000
+            wait(600)
+            grabImage(tc.shell).save(shotsDir + "/display-9-confirm-200.png")
+            keyClick(Qt.Key_Escape)
+            tryCompare(Display, "pending", false)
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => find("categoryList").activeFocus)
+            keyClick(Qt.Key_Escape)
+            tryCompare(tc.shell, "currentPage", "")
             Display.setUiScale(0)
             verify(Display.mockUseScenario("monitor"))
             tryCompare(Theme, "uiScale", 0.85)

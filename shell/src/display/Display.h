@@ -53,6 +53,11 @@ class DisplayControl : public QObject
     Q_PROPERTY(int confirmSeconds READ confirmSeconds CONSTANT)
     // Milliseconds per countdown step (1000; tests make it short).
     Q_PROPERTY(int countdownTickMs READ countdownTickMs WRITE setCountdownTickMs NOTIFY countdownTickMsChanged)
+    // Milliseconds after the dialog appears during which Accept is ignored (1000): a double press on
+    // the picker's row must not keep a mode nobody has seen. Back works at once.
+    Q_PROPERTY(int acceptGraceMs READ acceptGraceMs WRITE setAcceptGraceMs NOTIFY acceptGraceMsChanged)
+    // The mode in use is the display's preferred one (or no mode is known).
+    Q_PROPERTY(bool currentIsPreferred READ currentIsPreferred NOTIFY outputsChanged)
 
     // The owner's UI size in percent: 0 is Auto, else 100, 125, 150 or 200.
     Q_PROPERTY(int uiScalePercent READ uiScalePercent NOTIFY uiScaleChanged)
@@ -87,6 +92,9 @@ public:
     int confirmSeconds() const { return 15; }
     int countdownTickMs() const { return m_tickMs; }
     void setCountdownTickMs(int ms);
+    int acceptGraceMs() const { return m_graceMs; }
+    void setAcceptGraceMs(int ms);
+    bool currentIsPreferred() const { return m_currentWidth == m_preferredWidth && m_currentHeight == m_preferredHeight; }
     int uiScalePercent() const { return m_uiScale; }
     qreal autoScale() const { return m_autoScale; }
     qreal uiScaleFactor() const { return m_uiScale == 0 ? m_autoScale : m_uiScale / 100.0; }
@@ -107,12 +115,18 @@ public:
     Q_INVOKABLE void keep();
     Q_INVOKABLE void revert();
     Q_INVOKABLE void setUiScale(int percent);
+    // Mode and UI size back to the defaults; the shell restarts when the mode changes.
+    Q_INVOKABLE void resetSettings();
     Q_INVOKABLE void refresh();
 
     // Tests only, and only with the mock backend (otherwise no-ops).
     Q_INVOKABLE void mockReset();
     Q_INVOKABLE bool mockUseScenario(const QString &name);   // "tv4k" | "tv1080" | "monitor" | "none"
     Q_INVOKABLE void mockFailNext();                         // the next SetMode answers "failed"
+    Q_INVOKABLE void mockFailRevertNext();                   // the next Revert answers "failed" and changes nothing
+    Q_INVOKABLE void mockFailKeepNext();                     // the next Keep answers "failed" and changes nothing
+    Q_INVOKABLE void mockSetCrowded(bool crowded);           // SetMode and Reset answer "busy" (start limit)
+    Q_INVOKABLE int mockResetCalls() const;
     Q_INVOKABLE void mockSimulateFallback();                 // the console came back without the change
     Q_INVOKABLE int mockRestartCount() const;
     Q_INVOKABLE int mockSetModeCalls() const;
@@ -124,10 +138,13 @@ signals:
     void pendingChanged();
     void uiScaleChanged();
     void countdownTickMsChanged();
+    void acceptGraceMsChanged();
     // status: "ok" | "unchanged" | "unknown-output" | "unknown-mode" | "busy" | "failed"
     void setModeFinished(const QString &status);
     void keepFinished(const QString &status);
     void revertFinished(const QString &status);
+    // status: "ok" | "unchanged" | "busy" | "failed"
+    void resetFinished(const QString &status);
     // A compositor start dropped a change nobody confirmed (the screen did not answer).
     void modeReset();
 
@@ -154,4 +171,5 @@ private:
     int m_uiScale = 0;
     qreal m_autoScale = 1.0;
     int m_tickMs = 1000;
+    int m_graceMs = 1000;
 };

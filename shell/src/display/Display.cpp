@@ -40,10 +40,19 @@ DisplayControl::DisplayControl(std::unique_ptr<DisplayBackend> backend, QObject 
     });
     connect(m_backend.get(), &DisplayBackend::keepFinished, this, &DisplayControl::keepFinished);
     connect(m_backend.get(), &DisplayBackend::revertFinished, this, [this](const QString &status) {
-        // Back to the stored mode: the shell starts again to show it.
-        if (status == QLatin1String("ok"))
+        // Back to the stored mode: the shell starts again to show it. Also when the service did not
+        // answer or failed: the mode on trial may be on screen (or not), and the guard puts things
+        // right at the next start (a marker still there is dropped, else the config is rewritten from
+        // the stored choice). Only "nothing was pending" needs no restart.
+        if (status != QLatin1String("no-pending"))
             m_backend->restartShell();
         emit revertFinished(status);
+    });
+    connect(m_backend.get(), &DisplayBackend::resetFinished, this, [this](const QString &status) {
+        // The mode is the preferred one at the next start.
+        if (status == QLatin1String("ok"))
+            m_backend->restartShell();
+        emit resetFinished(status);
     });
     connect(m_backend.get(), &DisplayBackend::fallbackNoticeReported, this, [this](bool happened) {
         if (happened)
@@ -226,6 +235,19 @@ void DisplayControl::setUiScale(int percent)
     m_backend->setUiScale(percent);
 }
 
+void DisplayControl::resetSettings()
+{
+    m_backend->resetSettings();
+}
+
+void DisplayControl::setAcceptGraceMs(int ms)
+{
+    if (ms < 0 || ms == m_graceMs)
+        return;
+    m_graceMs = ms;
+    emit acceptGraceMsChanged();
+}
+
 void DisplayControl::refresh()
 {
     m_backend->refresh();
@@ -255,6 +277,30 @@ void DisplayControl::mockFailNext()
 {
     if (auto *mock = qobject_cast<MockDisplayBackend *>(m_backend.get()))
         mock->setFailNext(true);
+}
+
+void DisplayControl::mockFailRevertNext()
+{
+    if (auto *mock = qobject_cast<MockDisplayBackend *>(m_backend.get()))
+        mock->setFailRevertNext(true);
+}
+
+void DisplayControl::mockFailKeepNext()
+{
+    if (auto *mock = qobject_cast<MockDisplayBackend *>(m_backend.get()))
+        mock->setFailKeepNext(true);
+}
+
+void DisplayControl::mockSetCrowded(bool crowded)
+{
+    if (auto *mock = qobject_cast<MockDisplayBackend *>(m_backend.get()))
+        mock->setCrowded(crowded);
+}
+
+int DisplayControl::mockResetCalls() const
+{
+    auto *mock = qobject_cast<MockDisplayBackend *>(m_backend.get());
+    return mock ? mock->resetCalls() : 0;
 }
 
 void DisplayControl::mockSimulateFallback()

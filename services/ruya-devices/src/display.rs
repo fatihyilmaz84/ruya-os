@@ -37,6 +37,16 @@ const STORED: &str = "display.toml";
 const PENDING: &str = "display-pending.toml";
 const KMS: &str = "kms.json";
 const FALLBACK: &str = "display-fallback";
+const STARTS: &str = "display-starts";
+
+/// The compositor unit's start limit (`StartLimitIntervalSec=` and `StartLimitBurst=` of
+/// `ruya-compositor@.service`): more starts than the burst within the window and systemd gives up,
+/// which is a black screen until the console is power-cycled. Every mode change and every revert is
+/// a start of its own, so the guard records each start and the service refuses a change that would
+/// not leave room (`REFUSE_MARGIN`: the change, its revert, and one to spare).
+pub const START_WINDOW_SECS: u64 = 120;
+pub const START_BURST: u32 = 10;
+const REFUSE_MARGIN: u32 = 3;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Mode {
@@ -298,12 +308,37 @@ fn mode_string(c: &Choice) -> String {
     }
 }
 
-/// The JSON `QT_QPA_EGLFS_KMS_CONFIG` points at (Qt's eglfs_kms, one entry per output; the output
-/// is named by the kernel's connector name, which is what Qt 6 calls its screens).
+/// What Qt's eglfs_kms calls the screen of a connector (`nameForConnector` in qkmsdevice.cpp): a
+/// short type name and the connector's number, no dash. The kernel's "HDMI-A-1" is "HDMI1", "DP-2"
+/// is "DP2", "eDP-1" is "eDP1", "Virtual-1" is "Virtual1"; the HDMI and DVI variants lose their
+/// letter, "SVIDEO" is "TV", "Component" is "CTV" and "9PinDIN" is "DIN".
+pub fn qt_output_name(kernel: &str) -> String {
+    let (kind, number) = match kernel.rsplit_once('-') {
+        Some((kind, n)) if !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()) => (kind, n),
+        _ => (kernel, ""),
+    };
+    let short = match kind {
+        "HDMI-A" | "HDMI-B" => "HDMI",
+        "DVI-I" | "DVI-D" | "DVI-A" => "DVI",
+        "SVIDEO" => "TV",
+        "Component" => "CTV",
+        "9PinDIN" => "DIN",
+        other => other,
+    };
+    format!("{short}{number}")
+}
+
+/// The JSON `QT_QPA_EGLFS_KMS_CONFIG` points at (Qt's eglfs_kms, one entry per output). The entry
+/// is named the way Qt names its screens (`qt_output_name`); the kernel's own name is written as a
+/// second entry when it differs, which does no harm where Qt does not know it.
 pub fn kms_config(choice: &Choice) -> String {
-    let doc = serde_json::json!({
-        "outputs": [{ "name": choice.output, "mode": mode_string(choice) }]
-    });
+    let mode = mode_string(choice);
+    let qt = qt_output_name(&choice.output);
+    let mut outputs = vec![serde_json::json!({ "name": qt, "mode": mode })];
+    if qt != choice.output {
+        outputs.push(serde_json::json!({ "name": choice.output, "mode": mode }));
+    }
+    let doc = serde_json::json!({ "outputs": outputs });
     let mut text = serde_json::to_string_pretty(&doc).unwrap_or_default();
     text.push('\n');
     text
@@ -421,6 +456,29 @@ impl Files {
         }
     }
 
+    /// The unix times of the compositor starts within the window ending at `now`.
+    fn recent_starts(&self, now: u64) -> Vec<u64> {
+        let Some(path) = self.path(STARTS) else {
+            return Vec::new();
+        };
+        fs::read_to_string(path)
+            .unwrap_or_default()
+            .lines()
+            .filter_map(|l| l.trim().parse::<u64>().ok())
+            .filter(|&t| t + START_WINDOW_SECS > now && t <= now + START_WINDOW_SECS)
+            .collect()
+    }
+
+    fn record_start(&self, now: u64) -> io::Result<()> {
+        let Some(path) = self.path(STARTS) else {
+            return Ok(());
+        };
+        let mut times = self.recent_starts(now);
+        times.push(now);
+        let text: String = times.iter().map(|t| format!("{t}\n")).collect();
+        write_atomic(&path, &text)
+    }
+
     fn note_fallback(&self) -> io::Result<()> {
         match self.path(FALLBACK) {
             Some(path) => write_atomic(
@@ -468,10 +526,25 @@ pub enum GuardOutcome {
 /// change that was never confirmed, forgets a stored mode the screen no longer offers, and writes
 /// the config for the default (capped) mode. Never fails the start: the caller ignores errors.
 pub fn guard(dir: &Path, drm: &dyn DrmSource) -> io::Result<GuardOutcome> {
+    guard_at(dir, drm, unix_now())
+}
+
+fn unix_now() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs())
+}
+
+/// `guard` with the time given (tests).
+pub fn guard_at(dir: &Path, drm: &dyn DrmSource, now: u64) -> io::Result<GuardOutcome> {
     fs::create_dir_all(dir)?;
     let files = Files {
         dir: Some(dir.to_owned()),
     };
+    // Every start counts towards the unit's start limit, whatever follows.
+    if let Err(err) = files.record_start(now) {
+        eprintln!("ruya-devices: recording the start failed: {err}");
+    }
     let pending = match files.pending() {
         Ok(p) => p,
         // An unreadable marker is a change that cannot be trusted.
@@ -530,16 +603,34 @@ pub struct Display<D: DrmSource> {
     drm: D,
     files: Files,
     lock: Mutex<()>,
+    /// Unix seconds now; a field so that tests can move time.
+    clock: Box<dyn Fn() -> u64 + Send + Sync>,
 }
 
 impl<D: DrmSource> Display<D> {
     /// `dir` is the state directory; `None` keeps nothing (tests that don't need files).
     pub fn new(drm: D, dir: Option<PathBuf>) -> Self {
+        Self::with_clock(drm, dir, Box::new(unix_now))
+    }
+
+    pub fn with_clock(
+        drm: D,
+        dir: Option<PathBuf>,
+        clock: Box<dyn Fn() -> u64 + Send + Sync>,
+    ) -> Self {
         Display {
             drm,
             files: Files { dir },
             lock: Mutex::new(()),
+            clock,
         }
+    }
+
+    /// True when another compositor start now (and the one to put it back) could trip the unit's
+    /// start limit.
+    fn restarts_crowded(&self) -> bool {
+        let recent = self.files.recent_starts((self.clock)()).len() as u32;
+        recent + REFUSE_MARGIN > START_BURST
     }
 
     fn lock(&self) -> MutexGuard<'_, ()> {
@@ -593,6 +684,10 @@ impl<D: DrmSource> Display<D> {
         }
         if view.current == Some(at) {
             return Status::Unchanged;
+        }
+        // A deliberate restart must never be the one that trips the start limit.
+        if self.restarts_crowded() {
+            return Status::Busy;
         }
         // The marker first: a config without it could never be taken back.
         let marker = PendingFile {
@@ -655,6 +750,57 @@ impl<D: DrmSource> Display<D> {
             return Status::Failed;
         }
         Status::Ok
+    }
+
+    /// Back to the defaults: no stored mode (the preferred one, capped at 4K60) and UI size Auto.
+    /// Works on a corrupt choice file too (it is replaced). Returns the status and whether the UI
+    /// size changed. "ok": the mode will change at the next compositor start, so the shell restarts;
+    /// "unchanged": only the stored values were reset; "busy": a change is pending, or restarting
+    /// now could trip the start limit.
+    pub fn reset(&self) -> (Status, bool) {
+        let _guard = self.lock();
+        match self.files.pending() {
+            Ok(None) => {}
+            _ => return (Status::Busy, false),
+        }
+        let stored = self.files.stored().unwrap_or_default();
+        let outputs = self.drm.outputs().unwrap_or_default();
+        let default = config_choice(&Stored::default(), &outputs);
+        let changes_mode = match valid_choice(&stored, &outputs) {
+            Some(c) => !self.is_default_choice(&c, &outputs),
+            None => false,
+        };
+        if changes_mode && self.restarts_crowded() {
+            return (Status::Busy, false);
+        }
+        let ui_changed = stored.ui_scale != 0;
+        if self.files.save_stored(&Stored::default()).is_err() {
+            return (Status::Failed, false);
+        }
+        if !outputs.is_empty() {
+            if let Err(err) = self.files.write_kms(default.as_ref()) {
+                eprintln!("ruya-devices: writing the KMS config failed: {err}");
+                return (Status::Failed, ui_changed);
+            }
+        }
+        (
+            if changes_mode {
+                Status::Ok
+            } else {
+                Status::Unchanged
+            },
+            ui_changed,
+        )
+    }
+
+    /// Whether `choice` is the mode the default would use for its output.
+    fn is_default_choice(&self, choice: &Choice, outputs: &[Output]) -> bool {
+        outputs
+            .iter()
+            .find(|o| o.id == choice.output)
+            .and_then(|o| default_mode(o).map(|at| Choice::of(o, &o.modes[at])))
+            .as_ref()
+            == Some(choice)
     }
 
     pub fn ui_scale(&self) -> u32 {
@@ -894,11 +1040,42 @@ mod tests {
     }
 
     #[test]
+    fn qt_names_its_screens_without_the_dash() {
+        for (kernel, qt) in [
+            ("HDMI-A-1", "HDMI1"),
+            ("HDMI-A-2", "HDMI2"),
+            ("HDMI-B-1", "HDMI1"),
+            ("DP-1", "DP1"),
+            ("eDP-1", "eDP1"),
+            ("VGA-1", "VGA1"),
+            ("DVI-I-1", "DVI1"),
+            ("DVI-D-2", "DVI2"),
+            ("DVI-A-1", "DVI1"),
+            ("Virtual-1", "Virtual1"),
+            ("LVDS-1", "LVDS1"),
+            ("SVIDEO-1", "TV1"),
+            ("Component-1", "CTV1"),
+            ("9PinDIN-1", "DIN1"),
+            ("DSI-1", "DSI1"),
+            ("Composite-1", "Composite1"),
+            ("HDMI-A-12", "HDMI12"),
+            // Not in the kernel's form: left as it is.
+            ("weird", "weird"),
+        ] {
+            assert_eq!(qt_output_name(kernel), qt, "{kernel}");
+        }
+    }
+
+    #[test]
     fn the_kms_config_matches_the_golden_file() {
         let golden = include_str!("../tests/fixtures/kms-hdmi-1080p60.json");
         assert_eq!(kms_config(&choice(1920, 1080, 60_000)), golden);
         // An unknown rate gives the bare size; 59.94 Hz rounds to 60.
         assert!(kms_config(&choice(1024, 768, 0)).contains("\"1024x768\""));
+        // A name that is the same in both forms is written once.
+        let mut dp = choice(1920, 1080, 60_000);
+        dp.output = "weird".to_owned();
+        assert_eq!(kms_config(&dp).matches("\"name\"").count(), 1);
         assert!(kms_config(&choice(1920, 1080, 59_940)).contains("\"1920x1080@60\""));
     }
 
@@ -1107,6 +1284,157 @@ mod tests {
             fs::read_to_string(dir.path().join(KMS)).unwrap(),
             kms_config(&choice(3840, 2160, 60_000))
         );
+    }
+
+    // --- the compositor unit's start limit ---
+
+    fn service_at(dir: &Path, now: u64) -> Display<FakeDrm> {
+        Display::with_clock(
+            FakeDrm(vec![tv()]),
+            Some(dir.to_owned()),
+            Box::new(move || now),
+        )
+    }
+
+    /// `n` compositor starts, one a second from `from`, recorded as the guard records them.
+    fn starts(dir: &Path, from: u64, n: u64) {
+        let files = Files {
+            dir: Some(dir.to_owned()),
+        };
+        for t in from..from + n {
+            files.record_start(t).unwrap();
+        }
+    }
+
+    #[test]
+    fn the_guard_records_every_start_and_forgets_old_ones() {
+        let dir = tempfile::tempdir().unwrap();
+        let drm = FakeDrm(vec![tv()]);
+        for t in 1000..1003 {
+            guard_at(dir.path(), &drm, t).unwrap();
+        }
+        let files = Files {
+            dir: Some(dir.path().to_owned()),
+        };
+        assert_eq!(files.recent_starts(1003), vec![1000, 1001, 1002]);
+        // Two minutes on, the first ones are out of the window.
+        assert_eq!(
+            files.recent_starts(1000 + START_WINDOW_SECS),
+            vec![1001, 1002]
+        );
+        guard_at(dir.path(), &drm, 2000).unwrap();
+        assert_eq!(
+            files.recent_starts(2001),
+            vec![2000],
+            "the file is pruned as it is written"
+        );
+        assert_eq!(
+            fs::read_to_string(dir.path().join(STARTS)).unwrap(),
+            "2000\n"
+        );
+    }
+
+    #[test]
+    fn a_change_that_could_trip_the_start_limit_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        // Seven starts in the last minute: the change, its revert and one to spare would be ten.
+        starts(dir.path(), 1000, u64::from(START_BURST - REFUSE_MARGIN));
+        let d = service_at(dir.path(), 1020);
+        assert_eq!(d.set_mode("HDMI-A-1", 1920, 1080, 60_000), Status::Ok);
+        assert_eq!(d.revert(), Status::Ok, "a revert is never refused");
+        // One more start in the window and there is no room.
+        starts(dir.path(), 1010, 1);
+        let d = service_at(dir.path(), 1020);
+        assert_eq!(d.set_mode("HDMI-A-1", 1920, 1080, 60_000), Status::Busy);
+        assert!(d.pending().is_none(), "nothing was written");
+        assert!(!dir.path().join(KMS).exists());
+        // The mode in use is still just "unchanged": nothing would restart.
+        assert_eq!(
+            d.set_mode("HDMI-A-1", 3840, 2160, 60_000),
+            Status::Unchanged
+        );
+        // Once the starts are out of the window the change goes through.
+        let later = service_at(dir.path(), 1011 + START_WINDOW_SECS);
+        assert_eq!(later.set_mode("HDMI-A-1", 1920, 1080, 60_000), Status::Ok);
+    }
+
+    #[test]
+    fn keep_and_revert_work_whatever_the_crowd() {
+        let dir = tempfile::tempdir().unwrap();
+        let d = service_at(dir.path(), 1000);
+        assert_eq!(d.set_mode("HDMI-A-1", 1920, 1080, 60_000), Status::Ok);
+        starts(dir.path(), 990, 20);
+        let d = service_at(dir.path(), 1000);
+        assert_eq!(d.keep(), Status::Ok);
+        assert_eq!(d.set_mode("HDMI-A-1", 1280, 720, 60_000), Status::Busy);
+    }
+
+    // --- Reset ---
+
+    #[test]
+    fn reset_returns_mode_and_ui_size_to_the_defaults() {
+        let dir = tempfile::tempdir().unwrap();
+        let d = service_at(dir.path(), 1000);
+        assert_eq!(d.set_mode("HDMI-A-1", 1280, 720, 60_000), Status::Ok);
+        assert_eq!(d.keep(), Status::Ok);
+        assert_eq!(d.set_ui_scale(200), (Status::Ok, true));
+        assert!(dir.path().join(KMS).exists());
+        // The mode changes at the next start: "ok" (the shell restarts); the UI size reported changed.
+        assert_eq!(d.reset(), (Status::Ok, true));
+        assert!(
+            !dir.path().join(KMS).exists(),
+            "the preferred mode is Qt's default"
+        );
+        assert_eq!(d.ui_scale(), 0);
+        assert_eq!(d.list().unwrap()[0].current, Some(0));
+        // Nothing left to reset: "unchanged".
+        assert_eq!(d.reset(), (Status::Unchanged, false));
+    }
+
+    #[test]
+    fn reset_with_only_the_ui_size_set_restarts_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let d = service_at(dir.path(), 1000);
+        assert_eq!(d.set_ui_scale(150), (Status::Ok, true));
+        assert_eq!(d.reset(), (Status::Unchanged, true));
+        assert_eq!(d.ui_scale(), 0);
+    }
+
+    #[test]
+    fn reset_works_with_no_output_and_on_a_corrupt_file_and_waits_for_a_pending_change() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join(STORED), "mode = 7").unwrap();
+        let none = Display::with_clock(
+            FakeDrm(Vec::new()),
+            Some(dir.path().to_owned()),
+            Box::new(|| 1000),
+        );
+        assert_eq!(none.reset(), (Status::Unchanged, false));
+        assert_eq!(none.ui_scale(), 0, "the corrupt file was replaced");
+
+        let dir = tempfile::tempdir().unwrap();
+        let d = service_at(dir.path(), 1000);
+        assert_eq!(d.set_mode("HDMI-A-1", 1920, 1080, 60_000), Status::Ok);
+        assert_eq!(
+            d.reset(),
+            (Status::Busy, false),
+            "the owner is still deciding"
+        );
+        assert!(d.pending().is_some());
+    }
+
+    #[test]
+    fn reset_that_would_restart_is_refused_when_restarts_are_crowded() {
+        let dir = tempfile::tempdir().unwrap();
+        let d = service_at(dir.path(), 1000);
+        assert_eq!(d.set_mode("HDMI-A-1", 1920, 1080, 60_000), Status::Ok);
+        assert_eq!(d.keep(), Status::Ok);
+        assert_eq!(d.set_ui_scale(125), (Status::Ok, true));
+        starts(dir.path(), 990, 9);
+        let d = service_at(dir.path(), 1000);
+        assert_eq!(d.reset(), (Status::Busy, false));
+        assert_eq!(d.ui_scale(), 125, "nothing was reset");
+        assert_eq!(d.list().unwrap()[0].current, Some(2));
     }
 
     #[test]

@@ -2,6 +2,10 @@
   "outputs": [
     {
       "mode": "1920x1080@60",
+      "name": "HDMI1"
+    },
+    {
+      "mode": "1920x1080@60",
       "name": "HDMI-A-1"
     }
   ]

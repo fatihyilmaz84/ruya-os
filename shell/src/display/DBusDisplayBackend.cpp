@@ -73,7 +73,12 @@ DBusDisplayBackend::DBusDisplayBackend(QObject *parent)
     , m_bus(chooseBus())
     , m_watcher(Service, m_bus, QDBusServiceWatcher::WatchForRegistration, this)
 {
-    connect(&m_watcher, &QDBusServiceWatcher::serviceRegistered, this, [this] { refresh(); });
+    // The service may come up after the shell: ask for the state again, and for the note a start
+    // that dropped an unconfirmed mode left (the first ask may have found nobody to answer).
+    connect(&m_watcher, &QDBusServiceWatcher::serviceRegistered, this, [this] {
+        refresh();
+        takeFallbackNotice();
+    });
     // UiScale changes as a property.
     m_bus.connect(Service, Path, Properties, QStringLiteral("PropertiesChanged"), this,
                   SLOT(onPropertiesChanged(QString,QVariantMap,QStringList)));
@@ -159,6 +164,11 @@ void DBusDisplayBackend::revert()
 void DBusDisplayBackend::setUiScale(int percent)
 {
     callStatus(QStringLiteral("SetUiScale"), {static_cast<uint>(percent)}, &DisplayBackend::setUiScaleFinished);
+}
+
+void DBusDisplayBackend::resetSettings()
+{
+    callStatus(QStringLiteral("Reset"), {}, &DisplayBackend::resetFinished);
 }
 
 void DBusDisplayBackend::takeFallbackNotice()

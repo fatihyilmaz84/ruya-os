@@ -1676,6 +1676,18 @@ impl DisplayIface {
         status.as_str().to_owned()
     }
 
+    /// Back to the defaults: the preferred mode (capped at 4K60) and UI size Auto.
+    async fn reset(&self, #[zbus(signal_emitter)] emitter: SignalEmitter<'_>) -> String {
+        let display = self.display.clone();
+        let (status, ui_changed) = unblock(move || display.reset()).await;
+        if ui_changed {
+            if let Err(err) = self.ui_scale_changed(&emitter).await {
+                eprintln!("ruya-devices: emitting UiScale failed: {err}");
+            }
+        }
+        status.as_str().to_owned()
+    }
+
     #[zbus(property)]
     fn ui_scale(&self) -> u32 {
         // A small file read; the service's own state, never the kernel's.

@@ -832,7 +832,7 @@
 <context>
     <name>DisplayPane</name>
     <message>
-        <location filename="../qml/DisplayPane.qml" line="+19"/>
+        <location filename="../qml/DisplayPane.qml" line="+21"/>
         <source>Effects quality</source>
         <translation>Efekt kalitesi</translation>
     </message>
@@ -890,30 +890,51 @@
     </message>
     <message>
         <location line="+11"/>
-        <location line="+52"/>
+        <location line="+66"/>
         <source>Resolution</source>
         <translation>Çözünürlük</translation>
     </message>
     <message>
-        <location line="-42"/>
-        <location line="+58"/>
+        <location line="-56"/>
+        <location line="+72"/>
         <source>Refresh rate</source>
         <translation>Yenileme hızı</translation>
     </message>
     <message>
-        <location line="-48"/>
+        <location line="-62"/>
         <source>UI size</source>
         <translation>Arayüz boyutu</translation>
     </message>
     <message>
         <location line="+19"/>
+        <source>Reset display settings</source>
+        <translation>Ekran ayarlarını sıfırla</translation>
+    </message>
+    <message>
+        <location line="+14"/>
         <source>Close running games and apps first: changing the screen mode restarts the console.</source>
         <translation>Önce çalışan oyunları ve uygulamaları kapatın: ekran modunu değiştirmek konsolu yeniden başlatır.</translation>
     </message>
     <message>
         <location line="+40"/>
+        <location line="+6"/>
+        <source>Try again in a minute: the console has just restarted several times.</source>
+        <translation>Bir dakika sonra yeniden deneyin: konsol az önce birkaç kez yeniden başladı.</translation>
+    </message>
+    <message>
+        <location line="-4"/>
         <source>The screen mode could not be changed.</source>
         <translation>Ekran modu değiştirilemedi.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>The display settings could not be reset.</source>
+        <translation>Ekran ayarları sıfırlanamadı.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Display settings reset.</source>
+        <translation>Ekran ayarları sıfırlandı.</translation>
     </message>
 </context>
 <context>
@@ -1007,24 +1028,30 @@
 <context>
     <name>ModeConfirm</name>
     <message>
-        <location filename="../qml/ModeConfirm.qml" line="+24"/>
-        <location line="+126"/>
+        <location filename="../qml/ModeConfirm.qml" line="+32"/>
+        <location line="+175"/>
         <source>Keep</source>
         <translation>Koru</translation>
     </message>
     <message>
-        <location line="-126"/>
-        <location line="+117"/>
+        <location line="-175"/>
+        <location line="+1"/>
+        <location line="+165"/>
         <source>Revert</source>
         <translation>Geri al</translation>
     </message>
     <message>
-        <location line="-37"/>
+        <location line="-81"/>
+        <source>The setting could not be kept. The previous one comes back when the time is up.</source>
+        <translation>Ayar korunamadı. Süre dolunca önceki ayar geri gelir.</translation>
+    </message>
+    <message>
+        <location line="+39"/>
         <source>Keep this resolution?</source>
         <translation>Bu çözünürlük korunsun mu?</translation>
     </message>
     <message numerus="yes">
-        <location line="+21"/>
+        <location line="+26"/>
         <source>If you do nothing, the previous setting comes back in %n second(s).</source>
         <translation>
             <numerusform>Hiçbir şey yapmazsanız önceki ayar %n saniye içinde geri gelir.</numerusform>

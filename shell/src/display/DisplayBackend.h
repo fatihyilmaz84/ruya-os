@@ -28,6 +28,8 @@ public:
     virtual void keep() = 0;
     virtual void revert() = 0;
     virtual void setUiScale(int percent) = 0;
+    // Back to the defaults: the preferred mode and UI size Auto (Devices1.Display.Reset).
+    virtual void resetSettings() = 0;
     virtual void takeFallbackNotice() = 0;
     // Makes the compositor start again so that a written mode takes effect. The real backend ends
     // the process (the compositor unit has Restart=always); the mock only counts.
@@ -41,6 +43,8 @@ signals:
     void keepFinished(const QString &status);
     void revertFinished(const QString &status);
     void setUiScaleFinished(const QString &status);
+    // status: "ok" (the mode changes at the next start) | "unchanged" | "busy" | "failed"
+    void resetFinished(const QString &status);
     void fallbackNoticeReported(bool happened);
 
 protected:

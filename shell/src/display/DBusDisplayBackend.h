@@ -22,6 +22,7 @@ public:
     void keep() override;
     void revert() override;
     void setUiScale(int percent) override;
+    void resetSettings() override;
     void takeFallbackNotice() override;
     void restartShell() override;
 
