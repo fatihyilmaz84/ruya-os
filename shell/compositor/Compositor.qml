@@ -58,6 +58,13 @@ WaylandCompositor {
         }
     }
 
+    // Apps that ask for the screen to stay on (video players, games): each inhibitor is a reason
+    // the idle clock does not count down (T-202; the shell's debug row lists them, the log has +/-).
+    IdleInhibitManager {
+        onInhibitorAdded: id => IdleInhibit.acquire("wayland:" + id)
+        onInhibitorRemoved: id => IdleInhibit.release("wayland:" + id)
+    }
+
     XdgShell {
         onToplevelCreated: (toplevel, xdgSurface) => {
             // Parented to the shell so it is never garbage-collected; addApp moves it into the app layer.

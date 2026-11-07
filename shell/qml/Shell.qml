@@ -259,13 +259,27 @@ FocusScope {
         appItem: root.focusedApp
         onGuidePressed: autoRepeat => { if (root.signedIn && !systemPanel.open) root.guideDown(autoRepeat) }
         onGuideReleased: autoRepeat => root.guideUp(autoRepeat)
+        // While the screen saver or the dark screen is up, the first input only wakes the console
+        // (IdleClock.covered): KeyRouter eats it, so no page and no app sees it (T-202).
+        swallowInput: IdleClock.covered
+        onActivity: IdleClock.noteInput()
+    }
+
+    // The one idle clock (T-202): every receiver that used to watch the input itself hears it from here.
+    Connections {
+        target: IdleClock
         // The update service restarts the console only when nobody is using it.
-        onActivity: {
+        function onInputNoted() {
             Update.noteActivity(root.appOpen)
             LiquidGate.noteInput()
             toasts.noteInput()
-            presence.noteInput()
+            presence.check()
         }
+    }
+    Binding {
+        target: IdleClock
+        property: "appOpen"
+        value: root.appOpen
     }
 
     // The app in front, for the play ledger (T-247): the newest running app of the active profile
@@ -429,7 +443,7 @@ FocusScope {
             objectName: "backdrop"
             anchors.fill: parent
             tint: Profiles.active.avatar ?? Theme.defaultTint
-            shown: !wallpaperLayer.covering      // a wallpaper covers it (T-208)
+            shown: !wallpaperLayer.covering && !IdleClock.covered   // a wallpaper covers it (T-208); the saver covers all (T-202)
         }
 
         // The wallpaper (Settings -> Display & motion): the picture under the hero art, blurred on pages.
@@ -1017,6 +1031,15 @@ FocusScope {
         objectName: "modeConfirm"
         anchors.fill: parent
         z: 40
+        u: root.u
+    }
+
+    // The screen saver and the dark screen (T-202): above everything, the OSD and the dialogs too.
+    ScreenSaver {
+        id: screenSaver
+        objectName: "screenSaver"
+        anchors.fill: parent
+        z: 100
         u: root.u
     }
 

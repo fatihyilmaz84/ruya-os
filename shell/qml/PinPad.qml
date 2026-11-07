@@ -37,6 +37,18 @@ FocusScope {
     signal collected(string pin)        // collect modes: the PIN the user entered (and confirmed)
     signal cancelled()                  // collect modes: closed without a PIN
 
+    // The screen saver starts (T-202): a PIN pad never stays up, half typed, behind it.
+    Connections {
+        target: IdleClock
+        function onSaverStarted() {
+            if (pad.shown) {
+                pad.entered = ""
+                pad.firstEntry = ""
+                pad.cancel()
+            }
+        }
+    }
+
     function collect(promptText, confirm) {
         mode = confirm ? "collect-confirm" : "collect"
         prompt = promptText

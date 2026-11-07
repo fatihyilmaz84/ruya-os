@@ -67,6 +67,8 @@ pub struct Snapshot {
     pub default: Option<String>,
     pub volume: u32,
     pub muted: bool,
+    /// Some output is running, i.e. something plays (T-202, `Playing`).
+    pub playing: bool,
 }
 
 /// The side effects: PipeWire itself. A fake serves tests and `--session`; on Linux
@@ -105,6 +107,7 @@ pub struct Audio<P: PipeWire> {
     previous: Vec<String>,
     volume: u32,
     muted: bool,
+    playing: bool,
     channels: Channels,
 }
 
@@ -120,6 +123,7 @@ impl<P: PipeWire> Audio<P> {
             previous: Vec::new(),
             volume: 0,
             muted: false,
+            playing: false,
             channels,
         })
     }
@@ -181,13 +185,14 @@ impl<P: PipeWire> Audio<P> {
         if self.sinks != snap.sinks {
             changes.sinks = true;
         }
-        if self.volume != snap.volume || self.muted != snap.muted {
+        if self.volume != snap.volume || self.muted != snap.muted || self.playing != snap.playing {
             changes.props = true;
         }
         self.sinks = snap.sinks;
         self.default = default;
         self.volume = snap.volume.min(100);
         self.muted = snap.muted;
+        self.playing = snap.playing;
         if first {
             changes = Changes::default();
         }
@@ -231,6 +236,11 @@ impl<P: PipeWire> Audio<P> {
 
     pub fn muted(&self) -> bool {
         self.muted
+    }
+
+    /// Something is playing on an output (an output node is "running").
+    pub fn playing(&self) -> bool {
+        self.playing
     }
 
     pub fn set_volume(&mut self, volume: u32) -> Status {
@@ -286,6 +296,7 @@ pub struct FakePipeWire {
     pub default: Option<String>,
     pub volume: u32,
     pub muted: bool,
+    pub playing: bool,
     /// Make every write fail (to test the "failed" status).
     pub broken: bool,
 }
@@ -305,6 +316,7 @@ impl FakePipeWire {
             default: Some("hdmi-0".to_owned()),
             volume: 50,
             muted: false,
+            playing: false,
             broken: false,
         }
     }
@@ -323,6 +335,7 @@ impl PipeWire for FakePipeWire {
             default: self.default.clone(),
             volume: self.volume,
             muted: self.muted,
+            playing: self.playing,
         })
     }
 
@@ -492,6 +505,19 @@ mod tests {
         let c = a.refresh().unwrap();
         assert_eq!(c.default.as_deref(), Some("analog-0"));
         assert_eq!(a.previous, ["hdmi-0"]);
+    }
+
+    #[test]
+    fn playing_follows_pipewire_and_is_announced() {
+        let mut a = started();
+        assert!(!a.playing());
+        a.pw.playing = true;
+        assert!(a.refresh().unwrap().props);
+        assert!(a.playing());
+        assert!(!a.refresh().unwrap().props, "no change, no announcement");
+        a.pw.playing = false;
+        assert!(a.refresh().unwrap().props);
+        assert!(!a.playing());
     }
 
     #[test]

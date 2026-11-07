@@ -2,6 +2,7 @@
 
 #include <QObject>
 #include <QPointer>
+#include <QSet>
 #include <QQmlEngine>
 #include <QQuickItem>
 #include <QQuickWindow>
@@ -20,6 +21,10 @@ class KeyRouter : public QObject
 
     Q_PROPERTY(QQuickWindow *window READ window WRITE setWindow NOTIFY windowChanged)
     Q_PROPERTY(QQuickItem *appItem READ appItem WRITE setAppItem NOTIFY appItemChanged)
+    // While true (the screen saver or the dark screen is up, T-202) every key, mouse, touch and
+    // wheel event is reported through activity() and then eaten: nothing below sees the press that
+    // wakes the console, nor its release.
+    Q_PROPERTY(bool swallowInput READ swallowInput WRITE setSwallowInput NOTIFY swallowInputChanged)
 
 public:
     explicit KeyRouter(QObject *parent = nullptr);
@@ -28,6 +33,8 @@ public:
     void setWindow(QQuickWindow *window);
     QQuickItem *appItem() const { return m_appItem; }
     void setAppItem(QQuickItem *item);
+    bool swallowInput() const { return m_swallowInput; }
+    void setSwallowInput(bool swallow);
 
     // The one place that says which keys are the Guide button. The controller's Guide arrives
     // as HomePage (ruya-inputd); on a keyboard it is Super, left or right (Qt reports the
@@ -39,6 +46,7 @@ public:
 signals:
     void windowChanged();
     void appItemChanged();
+    void swallowInputChanged();
     // A Guide key taken from the focused app (press, or release; `autoRepeat` for held keys).
     void guidePressed(bool autoRepeat);
     void guideReleased(bool autoRepeat);
@@ -51,4 +59,8 @@ private:
 
     QPointer<QQuickWindow> m_window;
     QPointer<QQuickItem> m_appItem;
+    bool m_swallowInput = false;
+    // Keys and mouse buttons whose press was eaten: their release is eaten too.
+    QSet<int> m_eatenKeys;
+    bool m_eatenMouse = false;
 };

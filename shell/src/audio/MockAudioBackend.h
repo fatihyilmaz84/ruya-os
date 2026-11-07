@@ -27,6 +27,11 @@ public:
     bool plug(const QString &id);
     void unplug(const QString &id);
     void reset();
+    void setPlaying(bool playing)
+    {
+        m_playing = playing;
+        publishState();
+    }
     // Replies to refresh() arrive after `ms` (0: at once), with the state as it was when asked;
     // the number of replies still on their way. Lets a test play an old reply landing after a
     // new one.
@@ -42,6 +47,7 @@ private:
 
     int m_volume = 50;
     bool m_muted = false;
+    bool m_playing = false;
     QVariantMap m_channels;
     QList<SinkInfo> m_sinks;
     QStringList m_previous; // earlier defaults, most recent last

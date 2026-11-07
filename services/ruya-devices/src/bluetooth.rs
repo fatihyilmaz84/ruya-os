@@ -8,6 +8,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
 use crate::families::family_of;
+use crate::idle_pads::{IdlePads, IdleReport, Pad};
 use crate::pairing::{
     address_of_path, is_format_char, is_hid_service, is_input_device, PairingState, DEFAULT_WINDOW,
     MAX_ATTEMPTS, MAX_WINDOW,
@@ -338,6 +339,8 @@ pub struct Bluetooth<B: Bluez> {
     state: Mutex<State>,
     /// Called when something changed outside any D-Bus call (the agent refused a device).
     notifier: Mutex<Option<Notifier>>,
+    /// Which idle pads were told to disconnect (T-202).
+    idle_pads: Mutex<IdlePads>,
 }
 
 impl<B: Bluez> Bluetooth<B> {
@@ -346,6 +349,7 @@ impl<B: Bluez> Bluetooth<B> {
             bluez,
             state: Mutex::new(State::default()),
             notifier: Mutex::new(None),
+            idle_pads: Mutex::new(IdlePads::new()),
         }
     }
 
@@ -624,6 +628,36 @@ impl<B: Bluez> Bluetooth<B> {
             },
             Err(s) => s,
         }
+    }
+
+    /// The shell's idle report (T-202): disconnects the connected, paired game controllers that
+    /// have been idle for the whole timeout. Returns the ids it disconnected. Bluetooth being off
+    /// or unreadable disconnects nothing.
+    pub fn report_idle(&self, now: Instant, report: IdleReport) -> Vec<String> {
+        if self.read().is_err() {
+            return Vec::new();
+        }
+        let pads: Vec<Pad> = self
+            .list()
+            .into_iter()
+            .filter(|d| d.kind == "controller" && d.paired)
+            .map(|d| Pad {
+                id: d.id,
+                connected: d.connected,
+            })
+            .collect();
+        let due = self
+            .idle_pads
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .decide(now, report, &pads);
+        let mut done = Vec::new();
+        for id in due {
+            if self.bluez.disconnect(&id).is_ok() {
+                done.push(id);
+            }
+        }
+        done
     }
 
     /// Gives a paired device the name the user typed (BlueZ's `Alias`), T-260. The name is
@@ -1397,6 +1431,41 @@ mod tests {
         });
         assert_eq!(status, Status::Timeout);
         assert_eq!(bt.bluez.timeouts().len(), 1, "connect was not even tried");
+    }
+
+    #[test]
+    fn an_idle_report_disconnects_only_connected_controllers_once() {
+        let bt = Bluetooth::new(FakeBluez::with_devices());
+        bt.refresh().expect("fake reads");
+        let min = Duration::from_secs(60);
+        let t0 = Instant::now();
+        let report = |idle: u32| IdleReport::from_seconds(idle * 60, 15 * 60, false);
+        // Dev Pad is connected; Found Pad is not paired. Just seen: not idle yet.
+        assert!(bt.report_idle(t0, report(20)).is_empty());
+        assert_eq!(
+            bt.report_idle(t0 + min * 15, report(35)),
+            vec!["AA:00:00:00:00:01".to_owned()]
+        );
+        assert_eq!(
+            bt.bluez
+                .calls()
+                .iter()
+                .filter(|c| c.starts_with("disconnect"))
+                .count(),
+            1
+        );
+        bt.refresh().expect("fake reads");
+        assert!(!bt.list()[0].connected, "the fake pad is off");
+        // Reported again: nothing more to do, and no second call.
+        assert!(bt.report_idle(t0 + min * 16, report(36)).is_empty());
+        assert_eq!(
+            bt.bluez
+                .calls()
+                .iter()
+                .filter(|c| c.starts_with("disconnect"))
+                .count(),
+            1
+        );
     }
 
     #[test]

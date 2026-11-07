@@ -99,9 +99,9 @@ Item {
             tryCompare(tc.shell, "currentPage", "settings")
             const list = find("categoryList")
             tryVerify(() => list.activeFocus)
-            for (let i = 0; i < 20 && list.currentIndex < 7; ++i)   // System
+            for (let i = 0; i < 20 && list.currentIndex < 8; ++i)   // System
                 keyClick(Qt.Key_Down)
-            compare(list.currentIndex, 7)
+            compare(list.currentIndex, 8)
             keyClick(Qt.Key_Return)
             const row = find("rowLanguage")
             tryVerify(() => row.activeFocus, 2000, "the language row has focus")

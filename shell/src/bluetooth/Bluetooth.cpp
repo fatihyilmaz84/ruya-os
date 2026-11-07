@@ -129,6 +129,35 @@ void Bluetooth::disconnectDevice(const QString &id)
     m_backend->disconnectDevice(id);
 }
 
+void Bluetooth::reportIdle(int idleSeconds, int timeoutSeconds, bool hold)
+{
+    m_backend->reportIdle(qMax(0, idleSeconds), qMax(0, timeoutSeconds), hold);
+}
+
+int Bluetooth::mockIdleReports() const
+{
+    auto *mock = qobject_cast<MockBluetoothBackend *>(m_backend.get());
+    return mock ? mock->idleReports() : 0;
+}
+
+int Bluetooth::mockLastIdleSeconds() const
+{
+    auto *mock = qobject_cast<MockBluetoothBackend *>(m_backend.get());
+    return mock ? mock->lastIdleSeconds() : -1;
+}
+
+int Bluetooth::mockLastIdleTimeout() const
+{
+    auto *mock = qobject_cast<MockBluetoothBackend *>(m_backend.get());
+    return mock ? mock->lastIdleTimeout() : -1;
+}
+
+bool Bluetooth::mockLastIdleHold() const
+{
+    auto *mock = qobject_cast<MockBluetoothBackend *>(m_backend.get());
+    return mock && mock->lastIdleHold();
+}
+
 void Bluetooth::rename(const QString &id, const QString &name)
 {
     m_backend->rename(id, name);

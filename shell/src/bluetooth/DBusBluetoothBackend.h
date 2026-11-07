@@ -24,6 +24,7 @@ public:
     void forget(const QString &id) override;
     void connectDevice(const QString &id) override;
     void disconnectDevice(const QString &id) override;
+    void reportIdle(int idleSeconds, int timeoutSeconds, bool hold) override;
     void rename(const QString &id, const QString &name) override;
     void startControllerPairing(int seconds) override;
     void stopControllerPairing() override;

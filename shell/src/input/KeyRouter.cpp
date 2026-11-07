@@ -27,6 +27,14 @@ void KeyRouter::setAppItem(QQuickItem *item)
     emit appItemChanged();
 }
 
+void KeyRouter::setSwallowInput(bool swallow)
+{
+    if (m_swallowInput == swallow)
+        return;
+    m_swallowInput = swallow;
+    emit swallowInputChanged();
+}
+
 bool KeyRouter::isGuideKey(int key)
 {
     return key == Qt::Key_HomePage || key == Qt::Key_Super_L || key == Qt::Key_Super_R || key == Qt::Key_Meta;
@@ -47,6 +55,18 @@ bool KeyRouter::eventFilter(QObject *watched, QEvent *event)
     if (watched != m_window)
         return false;
     const QEvent::Type type = event->type();
+    // Decided before activity() is emitted: the receiver wakes the console, which clears the flag.
+    const bool eat = m_swallowInput;
+    if (type == QEvent::KeyPress && m_eatenKeys.contains(static_cast<QKeyEvent *>(event)->key()))
+        return true; // the held key that woke the console keeps repeating: still not for the page
+    if (type == QEvent::KeyRelease) {
+        auto *key = static_cast<QKeyEvent *>(event);
+        if (m_eatenKeys.remove(key->key()))
+            return true;
+    } else if (type == QEvent::MouseButtonRelease && m_eatenMouse) {
+        m_eatenMouse = false;
+        return true;
+    }
     switch (type) {
     case QEvent::KeyPress:
     case QEvent::MouseButtonPress:
@@ -57,6 +77,24 @@ bool KeyRouter::eventFilter(QObject *watched, QEvent *event)
         break;
     default:
         break;
+    }
+    if (eat) {
+        switch (type) {
+        case QEvent::KeyPress:
+            m_eatenKeys.insert(static_cast<QKeyEvent *>(event)->key());
+            return true;
+        case QEvent::MouseButtonPress:
+            m_eatenMouse = true;
+            return true;
+        case QEvent::MouseMove:
+        case QEvent::TouchBegin:
+        case QEvent::TouchUpdate:
+        case QEvent::TouchEnd:
+        case QEvent::Wheel:
+            return true;
+        default:
+            break;
+        }
     }
     if (!appHasFocus())
         return false;

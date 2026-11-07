@@ -130,6 +130,16 @@
       <annotation name="org.freedesktop.DBus.Property.EmitsChangedSignal" value="true"/>
     </property>
 
+    <!--
+      True while something plays through an output: a PipeWire output node is "running" (T-202; the
+      shell keeps the screen saver and sleep off while it is true). It follows the graph by the
+      same events as the outputs; a UI sound makes it true for the few seconds PipeWire keeps the
+      node running.
+    -->
+    <property name="Playing" type="b" access="read">
+      <annotation name="org.freedesktop.DBus.Property.EmitsChangedSignal" value="true"/>
+    </property>
+
     <!-- Per-channel levels, 0-100: keys "ui", "ambient", "media", all always present. Set with SetChannelVolume. -->
     <property name="ChannelVolumes" type="a{su}" access="read">
       <annotation name="org.freedesktop.DBus.Property.EmitsChangedSignal" value="true"/>
@@ -279,6 +289,29 @@
 
     <method name="Disconnect">
       <arg name="id" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <!--
+      Idle controllers (T-202). The shell, which sees every key of the console, tells the service
+      how long nobody has pressed anything; the service disconnects the connected game
+      controllers (kind "controller", paired) to save their batteries once that reaches the
+      timeout. A pad reconnects by itself on its next button press (it is trusted).
+        idle_seconds     time since the last input the shell saw
+        timeout_seconds  the user's setting; 0 = never (the service forgets what it knew)
+        hold             true while something must keep the pads on: an app is in front (the
+                         shell does not see every button an app uses), or an install or update
+                         is running
+      Rules (idle_pads.rs): a pad is disconnected at most once per idle period; it counts as idle
+      only from the moment it was seen connected (a pad that has just reconnected gets the full
+      timeout again); a report with idle_seconds below the timeout, or with hold, starts over.
+      The shell reports every minute while the console is idle (and at once when input ends an
+      idle period). "ok" also when nothing was disconnected and when Bluetooth is off.
+    -->
+    <method name="ReportIdle">
+      <arg name="idle_seconds" type="u" direction="in"/>
+      <arg name="timeout_seconds" type="u" direction="in"/>
+      <arg name="hold" type="b" direction="in"/>
       <arg name="status" type="s" direction="out"/>
     </method>
 

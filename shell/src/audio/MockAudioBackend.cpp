@@ -120,6 +120,7 @@ void MockAudioBackend::initState()
 {
     m_volume = 50;
     m_muted = false;
+    m_playing = false;
     m_channels.clear();
     for (const QString &name : channelNames())
         m_channels.insert(name, 100);
@@ -155,14 +156,16 @@ void MockAudioBackend::publishState(int delayMs)
 {
     const int volume = m_volume;
     const bool muted = m_muted;
+    const bool playing = m_playing;
     const QVariantMap channels = m_channels;
     const quint64 request = beginStateRequest();
     if (delayMs > 0)
         ++m_pending;
-    QTimer::singleShot(delayMs, this, [this, request, volume, muted, channels, delayMs] {
+    QTimer::singleShot(delayMs, this, [this, request, volume, muted, playing, channels, delayMs] {
         if (delayMs > 0)
             --m_pending;
-        deliverState(request, volume, muted, channels);
+        if (deliverState(request, volume, muted, channels))
+            emit playingReported(playing);
     });
 }
 

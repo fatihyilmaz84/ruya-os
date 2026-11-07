@@ -229,6 +229,14 @@ void MockBluetoothBackend::disconnectDevice(const QString &id)
     answer(QStringLiteral("disconnect"), id, status);
 }
 
+void MockBluetoothBackend::reportIdle(int idleSeconds, int timeoutSeconds, bool hold)
+{
+    ++m_idleReports;
+    m_lastIdleSeconds = idleSeconds;
+    m_lastIdleTimeout = timeoutSeconds;
+    m_lastIdleHold = hold;
+}
+
 void MockBluetoothBackend::rename(const QString &id, const QString &name)
 {
     const int at = indexOf(id);
@@ -353,6 +361,10 @@ void MockBluetoothBackend::initState()
     m_pairingScript = QStringLiteral("wait");
     m_inputPresent = true;
     m_pairingStarts = 0;
+    m_idleReports = 0;
+    m_lastIdleSeconds = -1;
+    m_lastIdleTimeout = -1;
+    m_lastIdleHold = false;
     m_powered = true;
     m_discovering = false;
     m_scans = 0;

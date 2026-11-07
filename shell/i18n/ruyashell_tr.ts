@@ -1453,7 +1453,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>PinPad</name>
     <message>
-        <location filename="../qml/PinPad.qml" line="+127"/>
+        <location filename="../qml/PinPad.qml" line="+136"/>
         <source>PINs don&apos;t match</source>
         <translation>PIN&apos;ler eşleşmiyor</translation>
     </message>
@@ -1572,6 +1572,97 @@ Bu geri alınamaz.</translation>
         <location line="+7"/>
         <source>Power off</source>
         <translation>Kapat</translation>
+    </message>
+</context>
+<context>
+    <name>PowerSavingPane</name>
+    <message>
+        <location filename="../qml/PowerSavingPane.qml" line="+14"/>
+        <source>Select</source>
+        <translation>Seç</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Back</source>
+        <translation>Geri</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+6"/>
+        <source>%n hour(s)</source>
+        <translation>
+            <numerusform>%n saat</numerusform>
+            <numerusform>%n saat</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+1"/>
+        <source>%n minute(s)</source>
+        <translation>
+            <numerusform>%n dakika</numerusform>
+            <numerusform>%n dakika</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>a download or install</source>
+        <translation>bir indirme veya kurulum</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>a system update</source>
+        <translation>bir sistem güncellemesi</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>audio playing</source>
+        <translation>ses çalıyor</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>an app</source>
+        <translation>bir uygulama</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Screen saver</source>
+        <translation>Ekran koruyucu</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Off</source>
+        <translation>Kapalı</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Turn the screen off</source>
+        <translation>Ekranı kapat</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+11"/>
+        <location line="+10"/>
+        <source>Never</source>
+        <translation>Asla</translation>
+    </message>
+    <message>
+        <location line="-11"/>
+        <source>Sleep</source>
+        <translation>Uyku</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Controllers turn off</source>
+        <translation>Kontrolcüler kapanır</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Keeping the console awake</source>
+        <translation>Konsolu uyanık tutan</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Nothing</source>
+        <translation>Hiçbir şey</translation>
     </message>
 </context>
 <context>
@@ -1847,6 +1938,14 @@ Bu geri alınamaz.</translation>
     </message>
 </context>
 <context>
+    <name>ScreenSaver</name>
+    <message>
+        <location filename="../qml/ScreenSaver.qml" line="+59"/>
+        <source>Screen saver</source>
+        <translation>Ekran koruyucu</translation>
+    </message>
+</context>
+<context>
     <name>SectionNav</name>
     <message>
         <location filename="../qml/SectionNav.qml" line="+33"/>
@@ -1878,12 +1977,12 @@ Bu geri alınamaz.</translation>
     <name>SettingsPage</name>
     <message>
         <location filename="../qml/SettingsPage.qml" line="+12"/>
-        <location line="+64"/>
+        <location line="+66"/>
         <source>Settings</source>
         <translation>Ayarlar</translation>
     </message>
     <message>
-        <location line="-53"/>
+        <location line="-55"/>
         <source>Profiles</source>
         <translation>Profiller</translation>
     </message>
@@ -1919,6 +2018,11 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+1"/>
+        <source>Power saving</source>
+        <translation>Güç tasarrufu</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>System</source>
         <translation>Sistem</translation>
     </message>
@@ -1928,7 +2032,7 @@ Bu geri alınamaz.</translation>
         <translation>Hakkında</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+17"/>
         <source>Select</source>
         <translation>Seç</translation>
     </message>
@@ -1938,7 +2042,7 @@ Bu geri alınamaz.</translation>
         <translation>Geri</translation>
     </message>
     <message>
-        <location line="+204"/>
+        <location line="+213"/>
         <source>Coming soon</source>
         <translation>Yakında</translation>
     </message>
@@ -2122,7 +2226,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+332"/>
+        <location filename="../qml/Shell.qml" line="+346"/>
         <source>Could not %1.</source>
         <translation>%1 işlemi yapılamadı.</translation>
     </message>
@@ -2159,12 +2263,12 @@ Bu geri alınamaz.</translation>
         <translation>%1 yüzde %2</translation>
     </message>
     <message>
-        <location line="+573"/>
+        <location line="+582"/>
         <source>Power</source>
         <translation>Güç</translation>
     </message>
     <message>
-        <location line="-821"/>
+        <location line="-830"/>
         <source>Update ready. Restart to finish.</source>
         <translation>Güncelleme hazır. Bitirmek için yeniden başlat.</translation>
     </message>
@@ -2230,7 +2334,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 başlatılıyor…</translation>
     </message>
     <message>
-        <location line="+254"/>
+        <location line="+263"/>
         <location line="+12"/>
         <location line="+3"/>
         <source>Select</source>
@@ -3204,22 +3308,22 @@ Bu geri alınamaz.</translation>
         <translation>Dreamglass</translation>
     </message>
     <message>
-        <location line="+52"/>
+        <location line="+56"/>
         <source>Midnight</source>
         <translation>Gece yarısı</translation>
     </message>
     <message>
-        <location line="+52"/>
+        <location line="+56"/>
         <source>Aurora</source>
         <translation>Aurora</translation>
     </message>
     <message>
-        <location line="+52"/>
+        <location line="+56"/>
         <source>Ember</source>
         <translation>Köz</translation>
     </message>
     <message>
-        <location line="+52"/>
+        <location line="+55"/>
         <source>Daylight</source>
         <translation>Gün ışığı</translation>
     </message>

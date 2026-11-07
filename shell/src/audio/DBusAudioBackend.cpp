@@ -121,8 +121,10 @@ void DBusAudioBackend::refreshState()
         int volume = 0;
         bool muted = false;
         QVariantMap channels;
-        parseState(parseDict(reply.arguments().constFirst().value<QDBusArgument>()), &volume, &muted, &channels);
-        deliverState(request, volume, muted, channels);
+        const QVariantMap props = parseDict(reply.arguments().constFirst().value<QDBusArgument>());
+        parseState(props, &volume, &muted, &channels);
+        if (deliverState(request, volume, muted, channels))
+            emit playingReported(props.value(QStringLiteral("Playing")).toBool());
     });
 }
 

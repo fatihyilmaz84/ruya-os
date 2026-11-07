@@ -49,6 +49,12 @@ class DeviceSettings : public QObject
     // How much the wallpaper is darkened, 0.0 - 0.6 (a picture that needs more for legible text is
     // darkened further, Wallpapers.requiredDim).
     Q_PROPERTY(qreal wallpaperDim READ wallpaperDim WRITE setWallpaperDim NOTIFY wallpaperDimChanged)
+    // Power saving (T-202), minutes without input, 0 = never / off; stored per device. The defaults
+    // are the timeline of 01 §2.2: screen saver 10, screen off 30, sleep 60, idle controllers 15.
+    Q_PROPERTY(int saverMinutes READ saverMinutes WRITE setSaverMinutes NOTIFY saverMinutesChanged)
+    Q_PROPERTY(int screenOffMinutes READ screenOffMinutes WRITE setScreenOffMinutes NOTIFY screenOffMinutesChanged)
+    Q_PROPERTY(int sleepMinutes READ sleepMinutes WRITE setSleepMinutes NOTIFY sleepMinutesChanged)
+    Q_PROPERTY(int padIdleMinutes READ padIdleMinutes WRITE setPadIdleMinutes NOTIFY padIdleMinutesChanged)
 
 public:
     // `persistent == false` keeps everything in memory.
@@ -69,6 +75,10 @@ public:
     qreal wallpaperDim() const { return m_wallpaperDim; }
     QString theme() const { return m_theme; }
     static QStringList availableThemes();
+    int saverMinutes() const { return m_saverMinutes; }
+    int screenOffMinutes() const { return m_screenOffMinutes; }
+    int sleepMinutes() const { return m_sleepMinutes; }
+    int padIdleMinutes() const { return m_padIdleMinutes; }
 
     // Invalid values are rejected (warning logged) and leave the old value.
     void setReducedMotion(bool value);
@@ -79,6 +89,10 @@ public:
     void setWallpaper(const QString &value);
     void setWallpaperDim(qreal value);
     void setTheme(const QString &value);
+    void setSaverMinutes(int value);
+    void setScreenOffMinutes(int value);
+    void setSleepMinutes(int value);
+    void setPadIdleMinutes(int value);
 
     // Installs the translator for m_language and, when `retranslate`, refreshes the engine's bindings.
     void applyLanguage(bool retranslate);
@@ -88,6 +102,8 @@ public:
     // "", a lower-case id of letters, digits and dashes, or "user:" and a plain file name.
     Q_INVOKABLE static bool isValidWallpaper(const QString &value);
     static bool isValidTheme(const QString &value);
+    // 0 (never) to a day.
+    static bool isValidMinutes(int value);
 
 signals:
     void reducedMotionChanged();
@@ -98,6 +114,10 @@ signals:
     void wallpaperChanged();
     void wallpaperDimChanged();
     void themeChanged();
+    void saverMinutesChanged();
+    void screenOffMinutesChanged();
+    void sleepMinutesChanged();
+    void padIdleMinutesChanged();
 
 private:
     void init();   // reads the stored values (when there is a store) and the command-line overrides
@@ -111,6 +131,10 @@ private:
     QString m_wallpaper;
     qreal m_wallpaperDim = 0.2;
     QString m_theme = QStringLiteral("dreamglass");
+    int m_saverMinutes = 10;
+    int m_screenOffMinutes = 30;
+    int m_sleepMinutes = 60;
+    int m_padIdleMinutes = 15;
     std::optional<bool> m_forcedMotion;
     std::optional<QString> m_forcedQuality;
     bool m_thermalLimited = false;

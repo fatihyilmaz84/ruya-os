@@ -81,7 +81,7 @@ Item {
             tryVerify(() => glide.active)
             compare(list.currentIndex, 0)
             compare(glide.activeFocus, false, "the highlight never has focus")
-            for (let i = 0; i < 8; ++i) {
+            for (let i = 0; i < 9; ++i) {
                 const row = list.currentItem
                 compare(glide.targetY, row.y, "goal is the focused row, row " + list.currentIndex)
                 compare(glide.targetX, row.x)
@@ -92,7 +92,7 @@ Item {
                 compare(list.Accessible.name, row.Accessible.name, "the screen reader names the focused row")
                 keyClick(Qt.Key_Down)
             }
-            compare(list.currentIndex, 8)
+            compare(list.currentIndex, 9)
             compare(glide.targetY, list.currentItem.y, "also after the list scrolled ")
             tryCompare(glide, "y", glide.targetY)
         }

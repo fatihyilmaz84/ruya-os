@@ -46,6 +46,14 @@ void DeviceSettings::init()
         const QString theme = m_store->value(QStringLiteral("display/theme"), m_theme).toString();
         if (isValidTheme(theme))
             m_theme = theme;
+        const auto minutes = [this](const char *key, int fallback) {
+            const int value = m_store->value(QString::fromLatin1(key), fallback).toInt();
+            return isValidMinutes(value) ? value : fallback;
+        };
+        m_saverMinutes = minutes("power/saverMinutes", m_saverMinutes);
+        m_screenOffMinutes = minutes("power/screenOffMinutes", m_screenOffMinutes);
+        m_sleepMinutes = minutes("power/sleepMinutes", m_sleepMinutes);
+        m_padIdleMinutes = minutes("power/padIdleMinutes", m_padIdleMinutes);
         const QString language = m_store->value(QStringLiteral("general/language")).toString();
         if (isValidLanguage(language)) {
             m_language = language;
@@ -126,6 +134,67 @@ QStringList DeviceSettings::availableThemes()
 bool DeviceSettings::isValidTheme(const QString &value)
 {
     return availableThemes().contains(value);
+}
+
+bool DeviceSettings::isValidMinutes(int value)
+{
+    return value >= 0 && value <= 24 * 60;
+}
+
+void DeviceSettings::setSaverMinutes(int value)
+{
+    if (!isValidMinutes(value)) {
+        qWarning("ruya-shell: rejecting invalid screen saver time %d", value);
+        return;
+    }
+    if (value == m_saverMinutes)
+        return;
+    m_saverMinutes = value;
+    if (m_store)
+        m_store->setValue(QStringLiteral("power/saverMinutes"), value);
+    emit saverMinutesChanged();
+}
+
+void DeviceSettings::setScreenOffMinutes(int value)
+{
+    if (!isValidMinutes(value)) {
+        qWarning("ruya-shell: rejecting invalid screen-off time %d", value);
+        return;
+    }
+    if (value == m_screenOffMinutes)
+        return;
+    m_screenOffMinutes = value;
+    if (m_store)
+        m_store->setValue(QStringLiteral("power/screenOffMinutes"), value);
+    emit screenOffMinutesChanged();
+}
+
+void DeviceSettings::setSleepMinutes(int value)
+{
+    if (!isValidMinutes(value)) {
+        qWarning("ruya-shell: rejecting invalid sleep time %d", value);
+        return;
+    }
+    if (value == m_sleepMinutes)
+        return;
+    m_sleepMinutes = value;
+    if (m_store)
+        m_store->setValue(QStringLiteral("power/sleepMinutes"), value);
+    emit sleepMinutesChanged();
+}
+
+void DeviceSettings::setPadIdleMinutes(int value)
+{
+    if (!isValidMinutes(value)) {
+        qWarning("ruya-shell: rejecting invalid idle-controller time %d", value);
+        return;
+    }
+    if (value == m_padIdleMinutes)
+        return;
+    m_padIdleMinutes = value;
+    if (m_store)
+        m_store->setValue(QStringLiteral("power/padIdleMinutes"), value);
+    emit padIdleMinutesChanged();
 }
 
 void DeviceSettings::setTheme(const QString &value)
