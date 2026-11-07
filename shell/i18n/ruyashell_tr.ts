@@ -320,7 +320,7 @@
 <context>
     <name>BluetoothPane</name>
     <message>
-        <location filename="../qml/BluetoothPane.qml" line="+85"/>
+        <location filename="../qml/BluetoothPane.qml" line="+86"/>
         <source>Forget %1?</source>
         <translation>%1 unutulsun mu?</translation>
     </message>
@@ -506,8 +506,8 @@
     </message>
     <message>
         <location line="+7"/>
-        <source>D-pad and left stick are the arrows.</source>
-        <translation>Yön tuşları ve sol çubuk ok tuşlarıdır.</translation>
+        <source>D-pad and left stick are the arrows. Other buttons are not shown here.</source>
+        <translation>Yön tuşları ve sol çubuk ok tuşlarıdır. Diğer düğmeler burada gösterilmez.</translation>
     </message>
 </context>
 <context>
@@ -582,13 +582,13 @@
     </message>
     <message>
         <location line="+104"/>
-        <location line="+52"/>
+        <location line="+54"/>
         <source>Try your controller</source>
         <translation>Kontrolcünüzü deneyin</translation>
     </message>
     <message>
-        <location line="-52"/>
-        <location line="+52"/>
+        <location line="-54"/>
+        <location line="+54"/>
         <source>Pair a controller</source>
         <translation>Kontrolcü eşleştir</translation>
     </message>
@@ -599,14 +599,14 @@
     </message>
     <message>
         <location line="+36"/>
-        <location line="+157"/>
+        <location line="+163"/>
         <source>Other</source>
         <translation>Diğer</translation>
     </message>
     <message>
-        <location line="-120"/>
+        <location line="-126"/>
         <source>Press A to search again</source>
-        <translation>Yeniden aramak için A'ya basın</translation>
+        <translation>Yeniden aramak için A&apos;ya basın</translation>
     </message>
     <message>
         <location line="+6"/>
@@ -639,7 +639,7 @@
         <translation>A: eşleştir</translation>
     </message>
     <message>
-        <location line="+44"/>
+        <location line="+50"/>
         <source>%1 is connected. Press its buttons: they light up here.</source>
         <translation>%1 bağlı. Düğmelerine basın: burada yanarlar.</translation>
     </message>
@@ -669,7 +669,7 @@
     <message>
         <location filename="../qml/ControllerPairHint.qml" line="+36"/>
         <source>Hold PS and Create (Share on a DualShock 4) until the light bar flashes.</source>
-        <translation>Işık çubuğu yanıp sönene kadar PS ve Create düğmelerini (DualShock 4'te Share) basılı tutun.</translation>
+        <translation>Işık çubuğu yanıp sönene kadar PS ve Create düğmelerini (DualShock 4&apos;te Share) basılı tutun.</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -732,7 +732,7 @@
         <translation>Kontrolcü ya da klavye bulunamadı. Kontrolcünüzün ışığı yanıp sönene kadar eşleştirme düğmesini basılı tutun (DualSense&apos;te: PS + Create).</translation>
     </message>
     <message>
-        <location line="+171"/>
+        <location line="+172"/>
         <source>A device that is not a controller tried to connect and was ignored.</source>
         <translation>Kontrolcü olmayan bir cihaz bağlanmaya çalıştı ve yok sayıldı.</translation>
     </message>
@@ -740,7 +740,7 @@
 <context>
     <name>ControllerToasts</name>
     <message>
-        <location filename="../qml/ControllerToasts.qml" line="+94"/>
+        <location filename="../qml/ControllerToasts.qml" line="+88"/>
         <source>%1 connected · battery %2%</source>
         <translation>%1 bağlandı · pil %2%</translation>
     </message>
@@ -758,7 +758,7 @@
 <context>
     <name>DeviceIcons</name>
     <message>
-        <location filename="../qml/DeviceIcons.qml" line="+39"/>
+        <location filename="../qml/DeviceIcons.qml" line="+66"/>
         <source>PlayStation controller</source>
         <translation>PlayStation kontrolcüsü</translation>
     </message>
@@ -1225,7 +1225,7 @@
         <translation>Kim oynuyor?</translation>
     </message>
     <message>
-        <location line="+24"/>
+        <location line="+25"/>
         <source>Profiles</source>
         <translation>Profiller</translation>
     </message>
@@ -1517,7 +1517,7 @@
         <translation>Geri</translation>
     </message>
     <message>
-        <location line="+191"/>
+        <location line="+192"/>
         <source>Coming soon</source>
         <translation>Yakında</translation>
     </message>

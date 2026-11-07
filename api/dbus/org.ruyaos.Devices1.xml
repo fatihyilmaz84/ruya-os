@@ -328,9 +328,10 @@
 
     <!--
       Rename a paired device (T-260): sets BlueZ's Alias, which ListDevices reports as `name`. The
-      name is trimmed; an empty one, one longer than 48 characters or one with a control character
-      is "invalid". "unknown-device" for an id that is not in the list, "unavailable" when
-      Bluetooth is off, "failed" when BlueZ refused. The device keeps its pairing; the list follows
+      name is trimmed and Unicode format characters (bidirectional overrides, zero-width) are dropped;
+      an empty one, one longer than 48 characters or one with a control character is "invalid".
+      "unknown-device" for an id that is not in the list, "unavailable" when Bluetooth is off,
+      "failed" when the device is not paired or BlueZ refused. The device keeps its pairing; the list follows
       by DevicesChanged. Not limited to controllers.
     -->
     <method name="Rename">
@@ -345,8 +346,11 @@
       gamepad range, not the console's own virtual keyboard, not a keyboard or mouse. The first read
       after the service starts only sets the baseline: pads that are already there are not announced.
         id         s   stable per pad: the Bluetooth address (the input device's `uniq`) when it has one,
-                       else its name; a pad that is unplugged and plugged in again keeps it
-        name       s   the input device's name, as the kernel reports it ("Wireless Controller")
+                       else the USB port (`phys`), else its name; a pad that is unplugged and plugged
+                       in again keeps it
+        name       s   the input device's name, as the kernel reports it ("Wireless Controller"), made
+                       fit to show: control and Unicode format characters dropped, at most 64
+                       characters. It is still text a device chose: draw it as plain text
         family     s   as in ListDevices: "playstation" | "xbox" | "nintendo" | "8bitdo" | "", from the
                        USB vendor id the device reports (the same table, families.rs)
         transport  s   "usb" | "bluetooth" | "other"

@@ -159,6 +159,17 @@ Item {
             compare(toasts.connectedShown, 1)
         }
 
+        function test_a_service_that_restarted_forgets_the_pads_it_announced() {
+            usb(true, "usb-1", "Wireless Controller", "playstation")
+            tryCompare(toasts, "connectedShown", 1)
+            Bluetooth.mockServiceRestart()
+            tryVerify(() => !("usb-1" in toasts.shown), 2000, "forgotten")
+            toasts.noteInput()
+            usb(false, "usb-1", "Wireless Controller", "playstation")
+            wait(150)
+            compare(toasts.disconnectedShown, 0, "a pad nobody was told about leaves quietly")
+        }
+
         // ---- the guided pairing screen ----
 
         function chip(family) { return find("onbChip_" + family) }
@@ -267,6 +278,43 @@ Item {
             verify(!Bluetooth.devices.find(d => d.id === "bt-flaky").paired)
         }
 
+        // Names the devices chose are text, never markup, and never break the layout (T-260).
+        function test_names_from_devices_are_plain_text() {
+            Bluetooth.mockPairingScript("wait")
+            onb.open()
+            Bluetooth.mockReveal("bt-flaky")
+            Bluetooth.mockSetName("bt-flaky", "<b>x</b>" + String.fromCharCode(10) + "<i>y</i>")
+            tryVerify(() => find("onbRowName_bt-flaky") !== null, 2000)
+            tryCompare(find("onbRowName_bt-flaky"), "text", "<b>x</b> <i>y</i>")
+            compare(find("onbRowName_bt-flaky").textFormat, Text.PlainText)
+            Bluetooth.mockReveal("bt-pad-new")
+            Bluetooth.mockSetName("bt-pad-new", "x".repeat(300))
+            tryVerify(() => find("onbRow_bt-pad-new") !== null, 2000)
+            verify(find("onbRowName_bt-pad-new").width <= find("onbRow_bt-pad-new").width * 0.4 + 1, "a long name is bounded")
+            verify(find("onbRowState_bt-pad-new").width >= 0)
+            usb(true, "usb-9", "<img src=\"http://host/x\">", "")
+            tryCompare(onb, "stage", "try")
+            compare(find("onboardingTryName").text, "<img src=\"http://host/x\"> is connected. Press its buttons: they light up here.")
+            compare(find("onboardingTryName").textFormat, Text.PlainText)
+        }
+
+        function test_a_usb_pad_does_not_cut_a_pairing_short() {
+            Bluetooth.mockPairingScript("wait")
+            onb.open()
+            Bluetooth.mockReveal("bt-pad-new")
+            tryVerify(() => find("onbRow_bt-pad-new") !== null, 2000)
+            keyClick(Qt.Key_Down)
+            Bluetooth.mockHoldPairing(true)
+            keyClick(Qt.Key_Return)
+            tryCompare(find("onbRowState_bt-pad-new"), "text", "Pairing…")
+            usb(true, "usb-9", "Wireless Controller", "playstation")
+            wait(150)
+            compare(onb.stage, "pair", "the row finishes first")
+            Bluetooth.mockHoldPairing(false)
+            tryCompare(find("onbRowState_bt-pad-new"), "text", "Connected, remembered · A: try its buttons")
+            compare(onb.stage, "pair")
+        }
+
         function test_a_controller_the_service_paired_itself_is_listed_as_done() {
             Bluetooth.mockPairingScript("success")
             onb.open()
@@ -315,7 +363,7 @@ Item {
             onb.open()
             usb(true, "usb-9", "Wireless Controller", "playstation")        // plugged in over USB: nothing to pair
             tryCompare(onb, "stage", "try")
-            compare(find("onboardingTryName").text, "Wireless Controller is connected. Press its buttons: they light up here.")
+            compare(find("onboardingTryName").text, "PlayStation controller is connected. Press its buttons: they light up here.")
             tryVerify(() => find("onboardingButtonTest").activeFocus, 2000)
             keyClick(Qt.Key_Escape)
             tryVerify(() => !onb.shown, 2000)

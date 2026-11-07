@@ -933,45 +933,51 @@ pub async fn watch_input(connection: Connection, input: SharedInput) {
         if !changed && pads.is_empty() {
             continue;
         }
-        let announced = async {
-            let iface = connection
-                .object_server()
-                .interface::<_, BluetoothIface>(OBJECT_PATH)
-                .await?;
-            let emitter = iface.signal_emitter();
-            if changed {
-                let this = iface.get().await;
-                this.input_present_changed(emitter).await?;
+        let iface = match connection
+            .object_server()
+            .interface::<_, BluetoothIface>(OBJECT_PATH)
+            .await
+        {
+            Ok(iface) => iface,
+            Err(err) => {
+                eprintln!("ruya-devices: the input changes cannot be announced: {err}");
+                continue;
             }
-            for event in &pads {
-                match event {
-                    GamepadEvent::Connected(p) => {
-                        BluetoothIface::gamepad_connected(
-                            emitter,
-                            &p.id,
-                            &p.name,
-                            p.family,
-                            p.transport,
-                        )
-                        .await?
-                    }
-                    GamepadEvent::Disconnected(p) => {
-                        BluetoothIface::gamepad_disconnected(
-                            emitter,
-                            &p.id,
-                            &p.name,
-                            p.family,
-                            p.transport,
-                        )
-                        .await?
-                    }
-                }
+        };
+        let emitter = iface.signal_emitter();
+        // One signal that fails to go out must not take the rest of this tick's pads with it.
+        if changed {
+            let this = iface.get().await;
+            if let Err(err) = this.input_present_changed(emitter).await {
+                eprintln!("ruya-devices: emitting InputPresent failed: {err}");
             }
-            Ok::<(), zbus::Error>(())
         }
-        .await;
-        if let Err(err) = announced {
-            eprintln!("ruya-devices: emitting the input changes failed: {err}");
+        for event in &pads {
+            let sent = match event {
+                GamepadEvent::Connected(p) => {
+                    BluetoothIface::gamepad_connected(
+                        emitter,
+                        &p.id,
+                        &p.name,
+                        p.family,
+                        p.transport,
+                    )
+                    .await
+                }
+                GamepadEvent::Disconnected(p) => {
+                    BluetoothIface::gamepad_disconnected(
+                        emitter,
+                        &p.id,
+                        &p.name,
+                        p.family,
+                        p.transport,
+                    )
+                    .await
+                }
+            };
+            if let Err(err) = sent {
+                eprintln!("ruya-devices: emitting a gamepad change failed: {err}");
+            }
         }
     }
 }

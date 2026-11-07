@@ -67,13 +67,7 @@ QtObject {
     // The name to show: the Bluetooth device's alias (what the user renamed it to) when the id is a
     // Bluetooth address, else the family's words, else the kernel's name.
     function displayName(id, name, family) {
-        const wanted = id.toLowerCase()
-        const paired = Bluetooth.devices.find(d => d.id.toLowerCase() === wanted)
-        if (paired)
-            return paired.name
-        if (family !== "")
-            return DeviceIcons.kindText("controller", family)
-        return name
+        return DeviceIcons.padName(id, name, family)
     }
 
     // The battery of the pad that just connected, or -1.
@@ -120,5 +114,10 @@ QtObject {
         target: Bluetooth
         function onGamepadConnected(id, name, family, transport) { toasts.onConnected(id, name, family, transport) }
         function onGamepadDisconnected(id, name, family, transport) { toasts.onDisconnected(id, name, family, transport) }
+        // The service restarted: what it said before is void, and its next read is a new baseline.
+        function onGamepadsReset() {
+            toasts.waiting = []
+            toasts.shown = ({})
+        }
     }
 }

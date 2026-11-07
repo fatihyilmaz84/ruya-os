@@ -57,6 +57,9 @@ signals:
     // family: "playstation" | "xbox" | "nintendo" | "8bitdo" | ""; transport: "usb" | "bluetooth" | "other".
     void gamepadConnected(const QString &id, const QString &name, const QString &family, const QString &transport);
     void gamepadDisconnected(const QString &id, const QString &name, const QString &family, const QString &transport);
+    // The service went away (or came back): what was said about pads before is void, the next read of
+    // the service is a new baseline.
+    void gamepadsReset();
     void devicesListed(const QList<BtDevice> &devices);
     // op: "power" | "scan" | "pair" | "forget" | "connect" | "disconnect" | "rename" | "controller-pairing";
     // id: "" for power and scan, "start" or "stop" for controller-pairing; status: see the XML ("ok", "pairing-failed", "timeout", ...).

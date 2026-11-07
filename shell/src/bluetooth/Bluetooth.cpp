@@ -28,6 +28,7 @@ Bluetooth::Bluetooth(std::unique_ptr<BluetoothBackend> backend, QObject *parent)
     connect(m_backend.get(), &BluetoothBackend::controllerRejected, this, &Bluetooth::controllerRejected);
     connect(m_backend.get(), &BluetoothBackend::gamepadConnected, this, &Bluetooth::gamepadConnected);
     connect(m_backend.get(), &BluetoothBackend::gamepadDisconnected, this, &Bluetooth::gamepadDisconnected);
+    connect(m_backend.get(), &BluetoothBackend::gamepadsReset, this, &Bluetooth::gamepadsReset);
     connect(m_backend.get(), &BluetoothBackend::devicesListed, this, [this](const QList<BtDevice> &list) {
         QVariantList out;
         for (const BtDevice &d : list) {
@@ -153,6 +154,18 @@ void Bluetooth::mockReveal(const QString &id)
 {
     if (auto *mock = qobject_cast<MockBluetoothBackend *>(m_backend.get()))
         mock->reveal(id);
+}
+
+void Bluetooth::mockSetName(const QString &id, const QString &name)
+{
+    if (auto *mock = qobject_cast<MockBluetoothBackend *>(m_backend.get()))
+        mock->setName(id, name);
+}
+
+void Bluetooth::mockServiceRestart()
+{
+    if (auto *mock = qobject_cast<MockBluetoothBackend *>(m_backend.get()))
+        mock->serviceRestart();
 }
 
 void Bluetooth::mockGamepad(bool connected, const QString &id, const QString &name, const QString &family,

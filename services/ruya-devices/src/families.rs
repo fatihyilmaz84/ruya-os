@@ -21,10 +21,10 @@ const VENDORS: &[(&str, u16, &str)] = &[
     ("usb", 0x054C, PLAYSTATION),       // Sony Interactive Entertainment
     ("usb", 0x045E, XBOX),              // Microsoft
     ("usb", 0x057E, NINTENDO),          // Nintendo
-    ("usb", 0x2DC8, EIGHTBITDO),        // 8BitDo (the USB-IF id it reports in every mode)
+    ("usb", 0x2DC8, EIGHTBITDO), // 8BitDo (D-input mode; X-input mode reports Microsoft's id)
     ("bluetooth", 0x012D, PLAYSTATION), // Sony Corp. (Bluetooth SIG company id)
-    ("bluetooth", 0x0006, XBOX),        // Microsoft (Bluetooth SIG company id)
-    ("bluetooth", 0x0553, NINTENDO),    // Nintendo (Bluetooth SIG company id)
+    ("bluetooth", 0x0006, XBOX), // Microsoft (Bluetooth SIG company id)
+    ("bluetooth", 0x0553, NINTENDO), // Nintendo (Bluetooth SIG company id)
 ];
 
 /// (lower-case fragment of the device name, family), for a pad without a usable modalias. The

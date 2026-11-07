@@ -14,6 +14,26 @@ pub const MAX_WINDOW: Duration = Duration::from_secs(300);
 /// How often the window tries to pair the same gamepad found by its scan.
 pub const MAX_ATTEMPTS: u32 = 3;
 
+/// A character that draws nothing or changes how the text around it is drawn: bidirectional
+/// controls and overrides, zero-width and joiner characters, the byte-order mark, the soft hyphen.
+/// A device that names itself with them can spoof another name (U+202E) or hide in a list.
+pub fn is_format_char(c: char) -> bool {
+    matches!(c,
+        '\u{00AD}' | '\u{061C}' | '\u{180E}' | '\u{200B}'..='\u{200F}' | '\u{202A}'..='\u{202E}'
+        | '\u{2060}'..='\u{2064}' | '\u{2066}'..='\u{206F}' | '\u{FEFF}')
+}
+
+/// A name a device told us, made fit to show: control and format characters dropped, trimmed,
+/// at most `max` characters (T-260). The shell also draws such names as plain text; this keeps
+/// a newline or a right-to-left override out of what it is given at all.
+pub fn clean_name(raw: &str, max: usize) -> String {
+    let kept: String = raw
+        .chars()
+        .filter(|c| !c.is_control() && !is_format_char(*c))
+        .collect();
+    kept.trim().chars().take(max).collect()
+}
+
 /// Major device class "Peripheral" (gamepad, keyboard, mouse...), bits 8-12 of the Class of Device.
 const MAJOR_PERIPHERAL: u32 = 0x05;
 
@@ -154,6 +174,15 @@ mod tests {
             None
         );
         assert_eq!(address_of_path(""), None);
+    }
+
+    #[test]
+    fn clean_names_lose_control_and_format_characters() {
+        assert_eq!(clean_name("  Pad\n\t one  ", 48), "Pad one");
+        assert_eq!(clean_name("\u{202E}dap\u{200B}\u{FEFF}", 48), "dap");
+        assert_eq!(clean_name("Kontrolcü şğı", 48), "Kontrolcü şğı");
+        assert_eq!(clean_name("abcdef", 3), "abc");
+        assert_eq!(clean_name("\u{2066}\u{2069}", 48), "");
     }
 
     #[test]

@@ -320,7 +320,7 @@
 <context>
     <name>BluetoothPane</name>
     <message>
-        <location filename="../qml/BluetoothPane.qml" line="+85"/>
+        <location filename="../qml/BluetoothPane.qml" line="+86"/>
         <source>Forget %1?</source>
         <translation>Forget %1?</translation>
     </message>
@@ -506,8 +506,8 @@
     </message>
     <message>
         <location line="+7"/>
-        <source>D-pad and left stick are the arrows.</source>
-        <translation>D-pad and left stick are the arrows.</translation>
+        <source>D-pad and left stick are the arrows. Other buttons are not shown here.</source>
+        <translation>D-pad and left stick are the arrows. Other buttons are not shown here.</translation>
     </message>
 </context>
 <context>
@@ -582,13 +582,13 @@
     </message>
     <message>
         <location line="+104"/>
-        <location line="+52"/>
+        <location line="+54"/>
         <source>Try your controller</source>
         <translation>Try your controller</translation>
     </message>
     <message>
-        <location line="-52"/>
-        <location line="+52"/>
+        <location line="-54"/>
+        <location line="+54"/>
         <source>Pair a controller</source>
         <translation>Pair a controller</translation>
     </message>
@@ -599,12 +599,12 @@
     </message>
     <message>
         <location line="+36"/>
-        <location line="+157"/>
+        <location line="+163"/>
         <source>Other</source>
         <translation>Other</translation>
     </message>
     <message>
-        <location line="-120"/>
+        <location line="-126"/>
         <source>Press A to search again</source>
         <translation>Press A to search again</translation>
     </message>
@@ -639,7 +639,7 @@
         <translation>A: pair</translation>
     </message>
     <message>
-        <location line="+44"/>
+        <location line="+50"/>
         <source>%1 is connected. Press its buttons: they light up here.</source>
         <translation>%1 is connected. Press its buttons: they light up here.</translation>
     </message>
@@ -732,7 +732,7 @@
         <translation>No controller or keyboard found. Hold the pairing button on your controller (on a DualSense: PS + Create) until its light blinks.</translation>
     </message>
     <message>
-        <location line="+171"/>
+        <location line="+172"/>
         <source>A device that is not a controller tried to connect and was ignored.</source>
         <translation>A device that is not a controller tried to connect and was ignored.</translation>
     </message>
@@ -740,7 +740,7 @@
 <context>
     <name>ControllerToasts</name>
     <message>
-        <location filename="../qml/ControllerToasts.qml" line="+94"/>
+        <location filename="../qml/ControllerToasts.qml" line="+88"/>
         <source>%1 connected · battery %2%</source>
         <translation>%1 connected · battery %2%</translation>
     </message>
@@ -758,7 +758,7 @@
 <context>
     <name>DeviceIcons</name>
     <message>
-        <location filename="../qml/DeviceIcons.qml" line="+39"/>
+        <location filename="../qml/DeviceIcons.qml" line="+66"/>
         <source>PlayStation controller</source>
         <translation>PlayStation controller</translation>
     </message>
@@ -1226,7 +1226,7 @@
         <translation>Who&apos;s playing?</translation>
     </message>
     <message>
-        <location line="+24"/>
+        <location line="+25"/>
         <source>Profiles</source>
         <translation>Profiles</translation>
     </message>
@@ -1519,7 +1519,7 @@
         <translation>Back</translation>
     </message>
     <message>
-        <location line="+191"/>
+        <location line="+192"/>
         <source>Coming soon</source>
         <translation>Coming soon</translation>
     </message>

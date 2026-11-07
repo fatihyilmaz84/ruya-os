@@ -328,6 +328,9 @@ Item {
             openBluetoothPane()
             Bluetooth.rename("bt-pad-old", "   ")
             tryVerify(() => toastTexts().includes("That name does not work. Try another."), 2000)
+            Bluetooth.rename("bt-pad-old", "a" + String.fromCharCode(7) + "b")      // a control character
+            tryVerify(() => host.answers.filter(a => a.op === "rename" && a.status === "invalid").length === 2, 2000)
+            Bluetooth.rename("bt-flaky", "Pad")                                      // found, not paired
             Bluetooth.rename("nope", "Pad")
             tryVerify(() => toastTexts().includes("Could not rename the controller."), 2000)
             compare(device("bt-pad-old").name, "Retro Pad")
@@ -486,6 +489,22 @@ Item {
             goTo("rowBtPairController")
             keyClick(Qt.Key_Return)
             tryCompare(Bluetooth, "controllerPairing", "open")
+            tryVerify(() => find("controllerOnboarding").shown)
+            // The pane goes away under the open screen without B (another category is selected from
+            // code, as a stray event could): the screen and the window must go with it. The pane is
+            // only hidden, not destroyed, so nothing else would close them.
+            find("categoryList").currentIndex = 1
+            tryVerify(() => !find("paneBluetooth").visible, 3000, "the pane is hidden")
+            tryVerify(() => !find("controllerOnboarding").shown, 2000, "the screen closed with it")
+            tryCompare(Bluetooth, "controllerPairing", "idle")
+        }
+
+        function test_B_closes_the_screen_and_the_window_and_the_pane_stays() {
+            Bluetooth.mockPairingScript("wait")
+            openBluetoothPane()
+            goTo("rowBtPairController")
+            keyClick(Qt.Key_Return)
+            tryCompare(Bluetooth, "controllerPairing", "open")
             keyClick(Qt.Key_Escape)
             tryCompare(Bluetooth, "controllerPairing", "idle")
             tryVerify(() => find("rowBtPairController").activeFocus, 2000)
@@ -494,6 +513,19 @@ Item {
             keyClick(Qt.Key_Up)                           // Network: the Bluetooth pane is hidden
             tryVerify(() => !find("paneBluetooth").visible, 2000)
             tryCompare(Bluetooth, "controllerPairing", "idle")
+        }
+
+        // A name a device chose is text, never markup (T-260): in the toast and in the pane's rows.
+        function test_a_pad_named_with_markup_is_shown_as_it_is() {
+            Bluetooth.mockGamepad(true, "usb-7", "<b>x</b>", "", "usb")
+            tryVerify(() => toastTexts().some(t => t.startsWith("<b>x</b> connected")), 4000)
+            tryVerify(() => find("toastText") !== null, 2000)
+            compare(find("toastText").textFormat, Text.PlainText)
+            Bluetooth.mockSetName("bt-pad-old", "<font size=7>big</font>")
+            openBluetoothPane()
+            tryVerify(() => find("btDev_bt-pad-old") !== null)
+            tryCompare(findChild(find("btDev_bt-pad-old"), "label"), "textFormat", Text.PlainText)
+            compare(find("btDev_bt-pad-old").label, "<font size=7>big</font>")
         }
 
         // T-260: the Shell hosts the toasts and tells them about every key, so "disconnected" is for a pad in use.

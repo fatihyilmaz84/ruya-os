@@ -139,7 +139,7 @@ FocusScope {
             objectName: "testNote"
             anchors.horizontalCenter: parent.horizontalCenter
             horizontalAlignment: Text.AlignHCenter
-            text: qsTr("D-pad and left stick are the arrows.")
+            text: qsTr("D-pad and left stick are the arrows. Other buttons are not shown here.")
             color: Theme.textDim
             font.pixelSize: Theme.typeCaption * test.u
         }

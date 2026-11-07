@@ -40,6 +40,10 @@ public:
     void setBattery(const QString &id, int percent);
     // A device that was not in the list is "found" now, as if the window's scan saw it (T-260).
     void reveal(const QString &id);
+    // A device's name set to any text (a device names itself; rename() would refuse some of it).
+    void setName(const QString &id, const QString &name);
+    // The service restarts: pads announced before are void.
+    void serviceRestart() { emit gamepadsReset(); }
     // A game controller appears or goes away (USB or Bluetooth), announced a moment later like the
     // service's signal (T-260). Returns nothing; the shell reacts to gamepadConnected/Disconnected.
     void gamepadEvent(bool connected, const QString &id, const QString &name, const QString &family,

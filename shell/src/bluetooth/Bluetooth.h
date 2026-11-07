@@ -86,6 +86,8 @@ public:
     Q_INVOKABLE void mockSetInputPresent(bool present);
     // A device that was hidden is found now; a game controller appears or goes away (T-260).
     Q_INVOKABLE void mockReveal(const QString &id);
+    Q_INVOKABLE void mockSetName(const QString &id, const QString &name);   // any text, as a device could send it
+    Q_INVOKABLE void mockServiceRestart();
     Q_INVOKABLE void mockGamepad(bool connected, const QString &id, const QString &name, const QString &family,
                                  const QString &transport);
     Q_INVOKABLE int mockPairingStarts() const;
@@ -100,6 +102,8 @@ signals:
     // "nintendo" | "8bitdo" | ""; transport: "usb" | "bluetooth" | "other"; id is stable per pad.
     void gamepadConnected(const QString &id, const QString &name, const QString &family, const QString &transport);
     void gamepadDisconnected(const QString &id, const QString &name, const QString &family, const QString &transport);
+    // The service restarted: pads announced before are forgotten.
+    void gamepadsReset();
     // op: "power" | "scan" | "pair" | "forget" | "connect" | "disconnect" | "rename" | "controller-pairing"; status: see
     // api/dbus/org.ruyaos.Devices1.xml
     void finished(const QString &op, const QString &id, const QString &status);

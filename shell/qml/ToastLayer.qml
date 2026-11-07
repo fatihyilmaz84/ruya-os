@@ -150,7 +150,10 @@ Item {
                     right: parent.right; rightMargin: Theme.spaceM * layer.u
                     verticalCenter: parent.verticalCenter
                 }
+                objectName: "toastText"
                 text: toast.text
+                // A toast may carry a name a device gave itself: never markup (T-260).
+                textFormat: Text.PlainText
                 color: Theme.text
                 font.pixelSize: Theme.typeBody * layer.u
                 elide: Text.ElideRight

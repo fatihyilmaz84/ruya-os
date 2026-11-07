@@ -10,6 +10,10 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 
 use crate::families::family_of;
+use crate::pairing::clean_name;
+
+/// The longest pad name or id the service reports, in characters.
+pub const MAX_NAME_CHARS: usize = 64;
 
 /// The name of the virtual keyboard `ruya-inputd` creates (`services/ruya-inputd`).
 pub const VIRTUAL_NAME: &str = "RuyaOS Navigation";
@@ -88,23 +92,34 @@ pub fn gamepad_of(device: &InputDevice) -> Option<Gamepad> {
     if !(0x120..0x13f).any(|n| bit(&words, n)) {
         return None;
     }
+    // A pad names itself: control and format characters are dropped and the length is capped
+    // before the name goes anywhere (T-260).
+    let name = clean_name(&device.name, MAX_NAME_CHARS);
+    let name = if name.is_empty() {
+        "Controller".to_owned()
+    } else {
+        name
+    };
     // The vendor id a pad reports is the USB-IF one over USB and over Bluetooth alike.
     let family = if device.vendor != 0 {
         family_of(
             &format!("usb:v{:04X}p{:04X}d0000", device.vendor, device.product),
-            &device.name,
+            &name,
         )
     } else {
-        family_of("", &device.name)
+        family_of("", &name)
     };
-    let id = [&device.uniq, &device.phys, &device.name]
-        .into_iter()
-        .find(|s| !s.is_empty())
-        .cloned()
-        .unwrap_or_default();
+    let id = [
+        clean_name(&device.uniq, MAX_NAME_CHARS),
+        clean_name(&device.phys, MAX_NAME_CHARS),
+        name.clone(),
+    ]
+    .into_iter()
+    .find(|s| !s.is_empty())
+    .unwrap_or_default();
     Some(Gamepad {
         id,
-        name: device.name.clone(),
+        name,
         family,
         transport: match device.bustype {
             3 => "usb",
@@ -407,6 +422,23 @@ mod tests {
         assert_eq!(clone.family, "");
         let guessed = gamepad_of(&pad("DualSense", "p", "", 0, 0)).expect("pad");
         assert_eq!(guessed.family, "playstation");
+    }
+
+    #[test]
+    fn a_name_a_pad_gives_itself_is_cleaned_and_capped() {
+        let nasty = "<img src=\"http://x/y\">\n\u{202E}Pad\u{200B}\u{0007}";
+        let p = gamepad_of(&pad(nasty, "usb-1", "", 3, 0x1234)).expect("a pad");
+        assert_eq!(p.name, "<img src=\"http://x/y\">Pad");
+        assert!(!p.name.chars().any(|c| c.is_control() || c == '\u{202E}'));
+        let long = gamepad_of(&pad(&"x".repeat(500), "usb-1", "", 3, 0x1234)).expect("a pad");
+        assert_eq!(long.name.chars().count(), MAX_NAME_CHARS);
+        // Nothing left of the name: a plain word, and the id still works.
+        let empty = gamepad_of(&pad("\n\u{200B}", "", "", 3, 0x1234)).expect("a pad");
+        assert_eq!(empty.name, "Controller");
+        assert_eq!(empty.id, "Controller");
+        // The id from the port or the address is cleaned too.
+        let ported = gamepad_of(&pad("Pad", "usb-1\n/input0", "", 3, 0x1234)).expect("a pad");
+        assert_eq!(ported.id, "usb-1/input0");
     }
 
     #[test]

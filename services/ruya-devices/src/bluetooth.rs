@@ -9,8 +9,8 @@ use std::time::{Duration, Instant};
 
 use crate::families::family_of;
 use crate::pairing::{
-    address_of_path, is_hid_service, is_input_device, PairingState, DEFAULT_WINDOW, MAX_ATTEMPTS,
-    MAX_WINDOW,
+    address_of_path, is_format_char, is_hid_service, is_input_device, PairingState, DEFAULT_WINDOW,
+    MAX_ATTEMPTS, MAX_WINDOW,
 };
 
 /// A scan ends by itself after this long (the contract's `Discovering` text).
@@ -626,9 +626,12 @@ impl<B: Bluez> Bluetooth<B> {
         }
     }
 
-    /// Gives a device the name the user typed (BlueZ's `Alias`), T-260. The name is trimmed;
-    /// empty, longer than `MAX_NAME_CHARS` or with a control character is `invalid`.
+    /// Gives a paired device the name the user typed (BlueZ's `Alias`), T-260. The name is
+    /// trimmed and Unicode format characters (bidi overrides, zero-width) are dropped; empty,
+    /// longer than `MAX_NAME_CHARS` or with a control character is `invalid`; a device that is
+    /// not paired is `failed`.
     pub fn rename(&self, id: &str, name: &str) -> Status {
+        let name: String = name.chars().filter(|c| !is_format_char(*c)).collect();
         let name = name.trim();
         if name.is_empty()
             || name.chars().count() > MAX_NAME_CHARS
@@ -637,6 +640,7 @@ impl<B: Bluez> Bluetooth<B> {
             return Status::Invalid;
         }
         match self.ready_device(id) {
+            Ok(d) if !d.paired => Status::Failed,
             Ok(d) => match self.bluez.set_alias(&d.id, name) {
                 Ok(()) => Status::Ok,
                 Err(e) => map_error(&e.0, false),
@@ -1856,11 +1860,31 @@ mod tests {
             calls_before,
             "BlueZ was never asked"
         );
+        // A device that is only found, not paired, is not renamed.
+        assert_eq!(bt.rename("AA:00:00:00:00:02", "Pad"), Status::Failed);
+        // Format characters are dropped: a name of nothing else is empty.
+        assert_eq!(
+            bt.rename("AA:00:00:00:00:01", "\u{200B}\u{202E}"),
+            Status::Invalid
+        );
         // The longest name still passes; so does a name with Turkish letters.
         assert_eq!(
             bt.rename("AA:00:00:00:00:01", &"ş".repeat(MAX_NAME_CHARS)),
             Status::Ok
         );
+    }
+
+    #[test]
+    fn rename_drops_bidi_and_zero_width_characters_from_the_name() {
+        let bt = bt();
+        assert_eq!(
+            bt.rename("AA:00:00:00:00:01", "\u{202E}Pad\u{200B}"),
+            Status::Ok
+        );
+        assert!(bt
+            .bluez
+            .calls()
+            .contains(&"alias AA:00:00:00:00:01 Pad".to_owned()));
     }
 
     #[test]

@@ -115,7 +115,7 @@ FocusScope {
         for (let i = 0; i < list.length; ++i) {
             const d = list[i]
             const set = phases[d.id]
-            const entry = { devId: d.id, name: d.name, family: d.family ?? "", phase: phaseOf(d),
+            const entry = { devId: d.id, name: DeviceIcons.plain(d.name), family: d.family ?? "", phase: phaseOf(d),
                             reason: set && set.reason ? set.reason : "" }
             let at = -1
             for (let j = 0; j < found.count; ++j) {
@@ -214,8 +214,10 @@ FocusScope {
         }
         // A pad plugged in over USB while we wait: nothing to pair, go and try it.
         function onGamepadConnected(id, name, family, transport) {
-            if (onb.shown && onb.stage === "pair" && transport === "usb") {
-                onb.tryName = name
+            // Not while a row is still pairing: its result would be lost behind the try screen.
+            const pairing = Object.values(onb.phases).some(p => p.phase === "pairing")
+            if (onb.shown && onb.stage === "pair" && transport === "usb" && !pairing) {
+                onb.tryName = DeviceIcons.padName(id, name, family)
                 onb.stage = "try"
                 test.forceActiveFocus()
             }
@@ -400,6 +402,11 @@ FocusScope {
                         Text {
                             id: rowName
                             anchors { left: rowGlyph.right; leftMargin: Theme.spaceM * onb.u; verticalCenter: parent.verticalCenter }
+                            objectName: "onbRowName_" + row.devId
+                            width: Math.min(implicitWidth, row.width * 0.4)
+                            elide: Text.ElideRight
+                            // A name the device chose: plain text, never markup (T-260).
+                            textFormat: Text.PlainText
                             text: row.name
                             color: Theme.text
                             font.pixelSize: Theme.typeBody * onb.u
@@ -408,7 +415,7 @@ FocusScope {
                         Text {
                             objectName: "onbRowState_" + row.devId
                             anchors { right: parent.right; rightMargin: Theme.spaceM * onb.u; verticalCenter: parent.verticalCenter }
-                            width: Math.min(implicitWidth, parent.width - rowName.width - rowGlyph.width - 4 * Theme.spaceM * onb.u)
+                            width: Math.max(0, Math.min(implicitWidth, parent.width - rowName.width - rowGlyph.width - 4 * Theme.spaceM * onb.u))
                             elide: Text.ElideRight
                             text: row.stateText
                             color: row.phase === "failed" ? Theme.errorText : Theme.textDim
@@ -430,6 +437,7 @@ FocusScope {
                 objectName: "onboardingTryName"
                 width: parent.width
                 horizontalAlignment: Text.AlignHCenter
+                textFormat: Text.PlainText      // the pad's name came from the pad
                 text: qsTr("%1 is connected. Press its buttons: they light up here.").arg(onb.tryName)
                 color: Theme.text
                 font.pixelSize: Theme.typeBody * onb.u

@@ -61,9 +61,13 @@ QList<BtDevice> parseDevices(const QDBusArgument &arg)
 DBusBluetoothBackend::DBusBluetoothBackend(QObject *parent)
     : BluetoothBackend(parent)
     , m_bus(chooseBus())
-    , m_watcher(Service, m_bus, QDBusServiceWatcher::WatchForRegistration, this)
+    , m_watcher(Service, m_bus, QDBusServiceWatcher::WatchForOwnerChange, this)
 {
-    connect(&m_watcher, &QDBusServiceWatcher::serviceRegistered, this, [this] { refresh(); });
+    connect(&m_watcher, &QDBusServiceWatcher::serviceRegistered, this, [this] {
+        emit gamepadsReset();       // a new instance: its first read is a baseline, nothing is announced
+        refresh();
+    });
+    connect(&m_watcher, &QDBusServiceWatcher::serviceUnregistered, this, [this] { emit gamepadsReset(); });
     m_bus.connect(Service, Path, Interface, QStringLiteral("DevicesChanged"), this, SLOT(onDevicesChanged()));
     m_bus.connect(Service, Path, Interface, QStringLiteral("ControllerPairingRejected"), this,
                   SLOT(onControllerRejected()));

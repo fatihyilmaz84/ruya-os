@@ -234,17 +234,31 @@ void MockBluetoothBackend::rename(const QString &id, const QString &name)
     const int at = indexOf(id);
     const QString trimmed = name.trimmed();
     QString status = QStringLiteral("ok");
-    if (id.isEmpty() || trimmed.isEmpty() || trimmed.size() > 48)
+    bool control = false;
+    for (const QChar c : trimmed)
+        control = control || c.category() == QChar::Other_Control;
+    if (id.isEmpty() || trimmed.isEmpty() || trimmed.size() > 48 || control)
         status = QStringLiteral("invalid");
     else if (!m_powered)
         status = QStringLiteral("unavailable");
     else if (at < 0 || !m_entries.at(at).listed)
         status = QStringLiteral("unknown-device");
+    else if (!m_entries.at(at).dev.paired)
+        status = QStringLiteral("failed");
     else {
         m_entries[at].dev.name = trimmed;
         publish();
     }
     answer(QStringLiteral("rename"), id, status);
+}
+
+void MockBluetoothBackend::setName(const QString &id, const QString &name)
+{
+    const int at = indexOf(id);
+    if (at >= 0) {
+        m_entries[at].dev.name = name;
+        publish();
+    }
 }
 
 void MockBluetoothBackend::reveal(const QString &id)

@@ -81,6 +81,7 @@ FocusScope {
             verticalCenter: parent.verticalCenter
         }
         text: control.label
+        textFormat: Text.PlainText      // a label may be a name a device or a person chose: never markup
         color: Theme.text
         font.pixelSize: Theme.typeBody * control.u
     }
