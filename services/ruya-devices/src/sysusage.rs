@@ -374,12 +374,11 @@ fn filesystem_of(path: &str) -> Result<(u64, u64), String> {
     if unsafe { libc::statvfs(c.as_ptr(), &mut st) } != 0 {
         return Err(std::io::Error::last_os_error().to_string());
     }
+    // The statvfs fields are u32 on some targets (32-bit, musl) and u64 on others: the casts are
+    // needed there, and clippy 1.92 on x86_64 glibc calls them unnecessary (CI, 2026-11-07).
     #[allow(clippy::unnecessary_cast)]
-    let unit = st.f_frsize as u64;
-    Ok((
-        (st.f_blocks as u64).saturating_mul(unit),
-        (st.f_bavail as u64).saturating_mul(unit),
-    ))
+    let (unit, blocks, avail) = (st.f_frsize as u64, st.f_blocks as u64, st.f_bavail as u64);
+    Ok((blocks.saturating_mul(unit), avail.saturating_mul(unit)))
 }
 
 #[cfg(not(target_os = "linux"))]
