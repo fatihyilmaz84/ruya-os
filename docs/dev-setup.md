@@ -53,7 +53,7 @@ To test an ISO in QEMU: `.\scripts\vm-iso-check.ps1` (about 10 minutes; a lead-r
 
 ### Disk space: one working VM disk, no stale images
 
-Image builds and VM disks are big (an image is ~4.7 GB, a qcow2 ~2.6 GB), and the WSL disk file lives on **C:** (`%LOCALAPPDATA%\wsl\{…}\ext4.vhdx`). Before 2026-10-24 every build left the previous image behind (70 GB of untagged images after two days) and every task made its own `tNNN.qcow2` copy. Now:
+Image builds and VM disks are big (an image is ~4.7 GB, a qcow2 ~2.6 GB), and the WSL disk file lives on **F:** (`F:\wsl\ext4.vhdx`, moved from C: on 2026-11-07 with `wsl --manage FedoraLinux-44 --move F:\wsl`, 18 minutes for 40 GB; F: is a USB drive, so builds there are slower than on the internal SSD: the first build after the move is measured in LEAD-NOTES; moving back is the same command). Before 2026-10-24 every build left the previous image behind (70 GB of untagged images after two days) and every task made its own `tNNN.qcow2` copy. Now:
 - `scripts/build.sh` removes, after a successful build, the untagged images that build did not use (it keeps the layers it used, so the cache still works). `RUYA_KEEP_IMAGES=1` skips it.
 - **Use `smoke-test.ps1 -Work`** whenever the VM must keep state across boots (profiles, drives, the drill). It boots `output\qcow2\work.qcow2`, made fresh from `disk.qcow2` after every `make-disk.sh` and reused otherwise; delete it to start over. Never make a per-task copy. `smoke-test.ps1` warns about any other `.qcow2` in `output\qcow2`.
 - Plain `smoke-test.ps1` (no `-Work`) boots `disk.qcow2` on a snapshot and writes nothing.
@@ -307,7 +307,7 @@ cmake -S shell -B shell/build -G Ninja && cmake --build shell/build && shell/bui
 - `smoke-test.ps1` boots without a sound card unless asked (`-Audio`, see "Audio in the VM"). Without one the shell logs `QSoundEffect: playback of this format is not supported` once per cue and nothing plays. With one, the same three lines still appear at the first shell start of a session (a start-up race, benign: the cues play), but not when the shell restarts later.
 
 ## Free disk space
-C: holds the WSL disk (`%LOCALAPPDATA%\wsl\FedoraLinux-44\ext4.vhdx`), D: holds `output/`; both drives are nearly full, and a full drive breaks `make-disk.sh` ("Cannot allocate memory"). After a session with image builds:
+F: holds the WSL disk (`F:\wsl\ext4.vhdx`, since 2026-11-07), D: holds `output/` and is nearly full; `build.sh`/`make-disk.sh` refuse with under 15 GiB free on `/mnt/c` or `/mnt/f` (`scripts/lib-diskguard.sh`); and a full drive breaks `make-disk.sh` ("Cannot allocate memory"). After a session with image builds:
 - In WSL as root: `podman image prune -f; podman system prune -f`, and `podman rmi` every drill/registry tag you pushed. Keep `localhost/ruyaos:dev`, `fedora-bootc:44`, `bootc-image-builder` and `fedora:44` (the next build needs them).
 - `output/qcow2/work.qcow2` and any `.iso` you no longer need; `disk.qcow2` is the newest fresh disk (`make-disk.sh` recreates it).
 - The VHDX never shrinks by itself (7 → 29 GB in one failed build, 2026-11-03). **`.\scripts\free-space.ps1`** does all of this section after every image build, passed or failed (owner rule): it refuses while a build runs, prunes untagged images, drill tags (`localhost:5000/*`) and stopped containers, keeps `ruyaos:dev` and the base images, deletes `work.qcow2` (unless `-KeepWork`), shuts WSL down and runs `wsl --manage FedoraLinux-44 --compact` (29 → 5.9 GB on 2026-11-03; the old export/import recipe is no longer needed).
