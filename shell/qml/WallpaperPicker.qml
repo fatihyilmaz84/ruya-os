@@ -1,5 +1,6 @@
 pragma ComponentBehavior: Bound
 import QtQuick
+import QtQuick.Effects
 import RuyaShell
 
 // Settings -> Display & motion -> Wallpaper (T-208): a modal grid of thumbnails. The first tile is
@@ -234,16 +235,14 @@ FocusScope {
         color: Theme.scrim
     }
 
-    Rectangle {
+    GlassSheet {
         id: panel
         objectName: "wallpaperPanel"
         anchors.centerIn: parent
         width: gridFrame.width + 2 * Theme.spaceXl * picker.u
         height: content.height + 2 * Theme.spaceXl * picker.u
-        radius: Theme.radiusL * picker.u
-        color: Theme.panel
-        border.width: Theme.hairlineAt(picker.u)
-        border.color: Theme.glassBorder
+        u: picker.u
+        shown: picker.shown
     }
 
     Column {
@@ -309,41 +308,76 @@ FocusScope {
                 Accessible.name: chosen ? qsTr("%1, current").arg(label) : label
                 Accessible.selected: isCurrent
 
-                Rectangle {
+                // The tile's art: the default look or the picture, cut to the tile's rounded shape by a mask
+                // (a `clip` is rectangular), so the picture, the hairline and the focus ring share one
+                // radius. On the software renderer, where `MultiEffect` draws nothing, the content is
+                // drawn as it is (square corners).
+                Item {
                     id: art
                     objectName: "wallpaperTile_" + (picker.usbMode ? tile.index : tile.modelData.id)
                     width: grid.tileWidth
                     height: grid.tileHeight
-                    radius: Theme.radiusM * picker.u
-                    clip: true
-                    // The default look: the backdrop's gradient and two soft blobs.
-                    gradient: Gradient {
-                        GradientStop { position: 0.0; color: Theme.backdropTop(Theme.defaultTint) }
-                        GradientStop { position: 1.0; color: Theme.background }
+                    readonly property real radius: Theme.radiusM * picker.u
+                    readonly property bool masked: GraphicsInfo.api !== GraphicsInfo.Software
+                                                   && GraphicsInfo.api !== GraphicsInfo.Null
+                                                   && GraphicsInfo.api !== GraphicsInfo.Unknown
+                    readonly property real maskRadius: artMask.radius       // tests read it
+
+                    Item {
+                        id: artContent
+                        anchors.fill: parent
+                        clip: !art.masked
+                        visible: !art.masked
+                        layer.enabled: art.masked
+                        // The default look: the backdrop's gradient and two soft blobs.
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: art.radius
+                            gradient: Gradient {
+                                GradientStop { position: 0.0; color: Theme.backdropTop(Theme.defaultTint) }
+                                GradientStop { position: 1.0; color: Theme.background }
+                            }
+                        }
+                        Rectangle {
+                            visible: !picker.usbMode && tile.modelData.kind === "default"
+                            width: parent.width * 0.7
+                            height: width
+                            radius: width / 2
+                            x: -width * 0.2
+                            y: -height * 0.5
+                            color: Theme.defaultTint
+                            opacity: 0.55
+                        }
+                        Image {
+                            anchors.fill: parent
+                            visible: status === Image.Ready
+                            source: tile.modelData.source ?? ""
+                            asynchronous: true
+                            cache: false
+                            fillMode: Image.PreserveAspectCrop
+                            sourceSize: Qt.size(grid.tileWidth, grid.tileHeight)
+                        }
                     }
                     Rectangle {
-                        visible: !picker.usbMode && tile.modelData.kind === "default"
-                        width: parent.width * 0.7
-                        height: width
-                        radius: width / 2
-                        x: -width * 0.2
-                        y: -height * 0.5
-                        color: Theme.defaultTint
-                        opacity: 0.55
-                    }
-                    Image {
+                        id: artMask
                         anchors.fill: parent
-                        visible: status === Image.Ready
-                        source: tile.modelData.source ?? ""
-                        asynchronous: true
-                        cache: false
-                        fillMode: Image.PreserveAspectCrop
-                        sourceSize: Qt.size(grid.tileWidth, grid.tileHeight)
+                        radius: art.radius
+                        visible: false
+                        layer.enabled: art.masked
+                    }
+                    MultiEffect {
+                        objectName: "wallpaperTileMask_" + (picker.usbMode ? tile.index : tile.modelData.id)
+                        anchors.fill: parent
+                        visible: art.masked
+                        source: artContent
+                        maskEnabled: true
+                        maskSource: artMask
+                        autoPaddingEnabled: false
                     }
                     // Selected but focus is elsewhere (the buttons): a hairline.
                     Rectangle {
                         anchors.fill: parent
-                        radius: parent.radius
+                        radius: art.radius
                         color: "transparent"
                         border.width: tile.isCurrent && !tile.focused ? Theme.hairlineAt(picker.u) : 0
                         border.color: Theme.glassBorder
@@ -410,7 +444,7 @@ FocusScope {
             width: gridFrame.width
             text: picker.message.length > 0 ? picker.message
                 : qsTr("Choose a picture to copy to this console. It is shrunk to fit the screen.")
-            color: picker.message.length > 0 ? Theme.errorText : Theme.textDim
+            color: picker.message.length > 0 ? Theme.errorText : Theme.text
             font.pixelSize: Theme.typeCaption * picker.u
             wrapMode: Text.Wrap
         }

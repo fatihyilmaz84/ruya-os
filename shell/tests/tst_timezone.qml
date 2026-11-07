@@ -211,6 +211,24 @@ Item {
             verify(find("rowTimezone").activeFocus)
         }
 
+        // T-272: the picker's panel is the glass sheet, not a flat `panel` card.
+        function test_the_picker_panel_is_glass() {
+            openSystemPane("p1", "1234")
+            goToRow("rowTimezone")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("zonePicker").shown, 2000, "the picker opens")
+            const panel = find("zonePanel")
+            verify(panel.layers !== undefined, "the panel is a GlassSheet")
+            compare(panel.fillColor, panel.blurred ? Theme.glassStrong : Theme.glassOpaque)
+            verify(!Qt.colorEqual(panel.fillColor, Theme.panel), "not the flat panel fill")
+            verify(findChild(panel, "glassSheetLayers").tintVisible)
+            compare(panel.radius, Theme.radiusL * tc.shell.u)
+            verify(find("zoneRegions").activeFocus, "focus is on the regions")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !find("zonePicker").shown, 2000, "Back closes it")
+            verify(find("rowTimezone").activeFocus, "and returns to the row")
+        }
+
         function test_an_admin_picks_a_region_then_a_city() {
             openSystemPane("p1", "1234")
             goToRow("rowTimezone")

@@ -1009,6 +1009,8 @@ FocusScope {
         objectName: "modalLayer"
         anchors.fill: parent
         z: 15
+        // The layer the glass sheets of the picker modals blur (GlassSheet finds it here).
+        property Item glassSource: l0
     }
 
     // "Keep this resolution?" (T-198): above the hint bar and every other modal.
