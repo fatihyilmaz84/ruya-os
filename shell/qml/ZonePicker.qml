@@ -49,16 +49,14 @@ FocusScope {
         color: Theme.scrim
     }
 
-    Rectangle {
+    GlassSheet {
         id: panel
         objectName: "zonePanel"
         anchors.centerIn: parent
         width: chooser.width + 2 * Theme.spaceXl * picker.u
         height: content.height + 2 * Theme.spaceXl * picker.u
-        radius: Theme.radiusL * picker.u
-        color: Theme.panel
-        border.width: Theme.hairlineAt(picker.u)
-        border.color: Theme.glassBorder
+        u: picker.u
+        shown: picker.shown
     }
 
     Column {

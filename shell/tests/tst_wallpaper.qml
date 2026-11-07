@@ -415,6 +415,49 @@ Item {
             compare(ring.visible, false)
         }
 
+        // T-272: the panel is the glass sheet (not a flat `panel` card) and the picture is cut to the radius
+        // of the hairline and the ring around it.
+        function test_the_panel_is_glass_and_the_thumbnails_are_rounded() {
+            DeviceSettings.wallpaper = "dusk"
+            openPicker()
+            const u = tc.shell.u
+            const panel = find("wallpaperPanel")
+            verify(panel.layers !== undefined, "the panel is a GlassSheet")
+            for (const key of Themes.keys) {
+                DeviceSettings.theme = key
+                tryCompare(Theme, "mix", 1, 3000)
+                compare(panel.fillColor, panel.blurred ? Theme.glassStrong : Theme.glassOpaque, key)
+                verify(!Qt.colorEqual(panel.fillColor, Theme.panel), key + ": not the flat panel fill")
+                verify(findChild(panel, "glassSheetLayers").tintVisible, key + ": the tint of a modal")
+            }
+            DeviceSettings.theme = "dreamglass"
+            tryCompare(Theme, "mix", 1, 3000)
+            compare(panel.radius, Theme.radiusL * u)
+            // Every tile: the mask has the tile's radius, and the ring hugs it.
+            for (const id of ["", "dusk", "daybreak"]) {
+                const art = find("wallpaperTile_" + id)
+                compare(art.radius, Theme.radiusM * u)
+                compare(art.maskRadius, Theme.radiusM * u, "the picture is masked to radiusM: " + id)
+            }
+            const ring = find("wallpaperRing_")
+            compare(ring.radius, find("wallpaperTile_").radius + Theme.focusRingOffset * u, "the ring follows the picture's shape")
+            // The Current badge sits inside the tile's corner.
+            const badge = find("wallpaperCurrent_dusk")
+            verify(badge.visible)
+            const at = badge.mapToItem(find("wallpaperTile_dusk"), 0, 0)
+            verify(at.x >= Theme.spaceXs * u - 0.01 && at.y >= Theme.spaceXs * u - 0.01, "inside the corner: " + at.x + "," + at.y)
+            // The drive's pictures are rounded the same way.
+            Wallpapers.mockPrepareUsb()
+            Storage.mockPlugStick()
+            tryVerify(() => find("wallpaperAddUsb").visible, 5000)
+            keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Return)
+            tryCompare(find("wallpaperPicker"), "mode", "usb")
+            compare(find("wallpaperPanel").layers !== undefined, true)
+            compare(find("wallpaperTile_0").maskRadius, Theme.radiusM * u, "the USB grid is masked too")
+        }
+
         function test_the_ring_reads_against_the_panel_in_every_theme() {
             for (const key of Themes.keys) {
                 DeviceSettings.theme = key
@@ -764,6 +807,10 @@ Item {
             keyClick(Qt.Key_Right)
             wait(900)
             grabImage(tc.shell).save(shotsDir + "/70-wallpaper-picker.png")
+            // On a GPU the sheet blurs L0 (found on the modal layer) and bakes it once for this opening.
+            const sheet = find("wallpaperPanel")
+            compare(sheet.blurred, true, "the sheet found L0 and draws the blur")
+            compare(sheet.bakeCount, 1, "captured once, not per frame")
             keyClick(Qt.Key_Down)
             keyClick(Qt.Key_Down)
             keyClick(Qt.Key_Down)

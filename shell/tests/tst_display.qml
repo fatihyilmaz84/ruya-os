@@ -257,6 +257,13 @@ Item {
             compare(find("resolutionPickerEntry_1920x1080").value, "")
             compare(find("resolutionPickerEntry_1920x1080").label, "1920 × 1080")
 
+            // T-272: the panel is the glass sheet, not a flat `panel` card.
+            const sheet = find("resolutionPickerPanel")
+            verify(sheet.layers !== undefined, "the panel is a GlassSheet")
+            compare(sheet.fillColor, sheet.blurred ? Theme.glassStrong : Theme.glassOpaque)
+            verify(!Qt.colorEqual(sheet.fillColor, Theme.panel), "not the flat panel fill")
+            verify(findChild(sheet, "glassSheetLayers").tintVisible)
+
             // Up and Down clamp at the ends; Back closes without choosing and focus returns.
             keyClick(Qt.Key_Up)
             verify(find("resolutionPickerEntry_3840x2160").activeFocus)

@@ -32,7 +32,7 @@ Settings → Display lets the owner pick the resolution and refresh rate the TV 
 - `02-shell.md`, `03-services-and-apps.md` §2.4, `04-design-system.md` (scale rule), the Devices1 XML, `docs/dev-setup.md`.
 
 ## Outcome
-Verified: host (vm pending: scripts/vm-display-check.sh check and switch; hw pending: the Dell)
+Verified: vm (0.0.51, lead, 2026-11-07: `vm-display-check.sh check` ALL PASSED; `switch`: the guard counted the start and **the CRTC followed the KMS config** (1280x800 and 1920x1440 in `/sys/kernel/debug/dri/*/state`; Qt takes the screen name `Virtual1` and `"WxH@Hz"`), 5 compositor starts under the limit of 10; the script's old fb0 check and EDID `-s` test were wrong on a virtio GPU and are fixed; unconfirmed change and fallback notice: the running shell takes the notice itself (WARN)). Hardware pending: the Dell. **VM finding fixed (lead):** the preferred 1280x800@75 became the default 3840x2160@60 because the 4K60 cap also covers the rate; `default_mode` now keeps the preferred size at the highest rate within the cap first.
 
 **Built.** The whole chain, host-tested; nothing of it has run on a real DRM device.
 - **Contract** `org.ruyaos.Devices1.Display` (XML first): `ListOutputs`, `SetMode`, `GetPending`, `Keep`, `Revert`, `TakeFallbackNotice`, `SetUiScale`, property `UiScale`; statuses `ok | unchanged | unknown-output | unknown-mode | busy | no-pending | invalid | failed`.

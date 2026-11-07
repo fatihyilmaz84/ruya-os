@@ -38,7 +38,7 @@ A read-only **System information** screen shows what the console is made of and 
 - `02-shell.md` (About / System information), `03-services-and-apps.md` (the interface), `Devices1.xml`, `docs/dev-setup.md`.
 
 ## Outcome
-Verified: host (vm pending: `scripts/vm-devices-check.sh system`; hw pending: the Dell's page against `lscpu`, `free`, `lspci`)
+Verified: host + vm (0.0.51, lead, 2026-11-07: `vm-devices-check.sh` 134 PASS incl. the system-information keys; the check's GPU lookup assumed `card0` and now finds the first `cardN` with a PCI device; one flaky FAIL `used + available is not the total` (two reads at different moments), not reproduced as a defect). Pending: `system` with a FAT USB stick (`ReadWritePaths=-/run/media`), and the Dell's page against `lscpu`, `free`, `lspci`.
 
 **Built.**
 - **Contract first** (`api/dbus/org.ruyaos.Devices1.xml`): interface `org.ruyaos.Devices1.System` with `GetInfo() -> a{sv}` (grouped keys `console.*`, `cpu.*`, `memory.*`, `graphics.*`, `storage.drives` as `aa{sv}`, `network.*`, `bluetooth.*`; every key and its type is in the XML; LIVE keys marked; a value that cannot be read is absent, never 0) and the signal `SystemInfoChanged`; and `Devices1.Storage.SaveReport(id, files a{ss}) -> (status, path)` with its status strings in the header.

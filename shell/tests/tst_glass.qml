@@ -24,6 +24,16 @@ Item {
             Rectangle { anchors.fill: parent; radius: 32; color: Theme.glass }
         }
     }
+    Component { id: sheetComponent; GlassSheet { width: 400; height: 240; shown: true } }
+    // A modal layer as the Shell has it: it offers the L0 layer to the sheets below it.
+    Component {
+        id: layerComponent
+        ModalLayer {
+            id: modalLayer
+            width: 800; height: 480
+            glassSource: Rectangle { parent: modalLayer; width: 800; height: 480; color: "#336699" }
+        }
+    }
     Component { id: sourceComponent; Rectangle { width: 400; height: 80; color: "#336699" } }
 
     // The stage of the screenshots. Outside the TestCase, which is invisible itself.
@@ -184,6 +194,52 @@ Item {
             verify(layerState(layers).sheen && layerState(layers).rim, "opaque glass keeps sheen and rim")
             compare(layerState(layers).grain, false, "and drops the grain")
             compare(shadow.shown, false, "and the shadow")
+        }
+
+        // --- the glass sheet of the picker modals (T-272) ---------------------------------------
+
+        function test_sheet_is_opaque_glass_without_blur() {
+            const sheet = createTemporaryObject(sheetComponent, host)
+            verify(sheet)
+            compare(sheet.blurred, false, "nothing to sample, so no blur")
+            compare(sheet.fillColor, Theme.glassOpaque)
+            const l = findChild(sheet, "glassSheetLayers")
+            verify(l.tintVisible, "a modal carries the tint")
+            verify(l.sheenVisible && l.rimVisible, "sheen and rim stay on opaque glass")
+            compare(l.grainVisible, false, "no grain where nothing is blurred")
+            compare(findChild(sheet, "glassSheetBlur").visible, false)
+            compare(l.radius, Theme.radiusL * sheet.u)
+        }
+
+        function test_sheet_blurs_the_modal_layers_source_on_the_gpu() {
+            const layer = createTemporaryObject(layerComponent, host)
+            const sheet = createTemporaryObject(sheetComponent, layer, { gpu: true })
+            tryVerify(() => sheet.source === layer.glassSource, 2000, "found on the modal layer")
+            compare(sheet.blurred, true)
+            compare(sheet.fillColor, Theme.glassStrong)
+            verify(findChild(sheet, "glassSheetBlur").visible)
+            verify(findChild(sheet, "glassSheetLayers").grainVisible, "grain with blur")
+            verify(findChild(sheet, "glassSheetLayers").tintVisible)
+            DeviceSettings.effectsQuality = "performance"
+            compare(sheet.blurred, false, "the Performance tier: no blur")
+            compare(sheet.fillColor, Theme.glassOpaque, "opaque glass, never translucent over sharp art")
+            compare(findChild(sheet, "glassSheetBlur").visible, false)
+            compare(sheet.shadow.shown, false, "and no shadow")
+            verify(findChild(sheet, "glassSheetLayers").sheenVisible && findChild(sheet, "glassSheetLayers").rimVisible)
+        }
+
+        function test_sheet_is_baked_when_it_opens_not_every_frame() {
+            const layer = createTemporaryObject(layerComponent, host)
+            const sheet = createTemporaryObject(sheetComponent, layer, { gpu: true, shown: false, x: 100, y: 60 })
+            compare(sheet.bakeCount, 0, "nothing is captured while it is closed")
+            sheet.shown = true
+            tryCompare(sheet, "bakeCount", 1, 2000, "captured once on opening")
+            verify(sheet.source === layer.glassSource)
+            wait(300)
+            compare(sheet.bakeCount, 1, "and not again while it stays open")
+            sheet.shown = false
+            sheet.shown = true
+            tryCompare(sheet, "bakeCount", 2, 2000, "once more on the next opening")
         }
 
         // --- card focus ------------------------------------------------------------------------
