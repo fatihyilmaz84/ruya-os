@@ -402,14 +402,15 @@ sysinfo_check() {
         [ "$v" = "$want" ] && ok "memory.swap_total_bytes matches SwapTotal ($v)" || bad "memory.swap_total_bytes '$v' vs $want"
     fi
 
-    # Graphics
-    if [ -e /sys/class/drm/card0/device/vendor ]; then
-        want="$(sed 's/^0x//' /sys/class/drm/card0/device/vendor):$(sed 's/^0x//' /sys/class/drm/card0/device/device)"
+    # Graphics: the first cardN that has a PCI device (virtio-gpu is card1 when simpledrm took card0).
+    gcard=""; for c in /sys/class/drm/card[0-9]*; do [ -e "$c/device/vendor" ] && { gcard="$c"; break; }; done
+    if [ -n "$gcard" ]; then
+        want="$(sed 's/^0x//' ${gcard}/device/vendor):$(sed 's/^0x//' ${gcard}/device/device)"
         v="$(sys_key graphics.pci_id)"; [ "$v" = "$want" ] && ok "graphics.pci_id is $v" || bad "graphics.pci_id '$v' vs $want"
-        want="$(basename "$(readlink -f /sys/class/drm/card0/device/driver 2>/dev/null)")"
+        want="$(basename "$(readlink -f ${gcard}/device/driver 2>/dev/null)")"
         v="$(sys_key graphics.driver)"; [ "$v" = "$want" ] && ok "graphics.driver is $v" || bad "graphics.driver '$v' vs '$want'"
         if command -v lspci >/dev/null; then
-            slot="$(basename "$(readlink -f /sys/class/drm/card0/device)")"
+            slot="$(basename "$(readlink -f ${gcard}/device)")"
             echo "compare by eye: lspci: $(lspci -s "${slot#0000:}" 2>/dev/null) / graphics.vendor+model: $(sys_key graphics.vendor) $(sys_key graphics.model)"
         fi
     else

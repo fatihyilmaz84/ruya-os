@@ -248,6 +248,23 @@ pub fn default_mode(output: &Output) -> Option<usize> {
     if within(&output.modes[preferred]) {
         return Some(preferred);
     }
+    // Too fast only (a 1440p240 monitor, a 1280x800 at 75 Hz): the same size at the highest rate
+    // within the cap, never another size (the VM showed a 75 Hz preferred mode becoming 4K).
+    let (pw, ph) = (
+        output.modes[preferred].width,
+        output.modes[preferred].height,
+    );
+    if pw <= CAP_WIDTH && ph <= CAP_HEIGHT {
+        let slower = output
+            .modes
+            .iter()
+            .enumerate()
+            .filter(|(_, m)| m.width == pw && m.height == ph && within(m))
+            .max_by_key(|(_, m)| m.refresh_mhz);
+        if let Some((at, _)) = slower {
+            return Some(at);
+        }
+    }
     output.modes.iter().position(within).or(Some(preferred))
 }
 
@@ -1017,6 +1034,14 @@ mod tests {
             mode(1920, 1080, 60_000, false),
         ];
         assert_eq!(default_mode(&out), Some(1));
+        // Too fast only: the same size at the highest rate within the cap, not another size.
+        out.modes = vec![
+            mode(2560, 1440, 240_000, true),
+            mode(3840, 2160, 60_000, false),
+            mode(2560, 1440, 144_000, false),
+            mode(2560, 1440, 60_000, false),
+        ];
+        assert_eq!(default_mode(&out), Some(3));
         // A preferred mode beyond the cap in size, at a low rate: still skipped.
         out.modes = vec![
             mode(7680, 4320, 30_000, true),

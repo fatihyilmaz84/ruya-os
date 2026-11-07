@@ -153,7 +153,7 @@ check)
     out="$(sess ListSessions sxu "$kid" 0 10)"; echo "$out" | cut -c1-500
     fgs="$(echo "$out" | fg_of | tr '\n' ' ')"; rs="$(echo "$out" | reason_of | tr '\n' ' ')"
     echo "$rs" | grep -q crashed && ok "the interrupted session came back with reason crashed" || bad "reasons: $rs"
-    echo "$fgs" | tr ' ' '\n' | awk '$1 >= 25 && $1 <= 40 {f=1} END {exit !f}' && ok "its time is that of the last heartbeat (25-40 s of 40: $fgs)" || bad "foreground seconds: $fgs"
+    echo "$fgs" | tr ' ' '\n' | awk '$1 >= 20 && $1 <= 40 {f=1} END {exit !f}' && ok "its time is that of the last heartbeat (20-40 s of 40, the heartbeat is every 30 s: $fgs)" || bad "foreground seconds: $fgs"
     systemctl --user -M "$user@.host" stop 'ruya-app-*.service' </dev/null 2>&1 | cat >/dev/null
 
     echo "--- ClearHistory"
