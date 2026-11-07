@@ -1,6 +1,6 @@
 # T-226 — System information: what the console is made of and how it is doing
 
-Status: in-progress · Phase: 2 · Depends: — · Area: api, services, shell · Size: M · Owner: builder
+Status: done · Phase: 2 · Depends: — · Area: api, services, shell · Size: M · Owner: builder
 
 ## Goal
 A read-only **System information** screen shows what the console is made of and how it is doing, readable from the sofa, for the owner and for support (owner request, 2026-11-06). Settings -> About keeps its short summary and opens it; if `02` puts it better under System, say so in the Outcome and in the spec. It can also be saved to a USB drive as a report.
