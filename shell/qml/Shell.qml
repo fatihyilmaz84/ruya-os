@@ -991,6 +991,9 @@ FocusScope {
                     { button: "B", text: systemPanel.powerMode ? qsTr("Back") : qsTr("Close") }]
         if (appOpen)
             return []
+        const keyboard = activeItem as TextEntry     // Back deletes a letter or cancels: the keyboard says which
+        if (keyboard)
+            return keyboard.entryHints
         if (hasAncestor(activeItem, modalLayer) || hasAncestor(activeItem, pinPadInPicker))
             return [{ button: "B", text: qsTr("Cancel") }]
         if (!signedIn)

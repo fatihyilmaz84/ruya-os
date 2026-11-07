@@ -26,6 +26,11 @@ Item {
         PinPad { anchors.fill: parent }
     }
 
+    Component {
+        id: entryComponent
+        TextEntry { anchors.fill: parent }
+    }
+
     TestCase {
         id: tc
         name: "Hints"
@@ -191,6 +196,21 @@ Item {
             compare(tc.shown(), "B Cancel")
             verify(!find("hintBar").activeFocus)
             pad.destroy()
+        }
+
+        // T-194: the on-screen keyboard says what Back does with the text in the field.
+        function test_text_entry_back_cue() {
+            signInAsAda()
+            const entry = createTemporaryObject(entryComponent, find("modalLayer"))
+            verify(entry)
+            entry.open("Name", "ab")
+            tryVerify(() => entry.activeFocus, 2000, "the keyboard takes focus")
+            compare(tc.shown(), "B Delete")
+            keyClick(Qt.Key_Escape)
+            keyClick(Qt.Key_Escape)
+            compare(entry.text, "")
+            compare(tc.shown(), "B Cancel", "an empty field: Back cancels")
+            entry.destroy()
         }
 
         function test_picker_pin_pad() {

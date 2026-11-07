@@ -123,6 +123,35 @@ Item {
             compare(cancelledSpy.count, 1, "cancelled() is emitted exactly once")
         }
 
+        // T-194: the entry says what Back does now, to the hint bar (entryHints) and to a screen
+        // reader (Accessible.description): delete while there is text on a controller, cancel when
+        // the field is empty or after typing on a physical keyboard.
+        function shownHint() { return entry.entryHints.map(h => h.button + " " + h.text).join("|") }
+
+        function test_back_cue() {
+            openEntry("Name", "ab")
+            compare(shownHint(), "B Delete")
+            compare(entry.Accessible.description, "Press Back to delete, Back on an empty field to cancel")
+            keyClick(Qt.Key_Escape)
+            compare(entry.text, "a")
+            compare(shownHint(), "B Delete")
+            keyClick(Qt.Key_Escape)
+            compare(entry.text, "")
+            compare(shownHint(), "B Cancel", "an empty field: Back cancels")
+            compare(entry.Accessible.description, "Press Back to cancel")
+            pressKey("a")
+            compare(shownHint(), "B Delete", "typing brings the delete cue back")
+            keyClick(Qt.Key_Backspace)
+            compare(shownHint(), "B Cancel")
+            // After typing on a physical keyboard Esc cancels at once.
+            keyClick("x")
+            compare(entry.text, "x")
+            compare(shownHint(), "B Cancel", "keyboard mode: Esc cancels even with text")
+            compare(entry.Accessible.description, "Press Back to cancel")
+            keyClick(Qt.Key_Left)                      // the D-pad takes over again
+            compare(shownHint(), "B Delete")
+        }
+
         // T-179: Backspace is Back on pages, but in a text field it only deletes.
         function test_backspace_deletes_and_never_goes_back() {
             openEntry("Name", "ab")

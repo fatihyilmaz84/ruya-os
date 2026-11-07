@@ -731,7 +731,7 @@
         <translation>Şimdi kapatılsın mı?</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+7"/>
         <source>Suspend now</source>
         <translation>Şimdi askıya al</translation>
     </message>
@@ -746,14 +746,13 @@
         <translation>Şimdi kapat</translation>
     </message>
     <message>
-        <location line="+95"/>
+        <location line="+104"/>
         <location line="+10"/>
         <source>Cancel</source>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="-102"/>
-        <location line="+126"/>
+        <location line="-111"/>
         <source>Confirm</source>
         <translation>Onayla</translation>
     </message>
@@ -1317,7 +1316,7 @@
         <translation>Ses çıkışı: %1</translation>
     </message>
     <message numerus="yes">
-        <location line="+180"/>
+        <location line="+231"/>
         <source>%n more device(s) with a battery: %1</source>
         <translation>
             <numerusform>Pili olan %n cihaz daha: %1</numerusform>
@@ -1329,12 +1328,12 @@
         <translation>%1 yüzde %2</translation>
     </message>
     <message>
-        <location line="+545"/>
+        <location line="+551"/>
         <source>Power</source>
         <translation>Güç</translation>
     </message>
     <message>
-        <location line="-718"/>
+        <location line="-775"/>
         <source>Update ready. Restart to finish.</source>
         <translation>Güncelleme hazır. Bitirmek için yeniden başlat.</translation>
     </message>
@@ -1354,7 +1353,7 @@
         <translation>Duvar kağıdı yüklenemedi</translation>
     </message>
     <message>
-        <location line="+211"/>
+        <location line="+265"/>
         <source>Continue playing</source>
         <translation>Oynamaya devam et</translation>
     </message>
@@ -1396,7 +1395,7 @@
     </message>
     <message>
         <location line="+231"/>
-        <location line="+7"/>
+        <location line="+10"/>
         <location line="+3"/>
         <source>Select</source>
         <translation>Seç</translation>
@@ -1428,8 +1427,8 @@
         <translation>Profil değiştir</translation>
     </message>
     <message>
-        <location line="-106"/>
-        <location line="+108"/>
+        <location line="-109"/>
+        <location line="+111"/>
         <source>Close</source>
         <translation>Kapat</translation>
     </message>
@@ -1449,8 +1448,8 @@
         <translation>Kapat</translation>
     </message>
     <message>
-        <location line="-114"/>
-        <location line="+115"/>
+        <location line="-117"/>
+        <location line="+118"/>
         <source>Back</source>
         <translation>Geri</translation>
     </message>
@@ -1794,7 +1793,27 @@
 <context>
     <name>TextEntry</name>
     <message>
-        <location filename="../qml/TextEntry.qml" line="+129"/>
+        <location filename="../qml/TextEntry.qml" line="+53"/>
+        <source>Delete</source>
+        <translation>Sil</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Cancel</source>
+        <translation>İptal</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Press Back to delete, Back on an empty field to cancel</source>
+        <translation>Silmek için Geri&apos;ye basın; boş alanda Geri iptal eder</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Press Back to cancel</source>
+        <translation>İptal etmek için Geri&apos;ye basın</translation>
+    </message>
+    <message>
+        <location line="+82"/>
         <source>Space</source>
         <translation>Boşluk</translation>
     </message>
