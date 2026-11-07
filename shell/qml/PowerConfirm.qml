@@ -2,7 +2,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import RuyaShell
 
-// "Restart now?" with Cancel and Confirm. Shared by the Power page and the Guide overlay.
+// "Restart now?" with Cancel and a button that names the action ("Restart now"). Shared by the Power page and the Guide overlay.
 // Cancel has focus when it opens, so a stray Accept never powers the machine off. Confirm
 // calls the Power singleton; Cancel and Back call nothing. Modal: it accepts every key.
 // Focus returns to the item that had it before open() (checked for still being usable).
@@ -15,8 +15,8 @@ FocusScope {
     // Confirm then only emits confirmed("custom") and the caller does the work.
     property string customTitle: ""
     property string detail: ""
-    // Accessible name of the Confirm button for action "custom" (e.g. "Delete Ada"); the
-    // visible label stays "Confirm". Empty falls back to "Confirm".
+    // Label and accessible name of the Confirm button for action "custom" (e.g. "Delete Ada").
+    // Empty falls back to the generic "Confirm".
     property string customConfirmName: ""
     property bool shown: false
     property Item returnTo: null
@@ -31,7 +31,8 @@ FocusScope {
         poweroff: qsTr("Power off now?")
     })
 
-    // What a screen reader says for the Confirm button: the action, not the word "Confirm".
+    // The Confirm button's visible label and its accessible name (T-194): the action, not the
+    // word "Confirm" (WCAG 2.5.3: the visible label is the name).
     readonly property string confirmName: {
         if (action === "suspend")
             return qsTr("Suspend now")
@@ -43,6 +44,14 @@ FocusScope {
             return customConfirmName
         return qsTr("Confirm")
     }
+
+    // Widths (design px times u): Cancel is fixed; the action button grows with its label and
+    // stops where the dialog (90 % of the window, minus the card padding) stops; beyond that
+    // the label elides on the right, the full text stays in the accessible name.
+    readonly property real cancelWidth: 300 * u
+    readonly property real buttonPad: Theme.spaceL * u
+    readonly property real confirmMaxWidth: Math.max(cancelWidth, 0.9 * width - 120 * u - cancelWidth - Theme.spaceM * u)
+    readonly property real confirmWidth: Math.min(confirmMaxWidth, Math.max(cancelWidth, confirmLabel.implicitWidth + 2 * buttonPad))
 
     function open(which) {
         returnTo = Window.activeFocusItem
@@ -89,6 +98,7 @@ FocusScope {
     }
 
     Rectangle {
+        objectName: "powerConfirmPanel"
         anchors.centerIn: parent
         width: Math.max(titleText.width, buttons.width) + 120 * dialog.u
         height: card.height + 96 * dialog.u
@@ -135,7 +145,7 @@ FocusScope {
                 Accessible.role: Accessible.Button
                 Accessible.name: qsTr("Cancel")
                 Accessible.focusable: true
-                width: 300 * dialog.u
+                width: dialog.cancelWidth
                 height: Theme.buttonHeight * dialog.u
                 radius: height / 2
                 color: activeFocus ? Theme.focusFill : Theme.glass
@@ -159,15 +169,20 @@ FocusScope {
                 Accessible.role: Accessible.Button
                 Accessible.name: dialog.confirmName
                 Accessible.focusable: true
-                width: 300 * dialog.u
+                width: dialog.confirmWidth
                 height: Theme.buttonHeight * dialog.u
                 radius: height / 2
                 color: dialog.action === "suspend" ? (activeFocus ? Theme.focusFill : Theme.glass) : Theme.dangerFill
                 border.width: activeFocus ? Theme.focusRingWidth * dialog.u : Theme.hairlineAt(dialog.u)
                 border.color: activeFocus ? Theme.focusRing : Theme.glassBorder
                 Text {
+                    id: confirmLabel
+                    objectName: "powerConfirmLabel"
                     anchors.centerIn: parent
-                    text: qsTr("Confirm")
+                    width: Math.min(implicitWidth, parent.width - 2 * dialog.buttonPad)
+                    elide: Text.ElideRight
+                    horizontalAlignment: Text.AlignHCenter
+                    text: dialog.confirmName
                     color: Theme.text
                     font.pixelSize: Theme.typeHeadline * dialog.u
                     font.weight: Theme.weightDemiBold

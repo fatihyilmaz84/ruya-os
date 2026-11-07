@@ -299,6 +299,7 @@ Item {
                 keyClick(Qt.Key_Right)
                 tryVerify(() => find("powerConfirm").activeFocus, 2000, action + ": Confirm has focus")
                 compare(focused().Accessible.name, name, action)
+                compare(findChild(dialog, "powerConfirmLabel").text, name, action + ": the visible label is the name (T-194)")
                 verify(focused().Accessible.name !== "Confirm", action + ": not the bare word Confirm")
                 compare(find("powerCancel").Accessible.name, "Cancel")
                 keyClick(Qt.Key_Escape)                  // Back cancels: nothing powers off
@@ -514,6 +515,7 @@ Item {
             tryVerify(() => ok.activeFocus, 2000, "Confirm has focus")
             checkFocused("delete confirm")
             compare(focused().Accessible.name, "Delete Ada")
+            compare(findChild(confirm, "powerConfirmLabel").text, "Delete Ada", "the visible label is the name (T-194)")
             keyClick(Qt.Key_Return)
             walkProfilesPad("delete profile")
             tryVerify(() => find("rowDelete").activeFocus, 2000, "focus returns to Delete")

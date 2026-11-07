@@ -796,7 +796,7 @@
         <translation>Şimdi kapatılsın mı?</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+7"/>
         <source>Suspend now</source>
         <translation>Şimdi askıya al</translation>
     </message>
@@ -811,14 +811,13 @@
         <translation>Şimdi kapat</translation>
     </message>
     <message>
-        <location line="+95"/>
+        <location line="+104"/>
         <location line="+10"/>
         <source>Cancel</source>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="-102"/>
-        <location line="+126"/>
+        <location line="-111"/>
         <source>Confirm</source>
         <translation>Onayla</translation>
     </message>
@@ -1292,19 +1291,19 @@
     </message>
     <message>
         <location line="+16"/>
-        <location line="+62"/>
+        <location line="+63"/>
         <location line="+79"/>
         <source>Press A to continue</source>
         <translation>Devam etmek için A&apos;ya basın</translation>
     </message>
     <message>
-        <location line="-308"/>
-        <location line="+216"/>
+        <location line="-309"/>
+        <location line="+217"/>
         <source>Network</source>
         <translation>Ağ</translation>
     </message>
     <message>
-        <location line="-342"/>
+        <location line="-343"/>
         <source>Try again</source>
         <translation>Yeniden dene</translation>
     </message>
@@ -1337,7 +1336,7 @@
         <translation>Saatin doğru olması için önce bölgenizi, sonra şehrinizi seçin. Bunu daha sonra Ayarlar&apos;dan değiştirebilirsiniz.</translation>
     </message>
     <message>
-        <location line="+35"/>
+        <location line="+36"/>
         <source>Network setup comes later. A wired connection works without any setup.</source>
         <translation>Ağ kurulumu daha sonra gelecek. Kablolu bağlantı herhangi bir kurulum olmadan çalışır.</translation>
     </message>
@@ -1377,8 +1376,8 @@
         <translation>Oluşturuluyor…</translation>
     </message>
     <message>
-        <location line="-270"/>
-        <location line="+296"/>
+        <location line="-271"/>
+        <location line="+297"/>
         <source>You&apos;re all set</source>
         <translation>Her şey hazır</translation>
     </message>
@@ -1428,12 +1427,12 @@
         <translation>%1 yüzde %2</translation>
     </message>
     <message>
-        <location line="+545"/>
+        <location line="+548"/>
         <source>Power</source>
         <translation>Güç</translation>
     </message>
     <message>
-        <location line="-769"/>
+        <location line="-772"/>
         <source>Update ready. Restart to finish.</source>
         <translation>Güncelleme hazır. Bitirmek için yeniden başlat.</translation>
     </message>
@@ -1495,7 +1494,7 @@
     </message>
     <message>
         <location line="+231"/>
-        <location line="+7"/>
+        <location line="+10"/>
         <location line="+3"/>
         <source>Select</source>
         <translation>Seç</translation>
@@ -1527,8 +1526,8 @@
         <translation>Profil değiştir</translation>
     </message>
     <message>
-        <location line="-106"/>
-        <location line="+108"/>
+        <location line="-109"/>
+        <location line="+111"/>
         <source>Close</source>
         <translation>Kapat</translation>
     </message>
@@ -1548,8 +1547,8 @@
         <translation>Kapat</translation>
     </message>
     <message>
-        <location line="-114"/>
-        <location line="+115"/>
+        <location line="-117"/>
+        <location line="+118"/>
         <source>Back</source>
         <translation>Geri</translation>
     </message>
@@ -1914,7 +1913,27 @@
 <context>
     <name>TextEntry</name>
     <message>
-        <location filename="../qml/TextEntry.qml" line="+129"/>
+        <location filename="../qml/TextEntry.qml" line="+53"/>
+        <source>Delete</source>
+        <translation>Sil</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Cancel</source>
+        <translation>İptal</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Press Back to delete, Back on an empty field to cancel</source>
+        <translation>Silmek için Geri&apos;ye basın; boş alanda Geri iptal eder</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Press Back to cancel</source>
+        <translation>İptal etmek için Geri&apos;ye basın</translation>
+    </message>
+    <message>
+        <location line="+82"/>
         <source>Space</source>
         <translation>Boşluk</translation>
     </message>
@@ -2224,7 +2243,7 @@
 <context>
     <name>ZoneChooser</name>
     <message>
-        <location filename="../qml/ZoneChooser.qml" line="+43"/>
+        <location filename="../qml/ZoneChooser.qml" line="+46"/>
         <source>Africa</source>
         <translation>Afrika</translation>
     </message>

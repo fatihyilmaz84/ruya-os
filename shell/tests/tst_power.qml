@@ -26,6 +26,7 @@ Item {
 
         function init() {
             verify(windowGuard.ensureActive() === "", windowGuard.ensureActive())
+            DeviceSettings.language = "en"
             Power.mockReset()
             Profiles.lock()
             tryCompare(Profiles, "activeProfile", "")
@@ -102,6 +103,114 @@ Item {
             compare(Power.actionCount, 1)
             tryVerify(() => !find("powerConfirmDialog").shown)
             tryVerify(() => find("powerRestart").activeFocus)
+        }
+
+        // T-194: the visible label of the action button is the action, and it is the accessible
+        // name too (WCAG 2.5.3); only a custom dialog without a name says "Confirm".
+        function test_button_label_is_the_action() {
+            openPowerPage()
+            const dialog = find("powerConfirmDialog")
+            const label = findChild(dialog, "powerConfirmLabel")
+            const expected = [["suspend", "Suspend now"], ["restart", "Restart now"], ["poweroff", "Power off now"]]
+            for (const [action, text] of expected) {
+                dialog.open(action)
+                tryVerify(() => find("powerCancel").activeFocus, 2000, action + ": Cancel has focus")
+                compare(label.text, text, action)
+                compare(find("powerConfirm").Accessible.name, label.text, action + ": name equals label")
+                compare(find("powerCancel").Accessible.name, "Cancel")
+                dialog.cancel()
+                tryVerify(() => !dialog.shown)
+            }
+            dialog.customConfirmName = ""
+            dialog.open("custom")
+            compare(label.text, "Confirm", "a custom dialog without a name keeps the generic word")
+            compare(find("powerConfirm").Accessible.name, "Confirm")
+            dialog.cancel()
+            tryVerify(() => !dialog.shown)
+            dialog.customConfirmName = "Roll back now"
+            dialog.open("custom")
+            compare(label.text, "Roll back now")
+            compare(find("powerConfirm").Accessible.name, "Roll back now")
+            dialog.cancel()
+            tryVerify(() => !dialog.shown)
+        }
+
+        // The Turkish labels are the action too; the same text is the name.
+        function test_button_label_is_translated() {
+            DeviceSettings.language = "tr"
+            openPowerPage()
+            const dialog = find("powerConfirmDialog")
+            const label = findChild(dialog, "powerConfirmLabel")
+            dialog.open("restart")
+            compare(label.text, "Şimdi yeniden başlat")
+            compare(find("powerConfirm").Accessible.name, "Şimdi yeniden başlat")
+            compare(find("powerCancel").Accessible.name, "İptal")
+            dialog.cancel()
+            tryVerify(() => !dialog.shown)
+        }
+
+        // What is wrong with the buttons' place inside the dialog at the size the shell really
+        // gives it ("" when nothing). Row and Column lay out on the next frame: callers wait.
+        function buttonsProblem(dialog) {
+            const panel = findChild(dialog, "powerConfirmPanel")
+            const confirm = find("powerConfirm")
+            const cancel = find("powerCancel")
+            const label = findChild(dialog, "powerConfirmLabel")
+            const c = confirm.mapToItem(dialog, 0, 0)
+            const k = cancel.mapToItem(dialog, 0, 0)
+            const p = panel.mapToItem(dialog, 0, 0)
+            const dims = [k.x, c.x, confirm.width, p.x, panel.width, dialog.width, dialog.u].join(",")
+            if (!(dialog.u > 0.5))
+                return "no real scale " + dims
+            if (!(p.x >= 0 && p.x + panel.width <= dialog.width + 0.5))
+                return "the card is outside the window " + dims
+            if (!(k.x >= p.x && c.x + confirm.width <= p.x + panel.width + 0.5))
+                return "a button is outside the card " + dims
+            if (!(k.x + cancel.width <= c.x))
+                return "the buttons overlap " + dims
+            if (!(label.width <= confirm.width + 0.5 && label.x >= 0))
+                return "the label is outside its button " + dims
+            return ""
+        }
+
+        function checkButtonsInside(dialog, what) {
+            tryVerify(() => buttonsProblem(dialog) === "", 2000, what + ": " + buttonsProblem(dialog))
+        }
+
+        // T-194: the longest names (English and Turkish) still fit the dialog; beyond the room
+        // the label elides and the full text stays in the accessible name.
+        function test_longest_names_fit_the_dialog() {
+            openPowerPage()
+            const dialog = find("powerConfirmDialog")
+            const label = findChild(dialog, "powerConfirmLabel")
+            const names = [
+                ["en", "Roll back now"],
+                ["en", "Delete Wolfeschlegelsteinhausen Jr"],
+                ["tr", "Şimdi önceki sürüme dön"],
+                ["tr", "Wolfeschlegelsteinhausen Jr. profilini sil"]
+            ]
+            for (const [lang, name] of names) {
+                DeviceSettings.language = lang
+                dialog.customTitle = name + "?"
+                dialog.customConfirmName = name
+                dialog.open("custom")
+                tryVerify(() => find("powerCancel").activeFocus, 2000)
+                tryCompare(label, "text", name)
+                checkButtonsInside(dialog, name)
+                verify(!label.truncated, name + ": fits without eliding")
+                dialog.cancel()
+                tryVerify(() => !dialog.shown)
+            }
+            const absurd = "Delete " + "Ayşegül-Çağlayan-Öztürk-".repeat(12)
+            dialog.customTitle = "Delete?"
+            dialog.customConfirmName = absurd
+            dialog.open("custom")
+            tryVerify(() => find("powerCancel").activeFocus, 2000)
+            checkButtonsInside(dialog, "absurd name")
+            verify(label.truncated, "the label elides when there is no room")
+            compare(find("powerConfirm").Accessible.name, absurd, "the name keeps the whole text")
+            dialog.cancel()
+            tryVerify(() => !dialog.shown)
         }
 
         // T-179: Backspace is Back, like Esc.
@@ -305,9 +414,37 @@ Item {
             keyClick(Qt.Key_Down)
             keyClick(Qt.Key_Return)
             tryVerify(() => find("powerCancel").activeFocus)
-            wait(500)
+            tryCompare(find("powerConfirmDialog"), "opacity", 1, 5000, "the dialog has faded in")
+            wait(200)
             grabImage(tc.shell).save(shotsDir + "/13-power-confirm.png")
             keyClick(Qt.Key_Escape)
+            tryVerify(() => !find("powerConfirmDialog").shown)
+            // Turkish (the longest stock label), then a long name under Daylight (T-194).
+            DeviceSettings.language = "tr"
+            find("powerConfirmDialog").open("restart")
+            tryVerify(() => find("powerCancel").activeFocus)
+            keyClick(Qt.Key_Right)
+            tryVerify(() => find("powerConfirm").activeFocus)
+            tryCompare(find("powerConfirmDialog"), "opacity", 1, 5000, "the dialog has faded in")
+            wait(200)
+            grabImage(tc.shell).save(shotsDir + "/13c-power-confirm-tr.png")
+            find("powerConfirmDialog").cancel()
+            DeviceSettings.language = "en"
+            DeviceSettings.theme = "daylight"
+            find("powerConfirmDialog").customTitle = "Delete Wolfeschlegelsteinhausen Jr?"
+            find("powerConfirmDialog").detail = "Their saved games and settings are removed."
+            find("powerConfirmDialog").customConfirmName = "Delete Wolfeschlegelsteinhausen Jr"
+            find("powerConfirmDialog").open("custom")
+            tryVerify(() => find("powerCancel").activeFocus)
+            keyClick(Qt.Key_Right)
+            tryVerify(() => find("powerConfirm").activeFocus)
+            tryCompare(Theme, "mix", 1, 5000, "the theme has finished fading")
+            tryCompare(find("powerConfirmDialog"), "opacity", 1, 5000, "the dialog has faded in")
+            wait(200)
+            grabImage(tc.shell).save(shotsDir + "/13d-power-confirm-long-daylight.png")
+            find("powerConfirmDialog").cancel()
+            find("powerConfirmDialog").detail = ""
+            DeviceSettings.theme = "dreamglass"
             keyClick(Qt.Key_HomePage)
             tryVerify(() => find("systemActions").activeFocus)
             keyClick(Qt.Key_Down)

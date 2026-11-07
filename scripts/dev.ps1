@@ -140,6 +140,10 @@ function Run-QmlTests([string]$ShotsDir) {
         $only = Get-ScreenshotFunctions
         New-Item -ItemType Directory -Force $ShotsDir | Out-Null
         $env:RUYA_SHOTS_DIR = $ShotsDir
+        # The threaded render loop stalls animations and layout in these test windows on the dev
+        # desktop (7-9 timing failures, stale frames; builders T-194/T-199/T-213, 2026-11-07): the
+        # basic loop renders on the GUI thread and gave a full green run.
+        $env:QSG_RENDER_LOOP = "basic"
     } else {
         # The gate runs offscreen: immune to a locked screen, OS focus changes and other
         # windows, same as CI. Logic and focus are tested; visuals are checked by `shots`.
@@ -149,6 +153,7 @@ function Run-QmlTests([string]$ShotsDir) {
     & (Join-Path $ShellBuild "Release\tst_ruyashell.exe") -o "$log,txt" @only | Out-Null
     $code = $LASTEXITCODE
     Remove-Item Env:\RUYA_SHOTS_DIR -ErrorAction SilentlyContinue
+    Remove-Item Env:\QSG_RENDER_LOOP -ErrorAction SilentlyContinue
     Remove-Item Env:\QT_QPA_PLATFORM -ErrorAction SilentlyContinue
     Get-Content $log | Where-Object { $_ -match '^(FAIL|XPASS|SKIP|Totals)|failure location|QWARN|QCRITICAL' } | ForEach-Object { Write-Host "    $_" }
     # A run that failed while the desktop is locked says so too; the failures above stay visible,

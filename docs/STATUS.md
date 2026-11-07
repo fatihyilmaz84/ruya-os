@@ -23,9 +23,8 @@ Open work only (the front of the board; the rest is in `STATUS-backlog.md`), in 
 
 | ID | Title | Status | Depends |
 |---|---|---|---|
-| [T-194](tasks/T-194-confirm-buttons-name-the-action.md) | Confirm dialogs: the button says the action | in-progress | — |
 | [T-197](tasks/T-197-shell-crash-on-bluetooth-audio-disconnect.md) | **[lead]** Shell crash when a Bluetooth headset disconnects | in-progress | — |
-| [T-199](tasks/T-199-device-icons.md) | Device icons in the Bluetooth pane and toasts | todo | — |
+| [T-199](tasks/T-199-device-icons.md) | Device icons in the Bluetooth pane and toasts | in-progress | — |
 | [T-202](tasks/T-202-screen-saver-and-power-saving.md) | Screen saver and power saving | todo | — |
 | [T-260](tasks/T-260-controller-onboarding-flow.md) | Controller onboarding: USB connected toast, per-family pairing guidance, one-click pair, the paired list | todo | T-203, T-199 |
 | [T-261](tasks/T-261-controller-families-and-drivers-audit.md) | **[lead]** Controller families and drivers audit (DualSense, Xbox, 8BitDo, Switch), detection table, hardware checklist | todo | — |
@@ -57,6 +56,7 @@ One line each: `- (source) what, and why it matters`. Dispatched builders put th
 - (CI 2026-11-07) clippy 1.92 on Linux flagged `as u64` casts of `statvfs` fields (`sysusage.rs`) that neither the Windows cross-target clippy nor Fedora's clippy 1.99 in WSL flags (fixed with the allow already used in `udisks.rs`). A Linux-native clippy at the CI's pinned 1.92 is the missing gate: needs the 1.92 toolchain inside WSL (rustup download: the owner decides) or a `ci.yml` pre-check; then `dev.ps1 rust-linux` and a mention in `push-main.ps1`. Until then: check CI after every push (`gh run list`).
 - (T-223) Dell: `busctl ... ListBatteries` should list the DualSense as controller and the WH-1000XM4 as headset (UPower kind 17/19/21; if it appears as `other` tell the lead), one chip each with the real percentage; `vm-devices-check.sh batteries` on the next image. Later: `fitChips()` should check that "+N" plus the shortest name fits (text scale); the Guide overlay should list the "+N" devices (T-147); UPower kinds 13 pen and 25 camera are dropped by design; T-199 will conflict with T-223 in `icons.txt`, `Icon.qml` and both TTFs (re-run `subset-icons.sh` after the second merge).
 - (T-203) BlueZ `PairableTimeout` in the image's `main.conf` as a second guard against a crash leaving the adapter pairable (image change: VM item); `ruya-devices --session` follows nothing (dev only); `InputPresent` polls sysfs every 2 s like `ruya-inputd` (a shared udev source would remove both polls); a manual Settings pairing during an open window goes through our NoInputNoOutput agent: check a headset still pairs there; the picker needs an input device to press A after three windows (an owner-visible limit). Residual risk: Class of Device is spoofable; windows are short, never discoverable, capped, and strangers are removed.
+- (T-194) `Setup.hints`: drop the `nameEntry.shown` half of its `B Cancel` branch (the keyboard's own hint wins in `Shell.hintList`); keyboard hint bar could add `A` Type / Start Done; `dev.ps1 shots` set `QSG_RENDER_LOOP=basic` (lead, 2026-11-07): the threaded loop stalled animations in real windows (7-9 timing failures, stale frames); main's `shots` is now ALL GREEN (111).
 - (0.0.40) The VM and the Dell clock show UTC: T-213.
 
 ## Blocked (need something this host doesn't have)

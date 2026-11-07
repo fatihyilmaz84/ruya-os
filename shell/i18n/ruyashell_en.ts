@@ -797,7 +797,7 @@
         <translation>Power off now?</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+7"/>
         <source>Suspend now</source>
         <translation>Suspend now</translation>
     </message>
@@ -812,14 +812,13 @@
         <translation>Power off now</translation>
     </message>
     <message>
-        <location line="+95"/>
+        <location line="+104"/>
         <location line="+10"/>
         <source>Cancel</source>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location line="-102"/>
-        <location line="+126"/>
+        <location line="-111"/>
         <source>Confirm</source>
         <translation>Confirm</translation>
     </message>
@@ -1294,19 +1293,19 @@
     </message>
     <message>
         <location line="+16"/>
-        <location line="+62"/>
+        <location line="+63"/>
         <location line="+79"/>
         <source>Press A to continue</source>
         <translation>Press A to continue</translation>
     </message>
     <message>
-        <location line="-308"/>
-        <location line="+216"/>
+        <location line="-309"/>
+        <location line="+217"/>
         <source>Network</source>
         <translation>Network</translation>
     </message>
     <message>
-        <location line="-342"/>
+        <location line="-343"/>
         <source>Try again</source>
         <translation>Try again</translation>
     </message>
@@ -1339,7 +1338,7 @@
         <translation>Choose your region, then your city, so the clock is right. You can change this later in Settings.</translation>
     </message>
     <message>
-        <location line="+35"/>
+        <location line="+36"/>
         <source>Network setup comes later. A wired connection works without any setup.</source>
         <translation>Network setup comes later. A wired connection works without any setup.</translation>
     </message>
@@ -1379,8 +1378,8 @@
         <translation>Creating…</translation>
     </message>
     <message>
-        <location line="-270"/>
-        <location line="+296"/>
+        <location line="-271"/>
+        <location line="+297"/>
         <source>You&apos;re all set</source>
         <translation>You&apos;re all set</translation>
     </message>
@@ -1431,12 +1430,12 @@
         <translation>%1 %2 percent</translation>
     </message>
     <message>
-        <location line="+545"/>
+        <location line="+548"/>
         <source>Power</source>
         <translation>Power</translation>
     </message>
     <message>
-        <location line="-769"/>
+        <location line="-772"/>
         <source>Update ready. Restart to finish.</source>
         <translation>Update ready. Restart to finish.</translation>
     </message>
@@ -1498,7 +1497,7 @@
     </message>
     <message>
         <location line="+231"/>
-        <location line="+7"/>
+        <location line="+10"/>
         <location line="+3"/>
         <source>Select</source>
         <translation>Select</translation>
@@ -1530,8 +1529,8 @@
         <translation>Switch profile</translation>
     </message>
     <message>
-        <location line="-106"/>
-        <location line="+108"/>
+        <location line="-109"/>
+        <location line="+111"/>
         <source>Close</source>
         <translation>Close</translation>
     </message>
@@ -1551,8 +1550,8 @@
         <translation>Power off</translation>
     </message>
     <message>
-        <location line="-114"/>
-        <location line="+115"/>
+        <location line="-117"/>
+        <location line="+118"/>
         <source>Back</source>
         <translation>Back</translation>
     </message>
@@ -1917,7 +1916,27 @@
 <context>
     <name>TextEntry</name>
     <message>
-        <location filename="../qml/TextEntry.qml" line="+129"/>
+        <location filename="../qml/TextEntry.qml" line="+53"/>
+        <source>Delete</source>
+        <translation>Delete</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Cancel</source>
+        <translation>Cancel</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Press Back to delete, Back on an empty field to cancel</source>
+        <translation>Press Back to delete, Back on an empty field to cancel</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Press Back to cancel</source>
+        <translation>Press Back to cancel</translation>
+    </message>
+    <message>
+        <location line="+82"/>
         <source>Space</source>
         <translation>Space</translation>
     </message>
@@ -2229,7 +2248,7 @@
 <context>
     <name>ZoneChooser</name>
     <message>
-        <location filename="../qml/ZoneChooser.qml" line="+43"/>
+        <location filename="../qml/ZoneChooser.qml" line="+46"/>
         <source>Africa</source>
         <translation>Africa</translation>
     </message>
