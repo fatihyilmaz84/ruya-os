@@ -64,3 +64,4 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | [T-269](tasks/T-269-boot-experience-brand-silent-direct.md) | Boot experience: branded splash, silent boot, no boot menu unless a key is held (image, VM) | todo | — |
 | [T-270](tasks/T-270-epic-games-store-integration.md) | **[lead]** Epic Games Store integration (Legendary, Heroic-style): Proposed ADR-018 first | blocked | owner |
 | [T-271](tasks/T-271-themes-more-distinct.md) | Colour themes that look different from each other (owner feedback) | todo | — |
+| [T-272](tasks/T-272-picker-modals-glass-and-rounded-thumbnails.md) | Picker modals in glass, rounded wallpaper thumbnails (owner feedback) | todo | T-198 |
