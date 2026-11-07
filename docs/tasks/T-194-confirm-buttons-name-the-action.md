@@ -1,6 +1,6 @@
 # T-194 — Confirm dialogs: the button says the action, so the name matches
 
-Status: todo · Phase: 2 · Depends: — · Area: shell · Size: S · Owner: builder
+Status: in-progress · Phase: 2 · Depends: — · Area: shell · Size: S · Owner: builder
 
 ## Goal
 Today a confirmation's button reads "Confirm" while its accessible name is "Restart now" (T-186). WCAG 2.5.3 wants the visible label inside the name, and a TV viewer reads "Restart now" faster than "Confirm" anyway. Decision (lead, 2026-11-05): **the visible label becomes the action**, the accessible name equals it, and the generic "Confirm" stays only as the fallback for a custom dialog without a name.
