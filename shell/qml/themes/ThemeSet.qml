@@ -36,6 +36,11 @@ QtObject {
     required property color errorText
     required property color warningText
     required property color blobHighlight
+    // The theme's own colours for the first two Backdrop blobs (the second is drawn 1.4 times
+    // lighter), mixed with the profile's tint at `blobTintShare` (T-271): 1 = the profile tint
+    // alone (Dreamglass, Daylight: the palette is then not used), 0 = the theme's colours alone.
+    required property color blobA
+    required property color blobB
     required property color defaultTint
     required property color tileGames
     required property color tileMedia
@@ -54,9 +59,11 @@ QtObject {
     required property color glassSpecular
     required property color shadowColor
 
-    // Strength of the three Backdrop blobs (1 = as designed), of the shadow alphas, and the
+    // Strength of the three Backdrop blobs (1 = as designed), the share of the profile's tint in
+    // the first two blobs and the gradient top (see blobA), the shadow alphas, and the
     // lightness of the art placeholder gradient (top, bottom).
     required property real blobStrength
+    required property real blobTintShare
     required property real shadowStrength
     required property real artLightTop
     required property real artLightBottom

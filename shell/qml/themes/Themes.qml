@@ -18,10 +18,10 @@ QtObject {
         "focusRing", "focusFill", "selectedFill", "keyFocusFill", "entryKeyFocusFill", "entryKeyActiveFill",
         "scrim", "scrimOverlay", "panel", "dangerFill", "primaryFill", "onPrimary",
         "heroScrim", "artCaptionFade", "errorText", "warningText", "blobHighlight",
-        "defaultTint", "tileGames", "tileMedia", "tileStore", "tileSettings", "tileOther",
+        "blobA", "blobB", "defaultTint", "tileGames", "tileMedia", "tileStore", "tileSettings", "tileOther",
         "toastInfo", "toastSuccess", "toastWarning", "toastError", "toastBackground",
         "glassSheen", "glassRim", "glassRimLit", "glassTint", "glassSpecular", "shadowColor",
-        "blobStrength", "shadowStrength", "artLightTop", "artLightBottom"
+        "blobStrength", "blobTintShare", "shadowStrength", "artLightTop", "artLightBottom"
     ]
 
     // Every set, in the order the Settings row cycles through them.
@@ -73,6 +73,8 @@ QtObject {
         errorText: "#ff8a80"
         warningText: "#ffb74d"
         blobHighlight: "#ffffff"
+        blobA: "#3a5bd9"           // not used: the profile's tint is the whole blob (blobTintShare 1)
+        blobB: "#3a5bd9"
         defaultTint: "#3a5bd9"
         tileGames: "#3a5bd9"
         tileMedia: "#d9483a"
@@ -91,12 +93,14 @@ QtObject {
         glassSpecular: Qt.rgba(1, 1, 1, 0.22)
         shadowColor: Qt.rgba(0, 0, 0, 1)
         blobStrength: 1
+        blobTintShare: 1
         shadowStrength: 1
         artLightTop: 0.42
         artLightBottom: 0.18
     }
 
-    // True black for OLED panels, neutral grey glass, quiet blobs.
+    // OLED: true black ground, neutral grey glass with no hue, very faint neutral blobs (the
+    // profile's tint barely shows), pure white focus and primary button. T-271.
     property ThemeSet midnight: ThemeSet {
         key: "midnight"
         label: qsTr("Midnight")
@@ -106,7 +110,7 @@ QtObject {
         textDim: "#a9a9a9"
         glass: "#1affffff"
         glassStrong: "#1affffff"
-        glassOpaque: "#e6121212"
+        glassOpaque: "#e6191919"
         glassBorder: "#2effffff"
         focusRing: "#ffffff"
         focusFill: Qt.rgba(1, 1, 1, 0.2)
@@ -116,16 +120,18 @@ QtObject {
         entryKeyActiveFill: Qt.rgba(1, 1, 1, 0.3)
         scrim: "#d9000000"
         scrimOverlay: "#e0000000"
-        panel: "#111111"
+        panel: "#141414"
         dangerFill: "#8f2d2d"
-        primaryFill: "#f5f5f5"
+        primaryFill: "#ffffff"
         onPrimary: "#000000"
         heroScrim: "#bf000000"
         artCaptionFade: "#d9000000"
         errorText: "#ff8a80"
         warningText: "#ffb74d"
         blobHighlight: "#ffffff"
-        defaultTint: "#56627a"
+        blobA: "#7a7a7a"
+        blobB: "#666666"
+        defaultTint: "#6e6e6e"
         tileGames: "#56627a"
         tileMedia: "#7a5656"
         tileStore: "#4f7a68"
@@ -142,94 +148,102 @@ QtObject {
         glassTint: Qt.rgba(0, 0, 0, 0.5)
         glassSpecular: Qt.rgba(1, 1, 1, 0.20)
         shadowColor: Qt.rgba(0, 0, 0, 1)
-        blobStrength: 0.45
+        blobStrength: 0.4
+        blobTintShare: 0.08
         shadowStrength: 1
         artLightTop: 0.34
         artLightBottom: 0.12
     }
 
-    // Deep teal ground with violet accents.
+    // Deep teal-green ground and glass, blobs in teal, green and violet whatever the profile's
+    // tint is, a mint focus ring, fills and primary button. T-271.
     property ThemeSet aurora: ThemeSet {
         key: "aurora"
         label: qsTr("Aurora")
         lightness: 0
-        background: "#04121a"
+        background: "#04211e"
         text: "#eaf6f4"
-        textDim: "#9fbcc0"
-        glass: "#1fcdfff2"
-        glassStrong: "#1fcdfff2"
-        glassOpaque: "#e60f2a32"
-        glassBorder: "#33c8fff0"
-        focusRing: "#ffffff"
-        focusFill: Qt.rgba(1, 1, 1, 0.2)
-        selectedFill: Qt.rgba(1, 1, 1, 0.1)
-        keyFocusFill: Qt.rgba(1, 1, 1, 0.22)
-        entryKeyFocusFill: Qt.rgba(1, 1, 1, 0.24)
-        entryKeyActiveFill: Qt.rgba(1, 1, 1, 0.3)
-        scrim: "#d0020a0e"
-        scrimOverlay: "#d8020a0e"
-        panel: "#112630"
+        textDim: "#a8cfca"
+        glass: "#1fa6ffe6"
+        glassStrong: "#1fa6ffe6"
+        glassOpaque: "#e60d3b37"
+        glassBorder: "#40a6fff0"
+        focusRing: "#9ff5e4"
+        focusFill: Qt.rgba(0.45, 1, 0.88, 0.22)
+        selectedFill: Qt.rgba(0.45, 1, 0.88, 0.12)
+        keyFocusFill: Qt.rgba(0.45, 1, 0.88, 0.24)
+        entryKeyFocusFill: Qt.rgba(0.45, 1, 0.88, 0.26)
+        entryKeyActiveFill: Qt.rgba(0.45, 1, 0.88, 0.34)
+        scrim: "#d0021210"
+        scrimOverlay: "#d8021210"
+        panel: "#0f3430"
         dangerFill: "#8f2d44"
-        primaryFill: "#eaf6f4"
-        onPrimary: "#04121a"
-        heroScrim: "#bf04121a"
-        artCaptionFade: "#d904121a"
+        primaryFill: "#5eead4"
+        onPrimary: "#04211e"
+        heroScrim: "#bf08403a"
+        artCaptionFade: "#d908403a"
         errorText: "#ff9a94"
         warningText: "#ffc266"
-        blobHighlight: "#d6c4ff"
-        defaultTint: "#2a9d8f"
+        blobHighlight: "#9b80f0"
+        blobA: "#1aa890"
+        blobB: "#2fa85c"
+        defaultTint: "#1fb5a0"
         tileGames: "#2a9d8f"
         tileMedia: "#9a5fd9"
         tileStore: "#2fa37a"
         tileSettings: "#7a5bd9"
         tileOther: "#4f6f7a"
-        toastInfo: "#7ab8ff"
-        toastSuccess: "#4cc38a"
+        toastInfo: "#8cc3ff"
+        toastSuccess: "#62dca0"
         toastWarning: "#ffc266"
         toastError: "#ff7a7a"
-        toastBackground: "#f00d2229"
-        glassSheen: Qt.rgba(1, 1, 1, 0.06)
-        glassRim: Qt.rgba(0.8, 1, 0.95, 0.16)
-        glassRimLit: Qt.rgba(0.85, 1, 0.97, 0.32)
-        glassTint: Qt.rgba(0.02, 0.07, 0.1, 0.44)
-        glassSpecular: Qt.rgba(0.85, 1, 0.97, 0.24)
-        shadowColor: Qt.rgba(0, 0.03, 0.05, 1)
-        blobStrength: 0.85
+        toastBackground: "#f00c3430"
+        glassSheen: Qt.rgba(0.85, 1, 0.97, 0.07)
+        glassRim: Qt.rgba(0.6, 1, 0.9, 0.2)
+        glassRimLit: Qt.rgba(0.75, 1, 0.94, 0.38)
+        glassTint: Qt.rgba(0, 0.16, 0.14, 0.46)
+        glassSpecular: Qt.rgba(0.7, 1, 0.94, 0.26)
+        shadowColor: Qt.rgba(0, 0.05, 0.04, 1)
+        blobStrength: 0.55
+        blobTintShare: 0.2
         shadowStrength: 1
         artLightTop: 0.40
         artLightBottom: 0.16
     }
 
-    // Warm near-black with red and orange.
+    // Warm ground, copper glass, blobs in red, amber and copper whatever the profile's tint is,
+    // a peach focus ring, warm fills and a copper primary button. T-271.
     property ThemeSet ember: ThemeSet {
         key: "ember"
         label: qsTr("Ember")
         lightness: 0
-        background: "#0d0605"
+        background: "#1c0c07"
         text: "#f8efe9"
-        textDim: "#bda99c"
-        glass: "#1fffe3c8"
-        glassStrong: "#1fffe3c8"
-        glassOpaque: "#e62b1713"
-        glassBorder: "#33ffd9b8"
-        focusRing: "#ffffff"
-        focusFill: Qt.rgba(1, 1, 1, 0.2)
-        selectedFill: Qt.rgba(1, 1, 1, 0.1)
-        keyFocusFill: Qt.rgba(1, 1, 1, 0.22)
-        entryKeyFocusFill: Qt.rgba(1, 1, 1, 0.24)
-        entryKeyActiveFill: Qt.rgba(1, 1, 1, 0.3)
-        scrim: "#d0100403"
-        scrimOverlay: "#d8100403"
-        panel: "#241411"
+        textDim: "#c4aa9a"
+        glass: "#26ffb27a"
+        glassStrong: "#26ffb27a"
+        glassOpaque: "#e6482212"
+        glassBorder: "#40ffc08a"
+        focusRing: "#ffc89a"
+        focusFill: Qt.rgba(1, 0.72, 0.45, 0.24)
+        selectedFill: Qt.rgba(1, 0.72, 0.45, 0.13)
+        keyFocusFill: Qt.rgba(1, 0.72, 0.45, 0.26)
+        entryKeyFocusFill: Qt.rgba(1, 0.72, 0.45, 0.28)
+        entryKeyActiveFill: Qt.rgba(1, 0.72, 0.45, 0.36)
+        scrim: "#d0150602"
+        scrimOverlay: "#d8150602"
+        panel: "#3d1d10"
         dangerFill: "#9c2b2b"
-        primaryFill: "#f8efe9"
-        onPrimary: "#0d0605"
-        heroScrim: "#bf0d0605"
-        artCaptionFade: "#d90d0605"
+        primaryFill: "#ffa866"
+        onPrimary: "#1c0c07"
+        heroScrim: "#bf4a1c0c"
+        artCaptionFade: "#d94a1c0c"
         errorText: "#ff9a8c"
         warningText: "#ffc266"
-        blobHighlight: "#ffd9b0"
-        defaultTint: "#c2492c"
+        blobHighlight: "#ffb070"
+        blobA: "#d65a24"
+        blobB: "#c9892a"
+        defaultTint: "#d4502e"
         tileGames: "#c2492c"
         tileMedia: "#d9483a"
         tileStore: "#c98a2c"
@@ -239,14 +253,15 @@ QtObject {
         toastSuccess: "#5cc88f"
         toastWarning: "#ffc266"
         toastError: "#ff7a6b"
-        toastBackground: "#f0241510"
-        glassSheen: Qt.rgba(1, 0.95, 0.9, 0.06)
-        glassRim: Qt.rgba(1, 0.85, 0.7, 0.16)
-        glassRimLit: Qt.rgba(1, 0.9, 0.78, 0.32)
-        glassTint: Qt.rgba(0.1, 0.04, 0.03, 0.44)
-        glassSpecular: Qt.rgba(1, 0.9, 0.78, 0.24)
-        shadowColor: Qt.rgba(0.05, 0, 0, 1)
-        blobStrength: 0.85
+        toastBackground: "#f0361a0e"
+        glassSheen: Qt.rgba(1, 0.92, 0.82, 0.07)
+        glassRim: Qt.rgba(1, 0.78, 0.55, 0.2)
+        glassRimLit: Qt.rgba(1, 0.86, 0.68, 0.38)
+        glassTint: Qt.rgba(0.22, 0.08, 0.03, 0.46)
+        glassSpecular: Qt.rgba(1, 0.86, 0.68, 0.26)
+        shadowColor: Qt.rgba(0.08, 0.01, 0, 1)
+        blobStrength: 0.66
+        blobTintShare: 0.2
         shadowStrength: 1
         artLightTop: 0.40
         artLightBottom: 0.15
@@ -281,6 +296,8 @@ QtObject {
         errorText: "#b3261e"
         warningText: "#7d4a00"
         blobHighlight: "#ffffff"
+        blobA: "#8ea4f2"           // not used (blobTintShare 1)
+        blobB: "#8ea4f2"
         defaultTint: "#8ea4f2"
         tileGames: "#8ea4f2"
         tileMedia: "#f29a8e"
@@ -299,6 +316,7 @@ QtObject {
         glassSpecular: Qt.rgba(1, 1, 1, 0.70)
         shadowColor: Qt.rgba(0x0f / 255, 0x14 / 255, 0x20 / 255, 1)
         blobStrength: 0.45
+        blobTintShare: 1
         shadowStrength: 0.45
         artLightTop: 0.84
         artLightBottom: 0.72

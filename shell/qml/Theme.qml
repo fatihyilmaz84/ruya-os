@@ -125,6 +125,14 @@ QtObject {
     }
 
     // Backdrop (Backdrop.qml): the top of its gradient for a tint, and the three blob opacities.
+    // The blobs and the gradient top are built from the theme's own blob colours with the profile's
+    // tint mixed in at `blobTintShare` (T-271): `blobTintA(tint)` for the first blob and the
+    // gradient, `blobTintB(tint)` for the second (which Backdrop draws 1.4 times lighter).
+    readonly property color blobA: tok("blobA")
+    readonly property color blobB: tok("blobB")
+    readonly property real blobTintShare: tok("blobTintShare")
+    function blobTintA(tint) { return ThemeMath.blobTint(blobA, tint, blobTintShare) }
+    function blobTintB(tint) { return ThemeMath.blobTint(blobB, tint, blobTintShare) }
     function backdropTop(tint) { return ThemeMath.backdropTop(tint, background, lightness) }
     readonly property real blobOpacityA: ThemeMath.blobOpacityA * tok("blobStrength")
     readonly property real blobOpacityB: ThemeMath.blobOpacityB * tok("blobStrength")
