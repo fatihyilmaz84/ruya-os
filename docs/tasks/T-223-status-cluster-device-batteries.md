@@ -33,7 +33,7 @@ The top-right status cluster shows the battery of every connected wireless devic
 - `02-shell.md` (status cluster), `04` §3.7 (the glyph list and the level mapping), spec 03 battery paragraph.
 
 ## Outcome
-Verified: host (vm pending: `vm-devices-check.sh batteries` is unchanged and still expects an empty list; the Dell check below is a lead run on hardware)
+Verified: host + vm (lead run, 2026-11-07, image 0.0.50). vm-devices-check.sh batteries on 0.0.50: PASS (empty list, nobody refused; QEMU has no UPower devices). The real chips and kinds need the Dell. Earlier: host (vm pending: `vm-devices-check.sh batteries` is unchanged and still expects an empty list; the Dell check below is a lead run on hardware)
 
 **Built.** The status cluster now shows one chip per wireless device that reports a battery (`shell/qml/BatteryChip.qml`, used by `Shell.qml`): the icon of the device's kind, a battery glyph that matches the level, the percentage. Lowest battery first, at most three chips, the rest as one "+N" (its accessible name lists the devices; Settings -> Bluetooth & controllers shows every device's battery; I did not build a list in the Guide overlay, which is still a placeholder card). Chips are never focusable and show no names. Accessible names: "DualSense Wireless Controller battery 62 percent, charging" / ", low" / plain.
 
