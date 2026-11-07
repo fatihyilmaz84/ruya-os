@@ -20,3 +20,9 @@ speaker e32d
 mouse e323
 keyboard e312
 bluetooth e1a7
+smartphone e7ba
+# Our own glyphs (T-199, scripts/add-pad-glyphs.py): the name, a private-use code point Material does
+# not use, and the word ruya. They are drawn, not downloaded.
+pad_playstation e005 ruya
+pad_xbox e006 ruya
+pad_switch e007 ruya

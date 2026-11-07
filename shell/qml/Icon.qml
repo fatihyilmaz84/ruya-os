@@ -31,7 +31,11 @@ Item {
         "speaker": 0xe32d,
         "mouse": 0xe323,
         "keyboard": 0xe312,
-        "bluetooth": 0xe1a7
+        "bluetooth": 0xe1a7,
+        "smartphone": 0xe7ba,
+        "pad_playstation": 0xe005,
+        "pad_xbox": 0xe006,
+        "pad_switch": 0xe007
     })
     readonly property bool known: name in codePoints
 

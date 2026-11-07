@@ -37,6 +37,9 @@ public:
     void setInputPresent(bool present);
     int pairingStarts() const { return m_pairingStarts; }
     void setBattery(const QString &id, int percent);
+    // Adds one paired, connected device of every kind and every controller family the shell
+    // draws, and one of a kind it does not know (icons: T-199). The ids are "bt-gallery-<what>".
+    void populate();
     void reset();
     // While held, pair() is counted but unanswered (a pairing that takes a while) until released.
     void holdPairing(bool hold);

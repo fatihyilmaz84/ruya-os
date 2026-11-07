@@ -33,6 +33,7 @@ Bluetooth::Bluetooth(std::unique_ptr<BluetoothBackend> backend, QObject *parent)
                 {QStringLiteral("id"), d.id},
                 {QStringLiteral("name"), d.name},
                 {QStringLiteral("kind"), d.kind},
+                {QStringLiteral("family"), d.family},
                 {QStringLiteral("paired"), d.paired},
                 {QStringLiteral("connected"), d.connected},
                 {QStringLiteral("trusted"), d.trusted},
@@ -79,7 +80,7 @@ void Bluetooth::checkBatteries(const QList<BtDevice> &devices)
             m_lowReported.remove(d.id);
         } else if (!m_lowReported.contains(d.id)) {
             m_lowReported.insert(d.id);
-            emit batteryLow(d.id, d.name, d.battery);
+            emit batteryLow(d.id, d.name, d.battery, d.kind, d.family);
         }
     }
     const QSet<QString> reported = m_lowReported;   // forget devices that left the list
@@ -157,6 +158,12 @@ void Bluetooth::mockSetBattery(const QString &id, int percent)
 {
     if (auto *mock = qobject_cast<MockBluetoothBackend *>(m_backend.get()))
         mock->setBattery(id, percent);
+}
+
+void Bluetooth::mockPopulate()
+{
+    if (auto *mock = qobject_cast<MockBluetoothBackend *>(m_backend.get()))
+        mock->populate();
 }
 
 void Bluetooth::mockHoldPairing(bool hold)

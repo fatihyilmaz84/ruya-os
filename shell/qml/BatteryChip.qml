@@ -36,15 +36,9 @@ Row {
     }
 
     // The icon of the kind of device (the contract's `kind`); anything else is a Bluetooth device.
+    // Batteries knows no controller family, so a controller is the generic gamepad (T-199).
     function kindIconFor(kind) {
-        switch (kind) {
-        case "controller": return "sports_esports"
-        case "headset": return "headphones"
-        case "speaker": return "speaker"
-        case "mouse": return "mouse"
-        case "keyboard": return "keyboard"
-        default: return "bluetooth"
-        }
+        return DeviceIcons.iconFor(kind, "")
     }
 
     readonly property var device: Batteries.devices.find(d => d.id === chip.deviceId) ?? ({})

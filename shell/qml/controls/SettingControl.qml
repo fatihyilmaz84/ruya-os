@@ -12,6 +12,10 @@ FocusScope {
     // Optional colour dot before the label (e.g. a profile's avatar colour).
     property color swatch: "transparent"
     readonly property bool hasSwatch: swatch.a > 0
+    // Optional icon before the label (a name from Icon.qml, e.g. a device's kind, T-199). Decorative:
+    // what it shows is also in the label or the accessible value. Not together with a swatch.
+    property string iconName
+    readonly property bool hasIcon: iconName !== "" && !hasSwatch
 
     // The pane navigates over children that set this.
     readonly property bool focusable: true
@@ -57,12 +61,23 @@ FocusScope {
         color: control.swatch
     }
 
+    Icon {
+        objectName: "rowIcon"
+        visible: control.hasIcon
+        anchors { left: parent.left; leftMargin: Theme.spaceL * control.u; verticalCenter: parent.verticalCenter }
+        u: control.u
+        name: control.hasIcon ? control.iconName : ""
+        color: Theme.text
+    }
+
     Text {
         id: labelText
         objectName: "label"
         anchors {
             left: parent.left
-            leftMargin: (control.hasSwatch ? Theme.spaceXxxl : Theme.spaceL) * control.u
+            leftMargin: (control.hasSwatch ? Theme.spaceXxxl
+                         : control.hasIcon ? Theme.spaceL + Theme.iconM + Theme.spaceS
+                         : Theme.spaceL) * control.u
             verticalCenter: parent.verticalCenter
         }
         text: control.label

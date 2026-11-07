@@ -12,7 +12,7 @@ QtObject {
     readonly property int maxVisible: 3
     property int durationMs: Theme.toastMs          // overridable (tests use a short one)
 
-    // Toasts on screen, oldest first: { toastId, text, kind, iconText, sticky, key }.
+    // Toasts on screen, oldest first: { toastId, text, kind, iconText, iconName, sticky, key }.
     readonly property ListModel model: ListModel {}
     readonly property int pendingCount: pending.length
     readonly property int shownCount: shown        // toasts that have appeared, ever
@@ -21,10 +21,13 @@ QtObject {
     property int shown: 0
     property int nextId: 1
 
-    // kind: "info" | "success" | "warning" | "error"
-    function show(text, kind, iconText) {
+    // kind: "info" | "success" | "warning" | "error". iconText is a character drawn in the toast's colour;
+    // iconName (T-199) is the name of a glyph of the icon font (Icon.qml) drawn instead, e.g. the
+    // icon of the device the toast is about (DeviceIcons.iconFor).
+    function show(text, kind, iconText, iconName) {
         const k = ["info", "success", "warning", "error"].includes(kind) ? kind : "info"
-        pending = pending.concat([{ text: text, kind: k, iconText: iconText ?? "", sticky: false, key: "" }])
+        pending = pending.concat([{ text: text, kind: k, iconText: iconText ?? "", iconName: iconName ?? "",
+                                    sticky: false, key: "" }])
         promote()
     }
 
@@ -33,7 +36,7 @@ QtObject {
     function showSticky(key, text, kind, iconText) {
         remove(key)
         const k = ["info", "success", "warning", "error"].includes(kind) ? kind : "info"
-        pending = pending.concat([{ text: text, kind: k, iconText: iconText ?? "", sticky: true, key: key }])
+        pending = pending.concat([{ text: text, kind: k, iconText: iconText ?? "", iconName: "", sticky: true, key: key }])
         promote()
     }
 
@@ -64,7 +67,7 @@ QtObject {
             const next = pending[0]
             pending = pending.slice(1)
             model.append({ toastId: nextId++, text: next.text, kind: next.kind, iconText: next.iconText,
-                           sticky: next.sticky, key: next.key })
+                           iconName: next.iconName, sticky: next.sticky, key: next.key })
             shown += 1
         }
     }

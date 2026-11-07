@@ -14,6 +14,7 @@ pub mod bluez;
 pub mod dbus;
 pub mod debounce;
 pub mod events;
+pub mod families;
 pub mod input;
 pub mod network;
 pub mod networkmanager;

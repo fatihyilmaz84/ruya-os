@@ -10,7 +10,10 @@ struct BtDevice
 {
     QString id;
     QString name;
-    QString kind = QStringLiteral("other"); // "controller" | "headset" | "audio" | "other"
+    // "controller" | "headset" | "speaker" | "keyboard" | "mouse" | "phone" | "other"
+    QString kind = QStringLiteral("other");
+    // "playstation" | "xbox" | "nintendo" for a controller the service can place, else ""
+    QString family;
     bool paired = false;
     bool connected = false;
     bool trusted = false;
