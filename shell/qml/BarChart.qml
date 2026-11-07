@@ -4,7 +4,9 @@ import RuyaShell
 
 // A row of rounded bars for a few values (T-247, 04 §5): the week chart and the 30-day strip of
 // the Activity pages. Tokens only; a bar grows over `Theme.pageMs` (0 under reduced motion, so
-// there is no animation then). `highlightIndex` is drawn in the primary colour (today). With
+// there is no animation then). `highlightIndex` is drawn in the primary colour (today); the other
+// bars are `text` at 70 % (3:1 against the row, measured on Dreamglass's brightest tint; textDim is
+// 2.3:1 there) and every label is `text` (textDim is for opaque surfaces only, 04 §3.1). With
 // `interactive`, Left/Right move `currentIndex` to read a bar's value as text above it; the host
 // decides when a bar is being read: it sets `currentIndex` while it has focus and resets it to -1 when not (ChartRow). The text alternative for a screen reader is
 // `summary`: "Mon 1 h 20 min, Tue 0 min, ...".
@@ -94,8 +96,8 @@ FocusScope {
                             ? Math.max(Theme.spaceXs * chart.u, chart.plotHeight * chart.u * slot.value / chart.maxValue)
                             : Theme.spaceXxs * chart.u
                     radius: Math.min(width / 2, Theme.radiusS * chart.u)
-                    color: slot.index === chart.highlightIndex ? Theme.primaryFill : Theme.textDim
-                    opacity: slot.value > 0 ? 1 : 0.6
+                    color: slot.index === chart.highlightIndex ? Theme.primaryFill : Theme.text
+                    opacity: slot.index === chart.highlightIndex ? 1 : slot.value > 0 ? 0.7 : 0.45
                     border.width: slot.current ? Theme.focusRingWidth * chart.u : 0
                     border.color: Theme.focusRing
                     Behavior on height {
@@ -115,7 +117,7 @@ FocusScope {
                     width: slot.width
                     horizontalAlignment: Text.AlignHCenter
                     text: chart.labels[slot.index] ?? ""
-                    color: slot.index === chart.highlightIndex || slot.current ? Theme.text : Theme.textDim
+                    color: Theme.text
                     font.pixelSize: Theme.typeCaption * chart.u
                     font.weight: slot.index === chart.highlightIndex ? Theme.weightDemiBold : Theme.weightRegular
                     elide: Text.ElideRight

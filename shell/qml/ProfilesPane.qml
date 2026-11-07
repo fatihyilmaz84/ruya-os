@@ -362,6 +362,13 @@ SettingsPane {
         onActivated: pane.startPinChange("change")
     }
     SettingRow {
+        objectName: "rowRemovePin"
+        u: pane.u
+        visible: pane.canRemovePin
+        label: qsTr("Remove my PIN")
+        onActivated: pane.startPinChange("remove")
+    }
+    SettingRow {
         id: activityRow
         objectName: "rowActivity"
         u: pane.u
@@ -369,13 +376,6 @@ SettingsPane {
         label: qsTr("Activity")
         value: qsTr("What you played")
         onActivated: pane.activityRequested()
-    }
-    SettingRow {
-        objectName: "rowRemovePin"
-        u: pane.u
-        visible: pane.canRemovePin
-        label: qsTr("Remove my PIN")
-        onActivated: pane.startPinChange("remove")
     }
 
     Text {

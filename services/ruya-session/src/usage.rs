@@ -232,8 +232,8 @@ pub struct Ledger {
     pub rows: Vec<DayRow>,
 }
 
-/// The rows a finished session adds: one per day it touched. The session counts on the day it
-/// began; `first` and `last` are its start and end on every day it touches.
+/// The rows a finished session adds: one per day it touched. The session counts on its first
+/// day with counted time; `first` and `last` are its start and end on every day it touches.
 fn rows_of(s: &SessionRecord) -> Vec<DayRow> {
     s.days
         .iter()

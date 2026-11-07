@@ -61,13 +61,13 @@
     foreground_seconds  u    seconds the app was the foreground, not idle or suspended
     exit_reason         s    "quit" | "crashed" | "killed" | "time-limit" | "bedtime"
     open                b    true while the app still runs (end is then "now")
-    day                 s    "YYYY-MM-DD": the local day (device time zone) the session began on
+    day                 s    "YYYY-MM-DD": the first local day (device time zone) with counted time in the session
 
   Day row (a{sv}), keys (one row per app and local day; the day is in the device time zone):
     app_id     s    Flatpak application id
     day        s    "YYYY-MM-DD"
     seconds    u    foreground seconds on that day
-    sessions   u    sessions that began that day
+    sessions   u    sessions whose first day with counted time is that day
     longest    u    seconds of the longest of those sessions
     first      x    unix seconds: the earliest start among the sessions touching that day
     last       x    unix seconds: the latest end among them

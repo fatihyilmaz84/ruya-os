@@ -233,7 +233,10 @@ Item {
             compare(findChild(find("activityWeek"), "chartCaption").text, "3 h 40 min more than the week before.")
             compare(chart.highlightIndex, 6)
             compare(findChild(chart, "chartBar_6").color, Theme.primaryFill, "today is highlighted")
-            compare(findChild(chart, "chartBar_5").color, Theme.textDim)
+            compare(findChild(chart, "chartBar_5").color, Theme.text)
+            compare(findChild(chart, "chartBar_5").opacity, 0.7, "bars are text at 70 %, today at full")
+            compare(findChild(chart, "chartBar_6").opacity, 1)
+            compare(findChild(chart, "chartLabel_5").color, Theme.text, "labels are text, not textDim (glass)")
             // Heights follow the values (after the bars have grown).
             tryVerify(() => findChild(chart, "chartBar_2").height > findChild(chart, "chartBar_3").height
                             && findChild(chart, "chartBar_3").height > findChild(chart, "chartBar_0").height
@@ -473,21 +476,45 @@ Item {
             compare(Usage.top.map(t => t.appId), [chess])
         }
 
-        function test_a_reply_for_the_old_profile_is_dropped() {
+        // The reply of a read for p2 lands while nobody is active: it must show nothing. (Without the
+        // profile check in Usage::onLoaded, p2's reply is accepted as the newest and fills the page.)
+        function test_a_reply_for_the_old_profile_is_dropped_when_nobody_is_active() {
             Usage.mockSetData("p2", sessions(), today)
-            Usage.mockSetData("p1", [mk(chess, 0, 9, 0, 600)], today)
             Profiles.switchTo("p2", "")
             tryCompare(Profiles, "activeProfile", "p2")
             Usage.mockRefreshDelayed(300)
             Usage.refresh()
             verify(Usage.mockPendingReplies() > 0)
             Profiles.lock()
+            tryCompare(Profiles, "activeProfile", "")
+            tryCompare(Usage, "ready", false)
+            tryVerify(() => Usage.mockPendingReplies() === 0, 3000, "the late reply has landed")
+            wait(100)
+            verify(!Usage.ready, "p2's reply did not make the page ready")
+            compare(Usage.top.length, 0)
+            compare(Usage.week.total, 0)
+            verify(Usage.empty)
+        }
+
+        // p2's reply lands (after 100 ms) while p1 is active and p1's own read is still on its way
+        // (800 ms): p2's play must not show in between.
+        function test_a_reply_for_the_old_profile_is_dropped_after_a_switch() {
+            Usage.mockSetData("p2", sessions(), today)
+            Usage.mockSetData("p1", [mk(chess, 0, 9, 0, 600)], today)
+            Profiles.switchTo("p2", "")
+            tryCompare(Profiles, "activeProfile", "p2")
+            Usage.mockRefreshDelayed(100)
+            Usage.refresh()
+            Usage.mockRefreshDelayed(800)
+            Profiles.lock()
             Profiles.switchTo("p1", "1234")
             tryCompare(Profiles, "activeProfile", "p1")
+            wait(400)                                   // p2's reply has landed, p1's has not
+            verify(Usage.mockPendingReplies() > 0, "p1's read is still pending")
+            verify(!Usage.ready, "nothing shows before p1's own reply")
+            compare(Usage.top.length, 0)
             tryCompare(Usage, "ready", true, 3000)
             compare(Usage.top.map(t => t.appId), [chess], "only the active profile's data shows")
-            wait(500)
-            compare(Usage.top.map(t => t.appId), [chess], "the late reply for p2 changed nothing")
             compare(Usage.mockPendingReplies(), 0)
         }
 
