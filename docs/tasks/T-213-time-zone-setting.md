@@ -1,6 +1,6 @@
 # T-213 — Time zone: choose it in setup and in Settings, so local time is right
 
-Status: todo · Phase: 2 · Depends: — · Area: api, services, shell · Size: S · Owner: builder
+Status: in-progress · Phase: 2 · Depends: — · Area: api, services, shell · Size: S · Owner: builder
 
 ## Goal
 The console knows the owner's time zone. Today the clock shows UTC (first noticed in the 0.0.40 try-out, still true on the Dell). Local time is needed by the clock in the shell, the update restart window ("03:00 to 05:00 local", `ruya-update`), bedtimes and daily limits (T-211) and the screen saver/sleep timelines (T-202).
