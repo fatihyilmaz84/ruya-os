@@ -27,6 +27,10 @@ Proposed tasks (numbers by the fresh lead):
  F guests: Guest as a temporary player: reuse the Guest profile, no data persisted, banner 'Guest player', auto-release at session end; interplay with the Guest device-level policy of T-211.
 Dependencies: T-203/T-260 (pairing, registry rename), T-217 (mapping/virtual pads), T-246/T-247 (attribution), T-211 (parental), T-199/T-223 (icons/chips). Hardware check: Dell with 2 pads (DualSense + a second pad); VM cannot do pads.
 
+5. **OWNER APPROVED (2026-11-07, "apply your recommendations"): record these in the ADR as Accepted (owner), do NOT park them in "Open owner decisions".** (a) Shell navigation: the slot 1 pad anywhere; ANY pad at the login screen and on the "Who's playing?" dialog; other pads navigate only inside apps. (b) Saves stay the session owner's per-app data; an assigned player's profile only attributes achievements (T-246) and play time (T-247); the STRICTEST age limit of owner and players applies at launch (T-211); Guest = no attribution. (c) Assigning a pad to a profile needs NO PIN (no data access is gained); admin features never come from a non-slot-1 pad.
+6. **T-198 (display resolution, refresh rate, DPI/UI scale; lead task) moves up** (owner): dispatch/take it right after T-260 merges, ahead of every other todo except the critical-path T-164 if that is unblocked; add it to the Dell look-at list.
+7. **T-260 round 3 is also open** (the owner's icon bug: one shared device glyph mapping for the top-right chip and Settings > Bluetooth; Batteries gets a `family`): see the T-260 worktree; add "same icon for the same device everywhere" to the Dell checklist.
+
 ## First, in this order
 1. Finish the `0.0.50` chain above (VM queue results -> record them in the task Outcomes and the VM queue line of STATUS; a failed check reopens its task; then the ISO). T-205/T-203/T-213/T-223/T-199 verification lines say `vm pending` until then.
 2. **T-164** (per-profile Wayland sockets, lead, NEXT, critical path; needs a whole session plus the Dell as the GL test: no `EGL_WL_bind_wayland_display` on KMS, pick a dmabuf integration). Then T-165/T-147 (Play does nothing until then).
