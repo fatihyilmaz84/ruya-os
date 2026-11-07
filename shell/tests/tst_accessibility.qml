@@ -278,6 +278,43 @@ Item {
             tryVerify(() => !find("powerConfirmDialog").shown)
         }
 
+        // The Display pane's screen rows, the mode picker and "Keep this resolution?" (T-198): every
+        // item that takes focus has a name and a role, and the dialog's buttons are named.
+        function test_display_pane_picker_and_mode_confirm() {
+            Display.mockReset()
+            tryVerify(() => Display.available)
+            signInAsAda()
+            tc.shell.openPage("settings", { category: "display" })
+            tryCompare(tc.shell, "currentPage", "settings")
+            tryVerify(() => find("categoryList").activeFocus, 2000)
+            keyClick(Qt.Key_Right)
+            tryVerify(() => find("rowQuality").activeFocus, 2000)
+            walk(Qt.Key_Down, 12, "display pane")
+            verify(seen.indexOf("rowResolution: Resolution, 3840 × 2160") >= 0, "the Resolution row is named with its value: " + seen)
+            verify(seen.some(n => n.indexOf("rowResetDisplay: Reset display settings") === 0), "the Reset row is named: " + seen)
+            // Up to the Resolution row, open the picker, walk it.
+            for (let i = 0; i < 12 && !find("rowResolution").activeFocus; ++i)
+                keyClick(Qt.Key_Up)
+            verify(find("rowResolution").activeFocus)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("resolutionPicker").shown)
+            tryVerify(() => find("resolutionPickerEntry_3840x2160").activeFocus, 2000)
+            walk(Qt.Key_Down, 5, "mode picker")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !find("resolutionPicker").shown)
+            Display.chooseResolution(1920, 1080)
+            tryCompare(Display, "confirming", true)
+            tryVerify(() => find("modeRevert").activeFocus, 2000, "Revert has focus")
+            checkFocused("mode revert")
+            keyClick(Qt.Key_Right)
+            tryVerify(() => find("modeKeep").activeFocus, 2000, "Keep has focus")
+            checkFocused("mode keep")
+            verify(seen.indexOf("modeRevert: Revert") >= 0 && seen.indexOf("modeKeep: Keep") >= 0, "both buttons are named: " + seen)
+            keyClick(Qt.Key_Escape)                      // Back reverts
+            tryCompare(Display, "pending", false)
+            Display.mockReset()
+        }
+
         // The Confirm button is named after the action, never the bare word "Confirm" (T-186).
         function test_power_confirm_names_follow_the_action() {
             signInAsAda()

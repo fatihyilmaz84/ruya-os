@@ -7,7 +7,8 @@
 //! `statvfs` and directory walks; the temperatures and fans (`thermal.rs`) from sysfs; the time zone
 //! (`time.rs`) is kept by systemd-timedated (`timedate.rs`); what the console is made of (`sysinfo.rs`,
 //! over the `ruya-sysinfo` crate) is read from `/proc` and `/sys`; a report is saved to a USB drive by
-//! `report.rs`.
+//! `report.rs`; the display's outputs and modes (`display.rs`, with the EDID parser `edid.rs`) are read
+//! from `/sys/class/drm`, and a chosen mode reaches the next compositor start as a KMS config file.
 
 pub mod audio;
 pub mod battery;
@@ -16,6 +17,8 @@ pub mod bluetooth;
 pub mod bluez;
 pub mod dbus;
 pub mod debounce;
+pub mod display;
+pub mod edid;
 pub mod events;
 pub mod families;
 pub mod input;

@@ -49,6 +49,16 @@ Page {
          : currentPane.activeFocus ? currentPane.hints
          : listHints
 
+    // `params.category` ("display") opens on that category, e.g. the Display pane after the shell
+    // restarted on a new screen mode (T-198).
+    Component.onCompleted: {
+        const wanted = (params ?? {}).category ?? ""
+        for (let i = 0; i < categories.length; ++i) {
+            if (categories[i].key === wanted)
+                categoryList.currentIndex = i
+        }
+    }
+
     function enterPane() {
         if (!currentPane)
             return

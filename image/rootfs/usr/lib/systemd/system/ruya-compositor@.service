@@ -12,8 +12,13 @@ Conflicts=getty@%i.service
 After=getty@%i.service
 Before=graphical.target
 ConditionPathExists=/dev/tty0
+# Crash-loop protection that deliberate restarts fit under (T-198): a mode change, a revert and a
+# reset are each a start of this unit, and a crash loop (RestartSec=1) still reaches ten starts
+# within 120 s in about ten seconds. ruya-devices (display.rs START_BURST, START_WINDOW_SECS) records
+# every start in its state directory and refuses a mode change while eight are in the window, so a
+# change, its revert and one to spare always fit: going over the limit is a black screen until power-cycle.
 StartLimitIntervalSec=120
-StartLimitBurst=5
+StartLimitBurst=10
 
 [Service]
 Type=simple
@@ -33,6 +38,15 @@ Environment=XDG_SESSION_TYPE=wayland
 Environment=QT_QPA_PLATFORM=eglfs
 Environment=QT_QPA_EGLFS_INTEGRATION=eglfs_kms
 Environment=QT_QPA_EGLFS_ALWAYS_SET_MODE=1
+# The owner's resolution and refresh rate (T-198): Qt reads this KMS config at start. It is written
+# by ruya-devices (Devices1.Display, its state directory under the shell user's home) and does not
+# exist while the owner has chosen nothing, which means the TV's preferred mode (Qt logs that it
+# could not open the file; that is expected).
+Environment=QT_QPA_EGLFS_KMS_CONFIG=/var/lib/ruya-shell/.local/state/ruya-devices/kms.json
+# Before every start: count a mode change that is waiting for the owner's "Keep", and drop one that
+# was never confirmed (a TV that could not show it), so the preferred mode always comes back. The
+# leading dash: a failing guard never keeps the console from starting.
+ExecStartPre=-/usr/bin/ruya-devices --display-guard
 # UI cues go through the PulseAudio protocol (served by pipewire-pulse), not Qt 6.11's native PipeWire
 # audio backend: its client thread (QAudioContext) segfaulted in libpipewire when a Bluetooth
 # headset disconnected and took the shell down (T-197, Dell).

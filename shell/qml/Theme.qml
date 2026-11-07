@@ -178,6 +178,10 @@ QtObject {
     function badgeFill(c) { return Qt.rgba(c.r, c.g, c.b, badgeFillAlpha) }
 
     readonly property real safeArea: DeviceSettings.overscan   // fraction of width/height
+    // UI size (T-198, 04 §2): a factor on the 1080p unit (height / 1080). The owner's choice
+    // (100, 125, 150, 200 %) or, on Auto, what the screen's physical size asks for: 1 on a TV read
+    // from the sofa, less on a smaller, nearer monitor. Shell.u multiplies it in.
+    readonly property real uiScale: Display.uiScaleFactor
     readonly property real focusScale: 1.08
 
     readonly property bool reducedMotion: DeviceSettings.reducedMotion

@@ -15,12 +15,13 @@ use ruya_devices::dbus::{
     watch_storage, watch_thermal, watch_time,
 };
 use ruya_devices::dbus::{
-    AudioIface, BatteriesIface, BluetoothIface, DynBluez, DynNm, DynPipeWire, DynSource,
-    DynThermal, DynTimedate, DynUPower, DynUdisks, NetworkIface, Shared, SharedBatteries,
-    SharedBluetooth, SharedInput, SharedNet, SharedStorage, SharedSystem, SharedThermal,
-    SharedTime, SharedUsage, StorageIface, SystemIface, ThermalIface, TimeIface, BUS_NAME,
-    OBJECT_PATH,
+    AudioIface, BatteriesIface, BluetoothIface, DisplayIface, DynBluez, DynNm, DynPipeWire,
+    DynSource, DynThermal, DynTimedate, DynUPower, DynUdisks, NetworkIface, Shared,
+    SharedBatteries, SharedBluetooth, SharedDisplay, SharedInput, SharedNet, SharedStorage,
+    SharedSystem, SharedThermal, SharedTime, SharedUsage, StorageIface, SystemIface, ThermalIface,
+    TimeIface, BUS_NAME, OBJECT_PATH,
 };
+use ruya_devices::display::{self, Display, DynDrm, FakeDrm, Mode, Output, SysfsDrm};
 use ruya_devices::input::{DynInputSource, FakeInput, InputDevice, InputPresence};
 use ruya_devices::network::{FakeNetworkManager, Network};
 use ruya_devices::storage::{FakeUdisks, RawVolume, Storage};
@@ -36,6 +37,13 @@ use ruya_devices::thermal::{
 use ruya_devices::time::{FakeTimedate, Time};
 
 fn main() {
+    let args: Vec<String> = std::env::args().collect();
+    if args.iter().any(|a| a == "--display-guard") {
+        return display_guard(&args);
+    }
+    if let Some(at) = args.iter().position(|a| a == "--display-list") {
+        return display_list(args.get(at + 1).map(PathBuf::from));
+    }
     if let Err(err) = run() {
         eprintln!("ruya-devices: fatal: {err}");
         std::process::exit(1);
@@ -185,6 +193,117 @@ fn info_source(session: bool) -> DynInfoSource {
     Box::new(ruya_sysinfo::RootSource::system())
 }
 
+/// The directory of the display's files (the choice, the KMS config, the markers): next to the
+/// audio levels, i.e. the unit's `StateDirectory=`; `--state-dir` and `RUYA_DEVICES_FILE`'s parent
+/// are for development, and the compositor's guard (which has no `STATE_DIRECTORY`) finds the
+/// same directory under the shell user's home.
+fn display_dir(session: bool, given: Option<PathBuf>) -> Option<PathBuf> {
+    if let Some(dir) = given {
+        return Some(dir);
+    }
+    if let Some(file) = std::env::var_os("RUYA_DEVICES_FILE") {
+        return PathBuf::from(file).parent().map(PathBuf::from);
+    }
+    if let Some(dir) = std::env::var_os("STATE_DIRECTORY") {
+        let first = dir.to_string_lossy().split(':').next()?.to_owned();
+        return Some(PathBuf::from(first));
+    }
+    if session {
+        return Some(std::env::temp_dir().join("ruya-devices-session"));
+    }
+    let home = std::env::var_os("HOME")?;
+    Some(PathBuf::from(home).join(".local/state/ruya-devices"))
+}
+
+/// The kernel's outputs (`RUYA_DRM_DIR` points at a copy of `/sys/class/drm`, e.g. a capture from
+/// a TV), or in `--session` two believable fake ones.
+fn drm_source(session: bool) -> DynDrm {
+    if let Some(dir) = std::env::var_os("RUYA_DRM_DIR") {
+        return Box::new(SysfsDrm::under(dir));
+    }
+    if session {
+        let mode = |width, height, refresh_mhz, preferred| Mode {
+            width,
+            height,
+            refresh_mhz,
+            preferred,
+        };
+        let output = |id: &str, name: &str, mm: (u32, u32), modes| Output {
+            id: id.to_owned(),
+            name: name.to_owned(),
+            width_mm: mm.0,
+            height_mm: mm.1,
+            modes,
+        };
+        return Box::new(FakeDrm(vec![
+            output(
+                "HDMI-A-1",
+                "Dev TV",
+                (1220, 690),
+                vec![
+                    mode(3840, 2160, 60_000, true),
+                    mode(1920, 1080, 60_000, false),
+                    mode(1280, 720, 60_000, false),
+                ],
+            ),
+            output(
+                "DP-1",
+                "Dev Monitor",
+                (700, 390),
+                vec![
+                    mode(2560, 1440, 60_000, true),
+                    mode(1920, 1080, 60_000, false),
+                ],
+            ),
+        ]));
+    }
+    Box::new(SysfsDrm::system())
+}
+
+/// `ruya-devices --display-guard [--state-dir DIR]`: `ExecStartPre=` of the compositor unit
+/// (`display::guard`). Never fails the start, whatever happens.
+fn display_guard(args: &[String]) {
+    let given = args
+        .iter()
+        .position(|a| a == "--state-dir")
+        .and_then(|at| args.get(at + 1))
+        .map(PathBuf::from);
+    let Some(dir) = display_dir(false, given) else {
+        return eprintln!("ruya-devices: --display-guard: no state directory (HOME is not set)");
+    };
+    match display::guard(&dir, drm_source(false).as_ref()) {
+        Ok(outcome) => eprintln!("ruya-devices: display guard: {outcome:?}"),
+        Err(err) => eprintln!("ruya-devices: display guard failed: {err}"),
+    }
+}
+
+/// `ruya-devices --display-list [DIR]`: prints the outputs and modes the service would offer, from
+/// `/sys/class/drm` or from a capture of it (`scripts/display-capture.sh`), one line each.
+fn display_list(dir: Option<PathBuf>) {
+    let source = dir.map_or_else(SysfsDrm::system, SysfsDrm::under);
+    match ruya_devices::display::DrmSource::outputs(&source) {
+        Ok(outputs) if outputs.is_empty() => println!("no connected output"),
+        Ok(outputs) => {
+            for o in outputs {
+                println!("{}  {:?}  {}x{} mm", o.id, o.name, o.width_mm, o.height_mm);
+                for m in o.modes {
+                    println!(
+                        "  {}x{} @ {} mHz{}",
+                        m.width,
+                        m.height,
+                        m.refresh_mhz,
+                        if m.preferred { "  (preferred)" } else { "" }
+                    );
+                }
+            }
+        }
+        Err(err) => {
+            eprintln!("ruya-devices: {err}");
+            std::process::exit(1);
+        }
+    }
+}
+
 /// `RUYA_DEVICES_FILE`, else `$STATE_DIRECTORY/audio.toml` (systemd's StateDirectory=), else none.
 fn state_file() -> Option<PathBuf> {
     if let Some(p) = std::env::var_os("RUYA_DEVICES_FILE") {
@@ -314,6 +433,12 @@ fn run() -> Result<(), Box<dyn Error>> {
         eprintln!("ruya-devices: timedated not readable yet: {err}");
     }
 
+    // The outputs are read from the kernel at every call; the choice is a file in the state dir.
+    let display: SharedDisplay = Arc::new(Display::new(
+        drm_source(session),
+        display_dir(session, None),
+    ));
+
     // The slow part is read once, now, off the main thread, so the first call finds it.
     let system: SharedSystem = Arc::new(SystemInfo::new(info_source(session)));
     {
@@ -347,6 +472,7 @@ fn run() -> Result<(), Box<dyn Error>> {
             )?
             .serve_at(OBJECT_PATH, ThermalIface::new(monitor.clone()))?
             .serve_at(OBJECT_PATH, TimeIface::new(time.clone(), session))?
+            .serve_at(OBJECT_PATH, DisplayIface::new(display.clone()))?
             .serve_at(OBJECT_PATH, SystemIface::new(system.clone()))?
             .build()
             .await?;
@@ -354,7 +480,7 @@ fn run() -> Result<(), Box<dyn Error>> {
         if session {
             let _keep = (
                 connection, audio, net, batteries, bluetooth, input, storage, usage, monitor, time,
-                system,
+                system, display,
             );
             futures_lite::future::pending::<()>().await;
         } else {

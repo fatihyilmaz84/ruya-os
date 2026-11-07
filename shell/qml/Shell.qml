@@ -9,7 +9,7 @@ FocusScope {
 
     required property string version
 
-    readonly property real u: height / 1080
+    readonly property real u: height / 1080 * Theme.uiScale     // the UI size (Theme.uiScale) scales the 1080p unit
     readonly property real marginX: width * Theme.safeArea
     readonly property real marginY: height * Theme.safeArea
     readonly property bool signedIn: Profiles.activeProfile !== ""
@@ -373,6 +373,27 @@ FocusScope {
                 return
             const name = Store.app(appId).name || appId
             Notifications.show(qsTr("%1 stopped unexpectedly").arg(name), "error")
+        }
+    }
+
+    // A screen mode waiting for the owner (T-198): after the restart on a new mode the shell finds
+    // Display.confirming and asks "Keep this resolution?" (ModeConfirm) over whatever it shows, so a
+    // TV that cannot show the mode can always be answered, or left to revert by the countdown.
+    // The Settings page on Display & motion is opened first, so that the owner lands where the
+    // change was made.
+    Connections {
+        target: Display
+        function onConfirmingChanged() {
+            if (Display.confirming) {
+                if (root.signedIn && root.currentPage !== "settings")
+                    root.openPage("settings", { category: "display" })
+                modeConfirm.shown = true
+            } else {
+                modeConfirm.shown = false
+            }
+        }
+        function onModeReset() {
+            Notifications.show(qsTr("The screen did not answer, so the previous resolution is back."), "warning")
         }
     }
 
@@ -990,6 +1011,15 @@ FocusScope {
         z: 15
     }
 
+    // "Keep this resolution?" (T-198): above the hint bar and every other modal.
+    ModeConfirm {
+        id: modeConfirm
+        objectName: "modeConfirm"
+        anchors.fill: parent
+        z: 40
+        u: root.u
+    }
+
     // Toasts sit above pages and below the modals (picker, overlay); the volume OSD is above all.
     ToastLayer {
         id: toasts
@@ -1022,6 +1052,8 @@ FocusScope {
         return [{ button: "B", text: qsTr("Cancel") }]
     }
     readonly property var hintList: {
+        if (modeConfirm.shown)
+            return modeConfirm.modalHints
         if (systemPanel.open)
             return [{ button: "A", text: qsTr("Select") },
                     { button: "B", text: systemPanel.powerMode ? qsTr("Back") : qsTr("Close") }]

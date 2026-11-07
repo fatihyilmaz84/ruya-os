@@ -434,17 +434,17 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+10"/>
-        <location line="+256"/>
+        <location line="+244"/>
         <source>Uninstall</source>
         <translation>Uninstall</translation>
     </message>
     <message>
-        <location line="-244"/>
+        <location line="-232"/>
         <source>Your activity</source>
         <translation>Your activity</translation>
     </message>
     <message>
-        <location line="+99"/>
+        <location line="+87"/>
         <source>This app can</source>
         <translation>This app can</translation>
     </message>
@@ -1052,7 +1052,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>DisplayPane</name>
     <message>
-        <location filename="../qml/DisplayPane.qml" line="+15"/>
+        <location filename="../qml/DisplayPane.qml" line="+21"/>
         <source>Effects quality</source>
         <translation>Effects quality</translation>
     </message>
@@ -1095,6 +1095,66 @@ This can&apos;t be undone.</translation>
         <location line="+10"/>
         <source>Dim wallpaper</source>
         <translation>Dim wallpaper</translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <location line="+16"/>
+        <source>Recommended</source>
+        <translation>Recommended</translation>
+    </message>
+    <message>
+        <location line="-14"/>
+        <location line="+16"/>
+        <source>Current</source>
+        <translation>Current</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <location line="+66"/>
+        <source>Resolution</source>
+        <translation>Resolution</translation>
+    </message>
+    <message>
+        <location line="-56"/>
+        <location line="+72"/>
+        <source>Refresh rate</source>
+        <translation>Refresh rate</translation>
+    </message>
+    <message>
+        <location line="-62"/>
+        <source>UI size</source>
+        <translation>UI size</translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>Reset display settings</source>
+        <translation>Reset display settings</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Close running games and apps first: changing the screen mode restarts the console.</source>
+        <translation>Close running games and apps first: changing the screen mode restarts the console.</translation>
+    </message>
+    <message>
+        <location line="+40"/>
+        <location line="+6"/>
+        <source>Try again in a minute: the console has just restarted several times.</source>
+        <translation>Try again in a minute: the console has just restarted several times.</translation>
+    </message>
+    <message>
+        <location line="-4"/>
+        <source>The screen mode could not be changed.</source>
+        <translation>The screen mode could not be changed.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>The display settings could not be reset.</source>
+        <translation>The display settings could not be reset.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Display settings reset.</source>
+        <translation>Display settings reset.</translation>
     </message>
 </context>
 <context>
@@ -1569,7 +1629,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>ProfilesPane</name>
     <message>
-        <location filename="../qml/ProfilesPane.qml" line="+51"/>
+        <location filename="../qml/ProfilesPane.qml" line="+48"/>
         <source>Admin</source>
         <translation>Admin</translation>
     </message>
@@ -1701,7 +1761,7 @@ This can&apos;t be undone.</translation>
         <translation>Set a PIN</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+11"/>
         <source>Activity</source>
         <translation>Activity</translation>
     </message>
@@ -1711,7 +1771,7 @@ This can&apos;t be undone.</translation>
         <translation>What you played</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="-5"/>
         <source>Remove my PIN</source>
         <translation>Remove my PIN</translation>
     </message>
@@ -1748,12 +1808,12 @@ This can&apos;t be undone.</translation>
     <name>SettingsPage</name>
     <message>
         <location filename="../qml/SettingsPage.qml" line="+12"/>
-        <location line="+54"/>
+        <location line="+64"/>
         <source>Settings</source>
         <translation>Settings</translation>
     </message>
     <message>
-        <location line="-43"/>
+        <location line="-53"/>
         <source>Profiles</source>
         <translation>Profiles</translation>
     </message>
@@ -1808,7 +1868,7 @@ This can&apos;t be undone.</translation>
         <translation>Back</translation>
     </message>
     <message>
-        <location line="+194"/>
+        <location line="+203"/>
         <source>Coming soon</source>
         <translation>Coming soon</translation>
     </message>
@@ -1992,7 +2052,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+332"/>
+        <location filename="../qml/Shell.qml" line="+309"/>
         <source>Could not %1.</source>
         <translation>Could not %1.</translation>
     </message>
@@ -2017,7 +2077,7 @@ This can&apos;t be undone.</translation>
         <translation>Audio output: %1</translation>
     </message>
     <message numerus="yes">
-        <location line="+234"/>
+        <location line="+253"/>
         <source>%n more device(s) with a battery: %1</source>
         <translation>
             <numerusform>%n more device with a battery: %1</numerusform>
@@ -2030,12 +2090,12 @@ This can&apos;t be undone.</translation>
         <translation>%1 %2 percent</translation>
     </message>
     <message>
-        <location line="+562"/>
+        <location line="+571"/>
         <source>Power</source>
         <translation>Power</translation>
     </message>
     <message>
-        <location line="-789"/>
+        <location line="-817"/>
         <source>Update ready. Restart to finish.</source>
         <translation>Update ready. Restart to finish.</translation>
     </message>
@@ -2050,7 +2110,12 @@ This can&apos;t be undone.</translation>
         <translation>%1 stopped unexpectedly</translation>
     </message>
     <message>
-        <location line="+47"/>
+        <location line="+21"/>
+        <source>The screen did not answer, so the previous resolution is back.</source>
+        <translation>The screen did not answer, so the previous resolution is back.</translation>
+    </message>
+    <message>
+        <location line="+45"/>
         <source>Wallpaper could not be loaded</source>
         <translation>Wallpaper could not be loaded</translation>
     </message>
@@ -2096,15 +2161,15 @@ This can&apos;t be undone.</translation>
         <translation>Starting %1…</translation>
     </message>
     <message>
-        <location line="+243"/>
+        <location line="+252"/>
         <location line="+12"/>
         <location line="+3"/>
         <source>Select</source>
         <translation>Select</translation>
     </message>
     <message>
-        <location line="-19"/>
-        <location line="+14"/>
+        <location line="-21"/>
+        <location line="+16"/>
         <source>Cancel</source>
         <translation>Cancel</translation>
     </message>
@@ -3445,6 +3510,81 @@ This can&apos;t be undone.</translation>
         <location line="+54"/>
         <source>Time zone</source>
         <translation>Time zone</translation>
+    </message>
+</context>
+<context>
+    <name>DisplayText</name>
+    <message>
+        <location filename="../qml/DisplayText.qml" line="+9"/>
+        <source>%1 × %2</source>
+        <translation>%1 × %2</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>%1 Hz</source>
+        <translation>%1 Hz</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>%1, %2</source>
+        <translation>%1, %2</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Auto</source>
+        <translation>Auto</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>%1 %</source>
+        <translation>%1 %</translation>
+    </message>
+</context>
+<context>
+    <name>ModeConfirm</name>
+    <message>
+        <location filename="../qml/ModeConfirm.qml" line="+32"/>
+        <location line="+175"/>
+        <source>Keep</source>
+        <translation>Keep</translation>
+    </message>
+    <message>
+        <location line="-175"/>
+        <location line="+1"/>
+        <location line="+165"/>
+        <source>Revert</source>
+        <translation>Revert</translation>
+    </message>
+    <message>
+        <location line="-81"/>
+        <source>The setting could not be kept. The previous one comes back when the time is up.</source>
+        <translation>The setting could not be kept. The previous one comes back when the time is up.</translation>
+    </message>
+    <message>
+        <location line="+39"/>
+        <source>Keep this resolution?</source>
+        <translation>Keep this resolution?</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+26"/>
+        <source>If you do nothing, the previous setting comes back in %n second(s).</source>
+        <translation>
+            <numerusform>If you do nothing, the previous setting comes back in %n second.</numerusform>
+            <numerusform>If you do nothing, the previous setting comes back in %n seconds.</numerusform>
+        </translation>
+    </message>
+</context>
+<context>
+    <name>ModePicker</name>
+    <message>
+        <location filename="../qml/ModePicker.qml" line="+24"/>
+        <source>Select</source>
+        <translation>Select</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Cancel</source>
+        <translation>Cancel</translation>
     </message>
 </context>
 </TS>
