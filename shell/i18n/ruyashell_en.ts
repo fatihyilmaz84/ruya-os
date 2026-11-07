@@ -797,7 +797,7 @@
         <translation>Power off now?</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+7"/>
         <source>Suspend now</source>
         <translation>Suspend now</translation>
     </message>
@@ -812,14 +812,13 @@
         <translation>Power off now</translation>
     </message>
     <message>
-        <location line="+95"/>
+        <location line="+104"/>
         <location line="+10"/>
         <source>Cancel</source>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location line="-102"/>
-        <location line="+126"/>
+        <location line="-111"/>
         <source>Confirm</source>
         <translation>Confirm</translation>
     </message>
@@ -1406,7 +1405,7 @@
         <translation>Audio output: %1</translation>
     </message>
     <message numerus="yes">
-        <location line="+180"/>
+        <location line="+231"/>
         <source>%n more device(s) with a battery: %1</source>
         <translation>
             <numerusform>%n more device with a battery: %1</numerusform>
@@ -1419,12 +1418,12 @@
         <translation>%1 %2 percent</translation>
     </message>
     <message>
-        <location line="+545"/>
+        <location line="+551"/>
         <source>Power</source>
         <translation>Power</translation>
     </message>
     <message>
-        <location line="-718"/>
+        <location line="-775"/>
         <source>Update ready. Restart to finish.</source>
         <translation>Update ready. Restart to finish.</translation>
     </message>
@@ -1444,7 +1443,7 @@
         <translation>Wallpaper could not be loaded</translation>
     </message>
     <message>
-        <location line="+211"/>
+        <location line="+265"/>
         <source>Continue playing</source>
         <translation>Continue playing</translation>
     </message>
@@ -1486,7 +1485,7 @@
     </message>
     <message>
         <location line="+231"/>
-        <location line="+7"/>
+        <location line="+10"/>
         <location line="+3"/>
         <source>Select</source>
         <translation>Select</translation>
@@ -1518,8 +1517,8 @@
         <translation>Switch profile</translation>
     </message>
     <message>
-        <location line="-106"/>
-        <location line="+108"/>
+        <location line="-109"/>
+        <location line="+111"/>
         <source>Close</source>
         <translation>Close</translation>
     </message>
@@ -1539,8 +1538,8 @@
         <translation>Power off</translation>
     </message>
     <message>
-        <location line="-114"/>
-        <location line="+115"/>
+        <location line="-117"/>
+        <location line="+118"/>
         <source>Back</source>
         <translation>Back</translation>
     </message>
@@ -1884,7 +1883,27 @@
 <context>
     <name>TextEntry</name>
     <message>
-        <location filename="../qml/TextEntry.qml" line="+129"/>
+        <location filename="../qml/TextEntry.qml" line="+53"/>
+        <source>Delete</source>
+        <translation>Delete</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Cancel</source>
+        <translation>Cancel</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Press Back to delete, Back on an empty field to cancel</source>
+        <translation>Press Back to delete, Back on an empty field to cancel</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Press Back to cancel</source>
+        <translation>Press Back to cancel</translation>
+    </message>
+    <message>
+        <location line="+82"/>
         <source>Space</source>
         <translation>Space</translation>
     </message>

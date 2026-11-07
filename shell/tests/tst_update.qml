@@ -291,6 +291,7 @@ Item {
             const confirmButton = findChild(confirm, "powerConfirm")
             tryVerify(() => confirmButton.activeFocus, 2000, "Right moves to the confirm button")
             compare(confirmButton.Accessible.name, "Roll back now", "the confirmation says what it does (T-189)")
+            compare(findChild(confirm, "powerConfirmLabel").text, "Roll back now", "and the visible label says it too (T-194)")
             keyClick(Qt.Key_Return)
             tryCompare(Update, "state", "staged")
             compare(Update.mockRollbackCount(), 1)

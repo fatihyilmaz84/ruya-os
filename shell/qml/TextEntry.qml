@@ -46,6 +46,14 @@ FocusScope {
         return title.length > 0 && key.length > 0 ? title + ", " + key : title + key
     }
 
+    // What Back does right now (T-194): with text in the field a controller's Back deletes a
+    // letter and only an empty field is cancelled; after typing on a physical keyboard Esc
+    // cancels at once. Said to a screen reader and shown by the hint bar (Shell.hintList).
+    readonly property bool backDeletes: text.length > 0 && !keyboardMode
+    readonly property var entryHints: [{ button: "B", text: backDeletes ? qsTr("Delete") : qsTr("Cancel") }]
+    Accessible.description: backDeletes ? qsTr("Press Back to delete, Back on an empty field to cancel")
+                                        : qsTr("Press Back to cancel")
+
     // Geometry, in design px (times u).
     readonly property real keyUnit: 98
     readonly property real keyGap: 10
