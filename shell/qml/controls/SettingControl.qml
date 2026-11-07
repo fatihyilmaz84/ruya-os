@@ -18,7 +18,8 @@ FocusScope {
 
     width: parent ? parent.width : 900 * u
     height: Theme.rowHeight * u
-    activeFocusOnTab: true
+    // No activeFocusOnTab (T-190): the window's tab chain would move focus without the pane scrolling;
+    // SettingsPane handles Tab / Shift+Tab itself, like Down / Up.
     Behavior on opacity { NumberAnimation { duration: Theme.focusMs } }   // the pane's peek-row cue (T-185); instant under reduced motion
 
     // What a screen reader says after the label: the subtype sets it (a value, "on"/"off").

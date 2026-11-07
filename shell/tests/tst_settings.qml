@@ -28,6 +28,20 @@ Item {
     }
     Component { id: sliderComponent; SliderRow { label: "Slider"; width: 700; from: 0; to: 3; stepSize: 1; value: 1 } }
     Component { id: plainComponent; SettingRow { label: "Plain"; width: 700; value: "x" } }
+    // A bare pane of six rows, the last two hidden (T-190): "late" rows appear below the focus.
+    Component {
+        id: barePaneComponent
+        SettingsPane {
+            width: 700
+            height: 384                          // four rows (84) and three gaps (16)
+            SettingRow { objectName: "r0"; label: "Row 0" }
+            SettingRow { objectName: "r1"; label: "Row 1" }
+            SettingRow { objectName: "r2"; label: "Row 2" }
+            SettingRow { objectName: "r3"; label: "Row 3" }
+            SettingRow { objectName: "r4"; label: "Row 4"; visible: false }
+            SettingRow { objectName: "r5"; label: "Row 5"; visible: false }
+        }
+    }
 
     SignalSpy { id: spy }
 
@@ -60,6 +74,7 @@ Item {
             host.height = 720
             Bluetooth.mockReset()
             DeviceSettings.reducedMotion = false
+            DeviceSettings.theme = "dreamglass"
             DeviceSettings.effectsQuality = "high"
             DeviceSettings.overscan = 0.05
         }
@@ -378,6 +393,167 @@ Item {
             compare(checkRowsInside(pane), 0)
         }
 
+        // The row sits whole inside the pane's viewport.
+        function wholeInViewport(pane, row) {
+            const y = row.mapToItem(pane.viewport, 0, 0).y
+            return y >= -0.5 && y + row.height <= pane.viewport.height + 0.5
+        }
+
+        // T-190: rows that appear below the focused row (a message, devices found) while it is the
+        // last row in view bring the next row whole into view.
+        // Revert check: dropping the ensureFocusedVisible() call at the end of relayout() fails this.
+        function test_rows_inserted_below_the_focus_keep_the_look_ahead() {
+            const pane = createTemporaryObject(barePaneComponent, host)
+            verify(pane)
+            pane.forceActiveFocus()
+            const r = n => findChild(pane, "r" + n)
+            tryVerify(() => r(0).activeFocus, 2000, "the first row takes focus")
+            for (let i = 0; i < 3; ++i)
+                keyClick(Qt.Key_Down)
+            tryVerify(() => r(3).activeFocus, 2000, "the last row has focus")
+            compare(pane.peekBelow, null, "four rows fit: no cue yet")
+            verify(wholeInViewport(pane, r(3)))
+
+            r(4).visible = true                          // a message appears below the focused row
+            tryVerify(() => wholeInViewport(pane, r(4)), 2000, "the row below the focus is whole in view")
+            verify(r(3).activeFocus)
+            verify(wholeInViewport(pane, r(3)), "the focused row stays whole")
+            tryCompare(pane, "peekBelow", null)          // r4 is the last row: nothing beyond it
+            tryCompare(pane, "peekAbove", r(1))         // the top row is the peek row
+            tryCompare(r(3), "opacity", 1)
+            tryCompare(r(4), "opacity", 1)
+            tryCompare(r(1), "opacity", Theme.peekOpacity)
+
+            r(5).visible = true                          // one more below the next row
+            tryVerify(() => pane.laidOutRows().length === 6, 2000, "six rows")
+            keyClick(Qt.Key_Down)
+            tryVerify(() => r(4).activeFocus, 2000, "down to row 4")
+            tryVerify(() => wholeInViewport(pane, r(5)), 2000, "r5 whole below r4")
+            verify(wholeInViewport(pane, r(4)))
+        }
+
+        // A pane that gets shorter leaves the focused row the last whole one: look ahead again.
+        // Revert check: same call in relayout() (onHeightChanged runs it).
+        function test_a_shorter_pane_keeps_the_look_ahead() {
+            const pane = createTemporaryObject(barePaneComponent, host)
+            verify(pane)
+            const r = n => findChild(pane, "r" + n)
+            r(4).visible = true
+            pane.height = 484                            // five rows
+            pane.forceActiveFocus()
+            tryVerify(() => r(0).activeFocus, 2000)
+            for (let i = 0; i < 3; ++i)
+                keyClick(Qt.Key_Down)
+            tryVerify(() => r(3).activeFocus, 2000, "row 3 has focus")
+            tryVerify(() => wholeInViewport(pane, r(4)), 2000, "r4 is the look-ahead row")
+            pane.height = 384                            // one row less: row 3 would be the last whole row
+            tryVerify(() => Math.abs(pane.viewport.height - 384) < 1, 2000, "four rows in view")
+            tryVerify(() => wholeInViewport(pane, r(4)), 2000, "r4 is whole again after the resize")
+            verify(wholeInViewport(pane, r(3)))
+            verify(r(3).activeFocus)
+        }
+
+        // The same in the real pane: Bluetooth discovery lists devices below the focused row.
+        function test_bluetooth_discovery_keeps_the_focused_row_and_the_row_below_whole() {
+            openSettings()
+            selectCategory(2)
+            keyClick(Qt.Key_Right)
+            const pane = find("paneBluetooth")
+            tryVerify(() => pane.activeFocus, 2000)
+            const first = pane.laidOutRows()
+            const stride = first[1].y - first[0].y
+            const gap = stride - first[0].height
+            const fit = 6                                // six rows in view: power, add, hint, three devices
+            pane.anchors.bottomMargin = pane.height - (fit * stride - gap)
+            tryVerify(() => Math.abs(pane.height - (fit * stride - gap)) < 1, 2000, "pane resized")
+            keyClick(Qt.Key_Down)                        // "Add a device"
+            tryVerify(() => find("rowBtAdd").activeFocus)
+            keyClick(Qt.Key_Return)                      // scan: devices are listed below
+            tryCompare(Bluetooth, "discovering", true)
+            tryCompare(Bluetooth, "discovering", false, 3000)
+            tryVerify(() => pane.laidOutRows().length > 10, 2000, "devices were added")
+            const row = checkFocusedRowClear(pane, "after the scan")
+            compare(row.objectName, "rowBtAdd")
+            const all = pane.laidOutRows()
+            const next = all[all.indexOf(row) + 1]
+            tryVerify(() => wholeInViewport(pane, next), 2000, "the row below the focus is whole")
+            checkPeekOpacities(pane, "after the scan")
+        }
+
+        // The panes that gained rows lately (Display & motion: theme, wallpaper, dim; System: thermal)
+        // squeezed to four rows: Down and Tab keep the focused row whole with its neighbour in view.
+        function test_longer_panes_keep_the_look_ahead_with_down_and_tab() {
+            openSettings()
+            for (const [index, name] of [[tc.displayIndex, "paneDisplay"], [7, "paneSystem"]]) {
+                selectCategory(index)
+                keyClick(Qt.Key_Right)
+                const pane = find(name)
+                tryVerify(() => pane.activeFocus && pane.focusableRows().length > 0, 2000, name + " has focus")
+                const first = pane.laidOutRows()
+                const stride = first[1].y - first[0].y
+                const gap = stride - first[0].height
+                verify(first.length >= 5, name + " has more than four rows: " + first.length)
+                pane.anchors.bottomMargin = pane.height - (4 * stride - gap)
+                tryVerify(() => Math.abs(pane.height - (4 * stride - gap)) < 1, 2000, name + " resized")
+                const rows = pane.focusableRows()
+                for (const key of [Qt.Key_Down, Qt.Key_Tab]) {
+                    for (let i = 1; i < rows.length; ++i) {
+                        keyClick(key)
+                        tryVerify(() => rows[i].activeFocus, 2000, name + ": row " + i + " takes focus")
+                        const f = checkFocusedRowClear(pane, name + " " + i)
+                        const all = pane.laidOutRows()
+                        const at = all.indexOf(f)
+                        if (at < all.length - 1)
+                            verify(wholeInViewport(pane, all[at + 1]), name + " " + i + ": the next row is whole too")
+                        checkPeekOpacities(pane, name + " " + i)
+                    }
+                    for (let i = rows.length - 2; i >= 0; --i)
+                        keyClick(key === Qt.Key_Tab ? Qt.Key_Backtab : Qt.Key_Up)
+                    tryVerify(() => rows[0].activeFocus, 2000, name + ": back on the first row")
+                }
+                keyClick(Qt.Key_Escape)
+                tryVerify(() => find("categoryList").activeFocus)
+            }
+        }
+
+        // T-190: Tab and Shift+Tab move between rows like Down and Up, scrolling and updating the peek rows.
+        // Revert check: dropping the Key_Tab / Key_Backtab cases lets the window's focus chain move focus
+        // without scrolling, which fails the viewport checks.
+        function test_tab_moves_like_down_and_scrolls() {
+            openSettings()
+            const pane = fillBluetoothPane()
+            const rows = pane.focusableRows()
+            const all = pane.laidOutRows()
+            checkFocusedRowClear(pane, "first row")
+            for (let i = 1; i < rows.length; ++i) {
+                keyClick(Qt.Key_Tab)
+                tryVerify(() => rows[i].activeFocus, 2000, "tab to row " + i)
+                const f = checkFocusedRowClear(pane, "tab " + i)
+                const at = all.indexOf(f)
+                if (at < all.length - 1)
+                    verify(wholeInViewport(pane, all[at + 1]), "tab " + i + ": the next row is whole too")
+                checkPeekOpacities(pane, "tab " + i)
+            }
+            compare(pane.peekBelow, null)
+            keyClick(Qt.Key_Tab)                         // clamped like Down: no wrap, no leaving the pane
+            verify(rows[rows.length - 1].activeFocus)
+            verify(pane.activeFocus)
+            for (let i = rows.length - 2; i >= 0; --i) {
+                keyClick(Qt.Key_Backtab)
+                tryVerify(() => rows[i].activeFocus, 2000, "backtab to row " + i)
+                const f = checkFocusedRowClear(pane, "backtab " + i)
+                const at = all.indexOf(f)
+                if (at > 0)
+                    verify(wholeInViewport(pane, all[at - 1]), "backtab " + i + ": the row above is whole too")
+                checkPeekOpacities(pane, "backtab " + i)
+            }
+            compare(pane.scrollY, 0)
+            keyClick(Qt.Key_Tab)
+            tryVerify(() => rows[1].activeFocus)
+            keyClick(Qt.Key_Tab, Qt.ShiftModifier)       // some platforms send Tab + Shift instead of Backtab
+            tryVerify(() => rows[0].activeFocus)
+        }
+
         function test_pane_remembers_last_row() {
             openSettings()
             selectCategory(tc.displayIndex)
@@ -659,6 +835,15 @@ Item {
             tryVerify(() => rows[rows.length - 1].activeFocus, 2000, "last row")
             wait(600)
             grabImage(tc.shell).save(shotsDir + "/28c-settings-scroll-end.png")
+            // The peek rows on the lightest dark theme and on the light theme (T-190).
+            for (let i = 0; i < Math.floor(rows.length / 2); ++i)
+                keyClick(Qt.Key_Up)
+            for (const key of ["aurora", "daylight"]) {
+                DeviceSettings.theme = key
+                tryCompare(Theme, "lightTheme", key === "daylight")
+                wait(900)
+                grabImage(tc.shell).save(shotsDir + "/28d-settings-scroll-middle-" + key + ".png")
+            }
         }
     }
 }

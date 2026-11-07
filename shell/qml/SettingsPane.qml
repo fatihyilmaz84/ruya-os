@@ -2,8 +2,8 @@ import QtQuick
 import RuyaShell
 
 // Body of one Settings category: a vertical stack of settings rows. Up/Down move between the
-// rows (clamped), Left/Back hand focus back to the category list (exitRequested). Rows keep
-// the keys they use (Left/Right on a ChoiceRow or SliderRow never reach this pane).
+// rows (clamped; so do Tab / Shift+Tab), Left/Back hand focus back to the category list
+// (exitRequested). Rows keep the keys they use (Left/Right on a ChoiceRow or SliderRow never reach this pane).
 // Being a FocusScope, the pane remembers its last focused row: forceActiveFocus() on it
 // re-enters at that row. Rows live in a Flickable that follows focus, so a pane may have
 // more rows than fit on the screen.
@@ -87,6 +87,11 @@ FocusScope {
         if (Math.abs(flick.contentY - top) > 0.5)
             flick.contentY = top
         updateView()
+        // Rows inserted or removed, a message appearing, the pane resized: with focus in the pane
+        // look ahead again, so the focused row is not left as the last visible one with rows
+        // beyond it (T-190). Without focus the pane keeps the view the snap above gave it.
+        if (activeFocus)
+            ensureFocusedVisible()
     }
 
     // Scrolls so the focused row is fully visible and, when there is room, so is the row above
@@ -214,6 +219,12 @@ FocusScope {
             break
         case Qt.Key_Down:
             move(1)
+            break
+        case Qt.Key_Tab:                   // a keyboard (a controller never sends Tab); rows are not in the window's tab chain
+            move(event.modifiers & Qt.ShiftModifier ? -1 : 1)
+            break
+        case Qt.Key_Backtab:
+            move(-1)
             break
         case Qt.Key_Right:
             break                      // nothing to the right of a row; stay put

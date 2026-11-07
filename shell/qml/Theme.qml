@@ -108,7 +108,7 @@ QtObject {
     readonly property color artCaptionFadeClear: Qt.rgba(artCaptionFade.r, artCaptionFade.g, artCaptionFade.b, 0)
     readonly property color errorText: tok("errorText")
     readonly property real disabledOpacity: 0.4                     // unavailable controls (PIN-pad OK, locked pad)
-    readonly property real peekOpacity: 0.5                         // scroll cue: the first / last visible row while more rows exist beyond it (not disabledOpacity, which means unavailable)
+    readonly property real peekOpacity: 0.7                         // scroll cue: the first / last visible row while more rows exist beyond it (not disabledOpacity, which means unavailable)
     readonly property color warningText: tok("warningText")
     readonly property color blobHighlight: tok("blobHighlight")   // faint third backdrop blob
 
