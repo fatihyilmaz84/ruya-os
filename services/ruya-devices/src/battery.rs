@@ -10,14 +10,16 @@ pub const KIND_GAMING_INPUT: u32 = 12;
 
 /// The contract's `kind` for a UPower `UpDeviceKind`, or `None` for a device that is not listed:
 /// the PC's battery (2), line power (1), a UPS (3), a monitor (4), phones and tablets and the
-/// like. Listed: mouse 5, keyboard 6, gaming input 12, headset 17, speakers 18, headphones 19,
-/// remote control 22 and Bluetooth generic 28.
+/// like. Listed: mouse 5 and touchpad 14 (a mouse), keyboard 6, gaming input 12, headset 17,
+/// speakers 18, headphones 19, other audio 21 (BlueZ's audio classes land there: a headset),
+/// remote control 22 and Bluetooth generic 28. Every other kind is dropped on purpose (a pen 13, a
+/// camera, a toy: nothing the status cluster has an icon for).
 pub fn kind_of(upower_kind: u32) -> Option<&'static str> {
     match upower_kind {
         KIND_GAMING_INPUT => Some("controller"),
-        17 | 19 => Some("headset"),
+        17 | 19 | 21 => Some("headset"),
         18 => Some("speaker"),
-        5 => Some("mouse"),
+        5 | 14 => Some("mouse"),
         6 => Some("keyboard"),
         22 | 28 => Some("other"),
         _ => None,
@@ -234,6 +236,8 @@ mod tests {
             dev("/monitor", 4, "Monitor", 90.0, 2),
             dev("/phone", 8, "Phone", 30.0, 2),
             dev("/tablet", 10, "Tablet", 30.0, 2),
+            dev("/pen", 13, "Pen", 30.0, 2),
+            dev("/camera", 25, "Camera", 30.0, 2),
             pad("/pad1", 40.0, 2),
         ]);
         assert_eq!(list.len(), 1);
@@ -251,6 +255,8 @@ mod tests {
             dev("/f", 6, "Keyboard", 70.0, 2),
             dev("/g", 22, "Remote", 70.0, 2),
             dev("/h", 28, "Thing", 70.0, 2),
+            dev("/i", 21, "Other audio", 70.0, 2),
+            dev("/j", 14, "Touchpad", 70.0, 2),
         ]);
         let kinds: Vec<&str> = list.iter().map(|b| b.kind).collect();
         assert_eq!(
@@ -263,7 +269,9 @@ mod tests {
                 "mouse",
                 "keyboard",
                 "other",
-                "other"
+                "other",
+                "headset",
+                "mouse"
             ]
         );
     }

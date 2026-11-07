@@ -1,6 +1,7 @@
 #include "Bluetooth.h"
 
 #include "DBusBluetoothBackend.h"
+#include "../battery/Batteries.h"
 #include "MockBluetoothBackend.h"
 
 #include <algorithm>
@@ -56,14 +57,15 @@ Bluetooth *Bluetooth::create(QQmlEngine *, QJSEngine *)
     return new Bluetooth(std::move(backend));
 }
 
-// A device is "low" while it is connected with a known battery under the limit. It is reported
+// A device is "low" while it is connected with a known battery at or under the limit
+// (Batteries::LowBatteryPercent, the same one the status cluster and the controller toast use). It is reported
 // when it enters that state and again only after it left it (recharged, or disconnected).
 void Bluetooth::checkBatteries(const QList<BtDevice> &devices)
 {
     for (const BtDevice &d : devices) {
         // Controllers are covered by Batteries (UPower), which reports the same battery.
         const bool low = d.kind != QLatin1String("controller") && d.connected && d.battery >= 0
-                         && d.battery < LowBatteryPercent;
+                         && d.battery <= Batteries::LowBatteryPercent;
         if (!low) {
             m_lowReported.remove(d.id);
         } else if (!m_lowReported.contains(d.id)) {

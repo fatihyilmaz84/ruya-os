@@ -78,17 +78,16 @@ Item {
             return toastTexts().filter(t => t.startsWith("Controller battery low"))
         }
 
-        // The ids of the chips in the cluster, left to right.
+        // The ids of the chips in the cluster, left to right (the Row keeps the model's order).
         function chipIds() {
             const row = find("batteryStatus")
             const found = []
             for (let i = 0; i < row.children.length; ++i) {
                 const name = row.children[i].objectName
-                if (name.startsWith("batteryChip_") && row.children[i].visible)
-                    found.push({ id: name.substring("batteryChip_".length), x: row.children[i].x })
+                if (name.startsWith("batteryChip_"))
+                    found.push(name.substring("batteryChip_".length))
             }
-            found.sort((a, b) => a.x - b.x)
-            return found.map(f => f.id)
+            return found
         }
 
         function test_one_device_shows_a_chip() {
@@ -317,6 +316,18 @@ Item {
             tryCompare(inChip("pad-1", "batteryPercent"), "text", "5%")
             compare(lowSpy.count, 0)
             compare(lowToasts().length, 0)
+        }
+
+        function test_a_charging_low_pad_does_not_toast_but_the_discharging_one_does() {
+            Batteries.mockSet("pad-1", 10, "charging")
+            Batteries.mockSet("pad-2", 12, "discharging")
+            tryVerify(() => chip("pad-2") !== null && chip("pad-1") !== null)
+            tryCompare(inChip("pad-2", "batteryLevelIcon"), "name", "battery_alert", 2000, "warning state, like the toast")
+            compare(levelIcon("pad-1"), "battery_charging_full")
+            tryVerify(() => lowToasts().length === 1, 2000)
+            compare(lowToasts()[0], "Controller battery low (12%)")
+            compare(lowSpy.count, 1, "only the discharging pad was reported")
+            compare(lowSpy.signalArguments[0][0], "pad-2")
         }
 
         function test_a_low_headset_warns_in_the_cluster_but_not_here() {

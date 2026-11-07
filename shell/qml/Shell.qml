@@ -462,6 +462,56 @@ FocusScope {
         sourceX: x
         sourceY: y
 
+        // The cluster is sized from the room between the nav and the right margin (T-223): the
+        // profile name elides to what is left (never under about six characters) and the battery
+        // chips are as many as fit (the rest collapse into "+N"), so the pill never reaches the
+        // nav (a Theme.spaceM gap stays) however long the name or many the devices.
+        readonly property real room: root.width - root.marginX - (sectionNav.x + sectionNav.width + Theme.spaceM * root.u)
+                                     - 2 * Theme.spaceL * root.u
+        // Every device that earns a chip, lowest first (the chips and the ones past MaxChips).
+        readonly property var batteryDevices: Batteries.chips.concat(Batteries.more)
+        readonly property real nameFull: profileName.implicitWidth
+        readonly property real nameMin: Math.min(nameFull, probeName.implicitWidth)
+        // Avatar, its gap to the name, the clock and the gap between profile and clock.
+        readonly property real fixedWidth: (48 + Theme.spaceS + Theme.spaceM) * root.u + clock.implicitWidth
+        readonly property int chipCount: fitChips()
+        readonly property real nameWidth: Math.max(nameMin, Math.min(nameFull, room - fixedWidth - batteryWidth(chipCount)))
+
+        // Probes of the real fonts, never shown: a chip is budgeted with its percentage in the widest
+        // digit (8) for its number of digits, the "+N" the same, and the name's minimum is six wide
+        // letters, so the budget only errs on the side of fewer chips.
+        Text { id: probePercent1; visible: false; text: "8%"; font.pixelSize: Theme.typeBody * root.u }
+        Text { id: probePercent2; visible: false; text: "88%"; font.pixelSize: Theme.typeBody * root.u }
+        Text { id: probePercent3; visible: false; text: "888%"; font.pixelSize: Theme.typeBody * root.u }
+        Text { id: probeMore1; visible: false; text: "+8"; font.pixelSize: Theme.typeBody * root.u }
+        Text { id: probeMore2; visible: false; text: "+88"; font.pixelSize: Theme.typeBody * root.u }
+        Text { id: probeName; visible: false; text: "nnnnnn"; font.pixelSize: Theme.typeBody * root.u }
+        Icon { id: iconProbe; visible: false; name: "battery_full"; u: root.u }
+
+        function chipBudget(device) {
+            const text = device.percent >= 100 ? probePercent3 : device.percent >= 10 ? probePercent2 : probePercent1
+            return 2 * iconProbe.width + 2 * Theme.spaceXs * root.u + text.implicitWidth
+        }
+        // The width of the battery group with `n` chips and a "+k" for the rest, with its gap to the profile.
+        function batteryWidth(n) {
+            const all = statusGlass.batteryDevices
+            if (all.length === 0)
+                return 0
+            let w = 0
+            for (let i = 0; i < n; ++i)
+                w += chipBudget(all[i]) + (i > 0 ? Theme.spaceM * root.u : 0)
+            if (all.length > n)
+                w += (n > 0 ? Theme.spaceM * root.u : 0) + (all.length - n >= 10 ? probeMore2 : probeMore1).implicitWidth
+            return w + Theme.spaceM * root.u
+        }
+        function fitChips() {
+            for (let n = Math.min(statusGlass.batteryDevices.length, Batteries.chips.length); n > 0; --n) {
+                if (batteryWidth(n) + fixedWidth + nameMin <= room)
+                    return n
+            }
+            return 0
+        }
+
         Row {
             id: statusRow
             anchors.centerIn: parent
@@ -472,11 +522,12 @@ FocusScope {
             Row {
                 id: batteryStatus
                 objectName: "batteryStatus"
-                visible: Batteries.chips.length > 0
+                visible: statusGlass.batteryDevices.length > 0
                 spacing: Theme.spaceM * root.u
                 anchors.verticalCenter: parent.verticalCenter
                 // The ids, not the entries: the delegates are kept while a level changes.
-                readonly property var chipIds: Batteries.chips.map(d => d.id)
+                readonly property var chipIds: statusGlass.batteryDevices.slice(0, statusGlass.chipCount).map(d => d.id)
+                readonly property var overflow: statusGlass.batteryDevices.slice(statusGlass.chipCount)
                 Repeater {
                     model: batteryStatus.chipIds
                     BatteryChip {
@@ -489,14 +540,14 @@ FocusScope {
                 Text {
                     id: batteryMore
                     objectName: "batteryMore"
-                    visible: Batteries.more.length > 0
+                    visible: batteryStatus.overflow.length > 0
                     anchors.verticalCenter: parent.verticalCenter
-                    text: "+" + Batteries.more.length
+                    text: "+" + batteryStatus.overflow.length
                     color: Theme.text
                     font.pixelSize: Theme.typeBody * root.u
                     Accessible.role: Accessible.StaticText
-                    Accessible.name: qsTr("%n more device(s) with a battery: %1", "", Batteries.more.length)
-                                     .arg(Batteries.more.map(d => qsTr("%1 %2 percent").arg(d.name).arg(d.percent)).join(", "))
+                    Accessible.name: qsTr("%n more device(s) with a battery: %1", "", batteryStatus.overflow.length)
+                                     .arg(batteryStatus.overflow.map(d => qsTr("%1 %2 percent").arg(d.name).arg(d.percent)).join(", "))
                 }
             }
             Row {
@@ -515,9 +566,12 @@ FocusScope {
                     }
                 }
                 Text {
+                    id: profileName
                     objectName: "activeProfileName"
                     anchors.verticalCenter: parent.verticalCenter
                     text: Profiles.active.name ?? ""
+                    width: Math.min(implicitWidth, statusGlass.nameWidth)   // the full name unless the room is short
+                    elide: Text.ElideRight
                     color: Theme.text
                     font.pixelSize: Theme.typeBody * root.u
                 }
