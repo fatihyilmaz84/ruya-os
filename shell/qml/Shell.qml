@@ -448,7 +448,7 @@ FocusScope {
         }
     }
 
-    // Status cluster (controller battery, profile, clock) top right, on glass; shown on Home and on pages.
+    // Status cluster (device batteries, profile, clock) top right, on glass; shown on Home and on pages.
     GlassPill {
         id: statusGlass
         objectName: "statusGlass"
@@ -467,30 +467,36 @@ FocusScope {
             anchors.centerIn: parent
             spacing: Theme.spaceM * root.u
 
-            // The lowest controller battery (Batteries, UPower behind it); nothing without one.
+            // The battery of each wireless device (Batteries, UPower behind it), lowest first: up to
+            // three chips and a "+N" for the rest; nothing without a device that needs one (T-223).
             Row {
                 id: batteryStatus
                 objectName: "batteryStatus"
-                visible: Batteries.lowest >= 0
-                spacing: Theme.spaceXs * root.u
+                visible: Batteries.chips.length > 0
+                spacing: Theme.spaceM * root.u
                 anchors.verticalCenter: parent.verticalCenter
-                readonly property bool low: Batteries.low
-                Accessible.role: Accessible.StaticText
-                Accessible.name: qsTr("Controller battery %1%").arg(Batteries.lowest)
-                Icon {
-                    objectName: "batteryIcon"
-                    anchors.verticalCenter: parent.verticalCenter
-                    u: root.u
-                    name: batteryStatus.low ? "battery_alert"
-                          : Batteries.lowestState === "charging" ? "battery_charging_full" : "battery_full"
-                    color: batteryStatus.low ? Theme.warningText : Theme.text
+                // The ids, not the entries: the delegates are kept while a level changes.
+                readonly property var chipIds: Batteries.chips.map(d => d.id)
+                Repeater {
+                    model: batteryStatus.chipIds
+                    BatteryChip {
+                        required property string modelData
+                        objectName: "batteryChip_" + modelData
+                        deviceId: modelData
+                        u: root.u
+                    }
                 }
                 Text {
-                    objectName: "batteryLevel"
+                    id: batteryMore
+                    objectName: "batteryMore"
+                    visible: Batteries.more.length > 0
                     anchors.verticalCenter: parent.verticalCenter
-                    text: Batteries.lowest + "%"
-                    color: batteryStatus.low ? Theme.warningText : Theme.text
+                    text: "+" + Batteries.more.length
+                    color: Theme.text
                     font.pixelSize: Theme.typeBody * root.u
+                    Accessible.role: Accessible.StaticText
+                    Accessible.name: qsTr("%n more device(s) with a battery: %1", "", Batteries.more.length)
+                                     .arg(Batteries.more.map(d => qsTr("%1 %2 percent").arg(d.name).arg(d.percent)).join(", "))
                 }
             }
             Row {

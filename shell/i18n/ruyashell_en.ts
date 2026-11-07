@@ -300,6 +300,24 @@
     </message>
 </context>
 <context>
+    <name>BatteryChip</name>
+    <message>
+        <location filename="../qml/BatteryChip.qml" line="+62"/>
+        <source>%1 battery %2 percent, low</source>
+        <translation>%1 battery %2 percent, low</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>%1 battery %2 percent, charging</source>
+        <translation>%1 battery %2 percent, charging</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>%1 battery %2 percent</source>
+        <translation>%1 battery %2 percent</translation>
+    </message>
+</context>
+<context>
     <name>BluetoothPane</name>
     <message>
         <location filename="../qml/BluetoothPane.qml" line="+70"/>
@@ -1037,7 +1055,7 @@
 <context>
     <name>SectionNav</name>
     <message>
-        <location filename="../qml/SectionNav.qml" line="+32"/>
+        <location filename="../qml/SectionNav.qml" line="+33"/>
         <source>Home</source>
         <translation>Home</translation>
     </message>
@@ -1126,7 +1144,7 @@
         <translation>Back</translation>
     </message>
     <message>
-        <location line="+177"/>
+        <location line="+191"/>
         <source>Coming soon</source>
         <translation>Coming soon</translation>
     </message>
@@ -1276,7 +1294,7 @@
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+291"/>
+        <location filename="../qml/Shell.qml" line="+308"/>
         <source>Could not %1.</source>
         <translation>Could not %1.</translation>
     </message>
@@ -1300,13 +1318,26 @@
         <source>Audio output: %1</source>
         <translation>Audio output: %1</translation>
     </message>
+    <message numerus="yes">
+        <location line="+180"/>
+        <source>%n more device(s) with a battery: %1</source>
+        <translation>
+            <numerusform>%n more device with a battery: %1</numerusform>
+            <numerusform>%n more devices with a battery: %1</numerusform>
+        </translation>
+    </message>
     <message>
-        <location line="+720"/>
+        <location line="+1"/>
+        <source>%1 %2 percent</source>
+        <translation>%1 %2 percent</translation>
+    </message>
+    <message>
+        <location line="+545"/>
         <source>Power</source>
         <translation>Power</translation>
     </message>
     <message>
-        <location line="-712"/>
+        <location line="-718"/>
         <source>Update ready. Restart to finish.</source>
         <translation>Update ready. Restart to finish.</translation>
     </message>
@@ -1326,12 +1357,7 @@
         <translation>Wallpaper could not be loaded</translation>
     </message>
     <message>
-        <location line="+84"/>
-        <source>Controller battery %1%</source>
-        <translation>Controller battery %1%</translation>
-    </message>
-    <message>
-        <location line="+121"/>
+        <location line="+211"/>
         <source>Continue playing</source>
         <translation>Continue playing</translation>
     </message>
@@ -1814,22 +1840,22 @@
         <translation>Dreamglass</translation>
     </message>
     <message>
-        <location line="+51"/>
+        <location line="+52"/>
         <source>Midnight</source>
         <translation>Midnight</translation>
     </message>
     <message>
-        <location line="+51"/>
+        <location line="+52"/>
         <source>Aurora</source>
         <translation>Aurora</translation>
     </message>
     <message>
-        <location line="+51"/>
+        <location line="+52"/>
         <source>Ember</source>
         <translation>Ember</translation>
     </message>
     <message>
-        <location line="+51"/>
+        <location line="+52"/>
         <source>Daylight</source>
         <translation>Daylight</translation>
     </message>
@@ -1969,7 +1995,7 @@
 <context>
     <name>WallpaperPicker</name>
     <message>
-        <location filename="../qml/WallpaperPicker.qml" line="+45"/>
+        <location filename="../qml/WallpaperPicker.qml" line="+48"/>
         <source>Default (animated blobs)</source>
         <translation>Default (animated blobs)</translation>
     </message>
@@ -2045,7 +2071,7 @@
     </message>
     <message>
         <location line="+0"/>
-        <location line="+26"/>
+        <location line="+38"/>
         <source>Wallpaper</source>
         <translation>Wallpaper</translation>
     </message>
@@ -2055,12 +2081,12 @@
         <translation>%1, current</translation>
     </message>
     <message>
-        <location line="+46"/>
+        <location line="+47"/>
         <source>Current</source>
         <translation>Current</translation>
     </message>
     <message>
-        <location line="+23"/>
+        <location line="+43"/>
         <source>Copying…</source>
         <translation>Copying…</translation>
     </message>

@@ -19,7 +19,19 @@ Item {
         "volume_off": 0xe04f,
         "battery_full": 0xe1a5,
         "battery_alert": 0xe19c,
-        "battery_charging_full": 0xe1a3
+        "battery_charging_full": 0xe1a3,
+        "battery_0_bar": 0xebdc,
+        "battery_1_bar": 0xf09c,
+        "battery_2_bar": 0xf09d,
+        "battery_3_bar": 0xf09e,
+        "battery_4_bar": 0xf09f,
+        "battery_5_bar": 0xf0a0,
+        "sports_esports": 0xea28,
+        "headphones": 0xf01f,
+        "speaker": 0xe32d,
+        "mouse": 0xe323,
+        "keyboard": 0xe312,
+        "bluetooth": 0xe1a7
     })
     readonly property bool known: name in codePoints
 

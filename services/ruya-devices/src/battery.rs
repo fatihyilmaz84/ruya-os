@@ -1,12 +1,28 @@
-//! Controller batteries (org.ruyaos.Devices1.Batteries, T-161). UPower knows every battery-like
-//! device of the machine; the rules here pick the gaming controllers and turn UPower's numbers
-//! into the contract's strings. Pure and tested on any host; the UPower side is `upower.rs`.
+//! Wireless device batteries (org.ruyaos.Devices1.Batteries, T-161, T-223). UPower knows every
+//! battery-like device of the machine; the rules here pick the controllers, headsets, speakers,
+//! mice, keyboards and remotes (not the PC's own battery) and turn UPower's numbers into the
+//! contract's strings. Pure and tested on any host; the UPower side is `upower.rs`.
 
 use std::sync::{Mutex, MutexGuard};
 
-/// UPower's `UpDeviceKind` for a gamepad ("gaming input"). The PC's battery is 2, a mouse 5, a
-/// keyboard 6, a headset 17: none of them are listed.
+/// UPower's `UpDeviceKind` for a gamepad ("gaming input").
 pub const KIND_GAMING_INPUT: u32 = 12;
+
+/// The contract's `kind` for a UPower `UpDeviceKind`, or `None` for a device that is not listed:
+/// the PC's battery (2), line power (1), a UPS (3), a monitor (4), phones and tablets and the
+/// like. Listed: mouse 5, keyboard 6, gaming input 12, headset 17, speakers 18, headphones 19,
+/// remote control 22 and Bluetooth generic 28.
+pub fn kind_of(upower_kind: u32) -> Option<&'static str> {
+    match upower_kind {
+        KIND_GAMING_INPUT => Some("controller"),
+        17 | 19 => Some("headset"),
+        18 => Some("speaker"),
+        5 => Some("mouse"),
+        6 => Some("keyboard"),
+        22 | 28 => Some("other"),
+        _ => None,
+    }
+}
 
 /// What the contract says about a controller's charge.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -53,22 +69,24 @@ pub struct RawDevice {
     pub state: u32,
 }
 
-/// A listed controller battery.
+/// A listed battery.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Battery {
     pub id: String,
     pub name: String,
+    /// "controller" | "headset" | "speaker" | "mouse" | "keyboard" | "other" (`kind_of`).
+    pub kind: &'static str,
     pub percent: u32,
     pub state: ChargeState,
 }
 
-/// The listed batteries: only gaming input devices, sorted by id (a stable order). A device
+/// The listed batteries: the kinds `kind_of` knows, sorted by id (a stable order). A device
 /// whose state is unknown and whose percentage is 0 has no reading at all and is not listed.
-pub fn controllers(devices: &[RawDevice]) -> Vec<Battery> {
+pub fn peripherals(devices: &[RawDevice]) -> Vec<Battery> {
     let mut out: Vec<Battery> = devices
         .iter()
-        .filter(|d| d.kind == KIND_GAMING_INPUT)
         .filter_map(|d| {
+            let kind = kind_of(d.kind)?;
             let state = ChargeState::from_upower(d.state);
             let percent = if d.percentage.is_finite() {
                 d.percentage.round().clamp(0.0, 100.0) as u32
@@ -81,7 +99,13 @@ pub fn controllers(devices: &[RawDevice]) -> Vec<Battery> {
             let name = d.model.trim();
             Some(Battery {
                 id: d.id.clone(),
-                name: if name.is_empty() { "Controller" } else { name }.to_owned(),
+                name: if name.is_empty() {
+                    default_name(kind)
+                } else {
+                    name
+                }
+                .to_owned(),
+                kind,
                 percent,
                 state,
             })
@@ -89,6 +113,17 @@ pub fn controllers(devices: &[RawDevice]) -> Vec<Battery> {
         .collect();
     out.sort_by(|a, b| a.id.cmp(&b.id));
     out
+}
+
+fn default_name(kind: &str) -> &'static str {
+    match kind {
+        "controller" => "Controller",
+        "headset" => "Headset",
+        "speaker" => "Speaker",
+        "mouse" => "Mouse",
+        "keyboard" => "Keyboard",
+        _ => "Device",
+    }
 }
 
 /// UPower, as far as the core needs it. `upower::UPowerClient` talks to the bus; an absent
@@ -117,7 +152,7 @@ impl<U: UPower> Batteries<U> {
 
     /// Reads UPower again. `true` when the list changed (so `BatteriesChanged` is due).
     pub fn refresh(&self) -> Result<bool, String> {
-        let now = controllers(&self.upower.devices()?);
+        let now = peripherals(&self.upower.devices()?);
         let mut list = self.list_lock();
         let changed = *list != now;
         *list = now;
@@ -177,12 +212,13 @@ mod tests {
 
     #[test]
     fn a_gamepad_discharging_is_listed() {
-        let list = controllers(&[pad("/pad1", 40.0, 2)]);
+        let list = peripherals(&[pad("/pad1", 40.0, 2)]);
         assert_eq!(
             list,
             vec![Battery {
                 id: "/pad1".to_owned(),
                 name: "Ruya Pad".to_owned(),
+                kind: "controller",
                 percent: 40,
                 state: ChargeState::Discharging,
             }]
@@ -190,18 +226,46 @@ mod tests {
     }
 
     #[test]
-    fn a_laptop_battery_a_mouse_and_other_peripherals_are_not_listed() {
-        let list = controllers(&[
+    fn the_pcs_battery_power_supplies_and_phones_are_not_listed() {
+        let list = peripherals(&[
             dev("/bat0", 2, "Internal", 80.0, 2),
             dev("/line", 1, "", 0.0, 0),
-            dev("/mouse", 5, "Mouse", 55.0, 2),
-            dev("/kbd", 6, "Keyboard", 70.0, 2),
-            dev("/buds", 17, "Headset", 30.0, 2),
+            dev("/ups", 3, "UPS", 90.0, 2),
+            dev("/monitor", 4, "Monitor", 90.0, 2),
             dev("/phone", 8, "Phone", 30.0, 2),
+            dev("/tablet", 10, "Tablet", 30.0, 2),
             pad("/pad1", 40.0, 2),
         ]);
         assert_eq!(list.len(), 1);
         assert_eq!(list[0].id, "/pad1");
+    }
+
+    #[test]
+    fn controllers_headsets_speakers_mice_keyboards_and_remotes_are_listed_with_their_kind() {
+        let list = peripherals(&[
+            dev("/a", 12, "Pad", 40.0, 2),
+            dev("/b", 17, "Headset", 30.0, 2),
+            dev("/c", 19, "Headphones", 30.0, 2),
+            dev("/d", 18, "Speaker", 30.0, 1),
+            dev("/e", 5, "Mouse", 55.0, 2),
+            dev("/f", 6, "Keyboard", 70.0, 2),
+            dev("/g", 22, "Remote", 70.0, 2),
+            dev("/h", 28, "Thing", 70.0, 2),
+        ]);
+        let kinds: Vec<&str> = list.iter().map(|b| b.kind).collect();
+        assert_eq!(
+            kinds,
+            [
+                "controller",
+                "headset",
+                "headset",
+                "speaker",
+                "mouse",
+                "keyboard",
+                "other",
+                "other"
+            ]
+        );
     }
 
     #[test]
@@ -219,7 +283,7 @@ mod tests {
 
     #[test]
     fn percentages_are_rounded_and_clamped() {
-        let percent = |p: f64| controllers(&[pad("/p", p, 2)])[0].percent;
+        let percent = |p: f64| peripherals(&[pad("/p", p, 2)])[0].percent;
         assert_eq!(percent(39.6), 40);
         assert_eq!(percent(14.4), 14);
         assert_eq!(percent(100.0), 100);
@@ -230,20 +294,27 @@ mod tests {
 
     #[test]
     fn a_pad_without_any_reading_is_not_listed() {
-        assert!(controllers(&[pad("/p", 0.0, 0)]).is_empty());
+        assert!(peripherals(&[pad("/p", 0.0, 0)]).is_empty());
         // ... but an empty, discharging one is (0 % is a reading).
-        assert_eq!(controllers(&[pad("/p", 0.0, 3)]).len(), 1);
+        assert_eq!(peripherals(&[pad("/p", 0.0, 3)]).len(), 1);
     }
 
     #[test]
     fn the_name_falls_back_and_the_order_is_by_id() {
-        let list = controllers(&[
+        let list = peripherals(&[
             dev("/b", KIND_GAMING_INPUT, "  ", 50.0, 1),
             dev("/a", KIND_GAMING_INPUT, "Zed Pad", 60.0, 4),
         ]);
         assert_eq!(list[0].id, "/a");
         assert_eq!(list[0].name, "Zed Pad");
         assert_eq!(list[1].name, "Controller");
+        let named = peripherals(&[
+            dev("/h", 17, "", 50.0, 2),
+            dev("/m", 5, "", 50.0, 2),
+            dev("/x", 28, "", 50.0, 2),
+        ]);
+        let names: Vec<&str> = named.iter().map(|b| b.name.as_str()).collect();
+        assert_eq!(names, ["Headset", "Mouse", "Device"]);
     }
 
     #[test]

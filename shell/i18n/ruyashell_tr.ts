@@ -300,6 +300,24 @@
     </message>
 </context>
 <context>
+    <name>BatteryChip</name>
+    <message>
+        <location filename="../qml/BatteryChip.qml" line="+62"/>
+        <source>%1 battery %2 percent, low</source>
+        <translation>%1 pili yüzde %2, düşük</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>%1 battery %2 percent, charging</source>
+        <translation>%1 pili yüzde %2, şarj oluyor</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>%1 battery %2 percent</source>
+        <translation>%1 pili yüzde %2</translation>
+    </message>
+</context>
+<context>
     <name>BluetoothPane</name>
     <message>
         <location filename="../qml/BluetoothPane.qml" line="+70"/>
@@ -1035,7 +1053,7 @@
 <context>
     <name>SectionNav</name>
     <message>
-        <location filename="../qml/SectionNav.qml" line="+32"/>
+        <location filename="../qml/SectionNav.qml" line="+33"/>
         <source>Home</source>
         <translation>Ana sayfa</translation>
     </message>
@@ -1124,7 +1142,7 @@
         <translation>Geri</translation>
     </message>
     <message>
-        <location line="+177"/>
+        <location line="+191"/>
         <source>Coming soon</source>
         <translation>Yakında</translation>
     </message>
@@ -1274,7 +1292,7 @@
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+291"/>
+        <location filename="../qml/Shell.qml" line="+308"/>
         <source>Could not %1.</source>
         <translation>%1 işlemi yapılamadı.</translation>
     </message>
@@ -1298,13 +1316,25 @@
         <source>Audio output: %1</source>
         <translation>Ses çıkışı: %1</translation>
     </message>
+    <message numerus="yes">
+        <location line="+180"/>
+        <source>%n more device(s) with a battery: %1</source>
+        <translation>
+            <numerusform>Pili olan %n cihaz daha: %1</numerusform>
+        </translation>
+    </message>
     <message>
-        <location line="+720"/>
+        <location line="+1"/>
+        <source>%1 %2 percent</source>
+        <translation>%1 yüzde %2</translation>
+    </message>
+    <message>
+        <location line="+545"/>
         <source>Power</source>
         <translation>Güç</translation>
     </message>
     <message>
-        <location line="-712"/>
+        <location line="-718"/>
         <source>Update ready. Restart to finish.</source>
         <translation>Güncelleme hazır. Bitirmek için yeniden başlat.</translation>
     </message>
@@ -1324,12 +1354,7 @@
         <translation>Duvar kağıdı yüklenemedi</translation>
     </message>
     <message>
-        <location line="+84"/>
-        <source>Controller battery %1%</source>
-        <translation>Kumanda pili %1%</translation>
-    </message>
-    <message>
-        <location line="+121"/>
+        <location line="+211"/>
         <source>Continue playing</source>
         <translation>Oynamaya devam et</translation>
     </message>
@@ -1812,22 +1837,22 @@
         <translation>Dreamglass</translation>
     </message>
     <message>
-        <location line="+51"/>
+        <location line="+52"/>
         <source>Midnight</source>
         <translation>Gece yarısı</translation>
     </message>
     <message>
-        <location line="+51"/>
+        <location line="+52"/>
         <source>Aurora</source>
         <translation>Aurora</translation>
     </message>
     <message>
-        <location line="+51"/>
+        <location line="+52"/>
         <source>Ember</source>
         <translation>Köz</translation>
     </message>
     <message>
-        <location line="+51"/>
+        <location line="+52"/>
         <source>Daylight</source>
         <translation>Gün ışığı</translation>
     </message>
@@ -1965,7 +1990,7 @@
 <context>
     <name>WallpaperPicker</name>
     <message>
-        <location filename="../qml/WallpaperPicker.qml" line="+45"/>
+        <location filename="../qml/WallpaperPicker.qml" line="+48"/>
         <source>Default (animated blobs)</source>
         <translation>Varsayılan (hareketli lekeler)</translation>
     </message>
@@ -2041,7 +2066,7 @@
     </message>
     <message>
         <location line="+0"/>
-        <location line="+26"/>
+        <location line="+38"/>
         <source>Wallpaper</source>
         <translation>Duvar kağıdı</translation>
     </message>
@@ -2051,12 +2076,12 @@
         <translation>%1, geçerli</translation>
     </message>
     <message>
-        <location line="+46"/>
+        <location line="+47"/>
         <source>Current</source>
         <translation>Geçerli</translation>
     </message>
     <message>
-        <location line="+23"/>
+        <location line="+43"/>
         <source>Copying…</source>
         <translation>Kopyalanıyor…</translation>
     </message>
