@@ -29,13 +29,12 @@ Open work only (the front of the board; the rest is in `STATUS-backlog.md`), in 
 | [T-199](tasks/T-199-device-icons.md) | Device icons in the Bluetooth pane and toasts | todo | — |
 | [T-202](tasks/T-202-screen-saver-and-power-saving.md) | Screen saver and power saving | todo | — |
 | [T-203](tasks/T-203-pair-a-controller-without-a-keyboard.md) | Pair a controller with no keyboard | todo | — |
-| [T-205](tasks/T-205-gliding-highlight-and-liquid-pills.md) | Gliding highlight, liquid-glass pills | in-progress | T-204 |
 | [T-223](tasks/T-223-status-cluster-device-batteries.md) | Top-right status: one battery chip per device | todo | — |
 | [T-164](tasks/T-164-per-profile-wayland-sockets.md) | **[lead]** Per-profile Wayland sockets | todo | T-162 |
 
 Later (ordered): [`STATUS-backlog.md`](STATUS-backlog.md) holds the rest of the open board, same columns; `lint-board.ps1` reads both. A planner or the lead moves rows up when they become ready.
 
-**VM queue** (host-done, VM check pending; the lead runs them with one image build): empty after `0.0.48-lead` (T-191, T-192, T-193, T-196, T-200, T-214 verified; T-200 sensors on the Dell are still open). Devices checks need `-Audio`.
+**VM queue** (host-done, VM or hardware check pending; the lead runs them with one image build): the next image (0.0.50) must carry T-205 (`qt6-qtshadertools-devel`, the `.qsb` resource, `GlassPill.liquid` true under a GPU session, boot to `RUYA_BOOT_OK`) and re-runs the three fixed scripts (`vm-devices-check.sh storage` and `thermal-fake`, `vm-sample-check.sh`) plus `vm-audio-check.sh` (T-197). ISO `0.0.49` is verified (`vm-iso-check.ps1`: whole disk, `RUYA_BOOT_OK`, greenboot success). Dell look-at list: gear, Dreamglass v2 frame times (T-204), themes, wallpapers (real stick), thermal rows.
 
 ## Inbox
 
@@ -54,6 +53,7 @@ One line each: `- (source) what, and why it matters`. Dispatched builders put th
 - (VM 0.0.48-lead) Re-run once on the next image: the three script fixes (`vm-devices-check.sh storage` with the retry, `thermal-fake` with the exponent parser, `vm-sample-check.sh` with the Store restart) are host-chec. Full text in `STATUS-parked.md`.
 - (T-209, design, decide) Dark themes + bright wallpaper/hero art: glass text 0.9:1 over white (T-208's dim rule covers wallpapers only); avatar palette vs themes: blob overlap on bright tints gives glass text 2.5-2.8:1 and initials on orange/cyan/green avatars 2.2-2.9:1 (gate per theme or an initial token); gate rows for text on the bare Backdrop. Later: one shared FocusRing + 2 px halo; High-contrast as a sixth theme (its shot is the deferred criterion); `--theme` override for `shots`; per-profile themes. Canvas boards need a theme row (all five palettes, Daylight). Dell: cycle the five themes and watch the 700 ms cross-fade.
 - (T-208) Hardware/VM: real-stick copy and whether `ruya-shell` can read the `/run/media/...` mount, RSS and frame time with a 4K copy, banding on the panel; image: `qt6-qtimageformats` missing (no webp from a stick); `textFormat: Text.PlainText` shell-wide for names from outside (profile, device, volume labels); hint bar: modals that take Accept need "A Select"; the Dim row shows the slider, not the effective dim; PNG decode cost; `safeName` drops emoji (iterate code points); transparent PNGs are flattened on the theme at copy time; accent from wallpaper and per-profile wallpapers stay open. (T-209 review) `tst_themes` fade assertion was racy: now `tryVerify`.
+- (T-205) Dell: frame times with the glide and the liquid pill (nav ten times; wallpaper set and Home idle; app open; before/after the 30 s idle pause), then decide `Theme.liquidPill`'s default; design: should the liquid pill match the plain High pill's brightness exactly (`liquidBrightnessLift`)? Backdrop drift keeps running under an open app (older, B-003); other single-row selectors could use `FocusGlide`; the focus-ring halo.
 - (0.0.40) The VM and the Dell clock show UTC: T-213.
 
 ## Blocked (need something this host doesn't have)

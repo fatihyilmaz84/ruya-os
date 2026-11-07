@@ -1,6 +1,6 @@
 # T-205 — Gliding highlight with velocity stretch, and liquid-glass pills
 
-Status: in-progress · Phase: 2 · Depends: T-204 · Area: shell · Size: M · Owner: builder
+Status: done · Phase: 2 · Depends: T-204 · Area: shell · Size: M · Owner: builder
 
 ## Goal
 Moving through the section nav and the Settings categories feels like one highlight gliding between rows (and stretching when you scroll fast) instead of each row switching its fill; on capable GPUs the top-bar pills refract what is behind them. Both from `04` §3.8 (owner, 2026-11-06). Riskier than T-204 (a different focus architecture, a shader), hence the lead.
@@ -29,7 +29,7 @@ Moving through the section nav and the Settings categories feels like one highli
 - `04` §3.8 (mark built/rejected), `02-shell.md` if navigation behaviour is described, `shell/CLAUDE.md`.
 
 ## Outcome
-Verified: host (the Dell frame times and the next image build are pending, see "Hardware" and "Image")
+Verified: host (vm pending: the image build 0.0.50 must reach RUYA_BOOT_OK with qt6-qtshadertools-devel and the .qsb; Dell frame times pending)
 
 **Built.**
 - `FocusGlide.qml`: the gliding, stretching highlight (04 §3.8). A picture only: `target` (the focused item), `shown` (the owner's `activeFocus`), `orientation`, `u`. It finds the target's geometry by walking the parents' x/y inside a binding (so it follows scrolling, layouts and resizes), exposes `targetX/Y/Width/Height`, animates x/y/width/height with `Behavior`s over `Theme.glideMs` (280 x `motionScale`) with `easeGlide` (a new target restarts the animation from the current value: no jump), and snaps when `motionScale` is 0, on its first placement and while hidden. Stretch: `stretchFor(speed)` (|speed| / 2600, clamped), `stepStretch(dt, speed)` (smoothed at 14 per second, 0 under reduced motion), fed per frame by a `FrameAnimation` that runs only while something moves; the body is longer on the trailing side by `glideStretchMax` (0.5) x stretch x its length. It never takes focus; each item keeps its ring and hides only its own focus *fill* while `glide.active` (the fallback when the highlight is not drawn).
