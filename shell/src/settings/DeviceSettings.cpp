@@ -46,6 +46,10 @@ void DeviceSettings::init()
         const QString theme = m_store->value(QStringLiteral("display/theme"), m_theme).toString();
         if (isValidTheme(theme))
             m_theme = theme;
+        const QString soundTheme = m_store->value(QStringLiteral("sound/theme"), m_soundTheme).toString();
+        if (isValidSoundTheme(soundTheme))
+            m_soundTheme = soundTheme;
+        m_ambientSound = m_store->value(QStringLiteral("sound/ambient"), m_ambientSound).toBool();
         const auto minutes = [this](const char *key, int fallback) {
             const int value = m_store->value(QString::fromLatin1(key), fallback).toInt();
             return isValidMinutes(value) ? value : fallback;
@@ -120,6 +124,13 @@ bool DeviceSettings::isValidWallpaper(const QString &value)
 {
     if (value.isEmpty())
         return true;
+    static const QRegularExpression bundled(QStringLiteral("^[a-z0-9-]{1,32}$"));
+    static const QRegularExpression user(QStringLiteral("^user:[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"));
+    return bundled.match(value).hasMatch() || user.match(value).hasMatch();
+}
+
+bool DeviceSettings::isValidSoundTheme(const QString &value)
+{
     static const QRegularExpression bundled(QStringLiteral("^[a-z0-9-]{1,32}$"));
     static const QRegularExpression user(QStringLiteral("^user:[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"));
     return bundled.match(value).hasMatch() || user.match(value).hasMatch();
@@ -289,6 +300,30 @@ void DeviceSettings::setWallpaper(const QString &value)
     if (m_store)
         m_store->setValue(QStringLiteral("display/wallpaper"), value);
     emit wallpaperChanged();
+}
+
+void DeviceSettings::setSoundTheme(const QString &value)
+{
+    if (!isValidSoundTheme(value)) {
+        qWarning("ruya-shell: rejecting invalid sound theme '%s'", qPrintable(value));
+        return;
+    }
+    if (value == m_soundTheme)
+        return;
+    m_soundTheme = value;
+    if (m_store)
+        m_store->setValue(QStringLiteral("sound/theme"), value);
+    emit soundThemeChanged();
+}
+
+void DeviceSettings::setAmbientSound(bool value)
+{
+    if (value == m_ambientSound)
+        return;
+    m_ambientSound = value;
+    if (m_store)
+        m_store->setValue(QStringLiteral("sound/ambient"), value);
+    emit ambientSoundChanged();
 }
 
 void DeviceSettings::setWallpaperDim(qreal value)

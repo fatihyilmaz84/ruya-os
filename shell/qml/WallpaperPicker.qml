@@ -222,7 +222,6 @@ FocusScope {
                 Notifications.show(qsTr("Wallpaper added"), "success")
                 picker.showLibrary(id)
             } else {
-                Sfx.back()
                 picker.message = picker.failureText(status)
                 Notifications.show(qsTr("Could not add the wallpaper"), "error")
             }

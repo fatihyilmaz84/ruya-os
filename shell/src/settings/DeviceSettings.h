@@ -55,6 +55,11 @@ class DeviceSettings : public QObject
     Q_PROPERTY(int screenOffMinutes READ screenOffMinutes WRITE setScreenOffMinutes NOTIFY screenOffMinutesChanged)
     Q_PROPERTY(int sleepMinutes READ sleepMinutes WRITE setSleepMinutes NOTIFY sleepMinutesChanged)
     Q_PROPERTY(int padIdleMinutes READ padIdleMinutes WRITE setPadIdleMinutes NOTIFY padIdleMinutesChanged)
+    // Sound (T-227): the sound theme ("dreamglass" or "user:<folder>", see SoundThemes; whether it is
+    // usable is the checker's business, the bundled one plays instead) and the Ambient on/off switch
+    // (Settings -> Audio; the level is the Ambient channel of the Audio service). Stored per device.
+    Q_PROPERTY(QString soundTheme READ soundTheme WRITE setSoundTheme NOTIFY soundThemeChanged)
+    Q_PROPERTY(bool ambientSound READ ambientSound WRITE setAmbientSound NOTIFY ambientSoundChanged)
 
 public:
     // `persistent == false` keeps everything in memory.
@@ -79,6 +84,8 @@ public:
     int screenOffMinutes() const { return m_screenOffMinutes; }
     int sleepMinutes() const { return m_sleepMinutes; }
     int padIdleMinutes() const { return m_padIdleMinutes; }
+    QString soundTheme() const { return m_soundTheme; }
+    bool ambientSound() const { return m_ambientSound; }
 
     // Invalid values are rejected (warning logged) and leave the old value.
     void setReducedMotion(bool value);
@@ -93,6 +100,8 @@ public:
     void setScreenOffMinutes(int value);
     void setSleepMinutes(int value);
     void setPadIdleMinutes(int value);
+    void setSoundTheme(const QString &value);
+    void setAmbientSound(bool value);
 
     // Installs the translator for m_language and, when `retranslate`, refreshes the engine's bindings.
     void applyLanguage(bool retranslate);
@@ -102,6 +111,8 @@ public:
     // "", a lower-case id of letters, digits and dashes, or "user:" and a plain file name.
     Q_INVOKABLE static bool isValidWallpaper(const QString &value);
     static bool isValidTheme(const QString &value);
+    // "dreamglass" (any lower-case id of letters, digits and dashes) or "user:" and a plain folder name.
+    static bool isValidSoundTheme(const QString &value);
     // 0 (never) to a day.
     static bool isValidMinutes(int value);
 
@@ -118,6 +129,8 @@ signals:
     void screenOffMinutesChanged();
     void sleepMinutesChanged();
     void padIdleMinutesChanged();
+    void soundThemeChanged();
+    void ambientSoundChanged();
 
 private:
     void init();   // reads the stored values (when there is a store) and the command-line overrides
@@ -135,6 +148,8 @@ private:
     int m_screenOffMinutes = 30;
     int m_sleepMinutes = 60;
     int m_padIdleMinutes = 15;
+    QString m_soundTheme = QStringLiteral("dreamglass");
+    bool m_ambientSound = true;
     std::optional<bool> m_forcedMotion;
     std::optional<QString> m_forcedQuality;
     bool m_thermalLimited = false;

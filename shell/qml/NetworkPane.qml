@@ -107,13 +107,11 @@ SettingsPane {
         target: Network
         function onConnectFinished(id, status) {
             if (status !== "ok") {
-                Sfx.back()
                 Notifications.show(pane.statusText(status), "warning")
             }
         }
         function onForgetFinished(id, status) {
             if (status !== "ok") {
-                Sfx.back()
                 Notifications.show(qsTr("Could not forget the network."), "warning")
             }
         }

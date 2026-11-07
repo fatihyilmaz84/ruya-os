@@ -58,10 +58,12 @@ Item {
             keyClick(Qt.Key_Return)                    // Player One
             tryVerify(() => pad.shown)
 
+            const errors = Sfx.errorCount
             for (let left = 4; left >= 1; --left) {
                 for (const d of "0000") keyClick(d)
                 keyClick(Qt.Key_Enter)
                 tryVerify(() => !pad.busy)
+                compare(Sfx.errorCount, errors + (5 - left), "a wrong PIN takes the error cue (T-227)")
                 verify(message.text.indexOf(String(left)) !== -1, "shows attempts left: " + message.text)
                 compare(pad.entered, "", "entry is cleared after a wrong PIN")
             }

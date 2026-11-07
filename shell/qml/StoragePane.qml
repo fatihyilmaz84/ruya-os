@@ -196,7 +196,6 @@ SettingsPane {
 
     function activate(id, removable, mounted) {
         if (!mounted) {
-            Sfx.back()
             Notifications.show(unsupportedText(), "warning")
         } else if (removable) {
             const eject = findEject(id)
@@ -217,7 +216,6 @@ SettingsPane {
                 pane.ejectingId = ""
             if (status === "ok")
                 return
-            Sfx.back()
             Notifications.show(pane.statusText(status, pane.labelOf(id)), "warning")
         }
         function onVolumesChanged() { pane.syncVolumes() }

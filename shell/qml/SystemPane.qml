@@ -272,7 +272,7 @@ SettingsPane {
                 rollbackConfirm.customConfirmName = qsTr("Roll back now")
                 rollbackConfirm.open("custom")
             } else {
-                Sfx.back()
+                Sfx.error()
                 pane.rollbackStep = "idle"
                 pane.report(ProfileStatus.describe(status, attemptsLeft, retryAfterSecs), true)
                 pane.restoreFocus()
@@ -291,14 +291,14 @@ SettingsPane {
                 if (status === "ok") {
                     pane.report(qsTr("The previous version starts after the next restart."), false)
                 } else {
-                    Sfx.back()
+                    Sfx.error()
                     pane.report(status === "forbidden" ? qsTr("Only an admin can do this.")
                                                        : qsTr("Could not roll back."), true)
                 }
                 pane.restoreFocus()
             } else if (status !== "ok" && (method === "check" || method === "download" || method === "setChannel"
                                             || method === "setAutoRestart")) {
-                Sfx.back()
+                Sfx.error()
                 pane.report(status === "busy" ? qsTr("An update is already in progress.")
                             : status === "forbidden" ? qsTr("Only an admin can do this.")
                                                      : qsTr("The update could not be started."), true)
@@ -369,7 +369,6 @@ SettingsPane {
             if (status === "ok") {
                 Notifications.show(qsTr("Time zone set to %1").arg(name.replace(/_/g, " ")), "success")
             } else {
-                Sfx.back()
                 Notifications.show(status === "forbidden" ? qsTr("Only an admin can do this.")
                                                           : qsTr("Could not change the time zone."), "error")
             }

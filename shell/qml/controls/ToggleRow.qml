@@ -38,8 +38,8 @@ SettingControl {
     }
 
     function toggle() {
-        Sfx.select()
         checked = !checked
+        Sfx.toggled(checked)          // the cue says which way the switch went
         toggled(checked)
     }
     Keys.onReturnPressed: toggle()

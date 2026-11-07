@@ -69,6 +69,11 @@ QtObject {
             model.append({ toastId: nextId++, text: next.text, kind: next.kind, iconText: next.iconText,
                            iconName: next.iconName, sticky: next.sticky, key: next.key })
             shown += 1
+            // The cue says how much attention it wants: a sticky or warning toast has its own.
+            if (next.sticky || next.kind === "warning" || next.kind === "error")
+                Sfx.warning()
+            else
+                Sfx.notification()
         }
     }
 }
