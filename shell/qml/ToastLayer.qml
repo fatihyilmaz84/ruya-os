@@ -16,8 +16,9 @@ Item {
     // A connected Bluetooth device's battery is low (once per crossing, Bluetooth.batteryLow).
     Connections {
         target: Bluetooth
-        function onBatteryLow(id, name, percent) {
-            Notifications.show(qsTr("%1: battery low (%2%)").arg(name).arg(percent), "warning")
+        function onBatteryLow(id, name, percent, kind, family) {
+            Notifications.show(qsTr("%1: battery low (%2%)").arg(name).arg(percent), "warning", "",
+                               DeviceIcons.iconFor(kind, family))
         }
     }
 
@@ -26,7 +27,8 @@ Item {
     Connections {
         target: Batteries
         function onBatteryLow(id, name, percent) {
-            Notifications.show(qsTr("Controller battery low (%1%)").arg(percent), "warning")
+            Notifications.show(qsTr("Controller battery low (%1%)").arg(percent), "warning", "",
+                               DeviceIcons.iconFor("controller", ""))
         }
     }
 
@@ -80,6 +82,7 @@ Item {
             required property string text
             required property string kind
             required property string iconText
+            required property string iconName
             required property bool sticky
 
             readonly property color accent: kind === "success" ? Theme.toastSuccess
@@ -115,10 +118,19 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 color: toast.accent
             }
+            Icon {
+                id: glyph
+                objectName: "toastIcon"
+                anchors { left: bar.right; leftMargin: Theme.spaceM * layer.u; verticalCenter: parent.verticalCenter }
+                visible: toast.iconName !== ""
+                u: layer.u
+                name: toast.iconName
+                color: toast.accent
+            }
             Text {
                 id: icon
                 anchors { left: bar.right; leftMargin: Theme.spaceM * layer.u; verticalCenter: parent.verticalCenter }
-                visible: toast.iconText !== ""
+                visible: toast.iconText !== "" && !glyph.visible
                 text: toast.iconText
                 color: toast.accent
                 font.pixelSize: Theme.typeHeadline * layer.u
@@ -126,7 +138,7 @@ Item {
             }
             Text {
                 anchors {
-                    left: icon.visible ? icon.right : bar.right
+                    left: glyph.visible ? glyph.right : icon.visible ? icon.right : bar.right
                     leftMargin: Theme.spaceM * layer.u
                     right: parent.right; rightMargin: Theme.spaceM * layer.u
                     verticalCenter: parent.verticalCenter

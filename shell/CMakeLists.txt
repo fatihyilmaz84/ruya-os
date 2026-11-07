@@ -15,7 +15,7 @@ qt_standard_project_setup(REQUIRES 6.8)
 # Everything except main() is a static QML module, so the app and the tests share it.
 qt_add_library(ruyashell STATIC)
 
-set_source_files_properties(qml/Theme.qml qml/Sfx.qml qml/Notifications.qml qml/ProfileStatus.qml qml/BackKey.qml qml/ThermalText.qml qml/GlareGate.qml qml/LiquidGate.qml qml/themes/Themes.qml qml/themes/ThemeMath.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
+set_source_files_properties(qml/Theme.qml qml/Sfx.qml qml/Notifications.qml qml/DeviceIcons.qml qml/ProfileStatus.qml qml/BackKey.qml qml/ThermalText.qml qml/GlareGate.qml qml/LiquidGate.qml qml/themes/Themes.qml qml/themes/ThemeMath.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 
 qt_add_qml_module(ruyashell
     URI RuyaShell
@@ -86,6 +86,7 @@ qt_add_qml_module(ruyashell
         qml/BackKey.qml
         qml/ThermalText.qml
         qml/Notifications.qml
+        qml/DeviceIcons.qml
         qml/ProfileStatus.qml
         qml/Setup.qml
         qml/ToastLayer.qml

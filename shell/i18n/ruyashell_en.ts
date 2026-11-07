@@ -302,7 +302,7 @@
 <context>
     <name>BatteryChip</name>
     <message>
-        <location filename="../qml/BatteryChip.qml" line="+62"/>
+        <location filename="../qml/BatteryChip.qml" line="+56"/>
         <source>%1 battery %2 percent, low</source>
         <translation>%1 battery %2 percent, low</translation>
     </message>
@@ -320,7 +320,7 @@
 <context>
     <name>BluetoothPane</name>
     <message>
-        <location filename="../qml/BluetoothPane.qml" line="+89"/>
+        <location filename="../qml/BluetoothPane.qml" line="+90"/>
         <source>Pairing failed. Put the device in pairing mode and try again.</source>
         <translation>Pairing failed. Put the device in pairing mode and try again.</translation>
     </message>
@@ -432,7 +432,7 @@
         <translation>Controller: hold its pairing button until the light blinks</translation>
     </message>
     <message>
-        <location line="+29"/>
+        <location line="+35"/>
         <source>Forget %1</source>
         <translation>Forget %1</translation>
     </message>
@@ -500,6 +500,59 @@
         <location line="+137"/>
         <source>A device that is not a controller tried to connect and was ignored.</source>
         <translation>A device that is not a controller tried to connect and was ignored.</translation>
+    </message>
+</context>
+<context>
+    <name>DeviceIcons</name>
+    <message>
+        <location filename="../qml/DeviceIcons.qml" line="+39"/>
+        <source>PlayStation controller</source>
+        <translation>PlayStation controller</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Xbox controller</source>
+        <translation>Xbox controller</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Nintendo controller</source>
+        <translation>Nintendo controller</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Controller</source>
+        <translation>Controller</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Headset</source>
+        <translation>Headset</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Speaker</source>
+        <translation>Speaker</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Keyboard</source>
+        <translation>Keyboard</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Mouse</source>
+        <translation>Mouse</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Phone</source>
+        <translation>Phone</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Bluetooth device</source>
+        <translation>Bluetooth device</translation>
     </message>
 </context>
 <context>
@@ -2067,12 +2120,12 @@
         <translation>%1: battery low (%2%)</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+10"/>
         <source>Controller battery low (%1%)</source>
         <translation>Controller battery low (%1%)</translation>
     </message>
     <message numerus="yes">
-        <location line="+11"/>
+        <location line="+12"/>
         <source>Drive inserted: %1 (and %n more)</source>
         <translation>
             <numerusform>Drive inserted: %1 (and %n more)</numerusform>

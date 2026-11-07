@@ -644,6 +644,7 @@ impl BluetoothIface {
                     ("id", own(Value::from(d.id.clone()))),
                     ("name", own(Value::from(d.name.clone()))),
                     ("kind", own(Value::from(d.kind))),
+                    ("family", own(Value::from(d.family))),
                     ("paired", own(Value::from(d.paired))),
                     ("connected", own(Value::from(d.connected))),
                     ("trusted", own(Value::from(d.trusted))),

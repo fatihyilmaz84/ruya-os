@@ -197,7 +197,17 @@
       dictionary per device:
         id         s   stable id, opaque to the shell (e.g. the BlueZ address)
         name       s   display name
-        kind       s   "controller" | "headset" | "audio" | "other"
+        kind       s   what it is, from BlueZ's Icon (the class of device): "controller" (input-gaming),
+                       "headset" (audio-headset, audio-headphones), "speaker" (audio-card,
+                       audio-speakers), "keyboard", "mouse", "phone", "other" (anything else, and a
+                       device that tells no Icon). The same words as Batteries' kind where both have one
+        family     s   the controller family, for kind "controller" only: "playstation" | "xbox" |
+                       "nintendo", or "" when it cannot be told (every other kind, an unknown maker, a
+                       third-party pad). From the Modalias BlueZ reports (the vendor id of the device's
+                       Device ID record: Sony, Microsoft, Nintendo), by name only when the device has no
+                       usable Modalias; the table is in the service (families.rs). Shells show a
+                       family's picture when they have one and the generic controller otherwise, and
+                       treat a family they do not know as ""
         paired     b
         connected  b
         trusted    b   may reconnect by itself

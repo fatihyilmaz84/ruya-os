@@ -13,7 +13,8 @@ param(
 
 $fromList = @{}
 foreach ($line in Get-Content -LiteralPath $IconList -Encoding UTF8) {
-    if ($line -match '^\s*([a-z0-9_]+)\s+([0-9a-fA-F]{4,6})\s*$') {
+    # A line may end in the word "ruya": our own glyph, drawn by scripts/add-pad-glyphs.py (T-199).
+    if ($line -match '^\s*([a-z0-9_]+)\s+([0-9a-fA-F]{4,6})(\s+ruya)?\s*$') {
         $fromList[$Matches[1]] = [Convert]::ToInt32($Matches[2], 16)
     }
 }

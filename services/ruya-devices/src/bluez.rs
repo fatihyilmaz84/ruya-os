@@ -271,6 +271,7 @@ impl BluezClient {
                     address: text(d, "Address"),
                     alias: text(d, "Alias"),
                     icon: text(d, "Icon"),
+                    modalias: text(d, "Modalias"),
                     paired: flag(d, "Paired"),
                     connected: flag(d, "Connected"),
                     trusted: flag(d, "Trusted"),

@@ -238,6 +238,41 @@ void MockBluetoothBackend::setBattery(const QString &id, int percent)
     }
 }
 
+// One paired, connected device of every kind and family (T-199): the pane's rows, the accessible
+// names and the screenshots show them all. "gizmo" is a kind that no shell version knows.
+void MockBluetoothBackend::populate()
+{
+    struct Spec { const char *id; const char *name; const char *kind; const char *family; };
+    static const Spec specs[] = {
+        {"bt-gallery-ps", "DualSense", "controller", "playstation"},
+        {"bt-gallery-xbox", "Xbox Wireless Controller", "controller", "xbox"},
+        {"bt-gallery-switch", "Pro Controller", "controller", "nintendo"},
+        {"bt-gallery-pad", "Generic Pad", "controller", ""},
+        {"bt-gallery-headset", "WH-1000XM4", "headset", ""},
+        {"bt-gallery-speaker", "Kitchen Speaker", "speaker", ""},
+        {"bt-gallery-keyboard", "Living Room Keyboard", "keyboard", ""},
+        {"bt-gallery-mouse", "Travel Mouse", "mouse", ""},
+        {"bt-gallery-phone", "Fatma's Phone", "phone", ""},
+        {"bt-gallery-other", "Fitness Band", "other", ""},
+        {"bt-gallery-gizmo", "Mystery Gadget", "gizmo", ""},
+    };
+    for (const Spec &s : specs) {
+        if (indexOf(QString::fromLatin1(s.id)) >= 0)
+            continue;
+        Entry e;
+        e.dev.id = QString::fromLatin1(s.id);
+        e.dev.name = QString::fromLatin1(s.name);
+        e.dev.kind = QString::fromLatin1(s.kind);
+        e.dev.family = QString::fromLatin1(s.family);
+        e.dev.paired = true;
+        e.dev.connected = true;
+        e.dev.trusted = true;
+        e.listed = true;
+        m_entries.append(e);
+    }
+    publish();
+}
+
 void MockBluetoothBackend::reset()
 {
     initState();
@@ -277,7 +312,7 @@ void MockBluetoothBackend::initState()
     m_entries = {
         entry("bt-pad-main", "Ruya Pad Pro", "controller", true, true, 80, 0, "ok"),
         entry("bt-pad-old", "Retro Pad", "controller", true, false, -1, 0, "ok"),
-        entry("bt-soundbar", "Soundbar", "audio", true, true, -1, 0, "ok"),
+        entry("bt-soundbar", "Soundbar", "speaker", true, true, -1, 0, "ok"),
         entry("bt-flaky", "Flaky Pad", "controller", false, false, -1, 1, "pairing-failed"),
         entry("bt-buds", "Sound Buds", "headset", false, false, 90, 1, "ok"),
         entry("bt-sleepy", "Old Headset", "headset", false, false, -1, 1, "timeout"),

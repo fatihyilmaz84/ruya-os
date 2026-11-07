@@ -7,6 +7,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
+use crate::families::family_of;
 use crate::pairing::{
     address_of_path, is_hid_service, is_input_device, PairingState, DEFAULT_WINDOW, MAX_ATTEMPTS,
     MAX_WINDOW,
@@ -108,13 +109,28 @@ pub fn battery_of(percentage: Option<u8>) -> i32 {
     percentage.map_or(-1, |p| i32::from(p.min(100)))
 }
 
-/// What the shell shows a device as. From BlueZ's `Icon` (derived from the class of device).
+/// What the shell shows a device as (the contract's `kind`). From BlueZ's `Icon`, which it
+/// derives from the class of device; a device with no `Icon` is "other".
 pub fn kind_of(icon: &str) -> &'static str {
     match icon {
         "input-gaming" => "controller",
         "audio-headset" | "audio-headphones" => "headset",
-        "audio-card" | "audio-speakers" => "audio",
+        "audio-card" | "audio-speakers" => "speaker",
+        "input-keyboard" => "keyboard",
+        "input-mouse" => "mouse",
+        "phone" => "phone",
         _ => "other",
+    }
+}
+
+/// The contract's `family`: the controller family of a `controller`, "" for every other kind
+/// (a Sony headset has Sony's vendor id and is no PlayStation pad). `families::family_of` holds
+/// the table.
+pub fn family_for(kind: &str, modalias: &str, name: &str) -> &'static str {
+    if kind == "controller" {
+        family_of(modalias, name)
+    } else {
+        ""
     }
 }
 
@@ -125,6 +141,8 @@ pub struct RawDevice {
     /// `Alias`: the user's name, else the device's own, else the address with dashes.
     pub alias: String,
     pub icon: String,
+    /// `Modalias` (`usb:v054Cp0CE6d0100`), "" when the device has none.
+    pub modalias: String,
     pub paired: bool,
     pub connected: bool,
     pub trusted: bool,
@@ -157,6 +175,8 @@ pub struct Device {
     pub id: String,
     pub name: String,
     pub kind: &'static str,
+    /// "playstation" | "xbox" | "nintendo" | "" (`family_for`).
+    pub family: &'static str,
     pub paired: bool,
     pub connected: bool,
     pub trusted: bool,
@@ -173,6 +193,7 @@ pub fn list_of(raw: &[RawDevice]) -> Vec<Device> {
             id: d.address.clone(),
             name: d.alias.clone(),
             kind: kind_of(&d.icon),
+            family: family_for(kind_of(&d.icon), &d.modalias, &d.alias),
             paired: d.paired,
             connected: d.connected,
             trusted: d.trusted,
@@ -1018,6 +1039,7 @@ impl FakeBluez {
             address: address.to_owned(),
             alias: alias.to_owned(),
             icon: icon.to_owned(),
+            modalias: String::new(),
             paired,
             connected: paired,
             trusted: paired,
@@ -1243,6 +1265,7 @@ mod tests {
             address: address.to_owned(),
             alias: alias.to_owned(),
             icon: icon.to_owned(),
+            modalias: String::new(),
             paired,
             connected: false,
             trusted: false,
@@ -1387,13 +1410,107 @@ mod tests {
         assert_eq!(kind_of("input-gaming"), "controller");
         assert_eq!(kind_of("audio-headset"), "headset");
         assert_eq!(kind_of("audio-headphones"), "headset");
-        assert_eq!(kind_of("audio-card"), "audio");
-        assert_eq!(kind_of("input-keyboard"), "other");
+        assert_eq!(kind_of("audio-card"), "speaker");
+        assert_eq!(kind_of("audio-speakers"), "speaker");
+        assert_eq!(kind_of("input-keyboard"), "keyboard");
+        assert_eq!(kind_of("input-mouse"), "mouse");
+        assert_eq!(kind_of("phone"), "phone");
+        // Anything else BlueZ knows (a computer, a printer, a tablet) and a device with no Icon.
+        assert_eq!(kind_of("computer"), "other");
+        assert_eq!(kind_of("input-tablet"), "other");
         assert_eq!(kind_of(""), "other");
         assert_eq!(battery_of(None), -1);
         assert_eq!(battery_of(Some(0)), 0);
         assert_eq!(battery_of(Some(73)), 73);
         assert_eq!(battery_of(Some(200)), 100);
+    }
+
+    fn with_modalias(mut d: RawDevice, modalias: &str) -> RawDevice {
+        d.modalias = modalias.to_owned();
+        d
+    }
+
+    #[test]
+    fn a_controller_carries_its_family_and_nothing_else_does() {
+        let list = list_of(&[
+            with_modalias(
+                raw_dev(
+                    "AA:BB:CC:00:00:01",
+                    "Wireless Controller",
+                    "input-gaming",
+                    true,
+                ),
+                "usb:v054Cp0CE6d0100",
+            ),
+            with_modalias(
+                raw_dev(
+                    "AA:BB:CC:00:00:02",
+                    "Xbox Wireless Controller",
+                    "input-gaming",
+                    true,
+                ),
+                "usb:v045Ep0B13d0509",
+            ),
+            with_modalias(
+                raw_dev("AA:BB:CC:00:00:03", "Pro Controller", "input-gaming", true),
+                "usb:v057Ep2009d0001",
+            ),
+            with_modalias(
+                raw_dev("AA:BB:CC:00:00:04", "8BitDo Pro 2", "input-gaming", true),
+                "usb:v2DC8p6003d0100",
+            ),
+            raw_dev("AA:BB:CC:00:00:05", "Ruya Pad", "input-gaming", true),
+            // The same vendor, but a headset, a keyboard and a phone: no family.
+            with_modalias(
+                raw_dev("AA:BB:CC:00:00:06", "WH-1000XM4", "audio-headset", true),
+                "usb:v054Cp0DF3d0100",
+            ),
+            with_modalias(
+                raw_dev(
+                    "AA:BB:CC:00:00:07",
+                    "Microsoft Keyboard",
+                    "input-keyboard",
+                    true,
+                ),
+                "usb:v045Ep0000d0001",
+            ),
+            with_modalias(
+                raw_dev("AA:BB:CC:00:00:08", "Xbox phone", "phone", true),
+                "usb:v045Ep0000d0001",
+            ),
+        ]);
+        let pairs: Vec<(&str, &str, &str)> = list
+            .iter()
+            .map(|d| (d.id.as_str(), d.kind, d.family))
+            .collect();
+        // Sorted by name: 8BitDo, Microsoft Keyboard, Pro Controller, Ruya Pad, WH-1000XM4,
+        // Wireless Controller, Xbox phone, Xbox Wireless Controller.
+        assert_eq!(
+            pairs,
+            [
+                ("AA:BB:CC:00:00:04", "controller", ""),
+                ("AA:BB:CC:00:00:07", "keyboard", ""),
+                ("AA:BB:CC:00:00:03", "controller", "nintendo"),
+                ("AA:BB:CC:00:00:05", "controller", ""),
+                ("AA:BB:CC:00:00:06", "headset", ""),
+                ("AA:BB:CC:00:00:01", "controller", "playstation"),
+                ("AA:BB:CC:00:00:08", "phone", ""),
+                ("AA:BB:CC:00:00:02", "controller", "xbox"),
+            ]
+        );
+    }
+
+    #[test]
+    fn family_for_asks_the_table_for_controllers_only() {
+        assert_eq!(
+            family_for("controller", "usb:v054Cp0CE6d0100", "Wireless Controller"),
+            "playstation"
+        );
+        assert_eq!(
+            family_for("headset", "usb:v054Cp0DF3d0100", "WH-1000XM4"),
+            ""
+        );
+        assert_eq!(family_for("other", "", "DualSense"), "");
     }
 
     #[test]
@@ -1707,6 +1824,7 @@ mod tests {
             address: address.to_owned(),
             alias: alias.to_owned(),
             icon: icon.to_owned(),
+            modalias: String::new(),
             paired: false,
             connected: false,
             trusted: false,

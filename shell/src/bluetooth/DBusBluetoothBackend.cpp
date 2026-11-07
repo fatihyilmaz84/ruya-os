@@ -46,6 +46,7 @@ QList<BtDevice> parseDevices(const QDBusArgument &arg)
         dev.id = d.value(QStringLiteral("id")).toString();
         dev.name = d.value(QStringLiteral("name")).toString();
         dev.kind = d.value(QStringLiteral("kind"), dev.kind).toString();
+        dev.family = d.value(QStringLiteral("family")).toString();
         dev.paired = d.value(QStringLiteral("paired")).toBool();
         dev.connected = d.value(QStringLiteral("connected")).toBool();
         dev.trusted = d.value(QStringLiteral("trusted")).toBool();

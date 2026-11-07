@@ -27,7 +27,8 @@ SettingsPane {
         }
         for (let i = 0; i < list.length; ++i) {
             const d = list[i]
-            const entry = { devId: d.id, name: d.name, paired: d.paired, connected: d.connected, battery: d.battery }
+            const entry = { devId: d.id, name: d.name, kind: d.kind, family: d.family ?? "", paired: d.paired,
+                            connected: d.connected, battery: d.battery }
             let at = -1
             for (let j = 0; j < deviceModel.count; ++j) {
                 if (deviceModel.get(j).devId === d.id) {
@@ -196,6 +197,8 @@ SettingsPane {
         SettingRow {
             required property string devId
             required property string name
+            required property string kind
+            required property string family
             required property bool paired
             required property bool connected
             required property int battery
@@ -203,7 +206,11 @@ SettingsPane {
             visible: Bluetooth.powered
             u: pane.u
             label: name
+            iconName: DeviceIcons.iconFor(kind, family)
             value: pane.deviceValue(pane.busyId === devId, paired, connected, battery)
+            // The screen reader says the name, what it is, then the state: "DualSense, PlayStation
+            // controller, Connected".
+            accessibleValue: DeviceIcons.kindText(kind, family) + ", " + value
             onActivated: pane.activate(devId, paired, connected)
         }
     }

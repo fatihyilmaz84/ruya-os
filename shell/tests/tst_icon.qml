@@ -53,7 +53,8 @@ Item {
         function test_the_battery_and_device_glyphs_are_in_the_table() {
             const names = ["battery_0_bar", "battery_1_bar", "battery_2_bar", "battery_3_bar", "battery_4_bar",
                            "battery_5_bar", "battery_full", "battery_alert", "battery_charging_full",
-                           "sports_esports", "headphones", "speaker", "mouse", "keyboard", "bluetooth"]
+                           "sports_esports", "headphones", "speaker", "mouse", "keyboard", "bluetooth",
+                           "smartphone", "pad_playstation", "pad_xbox", "pad_switch"]
             const icon = createTemporaryObject(iconComponent, host)
             verify(icon)
             for (const name of names) {
@@ -61,6 +62,29 @@ Item {
                 verify(icon.known, name + " is in the table")
                 verify(icon.implicitWidth > 0, name + " has a size")
             }
+        }
+
+        // T-199: every icon DeviceIcons can answer is in the table, whatever the kind and family
+        // (that the font has a glyph for each is checked by scripts/check-font-coverage.py).
+        function test_device_icons_answer_known_names() {
+            const icon = createTemporaryObject(iconComponent, host, { name: "settings" })
+            verify(icon)
+            const kinds = ["controller", "headset", "speaker", "keyboard", "mouse", "phone", "other", "", "gizmo"]
+            const families = ["", "playstation", "xbox", "nintendo", "newbrand"]
+            for (const kind of kinds) {
+                for (const family of families) {
+                    icon.name = DeviceIcons.iconFor(kind, family)
+                    verify(icon.known, "(" + kind + ", " + family + ") is " + icon.name)
+                }
+            }
+            compare(DeviceIcons.iconFor("controller", "playstation"), "pad_playstation")
+            compare(DeviceIcons.iconFor("controller", "xbox"), "pad_xbox")
+            compare(DeviceIcons.iconFor("controller", "nintendo"), "pad_switch")
+            compare(DeviceIcons.iconFor("controller", "newbrand"), "sports_esports", "an unknown family is the generic pad")
+            compare(DeviceIcons.iconFor("controller", ""), "sports_esports")
+            compare(DeviceIcons.iconFor("headset", "playstation"), "headphones", "a family only matters for a controller")
+            compare(DeviceIcons.iconFor("gizmo", ""), "bluetooth", "an unknown kind is the generic glyph")
+            compare(DeviceIcons.iconFor("", ""), "bluetooth")
         }
 
         function test_unknown_name_draws_nothing_and_warns_once() {

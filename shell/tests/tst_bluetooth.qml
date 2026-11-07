@@ -417,6 +417,71 @@ Item {
             compare(seen.size, 3, "no status outside the contract")
         }
 
+        // T-199: the icon of every kind and controller family, in the pane and in toasts.
+        function rowIcon(id) {
+            const row = find("btDev_" + id)
+            return row ? findChild(row, "rowIcon") : null
+        }
+
+        function test_every_kind_and_family_has_its_icon_in_the_pane() {
+            Bluetooth.mockPopulate()
+            tryVerify(() => device("bt-gallery-gizmo") !== undefined, 2000)
+            openBluetoothPane()
+            const expected = [
+                ["bt-gallery-ps", "pad_playstation", "PlayStation controller"],
+                ["bt-gallery-xbox", "pad_xbox", "Xbox controller"],
+                ["bt-gallery-switch", "pad_switch", "Nintendo controller"],
+                ["bt-gallery-pad", "sports_esports", "Controller"],
+                ["bt-gallery-headset", "headphones", "Headset"],
+                ["bt-gallery-speaker", "speaker", "Speaker"],
+                ["bt-gallery-keyboard", "keyboard", "Keyboard"],
+                ["bt-gallery-mouse", "mouse", "Mouse"],
+                ["bt-gallery-phone", "smartphone", "Phone"],
+                ["bt-gallery-other", "bluetooth", "Bluetooth device"],
+                ["bt-gallery-gizmo", "bluetooth", "Bluetooth device"],   // a kind no shell knows: the generic glyph
+                ["bt-soundbar", "speaker", "Speaker"],                   // the service's word for a sound bar
+                ["bt-pad-main", "sports_esports", "Controller"],         // no family told: the generic gamepad
+            ]
+            for (const [id, icon, word] of expected) {
+                tryVerify(() => rowIcon(id) !== null, 2000, id + " has an icon")
+                compare(rowIcon(id).name, icon, id)
+                verify(rowIcon(id).visible, id + " draws it")
+                verify(rowIcon(id).known, id + " is a glyph the font has")
+                const row = find("btDev_" + id)
+                verify(row.Accessible.name.startsWith(row.label + ", " + word + ", "),
+                       id + " is named: " + row.Accessible.name)
+            }
+            // The state still follows the kind in the name.
+            compare(find("btDev_bt-gallery-ps").Accessible.name, "DualSense, PlayStation controller, Connected")
+        }
+
+        function test_rows_of_the_other_panes_have_no_icon() {
+            openBluetoothPane()
+            compare(find("rowBtAdd").hasIcon, false)
+            compare(find("rowBtPower").hasIcon, false)
+        }
+
+        function test_a_device_toast_carries_the_devices_icon() {
+            Bluetooth.mockPopulate()
+            tryVerify(() => device("bt-gallery-headset") !== undefined, 2000)
+            Bluetooth.mockSetBattery("bt-gallery-headset", 12)
+            tryCompare(lowSpy, "count", 1)
+            compare(lowSpy.signalArguments[0][3], "headset", "the signal says what the device is")
+            compare(lowSpy.signalArguments[0][4], "", "and its family")
+            tryVerify(() => toastTexts().includes("WH-1000XM4: battery low (12%)"), 2000)
+            tryVerify(() => find("toastIcon") !== null && find("toastIcon").visible, 2000)
+            compare(find("toastIcon").name, "headphones")
+            compare(Notifications.model.get(0).iconName, "headphones")
+        }
+
+        function test_a_toast_without_an_icon_name_shows_its_text_glyph() {
+            Notifications.show("Plain", "info", "i")
+            tryVerify(() => Notifications.model.count === 1)
+            compare(Notifications.model.get(0).iconName, "")
+            tryVerify(() => find("toastIcon") !== null)
+            compare(find("toastIcon").visible, false)
+        }
+
         function test_zz_screenshots() {
             if (!shotsDir)
                 skip("set RUYA_SHOTS_DIR to save screenshots")
@@ -436,6 +501,29 @@ Item {
             goTo("btDev_bt-buds")
             wait(800)
             grabImage(tc.shell).save(shotsDir + "/26-settings-bluetooth.png")
+        }
+
+        // T-199: the pane with a device of every kind and family, and a toast that names a device.
+        function test_zz_device_icon_screenshots() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            Bluetooth.mockPopulate()
+            tryVerify(() => device("bt-gallery-gizmo") !== undefined, 2000)
+            openBluetoothPane()
+            goTo("btDev_bt-gallery-ps")
+            wait(600)
+            grabImage(tc.shell)                          // the first grab of a window makes it lay the pane out
+            wait(600)
+            grabImage(tc.shell).save(shotsDir + "/bt-icons-1-controllers.png")
+            goTo("btDev_bt-gallery-mouse")
+            wait(600)
+            grabImage(tc.shell).save(shotsDir + "/bt-icons-2-others.png")
+            Bluetooth.mockSetBattery("bt-gallery-headset", 12)
+            tryVerify(() => Notifications.model.count === 1, 2000)
+            grabImage(tc.shell)                          // a real window lays the toast list out on its next frame
+            tryVerify(() => find("toastIcon") !== null && find("toastIcon").visible, 2000)
+            wait(800)
+            grabImage(tc.shell).save(shotsDir + "/bt-icons-3-toast.png")
         }
     }
 }

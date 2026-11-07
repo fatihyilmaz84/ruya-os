@@ -20,7 +20,9 @@ class Bluetooth : public QObject
 
     Q_PROPERTY(bool powered READ powered NOTIFY stateChanged)
     Q_PROPERTY(bool discovering READ discovering NOTIFY stateChanged)
-    // [{ id, name, kind, paired, connected, trusted, battery }]; battery -1 = unknown
+    // [{ id, name, kind, family, paired, connected, trusted, battery }]; battery -1 = unknown;
+    // kind: "controller" | "headset" | "speaker" | "keyboard" | "mouse" | "phone" | "other";
+    // family: "playstation" | "xbox" | "nintendo" for a controller, else ""
     Q_PROPERTY(QVariantList devices READ devices NOTIFY devicesChanged)
     // The controller pairing window (T-203): "idle" | "open" | "paired" | "timeout".
     Q_PROPERTY(QString controllerPairing READ controllerPairing NOTIFY controllerStateChanged)
@@ -65,6 +67,9 @@ public:
     // the initial state.
     Q_INVOKABLE void mockSetBattery(const QString &id, int percent);
     Q_INVOKABLE void mockReset();
+    // Adds a paired, connected device of every kind and controller family, and of one kind that
+    // is not known (T-199); mockReset() takes them away again.
+    Q_INVOKABLE void mockPopulate();
     // Asks the backend for the state and the devices; the replies arrive after `ms` and show them
     // as they are now. mockPendingReplies: how many are still on their way.
     Q_INVOKABLE void mockRefreshDelayed(int ms);
@@ -89,7 +94,7 @@ signals:
     // api/dbus/org.ruyaos.Devices1.xml
     void finished(const QString &op, const QString &id, const QString &status);
     // A connected device's battery fell to Batteries::LowBatteryPercent or less; once per crossing.
-    void batteryLow(const QString &id, const QString &name, int percent);
+    void batteryLow(const QString &id, const QString &name, int percent, const QString &kind, const QString &family);
 
 private:
     void checkBatteries(const QList<BtDevice> &devices);

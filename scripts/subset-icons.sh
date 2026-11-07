@@ -11,6 +11,9 @@
 # overlapping contours merged (T-206): the variable font draws the filled gear as two coincident
 # contours of opposite direction that cancel in the nonzero fill rule, and the Windows rasteriser
 # leaves speckled holes where their edges meet (the gear in the active Settings pill).
+# Lines of icons.txt that end in the word `ruya` are not Material's: scripts/add-pad-glyphs.py draws
+# them (the controller silhouettes, T-199) into both cuts, at private-use code points that upstream
+# does not use (checked here).
 # The outputs, icons.txt and the upstream LICENSE are committed; the download is not.
 set -euo pipefail
 
@@ -46,6 +49,13 @@ fetch "LICENSE" LICENSE "$SHA_LICENSE"
 unicodes=""
 while read -r name cp rest; do
     case "$name" in ""|"#"*) continue ;; esac
+    if [ "$rest" = "ruya" ]; then   # our own glyph: its code point must be free upstream
+        if grep -qi " $cp\$" upstream.codepoints; then
+            echo "icons.txt: $name uses U+$cp, which upstream assigns to an icon" >&2
+            exit 1
+        fi
+        continue
+    fi
     want="$(grep -m1 "^$name " upstream.codepoints | cut -d' ' -f2 || true)"
     if [ "$want" != "$cp" ]; then
         echo "icons.txt: $name is $cp, upstream says '${want:-unknown}'" >&2
@@ -61,7 +71,8 @@ done < "$list"
 
 cut() {   # cut <fill> <family name> <output file>
     "$PY" -m fontTools.varLib.instancer subset.ttf FILL="$1" GRAD=0 opsz=40 wght=400 --remove-overlaps -o "cut-$1.ttf" -q
-    "$PY" - "cut-$1.ttf" "$2" "$out/$3" <<'EOF'
+    "$PY" "$repo/scripts/add-pad-glyphs.py" "cut-$1.ttf" "$1" "pads-$1.ttf" "$list"
+    "$PY" - "pads-$1.ttf" "$2" "$out/$3" <<'EOF'
 import sys
 from fontTools.ttLib import TTFont
 src, family, dst = sys.argv[1:4]
