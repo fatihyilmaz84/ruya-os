@@ -21,6 +21,7 @@ use crate::battery::{Batteries, UPower};
 use crate::bluetooth::{self, Bluetooth, Bluez, BtError};
 use crate::debounce;
 use crate::display::{Display, DynDrm, Mode, OutputView};
+use crate::idle_pads::IdleReport;
 #[cfg(target_os = "linux")]
 use crate::input::GamepadEvent;
 use crate::input::InputPresence;
@@ -140,6 +141,11 @@ impl AudioIface {
     }
 
     #[zbus(property)]
+    fn playing(&self) -> bool {
+        lock(&self.audio).playing()
+    }
+
+    #[zbus(property)]
     fn set_muted(&mut self, value: bool) {
         let status = lock(&self.audio).set_muted(value);
         if status != crate::Status::Ok {
@@ -209,6 +215,7 @@ async fn announce(connection: &Connection, changes: &Changes) -> zbus::Result<()
         let this = iface.get().await;
         this.master_volume_changed(emitter).await?;
         this.muted_changed(emitter).await?;
+        this.playing_changed(emitter).await?;
     }
     Ok(())
 }
@@ -721,6 +728,23 @@ impl BluetoothIface {
         let status = unblock(move || bt.disconnect(&id)).await;
         self.settle(&emitter).await;
         status.as_str().to_owned()
+    }
+
+    /// The shell's idle report (T-202): the rule is in `idle_pads.rs`.
+    async fn report_idle(
+        &self,
+        idle_seconds: u32,
+        timeout_seconds: u32,
+        hold: bool,
+        #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
+    ) -> String {
+        let bt = self.bt.clone();
+        let report = IdleReport::from_seconds(idle_seconds, timeout_seconds, hold);
+        let disconnected = unblock(move || bt.report_idle(Instant::now(), report)).await;
+        if !disconnected.is_empty() {
+            self.settle(&emitter).await;
+        }
+        bluetooth::Status::Ok.as_str().to_owned()
     }
 
     async fn rename(

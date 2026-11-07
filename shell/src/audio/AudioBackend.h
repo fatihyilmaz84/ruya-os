@@ -39,6 +39,9 @@ public:
 signals:
     // channels: channel name -> 0-100, all channels of channelNames().
     void stateChanged(int volume, bool muted, const QVariantMap &channels);
+    // Something plays through an output (Devices1.Audio Playing, T-202). Sent with every accepted
+    // state report that carries it.
+    void playingReported(bool playing);
     void sinksListed(const QList<SinkInfo> &sinks);
     // status: see the XML ("ok", "unknown-sink", "failed").
     void setDefaultSinkFinished(const QString &id, const QString &status);
@@ -48,10 +51,12 @@ protected:
     // if no newer one of the same kind has been reported already (the state and the output list
     // are two kinds). RequestSequence.h.
     quint64 beginStateRequest() { return m_stateSeq.begin(); }
-    void deliverState(quint64 request, int volume, bool muted, const QVariantMap &channels)
+    bool deliverState(quint64 request, int volume, bool muted, const QVariantMap &channels)
     {
-        if (m_stateSeq.accept(request))
-            emit stateChanged(volume, muted, channels);
+        if (!m_stateSeq.accept(request))
+            return false;
+        emit stateChanged(volume, muted, channels);
+        return true;
     }
     quint64 beginSinksRequest() { return m_sinksSeq.begin(); }
     void deliverSinks(quint64 request, const QList<SinkInfo> &sinks)

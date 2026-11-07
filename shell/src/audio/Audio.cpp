@@ -37,6 +37,12 @@ Audio::Audio(std::unique_ptr<AudioBackend> backend, QObject *parent)
                     emit adjusted();
                 m_ready = true; // the first report is the initial read, not a change
             });
+    connect(m_backend.get(), &AudioBackend::playingReported, this, [this](bool playing) {
+        if (playing != m_playing) {
+            m_playing = playing;
+            emit playingChanged();
+        }
+    });
     connect(m_backend.get(), &AudioBackend::sinksListed, this, [this](const QList<SinkInfo> &list) {
         QVariantList out;
         QString defaultId;
@@ -149,6 +155,12 @@ void Audio::mockReset()
 {
     if (auto *mock = qobject_cast<MockAudioBackend *>(m_backend.get()))
         mock->reset();
+}
+
+void Audio::mockSetPlaying(bool playing)
+{
+    if (auto *mock = qobject_cast<MockAudioBackend *>(m_backend.get()))
+        mock->setPlaying(playing);
 }
 
 void Audio::mockRefreshDelayed(int ms)

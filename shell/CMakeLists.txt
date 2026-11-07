@@ -7,6 +7,12 @@ option(RUYA_BUILD_TESTS "Build the Qt Quick tests" ON)
 option(RUYA_COMPOSITOR "Build ruya-shell as the Wayland compositor (Linux)" OFF)
 
 find_package(Qt6 6.8 REQUIRED COMPONENTS Gui Quick Multimedia DBus LinguistTools)
+# ScreenPower (T-202) calls QPlatformScreen::setPowerState, a private QPA header. `GuiPrivate` is a
+# find_package component only from Qt 6.9; Qt 6.8 (the floor, root CLAUDE.md) offers Qt6::GuiPrivate
+# with the Gui package, so asking for the component there would fail the configure step.
+if(Qt6_VERSION VERSION_GREATER_EQUAL 6.9)
+    find_package(Qt6 6.9 REQUIRED COMPONENTS GuiPrivate)
+endif()
 # ShaderTools builds the liquid pill's shader (T-205). It is optional: without it the .qsb is not
 # in the module, the ShaderEffect reports an error and GlassPill shows the plain pill.
 find_package(Qt6 6.8 OPTIONAL_COMPONENTS ShaderTools)
@@ -15,7 +21,7 @@ qt_standard_project_setup(REQUIRES 6.8)
 # Everything except main() is a static QML module, so the app and the tests share it.
 qt_add_library(ruyashell STATIC)
 
-set_source_files_properties(qml/Theme.qml qml/Sfx.qml qml/Notifications.qml qml/DeviceIcons.qml qml/ProfileStatus.qml qml/DurationText.qml qml/DisplayText.qml qml/BackKey.qml qml/ThermalText.qml qml/GlareGate.qml qml/LiquidGate.qml qml/themes/Themes.qml qml/themes/ThemeMath.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
+set_source_files_properties(qml/Theme.qml qml/Sfx.qml qml/Notifications.qml qml/DeviceIcons.qml qml/ProfileStatus.qml qml/DurationText.qml qml/DisplayText.qml qml/BackKey.qml qml/ThermalText.qml qml/GlareGate.qml qml/LiquidGate.qml qml/IdleClock.qml qml/themes/Themes.qml qml/themes/ThemeMath.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 
 qt_add_qml_module(ruyashell
     URI RuyaShell
@@ -90,6 +96,8 @@ qt_add_qml_module(ruyashell
         src/power/MockPowerBackend.h src/power/MockPowerBackend.cpp
         src/power/DBusPowerBackend.h src/power/DBusPowerBackend.cpp
         src/power/Power.h src/power/Power.cpp
+        src/power/IdleInhibit.h src/power/IdleInhibit.cpp
+        src/power/ScreenPower.h src/power/ScreenPower.cpp
         src/input/KeyRouter.h src/input/KeyRouter.cpp
         src/wallpaper/Wallpapers.h src/wallpaper/Wallpapers.cpp
     QML_FILES
@@ -141,6 +149,9 @@ qt_add_qml_module(ruyashell
         qml/FocusGlide.qml
         qml/LiquidGlass.qml
         qml/LiquidGate.qml
+        qml/IdleClock.qml
+        qml/ScreenSaver.qml
+        qml/PowerSavingPane.qml
         qml/GlassPill.qml
         qml/GlassLayers.qml
         qml/GlassRim.qml
@@ -218,7 +229,8 @@ endif()
 
 # qmltyperegistrar includes the QML_ELEMENT headers by file name.
 target_include_directories(ruyashell PUBLIC src/backend src/profiles src/settings src/audio src/network src/bluetooth src/battery src/time src/display src/thermal src/storage src/system src/power src/store src/library src/update src/session src/usage src/input src/wallpaper)
-target_link_libraries(ruyashell PRIVATE Qt6::Quick Qt6::Multimedia Qt6::DBus)
+# Qt6::GuiPrivate: ScreenPower calls QPlatformScreen::setPowerState (DPMS under eglfs_kms, T-202).
+target_link_libraries(ruyashell PRIVATE Qt6::Quick Qt6::Multimedia Qt6::DBus Qt6::GuiPrivate)
 
 # Translations: the .ts files in i18n/ are compiled to .qm and embedded as :/i18n/ruyashell_<lang>.qm.
 # English is the source language, but its .ts carries the plural forms ("1 attempt left").
@@ -264,7 +276,14 @@ if(RUYA_COMPOSITOR)
         URI RuyaCompositor
         VERSION 1.0
         QML_FILES compositor/Compositor.qml
+        SOURCES compositor/IdleInhibitManager.h compositor/IdleInhibitManager.cpp
     )
+    # The Wayland idle-inhibit protocol (T-202): qtwaylandscanner writes the server glue from the XML.
+    qt6_generate_wayland_protocol_server_sources(ruyacompositor
+        FILES ${CMAKE_CURRENT_SOURCE_DIR}/compositor/idle-inhibit-unstable-v1.xml)
+    # qmltyperegistrar emits __has_include(<IdleInhibitManager.h>); qt_add_qml_module adds only the
+    # target's source dir to the include path (QTBUG-93443), so list the folder of the headers.
+    target_include_directories(ruyacompositor PRIVATE compositor)
     target_link_libraries(ruyacompositor PRIVATE Qt6::Quick Qt6::WaylandCompositor)
     target_link_libraries(ruya-shell PRIVATE ruyacompositorplugin Qt6::WaylandCompositor)
     target_compile_definitions(ruya-shell PRIVATE RUYA_COMPOSITOR)

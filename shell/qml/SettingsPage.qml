@@ -15,7 +15,7 @@ Page {
     // currentIndex); the labels are bindings through labelFor().
     readonly property var categories: [
         { key: "profiles" }, { key: "network" }, { key: "bluetooth" }, { key: "display" },
-        { key: "audio" }, { key: "storage" }, { key: "accessibility" }, { key: "system" }, { key: "about" },
+        { key: "audio" }, { key: "storage" }, { key: "accessibility" }, { key: "power" }, { key: "system" }, { key: "about" },
     ]
 
     function labelFor(key) {
@@ -27,6 +27,7 @@ Page {
         case "audio": return qsTr("Audio")
         case "storage": return qsTr("Storage")
         case "accessibility": return qsTr("Accessibility")
+        case "power": return qsTr("Power saving")
         case "system": return qsTr("System")
         case "about": return qsTr("About")
         }
@@ -39,6 +40,7 @@ Page {
                                               : current.key === "bluetooth" ? bluetoothPane
                                               : current.key === "audio" ? audioPane
                                               : current.key === "storage" ? storagePane
+                                              : current.key === "power" ? powerPane
                                               : current.key === "system" ? systemPane
                                               : current.key === "about" ? aboutPane : null
 
@@ -74,7 +76,7 @@ Page {
         objectName: "categoryList"
         Accessible.role: Accessible.List
         Accessible.name: currentItem ? currentItem.Accessible.name : qsTr("Settings")
-        // Whole rows only: when the nine categories don't fit above the hint bar the list ends at
+        // Whole rows only: when the ten categories don't fit above the hint bar the list ends at
         // the last row that does and scrolls by rows (the focused row is always in view).
         readonly property real availableHeight: parent.height     // the content area, above the hint bar
         readonly property real rowHeight: 72 * page.u
@@ -213,6 +215,15 @@ Page {
             anchors.fill: parent
             u: page.u
             visible: page.current.key === "storage"
+            enabled: visible
+            onExitRequested: page.leavePane()
+        }
+        PowerSavingPane {
+            id: powerPane
+            objectName: "panePower"
+            anchors.fill: parent
+            u: page.u
+            visible: page.current.key === "power"
             enabled: visible
             onExitRequested: page.leavePane()
         }

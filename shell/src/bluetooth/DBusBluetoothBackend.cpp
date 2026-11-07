@@ -183,6 +183,21 @@ void DBusBluetoothBackend::disconnectDevice(const QString &id)
     startCommand(QStringLiteral("Disconnect"), QStringLiteral("disconnect"), id, {id});
 }
 
+void DBusBluetoothBackend::reportIdle(int idleSeconds, int timeoutSeconds, bool hold)
+{
+    // Fire and forget: nothing in the shell depends on the answer.
+    auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("ReportIdle"));
+    msg.setArguments({QVariant::fromValue(quint32(qMax(0, idleSeconds))), QVariant::fromValue(quint32(qMax(0, timeoutSeconds))),
+                      hold});
+    auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [](QDBusPendingCallWatcher *w) {
+        w->deleteLater();
+        QDBusPendingReply<QString> reply = *w;
+        if (!reply.isValid())
+            qWarning("ruya-shell: Devices1.Bluetooth ReportIdle failed: %s", qPrintable(reply.error().message()));
+    });
+}
+
 void DBusBluetoothBackend::rename(const QString &id, const QString &name)
 {
     startCommand(QStringLiteral("Rename"), QStringLiteral("rename"), id, {id, name});

@@ -586,12 +586,22 @@ Item {
             const presence = find("usagePresence")
             tryVerify(() => Usage.mockLastPresence().attention === "active")
             presence.idleSeconds = 600
-            presence.lastInputMs = Date.now() - 599000
+            const start = Date.now()
+            let fake = start
+            IdleClock.now = () => fake
+            IdleClock.reset()
+            // The clock moves a minute at a time, as the real timer looks at it (a bigger gap is a sleep).
+            for (let s = 60; s <= 540; s += 60) {
+                fake = start + s * 1000
+                presence.check()
+            }
+            fake = start + 599000
             presence.check()
             compare(presence.attention, "active", "599 s of silence is not idle yet")
-            presence.lastInputMs = Date.now() - 601000
+            fake = start + 601000
             presence.check()
             compare(presence.attention, "idle")
+            IdleClock.now = () => Date.now()
             tryVerify(() => Usage.mockLastPresence().attention === "idle")
             keyClick(Qt.Key_Left)                              // any input
             tryCompare(presence, "attention", "active")

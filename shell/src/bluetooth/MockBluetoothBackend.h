@@ -24,6 +24,7 @@ public:
     void forget(const QString &id) override;
     void connectDevice(const QString &id) override;
     void disconnectDevice(const QString &id) override;
+    void reportIdle(int idleSeconds, int timeoutSeconds, bool hold) override;
     void rename(const QString &id, const QString &name) override;
     void startControllerPairing(int seconds) override;
     void stopControllerPairing() override;
@@ -37,6 +38,10 @@ public:
     // A keyboard or gamepad is (not) connected. True at first, so every other screen is as before.
     void setInputPresent(bool present);
     int pairingStarts() const { return m_pairingStarts; }
+    int idleReports() const { return m_idleReports; }
+    int lastIdleSeconds() const { return m_lastIdleSeconds; }
+    int lastIdleTimeout() const { return m_lastIdleTimeout; }
+    bool lastIdleHold() const { return m_lastIdleHold; }
     void setBattery(const QString &id, int percent);
     // A device that was not in the list is "found" now, as if the window's scan saw it (T-260).
     void reveal(const QString &id);
@@ -95,4 +100,8 @@ private:
     QString m_pairingScript = QStringLiteral("wait");
     bool m_inputPresent = true;
     int m_pairingStarts = 0;
+    int m_idleReports = 0;
+    int m_lastIdleSeconds = -1;
+    int m_lastIdleTimeout = -1;
+    bool m_lastIdleHold = false;
 };
