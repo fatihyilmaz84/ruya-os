@@ -29,7 +29,10 @@ fi
 [ "$(systemctl show -p Result --value ruya-grub-menu.service)" = success ] && ok "ruya-grub-menu.service succeeded" || bad "ruya-grub-menu.service: $(systemctl show -p Result --value ruya-grub-menu.service)"
 cmp -s /usr/lib/ruyaos/grub-menu-custom.cfg /boot/grub2/custom.cfg && ok "custom.cfg equals /usr/lib/ruyaos/grub-menu-custom.cfg" || echo "note: custom.cfg differs or is absent"
 echo "grubenv: $(grub2-editenv list | tr '\n' ' ')"
-findmnt -n -o OPTIONS /boot | tr ',' '\n' | grep -qx ro && ok "/boot is read-only again after the sync" || bad "/boot is left read-write"
+# The service remounts /boot read-write and back to read-only before it exits, which cannot be seen from
+# here; this only shows the host's view after the boot (read-only), so it is a sanity check, not a proof
+# that the service restored the flag.
+findmnt -n -o OPTIONS /boot | tr ',' '\n' | grep -qx ro && ok "/boot is read-only in the host namespace" || bad "/boot is read-write in the host namespace"
 
 # No text console: nothing started a login on tty1.
 if journalctl -b -q -u getty@tty1.service --no-pager | grep -q -E 'Started|Starting'; then

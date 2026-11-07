@@ -54,11 +54,17 @@ foreach ($pat in @('(?m)^set ruya_menu_policy=1\s*$', '(?m)^set timeout_style=hi
     if ($static -notmatch $pat) { Fail "07_ruyaos-menu.cfg: expected a line matching $pat" }
 }
 $custom = Text "image/rootfs/usr/lib/ruyaos/grub-menu-custom.cfg"
+# Rollback must stay reachable: every timeout is at least 1 s ("set timeout=0" boots at once, with no window for Esc).
+foreach ($cfg in @(@{ Name = "07_ruyaos-menu.cfg"; Text = $static }, @{ Name = "grub-menu-custom.cfg"; Text = $custom })) {
+    $timeouts = [regex]::Matches($cfg.Text, '(?m)^\s*set timeout=(\S*)') | ForEach-Object { $_.Groups[1].Value }
+    if (@($timeouts).Count -lt 2) { Fail "$($cfg.Name): expected a hidden and a menu timeout" }
+    foreach ($t in $timeouts) { if ($t -notmatch '^[1-9][0-9]*$') { Fail "$($cfg.Name): 'set timeout=$t' leaves no window for Esc (rollback unreachable); use at least 1" } }
+}
 $marker = "# ruyaos-managed: grub-menu-custom.cfg"
 if (($custom -split "`n")[0].TrimEnd() -ne $marker) { Fail "grub-menu-custom.cfg: the first line must be '$marker' (the sync only overwrites files that carry it)" }
 if ($custom -notmatch '(?m)^if \[ -z "\$\{ruya_menu_policy\}" \]; then\s*$') { Fail "grub-menu-custom.cfg: must be guarded by ruya_menu_policy (new disks already have the policy in grub.cfg)" }
 if ($custom -notmatch '(?m)^\s+set timeout_style=hidden\s*$') { Fail "grub-menu-custom.cfg: must hide the menu" }
-if ($custom -notmatch '-n "\$\{boot_counter\}"') { Fail "grub-menu-custom.cfg: must show the menu while boot_counter is set (a failed boot)" }
+if ($custom -notmatch '(?m)^  if \[ -n "\$\{boot_counter\}" \]; then\s*$') { Fail "grub-menu-custom.cfg: must show the menu while boot_counter is set (a failed boot)" }
 $sync = Text "image/rootfs/usr/libexec/ruyaos/grub-menu-sync"
 if ($sync -notmatch [regex]::Escape("marker='$marker'")) { Fail "grub-menu-sync: marker differs from grub-menu-custom.cfg" }
 $unit = Text "image/rootfs/usr/lib/systemd/system/ruya-grub-menu.service"

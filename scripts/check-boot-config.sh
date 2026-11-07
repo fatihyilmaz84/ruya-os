@@ -31,7 +31,7 @@ for a in quiet splash loglevel=0 vt.global_cursor_default=0 systemd.show_status=
     grep -q "\"$a\"" "$k" && ok "karg $a" || bad "karg $a missing"
 done
 g=/usr/lib/bootupd/grub2-static/configs.d/07_ruyaos-menu.cfg
-grep -q 'timeout_style=hidden' "$g" && grep -q 'ruya_menu_policy=1' "$g" && ok "bootupd static GRUB config 07_ruyaos-menu.cfg" || bad "$g missing or wrong"
+grep -q 'timeout_style=hidden' "$g" && grep -q 'ruya_menu_policy=1' "$g" && ! grep -Eq '^[[:space:]]*set timeout=(0|-)' "$g" /usr/lib/ruyaos/grub-menu-custom.cfg && ok "bootupd static GRUB config 07_ruyaos-menu.cfg" || bad "$g missing or wrong"
 [ -f /usr/lib/ruyaos/grub-menu-custom.cfg ] && [ -x /usr/libexec/ruyaos/grub-menu-sync ] && ok "grub-menu-custom.cfg and grub-menu-sync" || bad "custom.cfg source or sync script missing"
 systemctl is-enabled ruya-grub-menu.service >/dev/null && ok "ruya-grub-menu.service enabled" || bad "ruya-grub-menu.service not enabled"
 systemctl cat plymouth-quit.service | grep -q 'plymouth quit --retain-splash' && ok "plymouth-quit retains the splash" || bad "plymouth-quit does not retain the splash"

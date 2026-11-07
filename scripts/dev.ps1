@@ -342,7 +342,9 @@ function Test-Boot {
         @{ Name = "a theme image that is not there"; File = "rootfs/usr/share/plymouth/themes/ruyaos/ruyaos.script"; From = 'Image("glow.png")'; To = 'Image("nothere.png")' },
         @{ Name = "a visible boot menu"; File = "rootfs/usr/lib/bootupd/grub2-static/configs.d/07_ruyaos-menu.cfg"; From = "set timeout_style=hidden"; To = "set timeout_style=menu" },
         @{ Name = "a shell that does not wait for Plymouth to quit"; File = "rootfs/usr/lib/systemd/system/ruya-compositor@.service"; From = "After=systemd-user-sessions.service plymouth-quit-wait.service"; To = "After=systemd-user-sessions.service" },
-        @{ Name = "a splash that is cleared on quit"; File = "rootfs/usr/lib/systemd/system/plymouth-quit.service.d/10-ruyaos.conf"; From = " --retain-splash"; To = "" }
+        @{ Name = "a splash that is cleared on quit"; File = "rootfs/usr/lib/systemd/system/plymouth-quit.service.d/10-ruyaos.conf"; From = " --retain-splash"; To = "" },
+        @{ Name = "a zero menu timeout"; File = "rootfs/usr/lib/bootupd/grub2-static/configs.d/07_ruyaos-menu.cfg"; From = "set timeout=2"; To = "set timeout=0" },
+        @{ Name = "the boot_counter branch removed"; File = "rootfs/usr/lib/ruyaos/grub-menu-custom.cfg"; From = 'if [ -n "${boot_counter}" ]; then'; To = 'if [ -n "${boot_counter_gone}" ]; then' }
     )
     foreach ($c in $cases) {
         $fixture = Join-Path ([IO.Path]::GetTempPath()) ("ruya-lint-boot-" + [guid]::NewGuid().ToString("N"))
