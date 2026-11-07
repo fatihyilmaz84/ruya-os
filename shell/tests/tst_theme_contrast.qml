@@ -30,22 +30,12 @@ Item {
         // The backdrop is measured with the theme's own default tint. The profile avatar colours
         // tint it too (they belong to profiles); their effect is documented in 04 §7.
 
-        // The Backdrop colours for a tint, as Backdrop.qml composes them: gradient ends, each
-        // blob over the brighter end, and the overlap (A then B, then the highlight blob).
+        // The Backdrop colours for a tint, as Backdrop.qml composes them (the theme's blob colours
+        // with the tint mixed in at its share, T-271): gradient ends, each blob over the brighter
+        // end, and the overlap (A then B, then the highlight blob). ThemeMath has the formulas,
+        // so the gate and the distinctness test measure what the shell draws.
         function backdropSamples(t, tint) {
-            const top = ThemeMath.backdropTop(tint, t.background, t.lightness)
-            const a = ThemeMath.blobOpacityA * t.blobStrength
-            const b = ThemeMath.blobOpacityB * t.blobStrength
-            const hi = ThemeMath.blobOpacityC * t.blobStrength
-            const blobA = Qt.rgba(tint.r, tint.g, tint.b, a)
-            const lit = Qt.lighter(tint, 1.4)
-            const blobB = Qt.rgba(lit.r, lit.g, lit.b, b)
-            const blobC = Qt.rgba(t.blobHighlight.r, t.blobHighlight.g, t.blobHighlight.b, hi)
-            const overlap = ThemeMath.over(blobC, ThemeMath.over(blobB, ThemeMath.over(blobA, top)))
-            return {
-                strict: [t.background, top, ThemeMath.over(blobA, top), ThemeMath.over(blobB, top)],
-                overlap: overlap
-            }
+            return ThemeMath.backdropSamples(t, tint)
         }
 
         // A row drawn at `alpha` (group opacity) over the backdrop colour `b`: the text pixel and the

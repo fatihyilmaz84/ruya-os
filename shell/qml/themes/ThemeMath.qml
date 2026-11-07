@@ -27,6 +27,63 @@ QtObject {
     readonly property real blobOpacityB: 0.35
     readonly property real blobOpacityC: 0.08
 
+    // The colour a Backdrop blob (and the gradient top) is built from: the theme's palette colour
+    // with the profile's `tint` mixed in at `share` (T-271). Share 1 is the tint itself, exactly.
+    function blobTint(palette, tint, share) {
+        if (share >= 1)
+            return tint
+        return blend(palette, tint, share)
+    }
+
+    // The Backdrop colours of a theme snapshot `t` for a profile tint, as Backdrop.qml composes them:
+    // the gradient's two ends and each blob over the brighter end (`strict`), and the overlap of
+    // the three blobs (`overlap`). The contrast gate and the distinctness test measure these.
+    function backdropSamples(t, tint) {
+        const tintA = blobTint(t.blobA, tint, t.blobTintShare)
+        const tintB = blobTint(t.blobB, tint, t.blobTintShare)
+        const top = backdropTop(tintA, t.background, t.lightness)
+        const blobA = Qt.rgba(tintA.r, tintA.g, tintA.b, blobOpacityA * t.blobStrength)
+        const lit = Qt.lighter(tintB, 1.4)
+        const blobB = Qt.rgba(lit.r, lit.g, lit.b, blobOpacityB * t.blobStrength)
+        const blobC = Qt.rgba(t.blobHighlight.r, t.blobHighlight.g, t.blobHighlight.b, blobOpacityC * t.blobStrength)
+        return {
+            strict: [t.background, top, over(blobA, top), over(blobB, top)],
+            overlap: over(blobC, over(blobB, over(blobA, top)))
+        }
+    }
+
+    // --- Distinctness (T-271) ---
+
+    // CIE L*a*b* (D65) of an opaque colour, and the distance between two colours (CIE76 delta E:
+    // about 2.3 is the least a trained eye sees side by side; 10 is "clearly another colour").
+    function lab(c) {
+        const r = channel(c.r), g = channel(c.g), b = channel(c.b)
+        const x = (0.4124564 * r + 0.3575761 * g + 0.1804375 * b) / 0.95047
+        const y = 0.2126729 * r + 0.7151522 * g + 0.0721750 * b
+        const z = (0.0193339 * r + 0.1191920 * g + 0.9503041 * b) / 1.08883
+        const f = v => v > 0.008856 ? Math.cbrt(v) : 7.787 * v + 16 / 116
+        return { L: 116 * f(y) - 16, a: 500 * (f(x) - f(y)), b: 200 * (f(y) - f(z)) }
+    }
+    function deltaE(c1, c2) {
+        const p = lab(c1), q = lab(c2)
+        return Math.sqrt((p.L - q.L) * (p.L - q.L) + (p.a - q.a) * (p.a - q.a) + (p.b - q.b) * (p.b - q.b))
+    }
+
+    // The four colours that make a theme recognisable at a glance, from a snapshot `t`:
+    //  ground: the middle of the backdrop gradient (its top for the theme's default tint, and the ground)
+    //  glass:  the opaque glass (shelf, sheets) over the ground
+    //  blobs:  the three backdrop blobs overlapping, over the gradient top
+    //  accent: `primaryFill`, the colour of the one main verb on a screen
+    function lookColors(t) {
+        const s = backdropSamples(t, t.defaultTint)
+        return {
+            ground: blend(s.strict[1], t.background, 0.5),
+            glass: over(t.glassOpaque, t.background),
+            blobs: s.overlap,
+            accent: t.primaryFill
+        }
+    }
+
     // The art placeholder gradient (AppArt): hue 0..1, `light` the set's lightness for this end.
     function artColor(hue, saturation, light) {
         return Qt.hsla(hue, saturation, light, 1)

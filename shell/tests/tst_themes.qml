@@ -49,7 +49,7 @@ Item {
         }
 
         function isNumber(name) {
-            return ["lightness", "blobStrength", "shadowStrength", "artLightTop", "artLightBottom"].indexOf(name) >= 0
+            return ["lightness", "blobStrength", "blobTintShare", "shadowStrength", "artLightTop", "artLightBottom"].indexOf(name) >= 0
         }
 
         function test_every_theme_defines_every_token() {
@@ -219,14 +219,115 @@ Item {
             const top = findChild(backdrop, "backdropGradient").gradient.stops[0].color
             same(top, Theme.backdropTop(tint), "the gradient top in Daylight")
             DeviceSettings.theme = "midnight"
-            compare(Theme.blobOpacityA, 0.55 * 0.45)
-            fuzzyCompare(findChild(backdrop, "blobA").opacity, 0.55 * 0.45, 1e-6)
-            fuzzyCompare(findChild(backdrop, "blobB").opacity, 0.35 * 0.45, 1e-6)
-            fuzzyCompare(findChild(backdrop, "blobC").opacity, 0.08 * 0.45, 1e-6)
+            fuzzyCompare(Theme.blobOpacityA, 0.55 * 0.4, 1e-9)
+            fuzzyCompare(findChild(backdrop, "blobA").opacity, 0.55 * 0.4, 1e-6)
+            fuzzyCompare(findChild(backdrop, "blobB").opacity, 0.35 * 0.4, 1e-6)
+            fuzzyCompare(findChild(backdrop, "blobC").opacity, 0.08 * 0.4, 1e-6)
             DeviceSettings.theme = "dreamglass"
             compare(Theme.blobOpacityA, 0.55)
             fuzzyCompare(findChild(backdrop, "blobA").opacity, 0.55, 1e-6)
             same(findChild(backdrop, "backdropGradient").gradient.stops[0].color, Qt.darker(tint, 3.2), "Dreamglass keeps its darkened tint")
+            same(findChild(backdrop, "blobA").color, tint, "Dreamglass: the blob is the profile's tint")
+            same(findChild(backdrop, "blobB").color, Qt.lighter(tint, 1.4), "Dreamglass: the second blob is the tint, lighter")
+        }
+
+        // T-271: a dark theme other than Dreamglass builds the blobs and the gradient from its own
+        // colours, with the profile's tint mixed in at blobTintShare: the blobs of two very different
+        // profile colours are close, and neither is the tint itself.
+        function test_blob_colours_belong_to_the_theme_not_the_profile_tint() {
+            const orange = Qt.color("#e8833a")
+            const blue = Qt.color("#3a5bd9")
+            const a = createTemporaryObject(backdropComponent, host, { tint: orange })
+            const b = createTemporaryObject(backdropComponent, host, { tint: blue })
+            verify(a && b)
+            for (const key of ["midnight", "aurora", "ember"]) {
+                DeviceSettings.theme = key
+                const set = Themes.byKey(key)
+                verify(set.blobTintShare > 0 && set.blobTintShare <= 0.25, key + " share " + set.blobTintShare)
+                const ca = findChild(a, "blobA").color
+                const cb = findChild(b, "blobA").color
+                const apart = ThemeMath.deltaE(orange, blue)
+                verify(ThemeMath.deltaE(ca, cb) < apart * set.blobTintShare * 1.2,
+                       key + ": blob A of two tints is " + ThemeMath.deltaE(ca, cb) + " apart, the tints " + apart)
+                same(ca, ThemeMath.blend(set.blobA, orange, set.blobTintShare), key + " blob A")
+                same(findChild(a, "backdropGradient").gradient.stops[0].color,
+                     Theme.backdropTop(ThemeMath.blend(set.blobA, orange, set.blobTintShare)), key + " gradient top")
+                same(findChild(a, "blobC").color, set.blobHighlight, key + " third blob")
+            }
+            DeviceSettings.theme = "dreamglass"
+            same(findChild(a, "blobA").color, orange, "Dreamglass follows the tint completely")
+        }
+
+        // The new blob tokens cross-fade with the rest (700 ms, T-209): mid-fade between two themes the
+        // share and the palette are between the two, and the Backdrop's blob colour follows.
+        function test_blob_tokens_cross_fade() {
+            DeviceSettings.reducedMotion = false
+            const tint = Qt.color("#e8833a")
+            const backdrop = createTemporaryObject(backdropComponent, host, { tint: tint })
+            verify(backdrop)
+            same(findChild(backdrop, "blobA").color, tint, "Dreamglass: the tint")
+            const aurora = Themes.byKey("aurora")
+            DeviceSettings.theme = "aurora"
+            verify(Theme.fade.running, "a fade is running")
+            tryVerify(() => Theme.mix > 0.3 && Theme.mix < 0.8, 1500, "mid-fade")
+            verify(Theme.blobTintShare < 1 && Theme.blobTintShare > aurora.blobTintShare, "share mid-fade: " + Theme.blobTintShare)
+            verify(ThemeMath.deltaE(findChild(backdrop, "blobA").color, tint) > 0, "the blob already left the tint")
+            tryCompare(Theme, "mix", 1, 3000)
+            fuzzyCompare(Theme.blobTintShare, aurora.blobTintShare, 1e-9)
+            same(findChild(backdrop, "blobA").color, ThemeMath.blend(aurora.blobA, tint, aurora.blobTintShare), "Aurora's blob at the end")
+        }
+
+        // --- distinctness (T-271) ---
+
+        // Four colours make a theme recognisable (ThemeMath.lookColors: the ground, the opaque glass,
+        // the backdrop blobs overlapping, the accent). Two themes must differ in at least
+        // `keysApart` of the four by `minDeltaE` (CIE76; 10 reads as another colour at a glance), and
+        // in total by `minTotal`. One key may stay close: Dreamglass and Midnight both have a white-ish
+        // accent. A pair cannot be flattened by editing one colour, nor two.
+        readonly property real minDeltaE: 10
+        readonly property int keysApart: 3
+        readonly property real minTotal: 80
+        readonly property var lookKeys: ["ground", "glass", "blobs", "accent"]
+
+        function apartKeys(a, b) {
+            const la = ThemeMath.lookColors(Themes.snapshot(a))
+            const lb = ThemeMath.lookColors(Themes.snapshot(b))
+            const out = { keys: [], total: 0, text: [] }
+            for (const k of lookKeys) {
+                const d = ThemeMath.deltaE(la[k], lb[k])
+                out.total += d
+                out.text.push(k + " " + d.toFixed(1))
+                if (d >= minDeltaE)
+                    out.keys.push(k)
+            }
+            return out
+        }
+
+        function test_themes_are_pairwise_distinct() {
+            for (let i = 0; i < Themes.all.length; ++i) {
+                for (let j = i + 1; j < Themes.all.length; ++j) {
+                    const r = apartKeys(Themes.all[i], Themes.all[j])
+                    const name = Themes.all[i].key + " / " + Themes.all[j].key + ": " + r.text.join(", ")
+                    verify(r.keys.length >= keysApart, name + " (need " + keysApart + " keys >= " + minDeltaE + ")")
+                    verify(r.total >= minTotal, name + " (total " + r.total.toFixed(1) + " < " + minTotal + ")")
+                }
+            }
+        }
+
+        // The measure can fail: two themes made alike on their ground and blobs are caught.
+        function test_distinctness_measure_catches_a_flattened_theme() {
+            const aurora = Themes.snapshot(Themes.byKey("aurora"))
+            const ember = Themes.snapshot(Themes.byKey("ember"))
+            const flat = Themes.snapshot(Themes.byKey("ember"))
+            for (const n of ["background", "blobA", "blobB", "blobHighlight", "glassOpaque"])
+                flat[n] = aurora[n]
+            const la = ThemeMath.lookColors(aurora)
+            const lf = ThemeMath.lookColors(flat)
+            for (const k of ["ground", "glass", "blobs"])
+                verify(ThemeMath.deltaE(la[k], lf[k]) < minDeltaE, k + " of the flattened Ember is Aurora's")
+            verify(ThemeMath.deltaE(ThemeMath.lookColors(ember).ground, la.ground) >= minDeltaE, "the real ones differ")
+            compare(ThemeMath.deltaE(la.ground, la.ground), 0)
+            verify(ThemeMath.deltaE(Qt.color("#000000"), Qt.color("#ffffff")) > 99, "black to white is about 100")
         }
 
         // Reduced motion switched on in the middle of a fade finishes it at once.
