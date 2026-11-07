@@ -38,3 +38,5 @@ Then the image recipe in `docs/dev-setup.md` and `vm-session-check.sh` over SSH.
 
 ## Outcome
 _Filled in by the implementer. First line: `Verified: host | vm | unverified | hw` (say what ran where). Then: what was built, files, deviations, follow-ups (each also an Inbox line)._
+
+> Lead note 2026-11-07: reuse this freezer code for the per-app freeze of epic T-273 (T-275); do not build a second one.
