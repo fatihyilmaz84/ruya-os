@@ -21,6 +21,7 @@ pub mod display;
 pub mod edid;
 pub mod events;
 pub mod families;
+pub mod idle_pads;
 pub mod input;
 pub mod network;
 pub mod networkmanager;

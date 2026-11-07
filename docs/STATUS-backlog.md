@@ -22,7 +22,6 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | [T-165](tasks/T-165-profile-switch-freezes-apps.md) | Profile switch and sign-out freeze the profile's apps | todo | T-164 |
 | [T-147](tasks/T-147-fullscreen-app-flow.md) | Full-screen apps: launch, quick menu, return, close | todo | T-164 |
 | [T-166](tasks/T-166-suspend-under-eglfs.md) | **[lead]** Suspend and resume under eglfs | todo | — |
-| [T-227](tasks/T-227-ui-sounds-and-ambient-themes.md) | UI sounds and ambient atmosphere: sound themes, one bundled theme, maker guide | todo | — |
 | [T-245](tasks/T-245-notification-centre.md) | **[lead]** Notification centre: history, quiet mode, notifications from apps (bridge) | todo | — |
 | [T-246](tasks/T-246-achievements.md) | **[lead]** Achievements: portal for games, per-profile service, unlock moment | todo | T-245, T-164 |
 | [T-228](tasks/T-228-epic-play-packages.md) | **[lead]** EPIC: `.play` packages (ADR-014 accepted; parked by the owner until visual polish and T-164) | blocked | owner |
@@ -62,3 +61,11 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | [T-267](tasks/T-267-pad-default-owner-at-login.md) | A pad remembers its owner: Guide on the picker highlights that profile | todo | T-264, T-265 |
 | [T-268](tasks/T-268-guest-player.md) | Guest as a temporary player | todo | T-264, T-265, T-211 |
 | [T-270](tasks/T-270-epic-games-store-integration.md) | **[lead]** Epic Games Store integration (Legendary, Heroic-style): Proposed ADR-018 first | blocked | owner |
+| [T-273](tasks/T-273-epic-multitasking-and-task-switching.md) | **[lead]** EPIC multitasking and task switching (ADR-019 Proposed): spec | todo | T-164 |
+| [T-274](tasks/T-274-spike-freezing-real-games.md) | **[lead]** Spike: freeze and thaw real apps and games on the Dell | todo | T-164, T-162 |
+| [T-275](tasks/T-275-session-per-app-freeze-and-switch.md) | `ruya-session`: per-app freeze/thaw and an atomic `Switch` | todo | T-273, T-274, T-165 |
+| [T-276](tasks/T-276-compositor-snapshots-visibility-smooth-switch.md) | **[lead]** Compositor: last-frame snapshots, visibility events, smooth switch | todo | T-273, T-164, T-147 |
+| [T-277](tasks/T-277-task-switcher-ui-and-quick-switch.md) | Task switcher UI and the quick-switch gesture | todo | T-273, T-147, T-275, T-276 |
+| [T-278](tasks/T-278-background-and-memory-policy-game-mode.md) | **[lead]** Background and memory policy ("game mode") | todo | T-273, T-274, T-275, T-201 |
+| [T-279](tasks/T-279-app-cooperation-save-state-and-background-audio.md) | App cooperation: save state, background audio, developer guide | todo | T-273, T-275 |
+

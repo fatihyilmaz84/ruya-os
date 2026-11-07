@@ -1,6 +1,6 @@
 # T-227 — UI sounds and ambient atmosphere: sound themes, one bundled theme, a guide for makers
 
-Status: todo · Phase: 2 · Depends: — · Area: shell, image, docs · Size: M · Owner: builder
+Status: in-progress · Phase: 2 · Depends: — · Area: shell, image, docs · Size: M · Owner: builder
 
 ## Goal
 The shell sounds like a console (owner request, 2026-11-06: "ambient sounds, existing or generated, I like how PlayStation does it"): a complete set of short UI cues, and a quiet ambient atmosphere behind Home and the menus that fades away when an app is in front. Everything comes from a **sound theme**, a folder with a manifest, so that anyone can make another one. RuyaOS ships **one** theme; the developer guide explains how to build others.

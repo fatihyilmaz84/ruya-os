@@ -55,6 +55,19 @@ pub fn parse_dump(json: &str) -> Result<(Vec<Sink>, Option<String>), String> {
     Ok((sinks, default.or(configured)))
 }
 
+/// Whether any output node is running (PipeWire's `info.state`), i.e. a stream plays through it.
+/// An idle sink is "idle" or "suspended".
+pub fn parse_playing(json: &str) -> bool {
+    let Ok(doc) = serde_json::from_str::<Value>(json) else {
+        return false;
+    };
+    doc.as_array().into_iter().flatten().any(|obj| {
+        obj.get("type").and_then(Value::as_str) == Some("PipeWire:Interface:Node")
+            && obj["info"]["props"]["media.class"].as_str() == Some("Audio/Sink")
+            && obj["info"]["state"].as_str() == Some("running")
+    })
+}
+
 /// hdmi / analog / usb / bluetooth from the node's properties; analog when unsure.
 fn classify(props: &Value) -> Kind {
     let text = |key: &str| props[key].as_str().unwrap_or("").to_ascii_lowercase();
@@ -94,7 +107,7 @@ pub use linux::WpCtl;
 mod linux {
     use std::process::Command;
 
-    use super::{parse_dump, parse_volume};
+    use super::{parse_dump, parse_playing, parse_volume};
     use crate::audio::{PipeWire, Snapshot};
 
     const DEFAULT_SINK: &str = "@DEFAULT_AUDIO_SINK@";
@@ -130,7 +143,9 @@ mod linux {
 
     impl PipeWire for WpCtl {
         fn snapshot(&mut self) -> Result<Snapshot, String> {
-            let (sinks, default) = parse_dump(&run("pw-dump", &[])?)?;
+            let dump = run("pw-dump", &[])?;
+            let (sinks, default) = parse_dump(&dump)?;
+            let playing = parse_playing(&dump);
             // No default output (none connected) means no volume to read.
             let (volume, muted) = if default.is_some() {
                 parse_volume(&run("wpctl", &["get-volume", DEFAULT_SINK])?)?
@@ -142,6 +157,7 @@ mod linux {
                 default,
                 volume,
                 muted,
+                playing,
             })
         }
 
@@ -209,6 +225,23 @@ mod tests {
         let json = r#"[{"type":"PipeWire:Interface:Metadata","props":{"metadata.name":"default"},
           "metadata":[{"key":"default.configured.audio.sink","value":{"name":"cfg"}}]}]"#;
         assert_eq!(parse_dump(json).unwrap().1.as_deref(), Some("cfg"));
+    }
+
+    #[test]
+    fn a_running_output_means_something_plays() {
+        assert!(!parse_playing(DUMP), "no state at all");
+        let node = |state: &str, class: &str| {
+            format!(
+                r#"[{{"id":1,"type":"PipeWire:Interface:Node","info":{{"state":"{state}","props":{{"media.class":"{class}"}}}}}}]"#
+            )
+        };
+        assert!(parse_playing(&node("running", "Audio/Sink")));
+        assert!(!parse_playing(&node("idle", "Audio/Sink")));
+        assert!(!parse_playing(&node("suspended", "Audio/Sink")));
+        // A running microphone or a stream is not an output.
+        assert!(!parse_playing(&node("running", "Audio/Source")));
+        assert!(!parse_playing(&node("running", "Stream/Output/Audio")));
+        assert!(!parse_playing("not json"));
     }
 
     #[test]

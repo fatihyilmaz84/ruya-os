@@ -45,6 +45,9 @@ public:
     // finished("controller-pairing", "start", status) (and "stop" for the stop); the state follows by controllerStateChanged.
     virtual void startControllerPairing(int seconds) = 0;
     virtual void stopControllerPairing() = 0;
+    // How long the console has been without input, for the idle-controller rule of the service
+    // (Devices1.Bluetooth.ReportIdle, T-202). No reply is reported; timeoutSeconds 0 is "never".
+    virtual void reportIdle(int idleSeconds, int timeoutSeconds, bool hold) = 0;
 
 signals:
     void stateChanged(bool powered, bool discovering);

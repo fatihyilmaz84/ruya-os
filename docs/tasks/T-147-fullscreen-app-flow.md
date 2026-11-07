@@ -49,3 +49,5 @@ Pressing Play starts the game full screen with a short art-led launch; Guide bri
 
 ## Outcome
 _Filled in by the implementer. Start with a `Verified:` line._
+
+> Lead note 2026-11-07: the "Switch to" list here stays minimal; the task switcher (cards, snapshots, quick switch) is epic T-273 (T-277).

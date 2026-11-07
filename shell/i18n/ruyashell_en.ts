@@ -1456,7 +1456,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>PinPad</name>
     <message>
-        <location filename="../qml/PinPad.qml" line="+127"/>
+        <location filename="../qml/PinPad.qml" line="+139"/>
         <source>PINs don&apos;t match</source>
         <translation>PINs don&apos;t match</translation>
     </message>
@@ -1576,6 +1576,119 @@ This can&apos;t be undone.</translation>
         <location line="+7"/>
         <source>Power off</source>
         <translation>Power off</translation>
+    </message>
+</context>
+<context>
+    <name>PowerSavingPane</name>
+    <message>
+        <location filename="../qml/PowerSavingPane.qml" line="+14"/>
+        <source>Select</source>
+        <translation>Select</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Back</source>
+        <translation>Back</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+6"/>
+        <source>%n hour(s)</source>
+        <translation>
+            <numerusform>%n hour</numerusform>
+            <numerusform>%n hours</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+1"/>
+        <source>%n minute(s)</source>
+        <translation>
+            <numerusform>%n minute</numerusform>
+            <numerusform>%n minutes</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>a download or install</source>
+        <translation>a download or install</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>a system update</source>
+        <translation>a system update</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>audio playing</source>
+        <translation>audio playing</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>an app</source>
+        <translation>an app</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <location line="+2"/>
+        <source>The screen saver never shows</source>
+        <translation>The screen saver never shows</translation>
+    </message>
+    <message>
+        <location line="-2"/>
+        <source>The screen turns off first</source>
+        <translation>The screen turns off first</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <location line="+2"/>
+        <source>The console sleeps first</source>
+        <translation>The console sleeps first</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>The screen is not turned off</source>
+        <translation>The screen is not turned off</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Screen saver</source>
+        <translation>Screen saver</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Off</source>
+        <translation>Off</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Turn the screen off</source>
+        <translation>Turn the screen off</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+11"/>
+        <location line="+10"/>
+        <source>Never</source>
+        <translation>Never</translation>
+    </message>
+    <message>
+        <location line="-11"/>
+        <source>Sleep</source>
+        <translation>Sleep</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Controllers turn off</source>
+        <translation>Controllers turn off</translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>Keeping the console awake</source>
+        <translation>Keeping the console awake</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Nothing</source>
+        <translation>Nothing</translation>
     </message>
 </context>
 <context>
@@ -1852,6 +1965,14 @@ This can&apos;t be undone.</translation>
     </message>
 </context>
 <context>
+    <name>ScreenSaver</name>
+    <message>
+        <location filename="../qml/ScreenSaver.qml" line="+56"/>
+        <source>Screen saver</source>
+        <translation>Screen saver</translation>
+    </message>
+</context>
+<context>
     <name>SectionNav</name>
     <message>
         <location filename="../qml/SectionNav.qml" line="+33"/>
@@ -1883,12 +2004,12 @@ This can&apos;t be undone.</translation>
     <name>SettingsPage</name>
     <message>
         <location filename="../qml/SettingsPage.qml" line="+12"/>
-        <location line="+64"/>
+        <location line="+66"/>
         <source>Settings</source>
         <translation>Settings</translation>
     </message>
     <message>
-        <location line="-53"/>
+        <location line="-55"/>
         <source>Profiles</source>
         <translation>Profiles</translation>
     </message>
@@ -1924,6 +2045,11 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+1"/>
+        <source>Power saving</source>
+        <translation>Power saving</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>System</source>
         <translation>System</translation>
     </message>
@@ -1933,7 +2059,7 @@ This can&apos;t be undone.</translation>
         <translation>About</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+17"/>
         <source>Select</source>
         <translation>Select</translation>
     </message>
@@ -1943,7 +2069,7 @@ This can&apos;t be undone.</translation>
         <translation>Back</translation>
     </message>
     <message>
-        <location line="+204"/>
+        <location line="+213"/>
         <source>Coming soon</source>
         <translation>Coming soon</translation>
     </message>
@@ -2127,7 +2253,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+332"/>
+        <location filename="../qml/Shell.qml" line="+346"/>
         <source>Could not %1.</source>
         <translation>Could not %1.</translation>
     </message>
@@ -2165,12 +2291,12 @@ This can&apos;t be undone.</translation>
         <translation>%1 %2 percent</translation>
     </message>
     <message>
-        <location line="+573"/>
+        <location line="+583"/>
         <source>Power</source>
         <translation>Power</translation>
     </message>
     <message>
-        <location line="-821"/>
+        <location line="-831"/>
         <source>Update ready. Restart to finish.</source>
         <translation>Update ready. Restart to finish.</translation>
     </message>
@@ -2236,7 +2362,7 @@ This can&apos;t be undone.</translation>
         <translation>Starting %1…</translation>
     </message>
     <message>
-        <location line="+254"/>
+        <location line="+264"/>
         <location line="+12"/>
         <location line="+3"/>
         <source>Select</source>
@@ -3210,22 +3336,22 @@ This can&apos;t be undone.</translation>
         <translation>Dreamglass</translation>
     </message>
     <message>
-        <location line="+52"/>
+        <location line="+56"/>
         <source>Midnight</source>
         <translation>Midnight</translation>
     </message>
     <message>
-        <location line="+52"/>
+        <location line="+56"/>
         <source>Aurora</source>
         <translation>Aurora</translation>
     </message>
     <message>
-        <location line="+52"/>
+        <location line="+56"/>
         <source>Ember</source>
         <translation>Ember</translation>
     </message>
     <message>
-        <location line="+52"/>
+        <location line="+55"/>
         <source>Daylight</source>
         <translation>Daylight</translation>
     </message>
@@ -3365,7 +3491,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>WallpaperPicker</name>
     <message>
-        <location filename="../qml/WallpaperPicker.qml" line="+23"/>
+        <location filename="../qml/WallpaperPicker.qml" line="+24"/>
         <source>Select</source>
         <translation>Select</translation>
     </message>
@@ -3445,7 +3571,7 @@ This can&apos;t be undone.</translation>
         <translation>Could not add the wallpaper</translation>
     </message>
     <message>
-        <location line="+30"/>
+        <location line="+28"/>
         <source>Pictures on the USB drive</source>
         <translation>Pictures on the USB drive</translation>
     </message>
@@ -3461,7 +3587,7 @@ This can&apos;t be undone.</translation>
         <translation>%1, current</translation>
     </message>
     <message>
-        <location line="+47"/>
+        <location line="+82"/>
         <source>Current</source>
         <translation>Current</translation>
     </message>
@@ -3582,7 +3708,7 @@ This can&apos;t be undone.</translation>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location line="+54"/>
+        <location line="+52"/>
         <source>Time zone</source>
         <translation>Time zone</translation>
     </message>

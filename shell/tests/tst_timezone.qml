@@ -24,7 +24,7 @@ Item {
         when: windowShown
 
         property Shell shell: null
-        readonly property int systemIndex: 7
+        readonly property int systemIndex: 8
         // 2027-01-15 08:00:00 UTC (a winter instant, so no daylight saving in any zone used here).
         readonly property real instant: 1800000000000
 

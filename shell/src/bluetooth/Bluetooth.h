@@ -64,6 +64,10 @@ public:
     // status of the start arrives as finished("controller-pairing", "start", status); the stop answers with id "stop".
     Q_INVOKABLE void startControllerPairing();
     Q_INVOKABLE void stopControllerPairing();
+    // Tells the service how long the console has been quiet, so that it can switch idle pads off
+    // (T-202; the rule is the service's, see Devices1.xml). timeoutSeconds 0: never. hold: an app
+    // or an install keeps the pads on.
+    Q_INVOKABLE void reportIdle(int idleSeconds, int timeoutSeconds, bool hold);
 
     // Tests only, and only with the mock backend (otherwise no-ops): a device's battery, and
     // the initial state.
@@ -92,6 +96,11 @@ public:
     Q_INVOKABLE void mockGamepad(bool connected, const QString &id, const QString &name, const QString &family,
                                  const QString &transport);
     Q_INVOKABLE int mockPairingStarts() const;
+    // The idle reports the mock got since the last reset, and the last one (0 / -1 before any).
+    Q_INVOKABLE int mockIdleReports() const;
+    Q_INVOKABLE int mockLastIdleSeconds() const;
+    Q_INVOKABLE int mockLastIdleTimeout() const;
+    Q_INVOKABLE bool mockLastIdleHold() const;
 
 signals:
     void stateChanged();

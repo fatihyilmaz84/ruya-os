@@ -101,7 +101,7 @@ Item {
         readonly property int displayIndex: 3
         readonly property int storageIndex: 5
         readonly property int accessibilityIndex: 6
-        readonly property int aboutIndex: 8
+        readonly property int aboutIndex: 9
 
         function test_two_pane_navigation() {
             openSettings()
@@ -498,7 +498,7 @@ Item {
         // squeezed to four rows: Down and Tab keep the focused row whole with its neighbour in view.
         function test_longer_panes_keep_the_look_ahead_with_down_and_tab() {
             openSettings()
-            for (const [index, name] of [[tc.displayIndex, "paneDisplay"], [7, "paneSystem"]]) {
+            for (const [index, name] of [[tc.displayIndex, "paneDisplay"], [8, "paneSystem"]]) {
                 selectCategory(index)
                 keyClick(Qt.Key_Right)
                 const pane = find(name)

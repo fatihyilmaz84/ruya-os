@@ -3,6 +3,8 @@
 #include "DBusPowerBackend.h"
 #include "MockPowerBackend.h"
 
+#include <QFile>
+
 Power::Power(std::unique_ptr<PowerBackend> backend, QObject *parent)
     : QObject(parent)
     , m_backend(std::move(backend))
@@ -86,4 +88,14 @@ void Power::mockReset()
     m_lastAction.clear();
     m_actionCount = 0;
     emit lastActionChanged();
+}
+
+bool Power::sleepAllowed() const
+{
+    if (!m_suspend)
+        return false;
+    if (m_backend->isMock())
+        return true;
+    return qEnvironmentVariable("RUYA_SUSPEND_VERIFIED") == QLatin1String("1")
+        || QFile::exists(QStringLiteral("/usr/share/ruyaos/suspend-verified"));
 }

@@ -21,7 +21,8 @@ The lead gives you: the task file, the worktree path and the branch `t/T-nnn-slu
 
 ## Self-check before the HANDOFF (what reviews keep finding)
 
-- **Revert test:** every new test fails when you temporarily undo the change it covers. Say which change you undid.
+- **Revert test:** every new test fails when you temporarily undo the change it covers. Use `.\scripts\revert-check.ps1 -File <path> -Old '<text>' -New '<text>'` (it rebuilds, runs the tests, restores the file and rebuilds again; a hand-made mutation once "stayed green" on a stale binary). Say which change you undid in the Outcome.
+- **Keep `output\shell-shots\review\` until the lead has merged:** the UX and design reviewers look at those PNGs (a builder's scratch cleanup removed them once). Clean other scratch only.
 - **Focus** is asserted after every navigation step that matters; geometry has a property test at the size a real caller sets.
 - **Timing tests** wait on the state that matters (`tryCompare`, `tryVerify`), never on a sleep or a counter read later.
 - **Claims match the code:** every sentence in the Outcome, the specs and the HANDOFF is true of the diff.
@@ -40,28 +41,24 @@ The lead gives you: the task file, the worktree path and the branch `t/T-nnn-slu
 
 Fix every blocking finding, answer each non-blocking one, re-run the checks, commit, and send a new HANDOFF with the next round number. Put the complete HANDOFF in your **final message**.
 
-## Your final message, always exactly this format
+## Your final message, always exactly this format (SHORT: the proofs live in the task's Outcome, not here)
+
+The lead reads every HANDOFF in its own context and pays for it again on every turn: at most about 25 lines, no restating of acceptance criteria with their proofs (the Outcome has them).
 
 ```
 HANDOFF T-nnn (round N)
 status: done | partial | blocked
 branch: t/T-nnn-slug   commit: <sha>
-summary: <2-4 sentences>
-
-acceptance criteria:
-- [x] <criterion> - proof: <test name / command + result / screenshot path>
-- [ ] <criterion> - why not: <reason>
-
+summary: <2-3 sentences>
+criteria: <all met, proofs in the Outcome | unmet: <id> - <why>, ...>
 checks: test <ALL GREEN: N QML + M skips, R Rust | failed: what>, shots <n/a | N, reviewed: files>
 vm: <n/a | pending lead run: <check> | this task: <version tag>, RUYA_BOOT_OK, <check> results>
-files changed: <list>
-docs updated: <list or none>
-deviations from task: <none | what and why>
-unverified: <none | what>
-
+deviations: <none | one line each, with why>
+unverified: <none | one line each>
 inbox:
 - (T-nnn) <follow-up, and why it matters>
-
 questions for lead:
 - <question or none>
 ```
+
+Revert checks (which change you undid for which new test) and the file list go into the Outcome, not here.

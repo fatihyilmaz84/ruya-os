@@ -30,6 +30,8 @@ jobs:
         run: pwsh -NoProfile -File scripts/lint-qml-members.ps1
       - name: Icon lint
         run: pwsh -NoProfile -File scripts/lint-icons.ps1
+      - name: Spec lint (components named in 04)
+        run: pwsh -NoProfile -File scripts/lint-spec-components.ps1
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -69,7 +71,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install Qt
-        run: dnf -y install --setopt=install_weak_deps=False cmake ninja-build gcc-c++ qt6-qtbase-devel qt6-qtdeclarative-devel qt6-qtmultimedia-devel qt6-qttools-devel qt6-linguist qt6-qtshadertools-devel
+        run: dnf -y install --setopt=install_weak_deps=False cmake ninja-build gcc-c++ qt6-qtbase-devel qt6-qtdeclarative-devel qt6-qtmultimedia-devel qt6-qttools-devel qt6-linguist qt6-qtshadertools-devel qt6-qtbase-private-devel
       - name: Build
         run: cmake -S shell -B shell/build -G Ninja -DCMAKE_BUILD_TYPE=Release && cmake --build shell/build
       - name: qmllint

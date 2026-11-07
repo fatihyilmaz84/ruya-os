@@ -16,6 +16,11 @@ class Power : public QObject
     QML_SINGLETON
 
     Q_PROPERTY(bool canSuspend READ canSuspend NOTIFY capabilitiesChanged)
+    // The console may put itself to sleep after idle time (T-202): logind allows suspend AND
+    // suspend is known to work on this image (T-166). The mock always says yes; on the image the
+    // file /usr/share/ruyaos/suspend-verified (or RUYA_SUSPEND_VERIFIED=1) is what T-166 provides.
+    // Settings -> Power saving shows the Sleep row only while this is true.
+    Q_PROPERTY(bool sleepAllowed READ sleepAllowed NOTIFY capabilitiesChanged)
     Q_PROPERTY(bool canRestart READ canRestart NOTIFY capabilitiesChanged)
     Q_PROPERTY(bool canPowerOff READ canPowerOff NOTIFY capabilitiesChanged)
     // The last action handed to the backend ("suspend", "restart", "poweroff", or empty).
@@ -32,6 +37,7 @@ public:
 
     // Only "yes" counts: "challenge" would need an interactive prompt the shell never shows.
     bool canSuspend() const { return m_suspend; }
+    bool sleepAllowed() const;
     bool canRestart() const { return m_restart; }
     bool canPowerOff() const { return m_poweroff; }
     QString lastAction() const { return m_lastAction; }

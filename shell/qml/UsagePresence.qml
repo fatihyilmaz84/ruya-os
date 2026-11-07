@@ -7,9 +7,11 @@ import RuyaShell
 // on every change and every 20 s, because the service ignores a report older than 75 s. The
 // service does the counting; this object only says what it sees.
 //
-// The idle clock here is the simple one of this task (the time since the last input the window
-// saw); T-202's single idle clock replaces it. The first `idleSeconds` of silence still count: the
-// shell cannot know yet that nobody is there.
+// Idle is read from the console's one idle clock (T-202, IdleClock): the time without input where
+// something holding the console awake counts as presence, so a game or a film that asked for the
+// screen to stay on (Wayland idle-inhibit) keeps counting however long the pad is not touched.
+// What the shell cannot see are buttons it does not map (triggers, X/Y, the right stick) in an app
+// that does not ask for the screen; those do not reset the clock.
 QtObject {
     id: reporter
 
@@ -18,20 +20,12 @@ QtObject {
     property string instance: ""
     property int idleSeconds: 600
     property bool idle: false
-    property double lastInputMs: Date.now()
-    // Replaced in tests.
-    property var now: () => Date.now()
 
     readonly property string attention: !signedIn ? "locked" : idle ? "idle" : "active"
 
-    function noteInput() {
-        lastInputMs = now()
-        if (idle)
-            idle = false
-    }
-
+    // Input ended the silence, or the check timer is due.
     function check() {
-        idle = (now() - lastInputMs) >= idleSeconds * 1000
+        idle = IdleClock.sample() >= idleSeconds
     }
 
     function report() {

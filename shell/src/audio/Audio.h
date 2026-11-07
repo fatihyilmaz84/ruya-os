@@ -21,6 +21,8 @@ class Audio : public QObject
 
     Q_PROPERTY(int volume READ volume NOTIFY volumeChanged)
     Q_PROPERTY(bool muted READ isMuted NOTIFY mutedChanged)
+    // Something plays through an output (T-202): the idle clock does not count that as idle.
+    Q_PROPERTY(bool playing READ isPlaying NOTIFY playingChanged)
     // channel name ("ui", "ambient", "media") -> 0-100
     Q_PROPERTY(QVariantMap channelVolumes READ channelVolumes NOTIFY channelVolumesChanged)
     // [{ id, name, kind, isDefault }]
@@ -37,6 +39,7 @@ public:
 
     int volume() const { return m_volume; }
     bool isMuted() const { return m_muted; }
+    bool isPlaying() const { return m_playing; }
     QVariantMap channelVolumes() const { return m_channels; }
     QVariantList sinks() const { return m_sinks; }
     QString defaultSink() const { return m_defaultSink; }
@@ -58,6 +61,8 @@ public:
     Q_INVOKABLE bool mockPlug(const QString &id);
     Q_INVOKABLE void mockUnplug(const QString &id);
     Q_INVOKABLE void mockReset();
+    // The mock's `playing` flag (tests); a no-op against the service.
+    Q_INVOKABLE void mockSetPlaying(bool playing);
     // Asks the backend for the state and the outputs; the replies arrive after `ms` and show them
     // as they are now. mockPendingReplies: how many are still on their way.
     Q_INVOKABLE void mockRefreshDelayed(int ms);
@@ -66,6 +71,7 @@ public:
 signals:
     void volumeChanged();
     void mutedChanged();
+    void playingChanged();
     void channelVolumesChanged();
     void sinksChanged();
     void defaultSinkChanged();
@@ -84,6 +90,7 @@ private:
     int m_volume = 0;
     int m_wanted = 0; // last requested level, so rapid steps accumulate before results arrive
     bool m_muted = false;
+    bool m_playing = false;
     bool m_wantedMuted = false;
     bool m_ready = false;
     bool m_masterPending = false; // a master command is waiting for its report
