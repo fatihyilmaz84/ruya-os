@@ -1,6 +1,6 @@
 # T-271 — Colour themes that look different from each other
 
-Status: todo · Phase: 2 · Depends: — · Area: shell · Size: M · Owner: builder
+Status: in-progress · Phase: 2 · Depends: — · Area: shell · Size: M · Owner: builder
 
 ## Goal
 Dreamglass, Midnight, Aurora and Ember are recognisably different at a glance on the Home screen, in Settings and under an open app's overlays; today only Daylight is. Owner feedback, 2026-11-07: "there doesn't seem to be much difference between themes, only Daylight makes a huge difference". The contrast gate (04 §7, `tst_theme_contrast.qml`) must still pass for every theme.
