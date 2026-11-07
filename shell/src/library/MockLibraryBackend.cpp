@@ -1,4 +1,5 @@
 #include "MockLibraryBackend.h"
+#include "MockArt.h"
 
 #include <algorithm>
 
@@ -38,6 +39,8 @@ MockLibraryBackend::MockLibraryBackend(QObject *parent)
 void MockLibraryBackend::reset(const QString &scenario)
 {
     m_items.clear();
+    // "art:<dir>": the default library, each item with a picture from <dir> (tests only, T-281).
+    const bool withArt = scenario.startsWith(QLatin1String("art:"));
     if (scenario != QLatin1String("empty")) {
         m_items = {
             item("steam:620", "game", "Portal 2", 1761800000),
@@ -51,6 +54,11 @@ void MockLibraryBackend::reset(const QString &scenario)
             item("flatpak:org.example.Player", "app", "Open Player", 1760000000),
             item("flatpak:org.example.Browser", "app", "Web Browser", 0),
         };
+        if (withArt) {
+            const QString dir = scenario.mid(4);
+            for (int i = 0; i < m_items.size(); ++i)
+                m_items[i].art.insert(QStringLiteral("tile"), mockArtPath(dir, i));
+        }
         // "unplayed": all installed, nothing started yet (a fresh image, Home's fallback row).
         if (scenario == QLatin1String("unplayed")) {
             for (LibraryItem &i : m_items)

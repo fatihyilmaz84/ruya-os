@@ -177,6 +177,19 @@ QtObject {
     readonly property real tileWidth: 400
     readonly property real tileHeight: 260
     readonly property real avatarSize: 200
+    // The card family (04 §5, T-281): the art cards are 16:9 in three widths, the icon card is square,
+    // the profile card is a portrait with a round avatar. Design px (times `u`); corner radius is
+    // `radiusM`, the gap between neighbours `cardGap`, the caption under a card that has one (Store)
+    // `cardCaptionHeight`. A card's height comes from `cardArtHeight(width)`.
+    readonly property real cardWidthHero: 400       // Games grid
+    readonly property real cardWidthShelf: 320      // Home "Recent" row
+    readonly property real cardWidthCompact: 288    // Store rows and results
+    readonly property real cardIconSize: 160        // square app icon card (the art is drawn at this size; no page lists them yet)
+    readonly property real cardProfileWidth: 260    // profile picker card ...
+    readonly property real cardProfileHeight: 320   // ... avatar (`avatarSize`) over the name
+    readonly property real cardGap: spaceM          // between cards, in rows and grids
+    readonly property real cardCaptionHeight: 72    // name + one line under the art (Store card)
+    function cardArtHeight(width) { return width * 9 / 16 }
     readonly property real glyphSize: 40    // controller button glyph (hint bar)
     readonly property real focusRingWidth: 4
     readonly property real focusRingOffset: 7
@@ -280,6 +293,24 @@ QtObject {
     readonly property var shadowLift: ({ offsetY: 14, blur: 34, alpha: 0.60 * tok("shadowStrength") })    // focused card
     readonly property var shadowPanel: ({ offsetY: 10, blur: 30, alpha: 0.35 * tok("shadowStrength") })   // glass panels, modals, toasts
     readonly property var shadowPill: ({ offsetFactor: 0.18, blurFactor: 0.6, blurMax: 40, alpha: 0.27 * tok("shadowStrength") })   // top bar, pills
+
+    // Art glow (04 §3.8, T-281): a focused card's lift shadow takes the colour of its picture (ArtPalette)
+    // like a Hue light behind a TV. `glowShadow(colour, strength)` is the shadow colour: the theme's
+    // shadow colour mixed toward the art colour by `glowShare` times the picture's strength, the
+    // art colour darkened on light themes (`glowDarken` times `lightness`) so it still reads on a
+    // pale ground; `glowBoost` is the alpha factor of a glowing shadow (twice on a light theme, whose
+    // shadows are weaker). On the High tier a wider, softer halo sits behind it (`glowHalo`).
+    readonly property real glowShare: 0.9
+    readonly property real glowDarken: 0.35
+    readonly property real glowBoost: 1 + lightness
+    readonly property bool haloOn: DeviceSettings.effectsQuality === "high"
+    readonly property var glowHalo: ({ blur: 120, alpha: 0.45 })
+    readonly property real glowFallbackStrength: 0.7   // a card without a picture (yet): its placeholder hue at this volume
+    function glowFallback(hue) { return Qt.hsla(hue, 0.6, 0.5, 1) }
+    function glowShadow(colour, strength) {
+        const d = 1 - glowDarken * lightness
+        return ThemeMath.blend(shadowColor, Qt.rgba(colour.r * d, colour.g * d, colour.b * d, 1), glowShare * strength)
+    }
 
     // Card focus: a white top sheen (all tiers) and a one-time glare sweep (04 §3.8).
     readonly property color cardSheen: Qt.rgba(1, 1, 1, 0.09)

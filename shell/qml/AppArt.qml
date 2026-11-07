@@ -21,6 +21,30 @@ Rectangle {
     readonly property bool pending: picture.length > 0 && imageStatus === Image.Loading
     readonly property bool shimmering: shimmer && pending && Theme.shimmerOn
 
+    // The art's colours for the card glow (T-281, 04 §3.8): the sampled colour of the picture
+    // (ArtPalette decodes it once, in the background, and remembers it) and how loud the glow may be.
+    // Until it is known, and for a card without a picture, the glow takes the placeholder's own hue.
+    // Only cards that glow ask for it (`glowing`); the hero and the saver do not.
+    property bool glowing: false
+    property var sample: ({})
+    readonly property bool sampled: sample.color !== undefined
+    readonly property color glowColor: sampled ? sample.color : Theme.glowFallback(hue)
+    readonly property real glowStrength: sampled ? sample.strength : Theme.glowFallbackStrength
+
+    function lookup() {
+        sample = glowing && picture.length > 0 ? ArtPalette.colorsOf(picture) : ({})
+    }
+    onPictureChanged: lookup()
+    onGlowingChanged: lookup()
+    Component.onCompleted: lookup()
+    Connections {
+        target: ArtPalette
+        function onSampled(source) {
+            if (source === art.picture)
+                art.lookup()
+        }
+    }
+
     readonly property real hue: {
         let h = 0
         for (let i = 0; i < appId.length; ++i)
@@ -81,7 +105,9 @@ Rectangle {
         objectName: "artImage"
         anchors.fill: parent
         visible: status === Image.Ready
-        source: art.picture.length > 0 ? (art.picture.startsWith("/") ? "file://" + art.picture : art.picture) : ""
+        // A path (Linux "/..." or a Windows drive "C:/...") becomes a file URL; a URL stays as it is.
+        source: art.picture.length > 0 ? (art.picture.startsWith("/") ? "file://" + art.picture
+                                          : /^[A-Za-z]:\//.test(art.picture) ? "file:///" + art.picture : art.picture) : ""
         fillMode: Image.PreserveAspectCrop
         asynchronous: true
     }

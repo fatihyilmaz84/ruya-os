@@ -99,6 +99,9 @@ public:
     Q_INVOKABLE int mockPendingReplies() const;
     Q_INVOKABLE int mockSearchCount() const;
     Q_INVOKABLE void mockCatalogChanged();
+    // The catalogue's apps get a tile picture from <dir> (<dir>/<colour>.png, cycling red, blue, green,
+    // white, dark, redblue) and the catalogue is announced as changed; mockReset takes them away (T-281).
+    Q_INVOKABLE void mockArtDir(const QString &dir);
 
 signals:
     void catalogueChanged();

@@ -50,7 +50,8 @@ public:
     Q_INVOKABLE QVariantMap item(const QString &id) const;
 
     // Tests only, and only with the mock backend (otherwise a no-op). scenario: "" (the default library), "empty" (nothing installed) or "unplayed" (the default
-    // items, none with a last played time).
+    // items, none with a last played time) or "art:<dir>" (the default items with pictures: art.tile is
+    // <dir>/<colour>.png, cycling red, blue, green, white, dark, redblue; T-281 screenshots).
     Q_INVOKABLE void resetMockForTests(const QString &scenario);
     // A list request whose reply (a snapshot of now) arrives after ms, and how many replies are
     // still due. No-ops with the D-Bus backend.

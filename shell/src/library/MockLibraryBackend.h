@@ -18,7 +18,8 @@ public:
     int pendingReplies() const { return m_pending; }
     void rescan() override;
 
-    // Tests only.
+    // Tests only. scenario: "", "empty", "unplayed" or "art:<dir>" (the default items, each with
+    // art.tile = a picture of <dir>, see mockArtPath).
     void reset(const QString &scenario);
 
 private:

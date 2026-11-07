@@ -6,7 +6,7 @@ option(RUYA_BUILD_TESTS "Build the Qt Quick tests" ON)
 # (compositor/, ADR-002 option A, T-130). Needs QtWaylandCompositor, which the Windows kit lacks.
 option(RUYA_COMPOSITOR "Build ruya-shell as the Wayland compositor (Linux)" OFF)
 
-find_package(Qt6 6.8 REQUIRED COMPONENTS Gui Quick Multimedia DBus LinguistTools)
+find_package(Qt6 6.8 REQUIRED COMPONENTS Gui Network Quick Multimedia DBus LinguistTools)
 # ScreenPower (T-202) calls QPlatformScreen::setPowerState, a private QPA header. `GuiPrivate` is a
 # find_package component only from Qt 6.9; Qt 6.8 (the floor, root CLAUDE.md) offers Qt6::GuiPrivate
 # with the Gui package, so asking for the component there would fail the configure step.
@@ -100,6 +100,7 @@ qt_add_qml_module(ruyashell
         src/power/ScreenPower.h src/power/ScreenPower.cpp
         src/input/KeyRouter.h src/input/KeyRouter.cpp
         src/wallpaper/Wallpapers.h src/wallpaper/Wallpapers.cpp
+        src/art/ArtPalette.h src/art/ArtPalette.cpp src/art/MockArt.h
     QML_FILES
         qml/Main.qml
         qml/Shell.qml
@@ -228,9 +229,9 @@ else()
 endif()
 
 # qmltyperegistrar includes the QML_ELEMENT headers by file name.
-target_include_directories(ruyashell PUBLIC src/backend src/profiles src/settings src/audio src/network src/bluetooth src/battery src/time src/display src/thermal src/storage src/system src/power src/store src/library src/update src/session src/usage src/input src/wallpaper)
+target_include_directories(ruyashell PUBLIC src/backend src/profiles src/settings src/audio src/network src/bluetooth src/battery src/time src/display src/thermal src/storage src/system src/power src/store src/library src/update src/session src/usage src/input src/wallpaper src/art)
 # Qt6::GuiPrivate: ScreenPower calls QPlatformScreen::setPowerState (DPMS under eglfs_kms, T-202).
-target_link_libraries(ruyashell PRIVATE Qt6::Quick Qt6::Multimedia Qt6::DBus Qt6::GuiPrivate)
+target_link_libraries(ruyashell PRIVATE Qt6::Network Qt6::Quick Qt6::Multimedia Qt6::DBus Qt6::GuiPrivate)
 
 # Translations: the .ts files in i18n/ are compiled to .qm and embedded as :/i18n/ruyashell_<lang>.qm.
 # English is the source language, but its .ts carries the plural forms ("1 attempt left").

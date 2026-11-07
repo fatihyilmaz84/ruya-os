@@ -18,8 +18,8 @@ Page {
     property string query: ""
     property var resultIds: []
 
-    readonly property real cardWidth: 300 * u
-    readonly property real cardHeight: 290 * u
+    readonly property real cardWidth: Theme.cardWidthCompact * u
+    readonly property real cardHeight: (Theme.cardArtHeight(Theme.cardWidthCompact) + Theme.cardCaptionHeight) * u
     readonly property real rowTitleHeight: 56 * u
     readonly property real rowHeight: rowTitleHeight + cardHeight + Theme.spaceL * u
 
@@ -178,13 +178,17 @@ Page {
             radius: Theme.radiusM * card.u
             kind: "lift"
             active: card.focused
+            glow: art.glowColor
+            glowStrength: art.glowStrength
+            halo: true
         }
 
         AppArt {
             id: art
             width: parent.width
-            height: 190 * card.u
+            height: Theme.cardArtHeight(width)
             u: card.u
+            glowing: true
             appId: card.modelData
             appName: card.app.name ?? ""
             picture: card.app.tile ?? ""
@@ -337,10 +341,10 @@ Page {
                             Accessible.role: Accessible.List
                             Accessible.name: currentItem ? currentItem.Accessible.name : page.rowTitle(row.modelData)
                             anchors { left: parent.left; right: parent.right; top: rowHeading.bottom }
-                            height: page.cardHeight + Theme.spaceM * page.u
+                            height: page.cardHeight + Theme.cardGap * page.u
                             focus: true
                             orientation: ListView.Horizontal
-                            spacing: Theme.spaceM * page.u
+                            spacing: Theme.cardGap * page.u
                             leftMargin: Theme.spaceS * page.u
                             rightMargin: Theme.spaceS * page.u
                             topMargin: Theme.spaceS * page.u
@@ -369,8 +373,8 @@ Page {
             visible: page.searching
             anchors { left: parent.left; right: parent.right; top: toolbar.bottom; topMargin: Theme.spaceM * page.u; bottom: parent.bottom }
             clip: true
-            cellWidth: page.cardWidth + Theme.spaceM * page.u
-            cellHeight: page.cardHeight + Theme.spaceL * page.u
+            cellWidth: page.cardWidth + Theme.cardGap * page.u
+            cellHeight: page.cardHeight + Theme.cardGap * page.u
             leftMargin: Theme.spaceS * page.u
             topMargin: Theme.spaceS * page.u
             keyNavigationEnabled: true

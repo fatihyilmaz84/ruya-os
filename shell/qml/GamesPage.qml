@@ -3,17 +3,18 @@ import QtQuick
 import RuyaShell
 import "controls"
 
-// Games (spec 02 §1): the installed games as art cards, 4 columns at 1080p, with a source
-// filter. Accept asks the library to launch the game (Library.launch); the session service does
-// the rest later. An empty library shows an empty state with a button to the Store.
+// Games (spec 02 §1): the installed games as hero-size art cards (04 §5: 400 design px wide,
+// as many columns as fit, 4 at 1080p), with a source filter. Accept asks the library to launch the
+// game (Library.launch); the session service does the rest later. An empty library shows an empty
+// state with a button to the Store.
 Page {
     id: page
 
     title: qsTr("Games")
 
-    readonly property int columns: 4
-    readonly property real gap: Theme.spaceM * u
-    readonly property real cardWidth: Math.floor((grid.width - grid.leftMargin - columns * gap) / columns)
+    readonly property real gap: Theme.cardGap * u
+    readonly property real cardWidth: Theme.cardWidthHero * u
+    readonly property int columns: Math.max(1, Math.floor((grid.width - grid.leftMargin) / (cardWidth + gap)))
     property string sourceFilter: "all"
 
     // Ids of the games to show; a list of ids keeps the grid from rebuilding on unrelated changes.
@@ -90,7 +91,7 @@ Page {
             leftMargin: Theme.spaceS * page.u
             topMargin: Theme.spaceS * page.u
             cellWidth: page.cardWidth + page.gap
-            cellHeight: page.cardWidth * 9 / 16 + page.gap
+            cellHeight: Theme.cardArtHeight(page.cardWidth) + page.gap
             keyNavigationEnabled: true
             highlightMoveDuration: 0
             model: page.shownIds
