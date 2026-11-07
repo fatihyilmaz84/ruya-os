@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(ruya-shell VERSION 0.1.0 LANGUAGES CXX)
+project(ruya-shell VERSION 0.1.0 LANGUAGES C CXX)
 
 option(RUYA_BUILD_TESTS "Build the Qt Quick tests" ON)
 # The image build turns this on (image/Containerfile): ruya-shell is then the Wayland compositor
