@@ -1248,7 +1248,7 @@
         <translation>Geri</translation>
     </message>
     <message>
-        <location line="+76"/>
+        <location line="+86"/>
         <source>Enter a name first.</source>
         <translation>Önce bir ad girin.</translation>
     </message>
@@ -1303,7 +1303,7 @@
         <translation>Ağ</translation>
     </message>
     <message>
-        <location line="-343"/>
+        <location line="-353"/>
         <source>Try again</source>
         <translation>Yeniden dene</translation>
     </message>
@@ -1315,7 +1315,7 @@
         <translation>Atla</translation>
     </message>
     <message>
-        <location line="+116"/>
+        <location line="+126"/>
         <location line="+86"/>
         <source>Connect a controller</source>
         <translation>Bir kontrolcü bağlayın</translation>
@@ -1427,12 +1427,12 @@
         <translation>%1 yüzde %2</translation>
     </message>
     <message>
-        <location line="+548"/>
+        <location line="+559"/>
         <source>Power</source>
         <translation>Güç</translation>
     </message>
     <message>
-        <location line="-772"/>
+        <location line="-783"/>
         <source>Update ready. Restart to finish.</source>
         <translation>Güncelleme hazır. Bitirmek için yeniden başlat.</translation>
     </message>
@@ -1493,14 +1493,15 @@
         <translation>%1 başlatılıyor…</translation>
     </message>
     <message>
-        <location line="+231"/>
-        <location line="+10"/>
+        <location line="+240"/>
+        <location line="+12"/>
         <location line="+3"/>
         <source>Select</source>
         <translation>Seç</translation>
     </message>
     <message>
-        <location line="-5"/>
+        <location line="-19"/>
+        <location line="+14"/>
         <source>Cancel</source>
         <translation>İptal</translation>
     </message>
@@ -1526,8 +1527,8 @@
         <translation>Profil değiştir</translation>
     </message>
     <message>
-        <location line="-109"/>
-        <location line="+111"/>
+        <location line="-111"/>
+        <location line="+113"/>
         <source>Close</source>
         <translation>Kapat</translation>
     </message>
@@ -1547,8 +1548,8 @@
         <translation>Kapat</translation>
     </message>
     <message>
-        <location line="-117"/>
-        <location line="+118"/>
+        <location line="-119"/>
+        <location line="+120"/>
         <source>Back</source>
         <translation>Geri</translation>
     </message>
@@ -2129,7 +2130,17 @@
 <context>
     <name>WallpaperPicker</name>
     <message>
-        <location filename="../qml/WallpaperPicker.qml" line="+48"/>
+        <location filename="../qml/WallpaperPicker.qml" line="+23"/>
+        <source>Select</source>
+        <translation>Seç</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Cancel</source>
+        <translation>İptal</translation>
+    </message>
+    <message>
+        <location line="+28"/>
         <source>Default (animated blobs)</source>
         <translation>Varsayılan (hareketli lekeler)</translation>
     </message>
@@ -2303,17 +2314,17 @@
         <translation>Saat dilimleri yükleniyor…</translation>
     </message>
     <message>
-        <location line="+20"/>
+        <location line="+21"/>
         <source>%1, current</source>
         <translation>%1, geçerli</translation>
     </message>
     <message>
-        <location line="+17"/>
+        <location line="+27"/>
         <source>Current</source>
         <translation>Geçerli</translation>
     </message>
     <message>
-        <location line="+21"/>
+        <location line="+22"/>
         <source>Region</source>
         <translation>Bölge</translation>
     </message>
@@ -2326,7 +2337,17 @@
 <context>
     <name>ZonePicker</name>
     <message>
-        <location filename="../qml/ZonePicker.qml" line="+68"/>
+        <location filename="../qml/ZonePicker.qml" line="+17"/>
+        <source>Select</source>
+        <translation>Seç</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Cancel</source>
+        <translation>İptal</translation>
+    </message>
+    <message>
+        <location line="+54"/>
         <source>Time zone</source>
         <translation>Saat dilimi</translation>
     </message>

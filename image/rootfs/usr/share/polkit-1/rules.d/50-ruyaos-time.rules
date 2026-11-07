@@ -5,12 +5,16 @@
 //
 //   org.freedesktop.timedate1.set-timezone
 //
-// Nothing else of timedated is allowed: the clock itself (set-time), the RTC mode (set-local-rtc)
-// and NTP on or off (set-ntp) keep the default policy (administrator authentication), as does
-// every action for every other user (profile users, Flatpak apps). Who among
-// the people at the console may change the zone is decided by ruya-devices (an admin profile, or
-// nobody yet during the first-boot setup), the same way the shell asks for an admin's PIN
-// before it calls the update service.
+// Every other timedate1 action is refused outright for this user (NO, not "ask for a password":
+// nobody could answer): the clock itself (set-time), the RTC mode (set-local-rtc) and NTP on or
+// off (set-ntp). Other users (profile users, Flatpak apps) keep the default policy.
+//
+// Trust boundary, honestly: polkit sees the caller's user, not the profile. Any process running as
+// ruya-shell can call timedate1.SetTimezone directly; the admin-profile rule in ruya-devices
+// (time.rs, caller_may_set) decides what the shell's own UI offers and what the Devices1.Time door
+// accepts, it is not a barrier against code that already runs as ruya-shell. That is the same
+// boundary as the power, network and storage rules next to this one. Third-party apps never run as
+// ruya-shell (Flatpak sandboxes, other users).
 // scripts/vm-devices-check.sh asks pkcheck for the verdicts as the service's own process.
 polkit.addRule(function(action, subject) {
     if (subject.user !== "ruya-shell")
@@ -18,5 +22,7 @@ polkit.addRule(function(action, subject) {
 
     if (action.id === "org.freedesktop.timedate1.set-timezone")
         return polkit.Result.YES;
+    if (action.id.indexOf("org.freedesktop.timedate1.") === 0)
+        return polkit.Result.NO;
     return polkit.Result.NOT_HANDLED;
 });

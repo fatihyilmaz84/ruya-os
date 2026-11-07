@@ -27,6 +27,9 @@ public:
     // The next SetTimezone fails ("failed").
     void setFailNext(bool fail) { m_failNext = fail; }
     int setCalls() const { return m_setCalls; }
+    // The service has not answered ListTimezones yet: the list is empty until releaseZones().
+    void withholdZones();
+    void releaseZones();
     // Replies to refresh() arrive after `ms` with the state as it was when asked; the number of
     // replies still on their way (a test plays an old reply landing after a new one).
     void refreshDelayed(int ms);
@@ -39,6 +42,7 @@ private:
     bool m_ntp = true;
     bool m_callerAllowed = true;
     bool m_failNext = false;
+    bool m_zonesWithheld = false;
     int m_setCalls = 0;
     int m_pending = 0;
     QStringList m_zones;

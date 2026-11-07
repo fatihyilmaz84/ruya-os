@@ -119,6 +119,16 @@ FocusScope {
         zoneChooser.forceActiveFocus()
     }
 
+    // ListTimezones can answer after the wizard reached the step: begin again, so the default for
+    // the language is not lost to the zone the console has now (UTC).
+    Connections {
+        target: TimeZone
+        function onTimezonesChanged() {
+            if (setup.step === setup.stepZone && setup.zoneChoice.length === 0 && TimeZone.timezones.length > 0)
+                setup.enterZone()
+        }
+    }
+
     function chooseZone(zone) {
         zoneChoice = zone
         TimeZone.setTimezone(zone)      // the answer needs no waiting for: Settings can change it later

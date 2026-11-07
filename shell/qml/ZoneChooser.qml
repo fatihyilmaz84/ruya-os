@@ -183,16 +183,26 @@ FocusScope {
         property bool listFocused: false   // the list has the focus
         property bool marked: false        // the zone that is set now
         readonly property bool focused: selected && listFocused
+        readonly property bool restingSelection: selected && !listFocused   // the region while the cities have focus (04 §4)
 
         width: ListView.view ? ListView.view.width : 0
         height: Theme.rowHeight * chooser.u
         radius: height / 2
-        color: selected ? Theme.focusFill : Theme.glass
+        color: focused ? Theme.focusFill : restingSelection ? Theme.selectedFill : Theme.glass
         border.width: focused ? Theme.focusRingWidth * chooser.u : 0
         border.color: Theme.focusRing
         Accessible.role: Accessible.ListItem
         Accessible.name: marked ? qsTr("%1, current").arg(label) : label
         Accessible.selected: selected
+
+        GlassLayers {
+            objectName: "rowLayers"
+            anchors.fill: parent
+            u: chooser.u
+            radius: parent.radius
+            grain: false                // a row is not blurred
+            rim: !zoneRow.focused       // the focus ring replaces the rim
+        }
 
         Text {
             anchors { left: parent.left; leftMargin: Theme.spaceL * chooser.u; right: markText.visible ? markText.left : parent.right
@@ -202,6 +212,7 @@ FocusScope {
             text: zoneRow.label
             color: Theme.text
             font.pixelSize: Theme.typeBody * chooser.u
+            font.weight: zoneRow.restingSelection ? Theme.weightDemiBold : Theme.weightRegular
         }
         Text {
             id: markText
@@ -209,8 +220,9 @@ FocusScope {
             visible: zoneRow.marked
             anchors { right: parent.right; rightMargin: Theme.spaceL * chooser.u; verticalCenter: parent.verticalCenter }
             text: qsTr("Current")
-            color: Theme.textDim
+            color: Theme.text           // on translucent glass textDim is too faint
             font.pixelSize: Theme.typeCaption * chooser.u
+            font.weight: Theme.weightDemiBold
         }
     }
 

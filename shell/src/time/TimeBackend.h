@@ -34,10 +34,16 @@ protected:
     bool acceptState(quint64 request) { return m_stateSeq.accept(request); }
     void deliverState(quint64 request, const QString &timezone, bool ntpSynchronised)
     {
-        if (acceptState(request))
+        if (acceptState(request)) {
+            m_ntp = ntpSynchronised;
             emit stateChanged(timezone, ntpSynchronised);
+        }
     }
+    // A successful SetTimezone is the newest state there is: report it through the sequence, so a
+    // GetTimezone reply that was already on its way (with the old zone) is dropped when it lands.
+    void deliverZoneSet(const QString &timezone) { deliverState(beginStateRequest(), timezone, m_ntp); }
 
 private:
     RequestSequence m_stateSeq;
+    bool m_ntp = false;
 };

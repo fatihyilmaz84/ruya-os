@@ -1250,7 +1250,7 @@
         <translation>Back</translation>
     </message>
     <message>
-        <location line="+76"/>
+        <location line="+86"/>
         <source>Enter a name first.</source>
         <translation>Enter a name first.</translation>
     </message>
@@ -1305,7 +1305,7 @@
         <translation>Network</translation>
     </message>
     <message>
-        <location line="-343"/>
+        <location line="-353"/>
         <source>Try again</source>
         <translation>Try again</translation>
     </message>
@@ -1317,7 +1317,7 @@
         <translation>Skip</translation>
     </message>
     <message>
-        <location line="+116"/>
+        <location line="+126"/>
         <location line="+86"/>
         <source>Connect a controller</source>
         <translation>Connect a controller</translation>
@@ -1430,12 +1430,12 @@
         <translation>%1 %2 percent</translation>
     </message>
     <message>
-        <location line="+548"/>
+        <location line="+559"/>
         <source>Power</source>
         <translation>Power</translation>
     </message>
     <message>
-        <location line="-772"/>
+        <location line="-783"/>
         <source>Update ready. Restart to finish.</source>
         <translation>Update ready. Restart to finish.</translation>
     </message>
@@ -1496,14 +1496,15 @@
         <translation>Starting %1…</translation>
     </message>
     <message>
-        <location line="+231"/>
-        <location line="+10"/>
+        <location line="+240"/>
+        <location line="+12"/>
         <location line="+3"/>
         <source>Select</source>
         <translation>Select</translation>
     </message>
     <message>
-        <location line="-5"/>
+        <location line="-19"/>
+        <location line="+14"/>
         <source>Cancel</source>
         <translation>Cancel</translation>
     </message>
@@ -1529,8 +1530,8 @@
         <translation>Switch profile</translation>
     </message>
     <message>
-        <location line="-109"/>
-        <location line="+111"/>
+        <location line="-111"/>
+        <location line="+113"/>
         <source>Close</source>
         <translation>Close</translation>
     </message>
@@ -1550,8 +1551,8 @@
         <translation>Power off</translation>
     </message>
     <message>
-        <location line="-117"/>
-        <location line="+118"/>
+        <location line="-119"/>
+        <location line="+120"/>
         <source>Back</source>
         <translation>Back</translation>
     </message>
@@ -2134,7 +2135,17 @@
 <context>
     <name>WallpaperPicker</name>
     <message>
-        <location filename="../qml/WallpaperPicker.qml" line="+48"/>
+        <location filename="../qml/WallpaperPicker.qml" line="+23"/>
+        <source>Select</source>
+        <translation>Select</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Cancel</source>
+        <translation>Cancel</translation>
+    </message>
+    <message>
+        <location line="+28"/>
         <source>Default (animated blobs)</source>
         <translation>Default (animated blobs)</translation>
     </message>
@@ -2308,17 +2319,17 @@
         <translation>Loading time zones…</translation>
     </message>
     <message>
-        <location line="+20"/>
+        <location line="+21"/>
         <source>%1, current</source>
         <translation>%1, current</translation>
     </message>
     <message>
-        <location line="+17"/>
+        <location line="+27"/>
         <source>Current</source>
         <translation>Current</translation>
     </message>
     <message>
-        <location line="+21"/>
+        <location line="+22"/>
         <source>Region</source>
         <translation>Region</translation>
     </message>
@@ -2331,7 +2342,17 @@
 <context>
     <name>ZonePicker</name>
     <message>
-        <location filename="../qml/ZonePicker.qml" line="+68"/>
+        <location filename="../qml/ZonePicker.qml" line="+17"/>
+        <source>Select</source>
+        <translation>Select</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Cancel</source>
+        <translation>Cancel</translation>
+    </message>
+    <message>
+        <location line="+54"/>
         <source>Time zone</source>
         <translation>Time zone</translation>
     </message>

@@ -71,6 +71,8 @@ public:
     Q_INVOKABLE void mockSetCallerAllowed(bool allowed);    // false: SetTimezone answers "forbidden"
     Q_INVOKABLE void mockFailNext();                        // the next SetTimezone answers "failed"
     Q_INVOKABLE int mockSetCalls() const;
+    Q_INVOKABLE void mockWithholdZones();                   // ListTimezones has not answered yet: the list is empty
+    Q_INVOKABLE void mockReleaseZones();                    // ... and now it answers
     Q_INVOKABLE void mockRefreshDelayed(int ms);
     Q_INVOKABLE int mockPendingReplies() const;
 

@@ -28,8 +28,8 @@
 # Then the time part (T-213): GetTimezone and ListTimezones answer (the list has Europe/Istanbul and UTC), NtpSynchronised is a
 # boolean, an unknown or malformed name is invalid, a call from another user is refused, root sets Asia/Tokyo and timedatectl,
 # /etc/localtime and `date +%Z` follow, a zone set by timedatectl from outside shows in GetTimezone within 5 s (the service follows
-# timedated), the shell's own call is `forbidden` while profiles exist and nobody is signed in and `ok` while no profile exists
-# (first-boot setup), pkcheck as the service's process allows org.freedesktop.timedate1.set-timezone and refuses set-time, set-ntp
+# timedated), the shell's own call is `forbidden` while profiles exist and nobody (or a standard profile) is signed in, `ok` for a signed-in admin
+# and while no profile exists (first-boot setup), pkcheck as the service's process allows org.freedesktop.timedate1.set-timezone and refuses set-time, set-ntp
 # and set-local-rtc. The original zone is restored. `time` runs only this part.
 # events: only the PipeWire event checks (T-133); IDLE=60 adds the idle-process count (also part of check; samples the process list for IDLE seconds).
 # state: prints State and Primary (for the link test, see docs/dev-setup.md).
@@ -440,14 +440,25 @@ time_check() {
     done
     [ "$(busctl --system call "$svc" "$path" "$tm" GetTimezone)" = 's "Europe/Istanbul"' ] && ok "a zone set by timedatectl shows within 5 s" || bad "GetTimezone did not follow timedatectl"
 
-    # The shell's own call: what the caller rule says depends on who is signed in.
-    profiles="$(busctl --system call org.ruyaos.Profiles1 /org/ruyaos/Profiles1 org.ruyaos.Profiles1 ListProfiles | cut -d' ' -f2)"
-    active="$(busctl --system get-property org.ruyaos.Profiles1 /org/ruyaos/Profiles1 org.ruyaos.Profiles1 ActiveProfile)"
+    # The shell's own call: the caller rule depends on who is signed in. Expected: no profile at all
+    # (first-boot setup) ok; nobody signed in forbidden; a signed-in standard profile forbidden; a
+    # signed-in admin ok. The signed-in cases only run when the VM happens to be in that state (this
+    # check never signs anyone in); the rule itself is time::tests::* on the host.
+    plist="$(busctl --system call org.ruyaos.Profiles1 /org/ruyaos/Profiles1 org.ruyaos.Profiles1 ListProfiles)"
+    profiles="$(echo "$plist" | cut -d' ' -f2)"
+    active="$(busctl --system get-property org.ruyaos.Profiles1 /org/ruyaos/Profiles1 org.ruyaos.Profiles1 ActiveProfile | cut -d'"' -f2)"
+    role=""
+    [ -n "$active" ] && role="$(echo "$plist" | grep -o "\"$active\" \"[^\"]*\" \"[^\"]*\" \"[a-z]*\"" | grep -o '"[a-z]*"$' | tr -d '"')"
     out="$(as_shell busctl --system call "$svc" "$path" "$tm" SetTimezone s Pacific/Auckland 2>&1)"
-    echo "profiles: $profiles, active: $active, the shell's SetTimezone: $out"
-    if [ "$profiles" = "0" ]; then want='s "ok"'; elif [ "$active" = 's ""' ]; then want='s "forbidden"'; else want="$out"; fi
-    [ "$out" = "$want" ] && ok "the shell's SetTimezone answers $out (profiles $profiles, active $active)" || bad "the shell's SetTimezone: $out, want $want"
-    [ "$out" = 's "forbidden"' ] && [ "$(timedatectl show -p Timezone --value)" = "Europe/Istanbul" ] && ok "a forbidden call changed nothing"
+    echo "profiles: $profiles, active: '$active', role: '$role', the shell's SetTimezone: $out"
+    if [ "$profiles" = "0" ]; then want='s "ok"'
+    elif [ -z "$active" ]; then want='s "forbidden"'
+    elif [ "$role" = "admin" ]; then want='s "ok"'
+    elif [ "$role" = "standard" ]; then want='s "forbidden"'
+    else want="(unknown role '$role')"; fi
+    [ "$out" = "$want" ] && ok "the shell's SetTimezone answers $out (profiles $profiles, active '$active', role '$role')" || bad "the shell's SetTimezone: $out, want $want"
+    [ "$want" = 's "forbidden"' ] && [ "$(timedatectl show -p Timezone --value)" = "Europe/Istanbul" ] && ok "a forbidden call changed nothing"
+    [ -z "$active" ] || [ "$profiles" = "0" ] || echo "note: a profile is signed in; the 'nobody signed in' case was not exercised"
 
     pid="$(pgrep -u ruya-shell -x ruya-devices | head -1)"
     if [ -n "$pid" ]; then

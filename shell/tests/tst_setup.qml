@@ -394,6 +394,20 @@ Item {
             compare(find("setupZoneRegion_Europe").label, "Avrupa", "the region is named in Turkish")
         }
 
+        function test_a_late_zone_list_still_starts_on_the_language_default() {
+            TimeZone.mockWithholdZones()
+            tryVerify(() => TimeZone.timezones.length === 0)
+            DeviceSettings.language = "tr"
+            startShell()
+            goToStep(1)
+            goToStep(2)
+            tryVerify(() => find("setupZoneLoading").visible, 2000, "the step waits for the list")
+            TimeZone.mockReleaseZones()
+            tryVerify(() => chooser().selectedZone === "Europe/Istanbul", 3000, "begins on the Turkish default, not on UTC")
+            compare(chooser().region, "Europe")
+            tryVerify(() => find("setupZoneRegions").activeFocus, 2000, "the regions have focus")
+        }
+
         function test_time_zone_back_leaves_the_cities_first_then_the_step() {
             startShell()
             goToStep(2)

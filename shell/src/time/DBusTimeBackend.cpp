@@ -86,6 +86,9 @@ void DBusTimeBackend::setTimezone(const QString &name)
     connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, name](QDBusPendingCallWatcher *w) {
         w->deleteLater();
         const QDBusPendingReply<QString> reply = *w;
-        emit setTimezoneFinished(name, reply.isValid() ? reply.value() : QStringLiteral("failed"));
+        const QString status = reply.isValid() ? reply.value() : QStringLiteral("failed");
+        if (status == QLatin1String("ok"))
+            deliverZoneSet(name);
+        emit setTimezoneFinished(name, status);
     });
 }

@@ -122,6 +122,16 @@ Item {
             compare(TimeZone.timezone, "Asia/Tokyo", "... and was dropped")
         }
 
+        function test_a_late_state_reply_does_not_undo_a_zone_that_was_set() {
+            TimeZone.mockRefreshDelayed(300)                // a GetTimezone on its way, answering "UTC"
+            compare(TimeZone.mockPendingReplies(), 1)
+            compare(setZone("Asia/Tokyo"), "ok")
+            compare(TimeZone.timezone, "Asia/Tokyo")
+            tryVerify(() => TimeZone.mockPendingReplies() === 0)
+            wait(50)
+            compare(TimeZone.timezone, "Asia/Tokyo", "the old reply was dropped")
+        }
+
         // ---- the clock ----
 
         function test_the_clock_text_is_in_the_zone() {
@@ -224,6 +234,46 @@ Item {
             tryCompare(find("rowTimezone"), "value", "Europe/Istanbul")
             tryVerify(() => find("rowTimezone").activeFocus, 2000, "focus is back on the row")
             tryVerify(() => Notifications.model.count > 0 && Notifications.model.get(0).text === "Time zone set to Europe/Istanbul")
+        }
+
+        function hintsShown() {
+            const bar = find("hintBar")
+            if (!bar.visible)
+                return ""
+            const parts = []
+            for (const b of ["A", "B"]) {
+                const h = findChild(bar, "hint_" + b)
+                if (h)
+                    parts.push(b + " " + h.verb)
+            }
+            return parts.join("|")
+        }
+
+        function test_the_picker_says_what_a_and_b_do() {
+            openSystemPane("p1", "1234")
+            goToRow("rowTimezone")
+            compare(hintsShown(), "A Select|B Back", "the pane")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("zoneRegions").activeFocus, 2000)
+            compare(hintsShown(), "A Select|B Cancel", "the picker: A chooses, B cancels")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !find("zonePicker").shown, 2000)
+            compare(hintsShown(), "A Select|B Back")
+        }
+
+        function test_the_selected_region_stays_marked_while_the_cities_have_focus() {
+            openSystemPane("p1", "1234")
+            goToRow("rowTimezone")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("zoneRegions").activeFocus, 2000)
+            const row = find("zoneRegion_Other")
+            compare(row.focused, true)
+            compare(row.restingSelection, false)
+            keyClick(Qt.Key_Right)
+            tryVerify(() => find("zoneCities").activeFocus)
+            compare(row.focused, false)
+            compare(row.restingSelection, true, "the region the cities belong to keeps the selected look")
+            compare(row.color, Theme.selectedFill)
         }
 
         function test_back_closes_the_picker_without_choosing() {

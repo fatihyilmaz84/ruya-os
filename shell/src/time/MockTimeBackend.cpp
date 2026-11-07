@@ -40,6 +40,8 @@ void MockTimeBackend::reset()
     m_callerAllowed = true;
     m_failNext = false;
     m_setCalls = 0;
+    if (m_zonesWithheld)
+        releaseZones();
     publish();
 }
 
@@ -65,7 +67,19 @@ void MockTimeBackend::refreshDelayed(int ms)
 
 void MockTimeBackend::loadZones()
 {
-    QTimer::singleShot(0, this, [this] { emit zonesListed(m_zones); });
+    QTimer::singleShot(0, this, [this] { emit zonesListed(m_zonesWithheld ? QStringList() : m_zones); });
+}
+
+void MockTimeBackend::withholdZones()
+{
+    m_zonesWithheld = true;
+    loadZones();        // the facade drops the list it has
+}
+
+void MockTimeBackend::releaseZones()
+{
+    m_zonesWithheld = false;
+    loadZones();
 }
 
 void MockTimeBackend::setTimezone(const QString &name)

@@ -38,9 +38,7 @@ TimeZone::TimeZone(std::unique_ptr<TimeBackend> backend, QObject *parent)
     connect(m_backend.get(), &TimeBackend::zonesListed, this, &TimeZone::applyZones);
     connect(m_backend.get(), &TimeBackend::setTimezoneFinished, this,
             [this](const QString &name, const QString &status) {
-                // The service has set it: show it now, the state read that follows agrees.
-                if (status == QLatin1String("ok"))
-                    applyState(name, m_ntp);
+                // The backend has already reported the new zone (through its request sequence).
                 emit setTimezoneFinished(name, status);
             });
     m_tick.setInterval(10000);
@@ -188,6 +186,18 @@ void TimeZone::mockFailNext()
 {
     if (auto *mock = qobject_cast<MockTimeBackend *>(m_backend.get()))
         mock->setFailNext(true);
+}
+
+void TimeZone::mockWithholdZones()
+{
+    if (auto *mock = qobject_cast<MockTimeBackend *>(m_backend.get()))
+        mock->withholdZones();
+}
+
+void TimeZone::mockReleaseZones()
+{
+    if (auto *mock = qobject_cast<MockTimeBackend *>(m_backend.get()))
+        mock->releaseZones();
 }
 
 int TimeZone::mockSetCalls() const
