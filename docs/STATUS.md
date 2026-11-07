@@ -25,6 +25,7 @@ Open work only (the front of the board; the rest is in `STATUS-backlog.md`), in 
 |---|---|---|---|
 | [T-197](tasks/T-197-shell-crash-on-bluetooth-audio-disconnect.md) | **[lead]** Shell crash when a Bluetooth headset disconnects | in-progress | — |
 | [T-269](tasks/T-269-boot-experience-brand-silent-direct.md) | Boot experience: branded splash, silent boot, no boot menu unless a key is held (image, VM) | in-progress | — |
+| [T-227](tasks/T-227-ui-sounds-and-ambient-themes.md) | UI sounds and ambient atmosphere: sound themes, one bundled theme, maker guide | in-progress | — |
 | [T-261](tasks/T-261-controller-families-and-drivers-audit.md) | **[lead]** Controller families and drivers audit (DualSense, Xbox, 8BitDo, Switch), detection table, hardware checklist | todo | — |
 | [T-164](tasks/T-164-per-profile-wayland-sockets.md) | **[lead]** Per-profile Wayland sockets | todo | T-162 |
 
