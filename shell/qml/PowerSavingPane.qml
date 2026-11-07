@@ -39,6 +39,23 @@ SettingsPane {
         return words.join(", ")
     }
 
+    // One row when a later step is set at or before an earlier one: the earlier step never shows.
+    // (The choices stay free: a user may want exactly that.) A label and a value, because a row does
+    // not wrap.
+    function orderNote() {
+        const saverOn = DeviceSettings.saverMinutes > 0
+        const offOn = DeviceSettings.screenOffMinutes > 0
+        const sleepOn = Power.sleepAllowed && DeviceSettings.sleepMinutes > 0
+        if (saverOn && offOn && DeviceSettings.screenOffMinutes <= DeviceSettings.saverMinutes)
+            return [qsTr("The screen saver never shows"), qsTr("The screen turns off first")]
+        if (saverOn && sleepOn && DeviceSettings.sleepMinutes <= DeviceSettings.saverMinutes)
+            return [qsTr("The screen saver never shows"), qsTr("The console sleeps first")]
+        if (offOn && sleepOn && DeviceSettings.sleepMinutes <= DeviceSettings.screenOffMinutes)
+            return [qsTr("The screen is not turned off"), qsTr("The console sleeps first")]
+        return ["", ""]
+    }
+    readonly property var note: orderNote()
+
     ChoiceRow {
         id: saver
         objectName: "rowScreenSaver"
@@ -79,6 +96,14 @@ SettingsPane {
         onEdited: v => DeviceSettings.padIdleMinutes = v
     }
     Binding { target: pads; property: "value"; value: DeviceSettings.padIdleMinutes }
+
+    SettingRow {
+        objectName: "rowOrderNote"
+        u: pane.u
+        visible: pane.note[0].length > 0
+        label: pane.note[0]
+        value: pane.note[1]
+    }
 
     SettingRow {
         objectName: "rowKeepingAwake"

@@ -2,7 +2,8 @@
 
 #include <QObject>
 #include <QPointer>
-#include <QSet>
+#include <QElapsedTimer>
+#include <QHash>
 #include <QQmlEngine>
 #include <QQuickItem>
 #include <QQuickWindow>
@@ -61,6 +62,7 @@ private:
     QPointer<QQuickItem> m_appItem;
     bool m_swallowInput = false;
     // Keys and mouse buttons whose press was eaten: their release is eaten too.
-    QSet<int> m_eatenKeys;
+    QHash<int, qint64> m_eatenKeys; // key -> when it was last eaten (ms on m_clock)
+    QElapsedTimer m_clock;
     bool m_eatenMouse = false;
 };

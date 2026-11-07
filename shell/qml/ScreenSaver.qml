@@ -30,13 +30,10 @@ Item {
     readonly property bool showArt: !dark && DeviceSettings.effectsQuality !== "performance" && pool.length > 0
     readonly property bool animating: stage === "saver" && Theme.ambientMotion && pool.length > 1
 
-    // Near black on every theme, from the theme's own background (a missing token, Inbox).
-    readonly property color ground: Qt.darker(Theme.background, 20)
-
     // The clock's place: one of many, chosen from the minute of the day, so it differs every minute.
     // IdleClock's clock is the one the tests replace; the tick below reads it.
     property int slot: 0
-    property date shownTime: new Date()
+    property double shownMs: 0
     readonly property real golden: 0.6180339887
     function place(index, span) {
         const f = (index * golden) % 1
@@ -60,7 +57,7 @@ Item {
 
     Rectangle {
         anchors.fill: parent
-        color: saver.ground
+        color: Theme.saverGround
     }
 
     // Two layers cross-fade; each drifts (a slow zoom and pan) while it is in front.
@@ -69,7 +66,7 @@ Item {
         objectName: "saverArt"
         anchors.fill: parent
         visible: saver.showArt
-        opacity: 0.3                           // dimmed: art on a dark ground, never at full strength
+        opacity: Theme.saverArtOpacity          // dimmed: art on a dark ground, never at full strength
         clip: true
 
         Repeater {
@@ -95,18 +92,18 @@ Item {
                 opacity: front ? 1 : 0
                 property real drift: 0
                 scale: 1.1                   // already larger than the screen, so the drift never shows an edge
-                Behavior on opacity { NumberAnimation { duration: Theme.tintMs * 4 } }
+                Behavior on opacity { NumberAnimation { duration: Theme.saverFadeMs } }
                 SequentialAnimation on drift {
                     running: saver.animating && layer.front
                     loops: Animation.Infinite
-                    NumberAnimation { from: -1; to: 1; duration: Theme.tintMs * 40; easing.type: Easing.InOutSine }
-                    NumberAnimation { from: 1; to: -1; duration: Theme.tintMs * 40; easing.type: Easing.InOutSine }
+                    NumberAnimation { from: -1; to: 1; duration: Theme.saverDriftMs; easing.type: Easing.InOutSine }
+                    NumberAnimation { from: 1; to: -1; duration: Theme.saverDriftMs; easing.type: Easing.InOutSine }
                 }
                 NumberAnimation on scale {
                     running: saver.animating && layer.front
                     from: 1.1
                     to: 1.22
-                    duration: Theme.tintMs * 80
+                    duration: Theme.saverZoomMs
                     easing.type: Easing.InOutSine
                 }
             }
@@ -117,7 +114,7 @@ Item {
     // keeps the first frame.
     Timer {
         objectName: "saverSlides"
-        interval: 20000
+        interval: Theme.saverSlideMs
         repeat: true
         running: saver.animating
         onTriggered: saver.artIndex = saver.artIndex + 1
@@ -130,8 +127,10 @@ Item {
         visible: saver.stage === "saver"
         x: saver.clockX
         y: saver.clockY
-        text: Qt.formatTime(saver.shownTime, "hh:mm")
-        color: Theme.glarePeak
+        // In the console's time zone, like the status bar (T-213): TimeZone formats it. Reading
+        // clockText makes the binding run again when the zone changes or the minute turns.
+        text: { TimeZone.clockText; return TimeZone.formatClock(saver.shownMs) }
+        color: Theme.saverText
         font.pixelSize: Theme.typeDisplay * saver.u
         font.weight: Theme.weightDemiBold
     }
@@ -145,7 +144,7 @@ Item {
         running: saver.stage === "saver"
         triggeredOnStart: true
         onTriggered: {
-            saver.shownTime = new Date(IdleClock.now())
+            saver.shownMs = IdleClock.now()
             saver.slot = Math.floor(IdleClock.now() / 60000)
         }
     }

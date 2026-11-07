@@ -287,6 +287,17 @@ QtObject {
     readonly property int glareMs: Math.round(550 * motionScale)
     readonly property color glarePeak: Qt.rgba(1, 1, 1, 0.6)      // centre of the glare band
     readonly property int glareGapMs: 300       // focus entering a card within this time of the last entry plays no glare
+    // The screen saver (T-202, 04 §5), not themeable: its ground is the same near black in every set,
+    // so the OLED pixels are off on Daylight too. The clock is the only text (white at 70 %: 4.5:1 or
+    // better on the ground and on pure-white art at the 30 % dim, asserted by tst_themes). The motion
+    // tokens are 0 under reduced motion; the slide interval is a Timer's, not an animation's.
+    readonly property color saverGround: Qt.rgba(0.02, 0.02, 0.03, 1)
+    readonly property color saverText: Qt.rgba(1, 1, 1, 0.7)
+    readonly property real saverArtOpacity: 0.3
+    readonly property int saverFadeMs: Math.round(2800 * motionScale)     // art cross-fade
+    readonly property int saverDriftMs: Math.round(28000 * motionScale)   // one pan, there and back
+    readonly property int saverZoomMs: Math.round(56000 * motionScale)    // one slow zoom
+    readonly property int saverSlideMs: 20000                             // the next picture
     // Shimmer of an art placeholder: a gleam of this alpha at this speed (design px per second).
     readonly property color shimmerPeak: Qt.rgba(1, 1, 1, 0.085)   // centre of the gleam
     readonly property real shimmerSpeed: 760

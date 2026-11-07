@@ -2,7 +2,7 @@ pragma Singleton
 import QtQuick
 import RuyaShell
 
-// The console's one idle clock and the power-saving timeline (T-202, 01 Â§2.2, 02 "Power saving").
+// The console's one idle clock and the power-saving timeline (T-202, 01 §2.2, 02 "Power saving").
 //
 // The shell is the compositor, so every key, button and pointer event of every app passes it
 // (`KeyRouter.activity` -> `noteInput()`). From that one stamp come
@@ -39,6 +39,11 @@ QtObject {
     // Only offered where suspend works (Power.sleepAllowed); otherwise the step does not exist.
     readonly property int sleepAfter: Power.sleepAllowed ? secs(DeviceSettings.sleepMinutes) : 0
     readonly property int padAfter: secs(DeviceSettings.padIdleMinutes)
+    // The timer never sleeps longer than this (a minute; shorter with the debug divisor), so that
+    // two looks at the clock further apart than `gapMs` mean the machine was asleep. The limit is
+    // not below 5 s however short the divisor makes the minute: a slow VM must not read lag as sleep.
+    readonly property int heartbeatMs: Math.min(60000, Math.max(1000, Math.round(60000 / IdleInhibit.timeDivisor)))
+    readonly property int gapMs: Math.max(5000, Math.round(90000 / IdleInhibit.timeDivisor))
 
     // ---- state ----
     property double lastInputMs: now()
@@ -111,12 +116,15 @@ QtObject {
 
     function evaluate() {
         const t = now()
-        // A clock that jumped far ahead of the last look: the console slept (suspend) and something
-        // woke it that was not a key the shell saw (the power button). That is activity.
-        if (stage === "sleep" && t - lastEvalMs > 30000 / IdleInhibit.timeDivisor + 1000) {
-            lastEvalMs = t
-            lastInputMs = t
-            wake()
+        // A wall clock that jumped far ahead of the last look: the console was suspended (by this
+        // clock's sleep step, or from the Guide menu) and something woke it that was not a key the
+        // shell saw (the power button). Waking up is activity, in every stage: without this the
+        // first look after a long sleep would read the time asleep as idle time, go straight to
+        // the dark screen and suspend again. The timer never waits longer than `heartbeatMs`, so
+        // a gap above `gapMs` can only be a sleep.
+        if (t - lastEvalMs > gapMs) {
+            noteInput()
+            return
         }
         lastEvalMs = t
         if (held)
@@ -171,13 +179,13 @@ QtObject {
         evaluate()
     }
 
-    // One timer, aimed at the next thing that can happen.
+    // One timer, aimed at the next thing that can happen (and never further than a heartbeat).
     function schedule() {
         let next = -1
         const consider = ms => { if (next < 0 || ms < next) next = ms }
         const t = now()
         if (stage === "sleep") {
-            consider(5000)                      // the resume check
+            consider(heartbeatMs)               // the resume check
         } else if (!held) {
             const quiet = (t - Math.max(lastInputMs, lastBusyMs)) / 1000
             for (const at of [saverAfter, offAfter, sleepAfter]) {
@@ -192,11 +200,11 @@ QtObject {
             else
                 consider(Math.max(1000, 60000 / IdleInhibit.timeDivisor))
         }
-        if (next < 0) {
-            tick.stop()
-            return
-        }
-        tick.interval = Math.min(60000, Math.max(200, Math.ceil(next) + 50))
+        // Always one more look within a heartbeat, even while nothing is due or the console is held
+        // awake: that look is what notices a sleep.
+        if (next < 0 || next > heartbeatMs)
+            next = heartbeatMs
+        tick.interval = Math.min(heartbeatMs, Math.max(200, Math.ceil(next) + 50))
         tick.restart()
     }
 
@@ -235,6 +243,12 @@ QtObject {
     readonly property Connections audioWatch: Connections {
         target: Audio
         function onPlayingChanged() { clock.syncHolds() }
+    }
+
+    // A pad that connects (a button press on a bonded pad wakes it and connects it) is input.
+    readonly property Connections padWatch: Connections {
+        target: Bluetooth
+        function onGamepadConnected() { clock.noteInput() }
     }
 
     readonly property Timer tick: Timer {

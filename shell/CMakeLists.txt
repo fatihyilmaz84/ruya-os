@@ -6,7 +6,13 @@ option(RUYA_BUILD_TESTS "Build the Qt Quick tests" ON)
 # (compositor/, ADR-002 option A, T-130). Needs QtWaylandCompositor, which the Windows kit lacks.
 option(RUYA_COMPOSITOR "Build ruya-shell as the Wayland compositor (Linux)" OFF)
 
-find_package(Qt6 6.8 REQUIRED COMPONENTS Gui GuiPrivate Quick Multimedia DBus LinguistTools)
+find_package(Qt6 6.8 REQUIRED COMPONENTS Gui Quick Multimedia DBus LinguistTools)
+# ScreenPower (T-202) calls QPlatformScreen::setPowerState, a private QPA header. `GuiPrivate` is a
+# find_package component only from Qt 6.9; Qt 6.8 (the floor, root CLAUDE.md) offers Qt6::GuiPrivate
+# with the Gui package, so asking for the component there would fail the configure step.
+if(Qt6_VERSION VERSION_GREATER_EQUAL 6.9)
+    find_package(Qt6 6.9 REQUIRED COMPONENTS GuiPrivate)
+endif()
 # ShaderTools builds the liquid pill's shader (T-205). It is optional: without it the .qsb is not
 # in the module, the ShaderEffect reports an error and GlassPill shows the plain pill.
 find_package(Qt6 6.8 OPTIONAL_COMPONENTS ShaderTools)
@@ -275,6 +281,9 @@ if(RUYA_COMPOSITOR)
     # The Wayland idle-inhibit protocol (T-202): qtwaylandscanner writes the server glue from the XML.
     qt6_generate_wayland_protocol_server_sources(ruyacompositor
         FILES ${CMAKE_CURRENT_SOURCE_DIR}/compositor/idle-inhibit-unstable-v1.xml)
+    # qmltyperegistrar emits __has_include(<IdleInhibitManager.h>); qt_add_qml_module adds only the
+    # target's source dir to the include path (QTBUG-93443), so list the folder of the headers.
+    target_include_directories(ruyacompositor PRIVATE compositor)
     target_link_libraries(ruyacompositor PRIVATE Qt6::Quick Qt6::WaylandCompositor)
     target_link_libraries(ruya-shell PRIVATE ruyacompositorplugin Qt6::WaylandCompositor)
     target_compile_definitions(ruya-shell PRIVATE RUYA_COMPOSITOR)

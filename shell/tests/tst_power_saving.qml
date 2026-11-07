@@ -32,8 +32,21 @@ Item {
         property var order: []                // the stage signals, in the order they came
 
         function find(name) { return findChild(tc.shell, name) }
-        function minutes(m) { tc.t += m * 60000; IdleClock.evaluate() }
-        function seconds(s) { tc.t += s * 1000; IdleClock.evaluate() }
+        // The fake clock moves in steps of at most a minute, as the real timer looks at it: a bigger
+        // gap between two looks is a sleep (see jump()).
+        function advance(ms) {
+            let left = ms
+            while (left > 0) {
+                const step = Math.min(left, 60000)
+                tc.t += step
+                left -= step
+                IdleClock.evaluate()
+            }
+        }
+        function minutes(m) { advance(m * 60000) }
+        function seconds(s) { advance(s * 1000) }
+        // The machine was suspended: one look, far after the last.
+        function jump(ms) { tc.t += ms; IdleClock.evaluate() }
 
         function setTimes(saver, off, sleep, pads) {
             DeviceSettings.saverMinutes = saver
@@ -222,10 +235,40 @@ Item {
             minutes(60)
             compare(IdleClock.stage, "sleep")
             compare(ScreenPower.on, false)
-            seconds(3600)                          // the machine was suspended; nothing ticked
+            jump(3600 * 1000)                      // the machine was suspended; nothing ticked
             compare(IdleClock.stage, "active", "waking by the power button is activity")
             compare(ScreenPower.on, true)
             compare(IdleClock.idleSeconds, 0)
+        }
+
+        function test_suspend_from_the_menu_then_two_hours_is_a_wake_not_idle_time() {
+            Power.suspend()                        // the Guide menu's Suspend: nothing of the idle clock knows
+            compare(Power.lastAction, "suspend")
+            const before = Power.actionCount
+            jump(2 * 3600 * 1000)
+            compare(IdleClock.stage, "active", "the time asleep is not idle time")
+            compare(IdleClock.idleSeconds, 0)
+            compare(ScreenPower.on, true)
+            compare(Power.actionCount, before, "and it does not go back to sleep at once")
+            minutes(9)
+            compare(IdleClock.stage, "active", "the countdown starts at the wake")
+            minutes(1)
+            compare(IdleClock.stage, "saver")
+        }
+
+        function test_the_gap_limit_is_longer_than_the_heartbeat() {
+            compare(IdleClock.heartbeatMs, 60000)
+            compare(IdleClock.gapMs, 90000)
+            verify(IdleClock.gapMs > IdleClock.heartbeatMs, "the timer never looks less often than the gap allows")
+        }
+
+        function test_a_pad_connecting_is_input() {
+            minutes(10)
+            compare(IdleClock.stage, "saver")
+            Bluetooth.mockGamepad(true, "bt-9", "Wireless Controller", "playstation", "bluetooth")
+            tryCompare(IdleClock, "stage", "active")
+            compare(IdleClock.idleSeconds, 0)
+            Bluetooth.mockGamepad(false, "bt-9", "Wireless Controller", "playstation", "bluetooth")
         }
 
         // ---- inhibitors ----
@@ -335,6 +378,19 @@ Item {
             verify(second[0] >= margin - 1 && second[0] + find("saverClock").width <= saver.width - margin + 1,
                    "inside the safe area")
             verify(second[1] >= DeviceSettings.overscan * saver.height - 1)
+        }
+
+        function test_the_clock_is_in_the_consoles_zone() {
+            TimeZone.mockSetOutside("Asia/Tokyo")
+            tryCompare(TimeZone, "timezone", "Asia/Tokyo")
+            minutes(10)
+            find("saverTick").triggered()
+            const tokyo = new Date(tc.t + 9 * 3600000)
+            const hh = ("0" + tokyo.getUTCHours()).slice(-2)
+            const mm = ("0" + tokyo.getUTCMinutes()).slice(-2)
+            tryCompare(find("saverClock"), "text", hh + ":" + mm)
+            compare(find("saverClock").text, TimeZone.formatClock(tc.t))
+            TimeZone.mockReset()
         }
 
         function test_the_dark_screen_runs_nothing() {
@@ -447,6 +503,10 @@ Item {
             compare(find("rowControllersOff").currentLabel, "15 minutes")
             keyClick(Qt.Key_Left)
             compare(DeviceSettings.padIdleMinutes, 10)
+            // Screen off and Sleep are both 60 minutes now: the note row (it takes focus like a row).
+            compare(find("rowOrderNote").visible, true)
+            keyClick(Qt.Key_Down)
+            tryVerify(() => find("rowOrderNote").activeFocus)
             keyClick(Qt.Key_Down)
             tryVerify(() => find("rowKeepingAwake").activeFocus)
             compare(find("rowKeepingAwake").value, "Nothing")
@@ -458,6 +518,23 @@ Item {
             keyClick(Qt.Key_Escape)
             tryCompare(tc.shell, "currentPage", "")
             tryVerify(() => find("homePlay").activeFocus, 2000, "Play regains focus")
+        }
+
+        function test_a_later_step_at_or_before_an_earlier_one_gets_a_note() {
+            openPowerPane()
+            compare(find("rowOrderNote").visible, false, "the defaults are in order")
+            DeviceSettings.screenOffMinutes = 15
+            DeviceSettings.saverMinutes = 30
+            compare(find("rowOrderNote").visible, true)
+            compare(find("rowOrderNote").label, "The screen saver never shows")
+            compare(find("rowOrderNote").value, "The screen turns off first")
+            DeviceSettings.saverMinutes = 5
+            compare(find("rowOrderNote").visible, false)
+            DeviceSettings.sleepMinutes = 30
+            DeviceSettings.screenOffMinutes = 60
+            compare(find("rowOrderNote").value, "The console sleeps first")
+            DeviceSettings.screenOffMinutes = 0
+            compare(find("rowOrderNote").visible, false, "Never has no order to break")
         }
 
         function test_the_sleep_row_is_hidden_where_suspend_is_not_available() {

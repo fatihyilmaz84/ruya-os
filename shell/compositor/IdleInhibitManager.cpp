@@ -30,20 +30,31 @@ private:
     int m_number;
 };
 
-IdleInhibitManager::IdleInhibitManager(QObject *parent)
-    : QWaylandCompositorExtensionTemplate<IdleInhibitManager>(parent)
+IdleInhibitManager::IdleInhibitManager(QWaylandCompositor *compositor)
+    : QWaylandCompositorExtensionTemplate<IdleInhibitManager>(compositor)
 {
+}
+
+void IdleInhibitManager::componentComplete()
+{
+    if (!isInitialized())
+        initialize();
 }
 
 void IdleInhibitManager::initialize()
 {
     QWaylandCompositorExtensionTemplate::initialize();
-    auto *compositor = static_cast<QWaylandCompositor *>(extensionContainer());
+    // Declared in QML inside the WaylandCompositor, the container is the compositor (the parent).
+    auto *compositor = qobject_cast<QWaylandCompositor *>(extensionContainer());
+    if (!compositor)
+        compositor = qobject_cast<QWaylandCompositor *>(parent());
     if (!compositor) {
-        qWarning("ruya-compositor: IdleInhibitManager has no compositor to extend");
+        qWarning("ruya-compositor: IdleInhibitManager has no compositor to extend, idle-inhibit is not advertised");
         return;
     }
     init(compositor->display(), 1);
+    // One line for the VM journal: apps can bind the global only if this was reached.
+    qInfo("ruya-shell: idle-inhibit manager advertised");
 }
 
 void IdleInhibitManager::zwp_idle_inhibit_manager_v1_destroy(Resource *resource)

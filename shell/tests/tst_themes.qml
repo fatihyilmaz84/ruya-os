@@ -142,7 +142,22 @@ Item {
                     Theme.shadowLift.blur, Theme.shadowPanel.offsetY, Theme.shadowPill.blurMax,
                     Theme.fontFamily, Theme.weightDemiBold, Theme.easeGlide.join(","), Theme.easeSnap.join(","),
                     Theme.cardSheen.toString(), Theme.glarePeak.toString(), Theme.shimmerPeak.toString(),
-                    Theme.glassSheenEnd.toString(), Theme.safeArea, Theme.motionScale]
+                    Theme.glassSheenEnd.toString(), Theme.safeArea, Theme.motionScale,
+                    Theme.saverGround.toString(), Theme.saverText.toString(), Theme.saverArtOpacity,
+                    Theme.saverFadeMs, Theme.saverDriftMs, Theme.saverZoomMs, Theme.saverSlideMs]
+        }
+
+        // The screen saver (T-202, 04 §3.1): near black in every theme, Daylight included, with a
+        // clock that reads on it and on pure-white art at the 30 % dim.
+        function test_the_saver_ground_is_near_black_in_every_theme_and_its_clock_reads() {
+            for (let i = 0; i < Themes.all.length; ++i) {
+                DeviceSettings.theme = Themes.all[i].key
+                const key = Themes.all[i].key
+                verify(ThemeMath.luminance(Theme.saverGround) < 0.02, "saver ground luminance in " + key)
+                verify(ThemeMath.contrast(Theme.saverText, Theme.saverGround) >= 4.5, "clock on the ground in " + key)
+                const whiteArt = ThemeMath.over(Qt.rgba(1, 1, 1, Theme.saverArtOpacity), Theme.saverGround)
+                verify(ThemeMath.contrast(Theme.saverText, whiteArt) >= 4.5, "clock on white art at the dim in " + key)
+            }
         }
         function test_non_themeable_tokens_are_identical_in_every_theme() {
             const reference = nonThemeable()
