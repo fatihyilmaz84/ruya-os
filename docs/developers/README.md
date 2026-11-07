@@ -12,6 +12,7 @@ For people who make games and apps for RuyaOS, a living-room console OS: control
 | [Full screen and lifecycle](fullscreen-and-lifecycle.md): how your game starts, loses focus and stops; screens for the sofa | **written** (2026-11-06) | display for profile apps: T-164; quick menu: T-147; profile switch: T-165 |
 | [Saves and data](saves-and-data.md): where to write saves, save states, settings and caches; atomic writes; what happens on SIGTERM; what the console backs up | **written** (2026-11-06) | backup and restore: T-215 |
 | [Permissions and sandbox rules](permissions-and-sandbox.md): what the Store shows to players, what is high risk, portals | **written** (2026-11-06) | portal backend for file dialogs: not started |
+| [What the console records about your game](play-time.md): the per-profile play history (times and the exit reason only), what counts as play time | **written** (2026-11-07) | parental limits: T-211; Steam's own play time: later |
 | [Audio and video](audio-and-video.md): PipeWire, the pulse route, codecs, hardware decode, HDR/VRR (not yet) | **written** (2026-11-06) | audio for profile games: B-007 |
 | [Testing and debugging](testing-and-debugging.md): the dev image (QEMU) and hardware, the dev SSH key, logs, how to break your game on purpose | **written** (2026-11-06) | |
 | [Publishing](publishing.md): the routes today, the `ruyaos` remote and review (planned), a self-review checklist | **written** (2026-11-06); the remote and review: planned (Phase 7) | |

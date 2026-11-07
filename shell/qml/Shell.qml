@@ -264,7 +264,30 @@ FocusScope {
             Update.noteActivity(root.appOpen)
             LiquidGate.noteInput()
             toasts.noteInput()
+            presence.noteInput()
         }
+    }
+
+    // The app in front, for the play ledger (T-247): the newest running app of the active profile
+    // while an app item has the screen and the Guide overlay is closed. (The compositor does not
+    // tell the shell which window belongs to which instance yet, T-164; with two apps running
+    // the newest is assumed.)
+    readonly property string foregroundInstance: {
+        if (!focusedApp || systemPanel.open || !signedIn)
+            return ""
+        let best = null
+        for (const r of Session.running) {
+            if (r.profile === Profiles.activeProfile && r.state !== "stopping" && (!best || r.started >= best.started))
+                best = r
+        }
+        return best ? best.instance : ""
+    }
+
+    UsagePresence {
+        id: presence
+        objectName: "usagePresence"
+        signedIn: root.signedIn
+        instance: root.foregroundInstance
     }
 
     // The liquid pill's specular clock runs only with no app in front, the window shown and input
@@ -367,6 +390,8 @@ FocusScope {
         details: libraryDetailsPage,
         settings: settingsPage,
         systemInfo: systemInfoPage,
+        activity: activityPage,
+        activityGame: activityGamePage,
         power: powerPage
     })
     readonly property var pageComponents: Object.assign({}, builtinPages, extraPages)
@@ -830,6 +855,8 @@ FocusScope {
     Component { id: libraryDetailsPage; LibraryDetailsPage {} }
     Component { id: settingsPage; SettingsPage {} }
     Component { id: systemInfoPage; SystemInfoPage {} }
+    Component { id: activityPage; ActivityPage {} }
+    Component { id: activityGamePage; ActivityGamePage {} }
     Component { id: powerPage; PowerPage {} }
 
     // Hosts the page slots, one per open page (plus any still fading out). Its only

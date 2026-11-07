@@ -17,6 +17,11 @@ FocusScope {
     property string iconName
     readonly property bool hasIcon: iconName !== "" && !hasSwatch
 
+    // A tall row (a chart, T-247) rounds its corners with a token instead of height / 2, and may
+    // draw its own text in place of the label.
+    property real cornerRadius: height / 2
+    property bool labelVisible: true
+
     // The pane navigates over children that set this.
     readonly property bool focusable: true
 
@@ -35,7 +40,7 @@ FocusScope {
     Rectangle {
         id: background
         anchors.fill: parent
-        radius: height / 2
+        radius: control.cornerRadius
         color: control.activeFocus ? Theme.focusFill : Theme.glass
         border.width: control.activeFocus ? Theme.focusRingWidth * control.u : 0     // unfocused: the lit rim below
         border.color: Theme.focusRing
@@ -45,7 +50,7 @@ FocusScope {
         objectName: "rowLayers"
         anchors.fill: parent
         u: control.u
-        radius: height / 2
+        radius: control.cornerRadius
         grain: false                // a row is not blurred
         rim: !control.activeFocus   // the focus ring replaces the rim
     }
@@ -73,6 +78,7 @@ FocusScope {
     Text {
         id: labelText
         objectName: "label"
+        visible: control.labelVisible
         anchors {
             left: parent.left
             leftMargin: (control.hasSwatch ? Theme.spaceXxxl

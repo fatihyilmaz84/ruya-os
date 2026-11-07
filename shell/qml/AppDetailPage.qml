@@ -300,6 +300,18 @@ Page {
                 text: qsTr("Uninstall")
                 onActivated: confirm.open()
                 Keys.onUpPressed: { Sfx.navigate(); primary.forceActiveFocus() }
+                Keys.onDownPressed: if (activity.visible) { Sfx.navigate(); activity.forceActiveFocus() }
+                onVisibleChanged: if (!visible) primary.forceActiveFocus()
+            }
+
+            // What this profile played of the app (T-247): private to the active profile.
+            ActionButton {
+                id: activity
+                objectName: "detailActivity"
+                visible: page.installed && !page.working
+                text: qsTr("Your activity")
+                onActivated: page.openRequested("activityGame", ({ appId: page.appId }))
+                Keys.onUpPressed: { Sfx.navigate(); (uninstall.visible ? uninstall : primary).forceActiveFocus() }
                 onVisibleChanged: if (!visible) primary.forceActiveFocus()
             }
 

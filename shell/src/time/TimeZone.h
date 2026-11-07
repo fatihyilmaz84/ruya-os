@@ -61,6 +61,8 @@ public:
     Q_INVOKABLE QString defaultZoneFor(const QString &language) const;
     // The clock text for an instant (milliseconds since the epoch) in the current zone.
     Q_INVOKABLE QString formatClock(qint64 msSinceEpoch) const;
+    // The date "YYYY-MM-DD" of an instant in the current zone (the Activity pages, T-247).
+    Q_INVOKABLE QString formatIsoDate(qint64 msSinceEpoch) const;
     // Asks the service to set the zone; the answer comes as setTimezoneFinished.
     Q_INVOKABLE void setTimezone(const QString &name);
 

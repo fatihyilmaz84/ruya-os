@@ -156,6 +156,7 @@ Page {
             visible: page.current.key === "profiles"
             enabled: visible
             onExitRequested: page.leavePane()
+            onActivityRequested: page.openRequested("activity", ({}))
         }
         DisplayPane {
             id: displayPane

@@ -105,6 +105,46 @@ pub fn flatpak_app_installed(root: &Path, app_id: &str) -> bool {
     valid_app_id(app_id) && root.join("app").join(app_id).join("current").exists()
 }
 
+/// The version of the installed app, from the first `<release version="...">` of its AppStream
+/// file, or "" when it has none (or the app is not installed). For the play ledger (T-247); an
+/// update that lands while the app runs is not noticed, so a session keeps the version it began
+/// with.
+pub fn flatpak_app_version(root: &Path, app_id: &str) -> String {
+    if !valid_app_id(app_id) {
+        return String::new();
+    }
+    let files = root
+        .join("app")
+        .join(app_id)
+        .join("current")
+        .join("active")
+        .join("files");
+    let candidates = [
+        files
+            .join("share/metainfo")
+            .join(format!("{app_id}.metainfo.xml")),
+        files
+            .join("share/appdata")
+            .join(format!("{app_id}.appdata.xml")),
+    ];
+    for path in candidates {
+        let Ok(text) = std::fs::read_to_string(path) else {
+            continue;
+        };
+        if let Some(i) = text.find("<release ") {
+            let tag = &text[i..];
+            let tag = &tag[..tag.find('>').unwrap_or(tag.len())];
+            if let Some(v) = tag.split("version=\"").nth(1) {
+                let version = v.split('"').next().unwrap_or("");
+                if !version.is_empty() && version.len() <= 32 {
+                    return version.to_owned();
+                }
+            }
+        }
+    }
+    String::new()
+}
+
 /// The argument list that starts `flatpak run <app_id>` as `user` in that user's systemd manager
 /// and waits for it (`--wait`: the process lives as long as the app does, and prints the
 /// start and the end on stderr, see `parse_run_line`). `Type=exec` makes the start line mean
@@ -368,6 +408,26 @@ impl Spawner for FakeSpawner {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_version_comes_from_the_first_release_of_the_appstream_file() {
+        let root = std::env::temp_dir().join(format!("ruya-ver-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let dir = root.join("app/org.ruyaos.Racer/current/active/files/share/metainfo");
+        std::fs::create_dir_all(&dir).unwrap_or_else(|e| panic!("{e}"));
+        let file = dir.join("org.ruyaos.Racer.metainfo.xml");
+        std::fs::write(
+            &file,
+            "<component><releases><release version=\"1.4.2\" date=\"2026-01-01\"/><release version=\"1.0\"/></releases></component>",
+        )
+        .unwrap_or_else(|e| panic!("{e}"));
+        assert_eq!(flatpak_app_version(&root, "org.ruyaos.Racer"), "1.4.2");
+        std::fs::write(&file, "<component/>").unwrap_or_else(|e| panic!("{e}"));
+        assert_eq!(flatpak_app_version(&root, "org.ruyaos.Racer"), "");
+        assert_eq!(flatpak_app_version(&root, "org.ruyaos.Other"), "");
+        assert_eq!(flatpak_app_version(&root, "../x"), "");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
     use super::*;
 
     fn env() -> Vec<(String, String)> {

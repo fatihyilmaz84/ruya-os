@@ -61,6 +61,219 @@
     </message>
 </context>
 <context>
+    <name>ActivityGamePage</name>
+    <message>
+        <location filename="../qml/ActivityGamePage.qml" line="+65"/>
+        <source>Back</source>
+        <translation>Geri</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Loading…</source>
+        <translation>Yükleniyor…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>You have not played this yet. When you do, the time you spend shows up here.</source>
+        <translation>Bunu henüz oynamadınız. Oynadığınızda harcadığınız süre burada görünür.</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Time played</source>
+        <translation>Oynama süresi</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Times played</source>
+        <translation>Oynama sayısı</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>First played</source>
+        <translation>İlk oynama</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Last played</source>
+        <translation>Son oynama</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Longest session</source>
+        <translation>En uzun oturum</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Average session</source>
+        <translation>Ortalama oturum</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Last 30 days</source>
+        <translation>Son 30 gün</translation>
+    </message>
+</context>
+<context>
+    <name>ActivityPage</name>
+    <message>
+        <location filename="../qml/ActivityPage.qml" line="+19"/>
+        <source>Activity</source>
+        <translation>Etkinlik</translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <source>Nothing played in the last two weeks.</source>
+        <translation>Son iki haftada hiçbir şey oynanmadı.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Nothing played this week yet.</source>
+        <translation>Bu hafta henüz bir şey oynanmadı.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Nothing played the week before.</source>
+        <translation>Önceki hafta hiçbir şey oynanmadı.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>About the same as the week before.</source>
+        <translation>Önceki haftayla hemen hemen aynı.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>%1 more than the week before.</source>
+        <translation>Önceki haftadan %1 fazla.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>%1 less than the week before.</source>
+        <translation>Önceki haftadan %1 az.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>today</source>
+        <translation>bugün</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>yesterday</source>
+        <translation>dün</translation>
+    </message>
+    <message>
+        <location line="+39"/>
+        <source>Your activity was cleared.</source>
+        <translation>Etkinliğiniz temizlendi.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Your activity could not be cleared.</source>
+        <translation>Etkinliğiniz temizlenemedi.</translation>
+    </message>
+    <message>
+        <location line="+23"/>
+        <location line="+1"/>
+        <source>Back</source>
+        <translation>Geri</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Select</source>
+        <translation>Seç</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Loading…</source>
+        <translation>Yükleniyor…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Your activity could not be read.</source>
+        <translation>Etkinliğiniz okunamadı.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Nothing here yet. When you play something, the time you spend shows up on this page. Only you can see it.</source>
+        <translation>Burada henüz bir şey yok. Bir şey oynadığınızda harcadığınız süre bu sayfada görünür. Yalnızca siz görebilirsiniz.</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>This week</source>
+        <translation>Bu hafta</translation>
+    </message>
+    <message>
+        <location line="+23"/>
+        <source>Most played, last 30 days</source>
+        <translation>En çok oynanan, son 30 gün</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>%1, last played %2</source>
+        <translation>%1, son oynama: %2</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Highlights</source>
+        <translation>Öne çıkanlar</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Longest session this month</source>
+        <translation>Bu ayın en uzun oturumu</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+45"/>
+        <location line="+17"/>
+        <source>%1, %2</source>
+        <translation>%1, %2</translation>
+    </message>
+    <message numerus="yes">
+        <location line="-54"/>
+        <source>You have played %n day(s) in a row.</source>
+        <translation>
+            <numerusform>Üst üste %n gündür oynuyorsunuz.</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+9"/>
+        <source>You have not played %1 for %n day(s).</source>
+        <translation>
+            <numerusform>%1 oyununu %n gündür oynamadınız.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>History</source>
+        <translation>Geçmiş</translation>
+    </message>
+    <message>
+        <location line="+34"/>
+        <source>%1, playing now</source>
+        <translation>%1, şimdi oynanıyor</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <location line="+4"/>
+        <source>Clear my activity</source>
+        <translation>Etkinliğimi temizle</translation>
+    </message>
+    <message>
+        <location line="-2"/>
+        <source>Clear your activity?</source>
+        <translation>Etkinliğiniz temizlensin mi?</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Deletes the list of what you played.
+Your games and saves stay.
+This can&apos;t be undone.</source>
+        <translation>Ne oynadığınızın listesi silinir.
+Oyunlarınız ve kayıtlarınız kalır.
+Bu geri alınamaz.</translation>
+    </message>
+</context>
+<context>
     <name>AppDetailPage</name>
     <message>
         <location filename="../qml/AppDetailPage.qml" line="+49"/>
@@ -219,12 +432,17 @@
     </message>
     <message>
         <location line="+10"/>
-        <location line="+244"/>
+        <location line="+256"/>
         <source>Uninstall</source>
         <translation>Kaldır</translation>
     </message>
     <message>
-        <location line="-145"/>
+        <location line="-244"/>
+        <source>Your activity</source>
+        <translation>Etkinliğiniz</translation>
+    </message>
+    <message>
+        <location line="+99"/>
         <source>This app can</source>
         <translation>Bu uygulama şunları yapabilir</translation>
     </message>
@@ -318,7 +536,7 @@
 <context>
     <name>BatteryChip</name>
     <message>
-        <location filename="../qml/BatteryChip.qml" line="+56"/>
+        <location filename="../qml/BatteryChip.qml" line="+52"/>
         <source>%1 battery %2 percent, low</source>
         <translation>%1 pili yüzde %2, düşük</translation>
     </message>
@@ -615,12 +833,12 @@
     </message>
     <message>
         <location line="+36"/>
-        <location line="+163"/>
+        <location line="+164"/>
         <source>Other</source>
         <translation>Diğer</translation>
     </message>
     <message>
-        <location line="-126"/>
+        <location line="-127"/>
         <source>Press A to search again</source>
         <translation>Yeniden aramak için A&apos;ya basın</translation>
     </message>
@@ -655,7 +873,7 @@
         <translation>A: eşleştir</translation>
     </message>
     <message>
-        <location line="+50"/>
+        <location line="+51"/>
         <source>%1 is connected. Press its buttons: they light up here.</source>
         <translation>%1 bağlı. Düğmelerine basın: burada yanarlar.</translation>
     </message>
@@ -774,7 +992,7 @@
 <context>
     <name>DeviceIcons</name>
     <message>
-        <location filename="../qml/DeviceIcons.qml" line="+66"/>
+        <location filename="../qml/DeviceIcons.qml" line="+67"/>
         <source>PlayStation controller</source>
         <translation>PlayStation kontrolcüsü</translation>
     </message>
@@ -875,6 +1093,49 @@
         <location line="+10"/>
         <source>Dim wallpaper</source>
         <translation>Duvar kağıdını karart</translation>
+    </message>
+</context>
+<context>
+    <name>DurationText</name>
+    <message>
+        <location filename="../qml/DurationText.qml" line="+23"/>
+        <source>0 min</source>
+        <translation>0 dk</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Under 1 min</source>
+        <translation>1 dk&apos;dan az</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>%1 min</source>
+        <translation>%1 dk</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>%1 h</source>
+        <translation>%1 sa</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>%1 h %2 min</source>
+        <translation>%1 sa %2 dk</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Today</source>
+        <translation>Bugün</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Yesterday</source>
+        <translation>Dün</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>%1 %2</source>
+        <translation>%1 %2</translation>
     </message>
 </context>
 <context>
@@ -1304,7 +1565,7 @@
 <context>
     <name>ProfilesPane</name>
     <message>
-        <location filename="../qml/ProfilesPane.qml" line="+48"/>
+        <location filename="../qml/ProfilesPane.qml" line="+51"/>
         <source>Admin</source>
         <translation>Yönetici</translation>
     </message>
@@ -1436,6 +1697,16 @@
         <translation>PIN belirle</translation>
     </message>
     <message>
+        <location line="+8"/>
+        <source>Activity</source>
+        <translation>Etkinlik</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>What you played</source>
+        <translation>Ne oynadınız</translation>
+    </message>
+    <message>
         <location line="+7"/>
         <source>Remove my PIN</source>
         <translation>PIN&apos;imi kaldır</translation>
@@ -1533,7 +1804,7 @@
         <translation>Geri</translation>
     </message>
     <message>
-        <location line="+192"/>
+        <location line="+194"/>
         <source>Coming soon</source>
         <translation>Yakında</translation>
     </message>
@@ -1717,7 +1988,7 @@
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+309"/>
+        <location filename="../qml/Shell.qml" line="+332"/>
         <source>Could not %1.</source>
         <translation>%1 işlemi yapılamadı.</translation>
     </message>
@@ -1742,7 +2013,7 @@
         <translation>Ses çıkışı: %1</translation>
     </message>
     <message numerus="yes">
-        <location line="+232"/>
+        <location line="+234"/>
         <source>%n more device(s) with a battery: %1</source>
         <translation>
             <numerusform>Pili olan %n cihaz daha: %1</numerusform>
@@ -1754,12 +2025,12 @@
         <translation>%1 yüzde %2</translation>
     </message>
     <message>
-        <location line="+560"/>
+        <location line="+562"/>
         <source>Power</source>
         <translation>Güç</translation>
     </message>
     <message>
-        <location line="-785"/>
+        <location line="-789"/>
         <source>Update ready. Restart to finish.</source>
         <translation>Güncelleme hazır. Bitirmek için yeniden başlat.</translation>
     </message>
@@ -1774,7 +2045,7 @@
         <translation>%1 beklenmedik şekilde durdu</translation>
     </message>
     <message>
-        <location line="+45"/>
+        <location line="+47"/>
         <source>Wallpaper could not be loaded</source>
         <translation>Duvar kağıdı yüklenemedi</translation>
     </message>
@@ -1820,7 +2091,7 @@
         <translation>%1 başlatılıyor…</translation>
     </message>
     <message>
-        <location line="+241"/>
+        <location line="+243"/>
         <location line="+12"/>
         <location line="+3"/>
         <source>Select</source>

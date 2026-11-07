@@ -20,6 +20,9 @@ SettingsPane {
     readonly property bool canChangePin: myRole === "admin" || myRole === "standard"
     readonly property bool canRemovePin: myRole === "standard" && (me.hasPin ?? false)
 
+    // The "Activity" row was activated: the Settings page opens the Activity page (T-247).
+    signal activityRequested()
+
     property bool adding: false
     property string newName: ""
     property string newRole: "standard"
@@ -364,6 +367,15 @@ SettingsPane {
         visible: pane.canRemovePin
         label: qsTr("Remove my PIN")
         onActivated: pane.startPinChange("remove")
+    }
+    SettingRow {
+        id: activityRow
+        objectName: "rowActivity"
+        u: pane.u
+        visible: Profiles.activeProfile !== ""
+        label: qsTr("Activity")
+        value: qsTr("What you played")
+        onActivated: pane.activityRequested()
     }
 
     Text {

@@ -455,6 +455,8 @@ Item {
             tryVerify(() => find("profileRow_p1").activeFocus)
             for (let i = 0; i < 6; ++i)
                 keyClick(Qt.Key_Down)
+            verify(find("rowActivity").activeFocus, "the last row is Activity (T-247)")
+            keyClick(Qt.Key_Up)
             verify(find("rowChangePin").activeFocus)
             verify(!find("rowAdd").activeFocus)
         }

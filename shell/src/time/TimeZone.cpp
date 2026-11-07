@@ -121,6 +121,13 @@ QString TimeZone::formatClock(qint64 msSinceEpoch) const
     return shown.toString(QStringLiteral("HH:mm"));
 }
 
+QString TimeZone::formatIsoDate(qint64 msSinceEpoch) const
+{
+    const QDateTime utc = QDateTime::fromMSecsSinceEpoch(msSinceEpoch, QTimeZone::UTC);
+    const QDateTime shown = m_zone.isValid() ? utc.toTimeZone(m_zone) : utc.toLocalTime();
+    return shown.toString(QStringLiteral("yyyy-MM-dd"));
+}
+
 void TimeZone::updateClock()
 {
     const QString text = formatClock(QDateTime::currentMSecsSinceEpoch());

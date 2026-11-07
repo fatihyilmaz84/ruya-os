@@ -11,11 +11,15 @@ Restart=on-failure
 # by SELinux when systemd-run passes it on to PID 1, see systemd.rs).
 RuntimeDirectory=ruya-session
 RuntimeDirectoryMode=0700
+# The play ledger (T-247): /var/lib/ruya-session/usage/<profile>/, root only. It is the only
+# place this service writes (ProtectSystem=strict leaves the state directory writable).
+StateDirectory=ruya-session
+StateDirectoryMode=0700
 # Starts apps as the profile users with `systemd-run --machine=ruya-<id>@.host` (root needs no
 # capability for it: systemd-machined and the user's manager do the work) and keeps their
-# managers alive with `loginctl enable-linger`. It writes nothing itself and only reads
-# /var/lib/flatpak to see what is installed; the apps run in the profile's own manager, outside
-# this unit.
+# managers alive with `loginctl enable-linger`. It writes only its state directory (above) and
+# reads /var/lib/flatpak to see what is installed and in what version; the apps run in the
+# profile's own manager, outside this unit.
 ProtectSystem=strict
 ProtectHome=yes
 PrivateTmp=yes
