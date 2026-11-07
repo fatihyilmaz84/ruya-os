@@ -1,6 +1,6 @@
 # T-223 — Top-right status: each connected device's battery, with the right icon and level
 
-Status: todo · Phase: 2 · Depends: — · Area: shell · Size: S · Owner: builder
+Status: in-progress · Phase: 2 · Depends: — · Area: shell · Size: S · Owner: builder
 
 ## Goal
 The top-right status cluster shows the battery of every connected wireless device that reports one (controllers, headsets, other Bluetooth devices), each with its own icon, a battery glyph that matches the level, and the percentage. Owner report, 2026-11-06: "show connected devices' battery percentage at the top right (right now it shows a hardcoded battery symbol it seems)".
