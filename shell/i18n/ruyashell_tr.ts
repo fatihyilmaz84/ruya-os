@@ -4,7 +4,18 @@
 <context>
     <name>AboutPane</name>
     <message>
-        <location filename="../qml/AboutPane.qml" line="+17"/>
+        <location filename="../qml/AboutPane.qml" line="+15"/>
+        <source>Select</source>
+        <translation>Seç</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <location line="+1"/>
+        <source>Back</source>
+        <translation>Geri</translation>
+    </message>
+    <message>
+        <location line="+5"/>
         <source>Image version</source>
         <translation>Sistem sürümü</translation>
     </message>
@@ -39,7 +50,7 @@
         <translation>GPL-3.0 veya üzeri; simge yazı tipi Apache-2.0; Inter yazı tipi OFL-1.1</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+6"/>
         <source>System information</source>
         <translation>Sistem bilgisi</translation>
     </message>
@@ -1785,9 +1796,14 @@
         <translation>Rapor kaydediliyor…</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+2"/>
         <source>Saved %1 and %2 to %3.</source>
         <translation>%1 ve %2, %3 sürücüsüne kaydedildi.</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>the USB drive</source>
+        <translation>USB sürücü</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -1815,7 +1831,18 @@
         <translation>Rapor kaydedilemedi.</translation>
     </message>
     <message>
-        <location line="+167"/>
+        <location line="+166"/>
+        <source>Select</source>
+        <translation>Seç</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <location line="+1"/>
+        <source>Back</source>
+        <translation>Geri</translation>
+    </message>
+    <message>
+        <location line="+7"/>
         <source>Save report to USB drive</source>
         <translation>Raporu USB sürücüye kaydet</translation>
     </message>
@@ -1830,7 +1857,7 @@
         <translation>Ağ adreslerini ekle</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+17"/>
         <source>The report is a text file and a JSON file on the drive. It is only a file: nothing is sent anywhere. Network addresses (MAC, IP, Wi-Fi name, Bluetooth address) are left out unless you include them.</source>
         <translation>Rapor, sürücüde bir metin dosyası ve bir JSON dosyası olarak saklanır. Yalnızca bir dosyadır: hiçbir yere gönderilmez. Ağ adresleri (MAC, IP, Wi-Fi adı, Bluetooth adresi) siz eklemedikçe rapora konmaz.</translation>
     </message>
@@ -1853,7 +1880,7 @@
         <translation>%1 dk</translation>
     </message>
     <message>
-        <location line="+30"/>
+        <location line="+37"/>
         <source>%1 °C</source>
         <translation>%1 °C</translation>
     </message>
@@ -2174,13 +2201,13 @@
     </message>
     <message>
         <location line="+0"/>
-        <location line="+36"/>
+        <location line="+40"/>
         <location line="+8"/>
         <source>%1 %</source>
         <translation>%%1</translation>
     </message>
     <message>
-        <location line="-42"/>
+        <location line="-46"/>
         <source>Not connected</source>
         <translation>Bağlı değil</translation>
     </message>
@@ -2226,7 +2253,7 @@
         <translation>Ses</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+5"/>
         <source>default</source>
         <translation>varsayılan</translation>
     </message>
@@ -2241,7 +2268,7 @@
         <translation>Kontrolcüler</translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+16"/>
         <source>Connected</source>
         <translation>Bağlı</translation>
     </message>

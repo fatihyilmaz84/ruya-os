@@ -80,6 +80,7 @@ FocusScope {
                          : Theme.spaceL) * control.u
             verticalCenter: parent.verticalCenter
         }
+        textFormat: Text.PlainText      // a label can be a device's own name (Bluetooth, UPower): never markup
         text: control.label
         color: Theme.text
         font.pixelSize: Theme.typeBody * control.u

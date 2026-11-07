@@ -105,10 +105,17 @@ QtObject {
             result.push(section)
         }
         // One row; `value` is the shown text, `raw` what the JSON carries (the service's value).
+        // A device name may itself be an address ("AA:BB:CC:DD:EE:FF", "bluez_output.AA_BB_...");
+        // without the user's say-so the report carries none.
+        const scrub = v => (en && !includeAddresses && typeof v === "string")
+            ? v.replace(/[0-9A-Fa-f]{2}([:_-][0-9A-Fa-f]{2}){5}/g, "…") : v
         const row = (key, label, value, raw, options) => {
             const o = options || {}
             if (o.sensitive && !includeAddresses)
                 return
+            label = scrub(label)
+            value = scrub(value)
+            raw = scrub(raw)
             section.rows.push({
                 uid: section.id + "/" + key,
                 key: key,
@@ -310,27 +317,31 @@ QtObject {
 
         // ---- Audio
         begin("audio", QT_TR_NOOP("Audio"))
+        // Rows are keyed by position, never by the service's id: an id can be a Bluetooth address
+        // (a BlueZ id, a UPower path, a PipeWire node name) and the report would carry it.
+        let outputs = 0
         for (const s of Audio.sinks) {
             const text = s.isDefault ? s.name + " (" + tx(QT_TR_NOOP("default")) + ")" : s.name
-            row("sink " + s.id, QT_TR_NOOP("Output"), text, s.name)
+            row("output" + (++outputs), QT_TR_NOOP("Output"), text, s.name)
         }
 
         // ---- Controllers
         begin("controllers", QT_TR_NOOP("Controllers"))
         {
             const seen = []
+            let pads = 0
             for (const b of Batteries.devices) {
                 if (b.kind !== "controller")
                     continue
                 seen.push(b.name)
-                row("pad " + b.id, b.name, en ? b.percent + " %" : qsTr("%1 %").arg(b.percent), b.percent, { plainLabel: true })
+                row("controller" + (++pads), b.name, en ? b.percent + " %" : qsTr("%1 %").arg(b.percent), b.percent, { plainLabel: true })
             }
             for (const d of Bluetooth.devices) {
                 if (d.kind !== "controller" || !d.connected || seen.includes(d.name))
                     continue
                 // The battery when the controller reports one (-1: none).
                 const known = d.battery !== undefined && d.battery >= 0
-                row("pad " + d.id, d.name,
+                row("controller" + (++pads), d.name,
                     known ? (en ? d.battery + " %" : qsTr("%1 %").arg(d.battery)) : tx(QT_TR_NOOP("Connected")),
                     known ? d.battery : "connected", { plainLabel: true })
             }

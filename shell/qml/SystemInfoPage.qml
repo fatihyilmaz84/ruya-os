@@ -39,7 +39,8 @@ Page {
     function saveMessage() {
         switch (saveState) {
         case "saving": return qsTr("Saving the report…")
-        case "ok": return qsTr("Saved %1 and %2 to %3.").arg(reportTextName).arg(reportJsonName).arg(saveDrive)
+        // The drive's label is whatever the stick says (and is shown as plain text); "the USB drive" when it has none.
+        case "ok": return qsTr("Saved %1 and %2 to %3.").arg(reportTextName).arg(reportJsonName).arg(saveDrive.length > 0 ? saveDrive : qsTr("the USB drive"))
         case "no-drive": return qsTr("No USB drive found. Plug one in and try again.")
         case "read-only": return qsTr("This drive is read-only. Try another one.")
         case "full": return qsTr("This drive is full. Free some space or try another one.")
@@ -141,7 +142,8 @@ Page {
         objectName: "sysLiveTimer"
         interval: SystemDetails.liveIntervalMs
         repeat: true
-        running: page.visible
+        // Nothing is asked for while the page is hidden, an app is in front or the window is not shown.
+        running: page.visible && LiquidGate.screenShown && !LiquidGate.appOpen
         onTriggered: SystemDetails.refresh()
     }
 
@@ -209,9 +211,15 @@ Page {
         anchors.fill: parent
         u: page.u
         focus: true
+        // Only the two export rows do something on Accept; the information rows are read-only, so
+        // while one has focus the hint bar offers Back only.
+        hints: (saveRow.activeFocus || addressesRow.activeFocus)
+               ? [{ button: "A", text: qsTr("Select") }, { button: "B", text: qsTr("Back") }]
+               : [{ button: "B", text: qsTr("Back") }]
         onExitRequested: page.backRequested()
 
         SettingRow {
+            id: saveRow
             objectName: "sysSave"
             u: page.u
             label: qsTr("Save report to USB drive")
@@ -234,6 +242,7 @@ Page {
                  : page.saveState === "saving" ? Theme.text : Theme.errorText
             font.pixelSize: Theme.typeBody * page.u
             wrapMode: Text.Wrap
+            textFormat: Text.PlainText       // carries the stick's label: never markup
         }
         Text {
             objectName: "sysNote"

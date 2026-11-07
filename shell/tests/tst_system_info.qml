@@ -155,6 +155,34 @@ Item {
             verify(body.viewport.height >= body.height - 2 * first.height, "the viewport fills the pane to its last whole row")
         }
 
+        // What the hint bar offers: A only where A does something (the two export rows).
+        function hintsOf(item) { return item.hints.map(h => h.button + " " + h.text).join("|") }
+
+        function test_the_hint_bar_offers_select_only_on_the_export_rows() {
+            openSystemInfo()
+            const page = find("page_systemInfo")
+            compare(hintsOf(page), "A Select|B Back", "Save report")
+            keyClick(Qt.Key_Down)
+            tryVerify(() => find("sysAddresses").activeFocus)
+            compare(hintsOf(page), "A Select|B Back", "Include network addresses")
+            keyClick(Qt.Key_Down)
+            tryVerify(() => row("console/version").activeFocus)
+            compare(hintsOf(page), "B Back", "an information row does nothing on A")
+            keyClick(Qt.Key_Up)
+            tryVerify(() => find("sysAddresses").activeFocus)
+            compare(hintsOf(page), "A Select|B Back")
+        }
+
+        // A row's label can be a device's own name: it is never read as markup.
+        function test_labels_are_plain_text() {
+            Batteries.mockSet("pad-markup", 70, "discharging", "controller", "<b>Bold</b> Pad")
+            openSystemInfo()
+            tryVerify(() => infoRows().some(r => r.label === "<b>Bold</b> Pad"), 2000, "the name is the label, literally")
+            const item = infoRows().find(r => r.label === "<b>Bold</b> Pad")
+            compare(findChild(item, "label").textFormat, Text.PlainText)
+            compare(findChild(find("sysSave"), "label").textFormat, Text.PlainText, "every settings row")
+        }
+
         function test_the_dell_has_its_sections_and_rows() {
             openSystemInfo()
             for (const id of ["console", "cpu", "memory", "graphics", "storage", "network", "bluetooth", "audio", "controllers"])
@@ -180,16 +208,15 @@ Item {
             compare(row("network/connection").value, "Wired")
             compare(row("network/link").value, "1000 Mb/s")
             compare(row("bluetooth/chipset").value, "Intel Corp. Bluetooth wireless interface")
-            verify(row("audio/sink " + Audio.sinks[0].id), "an output device")
+            verify(row("audio/output1"), "an output device (keyed by position, not by the service id)")
             const pad = Batteries.devices.find(b => b.kind === "controller")
-            compare(row("controllers/pad " + pad.id).value, pad.percent + " %", "a controller with its battery (T-223)")
-            compare(row("controllers/pad " + pad.id).label, pad.name)
-            verify(row("controllers/pad bt-pad-old") === null, "a controller that is not connected is not listed")
+            compare(row("controllers/controller1").value, pad.percent + " %", "a controller with its battery (T-223)")
+            compare(row("controllers/controller1").label, pad.name)
+            verify(row("controllers/controller2") === null, "a controller that is not connected (Retro Pad) is not listed")
             // A connected controller that has no entry in Batteries is listed from Bluetooth (with its own battery).
             Batteries.mockClear()
-            tryVerify(() => row("controllers/pad bt-pad-main") !== null, 2000)
-            compare(row("controllers/pad bt-pad-main").value, "80 %")
-            compare(row("controllers/pad bt-pad-main").label, "Ruya Pad Pro")
+            tryVerify(() => row("controllers/controller1") !== null && row("controllers/controller1").label === "Ruya Pad Pro", 2000)
+            compare(row("controllers/controller1").value, "80 %")
         }
 
         function test_memory_has_a_usage_bar() {
@@ -278,6 +305,16 @@ Item {
             compare(SystemDetails.refreshCount, stopped, "nothing is asked for while the page is hidden")
             page.visible = true
             tryVerify(() => SystemDetails.refreshCount > stopped, 2000, "and it asks again when shown")
+            // Not while an app is in front, nor while the window is not shown.
+            for (const gate of ["appOpen", "screenShown"]) {
+                LiquidGate[gate] = gate === "appOpen"
+                tryVerify(() => !find("sysLiveTimer").running, 2000, gate + " stops the timer")
+                const held = SystemDetails.refreshCount
+                wait(10 * SystemDetails.liveIntervalMs)
+                compare(SystemDetails.refreshCount, held, "nothing is asked for with " + gate)
+                LiquidGate.reset()
+                tryVerify(() => find("sysLiveTimer").running, 2000, "it runs again")
+            }
         }
 
         function test_a_late_reply_is_dropped() {
@@ -333,19 +370,33 @@ Item {
             Network.connectWifi("wifi-home", Network.mockPassword())
             tryCompare(Network.primary, "kind", "wifi")
             plugStick()
+            // Devices whose ids and names look like addresses: a UPower path with the pad's address in
+            // it, and a name that is an address. Neither may be in either file.
+            const upower = "/org/freedesktop/UPower/devices/gaming_input_ps_controller_battery_a0o5bo51o12o34o56"
+            Batteries.mockSet(upower, 55, "discharging", "controller", "Pad A0:5B:51:12:34:56")
             openSystemInfo()
             verify(!find("sysAddresses").checked, "network addresses start off")
             saveWith(false)
             compare(find("sysSaveMessage").text, "Saved RuyaOS-system-report.txt and RuyaOS-system-report.json to Ruya Stick.")
+            compare(find("sysSaveMessage").textFormat, Text.PlainText, "the drive's label is the stick's: never markup")
             const files = savedFiles()
             compare(Object.keys(files).sort(), [jsonName, txtName])
             // Nothing of what names this console on a network, in either file.
             const text = files[txtName]
             const json = files[jsonName]
-            for (const secret of ["c8:4b:d6:aa:bb:cc", "192.168.1.21", "HomeNet", "9C:B6:D0:12:34:56"]) {
+            const secrets = ["c8:4b:d6:aa:bb:cc", "192.168.1.21", "HomeNet", "9C:B6:D0:12:34:56", "a0o5bo51o12o34o56", "A0:5B:51:12:34:56", upower]
+            // The services' own ids (a Bluetooth id is the device's address): none of them either.
+            for (const sink of Audio.sinks)
+                secrets.push(sink.id)
+            for (const device of Bluetooth.devices)
+                secrets.push(device.id)
+            for (const device of Batteries.devices)
+                secrets.push(device.id)
+            for (const secret of secrets) {
                 verify(text.indexOf(secret) < 0, "the text has no " + secret)
                 verify(json.indexOf(secret) < 0, "the JSON has no " + secret)
             }
+            verify(json.indexOf("controller1") >= 0 && json.indexOf("output1") >= 0, "devices are keyed by position")
             verify(text.indexOf("Intel(R) Core(TM) i5-10500T") >= 0, "but the rest is there")
             verify(text.indexOf("MAC address") < 0 && text.indexOf("IP address") < 0 && text.indexOf("Wi-Fi network") < 0)
             const report = savedJson()

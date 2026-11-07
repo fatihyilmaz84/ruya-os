@@ -82,7 +82,10 @@ pub fn parse_cpuinfo(text: &str) -> CpuInfo {
     out.cores = if !core_ids.is_empty() {
         u32::try_from(core_ids.len()).ok()
     } else if cores_per_package > 0 {
-        Some(cores_per_package * u32::try_from(packages.len().max(1)).unwrap_or(1))
+        // Garbage (a huge count) is absent, not an overflow.
+        u32::try_from(packages.len().max(1))
+            .ok()
+            .and_then(|p| cores_per_package.checked_mul(p))
     } else {
         None
     };
@@ -191,6 +194,34 @@ mod tests {
         let cpu = parse_cpuinfo("processor : 0\nmodel name : X\ncpu cores : 4\nphysical id : 0\n\nprocessor : 1\nmodel name : X\ncpu cores : 4\nphysical id : 0\n");
         assert_eq!(cpu.cores, Some(4));
         assert_eq!(cpu.threads, 2);
+    }
+
+    #[test]
+    fn garbage_core_counts_are_absent_not_an_overflow() {
+        let cpu = parse_cpuinfo(
+            "processor : 0
+cpu cores : 4294967295
+physical id : 0
+
+processor : 1
+cpu cores : 4294967295
+physical id : 1
+",
+        );
+        assert_eq!(cpu.cores, None);
+        assert_eq!(cpu.threads, 2);
+        // The edge that fits still counts.
+        let ok = parse_cpuinfo(
+            "processor : 0
+cpu cores : 2147483647
+physical id : 0
+
+processor : 1
+cpu cores : 2147483647
+physical id : 1
+",
+        );
+        assert_eq!(ok.cores, Some(4294967294));
     }
 
     #[test]

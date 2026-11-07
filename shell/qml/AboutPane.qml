@@ -11,6 +11,10 @@ SettingsPane {
     // The last row was activated: the Settings page opens the System information page.
     signal systemInfoRequested()
 
+    // Only the last row does anything on Accept; the fact rows are read-only (hint bar: Back only).
+    hints: systemInfoRow.activeFocus ? [{ button: "A", text: qsTr("Select") }, { button: "B", text: qsTr("Back") }]
+                                     : [{ button: "B", text: qsTr("Back") }]
+
     SettingRow {
         objectName: "aboutVersion"
         u: pane.u
@@ -36,6 +40,7 @@ SettingsPane {
         value: qsTr("GPL-3.0-or-later; icon font Apache-2.0; Inter typeface OFL-1.1")
     }
     SettingRow {
+        id: systemInfoRow
         objectName: "aboutSystemInfo"
         u: pane.u
         label: qsTr("System information")

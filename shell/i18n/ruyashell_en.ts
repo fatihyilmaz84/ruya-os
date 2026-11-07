@@ -4,7 +4,18 @@
 <context>
     <name>AboutPane</name>
     <message>
-        <location filename="../qml/AboutPane.qml" line="+17"/>
+        <location filename="../qml/AboutPane.qml" line="+15"/>
+        <source>Select</source>
+        <translation>Select</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <location line="+1"/>
+        <source>Back</source>
+        <translation>Back</translation>
+    </message>
+    <message>
+        <location line="+5"/>
         <source>Image version</source>
         <translation>Image version</translation>
     </message>
@@ -39,7 +50,7 @@
         <translation>GPL-3.0-or-later; icon font Apache-2.0; Inter typeface OFL-1.1</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+6"/>
         <source>System information</source>
         <translation>System information</translation>
     </message>
@@ -1788,9 +1799,14 @@
         <translation>Saving the report…</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+2"/>
         <source>Saved %1 and %2 to %3.</source>
         <translation>Saved %1 and %2 to %3.</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>the USB drive</source>
+        <translation>the USB drive</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -1818,7 +1834,18 @@
         <translation>The report could not be saved.</translation>
     </message>
     <message>
-        <location line="+167"/>
+        <location line="+166"/>
+        <source>Select</source>
+        <translation>Select</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <location line="+1"/>
+        <source>Back</source>
+        <translation>Back</translation>
+    </message>
+    <message>
+        <location line="+7"/>
         <source>Save report to USB drive</source>
         <translation>Save report to USB drive</translation>
     </message>
@@ -1833,7 +1860,7 @@
         <translation>Include network addresses</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+17"/>
         <source>The report is a text file and a JSON file on the drive. It is only a file: nothing is sent anywhere. Network addresses (MAC, IP, Wi-Fi name, Bluetooth address) are left out unless you include them.</source>
         <translation>The report is a text file and a JSON file on the drive. It is only a file: nothing is sent anywhere. Network addresses (MAC, IP, Wi-Fi name, Bluetooth address) are left out unless you include them.</translation>
     </message>
@@ -1856,7 +1883,7 @@
         <translation>%1 min</translation>
     </message>
     <message>
-        <location line="+30"/>
+        <location line="+37"/>
         <source>%1 °C</source>
         <translation>%1 °C</translation>
     </message>
@@ -2177,13 +2204,13 @@
     </message>
     <message>
         <location line="+0"/>
-        <location line="+36"/>
+        <location line="+40"/>
         <location line="+8"/>
         <source>%1 %</source>
         <translation>%1 %</translation>
     </message>
     <message>
-        <location line="-42"/>
+        <location line="-46"/>
         <source>Not connected</source>
         <translation>Not connected</translation>
     </message>
@@ -2229,7 +2256,7 @@
         <translation>Audio</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+5"/>
         <source>default</source>
         <translation>default</translation>
     </message>
@@ -2244,7 +2271,7 @@
         <translation>Controllers</translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+16"/>
         <source>Connected</source>
         <translation>Connected</translation>
     </message>

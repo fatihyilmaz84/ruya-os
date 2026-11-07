@@ -459,9 +459,20 @@ sysinfo_check() {
         echo "$out"; ok "SaveReport from nobody refused"
     fi
     vols="$(busctl --system call "$svc" "$path" "$stor" ListVolumes)"
-    if echo "$vols" | grep -q '"removable" b true' && echo "$vols" | grep -q '"mounted" b true'; then
-        id="$(echo "$vols" | grep -o '"id" s "[^"]*"' | head -1 | sed 's/^"id" s "//; s/"$//')"
-        mp="$(echo "$vols" | grep -o '"mount_point" s "[^"]*"' | head -1 | sed 's/^"mount_point" s "//; s/"$//')"
+    # One record per volume (each starts at its "drive" key): the first REMOVABLE, mounted, writable one,
+    # not the first listed (an internal volume may come first).
+    id=""; mp=""
+    while IFS= read -r rec; do
+        case "$rec" in *'"removable" b true'*'"mounted" b true'*|*'"mounted" b true'*'"removable" b true'*) ;; *) continue;; esac
+        case "$rec" in *'"read_only" b false'*) ;; *) continue;; esac
+        id="$(echo "$rec" | grep -o '"id" s "[^"]*"' | head -1 | sed 's/^"id" s "//; s/"$//')"
+        mp="$(echo "$rec" | grep -o '"mount_point" s "[^"]*"' | head -1 | sed 's/^"mount_point" s "//; s/"$//')"
+        [ -n "$id" ] && [ -n "$mp" ] && break
+        id=""; mp=""
+    done <<VOLEOF
+$(echo "$vols" | sed 's/"drive" s/\n"drive" s/g')
+VOLEOF
+    if [ -n "$id" ]; then
         out="$(busctl --system call "$svc" "$path" "$stor" SaveReport 'sa{ss}' "$id" 2 "RuyaOS-system-report.txt" "report text" "RuyaOS-system-report.json" "{}")"
         echo "SaveReport on $id ($mp): $out"
         case "$out" in

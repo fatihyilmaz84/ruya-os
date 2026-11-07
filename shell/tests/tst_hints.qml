@@ -115,7 +115,7 @@ Item {
             }
         }
 
-        function test_placeholder_page_shows_only_back_and_about_can_open_system_information() {
+        function test_placeholder_page_and_about_show_only_back() {
             signInAsAda()
             tc.shell.openPage("media")
             tryCompare(tc.shell, "currentPage", "media")
@@ -134,8 +134,16 @@ Item {
             compare(tc.shown(), "A Select|B Back", "the category list still enters About")
             keyClick(Qt.Key_Return)
             tryVerify(() => find("paneAbout").activeFocus, 2000, "About took focus")
-            // About has a row to open (System information, T-226), so it shows the default hints.
-            compare(tc.shown(), "A Select|B Back")
+            compare(tc.shown(), "B Back", "a fact row of About does nothing on A")
+            // The last row opens System information (T-226): that one row offers A.
+            for (let i = 0; i < 3; ++i)
+                keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Down)
+            tryVerify(() => find("aboutSystemInfo").activeFocus, 2000)
+            compare(tc.shown(), "A Select|B Back", "the System information row")
+            keyClick(Qt.Key_Up)
+            tryVerify(() => !find("aboutSystemInfo").activeFocus, 2000)
+            compare(tc.shown(), "B Back")
             keyClick(Qt.Key_Escape)
             tryVerify(() => find("categoryList").activeFocus, 2000)
             compare(tc.shown(), "A Select|B Back")
@@ -150,14 +158,14 @@ Item {
             tryVerify(() => find("paneProfiles").activeFocus, 2000)
             compare(tc.shown(), "A Select|B Back")
             compare(shownOf(find("paneProfiles")), "A Select|B Back")
-            compare(shownOf(find("paneAbout")), "A Select|B Back", "About opens System information")
+            compare(shownOf(find("paneAbout")), "B Back")
             keyClick(Qt.Key_Escape)
             tryVerify(() => find("categoryList").activeFocus, 2000)
             for (let i = 0; i < 8; ++i)
                 keyClick(Qt.Key_Down)
             keyClick(Qt.Key_Return)
             tryVerify(() => find("paneAbout").activeFocus, 2000)
-            compare(tc.shown(), "A Select|B Back", "About's hints")
+            compare(tc.shown(), "B Back", "About's own hints")
             // A pane that sets no hints gets the default.
             const bare = createTemporaryObject(barePane, host)
             compare(shownOf(bare), "A Select|B Back")
