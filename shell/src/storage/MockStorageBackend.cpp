@@ -69,6 +69,27 @@ void MockStorageBackend::eject(const QString &id)
     doEject(id);
 }
 
+void MockStorageBackend::saveReport(const QString &id, const QMap<QString, QString> &files)
+{
+    ++m_saveCalls;
+    const int at = indexOf(id);
+    QString status = QStringLiteral("ok");
+    if (id.isEmpty() || files.isEmpty()) {
+        status = QStringLiteral("invalid");
+    } else if (at < 0 || !m_entries.at(at).present) {
+        status = QStringLiteral("unknown-volume");
+    } else if (!m_entries.at(at).vol.removable || !m_entries.at(at).vol.mounted) {
+        status = QStringLiteral("unsupported");
+    } else if (m_entries.at(at).vol.readOnly) {
+        status = QStringLiteral("read-only");
+    } else if (!m_saveStatus.isEmpty()) {
+        status = m_saveStatus;
+    }
+    if (status == QLatin1String("ok"))
+        m_saved = files;
+    answer(QStringLiteral("saveReport"), id, status);
+}
+
 void MockStorageBackend::holdEject(bool hold)
 {
     m_holdEject = hold;
@@ -159,6 +180,9 @@ void MockStorageBackend::initState()
     m_holdEject = false;
     m_heldEjects.clear();
     m_ejectCalls = 0;
+    m_saved.clear();
+    m_saveCalls = 0;
+    m_saveStatus.clear();
     m_plugTimer.stop();
     m_usage = usageOf(464 * GB, 450 * GB, 6 * GB + GB / 2, -1);
     auto entry = [](const char *id, const char *drive, const char *label, const char *fs, qint64 size, qint64 free,

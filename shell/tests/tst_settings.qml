@@ -775,7 +775,9 @@ Item {
             keyClick(Qt.Key_Down)
             verify(find("aboutLicence").activeFocus)
             keyClick(Qt.Key_Down)
-            verify(find("aboutLicence").activeFocus, "clamps at the last row")
+            verify(find("aboutSystemInfo").activeFocus, "the last row opens System information (T-226)")
+            keyClick(Qt.Key_Down)
+            verify(find("aboutSystemInfo").activeFocus, "clamps at the last row")
             keyClick(Qt.Key_Left)
             tryVerify(() => find("categoryList").activeFocus)
         }

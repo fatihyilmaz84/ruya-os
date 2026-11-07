@@ -7,7 +7,7 @@
   Contract between shell (Qt/QML) and services (Rust); see docs/specs/03-services-and-apps.md §2.3.
 
   One bus name and one object, one interface per device class: org.ruyaos.Devices1.Audio now,
-  org.ruyaos.Devices1.Network, .Bluetooth, .Storage, .Batteries, .Thermal and .Time next to it. A new
+  org.ruyaos.Devices1.Network, .Bluetooth, .Storage, .Batteries, .Thermal, .Time and .System next to it. A new
   class is a new interface, so existing clients and their PropertiesChanged filters (which match
   the interface name) are not touched, and each class can be mocked, implemented and tested on
   its own. Shared rules for every interface of this object:
@@ -54,6 +54,15 @@
                       (Eject: nothing to eject, it is safe to unplug)
     "invalid"         malformed argument (an empty id)
     "failed"          internal error, or Eject of a volume that is not removable
+
+  org.ruyaos.Devices1.Storage.SaveReport status strings (T-226; plain files onto a removable volume, nothing is run):
+    "ok"              the files are on the volume (path answers where)
+    "unknown-volume"  no volume with that id in the list
+    "unsupported"     the volume is not removable, or not mounted (a filesystem we do not mount)
+    "read-only"       the volume is mounted read-only
+    "full"            the files do not fit (or the volume refused them for lack of space)
+    "invalid"         an unsafe or unknown file name, more than 4 files, more than 1 MiB in all, or no file
+    "failed"          internal error (the volume refused the write for another reason)
 
   org.ruyaos.Devices1.Time status strings (systemd-timedated, org.freedesktop.timedate1, behind it):
     "ok"         success (SetTimezone: the zone is set; TimezoneChanged follows)
@@ -439,6 +448,27 @@
       <arg name="status" type="s" direction="out"/>
     </method>
 
+    <!--
+      Writes plain text files onto a mounted removable volume (T-226: the System information report,
+      `RuyaOS-system-report.txt` and `.json`). The caller composes the content; the service only
+      checks and writes, so what the caller left out of it (the shell leaves out MAC, IP and SSID
+      unless the user said otherwise) never reaches this service. files maps a file name to its
+      text (UTF-8). A name must be `RuyaOS-` followed by 1 to 64 of A-Z a-z 0-9 . _ - and end in
+      `.txt` or `.json`: no path, no hidden file, nothing else is ever written. At most 4 files and
+      1 MiB (1048576 bytes) in all. A file of the same name on the volume is replaced; each file is
+      written under a temporary name and renamed, so a pulled stick holds the old or the new file,
+      never half of one. Only a removable, mounted, writable volume is accepted (the volumes of
+      ListVolumes with removable and mounted true and read_only false). Nothing is executed and the
+      volume stays mounted nosuid,nodev,noexec. See the status strings in the header. path is the
+      mount point the files were written to ("" unless the status is "ok").
+    -->
+    <method name="SaveReport">
+      <arg name="id" type="s" direction="in"/>
+      <arg name="files" type="a{ss}" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+      <arg name="path" type="s" direction="out"/>
+    </method>
+
     <!-- A volume appeared, disappeared or changed (mounted, free space, ...); call ListVolumes again. -->
     <signal name="VolumesChanged"/>
 
@@ -576,6 +606,94 @@
 
     <!-- The zone changed (SetTimezone, or timedatectl run by someone else); call GetTimezone again. -->
     <signal name="TimezoneChanged"/>
+
+  </interface>
+  <interface name="org.ruyaos.Devices1.System">
+
+    <!--
+      What the console is made of and how it is doing (T-226), for the read-only System information
+      page. The collector is the crate ruya-sysinfo (parsers over /proc, /sys, the udev database and a
+      few commands; no D-Bus in it), which the telemetry hardware report (T-224) uses too. Read-only,
+      no statuses. Not repeated here, because other interfaces already say it and the shell puts it
+      next to this: temperatures (Thermal), how full the console's own storage is
+      (Storage.GetSystemUsage), the controllers' batteries (Batteries), the connection with its
+      address and signal (Network), the update channel (Update1).
+
+      GetInfo returns one dictionary of grouped keys `group.field`. **A value that cannot be read is
+      absent, never 0 or "".** Clients ignore keys they do not know. Sizes are bytes (t), clocks MHz,
+      durations seconds; texts are as the machine says them (English, not translated).
+
+        console.name             s  "RuyaOS" (os-release NAME)
+        console.version          s  the image version ("0.0.50", /usr/lib/ruyaos/version)
+        console.kernel           s  kernel release (uname -r)
+        console.arch             s  "x86_64" | "aarch64" ...
+        console.deployment       s  the first 12 characters of the ostree commit the console booted from
+        console.image            s  image reference of the booted deployment (`bootc status`)
+        console.image_digest     s  its digest. Both are absent where `bootc status` may not be run:
+                                    it needs root and this service runs as the shell's user
+        console.installed        s  "YYYY-MM" (UTC) of the first boot, from the machine id's age
+        console.firmware         s  "uefi" | "bios"
+        console.secure_boot      b  Secure Boot is on (UEFI only)
+        console.vendor           s  machine maker from the DMI data ("Dell Inc."); placeholders such
+                                    as "To Be Filled By O.E.M." are dropped
+        console.model            s  machine model ("OptiPlex 3080")
+        console.uptime_s         t  seconds since boot                                      LIVE
+
+        cpu.model                s  "Intel(R) Core(TM) i5-10500T CPU @ 2.30GHz"
+        cpu.cores                t  physical cores (absent where /proc/cpuinfo does not say)
+        cpu.threads              t  logical processors
+        cpu.freq_mhz             t  clock of the busiest core now (cpufreq)                 LIVE
+        cpu.freq_max_mhz         t  highest clock any core may reach
+
+        memory.total_bytes       t  installed memory as the kernel sees it
+        memory.available_bytes   t  MemAvailable                                            LIVE
+        memory.used_bytes        t  total - available                                       LIVE
+        memory.swap_total_bytes  t  absent without swap
+        memory.swap_used_bytes   t  absent without swap                                     LIVE
+        memory.zram_bytes        t  size of the compressed-RAM swap device(s); absent without
+
+        graphics.vendor          s  "Intel" | "AMD" | "NVIDIA" | ... of the GPU the firmware boots with
+        graphics.model           s  marketing name from the PCI database ("UHD Graphics 630")
+        graphics.pci_id          s  "8086:9bc8"
+        graphics.driver          s  kernel driver ("i915", "amdgpu", "nvidia", "nouveau")
+        graphics.driver_version  s  the module's version, else the kernel release for a driver that
+                                    lives in the kernel tree
+        graphics.mesa_version    s  Mesa's package version (not with the NVIDIA driver)
+        graphics.nvidia_version  s  the NVIDIA driver version (only with that driver)
+        graphics.connector       s  first connected display connector ("HDMI-A-1")
+        graphics.preferred_mode  s  that display's first listed mode ("1920x1080"). The mode in use, the
+                                    OpenGL/Vulkan renderer and the effects tier are the shell's to say
+
+        storage.drives          aa{sv}  the internal drives (not removable, not behind USB), one
+                                    record each: model s, type s ("nvme" | "ssd" | "hdd" | "emmc"),
+                                    size_bytes t, and health s ("ok" | "failed") for NVMe only, from
+                                    the controller state that sysfs gives (no SMART; no health for
+                                    other drives)
+
+        network.interface        s  the interface of the default route ("eno1")
+        network.mac              s  its hardware address
+        network.link_mbps        t  wired link speed (absent for Wi-Fi and without a link)
+
+        bluetooth.chipset        s  "Intel Corp. Bluetooth wireless interface" (USB adapters)
+        bluetooth.usb_id         s  "8087:0a2b"
+        bluetooth.address        s  the adapter's address (bluetoothctl)
+
+      Keys marked LIVE are read at every call (a few small files, no commands). All the others are
+      read at the first call and then at most every 30 s: a call that finds them older answers with
+      what it has and reads them again in the background (the bus is never blocked), and a difference
+      sends SystemInfoChanged. The shell calls GetInfo every 2 s while its page is visible and not
+      at all otherwise, so the service has no timer of its own.
+    -->
+    <method name="GetInfo">
+      <arg name="info" type="a{sv}" direction="out"/>
+    </method>
+
+    <!--
+      A key that is not LIVE differs from the one before: a display was plugged in, a drive was
+      added, the link speed changed. Call GetInfo again. Not sent for the LIVE keys, which change
+      all the time and are simply read when shown.
+    -->
+    <signal name="SystemInfoChanged"/>
 
   </interface>
 

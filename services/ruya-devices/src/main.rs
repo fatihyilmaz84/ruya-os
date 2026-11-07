@@ -1,4 +1,4 @@
-//! ruya-devices: serves org.ruyaos.Devices1.Audio, .Network, .Bluetooth, .Storage, .Batteries, .Thermal and .Time on the system bus, as a systemd
+//! ruya-devices: serves org.ruyaos.Devices1.Audio, .Network, .Bluetooth, .Storage, .Batteries, .Thermal, .Time and .System on the system bus, as a systemd
 //! user unit of `ruya-shell` (ADR-010). With `--session` (development) it serves on the session
 //! bus over a fake PipeWire, NetworkManager, BlueZ, udisks2, UPower, sensors and timedated.
 
@@ -17,13 +17,15 @@ use ruya_devices::dbus::{
 use ruya_devices::dbus::{
     AudioIface, BatteriesIface, BluetoothIface, DynBluez, DynNm, DynPipeWire, DynSource,
     DynThermal, DynTimedate, DynUPower, DynUdisks, NetworkIface, Shared, SharedBatteries,
-    SharedBluetooth, SharedInput, SharedNet, SharedStorage, SharedThermal, SharedTime, SharedUsage,
-    StorageIface, ThermalIface, TimeIface, BUS_NAME, OBJECT_PATH,
+    SharedBluetooth, SharedInput, SharedNet, SharedStorage, SharedSystem, SharedThermal,
+    SharedTime, SharedUsage, StorageIface, SystemIface, ThermalIface, TimeIface, BUS_NAME,
+    OBJECT_PATH,
 };
 use ruya_devices::input::{DynInputSource, FakeInput, InputDevice, InputPresence};
 use ruya_devices::network::{FakeNetworkManager, Network};
 use ruya_devices::storage::{FakeUdisks, RawVolume, Storage};
 use ruya_devices::store::Store;
+use ruya_devices::sysinfo::{DynInfoSource, SystemInfo};
 #[cfg(target_os = "linux")]
 use ruya_devices::sysusage::LinuxSource;
 use ruya_devices::sysusage::{FakeSource, MonotonicClock, SystemUsage};
@@ -171,6 +173,17 @@ fn thermal_source(session: bool) -> DynThermal {
     }
 }
 
+/// What the System information reads: the running system, or in `--session` the sample machine
+/// of `ruya-sysinfo` (the Dell of the task), so the shell has something to show on any host.
+fn info_source(session: bool) -> DynInfoSource {
+    if session {
+        return Box::new(ruya_sysinfo::FakeSource::from_dump(
+            ruya_sysinfo::SAMPLE_MACHINE,
+        ));
+    }
+    Box::new(ruya_sysinfo::RootSource::system())
+}
+
 /// `RUYA_DEVICES_FILE`, else `$STATE_DIRECTORY/audio.toml` (systemd's StateDirectory=), else none.
 fn state_file() -> Option<PathBuf> {
     if let Some(p) = std::env::var_os("RUYA_DEVICES_FILE") {
@@ -300,6 +313,15 @@ fn run() -> Result<(), Box<dyn Error>> {
         eprintln!("ruya-devices: timedated not readable yet: {err}");
     }
 
+    // The slow part is read once, now, off the main thread, so the first call finds it.
+    let system: SharedSystem = Arc::new(SystemInfo::new(info_source(session)));
+    {
+        let warm = system.clone();
+        std::thread::spawn(move || {
+            warm.current(std::time::Instant::now());
+        });
+    }
+
     futures_lite::future::block_on(async {
         let builder = if session {
             zbus::connection::Builder::session()?
@@ -321,12 +343,14 @@ fn run() -> Result<(), Box<dyn Error>> {
             )?
             .serve_at(OBJECT_PATH, ThermalIface::new(monitor.clone()))?
             .serve_at(OBJECT_PATH, TimeIface::new(time.clone(), session))?
+            .serve_at(OBJECT_PATH, SystemIface::new(system.clone()))?
             .build()
             .await?;
         // The fakes have nothing to follow (they change only through calls): just stay up.
         if session {
             let _keep = (
                 connection, audio, net, batteries, bluetooth, input, storage, usage, monitor, time,
+                system,
             );
             futures_lite::future::pending::<()>().await;
         } else {

@@ -26,6 +26,7 @@ public:
     bool isMock() const override { return true; }
     void refresh() override;
     void eject(const QString &id) override;
+    void saveReport(const QString &id, const QMap<QString, QString> &files) override;
     void refreshUsage() override;
 
     // Tests only.
@@ -43,6 +44,11 @@ public:
     // While held, eject() is counted but unanswered (an unmount takes seconds) until released.
     void holdEject(bool hold);
     int ejectCalls() const { return m_ejectCalls; }
+    // saveReport(): the files of the last call that was accepted (what the service would have
+    // written), how many calls there were, and a status that the next calls answer instead of "ok".
+    QMap<QString, QString> savedFiles() const { return m_saved; }
+    int saveCalls() const { return m_saveCalls; }
+    void setSaveStatus(const QString &status) { m_saveStatus = status; }
     void republish();   // publish the volume list again, unchanged
     // Replies to refresh() arrive after `ms` (0: at once), with the list as it was when asked; the
     // number of replies still on their way. Lets a test play an old reply landing after a new one.
@@ -71,6 +77,9 @@ private:
     bool m_holdEject = false;
     QStringList m_heldEjects;
     int m_ejectCalls = 0;
+    QMap<QString, QString> m_saved;
+    int m_saveCalls = 0;
+    QString m_saveStatus;
     int m_delay = 0;
     int m_pending = 0;
 };

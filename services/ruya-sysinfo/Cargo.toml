@@ -1,0 +1,13 @@
+[package]
+name = "ruya-sysinfo"
+description = "What a RuyaOS console is made of: parsers for /proc, /sys and udev data (pure core, no D-Bus)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+serde_json = "1"  # `bootc status --json` (already in the tree)
+
+[dev-dependencies]
+tempfile = "3"
