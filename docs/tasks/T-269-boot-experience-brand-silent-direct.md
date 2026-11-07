@@ -1,6 +1,6 @@
 # T-269 — Boot experience: branded splash, silent boot, no boot menu unless a key is held
 
-Status: in-progress · Phase: 2 · Depends: — · Area: image · Size: M · Owner: builder
+Status: done · Phase: 2 · Depends: — · Area: image · Size: M · Owner: builder
 
 ## Goal
 From power-on to the shell the screen shows only the RuyaOS look: no kernel or systemd text, no boot-loader menu, a branded logo splash, then the shell. Owner request, 2026-11-07: "styling/branding of the boot logo, non verbose boot (don't show any text during boot), if possible don't show the boot options but boot directly (allow the option via a special key)". Rollback must stay reachable.
