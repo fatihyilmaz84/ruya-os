@@ -28,7 +28,7 @@ The console knows the owner's time zone. Today the clock shows UTC (first notice
 - `01-platform.md` (schedule uses local time; the zone), `02-shell.md` §1.3 and System, the XML, `docs/dev-setup.md`.
 
 ## Outcome
-Verified: host (vm pending: `scripts/vm-devices-check.sh time`)
+Verified: host + vm (lead run, 2026-11-07, image 0.0.50). vm-devices-check.sh time on 0.0.50: all 26 lines PASS (polkit: pkcheck allowed set-timezone, refused set-time, set-ntp, set-local-rtc; the zone was set and restored). The VM had 0 profiles, so only the `ok` branch of the shell's SetTimezone ran: the `forbidden` cases (nobody or a standard profile signed in) are unit-test-only. Earlier: host (vm pending: `scripts/vm-devices-check.sh time`)
 
 **What was built.** The console now has a time zone it can be asked for and told.
 - **Contract** `org.ruyaos.Devices1.Time` in `api/dbus/org.ruyaos.Devices1.xml`: `GetTimezone`, `ListTimezones`, `SetTimezone(name) -> ok | invalid | forbidden | failed`, property `NtpSynchronised`, signal `TimezoneChanged`. `forbidden` (not `refused`, which Devices1 uses for the pairing window's uid rule) because it is the admin rule `Update1`/`Store1` already call `forbidden`.
