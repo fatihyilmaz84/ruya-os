@@ -1,6 +1,6 @@
 # T-272 — Picker modals in glass, and rounded wallpaper thumbnails
 
-Status: in-progress · Phase: 2 · Depends: T-198 · Area: shell · Size: S · Owner: builder
+Status: done · Phase: 2 · Depends: T-198 · Area: shell · Size: S · Owner: builder
 
 ## Goal
 The wallpaper picker looks like the rest of the shell: its panel is glass, and its thumbnails are rounded to the same shape as the selection hairline and the focus ring around them. Owner feedback, 2026-11-07: "the wallpaper select popup isn't styled (no glass). the selected item has a border while the image is square". The other picker modals follow the same rule so none of them stays flat.
