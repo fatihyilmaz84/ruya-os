@@ -432,17 +432,17 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+10"/>
-        <location line="+244"/>
+        <location line="+256"/>
         <source>Uninstall</source>
         <translation>Kaldır</translation>
     </message>
     <message>
-        <location line="-232"/>
+        <location line="-244"/>
         <source>Your activity</source>
         <translation>Etkinliğiniz</translation>
     </message>
     <message>
-        <location line="+87"/>
+        <location line="+99"/>
         <source>This app can</source>
         <translation>Bu uygulama şunları yapabilir</translation>
     </message>
@@ -1156,6 +1156,34 @@ Bu geri alınamaz.</translation>
     </message>
 </context>
 <context>
+    <name>DisplayText</name>
+    <message>
+        <location filename="../qml/DisplayText.qml" line="+9"/>
+        <source>%1 × %2</source>
+        <translation>%1 × %2</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>%1 Hz</source>
+        <translation>%1 Hz</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>%1, %2</source>
+        <translation>%1, %2</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Auto</source>
+        <translation>Otomatik</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>%1 %</source>
+        <translation>%%1</translation>
+    </message>
+</context>
+<context>
     <name>DurationText</name>
     <message>
         <location filename="../qml/DurationText.qml" line="+23"/>
@@ -1256,6 +1284,52 @@ Bu geri alınamaz.</translation>
         <location filename="../qml/MediaPage.qml" line="+6"/>
         <source>Media</source>
         <translation>Medya</translation>
+    </message>
+</context>
+<context>
+    <name>ModeConfirm</name>
+    <message>
+        <location filename="../qml/ModeConfirm.qml" line="+32"/>
+        <location line="+175"/>
+        <source>Keep</source>
+        <translation>Koru</translation>
+    </message>
+    <message>
+        <location line="-175"/>
+        <location line="+1"/>
+        <location line="+165"/>
+        <source>Revert</source>
+        <translation>Geri al</translation>
+    </message>
+    <message>
+        <location line="-81"/>
+        <source>The setting could not be kept. The previous one comes back when the time is up.</source>
+        <translation>Ayar korunamadı. Süre dolunca önceki ayar geri gelir.</translation>
+    </message>
+    <message>
+        <location line="+39"/>
+        <source>Keep this resolution?</source>
+        <translation>Bu çözünürlük korunsun mu?</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+26"/>
+        <source>If you do nothing, the previous setting comes back in %n second(s).</source>
+        <translation>
+            <numerusform>Hiçbir şey yapmazsanız önceki ayar %n saniye içinde geri gelir.</numerusform>
+        </translation>
+    </message>
+</context>
+<context>
+    <name>ModePicker</name>
+    <message>
+        <location filename="../qml/ModePicker.qml" line="+24"/>
+        <source>Select</source>
+        <translation>Seç</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Cancel</source>
+        <translation>İptal</translation>
     </message>
 </context>
 <context>
@@ -1625,7 +1699,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>ProfilesPane</name>
     <message>
-        <location filename="../qml/ProfilesPane.qml" line="+48"/>
+        <location filename="../qml/ProfilesPane.qml" line="+51"/>
         <source>Admin</source>
         <translation>Yönetici</translation>
     </message>
@@ -1757,7 +1831,7 @@ Bu geri alınamaz.</translation>
         <translation>PIN belirle</translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="+15"/>
         <source>Activity</source>
         <translation>Etkinlik</translation>
     </message>
@@ -1767,7 +1841,7 @@ Bu geri alınamaz.</translation>
         <translation>Ne oynadınız</translation>
     </message>
     <message>
-        <location line="-5"/>
+        <location line="-9"/>
         <source>Remove my PIN</source>
         <translation>PIN&apos;imi kaldır</translation>
     </message>
@@ -1864,7 +1938,7 @@ Bu geri alınamaz.</translation>
         <translation>Geri</translation>
     </message>
     <message>
-        <location line="+203"/>
+        <location line="+204"/>
         <source>Coming soon</source>
         <translation>Yakında</translation>
     </message>
@@ -2048,7 +2122,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+309"/>
+        <location filename="../qml/Shell.qml" line="+332"/>
         <source>Could not %1.</source>
         <translation>%1 işlemi yapılamadı.</translation>
     </message>
@@ -2073,7 +2147,7 @@ Bu geri alınamaz.</translation>
         <translation>Ses çıkışı: %1</translation>
     </message>
     <message numerus="yes">
-        <location line="+253"/>
+        <location line="+255"/>
         <source>%n more device(s) with a battery: %1</source>
         <translation>
             <numerusform>Pili olan %n cihaz daha: %1</numerusform>
@@ -2085,12 +2159,12 @@ Bu geri alınamaz.</translation>
         <translation>%1 yüzde %2</translation>
     </message>
     <message>
-        <location line="+571"/>
+        <location line="+573"/>
         <source>Power</source>
         <translation>Güç</translation>
     </message>
     <message>
-        <location line="-817"/>
+        <location line="-821"/>
         <source>Update ready. Restart to finish.</source>
         <translation>Güncelleme hazır. Bitirmek için yeniden başlat.</translation>
     </message>
@@ -2110,7 +2184,7 @@ Bu geri alınamaz.</translation>
         <translation>Ekran yanıt vermedi, bu yüzden önceki çözünürlük geri geldi.</translation>
     </message>
     <message>
-        <location line="+45"/>
+        <location line="+47"/>
         <source>Wallpaper could not be loaded</source>
         <translation>Duvar kağıdı yüklenemedi</translation>
     </message>
@@ -2156,7 +2230,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 başlatılıyor…</translation>
     </message>
     <message>
-        <location line="+252"/>
+        <location line="+254"/>
         <location line="+12"/>
         <location line="+3"/>
         <source>Select</source>
@@ -3503,80 +3577,6 @@ Bu geri alınamaz.</translation>
         <location line="+54"/>
         <source>Time zone</source>
         <translation>Saat dilimi</translation>
-    </message>
-</context>
-<context>
-    <name>DisplayText</name>
-    <message>
-        <location filename="../qml/DisplayText.qml" line="+9"/>
-        <source>%1 × %2</source>
-        <translation>%1 × %2</translation>
-    </message>
-    <message>
-        <location line="+9"/>
-        <source>%1 Hz</source>
-        <translation>%1 Hz</translation>
-    </message>
-    <message>
-        <location line="+7"/>
-        <source>%1, %2</source>
-        <translation>%1, %2</translation>
-    </message>
-    <message>
-        <location line="+5"/>
-        <source>Auto</source>
-        <translation>Otomatik</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>%1 %</source>
-        <translation>%%1</translation>
-    </message>
-</context>
-<context>
-    <name>ModeConfirm</name>
-    <message>
-        <location filename="../qml/ModeConfirm.qml" line="+32"/>
-        <location line="+175"/>
-        <source>Keep</source>
-        <translation>Koru</translation>
-    </message>
-    <message>
-        <location line="-175"/>
-        <location line="+1"/>
-        <location line="+165"/>
-        <source>Revert</source>
-        <translation>Geri al</translation>
-    </message>
-    <message>
-        <location line="-81"/>
-        <source>The setting could not be kept. The previous one comes back when the time is up.</source>
-        <translation>Ayar korunamadı. Süre dolunca önceki ayar geri gelir.</translation>
-    </message>
-    <message>
-        <location line="+39"/>
-        <source>Keep this resolution?</source>
-        <translation>Bu çözünürlük korunsun mu?</translation>
-    </message>
-    <message numerus="yes">
-        <location line="+26"/>
-        <source>If you do nothing, the previous setting comes back in %n second(s).</source>
-        <translation>
-            <numerusform>Hiçbir şey yapmazsanız önceki ayar %n saniye içinde geri gelir.</numerusform>
-        </translation>
-    </message>
-</context>
-<context>
-    <name>ModePicker</name>
-    <message>
-        <location filename="../qml/ModePicker.qml" line="+24"/>
-        <source>Select</source>
-        <translation>Seç</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Cancel</source>
-        <translation>İptal</translation>
     </message>
 </context>
 </TS>
