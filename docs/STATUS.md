@@ -25,7 +25,7 @@ Open work only (the front of the board; the rest is in `STATUS-backlog.md`), in 
 |---|---|---|---|
 | [T-197](tasks/T-197-shell-crash-on-bluetooth-audio-disconnect.md) | **[lead]** Shell crash when a Bluetooth headset disconnects | in-progress | — |
 | [T-272](tasks/T-272-picker-modals-glass-and-rounded-thumbnails.md) | Picker modals in glass, rounded wallpaper thumbnails (owner feedback) | in-progress | T-198 |
-| [T-202](tasks/T-202-screen-saver-and-power-saving.md) | Screen saver and power saving | todo | — |
+| [T-202](tasks/T-202-screen-saver-and-power-saving.md) | Screen saver and power saving | in-progress | — |
 | [T-261](tasks/T-261-controller-families-and-drivers-audit.md) | **[lead]** Controller families and drivers audit (DualSense, Xbox, 8BitDo, Switch), detection table, hardware checklist | todo | — |
 | [T-164](tasks/T-164-per-profile-wayland-sockets.md) | **[lead]** Per-profile Wayland sockets | todo | T-162 |
 
