@@ -58,3 +58,4 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | [T-257](tasks/T-257-app-jellyfin-client.md) | App: Jellyfin client | todo | T-251, T-252, T-255 |
 | [T-258](tasks/T-258-app-browser.md) | **[lead]** App: Browser: Proposed ADR-016 first | todo | T-250, T-252 |
 | [T-259](tasks/T-259-app-emulator-frontend.md) | App: Emulator frontend (no emulators, ROMs or BIOS shipped) | todo | T-251, T-252, T-256 |
+| [T-262](tasks/T-262-wake-from-suspend-by-controller.md) | **[lead]** Wake from suspend with a controller (hardware-dependent; honest UI) | todo | T-166, T-202, T-203 |
