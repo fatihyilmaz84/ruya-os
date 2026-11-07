@@ -9,6 +9,10 @@ Item {
     property color tint: Theme.defaultTint
     Behavior on tint { ColorAnimation { duration: Theme.tintMs; easing.type: Easing.InOutQuad } }
 
+    // False while a wallpaper covers the backdrop (T-208): nothing is drawn and the blobs rest.
+    property bool shown: true
+    visible: shown
+
     // True while any blob is drifting; stops with reduced motion or the performance tier.
     readonly property bool drifting: blobA.drifting || blobB.drifting || blobC.drifting
 
@@ -34,14 +38,14 @@ Item {
 
         SequentialAnimation on driftX {
             id: xAnim
-            running: Theme.ambientMotion
+            running: Theme.ambientMotion && backdrop.shown
             loops: Animation.Infinite
             NumberAnimation { to: 1; duration: blob.period; easing.type: Easing.InOutSine }
             NumberAnimation { to: 0; duration: blob.period; easing.type: Easing.InOutSine }
         }
         SequentialAnimation on driftY {
             id: yAnim
-            running: Theme.ambientMotion
+            running: Theme.ambientMotion && backdrop.shown
             loops: Animation.Infinite
             NumberAnimation { to: 1; duration: blob.period * 1.3; easing.type: Easing.InOutSine }
             NumberAnimation { to: 0; duration: blob.period * 1.3; easing.type: Easing.InOutSine }

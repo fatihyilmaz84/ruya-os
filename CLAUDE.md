@@ -18,7 +18,7 @@ RuyaOS is an open-source, immutable (Fedora bootc) console OS for living-room PC
 ## Session workflow (do every step, in order)
 
 0. **Which session?** Lead: `docs/LEAD.md`. Planning: `docs/tasks/PLANNING.md`. A dispatched builder is the `ruya-builder` agent in its own worktree (`.claude/agents/ruya-builder.md`); it never edits `docs/STATUS.md` or the task's `Status:`. A builder session the **owner starts directly** works in the main checkout and also does steps 3 and 6. Builders don't create tasks; follow-ups are Inbox lines (in the HANDOFF when dispatched).
-1. **Orient** (direct sessions). Read `docs/STATUS.md`. Take **NEXT**, or else the first `todo` whose dependencies are all `done`. Skip **[lead]** tasks. **One task per session**, unless its file says it is small enough to pair.
+1. **Orient** (direct sessions). Read `docs/STATUS.md`. Take **NEXT**, or else the first `todo` whose dependencies are all `done` (the board continues in `docs/STATUS-backlog.md`). Skip **[lead]** tasks. **One task per session**, unless its file says it is small enough to pair.
    - `git status` shows changes you didn't make? Another session may be running: stop and tell the user.
    - Nothing qualifies? Stop and say the backlog needs a planning session. Don't invent work.
 2. **Read before coding.** The whole task file, every spec section it links, the `CLAUDE.md` of each area you touch, and the existing code you will change. Read the Outcome of a dependency only when the task's Hints point to it.

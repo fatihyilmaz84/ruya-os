@@ -75,6 +75,8 @@ The typeface (Inter 4.1, OFL-1.1) is cut the same way: `scripts/fetch-inter.sh` 
 
 The glass grain tile (`shell/assets/glass-grain.png`, 128x128, T-204) is made by `python -I scripts/make-grain.py` (standard library only, a fixed pseudo-random sequence, so the PNG is reproducible; `--check` says whether the committed file matches). There is no switch to turn the glass layers off one by one; to see a surface without them, set the tier: `ruya-shell.exe --windowed --effects performance` has no grain, no shadows, no glare or shimmer, `--reduced-motion` has no glare or shimmer.
 
+The bundled wallpapers (`shell/assets/wallpapers/*.jpg` and `catalog.json`, T-208) are made by `python -I scripts/make-wallpapers.py` (needs Pillow and numpy; formulas and a seeded dither, no source images; the JPEG bytes depend on the libjpeg Pillow bundles). `catalog.json` carries each picture's `peak` and `floor` brightness, which the shell uses to veil a wallpaper until the theme's text stays legible (`04` §3.5). Wallpaper tests (`tst_wallpaper.qml`) use the mock USB stick: `Wallpapers.mockPrepareUsb()` writes a folder of made-up pictures into a temporary directory and the mock stick's mount point reads from it; the wallpaper library lives in a temporary directory while settings are ephemeral. On a real machine the copies are in `~/.local/share/ruya-shell/wallpapers` of the shell user (`RUYA_WALLPAPER_DIR` overrides it), with an `index.json`; `--windowed` development uses the same folder under your profile.
+
 ## Developer guide and the sample game (T-214)
 
 `docs/developers/` is the guide for people who make games for RuyaOS; `samples/hello-game/` is the sample it describes (C, SDL 3, CC0). Two checks belong to it:

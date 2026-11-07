@@ -364,6 +364,20 @@ FocusScope {
             objectName: "backdrop"
             anchors.fill: parent
             tint: Profiles.active.avatar ?? Theme.defaultTint
+            shown: !wallpaperLayer.covering      // a wallpaper covers it (T-208)
+        }
+
+        // The wallpaper (Settings -> Display & motion): the picture under the hero art, blurred on pages.
+        WallpaperLayer {
+            id: wallpaperLayer
+            objectName: "wallpaperLayer"
+            anchors.fill: parent
+            blurred: root.pageOpen
+            onFailed: (id, reason) => {
+                console.warn("ruya-shell: wallpaper", id, "unusable:", reason, "- using the default look")
+                Notifications.show(qsTr("Wallpaper could not be loaded"), "warning")
+                DeviceSettings.wallpaper = ""
+            }
         }
 
         // Hero art: two layers that cross-fade over tintMs when the focused item changes.
@@ -381,6 +395,7 @@ FocusScope {
                 clip: false
                 monogram: false
                 shimmer: false
+                bare: wallpaperLayer.has     // over a wallpaper an item without art shows the wallpaper, not a colour field
                 Behavior on opacity { NumberAnimation { duration: Theme.tintMs; easing.type: Easing.InOutQuad } }
             }
             ArtLayer { id: artA; objectName: "heroArtA"; u: root.u; opacity: heroArt.showB ? 0 : 1 }

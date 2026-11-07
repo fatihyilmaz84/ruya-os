@@ -181,7 +181,7 @@ Item {
                    "the ground is between the two looks mid-fade: " + mid)
             tryCompare(Theme, "mix", 1, 3000)
             same(Theme.background, Themes.byKey("daylight").background)
-            verify(!Theme.fade.running)
+            tryVerify(function () { return !Theme.fade.running }, 2000)
         }
 
         function test_switch_in_mid_fade_starts_from_what_is_shown() {

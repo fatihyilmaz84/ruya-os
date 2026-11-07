@@ -1,4 +1,4 @@
-# Board lint: docs/STATUS.md and the task files agree (docs/tasks/README.md, "Lifecycle").
+# Board lint: docs/STATUS.md (+ STATUS-backlog.md) and the task files agree (docs/tasks/README.md, "Lifecycle").
 #   - every board row links an existing task file, and its status equals the file's "Status:" header;
 #   - the board lists only open work (todo, in-progress, blocked): done tasks live in their file;
 #   - every task file whose status is not done has a board row;
@@ -24,7 +24,10 @@ foreach ($f in Get-ChildItem (Join-Path $Docs "tasks") -Filter "T-*.md") {
 }
 
 $status = [IO.File]::ReadAllText((Join-Path $Docs "STATUS.md"), $Utf8)
-$rows = [regex]::Matches($status, '(?m)^\|\s*\[(T-\d+)\]\(tasks/([^)]+)\)\s*\|[^|]*\|\s*([a-z-]+)\s*\|')
+$backlogFile = Join-Path $Docs "STATUS-backlog.md"
+$boardText = $status
+if (Test-Path $backlogFile) { $boardText += "`n" + [IO.File]::ReadAllText($backlogFile, $Utf8) }
+$rows = [regex]::Matches($boardText, '(?m)^\|\s*\[(T-\d+)\]\(tasks/([^)]+)\)\s*\|[^|]*\|\s*([a-z-]+)\s*\|')
 $onBoard = @{}
 foreach ($r in $rows) {
     $id = $r.Groups[1].Value; $file = $r.Groups[2].Value; $st = $r.Groups[3].Value

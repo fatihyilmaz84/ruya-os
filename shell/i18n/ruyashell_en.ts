@@ -422,7 +422,7 @@
 <context>
     <name>DisplayPane</name>
     <message>
-        <location filename="../qml/DisplayPane.qml" line="+13"/>
+        <location filename="../qml/DisplayPane.qml" line="+15"/>
         <source>Effects quality</source>
         <translation>Effects quality</translation>
     </message>
@@ -455,6 +455,16 @@
         <location line="+16"/>
         <source>Theme</source>
         <translation>Theme</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Wallpaper</source>
+        <translation>Wallpaper</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Dim wallpaper</source>
+        <translation>Dim wallpaper</translation>
     </message>
 </context>
 <context>
@@ -1116,7 +1126,7 @@
         <translation>Back</translation>
     </message>
     <message>
-        <location line="+176"/>
+        <location line="+177"/>
         <source>Coming soon</source>
         <translation>Coming soon</translation>
     </message>
@@ -1291,12 +1301,12 @@
         <translation>Audio output: %1</translation>
     </message>
     <message>
-        <location line="+705"/>
+        <location line="+720"/>
         <source>Power</source>
         <translation>Power</translation>
     </message>
     <message>
-        <location line="-697"/>
+        <location line="-712"/>
         <source>Update ready. Restart to finish.</source>
         <translation>Update ready. Restart to finish.</translation>
     </message>
@@ -1311,7 +1321,12 @@
         <translation>%1 stopped unexpectedly</translation>
     </message>
     <message>
-        <location line="+113"/>
+        <location line="+44"/>
+        <source>Wallpaper could not be loaded</source>
+        <translation>Wallpaper could not be loaded</translation>
+    </message>
+    <message>
+        <location line="+84"/>
         <source>Controller battery %1%</source>
         <translation>Controller battery %1%</translation>
     </message>
@@ -1949,6 +1964,120 @@
         <location filename="../qml/VolumeOsd.qml" line="+56"/>
         <source>Muted</source>
         <translation>Muted</translation>
+    </message>
+</context>
+<context>
+    <name>WallpaperPicker</name>
+    <message>
+        <location filename="../qml/WallpaperPicker.qml" line="+45"/>
+        <source>Default (animated blobs)</source>
+        <translation>Default (animated blobs)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Dusk</source>
+        <translation>Dusk</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Aurora</source>
+        <translation>Aurora</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Ember</source>
+        <translation>Ember</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Lagoon</source>
+        <translation>Lagoon</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Orchid</source>
+        <translation>Orchid</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Daybreak</source>
+        <translation>Daybreak</translation>
+    </message>
+    <message>
+        <location line="+85"/>
+        <source>Wallpaper deleted</source>
+        <translation>Wallpaper deleted</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>You can keep up to %1 wallpapers. Delete one first.</source>
+        <translation>You can keep up to %1 wallpapers. Delete one first.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This picture is too large.</source>
+        <translation>This picture is too large.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This kind of picture is not supported.</source>
+        <translation>This kind of picture is not supported.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>This picture could not be copied.</source>
+        <translation>This picture could not be copied.</translation>
+    </message>
+    <message>
+        <location line="+68"/>
+        <source>Wallpaper added</source>
+        <translation>Wallpaper added</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Could not add the wallpaper</source>
+        <translation>Could not add the wallpaper</translation>
+    </message>
+    <message>
+        <location line="+30"/>
+        <source>Pictures on the USB drive</source>
+        <translation>Pictures on the USB drive</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <location line="+26"/>
+        <source>Wallpaper</source>
+        <translation>Wallpaper</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>%1, current</source>
+        <translation>%1, current</translation>
+    </message>
+    <message>
+        <location line="+46"/>
+        <source>Current</source>
+        <translation>Current</translation>
+    </message>
+    <message>
+        <location line="+23"/>
+        <source>Copying…</source>
+        <translation>Copying…</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Choose a picture to copy to this console. It is shrunk to fit the screen.</source>
+        <translation>Choose a picture to copy to this console. It is shrunk to fit the screen.</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Add from USB drive…</source>
+        <translation>Add from USB drive…</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Delete</source>
+        <translation>Delete</translation>
     </message>
 </context>
 </TS>
