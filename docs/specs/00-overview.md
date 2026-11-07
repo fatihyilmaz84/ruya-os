@@ -196,3 +196,17 @@ Shell icons come from Google's **Material Symbols Rounded** (Apache-2.0), bundle
 **Consequences.** New services and tools: `ruya-play` (import, verify, feeds), `ruya-pack` (developer CLI), a launcher and runner extensions; a shell "install from USB" flow and a package page; Xwayland or Wine's Wayland driver becomes a prerequisite for Windows games (no Xwayland today). Maintenance cost: the Play platform extensions, the runner builds, the review process for the Official tier. RuyaOS ships only Wine as a system runner; emulators, Proton/Steam runtime, firmware and disc images are supplied by packagers and carry no distribution duty for RuyaOS (owner, 2026-11-06; 05 §14). If RuyaOS hosts packages itself, that remote's acceptance rules are a separate later decision.
 **Alternatives rejected.** (a) Flatpak only, with Heroic/Lutris for Windows games (no single-file distribution, no console art/permission model, per-launcher prefixes outside our control). (b) A new runtime and sandbox (an ADR-005 non-goal, security cost). (c) AppImage-style run-in-place (no sandbox, no verification before use, no deduplication).
 **Status of the rest.** Owner, 2026-11-06: accepted; RuyaOS provides Wine as the only system runner and the image preinstalls it; the epic (T-228) is **parked** (stays `blocked`) behind the current visual-polish lanes and T-164, and no `.play` code is written yet. Spec 05 describes the design, not the code.
+
+### ADR-017 — Multiple controllers and local players — *Accepted (owner, 2026-11-07)*
+**Question.** What happens when a second controller connects: which pad drives the shell, who "owns" a pad, how a second person (a profile or a guest) plays in the same session. Nothing exists today: `ruya-inputd` turns every pad into the same navigation keys (ADR-003), and there is no owner or slot concept.
+
+**Architecture fact.** ADR-004: one active profile session at a time, apps run as that profile's Unix user. Other people are therefore **local players inside the session**, never parallel sessions.
+
+**Model.** A *controller registry* (per pad: id = BlueZ address or USB path, family, nickname, default owner profile or none) and *player slots* 1..N per session. Slot 1 is the session owner's pad. Assignment = slot → a profile or Guest; it lasts for the session (a Guest assignment is temporary and is wiped at session end, at "leave" or after idle). A pad that reconnects within 60 s gets its slot back.
+
+**Decisions (owner, 2026-11-07, "apply your recommendations").**
+1. **Shell navigation:** the slot 1 pad anywhere; **any** pad at the login screen and on the "Who's playing?" dialog; other pads navigate only inside apps.
+2. **What a non-owner player's profile means:** saves stay the session owner's per-app data. An assigned profile only **attributes** achievements (T-246) and play time (T-247). The **strictest age limit** of owner and players applies at launch (T-211). Guest = no attribution.
+3. **No PIN** to assign a pad to a profile for play (no data access is gained). Admin features never come from a non-slot-1 pad.
+
+**Consequences.** New contract (registry, `Assign`/`Release`, signals), persistence root-only under `/var/lib`, a "Who's playing?" dialog and player chips, and, for apps to see slots in order, ordered virtual gamepads per slot with the physical pads hidden (needs the virtual-device layer of T-217/B-006). Epic and tasks: T-263 (spec), T-264 (services), T-265 (shell), T-266 (virtual pads), T-267 (default owner at login), T-268 (guest player).

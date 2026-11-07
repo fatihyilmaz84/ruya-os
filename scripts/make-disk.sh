@@ -34,6 +34,9 @@ if [[ "${1:-}" == "--check-config" ]]; then
     exit
 fi
 
+source scripts/lib-diskguard.sh
+ruya_disk_guard
+
 type="${1:-qcow2}"
 image="${IMAGE:-localhost/ruyaos:dev}"
 bib="${BIB_IMAGE:-quay.io/centos-bootc/bootc-image-builder:latest}"

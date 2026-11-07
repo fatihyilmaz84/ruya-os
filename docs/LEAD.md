@@ -8,6 +8,7 @@ RuyaOS is built by two kinds of AI session under the owner:
 | **Lead** | Opus | "Run a lead session following docs/LEAD.md." | Direction, quality, planning, architecture, hard tasks, and keeping this system working |
 | **Builder** | Sonnet | The lead dispatches the `ruya-builder` agent (`.claude/agents/`) into a worktree; or the owner: "Do the next task from docs/STATUS.md, following CLAUDE.md." | One task, exactly as specified, ending in a HANDOFF |
 | **Reviewer** | Opus | The lead dispatches the `ruya-reviewer` agent on a builder's branch | A verdict (APPROVE or CHANGES_REQUESTED) before the branch is merged; never edits |
+| **UX / design reviewers** | Sonnet | The lead dispatches `ruya-ux-reviewer` and `ruya-design-reviewer` on UI diffs only, in parallel with the reviewer | Read-only findings: dead ends and spec violations (blocking), spec gaps, notes; capped (4b) |
 
 The lead follows the root `CLAUDE.md` (rules, commit format, definition of done) **plus** this file. Every lead session starts cold, so continuity lives in [`LEAD-NOTES.md`](LEAD-NOTES.md). **Read it first; rewrite it last.**
 
@@ -75,6 +76,7 @@ Keep going while ready tasks remain and the owner hasn't said stop.
 2. **Claim on `main`:** `Status: in-progress` in the task file and on the board, commit `docs: claim T-nnn`. Then `git worktree add D:\dev\RuyaOS-worktrees\T-nnn -b t/T-nnn-slug main` (make worktrees yourself, so the path is known; not the Agent tool's `isolation`). Run every `git worktree` command from the **Bash tool** (Git for Windows): in PowerShell `git` resolves to devkitPro's MSYS2 git, which writes `/d/...` link paths the other git can't read, and back (T-163, T-167 on 2026-11-04; fix: rewrite `<worktree>\.git` and `.git\worktrees\<name>\gitdir` with `D:/...` paths).
 3. **Dispatch** the `ruya-builder` agent in the background (if the type isn't loaded in this session, a `general-purpose` agent on `model: sonnet` told to follow `.claude/agents/ruya-builder.md`) with: task path, worktree path, branch, round 1.
 4. **HANDOFF `done`:** dispatch `ruya-reviewer` (Opus) with the task, worktree, branch and the HANDOFF. `partial`/`blocked`: answer and resume the same builder, split the task, or mark it blocked.
+   - **UI diffs (owner, 2026-11-07):** when the diff touches `shell/qml`, shell UI C++ or a design/spec file, dispatch `ruya-ux-reviewer` and `ruya-design-reviewer` (read-only, Sonnet, <= 150k tokens / 10 min each) **in parallel** with `ruya-reviewer`, same inputs. Only a clear dead end (UX) or a clear spec violation (design) blocks; the rest are notes and Inbox lines. Their blocking items go to the builder together with the code review's, in the same round; at most **one extra round** for them. A `SPEC GAP` finding is yours to decide: add the proposed text to `04` (or reject it in one line). Skip them for docs-only, service-only or test-only diffs.
 5. **CHANGES_REQUESTED:** send the blocking findings to the **same** builder (SendMessage, round + 1; it keeps its context). After round 2 still fails: fix it yourself, split it, or reopen it.
 6. **APPROVE:** in the main checkout `git merge --no-ff t/T-nnn-slug`; set `Status: done`, delete the board row, copy the HANDOFF's and the review's `inbox` lines to the Inbox, add the task to the **VM queue** if its Outcome says `vm pending`, move NEXT; `dev.ps1 test` on `main` (red: revert the merge and reopen). Commit `docs: T-nnn done`. Remove the worktree (`git worktree remove --force`, then `git branch -d`): its `shell\build-win` and `services\target` cost ~4 GB.
 7. The session log gets one lead entry per session listing the tasks merged; dispatched builders write none.
@@ -132,6 +134,7 @@ A lead session that runs too long loses detail (auto-compact starts at 97 % of t
 | Plan, weekly | **70 %** | Tell the owner; run one lane instead of two; no spikes. |
 | A builder, one task | **300k tokens** in a round without a HANDOFF | The lead looks at what it is doing (a stall, a loop, a task too large) and splits, narrows or takes it over. |
 | A task over two rounds | **500k tokens** in total | Stop it, write what is done into the task file and split the rest (or do it as lead work). |
+| A UX or design reviewer | **150k tokens or 10 min** | It stops and reports what it has. Two of them run per UI diff, in parallel with `ruya-reviewer`; skip them when the 5-hour window is at 80 %. |
 
 Reference figures from the 2026-11-05/06 sessions (one builder round): T-189 160k, T-191 235k + round 2 (small), T-195 290k, T-196 220k + 280k, T-200 335k, T-162 (lead, with VM debugging) several hundred thousand. A lead session of about 25 merges and a lot of planning reached 87 % of 1M.
 

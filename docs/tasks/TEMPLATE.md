@@ -20,6 +20,7 @@ Status: todo · Phase: n · Depends: T-xxx, … · Area: shell | services | api 
 ## Acceptance criteria
 - [ ] … (test: `tst_xxx.qml::test_yyy`)
 - [ ] … (screenshot: `output/shell-shots/n-name.png` shows …)
+- [ ] UI tasks - UX: from every new state Back leaves; focus lands sensibly after open/close/error; readable at 10 ft; Outcome has a `UX notes:` line
 - [ ] VM (this task | lead run): `scripts/vm-…-check.sh` … (service-facing tasks only, PLANNING.md Lessons)
 
 ## Verification

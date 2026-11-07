@@ -15,7 +15,7 @@ Verification legend: **host** = built and tested on Windows · **host (vm pendin
 
 ## Board
 
-**NEXT → T-164** ([lead], the critical path: per-profile Wayland sockets). Owner, 2026-11-06: developer documentation (T-214) and then the visual polish come first: **T-204, T-206, T-205, then T-209, T-208** are the first builder lanes; T-164 stays the lead's critical path.
+**NEXT → T-198** (display resolution/refresh/DPI, owner moved it up, builder lane 1); **T-164** stays the lead's critical path (needs the Dell as the GL test). Owner, 2026-11-06: developer documentation (T-214) and then the visual polish come first: **T-204, T-206, T-205, then T-209, T-208** are the first builder lanes; T-164 stays the lead's critical path.
 
 **How work runs (owner, 2026-11-04):** the lead dispatches `ruya-builder` agents, at most two at a time in their own worktrees and in different areas, has each branch reviewed by `ruya-reviewer`, and merges it (`docs/LEAD.md`, build loop). Dispatched builders never edit this file. At most one task with a "VM (this task)" criterion runs at a time. A builder session the owner starts directly takes NEXT in the main checkout, alone, and does the bookkeeping itself (`CLAUDE.md`).
 
@@ -24,6 +24,7 @@ Open work only (the front of the board; the rest is in `STATUS-backlog.md`), in 
 | ID | Title | Status | Depends |
 |---|---|---|---|
 | [T-197](tasks/T-197-shell-crash-on-bluetooth-audio-disconnect.md) | **[lead]** Shell crash when a Bluetooth headset disconnects | in-progress | — |
+| [T-198](tasks/T-198-display-resolution-and-dpi.md) | Display: resolution, refresh, UI scale (DPI) | todo | — |
 | [T-202](tasks/T-202-screen-saver-and-power-saving.md) | Screen saver and power saving | todo | — |
 | [T-261](tasks/T-261-controller-families-and-drivers-audit.md) | **[lead]** Controller families and drivers audit (DualSense, Xbox, 8BitDo, Switch), detection table, hardware checklist | todo | — |
 | [T-164](tasks/T-164-per-profile-wayland-sockets.md) | **[lead]** Per-profile Wayland sockets | todo | T-162 |

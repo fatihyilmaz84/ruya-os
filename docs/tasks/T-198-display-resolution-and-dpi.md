@@ -1,6 +1,6 @@
 # T-198 — Display: choose the resolution and refresh rate, and scale the UI to the screen (DPI)
 
-Status: todo · Phase: 2 · Depends: — · Area: api, services, shell, image · Size: M · Owner: lead
+Status: todo · Phase: 2 · Depends: — · Area: api, services, shell, image · Size: M · Owner: builder
 
 ## Goal
 Settings → Display lets the owner pick the resolution and refresh rate the TV or monitor supports, and the UI is sized right for the screen (a 1080p TV, a 4K TV, a 32" monitor) instead of one fixed size. Owner request, 2026-11-06. Today the pane has only effects quality, reduced motion and overscan; the shell is the compositor on KMS (Qt `eglfs_kms`), so there is no desktop tool that could do this.
@@ -11,7 +11,7 @@ Settings → Display lets the owner pick the resolution and refresh rate the TV 
 - Qt docs: eglfs KMS (`QT_QPA_EGLFS_KMS_CONFIG` JSON: per-output `mode`, `size`/`refresh`, `physicalWidth`/`physicalHeight`), `QT_SCALE_FACTOR`, `QT_FONT_DPI`
 
 ## Scope
-1. **Find out what is true on the Dell first** (the owner's Samsung Odyssey G7 32" over HDMI/DP, Intel UHD 630): which modes the connector offers (EDID, `modetest`/`/sys/class/drm/*/modes`), what mode the shell picks now, the size it renders at, and how large the UI looks. Put the numbers in the Outcome.
+1. **What is true on the Dell is hardware (lead, later):** the builder works from the DRM sysfs/EDID layout (`/sys/class/drm/*/modes`, `edid`, `status`) with fixtures written from the Linux ABI, and leaves a `dell.dump`-style capture command in the Outcome (like `ruya-sysinfo --example dump`) for the owner to run on the Dell; the lead records the Dell numbers (modes, chosen mode, UI size) in the Outcome afterwards.
 2. **Contract + service:** a Display interface (new `org.ruyaos.Devices1.Display` or in `ruya-devices`) that lists the connected outputs with their modes (width, height, refresh, preferred, current), the physical size from EDID, and stores the owner's choice (output, mode, scale) under `/var/lib/…`. The service cannot change the mode of a running eglfs shell: the choice is applied by writing the KMS config JSON the compositor reads at start and restarting `ruya-compositor@tty1` (the shell comes back to the same page).
 3. **Safe switching:** after a change the shell asks "Keep this resolution?" with a 15 s countdown and reverts to the previous mode if nobody confirms (a TV that cannot show the new mode must never leave the owner with a black screen); a failed start falls back to the preferred mode automatically (a marker file the compositor unit checks).
 4. **UI scale (DPI):** `Theme` derives its unit from the output (physical size and resolution, or an owner override "Auto / 100 / 125 / 150 / 200 %" separate from the accessibility text scale) so 4K gets the same physical sizes as 1080p, and a close monitor gets sensible sizes. Decide whether to use `QT_SCALE_FACTOR` at start or the Theme unit; record why. Keep the 3 m / 1080p design target as the reference.
@@ -24,7 +24,8 @@ Settings → Display lets the owner pick the resolution and refresh rate the TV 
 - [ ] Rust tests for the mode list, the stored choice and the config JSON written (golden file), and for the fall-back marker logic.
 - [ ] `tst_display.qml` (or the existing Display tests): the pane lists the mock's modes, selecting one opens the keep/revert dialog with a countdown, confirm keeps, timeout reverts, focus is on "Keep" and Back reverts; UI-size choices change the `Theme` unit (assert the unit, not pixels).
 - [ ] Screenshots of the pane and the dialog, read against `04` §8.
-- [ ] VM: the mode list in QEMU's virtual GPU, a switch, a revert by timeout; Hardware (lead): the Dell, two modes, one deliberate unsupported mode that reverts.
+- [ ] UX: from the dialog and every row Back leaves (Back = revert); focus lands on "Keep"; the Outcome has a `UX notes:` line.
+- [ ] VM (lead run): `scripts/vm-display-check.sh` (write it): the mode list in QEMU's virtual GPU, the written KMS config, the fallback marker; a switch and a revert by timeout need the shell restart and are checked by the lead on the booted image. Hardware (lead): the Dell, two modes, one deliberate unsupported mode that reverts.
 - [ ] `.\scripts\dev.ps1 test` and `shots` ALL GREEN.
 
 ## Docs to update

@@ -26,6 +26,7 @@ Any of these is true (builders check at session start and stop if they find noth
 - Every acceptance criterion is observable by a named test or screenshot ("works", "looks good", "is robust" are not criteria).
 - It names the reference pattern to copy (`shell/src/network`, `ruya-profiles`, `PinPad.qml`, …) and what is out of scope, especially the tempting next step.
 - **UI tasks** link the `04-design-system.md` sections and components they use, and say which tokens or components (if any) the task may add. A screen that needs a component not in `04` §5 gets a design step first (lead or a `design:` task), not an improvised one.
+- **UI tasks also carry a "UX" acceptance line** (owner, 2026-11-07): "UX: from every new state Back leaves; focus lands sensibly after open/close/error; readable at 10 ft; the Outcome has a `UX notes:` line". The UX and design reviewers (`.claude/agents/`) check it on the branch.
 - Size S (up to ~150 changed lines) or M (up to ~400); split anything bigger.
 - Its Area and named files let the lead tell whether two tasks can run in parallel (LEAD.md 4b).
 

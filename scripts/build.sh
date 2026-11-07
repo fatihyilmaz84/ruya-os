@@ -8,6 +8,9 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+source scripts/lib-diskguard.sh
+ruya_disk_guard
+
 version="${1:-0.0.0-dev.$(date -u +%Y%m%d%H%M)}"
 image="${IMAGE:-localhost/ruyaos:dev}"
 log="$(mktemp)"
