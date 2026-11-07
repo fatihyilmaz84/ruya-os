@@ -3,13 +3,17 @@
 //! rules are in `bluetooth.rs`.
 
 use std::collections::HashMap;
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
+use blocking::unblock;
 use futures_lite::future;
-use zbus::zvariant::{OwnedObjectPath, OwnedValue, Value};
-use zbus::{Connection, DBusError};
+use zbus::zvariant::{ObjectPath, OwnedObjectPath, OwnedValue, Value};
+use zbus::{interface, Connection, DBusError};
 
-use crate::bluetooth::{Bluez, BtError, Raw, RawAdapter, RawDevice, LOCAL_TIMEOUT};
+use crate::bluetooth::{
+    AgentCall, AgentSlot, Bluez, BtError, Raw, RawAdapter, RawDevice, LOCAL_TIMEOUT,
+};
 
 pub const BLUEZ: &str = "org.bluez";
 const ADAPTER: &str = "org.bluez.Adapter1";
@@ -17,6 +21,13 @@ const DEVICE: &str = "org.bluez.Device1";
 const BATTERY: &str = "org.bluez.Battery1";
 const PROPERTIES: &str = "org.freedesktop.DBus.Properties";
 const OBJECTS: &str = "org.freedesktop.DBus.ObjectManager";
+const AGENT_MANAGER: &str = "org.bluez.AgentManager1";
+const BLUEZ_ROOT: &str = "/org/bluez";
+
+/// Where our agent object is served (on the connection that registers it).
+const AGENT_PATH: &str = "/org/ruyaos/Devices1/Agent";
+/// "Just works" only: the console can neither show nor take a PIN or a passkey.
+const AGENT_CAPABILITY: &str = "NoInputNoOutput";
 
 /// Longest the cancelling call after a timeout may take.
 const UNDO_LIMIT: Duration = Duration::from_secs(2);
@@ -25,6 +36,100 @@ type Dict = HashMap<String, OwnedValue>;
 
 pub struct BluezClient {
     conn: Connection,
+    agent: AgentSlot,
+}
+
+/// The error an agent answers with to refuse.
+#[derive(DBusError, Debug)]
+#[zbus(prefix = "org.bluez.Error")]
+enum AgentError {
+    #[zbus(error)]
+    ZBus(zbus::Error),
+    Rejected(String),
+}
+
+/// `org.bluez.Agent1`, served only so that BlueZ can ask it. The rules are the handler's
+/// (`Bluetooth::agent`); while none is set, or the window is shut, everything is refused.
+struct AgentIface {
+    slot: AgentSlot,
+}
+
+impl AgentIface {
+    async fn ask(&self, device: &ObjectPath<'_>, uuid: Option<&str>) -> Result<(), AgentError> {
+        let Some(handler) = self.slot.get().cloned() else {
+            return Err(AgentError::Rejected("no handler".to_owned()));
+        };
+        let (device, uuid) = (device.as_str().to_owned(), uuid.map(str::to_owned));
+        // The handler reads BlueZ over the bus and blocks: off this connection's executor.
+        let accepted = unblock(move || {
+            handler.answer(match &uuid {
+                Some(uuid) => AgentCall::Service {
+                    device: &device,
+                    uuid,
+                },
+                None => AgentCall::Authorize { device: &device },
+            })
+        })
+        .await;
+        if accepted {
+            Ok(())
+        } else {
+            Err(AgentError::Rejected("not accepted".to_owned()))
+        }
+    }
+
+    fn refuse<T>() -> Result<T, AgentError> {
+        // PIN and passkey pairing is not offered (B-006).
+        Err(AgentError::Rejected("no PIN or passkey".to_owned()))
+    }
+}
+
+#[interface(name = "org.bluez.Agent1")]
+impl AgentIface {
+    fn release(&self) {}
+
+    fn request_pin_code(&self, _device: ObjectPath<'_>) -> Result<String, AgentError> {
+        Self::refuse()
+    }
+
+    fn display_pin_code(&self, _device: ObjectPath<'_>, _pincode: &str) -> Result<(), AgentError> {
+        Self::refuse()
+    }
+
+    fn request_passkey(&self, _device: ObjectPath<'_>) -> Result<u32, AgentError> {
+        Self::refuse()
+    }
+
+    fn display_passkey(
+        &self,
+        _device: ObjectPath<'_>,
+        _passkey: u32,
+        _entered: u16,
+    ) -> Result<(), AgentError> {
+        Self::refuse()
+    }
+
+    async fn request_confirmation(
+        &self,
+        device: ObjectPath<'_>,
+        _passkey: u32,
+    ) -> Result<(), AgentError> {
+        self.ask(&device, None).await
+    }
+
+    async fn request_authorization(&self, device: ObjectPath<'_>) -> Result<(), AgentError> {
+        self.ask(&device, None).await
+    }
+
+    async fn authorize_service(
+        &self,
+        device: ObjectPath<'_>,
+        uuid: &str,
+    ) -> Result<(), AgentError> {
+        self.ask(&device, Some(uuid)).await
+    }
+
+    fn cancel(&self) {}
 }
 
 fn flag(d: &Dict, key: &str) -> bool {
@@ -53,10 +158,28 @@ fn device_path(adapter: &str, address: &str) -> String {
 }
 
 impl BluezClient {
+    /// Connects to the system bus and serves the (idle) agent object on that connection; BlueZ
+    /// calls an agent on the connection that registered it, so registering has to happen here
+    /// too. `agent_slot` is where the core's handler goes once it exists.
     pub fn connect() -> Result<Self, String> {
-        future::block_on(Connection::system())
-            .map(|conn| BluezClient { conn })
-            .map_err(|e| e.to_string())
+        future::block_on(async {
+            let conn = Connection::system().await.map_err(|e| e.to_string())?;
+            let agent: AgentSlot = Arc::new(OnceLock::new());
+            conn.object_server()
+                .at(
+                    AGENT_PATH,
+                    AgentIface {
+                        slot: agent.clone(),
+                    },
+                )
+                .await
+                .map_err(|e| e.to_string())?;
+            Ok(BluezClient { conn, agent })
+        })
+    }
+
+    pub fn agent_slot(&self) -> AgentSlot {
+        self.agent.clone()
     }
 
     async fn call(
@@ -129,6 +252,8 @@ impl BluezClient {
                         RawAdapter {
                             powered: flag(a, "Powered"),
                             discovering: flag(a, "Discovering"),
+                            pairable: flag(a, "Pairable"),
+                            discoverable: flag(a, "Discoverable"),
                         },
                     ));
                 }
@@ -150,6 +275,14 @@ impl BluezClient {
                     connected: flag(d, "Connected"),
                     trusted: flag(d, "Trusted"),
                     battery,
+                    class: match d.get("Class").map(|v| &**v) {
+                        Some(Value::U32(c)) => Some(*c),
+                        _ => None,
+                    },
+                    appearance: match d.get("Appearance").map(|v| &**v) {
+                        Some(Value::U16(a)) => Some(*a),
+                        _ => None,
+                    },
                 });
             }
         }
@@ -208,6 +341,52 @@ impl Bluez for BluezClient {
         future::block_on(async {
             let adapter = self.adapter_path().await?;
             self.set(&adapter, ADAPTER, "Pairable", on).await
+        })
+    }
+
+    fn set_discoverable(&self, on: bool) -> Result<(), BtError> {
+        future::block_on(async {
+            let adapter = self.adapter_path().await?;
+            self.set(&adapter, ADAPTER, "Discoverable", on).await
+        })
+    }
+
+    fn register_agent(&self) -> Result<(), BtError> {
+        future::block_on(async {
+            let path = ObjectPath::try_from(AGENT_PATH)
+                .map_err(|_| BtError::new("org.bluez.Error.InvalidArguments"))?;
+            match self
+                .call(
+                    BLUEZ_ROOT,
+                    AGENT_MANAGER,
+                    "RegisterAgent",
+                    &(&path, AGENT_CAPABILITY),
+                )
+                .await
+            {
+                // A registration of ours that outlived a crash of ours: take it over.
+                Err(e) if e.0 == "org.bluez.Error.AlreadyExists" => {}
+                other => {
+                    other?;
+                }
+            }
+            self.call(BLUEZ_ROOT, AGENT_MANAGER, "RequestDefaultAgent", &(&path,))
+                .await
+                .map(|_| ())
+        })
+    }
+
+    fn unregister_agent(&self) -> Result<(), BtError> {
+        future::block_on(async {
+            let path = ObjectPath::try_from(AGENT_PATH)
+                .map_err(|_| BtError::new("org.bluez.Error.InvalidArguments"))?;
+            match self
+                .call(BLUEZ_ROOT, AGENT_MANAGER, "UnregisterAgent", &(&path,))
+                .await
+            {
+                Err(e) if e.0 == "org.bluez.Error.DoesNotExist" => Ok(()),
+                other => other.map(|_| ()),
+            }
         })
     }
 

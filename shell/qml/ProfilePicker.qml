@@ -22,6 +22,11 @@ FocusScope {
         list.forceActiveFocus()
     }
 
+    // No keyboard or controller at all: the profiles cannot be chosen, so say how to pair one and
+    // keep the pairing window open (T-203). It is opened again when it times out.
+    readonly property bool needsController: enabled && Profiles.available && Profiles.profiles.length > 0
+                                            && Bluetooth.inputKnown && !Bluetooth.inputPresent
+
     Text {
         objectName: "pickerTitle"
         anchors { horizontalCenter: parent.horizontalCenter; bottom: list.top; bottomMargin: Theme.spaceXxl * picker.u }
@@ -67,6 +72,17 @@ FocusScope {
         text: qsTr("Waiting for the profiles service…")
         color: Theme.text
         font.pixelSize: Theme.typeBody * picker.u
+    }
+
+    ControllerPairHint {
+        id: controllerHint
+        objectName: "pickerControllerHint"
+        anchors { horizontalCenter: parent.horizontalCenter; top: list.bottom; topMargin: Theme.spaceXxl * picker.u }
+        width: Math.min(picker.width * 0.7, 1200 * picker.u)
+        u: picker.u
+        visible: picker.needsController && !pinPad.shown
+        active: picker.needsController
+        autoRetry: true
     }
 
     PinPad {

@@ -331,10 +331,99 @@ Item {
             compare(Bluetooth.devices.length, 0, "the late device list was dropped")
         }
 
+        // ---- T-203: the controller pairing window ----
+
+        function test_pair_a_controller_row_opens_the_window() {
+            Bluetooth.mockPairingScript("wait")
+            openBluetoothPane()
+            goTo("rowBtPairController")
+            compare(find("rowBtPairController").value, "")
+            keyClick(Qt.Key_Return)
+            tryCompare(Bluetooth, "controllerPairing", "open")
+            tryCompare(find("rowBtPairController"), "value", "Waiting for a controller…")
+            compare(Bluetooth.mockPairingStarts(), 1)
+            verify(find("rowBtPairController").activeFocus, "focus stays on the row")
+            tryVerify(() => host.answers.some(a => a.op === "controller-pairing" && a.status === "ok"))
+            compare(toastTexts().length, 0, "no error shown")
+            // A second Accept closes the window again
+            keyClick(Qt.Key_Return)
+            tryCompare(Bluetooth, "controllerPairing", "idle")
+            compare(find("rowBtPairController").value, "")
+            verify(find("rowBtPairController").activeFocus)
+        }
+
+        function test_a_controller_that_pairs_in_the_window_is_listed() {
+            Bluetooth.mockPairingScript("success")
+            openBluetoothPane()
+            goTo("rowBtPairController")
+            keyClick(Qt.Key_Return)
+            tryCompare(find("rowBtPairController"), "value", "Paired", 3000)
+            tryVerify(() => device("bt-pad-new") !== undefined && device("bt-pad-new").paired, 2000)
+            tryVerify(() => find("btDev_bt-pad-new") !== null, 2000, "the pad is a row of the pane")
+            tryVerify(() => find("rowBtPairController").activeFocus, 2000, "focus did not move")
+            compare(toastTexts().length, 0)
+        }
+
+        function test_a_timed_out_window_says_so_and_can_be_opened_again() {
+            Bluetooth.mockPairingScript("timeout")
+            openBluetoothPane()
+            goTo("rowBtPairController")
+            keyClick(Qt.Key_Return)
+            tryCompare(find("rowBtPairController"), "value", "Nothing found", 3000)
+            keyClick(Qt.Key_Return)                      // again
+            tryVerify(() => Bluetooth.mockPairingStarts() === 2)
+            tryCompare(find("rowBtPairController"), "value", "Nothing found", 3000)
+        }
+
+        function test_a_rejected_device_is_toasted_and_the_window_stays_open() {
+            Bluetooth.mockPairingScript("rejected")
+            openBluetoothPane()
+            goTo("rowBtPairController")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => toastTexts().indexOf("A device that is not a controller was ignored.") >= 0, 3000)
+            compare(Bluetooth.controllerPairing, "open")
+        }
+
+        function test_leaving_the_pane_closes_the_window() {
+            Bluetooth.mockPairingScript("wait")
+            openBluetoothPane()
+            goTo("rowBtPairController")
+            keyClick(Qt.Key_Return)
+            tryCompare(Bluetooth, "controllerPairing", "open")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => find("categoryList").activeFocus, 2000)
+            keyClick(Qt.Key_Up)                           // Network: the Bluetooth pane is hidden
+            tryVerify(() => !find("paneBluetooth").visible, 2000)
+            tryCompare(Bluetooth, "controllerPairing", "idle")
+        }
+
+        function test_the_window_statuses() {
+            const seen = new Set()
+            const run = (call) => runCommand(seen, "controller-pairing", "", call)
+            compare(run(() => Bluetooth.startControllerPairing()), "ok")
+            tryCompare(Bluetooth, "controllerPairing", "open")
+            compare(run(() => Bluetooth.startControllerPairing()), "busy")
+            compare(run(() => Bluetooth.stopControllerPairing()), "ok")
+            tryCompare(Bluetooth, "controllerPairing", "idle")
+            compare(run(() => Bluetooth.stopControllerPairing()), "ok")
+            Bluetooth.setPowered(false)
+            tryCompare(Bluetooth, "powered", false)
+            compare(run(() => Bluetooth.startControllerPairing()), "unavailable")
+            verify(seen.has("ok") && seen.has("busy") && seen.has("unavailable"))
+            compare(seen.size, 3, "no status outside the contract")
+        }
+
         function test_zz_screenshots() {
             if (!shotsDir)
                 skip("set RUYA_SHOTS_DIR to save screenshots")
             openBluetoothPane()
+            goTo("rowBtPairController")
+            keyClick(Qt.Key_Return)
+            tryCompare(Bluetooth, "controllerPairing", "open")
+            wait(800)
+            grabImage(tc.shell).save(shotsDir + "/26b-settings-bluetooth-pair-controller.png")
+            keyClick(Qt.Key_Return)
+            tryCompare(Bluetooth, "controllerPairing", "idle")
             scan()
             scan()
             goTo("btDev_bt-pad-new")

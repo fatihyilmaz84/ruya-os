@@ -284,6 +284,8 @@ cmake --build shell\build-win --config Release --target all_qmllint
 
 `dev.ps1 shots` runs only the test functions that save a screenshot, in real GPU windows (behaviour is already gated offscreen by `test`), in about 25 s. It stops at once, before building, when the session is locked (`LogonUI` running): red "The Windows session is locked" and a non-zero exit. The check repeats while it waits for another `shots` run and after a run that failed (a desktop that locked mid-run is reported as locked, not as test failures). `RUYA_ASSUME_LOCKED=1` simulates a locked session (read only by `dev.ps1`). Leave the windows alone while it runs. Offscreen is the software renderer, where `MultiEffect` draws nothing, so effects only show up in `shots`.
 
+**Controller pairing screens (T-203).** The shell's mock has an input device, so the "no controller" wizard stage and picker hint are not shown. In the mock, `Bluetooth.mockSetInputPresent(false)` and `Bluetooth.mockPairingScript("success"|"timeout"|"rejected"|"wait")` play them (the tests do). Against `ruya-devices --session`, `RUYA_DEVICES_NO_INPUT=1` makes the fake service report no input device (`busctl --user get-property org.ruyaos.Devices1 /org/ruyaos/Devices1 org.ruyaos.Devices1.Bluetooth InputPresent`); `StartControllerPairing` and `StopControllerPairing` work there too, but the session fakes follow nothing, so the window never ends by itself (no timeout, no pairing).
+
 **Against the real profiles service (Linux):** in `--session` mode the service uses the session bus and creates no Unix users, so it runs fine without root.
 
 ```bash

@@ -302,7 +302,7 @@
 <context>
     <name>BluetoothPane</name>
     <message>
-        <location filename="../qml/BluetoothPane.qml" line="+70"/>
+        <location filename="../qml/BluetoothPane.qml" line="+89"/>
         <source>Pairing failed. Put the device in pairing mode and try again.</source>
         <translation>Pairing failed. Put the device in pairing mode and try again.</translation>
     </message>
@@ -313,11 +313,12 @@
     </message>
     <message>
         <location line="+1"/>
+        <location line="+43"/>
         <source>Bluetooth is off.</source>
         <translation>Bluetooth is off.</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-42"/>
         <source>That device is no longer available.</source>
         <translation>That device is no longer available.</translation>
     </message>
@@ -352,17 +353,38 @@
         <translation>Connected</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="-31"/>
+        <location line="+31"/>
         <source>Paired</source>
         <translation>Paired</translation>
     </message>
     <message>
+        <location line="-32"/>
+        <source>Waiting for a controller…</source>
+        <translation>Waiting for a controller…</translation>
+    </message>
+    <message>
         <location line="+2"/>
+        <source>Nothing found</source>
+        <translation>Nothing found</translation>
+    </message>
+    <message>
+        <location line="+32"/>
         <source>Battery %1%</source>
         <translation>Battery %1%</translation>
     </message>
     <message>
-        <location line="+39"/>
+        <location line="+29"/>
+        <source>Could not start looking for controllers.</source>
+        <translation>Could not start looking for controllers.</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>A device that is not a controller was ignored.</source>
+        <translation>A device that is not a controller was ignored.</translation>
+    </message>
+    <message>
+        <location line="+10"/>
         <source>Bluetooth</source>
         <translation>Bluetooth</translation>
     </message>
@@ -382,7 +404,12 @@
         <translation>Scanning…</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+8"/>
+        <source>Pair a controller</source>
+        <translation>Pair a controller</translation>
+    </message>
+    <message>
+        <location line="+10"/>
         <source>Controller: hold its pairing button until the light blinks</source>
         <translation>Controller: hold its pairing button until the light blinks</translation>
     </message>
@@ -417,6 +444,39 @@
         <location line="+12"/>
         <source>Placeholder</source>
         <translation>Placeholder</translation>
+    </message>
+</context>
+<context>
+    <name>ControllerPairHint</name>
+    <message>
+        <location filename="../qml/ControllerPairHint.qml" line="+30"/>
+        <source>Controller connected.</source>
+        <translation>Controller connected.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Bluetooth is off or missing, so a controller cannot be paired here.</source>
+        <translation>Bluetooth is off or missing, so a controller cannot be paired here.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Could not start looking for controllers.</source>
+        <translation>Could not start looking for controllers.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>No controller was found. Hold the pairing button on your controller and try again.</source>
+        <translation>No controller was found. Hold the pairing button on your controller and try again.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>No controller or keyboard found. Hold the pairing button on your controller until its light blinks.</source>
+        <translation>No controller or keyboard found. Hold the pairing button on your controller until its light blinks.</translation>
+    </message>
+    <message>
+        <location line="+101"/>
+        <source>A device that is not a controller tried to connect and was ignored.</source>
+        <translation>A device that is not a controller tried to connect and was ignored.</translation>
     </message>
 </context>
 <context>
@@ -828,7 +888,7 @@
 <context>
     <name>ProfilePicker</name>
     <message>
-        <location filename="../qml/ProfilePicker.qml" line="+28"/>
+        <location filename="../qml/ProfilePicker.qml" line="+32"/>
         <source>Who&apos;s playing?</source>
         <translation>Who&apos;s playing?</translation>
     </message>
@@ -1037,7 +1097,7 @@
 <context>
     <name>SectionNav</name>
     <message>
-        <location filename="../qml/SectionNav.qml" line="+32"/>
+        <location filename="../qml/SectionNav.qml" line="+33"/>
         <source>Home</source>
         <translation>Home</translation>
     </message>
@@ -1126,7 +1186,7 @@
         <translation>Back</translation>
     </message>
     <message>
-        <location line="+177"/>
+        <location line="+191"/>
         <source>Coming soon</source>
         <translation>Coming soon</translation>
     </message>
@@ -1147,7 +1207,7 @@
 <context>
     <name>Setup</name>
     <message>
-        <location filename="../qml/Setup.qml" line="+33"/>
+        <location filename="../qml/Setup.qml" line="+66"/>
         <source>Cancel</source>
         <translation>Cancel</translation>
     </message>
@@ -1167,7 +1227,7 @@
         <translation>Back</translation>
     </message>
     <message>
-        <location line="+47"/>
+        <location line="+50"/>
         <source>Enter a name first.</source>
         <translation>Enter a name first.</translation>
     </message>
@@ -1177,13 +1237,13 @@
         <translation>Choose a PIN</translation>
     </message>
     <message>
-        <location line="+86"/>
+        <location line="+101"/>
         <source>Step %1 of %2</source>
         <translation>Step %1 of %2</translation>
     </message>
     <message>
-        <location line="-65"/>
-        <location line="+81"/>
+        <location line="-66"/>
+        <location line="+114"/>
         <source>Welcome to RuyaOS</source>
         <translation>Welcome to RuyaOS</translation>
     </message>
@@ -1216,13 +1276,35 @@
         <translation>Press A to continue</translation>
     </message>
     <message>
-        <location line="-240"/>
-        <location line="+148"/>
+        <location line="-273"/>
+        <location line="+181"/>
         <source>Network</source>
         <translation>Network</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="-276"/>
+        <source>Try again</source>
+        <translation>Try again</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <location line="+1"/>
+        <source>Skip</source>
+        <translation>Skip</translation>
+    </message>
+    <message>
+        <location line="+92"/>
+        <location line="+86"/>
+        <source>Connect a controller</source>
+        <translation>Connect a controller</translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>Press A to try again</source>
+        <translation>Press A to try again</translation>
+    </message>
+    <message>
+        <location line="+89"/>
         <source>Network setup comes later. A wired connection works without any setup.</source>
         <translation>Network setup comes later. A wired connection works without any setup.</translation>
     </message>
@@ -1262,8 +1344,8 @@
         <translation>Creating…</translation>
     </message>
     <message>
-        <location line="-202"/>
-        <location line="+228"/>
+        <location line="-235"/>
+        <location line="+261"/>
         <source>You&apos;re all set</source>
         <translation>You&apos;re all set</translation>
     </message>
@@ -1276,7 +1358,7 @@
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+291"/>
+        <location filename="../qml/Shell.qml" line="+308"/>
         <source>Could not %1.</source>
         <translation>Could not %1.</translation>
     </message>
@@ -1814,22 +1896,22 @@
         <translation>Dreamglass</translation>
     </message>
     <message>
-        <location line="+51"/>
+        <location line="+52"/>
         <source>Midnight</source>
         <translation>Midnight</translation>
     </message>
     <message>
-        <location line="+51"/>
+        <location line="+52"/>
         <source>Aurora</source>
         <translation>Aurora</translation>
     </message>
     <message>
-        <location line="+51"/>
+        <location line="+52"/>
         <source>Ember</source>
         <translation>Ember</translation>
     </message>
     <message>
-        <location line="+51"/>
+        <location line="+52"/>
         <source>Daylight</source>
         <translation>Daylight</translation>
     </message>
@@ -1969,7 +2051,7 @@
 <context>
     <name>WallpaperPicker</name>
     <message>
-        <location filename="../qml/WallpaperPicker.qml" line="+45"/>
+        <location filename="../qml/WallpaperPicker.qml" line="+48"/>
         <source>Default (animated blobs)</source>
         <translation>Default (animated blobs)</translation>
     </message>
@@ -2045,7 +2127,7 @@
     </message>
     <message>
         <location line="+0"/>
-        <location line="+26"/>
+        <location line="+38"/>
         <source>Wallpaper</source>
         <translation>Wallpaper</translation>
     </message>
@@ -2055,12 +2137,12 @@
         <translation>%1, current</translation>
     </message>
     <message>
-        <location line="+46"/>
+        <location line="+47"/>
         <source>Current</source>
         <translation>Current</translation>
     </message>
     <message>
-        <location line="+23"/>
+        <location line="+43"/>
         <source>Copying…</source>
         <translation>Copying…</translation>
     </message>

@@ -64,6 +64,8 @@ DBusBluetoothBackend::DBusBluetoothBackend(QObject *parent)
 {
     connect(&m_watcher, &QDBusServiceWatcher::serviceRegistered, this, [this] { refresh(); });
     m_bus.connect(Service, Path, Interface, QStringLiteral("DevicesChanged"), this, SLOT(onDevicesChanged()));
+    m_bus.connect(Service, Path, Interface, QStringLiteral("ControllerPairingRejected"), this,
+                  SLOT(onControllerRejected()));
     m_bus.connect(Service, Path, PropertiesInterface, QStringLiteral("PropertiesChanged"), this,
                   SLOT(onPropertiesChanged(QString, QVariantMap, QStringList)));
 }
@@ -89,7 +91,9 @@ void DBusBluetoothBackend::refreshState()
         }
         const QVariantMap props = parseDict(reply.arguments().constFirst().value<QDBusArgument>());
         deliverState(request, props.value(QStringLiteral("Powered")).toBool(),
-                     props.value(QStringLiteral("Discovering")).toBool());
+                     props.value(QStringLiteral("Discovering")).toBool(),
+                     props.value(QStringLiteral("ControllerPairingState"), QStringLiteral("idle")).toString(),
+                     props.value(QStringLiteral("InputPresent"), true).toBool());
     });
 }
 
@@ -168,6 +172,22 @@ void DBusBluetoothBackend::connectDevice(const QString &id)
 void DBusBluetoothBackend::disconnectDevice(const QString &id)
 {
     startCommand(QStringLiteral("Disconnect"), QStringLiteral("disconnect"), id, {id});
+}
+
+void DBusBluetoothBackend::startControllerPairing(int seconds)
+{
+    startCommand(QStringLiteral("StartControllerPairing"), QStringLiteral("controller-pairing"), QString(),
+                 {QVariant::fromValue(quint32(qMax(0, seconds)))});
+}
+
+void DBusBluetoothBackend::stopControllerPairing()
+{
+    startCommand(QStringLiteral("StopControllerPairing"), QStringLiteral("controller-pairing"), QString(), {});
+}
+
+void DBusBluetoothBackend::onControllerRejected()
+{
+    emit controllerRejected();
 }
 
 void DBusBluetoothBackend::onDevicesChanged()

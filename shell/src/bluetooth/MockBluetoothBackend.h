@@ -24,8 +24,18 @@ public:
     void forget(const QString &id) override;
     void connectDevice(const QString &id) override;
     void disconnectDevice(const QString &id) override;
+    void startControllerPairing(int seconds) override;
+    void stopControllerPairing() override;
 
     // Tests only.
+    // How the pairing window ends (T-203): "wait" (it stays open until stopped), "success" (a
+    // controller pairs: "Ruya Pad" is paired and connected and a controller is present),
+    // "timeout", "rejected" (a phone tries: the window stays open). The outcome comes a moment
+    // after the start, like the service's.
+    void setPairingScript(const QString &outcome) { m_pairingScript = outcome; }
+    // A keyboard or gamepad is (not) connected. True at first, so every other screen is as before.
+    void setInputPresent(bool present);
+    int pairingStarts() const { return m_pairingStarts; }
     void setBattery(const QString &id, int percent);
     void reset();
     // While held, pair() is counted but unanswered (a pairing that takes a while) until released.
@@ -53,6 +63,7 @@ private:
     void answer(const QString &op, const QString &id, const QString &status);
     int indexOf(const QString &id) const;
     void endScan();
+    void finishPairing(const QString &outcome);
 
     bool m_powered = true;
     bool m_discovering = false;
@@ -64,4 +75,9 @@ private:
     int m_scans = 0;
     QList<Entry> m_entries;
     QTimer m_scanTimer;
+    QTimer m_pairingTimer;
+    QString m_pairing = QStringLiteral("idle");
+    QString m_pairingScript = QStringLiteral("wait");
+    bool m_inputPresent = true;
+    int m_pairingStarts = 0;
 };

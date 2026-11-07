@@ -62,6 +62,25 @@ SettingsPane {
     onVisibleChanged: {
         if (!visible && Bluetooth.discovering)
             Bluetooth.stopScan()
+        if (!visible && Bluetooth.controllerPairing === "open")
+            Bluetooth.stopControllerPairing()
+    }
+
+    // The state of the controller pairing window as the "Pair a controller" row says it.
+    function controllerPairingValue(state) {
+        switch (state) {
+        case "open": return qsTr("Waiting for a controller…")
+        case "paired": return qsTr("Paired")
+        case "timeout": return qsTr("Nothing found")
+        }
+        return ""
+    }
+
+    function toggleControllerPairing() {
+        if (Bluetooth.controllerPairing === "open")
+            Bluetooth.stopControllerPairing()
+        else
+            Bluetooth.startControllerPairing()
     }
 
     // The single mapping from a service status to text.
@@ -110,10 +129,20 @@ SettingsPane {
                 power.checked = Bluetooth.powered      // a refused switch springs back
                 return
             }
-            if (op === "forget" || op === "scan" || status === "ok")
+            if (op === "controller-pairing" && status !== "ok" && status !== "busy") {
+                Sfx.back()
+                Notifications.show(status === "unavailable" ? qsTr("Bluetooth is off.")
+                                                            : qsTr("Could not start looking for controllers."), "warning")
+                return
+            }
+            if (op === "forget" || op === "scan" || op === "controller-pairing" || status === "ok")
                 return
             Sfx.back()
             Notifications.show(pane.statusText(op, status), "warning")
+        }
+        function onControllerRejected() {
+            if (pane.visible)
+                Notifications.show(qsTr("A device that is not a controller was ignored."), "info")
         }
         function onDevicesChanged() { pane.syncDevices() }
         function onStateChanged() { power.checked = Bluetooth.powered }
@@ -143,6 +172,15 @@ SettingsPane {
         label: qsTr("Add a device")
         value: Bluetooth.discovering ? qsTr("Scanning…") : ""
         onActivated: Bluetooth.startScan()
+    }
+
+    SettingRow {
+        objectName: "rowBtPairController"
+        visible: Bluetooth.powered
+        u: pane.u
+        label: qsTr("Pair a controller")
+        value: pane.controllerPairingValue(Bluetooth.controllerPairing)
+        onActivated: pane.toggleControllerPairing()
     }
 
     SettingRow {

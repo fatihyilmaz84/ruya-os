@@ -9,6 +9,9 @@ MockBluetoothBackend::MockBluetoothBackend(QObject *parent)
     m_scanTimer.setSingleShot(true);
     m_scanTimer.setInterval(300);
     connect(&m_scanTimer, &QTimer::timeout, this, &MockBluetoothBackend::endScan);
+    m_pairingTimer.setSingleShot(true);
+    m_pairingTimer.setInterval(300);
+    connect(&m_pairingTimer, &QTimer::timeout, this, [this] { finishPairing(m_pairingScript); });
     initState();
 }
 
@@ -23,6 +26,11 @@ void MockBluetoothBackend::setPowered(bool on)
         m_powered = on;
         m_scanTimer.stop();
         m_discovering = false;
+        if (!on) {
+            m_pairingTimer.stop();
+            if (m_pairing == QLatin1String("open"))
+                m_pairing = QStringLiteral("idle");     // the window cannot outlive the adapter
+        }
         for (Entry &e : m_entries) {
             if (!on) {
                 e.reconnect = e.dev.connected;
@@ -69,6 +77,61 @@ void MockBluetoothBackend::stopScan()
 void MockBluetoothBackend::endScan()
 {
     m_discovering = false;
+    publish();
+}
+
+void MockBluetoothBackend::startControllerPairing(int seconds)
+{
+    Q_UNUSED(seconds)
+    ++m_pairingStarts;
+    QString status = QStringLiteral("ok");
+    if (!m_powered)
+        status = QStringLiteral("unavailable");
+    else if (m_pairing == QLatin1String("open"))
+        status = QStringLiteral("busy");
+    else {
+        m_pairing = QStringLiteral("open");
+        publish();
+        if (m_pairingScript != QLatin1String("wait"))
+            m_pairingTimer.start();
+    }
+    answer(QStringLiteral("controller-pairing"), QString(), status);
+}
+
+void MockBluetoothBackend::stopControllerPairing()
+{
+    m_pairingTimer.stop();
+    if (m_pairing != QLatin1String("idle")) {
+        m_pairing = QStringLiteral("idle");
+        publish();
+    }
+    answer(QStringLiteral("controller-pairing"), QString(), QStringLiteral("ok"));
+}
+
+void MockBluetoothBackend::finishPairing(const QString &outcome)
+{
+    if (m_pairing != QLatin1String("open"))
+        return;
+    if (outcome == QLatin1String("rejected")) {
+        emit controllerRejected();     // the window stays open
+        return;
+    }
+    m_pairing = outcome == QLatin1String("success") ? QStringLiteral("paired") : QStringLiteral("timeout");
+    if (outcome == QLatin1String("success")) {
+        const int at = indexOf(QStringLiteral("bt-pad-new"));
+        if (at >= 0) {
+            Entry &e = m_entries[at];
+            e.listed = true;
+            e.dev.paired = e.dev.trusted = e.dev.connected = true;
+        }
+        m_inputPresent = true;
+    }
+    publish();
+}
+
+void MockBluetoothBackend::setInputPresent(bool present)
+{
+    m_inputPresent = present;
     publish();
 }
 
@@ -188,6 +251,11 @@ void MockBluetoothBackend::initState()
     m_heldPairs.clear();
     m_pairCalls = 0;
     m_scanTimer.stop();
+    m_pairingTimer.stop();
+    m_pairing = QStringLiteral("idle");
+    m_pairingScript = QStringLiteral("wait");
+    m_inputPresent = true;
+    m_pairingStarts = 0;
     m_powered = true;
     m_discovering = false;
     m_scans = 0;
@@ -240,15 +308,17 @@ void MockBluetoothBackend::publish(int delayMs)
     }
     const bool powered = m_powered;
     const bool discovering = m_discovering;
+    const QString pairing = m_pairing;
+    const bool inputPresent = m_inputPresent;
     // Two requests, as on the bus: the state and the list.
     const quint64 stateRequest = beginStateRequest();
     const quint64 devicesRequest = beginDevicesRequest();
     if (delayMs > 0)
         ++m_pending;
-    QTimer::singleShot(delayMs, this, [this, stateRequest, devicesRequest, powered, discovering, list, delayMs] {
+    QTimer::singleShot(delayMs, this, [this, stateRequest, devicesRequest, powered, discovering, pairing, inputPresent, list, delayMs] {
         if (delayMs > 0)
             --m_pending;
-        deliverState(stateRequest, powered, discovering);
+        deliverState(stateRequest, powered, discovering, pairing, inputPresent);
         deliverDevices(devicesRequest, list);
     });
 }

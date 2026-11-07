@@ -16,6 +16,15 @@ Bluetooth::Bluetooth(std::unique_ptr<BluetoothBackend> backend, QObject *parent)
         m_discovering = discovering;
         emit stateChanged();
     });
+    connect(m_backend.get(), &BluetoothBackend::controllerStateChanged, this, [this](const QString &pairing, bool present) {
+        if (m_inputKnown && pairing == m_controllerPairing && present == m_inputPresent)
+            return;
+        m_inputKnown = true;
+        m_controllerPairing = pairing;
+        m_inputPresent = present;
+        emit controllerStateChanged();
+    });
+    connect(m_backend.get(), &BluetoothBackend::controllerRejected, this, &Bluetooth::controllerRejected);
     connect(m_backend.get(), &BluetoothBackend::devicesListed, this, [this](const QList<BtDevice> &list) {
         QVariantList out;
         for (const BtDevice &d : list) {
@@ -112,6 +121,34 @@ void Bluetooth::connectDevice(const QString &id)
 void Bluetooth::disconnectDevice(const QString &id)
 {
     m_backend->disconnectDevice(id);
+}
+
+void Bluetooth::startControllerPairing()
+{
+    m_backend->startControllerPairing(ControllerPairingSeconds);
+}
+
+void Bluetooth::stopControllerPairing()
+{
+    m_backend->stopControllerPairing();
+}
+
+void Bluetooth::mockPairingScript(const QString &outcome)
+{
+    if (auto *mock = qobject_cast<MockBluetoothBackend *>(m_backend.get()))
+        mock->setPairingScript(outcome);
+}
+
+void Bluetooth::mockSetInputPresent(bool present)
+{
+    if (auto *mock = qobject_cast<MockBluetoothBackend *>(m_backend.get()))
+        mock->setInputPresent(present);
+}
+
+int Bluetooth::mockPairingStarts() const
+{
+    auto *mock = qobject_cast<MockBluetoothBackend *>(m_backend.get());
+    return mock ? mock->pairingStarts() : 0;
 }
 
 void Bluetooth::mockSetBattery(const QString &id, int percent)

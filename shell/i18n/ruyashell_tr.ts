@@ -302,7 +302,7 @@
 <context>
     <name>BluetoothPane</name>
     <message>
-        <location filename="../qml/BluetoothPane.qml" line="+70"/>
+        <location filename="../qml/BluetoothPane.qml" line="+89"/>
         <source>Pairing failed. Put the device in pairing mode and try again.</source>
         <translation>Eşleştirme başarısız. Cihazı eşleştirme moduna alıp yeniden deneyin.</translation>
     </message>
@@ -313,11 +313,12 @@
     </message>
     <message>
         <location line="+1"/>
+        <location line="+43"/>
         <source>Bluetooth is off.</source>
         <translation>Bluetooth kapalı.</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-42"/>
         <source>That device is no longer available.</source>
         <translation>Bu cihaz artık kullanılamıyor.</translation>
     </message>
@@ -352,17 +353,38 @@
         <translation>Bağlı</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="-31"/>
+        <location line="+31"/>
         <source>Paired</source>
         <translation>Eşleşti</translation>
     </message>
     <message>
+        <location line="-32"/>
+        <source>Waiting for a controller…</source>
+        <translation>Kontrolcü bekleniyor…</translation>
+    </message>
+    <message>
         <location line="+2"/>
+        <source>Nothing found</source>
+        <translation>Hiçbir şey bulunamadı</translation>
+    </message>
+    <message>
+        <location line="+32"/>
         <source>Battery %1%</source>
         <translation>Pil %1%</translation>
     </message>
     <message>
-        <location line="+39"/>
+        <location line="+29"/>
+        <source>Could not start looking for controllers.</source>
+        <translation>Kontrolcü aramaya başlanamadı.</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>A device that is not a controller was ignored.</source>
+        <translation>Kontrolcü olmayan bir cihaz yok sayıldı.</translation>
+    </message>
+    <message>
+        <location line="+10"/>
         <source>Bluetooth</source>
         <translation>Bluetooth</translation>
     </message>
@@ -382,7 +404,12 @@
         <translation>Taranıyor…</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+8"/>
+        <source>Pair a controller</source>
+        <translation>Kontrolcü eşleştir</translation>
+    </message>
+    <message>
+        <location line="+10"/>
         <source>Controller: hold its pairing button until the light blinks</source>
         <translation>Kontrolcü: ışık yanıp sönene kadar eşleştirme düğmesini basılı tutun</translation>
     </message>
@@ -417,6 +444,39 @@
         <location line="+12"/>
         <source>Placeholder</source>
         <translation>Yer tutucu</translation>
+    </message>
+</context>
+<context>
+    <name>ControllerPairHint</name>
+    <message>
+        <location filename="../qml/ControllerPairHint.qml" line="+30"/>
+        <source>Controller connected.</source>
+        <translation>Kontrolcü bağlandı.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Bluetooth is off or missing, so a controller cannot be paired here.</source>
+        <translation>Bluetooth kapalı ya da yok, bu yüzden burada kontrolcü eşleştirilemiyor.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Could not start looking for controllers.</source>
+        <translation>Kontrolcü aramaya başlanamadı.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>No controller was found. Hold the pairing button on your controller and try again.</source>
+        <translation>Kontrolcü bulunamadı. Kontrolcünüzün eşleştirme düğmesini basılı tutup yeniden deneyin.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>No controller or keyboard found. Hold the pairing button on your controller until its light blinks.</source>
+        <translation>Kontrolcü ya da klavye bulunamadı. Kontrolcünüzün ışığı yanıp sönene kadar eşleştirme düğmesini basılı tutun.</translation>
+    </message>
+    <message>
+        <location line="+101"/>
+        <source>A device that is not a controller tried to connect and was ignored.</source>
+        <translation>Kontrolcü olmayan bir cihaz bağlanmaya çalıştı ve yok sayıldı.</translation>
     </message>
 </context>
 <context>
@@ -827,7 +887,7 @@
 <context>
     <name>ProfilePicker</name>
     <message>
-        <location filename="../qml/ProfilePicker.qml" line="+28"/>
+        <location filename="../qml/ProfilePicker.qml" line="+32"/>
         <source>Who&apos;s playing?</source>
         <translation>Kim oynuyor?</translation>
     </message>
@@ -1035,7 +1095,7 @@
 <context>
     <name>SectionNav</name>
     <message>
-        <location filename="../qml/SectionNav.qml" line="+32"/>
+        <location filename="../qml/SectionNav.qml" line="+33"/>
         <source>Home</source>
         <translation>Ana sayfa</translation>
     </message>
@@ -1124,7 +1184,7 @@
         <translation>Geri</translation>
     </message>
     <message>
-        <location line="+177"/>
+        <location line="+191"/>
         <source>Coming soon</source>
         <translation>Yakında</translation>
     </message>
@@ -1145,7 +1205,7 @@
 <context>
     <name>Setup</name>
     <message>
-        <location filename="../qml/Setup.qml" line="+33"/>
+        <location filename="../qml/Setup.qml" line="+66"/>
         <source>Cancel</source>
         <translation>İptal</translation>
     </message>
@@ -1165,7 +1225,7 @@
         <translation>Geri</translation>
     </message>
     <message>
-        <location line="+47"/>
+        <location line="+50"/>
         <source>Enter a name first.</source>
         <translation>Önce bir ad girin.</translation>
     </message>
@@ -1175,13 +1235,13 @@
         <translation>Bir PIN seçin</translation>
     </message>
     <message>
-        <location line="+86"/>
+        <location line="+101"/>
         <source>Step %1 of %2</source>
         <translation>Adım %1 / %2</translation>
     </message>
     <message>
-        <location line="-65"/>
-        <location line="+81"/>
+        <location line="-66"/>
+        <location line="+114"/>
         <source>Welcome to RuyaOS</source>
         <translation>RuyaOS&apos;a hoş geldiniz</translation>
     </message>
@@ -1214,13 +1274,35 @@
         <translation>Devam etmek için A&apos;ya basın</translation>
     </message>
     <message>
-        <location line="-240"/>
-        <location line="+148"/>
+        <location line="-273"/>
+        <location line="+181"/>
         <source>Network</source>
         <translation>Ağ</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="-276"/>
+        <source>Try again</source>
+        <translation>Yeniden dene</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <location line="+1"/>
+        <source>Skip</source>
+        <translation>Atla</translation>
+    </message>
+    <message>
+        <location line="+92"/>
+        <location line="+86"/>
+        <source>Connect a controller</source>
+        <translation>Bir kontrolcü bağlayın</translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>Press A to try again</source>
+        <translation>Yeniden denemek için A&apos;ya basın</translation>
+    </message>
+    <message>
+        <location line="+89"/>
         <source>Network setup comes later. A wired connection works without any setup.</source>
         <translation>Ağ kurulumu daha sonra gelecek. Kablolu bağlantı herhangi bir kurulum olmadan çalışır.</translation>
     </message>
@@ -1260,8 +1342,8 @@
         <translation>Oluşturuluyor…</translation>
     </message>
     <message>
-        <location line="-202"/>
-        <location line="+228"/>
+        <location line="-235"/>
+        <location line="+261"/>
         <source>You&apos;re all set</source>
         <translation>Her şey hazır</translation>
     </message>
@@ -1274,7 +1356,7 @@
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+291"/>
+        <location filename="../qml/Shell.qml" line="+308"/>
         <source>Could not %1.</source>
         <translation>%1 işlemi yapılamadı.</translation>
     </message>
@@ -1812,22 +1894,22 @@
         <translation>Dreamglass</translation>
     </message>
     <message>
-        <location line="+51"/>
+        <location line="+52"/>
         <source>Midnight</source>
         <translation>Gece yarısı</translation>
     </message>
     <message>
-        <location line="+51"/>
+        <location line="+52"/>
         <source>Aurora</source>
         <translation>Aurora</translation>
     </message>
     <message>
-        <location line="+51"/>
+        <location line="+52"/>
         <source>Ember</source>
         <translation>Köz</translation>
     </message>
     <message>
-        <location line="+51"/>
+        <location line="+52"/>
         <source>Daylight</source>
         <translation>Gün ışığı</translation>
     </message>
@@ -1965,7 +2047,7 @@
 <context>
     <name>WallpaperPicker</name>
     <message>
-        <location filename="../qml/WallpaperPicker.qml" line="+45"/>
+        <location filename="../qml/WallpaperPicker.qml" line="+48"/>
         <source>Default (animated blobs)</source>
         <translation>Varsayılan (hareketli lekeler)</translation>
     </message>
@@ -2041,7 +2123,7 @@
     </message>
     <message>
         <location line="+0"/>
-        <location line="+26"/>
+        <location line="+38"/>
         <source>Wallpaper</source>
         <translation>Duvar kağıdı</translation>
     </message>
@@ -2051,12 +2133,12 @@
         <translation>%1, geçerli</translation>
     </message>
     <message>
-        <location line="+46"/>
+        <location line="+47"/>
         <source>Current</source>
         <translation>Geçerli</translation>
     </message>
     <message>
-        <location line="+23"/>
+        <location line="+43"/>
         <source>Copying…</source>
         <translation>Kopyalanıyor…</translation>
     </message>

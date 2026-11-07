@@ -3,8 +3,14 @@
 //! mapping of BlueZ's errors to the contract's statuses, and a device's battery. No I/O except
 //! through the `Bluez` trait; `bluez.rs` is the system-bus side. Time is passed in.
 
-use std::sync::{Mutex, MutexGuard};
+use std::collections::{HashMap, HashSet};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
+
+use crate::pairing::{
+    address_of_path, is_hid_service, is_input_device, PairingState, DEFAULT_WINDOW, MAX_ATTEMPTS,
+    MAX_WINDOW,
+};
 
 /// A scan ends by itself after this long (the contract's `Discovering` text).
 pub const SCAN_LIMIT: Duration = Duration::from_secs(30);
@@ -25,6 +31,8 @@ pub enum Status {
     Timeout,
     Unavailable,
     Invalid,
+    Busy,
+    Refused,
     Failed,
 }
 
@@ -37,6 +45,8 @@ impl Status {
             Status::Timeout => "timeout",
             Status::Unavailable => "unavailable",
             Status::Invalid => "invalid",
+            Status::Busy => "busy",
+            Status::Refused => "refused",
             Status::Failed => "failed",
         }
     }
@@ -119,12 +129,18 @@ pub struct RawDevice {
     pub connected: bool,
     pub trusted: bool,
     pub battery: Option<u8>,
+    /// `Class` (Class of Device); BlueZ has none for a device seen only over Bluetooth LE.
+    pub class: Option<u32>,
+    /// `Appearance` (Bluetooth LE).
+    pub appearance: Option<u16>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RawAdapter {
     pub powered: bool,
     pub discovering: bool,
+    pub pairable: bool,
+    pub discoverable: bool,
 }
 
 /// Everything the core needs from one read of BlueZ.
@@ -182,6 +198,13 @@ pub trait Bluez: Send + Sync {
     /// pairable answers a pairing with "No Bonding": the pairing succeeds but no link key is
     /// kept (`Bonded: no`), and BlueZ's HID plugin then rejects the pad (T-162 session, Dell).
     fn set_pairable(&self, on: bool) -> Result<(), BtError>;
+    /// The adapter's `Discoverable` property (the controller pairing window turns it on).
+    fn set_discoverable(&self, on: bool) -> Result<(), BtError>;
+    /// Registers our agent (capability `NoInputNoOutput`) as BlueZ's default one, and takes it
+    /// away again. BlueZ then asks `AgentHandler` about incoming pairings. Only while the
+    /// controller pairing window is open.
+    fn register_agent(&self) -> Result<(), BtError>;
+    fn unregister_agent(&self) -> Result<(), BtError>;
     fn start_discovery(&self) -> Result<(), BtError>;
     fn stop_discovery(&self) -> Result<(), BtError>;
     fn pair(&self, address: &str, timeout: Duration) -> Result<(), BtError>;
@@ -197,18 +220,69 @@ pub struct Changes {
     pub devices: bool,
     pub powered: bool,
     pub discovering: bool,
+    /// `ControllerPairingState` changed.
+    pub pairing: bool,
+    /// The window refused a device that is not an input device (the `ControllerPairingRejected`
+    /// signal).
+    pub rejected: bool,
 }
 
 impl Changes {
     pub fn any(&self) -> bool {
-        self.devices || self.powered || self.discovering
+        self.devices || self.powered || self.discovering || self.pairing || self.rejected
     }
+
+    pub fn merge(self, other: Changes) -> Changes {
+        Changes {
+            devices: self.devices || other.devices,
+            powered: self.powered || other.powered,
+            discovering: self.discovering || other.discovering,
+            pairing: self.pairing || other.pairing,
+            rejected: self.rejected || other.rejected,
+        }
+    }
+}
+
+/// What BlueZ asks of the agent, as far as the window answers it. Anything that needs a PIN or a
+/// passkey is `Pin` and is always refused (B-006 owns PIN pairing).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AgentCall<'a> {
+    /// `RequestAuthorization` (an incoming just-works pairing) and `RequestConfirmation`.
+    Authorize { device: &'a str },
+    /// `AuthorizeService`.
+    Service { device: &'a str, uuid: &'a str },
+    /// `RequestPinCode`, `RequestPasskey`, `DisplayPinCode`, `DisplayPasskey`.
+    Pin,
+}
+
+/// BlueZ's questions to our agent (`bluez::BluezClient` carries them over the bus). `true`
+/// accepts, `false` answers `org.bluez.Error.Rejected`.
+pub trait AgentHandler: Send + Sync {
+    fn answer(&self, call: AgentCall<'_>) -> bool;
+}
+
+/// The window that is open: what to restore when it closes, and what it has accepted.
+struct Window {
+    until: Instant,
+    /// Adapter state to give back (`false`: it was already as we set it, leave it).
+    restore_pairable: bool,
+    restore_discoverable: bool,
+    /// The scan is ours: stop it when the window closes.
+    scan_ours: bool,
+    /// Addresses of input devices the agent accepted or we paired ourselves.
+    accepted: HashSet<String>,
+    attempts: HashMap<String, u32>,
+    in_flight: Option<String>,
 }
 
 #[derive(Default)]
 struct State {
     adapter: Option<RawAdapter>,
     devices: Vec<Device>,
+    /// The last read, unfiltered (the window needs the classes).
+    raw_devices: Vec<RawDevice>,
+    window: Option<Window>,
+    pairing: PairingState,
     /// When the running scan has to be stopped (only for a scan we started).
     scan_until: Option<Instant>,
     /// Changes seen by reads whose caller did not announce them (a call that read on the way);
@@ -216,9 +290,17 @@ struct State {
     pending: Changes,
 }
 
+type Notifier = Arc<dyn Fn() + Send + Sync>;
+
+/// Where `bluez::BluezClient` finds the core's handler once the core exists (the core owns the
+/// client, so the client cannot be given the core).
+pub type AgentSlot = Arc<std::sync::OnceLock<Arc<dyn AgentHandler>>>;
+
 pub struct Bluetooth<B: Bluez> {
     bluez: B,
     state: Mutex<State>,
+    /// Called when something changed outside any D-Bus call (the agent refused a device).
+    notifier: Mutex<Option<Notifier>>,
 }
 
 impl<B: Bluez> Bluetooth<B> {
@@ -226,6 +308,7 @@ impl<B: Bluez> Bluetooth<B> {
         Bluetooth {
             bluez,
             state: Mutex::new(State::default()),
+            notifier: Mutex::new(None),
         }
     }
 
@@ -274,6 +357,8 @@ impl<B: Bluez> Bluetooth<B> {
         let off = RawAdapter {
             powered: false,
             discovering: false,
+            pairable: false,
+            discoverable: false,
         };
         let before = st.adapter.unwrap_or(off);
         let after = adapter.unwrap_or(off);
@@ -282,12 +367,14 @@ impl<B: Bluez> Bluetooth<B> {
             powered: before.powered != after.powered,
             discovering: (before.powered && before.discovering)
                 != (after.powered && after.discovering),
+            ..Changes::default()
         };
         st.pending.devices |= changes.devices;
         st.pending.powered |= changes.powered;
         st.pending.discovering |= changes.discovering;
         st.adapter = adapter;
         st.devices = devices;
+        st.raw_devices = if on { raw.devices } else { Vec::new() };
         // The scan is over when BlueZ says so after having said it runs, or the adapter went
         // off. A snapshot that still shows "not discovering" right after StartDiscovery (BlueZ
         // sets the property a moment later) must not drop the deadline.
@@ -331,6 +418,11 @@ impl<B: Bluez> Bluetooth<B> {
     pub fn stop_scan(&self) -> Status {
         // A scan we started is ended even before BlueZ reports Discovering (T-173 review).
         let ours = self.lock().scan_until.is_some();
+        if self.lock().window.is_some() {
+            // The controller pairing window needs the scan; it ends it when it closes.
+            self.lock().scan_until = None;
+            return Status::Ok;
+        }
         if self.read().is_err() || (!self.discovering() && !ours) {
             self.lock().scan_until = None;
             return Status::Ok;
@@ -343,17 +435,26 @@ impl<B: Bluez> Bluetooth<B> {
         status
     }
 
-    /// Ends the scan once its time is up. `true` when it did.
+    /// Ends the scan and the controller pairing window once their time is up. `true` when one
+    /// ended.
     pub fn tick(&self, now: Instant) -> bool {
+        let mut ended = false;
         let due = self.lock().scan_until.is_some_and(|t| now >= t);
-        if !due {
-            return false;
+        if due {
+            // The window keeps its own scan running until it closes.
+            if self.lock().window.is_none() {
+                if let Err(e) = self.bluez.stop_discovery() {
+                    eprintln!("ruya-devices: ending the scan failed: {}", e.0);
+                }
+            }
+            self.lock().scan_until = None;
+            ended = true;
         }
-        if let Err(e) = self.bluez.stop_discovery() {
-            eprintln!("ruya-devices: ending the scan failed: {}", e.0);
+        if self.lock().window.as_ref().is_some_and(|w| now >= w.until) {
+            self.close_window(PairingState::Timeout);
+            ended = true;
         }
-        self.lock().scan_until = None;
-        true
+        ended
     }
 
     /// Looks the device up in a fresh read.
@@ -387,13 +488,20 @@ impl<B: Bluez> Bluetooth<B> {
         let end = clock() + CALL_TIMEOUT;
         let left = || end.saturating_duration_since(clock());
         if !dev.paired {
-            // Bondable only for the pairing itself, and off again whatever it ends with.
-            if let Err(e) = self.bluez.set_pairable(true) {
-                return map_error(&e.0, false);
+            // Bondable only for the pairing itself, and off again whatever it ends with. The
+            // controller pairing window keeps the adapter pairable while it is open, and gives
+            // it back when it closes.
+            let window = self.lock().window.is_some();
+            if !window {
+                if let Err(e) = self.bluez.set_pairable(true) {
+                    return map_error(&e.0, false);
+                }
             }
             let paired = self.bluez.pair(&dev.id, left());
-            if let Err(e) = self.bluez.set_pairable(false) {
-                eprintln!("ruya-devices: Pairable off again failed: {}", e.0);
+            if !window {
+                if let Err(e) = self.bluez.set_pairable(false) {
+                    eprintln!("ruya-devices: Pairable off again failed: {}", e.0);
+                }
             }
             if let Err(e) = paired {
                 return map_error(&e.0, true);
@@ -446,6 +554,283 @@ impl<B: Bluez> Bluetooth<B> {
     }
 }
 
+/// The controller pairing window (T-203).
+impl<B: Bluez> Bluetooth<B> {
+    /// `ControllerPairingState`.
+    pub fn pairing_state(&self) -> PairingState {
+        self.lock().pairing
+    }
+
+    /// When the open window has to be closed, if one is open.
+    pub fn window_deadline(&self) -> Option<Instant> {
+        self.lock().window.as_ref().map(|w| w.until)
+    }
+
+    /// Called when something changed that no D-Bus call announces (the agent refused a device).
+    pub fn set_notifier(&self, notifier: Notifier) {
+        *self.notifier.lock().unwrap_or_else(|e| e.into_inner()) = Some(notifier);
+    }
+
+    /// Changes that were seen but not announced yet.
+    pub fn take_pending(&self) -> Changes {
+        std::mem::take(&mut self.lock().pending)
+    }
+
+    /// Runs the notifier (the D-Bus layer reads and announces what changed).
+    pub fn notify(&self) {
+        let notifier = self
+            .notifier
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        if let Some(notify) = notifier {
+            notify();
+        }
+    }
+
+    /// Opens the window for `seconds` (0: the default). `allowed` is the caller check of the
+    /// D-Bus layer (`pairing::caller_allowed`); nothing happens for a caller that is not.
+    pub fn start_controller_pairing(&self, now: Instant, seconds: u32, allowed: bool) -> Status {
+        if !allowed {
+            return Status::Refused;
+        }
+        let length = match seconds {
+            0 => DEFAULT_WINDOW,
+            n => Duration::from_secs(u64::from(n)),
+        };
+        if length > MAX_WINDOW {
+            return Status::Invalid;
+        }
+        if let Err(status) = self.ready() {
+            return status;
+        }
+        if self.lock().window.is_some() {
+            return Status::Busy;
+        }
+        let Some(adapter) = self.lock().adapter else {
+            return Status::Unavailable;
+        };
+        // Agent first: if BlueZ refuses it nothing else has been touched.
+        if let Err(e) = self.bluez.register_agent() {
+            eprintln!(
+                "ruya-devices: registering the pairing agent failed: {}",
+                e.0
+            );
+            return Status::Failed;
+        }
+        if let Err(e) = self.bluez.set_pairable(true) {
+            eprintln!("ruya-devices: Pairable on failed: {}", e.0);
+            self.drop_agent();
+            return Status::Failed;
+        }
+        // Discoverable is a courtesy to devices that look for the console; the window works
+        // without it.
+        let discoverable = match self.bluez.set_discoverable(true) {
+            Ok(()) => true,
+            Err(e) => {
+                eprintln!("ruya-devices: Discoverable on failed: {}", e.0);
+                false
+            }
+        };
+        // A scan of the user's own (Settings) is left alone, and left running.
+        let scan_ours = !adapter.discovering
+            && match self.bluez.start_discovery() {
+                Ok(()) => true,
+                Err(e) => {
+                    eprintln!("ruya-devices: the window's scan failed: {}", e.0);
+                    false
+                }
+            };
+        let mut st = self.lock();
+        st.window = Some(Window {
+            until: now + length,
+            restore_pairable: !adapter.pairable,
+            restore_discoverable: discoverable && !adapter.discoverable,
+            scan_ours,
+            accepted: HashSet::new(),
+            attempts: HashMap::new(),
+            in_flight: None,
+        });
+        st.pairing = PairingState::Open;
+        st.pending.pairing = true;
+        Status::Ok
+    }
+
+    /// Closes the window now. Also "ok" when none is open; a finished window's outcome is then
+    /// forgotten (`idle`).
+    pub fn stop_controller_pairing(&self, allowed: bool) -> Status {
+        if !allowed {
+            return Status::Refused;
+        }
+        if self.lock().window.is_some() {
+            self.close_window(PairingState::Idle);
+        } else if self.lock().pairing != PairingState::Idle {
+            let mut st = self.lock();
+            st.pairing = PairingState::Idle;
+            st.pending.pairing = true;
+        }
+        Status::Ok
+    }
+
+    fn drop_agent(&self) {
+        if let Err(e) = self.bluez.unregister_agent() {
+            eprintln!(
+                "ruya-devices: unregistering the pairing agent failed: {}",
+                e.0
+            );
+        }
+    }
+
+    /// Ends the window: the scan, Discoverable and Pairable as they were, the agent gone. Each
+    /// step is tried whatever the others did.
+    fn close_window(&self, outcome: PairingState) {
+        let Some(window) = self.lock().window.take() else {
+            return;
+        };
+        let user_scan = self.lock().scan_until.is_some();
+        if window.scan_ours && !user_scan {
+            if let Err(e) = self.bluez.stop_discovery() {
+                eprintln!("ruya-devices: ending the window's scan failed: {}", e.0);
+            }
+        }
+        if window.restore_discoverable {
+            if let Err(e) = self.bluez.set_discoverable(false) {
+                eprintln!("ruya-devices: Discoverable off again failed: {}", e.0);
+            }
+        }
+        if window.restore_pairable {
+            if let Err(e) = self.bluez.set_pairable(false) {
+                eprintln!("ruya-devices: Pairable off again failed: {}", e.0);
+            }
+        }
+        self.drop_agent();
+        let mut st = self.lock();
+        st.pairing = outcome;
+        st.pending.pairing = true;
+    }
+
+    /// Looks at what the last read showed. If a device the window accepted is paired now, the
+    /// window is done (trusted, closed, `paired`). Otherwise returns the address of a gamepad in
+    /// pairing mode that the scan found and that the window should pair itself (once at a time,
+    /// `MAX_ATTEMPTS` times at most): call `window_pair` with it, off the executor.
+    pub fn pump(&self) -> Option<String> {
+        let paired = {
+            let mut st = self.lock();
+            let State {
+                window,
+                raw_devices,
+                ..
+            } = &mut *st;
+            let window = window.as_mut()?;
+            let paired = window
+                .accepted
+                .iter()
+                .find(|a| raw_devices.iter().any(|d| &d.address == *a && d.paired))
+                .cloned();
+            if paired.is_none() && window.in_flight.is_none() {
+                let candidate = raw_devices.iter().find(|d| {
+                    !d.paired
+                        && kind_of(&d.icon) == "controller"
+                        && is_input_device(d.class, d.appearance)
+                        && window.attempts.get(&d.address).copied().unwrap_or(0) < MAX_ATTEMPTS
+                });
+                if let Some(d) = candidate {
+                    let address = d.address.clone();
+                    *window.attempts.entry(address.clone()).or_insert(0) += 1;
+                    window.accepted.insert(address.clone());
+                    window.in_flight = Some(address.clone());
+                    return Some(address);
+                }
+            }
+            paired
+        };
+        if let Some(address) = paired {
+            self.finish(&address);
+        }
+        None
+    }
+
+    /// A controller is paired: trust it (BlueZ then lets its HID connection through) and close.
+    fn finish(&self, address: &str) {
+        if let Err(e) = self.bluez.set_trusted(address) {
+            eprintln!("ruya-devices: trusting {address} failed: {}", e.0);
+        }
+        self.close_window(PairingState::Paired);
+    }
+
+    /// Pairs the gamepad `pump` named, trusts and connects it, and ends the window. A failed
+    /// attempt leaves the window open (`pump` tries again, up to `MAX_ATTEMPTS`). Blocks.
+    pub fn window_pair(&self, address: &str, clock: impl Fn() -> Instant) {
+        let end = clock() + CALL_TIMEOUT;
+        let result = self.bluez.pair(address, CALL_TIMEOUT);
+        if let Some(w) = self.lock().window.as_mut() {
+            w.in_flight = None;
+        }
+        match result {
+            Ok(()) => {
+                if let Err(e) = self.bluez.set_trusted(address) {
+                    eprintln!("ruya-devices: trusting {address} failed: {}", e.0);
+                }
+                let left = end.saturating_duration_since(clock());
+                if !left.is_zero() {
+                    // The bond is what counts; a pad that does not connect yet connects when its
+                    // button is pressed.
+                    if let Err(e) = self.bluez.connect(address, left) {
+                        eprintln!("ruya-devices: connecting {address} failed: {}", e.0);
+                    }
+                }
+                self.close_window(PairingState::Paired);
+            }
+            Err(e) => eprintln!("ruya-devices: pairing {address} failed: {}", e.0),
+        }
+    }
+
+    /// The agent's answer (see `AgentCall`). Only while the window is open and only for input
+    /// devices; everything else is refused, and a device that is not an input device is
+    /// announced as refused.
+    pub fn agent(&self, call: AgentCall<'_>, now: Instant) -> bool {
+        let (device, uuid) = match call {
+            AgentCall::Pin => return false,
+            AgentCall::Authorize { device } => (device, None),
+            AgentCall::Service { device, uuid } => (device, Some(uuid)),
+        };
+        if !self.lock().window.as_ref().is_some_and(|w| now < w.until) {
+            return false;
+        }
+        let Some(address) = address_of_path(device) else {
+            return false;
+        };
+        if self.read().is_err() {
+            return false;
+        }
+        let input = self
+            .lock()
+            .raw_devices
+            .iter()
+            .find(|d| d.address == address)
+            .is_some_and(|d| is_input_device(d.class, d.appearance));
+        if !input {
+            // Not an input device, or BlueZ has not told us about it: not our business.
+            self.lock().pending.rejected = true;
+            self.notify();
+            return false;
+        }
+        if uuid.is_some_and(|u| !is_hid_service(u)) {
+            return false;
+        }
+        if let Some(w) = self.lock().window.as_mut() {
+            w.accepted.insert(address);
+        }
+        true
+    }
+}
+
+impl<B: Bluez> AgentHandler for Bluetooth<B> {
+    fn answer(&self, call: AgentCall<'_>) -> bool {
+        self.agent(call, Instant::now())
+    }
+}
+
 /// A scripted BlueZ for tests and `--session` development.
 pub struct FakeBluez {
     inner: Mutex<FakeInner>,
@@ -465,6 +850,10 @@ struct FakeInner {
     spend: Option<(std::sync::Arc<Mutex<Instant>>, Duration)>,
     /// `set_pairable(true)` fails (the adapter refuses).
     pairable_fails: bool,
+    /// `register_agent` fails (BlueZ refuses the agent).
+    agent_fails: bool,
+    /// Our agent is registered with BlueZ.
+    agent: bool,
 }
 
 impl FakeBluez {
@@ -478,6 +867,8 @@ impl FakeBluez {
                 sticky_discovery: false,
                 spend: None,
                 pairable_fails: false,
+                agent_fails: false,
+                agent: false,
             }),
         }
     }
@@ -492,11 +883,15 @@ impl FakeBluez {
             connected: paired,
             trusted: paired,
             battery: if paired { Some(80) } else { None },
+            class: Some(0x2508),
+            appearance: None,
         };
         FakeBluez::new(Raw {
             adapter: Some(RawAdapter {
                 powered: true,
                 discovering: false,
+                pairable: false,
+                discoverable: false,
             }),
             devices: vec![
                 dev("AA:00:00:00:00:01", "Dev Pad", "input-gaming", true),
@@ -523,6 +918,30 @@ impl FakeBluez {
 
     pub fn fail_pairable(&self) {
         self.inner().pairable_fails = true;
+    }
+
+    pub fn fail_agent(&self) {
+        self.inner().agent_fails = true;
+    }
+
+    /// Our agent is registered with BlueZ right now.
+    pub fn agent_registered(&self) -> bool {
+        self.inner().agent
+    }
+
+    /// What the adapter says now.
+    pub fn adapter(&self) -> Option<RawAdapter> {
+        self.inner().raw.adapter
+    }
+
+    /// A device shows up (found by the scan, or calling in).
+    pub fn add_device(&self, device: RawDevice) {
+        self.inner().raw.devices.push(device);
+    }
+
+    /// The remote side finishes a pairing it started (an incoming one).
+    pub fn bond(&self, address: &str) {
+        with_device(&mut self.inner().raw, address, |d| d.paired = true);
     }
 
     pub fn set_sticky_discovery(&self, on: bool) {
@@ -588,6 +1007,32 @@ impl Bluez for FakeBluez {
         if on && i.pairable_fails {
             return Err(BtError::new("org.bluez.Error.Failed"));
         }
+        if let Some(a) = i.raw.adapter.as_mut() {
+            a.pairable = on;
+        }
+        Ok(())
+    }
+    fn set_discoverable(&self, on: bool) -> Result<(), BtError> {
+        let mut i = self.inner();
+        i.calls.push(format!("discoverable {on}"));
+        if let Some(a) = i.raw.adapter.as_mut() {
+            a.discoverable = on;
+        }
+        Ok(())
+    }
+    fn register_agent(&self) -> Result<(), BtError> {
+        let mut i = self.inner();
+        i.calls.push("agent register".to_owned());
+        if i.agent_fails {
+            return Err(BtError::new("org.bluez.Error.Failed"));
+        }
+        i.agent = true;
+        Ok(())
+    }
+    fn unregister_agent(&self) -> Result<(), BtError> {
+        let mut i = self.inner();
+        i.calls.push("agent unregister".to_owned());
+        i.agent = false;
         Ok(())
     }
     fn start_discovery(&self) -> Result<(), BtError> {
@@ -648,6 +1093,8 @@ mod tests {
             connected: false,
             trusted: false,
             battery: None,
+            class: None,
+            appearance: None,
         }
     }
 
@@ -1086,5 +1533,545 @@ mod tests {
         bt.bluez.set_raw(raw);
         let c = bt.refresh().expect("fake reads");
         assert!(c.devices && !c.powered && !c.discovering);
+    }
+
+    // ---- the controller pairing window (T-203) ----
+
+    const PAD: &str = "AA:00:00:00:00:10";
+    const PHONE: &str = "AA:00:00:00:00:20";
+    const HEADSET: &str = "AA:00:00:00:00:30";
+    const UNKNOWN: &str = "AA:00:00:00:00:40";
+    const HID: &str = "00001124-0000-1000-8000-00805f9b34fb";
+    const A2DP: &str = "0000110b-0000-1000-8000-00805f9b34fb";
+
+    fn path_of(address: &str) -> String {
+        format!("/org/bluez/hci0/dev_{}", address.replace(':', "_"))
+    }
+
+    fn near(address: &str, alias: &str, icon: &str, class: Option<u32>) -> RawDevice {
+        RawDevice {
+            address: address.to_owned(),
+            alias: alias.to_owned(),
+            icon: icon.to_owned(),
+            paired: false,
+            connected: false,
+            trusted: false,
+            battery: None,
+            class,
+            appearance: None,
+        }
+    }
+
+    /// An adapter that is on and not pairable, with a gamepad, a phone, a headset and a device
+    /// that tells nothing in range.
+    fn window_bt() -> Bluetooth<FakeBluez> {
+        let fake = FakeBluez::new(Raw {
+            adapter: Some(RawAdapter {
+                powered: true,
+                discovering: false,
+                pairable: false,
+                discoverable: false,
+            }),
+            devices: vec![
+                near(PAD, "Wireless Controller", "input-gaming", Some(0x2508)),
+                near(PHONE, "Some Phone", "phone", Some(0x5A020C)),
+                near(HEADSET, "Some Buds", "audio-headset", Some(0x240404)),
+                near(UNKNOWN, "Mystery", "", None),
+            ],
+        });
+        let bt = Bluetooth::new(fake);
+        bt.refresh().expect("fake reads");
+        bt
+    }
+
+    fn adapter(bt: &Bluetooth<FakeBluez>) -> RawAdapter {
+        bt.bluez.adapter().expect("an adapter")
+    }
+
+    fn open(bt: &Bluetooth<FakeBluez>, now: Instant) {
+        assert_eq!(bt.start_controller_pairing(now, 0, true), Status::Ok);
+    }
+
+    #[test]
+    fn the_window_opens_for_120_seconds_and_closes_by_timeout() {
+        let bt = window_bt();
+        let t0 = Instant::now();
+        assert_eq!(bt.pairing_state(), PairingState::Idle);
+        open(&bt, t0);
+        assert_eq!(bt.pairing_state(), PairingState::Open);
+        assert_eq!(bt.window_deadline(), Some(t0 + Duration::from_secs(120)));
+        // open: pairable, discoverable, scanning, with our agent
+        let a = adapter(&bt);
+        assert!(a.pairable && a.discoverable && a.discovering);
+        assert!(bt.bluez.agent_registered());
+        assert!(
+            bt.refresh().expect("reads").pairing,
+            "the open state is announced"
+        );
+
+        assert!(!bt.tick(t0 + Duration::from_secs(119)));
+        assert_eq!(bt.pairing_state(), PairingState::Open);
+        assert!(bt.tick(t0 + Duration::from_secs(120)));
+        assert_eq!(bt.pairing_state(), PairingState::Timeout);
+        assert_eq!(bt.window_deadline(), None);
+        assert!(
+            bt.refresh().expect("reads").pairing,
+            "the timeout is announced"
+        );
+        // closed: all as before
+        let a = adapter(&bt);
+        assert!(!a.pairable && !a.discoverable && !a.discovering);
+        assert!(!bt.bluez.agent_registered());
+    }
+
+    #[test]
+    fn stop_closes_the_window_and_forgets_the_outcome() {
+        let bt = window_bt();
+        open(&bt, Instant::now());
+        assert_eq!(bt.stop_controller_pairing(true), Status::Ok);
+        assert_eq!(bt.pairing_state(), PairingState::Idle);
+        assert_eq!(bt.window_deadline(), None);
+        let a = adapter(&bt);
+        assert!(!a.pairable && !a.discoverable && !a.discovering);
+        assert!(!bt.bluez.agent_registered());
+        // stopping again is fine and changes nothing
+        let n = bt.bluez.calls().len();
+        assert_eq!(bt.stop_controller_pairing(true), Status::Ok);
+        assert_eq!(bt.bluez.calls().len(), n);
+        // a finished window's outcome goes away with a stop
+        let t0 = Instant::now();
+        open(&bt, t0);
+        bt.tick(t0 + Duration::from_secs(120));
+        assert_eq!(bt.pairing_state(), PairingState::Timeout);
+        assert_eq!(bt.stop_controller_pairing(true), Status::Ok);
+        assert_eq!(bt.pairing_state(), PairingState::Idle);
+    }
+
+    #[test]
+    fn a_gamepad_that_pairs_with_us_is_accepted_trusted_and_ends_the_window() {
+        let bt = window_bt();
+        let t0 = Instant::now();
+        open(&bt, t0);
+        let now = t0 + Duration::from_secs(5);
+        assert!(bt.agent(
+            AgentCall::Authorize {
+                device: &path_of(PAD)
+            },
+            now
+        ));
+        assert!(bt.agent(
+            AgentCall::Service {
+                device: &path_of(PAD),
+                uuid: HID
+            },
+            now
+        ));
+        // the remote side finishes the pairing
+        assert_eq!(bt.pairing_state(), PairingState::Open, "not paired yet");
+        bt.bluez.bond(PAD);
+        bt.refresh().expect("reads");
+        assert_eq!(bt.pump(), None);
+        assert_eq!(bt.pairing_state(), PairingState::Paired);
+        assert!(bt.bluez.calls().contains(&format!("trust {PAD}")));
+        // the window is shut and the adapter is as it was
+        let a = adapter(&bt);
+        assert!(!a.pairable && !a.discoverable && !a.discovering);
+        assert!(!bt.bluez.agent_registered());
+        assert_eq!(bt.window_deadline(), None);
+        assert!(bt.refresh().expect("reads").pairing);
+    }
+
+    #[test]
+    fn a_keyboard_or_an_le_gamepad_without_a_class_is_accepted_too() {
+        let bt = window_bt();
+        let mut keyboard = near("AA:00:00:00:00:50", "Keys", "input-keyboard", Some(0x2540));
+        keyboard.paired = false;
+        let mut le_pad = near("AA:00:00:00:00:51", "LE Pad", "input-gaming", None);
+        le_pad.appearance = Some(0x03C4);
+        bt.bluez.add_device(keyboard);
+        bt.bluez.add_device(le_pad);
+        bt.refresh().expect("reads");
+        let t0 = Instant::now();
+        open(&bt, t0);
+        for address in ["AA:00:00:00:00:50", "AA:00:00:00:00:51"] {
+            assert!(
+                bt.agent(
+                    AgentCall::Authorize {
+                        device: &path_of(address)
+                    },
+                    t0
+                ),
+                "{address}"
+            );
+        }
+    }
+
+    #[test]
+    fn audio_phones_and_unknown_devices_are_rejected_and_announced() {
+        for address in [PHONE, HEADSET, UNKNOWN, "AA:00:00:00:00:99"] {
+            let bt = window_bt();
+            let t0 = Instant::now();
+            open(&bt, t0);
+            bt.refresh().expect("reads");
+            assert!(
+                !bt.agent(
+                    AgentCall::Authorize {
+                        device: &path_of(address)
+                    },
+                    t0
+                ),
+                "{address} must be refused"
+            );
+            assert!(
+                !bt.agent(
+                    AgentCall::Service {
+                        device: &path_of(address),
+                        uuid: HID
+                    },
+                    t0
+                ),
+                "{address} may not use an input service either"
+            );
+            assert!(
+                bt.refresh().expect("reads").rejected,
+                "{address} is announced"
+            );
+            // even if it bonds anyway, the window does not take it for a controller
+            bt.bluez.bond(address);
+            bt.refresh().expect("reads");
+            assert_ne!(bt.pump(), Some(address.to_owned()));
+            assert_eq!(bt.pairing_state(), PairingState::Open, "{address}");
+            assert!(bt.bluez.agent_registered());
+        }
+    }
+
+    #[test]
+    fn nothing_is_accepted_that_needs_a_pin_or_a_passkey() {
+        let bt = window_bt();
+        open(&bt, Instant::now());
+        assert!(!bt.agent(AgentCall::Pin, Instant::now()));
+    }
+
+    #[test]
+    fn a_gamepad_may_not_use_an_audio_service() {
+        let bt = window_bt();
+        let t0 = Instant::now();
+        open(&bt, t0);
+        assert!(!bt.agent(
+            AgentCall::Service {
+                device: &path_of(PAD),
+                uuid: A2DP
+            },
+            t0
+        ));
+    }
+
+    #[test]
+    fn the_agent_refuses_everything_outside_the_window() {
+        let bt = window_bt();
+        let t0 = Instant::now();
+        let ask = |now| {
+            bt.agent(
+                AgentCall::Authorize {
+                    device: &path_of(PAD),
+                },
+                now,
+            )
+        };
+        assert!(!ask(t0), "never opened");
+        open(&bt, t0);
+        assert!(ask(t0 + Duration::from_secs(119)));
+        assert!(
+            !ask(t0 + Duration::from_secs(120)),
+            "time is up, even before the tick closed it"
+        );
+        bt.tick(t0 + Duration::from_secs(120));
+        assert!(!ask(t0 + Duration::from_secs(121)), "closed");
+        assert!(!bt.agent(
+            AgentCall::Authorize {
+                device: "/not/a/device"
+            },
+            t0
+        ));
+    }
+
+    #[test]
+    fn only_one_window_at_a_time() {
+        let bt = window_bt();
+        let t0 = Instant::now();
+        open(&bt, t0);
+        let calls = bt.bluez.calls().len();
+        assert_eq!(
+            bt.start_controller_pairing(t0 + Duration::from_secs(60), 300, true),
+            Status::Busy
+        );
+        assert_eq!(
+            bt.window_deadline(),
+            Some(t0 + Duration::from_secs(120)),
+            "unchanged"
+        );
+        assert_eq!(bt.bluez.calls().len(), calls, "BlueZ was not touched again");
+        // after it ended, the next one opens
+        bt.tick(t0 + Duration::from_secs(120));
+        assert_eq!(
+            bt.start_controller_pairing(t0 + Duration::from_secs(130), 30, true),
+            Status::Ok
+        );
+        assert_eq!(bt.window_deadline(), Some(t0 + Duration::from_secs(160)));
+        assert_eq!(bt.pairing_state(), PairingState::Open);
+    }
+
+    #[test]
+    fn a_caller_that_is_not_allowed_is_refused_and_nothing_happens() {
+        let bt = window_bt();
+        let t0 = Instant::now();
+        assert_eq!(bt.start_controller_pairing(t0, 0, false), Status::Refused);
+        assert!(bt.bluez.calls().is_empty(), "BlueZ was not touched");
+        assert_eq!(bt.pairing_state(), PairingState::Idle);
+        assert!(!adapter(&bt).pairable);
+        // and cannot close one that is open
+        open(&bt, t0);
+        assert_eq!(bt.stop_controller_pairing(false), Status::Refused);
+        assert_eq!(bt.pairing_state(), PairingState::Open);
+        assert!(bt.bluez.agent_registered());
+        assert_eq!(Status::Refused.as_str(), "refused");
+        assert_eq!(Status::Busy.as_str(), "busy");
+    }
+
+    #[test]
+    fn the_length_is_checked() {
+        let bt = window_bt();
+        let t0 = Instant::now();
+        assert_eq!(bt.start_controller_pairing(t0, 301, true), Status::Invalid);
+        assert!(bt.bluez.calls().is_empty());
+        assert_eq!(bt.start_controller_pairing(t0, 300, true), Status::Ok);
+        assert_eq!(bt.window_deadline(), Some(t0 + Duration::from_secs(300)));
+    }
+
+    #[test]
+    fn without_bluetooth_the_window_is_unavailable() {
+        let bt = window_bt();
+        bt.set_powered(false).expect("fake");
+        let n = bt.bluez.calls().len();
+        assert_eq!(
+            bt.start_controller_pairing(Instant::now(), 0, true),
+            Status::Unavailable
+        );
+        assert_eq!(bt.bluez.calls().len(), n);
+        let none = Bluetooth::new(FakeBluez::new(Raw::default()));
+        assert_eq!(
+            none.start_controller_pairing(Instant::now(), 0, true),
+            Status::Unavailable
+        );
+    }
+
+    #[test]
+    fn pairable_and_discoverable_are_given_back_as_they_were() {
+        // they were off: off again, whatever ended the window
+        for end in ["timeout", "stop", "paired"] {
+            let bt = window_bt();
+            let t0 = Instant::now();
+            open(&bt, t0);
+            match end {
+                "timeout" => {
+                    bt.tick(t0 + Duration::from_secs(120));
+                }
+                "stop" => {
+                    bt.stop_controller_pairing(true);
+                }
+                _ => {
+                    bt.agent(
+                        AgentCall::Authorize {
+                            device: &path_of(PAD),
+                        },
+                        t0,
+                    );
+                    bt.bluez.bond(PAD);
+                    bt.refresh().expect("reads");
+                    bt.pump();
+                }
+            }
+            let a = adapter(&bt);
+            assert!(!a.pairable && !a.discoverable, "{end}");
+            assert!(!bt.bluez.agent_registered(), "{end}");
+        }
+        // they were on: left on
+        let bt = window_bt();
+        bt.bluez.set_pairable(true).expect("fake");
+        bt.bluez.set_discoverable(true).expect("fake");
+        bt.refresh().expect("reads");
+        open(&bt, Instant::now());
+        bt.stop_controller_pairing(true);
+        let a = adapter(&bt);
+        assert!(a.pairable && a.discoverable);
+    }
+
+    #[test]
+    fn a_refused_agent_or_pairable_leaves_nothing_behind() {
+        let bt = window_bt();
+        bt.bluez.fail_agent();
+        assert_eq!(
+            bt.start_controller_pairing(Instant::now(), 0, true),
+            Status::Failed
+        );
+        assert_eq!(bt.pairing_state(), PairingState::Idle);
+        assert_eq!(
+            bt.bluez.calls(),
+            ["agent register"],
+            "nothing else was touched"
+        );
+
+        let bt = window_bt();
+        bt.bluez.fail_pairable();
+        assert_eq!(
+            bt.start_controller_pairing(Instant::now(), 0, true),
+            Status::Failed
+        );
+        assert!(
+            !bt.bluez.agent_registered(),
+            "the agent is taken away again"
+        );
+        assert!(!adapter(&bt).discoverable);
+        assert_eq!(bt.window_deadline(), None);
+    }
+
+    #[test]
+    fn a_scan_of_the_users_own_keeps_running_after_the_window() {
+        let bt = window_bt();
+        let t0 = Instant::now();
+        assert_eq!(bt.start_scan(t0), Status::Ok);
+        bt.refresh().expect("reads");
+        open(&bt, t0);
+        assert!(!bt.bluez.calls().iter().any(|c| c == "stop"));
+        bt.stop_controller_pairing(true);
+        bt.refresh().expect("reads");
+        assert!(
+            bt.discovering(),
+            "the user's scan was not the window's to stop"
+        );
+        // and the window's own scan survives a StopScan from the shell
+        let bt = window_bt();
+        open(&bt, t0);
+        assert_eq!(bt.stop_scan(), Status::Ok);
+        assert!(adapter(&bt).discovering, "the window still scans");
+        bt.stop_controller_pairing(true);
+        assert!(!adapter(&bt).discovering);
+    }
+
+    #[test]
+    fn a_manual_pairing_does_not_close_pairable_under_the_window() {
+        let bt = window_bt();
+        open(&bt, Instant::now());
+        assert_eq!(bt.pair(PAD, Instant::now), Status::Ok);
+        assert!(adapter(&bt).pairable, "the window still holds it");
+        let calls = bt.bluez.calls();
+        assert_eq!(calls.iter().filter(|c| *c == "pairable false").count(), 0);
+        assert_eq!(calls.iter().filter(|c| *c == "pairable true").count(), 1);
+    }
+
+    #[test]
+    fn a_gamepad_found_in_pairing_mode_is_paired_by_the_window() {
+        let bt = window_bt();
+        let t0 = Instant::now();
+        assert_eq!(bt.pump(), None, "no window, nothing to do");
+        open(&bt, t0);
+        // only the gamepad is a candidate: not the phone, the headset or the unknown device
+        assert_eq!(bt.pump().as_deref(), Some(PAD));
+        assert_eq!(bt.pump(), None, "one at a time");
+        bt.window_pair(PAD, Instant::now);
+        let calls = bt.bluez.calls();
+        for want in [
+            format!("pair {PAD}"),
+            format!("trust {PAD}"),
+            format!("connect {PAD}"),
+        ] {
+            assert!(calls.contains(&want), "{want} in {calls:?}");
+        }
+        assert!(!calls
+            .iter()
+            .any(|c| c.contains(PHONE) || c.contains(HEADSET)));
+        assert_eq!(bt.pairing_state(), PairingState::Paired);
+        let a = adapter(&bt);
+        assert!(!a.pairable && !a.discoverable && !a.discovering);
+        assert!(!bt.bluez.agent_registered());
+        assert_eq!(bt.pump(), None);
+    }
+
+    #[test]
+    fn a_failing_pairing_is_tried_a_few_times_and_leaves_the_window_open() {
+        let bt = window_bt();
+        open(&bt, Instant::now());
+        for _ in 0..MAX_ATTEMPTS {
+            assert_eq!(bt.pump().as_deref(), Some(PAD));
+            bt.bluez.fail_next("org.bluez.Error.AuthenticationFailed");
+            bt.window_pair(PAD, Instant::now);
+            assert_eq!(bt.pairing_state(), PairingState::Open);
+        }
+        assert_eq!(bt.pump(), None, "enough");
+        assert!(bt.bluez.agent_registered());
+        assert!(!bt.bluez.calls().iter().any(|c| c.starts_with("trust")));
+    }
+
+    #[test]
+    fn a_keyboard_in_range_is_not_paired_by_the_window_itself() {
+        // Keyboards need a passkey; only gamepads are paired from our side.
+        let bt = Bluetooth::new(FakeBluez::new(Raw {
+            adapter: Some(RawAdapter {
+                powered: true,
+                discovering: false,
+                pairable: false,
+                discoverable: false,
+            }),
+            devices: vec![near(PAD, "Keys", "input-keyboard", Some(0x2540))],
+        }));
+        bt.refresh().expect("reads");
+        open(&bt, Instant::now());
+        assert_eq!(bt.pump(), None);
+    }
+
+    #[test]
+    fn the_window_ending_while_a_pairing_runs_keeps_its_own_outcome() {
+        let bt = window_bt();
+        let t0 = Instant::now();
+        open(&bt, t0);
+        assert_eq!(bt.pump().as_deref(), Some(PAD));
+        bt.tick(t0 + Duration::from_secs(120));
+        bt.window_pair(PAD, Instant::now);
+        assert_eq!(bt.pairing_state(), PairingState::Timeout);
+    }
+
+    #[test]
+    fn the_notifier_runs_when_the_agent_refuses() {
+        let bt = window_bt();
+        let seen = Arc::new(Mutex::new(0));
+        let s = seen.clone();
+        bt.set_notifier(Arc::new(move || {
+            *s.lock().unwrap_or_else(|e| e.into_inner()) += 1
+        }));
+        let t0 = Instant::now();
+        open(&bt, t0);
+        bt.agent(
+            AgentCall::Authorize {
+                device: &path_of(PAD),
+            },
+            t0,
+        );
+        assert_eq!(
+            *seen.lock().unwrap_or_else(|e| e.into_inner()),
+            0,
+            "a gamepad is no news"
+        );
+        bt.agent(
+            AgentCall::Authorize {
+                device: &path_of(PHONE),
+            },
+            t0,
+        );
+        assert_eq!(*seen.lock().unwrap_or_else(|e| e.into_inner()), 1);
+        // the handler seam BlueZ's agent object uses
+        let handler: &dyn AgentHandler = &bt;
+        assert!(handler.answer(AgentCall::Authorize {
+            device: &path_of(PAD)
+        }));
     }
 }
