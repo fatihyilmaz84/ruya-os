@@ -1,6 +1,6 @@
 # T-202 — Screen saver and power saving: dim, blank, sleep, and idle controllers
 
-Status: in-progress · Phase: 2 · Depends: — · Area: shell, services, image · Size: M · Owner: builder
+Status: done · Phase: 2 · Depends: — · Area: shell, services, image · Size: M · Owner: builder
 
 ## Goal
 A console left alone saves power and protects the screen, and wakes up instantly when touched. Owner request, 2026-11-06: "screen saver, power saving". After 10 minutes without input the screen shows a calm screen saver (and dims), later the display is switched off, later the console sleeps; none of that happens while something is going on (video, a download, an update being staged, an app that asks for the screen to stay on). Idle controllers are switched off by themselves.
