@@ -10,6 +10,9 @@ import RuyaShell
 // channel and "Restart automatically for updates" are for admins; the rollback asks for the admin's PIN (Profiles.verifyAdmin), then
 // a confirmation, then calls Update.rollback().
 //
+// The Time zone row (T-213) is for admins: Accept opens ZonePicker (region, then city), which asks
+// Devices1.Time to set the zone. The clock and the update restart window follow at once.
+//
 // The Device health section (T-200, Thermal, org.ruyaos.Devices1.Thermal) comes last: one read-only
 // row per sensor ("Processor 33 °C", "Fan 1820 rpm", "Drive 41 °C") with a mark when its level is
 // not normal. Rows follow Thermal.sensors by id and are updated in place, so focus stays on a row
@@ -25,6 +28,7 @@ SettingsPane {
 
     property string message: ""
     property bool messageIsError: false
+    property bool zoneAsked: false         // a zone chosen in this pane's picker is on its way
     property string rollbackStep: "idle"     // idle | pin | confirm | working
     property Item returnTo: null
 
@@ -321,6 +325,56 @@ SettingsPane {
         }
     }
     Binding { target: language; property: "value"; value: DeviceSettings.language }
+
+    // Time zone (T-213): admins only. The service checks the caller again (an admin profile).
+    SettingRow {
+        id: zoneRow
+        objectName: "rowTimezone"
+        u: pane.u
+        visible: pane.isAdmin
+        label: qsTr("Time zone")
+        value: TimeZone.timezone.replace(/_/g, " ")
+        onActivated: zonePicker.open()
+    }
+
+    Text {
+        objectName: "timeNtpNote"
+        width: parent ? parent.width : 0
+        visible: !TimeZone.ntpSynchronised
+        text: qsTr("The clock has not been set from the internet yet, so the time may be wrong.")
+        color: Theme.textDim
+        font.pixelSize: Theme.typeCaption * pane.u
+        wrapMode: Text.Wrap
+    }
+
+    ZonePicker {
+        id: zonePicker
+        objectName: "zonePicker"
+        parent: pane.overlay
+        width: parent ? parent.width : 0
+        height: parent ? parent.height : 0
+        u: pane.u
+        onRequested: zone => {
+            pane.zoneAsked = true
+            TimeZone.setTimezone(zone)
+        }
+    }
+
+    Connections {
+        target: TimeZone
+        function onSetTimezoneFinished(name, status) {
+            if (!pane.zoneAsked)
+                return
+            pane.zoneAsked = false
+            if (status === "ok") {
+                Notifications.show(qsTr("Time zone set to %1").arg(name.replace(/_/g, " ")), "success")
+            } else {
+                Sfx.back()
+                Notifications.show(status === "forbidden" ? qsTr("Only an admin can do this.")
+                                                          : qsTr("Could not change the time zone."), "error")
+            }
+        }
+    }
 
     Text {
         objectName: "updatesHeading"

@@ -582,11 +582,8 @@ FocusScope {
                 color: Theme.text
                 font.pixelSize: Theme.typeHeadline * root.u
                 font.weight: Theme.weightDemiBold
-                text: Qt.formatTime(new Date(), "HH:mm")
-                Timer {
-                    interval: 10000; running: true; repeat: true
-                    onTriggered: clock.text = Qt.formatTime(new Date(), "HH:mm")
-                }
+                objectName: "statusClock"
+                text: TimeZone.clockText     // the console's time zone (T-213), ticking in the singleton
             }
         }
     }
@@ -985,6 +982,15 @@ FocusScope {
         }
         return false
     }
+    // A modal in the modal layer may say what its buttons do: the nearest ancestor of the focused
+    // item (up to the layer) with a `modalHints` list (WallpaperPicker, ZonePicker). Others: B Cancel.
+    function modalHintsOf(item) {
+        for (let p = item; p && p !== modalLayer; p = p.parent) {
+            if (p.modalHints !== undefined)
+                return p.modalHints
+        }
+        return [{ button: "B", text: qsTr("Cancel") }]
+    }
     readonly property var hintList: {
         if (systemPanel.open)
             return [{ button: "A", text: qsTr("Select") },
@@ -994,7 +1000,9 @@ FocusScope {
         const keyboard = activeItem as TextEntry     // Back deletes a letter or cancels: the keyboard says which
         if (keyboard)
             return keyboard.entryHints
-        if (hasAncestor(activeItem, modalLayer) || hasAncestor(activeItem, pinPadInPicker))
+        if (hasAncestor(activeItem, modalLayer))
+            return modalHintsOf(activeItem)
+        if (hasAncestor(activeItem, pinPadInPicker))
             return [{ button: "B", text: qsTr("Cancel") }]
         if (!signedIn)
             return setupActive ? setup.hints : [{ button: "A", text: qsTr("Select") }]

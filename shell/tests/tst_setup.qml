@@ -4,7 +4,8 @@ import RuyaShell
 
 // First-boot setup (T-106): with no profiles the shell shows the setup wizard instead of the
 // picker, and the whole flow works with controller keys only (arrows, Return = Accept,
-// Escape = Back). Own file: it creates a profile and changes the language, and each file gets
+// Escape = Back, Menu = Start). Steps: 0 welcome, 1 language, 2 time zone (T-213), 3 network,
+// 4 create the admin, 5 done. Own file: it creates a profile and changes the language, and each file gets
 // a fresh engine; the mock is also reset before every test.
 Item {
     id: host
@@ -37,6 +38,7 @@ Item {
             tryVerify(() => Profiles.profiles.length === 0)
             createSpy.clear()
             DeviceSettings.language = "en"
+            TimeZone.mockReset()
         }
 
         function startShell() {
@@ -46,11 +48,12 @@ Item {
             tryVerify(() => Profiles.available)
         }
 
-        // Presses Accept until the wizard is on `target`, checking each step on the way.
+        // Presses Accept until the wizard is on `target`, checking each step on the way. The time
+        // zone step is passed with Start (skip), which leaves the zone alone.
         function goToStep(target) {
-            for (let i = 0; i < 6 && setup().step < target; ++i) {
+            for (let i = 0; i < 7 && setup().step < target; ++i) {
                 const before = setup().step
-                keyClick(Qt.Key_Return)
+                keyClick(before === 2 ? Qt.Key_Menu : Qt.Key_Return)
                 tryCompare(setup(), "step", before + 1)
             }
             compare(setup().step, target)
@@ -110,7 +113,7 @@ Item {
             fail("could not reach '" + value + "'")
         }
 
-        // On step 3 with the name row focused: open the keyboard, type, Done.
+        // On step 4 with the name row focused: open the keyboard, type, Done.
         function typeName(text) {
             keyClick(Qt.Key_Return)
             const entry = find("setupNameEntry")
@@ -137,7 +140,7 @@ Item {
             verify(!find("profilePicker").enabled)
             compare(setup().step, 0)
             verify(setup().activeFocus, "the wizard has focus")
-            compare(find("setupStepLabel").text, "Step 1 of 5")
+            compare(find("setupStepLabel").text, "Step 1 of 6")
         }
 
         function test_seeded_mock_never_shows_setup() {
@@ -171,7 +174,7 @@ Item {
 
         function test_full_setup_flow() {
             startShell()
-            goToStep(3)
+            goToStep(4)
             tryVerify(() => find("setupNameRow").activeFocus, 2000, "the name row has focus")
             typeName("Owner")
             compare(setup().adminName, "Owner")
@@ -183,7 +186,7 @@ Item {
             enterPin("2468")
             enterPin("2468")
 
-            tryCompare(setup(), "step", 4)
+            tryCompare(setup(), "step", 5)
             compare(Profiles.profiles.length, 1)
             compare(Profiles.profiles[0].name, "Owner")
             compare(Profiles.profiles[0].role, "admin")
@@ -210,7 +213,10 @@ Item {
         // T-179: Backspace is Back, like Esc.
         function test_backspace_goes_back_a_step() {
             startShell()
-            goToStep(2)
+            goToStep(3)
+            keyClick(Qt.Key_Backspace)
+            tryCompare(setup(), "step", 2)
+            tryVerify(() => find("setupZoneRegions").activeFocus)
             keyClick(Qt.Key_Backspace)
             tryCompare(setup(), "step", 1)
             tryVerify(() => find("setupLanguageRow").activeFocus)
@@ -228,10 +234,12 @@ Item {
             goToStep(1)
             keyClick(Qt.Key_Right)                            // Türkçe
             compare(DeviceSettings.language, "tr")
-            goToStep(3)
+            goToStep(4)
             typeName("Ab")
 
-            keyClick(Qt.Key_Escape)                           // 3 -> 2
+            keyClick(Qt.Key_Escape)                           // 4 -> 3
+            tryCompare(setup(), "step", 3)
+            keyClick(Qt.Key_Escape)                           // 3 -> 2 (time zone)
             tryCompare(setup(), "step", 2)
             keyClick(Qt.Key_Escape)                           // 2 -> 1
             tryCompare(setup(), "step", 1)
@@ -240,7 +248,7 @@ Item {
             keyClick(Qt.Key_Escape)                           // 1 -> 0
             tryCompare(setup(), "step", 0)
 
-            goToStep(3)
+            goToStep(4)
             compare(setup().adminName, "Ab", "the name is kept")
             tryVerify(() => find("setupCreateRow").activeFocus, 2000, "focus is on the PIN row once a name is set")
             compare(Profiles.profiles.length, 0, "going back and forth creates nothing")
@@ -248,7 +256,7 @@ Item {
 
         function test_name_is_required() {
             startShell()
-            goToStep(3)
+            goToStep(4)
             keyClick(Qt.Key_Down)                             // to the PIN row
             tryVerify(() => find("setupCreateRow").activeFocus)
             keyClick(Qt.Key_Return)
@@ -259,21 +267,21 @@ Item {
 
         function test_cancelling_the_pin_pad_creates_nothing() {
             startShell()
-            goToStep(3)
+            goToStep(4)
             typeName("Owner")
             keyClick(Qt.Key_Return)
             tryVerify(() => find("setupPinPad").shown)
             keyClick(Qt.Key_Escape)                           // Back on an empty pad
             tryVerify(() => !find("setupPinPad").shown)
             tryVerify(() => find("setupCreateRow").activeFocus, 2000, "focus returns to the PIN row")
-            compare(setup().step, 3)
+            compare(setup().step, 4)
             compare(createSpy.count, 0)
             compare(Profiles.profiles.length, 0)
         }
 
         function test_error_is_shown_and_can_be_retried() {
             startShell()
-            goToStep(3)
+            goToStep(4)
             setup().adminName = "x".repeat(40)                // the keyboard stops at 32; the service refuses this
             keyClick(Qt.Key_Down)
             tryVerify(() => find("setupCreateRow").activeFocus)
@@ -282,7 +290,7 @@ Item {
             enterPin("2468")
             enterPin("2468")
             tryVerify(() => find("setupMessage").text.indexOf("isn't allowed") >= 0, 3000)
-            compare(setup().step, 3)
+            compare(setup().step, 4)
             tryVerify(() => find("setupCreateRow").activeFocus, 2000, "focus is back on the PIN row")
             compare(Profiles.profiles.length, 0)
 
@@ -291,7 +299,7 @@ Item {
             tryVerify(() => find("setupPinPad").shown)
             enterPin("2468")
             enterPin("2468")
-            tryCompare(setup(), "step", 4)
+            tryCompare(setup(), "step", 5)
             compare(Profiles.profiles.length, 1)
         }
 
@@ -301,7 +309,7 @@ Item {
             if (!bar.visible)
                 return ""
             const parts = []
-            for (const b of ["A", "B"]) {
+            for (const b of ["A", "B", "Start"]) {
                 const h = findChild(bar, "hint_" + b)
                 if (h)
                     parts.push(b + " " + h.verb)
@@ -315,8 +323,10 @@ Item {
             goToStep(1)
             compare(hintsShown(), "A Next|B Back")
             goToStep(2)
-            compare(hintsShown(), "A Next|B Back")
+            compare(hintsShown(), "A Select|B Back|Start Skip", "time zone: Start skips it")
             goToStep(3)
+            compare(hintsShown(), "A Next|B Back")
+            goToStep(4)
             compare(hintsShown(), "A Select|B Back")
             keyClick(Qt.Key_Return)                           // the name row opens the keyboard
             tryVerify(() => find("setupNameEntry").shown, 2000, "the keyboard opens")
@@ -331,8 +341,132 @@ Item {
             compare(hintsShown(), "B Cancel")
             enterPin("2468")
             enterPin("2468")
-            tryCompare(setup(), "step", 4)
+            tryCompare(setup(), "step", 5)
             compare(hintsShown(), "A Next", "done: the account exists, no Back")
+        }
+
+        // ---- T-213: where are you? ----
+
+        // Presses `key` until `done()` is true, at most `limit` times; fails with `what` otherwise.
+        function pressUntil(key, done, what, limit) {
+            for (let i = 0; i < (limit ?? 30) && !done(); ++i)
+                keyClick(key)
+            verify(done(), what)
+        }
+
+        function chooser() { return find("setupZoneChooser") }
+
+        function test_time_zone_region_then_city_with_the_controller_keys() {
+            startShell()
+            goToStep(2)
+            tryVerify(() => find("setupZoneRegions").activeFocus, 2000, "the regions have focus")
+            compare(find("setupZoneTitle").text, "Where are you?")
+            compare(chooser().region, "Europe", "English starts on a European default")
+            compare(chooser().selectedZone, "Europe/London")
+            compare(TimeZone.timezone, "UTC", "nothing is set before a city is chosen")
+
+            pressUntil(Qt.Key_Up, () => chooser().region === "Asia", "Up reaches Asia")
+            verify(find("setupZoneRegions").activeFocus, "still on the regions")
+            compare(chooser().selectedZone, "Asia/Baghdad", "a new region shows its first city")
+            keyClick(Qt.Key_Return)                           // Accept: into the cities
+            tryVerify(() => find("setupZoneCities").activeFocus, 2000, "the cities have focus")
+            verify(!find("setupZoneRegions").activeFocus)
+            pressUntil(Qt.Key_Down, () => chooser().selectedZone === "Asia/Tokyo", "Down reaches Tokyo")
+            verify(find("setupZoneCities").activeFocus)
+            compare(TimeZone.mockSetCalls(), 0, "moving around sets nothing")
+
+            keyClick(Qt.Key_Return)                           // Accept: choose it
+            tryCompare(TimeZone, "timezone", "Asia/Tokyo")
+            tryCompare(setup(), "step", 3)
+            compare(TimeZone.mockSetCalls(), 1)
+            verify(setup().activeFocus, "the wizard has focus on the next step")
+            verify(find("setupNetwork").visible)
+        }
+
+        function test_time_zone_default_follows_the_language() {
+            DeviceSettings.language = "tr"
+            startShell()
+            goToStep(1)
+            goToStep(2)
+            tryVerify(() => find("setupZoneRegions").activeFocus, 2000)
+            compare(chooser().selectedZone, "Europe/Istanbul")
+            compare(chooser().region, "Europe")
+            compare(find("setupZoneRegion_Europe").label, "Avrupa", "the region is named in Turkish")
+        }
+
+        function test_a_late_zone_list_still_starts_on_the_language_default() {
+            TimeZone.mockWithholdZones()
+            tryVerify(() => TimeZone.timezones.length === 0)
+            DeviceSettings.language = "tr"
+            startShell()
+            goToStep(1)
+            goToStep(2)
+            tryVerify(() => find("setupZoneLoading").visible, 2000, "the step waits for the list")
+            TimeZone.mockReleaseZones()
+            tryVerify(() => chooser().selectedZone === "Europe/Istanbul", 3000, "begins on the Turkish default, not on UTC")
+            compare(chooser().region, "Europe")
+            tryVerify(() => find("setupZoneRegions").activeFocus, 2000, "the regions have focus")
+        }
+
+        function test_time_zone_back_leaves_the_cities_first_then_the_step() {
+            startShell()
+            goToStep(2)
+            tryVerify(() => find("setupZoneRegions").activeFocus)
+            keyClick(Qt.Key_Right)                            // into the cities
+            tryVerify(() => find("setupZoneCities").activeFocus)
+            keyClick(Qt.Key_Left)                             // Left: back to the regions
+            tryVerify(() => find("setupZoneRegions").activeFocus)
+            keyClick(Qt.Key_Right)
+            tryVerify(() => find("setupZoneCities").activeFocus)
+            keyClick(Qt.Key_Escape)                           // Back: also the regions, same step
+            tryVerify(() => find("setupZoneRegions").activeFocus)
+            compare(setup().step, 2)
+            keyClick(Qt.Key_Escape)                           // Back on the regions: the previous step
+            tryCompare(setup(), "step", 1)
+            tryVerify(() => find("setupLanguageRow").activeFocus)
+            compare(TimeZone.mockSetCalls(), 0)
+        }
+
+        function test_time_zone_can_be_skipped_with_start() {
+            startShell()
+            goToStep(2)
+            tryVerify(() => find("setupZoneRegions").activeFocus)
+            keyClick(Qt.Key_Menu)
+            tryCompare(setup(), "step", 3)
+            compare(TimeZone.timezone, "UTC", "the zone is left alone")
+            compare(TimeZone.mockSetCalls(), 0)
+            verify(setup().activeFocus)
+        }
+
+        function test_going_back_to_the_time_zone_step_keeps_the_choice() {
+            startShell()
+            goToStep(2)
+            tryVerify(() => find("setupZoneRegions").activeFocus)
+            pressUntil(Qt.Key_Up, () => chooser().region === "Asia", "Up reaches Asia")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("setupZoneCities").activeFocus)
+            pressUntil(Qt.Key_Down, () => chooser().selectedZone === "Asia/Tokyo", "Down reaches Tokyo")
+            keyClick(Qt.Key_Return)
+            tryCompare(setup(), "step", 3)
+            keyClick(Qt.Key_Escape)                           // back to the time zone
+            tryCompare(setup(), "step", 2)
+            tryVerify(() => find("setupZoneRegions").activeFocus, 2000, "the regions have focus again")
+            compare(chooser().region, "Asia")
+            compare(chooser().selectedZone, "Asia/Tokyo", "it begins on the zone chosen before")
+            compare(find("setupZoneCity_Asia/Tokyo").marked, true, "and marks the zone that is set")
+        }
+
+        function test_a_refused_zone_does_not_block_the_wizard() {
+            TimeZone.mockSetCallerAllowed(false)
+            startShell()
+            goToStep(2)
+            tryVerify(() => find("setupZoneRegions").activeFocus)
+            keyClick(Qt.Key_Right)
+            tryVerify(() => find("setupZoneCities").activeFocus)
+            keyClick(Qt.Key_Return)
+            tryCompare(setup(), "step", 3)
+            compare(TimeZone.mockSetCalls(), 1)
+            compare(TimeZone.timezone, "UTC", "the service refused; Settings can set it later")
         }
 
         // ---- T-203: pairing a controller with no keyboard ----
@@ -385,7 +519,7 @@ Item {
             keyClick(Qt.Key_Return)
             tryCompare(setup(), "step", 1)
             tryVerify(() => find("setupLanguageRow").activeFocus)
-            compare(find("setupStepLabel").text, "Step 2 of 5")
+            compare(find("setupStepLabel").text, "Step 2 of 6")
         }
 
         function test_a_timeout_offers_retry_with_the_pad() {
@@ -467,7 +601,18 @@ Item {
             startShell()
             wait(600)
             grabImage(tc.shell).save(shotsDir + "/11-setup-welcome.png")
-            goToStep(3)
+            goToStep(2)
+            tryVerify(() => find("setupZoneRegions").activeFocus)
+            tryVerify(() => find("setupZoneCity_Europe/London"))
+            wait(600)
+            grabImage(tc.shell).save(shotsDir + "/14-setup-timezone-region.png")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("setupZoneCities").activeFocus)
+            wait(300)
+            grabImage(tc.shell).save(shotsDir + "/15-setup-timezone-city.png")
+            keyClick(Qt.Key_Menu)
+            tryCompare(setup(), "step", 3)
+            goToStep(4)
             setup().adminName = "Owner"
             wait(600)
             grabImage(tc.shell).save(shotsDir + "/12-setup-admin.png")

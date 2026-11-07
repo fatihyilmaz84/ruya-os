@@ -4,7 +4,8 @@
 //! side in `networkmanager.rs` and the UPower side (controller batteries, `battery.rs`) in
 //! `upower.rs`; the BlueZ side (`bluetooth.rs`) in `bluez.rs`; the udisks2 side (drives and volumes,
 //! `storage.rs`) in `udisks.rs`; how full the console's own storage is (`sysusage.rs`) is read from
-//! `statvfs` and directory walks; the temperatures and fans (`thermal.rs`) from sysfs.
+//! `statvfs` and directory walks; the temperatures and fans (`thermal.rs`) from sysfs; the time zone
+//! (`time.rs`) is kept by systemd-timedated (`timedate.rs`).
 
 pub mod audio;
 pub mod battery;
@@ -24,6 +25,9 @@ pub mod storage;
 pub mod store;
 pub mod sysusage;
 pub mod thermal;
+pub mod time;
+#[cfg(target_os = "linux")]
+pub mod timedate;
 #[cfg(target_os = "linux")]
 pub mod udisks;
 #[cfg(target_os = "linux")]

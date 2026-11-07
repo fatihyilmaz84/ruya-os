@@ -8,7 +8,6 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | [T-201](tasks/T-201-recover-from-stuck-processes.md) | **[lead]** Recover from stuck processes (watchdogs, OOM) | todo | — |
 | [T-207](tasks/T-207-faster-bluetooth-controller-reconnect.md) | **[lead]** Faster Bluetooth controller reconnect | todo | — |
 | [T-210](tasks/T-210-profile-customisation.md) | Profile customisation: avatar, colour, name | todo | — |
-| [T-213](tasks/T-213-time-zone-setting.md) | Time zone in setup and Settings | in-progress | — |
 | [T-215](tasks/T-215-save-backup-and-keep-data.md) | **[lead]** Saves: back up/restore, keep on uninstall | todo | — |
 | [T-216](tasks/T-216-network-connection-options.md) | **[lead]** Network options: IP, DNS, proxy, hidden Wi-Fi | todo | — |
 | [T-217](tasks/T-217-controller-input-mapping.md) | **[lead]** Controller mapping (InputPlumber, B-006) | todo | — |

@@ -1282,7 +1282,7 @@
 <context>
     <name>Setup</name>
     <message>
-        <location filename="../qml/Setup.qml" line="+66"/>
+        <location filename="../qml/Setup.qml" line="+75"/>
         <source>Cancel</source>
         <translation>Cancel</translation>
     </message>
@@ -1297,12 +1297,13 @@
         <translation>Next</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+4"/>
+        <location line="+1"/>
         <source>Back</source>
         <translation>Back</translation>
     </message>
     <message>
-        <location line="+52"/>
+        <location line="+86"/>
         <source>Enter a name first.</source>
         <translation>Enter a name first.</translation>
     </message>
@@ -1312,7 +1313,7 @@
         <translation>Choose a PIN</translation>
     </message>
     <message>
-        <location line="+101"/>
+        <location line="+104"/>
         <source>Step %1 of %2</source>
         <translation>Step %1 of %2</translation>
     </message>
@@ -1345,30 +1346,31 @@
     </message>
     <message>
         <location line="+16"/>
-        <location line="+27"/>
+        <location line="+63"/>
         <location line="+79"/>
         <source>Press A to continue</source>
         <translation>Press A to continue</translation>
     </message>
     <message>
-        <location line="-273"/>
-        <location line="+181"/>
+        <location line="-309"/>
+        <location line="+217"/>
         <source>Network</source>
         <translation>Network</translation>
     </message>
     <message>
-        <location line="-278"/>
+        <location line="-353"/>
         <source>Try again</source>
         <translation>Try again</translation>
     </message>
     <message>
         <location line="+0"/>
         <location line="+1"/>
+        <location line="+7"/>
         <source>Skip</source>
         <translation>Skip</translation>
     </message>
     <message>
-        <location line="+94"/>
+        <location line="+126"/>
         <location line="+86"/>
         <source>Connect a controller</source>
         <translation>Connect a controller</translation>
@@ -1379,7 +1381,17 @@
         <translation>Press A to try again</translation>
     </message>
     <message>
-        <location line="+89"/>
+        <location line="+80"/>
+        <source>Where are you?</source>
+        <translation>Where are you?</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Choose your region, then your city, so the clock is right. You can change this later in Settings.</source>
+        <translation>Choose your region, then your city, so the clock is right. You can change this later in Settings.</translation>
+    </message>
+    <message>
+        <location line="+36"/>
         <source>Network setup comes later. A wired connection works without any setup.</source>
         <translation>Network setup comes later. A wired connection works without any setup.</translation>
     </message>
@@ -1419,8 +1431,8 @@
         <translation>Creating…</translation>
     </message>
     <message>
-        <location line="-235"/>
-        <location line="+261"/>
+        <location line="-271"/>
+        <location line="+297"/>
         <source>You&apos;re all set</source>
         <translation>You&apos;re all set</translation>
     </message>
@@ -1471,12 +1483,12 @@
         <translation>%1 %2 percent</translation>
     </message>
     <message>
-        <location line="+551"/>
+        <location line="+559"/>
         <source>Power</source>
         <translation>Power</translation>
     </message>
     <message>
-        <location line="-775"/>
+        <location line="-783"/>
         <source>Update ready. Restart to finish.</source>
         <translation>Update ready. Restart to finish.</translation>
     </message>
@@ -1496,7 +1508,7 @@
         <translation>Wallpaper could not be loaded</translation>
     </message>
     <message>
-        <location line="+265"/>
+        <location line="+262"/>
         <source>Continue playing</source>
         <translation>Continue playing</translation>
     </message>
@@ -1537,14 +1549,15 @@
         <translation>Starting %1…</translation>
     </message>
     <message>
-        <location line="+231"/>
-        <location line="+10"/>
+        <location line="+240"/>
+        <location line="+12"/>
         <location line="+3"/>
         <source>Select</source>
         <translation>Select</translation>
     </message>
     <message>
-        <location line="-5"/>
+        <location line="-19"/>
+        <location line="+14"/>
         <source>Cancel</source>
         <translation>Cancel</translation>
     </message>
@@ -1570,8 +1583,8 @@
         <translation>Switch profile</translation>
     </message>
     <message>
-        <location line="-109"/>
-        <location line="+111"/>
+        <location line="-111"/>
+        <location line="+113"/>
         <source>Close</source>
         <translation>Close</translation>
     </message>
@@ -1591,8 +1604,8 @@
         <translation>Power off</translation>
     </message>
     <message>
-        <location line="-117"/>
-        <location line="+118"/>
+        <location line="-119"/>
+        <location line="+120"/>
         <source>Back</source>
         <translation>Back</translation>
     </message>
@@ -1760,19 +1773,19 @@
 <context>
     <name>SystemPane</name>
     <message>
-        <location filename="../qml/SystemPane.qml" line="+129"/>
-        <location line="+220"/>
+        <location filename="../qml/SystemPane.qml" line="+133"/>
+        <location line="+270"/>
         <source>Beta</source>
         <translation>Beta</translation>
     </message>
     <message>
-        <location line="-220"/>
-        <location line="+219"/>
+        <location line="-270"/>
+        <location line="+269"/>
         <source>Stable</source>
         <translation>Stable</translation>
     </message>
     <message>
-        <location line="-214"/>
+        <location line="-264"/>
         <source>Last checked %1</source>
         <translation>Last checked %1</translation>
     </message>
@@ -1872,7 +1885,27 @@
         <translation>The update could not be started.</translation>
     </message>
     <message>
-        <location line="+103"/>
+        <location line="+31"/>
+        <source>Time zone</source>
+        <translation>Time zone</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>The clock has not been set from the internet yet, so the time may be wrong.</source>
+        <translation>The clock has not been set from the internet yet, so the time may be wrong.</translation>
+    </message>
+    <message>
+        <location line="+26"/>
+        <source>Time zone set to %1</source>
+        <translation>Time zone set to %1</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Could not change the time zone.</source>
+        <translation>Could not change the time zone.</translation>
+    </message>
+    <message>
+        <location line="+83"/>
         <source>Device health</source>
         <translation>Device health</translation>
     </message>
@@ -1882,13 +1915,14 @@
         <translation>No temperature sensors were found on this device.</translation>
     </message>
     <message>
-        <location line="-131"/>
+        <location line="-181"/>
         <location line="+8"/>
+        <location line="+70"/>
         <source>Only an admin can do this.</source>
         <translation>Only an admin can do this.</translation>
     </message>
     <message>
-        <location line="-184"/>
+        <location line="-254"/>
         <source>The console is warm. Nothing needs to be done.</source>
         <translation>The console is warm. Nothing needs to be done.</translation>
     </message>
@@ -1908,7 +1942,7 @@
         <translation>Language</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+66"/>
         <source>Updates</source>
         <translation>Updates</translation>
     </message>
@@ -2154,7 +2188,17 @@
 <context>
     <name>WallpaperPicker</name>
     <message>
-        <location filename="../qml/WallpaperPicker.qml" line="+48"/>
+        <location filename="../qml/WallpaperPicker.qml" line="+23"/>
+        <source>Select</source>
+        <translation>Select</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Cancel</source>
+        <translation>Cancel</translation>
+    </message>
+    <message>
+        <location line="+28"/>
         <source>Default (animated blobs)</source>
         <translation>Default (animated blobs)</translation>
     </message>
@@ -2263,6 +2307,107 @@
         <location line="+8"/>
         <source>Delete</source>
         <translation>Delete</translation>
+    </message>
+</context>
+<context>
+    <name>ZoneChooser</name>
+    <message>
+        <location filename="../qml/ZoneChooser.qml" line="+46"/>
+        <source>Africa</source>
+        <translation>Africa</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Americas</source>
+        <translation>Americas</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Antarctica</source>
+        <translation>Antarctica</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Arctic</source>
+        <translation>Arctic</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Asia</source>
+        <translation>Asia</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Atlantic Ocean</source>
+        <translation>Atlantic Ocean</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Australia</source>
+        <translation>Australia</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Europe</source>
+        <translation>Europe</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Indian Ocean</source>
+        <translation>Indian Ocean</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Pacific Ocean</source>
+        <translation>Pacific Ocean</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Other</source>
+        <translation>Other</translation>
+    </message>
+    <message>
+        <location line="+118"/>
+        <source>Loading time zones…</source>
+        <translation>Loading time zones…</translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <source>%1, current</source>
+        <translation>%1, current</translation>
+    </message>
+    <message>
+        <location line="+27"/>
+        <source>Current</source>
+        <translation>Current</translation>
+    </message>
+    <message>
+        <location line="+22"/>
+        <source>Region</source>
+        <translation>Region</translation>
+    </message>
+    <message>
+        <location line="+28"/>
+        <source>City</source>
+        <translation>City</translation>
+    </message>
+</context>
+<context>
+    <name>ZonePicker</name>
+    <message>
+        <location filename="../qml/ZonePicker.qml" line="+17"/>
+        <source>Select</source>
+        <translation>Select</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Cancel</source>
+        <translation>Cancel</translation>
+    </message>
+    <message>
+        <location line="+54"/>
+        <source>Time zone</source>
+        <translation>Time zone</translation>
     </message>
 </context>
 </TS>

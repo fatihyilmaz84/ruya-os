@@ -5,14 +5,18 @@ import RuyaShell
 // First-boot setup (spec 01 §5.2), shown instead of the profile picker while no profile exists.
 // Controller only: Accept (Return) continues, Back (Escape) goes to the previous step.
 //
-//   0 welcome -> 1 language -> 2 network (placeholder) -> 3 create the admin -> 4 done
+//   0 welcome -> 1 language -> 2 time zone -> 3 network (placeholder) -> 4 create the admin -> 5 done
 //
 // Before step 0, when the console has no keyboard or controller at all (Bluetooth.inputPresent
 // is false), comes the pairing stage (T-203): the controller pairing window is open and the
 // screen says to hold the pairing button. It ends when a controller pairs (the wizard goes on
 // to the welcome step), or with Back (skip). It is not one of the numbered steps.
 //
-// Step 3 collects a name (on-screen keyboard) and a PIN (PIN pad, entered twice), then calls
+// Step 2 (T-213) is "Where are you?": a region list and a city list (ZoneChooser), starting on a
+// zone that fits the language. Accept on a city asks Devices1.Time to set it (no admin is needed: no
+// profile exists yet) and goes on; Start skips the step and leaves the zone alone.
+//
+// Step 4 collects a name (on-screen keyboard) and a PIN (PIN pad, entered twice), then calls
 // Profiles.createProfile with no admin credentials (the first profile needs none). The Done
 // step is the only way out (finished()), so the picker never flashes between "profile created"
 // and "all set". The shell hosts this and leaves it on finished().
@@ -21,10 +25,15 @@ FocusScope {
 
     property real u: 1
 
-    readonly property int stepCount: 5
+    readonly property int stepCount: 6
+    // The steps, by number.
+    readonly property int stepZone: 2
+    readonly property int stepAdmin: 4
+    readonly property int stepDone: 5
     property int step: 0
     property string adminName: ""
     property string message: ""
+    property string zoneChoice: ""     // the city chosen in the time zone step ("" = none yet)
     property bool busy: false          // createProfile is in flight
     property bool created: false       // the admin exists; only Done is left
     // Once the account is being (or has been) created the shell must not drop setup, even
@@ -64,9 +73,11 @@ FocusScope {
                                      : [{ button: "B", text: qsTr("Skip") }]
         if (nameEntry.shown || pad.shown)
             return [{ button: "B", text: qsTr("Cancel") }]
-        const a = { button: "A", text: step === 3 ? qsTr("Select") : qsTr("Next") }
-        if (step === 0 || step === 4 || busy)
-            return step === 0 || step === 4 ? [a] : []
+        const a = { button: "A", text: step === stepAdmin || step === stepZone ? qsTr("Select") : qsTr("Next") }
+        if (step === 0 || step === stepDone || busy)
+            return step === 0 || step === stepDone ? [a] : []
+        if (step === stepZone)
+            return [a, { button: "B", text: qsTr("Back") }, { button: "Start", text: qsTr("Skip") }]
         return [a, { button: "B", text: qsTr("Back") }]
     }
 
@@ -75,6 +86,7 @@ FocusScope {
     function start() {
         step = 0
         adminName = ""
+        zoneChoice = ""
         message = ""
         busy = false
         created = false
@@ -87,12 +99,45 @@ FocusScope {
     }
 
     function focusStep() {
-        if (step === 1)
+        if (step === 1) {
             languageRow.forceActiveFocus()
-        else if (step === 3)
+        } else if (step === stepZone) {
+            enterZone()
+        } else if (step === stepAdmin) {
             (adminName.length > 0 ? createRow : nameRow).forceActiveFocus()
-        else
+        } else
             keySink.forceActiveFocus()
+    }
+
+    // The time zone step: begin on the choice made before, else on the zone the console already has
+    // (if it is not the factory UTC), else on one that fits the language.
+    function enterZone() {
+        const set = TimeZone.timezone
+        const fallback = set !== "UTC" ? set : TimeZone.defaultZoneFor(DeviceSettings.language)
+        zoneChooser.current = set
+        zoneChooser.start(zoneChoice.length > 0 ? zoneChoice : fallback)
+        zoneChooser.forceActiveFocus()
+    }
+
+    // ListTimezones can answer after the wizard reached the step: begin again, so the default for
+    // the language is not lost to the zone the console has now (UTC).
+    Connections {
+        target: TimeZone
+        function onTimezonesChanged() {
+            if (setup.step === setup.stepZone && setup.zoneChoice.length === 0 && TimeZone.timezones.length > 0)
+                setup.enterZone()
+        }
+    }
+
+    function chooseZone(zone) {
+        zoneChoice = zone
+        TimeZone.setTimezone(zone)      // the answer needs no waiting for: Settings can change it later
+        next()
+    }
+
+    function skipZone() {
+        Sfx.select()
+        next()
     }
 
     function next() {
@@ -108,7 +153,7 @@ FocusScope {
 
     function back() {
         Sfx.back()
-        if (step === 0 || step === 4 || busy)
+        if (step === 0 || step === stepDone || busy)
             return                      // nothing before the start; the account exists once Done shows
         step -= 1
         focusStep()
@@ -141,8 +186,11 @@ FocusScope {
             return
         }
         if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
-            if (step !== 3)
+            if (step !== stepAdmin && step !== stepZone)
                 next()
+        } else if (event.key === Qt.Key_Menu && step === stepZone) {
+            if (!event.isAutoRepeat)
+                skipZone()
         } else if (BackKey.isBackOrBackspace(event.key)) {
             back()
         }
@@ -154,10 +202,10 @@ FocusScope {
         id: keySink
         focus: true
         Accessible.role: Accessible.Pane
-        // Per step, so a screen reader says where the wizard is (steps 1 and 3 focus their own rows).
+        // Per step, so a screen reader says where the wizard is (steps 1, 2 and 4 focus their own controls).
         Accessible.name: setup.pairingStage ? qsTr("Connect a controller")
-                       : setup.step === 4 ? qsTr("You're all set")
-                       : setup.step === 2 ? qsTr("Network")
+                       : setup.step === setup.stepDone ? qsTr("You're all set")
+                       : setup.step === 3 ? qsTr("Network")
                        : qsTr("Welcome to RuyaOS")
     }
 
@@ -170,7 +218,7 @@ FocusScope {
             if (status === "ok") {
                 setup.created = true
                 setup.message = ""
-                setup.step = 4
+                setup.step = setup.stepDone
                 setup.focusStep()
             } else {
                 Sfx.back()
@@ -327,10 +375,46 @@ FocusScope {
         Pill { anchors.horizontalCenter: parent.horizontalCenter; label: qsTr("Press A to continue") }
     }
 
-    // ---- step 2: network (placeholder) ----
+    // ---- step 2: time zone ----
+    Column {
+        objectName: "setupZone"
+        visible: setup.step === setup.stepZone
+        anchors { top: parent.top; topMargin: 3 * Theme.spaceXxxl * setup.u; horizontalCenter: parent.horizontalCenter }
+        width: 1100 * setup.u
+        spacing: Theme.spaceM * setup.u
+        Text {
+            objectName: "setupZoneTitle"
+            width: parent.width
+            horizontalAlignment: Text.AlignHCenter
+            text: qsTr("Where are you?")
+            color: Theme.text
+            font.pixelSize: Theme.typeDisplay * setup.u
+            font.weight: Theme.weightLight
+        }
+        Text {
+            width: parent.width
+            horizontalAlignment: Text.AlignHCenter
+            wrapMode: Text.Wrap
+            text: qsTr("Choose your region, then your city, so the clock is right. You can change this later in Settings.")
+            color: Theme.text
+            font.pixelSize: Theme.typeBody * setup.u
+        }
+        ZoneChooser {
+            id: zoneChooser
+            objectName: "setupZoneChooser"
+            prefix: "setupZone"
+            anchors.horizontalCenter: parent.horizontalCenter
+            u: setup.u
+            visibleRows: 4
+            onChosen: zone => setup.chooseZone(zone)
+            onCancelled: setup.back()
+        }
+    }
+
+    // ---- step 3: network (placeholder) ----
     Column {
         objectName: "setupNetwork"
-        visible: setup.step === 2
+        visible: setup.step === 3
         anchors.centerIn: parent
         width: 1000 * setup.u
         spacing: Theme.spaceM * setup.u
@@ -354,10 +438,10 @@ FocusScope {
         Pill { anchors.horizontalCenter: parent.horizontalCenter; label: qsTr("Press A to continue") }
     }
 
-    // ---- step 3: create the admin ----
+    // ---- step 4: create the admin ----
     Column {
         objectName: "setupAdmin"
-        visible: setup.step === 3
+        visible: setup.step === setup.stepAdmin
         anchors.centerIn: parent
         width: 1000 * setup.u
         spacing: Theme.spaceM * setup.u
@@ -407,10 +491,10 @@ FocusScope {
         }
     }
 
-    // ---- step 4: done ----
+    // ---- step 5: done ----
     Column {
         objectName: "setupDone"
-        visible: setup.step === 4
+        visible: setup.step === setup.stepDone
         anchors.centerIn: parent
         width: 1000 * setup.u
         spacing: Theme.spaceM * setup.u

@@ -19,6 +19,9 @@ FocusScope {
     property string message: ""              // why the last copy failed (shown in the drive's grid)
     property bool awaitingCopy: false        // a copy asked for by this picker is running
 
+    // What the buttons do while it is open (Shell.modalHintsOf, the hint bar).
+    readonly property var modalHints: [{ button: "A", text: qsTr("Select") }, { button: "B", text: qsTr("Cancel") }]
+
     signal closed()
 
     readonly property int columns: 4

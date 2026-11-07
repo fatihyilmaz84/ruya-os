@@ -307,7 +307,7 @@ Item {
             }
         }
 
-        // Resets to a console without profiles and walks the wizard to step 3 (name and PIN).
+        // Resets to a console without profiles and walks the wizard to the name and PIN step.
         function startWizardAtNameStep() {
             Profiles.resetMockForTests("empty")
             tryVerify(() => Profiles.profiles.length === 0)
@@ -324,10 +324,16 @@ Item {
             checkFocused("setup language")
             keyClick(Qt.Key_Return)
             tryCompare(setup, "step", 2)
+            tryVerify(() => find("setupZoneRegions").activeFocus)
+            checkFocused("setup time zone")
+            compare(focused().objectName, "setupZoneRegion_Europe", "the current region row has focus")
+            compare(focused().Accessible.name, "Europe")
+            keyClick(Qt.Key_Menu)                      // Start skips the time zone
+            tryCompare(setup, "step", 3)
             checkFocused("setup network")
             compare(focused().Accessible.name, "Network")
             keyClick(Qt.Key_Return)
-            tryCompare(setup, "step", 3)
+            tryCompare(setup, "step", 4)
             tryVerify(() => find("setupNameRow").activeFocus)
             checkFocused("setup name")
             return setup
@@ -374,7 +380,7 @@ Item {
         function test_setup_wizard_steps() {
             const setup = startWizardAtNameStep()
             // The create flow (name, PIN) is test_setup_wizard_create_step; here the last step.
-            setup.step = 4
+            setup.step = setup.stepDone
             setup.focusStep()
             tryVerify(() => !find("setupNameRow").activeFocus && setup.activeFocus)
             checkFocused("setup done")
