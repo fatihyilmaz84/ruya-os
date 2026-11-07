@@ -1,6 +1,6 @@
 # T-190 — Settings panes: look-ahead survives relayout, Tab scrolls, peek text readable
 
-Status: in-progress · Phase: 2 · Depends: — · Area: shell · Size: S · Owner: builder
+Status: done · Phase: 2 · Depends: — · Area: shell · Size: S · Owner: builder
 
 ## Goal
 Three loose ends of the T-185 scroll cue: when rows are inserted or a message appears below the focused row the pane doesn't re-run look-ahead (the cue on that side disappears); Tab moves focus between rows without scrolling or updating the peek rows; and the dimmed peek text over a light backdrop blob has low contrast.

@@ -23,7 +23,6 @@ Open work only (the front of the board; the rest is in `STATUS-backlog.md`), in 
 
 | ID | Title | Status | Depends |
 |---|---|---|---|
-| [T-190](tasks/T-190-settings-pane-focus-follow-ups.md) | Settings panes: look-ahead, Tab, peek legibility | in-progress | — |
 | [T-194](tasks/T-194-confirm-buttons-name-the-action.md) | Confirm dialogs: the button says the action | todo | — |
 | [T-197](tasks/T-197-shell-crash-on-bluetooth-audio-disconnect.md) | **[lead]** Shell crash when a Bluetooth headset disconnects | in-progress | — |
 | [T-199](tasks/T-199-device-icons.md) | Device icons in the Bluetooth pane and toasts | todo | — |
@@ -56,6 +55,7 @@ One line each: `- (source) what, and why it matters`. Dispatched builders put th
 - (T-209, design, decide) Dark themes + bright wallpaper/hero art: glass text 0.9:1 over white (T-208's dim rule covers wallpapers only); avatar palette vs themes: blob overlap on bright tints gives glass text 2.5-2.8:1 and initials on orange/cyan/green avatars 2.2-2.9:1 (gate per theme or an initial token); gate rows for text on the bare Backdrop. Later: one shared FocusRing + 2 px halo; High-contrast as a sixth theme (its shot is the deferred criterion); `--theme` override for `shots`; per-profile themes. Canvas boards need a theme row (all five palettes, Daylight). Dell: cycle the five themes and watch the 700 ms cross-fade.
 - (T-208) Hardware/VM: real-stick copy and whether `ruya-shell` can read the `/run/media/...` mount, RSS and frame time with a 4K copy, banding on the panel; image: `qt6-qtimageformats` missing (no webp from a stick); `textFormat: Text.PlainText` shell-wide for names from outside (profile, device, volume labels); hint bar: modals that take Accept need "A Select"; the Dim row shows the slider, not the effective dim; PNG decode cost; `safeName` drops emoji (iterate code points); transparent PNGs are flattened on the theme at copy time; accent from wallpaper and per-profile wallpapers stay open. (T-209 review) `tst_themes` fade assertion was racy: now `tryVerify`.
 - (T-205) Dell: frame times with the glide and the liquid pill (nav ten times; wallpaper set and Home idle; app open; before/after the 30 s idle pause), then decide `Theme.liquidPill`'s default; design: should the liquid pill match the plain High pill's brightness exactly (`liquidBrightnessLift`)? Backdrop drift keeps running under an open app (older, B-003); other single-row selectors could use `FocusGlide`; the focus-ring halo.
+- (T-190 review) Tab on non-pane row lists (Power, Setup, filters, App detail) now does nothing (`activeFocusOnTab` dropped): decide Tab = Down there or record Tab as unmapped in 02 §4.2; the Bluetooth-discovery test passes without the fix (needs a pane height where the next row is out of view); `tst_theme_contrast` peek model assumes group opacity (Daylight slightly optimistic); 04 §7's general 4.5:1 bullet contradicts the large-text exceptions; peek rows over a wallpaper unmeasured; Store/Games peek still open.
 - (0.0.40) The VM and the Dell clock show UTC: T-213.
 
 ## Blocked (need something this host doesn't have)
