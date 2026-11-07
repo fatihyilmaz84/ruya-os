@@ -1,6 +1,6 @@
 # T-198 — Display: choose the resolution and refresh rate, and scale the UI to the screen (DPI)
 
-Status: todo · Phase: 2 · Depends: — · Area: api, services, shell, image · Size: M · Owner: builder
+Status: in-progress · Phase: 2 · Depends: — · Area: api, services, shell, image · Size: M · Owner: builder
 
 ## Goal
 Settings → Display lets the owner pick the resolution and refresh rate the TV or monitor supports, and the UI is sized right for the screen (a 1080p TV, a 4K TV, a 32" monitor) instead of one fixed size. Owner request, 2026-11-06. Today the pane has only effects quality, reduced motion and overscan; the shell is the compositor on KMS (Qt `eglfs_kms`), so there is no desktop tool that could do this.
