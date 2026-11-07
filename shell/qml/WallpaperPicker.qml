@@ -334,7 +334,7 @@ FocusScope {
                             anchors.fill: parent
                             radius: art.radius
                             gradient: Gradient {
-                                GradientStop { position: 0.0; color: Theme.backdropTop(Theme.defaultTint) }
+                                GradientStop { position: 0.0; color: Theme.backdropTop(Theme.blobTintA(Theme.defaultTint)) }
                                 GradientStop { position: 1.0; color: Theme.background }
                             }
                         }
@@ -345,8 +345,8 @@ FocusScope {
                             radius: width / 2
                             x: -width * 0.2
                             y: -height * 0.5
-                            color: Theme.defaultTint
-                            opacity: 0.55
+                            color: Theme.blobTintA(Theme.defaultTint)
+                            opacity: Theme.blobOpacityA
                         }
                         Image {
                             anchors.fill: parent

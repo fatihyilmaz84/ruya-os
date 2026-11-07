@@ -146,6 +146,7 @@ qt_add_qml_module(ruyashell
         qml/GlassRim.qml
         qml/GlassShadow.qml
         qml/GlassSheet.qml
+        qml/ModalLayer.qml
         qml/CardFocusLayers.qml
         qml/GlareGate.qml
         qml/Icon.qml

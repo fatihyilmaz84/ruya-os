@@ -43,9 +43,9 @@ Item {
     // The nearest ancestor that offers an L0 layer (the Shell's modal layer).
     function lookupSource() {
         for (let p = sheet.parent; p; p = p.parent) {
-            const s = p["glassSource"]
-            if (s)
-                return s
+            const layer = p as ModalLayer
+            if (layer)
+                return layer.glassSource
         }
         return null
     }

@@ -1004,13 +1004,12 @@ FocusScope {
 
     // Pages parent their modals (PinPad, TextEntry) here: full screen, above pages and toasts,
     // below the picker and the Guide overlay.
-    Item {
+    ModalLayer {
         id: modalLayer
         objectName: "modalLayer"
         anchors.fill: parent
         z: 15
-        // The layer the glass sheets of the picker modals blur (GlassSheet finds it here).
-        property Item glassSource: l0
+        glassSource: l0          // the layer the glass sheets of the picker modals blur
     }
 
     // "Keep this resolution?" (T-198): above the hint bar and every other modal.

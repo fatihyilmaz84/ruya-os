@@ -28,10 +28,10 @@ Item {
     // A modal layer as the Shell has it: it offers the L0 layer to the sheets below it.
     Component {
         id: layerComponent
-        Item {
+        ModalLayer {
             id: modalLayer
             width: 800; height: 480
-            property Item glassSource: Rectangle { parent: modalLayer; width: 800; height: 480; color: "#336699" }
+            glassSource: Rectangle { parent: modalLayer; width: 800; height: 480; color: "#336699" }
         }
     }
     Component { id: sourceComponent; Rectangle { width: 400; height: 80; color: "#336699" } }

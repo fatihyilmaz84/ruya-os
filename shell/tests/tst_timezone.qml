@@ -357,6 +357,12 @@ Item {
             tryCompare(find("zonePicker"), "opacity", 1, 10000, "the picker is shown")
             wait(300)
             grabImage(tc.shell).save(shotsDir + "/17-settings-timezone-picker.png")
+            // T-272: the glass sheet in Daylight (dark text on light glass).
+            DeviceSettings.theme = "daylight"
+            tryCompare(Theme, "mix", 1, 3000)
+            wait(500)
+            grabImage(tc.shell).save(shotsDir + "/17-settings-timezone-picker-daylight.png")
+            DeviceSettings.theme = "dreamglass"
         }
     }
 }

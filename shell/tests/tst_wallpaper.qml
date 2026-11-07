@@ -807,6 +807,10 @@ Item {
             keyClick(Qt.Key_Right)
             wait(900)
             grabImage(tc.shell).save(shotsDir + "/70-wallpaper-picker.png")
+            // On a GPU the sheet blurs L0 (found on the modal layer) and bakes it once for this opening.
+            const sheet = find("wallpaperPanel")
+            compare(sheet.blurred, true, "the sheet found L0 and draws the blur")
+            compare(sheet.bakeCount, 1, "captured once, not per frame")
             keyClick(Qt.Key_Down)
             keyClick(Qt.Key_Down)
             keyClick(Qt.Key_Down)
