@@ -41,6 +41,8 @@ A console left alone saves power and protects the screen, and wakes up instantly
 ## Outcome
 Verified: host (vm pending: `scripts/vm-power-saving-check.sh`; the Wayland idle-inhibit extension and the DPMS call are Linux-only code that was not compiled here)
 
+VM (lead, 0.0.53, 2026-11-08): `vm-power-saving-check.sh` service, audio, timeline PASS; the journal shows `ruya-shell: idle-inhibit manager advertised` (the Wayland extension runs), `display off (dpms)` with `DPMS was used (eglfs_kms)` on the virtual GPU; the wake by key was not injected. Still pending: Dell (DPMS wake time, DualSense), an app holding a Wayland inhibitor (mpv).
+
 **Built.** The shell's one idle clock, the saver, the dark screen, sleep, the inhibitors, the idle-controller rule and Settings -> Power saving. Specs: `01` §2.2 (timeline table, inhibitors), `02` §1.4a, `03` (service side), `dev-setup.md`.
 
 - **One idle clock** (`shell/qml/IdleClock.qml`, singleton): `KeyRouter.activity` -> `IdleClock.noteInput()`; `idleSeconds` (real time since input), `quietSeconds` (held-awake time counts as activity; the stage countdown runs on it), `stage` (`active` -> `saver` -> `off` -> `sleep`; it only deepens, and only input or a clock jump after sleep leaves it). One timer aimed at the next deadline, stopped while held awake. Every time comes from `secs()` and `RUYA_IDLE_DIVISOR` (`IdleInhibit.timeDivisor`). The update report, `LiquidGate`, toasts and `UsagePresence` now hear input from `IdleClock.inputNoted`. **`UsagePresence`'s own clock is gone**: it asks `IdleClock.sample()` (held-awake time counts as present, so a game or film with a Wayland idle-inhibitor keeps counting past 10 minutes of silence). `Update.noteActivity`'s 60 s throttle stays: it limits bus calls, it is not a clock.
