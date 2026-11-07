@@ -269,8 +269,8 @@ QtObject {
             const free = Storage.internal.freeBytes
             const total = Storage.internal.totalBytes
             const used = total - free
-            row("free", QT_TR_NOOP("Console storage free"),
-                en ? sizeText(free) + " of " + sizeText(total) : qsTr("%1 of %2").arg(sizeText(free)).arg(sizeText(total)),
+            row("free", QT_TR_NOOP("Console storage"),
+                en ? sizeText(free) + " free of " + sizeText(total) : qsTr("%1 free of %2").arg(sizeText(free)).arg(sizeText(total)),
                 { freeBytes: free, totalBytes: total }, { fraction: total > 0 ? Math.min(1, used / total) : undefined })
         }
 

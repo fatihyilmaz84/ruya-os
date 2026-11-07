@@ -1783,7 +1783,7 @@
         <translation>System information</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+18"/>
         <source>Saving the report…</source>
         <translation>Saving the report…</translation>
     </message>
@@ -1818,7 +1818,7 @@
         <translation>The report could not be saved.</translation>
     </message>
     <message>
-        <location line="+169"/>
+        <location line="+167"/>
         <source>Save report to USB drive</source>
         <translation>Save report to USB drive</translation>
     </message>
@@ -2131,13 +2131,13 @@
     </message>
     <message>
         <location line="+8"/>
-        <source>Console storage free</source>
-        <translation>Console storage free</translation>
+        <source>Console storage</source>
+        <translation>Console storage</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>%1 of %2</source>
-        <translation>%1 of %2</translation>
+        <source>%1 free of %2</source>
+        <translation>%1 free of %2</translation>
     </message>
     <message>
         <location line="+5"/>
@@ -2178,11 +2178,12 @@
     <message>
         <location line="+0"/>
         <location line="+36"/>
+        <location line="+8"/>
         <source>%1 %</source>
         <translation>%1 %</translation>
     </message>
     <message>
-        <location line="-34"/>
+        <location line="-42"/>
         <source>Not connected</source>
         <translation>Not connected</translation>
     </message>
@@ -2243,7 +2244,7 @@
         <translation>Controllers</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+15"/>
         <source>Connected</source>
         <translation>Connected</translation>
     </message>

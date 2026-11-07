@@ -1780,7 +1780,7 @@
         <translation>Sistem bilgisi</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+18"/>
         <source>Saving the report…</source>
         <translation>Rapor kaydediliyor…</translation>
     </message>
@@ -1815,7 +1815,7 @@
         <translation>Rapor kaydedilemedi.</translation>
     </message>
     <message>
-        <location line="+169"/>
+        <location line="+167"/>
         <source>Save report to USB drive</source>
         <translation>Raporu USB sürücüye kaydet</translation>
     </message>
@@ -2128,13 +2128,13 @@
     </message>
     <message>
         <location line="+8"/>
-        <source>Console storage free</source>
-        <translation>Konsol depolaması boş</translation>
+        <source>Console storage</source>
+        <translation>Konsol depolaması</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>%1 of %2</source>
-        <translation>%2 içinden %1</translation>
+        <source>%1 free of %2</source>
+        <translation>%2 içinde %1 boş</translation>
     </message>
     <message>
         <location line="+5"/>
@@ -2175,11 +2175,12 @@
     <message>
         <location line="+0"/>
         <location line="+36"/>
+        <location line="+8"/>
         <source>%1 %</source>
         <translation>%%1</translation>
     </message>
     <message>
-        <location line="-34"/>
+        <location line="-42"/>
         <source>Not connected</source>
         <translation>Bağlı değil</translation>
     </message>
@@ -2240,7 +2241,7 @@
         <translation>Kontrolcüler</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+15"/>
         <source>Connected</source>
         <translation>Bağlı</translation>
     </message>

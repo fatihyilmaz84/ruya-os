@@ -31,6 +31,8 @@ Page {
     // "idle" | "saving" | "ok" | "no-drive" | a failure status of Storage.SaveReport
     property string saveState: "idle"
     property string saveDrive: ""
+    // The message line comes and goes: lay the rows out again so the viewport ends on a whole row.
+    onSaveStateChanged: Qt.callLater(body.reflow)
 
     SystemInfoRows { id: sysRows }
 
@@ -91,27 +93,25 @@ Page {
     }
 
     // Makes the model equal to `desired()` with as few changes as possible: a live value changes
-    // nothing here (it is a binding), a row appearing or going away inserts or removes one.
+    // nothing here (it is a binding), a row going away is removed and a row appearing is inserted
+    // where it belongs. Never a move: a Repeater does not reorder its items on a move, and the
+    // order of the rows in the pane is the order in which the items were created.
     function syncRows() {
         const before = body.activeFocus ? body.focusableRows().findIndex(r => r.activeFocus) : -1
         const want = desired()
+        const wanted = {}
+        for (const w of want)
+            wanted[w.uid] = true
+        for (let i = rowModel.count - 1; i >= 0; --i) {
+            if (!wanted[rowModel.get(i).uid])
+                rowModel.remove(i)
+        }
+        // What is left is in the right relative order (the sections and their rows have a fixed order).
         for (let i = 0; i < want.length; ++i) {
-            if (i < rowModel.count && rowModel.get(i).uid === want[i].uid)
-                continue
-            let at = -1
-            for (let j = i + 1; j < rowModel.count; ++j) {
-                if (rowModel.get(j).uid === want[i].uid) {
-                    at = j
-                    break
-                }
-            }
-            if (at >= 0)
-                rowModel.move(at, i, 1)
-            else
+            if (i >= rowModel.count || rowModel.get(i).uid !== want[i].uid)
                 rowModel.insert(i, want[i])
         }
-        while (rowModel.count > want.length)
-            rowModel.remove(rowModel.count - 1)
+        body.reflow()
         Qt.callLater(page.refocus, before)
     }
 

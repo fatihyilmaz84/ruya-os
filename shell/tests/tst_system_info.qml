@@ -143,6 +143,18 @@ Item {
 
         // ---- sections and rows
 
+        // The viewport shows every whole row that fits, from the first (the pane sizes it from the
+        // rows it has, and rows arrive after the page opens).
+        function test_the_page_opens_showing_all_the_rows_that_fit() {
+            openSystemInfo()
+            const body = find("sysBody")
+            tryVerify(() => body.viewport.height > 3 * find("sysSave").height, 2000, "more than the first rows are shown")
+            const rows = infoRows()
+            verify(rows.length > 10)
+            const first = rows[0]
+            verify(body.viewport.height >= body.height - 2 * first.height, "the viewport fills the pane to its last whole row")
+        }
+
         function test_the_dell_has_its_sections_and_rows() {
             openSystemInfo()
             for (const id of ["console", "cpu", "memory", "graphics", "storage", "network", "bluetooth", "audio", "controllers"])
@@ -163,7 +175,7 @@ Item {
             compare(row("graphics/connector").value, "HDMI-A-1")
             compare(row("graphics/effects").value, "High", "the effects tier is the shell's own setting")
             compare(row("storage/drive0").value, "Samsung SSD 870 · SSD · " + Storage.formatBytes(500107862016))
-            compare(row("storage/free").value, Storage.formatBytes(450000000000) + " of " + Storage.formatBytes(464000000000),
+            compare(row("storage/free").value, Storage.formatBytes(450000000000) + " free of " + Storage.formatBytes(464000000000),
                     "the free space is Storage's (T-196) number")
             compare(row("network/connection").value, "Wired")
             compare(row("network/link").value, "1000 Mb/s")
@@ -425,6 +437,8 @@ Item {
             plugStick()
             openSystemInfo()
             wait(800)
+            // In a real window the rows must be laid out and shown (a Column left unlaid showed one row).
+            verify(find("sysBody").viewport.height > 3 * find("sysSave").height, "the page shows more than its first row")
             grabImage(tc.shell).save(shotsDir + "/30-system-info-top.png")
             goToRow("memory/used")
             wait(800)
@@ -434,7 +448,9 @@ Item {
             grabImage(tc.shell).save(shotsDir + "/30-system-info-storage.png")
             keyClick(Qt.Key_Escape)
             tryCompare(tc.shell, "currentPage", "settings")
+            tryVerify(() => find("page_systemInfo") === null, 3000, "the closed page is gone")
             SystemDetails.mockProfile("nvidia")
+            tryVerify(() => find("aboutSystemInfo").activeFocus, 2000)
             keyClick(Qt.Key_Return)
             tryCompare(tc.shell, "currentPage", "systemInfo")
             goToRow("graphics/nvidia")
@@ -442,8 +458,11 @@ Item {
             grabImage(tc.shell).save(shotsDir + "/30-system-info-nvidia.png")
             keyClick(Qt.Key_Escape)
             tryCompare(tc.shell, "currentPage", "settings")
+            tryVerify(() => find("page_systemInfo") === null, 3000, "the closed page is gone")
+            tryVerify(() => find("aboutSystemInfo").activeFocus, 2000)
             keyClick(Qt.Key_Return)
             tryCompare(tc.shell, "currentPage", "systemInfo")
+            tryVerify(() => find("sysSave").activeFocus, 2000)
             keyClick(Qt.Key_Return)
             tryVerify(() => find("sysSaveMessage").text.startsWith("Saved "), 2000)
             wait(800)
