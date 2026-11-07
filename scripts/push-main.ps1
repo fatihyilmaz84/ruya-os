@@ -30,3 +30,5 @@ if ($LASTEXITCODE -ne 0) { Stop-Push "scan-secrets.ps1 failed" }
 & $git push origin main
 if ($LASTEXITCODE -ne 0) { Stop-Push "git push was rejected (someone else pushed, or history diverged): don't force; tell the owner" }
 Write-Host "pushed: $(& $git log --oneline -1 origin/main)" -ForegroundColor Green
+# What dev.ps1 test cannot see (red CI on 2026-11-07: clippy 1.92 casts, Fedora qmllint property-override).
+Write-Host "CI is NOT verified here: it runs Rust 1.92 clippy on Linux and Fedora's Qt (qmllint --max-warnings 0, the .qsb shaders). Ask the owner for the Actions result; gh is not installed on this host." -ForegroundColor Yellow

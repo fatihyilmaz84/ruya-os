@@ -44,17 +44,17 @@ Row {
     readonly property var device: Batteries.devices.find(d => d.id === chip.deviceId) ?? ({})
     readonly property string deviceName: chip.device.name ?? ""
     readonly property int percent: chip.device.percent ?? 0
-    readonly property string state: chip.device.state ?? "unknown"
+    readonly property string chargeState: chip.device.state ?? "unknown"
     readonly property bool low: chip.device.low ?? false
     readonly property string kindIcon: kindIconFor(chip.device.kind ?? "")
-    readonly property string levelIcon: levelIconFor(percent, state, low)
+    readonly property string levelIcon: levelIconFor(percent, chargeState, low)
     readonly property color tone: low ? Theme.warningText : Theme.text
 
     spacing: Theme.spaceXs * chip.u
 
     Accessible.role: Accessible.StaticText
     Accessible.name: low ? qsTr("%1 battery %2 percent, low").arg(deviceName).arg(percent)
-                   : state === "charging" ? qsTr("%1 battery %2 percent, charging").arg(deviceName).arg(percent)
+                   : chargeState === "charging" ? qsTr("%1 battery %2 percent, charging").arg(deviceName).arg(percent)
                    : qsTr("%1 battery %2 percent").arg(deviceName).arg(percent)
 
     Icon {

@@ -26,6 +26,8 @@ jobs:
         run: pwsh -NoProfile -File scripts/lint-text.ps1
       - name: Token lint
         run: pwsh -NoProfile -File scripts/lint-tokens.ps1
+      - name: QML member lint
+        run: pwsh -NoProfile -File scripts/lint-qml-members.ps1
       - name: Icon lint
         run: pwsh -NoProfile -File scripts/lint-icons.ps1
       - uses: actions/setup-python@v5

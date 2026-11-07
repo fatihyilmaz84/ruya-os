@@ -187,6 +187,16 @@ function Test-Tokens {
     & (Join-Path $PSScriptRoot "lint-tokens.ps1")
     Record "token lint" ($LASTEXITCODE -eq 0)
 
+    Step "QML member lint (no property redeclares a QQuickItem member: CI's Fedora qmllint rejects it)"
+    & (Join-Path $PSScriptRoot "lint-qml-members.ps1")
+    Record "QML member lint" ($LASTEXITCODE -eq 0)
+    $memberFix = Join-Path ([IO.Path]::GetTempPath()) ("ruya-lint-members-" + [guid]::NewGuid().ToString("N"))
+    New-Item -ItemType Directory -Force (Join-Path $memberFix "qml") | Out-Null
+    [IO.File]::WriteAllText((Join-Path $memberFix "qml\Bad.qml"), "import QtQuick`nItem {`n    readonly property string state: `"x`"`n}`n")
+    & (Join-Path $PSScriptRoot "lint-qml-members.ps1") -QmlDir $memberFix 6>&1 | Out-Null
+    Record "QML member lint self-check (rejects a redeclared state)" ($LASTEXITCODE -ne 0)
+    Remove-Item -Recurse -Force $memberFix -ErrorAction SilentlyContinue
+
     # Self-check: the lint must reject a literal font size.
     $fixture = Join-Path ([IO.Path]::GetTempPath()) ("ruya-lint-" + [guid]::NewGuid().ToString("N"))
     New-Item -ItemType Directory -Path $fixture | Out-Null
