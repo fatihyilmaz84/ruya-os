@@ -44,6 +44,7 @@ struct Manifest
     QString licence;
     QString version;
     QMap<QString, QString> cues;   // cue name -> absolute file path; only known cue names
+    QMap<QString, qint64> cueMs;   // cue name -> length in ms
     bool hasAmbient = false;
     Ambient ambient;
 };
@@ -68,5 +69,11 @@ struct FixtureCase
 };
 QList<FixtureCase> fixtureCases();
 bool writeFixtures(const QString &root);
+
+// Hostile-file test: valid WAV, Ogg and FLAC files with their first 128 bytes cut, corrupted and their 4-byte
+// fields set to 0, 1, 0x7fffffff, 0x80000000 and 0xfffffff8, each checked in a worker thread. True when every
+// file got a verdict within `timeoutMs` in total; otherwise `problem` says why (a hung checker is abandoned).
+// `cases` is the number of files tried.
+bool fuzz(QString *problem, int *cases, int timeoutMs = 60000);
 
 } // namespace SoundTheme

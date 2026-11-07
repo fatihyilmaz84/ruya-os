@@ -76,31 +76,32 @@ QtObject {
     property int toggleOnCount: 0
     property int toggleOffCount: 0
 
-    function navigate() { navigateCount++; fire(navigateEffect, 0) }
-    function select() { selectCount++; fire(selectEffect, 0) }
-    function back() { backCount++; fire(backEffect, 0) }
-    function error() { errorCount++; fire(errorEffect, 0) }
-    function notification() { notificationCount++; fire(notificationEffect, 0) }
-    function warning() { warningCount++; fire(warningEffect, 0) }
-    function open() { openCount++; fire(openEffect, 0) }
-    function close() { closeCount++; fire(closeEffect, 0) }
-    function page() { pageCount++; fire(pageEffect, 0) }
-    function volume() { volumeCount++; fire(volumeEffect, 0) }
-    function startup() { startupCount++; fire(startupEffect, SoundThemes.duckMs * 3) }
-    function toggleOn() { toggleOnCount++; fire(toggleOnEffect, 0) }
-    function toggleOff() { toggleOffCount++; fire(toggleOffEffect, 0) }
+    function navigate() { navigateCount++; fire(navigateEffect, "navigate") }
+    function select() { selectCount++; fire(selectEffect, "select") }
+    function back() { backCount++; fire(backEffect, "back") }
+    function error() { errorCount++; fire(errorEffect, "error") }
+    function notification() { notificationCount++; fire(notificationEffect, "notification") }
+    function warning() { warningCount++; fire(warningEffect, "warning") }
+    function open() { openCount++; fire(openEffect, "open") }
+    function close() { closeCount++; fire(closeEffect, "close") }
+    function page() { pageCount++; fire(pageEffect, "page") }
+    function volume() { volumeCount++; fire(volumeEffect, "volume") }
+    function startup() { startupCount++; fire(startupEffect, "startup") }
+    function toggleOn() { toggleOnCount++; fire(toggleOnEffect, "toggle-on") }
+    function toggleOff() { toggleOffCount++; fire(toggleOffEffect, "toggle-off") }
     // A switch changed: the cue says which way.
     function toggled(checked) { if (checked) toggleOn(); else toggleOff() }
 
     // Plays one cue unless the console is dark or the channel is at 0 (nothing to hear, nothing to duck).
-    function fire(effect, holdMs) {
+    // The bed stays lowered for the cue's own length (the checker measured it), at least SoundThemes.duckMs.
+    function fire(effect, cue) {
         if (quiet || gain <= 0)
             return
         effect.play()
         playedCount++
         duckCount++
         ducking = true
-        duckTimer.interval = Math.max(SoundThemes.duckMs, holdMs)
+        duckTimer.interval = Math.max(SoundThemes.duckMs, SoundThemes.cueMs[cue] ?? 0)
         duckTimer.restart()
     }
 

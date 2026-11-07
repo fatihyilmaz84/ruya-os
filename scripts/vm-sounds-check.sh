@@ -10,7 +10,7 @@
 # scripts/vm-audio-check.sh) the owner listens to the cues and to the ambient loop; that is the
 # listening criterion of T-227 and stays with the owner.
 # Boot with plain smoke-test.ps1 -Keep, then:
-#   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-sounds-check.sh root@127.0.0.1:/root/
+#   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-sounds-check.sh scripts/vm-sounds-probe.qml root@127.0.0.1:/root/
 #   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-sounds-check.sh
 set -u
 dir=/usr/share/ruyaos/sounds/dreamglass
@@ -57,6 +57,22 @@ if journalctl -b -u 'ruya-compositor@*' -u ruya-shell --no-pager 2>/dev/null | g
     bad "the shell logged a sound theme problem"
 else
     ok "no sound theme complaint in the journal"
+fi
+
+# The image's own Qt Multimedia plays the ambient loop (FLAC): the probe loads it at volume 0 as the shell's user.
+# scp scripts/vm-sounds-probe.qml to /root/ together with this script.
+if [ -f /root/vm-sounds-probe.qml ]; then
+    work=$(mktemp -d); cp /root/vm-sounds-probe.qml "$work/probe.qml"; chmod 755 "$work"; chmod 644 "$work/probe.qml"
+    runuser -u ruya-shell -- env QT_QPA_PLATFORM=offscreen timeout 30 "$shell" --load "$work/probe.qml" > "$work/probe.log" 2>&1
+    last=$(grep -a "sounds-probe:" "$work/probe.log" | tail -1)
+    echo "    $last"
+    echo "$last" | grep -q "loaded=true" && ok "Qt Multimedia loaded ambient.flac (LoadedMedia)" || bad "the ambient file did not load under the image's Qt: $(grep -a -i 'error\|fail' "$work/probe.log" | head -2)"
+    dur=$(echo "$last" | sed -n 's/.*duration=\([0-9]*\).*/\1/p')
+    [ -n "$dur" ] && [ "$dur" -ge 74000 ] && [ "$dur" -le 77000 ] && ok "duration $dur ms (about 75 s)" || bad "duration '$dur' ms"
+    echo "$last" | grep -q "playing=true" && ok "PlayingState reached" || bad "PlayingState not reached (is there an audio device? the VM needs -Audio or a null sink)"
+    rm -rf "$work"
+else
+    echo "SKIP: /root/vm-sounds-probe.qml not copied, no playback probe"
 fi
 
 [ -s /usr/share/licenses/ruyaos/LICENSE-Sounds.txt ] && ok "licence notice installed" || bad "no LICENSE-Sounds.txt"

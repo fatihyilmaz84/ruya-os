@@ -10,9 +10,10 @@ import RuyaShell
 //  - It fades out over `SoundThemes.ambientFadeMs` (800 ms) when `wanted` goes false and in again on
 //    return; once the fade has finished the players are paused, so nothing is decoded while an app is
 //    in front. Reduced motion does not shorten it: this is sound, not motion.
-//  - It is lowered by `SoundThemes.duckGain` (-8 dB) while a UI cue sounds (`Sfx.ducking`).
+//  - It is lowered by `SoundThemes.duckGain` (-8 dB) while a UI cue sounds (`Sfx.ducking`). All the timing here
+//    (fade, ramp, cross-fade, poll) is a constant of SoundThemes (04 3.9).
 //  - The loop is two players that take turns: the second one starts at the loop start
-//    `crossMs` before the first reaches the loop end, and the two are cross-faded, so the join never
+//    `SoundThemes.crossMs` before the first reaches the loop end, and the two are cross-faded, so the join never
 //    clicks, whatever the codec does at the end of a file. A theme's loop is a whole number of cycles
 //    (docs/developers/sound-themes.md), so the two copies agree in phase.
 //
@@ -36,11 +37,9 @@ Item {
     readonly property bool ducked: Sfx.ducking
     // 1, or the duck gain: it follows quickly (a cue is short).
     property real duck: ducked ? SoundThemes.duckGain : 1
-    Behavior on duck { NumberAnimation { duration: 120; easing.type: Easing.OutQuad } }   // token-ok: audio ramp, not motion
+    Behavior on duck { NumberAnimation { duration: SoundThemes.duckRampMs; easing.type: Easing.OutQuad } }
     // What the players are set to.
     readonly property real outputVolume: fade * level * SoundThemes.ambientGain * duck
-    // The cross-fade between the two players at the loop seam.
-    readonly property int crossMs: 1500
     // Which player sounds now: 0 or 1; `blend` goes 0 -> 1 while the other one comes in.
     property int current: 0
     property real blend: 0
@@ -115,15 +114,15 @@ Item {
         }
     }
 
-    // Watches the position of the player that sounds and starts the next one `crossMs` before the loop end.
+    // Watches the position of the player that sounds and starts the next one `SoundThemes.crossMs` before the loop end.
     Timer {
         id: watch
-        interval: 50                 // token-ok: polling the player, not motion
+        interval: SoundThemes.loopPollMs
         repeat: true
         running: bed.playing && !SoundThemes.dry
         onTriggered: {
             const now = bed.player(bed.current)
-            if (bed.blend === 0 && now.position >= SoundThemes.ambientLoopEnd - bed.crossMs && now.playbackState === MediaPlayer.PlayingState)
+            if (bed.blend === 0 && now.position >= SoundThemes.ambientLoopEnd - SoundThemes.crossMs && now.playbackState === MediaPlayer.PlayingState)
                 bed.beginCross()
         }
     }
@@ -139,7 +138,7 @@ Item {
         property: "blend"
         from: 0
         to: 1
-        duration: bed.crossMs
+        duration: SoundThemes.crossMs
         onFinished: {
             const old = bed.player(bed.current)
             old.pause()

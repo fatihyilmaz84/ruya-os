@@ -498,14 +498,14 @@ Bu geri alınamaz.</translation>
 <context>
     <name>AudioPane</name>
     <message>
-        <location filename="../qml/AudioPane.qml" line="+90"/>
+        <location filename="../qml/AudioPane.qml" line="+109"/>
         <source>Sound theme: %1</source>
         <translation>Ses teması: %1</translation>
     </message>
     <message>
         <location line="+2"/>
-        <source>Too many sound themes are saved on this console.</source>
-        <translation>Bu konsolda çok fazla ses teması kayıtlı.</translation>
+        <source>The console keeps up to %1 sound themes. Copy over one with the same name to replace it.</source>
+        <translation>Konsol en fazla %1 ses teması tutar. Aynı adlı bir temanın üzerine kopyalayarak değiştirebilirsiniz.</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -558,7 +558,7 @@ Bu geri alınamaz.</translation>
         <translation>Ses teması</translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+16"/>
         <source>Use “%1” from the USB drive</source>
         <translation>USB sürücüsündeki “%1” temasını kullan</translation>
     </message>

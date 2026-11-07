@@ -52,7 +52,12 @@ class SoundThemes : public QObject
     Q_PROPERTY(QString importState READ importState NOTIFY importStateChanged)
     // Ambient timing (02 §5): the fade in and out, and how far a cue lowers the ambient bed.
     Q_PROPERTY(int ambientFadeMs READ ambientFadeMs CONSTANT)
-    Q_PROPERTY(int duckMs READ duckMs CONSTANT)
+    Q_PROPERTY(int duckMs READ duckMs CONSTANT)               // the shortest hold of the duck after a cue
+    Q_PROPERTY(int duckRampMs READ duckRampMs CONSTANT)       // the bed's level follows the duck over this
+    Q_PROPERTY(int crossMs READ crossMs CONSTANT)             // the ambient loop's cross-fade at its end
+    Q_PROPERTY(int loopPollMs READ loopPollMs CONSTANT)       // how often the loop's position is looked at
+    // cue name -> length in ms (from the checker), for the cues in `cues`: the duck is held that long.
+    Q_PROPERTY(QVariantMap cueMs READ cueLengths NOTIFY activeChanged)
     Q_PROPERTY(qreal duckGain READ duckGain CONSTANT)
     Q_PROPERTY(int installedLimit READ installedLimit CONSTANT)
     // RUYA_SOUNDS_DRY=1 (tests): the ambient players are given no file, so a test run makes no noise.
@@ -61,7 +66,10 @@ class SoundThemes : public QObject
 
 public:
     static constexpr int AmbientFadeMs = 800;
-    static constexpr int DuckMs = 450;              // how long the bed stays lowered after a cue starts
+    static constexpr int DuckMs = 450;              // the shortest time the bed stays lowered after a cue starts
+    static constexpr int DuckRampMs = 120;
+    static constexpr int CrossMs = 1500;
+    static constexpr int LoopPollMs = 50;
     static constexpr double DuckDb = -8.0;
     static constexpr int InstalledLimit = 8;
     static constexpr int MaxDriveFolders = 16;      // folders looked at per drive
@@ -86,6 +94,10 @@ public:
     QString importState() const { return m_importing ? QStringLiteral("copying") : QStringLiteral("idle"); }
     int ambientFadeMs() const { return AmbientFadeMs; }
     int duckMs() const { return DuckMs; }
+    int duckRampMs() const { return DuckRampMs; }
+    int crossMs() const { return CrossMs; }
+    int loopPollMs() const { return LoopPollMs; }
+    QVariantMap cueLengths() const { return m_cueMs; }
     qreal duckGain() const;
     int installedLimit() const { return InstalledLimit; }
     bool isMock() const { return m_mock; }
@@ -106,6 +118,8 @@ public:
     // directory that lives as long as this object; the path, or "" on failure.
     Q_INVOKABLE QString fixturesDir();
     Q_INVOKABLE static QVariantList fixtureCases();
+    // The hostile-file test of SoundTheme::fuzz: { ok, cases, problem }. Takes a few seconds; bounded by `timeoutMs`.
+    Q_INVOKABLE static QVariantMap fuzz(int timeoutMs = 60000);
 
     // Tests only, with the mock backend (otherwise no-ops). mockPrepareDrive writes a stick tree
     // (RuyaOS/sounds/Glassy: usable, Plain: usable, Broken: refused) and makes the mock stick's mount
@@ -141,6 +155,7 @@ private:
     bool m_broken = false;
     SoundTheme::Manifest m_active;
     QVariantMap m_cues;
+    QVariantMap m_cueMs;
     QString m_ambientUrl;
     int m_loopStart = 0;
     int m_loopEnd = 0;

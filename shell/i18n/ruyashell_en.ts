@@ -500,14 +500,14 @@ This can&apos;t be undone.</translation>
 <context>
     <name>AudioPane</name>
     <message>
-        <location filename="../qml/AudioPane.qml" line="+90"/>
+        <location filename="../qml/AudioPane.qml" line="+109"/>
         <source>Sound theme: %1</source>
         <translation>Sound theme: %1</translation>
     </message>
     <message>
         <location line="+2"/>
-        <source>Too many sound themes are saved on this console.</source>
-        <translation>Too many sound themes are saved on this console.</translation>
+        <source>The console keeps up to %1 sound themes. Copy over one with the same name to replace it.</source>
+        <translation>The console keeps up to %1 sound themes. Copy over one with the same name to replace it.</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -560,7 +560,7 @@ This can&apos;t be undone.</translation>
         <translation>Sound theme</translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+16"/>
         <source>Use “%1” from the USB drive</source>
         <translation>Use “%1” from the USB drive</translation>
     </message>

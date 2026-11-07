@@ -48,6 +48,11 @@ static int runSoundThemeCheck(int argc, char *argv[])
                         matched || r.problems.isEmpty() ? "" : qPrintable(QStringLiteral(": ") + r.problems.join(QStringLiteral("; "))));
             failures += matched ? 0 : 1;
         }
+        QString problem;
+        int cases = 0;
+        const bool fuzzOk = SoundTheme::fuzz(&problem, &cases);
+        std::printf("%s fuzz: %d hostile files, %s\n", fuzzOk ? "ok  " : "FAIL", cases, qPrintable(fuzzOk ? QStringLiteral("every one got a verdict") : problem));
+        failures += fuzzOk ? 0 : 1;
         return failures ? 1 : 0;
     }
     for (const QString &folder : args.mid(1)) {

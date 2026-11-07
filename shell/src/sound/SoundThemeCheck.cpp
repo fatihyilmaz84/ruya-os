@@ -7,9 +7,12 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QRegularExpression>
+#include <QTemporaryDir>
+#include <QThread>
 #include <QtMath>
 
 #include <cstdlib>
+#include <memory>
 
 namespace SoundTheme {
 
@@ -103,22 +106,28 @@ bool parseWav(const QByteArray &data, Audio *out, QString *why)
         *why = QStringLiteral("not a WAV file");
         return false;
     }
-    int at = 12;
+    // Offsets are qint64 and every chunk must lie inside the file before it is looked at: a hostile
+    // size (0xFFFFFFF8, 0x80000000) must end in a refusal, never in a loop or an out-of-range read.
+    qint64 at = 12;
     int channels = 0, rate = 0, bits = 0, format = 0;
     bool haveFmt = false;
     while (at + 8 <= data.size()) {
-        const QByteArray id = data.mid(at, 4);
-        const qint64 size = le32(data, at + 4);
-        const int body = at + 8;
+        const QByteArray id = data.mid(int(at), 4);
+        const qint64 size = qint64(le32(data, int(at) + 4));
+        const qint64 body = at + 8;
+        if (size > data.size() - body) {
+            *why = QStringLiteral("a chunk is cut short");
+            return false;
+        }
         if (id == "fmt ") {
-            if (size < 16 || body + 16 > data.size()) {
+            if (size < 16) {
                 *why = QStringLiteral("the fmt chunk is cut short");
                 return false;
             }
-            format = le16(data, body);
-            channels = le16(data, body + 2);
-            rate = int(le32(data, body + 4));
-            bits = le16(data, body + 14);
+            format = le16(data, int(body));
+            channels = le16(data, int(body) + 2);
+            rate = int(qMin<quint32>(le32(data, int(body) + 4), 1000000));
+            bits = le16(data, int(body) + 14);
             haveFmt = true;
         } else if (id == "data") {
             if (!haveFmt) {
@@ -137,12 +146,11 @@ bool parseWav(const QByteArray &data, Audio *out, QString *why)
                 *why = QStringLiteral("sample rate %1 Hz (48000 Hz)").arg(rate);
                 return false;
             }
-            const qint64 available = data.size() - body;
-            if (size > available) {
-                *why = QStringLiteral("the data chunk is cut short");
+            const int frames = int(size / (2 * channels));
+            if (frames <= 0) {
+                *why = QStringLiteral("no audio data");
                 return false;
             }
-            const int frames = int(size / (2 * channels));
             int peak = 0;
             const char *p = data.constData() + body;
             for (int i = 0; i < frames * channels; ++i) {
@@ -155,7 +163,7 @@ bool parseWav(const QByteArray &data, Audio *out, QString *why)
             out->peak = peak / 32768.0;
             return true;
         }
-        at = body + int(size + (size & 1));
+        at = body + size + (size & 1);      // never moves back: size is >= 0 and inside the file
     }
     *why = QStringLiteral("no audio data");
     return false;
@@ -205,7 +213,7 @@ bool parseOgg(const QByteArray &head, const QByteArray &tail, Audio *out, QStrin
             return false;
         }
         channels = quint8(head[packet + 11]);
-        rate = int(le32(head, packet + 12));
+        rate = int(qMin<quint32>(le32(head, packet + 12), 1000000));
     } else if (head.mid(packet, 8) == "OpusHead") {
         channels = quint8(head[packet + 9]);
         skip = le16(head, packet + 10);
@@ -220,8 +228,10 @@ bool parseOgg(const QByteArray &head, const QByteArray &tail, Audio *out, QStrin
         return false;
     }
     const qint64 granule = le64(tail, last + 6);
-    if (granule <= 0 || rate <= 0) {
-        *why = QStringLiteral("the Ogg stream has no length");
+    // A day of audio is far more than any theme may hold; anything bigger (or negative) is a damaged
+    // header, and this also keeps the arithmetic below inside 64 bits.
+    if (granule <= skip || rate <= 0 || granule > qint64(rate) * 86400) {
+        *why = QStringLiteral("the Ogg stream has no usable length");
         return false;
     }
     out->rate = rate;
@@ -281,7 +291,12 @@ Result check(const QString &dir)
         return r;
     }
     QJsonParseError parseError;
-    const QJsonDocument doc = QJsonDocument::fromJson(manifestFile.readAll(), &parseError);
+    const QByteArray manifestBytes = manifestFile.read(MaxManifestBytes + 1);       // never more than the limit, whatever the size said
+    if (manifestBytes.size() > MaxManifestBytes) {
+        fail(QStringLiteral("theme.json is larger than %1").arg(kib(MaxManifestBytes)));
+        return r;
+    }
+    const QJsonDocument doc = QJsonDocument::fromJson(manifestBytes, &parseError);
     if (parseError.error != QJsonParseError::NoError || !doc.isObject()) {
         fail(QStringLiteral("theme.json is not a JSON object"));
         return r;
@@ -353,7 +368,12 @@ Result check(const QString &dir)
                 continue;
             }
             Audio audio;
-            if (!parseWav(file.read(MaxCueBytes + 1), &audio, &why)) {
+            const QByteArray wav = file.read(MaxCueBytes + 1);
+            if (wav.size() > MaxCueBytes) {
+                fail(label + QStringLiteral("the file is larger than %1").arg(kib(MaxCueBytes)));
+                continue;
+            }
+            if (!parseWav(wav, &audio, &why)) {
                 fail(label + why);
                 continue;
             }
@@ -366,6 +386,7 @@ Result check(const QString &dir)
                 continue;
             }
             m.cues.insert(cue, path);
+            m.cueMs.insert(cue, audio.durationMs);
         }
     }
 
@@ -499,6 +520,16 @@ QByteArray makeWav(int ms, int rate, int channels, double amplitude)
     return b + data;
 }
 
+// A valid WAV with one more chunk (id, a declared size that need not be true, a payload) between the fmt and
+// the data chunk, where a hostile file hides its trick (offset 36).
+QByteArray wavWithChunk(const QByteArray &wav, const QByteArray &id, quint32 declared, const QByteArray &payload)
+{
+    QByteArray chunk = id;
+    put32(chunk, declared);
+    chunk.append(payload);
+    return wav.left(36) + chunk + wav.mid(36);
+}
+
 // A FLAC file that is only a STREAMINFO header (enough for the checker, which reads data, never decodes).
 QByteArray makeFlacHeader(int rate, int channels, quint64 totalSamples, qint64 padTo = 0)
 {
@@ -598,6 +629,9 @@ QList<FixtureCase> fixtureCases()
         {QStringLiteral("bad-ambient-extension"), false, QStringLiteral("unknown extension")},
         {QStringLiteral("bad-ambient-not-audio"), false, QStringLiteral("not a FLAC file")},
         {QStringLiteral("bad-ambient-gain"), false, QStringLiteral("'gain'")},
+        {QStringLiteral("bad-wav-chunk-loop"), false, QStringLiteral("a chunk is cut short")},       // size 0xFFFFFFF8 once looped forever
+        {QStringLiteral("bad-wav-chunk-negative"), false, QStringLiteral("a chunk is cut short")},   // size 0x80000000 once read out of range
+        {QStringLiteral("ok-wav-extra-chunk"), true, {}},
     };
 }
 
@@ -670,8 +704,105 @@ bool writeFixtures(const QString &root)
     withAmbient(QStringLiteral("bad-ambient-extension"), QStringLiteral("ambient.mp3"), flac, ambientOf(QStringLiteral("ambient.mp3"), 0, 10000));
     withAmbient(QStringLiteral("bad-ambient-not-audio"), QStringLiteral("ambient.flac"), QByteArray(100, 'x'),
                 ambientOf(QStringLiteral("ambient.flac"), 0, 10000));
+    simple(QStringLiteral("bad-wav-chunk-loop"), wavWithChunk(tone, "LIST", 0xFFFFFFF8u, QByteArray(4, 'x')));
+    simple(QStringLiteral("bad-wav-chunk-negative"), wavWithChunk(tone, "LIST", 0x80000000u, QByteArray(4, 'x')));
+    simple(QStringLiteral("ok-wav-extra-chunk"), wavWithChunk(tone, "LIST", 4, QByteArray(4, 'x')));
     withAmbient(QStringLiteral("bad-ambient-gain"), QStringLiteral("ambient.flac"), flac, ambientOf(QStringLiteral("ambient.flac"), 0, 10000, 3.0));
     return ok;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Fuzzing the parsers (T-227 round 2): a hostile file must always end in a verdict.
+// ---------------------------------------------------------------------------------------------
+namespace {
+
+// Every mutation of the first 128 bytes of `seed`: cut at each length, one byte set to 0x00 and 0xFF, and
+// each 4-byte field (at every offset, little- and big-endian) set to 0, 1, 0x7fffffff, 0x80000000, 0xfffffff8.
+// `run` gets each mutated file; the count of files tried is returned.
+template<typename Run>
+int mutations(const QByteArray &seed, Run run)
+{
+    int cases = 0;
+    const int limit = qMin<int>(seed.size(), 128);
+    for (int n = 0; n <= limit; ++n) {
+        run(seed.left(n));
+        ++cases;
+    }
+    for (int o = 0; o < limit; ++o) {
+        for (char v : {char(0x00), char(0xFF)}) {
+            QByteArray b = seed;
+            b[o] = v;
+            run(b);
+            ++cases;
+        }
+    }
+    static const quint32 values[] = {0u, 1u, 0x7fffffffu, 0x80000000u, 0xfffffff8u};
+    for (int o = 0; o + 4 <= limit; ++o) {
+        for (quint32 v : values) {
+            for (bool bigEndian : {false, true}) {
+                QByteArray b = seed;
+                for (int i = 0; i < 4; ++i)
+                    b[o + i] = char((v >> (bigEndian ? 8 * (3 - i) : 8 * i)) & 0xFF);
+                run(b);
+                ++cases;
+            }
+        }
+    }
+    return cases;
+}
+
+} // namespace
+
+bool fuzz(QString *problem, int *cases, int timeoutMs)
+{
+    struct State
+    {
+        bool done = false;
+        int cases = 0;
+        QString problem;
+    };
+    auto state = std::make_shared<State>();
+    QThread *thread = QThread::create([state] {
+        QTemporaryDir dir;
+        if (!dir.isValid()) {
+            state->problem = QStringLiteral("no temporary directory");
+            state->done = true;
+            return;
+        }
+        const QString folder = dir.path();
+        const QByteArray plain = makeWav(10, CueSampleRate, 1, 0.4);
+        const QByteArray wav = wavWithChunk(plain, "LIST", 4, QByteArray(4, 'x'));
+        const QByteArray ogg = makeOgg(48000, 2, 48000LL * 20);
+        const QByteArray flac = makeFlacHeader(24000, 1, 24000 * 10);
+        const auto writeTheme = [&folder](const QByteArray &cue, const QByteArray &ambient, const QString &ambientName) {
+            writeFile(folder + QStringLiteral("/select.wav"), cue);
+            QJsonObject cues{{QStringLiteral("select"), QStringLiteral("select.wav")}};
+            QJsonObject amb;
+            if (!ambientName.isEmpty()) {
+                writeFile(folder + QLatin1Char('/') + ambientName, ambient);
+                amb = ambientOf(ambientName, 0, 10000);
+            }
+            writeFile(folder + QStringLiteral("/theme.json"), manifest(cues, amb));
+        };
+        // The file under test is rewritten for each mutation; the verdict is not looked at, only that one comes.
+        state->cases += mutations(wav, [&](const QByteArray &b) { writeTheme(b, QByteArray(), QString()); (void)check(folder); });
+        state->cases += mutations(ogg, [&](const QByteArray &b) { writeTheme(plain, b, QStringLiteral("pad.ogg")); (void)check(folder); });
+        state->cases += mutations(flac, [&](const QByteArray &b) { writeTheme(plain, b, QStringLiteral("pad.flac")); (void)check(folder); });
+        state->done = true;
+    });
+    thread->start();
+    const bool finished = thread->wait(timeoutMs);
+    if (!finished) {
+        thread->terminate();                      // a hang is the failure being looked for; do not wait for it
+        thread->wait(2000);
+        *problem = QStringLiteral("the checker did not return within %1 ms").arg(timeoutMs);
+        *cases = state->cases;
+        return false;
+    }
+    delete thread;
+    *cases = state->cases;
+    *problem = state->problem;
+    return state->done && state->problem.isEmpty();
 }
 
 } // namespace SoundTheme

@@ -103,6 +103,22 @@ Item {
             verify(r.warnings.join("\n").includes("fanfare"))
         }
 
+        function test_hostile_wav_chunk_sizes() {
+            // A chunk size of 0xFFFFFFF8 once looped forever and 0x80000000 once read out of range.
+            rejected("bad-wav-chunk-loop", "a chunk is cut short")
+            rejected("bad-wav-chunk-negative", "a chunk is cut short")
+            const r = SoundThemes.check(checker.root + "/ok-wav-extra-chunk")
+            verify(r.ok, "an honest extra chunk is skipped: " + r.problems.join("; "))
+        }
+
+        function test_a_hostile_file_always_gets_a_verdict() {
+            // WAV, Ogg and FLAC with every length field of the first 128 bytes set to 0, 1, 0x7fffffff,
+            // 0x80000000 and 0xfffffff8, cut and corrupted at every offset: each must come back (bounded: 60 s).
+            const r = SoundThemes.fuzz(60000)
+            verify(r.ok, r.problem)
+            verify(r.cases > 1500, "cases tried: " + r.cases)
+        }
+
         function test_a_folder_that_does_not_exist() {
             verify(!SoundThemes.check(checker.root + "/no-such-theme").ok)
         }
@@ -198,6 +214,16 @@ Item {
                 const effect = Sfx[n[3]]
                 tryVerify(() => Math.abs(effect.volume - base * 0.5) < 0.001, 2000, n[0] + " volume")
             }
+        }
+
+        function test_the_duck_is_held_for_the_length_of_the_cue() {
+            verify(SoundThemes.cueMs.startup > 1000, "the checker measured the start-up cue: " + SoundThemes.cueMs.startup)
+            verify(SoundThemes.cueMs.navigate < SoundThemes.duckMs)
+            Sfx.startup()
+            compare(Sfx.duckTimer.interval, SoundThemes.cueMs.startup, "held as long as the cue")
+            Sfx.navigate()
+            compare(Sfx.duckTimer.interval, SoundThemes.duckMs, "a short cue holds for the minimum")
+            tryCompare(Sfx, "ducking", false, 4000)
         }
 
         function test_gain_zero_is_silent() {

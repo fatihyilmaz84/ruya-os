@@ -174,11 +174,15 @@ void SoundThemes::reload()
 
     // A cue the active theme does not name comes from the bundled one; the ambient has no fallback.
     QVariantMap cues;
-    for (auto it = m_bundled.manifest.cues.cbegin(); it != m_bundled.manifest.cues.cend(); ++it)
-        cues.insert(it.key(), urlOf(it.value()));
-    for (auto it = active.cues.cbegin(); it != active.cues.cend(); ++it)
-        cues.insert(it.key(), urlOf(it.value()));
+    QVariantMap lengths;
+    for (const SoundTheme::Manifest *m : {&m_bundled.manifest, &active}) {       // the active theme's entries win
+        for (auto it = m->cues.cbegin(); it != m->cues.cend(); ++it) {
+            cues.insert(it.key(), urlOf(it.value()));
+            lengths.insert(it.key(), m->cueMs.value(it.key()));
+        }
+    }
     m_cues = cues;
+    m_cueMs = lengths;
     if (active.hasAmbient) {
         m_ambientUrl = urlOf(active.ambient.file);
         m_loopStart = int(active.ambient.loopStartMs);
@@ -402,6 +406,14 @@ QVariantList SoundThemes::fixtureCases()
     for (const SoundTheme::FixtureCase &c : SoundTheme::fixtureCases())
         list.append(QVariantMap{{QStringLiteral("name"), c.name}, {QStringLiteral("shouldPass"), c.shouldPass}, {QStringLiteral("expect"), c.expect}});
     return list;
+}
+
+QVariantMap SoundThemes::fuzz(int timeoutMs)
+{
+    QString problem;
+    int cases = 0;
+    const bool ok = SoundTheme::fuzz(&problem, &cases, timeoutMs);
+    return {{QStringLiteral("ok"), ok}, {QStringLiteral("cases"), cases}, {QStringLiteral("problem"), problem}};
 }
 
 QString SoundThemes::mockPrepareDrive()

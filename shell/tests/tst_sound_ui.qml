@@ -135,7 +135,7 @@ Item {
             tryCompare(bed, "fade", 1, 3000)
             verify(bed.playing)
             verify(bed.outputVolume > 0)
-            compare(bed.crossMs, 1500)
+            compare(SoundThemes.crossMs, 1500)
             compare(SoundThemes.ambientFadeMs, 800)
         }
 
@@ -295,7 +295,7 @@ Item {
             tryCompare(SoundThemes, "activeId", "user:Glassy")
             tryVerify(() => find("driveTheme_drive:Ruya Stick/Glassy") === null, 3000, "the copied theme is no longer offered")
             tryVerify(() => find("rowSoundTheme").currentLabel === "Glassy", 3000)
-            verify(find("paneAudio").activeFocus, "focus is still in the pane")
+            tryVerify(() => find("rowSoundTheme").activeFocus, 2000, "focus lands on the Sound theme row, not on the first row")
 
             // It keeps working with the stick gone.
             const url = SoundThemes.cues.select
@@ -317,7 +317,25 @@ Item {
             verify(find("driveTheme_drive:Ruya Stick/Plain").activeFocus)
             Storage.eject("vol-stick")
             tryVerify(() => find("driveTheme_drive:Ruya Stick/Plain") === null, 5000)
-            tryVerify(() => find("paneAudio").activeFocus, 2000, "focus did not fall out of the pane")
+            tryVerify(() => find("rowSoundTheme").activeFocus, 2000, "focus lands on the Sound theme row")
+        }
+
+        function test_only_the_pressed_row_says_copying() {
+            SoundThemes.mockPrepareDrive()
+            SoundThemes.mockSetCopyDelay(1500)
+            openAudioPane()
+            Storage.mockPlugStick()
+            tryVerify(() => find("driveTheme_drive:Ruya Stick/Glassy") !== null, 5000)
+            tryVerify(() => find("driveTheme_drive:Ruya Stick/Plain") !== null, 5000)
+            for (let i = 0; i < 20 && !find("driveTheme_drive:Ruya Stick/Glassy").activeFocus; ++i)
+                keyClick(Qt.Key_Down)
+            verify(find("driveTheme_drive:Ruya Stick/Glassy").activeFocus)
+            keyClick(Qt.Key_Return)
+            tryCompare(SoundThemes, "importState", "copying")
+            compare(find("driveTheme_drive:Ruya Stick/Glassy").value, "Copying…")
+            compare(find("driveTheme_drive:Ruya Stick/Plain").value, "", "the other row does not claim to copy")
+            tryCompare(SoundThemes, "importState", "idle", 5000)
+            tryCompare(DeviceSettings, "soundTheme", "user:Glassy")
         }
 
         function test_zz_screenshots() {
