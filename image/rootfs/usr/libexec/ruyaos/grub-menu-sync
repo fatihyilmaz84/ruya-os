@@ -1,0 +1,35 @@
+#!/bin/sh
+# Keeps /boot/grub2/custom.cfg equal to /usr/lib/ruyaos/grub-menu-custom.cfg (T-269), so a disk
+# installed before the boot menu policy still boots without showing the menu after an image update
+# (the GRUB config on /boot is written at install time and an update does not rewrite it).
+# Runs as root from ruya-grub-menu.service at every boot; a no-op when nothing differs.
+#  - /boot is mounted read-only: remount it read-write for the copy and back (as greenboot does);
+#  - a custom.cfg that this file did not write is never touched.
+set -eu
+src=/usr/lib/ruyaos/grub-menu-custom.cfg
+dst=/boot/grub2/custom.cfg
+marker='# ruyaos-managed: grub-menu-custom.cfg'
+
+[ -d /boot/grub2 ] || exit 0
+if [ -e "$dst" ] && ! grep -qxF "$marker" "$dst"; then
+    echo "ruya-grub-menu: $dst was not written by RuyaOS, left alone"
+    exit 0
+fi
+if [ -e "$dst" ] && cmp -s "$src" "$dst"; then
+    exit 0
+fi
+
+was_ro=0
+if findmnt -n -o OPTIONS /boot | tr ',' '\n' | grep -qx ro; then
+    was_ro=1
+    mount -o remount,rw /boot
+fi
+restore() {
+    if [ "$was_ro" = 1 ]; then mount -o remount,ro /boot; fi
+}
+trap restore EXIT
+
+cp "$src" "$dst.new"
+mv "$dst.new" "$dst"
+sync "$dst"
+echo "ruya-grub-menu: wrote $dst"

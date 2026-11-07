@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=RuyaOS
+Description=The RuyaOS wordmark on the Dreamglass backdrop with a calm progress indicator. No text.
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/ruyaos
+ScriptFile=/usr/share/plymouth/themes/ruyaos/ruyaos.script

@@ -328,6 +328,38 @@ function Test-Text {
     Record "text lint" ($LASTEXITCODE -eq 0)
 }
 
+# The rules live in scripts\lint-boot.ps1 (shared with CI): the boot experience sources (T-269).
+function Test-Boot {
+    Step "boot lint (silent kernel arguments, Plymouth theme, GRUB menu policy, splash handover)"
+    & (Join-Path $PSScriptRoot "lint-boot.ps1")
+    Record "boot lint" ($LASTEXITCODE -eq 0)
+
+    # Self-check: each mistake below, made in a copy of image/, must be reported.
+    $lint = Join-Path $PSScriptRoot "lint-boot.ps1"
+    $cases = @(
+        @{ Name = "a missing silent argument"; File = "rootfs/usr/lib/bootc/kargs.d/10-ruyaos.toml"; From = '"quiet", '; To = "" },
+        @{ Name = "the old loglevel"; File = "rootfs/usr/lib/bootc/kargs.d/10-ruyaos.toml"; From = "loglevel=0"; To = "loglevel=3" },
+        @{ Name = "a theme image that is not there"; File = "rootfs/usr/share/plymouth/themes/ruyaos/ruyaos.script"; From = 'Image("glow.png")'; To = 'Image("nothere.png")' },
+        @{ Name = "a visible boot menu"; File = "rootfs/usr/lib/bootupd/grub2-static/configs.d/07_ruyaos-menu.cfg"; From = "set timeout_style=hidden"; To = "set timeout_style=menu" },
+        @{ Name = "a shell that does not wait for Plymouth to quit"; File = "rootfs/usr/lib/systemd/system/ruya-compositor@.service"; From = "After=systemd-user-sessions.service plymouth-quit-wait.service"; To = "After=systemd-user-sessions.service" },
+        @{ Name = "a splash that is cleared on quit"; File = "rootfs/usr/lib/systemd/system/plymouth-quit.service.d/10-ruyaos.conf"; From = " --retain-splash"; To = "" },
+        @{ Name = "a zero menu timeout"; File = "rootfs/usr/lib/bootupd/grub2-static/configs.d/07_ruyaos-menu.cfg"; From = "set timeout=2"; To = "set timeout=0" },
+        @{ Name = "the boot_counter branch removed"; File = "rootfs/usr/lib/ruyaos/grub-menu-custom.cfg"; From = 'if [ -n "${boot_counter}" ]; then'; To = 'if [ -n "${boot_counter_gone}" ]; then' }
+    )
+    foreach ($c in $cases) {
+        $fixture = Join-Path ([IO.Path]::GetTempPath()) ("ruya-lint-boot-" + [guid]::NewGuid().ToString("N"))
+        New-Item -ItemType Directory -Force (Join-Path $fixture "image") | Out-Null
+        Copy-Item -Recurse -Path (Join-Path $Repo "image\*") -Destination (Join-Path $fixture "image") -Exclude "bib"
+        $target = Join-Path $fixture ("image/" + $c.File)
+        $text = [IO.File]::ReadAllText($target)
+        if (-not $text.Contains($c.From)) { Record ("boot lint self-check: fixture for " + $c.Name) $false; Remove-Item -Recurse -Force $fixture; continue }
+        [IO.File]::WriteAllText($target, $text.Replace($c.From, $c.To))
+        & $lint -Root $fixture 6>&1 | Out-Null
+        Record ("boot lint reports " + $c.Name) ($LASTEXITCODE -eq 1)
+        Remove-Item -Recurse -Force $fixture
+    }
+}
+
 # The rules live in scripts\lint-board.ps1 (shared with CI).
 function Test-Board {
     Step "board lint (docs\STATUS.md and the task files agree)"
@@ -501,7 +533,7 @@ switch ($Command) {
     "build" { Do-Build }
     "rust" { Do-Rust }
     "shell" { Do-Shell }
-    "test" { Test-Text; Test-Board; Test-DevDocs; Do-Rust; Do-Shell }
+    "test" { Test-Text; Test-Board; Test-Boot; Test-DevDocs; Do-Rust; Do-Shell }
     "shots" {
         if (Test-SessionLocked) { Stop-SessionLocked } else {
             Do-Build

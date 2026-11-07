@@ -1,0 +1,28 @@
+# Applies the RuyaOS boot menu policy (hidden menu, shown after a failed boot) to disks whose GRUB
+# config predates it (T-269): writes /boot/grub2/custom.cfg when it differs. See
+# /usr/libexec/ruyaos/grub-menu-sync and /usr/lib/ruyaos/grub-menu-custom.cfg.
+[Unit]
+Description=Keep the RuyaOS boot menu policy in /boot/grub2/custom.cfg
+Documentation=file:///usr/lib/ruyaos/grub-menu-custom.cfg
+RequiresMountsFor=/boot
+ConditionPathExists=/boot/grub2
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/ruyaos/grub-menu-sync
+# /boot is remounted read-write for the copy, so no ProtectSystem here; everything else is closed.
+PrivateNetwork=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+NoNewPrivileges=yes
+LockPersonality=yes
+RestrictRealtime=yes
+RestrictAddressFamilies=AF_UNIX
+CapabilityBoundingSet=CAP_SYS_ADMIN CAP_DAC_OVERRIDE CAP_FOWNER
+SystemCallFilter=@system-service @mount
+
+[Install]
+WantedBy=multi-user.target

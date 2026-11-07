@@ -1,0 +1,60 @@
+# RuyaOS boot splash (T-269): the wordmark on the Dreamglass backdrop and a calm progress
+# indicator. No text, no percent. Everything is sized by the screen height, so it looks the
+# same at 720p, 1080p and 4K. The same picture serves boot, reboot and shutdown. Messages and
+# prompts are not drawn on purpose (a failing boot is read from the journal, not the screen).
+
+screen_w = Window.GetWidth();
+screen_h = Window.GetHeight();
+u = screen_h / 1080.0;
+
+Window.SetBackgroundTopColor(0.043, 0.063, 0.118);
+Window.SetBackgroundBottomColor(0.020, 0.027, 0.051);
+
+# Backdrop: scaled to the whole screen.
+bg_image = Image("bg.png");
+bg_sprite = Sprite(bg_image.Scale(screen_w, screen_h));
+bg_sprite.SetPosition(0, 0, -100);
+
+# Wordmark, authored at twice its 1080p size; 1.25 makes it about 410 px wide at 1080p.
+wm_image = Image("wordmark.png");
+wm_w = wm_image.GetWidth() * u * 0.625;
+wm_h = wm_image.GetHeight() * u * 0.625;
+wm_sprite = Sprite(wm_image.Scale(wm_w, wm_h));
+wm_x = (screen_w - wm_w) / 2;
+wm_y = screen_h * 0.5 - wm_h * 0.75;
+wm_sprite.SetPosition(wm_x, wm_y, 10);
+wm_sprite.SetOpacity(0);
+
+# Progress indicator: a faint track with a soft highlight that glides back and forth.
+track_w = 360 * u;
+track_h = 6 * u;
+if (track_h < 2) track_h = 2;
+track_x = (screen_w - track_w) / 2;
+track_y = wm_y + wm_h + 64 * u;
+bar_image = Image("bar.png");
+track_sprite = Sprite(bar_image.Scale(track_w, track_h));
+track_sprite.SetPosition(track_x, track_y, 10);
+track_sprite.SetOpacity(0);
+
+glow_w = 140 * u;
+glow_image = Image("glow.png");
+glow_sprite = Sprite(glow_image.Scale(glow_w, track_h));
+glow_sprite.SetPosition(track_x, track_y, 11);
+glow_sprite.SetOpacity(0);
+
+frame = 0;
+fade_frames = 30;      # the wordmark fades in over about 0.6 s (the refresh runs at ~50 Hz)
+period_frames = 140;   # one glide there and back takes about 2.8 s
+
+fun refresh() {
+    frame++;
+    fade = frame / fade_frames;
+    if (fade > 1) fade = 1;
+    wm_sprite.SetOpacity(fade);
+    track_sprite.SetOpacity(fade * 0.16);
+    glow_sprite.SetOpacity(fade * 0.9);
+    phase = 0.5 - 0.5 * Math.Cos(2 * Math.Pi * frame / period_frames);
+    glow_sprite.SetX(track_x + (track_w - glow_w) * phase);
+}
+
+Plymouth.SetRefreshFunction(refresh);

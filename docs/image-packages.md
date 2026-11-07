@@ -31,7 +31,8 @@ are in the order of the spec: UI, services, gaming and media, drivers and firmwa
 | `qt6-qtwayland` | `ruya-shell` is the Wayland compositor (QtWaylandCompositor, ADR-002 A) and runs on KMS through eglfs |
 | `qt6-qtmultimedia` | video and sound cues in the shell. It pulls `qt6-qtbase`, `qt6-qtdeclarative`, `qt6-qtquick3d` and `qt6-qtshadertools`; `qt6-qtbase-gui` pulls `gtk3` (the GTK platform theme) and `cups-libs` (Qt's print support, no daemon): they stay because Qt requires them |
 | `google-noto-sans-fonts` | fonts for the shell and for text in languages the shell's own font lacks (installed by `20-base.sh`) |
-| `plymouth-theme-spinner` | boot splash (`plymouth` itself is in the base) |
+| `plymouth-theme-spinner` | boot splash (`plymouth` itself is in the base); the stock theme, kept as a fallback (`plymouth-set-default-theme spinner`) |
+| `plymouth-plugin-script` | the `script` module of Plymouth, which draws the RuyaOS theme (T-269): the `two-step` module of the stock theme cannot scale its images to the screen height (about 25 KB) |
 | `kmscon` | the base image's text console on tty2 and up; support only, `ruya-compositor@tty1` owns tty1 |
 | `ncurses`, `man-db`, `vim-minimal` | the support shell (`clear`, `man`, `vi`), over SSH or tty2 |
 
