@@ -1,6 +1,6 @@
 # T-247 — Play statistics: a per-profile ledger of play sessions and the Activity pages
 
-Status: in-progress · Phase: 2 · Depends: — · Area: api, services, shell · Size: M · Owner: builder
+Status: done · Phase: 2 · Depends: — · Area: api, services, shell · Size: M · Owner: builder
 
 ## Goal
 Each profile sees how it plays: a recent history, time per game, when it plays, simple highlights (owner request, 2026-11-07). Private to the profile. Today the only data is `Library` last-played and recent; there is no play time or history. **One ledger for everything that needs play time:** T-211 (parental play-time limits and the parent's weekly report), the retention rules of T-220 ("Clear my play history") and T-224 (telemetry; "App usage" is a separate owner decision, not built here). Decision recorded here: **this task builds the ledger in `ruya-session`; T-211's counter reads it** (T-211's item 4 and its Depends were changed accordingly). The lead reviews the data-model decision.
