@@ -1,6 +1,6 @@
 # T-260 — Controller onboarding: USB detection, first-run guidance, one-click pairing, the paired list
 
-Status: todo · Phase: 2 · Depends: T-203, T-199 · Area: shell, services · Size: M · Owner: builder
+Status: in-progress · Phase: 2 · Depends: T-203, T-199 · Area: shell, services · Size: M · Owner: builder
 
 ## Goal
 The first minutes with a controller just work and explain themselves (owner request, 2026-11-07, "Controller onboarding experience"): plug a pad in and the console says what it is; a console with no pad tells you how to pair yours, per family; the paired pads are listed and reconnect by themselves. This task covers only the **gaps**; the table says what exists.
