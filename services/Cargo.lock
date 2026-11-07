@@ -777,6 +777,7 @@ dependencies = [
  "async-channel",
  "async-io",
  "futures-lite",
+ "libc",
  "zbus",
 ]
 

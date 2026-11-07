@@ -21,6 +21,12 @@
     "invalid"           malformed argument (empty id, bad characters)
     "failed"            internal error
 
+  Usage ledger (T-247; ReportPresence, ListSessions, GetTotals, ClearHistory, UsageChanged) has
+  these extra statuses:
+    "not-allowed"       the profile is not the active one (reads), or the actor may not clear it
+    "wrong-pin"         ClearHistory: the admin PIN did not match (attempts_left says how many remain)
+    "locked-out"        ClearHistory: too many failures (retry_after_secs says when to try again)
+
   An instance is an opaque string chosen by the service (a systemd unit name); the shell only
   hands it back. Every list is a plain array and every record an a{sv} dictionary, so fields can be
   added later without breaking clients (unknown keys are ignored).
@@ -31,6 +37,40 @@
     profile    s    profile id the app runs as
     started    x    unix seconds
     state      s    "starting" | "running" | "stopping"
+
+  Usage ledger (T-247). ruya-session keeps, per profile, a ledger of play sessions under
+  /var/lib/ruya-session/usage/<profile>/ (root only, 0600). A session is one run of one app; only
+  times and the exit reason are recorded, never anything about the content. Rules (spec 03):
+    - time counts only while the profile is active, not locked or suspended, the app is the
+      foreground app and the shell reports "active"; durations come from the monotonic clock;
+    - the shell reports who is in front with ReportPresence on every change and every 20 s; a
+      report older than 75 s counts as "unknown" and counts nothing;
+    - the service saves a heartbeat every 30 s; a session found at start-up (crash, power cut)
+      ends at the last heartbeat; sessions under 10 s are dropped;
+    - a profile switch ends the previous profile's sessions;
+    - raw sessions are kept 90 days, then rolled up into daily totals kept 24 months;
+    - the shell reads the active profile only: ListSessions and GetTotals answer "not-allowed"
+      for any other profile (the history of another profile is not browsable, admin or not).
+
+  Session record (a{sv}), keys:
+    app_id              s    Flatpak application id
+    app_version         s    version at the start ("" if unknown); an update mid-session continues
+                             the session
+    start               x    unix seconds (UTC)
+    end                 x    unix seconds (UTC)
+    foreground_seconds  u    seconds the app was the foreground, not idle or suspended
+    exit_reason         s    "quit" | "crashed" | "killed" | "time-limit" | "bedtime"
+    open                b    true while the app still runs (end is then "now")
+    day                 s    "YYYY-MM-DD": the local day (device time zone) the session began on
+
+  Day row (a{sv}), keys (one row per app and local day; the day is in the device time zone):
+    app_id     s    Flatpak application id
+    day        s    "YYYY-MM-DD"
+    seconds    u    foreground seconds on that day
+    sessions   u    sessions that began that day
+    longest    u    seconds of the longest of those sessions
+    first      x    unix seconds: the earliest start among the sessions touching that day
+    last       x    unix seconds: the latest end among them
 -->
 <node>
   <interface name="org.ruyaos.Session1">
@@ -56,6 +96,60 @@
       <arg name="apps" type="aa{sv}" direction="out"/>
     </method>
 
+    <!-- The shell tells who is in front: `instance` is the foreground app's instance ("" when
+         the shell itself is in front), `attention` is "active" | "idle" | "locked" | "suspended".
+         `profile` is the active profile ("" when none). Call on every change and every 20 s.
+         "invalid" for an unknown attention or a bad profile id. -->
+    <method name="ReportPresence">
+      <arg name="profile" type="s" direction="in"/>
+      <arg name="instance" type="s" direction="in"/>
+      <arg name="attention" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <!-- Sessions of the profile that ended at or after `since` (unix seconds), newest first, at
+         most `limit` (capped at 1000). Running apps are included with open = true. Statuses:
+         ok, invalid, unknown-profile, not-allowed, failed. -->
+    <method name="ListSessions">
+      <arg name="profile" type="s" direction="in"/>
+      <arg name="since" type="x" direction="in"/>
+      <arg name="limit" type="u" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+      <arg name="sessions" type="aa{sv}" direction="out"/>
+    </method>
+
+    <!-- Totals per app and day from `from` to `to` ("YYYY-MM-DD", inclusive; "" = the earliest
+         kept / today). `today` is today's date in the device time zone. Rows are sorted by day,
+         then app. Same statuses as ListSessions. -->
+    <method name="GetTotals">
+      <arg name="profile" type="s" direction="in"/>
+      <arg name="from" type="s" direction="in"/>
+      <arg name="to" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+      <arg name="today" type="s" direction="out"/>
+      <arg name="rows" type="aa{sv}" direction="out"/>
+    </method>
+
+    <!-- Deletes the profile's whole ledger. With admin_id "" the profile must be the active one
+         (its own PIN was checked when it signed in); otherwise admin_id and admin_pin are checked
+         with Profiles1.VerifyAdmin. Sessions still running start again from zero. Statuses: ok,
+         invalid, unknown-profile, not-allowed, wrong-pin, locked-out, failed. attempts_left and
+         retry_after_secs as in Profiles1. T-220's "Clear my play history" is this call. -->
+    <method name="ClearHistory">
+      <arg name="profile" type="s" direction="in"/>
+      <arg name="admin_id" type="s" direction="in"/>
+      <arg name="admin_pin" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+      <arg name="attempts_left" type="u" direction="out"/>
+      <arg name="retry_after_secs" type="u" direction="out"/>
+    </method>
+
+    <!-- The ledger of `profile` changed: a session ended, a heartbeat added time, or it was
+         cleared. -->
+    <signal name="UsageChanged">
+      <arg name="profile" type="s"/>
+    </signal>
+
     <signal name="AppStarted">
       <arg name="instance" type="s"/>
       <arg name="app_id" type="s"/>
@@ -64,7 +158,8 @@
     <!-- Sent once per instance. reason: "quit" (stopped on request or ended normally), "crashed"
          (exited abnormally by itself), "killed" (ended by the kill after a Stop it ignored, or by
          a signal from the system while it ran; dying of the Stop's own SIGTERM is "quit"),
-         "launch-failed" (never reached running; exit_code is then -1). -->
+         "launch-failed" (never reached running; exit_code is then -1). The play-time ledger
+         additionally knows "time-limit" and "bedtime" (T-211 ends a session with them). -->
     <signal name="AppExited">
       <arg name="instance" type="s"/>
       <arg name="app_id" type="s"/>
