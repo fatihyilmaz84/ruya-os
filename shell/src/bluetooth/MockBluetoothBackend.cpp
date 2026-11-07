@@ -95,7 +95,7 @@ void MockBluetoothBackend::startControllerPairing(int seconds)
         if (m_pairingScript != QLatin1String("wait"))
             m_pairingTimer.start();
     }
-    answer(QStringLiteral("controller-pairing"), QString(), status);
+    answer(QStringLiteral("controller-pairing"), QStringLiteral("start"), status);
 }
 
 void MockBluetoothBackend::stopControllerPairing()
@@ -105,7 +105,7 @@ void MockBluetoothBackend::stopControllerPairing()
         m_pairing = QStringLiteral("idle");
         publish();
     }
-    answer(QStringLiteral("controller-pairing"), QString(), QStringLiteral("ok"));
+    answer(QStringLiteral("controller-pairing"), QStringLiteral("stop"), QStringLiteral("ok"));
 }
 
 void MockBluetoothBackend::finishPairing(const QString &outcome)

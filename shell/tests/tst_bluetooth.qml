@@ -399,16 +399,16 @@ Item {
 
         function test_the_window_statuses() {
             const seen = new Set()
-            const run = (call) => runCommand(seen, "controller-pairing", "", call)
-            compare(run(() => Bluetooth.startControllerPairing()), "ok")
+            const run = (id, call) => runCommand(seen, "controller-pairing", id, call)
+            compare(run("start", () => Bluetooth.startControllerPairing()), "ok")
             tryCompare(Bluetooth, "controllerPairing", "open")
-            compare(run(() => Bluetooth.startControllerPairing()), "busy")
-            compare(run(() => Bluetooth.stopControllerPairing()), "ok")
+            compare(run("start", () => Bluetooth.startControllerPairing()), "busy")
+            compare(run("stop", () => Bluetooth.stopControllerPairing()), "ok")
             tryCompare(Bluetooth, "controllerPairing", "idle")
-            compare(run(() => Bluetooth.stopControllerPairing()), "ok")
+            compare(run("stop", () => Bluetooth.stopControllerPairing()), "ok")
             Bluetooth.setPowered(false)
             tryCompare(Bluetooth, "powered", false)
-            compare(run(() => Bluetooth.startControllerPairing()), "unavailable")
+            compare(run("start", () => Bluetooth.startControllerPairing()), "unavailable")
             verify(seen.has("ok") && seen.has("busy") && seen.has("unavailable"))
             compare(seen.size, 3, "no status outside the contract")
         }

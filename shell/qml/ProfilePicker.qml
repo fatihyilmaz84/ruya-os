@@ -17,6 +17,16 @@ FocusScope {
             Profiles.switchTo(profile.id, "")
     }
 
+    function accept(event) {
+        event.accepted = true
+        if (controllerHint.exhausted) {
+            Sfx.select()
+            controllerHint.newSeries()
+        } else {
+            choose(Profiles.profiles[list.currentIndex])
+        }
+    }
+
     function reset() {
         pinPad.shown = false
         list.forceActiveFocus()
@@ -60,8 +70,9 @@ FocusScope {
         delegate: ProfileCard { u: picker.u }
 
         onCurrentIndexChanged: Sfx.navigate()
-        Keys.onReturnPressed: picker.choose(Profiles.profiles[currentIndex])
-        Keys.onEnterPressed: picker.choose(Profiles.profiles[currentIndex])
+        // When the automatic pairing windows have run out, A starts a new series first.
+        Keys.onReturnPressed: event => picker.accept(event)
+        Keys.onEnterPressed: event => picker.accept(event)
     }
 
     Text {

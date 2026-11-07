@@ -245,18 +245,27 @@
 
     <!--
       Controller pairing window (T-203): pairing a controller with no keyboard, from the first-boot
-      wizard, the profile picker or Settings. While the window is open the adapter is pairable and
-      discoverable, a scan runs, and a BlueZ agent (capability NoInputNoOutput, "just works") is
-      registered. The service then
+      wizard, the profile picker or Settings. While the window is open the adapter is pairable
+      (never discoverable: a pad in pairing mode advertises and is found by the scan, a bonded pad
+      pages the console), a scan runs, and a BlueZ agent (capability NoInputNoOutput, "just works")
+      is registered. The service then
         - accepts an incoming pairing only from an input device (Class of Device major class
           Peripheral 0x05: gamepad, keyboard, mouse; for a device without a class, a Bluetooth LE
           appearance in the HID category), marks it trusted and lets the HID connection through;
         - pairs, trusts and connects, by itself, a gamepad that the scan finds in pairing mode;
         - rejects everything else (audio, phones, unknown classes), and every request for a PIN
-          or passkey (PIN pairing is not part of this window).
-      The window is never open by default. It closes by itself when a controller has paired, when
-      its seconds are up, or on StopControllerPairing, and then the adapter's Pairable and
-      Discoverable are what they were before and the agent is gone.
+          or passkey (PIN pairing is not part of this window);
+        - removes (Adapter1.RemoveDevice) any device that has bonded during the window and is not an
+          input device, and announces it with ControllerPairingRejected: with this agent the kernel
+          accepts a just-works pairing by itself and BlueZ never asks the agent.
+      Residual risk: the class and the appearance are told by the remote device, so a device that
+      claims an input class inside the window can bond, be trusted and act as a keyboard or pad.
+      The window is short, never open by default, not discoverable, capped when the shell reopens
+      it by itself, and sweeps strangers; it is not a defence against a spoofing device in range.
+      The window closes by itself when a controller has paired, when its seconds are up, or on
+      StopControllerPairing, and then the adapter's Pairable is what it was before and the agent is
+      gone. When the service starts it switches Pairable and Discoverable off, in case a crashed
+      one left them on.
     -->
 
     <!--

@@ -449,9 +449,14 @@
 <context>
     <name>ControllerPairHint</name>
     <message>
-        <location filename="../qml/ControllerPairHint.qml" line="+30"/>
+        <location filename="../qml/ControllerPairHint.qml" line="+37"/>
         <source>Controller connected.</source>
         <translation>Controller connected.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Press A to start pairing.</source>
+        <translation>Press A to start pairing.</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -465,16 +470,16 @@
     </message>
     <message>
         <location line="+2"/>
-        <source>No controller was found. Hold the pairing button on your controller and try again.</source>
-        <translation>No controller was found. Hold the pairing button on your controller and try again.</translation>
+        <source>No controller was found. Hold the pairing button on your controller (on a DualSense: PS + Create) and try again.</source>
+        <translation>No controller was found. Hold the pairing button on your controller (on a DualSense: PS + Create) and try again.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>No controller or keyboard found. Hold the pairing button on your controller until its light blinks.</source>
-        <translation>No controller or keyboard found. Hold the pairing button on your controller until its light blinks.</translation>
+        <source>No controller or keyboard found. Hold the pairing button on your controller (on a DualSense: PS + Create) until its light blinks.</source>
+        <translation>No controller or keyboard found. Hold the pairing button on your controller (on a DualSense: PS + Create) until its light blinks.</translation>
     </message>
     <message>
-        <location line="+101"/>
+        <location line="+137"/>
         <source>A device that is not a controller tried to connect and was ignored.</source>
         <translation>A device that is not a controller tried to connect and was ignored.</translation>
     </message>
@@ -888,7 +893,7 @@
 <context>
     <name>ProfilePicker</name>
     <message>
-        <location filename="../qml/ProfilePicker.qml" line="+32"/>
+        <location filename="../qml/ProfilePicker.qml" line="+43"/>
         <source>Who&apos;s playing?</source>
         <translation>Who&apos;s playing?</translation>
     </message>
@@ -898,7 +903,7 @@
         <translation>Profiles</translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+16"/>
         <source>Waiting for the profiles service…</source>
         <translation>Waiting for the profiles service…</translation>
     </message>
@@ -1227,7 +1232,7 @@
         <translation>Back</translation>
     </message>
     <message>
-        <location line="+50"/>
+        <location line="+52"/>
         <source>Enter a name first.</source>
         <translation>Enter a name first.</translation>
     </message>
@@ -1282,7 +1287,7 @@
         <translation>Network</translation>
     </message>
     <message>
-        <location line="-276"/>
+        <location line="-278"/>
         <source>Try again</source>
         <translation>Try again</translation>
     </message>
@@ -1293,7 +1298,7 @@
         <translation>Skip</translation>
     </message>
     <message>
-        <location line="+92"/>
+        <location line="+94"/>
         <location line="+86"/>
         <source>Connect a controller</source>
         <translation>Connect a controller</translation>

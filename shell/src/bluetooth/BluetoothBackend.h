@@ -37,7 +37,7 @@ public:
     virtual void connectDevice(const QString &id) = 0;
     virtual void disconnectDevice(const QString &id) = 0;
     // The controller pairing window (T-203): the status of the start arrives as
-    // finished("controller-pairing", "", status); the state follows by controllerStateChanged.
+    // finished("controller-pairing", "start", status) (and "stop" for the stop); the state follows by controllerStateChanged.
     virtual void startControllerPairing(int seconds) = 0;
     virtual void stopControllerPairing() = 0;
 
@@ -50,7 +50,7 @@ signals:
     void controllerRejected();
     void devicesListed(const QList<BtDevice> &devices);
     // op: "power" | "scan" | "pair" | "forget" | "connect" | "disconnect" | "controller-pairing";
-    // id: "" for power, scan and controller-pairing; status: see the XML ("ok", "pairing-failed", "timeout", ...).
+    // id: "" for power and scan, "start" or "stop" for controller-pairing; status: see the XML ("ok", "pairing-failed", "timeout", ...).
     void finished(const QString &op, const QString &id, const QString &status);
 
 protected:

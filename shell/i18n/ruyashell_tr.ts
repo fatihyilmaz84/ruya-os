@@ -449,9 +449,14 @@
 <context>
     <name>ControllerPairHint</name>
     <message>
-        <location filename="../qml/ControllerPairHint.qml" line="+30"/>
+        <location filename="../qml/ControllerPairHint.qml" line="+37"/>
         <source>Controller connected.</source>
         <translation>Kontrolcü bağlandı.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Press A to start pairing.</source>
+        <translation>Eşleştirmeyi başlatmak için A&apos;ya basın.</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -465,16 +470,16 @@
     </message>
     <message>
         <location line="+2"/>
-        <source>No controller was found. Hold the pairing button on your controller and try again.</source>
-        <translation>Kontrolcü bulunamadı. Kontrolcünüzün eşleştirme düğmesini basılı tutup yeniden deneyin.</translation>
+        <source>No controller was found. Hold the pairing button on your controller (on a DualSense: PS + Create) and try again.</source>
+        <translation>Kontrolcü bulunamadı. Kontrolcünüzün eşleştirme düğmesini basılı tutup (DualSense&apos;te: PS + Create) yeniden deneyin.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>No controller or keyboard found. Hold the pairing button on your controller until its light blinks.</source>
-        <translation>Kontrolcü ya da klavye bulunamadı. Kontrolcünüzün ışığı yanıp sönene kadar eşleştirme düğmesini basılı tutun.</translation>
+        <source>No controller or keyboard found. Hold the pairing button on your controller (on a DualSense: PS + Create) until its light blinks.</source>
+        <translation>Kontrolcü ya da klavye bulunamadı. Kontrolcünüzün ışığı yanıp sönene kadar eşleştirme düğmesini basılı tutun (DualSense&apos;te: PS + Create).</translation>
     </message>
     <message>
-        <location line="+101"/>
+        <location line="+137"/>
         <source>A device that is not a controller tried to connect and was ignored.</source>
         <translation>Kontrolcü olmayan bir cihaz bağlanmaya çalıştı ve yok sayıldı.</translation>
     </message>
@@ -887,7 +892,7 @@
 <context>
     <name>ProfilePicker</name>
     <message>
-        <location filename="../qml/ProfilePicker.qml" line="+32"/>
+        <location filename="../qml/ProfilePicker.qml" line="+43"/>
         <source>Who&apos;s playing?</source>
         <translation>Kim oynuyor?</translation>
     </message>
@@ -897,7 +902,7 @@
         <translation>Profiller</translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+16"/>
         <source>Waiting for the profiles service…</source>
         <translation>Profil hizmeti bekleniyor…</translation>
     </message>
@@ -1225,7 +1230,7 @@
         <translation>Geri</translation>
     </message>
     <message>
-        <location line="+50"/>
+        <location line="+52"/>
         <source>Enter a name first.</source>
         <translation>Önce bir ad girin.</translation>
     </message>
@@ -1280,7 +1285,7 @@
         <translation>Ağ</translation>
     </message>
     <message>
-        <location line="-276"/>
+        <location line="-278"/>
         <source>Try again</source>
         <translation>Yeniden dene</translation>
     </message>
@@ -1291,7 +1296,7 @@
         <translation>Atla</translation>
     </message>
     <message>
-        <location line="+92"/>
+        <location line="+94"/>
         <location line="+86"/>
         <source>Connect a controller</source>
         <translation>Bir kontrolcü bağlayın</translation>

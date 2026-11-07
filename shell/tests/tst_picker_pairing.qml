@@ -75,13 +75,51 @@ Item {
             tryCompare(Profiles, "activeProfile", "p2")
         }
 
-        function test_a_timed_out_window_is_opened_again_by_itself() {
+        function test_a_timed_out_window_is_opened_again_but_only_three_times() {
             Bluetooth.mockSetInputPresent(false)
             Bluetooth.mockPairingScript("timeout")
             tryVerify(() => !Bluetooth.inputPresent)
             startShell()
-            tryVerify(() => Bluetooth.mockPairingStarts() >= 2, 5000, "the window was opened again")
-            verify(hint().visible)
+            tryVerify(() => Bluetooth.mockPairingStarts() >= 3, 5000, "the window was opened again, twice")
+            tryCompare(find("pickerControllerHintText"), "text", "Press A to start pairing.", 3000)
+            compare(Bluetooth.controllerPairing, "timeout")
+            // time for a fourth window, if one were going to open: every window lasts 300 ms here
+            wait(1500)
+            compare(Bluetooth.mockPairingStarts(), 3, "nothing opens by itself after the third")
+            verify(hint().visible, "the prompt stays")
+            // A starts a new series (and does not sign anyone in)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => Bluetooth.mockPairingStarts() >= 4, 3000, "A opened a new window")
+            tryVerify(() => Bluetooth.mockPairingStarts() === 6 && hint().exhausted, 5000, "again three windows, then the prompt")
+            wait(1000)
+            compare(Bluetooth.mockPairingStarts(), 6)
+            compare(Profiles.activeProfile, "")
+        }
+
+        function test_the_text_names_the_dualsense_combination() {
+            Bluetooth.mockSetInputPresent(false)
+            tryVerify(() => !Bluetooth.inputPresent)
+            startShell()
+            tryVerify(() => hint().visible, 2000)
+            verify(find("pickerControllerHintText").text.indexOf("PS + Create") >= 0)
+            verify(find("pickerControllerHintText").text.indexOf("Hold the pairing button") >= 0, "and the generic words")
+        }
+
+        function test_a_stops_answer_is_not_taken_for_the_starts() {
+            Bluetooth.mockSetInputPresent(false)
+            Bluetooth.mockPairingScript("wait")
+            tryVerify(() => !Bluetooth.inputPresent)
+            startShell()
+            tryCompare(Bluetooth, "controllerPairing", "open")
+            tryVerify(() => hint().armed)
+            Bluetooth.setPowered(false)
+            tryCompare(Bluetooth, "powered", false)
+            // stop, then start again at once: the stop answers "ok", the start "unavailable"
+            hint().stop()
+            hint().start()
+            tryCompare(hint(), "startStatus", "unavailable", 3000)
+            verify(hint().failed, "the start's own answer decides")
+            verify(!hint().armed)
         }
 
         function test_signing_in_closes_the_window() {

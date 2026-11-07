@@ -9,13 +9,17 @@ import RuyaShell
 // While `active` the window is open; it is closed when `active` turns false or the item goes.
 // The window ends by itself when a controller pairs ("paired", then `paired()`), when
 // its time is up (`timedOut`; with `autoRetry` it is opened again at once, for a screen on
-// which nobody can press Retry), or when the service cannot open it (`failed`).
+// which nobody can press Retry, but only `maxAutoWindows` windows in a row: then `exhausted`
+// says "Press A to start pairing" and `newSeries()` starts again), or when the service cannot
+// open it (`failed`). The words are in `message`: the one place to make them per controller
+// family (T-260).
 Item {
     id: hint
 
     property real u: 1
     property bool active: false
     property bool autoRetry: false
+    property int maxAutoWindows: 3
 
     // The window ended because its time was up.
     readonly property bool timedOut: active && armed && sawOpen && Bluetooth.controllerPairing === "timeout"
@@ -25,16 +29,21 @@ Item {
     // The service could not open the window (no Bluetooth, ...).
     readonly property bool failed: active && startStatus !== "" && startStatus !== "ok" && startStatus !== "busy"
 
+    // Every automatic window of this series ran out: nothing more opens by itself.
+    readonly property bool exhausted: autoRetry && timedOut && windows >= maxAutoWindows
+
     readonly property string message: {
         if (succeeded)
             return qsTr("Controller connected.")
+        if (exhausted)
+            return qsTr("Press A to start pairing.")
         if (startStatus === "unavailable")
             return qsTr("Bluetooth is off or missing, so a controller cannot be paired here.")
         if (failed)
             return qsTr("Could not start looking for controllers.")
         if (timedOut)
-            return qsTr("No controller was found. Hold the pairing button on your controller and try again.")
-        return qsTr("No controller or keyboard found. Hold the pairing button on your controller until its light blinks.")
+            return qsTr("No controller was found. Hold the pairing button on your controller (on a DualSense: PS + Create) and try again.")
+        return qsTr("No controller or keyboard found. Hold the pairing button on your controller (on a DualSense: PS + Create) until its light blinks.")
     }
 
     signal paired()
@@ -46,6 +55,9 @@ Item {
     property bool rejected: false          // a device that is not a controller was turned away
     property string startStatus: ""        // the service's answer to the start
     property bool reported: false
+    property int windows: 0                // windows opened in this series (the first, then each automatic one)
+    property int startsSent: 0             // replies are matched to the newest start only
+    property int startsAnswered: 0
 
     implicitHeight: column.implicitHeight
     implicitWidth: column.implicitWidth
@@ -58,7 +70,17 @@ Item {
         reported = false
         startStatus = ""
         inputWasPresent = Bluetooth.inputPresent
+        windows += 1
+        startsSent += 1
         Bluetooth.startControllerPairing()
+    }
+
+    // After the automatic windows ran out: a new series (the screen's A).
+    function newSeries() {
+        if (!active || !exhausted)
+            return
+        windows = 0
+        begin()
     }
 
     function end() {
@@ -89,7 +111,7 @@ Item {
         if (succeeded && !reported) {
             reported = true
             hint.paired()
-        } else if (timedOut && autoRetry) {
+        } else if (timedOut && autoRetry && !exhausted) {
             hint.retry()
         }
     }
@@ -100,6 +122,7 @@ Item {
         if (started)
             return
         started = true
+        windows = 0
         begin()
     }
     function stop() {
@@ -118,7 +141,11 @@ Item {
     Connections {
         target: Bluetooth
         function onFinished(op, id, status) {
-            if (op !== "controller-pairing" || !hint.active || hint.startStatus !== "")
+            // Only the answer to the newest start counts: not a stop's, not an older start's.
+            if (op !== "controller-pairing" || id !== "start")
+                return
+            hint.startsAnswered += 1
+            if (hint.startsAnswered < hint.startsSent || !hint.active)
                 return
             hint.startStatus = status
             hint.armed = status === "ok" || status === "busy"

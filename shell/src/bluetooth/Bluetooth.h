@@ -58,7 +58,7 @@ public:
     Q_INVOKABLE void connectDevice(const QString &id);
     Q_INVOKABLE void disconnectDevice(const QString &id);
     // Opens the window in which a controller (or keyboard) can pair itself, and closes it. The
-    // status of the start arrives as finished("controller-pairing", "", status).
+    // status of the start arrives as finished("controller-pairing", "start", status); the stop answers with id "stop".
     Q_INVOKABLE void startControllerPairing();
     Q_INVOKABLE void stopControllerPairing();
 

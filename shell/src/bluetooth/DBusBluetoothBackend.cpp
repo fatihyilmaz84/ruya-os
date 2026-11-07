@@ -176,13 +176,13 @@ void DBusBluetoothBackend::disconnectDevice(const QString &id)
 
 void DBusBluetoothBackend::startControllerPairing(int seconds)
 {
-    startCommand(QStringLiteral("StartControllerPairing"), QStringLiteral("controller-pairing"), QString(),
+    startCommand(QStringLiteral("StartControllerPairing"), QStringLiteral("controller-pairing"), QStringLiteral("start"),
                  {QVariant::fromValue(quint32(qMax(0, seconds)))});
 }
 
 void DBusBluetoothBackend::stopControllerPairing()
 {
-    startCommand(QStringLiteral("StopControllerPairing"), QStringLiteral("controller-pairing"), QString(), {});
+    startCommand(QStringLiteral("StopControllerPairing"), QStringLiteral("controller-pairing"), QStringLiteral("stop"), {});
 }
 
 void DBusBluetoothBackend::onControllerRejected()

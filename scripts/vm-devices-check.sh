@@ -11,6 +11,8 @@
 # refused; then the Bluetooth part: bluetooth.service is active and org.bluez is on the bus, Powered is false,
 # ListDevices answers an empty list, StartScan/Pair/Connect answer unavailable (no adapter in the VM; a real
 # adapter and controller are NOT checked here), unknown ids and empty ids are refused, another user is
+# refused. T-203: InputPresent is true (QEMU's keyboard counts, so /sys/class/input is readable in the user unit), StartControllerPairing
+# answers unavailable (no adapter) and invalid for 301 s, ControllerPairingState stays idle, StopControllerPairing answers ok, another user is
 # refused. Needs the shell logged in (VM booted with -Audio).
 # Then the storage part (T-196): GetSystemUsage matches `stat -f /var` (within 1 %), apps_bytes and data_bytes
 # are measured in the background (data_bytes is -1 for now: the profile homes are 0700 profile users'),
@@ -141,6 +143,25 @@ bluetooth_check() {
     else
         echo "$out"; ok "bluetooth call from nobody refused"
     fi
+    # T-203: the controller pairing window. No adapter in the VM, so it cannot open; the rest is checked.
+    ip="$(busctl --system get-property "$svc" "$path" "$bt" InputPresent)"
+    echo "InputPresent: $ip"
+    case "$ip" in 'b true') ok "InputPresent is true (QEMU's keyboard counts; /sys/class/input is readable in the user unit)";; *) bad "InputPresent is not true: $ip";; esac
+    r="$(busctl --system call "$svc" "$path" "$bt" StartControllerPairing u 0)"
+    case "$r" in 's "unavailable"') ok "StartControllerPairing answers unavailable (no adapter)";; *) bad "StartControllerPairing answered: $r";; esac
+    st="$(busctl --system get-property "$svc" "$path" "$bt" ControllerPairingState)"
+    case "$st" in 's "idle"') ok "ControllerPairingState stays idle";; *) bad "ControllerPairingState is: $st";; esac
+    r="$(busctl --system call "$svc" "$path" "$bt" StartControllerPairing u 301)"
+    case "$r" in 's "invalid"') ok "a window of 301 s is invalid";; *) bad "StartControllerPairing 301 answered: $r";; esac
+    r="$(busctl --system call "$svc" "$path" "$bt" StopControllerPairing)"
+    case "$r" in 's "ok"') ok "StopControllerPairing answers ok";; *) bad "StopControllerPairing answered: $r";; esac
+    for m in "StartControllerPairing u 0" "StopControllerPairing"; do
+        if out="$(runuser -u nobody -- busctl --system call "$svc" "$path" "$bt" $m 2>&1)"; then
+            bad "nobody could call $m: $out"
+        else
+            echo "$out"; ok "$m from nobody refused"
+        fi
+    done
     as_shell systemctl --user is-active ruya-devices >/dev/null && ok "ruya-devices still active after the Bluetooth calls" || bad "ruya-devices not active"
 }
 
