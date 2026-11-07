@@ -69,4 +69,5 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | [T-278](tasks/T-278-background-and-memory-policy-game-mode.md) | **[lead]** Background and memory policy ("game mode") | todo | T-273, T-274, T-275, T-201 |
 | [T-279](tasks/T-279-app-cooperation-save-state-and-background-audio.md) | App cooperation: save state, background audio, developer guide | todo | T-273, T-275 |
 | [T-280](tasks/T-280-gap-free-boot-handover.md) | **[lead]** Close the dark gap between the boot splash and the shell's first frame | todo | T-269 |
+| [T-281](tasks/T-281-art-glow-shadow-and-standard-card-sizes.md) | Cards glow in the colour of their art (Hue-style shadow) and one standard set of card sizes (owner request) | todo | — |
 
