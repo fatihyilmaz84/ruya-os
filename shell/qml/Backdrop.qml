@@ -9,6 +9,11 @@ Item {
     property color tint: Theme.defaultTint
     Behavior on tint { ColorAnimation { duration: Theme.tintMs; easing.type: Easing.InOutQuad } }
 
+    // What the blobs and the gradient are built from: the theme's blob colours with `tint` mixed in
+    // at the theme's share (all of it in Dreamglass and Daylight, a little in the others, T-271).
+    readonly property color tintA: Theme.blobTintA(tint)
+    readonly property color tintB: Theme.blobTintB(tint)
+
     // False while a wallpaper covers the backdrop (T-208): nothing is drawn and the blobs rest.
     property bool shown: true
     visible: shown
@@ -20,7 +25,7 @@ Item {
         objectName: "backdropGradient"
         anchors.fill: parent
         gradient: Gradient {
-            GradientStop { position: 0.0; color: Theme.backdropTop(backdrop.tint) }
+            GradientStop { position: 0.0; color: Theme.backdropTop(backdrop.tintA) }
             GradientStop { position: 1.0; color: Theme.background }
         }
     }
@@ -55,14 +60,14 @@ Item {
     Blob {
         id: blobA
         objectName: "blobA"
-        color: backdrop.tint
+        color: backdrop.tintA
         x: backdrop.width * (-0.1 + 0.25 * driftX)
         y: backdrop.height * (-0.3 + 0.2 * driftY)
     }
     Blob {
         id: blobB
         objectName: "blobB"
-        color: Qt.lighter(backdrop.tint, 1.4)
+        color: Qt.lighter(backdrop.tintB, 1.4)
         period: 23000
         opacity: Theme.blobOpacityB
         x: backdrop.width * (0.55 - 0.2 * driftX)
