@@ -1,1 +1,15 @@
-kargs = ["quiet", "splash", "loglevel=3", "rd.udev.log_level=3"]
+# Silent boot (T-269): nothing but the splash on the screen between the firmware and the shell.
+# Errors are not lost: the kernel log and the journal keep everything (`journalctl -b`, `dmesg`).
+#   quiet splash loglevel=0      kernel messages stay off the console (dmesg has them)
+#   vt.global_cursor_default=0   no blinking text cursor on the VT
+#   systemd.show_status=false    no "[ OK ] Started ..." lines (also in the initramfs: rd.)
+#   udev.log_level=0             no udev noise
+#   rd.plymouth=1 plymouth.enable=1   the splash runs in the initramfs and after the switch-root
+#   plymouth.ignore-serial-consoles   a serial console (VMs: console=ttyS0) must not turn the splash into text
+kargs = [
+    "quiet", "splash", "loglevel=0",
+    "vt.global_cursor_default=0",
+    "systemd.show_status=false", "rd.systemd.show_status=false",
+    "rd.udev.log_level=0", "udev.log_level=0",
+    "rd.plymouth=1", "plymouth.enable=1", "plymouth.ignore-serial-consoles",
+]

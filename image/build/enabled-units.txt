@@ -6,6 +6,7 @@
 ruya-boot-marker.service      greenboot waits for the marker the shell writes
 ruya-compositor@.service      the shell, a Wayland compositor on KMS
 ruya-flathub-remote.service   adds the Flathub remote once
+ruya-grub-menu.service        boot menu policy on disks with an older GRUB config (T-269)
 ruya-inputd.service           controller input
 ruya-library.service          library service
 ruya-profiles.service         profiles and PINs

@@ -60,10 +60,10 @@ RUN --mount=type=bind,source=image/build,target=/ctx/build \
     cp -r --no-preserve=mode,ownership /ctx/rootfs/. / \
     && mkdir -p /usr/lib/ruyaos \
     && echo "${RUYA_VERSION}" > /usr/lib/ruyaos/version \
-    && chmod 0755 /usr/libexec/ruyaos/wait-shell-ready /usr/lib/greenboot/check/required.d/*.sh \
+    && chmod 0755 /usr/libexec/ruyaos/wait-shell-ready /usr/libexec/ruyaos/grub-menu-sync /usr/lib/greenboot/check/required.d/*.sh \
     && (cd /ctx/rootfs && find . -mindepth 1 ! -type l -print0 | xargs -0 -I{} find "/{}" -maxdepth 0 -perm /022 > /tmp/writable \
         && test ! -s /tmp/writable || { echo "group/world-writable files shipped from image/rootfs:"; cat /tmp/writable; exit 1; }) \
-    && systemctl enable ruya-compositor@tty1.service ruya-inputd.service ruya-profiles.service ruya-session.service ruya-library.service ruya-store.service ruya-update.service ruya-flathub-remote.service ruya-boot-marker.service bluetooth.service \
+    && systemctl enable ruya-compositor@tty1.service ruya-inputd.service ruya-profiles.service ruya-session.service ruya-library.service ruya-store.service ruya-update.service ruya-flathub-remote.service ruya-boot-marker.service ruya-grub-menu.service bluetooth.service \
     && systemctl --global enable ruya-devices.service \
     && systemctl enable greenboot-healthcheck.service greenboot-set-rollback-trigger.service \
     && systemctl set-default graphical.target \

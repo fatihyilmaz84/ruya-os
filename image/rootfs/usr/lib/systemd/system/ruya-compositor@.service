@@ -6,6 +6,12 @@
 [Unit]
 Description=RuyaOS shell and compositor on %I
 After=systemd-user-sessions.service plymouth-quit-wait.service
+# Boot and shutdown splash (T-269). Start: Plymouth must be gone before this unit starts, because eglfs
+# opens the DRM device as the unprivileged ruya-shell and only gets the display (DRM master) when no
+# other process holds it; `plymouth deactivate` does not release it (measured in the VM: the shell then
+# fails every page flip with "Permission denied"). Shutdown: the shell is gone before Plymouth draws
+# the reboot/poweroff splash.
+Before=plymouth-halt.service plymouth-kexec.service plymouth-poweroff.service plymouth-reboot.service
 Wants=dbus.socket systemd-logind.service
 After=dbus.socket systemd-logind.service
 Conflicts=getty@%i.service

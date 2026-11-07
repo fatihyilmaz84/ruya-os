@@ -10,7 +10,7 @@ dnf -y install --setopt=install_weak_deps=False \
     udisks2 exfatprogs ntfs-3g \
     flatpak fedora-flathub-remote \
     greenboot greenboot-default-health-checks \
-    plymouth plymouth-theme-spinner \
+    plymouth plymouth-theme-spinner plymouth-plugin-script \
     google-noto-sans-fonts
 
 # Firmware for the radios and sound chips a living-room PC has. linux-firmware only recommends
