@@ -51,6 +51,10 @@ public:
     Q_INVOKABLE static QString formatBytes(qint64 bytes);
 
     Q_INVOKABLE void eject(const QString &id);
+    // Saves plain report files (a map of file name -> text; names `RuyaOS-...txt|json`, see the
+    // XML) onto a mounted, writable, removable volume. The answer is `finished("saveReport", id,
+    // status)`. The shell composes the text, so what it left out (addresses) never leaves the shell.
+    Q_INVOKABLE void saveReport(const QString &id, const QVariantMap &files);
     // Reads the internal storage numbers again (free space changes without a signal: ask when
     // showing it).
     Q_INVOKABLE void refreshInternal();
@@ -68,6 +72,11 @@ public:
     // eject() calls since the last reset; mockRepublish publishes the unchanged list again.
     Q_INVOKABLE void mockHoldEject(bool hold);
     Q_INVOKABLE int mockEjectCalls() const;
+    // saveReport() with the mock: the files of the last accepted call (name -> text), the number of
+    // calls, and a status that later calls answer instead of "ok" ("" = "ok"). Reset by mockReset.
+    Q_INVOKABLE QVariantMap mockSavedFiles() const;
+    Q_INVOKABLE int mockSaveCalls() const;
+    Q_INVOKABLE void mockSetSaveStatus(const QString &status);
     Q_INVOKABLE void mockRepublish();
     // Asks the backend for the list; its reply arrives after `ms` and shows the list as it is now.
     // mockPendingReplies: how many replies are still on their way.
@@ -93,7 +102,7 @@ signals:
     // `groupWindowMs` of the first one are grouped by their drive; a volume that left the list
     // again before the window ended is not counted.
     void driveAdded(const QString &drive, const QString &label, int volumeCount);
-    // op: "eject"; status: see api/dbus/org.ruyaos.Devices1.xml
+    // op: "eject" | "saveReport"; status: see api/dbus/org.ruyaos.Devices1.xml
     void finished(const QString &op, const QString &id, const QString &status);
 
 private:

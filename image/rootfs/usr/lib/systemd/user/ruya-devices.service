@@ -19,6 +19,9 @@ StateDirectoryMode=0700
 UMask=0077
 ProtectSystem=strict
 ProtectHome=read-only
+# Storage.SaveReport (T-226) writes the system report to a USB drive that udisks mounted under
+# /run/media/<user>/: the only place besides the state directory this unit may write.
+ReadWritePaths=-/run/media
 PrivateTmp=yes
 PrivateDevices=yes
 NoNewPrivileges=yes

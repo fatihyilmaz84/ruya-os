@@ -365,6 +365,7 @@ FocusScope {
         appDetail: appDetailPage,
         details: libraryDetailsPage,
         settings: settingsPage,
+        systemInfo: systemInfoPage,
         power: powerPage
     })
     readonly property var pageComponents: Object.assign({}, builtinPages, extraPages)
@@ -827,6 +828,7 @@ FocusScope {
     Component { id: appDetailPage; AppDetailPage {} }
     Component { id: libraryDetailsPage; LibraryDetailsPage {} }
     Component { id: settingsPage; SettingsPage {} }
+    Component { id: systemInfoPage; SystemInfoPage {} }
     Component { id: powerPage; PowerPage {} }
 
     // Hosts the page slots, one per open page (plus any still fading out). Its only

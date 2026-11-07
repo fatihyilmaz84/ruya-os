@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Checks the Devices service (audio T-128, network T-132, controller batteries T-161, Bluetooth T-173) inside a running VM booted with sound. Copy and run as root:
 #   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-devices-check.sh root@127.0.0.1:/root/
-#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-devices-check.sh [check|events|security|state|batteries|bluetooth|storage|thermal|thermal-fake|time]
+#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-devices-check.sh [check|events|security|state|batteries|bluetooth|storage|thermal|thermal-fake|time|system]
 # check (default): unit active, name owned by ruya-shell, ListSinks, a MasterVolume write reaches
 # PipeWire, a call from another user is refused; then the network part: State is connected, Primary is
 # the ethernet link with an IPv4 address, ListWifi and Scan answer, unknown ids are refused, another
@@ -31,6 +31,15 @@
 # timedated), the shell's own call is `forbidden` while profiles exist and nobody (or a standard profile) is signed in, `ok` for a signed-in admin
 # and while no profile exists (first-boot setup), pkcheck as the service's process allows org.freedesktop.timedate1.set-timezone and refuses set-time, set-ntp
 # and set-local-rtc. The original zone is restored. `time` runs only this part.
+# Then the system information part (T-226): Devices1.System.GetInfo against the guest's own files and tools: console.kernel is
+# uname -r, console.version the image's version file, firmware and Secure Boot match /sys/firmware, uptime follows /proc/uptime
+# and moves between calls, cpu.model/threads/cores match /proc/cpuinfo and lscpu, memory total/available/used and swap match
+# /proc/meminfo (no swap: the keys are absent, not 0), the GPU's pci_id and driver match /sys/class/drm/card0 (no GPU: absent),
+# every internal disk of lsblk is in storage.drives, the default route's interface and MAC match, no Bluetooth adapter: no chipset;
+# another user is refused. Then Storage.SaveReport: an unknown volume, unsafe file names and no files are refused, another user is
+# refused, and with a mounted removable volume (attach one to QEMU: -drive if=none,id=u,file=stick.img,format=raw -device usb-storage,drive=u)
+# the two report files are written there and read back. `system` runs only these parts. The hardware part (the Dell: compare the
+# page with `lscpu`, `free`, `lspci`) is done by eye on the machine, see the T-226 Outcome.
 # events: only the PipeWire event checks (T-133); IDLE=60 adds the idle-process count (also part of check; samples the process list for IDLE seconds).
 # state: prints State and Primary (for the link test, see docs/dev-setup.md).
 set -u
@@ -324,6 +333,149 @@ thermal_sys_cpu() {
 
 thermal_level() { busctl --system get-property "$svc" "$path" "$therm" Level; }
 
+# T-226: Devices1.System.GetInfo against /proc, /sys and the usual tools inside the guest, and
+# Devices1.Storage.SaveReport's refusals (and, with a mounted USB stick, a real save).
+sysi=org.ruyaos.Devices1.System
+
+# sys_key <key>: the value of one scalar key of GetInfo (strings without their quotes), "" when absent.
+sys_key() {
+    local line
+    line="$(busctl --system call "$svc" "$path" "$sysi" GetInfo 2>/dev/null)" || return
+    echo "$line" | grep -o "\"$1\" [stb] \(\"[^\"]*\"\|[0-9a-z]*\)" | head -1 | sed -e 's/^"[^"]*" [stb] //' -e 's/^"//' -e 's/"$//'
+}
+
+# near <a> <b> <percent>: a is within percent of b.
+near() { awk -v a="$1" -v b="$2" -v p="$3" 'BEGIN { d = a - b; if (d < 0) d = -d; exit !(d <= b * p / 100) }'; }
+
+sysinfo_check() {
+    echo "--- system information (T-226): Devices1.System.GetInfo against /proc and /sys"
+    local raw v want n slot sizes id mp vols out s
+    raw="$(busctl --system call "$svc" "$path" "$sysi" GetInfo)"
+    echo "GetInfo: $(echo "$raw" | cut -c1-300)"
+    case "$raw" in 'a{sv} '[1-9]*) ok "GetInfo answers a dictionary";; *) bad "GetInfo did not answer a non-empty a{sv}"; return;; esac
+    if out="$(runuser -u nobody -- busctl --system call "$svc" "$path" "$sysi" GetInfo 2>&1)"; then
+        bad "nobody could call GetInfo: $out"
+    else
+        echo "$out"; ok "GetInfo from nobody refused"
+    fi
+
+    # Console
+    v="$(sys_key console.kernel)"; [ "$v" = "$(uname -r)" ] && ok "console.kernel is uname -r ($v)" || bad "console.kernel '$v' vs $(uname -r)"
+    v="$(sys_key console.version)"; want="$(cat /usr/lib/ruyaos/version)"; [ "$v" = "$want" ] && ok "console.version is /usr/lib/ruyaos/version ($v)" || bad "console.version '$v' vs '$want'"
+    v="$(sys_key console.firmware)"
+    if [ -d /sys/firmware/efi ]; then want=uefi; else want=bios; fi
+    [ "$v" = "$want" ] && ok "console.firmware is $want" || bad "console.firmware '$v' vs $want"
+    if [ -d /sys/firmware/efi ] && [ -r /sys/firmware/efi/efivars/SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c ]; then
+        want="$(od -An -tu1 -j4 -N1 /sys/firmware/efi/efivars/SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c | tr -d ' ')"
+        v="$(sys_key console.secure_boot)"
+        if { [ "$want" = 1 ] && [ "$v" = true ]; } || { [ "$want" = 0 ] && [ "$v" = false ]; }; then ok "console.secure_boot matches the EFI variable ($v)"; else bad "console.secure_boot '$v' vs $want"; fi
+    fi
+    v="$(sys_key console.uptime_s)"; want="$(cut -d. -f1 /proc/uptime)"
+    if [ $(( want - ${v:-0} )) -le 5 ] && [ $(( ${v:-0} - want )) -le 5 ]; then ok "console.uptime_s ($v) follows /proc/uptime ($want)"; else bad "console.uptime_s '$v' vs $want"; fi
+    sleep 2
+    n="$(sys_key console.uptime_s)"
+    [ "${n:-0}" -ge $(( ${v:-0} + 1 )) ] && ok "the live value moves between calls ($v -> $n)" || bad "console.uptime_s did not move ($v -> $n)"
+
+    # Processor
+    want="$(grep -m1 '^model name' /proc/cpuinfo | cut -d: -f2- | xargs)"
+    v="$(sys_key cpu.model)"; [ "$v" = "$want" ] && ok "cpu.model is '$v'" || bad "cpu.model '$v' vs '$want'"
+    want="$(grep -c '^processor' /proc/cpuinfo)"
+    v="$(sys_key cpu.threads)"; [ "$v" = "$want" ] && ok "cpu.threads is $v" || bad "cpu.threads '$v' vs $want"
+    if command -v lscpu >/dev/null; then
+        want="$(lscpu -p=CORE,SOCKET | grep -v '^#' | sort -u | wc -l)"
+        v="$(sys_key cpu.cores)"; [ "$v" = "$want" ] && ok "cpu.cores is $v (lscpu)" || bad "cpu.cores '$v' vs $want (lscpu)"
+    fi
+
+    # Memory
+    want=$(( $(awk '/^MemTotal:/ {print $2}' /proc/meminfo) * 1024 ))
+    v="$(sys_key memory.total_bytes)"; [ "$v" = "$want" ] && ok "memory.total_bytes matches MemTotal ($v)" || bad "memory.total_bytes '$v' vs $want"
+    want=$(( $(awk '/^MemAvailable:/ {print $2}' /proc/meminfo) * 1024 ))
+    v="$(sys_key memory.available_bytes)"
+    if near "${v:-0}" "$want" 5; then ok "memory.available_bytes ($v) is within 5 % of MemAvailable ($want)"; else bad "memory.available_bytes '$v' vs $want"; fi
+    n="$(sys_key memory.used_bytes)"
+    [ $(( ${n:-0} + ${v:-0} )) = "$(sys_key memory.total_bytes)" ] && ok "used + available = total" || bad "used $n + available $v is not the total"
+    want=$(( $(awk '/^SwapTotal:/ {print $2}' /proc/meminfo) * 1024 ))
+    v="$(sys_key memory.swap_total_bytes)"
+    if [ "$want" = 0 ]; then
+        [ -z "$v" ] && ok "no swap: memory.swap_total_bytes is absent, not 0" || bad "memory.swap_total_bytes '$v' on a machine without swap"
+    else
+        [ "$v" = "$want" ] && ok "memory.swap_total_bytes matches SwapTotal ($v)" || bad "memory.swap_total_bytes '$v' vs $want"
+    fi
+
+    # Graphics
+    if [ -e /sys/class/drm/card0/device/vendor ]; then
+        want="$(sed 's/^0x//' /sys/class/drm/card0/device/vendor):$(sed 's/^0x//' /sys/class/drm/card0/device/device)"
+        v="$(sys_key graphics.pci_id)"; [ "$v" = "$want" ] && ok "graphics.pci_id is $v" || bad "graphics.pci_id '$v' vs $want"
+        want="$(basename "$(readlink -f /sys/class/drm/card0/device/driver 2>/dev/null)")"
+        v="$(sys_key graphics.driver)"; [ "$v" = "$want" ] && ok "graphics.driver is $v" || bad "graphics.driver '$v' vs '$want'"
+        if command -v lspci >/dev/null; then
+            slot="$(basename "$(readlink -f /sys/class/drm/card0/device)")"
+            echo "compare by eye: lspci: $(lspci -s "${slot#0000:}" 2>/dev/null) / graphics.vendor+model: $(sys_key graphics.vendor) $(sys_key graphics.model)"
+        fi
+    else
+        [ -z "$(sys_key graphics.model)" ] && ok "no GPU in /sys: graphics.model is absent" || bad "graphics.model without a GPU"
+    fi
+
+    # Storage: every internal disk lsblk knows is a record (its size appears in the reply)
+    sizes="$(lsblk -dbn -o SIZE,RM,TRAN,TYPE 2>/dev/null | awk '$4 == "disk" && $2 == 0 && $3 != "usb" {print $1}')"
+    vols="$(busctl --system call "$svc" "$path" "$sysi" GetInfo)"
+    n=0
+    for s in $sizes; do
+        if echo "$vols" | grep -q "\"size_bytes\" t $s"; then n=$((n + 1)); else bad "internal disk of $s bytes is not in storage.drives"; fi
+    done
+    if [ -z "$sizes" ]; then echo "lsblk lists no internal disk"; else ok "$n internal disk(s) found in storage.drives (lsblk sizes)"; fi
+
+    # Network
+    want="$(ip route show default 2>/dev/null | awk '{for (i = 1; i < NF; i++) if ($i == "dev") {print $(i + 1); exit}}')"
+    v="$(sys_key network.interface)"
+    if [ -n "$want" ]; then
+        [ "$v" = "$want" ] && ok "network.interface is the default route's ($v)" || bad "network.interface '$v' vs $want"
+        want="$(cat "/sys/class/net/$want/address")"
+        v="$(sys_key network.mac)"; [ "$v" = "$want" ] && ok "network.mac matches /sys ($v)" || bad "network.mac '$v' vs $want"
+    else
+        [ -z "$v" ] && ok "no default route: network.interface is absent" || bad "network.interface '$v' without a default route"
+    fi
+
+    # Bluetooth: none in the VM
+    if ls /sys/class/bluetooth/hci* >/dev/null 2>&1; then
+        echo "bluetooth.chipset: $(sys_key bluetooth.chipset) / address: $(sys_key bluetooth.address)"
+    else
+        [ -z "$(sys_key bluetooth.chipset)" ] && ok "no Bluetooth adapter: bluetooth.chipset is absent" || bad "bluetooth.chipset without an adapter"
+    fi
+    as_shell systemctl --user is-active ruya-devices >/dev/null && ok "ruya-devices still active after the System calls" || bad "ruya-devices not active"
+
+    echo "--- report to USB (T-226): Devices1.Storage.SaveReport"
+    out="$(busctl --system call "$svc" "$path" "$stor" SaveReport 'sa{ss}' "/no/such/volume" 1 "RuyaOS-system-report.txt" "x")"
+    [ "$out" = 'ss "unknown-volume" ""' ] && ok "an unknown volume is refused" || bad "SaveReport unknown volume: $out"
+    for name in "../evil.txt" "RuyaOS-x.sh" "autorun.inf" "RuyaOS-.txt" "/etc/passwd"; do
+        out="$(busctl --system call "$svc" "$path" "$stor" SaveReport 'sa{ss}' "/no/such/volume" 1 "$name" "x")"
+        [ "$out" = 'ss "invalid" ""' ] && ok "file name '$name' is invalid" || bad "SaveReport '$name': $out"
+    done
+    out="$(busctl --system call "$svc" "$path" "$stor" SaveReport 'sa{ss}' "/no/such/volume" 0)"
+    [ "$out" = 'ss "invalid" ""' ] && ok "no file is invalid" || bad "SaveReport without files: $out"
+    if out="$(runuser -u nobody -- busctl --system call "$svc" "$path" "$stor" SaveReport 'sa{ss}' "/x" 1 "RuyaOS-a.txt" "x" 2>&1)"; then
+        bad "nobody could call SaveReport: $out"
+    else
+        echo "$out"; ok "SaveReport from nobody refused"
+    fi
+    vols="$(busctl --system call "$svc" "$path" "$stor" ListVolumes)"
+    if echo "$vols" | grep -q '"removable" b true' && echo "$vols" | grep -q '"mounted" b true'; then
+        id="$(echo "$vols" | grep -o '"id" s "[^"]*"' | head -1 | sed 's/^"id" s "//; s/"$//')"
+        mp="$(echo "$vols" | grep -o '"mount_point" s "[^"]*"' | head -1 | sed 's/^"mount_point" s "//; s/"$//')"
+        out="$(busctl --system call "$svc" "$path" "$stor" SaveReport 'sa{ss}' "$id" 2 "RuyaOS-system-report.txt" "report text" "RuyaOS-system-report.json" "{}")"
+        echo "SaveReport on $id ($mp): $out"
+        case "$out" in
+            'ss "ok" '*)
+                [ "$(cat "$mp/RuyaOS-system-report.txt" 2>/dev/null)" = "report text" ] && ok "the report text is on the stick" || bad "no report text at $mp"
+                [ -f "$mp/RuyaOS-system-report.json" ] && ok "the JSON is on the stick" || bad "no JSON at $mp"
+                rm -f "$mp/RuyaOS-system-report.txt" "$mp/RuyaOS-system-report.json";;
+            *) bad "SaveReport on a mounted stick answered $out";;
+        esac
+    else
+        echo "SKIP: no mounted removable volume in the VM (attach a USB stick, see the T-226 Outcome)"
+    fi
+}
+
 thermal_check() {
     echo "--- thermal (T-200): Devices1.Thermal"
     local raw lvl svc_cpu sys_cpu d out
@@ -588,6 +740,8 @@ check)
 
     time_check
 
+    sysinfo_check
+
     events_check "${IDLE:-60}"
     ;;
 bluetooth)
@@ -604,6 +758,9 @@ thermal-fake)
     ;;
 time)
     time_check
+    ;;
+system)
+    sysinfo_check
     ;;
 events)
     events_check "${IDLE:-0}"

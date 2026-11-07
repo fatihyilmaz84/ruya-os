@@ -732,6 +732,7 @@ dependencies = [
  "blocking",
  "futures-lite",
  "libc",
+ "ruya-sysinfo",
  "serde",
  "serde_json",
  "tempfile",
@@ -792,6 +793,14 @@ dependencies = [
  "rustix",
  "tempfile",
  "zbus",
+]
+
+[[package]]
+name = "ruya-sysinfo"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "tempfile",
 ]
 
 [[package]]

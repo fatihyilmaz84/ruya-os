@@ -1,4 +1,4 @@
-//! org.ruyaos.Devices1.Audio, .Network, .Bluetooth, .Storage, .Batteries and .Thermal on D-Bus. Thin adapter: the rules live in
+//! org.ruyaos.Devices1.Audio, .Network, .Bluetooth, .Storage, .Batteries, .Thermal, .Time and .System on D-Bus. Thin adapter: the rules live in
 //! `audio.rs`, `network.rs`, `bluetooth.rs`, `storage.rs`, `battery.rs` and `thermal.rs`.
 
 use std::collections::{BTreeMap, HashMap};
@@ -11,7 +11,7 @@ use futures_lite::future;
 use futures_lite::StreamExt;
 use zbus::message::Header;
 use zbus::object_server::SignalEmitter;
-use zbus::zvariant::{OwnedValue, Value};
+use zbus::zvariant::{Array, Dict, OwnedValue, Signature, Value};
 use zbus::{fdo, interface, Connection, MatchRule, MessageStream};
 
 use crate::audio::Audio;
@@ -22,7 +22,9 @@ use crate::bluetooth::{self, Bluetooth, Bluez, BtError};
 use crate::debounce;
 use crate::input::InputPresence;
 use crate::network::{self, Network, NetworkManager};
+use crate::report;
 use crate::storage::{self, Storage, Udisks};
+use crate::sysinfo::SystemInfo;
 use crate::sysusage::{MonotonicClock, Refresh, SystemSource, SystemUsage};
 use crate::thermal::{self, Monitor, Source};
 use crate::time::{self, ProfileState, Time, Timedate};
@@ -1051,6 +1053,15 @@ impl StorageIface {
         status.as_str().to_owned()
     }
 
+    /// Plain report files onto a mounted removable volume (`report.rs` checks and writes, on the
+    /// blocking pool; the content is the caller's).
+    #[zbus(out_args("status", "path"))]
+    async fn save_report(&self, id: &str, files: BTreeMap<String, String>) -> (String, String) {
+        let (storage, id) = (self.storage.clone(), id.to_owned());
+        let (status, path) = unblock(move || report::save(&storage, &id, &files)).await;
+        (status.as_str().to_owned(), path)
+    }
+
     #[zbus(signal)]
     async fn volumes_changed(emitter: &SignalEmitter<'_>) -> zbus::Result<()>;
 
@@ -1463,4 +1474,123 @@ async fn announce_time(connection: &Connection, changes: &time::Changes) {
         .await
         .emit(iface.signal_emitter(), changes)
         .await;
+}
+
+pub type SharedSystem = Arc<SystemInfo>;
+
+pub struct SystemIface {
+    system: SharedSystem,
+}
+
+impl SystemIface {
+    pub fn new(system: SharedSystem) -> Self {
+        SystemIface { system }
+    }
+}
+
+/// One value of the collector as D-Bus knows it: text `s`, numbers `t`, flags `b`, a table `aa{sv}`.
+fn system_value(value: &ruya_sysinfo::Value) -> Option<Value<'static>> {
+    match value {
+        ruya_sysinfo::Value::Text(t) => Some(Value::from(t.clone())),
+        ruya_sysinfo::Value::Unsigned(n) => Some(Value::from(*n)),
+        ruya_sysinfo::Value::Bool(b) => Some(Value::from(*b)),
+        ruya_sysinfo::Value::Table(rows) => {
+            let row_type = Signature::dict(Signature::Str, Signature::Variant);
+            let mut array = Array::new(&row_type);
+            for row in rows {
+                let mut dict = Dict::new(&Signature::Str, &Signature::Variant);
+                for (k, v) in row.iter() {
+                    let inner = system_value(v)?;
+                    dict.append(Value::from(k.clone()), Value::Value(Box::new(inner)))
+                        .ok()?;
+                }
+                array.append(Value::Dict(dict)).ok()?;
+            }
+            Some(Value::Array(array))
+        }
+    }
+}
+
+/// A value that cannot be converted is left out, like one that cannot be read.
+pub fn system_dict(info: &ruya_sysinfo::Info) -> BTreeMap<String, OwnedValue> {
+    info.iter()
+        .filter_map(|(k, v)| {
+            let value = system_value(v)?;
+            OwnedValue::try_from(value).ok().map(|v| (k.clone(), v))
+        })
+        .collect()
+}
+
+#[interface(name = "org.ruyaos.Devices1.System")]
+impl SystemIface {
+    /// The live keys are read now; the rest comes from the cache. The reading happens on the
+    /// blocking pool, and a cache older than 30 s is renewed in the background
+    /// (`SystemInfoChanged` when it differs).
+    async fn get_info(
+        &self,
+        #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
+    ) -> BTreeMap<String, OwnedValue> {
+        let system = self.system.clone();
+        let info = unblock(move || system.current(Instant::now())).await;
+        if self.system.is_stale(Instant::now()) {
+            emitter
+                .connection()
+                .executor()
+                .spawn(
+                    refresh_system(emitter.connection().clone(), self.system.clone()),
+                    "ruya-devices system info",
+                )
+                .detach();
+        }
+        system_dict(&info)
+    }
+
+    #[zbus(signal)]
+    async fn system_info_changed(emitter: &SignalEmitter<'_>) -> zbus::Result<()>;
+}
+
+/// Reads the slow part of the system information again on the blocking pool and sends
+/// `SystemInfoChanged` when it differs.
+pub async fn refresh_system(connection: Connection, system: SharedSystem) {
+    let reading = system.clone();
+    if unblock(move || reading.refresh_if_stale(Instant::now())).await != Some(true) {
+        return;
+    }
+    match connection
+        .object_server()
+        .interface::<_, SystemIface>(OBJECT_PATH)
+        .await
+    {
+        Ok(iface) => {
+            if let Err(err) = SystemIface::system_info_changed(iface.signal_emitter()).await {
+                eprintln!("ruya-devices: emitting SystemInfoChanged failed: {err}");
+            }
+        }
+        Err(err) => eprintln!("ruya-devices: emitting SystemInfoChanged failed: {err}"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ruya_sysinfo::{collect, FakeSource};
+
+    #[test]
+    fn the_collector_result_has_the_contracts_types() {
+        let dict = system_dict(&collect(&FakeSource::from_dump(
+            ruya_sysinfo::SAMPLE_MACHINE,
+        )));
+        let signature = |key: &str| dict.get(key).map(|v| v.value_signature().to_string());
+        assert_eq!(signature("cpu.model").as_deref(), Some("s"));
+        assert_eq!(signature("cpu.threads").as_deref(), Some("t"));
+        assert_eq!(signature("memory.total_bytes").as_deref(), Some("t"));
+        assert_eq!(signature("console.secure_boot").as_deref(), Some("b"));
+        assert_eq!(signature("storage.drives").as_deref(), Some("aa{sv}"));
+    }
+
+    #[test]
+    fn what_cannot_be_read_is_not_in_the_dictionary() {
+        let dict = system_dict(&collect(&FakeSource::new()));
+        assert!(dict.is_empty());
+    }
 }

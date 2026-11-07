@@ -29,6 +29,10 @@ qt_add_qml_module(ruyashell
         src/profiles/Profiles.h src/profiles/Profiles.cpp
         src/settings/DeviceSettings.h src/settings/DeviceSettings.cpp
         src/system/SystemInfo.h src/system/SystemInfo.cpp
+        src/system/SystemDetailsBackend.h
+        src/system/MockSystemDetailsBackend.h src/system/MockSystemDetailsBackend.cpp
+        src/system/DBusSystemDetailsBackend.h src/system/DBusSystemDetailsBackend.cpp
+        src/system/SystemDetails.h src/system/SystemDetails.cpp
         src/audio/AudioBackend.h
         src/audio/MockAudioBackend.h src/audio/MockAudioBackend.cpp
         src/audio/DBusAudioBackend.h src/audio/DBusAudioBackend.cpp
@@ -150,6 +154,8 @@ qt_add_qml_module(ruyashell
         qml/ZoneChooser.qml
         qml/ZonePicker.qml
         qml/AboutPane.qml
+        qml/SystemInfoPage.qml
+        qml/SystemInfoRows.qml
         qml/controls/SettingControl.qml
         qml/controls/SettingRow.qml
         qml/controls/ToggleRow.qml

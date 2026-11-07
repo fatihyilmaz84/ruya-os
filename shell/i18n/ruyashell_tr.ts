@@ -4,12 +4,7 @@
 <context>
     <name>AboutPane</name>
     <message>
-        <location filename="../qml/AboutPane.qml" line="+11"/>
-        <source>Back</source>
-        <translation>Geri</translation>
-    </message>
-    <message>
-        <location line="+5"/>
+        <location filename="../qml/AboutPane.qml" line="+17"/>
         <source>Image version</source>
         <translation>Sistem sürümü</translation>
     </message>
@@ -42,6 +37,16 @@
         <location line="+1"/>
         <source>GPL-3.0-or-later; icon font Apache-2.0; Inter typeface OFL-1.1</source>
         <translation>GPL-3.0 veya üzeri; simge yazı tipi Apache-2.0; Inter yazı tipi OFL-1.1</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>System information</source>
+        <translation>Sistem bilgisi</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Processor, memory, graphics, storage…</source>
+        <translation>İşlemci, bellek, grafik, depolama…</translation>
     </message>
 </context>
 <context>
@@ -1259,7 +1264,7 @@
         <translation>Geri</translation>
     </message>
     <message>
-        <location line="+191"/>
+        <location line="+192"/>
         <source>Coming soon</source>
         <translation>Yakında</translation>
     </message>
@@ -1468,7 +1473,7 @@
         <translation>Ses çıkışı: %1</translation>
     </message>
     <message numerus="yes">
-        <location line="+231"/>
+        <location line="+232"/>
         <source>%n more device(s) with a battery: %1</source>
         <translation>
             <numerusform>Pili olan %n cihaz daha: %1</numerusform>
@@ -1480,12 +1485,12 @@
         <translation>%1 yüzde %2</translation>
     </message>
     <message>
-        <location line="+559"/>
+        <location line="+560"/>
         <source>Power</source>
         <translation>Güç</translation>
     </message>
     <message>
-        <location line="-783"/>
+        <location line="-785"/>
         <source>Update ready. Restart to finish.</source>
         <translation>Güncelleme hazır. Bitirmek için yeniden başlat.</translation>
     </message>
@@ -1500,7 +1505,7 @@
         <translation>%1 beklenmedik şekilde durdu</translation>
     </message>
     <message>
-        <location line="+44"/>
+        <location line="+45"/>
         <source>Wallpaper could not be loaded</source>
         <translation>Duvar kağıdı yüklenemedi</translation>
     </message>
@@ -1546,7 +1551,7 @@
         <translation>%1 başlatılıyor…</translation>
     </message>
     <message>
-        <location line="+240"/>
+        <location line="+241"/>
         <location line="+12"/>
         <location line="+3"/>
         <source>Select</source>
@@ -1765,6 +1770,479 @@
         <location line="+31"/>
         <source>No apps found for &quot;%1&quot;</source>
         <translation>&quot;%1&quot; için uygulama bulunamadı</translation>
+    </message>
+</context>
+<context>
+    <name>SystemInfoPage</name>
+    <message>
+        <location filename="../qml/SystemInfoPage.qml" line="+23"/>
+        <source>System information</source>
+        <translation>Sistem bilgisi</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Saving the report…</source>
+        <translation>Rapor kaydediliyor…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Saved %1 and %2 to %3.</source>
+        <translation>%1 ve %2, %3 sürücüsüne kaydedildi.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>No USB drive found. Plug one in and try again.</source>
+        <translation>USB sürücü bulunamadı. Bir tane takıp yeniden deneyin.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This drive is read-only. Try another one.</source>
+        <translation>Bu sürücü salt okunur. Başka bir tane deneyin.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This drive is full. Free some space or try another one.</source>
+        <translation>Bu sürücü dolu. Yer açın ya da başka bir sürücü deneyin.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>This drive cannot be written to. Try another one.</source>
+        <translation>Bu sürücüye yazılamıyor. Başka bir tane deneyin.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>The report could not be saved.</source>
+        <translation>Rapor kaydedilemedi.</translation>
+    </message>
+    <message>
+        <location line="+169"/>
+        <source>Save report to USB drive</source>
+        <translation>Raporu USB sürücüye kaydet</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Saving…</source>
+        <translation>Kaydediliyor…</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Include network addresses</source>
+        <translation>Ağ adreslerini ekle</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>The report is a text file and a JSON file on the drive. It is only a file: nothing is sent anywhere. Network addresses (MAC, IP, Wi-Fi name, Bluetooth address) are left out unless you include them.</source>
+        <translation>Rapor, sürücüde bir metin dosyası ve bir JSON dosyası olarak saklanır. Yalnızca bir dosyadır: hiçbir yere gönderilmez. Ağ adresleri (MAC, IP, Wi-Fi adı, Bluetooth adresi) siz eklemedikçe rapora konmaz.</translation>
+    </message>
+</context>
+<context>
+    <name>SystemInfoRows</name>
+    <message>
+        <location filename="../qml/SystemInfoRows.qml" line="+92"/>
+        <source>%1 d %2 h</source>
+        <translation>%1 g %2 sa</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>%1 h %2 min</source>
+        <translation>%1 sa %2 dk</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>%1 min</source>
+        <translation>%1 dk</translation>
+    </message>
+    <message>
+        <location line="+30"/>
+        <source>%1 °C</source>
+        <translation>%1 °C</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Console</source>
+        <translation>Konsol</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>System</source>
+        <translation>Sistem</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Update channel</source>
+        <translation>Güncelleme kanalı</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Stable</source>
+        <translation>Kararlı</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Beta</source>
+        <translation>Beta</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Image</source>
+        <translation>İmaj</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Image digest</source>
+        <translation>İmaj özeti</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Deployment</source>
+        <translation>Dağıtım</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Kernel</source>
+        <translation>Linux çekirdeği</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Uptime</source>
+        <translation>Çalışma süresi</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Installed</source>
+        <translation>Kurulum</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Firmware</source>
+        <translation>Bellenim</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Secure Boot</source>
+        <translation>Güvenli Önyükleme</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+157"/>
+        <source>On</source>
+        <translation>Açık</translation>
+    </message>
+    <message>
+        <location line="-157"/>
+        <location line="+157"/>
+        <source>Off</source>
+        <translation>Kapalı</translation>
+    </message>
+    <message>
+        <location line="-151"/>
+        <source>Machine</source>
+        <translation>Makine</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Processor</source>
+        <translation>İşlemci</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Model</source>
+        <translation>Model</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Cores</source>
+        <translation>Çekirdek sayısı</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Threads</source>
+        <translation>İş parçacığı</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>%1 MHz (up to %2 MHz)</source>
+        <translation>%1 MHz (en çok %2 MHz)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+3"/>
+        <source>%1 MHz</source>
+        <translation>%1 MHz</translation>
+    </message>
+    <message>
+        <location line="-2"/>
+        <source>Clock</source>
+        <translation>Saat hızı</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Highest clock</source>
+        <translation>En yüksek hız</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <location line="+60"/>
+        <source>Temperature</source>
+        <translation>Sıcaklık</translation>
+    </message>
+    <message>
+        <location line="-57"/>
+        <source>Memory</source>
+        <translation>Bellek</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Total</source>
+        <translation>Toplam</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>In use</source>
+        <translation>Kullanımda</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Available</source>
+        <translation>Kullanılabilir</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>%1, %2 used</source>
+        <translation>%1, %2 kullanımda</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Swap</source>
+        <translation>Takas alanı</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Compressed memory (zram)</source>
+        <translation>Sıkıştırılmış bellek (zram)</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Graphics</source>
+        <translation>Grafik</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Graphics processor</source>
+        <translation>Grafik işlemci</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Driver</source>
+        <translation>Sürücü yazılımı</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Mesa</source>
+        <translation>Mesa</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>NVIDIA driver</source>
+        <translation>NVIDIA sürücü yazılımı</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Renderer</source>
+        <translation>Çizici</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>High</source>
+        <translation>Yüksek</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Balanced</source>
+        <translation>Dengeli</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Performance</source>
+        <translation>Performans</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Visual effects</source>
+        <translation>Görsel efektler</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Display connector</source>
+        <translation>Ekran bağlantısı</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Resolution</source>
+        <translation>Çözünürlük</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Display&apos;s preferred mode</source>
+        <translation>Ekranın tercih ettiği mod</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Storage</source>
+        <translation>Depolama</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Hard disk</source>
+        <translation>Sabit disk</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Drive %1</source>
+        <translation>Sürücü %1</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Drive</source>
+        <translation>Sürücü</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Healthy</source>
+        <translation>Sağlıklı</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Failing</source>
+        <translation>Arızalı</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Drive %1 health</source>
+        <translation>Sürücü %1 sağlığı</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Drive health</source>
+        <translation>Sürücü sağlığı</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Console storage free</source>
+        <translation>Konsol depolaması boş</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>%1 of %2</source>
+        <translation>%2 içinden %1</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Network</source>
+        <translation>Ağ</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <location line="+8"/>
+        <source>Connection</source>
+        <translation>Bağlantı</translation>
+    </message>
+    <message>
+        <location line="-8"/>
+        <source>Wi-Fi</source>
+        <translation>Wi-Fi</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Wired</source>
+        <translation>Kablolu</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Wi-Fi network</source>
+        <translation>Wi-Fi ağı</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>IP address</source>
+        <translation>IP adresi</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Signal</source>
+        <translation>Sinyal</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <location line="+36"/>
+        <source>%1 %</source>
+        <translation>%%1</translation>
+    </message>
+    <message>
+        <location line="-34"/>
+        <source>Not connected</source>
+        <translation>Bağlı değil</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>MAC address</source>
+        <translation>MAC adresi</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Link speed</source>
+        <translation>Bağlantı hızı</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>%1 Mb/s</source>
+        <translation>%1 Mb/sn</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <location line="+8"/>
+        <source>Bluetooth</source>
+        <translation>Bluetooth</translation>
+    </message>
+    <message>
+        <location line="-6"/>
+        <source>Adapter</source>
+        <translation>Adaptör</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>USB id</source>
+        <translation>USB kimliği</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Address</source>
+        <translation>Adres</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Audio</source>
+        <translation>Ses</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>default</source>
+        <translation>varsayılan</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Output</source>
+        <translation>Çıkış</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Controllers</source>
+        <translation>Kontrolcüler</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Connected</source>
+        <translation>Bağlı</translation>
     </message>
 </context>
 <context>

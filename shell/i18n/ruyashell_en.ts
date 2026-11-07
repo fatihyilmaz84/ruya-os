@@ -4,12 +4,7 @@
 <context>
     <name>AboutPane</name>
     <message>
-        <location filename="../qml/AboutPane.qml" line="+11"/>
-        <source>Back</source>
-        <translation>Back</translation>
-    </message>
-    <message>
-        <location line="+5"/>
+        <location filename="../qml/AboutPane.qml" line="+17"/>
         <source>Image version</source>
         <translation>Image version</translation>
     </message>
@@ -42,6 +37,16 @@
         <location line="+1"/>
         <source>GPL-3.0-or-later; icon font Apache-2.0; Inter typeface OFL-1.1</source>
         <translation>GPL-3.0-or-later; icon font Apache-2.0; Inter typeface OFL-1.1</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>System information</source>
+        <translation>System information</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Processor, memory, graphics, storage…</source>
+        <translation>Processor, memory, graphics, storage…</translation>
     </message>
 </context>
 <context>
@@ -1261,7 +1266,7 @@
         <translation>Back</translation>
     </message>
     <message>
-        <location line="+191"/>
+        <location line="+192"/>
         <source>Coming soon</source>
         <translation>Coming soon</translation>
     </message>
@@ -1470,7 +1475,7 @@
         <translation>Audio output: %1</translation>
     </message>
     <message numerus="yes">
-        <location line="+231"/>
+        <location line="+232"/>
         <source>%n more device(s) with a battery: %1</source>
         <translation>
             <numerusform>%n more device with a battery: %1</numerusform>
@@ -1483,12 +1488,12 @@
         <translation>%1 %2 percent</translation>
     </message>
     <message>
-        <location line="+559"/>
+        <location line="+560"/>
         <source>Power</source>
         <translation>Power</translation>
     </message>
     <message>
-        <location line="-783"/>
+        <location line="-785"/>
         <source>Update ready. Restart to finish.</source>
         <translation>Update ready. Restart to finish.</translation>
     </message>
@@ -1503,7 +1508,7 @@
         <translation>%1 stopped unexpectedly</translation>
     </message>
     <message>
-        <location line="+44"/>
+        <location line="+45"/>
         <source>Wallpaper could not be loaded</source>
         <translation>Wallpaper could not be loaded</translation>
     </message>
@@ -1549,7 +1554,7 @@
         <translation>Starting %1…</translation>
     </message>
     <message>
-        <location line="+240"/>
+        <location line="+241"/>
         <location line="+12"/>
         <location line="+3"/>
         <source>Select</source>
@@ -1768,6 +1773,479 @@
         <location line="+31"/>
         <source>No apps found for &quot;%1&quot;</source>
         <translation>No apps found for &quot;%1&quot;</translation>
+    </message>
+</context>
+<context>
+    <name>SystemInfoPage</name>
+    <message>
+        <location filename="../qml/SystemInfoPage.qml" line="+23"/>
+        <source>System information</source>
+        <translation>System information</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Saving the report…</source>
+        <translation>Saving the report…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Saved %1 and %2 to %3.</source>
+        <translation>Saved %1 and %2 to %3.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>No USB drive found. Plug one in and try again.</source>
+        <translation>No USB drive found. Plug one in and try again.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This drive is read-only. Try another one.</source>
+        <translation>This drive is read-only. Try another one.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This drive is full. Free some space or try another one.</source>
+        <translation>This drive is full. Free some space or try another one.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>This drive cannot be written to. Try another one.</source>
+        <translation>This drive cannot be written to. Try another one.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>The report could not be saved.</source>
+        <translation>The report could not be saved.</translation>
+    </message>
+    <message>
+        <location line="+169"/>
+        <source>Save report to USB drive</source>
+        <translation>Save report to USB drive</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Saving…</source>
+        <translation>Saving…</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Include network addresses</source>
+        <translation>Include network addresses</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>The report is a text file and a JSON file on the drive. It is only a file: nothing is sent anywhere. Network addresses (MAC, IP, Wi-Fi name, Bluetooth address) are left out unless you include them.</source>
+        <translation>The report is a text file and a JSON file on the drive. It is only a file: nothing is sent anywhere. Network addresses (MAC, IP, Wi-Fi name, Bluetooth address) are left out unless you include them.</translation>
+    </message>
+</context>
+<context>
+    <name>SystemInfoRows</name>
+    <message>
+        <location filename="../qml/SystemInfoRows.qml" line="+92"/>
+        <source>%1 d %2 h</source>
+        <translation>%1 d %2 h</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>%1 h %2 min</source>
+        <translation>%1 h %2 min</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>%1 min</source>
+        <translation>%1 min</translation>
+    </message>
+    <message>
+        <location line="+30"/>
+        <source>%1 °C</source>
+        <translation>%1 °C</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Console</source>
+        <translation>Console</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>System</source>
+        <translation>System</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Update channel</source>
+        <translation>Update channel</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Stable</source>
+        <translation>Stable</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Beta</source>
+        <translation>Beta</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Image</source>
+        <translation>Image</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Image digest</source>
+        <translation>Image digest</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Deployment</source>
+        <translation>Deployment</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Kernel</source>
+        <translation>Kernel</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Uptime</source>
+        <translation>Uptime</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Installed</source>
+        <translation>Installed</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Firmware</source>
+        <translation>Firmware</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Secure Boot</source>
+        <translation>Secure Boot</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+157"/>
+        <source>On</source>
+        <translation>On</translation>
+    </message>
+    <message>
+        <location line="-157"/>
+        <location line="+157"/>
+        <source>Off</source>
+        <translation>Off</translation>
+    </message>
+    <message>
+        <location line="-151"/>
+        <source>Machine</source>
+        <translation>Machine</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Processor</source>
+        <translation>Processor</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Model</source>
+        <translation>Model</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Cores</source>
+        <translation>Cores</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Threads</source>
+        <translation>Threads</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>%1 MHz (up to %2 MHz)</source>
+        <translation>%1 MHz (up to %2 MHz)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+3"/>
+        <source>%1 MHz</source>
+        <translation>%1 MHz</translation>
+    </message>
+    <message>
+        <location line="-2"/>
+        <source>Clock</source>
+        <translation>Clock</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Highest clock</source>
+        <translation>Highest clock</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <location line="+60"/>
+        <source>Temperature</source>
+        <translation>Temperature</translation>
+    </message>
+    <message>
+        <location line="-57"/>
+        <source>Memory</source>
+        <translation>Memory</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Total</source>
+        <translation>Total</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>In use</source>
+        <translation>In use</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Available</source>
+        <translation>Available</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>%1, %2 used</source>
+        <translation>%1, %2 used</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Swap</source>
+        <translation>Swap</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Compressed memory (zram)</source>
+        <translation>Compressed memory (zram)</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Graphics</source>
+        <translation>Graphics</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Graphics processor</source>
+        <translation>Graphics processor</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Driver</source>
+        <translation>Driver</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Mesa</source>
+        <translation>Mesa</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>NVIDIA driver</source>
+        <translation>NVIDIA driver</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Renderer</source>
+        <translation>Renderer</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>High</source>
+        <translation>High</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Balanced</source>
+        <translation>Balanced</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Performance</source>
+        <translation>Performance</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Visual effects</source>
+        <translation>Visual effects</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Display connector</source>
+        <translation>Display connector</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Resolution</source>
+        <translation>Resolution</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Display&apos;s preferred mode</source>
+        <translation>Display&apos;s preferred mode</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Storage</source>
+        <translation>Storage</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Hard disk</source>
+        <translation>Hard disk</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Drive %1</source>
+        <translation>Drive %1</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Drive</source>
+        <translation>Drive</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Healthy</source>
+        <translation>Healthy</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Failing</source>
+        <translation>Failing</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Drive %1 health</source>
+        <translation>Drive %1 health</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Drive health</source>
+        <translation>Drive health</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Console storage free</source>
+        <translation>Console storage free</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>%1 of %2</source>
+        <translation>%1 of %2</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Network</source>
+        <translation>Network</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <location line="+8"/>
+        <source>Connection</source>
+        <translation>Connection</translation>
+    </message>
+    <message>
+        <location line="-8"/>
+        <source>Wi-Fi</source>
+        <translation>Wi-Fi</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Wired</source>
+        <translation>Wired</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Wi-Fi network</source>
+        <translation>Wi-Fi network</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>IP address</source>
+        <translation>IP address</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Signal</source>
+        <translation>Signal</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <location line="+36"/>
+        <source>%1 %</source>
+        <translation>%1 %</translation>
+    </message>
+    <message>
+        <location line="-34"/>
+        <source>Not connected</source>
+        <translation>Not connected</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>MAC address</source>
+        <translation>MAC address</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Link speed</source>
+        <translation>Link speed</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>%1 Mb/s</source>
+        <translation>%1 Mb/s</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <location line="+8"/>
+        <source>Bluetooth</source>
+        <translation>Bluetooth</translation>
+    </message>
+    <message>
+        <location line="-6"/>
+        <source>Adapter</source>
+        <translation>Adapter</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>USB id</source>
+        <translation>USB id</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Address</source>
+        <translation>Address</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Audio</source>
+        <translation>Audio</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>default</source>
+        <translation>default</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Output</source>
+        <translation>Output</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Controllers</source>
+        <translation>Controllers</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Connected</source>
+        <translation>Connected</translation>
     </message>
 </context>
 <context>

@@ -1,0 +1,24 @@
+# A stripped-down machine: a small virtual machine without GPU, DMI, EFI, swap, drives or
+# network. Written for T-226, NOT captured from a machine. Everything the collector cannot read must
+# be absent, never zero.
+== file /etc/os-release
+NAME="RuyaOS"
+VERSION_ID=44
+== file /proc/sys/kernel/osrelease
+6.18.3-200.fc44.x86_64
+== file /proc/uptime
+12.50 20.10
+== dir /sys/firmware/acpi
+== file /proc/cpuinfo
+processor : 0
+model name : QEMU Virtual CPU version 2.5+
+
+processor : 1
+model name : QEMU Virtual CPU version 2.5+
+== file /proc/meminfo
+MemTotal:        2018244 kB
+MemFree:         1500000 kB
+MemAvailable:    1700000 kB
+SwapTotal:             0 kB
+SwapFree:              0 kB
+== dir /sys/class/drm

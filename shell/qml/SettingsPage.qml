@@ -223,6 +223,7 @@ Page {
             visible: page.current.key === "about"
             enabled: visible
             onExitRequested: page.leavePane()
+            onSystemInfoRequested: page.openRequested("systemInfo", ({}))
         }
         Column {
             objectName: "paneComingSoon"
