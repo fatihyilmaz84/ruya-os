@@ -37,21 +37,23 @@ The lead gives you: the task file, the worktree path and branch, and the builder
 
 Every command must finish on its own; never end your turn while something you started still runs. Scratch files go in the session scratchpad. Never copy `target/` or `shell\build-win`.
 
-## Your final message, always exactly this format
+## Your final message, always exactly this format (SHORT: the lead pays for every line again on every turn)
+
+At most about 40 lines. One line per acceptance criterion; findings only where something is wrong.
 
 ```
 REVIEW T-nnn (round N)
 verdict: APPROVE | CHANGES_REQUESTED
-checks (run by reviewer): test <result>, screenshots <n/a | reviewed: files>
+checks (run by reviewer): test <result>, screenshots <n/a | reviewed: files>, revert check: <what you undid, what failed>
 
-acceptance criteria:
-- [x] <criterion> - verified by: <evidence>
+criteria: <all verified, one line each below | the unproven ones>
+- [x] <criterion> - <evidence in a few words>
 - [ ] <criterion> - problem: <what>
 
 blocking findings:
 - <file:line> - <defect> - <failure scenario> - <suggested fix>
 
-non-blocking findings:
+non-blocking findings (at most 8, one line each):
 - <file:line> - <issue>
 
 inbox:

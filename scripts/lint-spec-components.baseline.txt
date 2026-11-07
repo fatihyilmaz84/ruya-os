@@ -1,0 +1,36 @@
+# Files under shell/qml that 04-design-system.md did not mention when lint-spec-components.ps1 was added (2026-11-07).
+# Do not add to this list to get a new component through: give it a row in 04 section 5.
+AboutPane.qml
+ActivityGamePage.qml
+ActivityPage.qml
+AudioPane.qml
+BackKey.qml
+BluetoothPane.qml
+ButtonTest.qml
+ChangePinFlow.qml
+ComingSoon.qml
+ControllerOnboarding.qml
+ControllerPairHint.qml
+ControllerToasts.qml
+DisplayPane.qml
+DisplayText.qml
+FpsMeter.qml
+GamesPage.qml
+IdleClock.qml
+LibraryDetailsPage.qml
+MediaPage.qml
+NetworkPane.qml
+PowerPage.qml
+PowerSavingPane.qml
+ProfileAddFlow.qml
+ProfileManageFlow.qml
+ProfilePicker.qml
+ProfilesPane.qml
+ProfileStatus.qml
+Sfx.qml
+StorePage.qml
+SystemInfoPage.qml
+SystemInfoRows.qml
+ThemeRow.qml
+ThermalPolicy.qml
+UsagePresence.qml

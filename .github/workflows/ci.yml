@@ -30,6 +30,8 @@ jobs:
         run: pwsh -NoProfile -File scripts/lint-qml-members.ps1
       - name: Icon lint
         run: pwsh -NoProfile -File scripts/lint-icons.ps1
+      - name: Spec lint (components named in 04)
+        run: pwsh -NoProfile -File scripts/lint-spec-components.ps1
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"

@@ -464,10 +464,27 @@ function Test-FontCoverage {
     Record "font coverage" ($LASTEXITCODE -eq 0)
 }
 
+# Every QML file is named in 04-design-system.md (or on the baseline): scripts\lint-spec-components.ps1 (shared with CI).
+function Test-SpecComponents {
+    Step "spec lint (every shell\qml file is named in 04-design-system.md)"
+    & (Join-Path $PSScriptRoot "lint-spec-components.ps1")
+    Record "spec lint" ($LASTEXITCODE -eq 0)
+
+    # Self-check: a new, unlisted component must be rejected.
+    $fx = Join-Path ([IO.Path]::GetTempPath()) ("ruya-spec-fx-" + [guid]::NewGuid().ToString("N"))
+    New-Item -ItemType Directory -Path $fx | Out-Null
+    Set-Content -LiteralPath (Join-Path $fx "BrandNewThing.qml") -Value "import QtQuick`nItem {}" -Encoding UTF8
+    & (Join-Path $PSScriptRoot "lint-spec-components.ps1") -QmlDir $fx 6>&1 | Out-Null
+    $rejected = ($LASTEXITCODE -eq 1)
+    Remove-Item -Recurse -Force $fx
+    Record "spec lint self-check (rejects an unlisted component)" $rejected
+}
+
 function Do-Shell {
     Do-Build
     Test-Tokens
     Test-Icons
+    Test-SpecComponents
     Test-FontCoverage
     Test-Translations
     Test-QmlTests
