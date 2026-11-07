@@ -34,6 +34,7 @@ QtObject {
     // A name a device gave itself, made fit for one line: control characters (a newline), bidirectional
     // controls and zero-width characters become nothing, runs of white space one space. It is still
     // text from outside: draw it with `textFormat: Text.PlainText`, never as markup.
+    // Keep in step with `pairing::clean_name` / `is_format_char` (services/ruya-devices/src/pairing.rs).
     function plain(raw) {
         let out = ""
         for (const ch of String(raw ?? "")) {

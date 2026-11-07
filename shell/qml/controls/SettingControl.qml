@@ -82,7 +82,6 @@ FocusScope {
         }
         textFormat: Text.PlainText      // a label can be a device's own name (Bluetooth, UPower): never markup
         text: control.label
-        textFormat: Text.PlainText      // a label may be a name a device or a person chose: never markup
         color: Theme.text
         font.pixelSize: Theme.typeBody * control.u
     }

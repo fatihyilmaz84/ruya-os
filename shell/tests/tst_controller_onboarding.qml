@@ -315,6 +315,21 @@ Item {
             compare(onb.stage, "pair")
         }
 
+        // The found list uses the same glyph table as every other screen (T-260).
+        function test_found_controllers_have_their_familys_glyph() {
+            Bluetooth.mockPairingScript("wait")
+            onb.open()
+            Bluetooth.mockReveal("bt-flaky")
+            tryVerify(() => find("onbRow_bt-flaky") !== null, 2000)
+            const table = [["playstation", "pad_playstation"], ["xbox", "pad_xbox"], ["nintendo", "pad_switch"],
+                           ["8bitdo", "sports_esports"], ["", "sports_esports"]]
+            for (const [family, glyph] of table) {
+                Bluetooth.mockSetFamily("bt-flaky", family)
+                tryVerify(() => findChild(find("onbRow_bt-flaky"), "onbRowGlyph").name === glyph, 2000, family)
+                compare(DeviceIcons.iconFor("controller", family), glyph)
+            }
+        }
+
         function test_a_controller_the_service_paired_itself_is_listed_as_done() {
             Bluetooth.mockPairingScript("success")
             onb.open()

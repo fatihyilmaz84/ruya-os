@@ -28,7 +28,7 @@ void MockBatteryBackend::publish()
 }
 
 void MockBatteryBackend::setDevice(const QString &id, int percent, const QString &state, const QString &kind,
-                                   const QString &name)
+                                   const QString &name, const QString &family)
 {
     for (DeviceBattery &existing : m_list) {
         if (existing.id != id)
@@ -39,6 +39,8 @@ void MockBatteryBackend::setDevice(const QString &id, int percent, const QString
             existing.kind = kind;
         if (!name.isEmpty())
             existing.name = name;
+        if (!family.isEmpty())
+            existing.family = family;
         publish();
         return;
     }
@@ -48,6 +50,7 @@ void MockBatteryBackend::setDevice(const QString &id, int percent, const QString
     c.name = name.isEmpty() ? QStringLiteral("Ruya %1 (%2)").arg(c.kind, id) : name;
     c.percent = percent < 0 ? -1 : qMin(percent, 100);
     c.state = state;
+    c.family = family;
     m_list.append(c);
     publish();
 }
@@ -84,17 +87,19 @@ void MockBatteryBackend::reset()
 void MockBatteryBackend::populate()
 {
     m_list.clear();
-    const auto add = [this](const char *id, const char *name, const char *kind, int percent, const char *state) {
+    const auto add = [this](const char *id, const char *name, const char *kind, int percent, const char *state,
+                            const char *family = "") {
         DeviceBattery d;
         d.id = QString::fromLatin1(id);
         d.name = QString::fromLatin1(name);
         d.kind = QString::fromLatin1(kind);
         d.percent = percent;
         d.state = QString::fromLatin1(state);
+        d.family = QString::fromLatin1(family);
         m_list.append(d);
     };
-    add("pad-1", "DualSense Wireless Controller", "controller", 62, "charging");
-    add("pad-2", "Xbox Wireless Controller", "controller", 41, "discharging");
+    add("pad-1", "DualSense Wireless Controller", "controller", 62, "charging", "playstation");
+    add("pad-2", "Xbox Wireless Controller", "controller", 41, "discharging", "xbox");
     add("headset-1", "WH-1000XM4", "headset", 78, "discharging");
     add("keyboard-1", "Ruya Keyboard", "keyboard", 94, "discharging");
     add("mouse-1", "Ruya Mouse", "mouse", 12, "discharging");

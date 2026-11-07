@@ -5,6 +5,9 @@
 
 use std::sync::{Mutex, MutexGuard};
 
+use crate::bluetooth::Device;
+use crate::families::family_of;
+
 /// UPower's `UpDeviceKind` for a gamepad ("gaming input").
 pub const KIND_GAMING_INPUT: u32 = 12;
 
@@ -58,7 +61,7 @@ impl ChargeState {
 }
 
 /// One UPower device as read from the bus.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct RawDevice {
     /// The object path.
     pub id: String,
@@ -69,6 +72,68 @@ pub struct RawDevice {
     pub percentage: f64,
     /// `UpDeviceState`.
     pub state: u32,
+    /// UPower's `Serial` and `NativePath`: for a pad that BlueZ feeds the serial is its Bluetooth
+    /// address, and the native path of a BlueZ or `hid-playstation` battery holds it too.
+    pub serial: String,
+    pub native_path: String,
+    /// UPower's `Vendor`.
+    pub vendor: String,
+}
+
+/// The Bluetooth address (`E4:17:D8:00:00:01`, upper case) inside a text such as a serial
+/// (`e4:17:d8:00:00:01`) or a BlueZ object path (`/org/bluez/hci0/dev_E4_17_D8_00_00_01`), or
+/// "".
+pub fn address_in(text: &str) -> String {
+    let bytes = text.as_bytes();
+    let separators = [b':', b'_', b'-'];
+    for start in 0..bytes.len().saturating_sub(16) {
+        let window = &bytes[start..start + 17];
+        let sep = window[2];
+        let fits = separators.contains(&sep)
+            && window.iter().enumerate().all(|(i, b)| {
+                if i % 3 == 2 {
+                    *b == sep
+                } else {
+                    b.is_ascii_hexdigit()
+                }
+            });
+        if fits {
+            return String::from_utf8_lossy(window)
+                .replace(['_', '-'], ":")
+                .to_uppercase();
+        }
+    }
+    String::new()
+}
+
+/// The controller family of a battery: the Bluetooth device with the same address decides (it is
+/// the same table, `families.rs`, over the Modalias BlueZ has, so the status cluster and Settings
+/// agree); a pad BlueZ does not know (wired, a dongle) is guessed from its model and vendor.
+/// "" for every other kind.
+pub fn family_of_battery(
+    kind: &str,
+    address: &str,
+    vendor: &str,
+    model: &str,
+    bluetooth: &[Device],
+) -> &'static str {
+    if kind != "controller" {
+        return "";
+    }
+    if !address.is_empty() {
+        if let Some(d) = bluetooth
+            .iter()
+            .find(|d| d.kind == "controller" && d.id.eq_ignore_ascii_case(address))
+        {
+            return d.family;
+        }
+    }
+    let by_model = family_of("", model);
+    if by_model.is_empty() {
+        family_of("", &format!("{vendor} {model}"))
+    } else {
+        by_model
+    }
 }
 
 /// A listed battery.
@@ -80,6 +145,14 @@ pub struct Battery {
     pub kind: &'static str,
     pub percent: u32,
     pub state: ChargeState,
+    /// The controller family (`family_of_battery`), "" for every other kind and for a pad whose
+    /// family cannot be told. `peripherals` sets the guess from the name; `Batteries::list_with`
+    /// replaces it by what Bluetooth knows.
+    pub family: &'static str,
+    /// The Bluetooth address UPower's serial or native path holds, "" for none.
+    pub address: String,
+    vendor: String,
+    model: String,
 }
 
 /// The listed batteries: the kinds `kind_of` knows, sorted by id (a stable order). A device
@@ -110,6 +183,17 @@ pub fn peripherals(devices: &[RawDevice]) -> Vec<Battery> {
                 kind,
                 percent,
                 state,
+                family: family_of_battery(kind, "", &d.vendor, &d.model, &[]),
+                address: {
+                    let found = address_in(&d.serial);
+                    if found.is_empty() {
+                        address_in(&d.native_path)
+                    } else {
+                        found
+                    }
+                },
+                vendor: d.vendor.clone(),
+                model: d.model.clone(),
             })
         })
         .collect();
@@ -164,6 +248,16 @@ impl<U: UPower> Batteries<U> {
     pub fn list(&self) -> Vec<Battery> {
         self.list_lock().clone()
     }
+
+    /// The list with each controller's family taken from the Bluetooth device that has its
+    /// address (`family_of_battery`), so a pad is the same family here as in `ListDevices`.
+    pub fn list_with(&self, bluetooth: &[Device]) -> Vec<Battery> {
+        let mut list = self.list();
+        for b in &mut list {
+            b.family = family_of_battery(b.kind, &b.address, &b.vendor, &b.model, bluetooth);
+        }
+        list
+    }
 }
 
 /// A scripted UPower for tests and `--session` development.
@@ -205,6 +299,7 @@ mod tests {
             model: model.to_owned(),
             percentage,
             state,
+            ..RawDevice::default()
         }
     }
 
@@ -223,8 +318,123 @@ mod tests {
                 kind: "controller",
                 percent: 40,
                 state: ChargeState::Discharging,
+                family: "",
+                address: String::new(),
+                vendor: String::new(),
+                model: "Ruya Pad".to_owned(),
             }]
         );
+    }
+
+    fn bt(id: &str, name: &str, kind: &'static str, family: &'static str) -> Device {
+        Device {
+            id: id.to_owned(),
+            name: name.to_owned(),
+            kind,
+            family,
+            paired: true,
+            connected: true,
+            trusted: true,
+            battery: 50,
+        }
+    }
+
+    fn with(mut d: RawDevice, serial: &str, native: &str, vendor: &str) -> RawDevice {
+        d.serial = serial.to_owned();
+        d.native_path = native.to_owned();
+        d.vendor = vendor.to_owned();
+        d
+    }
+
+    #[test]
+    fn addresses_are_found_in_serials_and_bluez_paths() {
+        assert_eq!(address_in("e4:17:d8:00:00:01"), "E4:17:D8:00:00:01");
+        assert_eq!(
+            address_in("/org/bluez/hci0/dev_E4_17_D8_00_00_0a"),
+            "E4:17:D8:00:00:0A"
+        );
+        assert_eq!(
+            address_in("/sys/class/power_supply/ps-controller-battery-e4:17:d8:00:00:01"),
+            "E4:17:D8:00:00:01"
+        );
+        assert_eq!(address_in("1234"), "");
+        assert_eq!(address_in("zz:17:d8:00:00:01"), "");
+        assert_eq!(address_in(""), "");
+    }
+
+    #[test]
+    fn a_dualsense_battery_has_the_family_of_the_bluetooth_device_with_its_serial() {
+        let b = Batteries::new(FakeUPower::new(vec![with(
+            dev("/p1", KIND_GAMING_INPUT, "Wireless Controller", 62.0, 2),
+            "e4:17:d8:00:00:01",
+            "",
+            "",
+        )]));
+        b.refresh().expect("reads");
+        let list = [bt(
+            "E4:17:D8:00:00:01",
+            "DualSense",
+            "controller",
+            "playstation",
+        )];
+        assert_eq!(b.list_with(&list)[0].family, "playstation");
+        // The Bluetooth device decides, even against what the name alone would say.
+        let other = [bt("E4:17:D8:00:00:01", "Renamed", "controller", "xbox")];
+        assert_eq!(b.list_with(&other)[0].family, "xbox");
+        // Another address is not this pad: the name guess stands.
+        let stranger = [bt("AA:00:00:00:00:09", "Pad", "controller", "nintendo")];
+        assert_eq!(b.list_with(&stranger)[0].family, "playstation");
+    }
+
+    #[test]
+    fn the_address_can_come_from_the_native_path() {
+        let b = Batteries::new(FakeUPower::new(vec![with(
+            dev("/p1", KIND_GAMING_INPUT, "Pad", 62.0, 2),
+            "",
+            "/org/bluez/hci0/dev_E4_17_D8_00_00_01",
+            "",
+        )]));
+        b.refresh().expect("reads");
+        let list = [bt("E4:17:D8:00:00:01", "Pad", "controller", "xbox")];
+        assert_eq!(b.list_with(&list)[0].family, "xbox");
+    }
+
+    #[test]
+    fn a_pad_bluez_does_not_know_falls_back_to_vendor_model_and_name() {
+        let family = |model: &str, vendor: &str| {
+            let b = Batteries::new(FakeUPower::new(vec![with(
+                dev("/p1", KIND_GAMING_INPUT, model, 62.0, 2),
+                "",
+                "",
+                vendor,
+            )]));
+            b.refresh().expect("reads");
+            b.list_with(&[])[0].family
+        };
+        assert_eq!(family("DualSense Wireless Controller", ""), "playstation");
+        assert_eq!(family("Xbox Wireless Controller", "Microsoft"), "xbox");
+        assert_eq!(family("Pro Controller", ""), "nintendo");
+        assert_eq!(family("SN30 Pro", "8BitDo"), "8bitdo");
+        assert_eq!(family("Ruya Pad", "Ruya"), "");
+        assert_eq!(family("", ""), "");
+    }
+
+    #[test]
+    fn only_controllers_have_a_family() {
+        let b = Batteries::new(FakeUPower::new(vec![with(
+            dev("/h", 17, "DualSense headset", 50.0, 2),
+            "e4:17:d8:00:00:01",
+            "",
+            "Sony",
+        )]));
+        b.refresh().expect("reads");
+        let list = [bt(
+            "E4:17:D8:00:00:01",
+            "DualSense",
+            "controller",
+            "playstation",
+        )];
+        assert_eq!(b.list_with(&list)[0].family, "");
     }
 
     #[test]

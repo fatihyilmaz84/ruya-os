@@ -395,6 +395,7 @@ FocusScope {
                         Accessible.focusable: true
                         Icon {
                             id: rowGlyph
+                            objectName: "onbRowGlyph"
                             u: onb.u
                             name: DeviceIcons.iconFor("controller", row.family)
                             anchors { left: parent.left; leftMargin: Theme.spaceM * onb.u; verticalCenter: parent.verticalCenter }

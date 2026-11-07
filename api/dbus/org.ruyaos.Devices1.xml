@@ -495,6 +495,12 @@
         kind     s   "controller" | "headset" | "speaker" | "mouse" | "keyboard" | "other"
         percent  u   0-100
         state    s   "charging" | "discharging" | "full" | "unknown"
+        family   s   for kind "controller": "playstation" | "xbox" | "nintendo" | "8bitdo" | "" (as in
+                     Bluetooth.ListDevices; "" for every other kind and for a pad whose maker cannot be
+                     told). The Bluetooth device with the same address (UPower's Serial or NativePath
+                     holds it for a BlueZ-fed pad) decides, so the two lists agree; a wired or dongle
+                     pad is guessed from UPower's vendor and model through the same table (families.rs).
+                     Clients treat a missing key or a family they do not know as ""
       A device that has no battery reading, or is gone, is not listed. A Bluetooth device can also
       be in Devices1.Bluetooth.ListDevices (with its own "battery"); this list is the one the
       status cluster uses for every kind, and the low-battery toast for controllers (the other

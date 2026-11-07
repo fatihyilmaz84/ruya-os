@@ -162,6 +162,12 @@ void Bluetooth::mockSetName(const QString &id, const QString &name)
         mock->setName(id, name);
 }
 
+void Bluetooth::mockSetFamily(const QString &id, const QString &family)
+{
+    if (auto *mock = qobject_cast<MockBluetoothBackend *>(m_backend.get()))
+        mock->setFamily(id, family);
+}
+
 void Bluetooth::mockServiceRestart()
 {
     if (auto *mock = qobject_cast<MockBluetoothBackend *>(m_backend.get()))

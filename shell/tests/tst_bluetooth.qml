@@ -559,6 +559,60 @@ Item {
             return row ? findChild(row, "rowIcon") : null
         }
 
+        function chipGlyph(id) {
+            const chip = find("batteryChip_" + id)
+            return chip ? findChild(chip, "batteryKindIcon").name : ""
+        }
+
+        // T-260 (owner bug, Dell 0.0.50): the same device had a different glyph in the status cluster
+        // than in Settings. One table (DeviceIcons) now serves the chip, the pane's rows (the paired
+        // list), the toasts and the pairing screens; this walks every kind and family through all of
+        // them. A family-less Batteries record would give the generic pad here and fail the first row.
+        function test_one_glyph_per_device_everywhere() {
+            const table = [
+                ["controller", "playstation", "bt-gallery-ps", "pad_playstation"],
+                ["controller", "xbox", "bt-gallery-xbox", "pad_xbox"],
+                ["controller", "nintendo", "bt-gallery-switch", "pad_switch"],
+                ["controller", "8bitdo", "bt-gallery-8bitdo", "sports_esports"],
+                ["controller", "", "bt-gallery-pad", "sports_esports"],
+                ["headset", "", "bt-gallery-headset", "headphones"],
+                ["speaker", "", "bt-gallery-speaker", "speaker"],
+                ["keyboard", "", "bt-gallery-keyboard", "keyboard"],
+                ["mouse", "", "bt-gallery-mouse", "mouse"],
+            ]
+            Bluetooth.mockPopulate()
+            tryVerify(() => device("bt-gallery-8bitdo") !== undefined, 2000)
+            openBluetoothPane()
+            for (let i = 0; i < table.length; ++i) {
+                const [kind, family, id, glyph] = table[i]
+                compare(DeviceIcons.iconFor(kind, family), glyph, "the table: " + id)
+                // the paired list in Settings
+                tryVerify(() => rowIcon(id) !== null, 2000, id + " has a row")
+                compare(rowIcon(id).name, glyph, "pane row of " + id)
+                // the chip in the status cluster, for a Batteries record of the same kind and family
+                const bat = "bat-" + i
+                Batteries.mockClear()
+                Batteries.mockSet(bat, 50, "discharging", kind, "Device " + i, family)
+                tryVerify(() => chipGlyph(bat) === glyph, 2000, "chip of " + id + ": " + chipGlyph(bat))
+                // the low-battery toast (controllers: Batteries; the other kinds: Bluetooth)
+                clearToasts()
+                if (kind === "controller")
+                    Batteries.mockSet(bat, 10, "discharging", kind, "Device " + i, family)
+                else
+                    Bluetooth.mockSetBattery(id, 10)
+                tryVerify(() => Notifications.model.count === 1 && Notifications.model.get(0).iconName === glyph, 3000,
+                          "low-battery toast of " + id)
+                // the connected toast and the pad's glyph there (controllers)
+                if (kind === "controller") {
+                    clearToasts()
+                    Bluetooth.mockGamepad(true, id, "Pad", family, "bluetooth")
+                    tryVerify(() => Notifications.model.count === 1 && Notifications.model.get(0).iconName === glyph, 4000,
+                              "connected toast of " + id)
+                }
+            }
+            Batteries.mockReset()
+        }
+
         function test_every_kind_and_family_has_its_icon_in_the_pane() {
             Bluetooth.mockPopulate()
             tryVerify(() => device("bt-gallery-gizmo") !== undefined, 2000)

@@ -25,7 +25,8 @@ class Batteries : public QObject
     QML_SINGLETON
 
     // Every listed device, lowest battery first (ties: discharging before charging, then by id):
-    // [{ id, name, kind, percent, state, low }]. kind "controller" | "headset" | "speaker" | "mouse"
+    // [{ id, name, kind, family, percent, state, low }]. family: a controller's ("playstation" | "xbox" |
+    // "nintendo" | "8bitdo" or ""), the same word Bluetooth.devices has for the same pad. kind "controller" | "headset" | "speaker" | "mouse"
     // | "keyboard" | "other"; state "charging" | "discharging" | "full" | "unknown"; low: the device
     // is discharging at or under LowBatteryPercent.
     Q_PROPERTY(QVariantList devices READ devices NOTIFY devicesChanged)
@@ -58,7 +59,8 @@ public:
     // empty the list, the initial state (one pad at 60 %, discharging) and a household of five
     // devices (mockPopulate, for screenshots).
     Q_INVOKABLE void mockSet(const QString &id, int percent, const QString &state = QStringLiteral("discharging"),
-                             const QString &kind = QString(), const QString &name = QString());
+                             const QString &kind = QString(), const QString &name = QString(),
+                             const QString &family = QString());
     Q_INVOKABLE void mockRemove(const QString &id);
     Q_INVOKABLE void mockClear();
     Q_INVOKABLE void mockReset();
@@ -70,7 +72,7 @@ public:
 signals:
     void devicesChanged();
     // A controller is discharging at or under LowBatteryPercent; once per crossing.
-    void batteryLow(const QString &id, const QString &name, int percent);
+    void batteryLow(const QString &id, const QString &name, int percent, const QString &family);
 
 private:
     void apply(const QList<DeviceBattery> &list);

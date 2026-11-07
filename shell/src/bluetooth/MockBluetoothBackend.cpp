@@ -261,6 +261,15 @@ void MockBluetoothBackend::setName(const QString &id, const QString &name)
     }
 }
 
+void MockBluetoothBackend::setFamily(const QString &id, const QString &family)
+{
+    const int at = indexOf(id);
+    if (at >= 0) {
+        m_entries[at].dev.family = family;
+        publish();
+    }
+}
+
 void MockBluetoothBackend::reveal(const QString &id)
 {
     const int at = indexOf(id);
@@ -299,6 +308,7 @@ void MockBluetoothBackend::populate()
         {"bt-gallery-ps", "DualSense", "controller", "playstation"},
         {"bt-gallery-xbox", "Xbox Wireless Controller", "controller", "xbox"},
         {"bt-gallery-switch", "Pro Controller", "controller", "nintendo"},
+        {"bt-gallery-8bitdo", "8BitDo Pro 2", "controller", "8bitdo"},
         {"bt-gallery-pad", "Generic Pad", "controller", ""},
         {"bt-gallery-headset", "WH-1000XM4", "headset", ""},
         {"bt-gallery-speaker", "Kitchen Speaker", "speaker", ""},

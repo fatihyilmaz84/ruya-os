@@ -42,6 +42,7 @@ public:
     void reveal(const QString &id);
     // A device's name set to any text (a device names itself; rename() would refuse some of it).
     void setName(const QString &id, const QString &name);
+    void setFamily(const QString &id, const QString &family);
     // The service restarts: pads announced before are void.
     void serviceRestart() { emit gamepadsReset(); }
     // A game controller appears or goes away (USB or Bluetooth), announced a moment later like the

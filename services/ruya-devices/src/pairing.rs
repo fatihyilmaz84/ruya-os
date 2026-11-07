@@ -14,6 +14,7 @@ pub const MAX_WINDOW: Duration = Duration::from_secs(300);
 /// How often the window tries to pair the same gamepad found by its scan.
 pub const MAX_ATTEMPTS: u32 = 3;
 
+/// Keep in step with `DeviceIcons.plain` (shell/qml/DeviceIcons.qml), which cleans the same names again.
 /// A character that draws nothing or changes how the text around it is drawn: bidirectional
 /// controls and overrides, zero-width and joiner characters, the byte-order mark, the soft hyphen.
 /// A device that names itself with them can spoof another name (U+202E) or hide in a list.

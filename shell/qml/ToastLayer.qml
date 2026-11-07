@@ -33,9 +33,9 @@ Item {
     // This is the only low-battery toast for controllers: Bluetooth.batteryLow skips them.
     Connections {
         target: Batteries
-        function onBatteryLow(id, name, percent) {
+        function onBatteryLow(id, name, percent, family) {
             Notifications.show(qsTr("Controller battery low (%1%)").arg(percent), "warning", "",
-                               DeviceIcons.iconFor("controller", ""))
+                               DeviceIcons.iconFor("controller", family))
         }
     }
 

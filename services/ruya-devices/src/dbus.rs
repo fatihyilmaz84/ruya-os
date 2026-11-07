@@ -396,11 +396,17 @@ pub type SharedBatteries = Arc<Batteries<DynUPower>>;
 
 pub struct BatteriesIface {
     batteries: SharedBatteries,
+    bluetooth: SharedBluetooth,
 }
 
 impl BatteriesIface {
-    pub fn new(batteries: SharedBatteries) -> Self {
-        BatteriesIface { batteries }
+    /// `bluetooth` is the list a controller's family is taken from, so Batteries and
+    /// `Bluetooth.ListDevices` agree (T-260).
+    pub fn new(batteries: SharedBatteries, bluetooth: SharedBluetooth) -> Self {
+        BatteriesIface {
+            batteries,
+            bluetooth,
+        }
     }
 }
 
@@ -408,7 +414,7 @@ impl BatteriesIface {
 impl BatteriesIface {
     fn list_batteries(&self) -> Vec<HashMap<String, OwnedValue>> {
         self.batteries
-            .list()
+            .list_with(&self.bluetooth.list())
             .into_iter()
             .map(|b| {
                 let own = |v: Value<'_>| OwnedValue::try_from(v).ok();
@@ -418,6 +424,7 @@ impl BatteriesIface {
                     ("kind", own(Value::from(b.kind))),
                     ("percent", own(Value::from(b.percent))),
                     ("state", own(Value::from(b.state.as_str()))),
+                    ("family", own(Value::from(b.family))),
                 ]
                 .into_iter()
                 .filter_map(|(k, v)| v.map(|v| (k.to_owned(), v)))
