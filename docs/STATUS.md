@@ -24,7 +24,7 @@ Open work only (the front of the board; the rest is in `STATUS-backlog.md`), in 
 | ID | Title | Status | Depends |
 |---|---|---|---|
 | [T-197](tasks/T-197-shell-crash-on-bluetooth-audio-disconnect.md) | **[lead]** Shell crash when a Bluetooth headset disconnects | in-progress | — |
-| [T-199](tasks/T-199-device-icons.md) | Device icons in the Bluetooth pane and toasts | todo | — |
+| [T-199](tasks/T-199-device-icons.md) | Device icons in the Bluetooth pane and toasts | in-progress | — |
 | [T-202](tasks/T-202-screen-saver-and-power-saving.md) | Screen saver and power saving | todo | — |
 | [T-260](tasks/T-260-controller-onboarding-flow.md) | Controller onboarding: USB connected toast, per-family pairing guidance, one-click pair, the paired list | todo | T-203, T-199 |
 | [T-261](tasks/T-261-controller-families-and-drivers-audit.md) | **[lead]** Controller families and drivers audit (DualSense, Xbox, 8BitDo, Switch), detection table, hardware checklist | todo | — |
