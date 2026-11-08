@@ -25,7 +25,6 @@ Open work only (the front of the board; the rest is in `STATUS-backlog.md`), in 
 |---|---|---|---|
 | [T-197](tasks/T-197-shell-crash-on-bluetooth-audio-disconnect.md) | **[lead]** Shell crash when a Bluetooth headset disconnects | in-progress | — |
 | [T-281](tasks/T-281-art-glow-shadow-and-standard-card-sizes.md) | Cards glow in the colour of their art (Hue-style shadow) and one standard set of card sizes (owner request) | in-progress | — |
-| [T-296](tasks/T-296-vm-check-script-fixes.md) | VM check script fixes: checks that pass for the wrong reason, early exits, missing cases | in-progress | — |
 | [T-282](tasks/T-282-design-decisions-contrast-themes-dialogs.md) | **[lead]** Design decisions queue: glass text contrast, theme looks, dialogs, Tab, display recovery | todo | — |
 | [T-261](tasks/T-261-controller-families-and-drivers-audit.md) | **[lead]** Controller families and drivers audit (DualSense, Xbox, 8BitDo, Switch), detection table, hardware checklist | todo | — |
 | [T-164](tasks/T-164-per-profile-wayland-sockets.md) | **[lead]** Per-profile Wayland sockets | todo | T-162 |
@@ -39,6 +38,8 @@ Later (ordered): [`STATUS-backlog.md`](STATUS-backlog.md) holds the rest of the 
 ## Inbox
 
 One line each: `- (source) what, and why it matters`. Dispatched builders put them in their HANDOFF; the lead copies them here. **Empty as of 2026-11-08** (planning triage; every earlier line is tagged with its task in [`STATUS-parked.md`](STATUS-parked.md), "Inbox triage 2026-11-07"). Plan at 5+ items.
+
+- (T-296 review, lead 2026-11-08) `vm-power-saving-check.sh` `wake_check`: count frames only after the key press (or require on_frames > off_frames), ensure `tracing_on=1`, say "ALL PASS (n UNVERIFIED)", a trap that removes the idle-divisor drop-in and the tracepoint; `VM_CHECK_LIB_ONLY` run as a program should exit 2 with a message; the 0.0.54 VM run decides whether `drm_vblank_event_delivered` exists on virtio-gpu and the sounds directory-link verdict (if a linked subfolder is accepted, `SoundThemeCheck.cpp resolve()` must reject any link in the path).
 
 ## Blocked (need something this host doesn't have)
 
