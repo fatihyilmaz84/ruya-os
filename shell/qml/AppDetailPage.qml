@@ -353,6 +353,7 @@ Page {
                     objectName: "detailError"
                     visible: page.errorText.length > 0
                     width: parent.width
+                    textFormat: Text.PlainText
                     text: page.errorText
                     color: Theme.errorText
                     font.pixelSize: Theme.typeCaption * page.u
@@ -370,6 +371,7 @@ Page {
 
         Text {
             objectName: "detailDeveloper"
+            textFormat: Text.PlainText
             text: page.app.developer ?? ""
             color: Theme.text
             font.pixelSize: Theme.typeBody * page.u
@@ -400,6 +402,7 @@ Page {
 
         Text {
             width: parent.width
+            textFormat: Text.PlainText
             text: page.app.description ?? ""
             color: Theme.text
             font.pixelSize: Theme.typeCaption * page.u
@@ -438,6 +441,7 @@ Page {
                 }
 
                 Text {
+                    textFormat: Text.PlainText      // an id the service sent shows raw
                     text: page.permissionText(perm.modelData)
                     color: perm.risky ? Theme.warningText : Theme.text
                     font.pixelSize: Theme.typeCaption * page.u
@@ -449,6 +453,7 @@ Page {
             objectName: "detailUpdateAdds"
             visible: page.newPermissions.length > 0
             width: parent.width
+            textFormat: Text.PlainText
             text: qsTr("The update adds: %1").arg(page.newPermissions.map(p => page.permissionText(p)).join(", "))
             color: page.addsHighRisk ? Theme.warningText : Theme.text
             font.pixelSize: Theme.typeCaption * page.u
@@ -521,6 +526,7 @@ Page {
                 objectName: "uninstallTitle"
                 width: parent.width
                 horizontalAlignment: Text.AlignHCenter
+                textFormat: Text.PlainText
                 text: qsTr("Uninstall %1?").arg(page.app.name ?? "")
                 color: Theme.text
                 font.pixelSize: Theme.typeTitle * page.u

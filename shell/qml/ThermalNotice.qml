@@ -79,6 +79,7 @@ FocusScope {
             objectName: "thermalNoticeSensor"
             anchors.horizontalCenter: parent.horizontalCenter
             visible: dialog.sensorText.length > 0
+            textFormat: Text.PlainText
             text: dialog.sensorText
             color: Theme.text
             font.pixelSize: Theme.typeHeadline * dialog.u

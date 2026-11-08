@@ -194,6 +194,7 @@ FocusScope {
 
         Text {
             anchors.horizontalCenter: parent.horizontalCenter
+            textFormat: Text.PlainText
             text: pad.mode === "verify" ? qsTr("Enter PIN for %1").arg(pad.profile.name ?? "")
                 : pad.stage === 1 ? qsTr("Confirm PIN") : pad.prompt
             color: Theme.text
@@ -233,6 +234,7 @@ FocusScope {
             objectName: "pinMessage"
             anchors.horizontalCenter: parent.horizontalCenter
             height: 36 * pad.u
+            textFormat: Text.PlainText
             text: pad.locked ? qsTr("Too many attempts. Try again in %1 s.").arg(pad.lockSecs) : pad.message
             color: Theme.errorText
             font.pixelSize: Theme.typeCaption * pad.u

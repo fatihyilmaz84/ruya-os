@@ -165,6 +165,15 @@ void MockStorageBackend::setBusy(const QString &id, bool busy)
         m_entries[at].busy = busy;
 }
 
+void MockStorageBackend::setLabel(const QString &id, const QString &label)
+{
+    const int at = indexOf(id);
+    if (at < 0)
+        return;
+    m_entries[at].vol.label = label;
+    publish();
+}
+
 void MockStorageBackend::reset(bool plugStick)
 {
     initState();

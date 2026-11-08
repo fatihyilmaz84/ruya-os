@@ -99,6 +99,11 @@ public:
     Q_INVOKABLE QString mockPlantCorrupt();
     // importFile without the check against usbImages (to try files the list would never hold).
     Q_INVOKABLE void mockImportAny(const QString &path, const QColor &flatten);
+    // mockPlantPicture writes a small made-up picture named `<baseName>.png` into a temporary folder and
+    // returns its path (a file name as a drive could carry it: emoji, long); mockSafeName is the name
+    // filter a copy goes through.
+    Q_INVOKABLE QString mockPlantPicture(const QString &baseName);
+    Q_INVOKABLE static QString mockSafeName(const QString &name);
     Q_INVOKABLE void mockFillUser(int count);
     Q_INVOKABLE void mockSetCopyDelay(int ms);
     Q_INVOKABLE void mockReset();

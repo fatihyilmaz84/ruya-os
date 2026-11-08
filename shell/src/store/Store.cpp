@@ -351,6 +351,13 @@ void Store::mockArtDir(const QString &dir)
         mock->setArtDir(dir);
 }
 
+void Store::mockSetAppText(const QString &appId, const QString &name, const QString &summary, const QString &developer,
+                           const QStringList &permissions)
+{
+    if (auto *mock = qobject_cast<MockStoreBackend *>(m_backend.get()))
+        mock->setAppText(appId, name, summary, developer, permissions);
+}
+
 void Store::mockCatalogChanged()
 {
     if (auto *mock = qobject_cast<MockStoreBackend *>(m_backend.get()))

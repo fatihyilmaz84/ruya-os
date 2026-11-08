@@ -32,6 +32,7 @@ FocusScope {
             objectName: "heroEyebrow"
             width: parent.width
             visible: text.length > 0
+            textFormat: Text.PlainText
             text: hero.eyebrow.toUpperCase()
             color: Theme.text
             font.pixelSize: Theme.typeCaption * hero.u
@@ -42,6 +43,7 @@ FocusScope {
         Text {
             objectName: "heroTitle"
             width: parent.width
+            textFormat: Text.PlainText
             text: hero.title
             color: Theme.text
             font.pixelSize: Theme.typeHero * hero.u
@@ -55,6 +57,7 @@ FocusScope {
             objectName: "heroMeta"
             width: parent.width
             visible: text.length > 0
+            textFormat: Text.PlainText
             text: hero.meta
             color: Theme.text
             font.pixelSize: Theme.typeBody * hero.u

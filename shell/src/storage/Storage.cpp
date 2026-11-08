@@ -255,6 +255,12 @@ void Storage::mockRefreshInternalDelayed(int ms)
     }
 }
 
+void Storage::mockSetLabel(const QString &id, const QString &label)
+{
+    if (auto *mock = qobject_cast<MockStorageBackend *>(m_backend.get()))
+        mock->setLabel(id, label);
+}
+
 void Storage::mockSetBusy(const QString &id, bool busy)
 {
     if (auto *mock = qobject_cast<MockStorageBackend *>(m_backend.get()))

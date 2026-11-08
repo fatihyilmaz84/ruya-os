@@ -623,6 +623,7 @@ FocusScope {
                     color: Profiles.active.avatar ?? Theme.glass
                     Text {
                         anchors.centerIn: parent
+                        textFormat: Text.PlainText
                         text: (Profiles.active.name ?? "?").charAt(0).toUpperCase()
                         color: Theme.text
                         font.pixelSize: Theme.typeCaption * root.u
@@ -632,6 +633,7 @@ FocusScope {
                     id: profileName
                     objectName: "activeProfileName"
                     anchors.verticalCenter: parent.verticalCenter
+                    textFormat: Text.PlainText
                     text: Profiles.active.name ?? ""
                     width: Math.min(implicitWidth, statusGlass.nameWidth)   // the full name unless the room is short
                     elide: Text.ElideRight
@@ -1265,6 +1267,7 @@ FocusScope {
                     border.color: focused ? Theme.focusRing : Theme.glassBorder
                     Text {
                         anchors.centerIn: parent
+                        textFormat: Text.PlainText
                         text: action.modelData.label
                         color: Theme.text
                         font.pixelSize: Theme.typeHeadline * root.u

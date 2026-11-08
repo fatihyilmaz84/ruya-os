@@ -80,17 +80,32 @@ Probe probe(const QString &path, QSize *size)
     return Probe::Ok;
 }
 
-// A name from a drive: no control characters, one line, at most 40 characters.
-QString safeName(QString name)
+// How many UTF-16 units the code point at `at` takes (2 for a well-formed surrogate pair).
+qsizetype pointLength(const QString &text, qsizetype at)
 {
+    const bool pair = text.at(at).isHighSurrogate() && at + 1 < text.size() && text.at(at + 1).isLowSurrogate();
+    return pair ? 2 : 1;
+}
+
+// A name from a drive: no control characters, one line, at most 40 characters. Walks code points,
+// so an emoji (a surrogate pair in UTF-16) is kept or cut whole, never split into a lone surrogate.
+QString safeName(const QString &input)
+{
+    constexpr int MaxCodePoints = 40;
     QString printable;
-    for (const QChar c : std::as_const(name)) {
-        if (c.isPrint())
-            printable.append(c);
+    for (qsizetype at = 0; at < input.size();) {
+        const qsizetype length = pointLength(input, at);
+        const char32_t point = length == 2 ? QChar::surrogateToUcs4(input.at(at), input.at(at + 1)) : input.at(at).unicode();
+        if (QChar::isPrint(point))
+            printable.append(QStringView(input).mid(at, length));
+        at += length;
     }
-    name = printable.simplified();
-    if (name.size() > 40)
-        name = name.left(40).trimmed();
+    QString name = printable.simplified();
+    qsizetype units = 0;
+    for (int count = 0; count < MaxCodePoints && units < name.size(); ++count)
+        units += pointLength(name, units);
+    if (units < name.size())
+        name = name.left(units).trimmed();
     return name.isEmpty() ? QStringLiteral("Wallpaper") : name;
 }
 
@@ -583,6 +598,25 @@ QString Wallpapers::mockPlantCorrupt()
     saveIndex();
     emit userChanged();
     return UserPrefix + file;
+}
+
+QString Wallpapers::mockPlantPicture(const QString &baseName)
+{
+    if (!m_mock)
+        return QString();
+    if (!m_mockUsb)
+        m_mockUsb = std::make_unique<QTemporaryDir>();
+    const QString path = m_mockUsb->path() + QLatin1Char('/') + baseName + QStringLiteral(".png");
+    // A different picture per name (a copy of the same bytes is the same copy).
+    const uint seed = qHash(baseName);
+    testPicture(320, 180, QColor(int(seed % 200), int((seed >> 8) % 200), 120), QColor(int((seed >> 16) % 200), 70, int((seed >> 24) % 200)))
+        .save(path, "PNG");
+    return path;
+}
+
+QString Wallpapers::mockSafeName(const QString &name)
+{
+    return safeName(name);
 }
 
 void Wallpapers::mockFillUser(int count)

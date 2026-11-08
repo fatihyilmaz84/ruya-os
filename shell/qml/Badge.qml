@@ -28,6 +28,7 @@ Rectangle {
     Text {
         id: label
         anchors.centerIn: parent
+        textFormat: Text.PlainText
         text: badge.text
         color: badge.tone
         font.pixelSize: Theme.typeMicro * badge.u

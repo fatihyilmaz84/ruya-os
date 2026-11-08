@@ -68,6 +68,7 @@ public:
     // vol-odd), announced in the order given, one list for all.
     Q_INVOKABLE void mockPlug(const QStringList &ids);
     Q_INVOKABLE void mockSetBusy(const QString &id, bool busy);
+    Q_INVOKABLE void mockSetLabel(const QString &id, const QString &label);   // any text, as a drive could carry it
     // mockHoldEject: eject() stays unanswered until released (false); mockEjectCalls counts the
     // eject() calls since the last reset; mockRepublish publishes the unchanged list again.
     Q_INVOKABLE void mockHoldEject(bool hold);

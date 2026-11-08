@@ -201,6 +201,7 @@ Item {
             width: parent.width
             horizontalAlignment: Text.AlignHCenter
             wrapMode: Text.Wrap
+            textFormat: Text.PlainText
             text: hint.message
             color: Theme.text
             font.pixelSize: Theme.typeBody * hint.u

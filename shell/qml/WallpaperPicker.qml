@@ -441,6 +441,7 @@ FocusScope {
             objectName: "wallpaperMessage"
             visible: picker.usbMode
             width: gridFrame.width
+            textFormat: Text.PlainText
             text: picker.message.length > 0 ? picker.message
                 : qsTr("Choose a picture to copy to this console. It is shrunk to fit the screen.")
             color: picker.message.length > 0 ? Theme.errorText : Theme.text

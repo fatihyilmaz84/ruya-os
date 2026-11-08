@@ -382,6 +382,7 @@ SettingsPane {
         objectName: "profilesMessage"
         width: parent ? parent.width : 0
         visible: pane.message.length > 0
+        textFormat: Text.PlainText
         text: pane.message
         color: pane.messageIsError ? Theme.errorText : Theme.toastSuccess
         font.pixelSize: Theme.typeBody * pane.u

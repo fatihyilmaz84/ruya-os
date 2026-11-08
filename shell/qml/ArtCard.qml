@@ -88,6 +88,7 @@ Item {
         Text {
             objectName: "artCardTitle"
             anchors { left: parent.left; right: parent.right; bottom: parent.bottom; margins: Theme.spaceS * card.u }
+            textFormat: Text.PlainText
             text: card.title
             color: Theme.text
             font.pixelSize: Theme.typeCaption * card.u

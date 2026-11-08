@@ -73,6 +73,7 @@ Rectangle {
         objectName: "artMonogram"
         visible: art.monogram
         anchors.centerIn: parent
+        textFormat: Text.PlainText
         text: art.appName.charAt(0).toUpperCase()
         color: Theme.text
         opacity: 0.85
