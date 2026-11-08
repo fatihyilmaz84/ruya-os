@@ -36,4 +36,16 @@ Status: in-progress · Phase: 2 · Depends: — · Area: services (ruya-inputd),
 - Land this before T-264 so the registry starts from a service that cannot stick a key.
 
 ## Outcome
-_Filled in by the implementer._
+Verified: host (vm pending: vm-devices-check.sh inputd)
+
+Checks: `dev.ps1 test` ALL GREEN (940 QML passed, 73 skipped; Rust incl. 13 ruya-inputd tests).
+
+Built:
+- `mapping.rs`: `Mapper` counts the sources behind each key (button, hat, stick; a key two sources hold is one pad-level press and one release) and gets `release_all()`; new `KeyBoard` (`route`, `pad_gone`) counts pads per key: press on 0 -> 1, release on 1 -> 0. A repeated press of one button is ignored; a release with no press seen still passes through `Mapper::button` (the existing test needs it) and `KeyBoard` ignores a release with nothing counted.
+- `linux.rs`: `Output { device, board }` behind the one `Mutex`; a `Pad` guard whose `Drop` runs `pad_gone`, writes the releases and logs `ruya-inputd: <name> gone: <err>; released <keys|nothing>`. Drop runs on read error, return and unwinding (the lock tolerates poison so one panicked pump cannot block the others' releases).
+- `scripts/vm-devices-check.sh inputd` (not part of `check`): virtual pads through `/dev/uinput` (python3 stdlib), `EVIOCGKEY` on "RuyaOS Navigation"; vanished pad with Down + A held; two pads sharing Down; the journal line; no `/dev/uinput` access prints `UNVERIFIED`.
+- Docs: `00-overview.md` ADR-003 paragraph (where `ruya-inputd` is described; `03` has no such paragraph), `dev-setup.md`.
+
+Proofs: the six named tests plus `a_key_held_by_two_sources_of_one_pad_is_released_once` in `mapping.rs`. Revert check: `KeyBoard::pad_gone` made to return nothing (hand mutation, `cargo test -p ruya-inputd`, file restored and re-run green): 2 tests red, `a_key_stays_down_until_the_last_pad_lets_go` and `a_vanished_pad_releases_only_what_it_held`. `linux.rs` type-checks via `dev.ps1 rust`'s Linux-target clippy (`x86_64-unknown-linux-gnu`); it was not run or linked on this host. The check script's `bash -n` and the python body's `py_compile` pass; the check itself ran nowhere (needs the VM).
+
+Files: services/ruya-inputd/src/mapping.rs, linux.rs; scripts/vm-devices-check.sh; docs/specs/00-overview.md, docs/dev-setup.md.

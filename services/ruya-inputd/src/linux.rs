@@ -8,7 +8,7 @@ use std::time::Duration;
 use evdev::uinput::{VirtualDevice, VirtualDeviceBuilder};
 use evdev::{AbsoluteAxisType, AttributeSet, Device, EventType, InputEvent, InputEventKind, Key};
 
-use crate::mapping::{Axis, Button, KeyEvent, Mapper, NavKey};
+use crate::mapping::{Axis, Button, KeyBoard, KeyEvent, Mapper, NavKey};
 
 const RESCAN_INTERVAL: Duration = Duration::from_secs(2);
 const VIRTUAL_NAME: &str = "RuyaOS Navigation";
@@ -72,7 +72,14 @@ fn build_virtual_keyboard() -> io::Result<VirtualDevice> {
         .build()
 }
 
-fn emit(output: &Mutex<VirtualDevice>, events: &[KeyEvent]) {
+/// The shared virtual keyboard and the count of pads holding each key. One lock covers both,
+/// so counting a pad's events and writing them out cannot interleave with another pad's.
+struct Output {
+    device: VirtualDevice,
+    board: KeyBoard,
+}
+
+fn write_keys(device: &mut VirtualDevice, events: &[KeyEvent]) {
     if events.is_empty() {
         return;
     }
@@ -82,13 +89,55 @@ fn emit(output: &Mutex<VirtualDevice>, events: &[KeyEvent]) {
             InputEvent::new(EventType::KEY, nav_to_key(key).code(), pressed as i32)
         })
         .collect();
-    if let Err(err) = output.lock().unwrap().emit(&batch) {
+    if let Err(err) = device.emit(&batch) {
         eprintln!("ruya-inputd: emit failed: {err}");
     }
 }
 
+/// A poisoned lock (another pump panicked) must not stop the others from releasing keys.
+fn lock(output: &Mutex<Output>) -> std::sync::MutexGuard<'_, Output> {
+    output
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+fn emit(output: &Mutex<Output>, events: &[KeyEvent]) {
+    let mut out = lock(output);
+    let keys = out.board.route(events);
+    write_keys(&mut out.device, &keys);
+}
+
+/// One pad's state. Dropping it, on any way out of `pump` (read error, node gone, a panic
+/// unwinding the thread), releases every key the pad still holds on the shared keyboard.
+struct Pad {
+    name: String,
+    mapper: Mapper,
+    output: Arc<Mutex<Output>>,
+    gone: String,
+}
+
+impl Drop for Pad {
+    fn drop(&mut self) {
+        let mut out = lock(&self.output);
+        let keys = out.board.pad_gone(&mut self.mapper);
+        write_keys(&mut out.device, &keys);
+        let released = if keys.is_empty() {
+            "nothing".to_owned()
+        } else {
+            keys.iter()
+                .map(|(key, _)| format!("{key:?}"))
+                .collect::<Vec<_>>()
+                .join(", ")
+        };
+        eprintln!(
+            "ruya-inputd: {} gone: {}; released {released}",
+            self.name, self.gone
+        );
+    }
+}
+
 /// Reads one gamepad until it disappears (unplug -> read error).
-fn pump(mut device: Device, path: PathBuf, output: Arc<Mutex<VirtualDevice>>) {
+fn pump(mut device: Device, path: PathBuf, output: Arc<Mutex<Output>>) {
     let name = device.name().unwrap_or("unknown").to_owned();
     eprintln!("ruya-inputd: using {name} ({})", path.display());
 
@@ -105,16 +154,22 @@ fn pump(mut device: Device, path: PathBuf, output: Arc<Mutex<VirtualDevice>>) {
     let (x_min, x_max) = range(AbsoluteAxisType::ABS_X);
     let (y_min, y_max) = range(AbsoluteAxisType::ABS_Y);
 
-    let mut mapper = Mapper::default();
+    let mut pad = Pad {
+        name,
+        mapper: Mapper::default(),
+        output,
+        gone: "thread ended".to_owned(),
+    };
     loop {
         let events = match device.fetch_events() {
             Ok(events) => events,
             Err(err) => {
-                eprintln!("ruya-inputd: {name} gone: {err}");
+                pad.gone = err.to_string();
                 return;
             }
         };
         for event in events {
+            let mapper = &mut pad.mapper;
             let out = match event.kind() {
                 // value 2 = autorepeat; the compositor/client handles repeat itself.
                 InputEventKind::Key(key) if event.value() != 2 => match button_from_key(key) {
@@ -134,7 +189,7 @@ fn pump(mut device: Device, path: PathBuf, output: Arc<Mutex<VirtualDevice>>) {
                 },
                 _ => continue,
             };
-            emit(&output, &out);
+            emit(&pad.output, &out);
         }
     }
 }
@@ -153,7 +208,10 @@ fn event_nodes() -> Vec<PathBuf> {
 }
 
 pub fn run() -> io::Result<()> {
-    let output = Arc::new(Mutex::new(build_virtual_keyboard()?));
+    let output = Arc::new(Mutex::new(Output {
+        device: build_virtual_keyboard()?,
+        board: KeyBoard::default(),
+    }));
     // Paths currently served by a pump thread; a thread removes its path when it exits.
     let active: Arc<Mutex<HashSet<PathBuf>>> = Arc::default();
     // Paths already checked and found not to be gamepads.

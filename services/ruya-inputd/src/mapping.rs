@@ -43,10 +43,72 @@ pub type KeyEvent = (NavKey, bool);
 const STICK_PRESS: f32 = 0.6;
 const STICK_RELEASE: f32 = 0.35;
 
+/// Every key, in the order a release list is written.
+const ALL_KEYS: [NavKey; 10] = [
+    NavKey::Up,
+    NavKey::Down,
+    NavKey::Left,
+    NavKey::Right,
+    NavKey::Accept,
+    NavKey::Back,
+    NavKey::Menu,
+    NavKey::Guide,
+    NavKey::PrevTab,
+    NavKey::NextTab,
+];
+
+fn key_index(key: NavKey) -> usize {
+    ALL_KEYS.iter().position(|&k| k == key).unwrap_or(0)
+}
+
+fn button_key(button: Button) -> NavKey {
+    match button {
+        Button::South => NavKey::Accept,
+        Button::East => NavKey::Back,
+        Button::Start => NavKey::Menu,
+        Button::Mode => NavKey::Guide,
+        Button::ShoulderLeft => NavKey::PrevTab,
+        Button::ShoulderRight => NavKey::NextTab,
+        Button::DpadUp => NavKey::Up,
+        Button::DpadDown => NavKey::Down,
+        Button::DpadLeft => NavKey::Left,
+        Button::DpadRight => NavKey::Right,
+    }
+}
+
+/// Counts presses and releases per key and returns only the 0 -> 1 presses and 1 -> 0 releases.
+/// A release with nothing counted is ignored.
+fn count_transitions(counts: &mut [u8; 10], events: &[KeyEvent]) -> Vec<KeyEvent> {
+    let mut out = Vec::with_capacity(events.len());
+    for &(key, pressed) in events {
+        let count = &mut counts[key_index(key)];
+        if pressed {
+            *count = count.saturating_add(1);
+            if *count == 1 {
+                out.push((key, true));
+            }
+        } else if *count > 0 {
+            *count -= 1;
+            if *count == 0 {
+                out.push((key, false));
+            }
+        }
+    }
+    out
+}
+
+/// One pad's view: what it presses and which keys it holds right now.
+///
+/// A key can be held by several sources of the same pad (the d-pad button and the stick both
+/// say Down); `held` counts the sources, and the events a `Mapper` returns are the pad's own
+/// transitions only: pressed when the first source takes the key, released when the last lets go.
 #[derive(Debug, Default)]
 pub struct Mapper {
     hat: [Option<NavKey>; 2],
     stick: [Option<NavKey>; 2],
+    /// Buttons currently down, by the key they map to (two buttons never share a key).
+    buttons: [bool; 10],
+    held: [u8; 10],
 }
 
 fn axis_index(axis: Axis) -> usize {
@@ -84,24 +146,23 @@ fn transition(slot: &mut Option<NavKey>, new: Option<NavKey>) -> Vec<KeyEvent> {
 
 impl Mapper {
     pub fn button(&mut self, button: Button, pressed: bool) -> Vec<KeyEvent> {
-        let key = match button {
-            Button::South => NavKey::Accept,
-            Button::East => NavKey::Back,
-            Button::Start => NavKey::Menu,
-            Button::Mode => NavKey::Guide,
-            Button::ShoulderLeft => NavKey::PrevTab,
-            Button::ShoulderRight => NavKey::NextTab,
-            Button::DpadUp => NavKey::Up,
-            Button::DpadDown => NavKey::Down,
-            Button::DpadLeft => NavKey::Left,
-            Button::DpadRight => NavKey::Right,
-        };
-        vec![(key, pressed)]
+        let key = button_key(button);
+        let down = &mut self.buttons[key_index(key)];
+        if pressed && *down {
+            return Vec::new(); // a repeated press is not a second hold
+        }
+        if !pressed && !*down {
+            // Released without a press seen (the pad connected with it held): nothing of ours.
+            return vec![(key, false)];
+        }
+        *down = pressed;
+        self.settle(vec![(key, pressed)])
     }
 
     /// D-pad reported as a hat axis: value is -1, 0 or 1.
     pub fn hat(&mut self, axis: Axis, value: i32) -> Vec<KeyEvent> {
-        transition(&mut self.hat[axis_index(axis)], direction(axis, value))
+        let events = transition(&mut self.hat[axis_index(axis)], direction(axis, value));
+        self.settle(events)
     }
 
     /// Analog stick: raw value within `[min, max]`.
@@ -120,7 +181,47 @@ impl Mapper {
         } else {
             None
         };
-        transition(slot, new)
+        let events = transition(slot, new);
+        self.settle(events)
+    }
+
+    /// Counts the sources behind each key and keeps only the pad's own transitions.
+    fn settle(&mut self, events: Vec<KeyEvent>) -> Vec<KeyEvent> {
+        count_transitions(&mut self.held, &events)
+    }
+
+    /// The pad is gone: a release for every key it holds, then it holds nothing.
+    pub fn release_all(&mut self) -> Vec<KeyEvent> {
+        let out = ALL_KEYS
+            .iter()
+            .filter(|&&key| self.held[key_index(key)] > 0)
+            .map(|&key| (key, false))
+            .collect();
+        self.hat = [None; 2];
+        self.stick = [None; 2];
+        self.buttons = [false; 10];
+        self.held = [0; 10];
+        out
+    }
+}
+
+/// The one virtual keyboard all pads share: a count of pads per key.
+#[derive(Debug, Default)]
+pub struct KeyBoard {
+    pads: [u8; 10],
+}
+
+impl KeyBoard {
+    /// Turns one pad's transitions into keyboard events: a key goes down when the first pad
+    /// presses it and up when the last pad lets go.
+    pub fn route(&mut self, events: &[KeyEvent]) -> Vec<KeyEvent> {
+        count_transitions(&mut self.pads, events)
+    }
+
+    /// A pad vanished: release what it held (another pad's hold on a key survives).
+    pub fn pad_gone(&mut self, mapper: &mut Mapper) -> Vec<KeyEvent> {
+        let released = mapper.release_all();
+        self.route(&released)
     }
 }
 
@@ -192,5 +293,101 @@ mod tests {
     fn degenerate_range_is_ignored() {
         let mut m = Mapper::default();
         assert_eq!(m.stick(Axis::Horizontal, 10, 0, 0), vec![]);
+    }
+
+    fn press(m: &mut Mapper, b: Button) {
+        m.button(b, true);
+    }
+
+    #[test]
+    fn release_all_releases_held_buttons_hats_and_sticks() {
+        let mut m = Mapper::default();
+        press(&mut m, Button::South);
+        m.hat(Axis::Horizontal, -1);
+        m.stick(Axis::Vertical, 30000, -32768, 32767);
+        assert_eq!(
+            m.release_all(),
+            vec![
+                (NavKey::Down, false),
+                (NavKey::Left, false),
+                (NavKey::Accept, false)
+            ]
+        );
+        // Everything is forgotten: the same inputs press again from scratch.
+        assert_eq!(m.hat(Axis::Horizontal, -1), vec![(NavKey::Left, true)]);
+        assert_eq!(m.button(Button::South, true), vec![(NavKey::Accept, true)]);
+    }
+
+    #[test]
+    fn release_all_twice_releases_nothing_the_second_time() {
+        let mut m = Mapper::default();
+        press(&mut m, Button::DpadDown);
+        assert_eq!(m.release_all(), vec![(NavKey::Down, false)]);
+        assert_eq!(m.release_all(), vec![]);
+    }
+
+    #[test]
+    fn a_key_held_by_two_sources_of_one_pad_is_released_once() {
+        let mut m = Mapper::default();
+        assert_eq!(m.button(Button::DpadDown, true), vec![(NavKey::Down, true)]);
+        assert_eq!(m.stick(Axis::Vertical, 30000, -32768, 32767), vec![]);
+        assert_eq!(m.button(Button::DpadDown, false), vec![]);
+        assert_eq!(
+            m.stick(Axis::Vertical, 0, -32768, 32767),
+            vec![(NavKey::Down, false)]
+        );
+    }
+
+    #[test]
+    fn two_pads_holding_the_same_key_press_it_once() {
+        let (mut a, mut b, mut kb) = (Mapper::default(), Mapper::default(), KeyBoard::default());
+        assert_eq!(
+            kb.route(&a.button(Button::DpadDown, true)),
+            vec![(NavKey::Down, true)]
+        );
+        assert_eq!(kb.route(&b.button(Button::DpadDown, true)), vec![]);
+    }
+
+    #[test]
+    fn a_key_stays_down_until_the_last_pad_lets_go() {
+        let (mut a, mut b, mut kb) = (Mapper::default(), Mapper::default(), KeyBoard::default());
+        kb.route(&a.button(Button::DpadDown, true));
+        kb.route(&b.button(Button::DpadDown, true));
+        // Pad B lets go: pad A still holds Down.
+        assert_eq!(kb.route(&b.button(Button::DpadDown, false)), vec![]);
+        // Pad A vanishes while holding it: now it goes up.
+        assert_eq!(kb.pad_gone(&mut a), vec![(NavKey::Down, false)]);
+        // And the other way round: B vanishes first, A still holds.
+        let (mut c, mut d) = (Mapper::default(), Mapper::default());
+        kb.route(&c.button(Button::South, true));
+        kb.route(&d.button(Button::South, true));
+        assert_eq!(kb.pad_gone(&mut c), vec![]);
+        assert_eq!(
+            kb.route(&d.button(Button::South, false)),
+            vec![(NavKey::Accept, false)]
+        );
+    }
+
+    #[test]
+    fn a_vanished_pad_releases_only_what_it_held() {
+        let (mut a, mut b, mut kb) = (Mapper::default(), Mapper::default(), KeyBoard::default());
+        kb.route(&a.button(Button::DpadDown, true));
+        kb.route(&a.button(Button::South, true));
+        kb.route(&b.button(Button::DpadDown, true));
+        kb.route(&b.button(Button::East, true));
+        assert_eq!(kb.pad_gone(&mut a), vec![(NavKey::Accept, false)]);
+        assert_eq!(
+            kb.pad_gone(&mut b),
+            vec![(NavKey::Down, false), (NavKey::Back, false)]
+        );
+    }
+
+    #[test]
+    fn a_pad_that_vanishes_holding_nothing_emits_nothing() {
+        let (mut a, mut kb) = (Mapper::default(), KeyBoard::default());
+        assert_eq!(kb.pad_gone(&mut a), vec![]);
+        kb.route(&a.button(Button::South, true));
+        kb.route(&a.button(Button::South, false));
+        assert_eq!(kb.pad_gone(&mut a), vec![]);
     }
 }
