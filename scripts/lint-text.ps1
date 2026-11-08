@@ -14,14 +14,15 @@ $strict = New-Object System.Text.UTF8Encoding($false, $true)
 $bad = '[\x00-\x09\x0B\x0C\x0E-\x1F\x7F]|\r(?!\n)'
 $names = @{ 9 = 'tab'; 11 = '\v'; 12 = '\f'; 13 = 'lone \r'; 127 = 'DEL' }
 
-# "git ls-files --eol" prints "i/<info> w/<info> attr/<attrs> <TAB><path>"; i/-text = binary.
-$files = @(git -C $Repo ls-files --eol | Where-Object { $_ -notmatch '^i/-text' } |
-    ForEach-Object { ($_ -split "`t", 2)[1] })
+# Binary = a NUL byte in the file. Not git's "-text": git also calls a file with a lone CR
+# binary, which is exactly the corruption this lint exists to catch (d09da99).
+$files = @(git -C $Repo ls-files)
 $findings = 0
 foreach ($f in $files) {
     $path = Join-Path $Repo $f
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { continue }
     $bytes = [System.IO.File]::ReadAllBytes($path)
+    if ([Array]::IndexOf($bytes, [byte]0) -ge 0) { continue }
     try { $text = $strict.GetString($bytes) }
     catch {
         Write-Host "    ${f}: not valid UTF-8 (a cp1252 write? pass encoding=`"utf-8`")" -ForegroundColor Yellow
