@@ -562,7 +562,7 @@ Item {
             tryVerify(() => volume("vol-card") !== undefined)
             openStoragePane()
             tryVerify(() => find("storageScan_vol-card_none") !== null, 3000)
-            compare(find("storageScan_vol-card_none").label, "Nothing from RuyaOS on this drive")
+            compare(find("storageScan_vol-card_none").label, "Nothing found here")
             compare(find("storageScan_vol-card_none").value, "")
             compare(scanRowNames("vol-card").join(), "none", "one line, no Other row")
         }
@@ -576,7 +576,8 @@ Item {
             compare(find("storageScan_vol-stick_cat:games").value, "at least 12 GB")
             compare(find("storageScan_vol-stick_other").value, "at least 3.7 GB")
             tryVerify(() => find("storageScan_vol-card_none") !== null, 3000)
-            compare(find("storageScan_vol-card_none").value, "not everything was read")
+            compare(find("storageScan_vol-card_none").label, "Nothing found so far", "a partial walk may not have got to it")
+            compare(find("storageScan_vol-card_none").value, "")
             compare(Storage.scans["vol-stick"].partial, true)
         }
 
@@ -727,6 +728,109 @@ Item {
             goTo("storageScan_vol-stick_cat:backups")
             wait(800)
             grabImage(tc.shell).save(shotsDir + "/27-settings-storage-scan-partial.png")
+        }
+
+        function shownHints() { return find("paneStorage").hints.map(h => h.button + " " + h.text).join("|") }
+
+        // A row that does nothing on Accept says so: the hint bar offers Back only, and Accept is silent.
+        function test_scan_rows_offer_back_only_and_accept_does_nothing() {
+            Storage.mockPlugStick()
+            tryVerify(() => volume("vol-stick") !== undefined)
+            openStoragePane()
+            tryVerify(() => find("storageScan_vol-stick_cat:games") !== null, 3000)
+            compare(shownHints(), "B Back", "the first row (This console) is a fact")
+            goTo("storageVol_vol-stick")
+            compare(shownHints(), "A Select|B Back", "a drive's own row does something")
+            keyClick(Qt.Key_Down)
+            tryVerify(() => find("storageScan_vol-stick_cat:games").activeFocus, 2000)
+            compare(shownHints(), "B Back", "a result row does nothing on Accept")
+            const row = find("storageScan_vol-stick_cat:games")
+            verify(row.inert)
+            let hit = 0
+            row.activated.connect(() => { hit++ })
+            keyClick(Qt.Key_Return)
+            wait(100)
+            compare(hit, 0, "Accept on a result row emits nothing")
+            verify(row.activeFocus, "and focus stays")
+            goTo("storageEject_vol-stick")
+            compare(shownHints(), "A Select|B Back", "Eject does something")
+            goTo("storageApps")
+            compare(shownHints(), "B Back")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => find("categoryList").activeFocus, 2000, "Back leaves")
+        }
+
+        // The focused row is inside what the pane shows (rows rebuilt under it must not leave it off screen).
+        function focusedRowIsShown() {
+            const pane = find("paneStorage")
+            const row = pane.focusableRows().find(r => r.activeFocus)
+            if (!row)
+                return false
+            return row.y >= pane.scrollY - 0.5 && row.y + row.height <= pane.scrollY + pane.viewport.height + 0.5
+        }
+
+        function test_focus_stays_in_view_when_the_rows_under_it_are_rebuilt() {
+            Storage.mockPlug(["vol-card"])
+            tryVerify(() => volume("vol-card") !== undefined)
+            openStoragePane()
+            tryVerify(() => find("storageScan_vol-card_none") !== null, 3000)
+            goTo("storageScan_vol-card_none")
+            tryVerify(() => focusedRowIsShown(), 2000, "the focused result row is in view")
+            Storage.mockSetScanFailed(true)
+            Storage.mockSetFree("vol-card", 39000000000)   // the volume changed: scanned again, now unreadable
+            tryVerify(() => find("storageScan_vol-card_failed") !== null, 3000)
+            tryVerify(() => find("paneStorage").activeFocus, 2000)
+            tryVerify(() => focusedRowIsShown(), 2000, "the focused row is still in view")
+            keyClick(Qt.Key_Down)
+            tryVerify(() => focusedRowIsShown(), 2000, "and Down keeps it in view")
+        }
+
+        function test_unreadable_drive_says_so_and_how_to_retry() {
+            Storage.mockSetScanFailed(true)
+            Storage.mockPlug(["vol-card"])
+            tryVerify(() => volume("vol-card") !== undefined)
+            openStoragePane()
+            tryVerify(() => find("storageScan_vol-card_failed") !== null, 3000)
+            compare(find("storageScan_vol-card_failed").label, "Could not read this drive")
+            compare(find("storageScan_vol-card_failed").value, "Plug it in again")
+            compare(scanRowNames("vol-card").join(), "failed")
+            compare(Storage.mockScanCalls().length, 1, "not asked again in a loop")
+            wait(200)
+            compare(Storage.mockScanCalls().length, 1)
+            compare(Storage.scans["vol-card"].state, "failed")
+        }
+
+        function test_zz_screenshots_scan_states() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            // Scanning, then nothing recognised, then an unreadable drive; English and Turkish.
+            for (const lang of ["en", "tr"]) {
+                DeviceSettings.language = lang
+                Storage.mockReset()
+                tryVerify(() => Storage.volumes.length === 2)
+                Storage.mockSetScanFailed(false)
+                Storage.mockHoldScan(true)
+                Storage.mockPlug(["vol-card"])
+                tryVerify(() => volume("vol-card") !== undefined)
+                if (lang === "en")
+                    openStoragePane()
+                tryVerify(() => find("storageScan_vol-card_wait") !== null, 3000)
+                goTo("storageScan_vol-card_wait")
+                wait(800)
+                grabImage(tc.shell).save(shotsDir + "/27-settings-storage-scan-scanning" + (lang === "tr" ? "-tr" : "") + ".png")
+                Storage.mockHoldScan(false)
+                tryVerify(() => find("storageScan_vol-card_none") !== null, 3000)
+                goTo("storageScan_vol-card_none")
+                wait(800)
+                grabImage(tc.shell).save(shotsDir + "/27-settings-storage-scan-empty" + (lang === "tr" ? "-tr" : "") + ".png")
+                // An unreadable drive: scanned again after the volume changes.
+                Storage.mockSetScanFailed(true)
+                Storage.mockSetFree("vol-card", 39000000000)
+                tryVerify(() => find("storageScan_vol-card_failed") !== null, 3000)
+                goTo("storageScan_vol-card_failed")
+                wait(800)
+                grabImage(tc.shell).save(shotsDir + "/27-settings-storage-scan-failed" + (lang === "tr" ? "-tr" : "") + ".png")
+            }
         }
 
         function test_zz_screenshots_scan_turkish() {

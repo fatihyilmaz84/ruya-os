@@ -364,6 +364,12 @@ void Storage::mockSetScanPartial(bool partial)
         mock->setScanPartial(partial);
 }
 
+void Storage::mockSetScanFailed(bool failed)
+{
+    if (auto *mock = qobject_cast<MockStorageBackend *>(m_backend.get()))
+        mock->setScanFailed(failed);
+}
+
 void Storage::mockRefreshScanDelayed(const QString &id, int ms)
 {
     if (auto *mock = qobject_cast<MockStorageBackend *>(m_backend.get()))

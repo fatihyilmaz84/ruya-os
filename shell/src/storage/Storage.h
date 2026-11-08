@@ -115,6 +115,7 @@ public:
     Q_INVOKABLE QStringList mockScanCalls() const;
     Q_INVOKABLE QStringList mockCancelCalls() const;
     Q_INVOKABLE void mockSetScanPartial(bool partial);
+    Q_INVOKABLE void mockSetScanFailed(bool failed);   // later scans end "failed" (the drive cannot be read)
     Q_INVOKABLE void mockRefreshScanDelayed(const QString &id, int ms);
 
 signals:

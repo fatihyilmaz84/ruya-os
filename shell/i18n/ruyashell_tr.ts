@@ -2707,7 +2707,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>StoragePane</name>
     <message>
-        <location filename="../qml/StoragePane.qml" line="+301"/>
+        <location filename="../qml/StoragePane.qml" line="+309"/>
         <source>%1 is still in use. Close what uses it and try again.</source>
         <translation>%1 hâlâ kullanımda. Kullanan uygulamayı kapatıp tekrar deneyin.</translation>
     </message>
@@ -2732,13 +2732,24 @@ Bu geri alınamaz.</translation>
         <translation>Desteklenmiyor</translation>
     </message>
     <message>
-        <location line="-262"/>
-        <location line="+263"/>
+        <location line="-263"/>
+        <location line="+264"/>
         <source>%1 free of %2</source>
         <translation>%2 içinde %1 boş</translation>
     </message>
     <message>
-        <location line="-206"/>
+        <location line="-290"/>
+        <source>Select</source>
+        <translation>Seç</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <location line="+1"/>
+        <source>Back</source>
+        <translation>Geri</translation>
+    </message>
+    <message>
+        <location line="+82"/>
         <source>Games</source>
         <translation>Oyunlar</translation>
     </message>
@@ -2783,17 +2794,7 @@ Bu geri alınamaz.</translation>
         <translation>Bu sürücü okunamadı</translation>
     </message>
     <message>
-        <location line="+13"/>
-        <source>Nothing from RuyaOS on this drive</source>
-        <translation>Bu sürücüde RuyaOS'a ait bir şey yok</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>not everything was read</source>
-        <translation>tamamı okunamadı</translation>
-    </message>
-    <message>
-        <location line="+169"/>
+        <location line="+183"/>
         <source>Read-only</source>
         <translation>Salt okunur</translation>
     </message>
@@ -2803,38 +2804,53 @@ Bu geri alınamaz.</translation>
         <translation>Bu konsol</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+9"/>
         <source>Free space</source>
         <translation>Boş alan</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+11"/>
         <source>Apps and games</source>
         <translation>Uygulamalar ve oyunlar</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+10"/>
         <source>Profile data</source>
         <translation>Profil verileri</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+9"/>
         <source>System</source>
         <translation>Sistem</translation>
     </message>
     <message>
-        <location line="-263"/>
-        <location line="+263"/>
+        <location line="-271"/>
+        <location line="+271"/>
         <source>Other</source>
         <translation>Diğer</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="-282"/>
+        <source>Plug it in again</source>
+        <translation>Yeniden takın</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Nothing found so far</source>
+        <translation>Şimdilik bir şey bulunamadı</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Nothing found here</source>
+        <translation>Burada bir şey bulunamadı</translation>
+    </message>
+    <message>
+        <location line="+277"/>
         <source>Drives</source>
         <translation>Sürücüler</translation>
     </message>
     <message>
-        <location line="-257"/>
+        <location line="-264"/>
         <source>Eject %1</source>
         <translation>%1 sürücüsünü çıkar</translation>
     </message>

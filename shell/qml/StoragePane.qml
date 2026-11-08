@@ -25,6 +25,13 @@ SettingsPane {
     id: pane
 
     readonly property var internal: Storage.internal
+
+    // Only a drive's own row and its Eject row do something on Accept; the "This console" rows and
+    // the scan rows are facts, so while one has focus the hint bar offers Back only (04 section 5).
+    // Each row says so when it takes focus.
+    property bool actionFocused: false
+    hints: actionFocused ? [{ button: "A", text: qsTr("Select") }, { button: "B", text: qsTr("Back") }]
+                         : [{ button: "B", text: qsTr("Back") }]
     // Less than this much free and the usage bar turns to the warning colour.
     readonly property real lowFreeFraction: 0.10
 
@@ -132,7 +139,7 @@ SettingsPane {
         if (!e || (e.state !== "done" && e.state !== "failed" && !refused))
             return [row("wait", qsTr("Scanning…"), "")]
         if (e.state === "failed" || refused)
-            return [row("failed", qsTr("Could not read this drive"), "")]
+            return [row("failed", qsTr("Could not read this drive"), qsTr("Plug it in again"))]
         const rows = []
         let other = e.otherBytes
         for (const c of e.categories) {
@@ -144,8 +151,9 @@ SettingsPane {
         }
         if (other > 0 && rows.length > 0)
             rows.push(row("other", qsTr("Other"), scanSize(other, e.partial)))
+        // A partial walk may simply not have got to it yet.
         if (rows.length === 0)
-            rows.push(row("none", qsTr("Nothing from RuyaOS on this drive"), e.partial ? qsTr("not everything was read") : ""))
+            rows.push(row("none", e.partial ? qsTr("Nothing found so far") : qsTr("Nothing found here"), ""))
         return rows
     }
 
@@ -193,6 +201,8 @@ SettingsPane {
         // focused row went must not cancel the refocus the first one asked for.)
         if (before >= 0)
             Qt.callLater(pane.refocus, before)
+        // Rows created or removed: lay them out now, so the view follows the focused row (SettingsPane.reflow).
+        reflow()
     }
 
     // After a list update: if the focused row vanished, focus the row now at its place (or the
@@ -381,6 +391,7 @@ SettingsPane {
 
     UsageRow {
         objectName: "storageInternal"
+        onActiveFocusChanged: if (activeFocus) pane.actionFocused = false
         u: pane.u
         label: qsTr("Free space")
         value: pane.freeText()
@@ -390,6 +401,8 @@ SettingsPane {
 
     SettingRow {
         objectName: "storageApps"
+        inert: true
+        onActiveFocusChanged: if (activeFocus) pane.actionFocused = false
         u: pane.u
         label: qsTr("Apps and games")
         value: pane.sizeText(pane.internal.appsBytes)
@@ -397,6 +410,8 @@ SettingsPane {
 
     SettingRow {
         objectName: "storageData"
+        inert: true
+        onActiveFocusChanged: if (activeFocus) pane.actionFocused = false
         visible: pane.dataKnown()
         u: pane.u
         label: qsTr("Profile data")
@@ -405,6 +420,8 @@ SettingsPane {
 
     SettingRow {
         objectName: "storageSystem"
+        inert: true
+        onActiveFocusChanged: if (activeFocus) pane.actionFocused = false
         u: pane.u
         label: pane.dataKnown() ? qsTr("System") : qsTr("Other")
         value: pane.sizeText(pane.internal.systemBytes)
@@ -436,6 +453,8 @@ SettingsPane {
                       : kind === "eject" ? "storageEject_" + volId
                       : "storageScan_" + volId + "_" + sub
             visible: shown
+            inert: kind === "scan"
+            onActiveFocusChanged: if (activeFocus) pane.actionFocused = kind !== "scan"
             u: pane.u
             // What was found on a drive sits a step in from the drive's own row.
             x: kind === "scan" ? Theme.spaceL * pane.u : 0

@@ -181,6 +181,9 @@ void MockStorageBackend::setFree(const QString &id, qint64 freeBytes)
     if (at < 0)
         return;
     m_entries[at].vol.freeBytes = freeBytes;
+    m_scans.remove(id); // the service drops a scan of a volume that changed
+    if (m_scanning == id)
+        m_scanning.clear();
     publish();
 }
 
@@ -206,6 +209,7 @@ void MockStorageBackend::initState()
     m_scanning.clear();
     m_holdScan = false;
     m_scanPartial = false;
+    m_scanFailed = false;
     m_scanCalls.clear();
     m_cancelCalls.clear();
     m_plugTimer.stop();
@@ -345,7 +349,9 @@ void MockStorageBackend::refreshScanDelayed(const QString &id, int ms)
 VolumeScan MockStorageBackend::contentFor(const QString &id) const
 {
     VolumeScan scan;
-    scan.state = QStringLiteral("done");
+    scan.state = m_scanFailed ? QStringLiteral("failed") : QStringLiteral("done");
+    if (m_scanFailed)
+        return scan;
     scan.partial = m_scanPartial;
     auto add = [&scan](const char *key, qint64 bytes, qint64 files) {
         scan.categories.append({QString::fromLatin1(key), bytes, files});

@@ -43,6 +43,7 @@ public:
     QStringList scanCalls() const { return m_scanCalls; }     // the ids of scanVolume() calls, in order
     QStringList cancelCalls() const { return m_cancelCalls; } // the ids of cancelScan() calls, in order
     void setScanPartial(bool partial) { m_scanPartial = partial; }
+    void setScanFailed(bool failed) { m_scanFailed = failed; } // later scans end "failed" (an unreadable drive)
     // Asks for the scan state of a volume; the reply (a snapshot of it as it is now) arrives after `ms`.
     void refreshScanDelayed(const QString &id, int ms);
     // Replaces the internal storage numbers and publishes them. system is the rest of the used
@@ -109,6 +110,7 @@ private:
     QString m_scanning; // the volume being scanned, "" if none
     bool m_holdScan = false;
     bool m_scanPartial = false;
+    bool m_scanFailed = false;
     QStringList m_scanCalls;
     QStringList m_cancelCalls;
 };

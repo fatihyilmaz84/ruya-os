@@ -26,7 +26,7 @@
 use std::collections::{HashMap, HashSet};
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 use std::time::Duration;
 
 use crate::storage::Volume;
@@ -195,25 +195,30 @@ pub struct Meta {
     pub links: u64,
 }
 
-/// The names in a directory. `skipped` counts those that cannot be represented (not UTF-8).
+/// The names in a directory. `skipped` counts those that cannot be represented (not UTF-8);
+/// `truncated` is set when the listing stopped early (more entries than the cap, or `stop`).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Listing {
     pub names: Vec<String>,
     pub skipped: usize,
+    pub truncated: bool,
 }
 
 /// What the walk reads from. **Only names and sizes**: there is no method that opens or reads a
 /// file, so nothing that walks a volume can. Adding one needs a decision, not a drive-by.
 pub trait ScanSource: Send + Sync {
-    /// The entries of a directory (not `.` and `..`).
-    fn list(&self, dir: &str) -> Result<Listing, String>;
+    /// The entries of a directory (not `.` and `..`), at most `max` of them (skipped names
+    /// count): a directory with millions of entries must never be read whole, so a source
+    /// stops iterating at the cap and sets `truncated`. It also looks at `stop` every
+    /// [`CHECK_EVERY`] entries (cancel, clock) and stops, truncated, when it says so.
+    fn list(&self, dir: &str, max: usize, stop: &dyn Fn() -> bool) -> Result<Listing, String>;
     /// `lstat`: the entry itself, a symlink is not followed.
     fn stat(&self, path: &str) -> Result<Meta, String>;
 }
 
 impl<T: ScanSource + ?Sized> ScanSource for Box<T> {
-    fn list(&self, dir: &str) -> Result<Listing, String> {
-        (**self).list(dir)
+    fn list(&self, dir: &str, max: usize, stop: &dyn Fn() -> bool) -> Result<Listing, String> {
+        (**self).list(dir, max, stop)
     }
     fn stat(&self, path: &str) -> Result<Meta, String> {
         (**self).stat(path)
@@ -309,23 +314,29 @@ pub fn scan_with<S: ScanSource, C: Clock>(
         path: root.to_owned(),
         rel: Vec::new(),
     }];
+    let cancelled_now = || cancel.load(Ordering::Relaxed);
+    let out_of_time = || clock.now().saturating_sub(started) >= limits.time;
     let stopped = |cancelled: &mut bool, partial: &mut bool| {
-        if cancel.load(Ordering::Relaxed) {
+        if cancelled_now() {
             *cancelled = true;
             *partial = true;
             return true;
         }
-        if clock.now().saturating_sub(started) >= limits.time {
+        if out_of_time() {
             *partial = true;
             return true;
         }
         false
     };
+    // What a source checks inside one big directory.
+    let stop_listing = || cancelled_now() || out_of_time();
     'dirs: while let Some(dir) = pending.pop() {
         if stopped(&mut cancelled, &mut partial) {
             break;
         }
-        let listing = match source.list(&dir.path) {
+        // At most what the entry bound still allows, plus one to tell that there was more.
+        let room = limits.entries.saturating_sub(entries).saturating_add(1);
+        let listing = match source.list(&dir.path, room, &stop_listing) {
             Ok(listing) => listing,
             // The root itself is the one failure that is an error.
             Err(err) if dir.rel.is_empty() => return Err(err),
@@ -339,8 +350,13 @@ pub fn scan_with<S: ScanSource, C: Clock>(
                 continue;
             }
         };
-        if listing.skipped > 0 {
+        if listing.skipped > 0 || listing.truncated {
             partial = true;
+        }
+        // A listing cut short by cancel or the clock ends the walk (one that hit the cap ends at
+        // the entry bound below).
+        if listing.truncated && stopped(&mut cancelled, &mut partial) {
+            break;
         }
         for name in &listing.names {
             if entries >= limits.entries {
@@ -429,9 +445,20 @@ fn meta_of(m: &std::fs::Metadata) -> (u64, u64, u64, u64) {
 }
 
 impl ScanSource for FsSource {
-    fn list(&self, dir: &str) -> Result<Listing, String> {
+    fn list(&self, dir: &str, max: usize, stop: &dyn Fn() -> bool) -> Result<Listing, String> {
         let mut listing = Listing::default();
+        let mut seen = 0usize;
         for entry in std::fs::read_dir(dir).map_err(|e| e.to_string())? {
+            // Never read a directory whole: a hostile one has millions of entries.
+            if seen >= max {
+                listing.truncated = true;
+                break;
+            }
+            seen += 1;
+            if seen % CHECK_EVERY == 0 && stop() {
+                listing.truncated = true;
+                break;
+            }
             match entry {
                 Ok(entry) => match entry.file_name().into_string() {
                     Ok(name) => listing.names.push(name),
@@ -479,6 +506,8 @@ struct FakeInner {
     skipped: HashMap<String, usize>,
     lists: Vec<String>,
     stats: usize,
+    /// The most names one `list` call returned.
+    largest: usize,
 }
 
 /// An in-memory tree for the tests and for `--session` development. Paths are written relative
@@ -500,6 +529,7 @@ impl FakeTree {
                 skipped: HashMap::new(),
                 lists: Vec::new(),
                 stats: 0,
+                largest: 0,
             }),
             on_list: Mutex::new(None),
         };
@@ -649,6 +679,11 @@ impl FakeTree {
         self.inner().lists.clone()
     }
 
+    /// The most names any single `list` call returned.
+    pub fn largest_listing(&self) -> usize {
+        self.inner().largest
+    }
+
     pub fn stats(&self) -> usize {
         self.inner().stats
     }
@@ -669,7 +704,7 @@ impl FakeTree {
 }
 
 impl ScanSource for FakeTree {
-    fn list(&self, dir: &str) -> Result<Listing, String> {
+    fn list(&self, dir: &str, max: usize, stop: &dyn Fn() -> bool) -> Result<Listing, String> {
         if let Some(hook) = self
             .on_list
             .lock()
@@ -682,10 +717,24 @@ impl ScanSource for FakeTree {
         inner.lists.push(dir.to_owned());
         let skipped = inner.skipped.get(dir).copied().unwrap_or(0);
         match inner.nodes.get(dir) {
-            Some((FakeNode::Dir { names, readable }, _)) if *readable => Ok(Listing {
-                names: names.clone(),
-                skipped,
-            }),
+            Some((FakeNode::Dir { names, readable }, _)) if *readable => {
+                // Like the real source: never more than `max`, and `stop` is looked at.
+                let mut listing = Listing {
+                    names: Vec::new(),
+                    skipped,
+                    truncated: false,
+                };
+                for (i, name) in names.iter().enumerate() {
+                    if i >= max || ((i + 1) % CHECK_EVERY == 0 && stop()) {
+                        listing.truncated = true;
+                        break;
+                    }
+                    listing.names.push(name.clone());
+                }
+                let returned = listing.names.len();
+                inner.largest = inner.largest.max(returned);
+                Ok(listing)
+            }
             Some((FakeNode::Dir { .. }, _)) => Err("Permission denied (os error 13)".to_owned()),
             _ => Err("No such file or directory (os error 2)".to_owned()),
         }
@@ -816,6 +865,8 @@ pub struct Scans<S: ScanSource, C: Clock> {
     clock: C,
     limits: Limits,
     inner: Mutex<Inner>,
+    /// Notified when a walk has ended (`running` was cleared).
+    idle: Condvar,
 }
 
 impl<S: ScanSource, C: Clock> Scans<S, C> {
@@ -829,7 +880,16 @@ impl<S: ScanSource, C: Clock> Scans<S, C> {
             clock,
             limits,
             inner: Mutex::new(Inner::default()),
+            idle: Condvar::new(),
         }
+    }
+
+    /// The walk of `id` is over: free the scanner and wake whoever waits for it.
+    fn walk_ended(&self, inner: &mut Inner, id: &str) {
+        if inner.running.as_deref() == Some(id) {
+            inner.running = None;
+        }
+        self.idle.notify_all();
     }
 
     fn lock(&self) -> MutexGuard<'_, Inner> {
@@ -907,9 +967,7 @@ impl<S: ScanSource, C: Clock> Scans<S, C> {
                 Some(e) if e.token == job.token => e.cancel.clone(),
                 _ => {
                     // The volume changed or left before the walk began: nothing to walk.
-                    if inner.running.as_deref() == Some(job.id.as_str()) {
-                        inner.running = None;
-                    }
+                    self.walk_ended(&mut inner, &job.id);
                     return false;
                 }
             }
@@ -919,9 +977,7 @@ impl<S: ScanSource, C: Clock> Scans<S, C> {
             scan(&self.source, &self.clock, &job.root, &self.limits, &cancel)
         }));
         let mut inner = self.lock();
-        if inner.running.as_deref() == Some(job.id.as_str()) {
-            inner.running = None;
-        }
+        self.walk_ended(&mut inner, &job.id);
         let Some(entry) = inner.entries.get_mut(&job.id) else {
             return false;
         };
@@ -979,6 +1035,24 @@ impl<S: ScanSource, C: Clock> Scans<S, C> {
                 e.cancel.store(true, Ordering::Relaxed);
             }
         }
+    }
+
+    /// `Eject`: cancels the scan of this volume and waits until its walk has really stopped (at
+    /// most `wait`), because a walk inside `read_dir` holds a directory open on the volume and
+    /// the unmount would answer busy. Returns false when the walk was still on a thread after
+    /// the wait. Blocks: call it on the blocking pool, before unmounting.
+    pub fn cancel_and_wait(&self, id: &str, wait: Duration) -> bool {
+        let inner = self.lock();
+        if let Some(e) = inner.entries.get(id) {
+            if e.state == State::Running {
+                e.cancel.store(true, Ordering::Relaxed);
+            }
+        }
+        let (inner, _) = self
+            .idle
+            .wait_timeout_while(inner, wait, |i| i.running.as_deref() == Some(id))
+            .unwrap_or_else(|e| e.into_inner());
+        inner.running.as_deref() != Some(id)
     }
 }
 
@@ -1328,7 +1402,12 @@ mod tests {
     struct OnlyListAndStat;
 
     impl ScanSource for OnlyListAndStat {
-        fn list(&self, dir: &str) -> Result<Listing, String> {
+        fn list(
+            &self,
+            dir: &str,
+            _max: usize,
+            _stop: &dyn Fn() -> bool,
+        ) -> Result<Listing, String> {
             assert!(dir == "/m" || dir == "/m/d", "listed {dir}");
             Ok(Listing {
                 names: if dir == "/m" {
@@ -1337,6 +1416,7 @@ mod tests {
                     vec![]
                 },
                 skipped: 0,
+                truncated: false,
             })
         }
         fn stat(&self, path: &str) -> Result<Meta, String> {
@@ -1523,7 +1603,12 @@ mod tests {
     struct Panics;
 
     impl ScanSource for Panics {
-        fn list(&self, _dir: &str) -> Result<Listing, String> {
+        fn list(
+            &self,
+            _dir: &str,
+            _max: usize,
+            _stop: &dyn Fn() -> bool,
+        ) -> Result<Listing, String> {
             panic!("a source that fails badly");
         }
         fn stat(&self, _path: &str) -> Result<Meta, String> {
@@ -1590,5 +1675,158 @@ mod tests {
         let games = bytes_of(&scan, "games").unwrap();
         assert!((3 << 20..4 << 20).contains(&games), "{games}");
         assert!(scan.used_bytes < 6 << 20, "{}", scan.used_bytes);
+    }
+
+    #[test]
+    fn a_huge_directory_is_never_listed_whole() {
+        let mut tree = FakeTree::new("/m");
+        for i in 0..5000 {
+            tree = tree.file(&format!("f{i}"), 1);
+        }
+        let limits = Limits {
+            entries: 100,
+            ..Limits::default()
+        };
+        let scan = scan_at(&tree, limits);
+        assert!(scan.partial);
+        assert!(
+            tree.largest_listing() <= 101,
+            "listed {} names of 5000 at once",
+            tree.largest_listing()
+        );
+        assert!(tree.stats() <= 101, "{} stats", tree.stats());
+        // Within the bound the same directory is complete.
+        let small = FakeTree::new("/m").file("a", 1).file("b", 1);
+        assert!(!scan_at(&small, limits).partial);
+    }
+
+    #[test]
+    fn a_huge_directory_sees_cancel_while_it_is_listed() {
+        let cancel = Arc::new(AtomicBool::new(false));
+        let flag = cancel.clone();
+        let mut tree = FakeTree::new("/m").on_list(move |_| flag.store(true, Ordering::Relaxed));
+        for i in 0..1000 {
+            tree = tree.file(&format!("f{i}"), 1);
+        }
+        let clock = FakeClock::default();
+        let scan = super::scan(&tree, &clock, "/m", &Limits::default(), &cancel).unwrap();
+        // The only directory: the cancel is still reported, not lost with the listing.
+        assert!(scan.cancelled && scan.partial);
+        assert!(tree.largest_listing() < 1000, "{}", tree.largest_listing());
+    }
+
+    /// A source whose `list` blocks until it is released, like a walk inside `read_dir`.
+    struct Blocking {
+        released: Mutex<bool>,
+        wake: Condvar,
+        entered: Mutex<bool>,
+        entered_wake: Condvar,
+    }
+
+    impl Blocking {
+        fn new() -> Self {
+            Blocking {
+                released: Mutex::new(false),
+                wake: Condvar::new(),
+                entered: Mutex::new(false),
+                entered_wake: Condvar::new(),
+            }
+        }
+
+        fn wait_entered(&self) {
+            let mut entered = self.entered.lock().unwrap();
+            while !*entered {
+                entered = self.entered_wake.wait(entered).unwrap();
+            }
+        }
+
+        fn release(&self) {
+            *self.released.lock().unwrap() = true;
+            self.wake.notify_all();
+        }
+    }
+
+    impl ScanSource for Blocking {
+        fn list(
+            &self,
+            _dir: &str,
+            _max: usize,
+            _stop: &dyn Fn() -> bool,
+        ) -> Result<Listing, String> {
+            *self.entered.lock().unwrap() = true;
+            self.entered_wake.notify_all();
+            let mut released = self.released.lock().unwrap();
+            while !*released {
+                released = self.wake.wait(released).unwrap();
+            }
+            Ok(Listing::default())
+        }
+        fn stat(&self, _path: &str) -> Result<Meta, String> {
+            Ok(Meta {
+                kind: Kind::Dir,
+                bytes: 0,
+                dev: 1,
+                ino: 1,
+                links: 1,
+            })
+        }
+    }
+
+    #[test]
+    fn eject_waits_until_the_walk_has_stopped() {
+        use std::sync::atomic::AtomicUsize;
+        let scans = Arc::new(Scans::new(Blocking::new(), FakeClock::default()));
+        let vols = [volume("v1")];
+        let Ok(Begin::Run(job)) = scans.request(&vols, "v1") else {
+            panic!("expected a job");
+        };
+        let walker = {
+            let scans = scans.clone();
+            std::thread::spawn(move || scans.run(&job))
+        };
+        scans.source.wait_entered(); // the walk is inside `list`, holding the directory
+        let returned = Arc::new(AtomicUsize::new(0));
+        let waiter = {
+            let (scans, returned) = (scans.clone(), returned.clone());
+            std::thread::spawn(move || {
+                let stopped = scans.cancel_and_wait("v1", Duration::from_secs(10));
+                returned.store(1 + usize::from(stopped), Ordering::SeqCst);
+            })
+        };
+        std::thread::sleep(Duration::from_millis(150));
+        assert_eq!(
+            returned.load(Ordering::SeqCst),
+            0,
+            "returned while the walk was still inside list"
+        );
+        scans.source.release();
+        waiter.join().unwrap();
+        assert!(walker.join().unwrap());
+        assert_eq!(returned.load(Ordering::SeqCst), 2, "the walk had stopped");
+        // The listing came back whole, so the walk finished normally.
+        assert_eq!(scans.get(&vols, "v1").state, State::Done);
+        // Nothing to wait for any more: returns at once, true.
+        assert!(scans.cancel_and_wait("v1", Duration::from_secs(10)));
+        assert!(scans.cancel_and_wait("never-scanned", Duration::from_millis(10)));
+    }
+
+    #[test]
+    fn eject_gives_up_waiting_after_the_bound() {
+        let scans = Arc::new(Scans::new(Blocking::new(), FakeClock::default()));
+        let vols = [volume("v1")];
+        let Ok(Begin::Run(job)) = scans.request(&vols, "v1") else {
+            panic!("expected a job");
+        };
+        let walker = {
+            let scans = scans.clone();
+            std::thread::spawn(move || scans.run(&job))
+        };
+        scans.source.wait_entered();
+        assert!(
+            !scans.cancel_and_wait("v1", Duration::from_millis(100)),
+            "the walk is still inside list: not stopped"
+        );
+        scans.source.release();
+        assert!(walker.join().unwrap());
     }
 }

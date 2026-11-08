@@ -2716,7 +2716,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>StoragePane</name>
     <message>
-        <location filename="../qml/StoragePane.qml" line="+301"/>
+        <location filename="../qml/StoragePane.qml" line="+309"/>
         <source>%1 is still in use. Close what uses it and try again.</source>
         <translation>%1 is still in use. Close what uses it and try again.</translation>
     </message>
@@ -2741,13 +2741,24 @@ This can&apos;t be undone.</translation>
         <translation>Not supported</translation>
     </message>
     <message>
-        <location line="-262"/>
-        <location line="+263"/>
+        <location line="-263"/>
+        <location line="+264"/>
         <source>%1 free of %2</source>
         <translation>%1 free of %2</translation>
     </message>
     <message>
-        <location line="-206"/>
+        <location line="-290"/>
+        <source>Select</source>
+        <translation>Select</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <location line="+1"/>
+        <source>Back</source>
+        <translation>Back</translation>
+    </message>
+    <message>
+        <location line="+82"/>
         <source>Games</source>
         <translation>Games</translation>
     </message>
@@ -2792,17 +2803,7 @@ This can&apos;t be undone.</translation>
         <translation>Could not read this drive</translation>
     </message>
     <message>
-        <location line="+13"/>
-        <source>Nothing from RuyaOS on this drive</source>
-        <translation>Nothing from RuyaOS on this drive</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>not everything was read</source>
-        <translation>not everything was read</translation>
-    </message>
-    <message>
-        <location line="+169"/>
+        <location line="+183"/>
         <source>Read-only</source>
         <translation>Read-only</translation>
     </message>
@@ -2812,38 +2813,53 @@ This can&apos;t be undone.</translation>
         <translation>This console</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+9"/>
         <source>Free space</source>
         <translation>Free space</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+11"/>
         <source>Apps and games</source>
         <translation>Apps and games</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+10"/>
         <source>Profile data</source>
         <translation>Profile data</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+9"/>
         <source>System</source>
         <translation>System</translation>
     </message>
     <message>
-        <location line="-263"/>
-        <location line="+263"/>
+        <location line="-271"/>
+        <location line="+271"/>
         <source>Other</source>
         <translation>Other</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="-282"/>
+        <source>Plug it in again</source>
+        <translation>Plug it in again</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Nothing found so far</source>
+        <translation>Nothing found so far</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Nothing found here</source>
+        <translation>Nothing found here</translation>
+    </message>
+    <message>
+        <location line="+277"/>
         <source>Drives</source>
         <translation>Drives</translation>
     </message>
     <message>
-        <location line="-257"/>
+        <location line="-264"/>
         <source>Eject %1</source>
         <translation>Eject %1</translation>
     </message>
