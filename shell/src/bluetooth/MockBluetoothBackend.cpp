@@ -123,6 +123,7 @@ void MockBluetoothBackend::finishPairing(const QString &outcome)
             Entry &e = m_entries[at];
             e.listed = true;
             e.dev.paired = e.dev.trusted = e.dev.connected = true;
+            e.dev.bonded = true;
         }
         m_inputPresent = true;
     }
@@ -170,6 +171,7 @@ void MockBluetoothBackend::doPair(const QString &id)
     if (status == QLatin1String("ok")) {
         BtDevice &d = m_entries[at].dev;
         d.paired = d.trusted = d.connected = true;
+        d.bonded = true;
         publish();
     }
     answer(QStringLiteral("pair"), id, status);
@@ -186,6 +188,7 @@ void MockBluetoothBackend::forget(const QString &id)
     } else {
         Entry &e = m_entries[at];
         e.dev.paired = e.dev.trusted = e.dev.connected = false;
+        e.dev.bonded = false;
         e.listed = false; // it has to be found again
         e.appearAfter = 0;
         publish();
@@ -278,6 +281,15 @@ void MockBluetoothBackend::setFamily(const QString &id, const QString &family)
     }
 }
 
+void MockBluetoothBackend::setBonded(const QString &id, bool bonded)
+{
+    const int at = indexOf(id);
+    if (at >= 0) {
+        m_entries[at].dev.bonded = bonded;
+        publish();
+    }
+}
+
 void MockBluetoothBackend::reveal(const QString &id)
 {
     const int at = indexOf(id);
@@ -332,6 +344,8 @@ void MockBluetoothBackend::populate()
         Entry e;
         e.dev.id = QString::fromLatin1(s.id);
         e.dev.name = QString::fromLatin1(s.name);
+        e.dev.deviceName = e.dev.name;
+        e.dev.bonded = true;
         e.dev.kind = QString::fromLatin1(s.kind);
         e.dev.family = QString::fromLatin1(s.family);
         e.dev.paired = true;
@@ -373,8 +387,10 @@ void MockBluetoothBackend::initState()
         Entry e;
         e.dev.id = QString::fromLatin1(id);
         e.dev.name = QString::fromLatin1(name);
+        e.dev.deviceName = e.dev.name;
         e.dev.kind = QString::fromLatin1(kind);
         e.dev.paired = paired;
+        e.dev.bonded = paired;
         e.dev.connected = connected;
         e.dev.trusted = paired;
         e.dev.battery = battery;

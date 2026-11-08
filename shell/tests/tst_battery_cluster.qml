@@ -149,6 +149,25 @@ Item {
             tryVerify(() => Profiles.active.name === "Ada")
         }
 
+        // T-300: a pad whose battery UPower listed before it bonded is announced again with its family
+        // (the service sends BatteriesChanged when the Bluetooth side changes); the chip follows at once.
+        function chipGlyph(id) {
+            const chip = find("batteryChip_" + id)
+            return chip ? findChild(chip, "batteryKindIcon").name : ""
+        }
+
+        function test_family_after_late_bond() {
+            openShell(1920, 1080)
+            Batteries.mockClear()
+            Batteries.mockSet("pad-late", 62, "discharging", "controller", "Wireless Controller")
+            tryVerify(() => chipGlyph("pad-late") === "sports_esports", 2000, "no family yet: the generic pad: " + chipGlyph("pad-late"))
+            Batteries.mockSet("pad-late", 62, "discharging", "controller", "Wireless Controller", "playstation")
+            tryVerify(() => chipGlyph("pad-late") === "pad_playstation", 2000, "the chip got the PlayStation pad after the late bond: " + chipGlyph("pad-late"))
+            compare(DeviceIcons.iconFor("controller", "playstation"), "pad_playstation")
+            tc.shell.destroy()
+            wait(50)
+        }
+
         function test_zz_screenshots() {
             if (!shotsDir)
                 skip("set RUYA_SHOTS_DIR to save screenshots")

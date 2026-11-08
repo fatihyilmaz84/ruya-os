@@ -9,12 +9,14 @@
 struct BtDevice
 {
     QString id;
-    QString name;
+    QString name;       // the alias: what the user calls it, else what it calls itself
+    QString deviceName; // what it calls itself (BlueZ's Name, the model); "" when it told none (T-300)
     // "controller" | "headset" | "speaker" | "keyboard" | "mouse" | "phone" | "other"
     QString kind = QStringLiteral("other");
     // "playstation" | "xbox" | "nintendo" | "8bitdo" for a controller the service can place, else ""
     QString family;
     bool paired = false;
+    bool bonded = true; // the pairing keys are kept; false: paired but only reconnects in pairing mode (T-300)
     bool connected = false;
     bool trusted = false;
     int battery = -1; // 0-100, -1 unknown

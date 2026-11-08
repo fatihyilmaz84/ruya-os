@@ -7,7 +7,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
-use crate::families::family_of;
+use crate::families::family_of_device;
 use crate::idle_pads::{IdlePads, IdleReport, Pad};
 use crate::pairing::{
     address_of_path, is_format_char, is_hid_service, is_input_device, PairingState, DEFAULT_WINDOW,
@@ -130,9 +130,9 @@ pub fn kind_of(icon: &str) -> &'static str {
 /// The contract's `family`: the controller family of a `controller`, "" for every other kind
 /// (a Sony headset has Sony's vendor id and is no PlayStation pad). `families::family_of` holds
 /// the table.
-pub fn family_for(kind: &str, modalias: &str, name: &str) -> &'static str {
+pub fn family_for(kind: &str, modalias: &str, device_name: &str, alias: &str) -> &'static str {
     if kind == "controller" {
-        family_of(modalias, name)
+        family_of_device(modalias, device_name, alias)
     } else {
         ""
     }
@@ -144,10 +144,15 @@ pub struct RawDevice {
     pub address: String,
     /// `Alias`: the user's name, else the device's own, else the address with dashes.
     pub alias: String,
+    /// `Name`: what the device calls itself (the model), whatever its alias; "" when it told none.
+    pub name: String,
     pub icon: String,
     /// `Modalias` (`usb:v054Cp0CE6d0100`), "" when the device has none.
     pub modalias: String,
     pub paired: bool,
+    /// `Bonded`: the pairing keys are kept. A device paired while the adapter was not pairable is
+    /// `Paired: yes, Bonded: no`.
+    pub bonded: bool,
     pub connected: bool,
     pub trusted: bool,
     pub battery: Option<u8>,
@@ -177,11 +182,15 @@ pub struct Raw {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Device {
     pub id: String,
+    /// The alias (the user's name for it, else the device's own).
     pub name: String,
+    /// BlueZ's `Name`, the model as the device advertises it; "" when it told none.
+    pub device_name: String,
     pub kind: &'static str,
     /// "playstation" | "xbox" | "nintendo" | "" (`family_for`).
     pub family: &'static str,
     pub paired: bool,
+    pub bonded: bool,
     pub connected: bool,
     pub trusted: bool,
     pub battery: i32,
@@ -196,9 +205,11 @@ pub fn list_of(raw: &[RawDevice]) -> Vec<Device> {
         .map(|d| Device {
             id: d.address.clone(),
             name: d.alias.clone(),
+            device_name: d.name.clone(),
             kind: kind_of(&d.icon),
-            family: family_for(kind_of(&d.icon), &d.modalias, &d.alias),
+            family: family_for(kind_of(&d.icon), &d.modalias, &d.name, &d.alias),
             paired: d.paired,
+            bonded: d.bonded,
             connected: d.connected,
             trusted: d.trusted,
             battery: battery_of(d.battery),
@@ -1100,9 +1111,11 @@ impl FakeBluez {
         let dev = |address: &str, alias: &str, icon: &str, paired: bool| RawDevice {
             address: address.to_owned(),
             alias: alias.to_owned(),
+            name: alias.to_owned(),
             icon: icon.to_owned(),
             modalias: String::new(),
             paired,
+            bonded: paired,
             connected: paired,
             trusted: paired,
             battery: if paired { Some(80) } else { None },
@@ -1121,6 +1134,30 @@ impl FakeBluez {
                 dev("AA:00:00:00:00:02", "Found Pad", "input-gaming", false),
             ],
         })
+    }
+
+    /// `with_devices` and a third pad that was paired before the pairing fix (`Paired: yes,
+    /// Bonded: no`) and that its user renamed: its `Name` is still the model (T-300; `--session`
+    /// serves this one, `vm-devices-check.sh bluetooth` reads it).
+    pub fn with_old_pad() -> Self {
+        let fake = Self::with_devices();
+        let mut raw = fake.inner().raw.clone();
+        raw.devices.push(RawDevice {
+            address: "AA:00:00:00:00:03".to_owned(),
+            alias: "Living room pad".to_owned(),
+            name: "DualSense Wireless Controller".to_owned(),
+            icon: "input-gaming".to_owned(),
+            modalias: String::new(),
+            paired: true,
+            bonded: false,
+            connected: false,
+            trusted: true,
+            battery: None,
+            class: Some(0x2508),
+            appearance: None,
+        });
+        fake.set_raw(raw);
+        fake
     }
 
     fn inner(&self) -> MutexGuard<'_, FakeInner> {
@@ -1331,9 +1368,11 @@ mod tests {
         RawDevice {
             address: address.to_owned(),
             alias: alias.to_owned(),
+            name: String::new(),
             icon: icon.to_owned(),
             modalias: String::new(),
             paired,
+            bonded: paired,
             connected: false,
             trusted: false,
             battery: None,
@@ -1605,14 +1644,78 @@ mod tests {
     #[test]
     fn family_for_asks_the_table_for_controllers_only() {
         assert_eq!(
-            family_for("controller", "usb:v054Cp0CE6d0100", "Wireless Controller"),
+            family_for(
+                "controller",
+                "usb:v054Cp0CE6d0100",
+                "Wireless Controller",
+                "Wireless Controller"
+            ),
             "playstation"
         );
         assert_eq!(
-            family_for("headset", "usb:v054Cp0DF3d0100", "WH-1000XM4"),
+            family_for("headset", "usb:v054Cp0DF3d0100", "WH-1000XM4", "WH-1000XM4"),
             ""
         );
-        assert_eq!(family_for("other", "", "DualSense"), "");
+        assert_eq!(family_for("other", "", "DualSense", "DualSense"), "");
+    }
+
+    #[test]
+    fn a_paired_device_that_is_not_bonded_says_so() {
+        let mut half = raw_dev("AA:BB:CC:00:00:01", "Old pad", "input-gaming", true);
+        half.bonded = false;
+        let whole = raw_dev("AA:BB:CC:00:00:02", "New pad", "input-gaming", true);
+        let list = list_of(&[half, whole]);
+        let flags: Vec<(&str, bool, bool)> = list
+            .iter()
+            .map(|d| (d.id.as_str(), d.paired, d.bonded))
+            .collect();
+        assert_eq!(
+            flags,
+            [
+                // Sorted by name: "New pad", "Old pad".
+                ("AA:BB:CC:00:00:02", true, true),
+                ("AA:BB:CC:00:00:01", true, false)
+            ]
+        );
+    }
+
+    #[test]
+    fn the_device_name_is_bluezs_name_while_the_name_stays_the_alias() {
+        let mut pad = raw_dev("AA:BB:CC:00:00:01", "Living room pad", "input-gaming", true);
+        pad.name = "DualSense Wireless Controller".to_owned();
+        let list = list_of(&[pad]);
+        assert_eq!(list[0].name, "Living room pad");
+        assert_eq!(list[0].device_name, "DualSense Wireless Controller");
+    }
+
+    #[test]
+    fn the_session_fake_has_a_renamed_pad_that_is_paired_but_not_bonded() {
+        let bt = Bluetooth::new(FakeBluez::with_old_pad());
+        bt.refresh().expect("reads");
+        let list = bt.list();
+        let old = list
+            .iter()
+            .find(|d| d.id == "AA:00:00:00:00:03")
+            .expect("listed");
+        assert_eq!(old.name, "Living room pad");
+        assert_eq!(old.device_name, "DualSense Wireless Controller");
+        assert_eq!((old.paired, old.bonded), (true, false));
+        assert_eq!(old.family, "playstation");
+        let dev = list
+            .iter()
+            .find(|d| d.id == "AA:00:00:00:00:01")
+            .expect("listed");
+        assert!(dev.bonded);
+    }
+
+    #[test]
+    fn a_renamed_dualsense_without_a_modalias_still_gets_playstation() {
+        let mut pad = raw_dev("AA:BB:CC:00:00:01", "Living room pad", "input-gaming", true);
+        pad.name = "DualSense Wireless Controller".to_owned();
+        assert_eq!(list_of(&[pad.clone()])[0].family, "playstation");
+        // Only the alias to go on: no family (this is what a rename used to cause).
+        pad.name = String::new();
+        assert_eq!(list_of(&[pad])[0].family, "");
     }
 
     #[test]
@@ -1994,9 +2097,11 @@ mod tests {
         RawDevice {
             address: address.to_owned(),
             alias: alias.to_owned(),
+            name: alias.to_owned(),
             icon: icon.to_owned(),
             modalias: String::new(),
             paired: false,
+            bonded: false,
             connected: false,
             trusted: false,
             battery: None,

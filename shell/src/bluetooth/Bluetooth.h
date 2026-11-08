@@ -20,7 +20,9 @@ class Bluetooth : public QObject
 
     Q_PROPERTY(bool powered READ powered NOTIFY stateChanged)
     Q_PROPERTY(bool discovering READ discovering NOTIFY stateChanged)
-    // [{ id, name, kind, family, paired, connected, trusted, battery }]; battery -1 = unknown;
+    // [{ id, name, deviceName, kind, family, paired, bonded, connected, trusted, battery }]; battery -1 = unknown;
+    // name: the alias; deviceName: the model it advertises ("" when unknown); bonded: false for a device
+    // paired without its keys kept (a missing key from an older service reads as true);
     // kind: "controller" | "headset" | "speaker" | "keyboard" | "mouse" | "phone" | "other";
     // family: "playstation" | "xbox" | "nintendo" | "8bitdo" for a controller, else ""
     Q_PROPERTY(QVariantList devices READ devices NOTIFY devicesChanged)
@@ -92,6 +94,7 @@ public:
     Q_INVOKABLE void mockReveal(const QString &id);
     Q_INVOKABLE void mockSetName(const QString &id, const QString &name);   // any text, as a device could send it
     Q_INVOKABLE void mockSetFamily(const QString &id, const QString &family);
+    Q_INVOKABLE void mockSetBonded(const QString &id, bool bonded);
     Q_INVOKABLE void mockServiceRestart();
     Q_INVOKABLE void mockGamepad(bool connected, const QString &id, const QString &name, const QString &family,
                                  const QString &transport);

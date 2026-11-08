@@ -270,9 +270,11 @@ impl BluezClient {
                 devices.push(RawDevice {
                     address: text(d, "Address"),
                     alias: text(d, "Alias"),
+                    name: text(d, "Name"),
                     icon: text(d, "Icon"),
                     modalias: text(d, "Modalias"),
                     paired: flag(d, "Paired"),
+                    bonded: flag(d, "Bonded"),
                     connected: flag(d, "Connected"),
                     trusted: flag(d, "Trusted"),
                     battery,

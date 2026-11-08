@@ -78,7 +78,7 @@ fn bluez(session: bool) -> Result<(DynBluez, AgentSlot), Box<dyn Error>> {
         return Ok((Box::new(client), slot));
     }
     let _ = session;
-    Ok((Box::new(FakeBluez::with_devices()), AgentSlot::default()))
+    Ok((Box::new(FakeBluez::with_old_pad()), AgentSlot::default()))
 }
 
 /// The kernel's input devices; in `--session` a keyboard is there unless
@@ -335,7 +335,7 @@ async fn follow_system(
         futures_lite::future::zip(
             watch_network(connection.clone(), net),
             futures_lite::future::zip(
-                watch_batteries(connection.clone(), batteries),
+                watch_batteries(connection.clone(), batteries, bluetooth.clone()),
                 futures_lite::future::zip(
                     watch_bluetooth(connection.clone(), bluetooth),
                     futures_lite::future::zip(
@@ -399,6 +399,8 @@ fn run() -> Result<(), Box<dyn Error>> {
     if let Err(err) = bluetooth.refresh() {
         eprintln!("ruya-devices: BlueZ not readable yet: {}", err.0);
     }
+    // The batteries' first families, now that Bluetooth is known (nobody listens yet).
+    batteries.recheck(&bluetooth.list());
     // Keyboards and gamepads, from the kernel; no input at all is what the shell offers
     // controller pairing for.
     let input: SharedInput = Arc::new(InputPresence::new(input_source(session)));
@@ -464,7 +466,7 @@ fn run() -> Result<(), Box<dyn Error>> {
             )?
             .serve_at(
                 OBJECT_PATH,
-                BluetoothIface::new(bluetooth.clone(), input.clone()),
+                BluetoothIface::new(bluetooth.clone(), input.clone(), batteries.clone()),
             )?
             .serve_at(
                 OBJECT_PATH,

@@ -449,7 +449,11 @@ impl BatteriesIface {
 /// itself appearing or leaving, and after a quiet moment reads the list again and announces a
 /// change. No polling. Runs forever.
 #[cfg(target_os = "linux")]
-pub async fn watch_batteries(connection: Connection, batteries: SharedBatteries) {
+pub async fn watch_batteries(
+    connection: Connection,
+    batteries: SharedBatteries,
+    bluetooth: SharedBluetooth,
+) {
     use crate::upower::UPOWER;
 
     let signals = MatchRule::builder()
@@ -477,8 +481,8 @@ pub async fn watch_batteries(connection: Connection, batteries: SharedBatteries)
     let mut stream = futures_lite::stream::or(signals, owner);
     while stream.next().await.is_some() {
         debounce::settle(&mut stream, debounce::QUIET, debounce::MAX_WAIT, None).await;
-        let batteries = batteries.clone();
-        match unblock(move || batteries.refresh()).await {
+        let (batteries, bluetooth) = (batteries.clone(), bluetooth.clone());
+        match unblock(move || batteries.refresh_with(&bluetooth.list())).await {
             Ok(true) => {
                 if let Err(err) = announce_batteries(&connection).await {
                     eprintln!("ruya-devices: emitting battery signals failed: {err}");
@@ -559,6 +563,9 @@ const INPUT_POLL: Duration = Duration::from_secs(2);
 pub struct BluetoothIface {
     bt: SharedBluetooth,
     input: SharedInput,
+    /// Told when the Bluetooth devices changed, because a controller's family in `ListBatteries`
+    /// comes from them (T-300).
+    batteries: SharedBatteries,
 }
 
 /// Root and the user the service runs as may open the controller pairing window (the bus policy
@@ -585,8 +592,12 @@ async fn caller_may_pair(header: &Header<'_>, connection: &Connection) -> bool {
 }
 
 impl BluetoothIface {
-    pub fn new(bt: SharedBluetooth, input: SharedInput) -> Self {
-        BluetoothIface { bt, input }
+    pub fn new(bt: SharedBluetooth, input: SharedInput, batteries: SharedBatteries) -> Self {
+        BluetoothIface {
+            bt,
+            input,
+            batteries,
+        }
     }
 
     async fn emit(&self, emitter: &SignalEmitter<'_>, changes: &bluetooth::Changes) {
@@ -599,6 +610,11 @@ impl BluetoothIface {
             }
             if changes.devices {
                 Self::devices_changed(emitter).await?;
+                // A pad that bonded or connected after UPower listed its battery (or was
+                // forgotten) changes the family `ListBatteries` reports.
+                if self.batteries.recheck(&self.bt.list()) {
+                    BatteriesIface::batteries_changed(emitter).await?;
+                }
             }
             if changes.pairing {
                 self.controller_pairing_state_changed(emitter).await?;
@@ -666,9 +682,11 @@ impl BluetoothIface {
                 [
                     ("id", own(Value::from(d.id.clone()))),
                     ("name", own(Value::from(d.name.clone()))),
+                    ("device_name", own(Value::from(d.device_name.clone()))),
                     ("kind", own(Value::from(d.kind))),
                     ("family", own(Value::from(d.family))),
                     ("paired", own(Value::from(d.paired))),
+                    ("bonded", own(Value::from(d.bonded))),
                     ("connected", own(Value::from(d.connected))),
                     ("trusted", own(Value::from(d.trusted))),
                     ("battery", own(Value::from(d.battery))),

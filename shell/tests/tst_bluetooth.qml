@@ -324,6 +324,61 @@ Item {
             compare(toastTexts().length, 0)
         }
 
+        // T-300: ListDevices tells whether a paired device is bonded (BlueZ's Bonded) and what the device
+        // calls itself (BlueZ's Name) while `name` stays the alias. A client that gets neither key (an older
+        // service) reads bonded=true and deviceName="" (the D-Bus client's defaults); the mock sends both.
+        function test_bonded_flag_from_mock() {
+            verify(device("bt-pad-old").paired)
+            compare(device("bt-pad-old").bonded, true, "a normal pairing keeps its keys")
+            compare(device("bt-pad-old").deviceName, "Retro Pad", "the device's own name")
+            Bluetooth.mockSetBonded("bt-pad-old", false)
+            tryVerify(() => device("bt-pad-old").bonded === false, 2000, "paired but not bonded")
+            verify(device("bt-pad-old").paired)
+            compare(device("bt-pad-main").bonded, true, "the others are untouched")
+            // A rename changes the alias only.
+            Bluetooth.rename("bt-pad-old", "Living room pad")
+            tryVerify(() => device("bt-pad-old").name === "Living room pad", 2000)
+            compare(device("bt-pad-old").deviceName, "Retro Pad", "the model stays what the device advertises")
+            compare(device("bt-pad-old").bonded, false)
+            // Forgetting and pairing again bonds it.
+            Bluetooth.forget("bt-pad-old")
+            tryVerify(() => device("bt-pad-old") === undefined, 2000, "forgotten")
+            Bluetooth.mockReveal("bt-pad-old")
+            tryVerify(() => device("bt-pad-old") !== undefined, 2000)
+            compare(device("bt-pad-old").bonded, false, "found again: not paired, so not bonded")
+            Bluetooth.pair("bt-pad-old")
+            tryVerify(() => device("bt-pad-old").paired && device("bt-pad-old").bonded, 2000, "pairing again bonds")
+        }
+
+        // T-300: DeviceIcons.plain (QML) and pairing::is_format_char (Rust) strip the same characters, and
+        // both are held to services/ruya-devices/tests/fixtures/format-chars.txt. Every Basic Multilingual
+        // Plane code point (control characters are stripped as a class on both sides) is run through plain().
+        function test_format_characters_are_the_services_fixture() {
+            const xhr = new XMLHttpRequest()
+            xhr.open("GET", Qt.resolvedUrl("../../services/ruya-devices/tests/fixtures/format-chars.txt"), false)
+            xhr.send()
+            const ranges = []
+            for (const raw of xhr.responseText.split("\n")) {
+                const line = raw.trim()
+                if (line === "" || line.startsWith("#"))
+                    continue
+                const parts = line.split("-")
+                ranges.push([parseInt(parts[0], 16), parseInt(parts[parts.length - 1], 16)])
+            }
+            verify(ranges.length >= 7, "the fixture was read: " + xhr.responseText.length + " bytes")
+            const bad = []
+            for (let code = 0; code <= 0xFFFF; ++code) {
+                if (code < 32 || (code >= 127 && code <= 159) || (code >= 0xD800 && code <= 0xDFFF))
+                    continue
+                const listed = ranges.some(r => code >= r[0] && code <= r[1])
+                const ch = String.fromCharCode(code)
+                const expected = listed ? "a b" : "a" + ch + "b"
+                if (DeviceIcons.plain("a" + ch + "b") !== expected)
+                    bad.push("U+" + code.toString(16).toUpperCase().padStart(4, "0"))
+            }
+            compare(bad.join(" "), "", "DeviceIcons.plain and the fixture disagree on these characters")
+        }
+
         function test_a_name_the_service_refuses_says_so() {
             openBluetoothPane()
             Bluetooth.rename("bt-pad-old", "   ")

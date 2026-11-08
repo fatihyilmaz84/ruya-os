@@ -35,9 +35,11 @@ Bluetooth::Bluetooth(std::unique_ptr<BluetoothBackend> backend, QObject *parent)
             out.append(QVariantMap{
                 {QStringLiteral("id"), d.id},
                 {QStringLiteral("name"), d.name},
+                {QStringLiteral("deviceName"), d.deviceName},
                 {QStringLiteral("kind"), d.kind},
                 {QStringLiteral("family"), d.family},
                 {QStringLiteral("paired"), d.paired},
+                {QStringLiteral("bonded"), d.bonded},
                 {QStringLiteral("connected"), d.connected},
                 {QStringLiteral("trusted"), d.trusted},
                 {QStringLiteral("battery"), d.battery},
@@ -195,6 +197,12 @@ void Bluetooth::mockSetFamily(const QString &id, const QString &family)
 {
     if (auto *mock = qobject_cast<MockBluetoothBackend *>(m_backend.get()))
         mock->setFamily(id, family);
+}
+
+void Bluetooth::mockSetBonded(const QString &id, bool bonded)
+{
+    if (auto *mock = qobject_cast<MockBluetoothBackend *>(m_backend.get()))
+        mock->setBonded(id, bonded);
 }
 
 void Bluetooth::mockServiceRestart()
