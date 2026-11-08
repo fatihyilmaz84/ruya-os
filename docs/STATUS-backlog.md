@@ -4,7 +4,6 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 
 | ID | Title | Status | Depends |
 |---|---|---|---|
-| [T-321](tasks/T-321-shell-sounds-never-start-audio-format-not-valid.md) | **[lead]** The shell's own sounds never start on real hardware (`QAudioSink::start: QAudioFormat not valid`) | in-progress | — |
 | [T-322](tasks/T-322-sound-output-policy-and-picker.md) | **[lead]** Choose the sound output by what is usable; Settings > Audio output with ports, test sound, remembered | todo | — |
 | [T-315](tasks/T-315-settings-my-profile-and-manage-profiles.md) | Settings: "My profile" and "Manage profiles" are two categories (owner, 2026-11-08) | in-progress | — |
 | [T-285](tasks/T-285-hint-bar-and-focus-follow-ups.md) | Hint bar and focus follow-ups: Accept hints, keyboard hints, Tab, tests that could not fail | todo | — |
