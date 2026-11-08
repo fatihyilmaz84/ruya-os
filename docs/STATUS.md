@@ -102,6 +102,8 @@ Long form (as before the 2026-11-08 trim): `STATUS-parked.md`.
 One entry per session, at most 700 characters (`lint-board.ps1`): date · model · tasks · what happened · numbers · follow-ups. Detail belongs in the task Outcome.
 
 
+- 2026-11-08 · Sonnet 5.5 · Lead (build loop from `d09da99`: T-290, T-291, T-293, T-294, T-297, T-286, T-300, T-301, T-312, T-313, T-321, T-323 (corners), T-324 (profile settings) merged; 8 of 13 needed a round 2; T-330 in flight) · `test` 931 QML + 73 skips; VM `0.0.54`: usage 33, session 37 + restart 22 (exposure 1.1), store 70, library 34, bluetooth 21, display, power-saving incl. wake. Found: the ambient bed never played (FLAC rate code 0), the Dell sound path (HDMI-first was wrong), `lint-text` skipped lone-CR files. Process: Opus builders for owner-visible fixes; ID clash with the other planner (T-314/T-315 renumbered).
+
 - 2026-11-08 · Sonnet 5.5 · Planning (Inbox triage, docs only) · 33 Inbox lines emptied: 20 tasks T-282..T-301 (lead: T-282 design decisions, T-298 CI gate; builder: contrast rows, glass sheet and dialogs, hints, plain text, display x2, system info, session, store, Activity, power saving, sound themes, time zone, VM scripts, lint, image, Bluetooth service and UI), notes merged into T-147/T-164/T-166/T-211, 7 dropped as done, 2 owner decisions added (pad glyph licence, wordmark). STATUS 34 KB to about 14 KB; full lines in STATUS-parked.md. Next: T-164, then the builder lanes at the top of the backlog.
 
 
@@ -111,6 +113,3 @@ One entry per session, at most 700 characters (`lint-board.ps1`): date · model 
 
 
 - 2026-11-06 · Sonnet 5.5 · Lead (T-162 by the lead; no lanes; range had only docs) · `ruya-session` runs in the image: `systemd-run --machine=` per app, status file, scope-aware Stop/kill, linger; unit exposure 1.1; deleting a profile ends its manager. VM `0.0.44-t162`: smoke OK, session check 45 PASS, devices 57. `test` 381 QML + 30 skips, Rust green. VM found: SELinux refuses PID 1 a service's pipe; Flatpak apps live in their own scope; PipeWire was not masked for profiles. New F: drive formatted NTFS, holds the ISO. Process: image/CLAUDE.md quirk.
-
-
-- 2026-11-05 · Sonnet 5.5 · Lead (build loop from `4c0e713`: T-178..T-188 merged, 11 tasks; 6 CHANGES_REQUESTED, T-187 lead-read) · `test` 381 QML + 30 skips. VM `0.0.42-lead`: smoke, devices 57, store 67, library, storage 98: all PASS (devices needs `-Audio`). Planned T-178..T-194 (T-189..T-194 not dispatched). Owner: media and streaming apps out of the first MVP; blur and shadows stay the default; no new tasks after those in flight. Process: builders run dev.ps1 in their worktree; VM scripts parse JSON, not key order.
