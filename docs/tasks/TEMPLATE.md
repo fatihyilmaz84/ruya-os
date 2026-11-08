@@ -1,6 +1,6 @@
 # T-nnn — <title>
 
-Status: todo · Phase: n · Depends: T-xxx, … · Area: shell | services | api | image | docs · Size: S | M · Owner: builder | lead
+Status: todo · Phase: n · Depends: T-xxx, … · Area: shell | services | api | image | docs · Size: S | M · Owner: builder | lead · Developer surface: none | internal | public-API | public-format
 
 ## Goal
 <One or two sentences: the user-visible result.>
@@ -21,6 +21,7 @@ Status: todo · Phase: n · Depends: T-xxx, … · Area: shell | services | api 
 - [ ] … (test: `tst_xxx.qml::test_yyy`)
 - [ ] … (screenshot: `output/shell-shots/n-name.png` shows …)
 - [ ] UI tasks - UX: from every new state Back leaves; focus lands sensibly after open/close/error; readable at 10 ft; Outcome has a `UX notes:` line
+- [ ] public-API / public-format tasks only (`docs/developers/api-surface.md`): XML with `org.ruyaos.Stability` tag; a paragraph in `docs/developers/`; a minimal sample (`lint-dev-docs.ps1` compiles or runs it against the mock); mock support so a developer can test off the console; a conformance test incl. abuse cases (test: `...`)
 - [ ] VM (this task | lead run): `scripts/vm-…-check.sh` … (service-facing tasks only, PLANNING.md Lessons)
 
 ## Verification

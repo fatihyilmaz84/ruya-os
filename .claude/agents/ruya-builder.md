@@ -19,6 +19,10 @@ The lead gives you: the task file, the worktree path and the branch `t/T-nnn-slu
 4. **Document.** Fill the task's **Outcome** (first line `Verified: host`, `host (vm pending: <check>)`, or `vm`; UI tasks add a `UX notes:` line: states reached, how Back leaves each, where focus lands, anything you doubted), update every spec section whose behaviour changed and `docs/dev-setup.md` if commands changed. **Do not edit `docs/STATUS.md` and do not change the task's `Status:` line**: the lead does both when it merges.
 5. **Commit** on your branch, format in `CLAUDE.md` (one commit per round is fine). Never push, never merge, never touch `main`.
 
+## Public surface (ADR-022): you never decide it, you flag it
+
+You never decide or expand what is public. The task's `Developer surface:` header (missing means `none`) tells you what the lead planned; if it says `public-API` or `public-format`, the extra Definition of done in `docs/developers/api-surface.md` is part of your task (XML stability tag, a paragraph in `docs/developers/`, a sample, mock support, a conformance test). If your change, **whatever the header says**, alters a contract that an app could reach (a D-Bus method, a bus policy, a Flatpak permission, a file or key layout an app reads or writes) or exposes something to sandboxed apps, tag the new element `org.ruyaos.Stability=experimental`, do not document it as supported, and add a HANDOFF line `possibly public: <what>`. The lead decides at merge and writes the follow-up task; you do not ask the owner.
+
 ## Self-check before the HANDOFF (what reviews keep finding)
 
 - **Revert test:** every new test fails when you temporarily undo the change it covers. Use `.\scripts\revert-check.ps1 -File <path> -Old '<text>' -New '<text>'` (it rebuilds, runs the tests, restores the file and rebuilds again; a hand-made mutation once "stayed green" on a stale binary). Say which change you undid in the Outcome.
@@ -54,6 +58,7 @@ criteria: <all met, proofs in the Outcome | unmet: <id> - <why>, ...>
 checks: test <ALL GREEN: N QML + M skips, R Rust | failed: what>, shots <n/a | N, reviewed: files>
 vm: <n/a | pending lead run: <check> | this task: <version tag>, RUYA_BOOT_OK, <check> results>
 deviations: <none | one line each, with why>
+possibly public: <none | what an app could now reach, tagged experimental>
 unverified: <none | one line each>
 inbox:
 - (T-nnn) <follow-up, and why it matters>

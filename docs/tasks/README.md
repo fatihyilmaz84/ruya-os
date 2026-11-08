@@ -25,4 +25,4 @@ Lead and planner sessions write almost all of them (procedure and quality bar: [
 3. Size it for one session: S < 300 lines, M 300–800, L = split it.
 4. Add it to the STATUS board as `todo` with its dependencies. Don't start it in the same session unless it blocks your current task.
 
-The header line is `Status · Phase · Depends · Area · Size`, plus `· Owner: lead` for tasks builders must skip (board title prefixed **[lead]**).
+The header line is `Status · Phase · Depends · Area · Size`, plus `· Owner: lead` for tasks builders must skip (board title prefixed **[lead]**), plus `· Developer surface: none | internal | public-API | public-format` (ADR-022, `docs/developers/api-surface.md`). The planner sets the surface when the task is written; **a missing field means `none`**, so older task files stay valid (`lint-board.ps1` reads only `Status:`). `public-API` and `public-format` add to the Definition of done: the XML carries the stability tag, a paragraph in `docs/developers/`, a minimal sample, mock support for off-device testing and a conformance test; the implementing builder writes them in the same commit and `ruya-api-reviewer` checks the diff.
