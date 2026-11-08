@@ -1,6 +1,6 @@
 # T-331 - Settings > Storage shows what RuyaOS finds on a removable drive
 
-Status: todo · Phase: 2 · Depends: T-196 · Area: api, services (ruya-devices), shell (Storage facade, mock, StoragePane) · Size: M · Owner: builder
+Status: in-progress · Phase: 2 · Depends: T-196 · Area: api, services (ruya-devices), shell (Storage facade, mock, StoragePane) · Size: M · Owner: builder
 
 ## Goal
 Owner, 2026-11-08: "if the drives contain data that is recognized by ruya os, then show that too (like the internal drive)". Each mounted removable drive in Settings > Storage gets the same kind of breakdown as "This console": used and free, then what RuyaOS knows on it (games, backups, captures, pictures, packages, reports) with sizes, and "Other" for the rest. The scan only reads names and sizes; it never opens, runs or trusts anything on the drive.
