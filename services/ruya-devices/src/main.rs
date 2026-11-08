@@ -78,7 +78,12 @@ fn bluez(session: bool) -> Result<(DynBluez, AgentSlot), Box<dyn Error>> {
         return Ok((Box::new(client), slot));
     }
     let _ = session;
-    Ok((Box::new(FakeBluez::with_old_pad()), AgentSlot::default()))
+    // `RUYA_DEVICES_FAKE_BLUETOOTH=two-adapters`: a machine with two adapters (T-336).
+    let fake = match std::env::var("RUYA_DEVICES_FAKE_BLUETOOTH").as_deref() {
+        Ok("two-adapters") => FakeBluez::with_two_adapters(),
+        _ => FakeBluez::with_old_pad(),
+    };
+    Ok((Box::new(fake), AgentSlot::default()))
 }
 
 /// The kernel's input devices; in `--session` a keyboard is there unless

@@ -531,23 +531,23 @@ impl Bluez for DynBluez {
     fn stop_discovery(&self) -> Result<(), BtError> {
         (**self).stop_discovery()
     }
-    fn pair(&self, address: &str, timeout: Duration) -> Result<(), BtError> {
-        (**self).pair(address, timeout)
+    fn pair(&self, adapter: &str, address: &str, timeout: Duration) -> Result<(), BtError> {
+        (**self).pair(adapter, address, timeout)
     }
-    fn set_trusted(&self, address: &str) -> Result<(), BtError> {
-        (**self).set_trusted(address)
+    fn set_trusted(&self, adapter: &str, address: &str) -> Result<(), BtError> {
+        (**self).set_trusted(adapter, address)
     }
-    fn set_alias(&self, address: &str, alias: &str) -> Result<(), BtError> {
-        (**self).set_alias(address, alias)
+    fn set_alias(&self, adapter: &str, address: &str, alias: &str) -> Result<(), BtError> {
+        (**self).set_alias(adapter, address, alias)
     }
-    fn connect(&self, address: &str, timeout: Duration) -> Result<(), BtError> {
-        (**self).connect(address, timeout)
+    fn connect(&self, adapter: &str, address: &str, timeout: Duration) -> Result<(), BtError> {
+        (**self).connect(adapter, address, timeout)
     }
-    fn disconnect(&self, address: &str) -> Result<(), BtError> {
-        (**self).disconnect(address)
+    fn disconnect(&self, adapter: &str, address: &str) -> Result<(), BtError> {
+        (**self).disconnect(adapter, address)
     }
-    fn remove(&self, address: &str) -> Result<(), BtError> {
-        (**self).remove(address)
+    fn remove(&self, adapter: &str, address: &str) -> Result<(), BtError> {
+        (**self).remove(adapter, address)
     }
 }
 
@@ -690,6 +690,7 @@ impl BluetoothIface {
                     ("connected", own(Value::from(d.connected))),
                     ("trusted", own(Value::from(d.trusted))),
                     ("battery", own(Value::from(d.battery))),
+                    ("adapter", own(Value::from(d.adapter.clone()))),
                 ]
                 .into_iter()
                 .filter_map(|(k, v)| v.map(|v| (k.to_owned(), v)))

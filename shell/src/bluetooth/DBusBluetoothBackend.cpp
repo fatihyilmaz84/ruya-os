@@ -53,6 +53,7 @@ QList<BtDevice> parseDevices(const QDBusArgument &arg)
         dev.connected = d.value(QStringLiteral("connected")).toBool();
         dev.trusted = d.value(QStringLiteral("trusted")).toBool();
         dev.battery = d.value(QStringLiteral("battery"), -1).toInt();
+        dev.adapter = d.value(QStringLiteral("adapter")).toString(); // an older service tells none
         out.append(dev);
     }
     arg.endArray();

@@ -20,6 +20,8 @@ struct BtDevice
     bool connected = false;
     bool trusted = false;
     int battery = -1; // 0-100, -1 unknown
+    // The adapter that holds the device ("hci0"), for a log or a bug report; no screen shows it (T-336).
+    QString adapter;
 };
 
 // Transport behind the Bluetooth QML singleton: org.ruyaos.Devices1.Bluetooth over D-Bus

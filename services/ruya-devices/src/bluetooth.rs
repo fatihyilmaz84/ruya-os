@@ -160,6 +160,17 @@ pub struct RawDevice {
     pub class: Option<u32>,
     /// `Appearance` (Bluetooth LE).
     pub appearance: Option<u16>,
+    /// The object path of the adapter this device was read under (`/org/bluez/hci1`). Every call
+    /// for the device goes through that adapter (T-336).
+    pub adapter: String,
+}
+
+/// The first adapter's object path (`HCI0`), the one a single-adapter machine has.
+pub const HCI0: &str = "/org/bluez/hci0";
+
+/// An adapter's name as the contract shows it (`hci0`) from its object path.
+pub fn adapter_name(path: &str) -> &str {
+    path.rsplit('/').next().unwrap_or(path)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -170,12 +181,97 @@ pub struct RawAdapter {
     pub discoverable: bool,
 }
 
+/// One `org.bluez.Adapter1`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AdapterInfo {
+    /// `/org/bluez/hci0`.
+    pub path: String,
+    /// Attached over USB (the sysfs path of `/sys/class/bluetooth/hciN` contains `/usb`).
+    pub usb: bool,
+    pub state: RawAdapter,
+}
+
 /// Everything the core needs from one read of BlueZ.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Raw {
-    /// `None`: no adapter, or BlueZ is not there.
-    pub adapter: Option<RawAdapter>,
+    /// Every adapter; empty: no adapter, or BlueZ is not there. Devices of all of them are in
+    /// `devices`; the adapter-wide state and the pairing window are the primary one's.
+    pub adapters: Vec<AdapterInfo>,
     pub devices: Vec<RawDevice>,
+}
+
+impl Raw {
+    /// One adapter (`/org/bluez/hci0`, not USB) and its devices.
+    pub fn single(state: RawAdapter, devices: Vec<RawDevice>) -> Raw {
+        Raw {
+            adapters: vec![AdapterInfo {
+                path: HCI0.to_owned(),
+                usb: false,
+                state,
+            }],
+            devices,
+        }
+    }
+
+    /// The primary adapter (see `primary_index`).
+    pub fn primary(&self) -> Option<&AdapterInfo> {
+        primary_index(&self.adapters, &self.devices).map(|i| &self.adapters[i])
+    }
+
+    pub fn primary_mut(&mut self) -> Option<&mut AdapterInfo> {
+        let i = primary_index(&self.adapters, &self.devices)?;
+        self.adapters.get_mut(i)
+    }
+
+    /// The adapter-wide state as the contract shows it: the primary adapter's, except that
+    /// `powered` is true when any adapter is on (a pad bonded on the second one keeps working).
+    pub fn adapter(&self) -> Option<RawAdapter> {
+        let mut state = self.primary()?.state;
+        state.powered = self.adapters.iter().any(|a| a.state.powered);
+        Some(state)
+    }
+}
+
+/// The number in `hciN`; adapters named otherwise sort last.
+fn hci_number(path: &str) -> u32 {
+    adapter_name(path)
+        .trim_start_matches(|c: char| !c.is_ascii_digit())
+        .parse()
+        .unwrap_or(u32::MAX)
+}
+
+/// The primary adapter (spec 03): new pairings, the scan, the pairing window and Pairable act on
+/// it. It is the adapter with the most paired devices, so a pad bonded on the second adapter
+/// keeps its adapter whatever order the adapters come up in; a tie goes to a USB-attached
+/// adapter, then to the lowest `hciN`. T-289's adapter address uses this too.
+pub fn primary_index(adapters: &[AdapterInfo], devices: &[RawDevice]) -> Option<usize> {
+    (0..adapters.len()).max_by_key(|&i| {
+        let a = &adapters[i];
+        let paired = devices
+            .iter()
+            .filter(|d| d.paired && d.adapter == a.path)
+            .count();
+        (paired, a.usb, std::cmp::Reverse(hci_number(&a.path)))
+    })
+}
+
+/// One entry per address: a device that more than one adapter has seen is listed once, under the
+/// adapter that holds it (connected, then paired, then bonded, then the primary one; the first
+/// read otherwise). Order of first sight is kept.
+pub fn merge_devices(devices: Vec<RawDevice>, primary: &str) -> Vec<RawDevice> {
+    let key = |d: &RawDevice| (d.connected, d.paired, d.bonded, d.adapter == primary);
+    let mut out: Vec<RawDevice> = Vec::with_capacity(devices.len());
+    for d in devices {
+        match out.iter_mut().find(|o| o.address == d.address) {
+            Some(o) => {
+                if key(&d) > key(o) {
+                    *o = d;
+                }
+            }
+            None => out.push(d),
+        }
+    }
+    out
 }
 
 /// A listed device (the contract's dictionary).
@@ -194,6 +290,8 @@ pub struct Device {
     pub connected: bool,
     pub trusted: bool,
     pub battery: i32,
+    /// The name of the adapter that holds the device (`hci0`).
+    pub adapter: String,
 }
 
 /// The listed devices: paired first, then by name (case-insensitive), then by id. An unpaired
@@ -213,6 +311,7 @@ pub fn list_of(raw: &[RawDevice]) -> Vec<Device> {
             connected: d.connected,
             trusted: d.trusted,
             battery: battery_of(d.battery),
+            adapter: adapter_name(&d.adapter).to_owned(),
         })
         .collect();
     out.sort_by(|a, b| {
@@ -229,8 +328,11 @@ pub fn list_of(raw: &[RawDevice]) -> Vec<Device> {
 /// then report `LOCAL_TIMEOUT`.
 pub trait Bluez: Send + Sync {
     fn snapshot(&self) -> Result<Raw, BtError>;
+    /// Every adapter (on: every one that is not rfkill-blocked; `Err` only when none could be
+    /// switched).
     fn set_powered(&self, on: bool) -> Result<(), BtError>;
-    /// The adapter's `Pairable` property. BlueZ 5.87 keeps it off, and an adapter that is not
+    /// The primary adapter's `Pairable` property (like `Discoverable` and the scan below, it is
+    /// the primary's alone). BlueZ 5.87 keeps it off, and an adapter that is not
     /// pairable answers a pairing with "No Bonding": the pairing succeeds but no link key is
     /// kept (`Bonded: no`), and BlueZ's HID plugin then rejects the pad (T-162 session, Dell).
     fn set_pairable(&self, on: bool) -> Result<(), BtError>;
@@ -244,13 +346,15 @@ pub trait Bluez: Send + Sync {
     fn unregister_agent(&self) -> Result<(), BtError>;
     fn start_discovery(&self) -> Result<(), BtError>;
     fn stop_discovery(&self) -> Result<(), BtError>;
-    fn pair(&self, address: &str, timeout: Duration) -> Result<(), BtError>;
-    fn set_trusted(&self, address: &str) -> Result<(), BtError>;
-    fn connect(&self, address: &str, timeout: Duration) -> Result<(), BtError>;
-    fn disconnect(&self, address: &str) -> Result<(), BtError>;
-    fn remove(&self, address: &str) -> Result<(), BtError>;
+    /// The calls for one device take the object path of the adapter that holds it
+    /// (`RawDevice::adapter`), never "the first adapter" (T-336).
+    fn pair(&self, adapter: &str, address: &str, timeout: Duration) -> Result<(), BtError>;
+    fn set_trusted(&self, adapter: &str, address: &str) -> Result<(), BtError>;
+    fn connect(&self, adapter: &str, address: &str, timeout: Duration) -> Result<(), BtError>;
+    fn disconnect(&self, adapter: &str, address: &str) -> Result<(), BtError>;
+    fn remove(&self, adapter: &str, address: &str) -> Result<(), BtError>;
     /// The device's `Alias` (the name the user gave it).
-    fn set_alias(&self, address: &str, alias: &str) -> Result<(), BtError>;
+    fn set_alias(&self, adapter: &str, address: &str, alias: &str) -> Result<(), BtError>;
 }
 
 /// What a refresh found different (so the signals are due).
@@ -426,10 +530,13 @@ impl<B: Bluez> Bluetooth<B> {
     /// Reads BlueZ and remembers what changed for the next `refresh`.
     fn read(&self) -> Result<(), BtError> {
         let raw = self.bluez.snapshot()?;
-        let adapter = raw.adapter;
+        let adapter = raw.adapter();
         let on = adapter.is_some_and(|a| a.powered);
+        // A device more than one adapter has seen is one entry, under the adapter that holds it.
+        let primary = raw.primary().map(|a| a.path.clone()).unwrap_or_default();
+        let raw_devices = merge_devices(raw.devices, &primary);
         let devices = if on {
-            list_of(&raw.devices)
+            list_of(&raw_devices)
         } else {
             Vec::new()
         };
@@ -454,7 +561,7 @@ impl<B: Bluez> Bluetooth<B> {
         st.pending.discovering |= changes.discovering;
         st.adapter = adapter;
         st.devices = devices;
-        st.raw_devices = if on { raw.devices } else { Vec::new() };
+        st.raw_devices = if on { raw_devices } else { Vec::new() };
         // The scan is over when BlueZ says so after having said it runs, or the adapter went
         // off. A snapshot that still shows "not discovering" right after StartDiscovery (BlueZ
         // sets the property a moment later) must not drop the deadline.
@@ -537,6 +644,24 @@ impl<B: Bluez> Bluetooth<B> {
         ended
     }
 
+    /// The object path of the adapter that holds the device: from the last read, else from a
+    /// new one, else the device is unknown (BlueZ's `DoesNotExist`, the contract's
+    /// `unknown-device`).
+    fn route(&self, address: &str) -> Result<String, BtError> {
+        let known = || {
+            self.lock()
+                .raw_devices
+                .iter()
+                .find(|d| d.address == address)
+                .map(|d| d.adapter.clone())
+        };
+        if let Some(adapter) = known() {
+            return Ok(adapter);
+        }
+        self.read()?;
+        known().ok_or_else(|| BtError::new("org.bluez.Error.DoesNotExist"))
+    }
+
     /// Looks the device up in a fresh read.
     fn find(&self, id: &str) -> Result<Device, Status> {
         if id.is_empty() {
@@ -596,7 +721,9 @@ impl<B: Bluez> Bluetooth<B> {
                     return map_error(&e.0, false);
                 }
             }
-            let paired = self.bluez.pair(&dev.id, left());
+            let paired = self
+                .route(&dev.id)
+                .and_then(|a| self.bluez.pair(&a, &dev.id, left()));
             if !window {
                 if let Err(e) = self.bluez.set_pairable(false) {
                     eprintln!("ruya-devices: Pairable off again failed: {}", e.0);
@@ -606,14 +733,20 @@ impl<B: Bluez> Bluetooth<B> {
                 return map_error(&e.0, true);
             }
         }
-        if let Err(e) = self.bluez.set_trusted(&dev.id) {
+        if let Err(e) = self
+            .route(&dev.id)
+            .and_then(|a| self.bluez.set_trusted(&a, &dev.id))
+        {
             return map_error(&e.0, false);
         }
         let left = left();
         if left.is_zero() {
             return Status::Timeout;
         }
-        match self.bluez.connect(&dev.id, left) {
+        match self
+            .route(&dev.id)
+            .and_then(|a| self.bluez.connect(&a, &dev.id, left))
+        {
             Ok(()) => Status::Ok,
             Err(e) => map_error(&e.0, true),
         }
@@ -622,7 +755,10 @@ impl<B: Bluez> Bluetooth<B> {
     pub fn connect(&self, id: &str) -> Status {
         match self.ready_device(id) {
             Ok(d) if !d.paired => Status::Failed,
-            Ok(d) => match self.bluez.connect(&d.id, CALL_TIMEOUT) {
+            Ok(d) => match self
+                .route(&d.id)
+                .and_then(|a| self.bluez.connect(&a, &d.id, CALL_TIMEOUT))
+            {
                 Ok(()) => Status::Ok,
                 Err(e) => map_error(&e.0, false),
             },
@@ -633,7 +769,10 @@ impl<B: Bluez> Bluetooth<B> {
     pub fn disconnect(&self, id: &str) -> Status {
         match self.find(id) {
             Ok(d) if !d.paired => Status::Failed,
-            Ok(d) => match self.bluez.disconnect(&d.id) {
+            Ok(d) => match self
+                .route(&d.id)
+                .and_then(|a| self.bluez.disconnect(&a, &d.id))
+            {
                 Ok(()) => Status::Ok,
                 Err(e) => map_error(&e.0, false),
             },
@@ -664,7 +803,11 @@ impl<B: Bluez> Bluetooth<B> {
             .decide(now, report, &pads);
         let mut done = Vec::new();
         for id in due {
-            if self.bluez.disconnect(&id).is_ok() {
+            if self
+                .route(&id)
+                .and_then(|a| self.bluez.disconnect(&a, &id))
+                .is_ok()
+            {
                 done.push(id);
             }
         }
@@ -686,7 +829,10 @@ impl<B: Bluez> Bluetooth<B> {
         }
         match self.ready_device(id) {
             Ok(d) if !d.paired => Status::Failed,
-            Ok(d) => match self.bluez.set_alias(&d.id, name) {
+            Ok(d) => match self
+                .route(&d.id)
+                .and_then(|a| self.bluez.set_alias(&a, &d.id, name))
+            {
                 Ok(()) => Status::Ok,
                 Err(e) => map_error(&e.0, false),
             },
@@ -697,7 +843,7 @@ impl<B: Bluez> Bluetooth<B> {
     /// Disconnects and removes the pairing (BlueZ's `RemoveDevice` does both).
     pub fn forget(&self, id: &str) -> Status {
         match self.find(id) {
-            Ok(d) => match self.bluez.remove(&d.id) {
+            Ok(d) => match self.route(&d.id).and_then(|a| self.bluez.remove(&a, &d.id)) {
                 Ok(()) => Status::Ok,
                 Err(e) => map_error(&e.0, false),
             },
@@ -931,7 +1077,10 @@ impl<B: Bluez> Bluetooth<B> {
 
     /// Removes a device that bonded during the window and is not an input device.
     fn remove_stranger(&self, address: &str) {
-        if let Err(e) = self.bluez.remove(address) {
+        if let Err(e) = self
+            .route(address)
+            .and_then(|a| self.bluez.remove(&a, address))
+        {
             eprintln!("ruya-devices: removing {address} failed: {}", e.0);
         }
         self.lock().pending.rejected = true;
@@ -939,7 +1088,10 @@ impl<B: Bluez> Bluetooth<B> {
 
     /// A controller is paired: trust it (BlueZ then lets its HID connection through) and close.
     fn finish(&self, address: &str) {
-        if let Err(e) = self.bluez.set_trusted(address) {
+        if let Err(e) = self
+            .route(address)
+            .and_then(|a| self.bluez.set_trusted(&a, address))
+        {
             eprintln!("ruya-devices: trusting {address} failed: {}", e.0);
         }
         self.close_window(PairingState::Paired);
@@ -959,7 +1111,9 @@ impl<B: Bluez> Bluetooth<B> {
             }
         };
         let end = clock() + CALL_TIMEOUT;
-        let result = self.bluez.pair(address, CALL_TIMEOUT);
+        let result = self
+            .route(address)
+            .and_then(|a| self.bluez.pair(&a, address, CALL_TIMEOUT));
         let open = {
             let mut st = self.lock();
             match st.window.as_mut() {
@@ -972,14 +1126,20 @@ impl<B: Bluez> Bluetooth<B> {
         };
         match result {
             Ok(()) if open => {
-                if let Err(e) = self.bluez.set_trusted(address) {
+                if let Err(e) = self
+                    .route(address)
+                    .and_then(|a| self.bluez.set_trusted(&a, address))
+                {
                     eprintln!("ruya-devices: trusting {address} failed: {}", e.0);
                 }
                 let left = end.saturating_duration_since(clock());
                 if !left.is_zero() {
                     // The bond is what counts; a pad that does not connect yet connects when its
                     // button is pressed.
-                    if let Err(e) = self.bluez.connect(address, left) {
+                    if let Err(e) = self
+                        .route(address)
+                        .and_then(|a| self.bluez.connect(&a, address, left))
+                    {
                         eprintln!("ruya-devices: connecting {address} failed: {}", e.0);
                     }
                 }
@@ -1038,7 +1198,10 @@ impl<B: Bluez> Bluetooth<B> {
                 }
             };
             if stranger {
-                if let Err(e) = self.bluez.remove(&address) {
+                if let Err(e) = self
+                    .route(&address)
+                    .and_then(|a| self.bluez.remove(&a, &address))
+                {
                     eprintln!("ruya-devices: removing {address} failed: {}", e.0);
                 }
             }
@@ -1086,6 +1249,8 @@ struct FakeInner {
     /// Run when `register_agent` or `pair` is called (with its name), before it does anything: a
     /// test lets something happen "meanwhile".
     hook: Option<FakeHook>,
+    /// Which adapter (object path) each call was made through: `"connect AA:.. /org/bluez/hci1"`.
+    routes: Vec<String>,
 }
 
 impl FakeBluez {
@@ -1102,6 +1267,7 @@ impl FakeBluez {
                 agent_fails: false,
                 agent: false,
                 hook: None,
+                routes: Vec::new(),
             }),
         }
     }
@@ -1121,17 +1287,68 @@ impl FakeBluez {
             battery: if paired { Some(80) } else { None },
             class: Some(0x2508),
             appearance: None,
+            adapter: HCI0.to_owned(),
         };
-        FakeBluez::new(Raw {
-            adapter: Some(RawAdapter {
+        FakeBluez::new(Raw::single(
+            RawAdapter {
                 powered: true,
                 discovering: false,
                 pairable: false,
                 discoverable: false,
-            }),
-            devices: vec![
+            },
+            vec![
                 dev("AA:00:00:00:00:01", "Dev Pad", "input-gaming", true),
                 dev("AA:00:00:00:00:02", "Found Pad", "input-gaming", false),
+            ],
+        ))
+    }
+
+    /// Two adapters, like the Dell: `hci0` (not USB) holds `Dev Pad` and sees `Found Pad`;
+    /// `hci1` (USB) holds two bonded pads, `Second Pad` (not connected) and `Third Pad`, so it is
+    /// the primary adapter (`--session` serves this one when `RUYA_DEVICES_FAKE_BLUETOOTH` is
+    /// `two-adapters`, `vm-devices-check.sh bluetooth` reads it).
+    pub fn with_two_adapters() -> Self {
+        let on = RawAdapter {
+            powered: true,
+            discovering: false,
+            pairable: false,
+            discoverable: false,
+        };
+        let dev =
+            |adapter: &str, address: &str, alias: &str, paired: bool, connected: bool| RawDevice {
+                address: address.to_owned(),
+                alias: alias.to_owned(),
+                name: alias.to_owned(),
+                icon: "input-gaming".to_owned(),
+                modalias: String::new(),
+                paired,
+                bonded: paired,
+                connected,
+                trusted: paired,
+                battery: None,
+                class: Some(0x2508),
+                appearance: None,
+                adapter: adapter.to_owned(),
+            };
+        let (hci0, hci1) = (HCI0, "/org/bluez/hci1");
+        FakeBluez::new(Raw {
+            adapters: vec![
+                AdapterInfo {
+                    path: hci0.to_owned(),
+                    usb: false,
+                    state: on,
+                },
+                AdapterInfo {
+                    path: hci1.to_owned(),
+                    usb: true,
+                    state: on,
+                },
+            ],
+            devices: vec![
+                dev(hci0, "AA:00:00:00:00:01", "Dev Pad", true, true),
+                dev(hci0, "AA:00:00:00:00:02", "Found Pad", false, false),
+                dev(hci1, "AA:00:00:00:00:11", "Second Pad", true, false),
+                dev(hci1, "AA:00:00:00:00:12", "Third Pad", true, true),
             ],
         })
     }
@@ -1155,6 +1372,7 @@ impl FakeBluez {
             battery: None,
             class: Some(0x2508),
             appearance: None,
+            adapter: HCI0.to_owned(),
         });
         fake.set_raw(raw);
         fake
@@ -1202,9 +1420,24 @@ impl FakeBluez {
         self.inner().agent
     }
 
-    /// What the adapter says now.
+    /// What the primary adapter says now (`Raw::adapter`).
     pub fn adapter(&self) -> Option<RawAdapter> {
-        self.inner().raw.adapter
+        self.inner().raw.adapter()
+    }
+
+    /// What the adapter with this object path says now.
+    pub fn adapter_state(&self, path: &str) -> Option<RawAdapter> {
+        let i = self.inner();
+        i.raw
+            .adapters
+            .iter()
+            .find(|a| a.path == path)
+            .map(|a| a.state)
+    }
+
+    /// The adapter each call went through, in order (`"connect AA:.. /org/bluez/hci1"`).
+    pub fn routes(&self) -> Vec<String> {
+        self.inner().routes.clone()
     }
 
     /// A device shows up (found by the scan, or calling in).
@@ -1214,7 +1447,10 @@ impl FakeBluez {
 
     /// The remote side finishes a pairing it started (an incoming one).
     pub fn bond(&self, address: &str) {
-        with_device(&mut self.inner().raw, address, |d| d.paired = true);
+        let mut i = self.inner();
+        if let Some(d) = i.raw.devices.iter_mut().find(|d| d.address == address) {
+            d.paired = true;
+        }
     }
 
     pub fn set_sticky_discovery(&self, on: bool) {
@@ -1238,20 +1474,47 @@ impl FakeBluez {
         self.inner().calls.clone()
     }
 
-    fn act(&self, call: String, apply: impl FnOnce(&mut Raw)) -> Result<(), BtError> {
+    /// One call that changes something. `via`: the adapter it goes through (`None`: the primary
+    /// one), noted in `routes`.
+    fn act(
+        &self,
+        call: String,
+        via: Option<&str>,
+        apply: impl FnOnce(&mut Raw) -> Result<(), BtError>,
+    ) -> Result<(), BtError> {
         let mut i = self.inner();
+        let path = match via {
+            Some(path) => path.to_owned(),
+            None => i.raw.primary().map(|a| a.path.clone()).unwrap_or_default(),
+        };
+        i.routes.push(format!("{call} {path}"));
         i.calls.push(call);
         if !i.fail.is_empty() {
             return Err(BtError(i.fail.remove(0)));
         }
-        apply(&mut i.raw);
-        Ok(())
+        apply(&mut i.raw)
     }
 }
 
-fn with_device(raw: &mut Raw, address: &str, f: impl FnOnce(&mut RawDevice)) {
-    if let Some(d) = raw.devices.iter_mut().find(|d| d.address == address) {
+/// Like BlueZ, a device is only reachable through the adapter that holds it: its object path is
+/// `<adapter>/dev_<address>`. A device the fake does not know at all is left alone (as before).
+fn with_device(
+    raw: &mut Raw,
+    adapter: &str,
+    address: &str,
+    f: impl FnOnce(&mut RawDevice),
+) -> Result<(), BtError> {
+    if let Some(d) = raw
+        .devices
+        .iter_mut()
+        .find(|d| d.address == address && d.adapter == adapter)
+    {
         f(d);
+        Ok(())
+    } else if raw.devices.iter().any(|d| d.address == address) {
+        Err(BtError::new("org.freedesktop.DBus.Error.UnknownObject"))
+    } else {
+        Ok(())
     }
 }
 
@@ -1260,15 +1523,16 @@ impl Bluez for FakeBluez {
         Ok(self.inner().raw.clone())
     }
     fn set_powered(&self, on: bool) -> Result<(), BtError> {
-        self.act(format!("power {on}"), |raw| {
-            if let Some(a) = raw.adapter.as_mut() {
-                a.powered = on;
+        self.act(format!("power {on}"), Some("all"), |raw| {
+            for a in raw.adapters.iter_mut() {
+                a.state.powered = on;
                 if !on {
-                    a.discovering = false;
+                    a.state.discovering = false;
                 }
             }
+            Ok(())
         })?;
-        if self.inner().raw.adapter.is_none() {
+        if self.inner().raw.adapters.is_empty() {
             return Err(BtError::new("org.bluez.Error.NotReady"));
         }
         Ok(())
@@ -1277,19 +1541,23 @@ impl Bluez for FakeBluez {
         // Not through `act`: a queued `fail_next` is meant for the pairing itself.
         let mut i = self.inner();
         i.calls.push(format!("pairable {on}"));
+        let via = i.raw.primary().map(|a| a.path.clone()).unwrap_or_default();
+        i.routes.push(format!("pairable {on} {via}"));
         if on && i.pairable_fails {
             return Err(BtError::new("org.bluez.Error.Failed"));
         }
-        if let Some(a) = i.raw.adapter.as_mut() {
-            a.pairable = on;
+        if let Some(a) = i.raw.primary_mut() {
+            a.state.pairable = on;
         }
         Ok(())
     }
     fn set_discoverable(&self, on: bool) -> Result<(), BtError> {
         let mut i = self.inner();
         i.calls.push(format!("discoverable {on}"));
-        if let Some(a) = i.raw.adapter.as_mut() {
-            a.discoverable = on;
+        let via = i.raw.primary().map(|a| a.path.clone()).unwrap_or_default();
+        i.routes.push(format!("discoverable {on} {via}"));
+        if let Some(a) = i.raw.primary_mut() {
+            a.state.discoverable = on;
         }
         Ok(())
     }
@@ -1311,51 +1579,56 @@ impl Bluez for FakeBluez {
     }
     fn start_discovery(&self) -> Result<(), BtError> {
         let sticky = self.inner().sticky_discovery;
-        self.act("start".to_owned(), |raw| {
-            if let (Some(a), false) = (raw.adapter.as_mut(), sticky) {
-                a.discovering = true;
+        self.act("start".to_owned(), None, |raw| {
+            if let (Some(a), false) = (raw.primary_mut(), sticky) {
+                a.state.discovering = true;
             }
+            Ok(())
         })
     }
     fn stop_discovery(&self) -> Result<(), BtError> {
         let sticky = self.inner().sticky_discovery;
-        self.act("stop".to_owned(), |raw| {
-            if let (Some(a), false) = (raw.adapter.as_mut(), sticky) {
-                a.discovering = false;
+        self.act("stop".to_owned(), None, |raw| {
+            if let (Some(a), false) = (raw.primary_mut(), sticky) {
+                a.state.discovering = false;
             }
+            Ok(())
         })
     }
-    fn pair(&self, address: &str, timeout: Duration) -> Result<(), BtError> {
+    fn pair(&self, adapter: &str, address: &str, timeout: Duration) -> Result<(), BtError> {
         self.run_hook("pair");
         self.took(timeout);
-        self.act(format!("pair {address}"), |raw| {
-            with_device(raw, address, |d| d.paired = true);
+        self.act(format!("pair {address}"), Some(adapter), |raw| {
+            with_device(raw, adapter, address, |d| d.paired = true)
         })
     }
-    fn set_trusted(&self, address: &str) -> Result<(), BtError> {
-        self.act(format!("trust {address}"), |raw| {
-            with_device(raw, address, |d| d.trusted = true);
+    fn set_trusted(&self, adapter: &str, address: &str) -> Result<(), BtError> {
+        self.act(format!("trust {address}"), Some(adapter), |raw| {
+            with_device(raw, adapter, address, |d| d.trusted = true)
         })
     }
-    fn connect(&self, address: &str, timeout: Duration) -> Result<(), BtError> {
+    fn connect(&self, adapter: &str, address: &str, timeout: Duration) -> Result<(), BtError> {
         self.took(timeout);
-        self.act(format!("connect {address}"), |raw| {
-            with_device(raw, address, |d| d.connected = true);
+        self.act(format!("connect {address}"), Some(adapter), |raw| {
+            with_device(raw, adapter, address, |d| d.connected = true)
         })
     }
-    fn disconnect(&self, address: &str) -> Result<(), BtError> {
-        self.act(format!("disconnect {address}"), |raw| {
-            with_device(raw, address, |d| d.connected = false);
+    fn disconnect(&self, adapter: &str, address: &str) -> Result<(), BtError> {
+        self.act(format!("disconnect {address}"), Some(adapter), |raw| {
+            with_device(raw, adapter, address, |d| d.connected = false)
         })
     }
-    fn remove(&self, address: &str) -> Result<(), BtError> {
-        self.act(format!("remove {address}"), |raw| {
-            raw.devices.retain(|d| d.address != address);
+    fn remove(&self, adapter: &str, address: &str) -> Result<(), BtError> {
+        self.act(format!("remove {address}"), Some(adapter), |raw| {
+            with_device(raw, adapter, address, |_| ())?;
+            raw.devices
+                .retain(|d| !(d.address == address && d.adapter == adapter));
+            Ok(())
         })
     }
-    fn set_alias(&self, address: &str, alias: &str) -> Result<(), BtError> {
-        self.act(format!("alias {address} {alias}"), |raw| {
-            with_device(raw, address, |d| d.alias = alias.to_owned());
+    fn set_alias(&self, adapter: &str, address: &str, alias: &str) -> Result<(), BtError> {
+        self.act(format!("alias {address} {alias}"), Some(adapter), |raw| {
+            with_device(raw, adapter, address, |d| d.alias = alias.to_owned())
         })
     }
 }
@@ -1378,6 +1651,7 @@ mod tests {
             battery: None,
             class: None,
             appearance: None,
+            adapter: HCI0.to_owned(),
         }
     }
 
@@ -2107,26 +2381,27 @@ mod tests {
             battery: None,
             class,
             appearance: None,
+            adapter: HCI0.to_owned(),
         }
     }
 
     /// An adapter that is on and not pairable, with a gamepad, a phone, a headset and a device
     /// that tells nothing in range.
     fn window_bt() -> Bluetooth<FakeBluez> {
-        let fake = FakeBluez::new(Raw {
-            adapter: Some(RawAdapter {
+        let fake = FakeBluez::new(Raw::single(
+            RawAdapter {
                 powered: true,
                 discovering: false,
                 pairable: false,
                 discoverable: false,
-            }),
-            devices: vec![
+            },
+            vec![
                 near(PAD, "Wireless Controller", "input-gaming", Some(0x2508)),
                 near(PHONE, "Some Phone", "phone", Some(0x5A020C)),
                 near(HEADSET, "Some Buds", "audio-headset", Some(0x240404)),
                 near(UNKNOWN, "Mystery", "", None),
             ],
-        });
+        ));
         let bt = Bluetooth::new(fake);
         bt.refresh().expect("fake reads");
         bt
@@ -2436,15 +2711,15 @@ mod tests {
     fn the_window_only_pairs_a_gamepad_that_claims_an_input_class() {
         // looks like a pad by name and icon, but its class is a phone's, or it tells nothing
         for class in [Some(0x5A020C), Some(0x240404), None] {
-            let bt = Bluetooth::new(FakeBluez::new(Raw {
-                adapter: Some(RawAdapter {
+            let bt = Bluetooth::new(FakeBluez::new(Raw::single(
+                RawAdapter {
                     powered: true,
                     discovering: false,
                     pairable: false,
                     discoverable: false,
-                }),
-                devices: vec![near(PAD, "Pad-like", "input-gaming", class)],
-            }));
+                },
+                vec![near(PAD, "Pad-like", "input-gaming", class)],
+            )));
             bt.refresh().expect("reads");
             open(&bt, Instant::now());
             assert_eq!(bt.pump(), None, "class {class:?}");
@@ -2614,15 +2889,15 @@ mod tests {
     #[test]
     fn an_adapter_found_pairable_or_discoverable_is_closed_once() {
         // a service that crashed inside a window left it open
-        let bt = Bluetooth::new(FakeBluez::new(Raw {
-            adapter: Some(RawAdapter {
+        let bt = Bluetooth::new(FakeBluez::new(Raw::single(
+            RawAdapter {
                 powered: true,
                 discovering: false,
                 pairable: true,
                 discoverable: true,
-            }),
-            devices: Vec::new(),
-        }));
+            },
+            Vec::new(),
+        )));
         bt.refresh().expect("reads");
         assert_eq!(bt.bluez.calls(), ["pairable false", "discoverable false"]);
         let a = adapter(&bt);
@@ -2743,15 +3018,15 @@ mod tests {
     #[test]
     fn a_keyboard_in_range_is_not_paired_by_the_window_itself() {
         // Keyboards need a passkey; only gamepads are paired from our side.
-        let bt = Bluetooth::new(FakeBluez::new(Raw {
-            adapter: Some(RawAdapter {
+        let bt = Bluetooth::new(FakeBluez::new(Raw::single(
+            RawAdapter {
                 powered: true,
                 discovering: false,
                 pairable: false,
                 discoverable: false,
-            }),
-            devices: vec![near(PAD, "Keys", "input-keyboard", Some(0x2540))],
-        }));
+            },
+            vec![near(PAD, "Keys", "input-keyboard", Some(0x2540))],
+        )));
         bt.refresh().expect("reads");
         open(&bt, Instant::now());
         assert_eq!(bt.pump(), None);
@@ -2880,5 +3155,279 @@ mod tests {
         assert!(handler.answer(AgentCall::Authorize {
             device: &path_of(PAD)
         }));
+    }
+
+    // T-336: more than one adapter. `FakeBluez::with_two_adapters`: hci0 (not USB) holds Dev
+    // Pad and sees Found Pad, hci1 (USB) holds Second Pad and Third Pad.
+    const HCI1: &str = "/org/bluez/hci1";
+    const SECOND: &str = "AA:00:00:00:00:11";
+
+    fn two() -> Bluetooth<FakeBluez> {
+        let bt = Bluetooth::new(FakeBluez::with_two_adapters());
+        bt.refresh().expect("fake reads");
+        bt
+    }
+
+    fn adapter_info(path: &str, usb: bool) -> AdapterInfo {
+        AdapterInfo {
+            path: path.to_owned(),
+            usb,
+            state: RawAdapter {
+                powered: true,
+                discovering: false,
+                pairable: false,
+                discoverable: false,
+            },
+        }
+    }
+
+    fn on(adapter: &str, address: &str, paired: bool) -> RawDevice {
+        RawDevice {
+            adapter: adapter.to_owned(),
+            ..raw_dev(address, "Pad", "input-gaming", paired)
+        }
+    }
+
+    #[test]
+    fn the_list_says_which_adapter_holds_each_device() {
+        let bt = two();
+        let adapter_of = |id: &str| {
+            bt.list()
+                .into_iter()
+                .find(|d| d.id == id)
+                .map(|d| d.adapter)
+        };
+        assert_eq!(adapter_of("AA:00:00:00:00:01").as_deref(), Some("hci0"));
+        assert_eq!(adapter_of(SECOND).as_deref(), Some("hci1"));
+    }
+
+    #[test]
+    fn a_device_on_the_second_adapter_connects_through_the_second_adapter() {
+        let bt = two();
+        assert_eq!(bt.connect(SECOND), Status::Ok);
+        assert!(bt
+            .bluez
+            .routes()
+            .contains(&format!("connect {SECOND} {HCI1}")));
+        bt.refresh().expect("reads");
+        assert!(bt.list().iter().any(|d| d.id == SECOND && d.connected));
+        // and a device of the first one through the first
+        assert_eq!(bt.disconnect("AA:00:00:00:00:01"), Status::Ok);
+        assert!(bt
+            .bluez
+            .routes()
+            .contains(&format!("disconnect AA:00:00:00:00:01 {HCI0}")));
+    }
+
+    #[test]
+    fn forget_removes_from_the_adapter_that_holds_the_device() {
+        let bt = two();
+        assert_eq!(bt.forget(SECOND), Status::Ok);
+        assert!(bt
+            .bluez
+            .routes()
+            .contains(&format!("remove {SECOND} {HCI1}")));
+        let ids: Vec<_> = bt.bluez.snapshot().expect("fake").devices;
+        assert!(!ids.iter().any(|d| d.address == SECOND));
+        assert!(
+            ids.iter().any(|d| d.address == "AA:00:00:00:00:01"),
+            "the other adapter's pad stays"
+        );
+    }
+
+    #[test]
+    fn rename_and_trust_use_the_devices_adapter() {
+        let bt = two();
+        assert_eq!(bt.rename(SECOND, "Couch pad"), Status::Ok);
+        assert!(bt
+            .bluez
+            .routes()
+            .contains(&format!("alias {SECOND} Couch pad {HCI1}")));
+        bt.refresh().expect("reads");
+        assert!(bt
+            .list()
+            .iter()
+            .any(|d| d.id == SECOND && d.name == "Couch pad"));
+        // pairing a new pad that hci1 sees: pair, trust and connect all go through hci1
+        let new = "AA:00:00:00:00:13";
+        bt.bluez.add_device(on(HCI1, new, false));
+        assert_eq!(bt.pair(new, Instant::now), Status::Ok);
+        let routes = bt.bluez.routes();
+        for call in ["pair", "trust", "connect"] {
+            assert!(
+                routes.contains(&format!("{call} {new} {HCI1}")),
+                "{call}: {routes:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_primary_adapter_has_the_most_paired_devices_then_usb_then_lowest_number() {
+        let a = |path: &str, usb| adapter_info(path, usb);
+        // most paired devices wins over USB and over the lower number
+        let adapters = [a(HCI0, true), a(HCI1, false)];
+        let devices = [
+            on(HCI1, "AA:00:00:00:00:21", true),
+            on(HCI1, "AA:00:00:00:00:22", true),
+            on(HCI0, "AA:00:00:00:00:23", true),
+            on(HCI0, "AA:00:00:00:00:24", false),
+        ];
+        assert_eq!(primary_index(&adapters, &devices), Some(1));
+        // a tie: the USB-attached one
+        let adapters = [a(HCI0, false), a(HCI1, true)];
+        assert_eq!(primary_index(&adapters, &[]), Some(1));
+        // a tie in both: the lowest number, numerically (hci2 before hci10), in any order
+        let adapters = [a("/org/bluez/hci10", true), a("/org/bluez/hci2", true)];
+        assert_eq!(primary_index(&adapters, &[]), Some(1));
+        let adapters = [a(HCI1, false), a(HCI0, false)];
+        assert_eq!(primary_index(&adapters, &[]), Some(1));
+        assert_eq!(primary_index(&[], &[]), None);
+    }
+
+    #[test]
+    fn a_device_two_adapters_have_seen_is_listed_once_under_the_one_that_holds_it() {
+        let seen = |adapter, paired| on(adapter, "AA:00:00:00:00:31", paired);
+        let merged = merge_devices(vec![seen(HCI0, false), seen(HCI1, true)], HCI0);
+        assert_eq!(merged.len(), 1);
+        assert_eq!(merged[0].adapter, HCI1, "paired beats primary");
+        let merged = merge_devices(vec![seen(HCI1, false), seen(HCI0, false)], HCI0);
+        assert_eq!(merged[0].adapter, HCI0, "else the primary adapter");
+        let connected = RawDevice {
+            connected: true,
+            ..seen(HCI1, true)
+        };
+        let merged = merge_devices(vec![seen(HCI0, true), connected], HCI0);
+        assert_eq!(merged[0].adapter, HCI1, "connected beats paired");
+    }
+
+    #[test]
+    fn the_window_and_scan_use_the_primary_adapter_only() {
+        let bt = two();
+        assert_eq!(bt.start_scan(Instant::now()), Status::Ok);
+        assert_eq!(
+            bt.start_controller_pairing(Instant::now(), 0, true),
+            Status::Ok
+        );
+        let hci1 = bt.bluez.adapter_state(HCI1).expect("hci1");
+        let hci0 = bt.bluez.adapter_state(HCI0).expect("hci0");
+        assert!(hci1.pairable, "the window opens the primary");
+        assert!(
+            !hci0.pairable && !hci0.discovering && !hci0.discoverable,
+            "the other adapter is left alone: {hci0:?}"
+        );
+        assert_eq!(bt.stop_controller_pairing(true), Status::Ok);
+        assert_eq!(bt.stop_scan(), Status::Ok);
+        let routes = bt.bluez.routes();
+        for r in routes.iter().filter(|r| {
+            r.starts_with("pairable") || r.starts_with("start") || r.starts_with("stop")
+        }) {
+            assert!(r.ends_with(HCI1), "{r}");
+        }
+        assert!(routes.iter().any(|r| r.starts_with("start ")));
+        assert!(!bt.bluez.adapter_state(HCI1).expect("hci1").pairable);
+    }
+
+    #[test]
+    fn the_order_of_adapters_flipping_changes_nothing_for_a_bonded_pad() {
+        let fake = FakeBluez::with_two_adapters();
+        let mut raw = fake.snapshot().expect("fake");
+        // the order of the bus: hci1 first
+        raw.adapters.reverse();
+        raw.devices.reverse();
+        fake.set_raw(raw.clone());
+        let bt = Bluetooth::new(fake);
+        bt.refresh().expect("reads");
+        assert_eq!(bt.connect(SECOND), Status::Ok);
+        assert!(bt
+            .bluez
+            .routes()
+            .contains(&format!("connect {SECOND} {HCI1}")));
+        // the kernel numbers the two adapters the other way round on the next boot
+        let swap = |path: &str| (if path == HCI0 { HCI1 } else { HCI0 }).to_owned();
+        for a in raw.adapters.iter_mut() {
+            a.path = swap(&a.path);
+        }
+        for d in raw.devices.iter_mut() {
+            d.adapter = swap(&d.adapter);
+        }
+        bt.bluez.set_raw(raw);
+        bt.refresh().expect("reads");
+        assert_eq!(bt.forget(SECOND), Status::Ok, "now it sits under hci0");
+        assert!(bt
+            .bluez
+            .routes()
+            .contains(&format!("remove {SECOND} {HCI0}")));
+        assert_eq!(
+            bt.bluez
+                .snapshot()
+                .expect("fake")
+                .primary()
+                .map(|a| a.path.clone()),
+            Some(HCI0.to_owned()),
+            "the adapter with the pads is still the primary one"
+        );
+    }
+
+    #[test]
+    fn power_off_switches_every_adapter() {
+        let bt = two();
+        bt.set_powered(false).expect("off");
+        for path in [HCI0, HCI1] {
+            assert!(
+                !bt.bluez.adapter_state(path).expect("adapter").powered,
+                "{path}"
+            );
+        }
+        assert!(!bt.powered());
+        assert!(bt.list().is_empty());
+        bt.set_powered(true).expect("on");
+        for path in [HCI0, HCI1] {
+            assert!(
+                bt.bluez.adapter_state(path).expect("adapter").powered,
+                "{path}"
+            );
+        }
+        assert!(bt.powered());
+    }
+
+    #[test]
+    fn powered_is_any_adapter_on() {
+        let fake = FakeBluez::with_two_adapters();
+        let mut raw = fake.snapshot().expect("fake");
+        raw.adapters[0].state.powered = false;
+        fake.set_raw(raw);
+        let bt = Bluetooth::new(fake);
+        bt.refresh().expect("reads");
+        assert!(bt.powered(), "the pads on hci1 work, so Bluetooth is on");
+        assert!(!bt.list().is_empty());
+    }
+
+    #[test]
+    fn a_device_in_the_list_is_never_unreachable() {
+        let bt = two();
+        let listed = bt.list();
+        assert!(listed.len() >= 4);
+        for d in listed {
+            let status = if d.paired {
+                bt.connect(&d.id)
+            } else {
+                bt.pair(&d.id, Instant::now)
+            };
+            assert_eq!(status, Status::Ok, "{} on {}", d.id, d.adapter);
+        }
+    }
+
+    #[test]
+    fn a_device_that_came_after_the_last_read_is_looked_up_again() {
+        let bt = two();
+        let late = "AA:00:00:00:00:41";
+        bt.bluez.add_device(on(HCI1, late, true));
+        assert!(!bt.list().iter().any(|d| d.id == late));
+        assert_eq!(bt.route(late), Ok(HCI1.to_owned()));
+        assert_eq!(
+            bt.route("AA:00:00:00:00:99"),
+            Err(BtError::new("org.bluez.Error.DoesNotExist"))
+        );
+        assert_eq!(bt.forget("AA:00:00:00:00:99"), Status::UnknownDevice);
     }
 }
