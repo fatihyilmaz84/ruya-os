@@ -93,6 +93,8 @@ Item {
         function openDisplayPane() {
             keyClick(Qt.Key_Up)                          // the section nav
             for (let i = 0; i < 4; ++i)
+                keyClick(Qt.Key_Left)                    // to Home: the nav may open on the Settings pill, and Right from it reaches the "N more" chip (T-301)
+            for (let i = 0; i < 4; ++i)
                 keyClick(Qt.Key_Right)
             keyClick(Qt.Key_Return)                      // Settings
             tryCompare(tc.shell, "currentPage", "settings")

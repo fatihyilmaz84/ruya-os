@@ -531,25 +531,39 @@ FocusScope {
         // nav (a Theme.spaceM gap stays) however long the name or many the devices.
         readonly property real room: root.width - root.marginX - (sectionNav.x + sectionNav.width + Theme.spaceM * root.u)
                                      - 2 * Theme.spaceL * root.u
-        // Every device that earns a chip, lowest first (the chips and the ones past MaxChips).
+        // Every device that earns a chip, in the order the slots are given out (T-301): pads and headsets
+        // before mice, keyboards and the rest, each group lowest first (the service sorts that way), so
+        // three full pads are not pushed out by a mouse at 5 % (that one shows in Settings and in its toast).
         readonly property var batteryDevices: Batteries.chips.concat(Batteries.more)
+            .map((d, i) => ({ device: d, order: i, rank: statusGlass.rankOf(d) }))
+            .sort((a, b) => a.rank - b.rank || a.order - b.order)
+            .map(x => x.device)
+        function rankOf(device) {
+            return device.kind === "controller" || device.kind === "headset" ? 0 : 1
+        }
         readonly property real nameFull: profileName.implicitWidth
         readonly property real nameMin: Math.min(nameFull, probeName.implicitWidth)
         // Avatar, its gap to the name, the clock and the gap between profile and clock.
-        readonly property real fixedWidth: (48 + Theme.spaceS + Theme.spaceM) * root.u + clock.implicitWidth
-        readonly property int chipCount: fitChips()
+        readonly property real fixedWidth: (Theme.statusAvatarSize + Theme.spaceS + Theme.spaceM) * root.u + clock.implicitWidth
+        // How many chips fit, and whether the "N more" chip has to drop its words to fit (T-301).
+        readonly property var fit: fitChips()
+        readonly property int chipCount: fit.chips
+        readonly property bool moreCompact: fit.compact
         // The pill stops growing here however much room there is (T-312): the name elides.
         readonly property real nameCap: 220 * root.u
-        readonly property real nameWidth: Math.max(nameMin, Math.min(nameFull, nameCap, room - fixedWidth - batteryWidth(chipCount)))
+        readonly property real nameWidth: Math.max(nameMin, Math.min(nameFull, nameCap, room - fixedWidth - batteryWidth(chipCount, moreCompact)))
 
         // Probes of the real fonts, never shown: a chip is budgeted with its percentage in the widest
         // digit (8) for its number of digits, the "+N" the same, and the name's minimum is six wide
-        // letters, so the budget only errs on the side of fewer chips.
+        // letters, so the budget only errs on the side of fewer chips. The "N more" chip is measured by
+        // itself (same component, in the translated language), at one and at two digits.
         Text { id: probePercent1; visible: false; text: "8%"; font.pixelSize: Theme.typeBody * root.u }
         Text { id: probePercent2; visible: false; text: "88%"; font.pixelSize: Theme.typeBody * root.u }
         Text { id: probePercent3; visible: false; text: "888%"; font.pixelSize: Theme.typeBody * root.u }
-        Text { id: probeMore1; visible: false; text: "+8"; font.pixelSize: Theme.typeBody * root.u }
-        Text { id: probeMore2; visible: false; text: "+88"; font.pixelSize: Theme.typeBody * root.u }
+        BatteryMore { id: probeMore1; visible: false; count: 8; u: root.u }
+        BatteryMore { id: probeMore2; visible: false; count: 88; u: root.u }
+        BatteryMore { id: probeCompact1; visible: false; count: 8; compact: true; u: root.u }
+        BatteryMore { id: probeCompact2; visible: false; count: 88; compact: true; u: root.u }
         Text { id: probeName; visible: false; text: "nnnnnn"; font.pixelSize: Theme.typeBody * root.u }
         Icon { id: iconProbe; visible: false; name: "battery_full"; u: root.u }
 
@@ -557,24 +571,35 @@ FocusScope {
             const text = device.percent >= 100 ? probePercent3 : device.percent >= 10 ? probePercent2 : probePercent1
             return 2 * iconProbe.width + 2 * Theme.spaceXs * root.u + text.implicitWidth
         }
-        // The width of the battery group with `n` chips and a "+k" for the rest, with its gap to the profile.
-        function batteryWidth(n) {
+        // The width of the battery group with `n` chips and an "N more" chip for the rest (without its
+        // words when `compact`), with its gap to the profile.
+        function batteryWidth(n, compact) {
             const all = statusGlass.batteryDevices
             if (all.length === 0)
                 return 0
             let w = 0
             for (let i = 0; i < n; ++i)
                 w += chipBudget(all[i]) + (i > 0 ? Theme.spaceM * root.u : 0)
-            if (all.length > n)
-                w += (n > 0 ? Theme.spaceM * root.u : 0) + (all.length - n >= 10 ? probeMore2 : probeMore1).implicitWidth
+            if (all.length > n) {   // the "N more" chip for the rest
+                const two = all.length - n >= 10
+                const probe = compact ? (two ? probeCompact2 : probeCompact1) : (two ? probeMore2 : probeMore1)
+                w += (n > 0 ? Theme.spaceM * root.u : 0) + probe.implicitWidth
+            }
             return w + Theme.spaceM * root.u
         }
+        // The most chips that fit with the "N more" chip and the shortest profile name (nameMin) in the
+        // room, at the current UI size. At least one chip is kept if it fits in any form: first with the
+        // words "N more", then without them; if no chip fits, the "N more" chip stands alone, with its
+        // words if they fit, else without. (Nothing fits at 150 % and more: the nav takes the room.)
         function fitChips() {
-            for (let n = Math.min(statusGlass.batteryDevices.length, Batteries.chips.length); n > 0; --n) {
-                if (batteryWidth(n) + fixedWidth + nameMin <= room)
-                    return n
+            const most = Math.min(statusGlass.batteryDevices.length, Batteries.chips.length)
+            for (const compact of [false, true]) {
+                for (let n = most; n > 0; --n) {
+                    if (batteryWidth(n, compact) + fixedWidth + nameMin <= room)
+                        return { chips: n, compact: compact }
+                }
             }
-            return 0
+            return { chips: 0, compact: batteryWidth(0, false) + fixedWidth + nameMin > room }
         }
 
         Row {
@@ -602,24 +627,42 @@ FocusScope {
                         u: root.u
                     }
                 }
-                Text {
+                // The devices without a chip of their own: one chip the pad can reach (Right from the last
+                // nav pill); Accept lists them (BatteryListModal).
+                BatteryMore {
                     id: batteryMore
                     objectName: "batteryMore"
                     visible: batteryStatus.overflow.length > 0
+                    enabled: root.navShown && !systemPanel.open && !batteryList.shown
                     anchors.verticalCenter: parent.verticalCenter
-                    text: "+" + batteryStatus.overflow.length
-                    color: Theme.text
-                    font.pixelSize: Theme.typeBody * root.u
-                    Accessible.role: Accessible.StaticText
-                    Accessible.name: qsTr("%n more device(s) with a battery: %1", "", batteryStatus.overflow.length)
-                                     .arg(batteryStatus.overflow.map(d => qsTr("%1 %2 percent").arg(d.name).arg(d.percent)).join(", "))
+                    u: root.u
+                    count: batteryStatus.overflow.length
+                    compact: statusGlass.moreCompact
+                    devices: batteryStatus.overflow
+                    onActivated: batteryList.open()
+                    onLeftRequested: {
+                        Sfx.navigate()
+                        sectionNav.currentIndex = sectionNav.keys.length - 1
+                        sectionNav.forceActiveFocus()
+                    }
+                    onDownRequested: { Sfx.navigate(); root.leaveNavDown() }
+                    onBackRequested: {
+                        if (root.pageOpen) {
+                            Sfx.back()
+                            root.closePage()
+                        }
+                    }
+                    onStepRequested: direction => root.stepSection(direction)
+                    // Lost with the chip (nothing hidden any more): the focus goes to the nav, not nowhere.
+                    onActiveFocusChanged: if (!activeFocus) Qt.callLater(root.rescueFocus)
+                    onVisibleChanged: if (!visible) Qt.callLater(root.rescueFocus)
                 }
             }
             Row {
                 spacing: Theme.spaceS * root.u
                 anchors.verticalCenter: parent.verticalCenter
                 Rectangle {
-                    width: 48 * root.u
+                    width: Theme.statusAvatarSize * root.u
                     height: width
                     radius: width / 2
                     color: Profiles.active.avatar ?? Theme.glass
@@ -883,6 +926,15 @@ FocusScope {
         sectionNav.forceActiveFocus()
     }
 
+    // The "N more" chip lost the focus because it went away: if nothing took it, the nav does.
+    function rescueFocus() {
+        const item = root.Window.window ? root.Window.window.activeFocusItem : null
+        if (navShown && !systemPanel.open && !batteryList.shown && (item === null || item === root || !item.visible || !item.enabled)) {
+            sectionNav.currentIndex = sectionNav.keys.indexOf(navSection) >= 0 ? sectionNav.keys.indexOf(navSection) : 0
+            sectionNav.forceActiveFocus()
+        }
+    }
+
     // Down from the nav: the page content that had focus, or Play on Home.
     function leaveNavDown() {
         if (pageOpen)
@@ -950,6 +1002,12 @@ FocusScope {
         Behavior on opacity { NumberAnimation { duration: Theme.pageMs; easing.type: Easing.Bezier; easing.bezierCurve: Theme.easeSnap } }
         onActivated: key => root.openSection(key)
         onDownRequested: root.leaveNavDown()
+        onEdgeRequested: {
+            if (batteryMore.visible && batteryMore.enabled) {
+                Sfx.navigate()
+                batteryMore.forceActiveFocus()
+            }
+        }
         onStepRequested: direction => root.stepSection(direction)
         onBackRequested: {
             if (root.pageOpen) {
@@ -1032,6 +1090,18 @@ FocusScope {
         anchors.fill: parent
         z: 15
         glassSource: l0          // the layer the glass sheets of the picker modals blur
+    }
+
+    // The devices behind the cluster's "N more" chip (T-301): a small modal in the modal layer.
+    BatteryListModal {
+        id: batteryList
+        objectName: "batteryList"
+        parent: modalLayer
+        width: parent ? parent.width : 0
+        height: parent ? parent.height : 0
+        u: root.u
+        devices: batteryStatus.overflow
+        onClosed: Qt.callLater(root.rescueFocus)      // its return target may be gone (nothing is hidden any more)
     }
 
     // "Keep this resolution?" (T-198): above the hint bar and every other modal.

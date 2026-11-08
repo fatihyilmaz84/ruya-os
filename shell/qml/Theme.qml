@@ -177,6 +177,7 @@ QtObject {
     readonly property real tileWidth: 400
     readonly property real tileHeight: 260
     readonly property real avatarSize: 200
+    readonly property real statusAvatarSize: 48    // the round avatar in the status cluster (Shell, 04 §5)
     // The card family (04 §5, T-281): the art cards are 16:9 in three widths, the icon card is square,
     // the profile card is a portrait with a round avatar. Design px (times `u`); corner radius is
     // `radiusM`, the gap between neighbours `cardGap`, the caption under a card that has one (Store)

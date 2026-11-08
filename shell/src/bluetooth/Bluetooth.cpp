@@ -205,6 +205,12 @@ void Bluetooth::mockSetBonded(const QString &id, bool bonded)
         mock->setBonded(id, bonded);
 }
 
+void Bluetooth::mockSetSilent(const QString &id, bool silent)
+{
+    if (auto *mock = qobject_cast<MockBluetoothBackend *>(m_backend.get()))
+        mock->setSilent(id, silent);
+}
+
 void Bluetooth::mockServiceRestart()
 {
     if (auto *mock = qobject_cast<MockBluetoothBackend *>(m_backend.get()))

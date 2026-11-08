@@ -57,7 +57,7 @@ void MockBluetoothBackend::startScan()
     }
     ++m_scans;
     for (Entry &e : m_entries) {
-        if (e.appearAfter <= m_scans)
+        if (e.appearAfter <= m_scans && !e.silent)
             e.listed = true;
     }
     m_discovering = true;
@@ -288,6 +288,13 @@ void MockBluetoothBackend::setBonded(const QString &id, bool bonded)
         m_entries[at].dev.bonded = bonded;
         publish();
     }
+}
+
+void MockBluetoothBackend::setSilent(const QString &id, bool silent)
+{
+    const int at = indexOf(id);
+    if (at >= 0)
+        m_entries[at].silent = silent;
 }
 
 void MockBluetoothBackend::reveal(const QString &id)

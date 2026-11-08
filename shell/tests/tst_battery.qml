@@ -188,22 +188,27 @@ Item {
 
         function test_lowest_first_and_a_plus_n_beyond_three() {
             Batteries.mockPopulate()
-            // mouse 12, pad-2 41, pad-1 62 (charging), headset 78, keyboard 94
+            // mouse 12, pad-2 41, pad-1 62 (charging), headset 78, keyboard 94. The slots go to pads and
+            // headsets first, the lowest first (T-301); beside the "N more" chip (whose words are wider than the
+            // old "+N") two chips fit here, the three only when nothing is left over.
             tryCompare(find("batteryMore"), "visible", true)
-            compare(find("batteryMore").text, "+2")
-            tryVerify(() => chipIds().length === 3)
-            compare(chipIds(), ["mouse-1", "pad-2", "pad-1"], "the three lowest, lowest first")
+            tryCompare(find("batteryMore"), "count", 3)
+            tryVerify(() => chipIds().length === 2)
+            compare(chipIds(), ["pad-2", "pad-1"], "the lowest pads and headsets, lowest first, not the mouse at 12")
             compare(chip("headset-1"), null)
+            compare(chip("mouse-1"), null)
             compare(chip("keyboard-1"), null)
             compare(find("batteryMore").Accessible.name,
-                    "2 more devices with a battery: WH-1000XM4 78 percent, Ruya Keyboard 94 percent")
-            // Drop one: the next device takes the free place and the +N counts one.
+                    "3 more devices with a battery: WH-1000XM4 78 percent, Ruya Mouse 12 percent, Ruya Keyboard 94 percent")
+            // Drop one: the count follows.
             Batteries.mockRemove("mouse-1")
-            tryCompare(find("batteryMore"), "text", "+1")
-            tryVerify(() => chip("headset-1") !== null)
-            compare(chipIds(), ["pad-2", "pad-1", "headset-1"])
+            tryCompare(find("batteryMore"), "count", 2)
+            compare(chipIds(), ["pad-2", "pad-1"])
+            // Down to three devices: all three are chips and nothing is left for the "N more" chip.
             Batteries.mockRemove("keyboard-1")
             tryCompare(find("batteryMore"), "visible", false)
+            tryVerify(() => chip("headset-1") !== null)
+            compare(chipIds(), ["pad-2", "pad-1", "headset-1"])
         }
 
         function test_equal_levels_put_the_discharging_one_first() {

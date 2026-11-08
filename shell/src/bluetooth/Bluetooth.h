@@ -95,6 +95,8 @@ public:
     Q_INVOKABLE void mockSetName(const QString &id, const QString &name);   // any text, as a device could send it
     Q_INVOKABLE void mockSetFamily(const QString &id, const QString &family);
     Q_INVOKABLE void mockSetBonded(const QString &id, bool bonded);
+    // A device a scan does not find (it is not in pairing mode), or finds again.
+    Q_INVOKABLE void mockSetSilent(const QString &id, bool silent);
     Q_INVOKABLE void mockServiceRestart();
     Q_INVOKABLE void mockGamepad(bool connected, const QString &id, const QString &name, const QString &family,
                                  const QString &transport);
