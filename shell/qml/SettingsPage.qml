@@ -205,6 +205,7 @@ Page {
             objectName: "paneAudio"
             anchors.fill: parent
             u: page.u
+            overlay: page.overlay
             visible: page.current.key === "audio"
             enabled: visible
             onExitRequested: page.leavePane()

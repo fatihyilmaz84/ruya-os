@@ -12,6 +12,7 @@
 #include <QtMath>
 
 #include <cstdlib>
+#include <limits>
 #include <memory>
 
 namespace SoundTheme {
@@ -240,6 +241,17 @@ bool parseOgg(const QByteArray &head, const QByteArray &tail, Audio *out, QStrin
     return true;
 }
 
+// A number from the manifest as whole milliseconds. Converting a double that does not fit into 64 bits is
+// undefined behaviour, so it is clamped first (to far more than any file's length: the verdict stays "not
+// inside the file", and the message names a number that can be printed).
+constexpr double MaxManifestMs = 1e15;
+qint64 clampedMs(double value)
+{
+    if (!(value == value))
+        return 0;
+    return qint64(qBound(-MaxManifestMs, value, MaxManifestMs));
+}
+
 bool hasExtension(const QString &path, const QStringList &allowed)
 {
     const QString lower = path.toLower();
@@ -443,8 +455,8 @@ Result check(const QString &dir)
                                 fail(label + QStringLiteral("'loop' needs a numeric start and end in ms"));
                                 loopOk = false;
                             } else {
-                                start = qint64(o.value(QStringLiteral("start")).toDouble());
-                                end = qint64(o.value(QStringLiteral("end")).toDouble());
+                                start = clampedMs(o.value(QStringLiteral("start")).toDouble());
+                                end = clampedMs(o.value(QStringLiteral("end")).toDouble());
                             }
                         }
                         if (loopOk && (start < 0 || end > audio.durationMs || end <= start)) {
@@ -632,6 +644,8 @@ QList<FixtureCase> fixtureCases()
         {QStringLiteral("bad-wav-chunk-loop"), false, QStringLiteral("a chunk is cut short")},       // size 0xFFFFFFF8 once looped forever
         {QStringLiteral("bad-wav-chunk-negative"), false, QStringLiteral("a chunk is cut short")},   // size 0x80000000 once read out of range
         {QStringLiteral("ok-wav-extra-chunk"), true, {}},
+        {QStringLiteral("bad-granule-overflow"), false, QStringLiteral("no usable length")},          // an Ogg granule of 2^63 - 1
+        {QStringLiteral("bad-loop-overflow"), false, QStringLiteral("0 to 1000000000000000 ms")},   // a loop end of 1e300, clamped before the cast
     };
 }
 
@@ -708,6 +722,11 @@ bool writeFixtures(const QString &root)
     simple(QStringLiteral("bad-wav-chunk-negative"), wavWithChunk(tone, "LIST", 0x80000000u, QByteArray(4, 'x')));
     simple(QStringLiteral("ok-wav-extra-chunk"), wavWithChunk(tone, "LIST", 4, QByteArray(4, 'x')));
     withAmbient(QStringLiteral("bad-ambient-gain"), QStringLiteral("ambient.flac"), flac, ambientOf(QStringLiteral("ambient.flac"), 0, 10000, 3.0));
+    withAmbient(QStringLiteral("bad-granule-overflow"), QStringLiteral("pad.ogg"), makeOgg(48000, 2, std::numeric_limits<qint64>::max()),
+                ambientOf(QStringLiteral("pad.ogg"), 0, 10000));
+    QJsonObject huge = ambientOf(QStringLiteral("ambient.flac"), 0, 10000);
+    huge.insert(QStringLiteral("loop"), QJsonObject{{QStringLiteral("start"), 0.0}, {QStringLiteral("end"), 1e300}});
+    withAmbient(QStringLiteral("bad-loop-overflow"), QStringLiteral("ambient.flac"), flac, huge);
     return ok;
 }
 

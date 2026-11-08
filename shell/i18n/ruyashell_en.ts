@@ -505,22 +505,37 @@ This can&apos;t be undone.</translation>
 <context>
     <name>AudioPane</name>
     <message>
-        <location filename="../qml/AudioPane.qml" line="+115"/>
+        <location filename="../qml/AudioPane.qml" line="+155"/>
         <source>Sound theme: %1</source>
         <translation>Sound theme: %1</translation>
     </message>
     <message>
-        <location line="+2"/>
-        <source>The console keeps up to %1 sound themes. Copy over one with the same name to replace it.</source>
-        <translation>The console keeps up to %1 sound themes. Copy over one with the same name to replace it.</translation>
+        <location line="-90"/>
+        <source>The console keeps up to %1 sound themes. Delete one first, or copy over one with the same name to replace it.</source>
+        <translation>The console keeps up to %1 sound themes. Delete one first, or copy over one with the same name to replace it.</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+2"/>
+        <source>That sound theme has more than %1 files.</source>
+        <translation>That sound theme has more than %1 files.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>That sound theme is larger than %1 MB.</source>
+        <translation>That sound theme is larger than %1 MB.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>That sound theme can&apos;t be used. %1.</source>
+        <translation>That sound theme can&apos;t be used. %1.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
         <source>That sound theme could not be used.</source>
         <translation>That sound theme could not be used.</translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+97"/>
         <source>Could not switch the audio output.</source>
         <translation>Could not switch the audio output.</translation>
     </message>
@@ -565,7 +580,23 @@ This can&apos;t be undone.</translation>
         <translation>Sound theme</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+14"/>
+        <location line="+10"/>
+        <source>Delete “%1”</source>
+        <translation>Delete “%1”</translation>
+    </message>
+    <message>
+        <location line="-2"/>
+        <source>Delete “%1”?</source>
+        <translation>Delete “%1”?</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>You can copy it again from a USB drive.</source>
+        <translation>You can copy it again from a USB drive.</translation>
+    </message>
+    <message>
+        <location line="+31"/>
         <source>Use “%1” from the USB drive</source>
         <translation>Use “%1” from the USB drive</translation>
     </message>
@@ -573,6 +604,16 @@ This can&apos;t be undone.</translation>
         <location line="+1"/>
         <source>Copying…</source>
         <translation>Copying…</translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <source>Can&apos;t use “%1”</source>
+        <translation>Can&apos;t use “%1”</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>“%1” can&apos;t be used. %2.</source>
+        <translation>“%1” can&apos;t be used. %2.</translation>
     </message>
 </context>
 <context>
@@ -2192,7 +2233,7 @@ This can&apos;t be undone.</translation>
         <translation>Back</translation>
     </message>
     <message>
-        <location line="+213"/>
+        <location line="+214"/>
         <source>Coming soon</source>
         <translation>Coming soon</translation>
     </message>
@@ -2541,6 +2582,69 @@ This can&apos;t be undone.</translation>
         <location line="+110"/>
         <source>mock services</source>
         <translation>mock services</translation>
+    </message>
+</context>
+<context>
+    <name>SoundThemeText</name>
+    <message>
+        <location filename="../qml/SoundThemeText.qml" line="+17"/>
+        <source>The theme.json file is missing</source>
+        <translation>The theme.json file is missing</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>A sound file is missing</source>
+        <translation>A sound file is missing</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>A cue is louder than allowed</source>
+        <translation>A cue is louder than allowed</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>A cue is longer than allowed</source>
+        <translation>A cue is longer than allowed</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>The folder name can&apos;t be used</source>
+        <translation>The folder name can&apos;t be used</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>A file is outside the theme folder</source>
+        <translation>A file is outside the theme folder</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>The theme.json file has a mistake</source>
+        <translation>The theme.json file has a mistake</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>The ambient loop does not fit the file</source>
+        <translation>The ambient loop does not fit the file</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>The ambient settings have a mistake</source>
+        <translation>The ambient settings have a mistake</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>A file is larger than allowed</source>
+        <translation>A file is larger than allowed</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>A sound file is not in a format that can be played</source>
+        <translation>A sound file is not in a format that can be played</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Something in the theme is not right</source>
+        <translation>Something in the theme is not right</translation>
     </message>
 </context>
 <context>

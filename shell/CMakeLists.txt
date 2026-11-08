@@ -5,6 +5,15 @@ option(RUYA_BUILD_TESTS "Build the Qt Quick tests" ON)
 # The image build turns this on (image/Containerfile): ruya-shell is then the Wayland compositor
 # (compositor/, ADR-002 option A, T-130). Needs QtWaylandCompositor, which the Windows kit lacks.
 option(RUYA_COMPOSITOR "Build ruya-shell as the Wayland compositor (Linux)" OFF)
+# The bundled sound theme (T-227, T-294) is installed as files (/usr/share/ruyaos/sounds/dreamglass) and the shell
+# reads it there, so the image build (RUYA_COMPOSITOR=ON) does not embed a second copy of its 1.1 MB. The Windows
+# build and the Linux test build keep the resource (the dev build's theme, and the fallback if the folder is missing).
+if(RUYA_COMPOSITOR)
+    set(_ruya_sounds_default OFF)
+else()
+    set(_ruya_sounds_default ON)
+endif()
+option(RUYA_SOUNDS_RESOURCE "Embed the bundled sound theme in the binary" ${_ruya_sounds_default})
 
 find_package(Qt6 6.8 REQUIRED COMPONENTS Gui Network Quick Multimedia DBus LinguistTools)
 # ScreenPower (T-202) calls QPlatformScreen::setPowerState, a private QPA header. `GuiPrivate` is a
@@ -21,7 +30,7 @@ qt_standard_project_setup(REQUIRES 6.8)
 # Everything except main() is a static QML module, so the app and the tests share it.
 qt_add_library(ruyashell STATIC)
 
-set_source_files_properties(qml/Theme.qml qml/Sfx.qml qml/Notifications.qml qml/DeviceIcons.qml qml/BluetoothText.qml qml/ProfileStatus.qml qml/DurationText.qml qml/DisplayText.qml qml/BackKey.qml qml/ThermalText.qml qml/GlareGate.qml qml/LiquidGate.qml qml/IdleClock.qml qml/themes/Themes.qml qml/themes/ThemeMath.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
+set_source_files_properties(qml/Theme.qml qml/Sfx.qml qml/Notifications.qml qml/DeviceIcons.qml qml/BluetoothText.qml qml/SoundThemeText.qml qml/ProfileStatus.qml qml/DurationText.qml qml/DisplayText.qml qml/BackKey.qml qml/ThermalText.qml qml/GlareGate.qml qml/LiquidGate.qml qml/IdleClock.qml qml/themes/Themes.qml qml/themes/ThemeMath.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 
 qt_add_qml_module(ruyashell
     URI RuyaShell
@@ -119,6 +128,7 @@ qt_add_qml_module(ruyashell
         qml/DeviceIcons.qml
         qml/BluetoothText.qml
         qml/ProfileStatus.qml
+        qml/SoundThemeText.qml
         qml/DisplayText.qml
         qml/ModeConfirm.qml
         qml/ModePicker.qml
@@ -205,23 +215,6 @@ qt_add_qml_module(ruyashell
         qml/controls/SliderRow.qml
         qml/controls/ThemeRow.qml
     RESOURCES
-        sounds/dreamglass/navigate.wav
-        sounds/dreamglass/select.wav
-        sounds/dreamglass/back.wav
-        sounds/dreamglass/error.wav
-        sounds/dreamglass/notification.wav
-        sounds/dreamglass/warning.wav
-        sounds/dreamglass/open.wav
-        sounds/dreamglass/close.wav
-        sounds/dreamglass/page.wav
-        sounds/dreamglass/volume.wav
-        sounds/dreamglass/startup.wav
-        sounds/dreamglass/toggle-on.wav
-        sounds/dreamglass/toggle-off.wav
-        sounds/dreamglass/ambient.flac
-        sounds/dreamglass/theme.json
-        sounds/dreamglass/README.md
-        sounds/dreamglass/LICENSE-Sounds.txt
         assets/glass-grain.png
         assets/wallpapers/catalog.json
         assets/wallpapers/dusk.jpg
@@ -237,6 +230,29 @@ qt_add_qml_module(ruyashell
         fonts/Inter-SemiBold.ttf
         fonts/Inter-Bold.ttf
 )
+
+if(RUYA_SOUNDS_RESOURCE)
+    qt_target_qml_sources(ruyashell
+        RESOURCES
+            sounds/dreamglass/navigate.wav
+            sounds/dreamglass/select.wav
+            sounds/dreamglass/back.wav
+            sounds/dreamglass/error.wav
+            sounds/dreamglass/notification.wav
+            sounds/dreamglass/warning.wav
+            sounds/dreamglass/open.wav
+            sounds/dreamglass/close.wav
+            sounds/dreamglass/page.wav
+            sounds/dreamglass/volume.wav
+            sounds/dreamglass/startup.wav
+            sounds/dreamglass/toggle-on.wav
+            sounds/dreamglass/toggle-off.wav
+            sounds/dreamglass/ambient.flac
+            sounds/dreamglass/theme.json
+            sounds/dreamglass/README.md
+            sounds/dreamglass/LICENSE-Sounds.txt
+    )
+endif()
 
 # Precompiled shaders (04 §3.8 liquid pill, T-205): GLSL 440 -> .qsb for every backend, embedded at
 # qrc:/qt/qml/RuyaShell/qml/shaders/, next to the QML files. Never inline GLSL in QML.

@@ -503,22 +503,37 @@ Bu geri alınamaz.</translation>
 <context>
     <name>AudioPane</name>
     <message>
-        <location filename="../qml/AudioPane.qml" line="+115"/>
+        <location filename="../qml/AudioPane.qml" line="+155"/>
         <source>Sound theme: %1</source>
         <translation>Ses teması: %1</translation>
     </message>
     <message>
-        <location line="+2"/>
-        <source>The console keeps up to %1 sound themes. Copy over one with the same name to replace it.</source>
-        <translation>Konsol en fazla %1 ses teması tutar. Aynı adlı bir temanın üzerine kopyalayarak değiştirebilirsiniz.</translation>
+        <location line="-90"/>
+        <source>The console keeps up to %1 sound themes. Delete one first, or copy over one with the same name to replace it.</source>
+        <translation>Konsol en fazla %1 ses teması tutar. Önce birini silin ya da aynı adlı bir temanın üzerine kopyalayarak değiştirin.</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+2"/>
+        <source>That sound theme has more than %1 files.</source>
+        <translation>Bu ses temasında %1 dosyadan fazlası var.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>That sound theme is larger than %1 MB.</source>
+        <translation>Bu ses teması %1 MB&apos;tan büyük.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>That sound theme can&apos;t be used. %1.</source>
+        <translation>Bu ses teması kullanılamıyor. %1.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
         <source>That sound theme could not be used.</source>
         <translation>Bu ses teması kullanılamadı.</translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+97"/>
         <source>Could not switch the audio output.</source>
         <translation>Ses çıkışı değiştirilemedi.</translation>
     </message>
@@ -563,7 +578,23 @@ Bu geri alınamaz.</translation>
         <translation>Ses teması</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+14"/>
+        <location line="+10"/>
+        <source>Delete “%1”</source>
+        <translation>“%1” temasını sil</translation>
+    </message>
+    <message>
+        <location line="-2"/>
+        <source>Delete “%1”?</source>
+        <translation>“%1” silinsin mi?</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>You can copy it again from a USB drive.</source>
+        <translation>Temayı bir USB sürücüsünden yeniden kopyalayabilirsiniz.</translation>
+    </message>
+    <message>
+        <location line="+31"/>
         <source>Use “%1” from the USB drive</source>
         <translation>USB sürücüsündeki “%1” temasını kullan</translation>
     </message>
@@ -571,6 +602,16 @@ Bu geri alınamaz.</translation>
         <location line="+1"/>
         <source>Copying…</source>
         <translation>Kopyalanıyor…</translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <source>Can&apos;t use “%1”</source>
+        <translation>“%1” kullanılamıyor</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>“%1” can&apos;t be used. %2.</source>
+        <translation>“%1” kullanılamıyor. %2.</translation>
     </message>
 </context>
 <context>
@@ -2183,7 +2224,7 @@ Bu geri alınamaz.</translation>
         <translation>Geri</translation>
     </message>
     <message>
-        <location line="+213"/>
+        <location line="+214"/>
         <source>Coming soon</source>
         <translation>Yakında</translation>
     </message>
@@ -2532,6 +2573,69 @@ Bu geri alınamaz.</translation>
         <location line="+110"/>
         <source>mock services</source>
         <translation>sahte hizmetler</translation>
+    </message>
+</context>
+<context>
+    <name>SoundThemeText</name>
+    <message>
+        <location filename="../qml/SoundThemeText.qml" line="+17"/>
+        <source>The theme.json file is missing</source>
+        <translation>theme.json dosyası yok</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>A sound file is missing</source>
+        <translation>Bir ses dosyası eksik</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>A cue is louder than allowed</source>
+        <translation>Bir arayüz sesi izin verilenden daha yüksek</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>A cue is longer than allowed</source>
+        <translation>Bir arayüz sesi izin verilenden daha uzun</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>The folder name can&apos;t be used</source>
+        <translation>Klasör adı kullanılamaz</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>A file is outside the theme folder</source>
+        <translation>Bir dosya tema klasörünün dışında</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>The theme.json file has a mistake</source>
+        <translation>theme.json dosyasında bir hata var</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>The ambient loop does not fit the file</source>
+        <translation>Ortam sesi döngüsü dosyaya uymuyor</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>The ambient settings have a mistake</source>
+        <translation>Ortam sesi ayarlarında bir hata var</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>A file is larger than allowed</source>
+        <translation>Bir dosya izin verilenden büyük</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>A sound file is not in a format that can be played</source>
+        <translation>Bir ses dosyası çalınabilecek biçimde değil</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Something in the theme is not right</source>
+        <translation>Temada bir sorun var</translation>
     </message>
 </context>
 <context>

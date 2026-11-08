@@ -4,11 +4,14 @@ import RuyaShell
 
 // Settings -> Audio: pick the output (Accept makes it the default), the master level, the
 // three channel levels (UI sounds, Ambient, Media), the Ambient switch, Mute and the sound theme
-// (T-227: the bundled one or a copy, and the themes found on a USB drive). Everything goes through the
+// (T-227: the bundled one or a copy, and the themes found on a USB drive; T-294: a copy can be deleted, and
+// a drive theme the checker refused says why). Everything goes through the
 // Audio singleton (org.ruyaos.Devices1.Audio), so changes apply live; the Bindings keep each
 // row in step with the service, e.g. after the volume keys or a hot-plugged headset.
 SettingsPane {
     id: pane
+
+    property Item overlay      // where the confirmation of "Delete" is parented
 
     // The output rows follow Audio.sinks by id (updated in place), so focus stays on a row
     // when the list is re-published, e.g. after choosing an output.
@@ -55,6 +58,20 @@ SettingsPane {
     // row when a stick comes or goes. Each is a row of its own: copying one while only browsing the
     // choice row would be a surprise.
     ListModel { id: driveModel }
+    // The toast for a copy that did not happen: the first thing wrong, in plain words (SoundThemeText).
+    function importFailure(status, problems) {
+        switch (status) {
+        case "limit":
+            return qsTr("The console keeps up to %1 sound themes. Delete one first, or copy over one with the same name to replace it.").arg(SoundThemes.installedLimit)
+        case "too-many-files":
+            return qsTr("That sound theme has more than %1 files.").arg(SoundThemes.maxCopyFiles)
+        case "too-large":
+            return qsTr("That sound theme is larger than %1 MB.").arg(SoundThemes.maxCopyMb)
+        case "invalid":
+            return qsTr("That sound theme can't be used. %1.").arg(SoundThemeText.describe(problems))
+        }
+        return qsTr("That sound theme could not be used.")
+    }
     function usbMounts() {
         return Storage.volumes.filter(v => v.mounted && v.removable && v.mountPoint.length > 0).map(v => v.mountPoint)
     }
@@ -62,9 +79,11 @@ SettingsPane {
     // The path of the drive theme being copied: only its row says "Copying…".
     property string copyingPath: ""
     function driveRowHasFocus() {
-        for (let i = 0; i < driveRepeater.count; ++i) {
-            if (driveRepeater.itemAt(i)?.activeFocus)
-                return true
+        for (const repeater of [driveRepeater, refusedRepeater]) {
+            for (let i = 0; i < repeater.count; ++i) {
+                if (repeater.itemAt(i)?.activeFocus)
+                    return true
+            }
         }
         return false
     }
@@ -76,6 +95,7 @@ SettingsPane {
     function afterDriveSync() {
         const lost = pane.driveFocusLost
         pane.driveFocusLost = false
+        pane.reflow()                    // rows came or went (drive rows, Delete): lay the column out now (SettingsPane.reflow)
         if (lost && pane.activeFocus && !pane.driveRowHasFocus() && themeRow.visible && themeRow.enabled)
             themeRow.forceActiveFocus()
         else
@@ -100,22 +120,41 @@ SettingsPane {
             if (at < 0)
                 driveModel.insert(i, { themeId: t.id, themeName: t.name, themePath: t.path })
         }
+        // The folders the checker refused: a row each, saying why.
+        const refused = SoundThemes.driveProblems
+        for (let i = refusedModel.count - 1; i >= 0; --i) {
+            const id = refusedModel.get(i).refusedId
+            if (!refused.some(p => p.id === id))
+                refusedModel.remove(i)
+        }
+        for (let i = 0; i < refused.length; ++i) {
+            const p = refused[i]
+            let at = -1
+            for (let j = 0; j < refusedModel.count; ++j) {
+                if (refusedModel.get(j).refusedId === p.id)
+                    at = j
+            }
+            if (at < 0)
+                refusedModel.insert(i, { refusedId: p.id, folder: p.folder, firstProblem: p.problems.length > 0 ? p.problems[0] : "" })
+        }
         Qt.callLater(pane.afterDriveSync)
     }
+    ListModel { id: refusedModel }
+    // A folder name from a drive, short enough for the row (it can be 64 characters).
+    function shortName(name) { return name.length > 24 ? name.slice(0, 23) + "…" : name }
     // The choice row lists the themes the console holds: the bundled one and the copies.
     readonly property var themeOptions: SoundThemes.themes.filter(t => t.kind !== "drive").map(t => ({ value: t.id, label: t.name }))
     Connections {
         target: SoundThemes
         function onThemesChanged() { pane.syncDriveThemes() }
-        function onImportFinished(status, id) {
+        function onImportFinished(status, id, problems) {
             pane.copyingPath = ""
             if (status === "ok") {
                 DeviceSettings.soundTheme = id
                 const t = SoundThemes.themes.find(e => e.id === id)
                 Notifications.show(qsTr("Sound theme: %1").arg(t ? t.name : id), "success")
             } else {
-                Notifications.show(status === "limit" ? qsTr("The console keeps up to %1 sound themes. Copy over one with the same name to replace it.").arg(SoundThemes.installedLimit)
-                                                       : qsTr("That sound theme could not be used."), "warning")
+                Notifications.show(pane.importFailure(status, problems), "warning")
             }
         }
     }
@@ -229,6 +268,44 @@ SettingsPane {
     // The theme that plays (the bundled one when the chosen one cannot be used).
     Binding { target: themeRow; property: "value"; value: SoundThemes.activeId }
 
+    // The chosen theme when it is a copy (the bundled theme cannot be deleted); Delete is offered only then.
+    readonly property var savedTheme: SoundThemes.themes.find(t => t.kind === "installed" && t.id === SoundThemes.activeId)
+    SettingRow {
+        id: deleteRow
+        objectName: "rowDeleteSoundTheme"
+        u: pane.u
+        visible: pane.savedTheme !== undefined
+        label: pane.savedTheme ? qsTr("Delete “%1”").arg(pane.savedTheme.name) : ""
+        onActivated: pane.askDelete()
+    }
+    function askDelete() {
+        const t = pane.savedTheme
+        if (!t)
+            return
+        deleteConfirm.pendingId = t.id
+        deleteConfirm.customTitle = qsTr("Delete “%1”?").arg(t.name)
+        deleteConfirm.detail = qsTr("You can copy it again from a USB drive.")
+        deleteConfirm.customConfirmName = qsTr("Delete “%1”").arg(t.name)
+        deleteConfirm.open("custom")
+    }
+    PowerConfirm {
+        id: deleteConfirm
+        objectName: "soundDeleteConfirm"
+        parent: pane.overlay
+        width: parent ? parent.width : 0
+        height: parent ? parent.height : 0
+        u: pane.u
+        property string pendingId: ""
+        onConfirmed: {
+            // The setting first (so nothing holds on to the folder), then the folder; the bundled theme plays,
+            // quietly: no cue and no toast. Focus goes to the Sound theme row, the nearest row that is left.
+            if (DeviceSettings.soundTheme === deleteConfirm.pendingId)
+                DeviceSettings.soundTheme = SoundThemes.bundledId
+            SoundThemes.removeTheme(deleteConfirm.pendingId)
+            themeRow.forceActiveFocus()
+        }
+    }
+
     Repeater {
         id: driveRepeater
         model: driveModel
@@ -246,6 +323,23 @@ SettingsPane {
                     SoundThemes.importTheme(themePath)
                 }
             }
+        }
+    }
+
+    // A theme on the drive that the checker refused: the row says why; Accept says it again as a toast (a long
+    // reason can run past the row).
+    Repeater {
+        id: refusedRepeater
+        model: refusedModel
+        SettingRow {
+            required property string refusedId
+            required property string folder
+            required property string firstProblem
+            objectName: "driveRefused_" + refusedId
+            u: pane.u
+            label: qsTr("Can't use “%1”").arg(pane.shortName(folder))
+            value: SoundThemeText.describe(firstProblem)
+            onActivated: Notifications.show(qsTr("“%1” can't be used. %2.").arg(pane.shortName(folder)).arg(SoundThemeText.describe(firstProblem)), "warning")
         }
     }
 }

@@ -19,8 +19,8 @@
 namespace {
 
 const QString UserPrefix = QStringLiteral("user:");
-constexpr int MaxCopyFiles = 100;
-constexpr qint64 MaxCopyBytes = 12LL * 1024 * 1024;       // a theme is at most 64 cues + one ambient file
+
+enum class CopyFail { None, Io, TooManyFiles, TooLarge };
 
 bool useMock()
 {
@@ -53,11 +53,17 @@ QString bundledDirectory(const QString &id)
     return QStringLiteral(":/qt/qml/RuyaShell/sounds/") + id;
 }
 
-// Copies the regular files of `from` to `to` (no links), at most MaxCopyFiles files and MaxCopyBytes.
-bool copyTree(const QString &from, const QString &to)
+// Copies the regular files of `from` to `to` (no links), at most MaxCopyFiles files and MaxCopyBytes (exactly
+// that many is fine); `why` says which limit stopped it.
+bool copyTree(const QString &from, const QString &to, CopyFail *why = nullptr)
 {
-    if (!QDir().mkpath(to))
+    CopyFail ignored = CopyFail::None;
+    CopyFail &fail = why ? *why : ignored;
+    fail = CopyFail::None;
+    if (!QDir().mkpath(to)) {
+        fail = CopyFail::Io;
         return false;
+    }
     int files = 0;
     qint64 bytes = 0;
     QDirIterator it(from, QDir::Files | QDir::NoSymLinks | QDir::NoDotAndDotDot, QDirIterator::Subdirectories);
@@ -66,12 +72,33 @@ bool copyTree(const QString &from, const QString &to)
         const QString path = it.next();
         const QFileInfo info(path);
         bytes += info.size();
-        if (++files > MaxCopyFiles || bytes > MaxCopyBytes)
+        if (++files > SoundThemes::MaxCopyFiles) {
+            fail = CopyFail::TooManyFiles;
             return false;
+        }
+        if (bytes > SoundThemes::MaxCopyBytes) {
+            fail = CopyFail::TooLarge;
+            return false;
+        }
         const QString target = to + QLatin1Char('/') + base.relativeFilePath(path);
-        if (!QDir().mkpath(QFileInfo(target).path()) || !QFile::copy(path, target))
+        if (!QDir().mkpath(QFileInfo(target).path()) || !QFile::copy(path, target)) {
+            fail = CopyFail::Io;
             return false;
+        }
     }
+    return true;
+}
+
+// Gives the theme in `folder` the name `name` in its theme.json.
+bool renameTheme(const QString &folder, const QString &name)
+{
+    QFile manifest(folder + QStringLiteral("/theme.json"));
+    if (!manifest.open(QIODevice::ReadWrite))
+        return false;
+    QJsonObject o = QJsonDocument::fromJson(manifest.readAll()).object();
+    o.insert(QStringLiteral("name"), name);
+    manifest.resize(0);
+    manifest.write(QJsonDocument(o).toJson());
     return true;
 }
 
@@ -274,21 +301,24 @@ void SoundThemes::refresh(const QStringList &mountPoints)
                         if (++looked > MaxDriveFolders)
                             break;
                         const QString path = soundsDir.filePath(folder);
-                        QString problem;
+                        QStringList why;
                         SoundTheme::Result r;
+                        const QString id = QStringLiteral("drive:") + volumes.at(i) + QLatin1Char('/') + folder;
                         if (!isFolderName(folder)) {
-                            problem = QStringLiteral("the folder name is not usable (letters, digits, . _ -)");
+                            why.append(QStringLiteral("the folder name is not usable (letters, digits, . _ -)"));
                         } else {
                             r = SoundTheme::check(path);
                             if (!r.ok)
-                                problem = r.problems.join(QStringLiteral("; "));
+                                why = r.problems;
                         }
-                        if (!problem.isEmpty()) {
+                        if (!why.isEmpty()) {
+                            const QString problem = why.join(QStringLiteral("; "));
                             qWarning("ruya-shell: sound theme '%s' on the drive ignored: %s", qPrintable(folder), qPrintable(problem));
-                            problems.append(QVariantMap{{QStringLiteral("folder"), folder}, {QStringLiteral("problem"), problem}});
+                            problems.append(QVariantMap{{QStringLiteral("id"), id}, {QStringLiteral("folder"), folder},
+                                                        {QStringLiteral("problem"), problem}, {QStringLiteral("problems"), why}});
                             continue;
                         }
-                        QVariantMap e = entry(QStringLiteral("drive:") + volumes.at(i) + QLatin1Char('/') + folder, r.manifest, QStringLiteral("drive"), path);
+                        QVariantMap e = entry(id, r.manifest, QStringLiteral("drive"), path);
                         e.insert(QStringLiteral("folder"), folder);
                         drive.append(e);
                     }
@@ -298,7 +328,13 @@ void SoundThemes::refresh(const QStringList &mountPoints)
         QMetaObject::invokeMethod(qApp, [self, serial, installed, drive, problems] {
             if (!self || serial != self->m_scanSerial)
                 return;                              // a newer refresh was asked for meanwhile
-            self->m_installed = installed;
+            // A copy deleted while the scan ran is not listed again.
+            QVariantList present;
+            for (const QVariant &e : std::as_const(installed)) {
+                if (QFileInfo(e.toMap().value(QStringLiteral("path")).toString()).isDir())
+                    present.append(e);
+            }
+            self->m_installed = present;
             // The chosen copy stays listed even if it has just been found unusable on disk.
             self->m_drive = drive;
             self->m_driveProblems = problems;
@@ -315,7 +351,7 @@ void SoundThemes::importTheme(const QString &path)
     for (const QVariant &e : std::as_const(m_drive))
         listed = listed || e.toMap().value(QStringLiteral("path")).toString() == path;
     if (!listed) {
-        QMetaObject::invokeMethod(this, [this] { emit importFinished(QStringLiteral("unknown"), QString()); }, Qt::QueuedConnection);
+        QMetaObject::invokeMethod(this, [this] { emit importFinished(QStringLiteral("unknown"), QString(), QStringList()); }, Qt::QueuedConnection);
         return;
     }
     m_importing = true;
@@ -326,6 +362,7 @@ void SoundThemes::importTheme(const QString &path)
     QPointer<SoundThemes> self(this);
     QThreadPool::globalInstance()->start([self, path, dir, folder, delay] {
         QString status = QStringLiteral("ok");
+        QStringList refused;
         SoundTheme::Result done;
         const QString dest = dir + QLatin1Char('/') + folder;
         const QString incoming = dir + QStringLiteral("/.incoming");
@@ -337,16 +374,20 @@ void SoundThemes::importTheme(const QString &path)
         const SoundTheme::Result source = SoundTheme::check(path);
         if (!source.ok) {
             status = QStringLiteral("invalid");
+            refused = source.problems;
         } else if (existing >= InstalledLimit && !QFileInfo(dest).isDir()) {
             status = QStringLiteral("limit");
         } else {
             QDir(incoming).removeRecursively();
-            if (!copyTree(path, incoming)) {
-                status = QStringLiteral("io");
+            CopyFail fail = CopyFail::None;
+            if (!copyTree(path, incoming, &fail)) {
+                status = fail == CopyFail::TooManyFiles ? QStringLiteral("too-many-files")
+                       : fail == CopyFail::TooLarge ? QStringLiteral("too-large") : QStringLiteral("io");
             } else {
                 done = SoundTheme::check(incoming);       // what was copied must pass, too
                 if (!done.ok) {
                     status = QStringLiteral("invalid");
+                    refused = done.problems;
                 } else {
                     QDir(dest).removeRecursively();
                     if (!QDir().rename(incoming, dest))
@@ -357,7 +398,7 @@ void SoundThemes::importTheme(const QString &path)
             }
             QDir(incoming).removeRecursively();
         }
-        QMetaObject::invokeMethod(qApp, [self, status, folder, dest, done] {
+        QMetaObject::invokeMethod(qApp, [self, status, folder, dest, done, refused] {
             if (!self)
                 return;
             self->m_importing = false;
@@ -376,9 +417,30 @@ void SoundThemes::importTheme(const QString &path)
                 else
                     self->rebuildThemes();
             }
-            emit self->importFinished(status, status == QLatin1String("ok") ? id : QString());
+            emit self->importFinished(status, status == QLatin1String("ok") ? id : QString(), refused);
         }, Qt::QueuedConnection);
     });
+}
+
+bool SoundThemes::removeTheme(const QString &id)
+{
+    if (!id.startsWith(UserPrefix) || !isFolderName(id.mid(UserPrefix.size())) || m_importing)
+        return false;
+    const QString path = m_dir + QLatin1Char('/') + id.mid(UserPrefix.size());
+    const QFileInfo info(path);
+    if (!info.exists())
+        return false;
+    if (m_selectedId == id)
+        setSelectedId(bundledId());                         // the bundled theme plays (no cue, no toast) and lets go of the files
+    if (info.isSymLink())
+        QFile::remove(path);                                // only the link, never what it points to
+    else
+        QDir(path).removeRecursively();
+    const bool gone = !QFileInfo::exists(path);
+    if (gone)
+        m_installed.removeIf([&id](const QVariant &e) { return e.toMap().value(QStringLiteral("id")).toString() == id; });
+    rebuildThemes();
+    return gone;
 }
 
 QVariantMap SoundThemes::check(const QString &folder)
@@ -428,19 +490,39 @@ QString SoundThemes::mockPrepareDrive()
     bool ok = QDir().mkpath(sounds);
     ok = copyTree(fixtures + QStringLiteral("/ok-full"), sounds + QStringLiteral("/Glassy")) && ok;
     ok = copyTree(fixtures + QStringLiteral("/ok-partial"), sounds + QStringLiteral("/Plain")) && ok;
-    for (const QString &name : {QStringLiteral("Glassy"), QStringLiteral("Plain")}) {      // two themes with names of their own
-        QFile manifest(sounds + QLatin1Char('/') + name + QStringLiteral("/theme.json"));
-        if (!manifest.open(QIODevice::ReadWrite)) {
-            ok = false;
-            continue;
-        }
-        QJsonObject o = QJsonDocument::fromJson(manifest.readAll()).object();
-        o.insert(QStringLiteral("name"), name);
-        manifest.resize(0);
-        manifest.write(QJsonDocument(o).toJson());
-    }
+    for (const QString &name : {QStringLiteral("Glassy"), QStringLiteral("Plain")})       // two themes with names of their own
+        ok = renameTheme(sounds + QLatin1Char('/') + name, name) && ok;
     ok = copyTree(fixtures + QStringLiteral("/bad-json"), sounds + QStringLiteral("/Broken")) && ok;
     return ok ? m_mockDrive->path() : QString();
+}
+
+bool SoundThemes::mockAddDriveTheme(const QString &folder, int files, qint64 bytes)
+{
+    if (!m_mock || !m_mockDrive || !isFolderName(folder))
+        return false;
+    const QString fixtures = fixturesDir();
+    const QString target = m_mockDrive->path() + QStringLiteral("/Ruya Stick/RuyaOS/sounds/") + folder;
+    if (fixtures.isEmpty() || !copyTree(fixtures + QStringLiteral("/ok-partial"), target) || !renameTheme(target, folder))
+        return false;
+    int have = 0;
+    qint64 size = 0;
+    QDirIterator it(target, QDir::Files | QDir::NoDotAndDotDot, QDirIterator::Subdirectories);
+    while (it.hasNext()) {
+        it.next();
+        ++have;
+        size += it.fileInfo().size();
+    }
+    if (files <= have || bytes < size)
+        return false;
+    // The extra files are empty but the first, which takes the rest of the bytes.
+    for (int i = 0; i < files - have; ++i) {
+        QFile f(target + QStringLiteral("/pad/%1.bin").arg(i, 3, 10, QLatin1Char('0')));
+        if (!QDir().mkpath(QFileInfo(f).path()) || !f.open(QIODevice::WriteOnly))
+            return false;
+        if (i == 0 && f.write(QByteArray(int(bytes - size), 'x')) != bytes - size)
+            return false;
+    }
+    return true;
 }
 
 void SoundThemes::mockSetCopyDelay(int ms)

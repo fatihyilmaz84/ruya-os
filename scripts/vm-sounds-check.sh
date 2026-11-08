@@ -35,6 +35,10 @@ if [ -x "$shell" ]; then
     out=$("$shell" --check-sound-theme "$dir" 2>&1); rc=$?
     echo "    $out"
     [ $rc -eq 0 ] && ok "the shell's checker accepts the bundled theme" || bad "the checker refused the bundled theme"
+    # T-294: the image installs the theme as files, so the binary must not carry a second copy of it as a Qt
+    # resource (RUYA_SOUNDS_RESOURCE is off when RUYA_COMPOSITOR is on). The same call on a Windows/Linux test
+    # build, which embeds it, ends 0.
+    "$shell" --check-sound-theme :/qt/qml/RuyaShell/sounds/dreamglass >/dev/null 2>&1 && bad "ruya-shell embeds a second copy of the bundled theme" || ok "no second copy of the bundled theme in the binary"
     out=$("$shell" --check-sound-theme-fixtures 2>&1); rc=$?
     [ $rc -eq 0 ] && ok "the checker fixtures end as expected ($(echo "$out" | grep -c '^ok') cases)" || { echo "$out" | grep '^FAIL'; bad "checker fixtures"; }
 

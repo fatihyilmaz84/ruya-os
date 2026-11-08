@@ -56,6 +56,7 @@ Item {
         }
 
         function cleanup() {
+            DeviceSettings.language = "en"
             IdleClock.now = () => MonotonicClock.ms()
             IdleClock.reset()
             DeviceSettings.ambientSound = true
@@ -338,6 +339,167 @@ Item {
             tryCompare(DeviceSettings, "soundTheme", "user:Glassy")
         }
 
+        // Down (else Up) until the row named has focus (the pane is long and rows come and go).
+        function goTo(name) {
+            const row = find(name)
+            for (let i = 0; i < 30 && !row.activeFocus; ++i)
+                keyClick(Qt.Key_Down)
+            for (let i = 0; i < 30 && !row.activeFocus; ++i)
+                keyClick(Qt.Key_Up)
+            tryVerify(() => row.activeFocus, 2000, name + " has focus")
+        }
+
+        function inConfirm(name) { return findChild(find("soundDeleteConfirm"), name) }
+
+        // Copies a theme of the mock stick through its row; the copy becomes the chosen theme.
+        function copyFromStick(folder) {
+            goTo("driveTheme_drive:Ruya Stick/" + folder)
+            keyClick(Qt.Key_Return)
+            tryCompare(DeviceSettings, "soundTheme", "user:" + folder, 5000)
+            tryVerify(() => find("driveTheme_drive:Ruya Stick/" + folder) === null, 3000, "the copied theme is no longer offered")
+            tryVerify(() => find("rowSoundTheme").activeFocus, 2000, "focus lands on the Sound theme row")
+        }
+
+        function test_delete_saved_theme() {
+            SoundThemes.mockPrepareDrive()
+            openAudioPane()
+            Storage.mockPlugStick()
+            tryVerify(() => find("driveTheme_drive:Ruya Stick/Glassy") !== null, 5000)
+            tryVerify(() => tc.toastTexts().includes("Drive inserted: Ruya Stick"), 5000, "the stick's own toast has come (it is not ours to count)")
+            verify(!find("rowDeleteSoundTheme").visible, "nothing to delete while the bundled theme is chosen")
+            copyFromStick("Glassy")
+            const glassyPath = SoundThemes.themes.find(t => t.id === "user:Glassy").path     // a string: an entry read from the list changes with it
+            copyFromStick("Plain")
+            tryCompare(SoundThemes, "activeId", "user:Plain")
+            compare(find("rowSoundTheme").options.length, 3, "the bundled theme and two copies")
+
+            // The row is under the choice row and names the chosen copy.
+            const del = find("rowDeleteSoundTheme")
+            tryVerify(() => del.visible, 2000, "a saved theme can be deleted")
+            compare(del.label, "Delete “Plain”")
+            keyClick(Qt.Key_Down)
+            tryVerify(() => del.activeFocus, 2000, "Down from the choice row reaches Delete")
+
+            // Back leaves the confirmation and nothing is deleted.
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("soundDeleteConfirm").shown, 2000, "the confirmation is up")
+            compare(inConfirm("powerConfirmTitle").text, "Delete “Plain”?")
+            tryVerify(() => inConfirm("powerCancel").activeFocus, 2000, "Cancel has focus first")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !find("soundDeleteConfirm").shown, 2000)
+            tryVerify(() => del.activeFocus, 2000, "Back returns to the Delete row")
+            compare(DeviceSettings.soundTheme, "user:Plain")
+            compare(find("rowSoundTheme").options.length, 3)
+
+            // Confirm: the copy is gone, the bundled theme plays, no cue other than the button's own click.
+            const plainPath = SoundThemes.themes.find(t => t.id === "user:Plain").path
+            verify(SoundThemes.check(plainPath).ok)
+            const startups = Sfx.startupCount
+            const notes = Sfx.notificationCount
+            const warns = Sfx.warningCount
+            clearToasts()
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("soundDeleteConfirm").shown, 2000)
+            tryVerify(() => inConfirm("powerCancel").activeFocus, 2000)
+            keyClick(Qt.Key_Right)
+            tryVerify(() => inConfirm("powerConfirm").activeFocus)
+            compare(inConfirm("powerConfirm").Accessible.name, "Delete “Plain”")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => !find("soundDeleteConfirm").shown, 2000)
+            tryCompare(DeviceSettings, "soundTheme", "dreamglass")
+            tryCompare(SoundThemes, "activeId", "dreamglass")
+            tryVerify(() => find("rowSoundTheme").options.length === 2, 2000, "the list shrank")
+            verify(!SoundThemes.themes.some(t => t.id === "user:Plain"))
+            verify(SoundThemes.themes.some(t => t.id === "user:Glassy"), "the other copy stays")
+            verify(!SoundThemes.check(plainPath).ok, "the folder of the deleted copy is gone")
+            verify(SoundThemes.check(glassyPath).ok, "the other copy is intact on disk")
+            tryVerify(() => !del.visible, 2000, "the bundled theme has no Delete row")
+            tryVerify(() => find("rowSoundTheme").activeFocus, 2000, "focus lands on the Sound theme row")
+            tryCompare(find("rowSoundTheme"), "currentLabel", "Dreamglass")
+            compare(Sfx.startupCount, startups, "the start-up cue is not replayed")
+            compare(Sfx.notificationCount, notes, "no toast, no notification cue: " + tc.toastTexts().join(" | "))
+            compare(Sfx.warningCount, warns)
+            compare(tc.toastTexts().length, 0, "and nothing is said")
+            tryVerify(() => find("driveTheme_drive:Ruya Stick/Plain") !== null, 3000, "the deleted theme is on the stick still and offered again")
+
+            // Back from the pane still works.
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => find("categoryList").activeFocus, 2000, "Back leaves the pane")
+        }
+
+        function test_deleting_a_copy_that_is_not_chosen_leaves_the_choice_alone() {
+            // The row only ever names the chosen copy; this is the C++ side of "a stale answer": a copy removed while
+            // another is chosen keeps the choice.
+            SoundThemes.mockPrepareDrive()
+            SoundThemes.refresh(["/run/media/mock/Ruya Stick"])
+            tryVerify(() => SoundThemes.themes.filter(t => t.kind === "drive").length === 2, 5000)
+            SoundThemes.importTheme(SoundThemes.themes.find(t => t.id.endsWith("/Plain")).path)
+            tryVerify(() => SoundThemes.themes.some(t => t.id === "user:Plain"), 5000)
+            SoundThemes.importTheme(SoundThemes.themes.find(t => t.id.endsWith("/Glassy")).path)
+            tryVerify(() => SoundThemes.themes.some(t => t.id === "user:Glassy"), 5000)
+            DeviceSettings.soundTheme = "user:Glassy"
+            tryCompare(SoundThemes, "activeId", "user:Glassy")
+            verify(SoundThemes.removeTheme("user:Plain"))
+            compare(SoundThemes.activeId, "user:Glassy")
+            verify(!SoundThemes.themes.some(t => t.id === "user:Plain"))
+        }
+
+        function test_bundled_theme_has_no_delete() {
+            openAudioPane()
+            const del = find("rowDeleteSoundTheme")
+            verify(del, "the row exists")
+            verify(!del.visible, "but is not shown for the bundled theme")
+            verify(!SoundThemes.removeTheme("dreamglass"))
+            for (let i = 0; i < 8; ++i)
+                keyClick(Qt.Key_Down)                    // to the sound theme row, the last one
+            tryVerify(() => find("rowSoundTheme").activeFocus, 2000)
+            keyClick(Qt.Key_Down)
+            verify(!del.activeFocus, "Down never lands on a hidden row")
+            verify(find("rowSoundTheme").activeFocus)
+            compare(find("rowSoundTheme").currentLabel, "Dreamglass")
+        }
+
+        function test_a_refused_drive_theme_says_why() {
+            SoundThemes.mockPrepareDrive()
+            openAudioPane()
+            Storage.mockPlugStick()
+            const row = "driveRefused_drive:Ruya Stick/Broken"
+            tryVerify(() => find(row) !== null, 5000, "the refused folder gets a row")
+            verify(!find("driveTheme_drive:Ruya Stick/Broken"), "and is not offered as a theme")
+            compare(find(row).label, "Can't use “Broken”")
+            compare(find(row).value, "The theme.json file has a mistake")
+            goTo(row)
+            clearToasts()
+            keyClick(Qt.Key_Return)
+            tryVerify(() => tc.toastTexts().includes("“Broken” can't be used. The theme.json file has a mistake."), 2000)
+            verify(find(row).activeFocus, "focus stays on the row")
+            DeviceSettings.language = "tr"
+            tryCompare(find(row), "value", "theme.json dosyasında bir hata var")
+            DeviceSettings.language = "en"
+            Storage.eject("vol-stick")
+            tryVerify(() => find(row) === null, 5000, "the row goes with the stick")
+            tryVerify(() => find("rowSoundTheme").activeFocus, 2000, "focus lands on the Sound theme row")
+        }
+
+        function test_a_theme_over_the_limits_says_how() {
+            SoundThemes.mockPrepareDrive()
+            verify(SoundThemes.mockAddDriveTheme("Heavy", SoundThemes.maxCopyFiles + 1, 200000))
+            openAudioPane()
+            Storage.mockPlugStick()
+            tryVerify(() => find("driveTheme_drive:Ruya Stick/Heavy") !== null, 5000)
+            goTo("driveTheme_drive:Ruya Stick/Heavy")
+            clearToasts()
+            keyClick(Qt.Key_Return)
+            tryVerify(() => tc.toastTexts().includes("That sound theme has more than 100 files."), 5000)
+            compare(DeviceSettings.soundTheme, "dreamglass", "nothing was chosen")
+            verify(find("driveTheme_drive:Ruya Stick/Heavy").activeFocus)
+            const pane = find("paneAudio")
+            verify(pane.importFailure("too-large", []).includes("larger than 12 MB"))
+            verify(pane.importFailure("limit", []).includes("Delete one first"), pane.importFailure("limit", []))
+            verify(pane.importFailure("limit", []).includes("copy over one with the same name"))
+            compare(pane.importFailure("invalid", ["cue 'select': peak above -3 dBFS"]), "That sound theme can't be used. A cue is louder than allowed.")
+        }
+
         function test_zz_screenshots() {
             if (!shotsDir)
                 skip("set RUYA_SHOTS_DIR to save screenshots")
@@ -351,11 +513,39 @@ Item {
             tryCompare(find("volumeOsd"), "shown", false, 5000)
             wait(800)
             grabImage(tc.shell).save(shotsDir + "/sound-settings-en.png")
-            DeviceSettings.language = "tr"
-            tryCompare(find("rowSoundTheme"), "label", "Ses teması")
+            // A saved theme: the Delete row, and its confirmation.
+            clearToasts()
+            tryCompare(find("toastList"), "count", 0, 3000)
+            copyFromStick("Glassy")
+            keyClick(Qt.Key_Down)
+            tryVerify(() => find("rowDeleteSoundTheme").activeFocus, 2000)
             wait(600)
+            grabImage(tc.shell).save(shotsDir + "/sound-delete-row-en.png")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("soundDeleteConfirm").shown, 2000)
+            wait(600)
+            grabImage(tc.shell).save(shotsDir + "/sound-delete-confirm-en.png")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !find("soundDeleteConfirm").shown, 2000)
+        }
+
+        // Settings -> Audio in Turkish, with the stick plugged in after the language was chosen: a toast keeps
+        // the language it was written in, so the "Drive inserted" toast on this shot is Turkish (T-294).
+        function test_zz_screenshots_tr() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            DeviceSettings.language = "tr"
+            Notifications.durationMs = 60000             // the toast is still up when the key presses have reached the row
+            SoundThemes.mockPrepareDrive()
+            openAudioPane()
+            Storage.mockPlugStick()
+            tryVerify(() => find("driveRefused_drive:Ruya Stick/Broken") !== null, 5000)
+            tryVerify(() => tc.toastTexts().includes("Sürücü takıldı: Ruya Stick"), 3000, "the toast is Turkish: " + tc.toastTexts().join(" | "))
+            goTo("driveRefused_drive:Ruya Stick/Broken")
+            tryCompare(find("rowSoundTheme"), "label", "Ses teması")
+            tryCompare(find("driveRefused_drive:Ruya Stick/Broken"), "value", "theme.json dosyasında bir hata var")
+            wait(800)
             grabImage(tc.shell).save(shotsDir + "/sound-settings-tr.png")
-            DeviceSettings.language = "en"
         }
     }
 }
