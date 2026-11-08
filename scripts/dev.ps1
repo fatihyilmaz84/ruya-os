@@ -398,6 +398,13 @@ function Test-Boot {
     }
 }
 
+# The rules live in scripts\lint-vm-checks.ps1 (shared with CI): the lead-run VM check scripts (T-296).
+function Test-VmChecks {
+    Step "VM check lint (vm-*.sh syntax and exec bit, host tests on canned data, ISO check refusals)"
+    & (Join-Path $PSScriptRoot "lint-vm-checks.ps1")
+    Record "VM check lint" ($LASTEXITCODE -eq 0)
+}
+
 # The rules live in scripts\lint-board.ps1 (shared with CI).
 function Test-Board {
     Step "board lint (docs\STATUS.md and the task files agree)"
@@ -646,7 +653,7 @@ switch ($Command) {
         # A stale marker must never outlive a run that did not finish green.
         Remove-Item $GreenMarker -ErrorAction SilentlyContinue
         $treeBefore = Get-TreeState
-        Test-Text; Test-Board; Test-Boot; Test-DevDocs; Do-Rust; Do-Shell
+        Test-Text; Test-Board; Test-Boot; Test-DevDocs; Test-VmChecks; Do-Rust; Do-Shell
         if ($script:Failures.Count -eq 0) { Write-GreenMarker $treeBefore (Get-TreeState) }
     }
     "shots" {

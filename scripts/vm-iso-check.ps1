@@ -32,6 +32,12 @@ function Resolve-ScratchDisk([string]$Path, [string]$Root) {
     if (-not $full.StartsWith($outDir, [System.StringComparison]::OrdinalIgnoreCase) -or $full.Length -le $outDir.Length) {
         throw "refusing -Disk '$Path' (resolves to $full): it is deleted before and after the check, so it must be a file inside $outDir"
     }
+    # T-296: the development disks live inside output\ too, and the check wipes its target.
+    foreach ($dev in "qcow2\disk.qcow2", "qcow2\work.qcow2") {
+        if ($full -ieq (Join-Path $outDir $dev)) {
+            throw "refusing -Disk '$Path' (resolves to $full): that is a development disk (output\$dev), and this check erases its disk; use a scratch file such as output\iso-test.qcow2"
+        }
+    }
     return $full
 }
 $diskFull = Resolve-ScratchDisk $Disk $Repo

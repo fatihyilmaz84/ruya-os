@@ -48,6 +48,8 @@ jobs:
         run: pwsh -NoProfile -File scripts/lint-tests.ps1
       - name: Developer guide lint
         run: pwsh -NoProfile -File scripts/lint-dev-docs.ps1
+      - name: VM check lint
+        run: pwsh -NoProfile -File scripts/lint-vm-checks.ps1
 
   services:
     runs-on: ubuntu-24.04

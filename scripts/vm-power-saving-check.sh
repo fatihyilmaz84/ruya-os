@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Checks the power-saving parts of T-202 inside a running VM, as root:
-#   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-power-saving-check.sh root@127.0.0.1:/root/
+#   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-power-saving-check.sh scripts/vm-inject-key.py root@127.0.0.1:/root/
 #   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-power-saving-check.sh [service|audio|timeline|all]
 #
 #   service   Devices1.Bluetooth.ReportIdle exists and answers "ok" (also with Bluetooth off, as in the VM)
@@ -10,9 +10,13 @@
 #             journal: screen saver at ~10 s, display off at ~30 s (and whether DPMS worked: "dpms" or
 #             "black frame only"), then removes the drop-in and restarts the shell again. Sleep needs
 #             /usr/share/ruyaos/suspend-verified (T-166) and is not exercised here.
-#             The wake is a host-side step: send a key afterwards (scripts/vm-keys.ps1 / vm-inject-key.py)
-#             and expect "display on" in the journal; the screen must come back on the first key and the
-#             page below must not have moved.
+#             T-296: it then wakes the display itself with a uinput key (scripts/vm-inject-key.py must be
+#             copied next to this script) and checks that the display came back AND that frames are produced
+#             again: "display on" in the journal, a CRTC active in /sys/kernel/debug/dri/*/state, dpms On,
+#             no page flip / commit error in the journal, and at least one delivered vblank event (a page
+#             flip, counted through the drm_vblank_event_delivered tracepoint in tracefs) in the 4 s after
+#             the key. Without tracefs or debugfs the part prints "UNVERIFIED:" for what it could not read.
+#             That the page below did not move is not checked here (tst_power_saving.qml does).
 # Hardware (the Dell, not this script): the DualSense disconnects after the Controllers-turn-off time and
 # reconnects on a button press; a TV's re-sync time after display off is recorded by hand.
 set -u
@@ -60,12 +64,73 @@ timeline_check() {
     echo "$log"
     echo "$log" | grep -q 'display off' && ok "the display was switched off" || bad "no 'display off' line after 45 s"
     echo "$log" | grep -q 'display off (dpms)' && ok "DPMS was used (eglfs_kms)" || echo "NOTE: no DPMS ('black frame only' or none): the picture goes black, the monitor stays on"
+    if echo "$log" | grep -q 'display off'; then wake_check "$start"; else bad "no wake check: the display never went off"; fi
     rm -f "$dropin/zz-idle-divisor.conf"
     rmdir "$dropin" 2>/dev/null
     systemctl daemon-reload
     systemctl restart "$unit"
     echo "(drop-in removed, shell restarted)"
-    echo "Now send a key from the host and expect 'ruya-shell: display on' (journalctl -b -o cat | grep 'display')."
+}
+
+# T-296: tracefs, where the kernel counts the page flips (completed vblank events) the compositor gets.
+trace_dir() {
+    local d
+    for d in /sys/kernel/tracing /sys/kernel/debug/tracing; do
+        [ -w "$d/trace" ] && [ -e "$d/events/drm/drm_vblank_event_delivered/enable" ] && { echo "$d"; return 0; }
+    done
+    return 1
+}
+# frames_since_reset <tracedir>: the number of delivered vblank events (page flips of any CRTC) since frames_reset.
+frames_reset() { : > "$1/trace"; }
+frames_since_reset() { grep -c 'drm_vblank_event_delivered' "$1/trace" || true; }
+
+# The display came back on after "display off": frames must be produced again, not only the journal line.
+# DPMS off/on with atomic modesetting can leave the CRTC inactive or make every page flip fail, with the
+# shell logging "display on" and the screen staying black. Needs vm-inject-key.py next to this script
+# (a uinput keyboard in the guest: the same input path as a controller, no host step).
+wake_check() {
+    local since="$1" td off_frames on_frames wake errs
+    echo "--- wake: a key brings the display back, and frames are produced again"
+    if [ ! -f /root/vm-inject-key.py ]; then
+        bad "/root/vm-inject-key.py is missing: scp scripts/vm-inject-key.py next to this script (the wake cannot be tested)"
+        return
+    fi
+    if td="$(trace_dir)"; then
+        echo 1 > "$td/events/drm/drm_vblank_event_delivered/enable"
+        frames_reset "$td"
+        sleep 3
+        off_frames="$(frames_since_reset "$td")"
+        echo "page flips in 3 s while the display is off: $off_frames (a dark screen runs no animation)"
+    fi
+    echo "dpms while off: $(cat /sys/class/drm/card*-*/dpms 2>/dev/null | tr '\n' ' ')(informational: the atomic path may not touch the legacy property)"
+    [ -n "${td:-}" ] && frames_reset "$td"
+    wake="$(date +%s)"
+    python3 /root/vm-inject-key.py home || bad "the key could not be injected (is /dev/uinput there?)"
+    sleep 4
+    log="$(journalctl -b -q -o cat --since "@$wake" | grep -E 'ruya-shell: display' || true)"
+    echo "$log"
+    echo "$log" | grep -q 'display on' && ok "the first key switched the display on" || bad "no 'display on' line after the key"
+    if grep -qs '^[[:space:]]*active=1' /sys/kernel/debug/dri/*/state; then
+        ok "a CRTC is active again (/sys/kernel/debug/dri/*/state)"
+    elif ls /sys/kernel/debug/dri/*/state >/dev/null 2>&1; then
+        bad "no CRTC is active after the display came back on"
+    else
+        echo "UNVERIFIED: no /sys/kernel/debug/dri/*/state (debugfs not mounted): the CRTC state was not read"
+    fi
+    for c in /sys/class/drm/card*-*; do
+        [ "$(cat "$c/status" 2>/dev/null)" = connected ] && [ -r "$c/dpms" ] || continue
+        [ "$(cat "$c/dpms")" = On ] && ok "$(basename "$c"): dpms is On" || bad "$(basename "$c"): dpms is $(cat "$c/dpms") after the wake"
+    done
+    errs="$(journalctl -b -q -o cat --since "@$since" | grep -iE 'pageflip|page flip|atomic commit|drmModeAtomicCommit|failed to (flip|commit)' | head -3 || true)"
+    [ -z "$errs" ] && ok "no page flip or commit error in the journal" || bad "page flip or commit errors in the journal: $errs"
+    if [ -n "${td:-}" ]; then
+        on_frames="$(frames_since_reset "$td")"
+        echo 0 > "$td/events/drm/drm_vblank_event_delivered/enable"
+        echo "page flips in the 4 s after the wake key: $on_frames"
+        [ "$on_frames" -ge 1 ] && ok "frames are produced again after the wake ($on_frames page flips in 4 s)" || bad "no page flip in 4 s after the wake: the display is on but nothing is drawn"
+    else
+        echo "UNVERIFIED: no tracefs with drm_vblank_event_delivered (is the kernel built with it, is tracefs mounted?): frames were not counted"
+    fi
 }
 
 case "$part" in
