@@ -1,6 +1,6 @@
 # T-300 — Bluetooth service follow-ups: `bonded` and the device's own name in ListDevices, Batteries re-announce, one format-character list
 
-Status: todo · Phase: 2 · Depends: — · Area: api, services (ruya-devices bluetooth, battery, pairing, families), shell (backend, mock, client) · Size: M · Owner: builder
+Status: in-progress · Phase: 2 · Depends: — · Area: api, services (ruya-devices bluetooth, battery, pairing, families), shell (backend, mock, client) · Size: M · Owner: builder
 
 ## Goal
 The service tells the shell whether a paired device is actually bonded and what the device calls itself, announces a controller's battery as soon as it bonds even if UPower listed it earlier, and the QML and Rust format-character lists cannot drift apart. This is the base of T-301's "Pair again".
