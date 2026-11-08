@@ -63,7 +63,7 @@ audio_check() {
         return
     fi
     # PipeWire runs in the ruya-shell user's session.
-    runuser -u ruya-shell -- env "XDG_RUNTIME_DIR=/run/user/$uid" pw-cat -p --rate 48000 --channels 2 --format s16 /dev/zero >/dev/null 2>&1 &
+    runuser -u ruya-shell -- env "XDG_RUNTIME_DIR=/run/user/$uid" pw-cat -p --raw --rate 48000 --channels 2 --format s16 /dev/zero >/dev/null 2>&1 &
     player=$!
     if wait_playing true 8; then
         ok "a running output stream makes Playing true"

@@ -1,6 +1,6 @@
 # T-293 — Power saving follow-ups: monotonic idle clock, honest Sleep row, audio inhibit, wake input gap, backdrop pause
 
-Status: in-progress · Phase: 2 · Depends: — · Area: shell (IdleClock, PowerSavingPane, Backdrop, power/audio backends), services (ruya-devices audio) · Size: M · Owner: builder
+Status: done · Phase: 2 · Depends: — · Area: shell (IdleClock, PowerSavingPane, Backdrop, power/audio backends), services (ruya-devices audio) · Size: M · Owner: builder
 
 ## Goal
 The idle clock survives a wall-clock change and a resume, the Power saving pane is honest about sleep and the screen, a paused stream no longer keeps the console awake, a wake from a dark screen does not eat the first button press as a command, and the animated backdrop stops costing GPU while an app is in front.

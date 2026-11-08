@@ -6,8 +6,8 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 |---|---|---|---|
 | [T-285](tasks/T-285-hint-bar-and-focus-follow-ups.md) | Hint bar and focus follow-ups: Accept hints, keyboard hints, Tab, tests that could not fail | todo | — |
 | [T-286](tasks/T-286-outside-text-plain-and-wallpaper-copy-edges.md) | Names from outside are drawn as plain text everywhere; wallpaper copy edge cases | in-progress | — |
+| [T-313](tasks/T-313-ambient-bed-must-not-hold-the-screen-saver.md) | The shell's own ambient sound must not count as "something is playing" (the saver never starts on Home) | todo | — |
 | [T-312](tasks/T-312-long-outside-names-capped-and-elided.md) | Long names from outside are capped and elided: profile card, status cluster, PIN pad title, Dim row caption | todo | T-286 |
-| [T-293](tasks/T-293-power-saving-follow-ups.md) | Power saving follow-ups: monotonic idle clock, honest Sleep row, audio inhibit, wake input gap, backdrop pause | in-progress | — |
 | [T-292](tasks/T-292-activity-page-follow-ups.md) | Activity page follow-ups: refresh only when visible, paging, retry, icons, focus order | todo | — |
 | [T-294](tasks/T-294-sound-theme-follow-ups.md) | Sound theme follow-ups: delete a saved theme, import limits tested, clear refusal message, one ambient copy | todo | — |
 | [T-295](tasks/T-295-time-zone-follow-ups.md) | Time zone follow-ups: say it when Setup cannot set the zone, type to filter the chooser | todo | — |

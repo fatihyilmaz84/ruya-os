@@ -238,7 +238,7 @@ impl<P: PipeWire> Audio<P> {
         self.muted
     }
 
-    /// Something is playing on an output (an output node is "running").
+    /// Something is playing on an output (an output stream is "running" and not corked).
     pub fn playing(&self) -> bool {
         self.playing
     }
