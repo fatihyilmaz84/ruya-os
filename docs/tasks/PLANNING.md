@@ -24,6 +24,7 @@ Any of these is true (builders check at session start and stop if they find noth
 
 - A builder who never saw the conversation can finish it from the file and the linked docs alone.
 - Every acceptance criterion is observable by a named test or screenshot ("works", "looks good", "is robust" are not criteria).
+- **Visual-only tasks** (card look, colours, spacing): one test per behaviour (a token applied, a state that changes the look, geometry at a real caller's size: screenshots passed 2.2:1 "16:9" cards, T-113) plus the screenshots, not a test per tier/theme pair.
 - It names the reference pattern to copy (`shell/src/network`, `ruya-profiles`, `PinPad.qml`, …) and what is out of scope, especially the tempting next step.
 - **UI tasks** link the `04-design-system.md` sections and components they use, and say which tokens or components (if any) the task may add. A screen that needs a component not in `04` §5 gets a design step first (lead or a `design:` task), not an improvised one.
 - **UI tasks also carry a "UX" acceptance line** (owner, 2026-11-07): "UX: from every new state Back leaves; focus lands sensibly after open/close/error; readable at 10 ft; the Outcome has a `UX notes:` line". The UX and design reviewers (`.claude/agents/`) check it on the branch.
@@ -36,7 +37,6 @@ Any of these is true (builders check at session start and stop if they find noth
 - **Don't freeze contracts in task text.** Write "extend the contract if needed" (contracts are drafts until release).
 - **Service-facing work gets a VM criterion** naming the check (`smoke-test.ps1`, a `scripts/vm-*` script, a VM screenshot): a task that changes a service, a unit, the image or a D-Bus client is not verified by mocks. Pure mock-only UI tasks don't need one. Label it **"VM (this task)"** when the risk is in the image (packaging, units, bus policy, hardening) or **"VM (lead run)"** for service or shell logic (owner, 2026-11-03; root `CLAUDE.md`, Host).
 - **Prefer visible-behaviour criteria** over signatures: state what the user sees, leave the signatures to the builder.
-- **Geometry gets a property test** with the size a real caller sets (aspect ratio, ring outside a filled pill): two builders' screenshot reviews passed 2.2:1 "16:9" cards and an invisible focus ring (T-113, T-146).
 - **Host-only is a phase, not a plan.** When the VM is unavailable, keep real-service tasks queued behind the blocker and fill the gap with contract + mock + UI tasks, but each contract task should name its service task so the mock can't drift unnoticed.
 - **VM checks parse JSON, never key order.** `busctl` text output lists `a{sv}` keys in service-defined order (a Rust `HashMap` reorders them per process): use `busctl --json=short` and python3 (`vm-update-check.sh`), or the check fails on a correct service (T-188).
-- **A test that cannot fail is the commonest review finding** (T-167, T-176, T-184: a wait on an undefined QML property is `wait(NaN)`, i.e. no wait). A task's criteria name the revert that must turn each new test red; planned as a gate check in T-189.
+- **A test that cannot fail is the commonest review finding** (T-167, T-176, T-184: a wait on an undefined QML property is `wait(NaN)`, i.e. no wait). A task's criteria name the revert that must turn each new test red (`revert-check.ps1`).
