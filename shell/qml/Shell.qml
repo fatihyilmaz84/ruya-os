@@ -318,9 +318,58 @@ FocusScope {
                && root.Window.window.visibility !== Window.Minimized
     }
 
+    // The focus fell out of the page: nothing, the shell itself or the window's content item holds it,
+    // so a page's keys (Back above all) go nowhere. Seen on the Dell (2026-11-09): neither the pad's B
+    // nor Esc left the Activity page, only the Guide overlay did, and closing it gave the focus back.
+    // The cause is not found yet: a Back that reaches the shell is logged with the item that held the
+    // focus (`journalctl -b _UID=<ruya-shell> | grep "reached the shell"`), and it still leaves the page.
+    property bool focusLostTest: false      // tests: pretend the focus is lost
+    readonly property bool focusLost: {
+        if (focusLostTest)
+            return true
+        if (!signedIn || !pageOpen || focusedApp || systemPanel.open || setupActive)
+            return false
+        const f = root.Window.window ? root.Window.window.activeFocusItem : null
+        return f === null || f === root || f === root.Window.window.contentItem
+    }
+
+    // Restores the focus as soon as it is lost, not only when a key shows it (a row that held the
+    // focus was hidden by a failed read: the whole focus chain fell out to the shell, T-356).
+    Connections {
+        target: root.Window.window
+        ignoreUnknownSignals: true
+        function onActiveFocusItemChanged() {
+            if (root.focusLost)
+                Qt.callLater(root.refocusIfLost)
+        }
+    }
+    function refocusIfLost() {
+        if (!focusLost || focusLostTest)
+            return
+        console.warn("ruya-shell: the focus fell out of the page, restoring it")
+        focusCurrent()
+    }
+
+    // A key that nothing below the shell took. Returns true when it was used.
+    function orphanKey(key, isAutoRepeat) {
+        if (!BackKey.isBackOrBackspace(key))
+            return false
+        const f = root.Window.window ? root.Window.window.activeFocusItem : null
+        console.warn("ruya-shell: Back reached the shell; focus on", f ? (f.objectName || String(f)) : "nothing",
+                     "page", currentPage, "lost", focusLost)
+        if (!focusLost || isAutoRepeat || !pageOpen)
+            return false
+        focusCurrent()
+        Sfx.back()
+        closePage()
+        return true
+    }
+
     Keys.onPressed: event => {
         if (signedIn && !systemPanel.open && isGuideKey(event.key)) {
             guideDown(event.isAutoRepeat)
+            event.accepted = true
+        } else if (orphanKey(event.key, event.isAutoRepeat)) {
             event.accepted = true
         }
     }

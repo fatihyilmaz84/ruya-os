@@ -440,6 +440,74 @@ Item {
             tryVerify(() => find("detailActivity").activeFocus, 2000, "focus is back on the button")
         }
 
+        // Found on the Dell (2026-11-09): app page -> "Your activity" of an app with no stats at all,
+        // then neither the pad's B nor Esc left the page (the Guide overlay did, and closing it
+        // gave the keys back): the page must own the focus whatever the data is.
+        function test_the_app_page_to_a_game_with_no_stats_and_back() {
+            Usage.mockSetData("p2", [], today)
+            startShell()
+            signInAda()
+            tryVerify(() => Store.catalogue.length > 0)
+            tc.shell.openPage("appDetail", { appId: chess })
+            tryCompare(tc.shell, "currentPage", "appDetail")
+            tryVerify(() => find("detailPrimary") && find("detailPrimary").activeFocus, 2000)
+            keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Down)
+            verify(find("detailActivity").activeFocus)
+            keyClick(Qt.Key_Return)
+            tryCompare(tc.shell, "currentPage", "activityGame")
+            tryVerify(() => find("gameMessage").visible)
+            tryVerify(() => find("gameBody").activeFocus, 2000, "the page owns the focus although it has no rows")
+            keyClick(Qt.Key_Escape)
+            tryCompare(tc.shell, "currentPage", "appDetail")
+            tryVerify(() => find("detailActivity").activeFocus, 2000, "focus is back on the button")
+        }
+
+        // The same path while the usage service answers late or with an error: the page has no rows
+        // at all, and Back must still leave it.
+        function test_the_game_page_leaves_with_back_while_the_usage_service_is_slow_or_failing() {
+            Usage.mockSetData("p2", sessions(), today)
+            startShell()
+            signInAda()
+            tryVerify(() => Store.catalogue.length > 0)
+            Usage.mockRefreshDelayed(400)
+            tc.shell.openPage("appDetail", { appId: chess })
+            tryCompare(tc.shell, "currentPage", "appDetail")
+            tryVerify(() => find("detailPrimary") && find("detailPrimary").activeFocus, 2000)
+            keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Return)
+            tryCompare(tc.shell, "currentPage", "activityGame")
+            tryVerify(() => find("gameBody").activeFocus, 2000, "the page owns the focus before the data arrives")
+            keyClick(Qt.Key_Escape)
+            tryCompare(tc.shell, "currentPage", "appDetail")
+            tryVerify(() => find("detailActivity").activeFocus, 2000, "focus is back on the button")
+            Usage.mockFailNextRefresh("failed")
+            keyClick(Qt.Key_Return)
+            tryCompare(tc.shell, "currentPage", "activityGame")
+            tryVerify(() => find("gameBody").activeFocus, 2000, "and after a failed read")
+            keyClick(Qt.Key_Escape)
+            tryCompare(tc.shell, "currentPage", "appDetail")
+        }
+
+        // The focus can fall out of a page (seen on the Dell): a Back that then reaches the shell
+        // itself still leaves the page, and the focus is given back to it.
+        function test_a_back_that_reaches_the_shell_leaves_the_page_when_the_focus_is_lost() {
+            openActivity(sessions())
+            tc.shell.openPage("activityGame", { appId: chess })
+            tryCompare(tc.shell, "currentPage", "activityGame")
+            tryVerify(() => find("gameBody").activeFocus, 2000)
+            verify(!tc.shell.orphanKey(Qt.Key_Escape, false), "with the focus in the page the shell does not act")
+            compare(tc.shell.currentPage, "activityGame")
+            tc.shell.focusLostTest = true
+            verify(!tc.shell.orphanKey(Qt.Key_Escape, true), "a held key does not pop pages")
+            verify(!tc.shell.orphanKey(Qt.Key_Down, false), "only Back is taken")
+            compare(tc.shell.currentPage, "activityGame")
+            verify(tc.shell.orphanKey(Qt.Key_Escape, false))
+            tryCompare(tc.shell, "currentPage", "activity")
+            tc.shell.focusLostTest = false
+        }
+
         function test_a_game_never_played_says_so() {
             openActivity(sessions())
             tc.shell.openPage("activityGame", { appId: "org.example.Editor" })
