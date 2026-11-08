@@ -187,7 +187,9 @@ qt_add_qml_module(ruyashell
         qml/ThermalNotice.qml
         qml/ThermalPolicy.qml
         qml/SettingsPane.qml
-        qml/ProfilesPane.qml
+        qml/ProfilePaneBase.qml
+        qml/MyProfilePane.qml
+        qml/ManageProfilesPane.qml
         qml/ProfileAddFlow.qml
         qml/ProfileManageFlow.qml
         qml/ChangePinFlow.qml

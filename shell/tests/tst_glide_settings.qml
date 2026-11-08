@@ -100,7 +100,7 @@ Item {
         function test_rows_keep_their_ring_and_hide_their_fill_under_the_highlight() {
             const glide = find("categoryGlide")
             tryVerify(() => glide.active)
-            const row = find("category_profiles")
+            const row = find("category_myprofile")
             tryVerify(() => row.color.a === 0)
             compare(row.border.width > 0, true, "the ring stays on the row")
             compare(Qt.colorEqual(row.border.color, Theme.focusRing), true)

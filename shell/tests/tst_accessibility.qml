@@ -438,7 +438,9 @@ Item {
             keyClick(Qt.Key_Return)
             tryCompare(tc.shell, "currentPage", "settings")
             tryVerify(() => find("categoryList") && find("categoryList").activeFocus, 2000)
-            compare(find("categoryList").currentIndex, 0, "Profiles is the first category")
+            compare(find("categoryList").currentIndex, 0, "My profile is the first category")
+            keyClick(Qt.Key_Down)                        // Manage profiles (an admin has it second)
+            compare(find("categoryList").currentIndex, 1, "Manage profiles is the second category")
             keyClick(Qt.Key_Right)
             tryVerify(() => find("paneProfiles").activeFocus, 2000, "the pane has focus")
             tryVerify(() => find("paneProfiles").focusableRows().some(r => r.activeFocus), 2000)
@@ -529,7 +531,7 @@ Item {
             // Rename: the keyboard.
             keyClick(Qt.Key_Up)
             keyClick(Qt.Key_Return)
-            const entry = find("profileRenameEntry")
+            const entry = find("profilesRenameEntry")
             tryVerify(() => entry.shown && entry.activeFocus, 2000, "the rename keyboard opens")
             verifyNamesChange(namesAlong(Qt.Key_Right, 4, "rename keyboard"), "rename keyboard")
             // Back deletes a letter of "Ada" first and cancels once the field is empty.
@@ -541,7 +543,7 @@ Item {
             keyClick(Qt.Key_Down)
             tryVerify(() => find("rowDelete").activeFocus)
             keyClick(Qt.Key_Return)
-            const confirm = find("profileDeleteConfirm")
+            const confirm = find("profilesDeleteConfirm")
             tryVerify(() => confirm.shown, 2000, "the delete confirmation opens")
             const cancel = findChild(confirm, "powerCancel")
             tryVerify(() => cancel.activeFocus, 2000, "Cancel has focus")

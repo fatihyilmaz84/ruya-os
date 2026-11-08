@@ -12,15 +12,40 @@ Page {
     title: qsTr("Settings")
 
     // Keys only: the list's model must not change with the language (that would reset its
-    // currentIndex); the labels are bindings through labelFor().
-    readonly property var categories: [
-        { key: "profiles" }, { key: "network" }, { key: "bluetooth" }, { key: "display" },
-        { key: "audio" }, { key: "storage" }, { key: "accessibility" }, { key: "power" }, { key: "system" }, { key: "about" },
-    ]
+    // currentIndex); the labels are bindings through labelFor(). "Manage profiles" (key
+    // "profiles") is listed for an admin only (T-315): for anyone else it is not in the list at
+    // all, so Up/Down and the nav keys never reach it. Only a change of the signed-in profile's
+    // role changes the list (refreshCategories), and the selected category stays selected.
+    readonly property bool showManage: (Profiles.active.role ?? "") === "admin"
+    // Assigned, never bound: the list changes only in refreshCategories().
+    property var categories: buildCategories(false)
+    property bool refreshing: false
+    function buildCategories(withManage) {
+        const keys = ["myprofile"]
+        if (withManage)
+            keys.push("profiles")
+        keys.push("network", "bluetooth", "display", "audio", "storage", "accessibility", "power", "system", "about")
+        return keys.map(k => ({ key: k }))
+    }
+    // The signed-in profile became (or stopped being) an admin, or Settings just opened: rebuild
+    // the list, keep the selected category when it is still there, and if it was Manage profiles
+    // (gone now) leave its pane: focus goes to the category list, which shows My profile.
+    function refreshCategories() {
+        const key = current.key
+        const hadPaneFocus = currentPane !== null && currentPane.activeFocus
+        refreshing = true
+        categories = buildCategories(showManage)
+        categoryList.currentIndex = Math.max(0, categories.findIndex(c => c.key === key))
+        refreshing = false
+        if (hadPaneFocus && current.key !== key)
+            leavePane()
+    }
+    onShowManageChanged: refreshCategories()
 
     function labelFor(key) {
         switch (key) {
-        case "profiles": return qsTr("Profiles")
+        case "myprofile": return qsTr("My profile")
+        case "profiles": return qsTr("Manage profiles")
         case "network": return qsTr("Network")
         case "bluetooth": return qsTr("Bluetooth & controllers")
         case "display": return qsTr("Display & motion")
@@ -33,8 +58,9 @@ Page {
         }
         return key
     }
-    readonly property var current: categories[categoryList.currentIndex]
-    readonly property SettingsPane currentPane: current.key === "profiles" ? profilesPane
+    readonly property var current: categories[categoryList.currentIndex] ?? categories[0]
+    readonly property SettingsPane currentPane: current.key === "myprofile" ? myProfilePane
+                                              : current.key === "profiles" ? manageProfilesPane
                                               : current.key === "display" ? displayPane
                                               : current.key === "network" ? networkPane
                                               : current.key === "bluetooth" ? bluetoothPane
@@ -54,6 +80,7 @@ Page {
     // `params.category` ("display") opens on that category, e.g. the Display pane after the shell
     // restarted on a new screen mode (T-198).
     Component.onCompleted: {
+        refreshCategories()
         const wanted = (params ?? {}).category ?? ""
         for (let i = 0; i < categories.length; ++i) {
             if (categories[i].key === wanted)
@@ -93,7 +120,7 @@ Page {
         clip: contentHeight > height + 0.5
         model: page.categories
 
-        onCurrentIndexChanged: { Sfx.navigate(); positionViewAtIndex(currentIndex, ListView.Contain) }
+        onCurrentIndexChanged: { if (!page.refreshing) Sfx.navigate(); positionViewAtIndex(currentIndex, ListView.Contain) }
         onHeightChanged: positionViewAtIndex(currentIndex, ListView.Contain)
         Keys.onReturnPressed: page.enterPane()
         Keys.onEnterPressed: page.enterPane()
@@ -159,8 +186,19 @@ Page {
         id: paneArea
         anchors { left: categoryList.right; leftMargin: Theme.spaceXxl * page.u; right: parent.right; top: parent.top; bottom: parent.bottom }
 
-        ProfilesPane {
-            id: profilesPane
+        MyProfilePane {
+            id: myProfilePane
+            objectName: "paneMyProfile"
+            anchors.fill: parent
+            u: page.u
+            overlay: page.overlay
+            visible: page.current.key === "myprofile"
+            enabled: visible
+            onExitRequested: page.leavePane()
+            onActivityRequested: page.openRequested("activity", ({}))
+        }
+        ManageProfilesPane {
+            id: manageProfilesPane
             objectName: "paneProfiles"
             anchors.fill: parent
             u: page.u
@@ -168,7 +206,6 @@ Page {
             visible: page.current.key === "profiles"
             enabled: visible
             onExitRequested: page.leavePane()
-            onActivityRequested: page.openRequested("activity", ({}))
         }
         DisplayPane {
             id: displayPane

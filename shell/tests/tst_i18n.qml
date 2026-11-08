@@ -99,9 +99,9 @@ Item {
             tryCompare(tc.shell, "currentPage", "settings")
             const list = find("categoryList")
             tryVerify(() => list.activeFocus)
-            for (let i = 0; i < 20 && list.currentIndex < 8; ++i)   // System
+            for (let i = 0; i < 20 && list.currentItem.objectName !== "category_system"; ++i)   // System; an admin has Manage profiles too, so select by key
                 keyClick(Qt.Key_Down)
-            compare(list.currentIndex, 8)
+            compare(list.currentItem.objectName, "category_system")
             keyClick(Qt.Key_Return)
             const row = find("rowLanguage")
             tryVerify(() => row.activeFocus, 2000, "the language row has focus")

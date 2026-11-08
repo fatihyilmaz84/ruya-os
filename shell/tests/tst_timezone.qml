@@ -24,7 +24,6 @@ Item {
         when: windowShown
 
         property Shell shell: null
-        readonly property int systemIndex: 8
         // 2027-01-15 08:00:00 UTC (a winter instant, so no daylight saving in any zone used here).
         readonly property real instant: 1800000000000
 
@@ -177,9 +176,9 @@ Item {
             tryCompare(tc.shell, "currentPage", "settings")
             const list = find("categoryList")
             tryVerify(() => list.activeFocus, 2000, "category list has focus")
-            for (let i = 0; i < 20 && list.currentIndex < systemIndex; ++i)
+            for (let i = 0; i < 20 && list.currentItem.objectName !== "category_system"; ++i)   // an admin has Manage profiles too: select by key
                 keyClick(Qt.Key_Down)
-            compare(list.currentIndex, systemIndex)
+            compare(list.currentItem.objectName, "category_system")
             keyClick(Qt.Key_Right)
             tryVerify(() => find("paneSystem").activeFocus, 2000, "System pane has focus")
         }
