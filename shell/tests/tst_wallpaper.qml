@@ -748,6 +748,16 @@ Item {
             DeviceSettings.wallpaperDim = 0.6
             tryCompare(row, "shownValue", 60)
             compare(findChild(row, "value").text, "60%", "an owner dim above the rule shows as set")
+
+            // The rule can ask for more than the row's scale (up to 85 % against 60): the fill stops at the track.
+            const fill = findChild(row, "valueFill")
+            verify(fill !== null, "the bar has a named fill")
+            verify(fill.width <= fill.parent.width, "the fill is " + fill.width + " of a track " + fill.parent.width)
+            row.shownValue = 85
+            compare(findChild(row, "value").text, "85%")
+            compare(fill.width, fill.parent.width, "a shown value past `to` fills the track and no more")
+            row.shownValue = -20
+            compare(fill.width, 0, "and one under `from` fills nothing")
         }
 
         // True when no UTF-16 unit of the string is half of a pair.

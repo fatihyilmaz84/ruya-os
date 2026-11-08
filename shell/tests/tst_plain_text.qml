@@ -201,6 +201,20 @@ Item {
             expectPlain(find("btDev_bt-pad-old"), tc.hostile, 1, "Bluetooth device row", ["label"])
         }
 
+        // The confirmation that names the device: its title, and the confirm button's label ("Forget <name>").
+        function test_forget_confirmation_names_the_device() {
+            Bluetooth.mockSetName("bt-pad-old", tc.hostile)
+            openSettings()
+            keyClick(Qt.Key_Down)                        // Network
+            keyClick(Qt.Key_Down)                        // Bluetooth & controllers
+            keyClick(Qt.Key_Right)
+            tryVerify(() => find("btForget_bt-pad-old") !== null, 3000, "the Forget row")
+            find("btForget_bt-pad-old").forceActiveFocus()
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("btForgetConfirm").shown, 2000, "the confirmation opens")
+            expectPlain(find("btForgetConfirm"), "Forget " + tc.hostile, 2, "Forget confirmation", ["powerConfirmLabel", "powerConfirmTitle"])
+        }
+
         // --- storage: a volume's label in Settings -> Storage and in the "drive connected" toast ---
 
         function test_volume_label() {
@@ -260,6 +274,16 @@ Item {
             tryVerify(() => find("detailPrimary") !== null, 2000)
             // The page title, the developer line and the description.
             expectPlain(find("page_appDetail"), tc.hostile, 3, "App detail")
+        }
+
+        // Permission ids come from the service; one the shell has no words for is shown as it is.
+        function test_permission_ids_from_the_service() {
+            Store.mockSetAppText("org.example.Chess", "Open Chess", "Chess.", "Community", [tc.hostile])
+            tryVerify(() => Store.app("org.example.Chess").permissions.indexOf(tc.hostile) >= 0, 3000)
+            tc.shell.openPage("appDetail", { appId: "org.example.Chess" })
+            tryCompare(tc.shell, "currentPage", "appDetail")
+            tryCompare(find("page_appDetail"), "detailsReady", true)
+            expectPlain(find("page_appDetail"), tc.hostile, 2, "App detail permissions", ["detailUpdateAdds"])
         }
 
         function test_store_search_message() {

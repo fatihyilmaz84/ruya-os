@@ -79,7 +79,7 @@ void MockStoreBackend::setArtDir(const QString &dir)
 }
 
 void MockStoreBackend::setAppText(const QString &id, const QString &name, const QString &summary,
-                                  const QString &developer)
+                                  const QString &developer, const QStringList &permissions)
 {
     const int at = indexOf(id);
     if (at < 0)
@@ -88,6 +88,11 @@ void MockStoreBackend::setAppText(const QString &id, const QString &name, const 
     m_apps[at].summary = summary;
     m_apps[at].description = summary;
     m_apps[at].developer = developer;
+    if (!permissions.isEmpty()) {
+        m_apps[at].permissions = permissions;
+        if (m_apps[at].updateAvailable)
+            m_apps[at].newPermissions = permissions;
+    }
     emit installedChanged();
     emit catalogChanged();
 }

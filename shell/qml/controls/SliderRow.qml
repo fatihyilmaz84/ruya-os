@@ -47,7 +47,8 @@ SettingControl {
         radius: height / 2
         color: Theme.glass
         Rectangle {
-            width: row.to > row.from ? parent.width * (row.shownValue - row.from) / (row.to - row.from) : 0
+            objectName: "valueFill"
+            width: row.to > row.from ? parent.width * Math.max(0, Math.min(1, (row.shownValue - row.from) / (row.to - row.from))) : 0
             height: parent.height
             radius: parent.radius
             color: Theme.text

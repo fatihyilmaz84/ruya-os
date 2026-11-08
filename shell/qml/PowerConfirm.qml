@@ -184,6 +184,7 @@ FocusScope {
                     width: Math.min(implicitWidth, parent.width - 2 * dialog.buttonPad)
                     elide: Text.ElideRight
                     horizontalAlignment: Text.AlignHCenter
+                    textFormat: Text.PlainText      // "Forget %1" / "Delete %1": a device's or profile's own name
                     text: dialog.confirmName
                     color: Theme.text
                     font.pixelSize: Theme.typeHeadline * dialog.u

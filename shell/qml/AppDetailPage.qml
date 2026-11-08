@@ -439,6 +439,7 @@ Page {
                 }
 
                 Text {
+                    textFormat: Text.PlainText      // an id the service sent shows raw
                     text: page.permissionText(perm.modelData)
                     color: perm.risky ? Theme.warningText : Theme.text
                     font.pixelSize: Theme.typeCaption * page.u
@@ -450,6 +451,7 @@ Page {
             objectName: "detailUpdateAdds"
             visible: page.newPermissions.length > 0
             width: parent.width
+            textFormat: Text.PlainText
             text: qsTr("The update adds: %1").arg(page.newPermissions.map(p => page.permissionText(p)).join(", "))
             color: page.addsHighRisk ? Theme.warningText : Theme.text
             font.pixelSize: Theme.typeCaption * page.u
