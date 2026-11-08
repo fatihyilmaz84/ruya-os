@@ -27,6 +27,8 @@ FocusScope {
     signal downRequested()
     signal stepRequested(int direction)
     signal backRequested()
+    // Right at the last pill (Left at the first under a mirrored layout): the status cluster is there (T-301).
+    signal edgeRequested()
 
     function label(key) {
         switch (key) {
@@ -145,6 +147,8 @@ FocusScope {
             const next = currentIndex + (event.key === Qt.Key_Right ? step : -step)
             if (next >= 0 && next < keys.length)
                 currentIndex = next
+            else if (next >= keys.length && !nav.LayoutMirroring.enabled)
+                nav.edgeRequested()
             event.accepted = true
         } else if (event.key === Qt.Key_Down) {
             nav.downRequested()

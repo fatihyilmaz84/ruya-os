@@ -50,6 +50,8 @@ public:
     void setFamily(const QString &id, const QString &family);
     // Paired without the keys kept (BlueZ's Bonded: no), or bonded.
     void setBonded(const QString &id, bool bonded);
+    // A device that does not answer a scan (it is not in pairing mode): never listed by one.
+    void setSilent(const QString &id, bool silent);
     // The service restarts: pads announced before are void.
     void serviceRestart() { emit gamepadsReset(); }
     // A game controller appears or goes away (USB or Bluetooth), announced a moment later like the
@@ -77,6 +79,7 @@ private:
         QString pairResult = QStringLiteral("ok");
         bool listed = false;
         bool reconnect = false; // was connected when Bluetooth went off
+        bool silent = false;    // a scan does not find it
     };
 
     void initState();

@@ -107,9 +107,13 @@ Item {
             Batteries.mockPopulate()
             for (const size of [[1280, 720], [1920, 1080], [3840, 2160]]) {
                 openShell(size[0], size[1])
-                tryVerify(() => find("batteryMore").visible, 2000, "three chips and a +N")
+                tryVerify(() => find("batteryMore").visible, 2000, "chips and an \"N more\" chip")
                 checkCluster(size, "five devices", ["WH-1000XM4", "Ruya Keyboard"])
-                compare(chipIds().length, 3, "three chips and a +N for 'Ada' at " + size[1] + "p")
+                // The "N more" chip carries words since T-301, so it is wider than the old "+N" and two chips
+                // (not three) fit beside it for a short name at every size.
+                compare(chipIds().length, 2, "two chips and an \"N more\" chip for 'Ada' at " + size[1] + "p")
+                compare(find("batteryMore").count, 3)
+                compare(findChild(find("batteryMore"), "batteryMoreLabel").text, "3 more", "with its words")
                 tc.shell.destroy()
                 wait(50)
             }
@@ -139,7 +143,7 @@ Item {
                     if (name === names[4] && size[1] === 720) {
                         verify(find("activeProfileName").truncated, "the 32-character name elides at 720p")
                         verify(chipsShown < 3 || find("batteryMore").visible, "fewer chips or a +N: " + chipsShown)
-                        compare(chipsShown + parseInt(find("batteryMore").text.substring(1)), 4, "every device is a chip or in the +N")
+                        compare(chipsShown + find("batteryMore").count, 4, "every device is a chip or in the +N")
                     }
                     tc.shell.destroy()
                     wait(50)
@@ -164,6 +168,160 @@ Item {
             Batteries.mockSet("pad-late", 62, "discharging", "controller", "Wireless Controller", "playstation")
             tryVerify(() => chipGlyph("pad-late") === "pad_playstation", 2000, "the chip got the PlayStation pad after the late bond: " + chipGlyph("pad-late"))
             compare(DeviceIcons.iconFor("controller", "playstation"), "pad_playstation")
+            tc.shell.destroy()
+            wait(50)
+        }
+
+        function cleanup() {
+            Display.setUiScale(0)               // a test that enlarged the UI puts it back
+            DeviceSettings.language = "en"
+            tryCompare(Theme, "uiScale", 1)
+        }
+
+        // T-301: the three slots go to pads and headsets before mice and keyboards, each group lowest first;
+        // the ones left out are named by the "N more" chip.
+        function test_pads_rank_above_mice() {
+            Batteries.mockClear()
+            Batteries.mockSet("mouse", 5, "discharging", "mouse", "Travel Mouse")
+            Batteries.mockSet("kb", 9, "discharging", "keyboard", "Ruya Keyboard")
+            Batteries.mockSet("padA", 90, "discharging", "controller", "Pad A")
+            Batteries.mockSet("padB", 80, "discharging", "controller", "Pad B")
+            Batteries.mockSet("hs", 70, "discharging", "headset", "WH-1000XM4")
+            openShell(1920, 1080)
+            tryVerify(() => find("batteryMore").visible, 2000, "two devices do not fit the three slots")
+            // As many as fit (two beside the "N more" chip for 'Ada'), the lowest pad or headset first,
+            // although the mouse and the keyboard are lower still.
+            compare(chipIds(), ["batteryChip_hs", "batteryChip_padB"],
+                    "pads and headsets, lowest first, although the mouse and the keyboard are lower")
+            compare(find("batteryMore").count, 3)
+            const name = find("batteryMore").Accessible.name
+            verify(name.indexOf("Travel Mouse") >= 0 && name.indexOf("Ruya Keyboard") >= 0, "the chip names them: " + name)
+            // With only mice and keyboards the lowest still come first.
+            Batteries.mockClear()
+            Batteries.mockSet("m1", 40, "discharging", "mouse", "Mouse One")
+            Batteries.mockSet("k1", 20, "discharging", "keyboard", "Keyboard One")
+            tryVerify(() => chipIds().join() === "batteryChip_k1,batteryChip_m1", 2000, "no pad or headset: lowest first: " + chipIds())
+            tc.shell.destroy()
+            wait(50)
+        }
+
+        // T-301: with larger text the "N more" chip still fits beside the shortest profile name and the pill keeps
+        // its gap to the nav. The accessibility text scale (04 section 1) is not built yet, so the nearest thing
+        // is the UI size: at 125 % the words no longer fit beside a battery chip, so one chip and the "+N" show
+        // (from 150 % up the nav leaves the cluster less than its parts need; no layout gives that back).
+        function test_plus_n_fits_at_text_scale_2() {
+            Batteries.mockPopulate()
+            const seen = []
+            for (const percent of [100, 125]) {
+                Display.setUiScale(percent === 100 ? 0 : percent)
+                tryCompare(Theme, "uiScale", percent / 100)
+                for (const size of [[1280, 720], [1920, 1080], [3840, 2160]]) {
+                    openShell(size[0], size[1])
+                    tryVerify(() => find("batteryMore").visible, 2000, "an \"N more\" chip at " + percent + " %")
+                    const what = percent + " % at " + size[1] + "p"
+                    checkCluster(size, what, ["WH-1000XM4", "Ruya Keyboard"])
+                    const row = find("batteryStatus")
+                    const more = find("batteryMore")
+                    verify(more.x + more.width <= row.width + 0.5, what + ": the chip sits inside the group: " + more.x + "+" + more.width + " in " + row.width)
+                    const label = findChild(more, "batteryMoreLabel")
+                    verify(label.width >= label.implicitWidth - 0.5, what + ": the label is not squeezed")
+                    compare(chipIds().length + more.count, 5, what + ": every device is a chip or behind the chip")
+                    compare(label.text === "+" + more.count, find("statusGlass").moreCompact, what + ": \"+N\" only when the words are dropped")
+                    if (percent === 100)
+                        compare(find("statusGlass").moreCompact, false, what + ": the words fit at the normal size")
+                    seen.push(chipIds().length)
+                    tc.shell.destroy()
+                    wait(50)
+                }
+            }
+            verify(Math.max(seen[3], seen[4], seen[5]) <= Math.min(seen[0], seen[1], seen[2]), "larger text never shows more chips: " + seen)
+
+        }
+
+        // A window too narrow for the words: the chip shrinks to "+N" (what the cluster showed before the words), keeps its
+        // meaning in the accessible name, and the pill still clears the nav; wide enough, the words come back.
+        function test_the_chip_shrinks_to_plus_n_in_a_narrow_room() {
+            Batteries.mockPopulate()
+            const compact = []
+            for (const width of [1290, 1320, 1400, 1920]) {
+                openShell(width, 1080)
+                tryVerify(() => find("batteryMore").visible, 2000, "the chip at " + width)
+                checkCluster([width, 1080], "a " + width + " px wide window", ["WH-1000XM4", "Ruya Keyboard"])
+                const more = find("batteryMore")
+                const label = findChild(more, "batteryMoreLabel")
+                compact.push(find("statusGlass").moreCompact)
+                compare(label.text, find("statusGlass").moreCompact ? "+" + more.count : more.count + " more")
+                compare(findChild(more, "batteryMoreFront").visible, !find("statusGlass").moreCompact, "the glyph goes with the words")
+                tc.shell.destroy()
+                wait(50)
+            }
+            compare(compact[0], true, "narrow: +N")
+            compare(compact[compact.length - 1], false, "wide: the words")
+        }
+
+        function openMore() {
+            keyClick(Qt.Key_Up)                                    // the nav, on Home
+            tryVerify(() => find("sectionNav").activeFocus, 2000, "the nav has focus")
+            for (let i = 0; i < 4; ++i)
+                keyClick(Qt.Key_Right)                             // ... to the last pill
+            tryCompare(find("sectionNav"), "currentIndex", 4)
+            keyClick(Qt.Key_Right)                                 // ... and on to the cluster
+            tryVerify(() => find("batteryMore").activeFocus, 2000, "Right from the last pill reaches the +N chip")
+        }
+
+        function test_plus_n_opens_the_hidden_list() {
+            Batteries.mockPopulate()
+            openShell(1920, 1080)
+            tryVerify(() => find("batteryMore").visible, 2000)
+            const more = find("batteryMore")
+            const list = find("batteryList")
+            compare(list.shown, false)
+            openMore()
+            keyClick(Qt.Key_Return)
+            tryVerify(() => list.shown, 2000, "Accept opens the list")
+            tryVerify(() => find("batteryListClose").activeFocus, 2000, "Close has focus")
+            const hidden = Batteries.chips.concat(Batteries.more).filter(d => chipIds().indexOf("batteryChip_" + d.id) < 0)
+            compare(hidden.length, more.count, "the list is the hidden devices")
+            for (const d of hidden) {
+                const row = find("batteryListRow_" + d.id)
+                verify(row !== null, d.name + " is listed")
+                const chip = find("batteryListChip_" + d.id)
+                verify(chip.Accessible.name.indexOf(d.percent + " percent") >= 0, d.name + " shows " + d.percent + ": " + chip.Accessible.name)
+                verify(chip.Accessible.name.indexOf(d.name) >= 0)
+            }
+            compare(find("hintBar").hints[0].text, "Close", "the hint bar says what B does")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !list.shown, 2000, "Back closes")
+            tryVerify(() => more.activeFocus, 2000, "focus returns to the chip")
+            keyClick(Qt.Key_Return)                                // Accept opens, Accept on Close closes
+            tryVerify(() => list.shown)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => !list.shown && more.activeFocus, 2000, "Accept on Close closes too, focus on the chip")
+            // The chip leads back: Left to the last pill, and Right again; Down into the page; Back leaves Home alone.
+            keyClick(Qt.Key_Left)
+            tryVerify(() => find("sectionNav").activeFocus && find("sectionNav").currentIndex === 4, 2000, "Left: the last pill")
+            keyClick(Qt.Key_Right)
+            tryVerify(() => more.activeFocus)
+            keyClick(Qt.Key_Down)
+            tryVerify(() => find("homePlay").activeFocus, 2000, "Down: the page")
+            tc.shell.destroy()
+            wait(50)
+        }
+
+        // The list is a picture of the live batteries: a hidden device that drops out closes it, and
+        // focus does not end up nowhere when the chip itself goes away.
+        function test_the_list_and_the_chip_follow_the_batteries() {
+            Batteries.mockPopulate()
+            openShell(1920, 1080)
+            tryVerify(() => find("batteryMore").visible, 2000)
+            openMore()
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("batteryList").shown)
+            Batteries.mockClear()
+            Batteries.mockSet("pad-1", 62, "discharging", "controller", "Pad One")
+            tryVerify(() => !find("batteryList").shown, 2000, "nothing is hidden any more: the list closed")
+            tryVerify(() => !find("batteryMore").visible, 2000)
+            tryVerify(() => find("sectionNav").activeFocus, 2000, "focus moved to the nav, not nowhere")
             tc.shell.destroy()
             wait(50)
         }
@@ -221,6 +379,42 @@ Item {
             grabImage(find("statusGlass")).save(shotsDir + "/battery-1080-daylight-crop.png")
             tc.shell.destroy()
             DeviceSettings.theme = before
+        }
+
+        // T-301: the "N more" chip with its focus ring and the list it opens, in English and Turkish, and
+        // the cluster at larger UI sizes.
+        function test_zz_more_screenshots() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            Batteries.mockPopulate()
+            for (const lang of ["en", "tr"]) {
+                DeviceSettings.language = lang
+                openShell(1920, 1080)
+                tryVerify(() => find("batteryMore").visible, 2000)
+                openMore()
+                wait(500)
+                grabImage(tc.shell).save(shotsDir + "/battery-more-" + lang + ".png")
+                grabImage(find("statusGlass")).save(shotsDir + "/battery-more-" + lang + "-crop.png")
+                keyClick(Qt.Key_Return)
+                tryVerify(() => find("batteryList").shown, 2000)
+                wait(600)
+                grabImage(tc.shell).save(shotsDir + "/battery-list-" + lang + ".png")
+                keyClick(Qt.Key_Escape)
+                tryVerify(() => !find("batteryList").shown, 2000)
+                tc.shell.destroy()
+                wait(50)
+            }
+            DeviceSettings.language = "en"
+            for (const percent of [150, 200]) {
+                Display.setUiScale(percent)
+                tryCompare(Theme, "uiScale", percent / 100)
+                openShell(1920, 1080)
+                wait(500)
+                grabImage(tc.shell).save(shotsDir + "/battery-scale-" + percent + ".png")
+                grabImage(find("statusGlass")).save(shotsDir + "/battery-scale-" + percent + "-crop.png")
+                tc.shell.destroy()
+                wait(50)
+            }
         }
     }
 }

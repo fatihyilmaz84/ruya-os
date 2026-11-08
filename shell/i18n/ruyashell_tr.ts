@@ -592,9 +592,46 @@ Bu geri alınamaz.</translation>
     </message>
 </context>
 <context>
+    <name>BatteryListModal</name>
+    <message>
+        <location filename="../qml/BatteryListModal.qml" line="+20"/>
+        <location line="+110"/>
+        <location line="+10"/>
+        <source>Close</source>
+        <translation>Kapat</translation>
+    </message>
+    <message>
+        <location line="-59"/>
+        <source>More devices</source>
+        <translation>Diğer cihazlar</translation>
+    </message>
+</context>
+<context>
+    <name>BatteryMore</name>
+    <message numerus="yes">
+        <location filename="../qml/BatteryMore.qml" line="+34"/>
+        <source>%n more device(s) with a battery: %1</source>
+        <translation>
+            <numerusform>Pili olan %n cihaz daha: %1</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>%1 %2 percent</source>
+        <translation>%1 yüzde %2</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+45"/>
+        <source>%n more</source>
+        <translation>
+            <numerusform>%n tane daha</numerusform>
+        </translation>
+    </message>
+</context>
+<context>
     <name>BluetoothPane</name>
     <message>
-        <location filename="../qml/BluetoothPane.qml" line="+86"/>
+        <location filename="../qml/BluetoothPane.qml" line="+88"/>
         <source>Forget %1?</source>
         <translation>%1 unutulsun mu?</translation>
     </message>
@@ -609,43 +646,12 @@ Bu geri alınamaz.</translation>
         <translation>Kontrolcü adı</translation>
     </message>
     <message>
-        <location line="+6"/>
-        <source>Pairing failed. Put the device in pairing mode and try again.</source>
-        <translation>Eşleştirme başarısız. Cihazı eşleştirme moduna alıp yeniden deneyin.</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>The device did not answer.</source>
-        <translation>Cihaz yanıt vermedi.</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <location line="+44"/>
+        <location line="+93"/>
         <source>Bluetooth is off.</source>
         <translation>Bluetooth kapalı.</translation>
     </message>
     <message>
-        <location line="-43"/>
-        <source>That device is no longer available.</source>
-        <translation>Bu cihaz artık kullanılamıyor.</translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>Could not pair the device.</source>
-        <translation>Cihaz eşleştirilemedi.</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Could not connect.</source>
-        <translation>Bağlanılamadı.</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Could not disconnect.</source>
-        <translation>Bağlantı kesilemedi.</translation>
-    </message>
-    <message>
-        <location line="+5"/>
+        <location line="-45"/>
         <source>Pairing…</source>
         <translation>Eşleştiriliyor…</translation>
     </message>
@@ -655,7 +661,7 @@ Bu geri alınamaz.</translation>
         <translation>Eşleşmedi</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+4"/>
         <source>Reconnects automatically</source>
         <translation>Kendiliğinden yeniden bağlanır</translation>
     </message>
@@ -665,27 +671,42 @@ Bu geri alınamaz.</translation>
         <translation>Bağlı</translation>
     </message>
     <message>
-        <location line="+80"/>
+        <location line="+95"/>
         <source>Pair a new controller</source>
         <translation>Yeni kontrolcü eşleştir</translation>
     </message>
     <message>
-        <location line="+73"/>
+        <location line="+74"/>
+        <source>Pair again %1</source>
+        <translation>%1 cihazını yeniden eşleştir</translation>
+    </message>
+    <message>
+        <location line="+15"/>
         <source>Rename %1</source>
         <translation>%1 adını değiştir</translation>
     </message>
     <message>
-        <location line="-154"/>
+        <location line="-185"/>
         <source>Paired</source>
         <translation>Eşleşti</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="-14"/>
+        <source>Could not find it. Put the device in pairing mode and try again.</source>
+        <translation>Bulunamadı. Cihazı eşleştirme moduna alıp yeniden deneyin.</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Not fully paired</source>
+        <translation>Tam eşleştirilmedi</translation>
+    </message>
+    <message>
+        <location line="+5"/>
         <source>Battery %1%</source>
         <translation>Pil %1%</translation>
     </message>
     <message>
-        <location line="+28"/>
+        <location line="+37"/>
         <source>Could not start looking for controllers.</source>
         <translation>Kontrolcü aramaya başlanamadı.</translation>
     </message>
@@ -705,7 +726,7 @@ Bu geri alınamaz.</translation>
         <translation>Kontrolcü olmayan bir cihaz yok sayıldı.</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+16"/>
         <source>Bluetooth</source>
         <translation>Bluetooth</translation>
     </message>
@@ -725,10 +746,68 @@ Bu geri alınamaz.</translation>
         <translation>Taranıyor…</translation>
     </message>
     <message>
-        <location line="-102"/>
-        <location line="+197"/>
+        <location line="-149"/>
+        <location line="+260"/>
         <source>Forget %1</source>
         <translation>%1 cihazını unut</translation>
+    </message>
+</context>
+<context>
+    <name>BluetoothText</name>
+    <message>
+        <location filename="../qml/BluetoothText.qml" line="+20"/>
+        <source>Pairing failed. Put the controller in pairing mode again.</source>
+        <translation>Eşleştirme başarısız. Kontrolcüyü yeniden eşleştirme kipine alın.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Pairing failed. Put the device in pairing mode and try again.</source>
+        <translation>Eşleştirme başarısız. Cihazı eşleştirme moduna alıp yeniden deneyin.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>The controller did not answer.</source>
+        <translation>Kontrolcü yanıt vermedi.</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>The device did not answer.</source>
+        <translation>Cihaz yanıt vermedi.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Bluetooth is off.</source>
+        <translation>Bluetooth kapalı.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>The controller went away.</source>
+        <translation>Kontrolcü kayboldu.</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>That device is no longer available.</source>
+        <translation>Bu cihaz artık kullanılamıyor.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Could not pair the controller.</source>
+        <translation>Kontrolcü eşleştirilemedi.</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Could not pair the device.</source>
+        <translation>Cihaz eşleştirilemedi.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Could not disconnect.</source>
+        <translation>Bağlantı kesilemedi.</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Could not connect.</source>
+        <translation>Bağlanılamadı.</translation>
     </message>
 </context>
 <context>
@@ -830,32 +909,7 @@ Bu geri alınamaz.</translation>
         <translation>Seç</translation>
     </message>
     <message>
-        <location line="+53"/>
-        <source>Pairing failed. Put the controller in pairing mode again.</source>
-        <translation>Eşleştirme başarısız. Kontrolcüyü yeniden eşleştirme kipine alın.</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>The controller did not answer.</source>
-        <translation>Kontrolcü yanıt vermedi.</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Bluetooth is off.</source>
-        <translation>Bluetooth kapalı.</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>The controller went away.</source>
-        <translation>Kontrolcü kayboldu.</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>Could not pair the controller.</source>
-        <translation>Kontrolcü eşleştirilemedi.</translation>
-    </message>
-    <message>
-        <location line="+104"/>
+        <location line="+157"/>
         <location line="+54"/>
         <source>Try your controller</source>
         <translation>Kontrolcünüzü deneyin</translation>
@@ -1014,7 +1068,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>ControllerToasts</name>
     <message>
-        <location filename="../qml/ControllerToasts.qml" line="+88"/>
+        <location filename="../qml/ControllerToasts.qml" line="+120"/>
         <source>%1 connected · battery %2%</source>
         <translation>%1 bağlandı · pil %2%</translation>
     </message>
@@ -2025,7 +2079,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>SectionNav</name>
     <message>
-        <location filename="../qml/SectionNav.qml" line="+33"/>
+        <location filename="../qml/SectionNav.qml" line="+35"/>
         <source>Home</source>
         <translation>Ana sayfa</translation>
     </message>
@@ -2327,25 +2381,13 @@ Bu geri alınamaz.</translation>
         <source>Audio output: %1</source>
         <translation>Ses çıkışı: %1</translation>
     </message>
-    <message numerus="yes">
-        <location line="+258"/>
-        <source>%n more device(s) with a battery: %1</source>
-        <translation>
-            <numerusform>Pili olan %n cihaz daha: %1</numerusform>
-        </translation>
-    </message>
     <message>
-        <location line="+1"/>
-        <source>%1 %2 percent</source>
-        <translation>%1 yüzde %2</translation>
-    </message>
-    <message>
-        <location line="+592"/>
+        <location line="+921"/>
         <source>Power</source>
         <translation>Güç</translation>
     </message>
     <message>
-        <location line="-843"/>
+        <location line="-913"/>
         <source>Update ready. Restart to finish.</source>
         <translation>Güncelleme hazır. Bitirmek için yeniden başlat.</translation>
     </message>
@@ -2370,7 +2412,7 @@ Bu geri alınamaz.</translation>
         <translation>Duvar kağıdı yüklenemedi</translation>
     </message>
     <message>
-        <location line="+266"/>
+        <location line="+309"/>
         <source>Continue playing</source>
         <translation>Oynamaya devam et</translation>
     </message>
@@ -2411,7 +2453,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 başlatılıyor…</translation>
     </message>
     <message>
-        <location line="+267"/>
+        <location line="+294"/>
         <location line="+12"/>
         <location line="+3"/>
         <source>Select</source>

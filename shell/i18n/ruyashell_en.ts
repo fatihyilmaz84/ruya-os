@@ -594,9 +594,48 @@ This can&apos;t be undone.</translation>
     </message>
 </context>
 <context>
+    <name>BatteryListModal</name>
+    <message>
+        <location filename="../qml/BatteryListModal.qml" line="+20"/>
+        <location line="+110"/>
+        <location line="+10"/>
+        <source>Close</source>
+        <translation>Close</translation>
+    </message>
+    <message>
+        <location line="-59"/>
+        <source>More devices</source>
+        <translation>More devices</translation>
+    </message>
+</context>
+<context>
+    <name>BatteryMore</name>
+    <message numerus="yes">
+        <location filename="../qml/BatteryMore.qml" line="+34"/>
+        <source>%n more device(s) with a battery: %1</source>
+        <translation>
+            <numerusform>%n more device with a battery: %1</numerusform>
+            <numerusform>%n more devices with a battery: %1</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>%1 %2 percent</source>
+        <translation>%1 %2 percent</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+45"/>
+        <source>%n more</source>
+        <translation>
+            <numerusform>%n more</numerusform>
+            <numerusform>%n more</numerusform>
+        </translation>
+    </message>
+</context>
+<context>
     <name>BluetoothPane</name>
     <message>
-        <location filename="../qml/BluetoothPane.qml" line="+86"/>
+        <location filename="../qml/BluetoothPane.qml" line="+88"/>
         <source>Forget %1?</source>
         <translation>Forget %1?</translation>
     </message>
@@ -611,43 +650,12 @@ This can&apos;t be undone.</translation>
         <translation>Controller name</translation>
     </message>
     <message>
-        <location line="+6"/>
-        <source>Pairing failed. Put the device in pairing mode and try again.</source>
-        <translation>Pairing failed. Put the device in pairing mode and try again.</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>The device did not answer.</source>
-        <translation>The device did not answer.</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <location line="+44"/>
+        <location line="+93"/>
         <source>Bluetooth is off.</source>
         <translation>Bluetooth is off.</translation>
     </message>
     <message>
-        <location line="-43"/>
-        <source>That device is no longer available.</source>
-        <translation>That device is no longer available.</translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>Could not pair the device.</source>
-        <translation>Could not pair the device.</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Could not connect.</source>
-        <translation>Could not connect.</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Could not disconnect.</source>
-        <translation>Could not disconnect.</translation>
-    </message>
-    <message>
-        <location line="+5"/>
+        <location line="-45"/>
         <source>Pairing…</source>
         <translation>Pairing…</translation>
     </message>
@@ -657,7 +665,7 @@ This can&apos;t be undone.</translation>
         <translation>Not paired</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+4"/>
         <source>Reconnects automatically</source>
         <translation>Reconnects automatically</translation>
     </message>
@@ -667,27 +675,42 @@ This can&apos;t be undone.</translation>
         <translation>Connected</translation>
     </message>
     <message>
-        <location line="+80"/>
+        <location line="+95"/>
         <source>Pair a new controller</source>
         <translation>Pair a new controller</translation>
     </message>
     <message>
-        <location line="+73"/>
+        <location line="+74"/>
+        <source>Pair again %1</source>
+        <translation>Pair again %1</translation>
+    </message>
+    <message>
+        <location line="+15"/>
         <source>Rename %1</source>
         <translation>Rename %1</translation>
     </message>
     <message>
-        <location line="-154"/>
+        <location line="-185"/>
         <source>Paired</source>
         <translation>Paired</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="-14"/>
+        <source>Could not find it. Put the device in pairing mode and try again.</source>
+        <translation>Could not find it. Put the device in pairing mode and try again.</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Not fully paired</source>
+        <translation>Not fully paired</translation>
+    </message>
+    <message>
+        <location line="+5"/>
         <source>Battery %1%</source>
         <translation>Battery %1%</translation>
     </message>
     <message>
-        <location line="+28"/>
+        <location line="+37"/>
         <source>Could not start looking for controllers.</source>
         <translation>Could not start looking for controllers.</translation>
     </message>
@@ -707,7 +730,7 @@ This can&apos;t be undone.</translation>
         <translation>A device that is not a controller was ignored.</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+16"/>
         <source>Bluetooth</source>
         <translation>Bluetooth</translation>
     </message>
@@ -727,10 +750,68 @@ This can&apos;t be undone.</translation>
         <translation>Scanning…</translation>
     </message>
     <message>
-        <location line="-102"/>
-        <location line="+197"/>
+        <location line="-149"/>
+        <location line="+260"/>
         <source>Forget %1</source>
         <translation>Forget %1</translation>
+    </message>
+</context>
+<context>
+    <name>BluetoothText</name>
+    <message>
+        <location filename="../qml/BluetoothText.qml" line="+20"/>
+        <source>Pairing failed. Put the controller in pairing mode again.</source>
+        <translation>Pairing failed. Put the controller in pairing mode again.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Pairing failed. Put the device in pairing mode and try again.</source>
+        <translation>Pairing failed. Put the device in pairing mode and try again.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>The controller did not answer.</source>
+        <translation>The controller did not answer.</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>The device did not answer.</source>
+        <translation>The device did not answer.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Bluetooth is off.</source>
+        <translation>Bluetooth is off.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>The controller went away.</source>
+        <translation>The controller went away.</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>That device is no longer available.</source>
+        <translation>That device is no longer available.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Could not pair the controller.</source>
+        <translation>Could not pair the controller.</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Could not pair the device.</source>
+        <translation>Could not pair the device.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Could not disconnect.</source>
+        <translation>Could not disconnect.</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Could not connect.</source>
+        <translation>Could not connect.</translation>
     </message>
 </context>
 <context>
@@ -832,32 +913,7 @@ This can&apos;t be undone.</translation>
         <translation>Select</translation>
     </message>
     <message>
-        <location line="+53"/>
-        <source>Pairing failed. Put the controller in pairing mode again.</source>
-        <translation>Pairing failed. Put the controller in pairing mode again.</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>The controller did not answer.</source>
-        <translation>The controller did not answer.</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Bluetooth is off.</source>
-        <translation>Bluetooth is off.</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>The controller went away.</source>
-        <translation>The controller went away.</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>Could not pair the controller.</source>
-        <translation>Could not pair the controller.</translation>
-    </message>
-    <message>
-        <location line="+104"/>
+        <location line="+157"/>
         <location line="+54"/>
         <source>Try your controller</source>
         <translation>Try your controller</translation>
@@ -1016,7 +1072,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>ControllerToasts</name>
     <message>
-        <location filename="../qml/ControllerToasts.qml" line="+88"/>
+        <location filename="../qml/ControllerToasts.qml" line="+120"/>
         <source>%1 connected · battery %2%</source>
         <translation>%1 connected · battery %2%</translation>
     </message>
@@ -2032,7 +2088,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>SectionNav</name>
     <message>
-        <location filename="../qml/SectionNav.qml" line="+33"/>
+        <location filename="../qml/SectionNav.qml" line="+35"/>
         <source>Home</source>
         <translation>Home</translation>
     </message>
@@ -2334,26 +2390,13 @@ This can&apos;t be undone.</translation>
         <source>Audio output: %1</source>
         <translation>Audio output: %1</translation>
     </message>
-    <message numerus="yes">
-        <location line="+258"/>
-        <source>%n more device(s) with a battery: %1</source>
-        <translation>
-            <numerusform>%n more device with a battery: %1</numerusform>
-            <numerusform>%n more devices with a battery: %1</numerusform>
-        </translation>
-    </message>
     <message>
-        <location line="+1"/>
-        <source>%1 %2 percent</source>
-        <translation>%1 %2 percent</translation>
-    </message>
-    <message>
-        <location line="+592"/>
+        <location line="+921"/>
         <source>Power</source>
         <translation>Power</translation>
     </message>
     <message>
-        <location line="-843"/>
+        <location line="-913"/>
         <source>Update ready. Restart to finish.</source>
         <translation>Update ready. Restart to finish.</translation>
     </message>
@@ -2378,7 +2421,7 @@ This can&apos;t be undone.</translation>
         <translation>Wallpaper could not be loaded</translation>
     </message>
     <message>
-        <location line="+266"/>
+        <location line="+309"/>
         <source>Continue playing</source>
         <translation>Continue playing</translation>
     </message>
@@ -2419,7 +2462,7 @@ This can&apos;t be undone.</translation>
         <translation>Starting %1…</translation>
     </message>
     <message>
-        <location line="+267"/>
+        <location line="+294"/>
         <location line="+12"/>
         <location line="+3"/>
         <source>Select</source>

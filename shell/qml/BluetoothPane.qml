@@ -8,7 +8,9 @@ import RuyaShell
 // "Rename" row (the on-screen keyboard; BlueZ keeps the name). Accept on a device pairs it (not
 // paired), connects it (paired) or disconnects it (connected). A controller says "Connected",
 // "Reconnects automatically" (paired and trusted, not connected: it comes back when switched on) or
-// "Paired". With Bluetooth off the pane says so and shows nothing else. Everything goes through
+// "Paired". A paired device that is not bonded (it forgot its keys: it only reconnects in pairing
+// mode, T-300) says "Not fully paired" and has a "Pair again" row: Forget, a scan, then Pair as soon
+// as it is found again (put it in pairing mode first). With Bluetooth off the pane says so and shows nothing else. Everything goes through
 // the Bluetooth singleton (org.ruyaos.Devices1.Bluetooth).
 SettingsPane {
     id: pane
@@ -32,7 +34,7 @@ SettingsPane {
         for (let i = 0; i < list.length; ++i) {
             const d = list[i]
             const entry = { devId: d.id, name: d.name, kind: d.kind, family: d.family ?? "", paired: d.paired,
-                            connected: d.connected, trusted: d.trusted ?? false, battery: d.battery }
+                            bonded: d.bonded ?? true, connected: d.connected, trusted: d.trusted ?? false, battery: d.battery }
             let at = -1
             for (let j = 0; j < deviceModel.count; ++j) {
                 if (deviceModel.get(j).devId === d.id) {
@@ -95,24 +97,60 @@ SettingsPane {
         renameEntry.open(qsTr("Controller name"), name, { maxLength: 48, layout: "text" })
     }
 
-    // The single mapping from a service status to text.
+    // The words for a failed operation: the one mapping the pairing screen shares (T-301).
     function statusText(op, status) {
-        switch (status) {
-        case "pairing-failed": return qsTr("Pairing failed. Put the device in pairing mode and try again.")
-        case "timeout": return qsTr("The device did not answer.")
-        case "unavailable": return qsTr("Bluetooth is off.")
-        case "unknown-device": return qsTr("That device is no longer available.")
-        }
-        if (op === "pair")
-            return qsTr("Could not pair the device.")
-        return op === "disconnect" ? qsTr("Could not disconnect.") : qsTr("Could not connect.")
+        return BluetoothText.statusText(op, status, "device")
     }
 
-    function deviceValue(busy, paired, connected, battery, kind, trusted) {
+    // "Pair again" (a paired device that is not bonded): the device being repaired, "" if none. Forget
+    // first; when it is gone a scan finds it again (it has to be in pairing mode) and it is paired.
+    property string repairId: ""
+    property bool repairScanSeen: false
+
+    function startRepair(id) {
+        if (repairId !== "" || id === busyId)
+            return
+        repairId = id
+        repairScanSeen = false
+        busyId = id
+        Bluetooth.forget(id)
+    }
+
+    function endRepair() {
+        repairId = ""
+        repairScanSeen = false
+        busyId = ""
+    }
+
+    // Called when the list or the scan changed during a repair.
+    function continueRepair() {
+        if (repairId === "")
+            return
+        if (!Bluetooth.powered) {
+            endRepair()                        // Bluetooth was switched off under it
+            return
+        }
+        const d = Bluetooth.devices.find(x => x.id === repairId)
+        if (d && !d.paired) {
+            const id = repairId
+            repairId = ""                      // the pair call below is an ordinary pairing now
+            repairScanSeen = false
+            Bluetooth.pair(id)
+        } else if (repairScanSeen && !Bluetooth.discovering) {
+            endRepair()                        // the scan ended and it was not found
+            Notifications.show(qsTr("Could not find it. Put the device in pairing mode and try again."), "warning")
+        } else if (Bluetooth.discovering) {
+            repairScanSeen = true
+        }
+    }
+
+    function deviceValue(busy, paired, bonded, connected, battery, kind, trusted) {
         if (busy)
             return qsTr("Pairing…")
         if (!paired)
             return qsTr("Not paired")
+        if (!bonded)
+            return qsTr("Not fully paired")
         // A paired, trusted controller that is off comes back by itself when it is switched on.
         const idle = kind === "controller" && trusted ? qsTr("Reconnects automatically") : qsTr("Paired")
         const parts = [connected ? qsTr("Connected") : idle]
@@ -139,6 +177,20 @@ SettingsPane {
         function onFinished(op, id, status) {
             if (op === "pair" && id === pane.busyId)
                 pane.busyId = ""
+            if (op === "forget" && id === pane.repairId) {
+                if (status !== "ok") {
+                    pane.endRepair()
+                    Notifications.show(BluetoothText.statusText("pair", status, "device"), "warning")
+                    return
+                }
+                Bluetooth.startScan()          // the device is gone from the list: find it again
+                return
+            }
+            if (op === "scan" && status !== "ok" && pane.repairId !== "") {
+                pane.endRepair()               // the scan that should find it again did not start
+                Notifications.show(BluetoothText.statusText("pair", status, "device"), "warning")
+                return
+            }
             if (op === "power") {
                 power.checked = Bluetooth.powered      // a refused switch springs back
                 return
@@ -161,8 +213,14 @@ SettingsPane {
             if (pane.visible)
                 Notifications.show(qsTr("A device that is not a controller was ignored."), "info")
         }
-        function onDevicesChanged() { pane.syncDevices() }
-        function onStateChanged() { power.checked = Bluetooth.powered }
+        function onDevicesChanged() {
+            pane.syncDevices()
+            pane.continueRepair()
+        }
+        function onStateChanged() {
+            power.checked = Bluetooth.powered
+            pane.continueRepair()
+        }
     }
 
     ToggleRow {
@@ -242,6 +300,7 @@ SettingsPane {
             required property string kind
             required property string family
             required property bool paired
+            required property bool bonded
             required property bool connected
             required property bool trusted
             required property int battery
@@ -250,11 +309,26 @@ SettingsPane {
             u: pane.u
             label: name
             iconName: DeviceIcons.iconFor(kind, family)
-            value: pane.deviceValue(pane.busyId === devId, paired, connected, battery, kind, trusted)
+            value: pane.deviceValue(pane.busyId === devId, paired, bonded, connected, battery, kind, trusted)
             // The screen reader says the name, what it is, then the state: "DualSense, PlayStation
             // controller, Connected".
             accessibleValue: DeviceIcons.kindText(kind, family) + ", " + value
             onActivated: pane.activate(devId, paired, connected)
+        }
+    }
+
+    Repeater {
+        model: deviceModel
+        SettingRow {
+            required property string devId
+            required property string name
+            required property bool paired
+            required property bool bonded
+            objectName: "btRepair_" + devId
+            visible: paired && !bonded && Bluetooth.powered
+            u: pane.u
+            label: qsTr("Pair again %1").arg(name)
+            onActivated: pane.startRepair(devId)
         }
     }
 

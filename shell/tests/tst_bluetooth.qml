@@ -350,6 +350,83 @@ Item {
             tryVerify(() => device("bt-pad-old").paired && device("bt-pad-old").bonded, 2000, "pairing again bonds")
         }
 
+        // T-301: a paired device that is not bonded says "Not fully paired" and offers "Pair again" among its
+        // actions: Forget, a scan that finds it again, then Pair. Bonded devices have no such row.
+        function test_pair_again_for_unbonded() {
+            openBluetoothPane()
+            compare(find("btRepair_bt-pad-old").visible, false, "a bonded device has no Pair again row")
+            tryCompare(find("btDev_bt-pad-old"), "value", "Reconnects automatically")
+            Bluetooth.mockSetBonded("bt-pad-old", false)
+            tryCompare(find("btRepair_bt-pad-old"), "visible", true)
+            tryCompare(find("btDev_bt-pad-old"), "value", "Not fully paired")
+            compare(find("btRepair_bt-pad-main").visible, false, "the bonded pad is untouched")
+            tryCompare(find("btDev_bt-pad-main"), "value", "Connected · Battery 80%")
+            goTo("btRepair_bt-pad-old")
+            compare(find("btRepair_bt-pad-old").label, "Pair again Retro Pad")
+            host.answers = []
+            keyClick(Qt.Key_Return)
+            tryVerify(() => device("bt-pad-old") !== undefined && device("bt-pad-old").paired && device("bt-pad-old").bonded,
+                      3000, "forgotten, found again and paired")
+            compare(Bluetooth.mockPairCalls(), 1, "one Pair call")
+            const ops = host.answers.map(a => a.op + ":" + a.id)
+            verify(ops.indexOf("forget:bt-pad-old") >= 0 && ops.indexOf("pair:bt-pad-old") > ops.indexOf("forget:bt-pad-old"),
+                   "Forget first, then Pair: " + ops)
+            compare(answerFor("pair", "bt-pad-old").status, "ok")
+            tryCompare(find("btRepair_bt-pad-old"), "visible", false)
+            tryCompare(find("btDev_bt-pad-old"), "value", "Connected")
+            tryVerify(() => find("paneBluetooth").activeFocus, 2000, "focus stays in the pane")
+            compare(toastTexts().length, 0)
+        }
+
+        // T-301: if the scan does not find the device again (it is not in pairing mode) the repair ends with
+        // a toast and nothing is paired; the device is just a normal unpaired one to pair by hand.
+        function test_pair_again_when_the_device_is_not_found() {
+            openBluetoothPane()
+            Bluetooth.mockSetBonded("bt-pad-old", false)
+            Bluetooth.mockSetSilent("bt-pad-old", true)
+            tryCompare(find("btRepair_bt-pad-old"), "visible", true)
+            goTo("btRepair_bt-pad-old")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => toastTexts().includes("Could not find it. Put the device in pairing mode and try again."), 3000)
+            compare(Bluetooth.mockPairCalls(), 0, "nothing to pair")
+            verify(device("bt-pad-old") === undefined, "it is gone from the list")
+            tryVerify(() => find("paneBluetooth").activeFocus, 2000, "focus stays in the pane")
+            // A later try with the device found: Accept pairs it as any new device.
+            Bluetooth.mockSetSilent("bt-pad-old", false)
+            scan()
+            tryVerify(() => device("bt-pad-old") !== undefined && !device("bt-pad-old").paired, 2000)
+            goTo("btDev_bt-pad-old")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => device("bt-pad-old").paired && device("bt-pad-old").bonded, 3000)
+        }
+
+        // T-301: the pane and the pairing screen use one mapping from a status to words (BluetoothText); the
+        // controller screen says "controller" where the pane says "device" and nothing else changes.
+        function test_status_text_single_mapping() {
+            openBluetoothPane()
+            const pane = find("paneBluetooth")
+            const onb = find("controllerOnboarding")
+            verify(pane !== null && onb !== null)
+            const words = {
+                "pairing-failed": ["Pairing failed. Put the device in pairing mode and try again.",
+                                   "Pairing failed. Put the controller in pairing mode again."],
+                "timeout": ["The device did not answer.", "The controller did not answer."],
+                "unavailable": ["Bluetooth is off.", "Bluetooth is off."],
+                "unknown-device": ["That device is no longer available.", "The controller went away."],
+                "failed": ["Could not pair the device.", "Could not pair the controller."],
+                "invalid": ["Could not pair the device.", "Could not pair the controller."]
+            }
+            for (const status in words) {
+                compare(pane.statusText("pair", status), words[status][0], "the pane, " + status)
+                compare(onb.reasonText(status), words[status][1], "the pairing screen, " + status)
+                compare(BluetoothText.statusText("pair", status, "device"), words[status][0])
+                compare(BluetoothText.statusText("pair", status, "controller"), words[status][1])
+            }
+            compare(pane.statusText("connect", "failed"), "Could not connect.")
+            compare(pane.statusText("disconnect", "failed"), "Could not disconnect.")
+            compare(pane.statusText("connect", "unavailable"), onb.reasonText("unavailable"), "the same words where they do not name the device")
+        }
+
         // T-300: DeviceIcons.plain (QML) and pairing::is_format_char (Rust) strip the same characters, and
         // both are held to services/ruya-devices/tests/fixtures/format-chars.txt. Every Basic Multilingual
         // Plane code point (control characters are stripped as a class on both sides) is run through plain().
@@ -748,6 +825,20 @@ Item {
             goTo("btDev_bt-buds")
             wait(800)
             grabImage(tc.shell).save(shotsDir + "/26-settings-bluetooth.png")
+        }
+
+        // T-301: a paired device that is not bonded, with its "Pair again" action under it.
+        function test_zz_pair_again_screenshot() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            Bluetooth.mockSetBonded("bt-pad-old", false)
+            openBluetoothPane()
+            tryVerify(() => find("btRepair_bt-pad-old").visible, 2000)
+            goTo("btRepair_bt-pad-old")
+            wait(600)
+            grabImage(tc.shell)                          // the first grab of a window makes it lay the pane out
+            wait(600)
+            grabImage(tc.shell).save(shotsDir + "/bt-pair-again.png")
         }
 
         // T-199: the pane with a device of every kind and family, and a toast that names a device.

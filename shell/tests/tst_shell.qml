@@ -52,6 +52,39 @@ Item {
             tryVerify(() => find("profileList").activeFocus, 2000, "picker has focus on start")
         }
 
+        // T-301: a Bluetooth keyboard that connects is announced like a pad, with the keyboard glyph; a mouse
+        // is not, nor is a keyboard that leaves.
+        function test_keyboard_connect_toast() {
+            signInAsAda()
+            Bluetooth.mockPopulate()
+            tryVerify(() => Bluetooth.devices.find(d => d.id === "bt-gallery-keyboard") !== undefined, 2000)
+            const toasts = find("toastLayer").controllerToasts
+            toasts.debounceMs = 40
+            while (Notifications.model.count > 0)
+                Notifications.dismiss(Notifications.model.get(0).toastId)
+            Notifications.pending = []
+            Bluetooth.disconnectDevice("bt-gallery-keyboard")
+            tryVerify(() => Bluetooth.devices.find(d => d.id === "bt-gallery-keyboard").connected === false, 2000)
+            Bluetooth.disconnectDevice("bt-gallery-mouse")
+            tryVerify(() => Bluetooth.devices.find(d => d.id === "bt-gallery-mouse").connected === false, 2000)
+            wait(150)
+            compare(Notifications.model.count, 0, "leaving says nothing")
+            Bluetooth.connectDevice("bt-gallery-mouse")
+            Bluetooth.connectDevice("bt-gallery-keyboard")
+            tryCompare(Notifications.model, "count", 1)
+            compare(Notifications.model.get(0).text, "Living Room Keyboard connected")
+            compare(Notifications.model.get(0).iconName, DeviceIcons.iconFor("keyboard", ""))
+            compare(Notifications.model.get(0).iconName, "keyboard")
+            compare(Notifications.model.get(0).kind, "success")
+            wait(150)
+            compare(Notifications.model.count, 1, "the mouse said nothing, the keyboard once")
+            // Gone and back is news again.
+            Bluetooth.disconnectDevice("bt-gallery-keyboard")
+            tryVerify(() => Bluetooth.devices.find(d => d.id === "bt-gallery-keyboard").connected === false, 2000)
+            Bluetooth.connectDevice("bt-gallery-keyboard")
+            tryCompare(Notifications.model, "count", 2)
+        }
+
         function test_profiles_are_listed() {
             compare(find("profileList").count, 3)
             compare(find("profileList").currentIndex, 0)

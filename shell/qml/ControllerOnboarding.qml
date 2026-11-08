@@ -84,14 +84,9 @@ FocusScope {
         return null
     }
 
+    // The words under a pad that failed to pair: the mapping the Bluetooth pane shares (BluetoothText).
     function reasonText(status) {
-        switch (status) {
-        case "pairing-failed": return qsTr("Pairing failed. Put the controller in pairing mode again.")
-        case "timeout": return qsTr("The controller did not answer.")
-        case "unavailable": return qsTr("Bluetooth is off.")
-        case "unknown-device": return qsTr("The controller went away.")
-        }
-        return qsTr("Could not pair the controller.")
+        return BluetoothText.statusText("pair", status, "controller")
     }
 
     function phaseOf(d) {
