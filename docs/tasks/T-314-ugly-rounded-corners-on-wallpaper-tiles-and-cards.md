@@ -1,6 +1,6 @@
 # T-314 — Rounded corners of the wallpaper tiles and the cards look rough
 
-Status: in-progress · Phase: 2 · Depends: — · Area: shell (WallpaperPicker, AppArt, the card family, CardFocusLayers) · Size: M · Owner: builder
+Status: done · Phase: 2 · Depends: — · Area: shell (WallpaperPicker, AppArt, the card family, CardFocusLayers) · Size: M · Owner: builder
 
 ## Goal
 The owner (2026-11-08) looked at the wallpaper chooser and said the tiles have **ugly corners**, and thinks the cards (Store, Library, Home) have the same problem. Find out exactly what is wrong on a GPU render and make every picture-carrying rounded shape (wallpaper tiles, `AppArt`, the cards, their hairline and focus ring) have clean, smooth, consistent corners at 720p, 1080p and 4K.
