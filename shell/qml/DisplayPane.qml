@@ -105,6 +105,8 @@ SettingsPane {
         // The dim that is applied: the larger of the slider and the legibility rule for this picture
         // under this theme (WallpaperLayer.effectiveDim without the page-blur tier rule).
         shownValue: Math.max(value, pane.requiredWallpaperDim() * 100)
+        // Said when the picture raises the dim: Left/Right then move the slider and nothing visible (T-312).
+        caption: shownValue > value ? qsTr("Raised for this picture") : ""
         onEdited: v => {
             DeviceSettings.wallpaperDim = v / 100
             dim.value = Math.round(DeviceSettings.wallpaperDim * 100)

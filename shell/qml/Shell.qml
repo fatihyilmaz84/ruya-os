@@ -538,7 +538,9 @@ FocusScope {
         // Avatar, its gap to the name, the clock and the gap between profile and clock.
         readonly property real fixedWidth: (48 + Theme.spaceS + Theme.spaceM) * root.u + clock.implicitWidth
         readonly property int chipCount: fitChips()
-        readonly property real nameWidth: Math.max(nameMin, Math.min(nameFull, room - fixedWidth - batteryWidth(chipCount)))
+        // The pill stops growing here however much room there is (T-312): the name elides.
+        readonly property real nameCap: 220 * root.u
+        readonly property real nameWidth: Math.max(nameMin, Math.min(nameFull, nameCap, room - fixedWidth - batteryWidth(chipCount)))
 
         // Probes of the real fonts, never shown: a chip is budgeted with its percentage in the widest
         // digit (8) for its number of digits, the "+N" the same, and the name's minimum is six wide

@@ -192,10 +192,37 @@ FocusScope {
         anchors.centerIn: parent
         spacing: Theme.spaceM * pad.u
 
+        // The title is one line, at most three card widths (T-312). In verify mode only the profile's name
+        // is cut (an ellipsis inside it), so the instruction stays whatever the language puts after the
+        // name ("%1 için PIN girin"): `frameMetrics` measures the title around an empty name and
+        // `nameMetrics` fits the name into what is left. The accessible name is the whole title.
+        readonly property real titleCap: 3 * Theme.cardProfileWidth * pad.u
+        readonly property string fullTitle: pad.mode === "verify" ? qsTr("Enter PIN for %1").arg(pad.profile.name ?? "")
+                                          : pad.stage === 1 ? qsTr("Confirm PIN") : pad.prompt
+
+        TextMetrics {
+            id: frameMetrics
+            font: pinTitle.font
+            text: qsTr("Enter PIN for %1").arg("")
+        }
+        TextMetrics {
+            id: nameMetrics
+            font: pinTitle.font
+            elide: Text.ElideRight
+            elideWidth: Math.max(0, content.titleCap - frameMetrics.advanceWidth)
+            text: pad.profile.name ?? ""
+        }
+
         Text {
+            id: pinTitle
+            objectName: "pinTitle"
             anchors.horizontalCenter: parent.horizontalCenter
+            width: Math.min(implicitWidth, content.titleCap)
+            elide: Text.ElideRight          // a prompt from a caller, which has no name to cut
             textFormat: Text.PlainText
-            text: pad.mode === "verify" ? qsTr("Enter PIN for %1").arg(pad.profile.name ?? "")
+            Accessible.role: Accessible.StaticText
+            Accessible.name: content.fullTitle
+            text: pad.mode === "verify" ? qsTr("Enter PIN for %1").arg(nameMetrics.elidedText)
                 : pad.stage === 1 ? qsTr("Confirm PIN") : pad.prompt
             color: Theme.text
             font.pixelSize: Theme.typeTitle * pad.u

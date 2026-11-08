@@ -171,7 +171,8 @@ Item {
             keyClick(Qt.Key_Left)                        // Player One has a PIN
             keyClick(Qt.Key_Return)
             tryVerify(() => find("pinPad") !== null && find("pinPad").visible, 2000, "the PIN pad opens")
-            expectPlain(tc.shell, "Enter PIN for " + tc.hostileProfile, 1, "PIN pad")
+            // The title cuts a long name inside itself (T-312): the start of the markup is what is left to find.
+            expectPlain(tc.shell, "Enter PIN for <b>x</b>", 1, "PIN pad")
         }
 
         // The profile picker and the status bar with the hostile names, for the screenshot review (`shots`).

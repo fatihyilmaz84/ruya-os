@@ -437,17 +437,17 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+10"/>
-        <location line="+257"/>
+        <location line="+263"/>
         <source>Uninstall</source>
         <translation>Kaldır</translation>
     </message>
     <message>
-        <location line="-245"/>
+        <location line="-251"/>
         <source>Your activity</source>
         <translation>Etkinliğiniz</translation>
     </message>
     <message>
-        <location line="+100"/>
+        <location line="+103"/>
         <source>This app can</source>
         <translation>Bu uygulama şunları yapabilir</translation>
     </message>
@@ -457,7 +457,7 @@ Bu geri alınamaz.</translation>
         <translation>Yüksek risk</translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+17"/>
         <source>The update adds: %1</source>
         <translation>Güncelleme şunları ekliyor: %1</translation>
     </message>
@@ -472,7 +472,7 @@ Bu geri alınamaz.</translation>
         <translation>Bu uygulamayı yüklemek için bir yöneticinin PIN&apos;i gerekir.</translation>
     </message>
     <message>
-        <location line="+61"/>
+        <location line="+62"/>
         <source>Uninstall %1?</source>
         <translation>%1 kaldırılsın mı?</translation>
     </message>
@@ -1006,7 +1006,7 @@ Bu geri alınamaz.</translation>
         <translation>Kontrolcü ya da klavye bulunamadı. Kontrolcünüzün ışığı yanıp sönene kadar eşleştirme düğmesini basılı tutun (DualSense&apos;te: PS + Create).</translation>
     </message>
     <message>
-        <location line="+172"/>
+        <location line="+173"/>
         <source>A device that is not a controller tried to connect and was ignored.</source>
         <translation>Kontrolcü olmayan bir cihaz bağlanmaya çalıştı ve yok sayıldı.</translation>
     </message>
@@ -1130,12 +1130,17 @@ Bu geri alınamaz.</translation>
         <translation>Duvar kağıdı</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+22"/>
         <source>Dim wallpaper</source>
         <translation>Duvar kağıdını karart</translation>
     </message>
     <message>
-        <location line="+19"/>
+        <location line="+9"/>
+        <source>Raised for this picture</source>
+        <translation>Bu resim için artırıldı</translation>
+    </message>
+    <message>
+        <location line="+15"/>
         <location line="+16"/>
         <source>Recommended</source>
         <translation>Önerilen</translation>
@@ -1510,17 +1515,20 @@ Bu geri alınamaz.</translation>
         <translation>Giriş yapılamadı (%1).</translation>
     </message>
     <message>
-        <location line="+24"/>
+        <location line="+27"/>
+        <location line="+6"/>
+        <location line="+19"/>
         <source>Enter PIN for %1</source>
         <translation>%1 için PIN girin</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-24"/>
+        <location line="+25"/>
         <source>Confirm PIN</source>
         <translation>PIN&apos;i onaylayın</translation>
     </message>
     <message>
-        <location line="+38"/>
+        <location line="+39"/>
         <source>Too many attempts. Try again in %1 s.</source>
         <translation>Çok fazla deneme. %1 sn sonra tekrar deneyin.</translation>
     </message>
@@ -1573,13 +1581,13 @@ Bu geri alınamaz.</translation>
         <translation>Şimdi kapat</translation>
     </message>
     <message>
-        <location line="+104"/>
+        <location line="+106"/>
         <location line="+10"/>
         <source>Cancel</source>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="-111"/>
+        <location line="-113"/>
         <source>Confirm</source>
         <translation>Onayla</translation>
     </message>
@@ -1617,7 +1625,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>PowerSavingPane</name>
     <message>
-        <location filename="../qml/PowerSavingPane.qml" line="+14"/>
+        <location filename="../qml/PowerSavingPane.qml" line="+15"/>
         <source>Select</source>
         <translation>Seç</translation>
     </message>
@@ -1673,12 +1681,11 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+2"/>
         <source>The console sleeps first</source>
         <translation>Önce konsol uykuya geçer</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="+2"/>
         <source>The screen is not turned off</source>
         <translation>Ekran ayrıca kapatılmaz</translation>
     </message>
@@ -1688,12 +1695,12 @@ Bu geri alınamaz.</translation>
         <translation>Konsol bunun yerine uykuya geçer</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="+33"/>
         <source>Sleep is not available on this console yet</source>
         <translation>Uyku bu konsolda henüz kullanılamıyor</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="-24"/>
         <source>Screen saver</source>
         <translation>Ekran koruyucu</translation>
     </message>
@@ -1709,18 +1716,18 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+11"/>
+        <location line="+15"/>
         <location line="+10"/>
         <source>Never</source>
         <translation>Asla</translation>
     </message>
     <message>
-        <location line="-11"/>
+        <location line="-12"/>
         <source>Sleep</source>
         <translation>Uyku</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+11"/>
         <source>Controllers turn off</source>
         <translation>Kontrolcüler kapanır</translation>
     </message>
@@ -1756,7 +1763,7 @@ Bu geri alınamaz.</translation>
         <translation>%1, PIN korumalı</translation>
     </message>
     <message>
-        <location line="+39"/>
+        <location line="+47"/>
         <source>PIN</source>
         <translation>PIN</translation>
     </message>
@@ -2198,12 +2205,12 @@ Bu geri alınamaz.</translation>
     <message>
         <location line="+16"/>
         <location line="+63"/>
-        <location line="+79"/>
+        <location line="+81"/>
         <source>Press A to continue</source>
         <translation>Devam etmek için A&apos;ya basın</translation>
     </message>
     <message>
-        <location line="-310"/>
+        <location line="-312"/>
         <location line="+218"/>
         <source>Network</source>
         <translation>Ağ</translation>
@@ -2283,12 +2290,12 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="-272"/>
-        <location line="+298"/>
+        <location line="+299"/>
         <source>You&apos;re all set</source>
         <translation>Her şey hazır</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+10"/>
         <source>Welcome, %1.</source>
         <translation>Hoş geldin, %1.</translation>
     </message>
@@ -2296,7 +2303,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+345"/>
+        <location filename="../qml/Shell.qml" line="+346"/>
         <source>Could not %1.</source>
         <translation>%1 işlemi yapılamadı.</translation>
     </message>
@@ -2321,7 +2328,7 @@ Bu geri alınamaz.</translation>
         <translation>Ses çıkışı: %1</translation>
     </message>
     <message numerus="yes">
-        <location line="+255"/>
+        <location line="+258"/>
         <source>%n more device(s) with a battery: %1</source>
         <translation>
             <numerusform>Pili olan %n cihaz daha: %1</numerusform>
@@ -2333,12 +2340,12 @@ Bu geri alınamaz.</translation>
         <translation>%1 yüzde %2</translation>
     </message>
     <message>
-        <location line="+590"/>
+        <location line="+592"/>
         <source>Power</source>
         <translation>Güç</translation>
     </message>
     <message>
-        <location line="-838"/>
+        <location line="-843"/>
         <source>Update ready. Restart to finish.</source>
         <translation>Güncelleme hazır. Bitirmek için yeniden başlat.</translation>
     </message>
@@ -2358,12 +2365,12 @@ Bu geri alınamaz.</translation>
         <translation>Ekran yanıt vermedi, bu yüzden önceki çözünürlük geri geldi.</translation>
     </message>
     <message>
-        <location line="+47"/>
+        <location line="+48"/>
         <source>Wallpaper could not be loaded</source>
         <translation>Duvar kağıdı yüklenemedi</translation>
     </message>
     <message>
-        <location line="+262"/>
+        <location line="+266"/>
         <source>Continue playing</source>
         <translation>Oynamaya devam et</translation>
     </message>
@@ -2411,12 +2418,12 @@ Bu geri alınamaz.</translation>
         <translation>Seç</translation>
     </message>
     <message>
-        <location line="+235"/>
+        <location line="+236"/>
         <source>The chosen sound theme can&apos;t be used. The standard one plays instead.</source>
         <translation>Seçilen ses teması kullanılamıyor. Bunun yerine standart tema çalıyor.</translation>
     </message>
     <message>
-        <location line="-256"/>
+        <location line="-257"/>
         <location line="+16"/>
         <source>Cancel</source>
         <translation>İptal</translation>
@@ -2470,7 +2477,7 @@ Bu geri alınamaz.</translation>
         <translation>Geri</translation>
     </message>
     <message>
-        <location line="+109"/>
+        <location line="+110"/>
         <source>mock services</source>
         <translation>sahte hizmetler</translation>
     </message>
@@ -2579,12 +2586,12 @@ Bu geri alınamaz.</translation>
     <message>
         <location line="+1"/>
         <location line="+136"/>
-        <location line="+68"/>
+        <location line="+70"/>
         <source>Installed</source>
         <translation>Kurulu</translation>
     </message>
     <message>
-        <location line="-180"/>
+        <location line="-182"/>
         <source>Official</source>
         <translation>Resmi</translation>
     </message>
@@ -2600,7 +2607,7 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+111"/>
-        <location line="+68"/>
+        <location line="+70"/>
         <source>Update available</source>
         <translation>Güncelleme var</translation>
     </message>
@@ -2620,12 +2627,12 @@ Bu geri alınamaz.</translation>
         <translation>Tüm uygulamaları göster</translation>
     </message>
     <message>
-        <location line="+106"/>
+        <location line="+107"/>
         <source>Search results</source>
         <translation>Arama sonuçları</translation>
     </message>
     <message>
-        <location line="+36"/>
+        <location line="+37"/>
         <source>No apps found for &quot;%1&quot;</source>
         <translation>&quot;%1&quot; için uygulama bulunamadı</translation>
     </message>
@@ -3255,17 +3262,17 @@ Bu geri alınamaz.</translation>
         <translation>Saat dilimi değiştirilemedi.</translation>
     </message>
     <message>
-        <location line="+83"/>
+        <location line="+84"/>
         <source>Device health</source>
         <translation>Cihaz sağlığı</translation>
     </message>
     <message>
-        <location line="+19"/>
+        <location line="+20"/>
         <source>No temperature sensors were found on this device.</source>
         <translation>Bu cihazda sıcaklık sensörü bulunamadı.</translation>
     </message>
     <message>
-        <location line="-180"/>
+        <location line="-182"/>
         <location line="+8"/>
         <location line="+69"/>
         <source>Only an admin can do this.</source>
@@ -3411,7 +3418,7 @@ Bu geri alınamaz.</translation>
         <translation>Konsol aşırı sıcak</translation>
     </message>
     <message numerus="yes">
-        <location line="+21"/>
+        <location line="+22"/>
         <source>Apps are being closed. If the console does not cool down, it powers off in %n second(s).</source>
         <translation>
             <numerusform>Uygulamalar kapatılıyor. Konsol soğumazsa %n saniye içinde kapanacak.</numerusform>
@@ -3642,7 +3649,7 @@ Bu geri alınamaz.</translation>
         <translation>Kopyalanıyor…</translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+14"/>
         <source>Choose a picture to copy to this console. It is shrunk to fit the screen.</source>
         <translation>Bu konsola kopyalanacak bir resim seçin. Resim ekrana sığacak şekilde küçültülür.</translation>
     </message>
