@@ -36,4 +36,23 @@ Today `ruya-devices` writes a line only when something fails, so "my second cont
 - T-338 uses these lines on the Dell; T-336 (adapters) adds the adapter name to each line when it lands.
 
 ## Outcome
-_Filled in by the implementer._
+Verified: host (vm pending: vm-devices-check.sh bluetooth)
+
+Built. `services/ruya-devices/src/log.rs`: `info(line)` writes `ruya-devices: <line>` to stderr and, under `cfg(test)`, to a thread-local buffer (`log::take()`); `clean()` turns control characters of a remote device's name into `?`. `bluetooth.rs` logs through small helpers that sit where the action is decided and take the reason: `connect_device(address, timeout, reason)`, `disconnect_device(address, reason)`, `remove_device(address, reason)`, `trust(address)`, `set_pairable(adapter, on, why)`, `label(address)` (`AA:.. "Alias" (hci0)`, so every line names the adapter, T-336). The lines and their wording are in 03 §2.1 ("What the journal says").
+
+Link drops: `read()` compares the devices of two reads and logs `connected|disconnected <device>: link` for a change no request of ours explains. A request is remembered (`State::intents`, address to the state asked for) before the call is made and forgotten when the call fails or the change is seen, so a signal that arrives while `Connect` is still running is not called `link`. Devices in only one of the reads (first read, radio off and on) say nothing.
+
+Tests (`bluetooth.rs`, the eight named plus `a_pairing_that_ends_after_its_window_says_so`, and two in `log.rs`): all pass. Revert checks (each mutation applied by `output/mutate.py` with a rebuild, the named test went red, source restored): removal line without its reason -> `a_removal_logs_its_reason_sweep_and_forget`; `"stopped"` outcome renamed -> `window_open_and_close_are_logged_with_the_outcome`; `via manual` changed to `via window` -> `a_pairing_in_the_window_logs_its_path`; the own-request filter of `link_changes` removed -> `a_drop_we_did_not_cause_logs_link`; the same-state skip of `link_changes` removed (logs every device on every read) -> `an_unchanged_world_logs_nothing`; `idle-timeout` reason renamed -> `idle_disconnect_logs_once_per_pad`; user connect reason changed -> `connect_and_disconnect_log_who_asked`; the PIN line made to format the call -> `no_log_line_contains_a_pin_or_passkey`.
+
+VM (lead run): `scripts/vm-devices-check.sh bluetooth`, the two-adapter step, now keeps the `--session` instance's stderr, also calls `StartControllerPairing`/`StopControllerPairing`, and greps for the window opened/closed lines (hci1, the primary one), the `connect ... (hci1): user` and the `remove ... (hci1): forget` lines. Not run here.
+
+Deviations / readings of the task:
+- `rejected <addr>` is not a window outcome in the code (the window stays open when it refuses a device, `ControllerPairingState` has no such state), so it is its own line `refused <device>: not an input device` next to the `remove ... sweep|agent-refused` line; the window's closing line says `paired <device>`, `timeout` or `stopped`.
+- `late-pair` removal does not exist: a pairing that completes after its window ended is left bonded and untrusted (T-203 test `a_pairing_that_completes_after_the_window_ended_is_not_trusted`). Task says not to change behaviour, so the line says `paired <device> via window after the window ended: left untrusted`. Inbox line below.
+- The idle decision is one line with the reason inside it (`disconnect <device>: idle-timeout (idle 35 min >= 15 min)`), not a decision line plus a request line.
+- Existing failure `eprintln!`s of the Bluetooth core that could be replaced by the new helpers were (removal, trust, connect); the rest (Pairable, scan, agent registration) are as before.
+- `adapters powered on|off (user)` is written only for the user's `Powered` call; a power change seen in a refresh that we did not cause is not logged (not asked for). Inbox.
+
+Unverified: the real journal (identifier `ruya-devices`, `--user-unit`) on the image; the VM grep.
+
+Files: `services/ruya-devices/src/{log.rs,lib.rs,bluetooth.rs}`, `scripts/vm-devices-check.sh`, `docs/specs/03-services-and-apps.md`, `docs/dev-setup.md`, this file.
