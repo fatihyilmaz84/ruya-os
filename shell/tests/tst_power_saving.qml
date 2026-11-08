@@ -347,6 +347,29 @@ Item {
             compare(IdleClock.stage, "saver")
         }
 
+        // T-313: the shell's own ambient bed is a running PipeWire stream, but Devices1 leaves the
+        // shell's streams out of `Playing`, so with the bed on and no app the stages still come.
+        function test_the_ambient_bed_does_not_hold_the_saver() {
+            DeviceSettings.ambientSound = true
+            const bed = find("ambientBed")
+            verify(bed, "the ambient bed exists")
+            compare(bed.switchedOn, true)
+            compare(bed.wanted, true, "nothing in front: the bed is wanted")
+            // The service answers false although the bed's stream runs: an answer after a true one
+            // (an app that played and stopped) makes the clock look at the holds again.
+            Audio.mockSetPlaying(true)
+            tryVerify(() => IdleInhibit.reasons.indexOf("audio") >= 0)
+            Audio.mockSetPlaying(false)
+            tryCompare(Audio, "playing", false)
+            tryVerify(() => IdleInhibit.reasons.indexOf("audio") < 0)
+            compare(bed.switchedOn, true, "the bed is still on")
+            compare(IdleInhibit.reasons.indexOf("audio"), -1)
+            minutes(10)
+            compare(IdleClock.stage, "saver")
+            minutes(20)
+            compare(IdleClock.stage, "off")
+        }
+
         function test_an_inhibitor_that_appears_later_does_not_end_the_saver_but_stops_the_next_step() {
             minutes(10)
             compare(IdleClock.stage, "saver")
