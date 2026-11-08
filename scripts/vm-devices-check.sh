@@ -178,6 +178,65 @@ bluetooth_check() {
         fi
     done
     as_shell systemctl --user is-active ruya-devices >/dev/null && ok "ruya-devices still active after the Bluetooth calls" || bad "ruya-devices not active"
+    bluetooth_fake_check
+}
+
+# T-300: the VM has no Bluetooth adapter, so ListDevices is empty on the system bus. `bonded` and
+# `device_name` are read from a second instance of the service on ruya-shell's own user bus
+# (`ruya-devices --session`: the fake BlueZ with a renamed pad that is paired but not bonded). The
+# real unit owns org.ruyaos.Devices1 on the SYSTEM bus only, so the name is free on the user bus.
+# JSON is parsed (python3 stays in the image), key order is never relied on.
+bluetooth_fake_check() {
+    local out verdict ubus="unix:path=/run/user/$uid/bus"
+    echo "--- bluetooth (T-300): bonded and device_name of a fake device (ruya-shell's user bus, FakeBluez)"
+    if ! command -v python3 >/dev/null; then
+        bad "python3 is needed for the fake-device check"
+        return
+    fi
+    if as_shell env DBUS_SESSION_BUS_ADDRESS="$ubus" busctl --user status org.ruyaos.Devices1 >/dev/null 2>&1; then
+        bad "org.ruyaos.Devices1 is already on ruya-shell's user bus: the fake-device check needs the name free"
+        return
+    fi
+    out="$(as_shell env DBUS_SESSION_BUS_ADDRESS="$ubus" bash -c '
+        /usr/bin/ruya-devices --session >/dev/null 2>&1 &
+        pid=$!
+        n=0
+        until busctl --user status org.ruyaos.Devices1 >/dev/null 2>&1 || [ "$n" -ge 50 ]; do sleep 0.2; n=$((n + 1)); done
+        busctl --user --json=short call org.ruyaos.Devices1 /org/ruyaos/Devices1 org.ruyaos.Devices1.Bluetooth ListDevices
+        kill "$pid" 2>/dev/null
+        wait "$pid" 2>/dev/null
+    ' 2>&1)"
+    verdict="$(printf '%s' "$out" | python3 -I -c '
+import json, sys
+text = sys.stdin.read()
+try:
+    devices = json.loads(text[text.index("{"):])["data"][0]
+except Exception as err:
+    print("unparsable: %r" % (err,)); sys.exit(0)
+rows = {d["id"]["data"]: d for d in devices}
+for d in devices:
+    print("device %s name=%r device_name=%r paired=%s bonded=%s family=%r" % (
+        d["id"]["data"], d["name"]["data"], d["device_name"]["data"], d["paired"]["data"], d["bonded"]["data"], d["family"]["data"]))
+old = rows.get("AA:00:00:00:00:03")
+good = rows.get("AA:00:00:00:00:01")
+if old is None or good is None:
+    print("missing: the fake devices are not listed")
+elif old["bonded"]["data"] is not False or old["paired"]["data"] is not True:
+    print("wrong: the old pad should be paired and not bonded")
+elif good["bonded"]["data"] is not True:
+    print("wrong: a normal pad should be bonded")
+elif old["name"]["data"] != "Living room pad" or old["device_name"]["data"] != "DualSense Wireless Controller":
+    print("wrong: name is the alias and device_name the model")
+elif old["family"]["data"] != "playstation":
+    print("wrong: a renamed DualSense keeps its family")
+else:
+    print("VERDICT ok")
+' 2>&1)"
+    echo "$verdict"
+    case "$verdict" in
+    *"VERDICT ok"*) ok "ListDevices carries bonded and device_name (a renamed DualSense: alias, model, playstation, paired and not bonded)";;
+    *) bad "ListDevices of the fake BlueZ: $verdict $out";;
+    esac
 }
 
 # T-196: Devices1.Storage.GetSystemUsage, the console's own storage. Compares the filesystem numbers

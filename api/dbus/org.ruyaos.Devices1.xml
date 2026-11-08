@@ -240,7 +240,10 @@
       Paired devices and those found by a scan, in a stable order (paired first). One
       dictionary per device:
         id         s   stable id, opaque to the shell (e.g. the BlueZ address)
-        name       s   display name
+        name       s   display name (BlueZ's Alias: the user's name for it, else the device's own)
+        device_name s  the name the device advertises (BlueZ's Name, the model: "DualSense Wireless
+                       Controller"), "" when it told none. Stays the model after a Rename, which only
+                       changes `name`. The family guess uses it first. Clients treat a missing key as ""
         kind       s   what it is, from BlueZ's Icon (the class of device): "controller" (input-gaming),
                        "headset" (audio-headset, audio-headphones), "speaker" (audio-card,
                        audio-speakers), "keyboard", "mouse", "phone", "other" (anything else, and a
@@ -248,11 +251,16 @@
         family     s   the controller family, for kind "controller" only: "playstation" | "xbox" |
                        "nintendo" | "8bitdo", or "" when it cannot be told (every other kind, an unknown maker, a
                        third-party pad). From the Modalias BlueZ reports (the vendor id of the device's
-                       Device ID record: Sony, Microsoft, Nintendo), by name only when the device has no
-                       usable Modalias; the table is in the service (families.rs). Shells show a
+                       Device ID record: Sony, Microsoft, Nintendo), by the device's own name
+                       (device_name, else the Alias) only when the device has no usable Modalias; the
+                       table is in the service (families.rs). Shells show a
                        family's picture when they have one and the generic controller otherwise, and
                        treat a family they do not know as ""
         paired     b
+        bonded     b   BlueZ's Device1.Bonded: the pairing keys are kept. A device paired while the
+                       adapter was not pairable (before the pairing fix) is `paired` but not `bonded`
+                       and only reconnects while it is in pairing mode; Forget and pair again fixes
+                       it. Clients treat a missing key as true
         connected  b
         trusted    b   may reconnect by itself
         battery    i   0-100, or -1 when the device reports none
@@ -559,7 +567,11 @@
       <arg name="batteries" type="aa{sv}" direction="out"/>
     </method>
 
-    <!-- A device appeared, disappeared or changed (percent, state); call ListBatteries again. -->
+    <!--
+      A device appeared, disappeared or changed (percent, state, family); call ListBatteries again.
+      Also sent when only a controller's family changed because its Bluetooth device bonded or
+      connected after UPower had listed its battery (or the other way round).
+    -->
     <signal name="BatteriesChanged"/>
 
   </interface>

@@ -1,0 +1,16 @@
+# The format characters a device name may not carry: bidirectional controls and overrides,
+# zero-width and joiner characters, the byte-order mark, the soft hyphen. One hex code point or
+# an inclusive range (XXXX-YYYY) per line; '#' starts a comment.
+#
+# Two lists strip them and must agree: `pairing::is_format_char` (Rust, services/ruya-devices) and
+# `DeviceIcons.plain` (QML, shell/qml/DeviceIcons.qml). A Rust test (pairing.rs) and
+# tst_bluetooth.qml read this file and compare every code point of the Basic Multilingual Plane
+# against it, so a character added to only one side fails. Control characters (C0, DEL, C1) are
+# handled separately on both sides and are not listed.
+00AD
+061C
+180E
+200B-200F
+202A-202E
+2060-206F
+FEFF

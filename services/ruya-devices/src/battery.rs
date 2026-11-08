@@ -220,43 +220,76 @@ pub trait UPower: Send + Sync {
 
 pub struct Batteries<U: UPower> {
     upower: U,
-    list: Mutex<Vec<Battery>>,
+    state: Mutex<State>,
+}
+
+#[derive(Default)]
+struct State {
+    /// The last UPower read, families guessed from the model alone.
+    read: Vec<Battery>,
+    /// What clients were last told (`ListBatteries`): `read` with each controller's family taken
+    /// from Bluetooth. A change in either source is announced when this changes.
+    shown: Vec<Battery>,
 }
 
 impl<U: UPower> Batteries<U> {
     pub fn new(upower: U) -> Self {
         Batteries {
             upower,
-            list: Mutex::new(Vec::new()),
+            state: Mutex::new(State::default()),
         }
     }
 
-    fn list_lock(&self) -> MutexGuard<'_, Vec<Battery>> {
-        // A poisoned lock only means another call panicked; the list is plain data.
-        self.list.lock().unwrap_or_else(|e| e.into_inner())
+    fn lock(&self) -> MutexGuard<'_, State> {
+        // A poisoned lock only means another call panicked; the state is plain data.
+        self.state.lock().unwrap_or_else(|e| e.into_inner())
     }
 
-    /// Reads UPower again. `true` when the list changed (so `BatteriesChanged` is due).
-    pub fn refresh(&self) -> Result<bool, String> {
+    /// Reads UPower again, resolving families against `bluetooth`. `true` when what clients see
+    /// changed (so `BatteriesChanged` is due).
+    pub fn refresh_with(&self, bluetooth: &[Device]) -> Result<bool, String> {
         let now = peripherals(&self.upower.devices()?);
-        let mut list = self.list_lock();
-        let changed = *list != now;
-        *list = now;
-        Ok(changed)
+        let mut state = self.lock();
+        state.read = now;
+        Ok(Self::settle(&mut state, bluetooth))
     }
 
+    /// `refresh_with` for a caller that knows no Bluetooth devices.
+    pub fn refresh(&self) -> Result<bool, String> {
+        self.refresh_with(&[])
+    }
+
+    /// Looks again at the last UPower read against the current Bluetooth devices, without asking
+    /// UPower: a pad that bonded or connected after UPower listed its battery has a family now
+    /// (or the other way round, a forgotten one has lost it). `true` when clients must be told.
+    pub fn recheck(&self, bluetooth: &[Device]) -> bool {
+        Self::settle(&mut self.lock(), bluetooth)
+    }
+
+    fn settle(state: &mut State, bluetooth: &[Device]) -> bool {
+        let now = Self::resolved(&state.read, bluetooth);
+        let changed = state.shown != now;
+        state.shown = now;
+        changed
+    }
+
+    fn resolved(read: &[Battery], bluetooth: &[Device]) -> Vec<Battery> {
+        let mut list = read.to_vec();
+        for b in &mut list {
+            b.family = family_of_battery(b.kind, &b.address, &b.vendor, &b.model, bluetooth);
+        }
+        list
+    }
+
+    /// The last UPower read, as `peripherals` made it (no Bluetooth knowledge).
     pub fn list(&self) -> Vec<Battery> {
-        self.list_lock().clone()
+        self.lock().read.clone()
     }
 
     /// The list with each controller's family taken from the Bluetooth device that has its
     /// address (`family_of_battery`), so a pad is the same family here as in `ListDevices`.
     pub fn list_with(&self, bluetooth: &[Device]) -> Vec<Battery> {
-        let mut list = self.list();
-        for b in &mut list {
-            b.family = family_of_battery(b.kind, &b.address, &b.vendor, &b.model, bluetooth);
-        }
-        list
+        Self::resolved(&self.lock().read, bluetooth)
     }
 }
 
@@ -330,9 +363,11 @@ mod tests {
         Device {
             id: id.to_owned(),
             name: name.to_owned(),
+            device_name: name.to_owned(),
             kind,
             family,
             paired: true,
+            bonded: true,
             connected: true,
             trusted: true,
             battery: 50,
@@ -417,6 +452,108 @@ mod tests {
         assert_eq!(family("SN30 Pro", "8BitDo"), "8bitdo");
         assert_eq!(family("Ruya Pad", "Ruya"), "");
         assert_eq!(family("", ""), "");
+    }
+
+    fn shown(b: &Batteries<FakeUPower>) -> Vec<(String, &'static str)> {
+        b.lock()
+            .shown
+            .iter()
+            .map(|x| (x.id.clone(), x.family))
+            .collect()
+    }
+
+    /// What hid-playstation gives UPower for a DualSense on Bluetooth: no model, no vendor, no
+    /// serial, the address in the power supply's name (`ps-controller-battery-<uniq>`).
+    fn dualsense_upower(address_in_name: &str) -> RawDevice {
+        with(
+            dev(
+                "/org/freedesktop/UPower/devices/gaming_input_ps_controller_battery_x",
+                12,
+                "",
+                62.0,
+                2,
+            ),
+            "",
+            &format!("ps-controller-battery-{address_in_name}"),
+            "",
+        )
+    }
+
+    #[test]
+    fn a_pad_that_bonds_after_upower_listed_it_is_announced_with_its_family() {
+        let b = Batteries::new(FakeUPower::new(vec![dualsense_upower("e4:17:d8:12:34:56")]));
+        // UPower first: Bluetooth knows no such pad yet.
+        assert_eq!(b.refresh_with(&[]), Ok(true));
+        assert_eq!(shown(&b)[0].1, "");
+        assert!(!b.recheck(&[]), "nothing new: no signal");
+        // Then the pad bonds: same UPower list, a family now.
+        let pads = [bt(
+            "E4:17:D8:12:34:56",
+            "Living room pad",
+            "controller",
+            "playstation",
+        )];
+        assert!(b.recheck(&pads), "the family appeared: BatteriesChanged");
+        assert_eq!(shown(&b)[0].1, "playstation");
+        assert!(!b.recheck(&pads), "announced once");
+        assert_eq!(b.refresh_with(&pads), Ok(false), "UPower said nothing new");
+        // The pad is forgotten: it falls back to what the model says (nothing here).
+        assert!(b.recheck(&[]));
+        assert_eq!(shown(&b)[0].1, "");
+    }
+
+    #[test]
+    fn a_battery_upower_lists_after_the_pad_bonded_has_the_family_at_once() {
+        let pads = [bt(
+            "E4:17:D8:12:34:56",
+            "Living room pad",
+            "controller",
+            "playstation",
+        )];
+        let b = Batteries::new(FakeUPower::new(vec![]));
+        assert_eq!(b.refresh_with(&pads), Ok(false), "no batteries, no news");
+        b.upower.set(vec![dualsense_upower("e4:17:d8:12:34:56")]);
+        assert_eq!(b.refresh_with(&pads), Ok(true), "a new battery");
+        assert_eq!(shown(&b)[0].1, "playstation");
+        assert!(!b.recheck(&pads), "no second signal for the same family");
+    }
+
+    #[test]
+    fn real_looking_upower_records_map_to_the_bluetooth_address() {
+        // (UPower Serial, NativePath, the address expected)
+        let table = [
+            (
+                "",
+                "ps-controller-battery-e4:17:d8:12:34:56",
+                "E4:17:D8:12:34:56",
+            ),
+            ("E4:17:D8:12:34:56", "", "E4:17:D8:12:34:56"),
+            (
+                "",
+                "/org/bluez/hci0/dev_E4_17_D8_12_34_56",
+                "E4:17:D8:12:34:56",
+            ),
+            ("", "hidpp_battery_0", ""),
+            ("0123456789", "BAT1", ""),
+        ];
+        let pads = [bt(
+            "E4:17:D8:12:34:56",
+            "Living room pad",
+            "controller",
+            "playstation",
+        )];
+        for (serial, native, want) in table {
+            let mut d = dev("/p", KIND_GAMING_INPUT, "", 62.0, 2);
+            d.serial = serial.to_owned();
+            d.native_path = native.to_owned();
+            let b = Batteries::new(FakeUPower::new(vec![d]));
+            b.refresh_with(&pads).expect("reads");
+            let battery = &b.list_with(&pads)[0];
+            assert_eq!(battery.address, want, "{serial:?} {native:?}");
+            // The chip, Settings and the picker agree: the same family as ListDevices says.
+            let family = if want.is_empty() { "" } else { "playstation" };
+            assert_eq!(battery.family, family, "{serial:?} {native:?}");
+        }
     }
 
     #[test]

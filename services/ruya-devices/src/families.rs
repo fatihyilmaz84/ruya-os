@@ -66,9 +66,66 @@ pub fn family_of(modalias: &str, name: &str) -> &'static str {
         .map_or("", |(_, family)| family)
 }
 
+/// The family of a Bluetooth device: the modalias decides when it has a usable one; otherwise the
+/// device's own `Name` as BlueZ has it (the model, which a rename does not change: a pad the user
+/// called "Living room pad" is still a "DualSense Wireless Controller"), and only then the alias.
+pub fn family_of_device(modalias: &str, device_name: &str, alias: &str) -> &'static str {
+    if vendor_of(modalias).is_some() {
+        return family_of(modalias, "");
+    }
+    match family_of("", device_name) {
+        "" => family_of("", alias),
+        family => family,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_renamed_pad_keeps_its_family_from_its_own_name() {
+        // (modalias, BlueZ Name, Alias, family)
+        let table = [
+            (
+                "",
+                "DualSense Wireless Controller",
+                "Living room pad",
+                "playstation",
+            ),
+            ("", "Wireless Controller", "Kids", "playstation"),
+            ("", "Xbox Wireless Controller", "Player 2", "xbox"),
+            ("", "Pro Controller", "Zelda", "nintendo"),
+            ("", "8BitDo Pro 2", "Retro", "8bitdo"),
+            // The device told no name: the alias is all there is.
+            ("", "", "DualSense Wireless Controller", "playstation"),
+            // The device's name says nothing, the alias does (a user called it so).
+            ("", "Gamepad", "Xbox pad", "xbox"),
+            // The device's own name wins over an alias that claims another maker.
+            ("", "DualSense Wireless Controller", "Xbox", "playstation"),
+            ("", "Gamepad", "Pad", ""),
+            // A usable modalias decides whatever the names say.
+            (
+                "usb:v045Ep0B13d0509",
+                "DualSense Wireless Controller",
+                "DualSense",
+                "xbox",
+            ),
+            (
+                "usb:v1234p0001d0100",
+                "DualSense Wireless Controller",
+                "DualSense",
+                "",
+            ),
+        ];
+        for (modalias, name, alias, want) in table {
+            assert_eq!(
+                family_of_device(modalias, name, alias),
+                want,
+                "{modalias:?} {name:?} {alias:?}"
+            );
+        }
+    }
 
     #[test]
     fn sony_microsoft_and_nintendo_pads_by_their_usb_vendor() {

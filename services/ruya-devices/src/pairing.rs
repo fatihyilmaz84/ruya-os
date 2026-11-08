@@ -14,14 +14,16 @@ pub const MAX_WINDOW: Duration = Duration::from_secs(300);
 /// How often the window tries to pair the same gamepad found by its scan.
 pub const MAX_ATTEMPTS: u32 = 3;
 
-/// Keep in step with `DeviceIcons.plain` (shell/qml/DeviceIcons.qml), which cleans the same names again.
+/// Keep in step with `DeviceIcons.plain` (shell/qml/DeviceIcons.qml), which cleans the same names again:
+/// `tests/fixtures/format-chars.txt` is the one list, and a test here and `tst_bluetooth.qml` compare
+/// each side with it (T-300).
 /// A character that draws nothing or changes how the text around it is drawn: bidirectional
 /// controls and overrides, zero-width and joiner characters, the byte-order mark, the soft hyphen.
 /// A device that names itself with them can spoof another name (U+202E) or hide in a list.
 pub fn is_format_char(c: char) -> bool {
     matches!(c,
         '\u{00AD}' | '\u{061C}' | '\u{180E}' | '\u{200B}'..='\u{200F}' | '\u{202A}'..='\u{202E}'
-        | '\u{2060}'..='\u{2064}' | '\u{2066}'..='\u{206F}' | '\u{FEFF}')
+        | '\u{2060}'..='\u{206F}' | '\u{FEFF}')
 }
 
 /// A name a device told us, made fit to show: control and format characters dropped, trimmed,
@@ -184,6 +186,42 @@ mod tests {
         assert_eq!(clean_name("Kontrolcü şğı", 48), "Kontrolcü şğı");
         assert_eq!(clean_name("abcdef", 3), "abc");
         assert_eq!(clean_name("\u{2066}\u{2069}", 48), "");
+    }
+
+    /// The code points of `tests/fixtures/format-chars.txt`: "XXXX" or "XXXX-YYYY" per line.
+    fn fixture_ranges() -> Vec<(u32, u32)> {
+        include_str!("../tests/fixtures/format-chars.txt")
+            .lines()
+            .map(str::trim)
+            .filter(|l| !l.is_empty() && !l.starts_with('#'))
+            .map(|l| {
+                let (from, to) = l.split_once('-').unwrap_or((l, l));
+                let hex = |t: &str| u32::from_str_radix(t.trim(), 16).expect("hex code point");
+                (hex(from), hex(to))
+            })
+            .collect()
+    }
+
+    #[test]
+    fn the_format_characters_are_the_fixture_the_shell_also_reads() {
+        let ranges = fixture_ranges();
+        assert!(ranges.len() >= 7, "the fixture was read: {ranges:?}");
+        // Every Basic Multilingual Plane code point except the controls (both sides strip those
+        // as a class): in the fixture exactly when is_format_char says so.
+        for code in 0..=0xFFFFu32 {
+            let Some(c) = char::from_u32(code) else {
+                continue; // a surrogate
+            };
+            if c.is_control() {
+                continue;
+            }
+            let listed = ranges.iter().any(|&(from, to)| (from..=to).contains(&code));
+            assert_eq!(
+                is_format_char(c),
+                listed,
+                "U+{code:04X}: is_format_char and tests/fixtures/format-chars.txt disagree"
+            );
+        }
     }
 
     #[test]

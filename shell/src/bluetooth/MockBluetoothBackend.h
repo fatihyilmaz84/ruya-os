@@ -48,6 +48,8 @@ public:
     // A device's name set to any text (a device names itself; rename() would refuse some of it).
     void setName(const QString &id, const QString &name);
     void setFamily(const QString &id, const QString &family);
+    // Paired without the keys kept (BlueZ's Bonded: no), or bonded.
+    void setBonded(const QString &id, bool bonded);
     // The service restarts: pads announced before are void.
     void serviceRestart() { emit gamepadsReset(); }
     // A game controller appears or goes away (USB or Bluetooth), announced a moment later like the
