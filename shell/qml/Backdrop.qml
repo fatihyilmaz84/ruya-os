@@ -18,6 +18,10 @@ Item {
     property bool shown: true
     visible: shown
 
+    // True while an app is in front and covers all of this (set by Shell, T-293): the blobs rest
+    // and cost no frames; they carry on from where they stopped when the app closes.
+    property bool paused: false
+
     // True while any blob is drifting; stops with reduced motion or the performance tier.
     readonly property bool drifting: blobA.drifting || blobB.drifting || blobC.drifting
 
@@ -43,14 +47,14 @@ Item {
 
         SequentialAnimation on driftX {
             id: xAnim
-            running: Theme.ambientMotion && backdrop.shown
+            running: Theme.ambientMotion && backdrop.shown && !backdrop.paused
             loops: Animation.Infinite
             NumberAnimation { to: 1; duration: blob.period; easing.type: Easing.InOutSine }
             NumberAnimation { to: 0; duration: blob.period; easing.type: Easing.InOutSine }
         }
         SequentialAnimation on driftY {
             id: yAnim
-            running: Theme.ambientMotion && backdrop.shown
+            running: Theme.ambientMotion && backdrop.shown && !backdrop.paused
             loops: Animation.Infinite
             NumberAnimation { to: 1; duration: blob.period * 1.3; easing.type: Easing.InOutSine }
             NumberAnimation { to: 0; duration: blob.period * 1.3; easing.type: Easing.InOutSine }

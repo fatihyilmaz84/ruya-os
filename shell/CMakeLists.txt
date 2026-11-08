@@ -97,6 +97,7 @@ qt_add_qml_module(ruyashell
         src/power/DBusPowerBackend.h src/power/DBusPowerBackend.cpp
         src/power/Power.h src/power/Power.cpp
         src/power/IdleInhibit.h src/power/IdleInhibit.cpp
+        src/power/MonotonicClock.h src/power/MonotonicClock.cpp
         src/power/ScreenPower.h src/power/ScreenPower.cpp
         src/input/KeyRouter.h src/input/KeyRouter.cpp
         src/wallpaper/Wallpapers.h src/wallpaper/Wallpapers.cpp

@@ -601,7 +601,7 @@ Item {
             fake = start + 601000
             presence.check()
             compare(presence.attention, "idle")
-            IdleClock.now = () => Date.now()
+            IdleClock.now = () => MonotonicClock.ms()
             tryVerify(() => Usage.mockLastPresence().attention === "idle")
             keyClick(Qt.Key_Left)                              // any input
             tryCompare(presence, "attention", "active")

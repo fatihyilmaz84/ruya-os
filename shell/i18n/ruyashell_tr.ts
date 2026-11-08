@@ -1683,6 +1683,16 @@ Bu geri alınamaz.</translation>
         <translation>Ekran ayrıca kapatılmaz</translation>
     </message>
     <message>
+        <location line="+0"/>
+        <source>The console sleeps instead</source>
+        <translation>Konsol bunun yerine uykuya geçer</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Sleep is not available on this console yet</source>
+        <translation>Uyku bu konsolda henüz kullanılamıyor</translation>
+    </message>
+    <message>
         <location line="+9"/>
         <source>Screen saver</source>
         <translation>Ekran koruyucu</translation>

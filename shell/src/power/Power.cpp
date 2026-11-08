@@ -85,17 +85,32 @@ void Power::mockReset()
 {
     if (auto *mock = qobject_cast<MockPowerBackend *>(m_backend.get()))
         mock->setCapabilities(QStringLiteral("yes"), QStringLiteral("yes"), QStringLiteral("yes"));
+    if (!m_mockVerified) {
+        m_mockVerified = true;
+        emit capabilitiesChanged();
+    }
     m_lastAction.clear();
     m_actionCount = 0;
     emit lastActionChanged();
 }
 
+void Power::mockSetSuspendVerified(bool verified)
+{
+    if (!m_backend->isMock() || m_mockVerified == verified)
+        return;
+    m_mockVerified = verified;
+    emit capabilitiesChanged();
+}
+
 bool Power::sleepAllowed() const
 {
-    if (!m_suspend)
-        return false;
+    return m_suspend && suspendVerified();
+}
+
+bool Power::suspendVerified() const
+{
     if (m_backend->isMock())
-        return true;
+        return m_mockVerified;
     return qEnvironmentVariable("RUYA_SUSPEND_VERIFIED") == QLatin1String("1")
         || QFile::exists(QStringLiteral("/usr/share/ruyaos/suspend-verified"));
 }

@@ -56,7 +56,7 @@ Item {
         }
 
         function cleanup() {
-            IdleClock.now = () => Date.now()
+            IdleClock.now = () => MonotonicClock.ms()
             IdleClock.reset()
             DeviceSettings.ambientSound = true
             DeviceSettings.soundTheme = "dreamglass"

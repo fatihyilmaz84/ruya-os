@@ -30,6 +30,10 @@ Item {
         property Shell shell: null
         property double t: 1000000000000   // the fake clock, ms
         property var order: []                // the stage signals, in the order they came
+        property double slept: 0              // the fake "total ms suspended" (IdleClock.slept)
+        property var defaultNow: null         // IdleClock's own clock source (monotonic), kept to test it
+        property var defaultSlept: null
+        property var defaultWallNow: null
 
         function find(name) { return findChild(tc.shell, name) }
         // The fake clock moves in steps of at most a minute, as the real timer looks at it: a bigger
@@ -56,6 +60,9 @@ Item {
         }
 
         function initTestCase() {
+            tc.defaultNow = IdleClock.now
+            tc.defaultSlept = IdleClock.slept
+            tc.defaultWallNow = IdleClock.wallNow
             IdleClock.saverStarted.connect(() => tc.order.push("saver"))
             IdleClock.displayOffStarted.connect(() => tc.order.push("off"))
             IdleClock.sleepRequested.connect(() => tc.order.push("sleep"))
@@ -73,7 +80,10 @@ Item {
             Update.mockReset()
             setTimes(10, 30, 60, 15)
             tc.t = 1000000000000
+            tc.slept = 0
             IdleClock.now = () => tc.t
+            IdleClock.slept = () => tc.slept
+            IdleClock.wallNow = () => tc.t
             IdleClock.appOpen = false
             IdleClock.reset()
             tc.order = []
@@ -93,7 +103,9 @@ Item {
         }
 
         function cleanup() {
-            IdleClock.now = () => Date.now()
+            IdleClock.now = tc.defaultNow
+            IdleClock.slept = tc.defaultSlept
+            IdleClock.wallNow = tc.defaultWallNow
             IdleClock.reset()
             setTimes(10, 30, 60, 15)
             DeviceSettings.reducedMotion = false
@@ -532,7 +544,8 @@ Item {
             compare(find("rowOrderNote").visible, false)
             DeviceSettings.sleepMinutes = 30
             DeviceSettings.screenOffMinutes = 60
-            compare(find("rowOrderNote").value, "The console sleeps first")
+            compare(find("rowOrderNote").label, "The screen is not turned off")
+            compare(find("rowOrderNote").value, "The console sleeps instead", "T-293: says what happens instead")
             DeviceSettings.screenOffMinutes = 0
             compare(find("rowOrderNote").visible, false, "Never has no order to break")
         }
@@ -545,6 +558,166 @@ Item {
             keyClick(Qt.Key_Down)
             keyClick(Qt.Key_Down)
             tryVerify(() => find("rowControllersOff").activeFocus, 2000, "focus skips the missing row")
+        }
+
+        // ---- the monotonic clock, resume, the sleep row, the wake gap (T-293) ----
+
+        // IdleClock.now is the monotonic clock, not Date.now: a wall clock that jumps an hour
+        // (NTP, a time zone, a date set by hand) neither starts nor ends a stage.
+        function test_wall_clock_jump_does_not_change_stage() {
+            IdleClock.now = tc.defaultNow
+            IdleClock.slept = tc.defaultSlept
+            IdleClock.reset()
+            for (let i = 0; i < 10; ++i) {
+                MonotonicClock.mockAdvance(60000)         // ten minutes pass, a minute at a time
+                IdleClock.evaluate()
+            }
+            compare(IdleClock.stage, "saver")
+            const realNow = Date.now
+            Date.now = () => realNow() + 3600 * 1000      // the wall clock jumps forward an hour
+            IdleClock.evaluate()
+            compare(IdleClock.stage, "saver", "a jump of the wall clock is not input and not a resume")
+            compare(IdleClock.quietSeconds, 600, "and it adds no idle time")
+            Date.now = () => realNow() - 3600 * 1000      // and back two hours
+            IdleClock.evaluate()
+            Date.now = realNow
+            compare(IdleClock.stage, "saver")
+            compare(IdleClock.quietSeconds, 600)
+        }
+
+        // The monotonic clock stops while the machine is suspended; what grew is the time slept.
+        function test_resume_restarts_idle() {
+            minutes(10)
+            compare(IdleClock.stage, "saver")
+            tc.slept += 3 * 3600 * 1000                   // suspended for three hours; `now` did not move
+            IdleClock.evaluate()
+            compare(IdleClock.stage, "active", "a resume is activity")
+            compare(IdleClock.quietSeconds, 0)
+            compare(IdleClock.idleSeconds, 0)
+            minutes(9)
+            compare(IdleClock.stage, "active", "the countdown starts again at the resume")
+            minutes(1)
+            compare(IdleClock.stage, "saver")
+            minutes(20)
+            compare(IdleClock.stage, "off")
+            compare(ScreenPower.on, false)
+            tc.slept += 1800 * 1000
+            IdleClock.evaluate()
+            compare(IdleClock.stage, "active", "also from the dark screen")
+            compare(ScreenPower.on, true)
+        }
+
+        function test_a_short_stall_is_not_a_resume() {
+            minutes(10)
+            tc.slept += 400                               // the boot clock and the monotonic one drift apart a little
+            IdleClock.evaluate()
+            compare(IdleClock.stage, "saver")
+        }
+
+        function test_sleep_row_disabled_without_marker() {
+            Power.mockSetSuspendVerified(false)
+            tryCompare(Power, "sleepAllowed", false)
+            compare(IdleClock.sleepAfter, 0, "the step does not exist")
+            openPowerPane()
+            const row = find("rowSleep")
+            compare(row.visible, true, "the row is not silently missing")
+            compare(row.enabled, false)
+            compare(row.label, "Sleep is not available on this console yet")
+            compare(row.valueText.visible, false, "no value to change")
+            keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Down)
+            tryVerify(() => find("rowControllersOff").activeFocus, 2000, "focus skips the disabled row")
+            keyClick(Qt.Key_Up)
+            tryVerify(() => find("rowScreenOff").activeFocus, 2000, "and Up passes it too")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => find("categoryList").activeFocus, 2000, "Back leaves the pane")
+            minutes(120)
+            compare(IdleClock.stage, "off", "the dark screen is as far as it goes")
+            compare(Power.actionCount, 0)
+        }
+
+        function test_sleep_row_enabled_with_marker() {
+            Power.mockSetSuspendVerified(true)
+            tryCompare(Power, "sleepAllowed", true)
+            openPowerPane()
+            const row = find("rowSleep")
+            compare(row.visible, true)
+            compare(row.enabled, true)
+            compare(row.label, "Sleep")
+            compare(row.valueText.visible, true)
+            keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Down)
+            tryVerify(() => row.activeFocus, 2000, "the row takes focus")
+            keyClick(Qt.Key_Right)
+            compare(DeviceSettings.sleepMinutes, 120)
+            keyClick(Qt.Key_Left)
+        }
+
+        function test_marker_appearing_later_enables_the_row_and_the_step() {
+            Power.mockSetSuspendVerified(false)
+            tryCompare(Power, "sleepAllowed", false)
+            openPowerPane()
+            compare(find("rowSleep").enabled, false)
+            Power.mockSetSuspendVerified(true)
+            tryCompare(find("rowSleep"), "enabled", true)
+            compare(IdleClock.sleepAfter, 3600)
+        }
+
+        // The screen came back from off: the TV may still be re-syncing, so for a second the input
+        // only counts as activity. Input at the dark screen itself is eaten as before.
+        function test_input_swallowed_for_1s_after_wake() {
+            probe.forceActiveFocus()
+            minutes(30)
+            compare(IdleClock.stage, "off")
+            keyClick(Qt.Key_Return)                       // wakes
+            compare(IdleClock.stage, "active")
+            compare(ScreenPower.on, true)
+            compare(probe.presses, 0)
+            compare(IdleClock.swallowInput, true, "the gap is on")
+            keyClick(Qt.Key_Return)
+            compare(probe.presses, 0, "within the second: swallowed")
+            seconds(0.5)
+            keyClick(Qt.Key_Return)
+            compare(probe.presses, 0, "still within it")
+            compare(IdleClock.stage, "active", "swallowed input is still activity, not a stage change")
+            compare(IdleClock.idleSeconds, 0)
+        }
+
+        function test_input_after_1s_passes() {
+            probe.forceActiveFocus()
+            minutes(30)
+            keyClick(Qt.Key_Return)
+            compare(probe.presses, 0)
+            compare(IdleClock.wakeGapMs, 1000)
+            seconds(1)
+            compare(IdleClock.swallowInput, false, "the gap ended after 1 s")
+            keyClick(Qt.Key_Return)
+            compare(probe.presses, 1, "an ordinary press again")
+        }
+
+        function test_the_wake_gap_is_only_after_the_screen_was_off() {
+            probe.forceActiveFocus()
+            minutes(10)
+            compare(IdleClock.stage, "saver")
+            keyClick(Qt.Key_Return)                       // dismisses the saver
+            compare(IdleClock.swallowInput, false, "the saver needs no gap: the screen never went dark")
+            keyClick(Qt.Key_Return)
+            compare(probe.presses, 1)
+        }
+
+        function test_a_resume_from_sleep_opens_the_gap_too() {
+            probe.forceActiveFocus()
+            minutes(60)
+            compare(IdleClock.stage, "sleep")
+            tc.slept += 3600 * 1000                       // woken by the power button: no key
+            IdleClock.evaluate()
+            compare(IdleClock.stage, "active")
+            compare(IdleClock.swallowInput, true)
+            keyClick(Qt.Key_Return)
+            compare(probe.presses, 0)
+            seconds(1)
+            keyClick(Qt.Key_Return)
+            compare(probe.presses, 1)
         }
 
         // ---- screenshots (dev.ps1 shots) ----
@@ -563,6 +736,11 @@ Item {
             settle()
             grabImage(tc.shell).save(shotsDir + "/92-power-saving-settings-en.png")
             IdleInhibit.release("audio")
+            Power.mockSetSuspendVerified(false)          // T-293: the Sleep row without the marker
+            tryCompare(find("rowSleep"), "enabled", false)
+            settle()
+            grabImage(tc.shell).save(shotsDir + "/92-power-saving-no-sleep-en.png")
+            Power.mockSetSuspendVerified(true)
             keyClick(Qt.Key_Escape)
             keyClick(Qt.Key_Escape)
             tryCompare(tc.shell, "currentPage", "")

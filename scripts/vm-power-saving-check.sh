@@ -4,7 +4,12 @@
 #   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-power-saving-check.sh [service|audio|timeline|all]
 #
 #   service   Devices1.Bluetooth.ReportIdle exists and answers "ok" (also with Bluetooth off, as in the VM)
-#   audio     Devices1.Audio.Playing exists and reads false on a quiet console
+#   audio     Devices1.Audio.Playing exists and reads false on a quiet console. T-293: it then plays a
+#             silent stream with pw-cat as ruya-shell (Playing must become true: a running output
+#             stream), stops the player with SIGSTOP (a stream that stopped feeding the graph; where
+#             PipeWire then reports it as not running Playing must become false, otherwise the part
+#             prints "UNVERIFIED:" because SIGSTOP is not a real cork: try a player's pause on the Dell),
+#             and checks that Playing is false again once the player is gone.
 #   timeline  shortens every power-saving time by 60 (RUYA_IDLE_DIVISOR=60: 10 minutes -> 10 s) with a
 #             drop-in on the compositor unit, restarts the shell, waits without any input and reads the
 #             journal: screen saver at ~10 s, display off at ~30 s (and whether DPMS worked: "dpms" or
@@ -38,10 +43,43 @@ service_check() {
     case "$out" in 's "ok"'*) bad "another user was allowed to call ReportIdle" ;; *) ok "another user is refused" ;; esac
 }
 
+playing() { busctl --system get-property "$svc" "$path" org.ruyaos.Devices1.Audio Playing 2>&1; }
+
+# Waits up to $2 s for Playing to read "$1".
+wait_playing() {
+    for _ in $(seq 1 "$(( $2 * 5 ))"); do
+        [ "$(playing)" = "b $1" ] && return 0
+        sleep 0.2
+    done
+    return 1
+}
+
 audio_check() {
-    echo "--- Audio.Playing (T-202)"
-    out="$(busctl --system get-property "$svc" "$path" org.ruyaos.Devices1.Audio Playing 2>&1)"
+    echo "--- Audio.Playing (T-202, T-293)"
+    out="$(playing)"
     [ "$out" = "b false" ] && ok "Playing is false on a quiet console" || bad "Playing read: $out"
+    if ! command -v pw-cat >/dev/null 2>&1; then
+        echo "UNVERIFIED: pw-cat is not installed: no stream was played"
+        return
+    fi
+    # PipeWire runs in the ruya-shell user's session.
+    runuser -u ruya-shell -- env "XDG_RUNTIME_DIR=/run/user/$uid" pw-cat -p --rate 48000 --channels 2 --format s16 /dev/zero >/dev/null 2>&1 &
+    player=$!
+    if wait_playing true 8; then
+        ok "a running output stream makes Playing true"
+    else
+        bad "Playing stayed $(playing) with a stream running"
+    fi
+    pkill -STOP -x pw-cat
+    if wait_playing false 8; then
+        ok "a stream that stopped running does not hold Playing"
+    else
+        echo "UNVERIFIED: Playing stays true after SIGSTOP of pw-cat (PipeWire keeps the node running); a real pause is checked on the Dell"
+    fi
+    pkill -CONT -x pw-cat
+    pkill -x pw-cat
+    wait "$player" 2>/dev/null
+    wait_playing false 8 && ok "Playing is false again once the stream is gone" || bad "Playing stayed true after the stream ended: $(playing)"
 }
 
 timeline_check() {

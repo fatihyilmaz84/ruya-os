@@ -14,7 +14,11 @@ import RuyaShell
 //     "nothing idles while something is going on" is a single rule.
 //   - `stage`: "active" -> "saver" -> "off" -> "sleep", entered when `quietSeconds` reaches the
 //     times of DeviceSettings (Off/never = 0 skips a stage). A stage is only ever left by input
-//     (`noteInput()`), or by the machine having been asleep (a jump of the clock).
+//     (`noteInput()`), or by the machine having been asleep (a resume).
+//
+// Time is read from a monotonic clock (`MonotonicClock`, T-293), never from the wall clock: NTP, a
+// time zone or a date set by hand moves nothing here. A resume from suspend is told by the time the
+// machine has slept (`slept()`), because the monotonic clock stops while it sleeps.
 //
 // Every time is derived in one place (`secs()`), divided by `IdleInhibit.timeDivisor`
 // (RUYA_IDLE_DIVISOR, for the VM and the Dell). Tests replace `now` with a fake clock and call
@@ -24,8 +28,15 @@ QtObject {
     id: clock
 
     // ---- test hooks and inputs ----
-    // The wall clock in ms. Replaced in tests.
-    property var now: () => Date.now()
+    // The clock in ms: monotonic, not the wall clock. Replaced in tests.
+    property var now: () => MonotonicClock.ms()
+    // Total ms the machine has been suspended since boot (a resume makes it jump). Replaced in tests.
+    property var slept: () => MonotonicClock.sleptMs()
+    // The time of day in ms since the epoch, for the screen saver's clock only. Replaced in tests.
+    property var wallNow: () => Date.now()
+    // Input within this long after the screen came back from off only wakes: the TV is still
+    // re-syncing and a press then is as likely a bounce as a command. To be tuned on the Dell.
+    readonly property int wakeGapMs: 1000
     // An app has the screen (set by Shell): the idle-controller rule never switches pads off then,
     // because the shell does not see every button a game uses.
     property bool appOpen: false
@@ -49,12 +60,19 @@ QtObject {
     property double lastInputMs: now()
     property double lastBusyMs: lastInputMs
     property double lastEvalMs: lastInputMs
+    property double lastSleptMs: slept()
+    // Until when (`now()` ms) input is swallowed after waking from the dark screen or from sleep.
+    property double wakeGuardUntilMs: 0
+    property bool wakeGuard: false
     property double lastPadReportMs: 0
     property bool padReported: false
     property int idleSeconds: 0
     property int quietSeconds: 0
     property string stage: "active"        // "active" | "saver" | "off" | "sleep"
     readonly property bool covered: stage !== "active"
+    // What KeyRouter eats: the saver and the dark screen (the first input only wakes), and the
+    // `wakeGapMs` after the screen came back.
+    readonly property bool swallowInput: covered || wakeGuard
     readonly property bool held: IdleInhibit.held
     // Why the console is held awake right now, for the Power saving pane ("" when it is not).
     readonly property string heldBy: IdleInhibit.reasons.join(", ")
@@ -102,8 +120,13 @@ QtObject {
     function wake() {
         const was = stage
         stage = "active"
-        if (was === "off" || was === "sleep")
+        if (was === "off" || was === "sleep") {
             ScreenPower.setOn(true)
+            wakeGuardUntilMs = now() + wakeGapMs
+            wakeGuard = true
+            guardTimer.interval = wakeGapMs + 50     // a timer may fire a hair early; evaluate() compares times
+            guardTimer.restart()
+        }
         woke()
     }
 
@@ -116,16 +139,22 @@ QtObject {
 
     function evaluate() {
         const t = now()
-        // A wall clock that jumped far ahead of the last look: the console was suspended (by this
-        // clock's sleep step, or from the Guide menu) and something woke it that was not a key the
-        // shell saw (the power button). Waking up is activity, in every stage: without this the
-        // first look after a long sleep would read the time asleep as idle time, go straight to
-        // the dark screen and suspend again. The timer never waits longer than `heartbeatMs`, so
-        // a gap above `gapMs` can only be a sleep.
-        if (t - lastEvalMs > gapMs) {
+        // The machine was suspended (by this clock's sleep step, or from the Guide menu) and
+        // something woke it that was not a key the shell saw (the power button). Waking up is
+        // activity, in every stage: without this the first look after a long sleep would read the
+        // time asleep as idle time, go straight to the dark screen and suspend again. The
+        // monotonic clock stops while suspended, so the sleeping is read from `slept()`; a clock
+        // that does count the sleep shows as a gap above `gapMs` (the timer never waits longer
+        // than `heartbeatMs`). The wall clock is not consulted: changing it is not a resume.
+        const sleptNow = slept()
+        const resumed = sleptNow - lastSleptMs > 1000
+        lastSleptMs = sleptNow
+        if (resumed || t - lastEvalMs > gapMs) {
             noteInput()
             return
         }
+        if (wakeGuard && t >= wakeGuardUntilMs)
+            wakeGuard = false
         lastEvalMs = t
         if (held)
             lastBusyMs = t
@@ -171,6 +200,9 @@ QtObject {
         lastInputMs = now()
         lastBusyMs = lastInputMs
         lastEvalMs = lastInputMs
+        lastSleptMs = slept()
+        wakeGuard = false
+        guardTimer.stop()
         lastPadReportMs = 0
         padReported = false
         idleSeconds = 0
@@ -249,6 +281,13 @@ QtObject {
     readonly property Connections padWatch: Connections {
         target: Bluetooth
         function onGamepadConnected() { clock.noteInput() }
+    }
+
+    // Ends the wake guard on time even when nothing else looks at the clock.
+    readonly property Timer guardTimer: Timer {
+        objectName: "idleWakeGuard"
+        repeat: false
+        onTriggered: clock.evaluate()
     }
 
     readonly property Timer tick: Timer {
