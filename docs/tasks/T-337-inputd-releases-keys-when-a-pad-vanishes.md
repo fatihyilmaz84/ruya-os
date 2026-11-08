@@ -36,7 +36,7 @@ Status: done · Phase: 2 · Depends: — · Area: services (ruya-inputd), script
 - Land this before T-264 so the registry starts from a service that cannot stick a key.
 
 ## Outcome
-Verified: host (vm pending: vm-devices-check.sh inputd)
+Verified: host + vm (image 0.0.56, lead-5 2026-11-08: vm-devices-check.sh inputd: 6 PASS incl. the vanished pad logged with what it released). hw (Dell) still to check: a real pad vanishing.
 
 Checks: `dev.ps1 test` ALL GREEN (940 QML passed, 73 skipped; Rust incl. 13 ruya-inputd tests).
 

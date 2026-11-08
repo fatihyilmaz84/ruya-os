@@ -36,7 +36,7 @@ Today `ruya-devices` writes a line only when something fails, so "my second cont
 - T-338 uses these lines on the Dell; T-336 (adapters) adds the adapter name to each line when it lands.
 
 ## Outcome
-Verified: host (vm pending: vm-devices-check.sh bluetooth)
+Verified: host + vm (image 0.0.56, lead-5 2026-11-08: vm-devices-check.sh bluetooth: 23 PASS incl. the journal lines of the two-adapter run). hw (Dell) still to check: the journal on the Dell.
 
 Built. `services/ruya-devices/src/log.rs`: `info(line)` writes `ruya-devices: <line>` to stderr and, under `cfg(test)`, to a thread-local buffer (`log::take()`); `clean()` turns control characters of a remote device's name into `?`. `bluetooth.rs` logs through small helpers that sit where the action is decided and take the reason: `connect_device(address, timeout, reason)`, `disconnect_device(address, reason)`, `remove_device(address, reason)`, `trust(address)`, `set_pairable(adapter, on, why)`, `label(address)` (`AA:.. "Alias" (hci0)`, so every line names the adapter, T-336). The lines and their wording are in 03 §2.1 ("What the journal says").
 

@@ -42,7 +42,7 @@ The Dell has two Bluetooth adapters (`hci0` 00:E0:4C:23:99:87 and `hci1` 34:2E:B
 - Overlaps T-334 (same files, tests) and T-335 (log lines gain the adapter name): sequence them, do not run in parallel.
 
 ## Outcome
-Verified: host (vm pending: vm-devices-check.sh bluetooth). Review APPROVE round 2.
+Verified: host + vm (image 0.0.56, lead-5 2026-11-08: vm-devices-check.sh bluetooth: 23 PASS incl. a pad on hci1 listed with adapter hci1, Connect and Forget of it succeed). hw (Dell) still to check: the two real adapters (the Dell has one now).
 
 **What was built.** A device is always operated through the adapter that holds it; new pairings, the scan and the window use one deliberate primary adapter.
 - **Contract (`org.ruyaos.Devices1.xml`):** `ListDevices` entries gained `adapter` (`hci0`); the `Powered` text says any-adapter-on / all-adapters-off and that scan and window are the primary's. No new method or property: the shell needs nothing beyond the field (justified: no adapter chooser, no per-adapter switch).
