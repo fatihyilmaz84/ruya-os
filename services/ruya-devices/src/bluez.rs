@@ -307,15 +307,6 @@ impl BluezClient {
         Ok(Raw { adapters, devices })
     }
 
-    /// The object path of the primary adapter.
-    async fn adapter_path(&self) -> Result<String, BtError> {
-        self.read()
-            .await?
-            .primary()
-            .map(|a| a.path.clone())
-            .ok_or_else(|| BtError::new("org.bluez.Error.NotReady"))
-    }
-
     async fn set(&self, path: &str, iface: &str, prop: &str, on: bool) -> Result<(), BtError> {
         self.call(path, PROPERTIES, "Set", &(iface, prop, Value::from(on)))
             .await
@@ -385,18 +376,12 @@ impl Bluez for BluezClient {
         })
     }
 
-    fn set_pairable(&self, on: bool) -> Result<(), BtError> {
-        future::block_on(async {
-            let adapter = self.adapter_path().await?;
-            self.set(&adapter, ADAPTER, "Pairable", on).await
-        })
+    fn set_pairable(&self, adapter: &str, on: bool) -> Result<(), BtError> {
+        future::block_on(self.set(adapter, ADAPTER, "Pairable", on))
     }
 
-    fn set_discoverable(&self, on: bool) -> Result<(), BtError> {
-        future::block_on(async {
-            let adapter = self.adapter_path().await?;
-            self.set(&adapter, ADAPTER, "Discoverable", on).await
-        })
+    fn set_discoverable(&self, adapter: &str, on: bool) -> Result<(), BtError> {
+        future::block_on(self.set(adapter, ADAPTER, "Discoverable", on))
     }
 
     fn register_agent(&self) -> Result<(), BtError> {
@@ -438,10 +423,9 @@ impl Bluez for BluezClient {
         })
     }
 
-    fn start_discovery(&self) -> Result<(), BtError> {
+    fn start_discovery(&self, adapter: &str) -> Result<(), BtError> {
         future::block_on(async {
-            let adapter = self.adapter_path().await?;
-            match self.call(&adapter, ADAPTER, "StartDiscovery", &()).await {
+            match self.call(adapter, ADAPTER, "StartDiscovery", &()).await {
                 // Someone else (or an earlier call of ours) already runs it.
                 Err(e) if e.0 == "org.bluez.Error.InProgress" => Ok(()),
                 other => other.map(|_| ()),
@@ -449,10 +433,9 @@ impl Bluez for BluezClient {
         })
     }
 
-    fn stop_discovery(&self) -> Result<(), BtError> {
+    fn stop_discovery(&self, adapter: &str) -> Result<(), BtError> {
         future::block_on(async {
-            let adapter = self.adapter_path().await?;
-            self.call(&adapter, ADAPTER, "StopDiscovery", &())
+            self.call(adapter, ADAPTER, "StopDiscovery", &())
                 .await
                 .map(|_| ())
         })

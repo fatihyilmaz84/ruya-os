@@ -225,7 +225,9 @@
       error. Powered is false when there is no adapter. With several adapters (T-336) Powered is true
       when any adapter is on; setting it false switches every adapter off, true every adapter that
       lets itself be switched on (an rfkill-blocked one is skipped), so a pad bonded on the second
-      adapter does not keep working while Bluetooth looks off. Discovering, StartScan and the
+      adapter does not keep working while Bluetooth looks off. Switching off answers the first
+      error if any adapter refused, even when the others did switch off; switching on answers an
+      error only when no adapter could be switched. Discovering, StartScan and the
       controller pairing window are those of the primary adapter (the one with the most paired
       devices; a tie goes to a USB-attached one, then to the lowest hciN).
     -->
