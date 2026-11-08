@@ -11,8 +11,23 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | [T-295](tasks/T-295-time-zone-follow-ups.md) | Time zone follow-ups: say it when Setup cannot set the zone, type to filter the chooser | todo | — |
 | [T-287](tasks/T-287-display-hotplug-and-mode-check.md) | Display service follow-ups: hot-plug signal, check the real mode after the restart, recovery argument | todo | T-282 |
 | [T-288](tasks/T-288-display-pane-layout-and-ui-size-reflow.md) | Display pane order, layout at large UI size, a Screen row, and the late-filled Column reflow | todo | T-282 |
+| [T-343](tasks/T-343-settings-first-focus-and-manage-profiles-follow-ups.md) | Settings follow-ups: first focus skips disabled rows, read-only rows in the spec, Manage profiles result and Guest | todo | — |
 | [T-289](tasks/T-289-system-information-follow-ups.md) | System information follow-ups: Bluetooth address from BlueZ, image from a root source, one info row, drive chooser | todo | — |
 | [T-299](tasks/T-299-image-follow-ups-secure-boot-bluez-grub-menu.md) | Image follow-ups (VM this task): quiet bootloader-update on Secure Boot, BlueZ pairable timeout, grub-menu ordering, webp | todo | — |
+| [T-334](tasks/T-334-two-controllers-tests.md) | Two controllers at once: tests that prove the second pad does not disturb the first | todo | — |
+| [T-335](tasks/T-335-bluetooth-info-logging.md) | ruya-devices logs window, pairing, removal, connect and idle disconnect with the reason | todo | — |
+| [T-337](tasks/T-337-inputd-releases-keys-when-a-pad-vanishes.md) | ruya-inputd: a vanished pad never leaves a key held; two pads share keys safely | todo | — |
+| [T-336](tasks/T-336-bluetooth-several-adapters.md) | Bluetooth with more than one adapter: every device is operated through its own adapter | todo | — |
+| [T-338](tasks/T-338-dell-second-pad-drop-repro.md) | **[lead]** Dell: why did the second DualSense drop after 21 s? (live repro and report) | todo | T-335 |
+| [T-331](tasks/T-331-removable-drive-recognised-data-scan.md) | Settings > Storage shows what RuyaOS finds on a removable drive (read-only scan) | todo | T-196 |
+| [T-332](tasks/T-332-format-removable-drive-service.md) | Format a removable drive: the service (udisks2, polkit, refusals, identity re-check) | todo | T-196, T-194 |
+| [T-333](tasks/T-333-format-drive-settings-flow.md) | Settings > Storage > Format drive...: choose, confirm, PIN, progress, result | todo | T-331, T-332 |
+| [T-339](tasks/T-339-vm-check-script-follow-ups.md) | VM check scripts: power-saving wake, sounds probe and jq | todo | — |
+| [T-340](tasks/T-340-session-adopted-units-follow-ups.md) | ruya-session: follow adopted apps cheaply, never relaunch into a taken unit name | todo | — |
+| [T-341](tasks/T-341-lint-icon-and-docs-follow-ups.md) | Lint and docs follow-ups: sample metainfo check, icon spike contour, member-lint note, vm-goto | todo | — |
+| [T-342](tasks/T-342-store-age-rating-and-sync-follow-ups.md) | Store follow-ups: every OARS attribute, the long Turkish badge, installed-list reads in order | todo | — |
+| [T-344](tasks/T-344-audio-pane-delete-and-confirm-detail-follow-ups.md) | Sound theme delete and confirm dialogs: refused delete, guard test, wrapped details | todo | — |
+| [T-345](tasks/T-345-appart-gpu-check-masked-tint-and-shots.md) | AppArt and rounded corners: one GPU check, tint under masked pictures, shots at 4K and DPR 1 | todo | — |
 | [T-283](tasks/T-283-contrast-gate-rows-and-chart-bar-marker.md) | Contrast gate rows: glass sheet, chart bars, saver, bare backdrop, avatars; the chart's read-bar marker | todo | T-282 |
 | [T-284](tasks/T-284-glass-sheet-and-dialog-card-follow-ups.md) | Glass sheet follow-ups and one dialog card for the confirm dialogs | todo | T-282 |
 | [T-298](tasks/T-298-ci-qt-floor-and-linux-clippy-gate.md) | **[lead]** CI: decide the Qt floor and add a Linux-native clippy gate at Rust 1.92 | todo | — |

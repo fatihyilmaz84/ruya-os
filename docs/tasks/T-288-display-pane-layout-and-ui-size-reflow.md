@@ -41,6 +41,7 @@ At UI size 200 % Settings and Home are still usable (no crowded nav, panes wide 
 - `02-shell.md` (Settings at large UI size), 04 (percent rule), `shell/PATTERNS.md` (the reflow note, if any remains).
 
 ## Hints
+- Review findings added by the 2026-11-08 triage: Settings Display rows stayed unlaid (all y=0) in a real 1080p window after a wallpaper change until `Column.forceLayout()` (seen in the `tst_long_names` shot): find out whether a user can hit it; the shared `SettingsPane` auto-reflow when rows' visibility changes (T-324 review) replaces the per-pane `reflow()` calls, the unlaid-column flake shows only in real-window shots. T-343 changes `settleFocus` in the same file: run it after this task.
 - Run after T-287 (same files: `DisplayPane.qml`, `tst_display.qml`). `shots` is the only place the Column bug shows (offscreen is the software renderer).
 
 ## Outcome

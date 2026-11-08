@@ -28,5 +28,8 @@ The system knows which pad is which player: a registry of known pads and the slo
 ## Docs to update
 - the XML, `03-services-and-apps.md`, `docs/dev-setup.md` if a check is added.
 
+## Hints
+- Robustness work that lands before this (2026-11-08, from the "second pad overrides the first" report): T-334 (two-pad tests and fixtures: reuse them), T-335 (INFO logging), T-336 (per-device Bluetooth adapter: the registry keys controllers by address, the adapter name is an extra field), T-337 (`ruya-inputd` releases keys when a pad vanishes and shares keys safely between pads: start from that mapper). T-338 is the Dell investigation of the 21 s drop.
+
 ## Outcome
 _Filled in by the implementer. First line: `Verified: host (vm pending: …)`._
