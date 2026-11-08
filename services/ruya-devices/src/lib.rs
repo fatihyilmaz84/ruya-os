@@ -23,6 +23,7 @@ pub mod events;
 pub mod families;
 pub mod idle_pads;
 pub mod input;
+pub mod log;
 pub mod network;
 pub mod networkmanager;
 pub mod pairing;

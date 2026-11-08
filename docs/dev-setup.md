@@ -65,6 +65,8 @@ Image builds and VM disks are big (an image is ~4.7 GB, a qcow2 ~2.6 GB), and th
 
 In the VM, the shell's own log is `journalctl -b _UID=$(id -u ruya-shell)`. pam_systemd moves the compositor into `session-N.scope`, so `journalctl -u ruya-compositor@tty1` shows only the unit's start.
 
+The history of a Bluetooth pad (window, pairing, trust, removal with its reason, connect and disconnect with who asked, `link` drops, idle disconnects) is in the Devices service's journal: `journalctl -b -t ruya-devices | grep -E 'window|paired|remove|connect|link|idle'` as root, or `journalctl --user-unit ruya-devices` as `ruya-shell` (T-335, [03 §2.1](specs/03-services-and-apps.md)).
+
 ### Adding an icon (T-157)
 
 The shell's icons come from a subset of Material Symbols Rounded (`shell/fonts/`, 04 §3.7). To add one: look up its code point in the upstream `.codepoints` file, add `<name> <hex>` to `shell/fonts/icons.txt` and the same pair to the table in `shell/qml/Icon.qml`, then cut the fonts again in WSL (`python3-fonttools` installed; no other setup):

@@ -247,8 +247,11 @@ else:
 # T-336: a second instance of the service with the two-adapter fake (RUYA_DEVICES_FAKE_BLUETOOTH=two-adapters)
 # on ruya-shell's user bus: AA:..:11 lives on hci1; it must be listed with adapter hci1, and Connect and
 # Forget of it must answer ok (the fake only accepts a call that goes through the adapter holding the device).
+# T-335: the same instance's stderr (what the journal collects from the real unit) must say what happened:
+# the connect and the forget with who asked and through which adapter, and the pairing window's open and close.
 bluetooth_two_adapters_check() {
     local out verdict ubus="unix:path=/run/user/$uid/bus" bt_user=org.ruyaos.Devices1.Bluetooth
+    local log="/run/user/$uid/ruya-devices-two-adapters.log" missing want
     echo "--- bluetooth (T-336): two adapters (ruya-shell's user bus, FakeBluez::with_two_adapters)"
     if ! command -v python3 >/dev/null; then
         bad "python3 is needed for the two-adapter check"
@@ -259,11 +262,13 @@ bluetooth_two_adapters_check() {
         return
     fi
     out="$(as_shell env DBUS_SESSION_BUS_ADDRESS="$ubus" RUYA_DEVICES_FAKE_BLUETOOTH=two-adapters bash -c '
-        /usr/bin/ruya-devices --session >/dev/null 2>&1 &
+        /usr/bin/ruya-devices --session >/dev/null 2>'"$log"' &
         pid=$!
         n=0
         until busctl --user status org.ruyaos.Devices1 >/dev/null 2>&1 || [ "$n" -ge 50 ]; do sleep 0.2; n=$((n + 1)); done
         call() { busctl --user --json=short call org.ruyaos.Devices1 /org/ruyaos/Devices1 '"$bt_user"' "$@"; }
+        echo "START $(call StartControllerPairing u 0)"
+        echo "STOP $(call StopControllerPairing)"
         echo "LIST $(call ListDevices)"
         echo "CONNECT $(call Connect s AA:00:00:00:00:11)"
         echo "FORGET $(call Forget s AA:00:00:00:00:11)"
@@ -291,6 +296,8 @@ for d in first.values():
     print("device %s adapter=%r" % (d["id"]["data"], d.get("adapter", {}).get("data")))
 if pad["adapter"]["data"] != "hci1" or other["adapter"]["data"] != "hci0":
     print("wrong: the pads should say hci1 and hci0")
+elif rows.get("START") != ["ok"] or rows.get("STOP") != ["ok"]:
+    print("wrong: the pairing window answered %r / %r" % (rows.get("START"), rows.get("STOP")))
 elif rows.get("CONNECT") != ["ok"]:
     print("wrong: Connect of the pad on hci1 answered %r" % (rows.get("CONNECT"),))
 elif rows.get("FORGET") != ["ok"]:
@@ -305,6 +312,17 @@ else:
     *"VERDICT ok"*) ok "a pad on hci1 is listed with adapter hci1; Connect and Forget of it answer ok";;
     *) bad "ListDevices/Connect/Forget of the two-adapter fake: $verdict $out";;
     esac
+    missing=
+    for want in         'ruya-devices: pairing window opened on hci1 for 2 min'         'ruya-devices: pairing window on hci1 closed: stopped'         'ruya-devices: connect AA:00:00:00:00:11 "Second Pad" (hci1): user'         'ruya-devices: remove AA:00:00:00:00:11 "Second Pad" (hci1): forget'; do
+        grep -qF -- "$want" "$log" 2>/dev/null || missing="$missing [$want]"
+    done
+    if [ -z "$missing" ]; then
+        ok "the service's log names the window (opened, closed: stopped), the connect (user) and the forget, each with its adapter"
+    else
+        echo "--- log:"; cat "$log" 2>/dev/null
+        bad "the service's log lacks:$missing"
+    fi
+    rm -f "$log"
 }
 
 # T-196: Devices1.Storage.GetSystemUsage, the console's own storage. Compares the filesystem numbers

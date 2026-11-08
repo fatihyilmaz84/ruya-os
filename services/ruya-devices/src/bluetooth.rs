@@ -9,6 +9,7 @@ use std::time::{Duration, Instant};
 
 use crate::families::family_of_device;
 use crate::idle_pads::{IdlePads, IdleReport, Pad};
+use crate::log::{self, clean};
 use crate::pairing::{
     address_of_path, is_format_char, is_hid_service, is_input_device, PairingState, DEFAULT_WINDOW,
     MAX_ATTEMPTS, MAX_WINDOW,
@@ -274,6 +275,65 @@ pub fn merge_devices(devices: Vec<RawDevice>, primary: &str) -> Vec<RawDevice> {
     out
 }
 
+/// A device as the journal names it: `AA:.. "Alias" (hci0)`. Names are what a remote device
+/// chose, so control characters are cleaned.
+fn label_of(d: &RawDevice) -> String {
+    format!(
+        "{} \"{}\" ({})",
+        clean(&d.address),
+        clean(&d.alias),
+        adapter_name(&d.adapter)
+    )
+}
+
+/// A length of time for the journal: whole minutes as `35 min`, else seconds.
+fn span(d: Duration) -> String {
+    let s = d.as_secs();
+    if s >= 60 && s % 60 == 0 {
+        format!("{} min", s / 60)
+    } else {
+        format!("{s} s")
+    }
+}
+
+/// The devices that connected or dropped between two reads and that we did not ask for, as
+/// journal lines (`link`: the device or the radio did it). A request of ours that BlueZ now
+/// shows is used up silently; one that never showed is dropped when the device changes anyway.
+/// Only devices in both reads count, so the first read and a radio that went off and on say
+/// nothing.
+fn link_changes(
+    before: &[RawDevice],
+    after: &[RawDevice],
+    on: bool,
+    intents: &mut HashMap<String, bool>,
+) -> Vec<String> {
+    let mut lines = Vec::new();
+    if !on {
+        return lines;
+    }
+    for d in after {
+        let Some(old) = before.iter().find(|o| o.address == d.address) else {
+            continue;
+        };
+        if old.connected == d.connected {
+            continue;
+        }
+        if intents.remove(&d.address) == Some(d.connected) {
+            continue;
+        }
+        lines.push(format!(
+            "{} {}: link",
+            if d.connected {
+                "connected"
+            } else {
+                "disconnected"
+            },
+            label_of(d)
+        ));
+    }
+    lines
+}
+
 /// A listed device (the contract's dictionary).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Device {
@@ -452,6 +512,9 @@ struct State {
     /// Changes seen by reads whose caller did not announce them (a call that read on the way);
     /// the next `refresh` reports them.
     pending: Changes,
+    /// Connect and disconnect requests of ours that BlueZ has not shown yet (address -> the
+    /// connected state asked for): a change that matches one is not logged as `link`.
+    intents: HashMap<String, bool>,
 }
 
 type Notifier = Arc<dyn Fn() + Send + Sync>;
@@ -530,7 +593,7 @@ impl<B: Bluez> Bluetooth<B> {
         for a in adapters {
             let name = adapter_name(&a.path);
             if a.state.pairable {
-                if let Err(e) = self.bluez.set_pairable(&a.path, false) {
+                if let Err(e) = self.set_pairable(&a.path, false, "startup") {
                     eprintln!("ruya-devices: {name} Pairable off failed: {}", e.0);
                 }
             }
@@ -557,6 +620,14 @@ impl<B: Bluez> Bluetooth<B> {
             Vec::new()
         };
         let mut st = self.lock();
+        let links = {
+            let State {
+                raw_devices: before,
+                intents,
+                ..
+            } = &mut *st;
+            link_changes(before, &raw_devices, on, intents)
+        };
         let off = RawAdapter {
             powered: false,
             discovering: false,
@@ -586,7 +657,94 @@ impl<B: Bluez> Bluetooth<B> {
         if !on || (before.discovering && !after.discovering) {
             st.scan_until = None;
         }
+        drop(st);
+        for line in links {
+            log::info(&line);
+        }
         Ok(())
+    }
+
+    /// A device as the journal names it: `AA:.. "Alias" (hci0)`; the bare address when the last
+    /// read did not show it.
+    fn label(&self, address: &str) -> String {
+        self.lock()
+            .raw_devices
+            .iter()
+            .find(|d| d.address == address)
+            .map_or_else(|| clean(address), label_of)
+    }
+
+    /// `Pairable` on an adapter, logged when it worked (`why`: who asked).
+    fn set_pairable(&self, adapter: &str, on: bool, why: &str) -> Result<(), BtError> {
+        self.bluez.set_pairable(adapter, on)?;
+        log::info(&format!(
+            "{} Pairable {}: {why}",
+            adapter_name(adapter),
+            if on { "on" } else { "off" }
+        ));
+        Ok(())
+    }
+
+    /// Asks BlueZ to connect the device, through its own adapter. `reason`: `user`, `window`.
+    fn connect_device(
+        &self,
+        address: &str,
+        timeout: Duration,
+        reason: &str,
+    ) -> Result<(), BtError> {
+        let label = self.label(address);
+        log::info(&format!("connect {label}: {reason}"));
+        self.lock().intents.insert(address.to_owned(), true);
+        let result = self
+            .route(address)
+            .and_then(|a| self.bluez.connect(&a, address, timeout));
+        if let Err(e) = &result {
+            self.lock().intents.remove(address);
+            log::info(&format!("connect {label} failed: {}", e.0));
+        }
+        result
+    }
+
+    /// Asks BlueZ to disconnect the device. `reason`: `user`, `idle-timeout (...)`.
+    fn disconnect_device(&self, address: &str, reason: &str) -> Result<(), BtError> {
+        let label = self.label(address);
+        log::info(&format!("disconnect {label}: {reason}"));
+        self.lock().intents.insert(address.to_owned(), false);
+        let result = self
+            .route(address)
+            .and_then(|a| self.bluez.disconnect(&a, address));
+        if let Err(e) = &result {
+            self.lock().intents.remove(address);
+            log::info(&format!("disconnect {label} failed: {}", e.0));
+        }
+        result
+    }
+
+    /// Removes the pairing (BlueZ then disconnects too). `reason`: `forget` (the user), `sweep`
+    /// (a stranger the window found), `agent-refused`.
+    fn remove_device(&self, address: &str, reason: &str) -> Result<(), BtError> {
+        let label = self.label(address);
+        log::info(&format!("remove {label}: {reason}"));
+        let result = self
+            .route(address)
+            .and_then(|a| self.bluez.remove(&a, address));
+        if let Err(e) = &result {
+            log::info(&format!("remove {label} failed: {}", e.0));
+        }
+        result
+    }
+
+    /// Trusts the device (BlueZ then lets its HID connection through).
+    fn trust(&self, address: &str) -> Result<(), BtError> {
+        let label = self.label(address);
+        let result = self
+            .route(address)
+            .and_then(|a| self.bluez.set_trusted(&a, address));
+        match &result {
+            Ok(()) => log::info(&format!("trusted {label}")),
+            Err(e) => log::info(&format!("trusting {label} failed: {}", e.0)),
+        }
+        result
     }
 
     /// The adapter must be there and on for scanning, pairing and connecting.
@@ -604,6 +762,10 @@ impl<B: Bluez> Bluetooth<B> {
         // Know the adapter first: BlueZ may have just come up.
         self.read()?;
         self.bluez.set_powered(on)?;
+        log::info(&format!(
+            "adapters powered {} (user)",
+            if on { "on" } else { "off" }
+        ));
         self.refresh()
     }
 
@@ -676,7 +838,7 @@ impl<B: Bluez> Bluetooth<B> {
             ended = true;
         }
         if self.lock().window.as_ref().is_some_and(|w| now >= w.until) {
-            self.close_window(PairingState::Timeout);
+            self.close_window(PairingState::Timeout, None);
             ended = true;
         }
         ended
@@ -760,34 +922,34 @@ impl<B: Bluez> Bluetooth<B> {
                 }
             };
             if !window {
-                if let Err(e) = self.bluez.set_pairable(&adapter, true) {
+                if let Err(e) = self.set_pairable(&adapter, true, "manual pairing") {
                     return map_error(&e.0, false);
                 }
             }
             let paired = self.bluez.pair(&adapter, &dev.id, left());
             if !window {
-                if let Err(e) = self.bluez.set_pairable(&adapter, false) {
+                if let Err(e) = self.set_pairable(&adapter, false, "manual pairing done") {
                     eprintln!("ruya-devices: Pairable off again failed: {}", e.0);
                 }
             }
             if let Err(e) = paired {
+                log::info(&format!(
+                    "pairing {} via manual failed: {}",
+                    self.label(&dev.id),
+                    e.0
+                ));
                 return map_error(&e.0, true);
             }
+            log::info(&format!("paired {} via manual", self.label(&dev.id)));
         }
-        if let Err(e) = self
-            .route(&dev.id)
-            .and_then(|a| self.bluez.set_trusted(&a, &dev.id))
-        {
+        if let Err(e) = self.trust(&dev.id) {
             return map_error(&e.0, false);
         }
         let left = left();
         if left.is_zero() {
             return Status::Timeout;
         }
-        match self
-            .route(&dev.id)
-            .and_then(|a| self.bluez.connect(&a, &dev.id, left))
-        {
+        match self.connect_device(&dev.id, left, "user") {
             Ok(()) => Status::Ok,
             Err(e) => map_error(&e.0, true),
         }
@@ -796,10 +958,7 @@ impl<B: Bluez> Bluetooth<B> {
     pub fn connect(&self, id: &str) -> Status {
         match self.ready_device(id) {
             Ok(d) if !d.paired => Status::Failed,
-            Ok(d) => match self
-                .route(&d.id)
-                .and_then(|a| self.bluez.connect(&a, &d.id, CALL_TIMEOUT))
-            {
+            Ok(d) => match self.connect_device(&d.id, CALL_TIMEOUT, "user") {
                 Ok(()) => Status::Ok,
                 Err(e) => map_error(&e.0, false),
             },
@@ -810,10 +969,7 @@ impl<B: Bluez> Bluetooth<B> {
     pub fn disconnect(&self, id: &str) -> Status {
         match self.find(id) {
             Ok(d) if !d.paired => Status::Failed,
-            Ok(d) => match self
-                .route(&d.id)
-                .and_then(|a| self.bluez.disconnect(&a, &d.id))
-            {
+            Ok(d) => match self.disconnect_device(&d.id, "user") {
                 Ok(()) => Status::Ok,
                 Err(e) => map_error(&e.0, false),
             },
@@ -844,11 +1000,12 @@ impl<B: Bluez> Bluetooth<B> {
             .decide(now, report, &pads);
         let mut done = Vec::new();
         for id in due {
-            if self
-                .route(&id)
-                .and_then(|a| self.bluez.disconnect(&a, &id))
-                .is_ok()
-            {
+            let reason = format!(
+                "idle-timeout (idle {} >= {})",
+                span(report.idle),
+                span(report.timeout)
+            );
+            if self.disconnect_device(&id, &reason).is_ok() {
                 done.push(id);
             }
         }
@@ -884,7 +1041,7 @@ impl<B: Bluez> Bluetooth<B> {
     /// Disconnects and removes the pairing (BlueZ's `RemoveDevice` does both).
     pub fn forget(&self, id: &str) -> Status {
         match self.find(id) {
-            Ok(d) => match self.route(&d.id).and_then(|a| self.bluez.remove(&a, &d.id)) {
+            Ok(d) => match self.remove_device(&d.id, "forget") {
                 Ok(()) => Status::Ok,
                 Err(e) => map_error(&e.0, false),
             },
@@ -958,7 +1115,7 @@ impl<B: Bluez> Bluetooth<B> {
             st.starting = true;
             (primary.path, primary.state)
         };
-        let status = self.open_window(now + length, &path, adapter);
+        let status = self.open_window(now + length, length, &path, adapter);
         self.lock().starting = false;
         status
     }
@@ -967,7 +1124,13 @@ impl<B: Bluez> Bluetooth<B> {
     /// made pairable (the pad's pairing, ours or its own, needs it) but not discoverable: a pad
     /// in pairing mode advertises and is found by our scan, and a bonded pad pages us, so nobody
     /// else needs to see the console. The window remembers the adapter.
-    fn open_window(&self, until: Instant, path: &str, adapter: RawAdapter) -> Status {
+    fn open_window(
+        &self,
+        until: Instant,
+        length: Duration,
+        path: &str,
+        adapter: RawAdapter,
+    ) -> Status {
         // Agent first: if BlueZ refuses it nothing else has been touched.
         if let Err(e) = self.bluez.register_agent() {
             eprintln!(
@@ -976,7 +1139,7 @@ impl<B: Bluez> Bluetooth<B> {
             );
             return Status::Failed;
         }
-        if let Err(e) = self.bluez.set_pairable(path, true) {
+        if let Err(e) = self.set_pairable(path, true, "window") {
             eprintln!("ruya-devices: Pairable on failed: {}", e.0);
             self.drop_agent();
             return Status::Failed;
@@ -1010,6 +1173,12 @@ impl<B: Bluez> Bluetooth<B> {
         });
         st.pairing = PairingState::Open;
         st.pending.pairing = true;
+        drop(st);
+        log::info(&format!(
+            "pairing window opened on {} for {}",
+            adapter_name(path),
+            span(length)
+        ));
         Status::Ok
     }
 
@@ -1020,7 +1189,7 @@ impl<B: Bluez> Bluetooth<B> {
             return Status::Refused;
         }
         if self.lock().window.is_some() {
-            self.close_window(PairingState::Idle);
+            self.close_window(PairingState::Idle, None);
         } else if self.lock().pairing != PairingState::Idle {
             let mut st = self.lock();
             st.pairing = PairingState::Idle;
@@ -1040,10 +1209,20 @@ impl<B: Bluez> Bluetooth<B> {
 
     /// Ends the window: the scan and Pairable as they were, the agent gone. Each
     /// step is tried whatever the others did.
-    fn close_window(&self, outcome: PairingState) {
+    fn close_window(&self, outcome: PairingState, paired: Option<&str>) {
         let Some(window) = self.lock().window.take() else {
             return;
         };
+        let how = match (outcome, paired) {
+            (PairingState::Paired, Some(address)) => format!("paired {}", self.label(address)),
+            (PairingState::Timeout, _) => "timeout".to_owned(),
+            (PairingState::Idle, _) => "stopped".to_owned(),
+            (other, _) => other.as_str().to_owned(),
+        };
+        log::info(&format!(
+            "pairing window on {} closed: {how}",
+            adapter_name(&window.adapter)
+        ));
         let user_scan = self.lock().scan_until.is_some();
         if window.scan_ours && !user_scan {
             if let Err(e) = self.bluez.stop_discovery(&window.adapter) {
@@ -1051,7 +1230,7 @@ impl<B: Bluez> Bluetooth<B> {
             }
         }
         if window.restore_pairable {
-            if let Err(e) = self.bluez.set_pairable(&window.adapter, false) {
+            if let Err(e) = self.set_pairable(&window.adapter, false, "window closed") {
                 eprintln!("ruya-devices: Pairable off again failed: {}", e.0);
             }
         }
@@ -1125,24 +1304,18 @@ impl<B: Bluez> Bluetooth<B> {
 
     /// Removes a device that bonded during the window and is not an input device.
     fn remove_stranger(&self, address: &str) {
-        if let Err(e) = self
-            .route(address)
-            .and_then(|a| self.bluez.remove(&a, address))
-        {
-            eprintln!("ruya-devices: removing {address} failed: {}", e.0);
-        }
+        let label = self.label(address);
+        let _ = self.remove_device(address, "sweep");
+        log::info(&format!("refused {label}: not an input device"));
         self.lock().pending.rejected = true;
     }
 
     /// A controller is paired: trust it (BlueZ then lets its HID connection through) and close.
     fn finish(&self, address: &str) {
-        if let Err(e) = self
-            .route(address)
-            .and_then(|a| self.bluez.set_trusted(&a, address))
-        {
-            eprintln!("ruya-devices: trusting {address} failed: {}", e.0);
-        }
-        self.close_window(PairingState::Paired);
+        log::info(&format!("paired {} via window", self.label(address)));
+        // A failed trust is logged by `trust`.
+        let _ = self.trust(address);
+        self.close_window(PairingState::Paired, Some(address));
     }
 
     /// Pairs the gamepad `pump` named, trusts and connects it, and ends the window. Only for the
@@ -1174,30 +1347,25 @@ impl<B: Bluez> Bluetooth<B> {
         };
         match result {
             Ok(()) if open => {
-                if let Err(e) = self
-                    .route(address)
-                    .and_then(|a| self.bluez.set_trusted(&a, address))
-                {
-                    eprintln!("ruya-devices: trusting {address} failed: {}", e.0);
-                }
+                log::info(&format!("paired {} via window", self.label(address)));
+                // A failed trust is logged by `trust`; the bond is what counts.
+                let _ = self.trust(address);
                 let left = end.saturating_duration_since(clock());
                 if !left.is_zero() {
                     // The bond is what counts; a pad that does not connect yet connects when its
-                    // button is pressed.
-                    if let Err(e) = self
-                        .route(address)
-                        .and_then(|a| self.bluez.connect(&a, address, left))
-                    {
-                        eprintln!("ruya-devices: connecting {address} failed: {}", e.0);
-                    }
+                    // button is pressed. A failure is logged by `connect_device`.
+                    let _ = self.connect_device(address, left, "window");
                 }
                 // The window may have ended while connecting: then the outcome is its own.
                 if self.lock().window.as_ref().is_some_and(|w| w.id == window) {
-                    self.close_window(PairingState::Paired);
+                    self.close_window(PairingState::Paired, Some(address));
                 }
             }
             Ok(()) => {
-                eprintln!("ruya-devices: {address} paired after the window ended: not trusted")
+                log::info(&format!(
+                    "paired {} via window after the window ended: left untrusted",
+                    self.label(address)
+                ));
             }
             Err(e) => eprintln!("ruya-devices: pairing {address} failed: {}", e.0),
         }
@@ -1208,7 +1376,11 @@ impl<B: Bluez> Bluetooth<B> {
     /// announced as refused.
     pub fn agent(&self, call: AgentCall<'_>, now: Instant) -> bool {
         let (device, uuid) = match call {
-            AgentCall::Pin => return false,
+            AgentCall::Pin => {
+                // Nothing the call carried (a PIN, a passkey) is looked at, let alone logged.
+                log::info("agent refused a PIN or passkey request (not offered)");
+                return false;
+            }
             AgentCall::Authorize { device } => (device, None),
             AgentCall::Service { device, uuid } => (device, Some(uuid)),
         };
@@ -1246,13 +1418,12 @@ impl<B: Bluez> Bluetooth<B> {
                 }
             };
             if stranger {
-                if let Err(e) = self
-                    .route(&address)
-                    .and_then(|a| self.bluez.remove(&a, &address))
-                {
-                    eprintln!("ruya-devices: removing {address} failed: {}", e.0);
-                }
+                let _ = self.remove_device(&address, "agent-refused");
             }
+            log::info(&format!(
+                "refused {}: not an input device",
+                self.label(&address)
+            ));
             self.lock().pending.rejected = true;
             self.notify();
             return false;
@@ -3610,5 +3781,375 @@ mod tests {
             assert!(!a.pairable && !a.discoverable, "{path}");
         }
         assert_eq!(bt.bluez.calls().len(), 4);
+    }
+
+    // ---- what the journal says (T-335) ----
+
+    /// The lines that mention `what`.
+    fn lines_with(lines: &[String], what: &str) -> Vec<String> {
+        lines.iter().filter(|l| l.contains(what)).cloned().collect()
+    }
+
+    /// Some line holds every one of `parts`.
+    fn has(lines: &[String], parts: &[&str]) -> bool {
+        lines.iter().any(|l| parts.iter().all(|p| l.contains(p)))
+    }
+
+    #[test]
+    fn window_open_and_close_are_logged_with_the_outcome() {
+        let bt = window_bt();
+        let t0 = Instant::now();
+        log::take();
+        open(&bt, t0);
+        let lines = log::take();
+        assert!(
+            has(&lines, &["pairing window opened on hci0 for 2 min"]),
+            "{lines:?}"
+        );
+        assert!(has(&lines, &["hci0 Pairable on: window"]), "{lines:?}");
+
+        bt.stop_controller_pairing(true);
+        let lines = log::take();
+        assert!(
+            has(&lines, &["pairing window on hci0 closed: stopped"]),
+            "{lines:?}"
+        );
+
+        open(&bt, t0);
+        log::take();
+        assert!(bt.tick(t0 + Duration::from_secs(120)));
+        let lines = log::take();
+        assert!(
+            has(&lines, &["pairing window on hci0 closed: timeout"]),
+            "{lines:?}"
+        );
+
+        open(&bt, t0);
+        assert_eq!(bt.pump().as_deref(), Some(PAD));
+        bt.window_pair(PAD, Instant::now);
+        let lines = log::take();
+        assert!(
+            has(
+                &lines,
+                &["closed: paired", PAD, "Wireless Controller", "hci0"]
+            ),
+            "{lines:?}"
+        );
+        // a length that is not whole minutes is told in seconds
+        let bt = window_bt();
+        log::take();
+        assert_eq!(bt.start_controller_pairing(t0, 45, true), Status::Ok);
+        assert!(has(&log::take(), &["opened on hci0 for 45 s"]));
+    }
+
+    #[test]
+    fn a_pairing_in_the_window_logs_its_path() {
+        let bt = window_bt();
+        let t0 = Instant::now();
+        open(&bt, t0);
+        assert_eq!(bt.pump().as_deref(), Some(PAD));
+        log::take();
+        bt.window_pair(PAD, Instant::now);
+        let lines = log::take();
+        assert!(
+            has(&lines, &["paired", PAD, "(hci0) via window"]),
+            "{lines:?}"
+        );
+        assert!(has(&lines, &["trusted", PAD]), "{lines:?}");
+        assert!(has(&lines, &["connect", PAD, ": window"]), "{lines:?}");
+
+        // a pad that bonds by itself while the window is open is the window's too
+        let bt = window_bt();
+        open(&bt, t0);
+        bt.bluez.bond(PAD);
+        bt.refresh().expect("reads");
+        log::take();
+        assert_eq!(bt.pump(), None);
+        let lines = log::take();
+        assert!(has(&lines, &["paired", PAD, "via window"]), "{lines:?}");
+        assert!(has(&lines, &["trusted", PAD]), "{lines:?}");
+
+        // and the user's own pairing is "manual"
+        let bt = window_bt();
+        log::take();
+        let t = Instant::now();
+        assert_eq!(bt.pair(PAD, move || t), Status::Ok);
+        let lines = log::take();
+        assert!(has(&lines, &["paired", PAD, "via manual"]), "{lines:?}");
+        assert!(has(&lines, &["trusted", PAD]), "{lines:?}");
+        assert!(
+            has(&lines, &["hci0 Pairable on: manual pairing"]),
+            "{lines:?}"
+        );
+        assert!(has(&lines, &["connect", PAD, ": user"]), "{lines:?}");
+        assert!(!has(&lines, &["via window"]), "{lines:?}");
+    }
+
+    #[test]
+    fn a_pairing_that_ends_after_its_window_says_so() {
+        let bt = Arc::new(window_bt());
+        let t0 = Instant::now();
+        open(&bt, t0);
+        assert_eq!(bt.pump().as_deref(), Some(PAD));
+        let b = bt.clone();
+        bt.bluez.set_hook(Box::new(move |what| {
+            if what == "pair" {
+                b.stop_controller_pairing(true);
+            }
+        }));
+        log::take();
+        bt.window_pair(PAD, Instant::now);
+        let lines = log::take();
+        assert!(
+            has(
+                &lines,
+                &["paired", PAD, "after the window ended: left untrusted"]
+            ),
+            "{lines:?}"
+        );
+        assert!(lines_with(&lines, "trusted ").is_empty(), "{lines:?}");
+    }
+
+    #[test]
+    fn a_removal_logs_its_reason_sweep_and_forget() {
+        // sweep: a phone bonded in the window
+        let bt = window_bt();
+        let t0 = Instant::now();
+        open(&bt, t0);
+        bt.bluez.bond(PHONE);
+        bt.refresh().expect("reads");
+        log::take();
+        bt.pump();
+        let lines = log::take();
+        assert!(
+            has(&lines, &["remove", PHONE, "Some Phone", ": sweep"]),
+            "{lines:?}"
+        );
+        assert!(has(&lines, &["refused", PHONE]), "{lines:?}");
+
+        // agent-refused: the same, found by the agent first
+        let bt = window_bt();
+        open(&bt, t0);
+        bt.bluez.bond(PHONE);
+        log::take();
+        assert!(!bt.agent(
+            AgentCall::Service {
+                device: &path_of(PHONE),
+                uuid: HID
+            },
+            t0
+        ));
+        let lines = log::take();
+        assert!(
+            has(&lines, &["remove", PHONE, ": agent-refused"]),
+            "{lines:?}"
+        );
+
+        // forget: the user's
+        let bt = Bluetooth::new(FakeBluez::with_devices());
+        bt.refresh().expect("fake reads");
+        log::take();
+        assert_eq!(bt.forget("AA:00:00:00:00:01"), Status::Ok);
+        let lines = log::take();
+        assert!(
+            has(
+                &lines,
+                &[
+                    "remove",
+                    "AA:00:00:00:00:01",
+                    "Dev Pad",
+                    "(hci0)",
+                    ": forget"
+                ]
+            ),
+            "{lines:?}"
+        );
+        // a removal BlueZ refuses is logged as failed, after the line with its reason
+        bt.bluez.fail_next("org.bluez.Error.Failed");
+        bt.forget("AA:00:00:00:00:02");
+        let lines = log::take();
+        assert!(has(&lines, &["remove", ": forget"]), "{lines:?}");
+        assert!(
+            has(&lines, &["remove", "failed: org.bluez.Error.Failed"]),
+            "{lines:?}"
+        );
+    }
+
+    #[test]
+    fn connect_and_disconnect_log_who_asked() {
+        let bt = Bluetooth::new(FakeBluez::with_devices());
+        bt.refresh().expect("fake reads");
+        let dev = "AA:00:00:00:00:01";
+        log::take();
+        assert_eq!(bt.disconnect(dev), Status::Ok);
+        let lines = log::take();
+        assert!(
+            has(&lines, &["disconnect", dev, "Dev Pad", ": user"]),
+            "{lines:?}"
+        );
+        bt.refresh().expect("reads");
+        assert_eq!(bt.connect(dev), Status::Ok);
+        let lines = log::take();
+        assert!(
+            has(&lines, &["connect", dev, "Dev Pad", ": user"]),
+            "{lines:?}"
+        );
+        // a connect BlueZ refuses says why
+        bt.bluez
+            .fail_next("org.bluez.Error.ConnectionAttemptFailed");
+        bt.connect(dev);
+        let lines = log::take();
+        assert!(
+            has(
+                &lines,
+                &[
+                    "connect",
+                    dev,
+                    "failed: org.bluez.Error.ConnectionAttemptFailed"
+                ]
+            ),
+            "{lines:?}"
+        );
+        // the window's own connect says "window" (a_pairing_in_the_window_logs_its_path), the
+        // idle one "idle-timeout" (idle_disconnect_logs_once_per_pad)
+    }
+
+    #[test]
+    fn a_drop_we_did_not_cause_logs_link() {
+        let bt = Bluetooth::new(FakeBluez::with_devices());
+        bt.refresh().expect("fake reads");
+        let dev = "AA:00:00:00:00:01";
+        // our own disconnect and reconnect are not "link"
+        assert_eq!(bt.disconnect(dev), Status::Ok);
+        bt.refresh().expect("reads");
+        assert_eq!(bt.connect(dev), Status::Ok);
+        bt.refresh().expect("reads");
+        let lines = log::take();
+        assert!(!has(&lines, &["link"]), "{lines:?}");
+
+        // the pad drops by itself (battery, range) and comes back by its button
+        let mut raw = bt.bluez.snapshot().expect("reads");
+        raw.devices[0].connected = false;
+        bt.bluez.set_raw(raw.clone());
+        bt.refresh().expect("reads");
+        let lines = log::take();
+        assert!(
+            has(&lines, &["disconnected", dev, "Dev Pad", "(hci0): link"]),
+            "{lines:?}"
+        );
+        raw.devices[0].connected = true;
+        bt.bluez.set_raw(raw);
+        bt.refresh().expect("reads");
+        let lines = log::take();
+        assert!(
+            has(&lines, &["connected", dev, "Dev Pad", ": link"]),
+            "{lines:?}"
+        );
+        assert!(!has(&lines, &["disconnected"]), "{lines:?}");
+        // a request that changed nothing does not hide a later drop
+        assert_eq!(bt.connect(dev), Status::Ok);
+        let mut raw = bt.bluez.snapshot().expect("reads");
+        raw.devices[0].connected = false;
+        bt.bluez.set_raw(raw);
+        bt.refresh().expect("reads");
+        assert!(has(&log::take(), &["disconnected", dev, ": link"]));
+    }
+
+    #[test]
+    fn idle_disconnect_logs_once_per_pad() {
+        let bt = Bluetooth::new(FakeBluez::with_devices());
+        bt.refresh().expect("fake reads");
+        let min = Duration::from_secs(60);
+        let t0 = Instant::now();
+        let report = |idle: u32| IdleReport::from_seconds(idle * 60, 15 * 60, false);
+        log::take();
+        bt.report_idle(t0, report(20));
+        assert!(
+            log::take().is_empty(),
+            "not idle long enough: nothing to say"
+        );
+        bt.report_idle(t0 + min * 15, report(35));
+        let lines = log::take();
+        let idle = lines_with(&lines, "idle-timeout");
+        assert_eq!(idle.len(), 1, "{lines:?}");
+        assert!(
+            has(
+                &idle,
+                &[
+                    "disconnect",
+                    "AA:00:00:00:00:01",
+                    "Dev Pad",
+                    "idle 35 min >= 15 min"
+                ]
+            ),
+            "{idle:?}"
+        );
+        bt.refresh().expect("reads");
+        bt.report_idle(t0 + min * 16, report(36));
+        bt.report_idle(t0 + min * 17, report(37));
+        let lines = log::take();
+        assert!(lines_with(&lines, "idle").is_empty(), "{lines:?}");
+    }
+
+    #[test]
+    fn an_unchanged_world_logs_nothing() {
+        let bt = window_bt();
+        log::take();
+        for _ in 0..100 {
+            bt.refresh().expect("reads");
+            bt.pump();
+        }
+        assert!(log::take().is_empty());
+        // also with a window open: reading again says nothing
+        let t0 = Instant::now();
+        open(&bt, t0);
+        log::take();
+        for _ in 0..100 {
+            bt.refresh().expect("reads");
+            bt.tick(t0);
+        }
+        let lines = log::take();
+        assert!(lines.is_empty(), "{lines:?}");
+    }
+
+    #[test]
+    fn no_log_line_contains_a_pin_or_passkey() {
+        let bt = window_bt();
+        let t0 = Instant::now();
+        log::take();
+        open(&bt, t0);
+        // BlueZ asks for a passkey (what the call carries never reaches the core), a
+        // confirmation and a service; the phone bonds and is removed; the pad pairs
+        assert!(!bt.agent(AgentCall::Pin, t0));
+        let phone = path_of(PHONE);
+        assert!(!bt.agent(AgentCall::Authorize { device: &phone }, t0));
+        bt.bluez.bond(PHONE);
+        assert!(!bt.agent(
+            AgentCall::Service {
+                device: &phone,
+                uuid: A2DP
+            },
+            t0
+        ));
+        assert!(bt.agent(
+            AgentCall::Authorize {
+                device: &path_of(PAD)
+            },
+            t0
+        ));
+        assert_eq!(bt.pump().as_deref(), Some(PAD));
+        bt.window_pair(PAD, Instant::now);
+        let lines = log::take();
+        assert!(has(&lines, &["agent refused a PIN or passkey request"]));
+        for line in &lines {
+            let l = line.to_lowercase();
+            if l.contains("pin") || l.contains("passkey") || l.contains("passcode") {
+                assert_eq!(
+                    line, "agent refused a PIN or passkey request (not offered)",
+                    "only the fixed refusal may name a PIN"
+                );
+            }
+            assert!(!l.contains("link key") && !l.contains("linkkey"), "{line}");
+        }
     }
 }
