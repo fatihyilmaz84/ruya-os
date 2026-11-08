@@ -12,6 +12,7 @@ Apps (first-party and third-party) know what happens to them in the background a
 1. **Signals to the app:** SIGTERM with the 5 s grace (existing) plus the `xdg_toplevel` suspended state (T-276); document that a frozen app gets no CPU, so it must save *before* losing focus ("save on pause"). For apps that want a stronger hook, a small D-Bus/portal call `org.ruyaos.AppLifecycle.WillClose` is evaluated and, if feasible in the sandbox, added as a contract (otherwise documented as not available: say why).
 2. **Background reasons:** an app declares `X-Ruya-Background=audio|download|none` in its AppStream metadata (default `none`); the service honours it (T-275) only while the reason holds (an active PipeWire playback stream, an active transfer reported through the portal). Validation: unknown values are ignored.
 3. **Audio:** a frozen app's PipeWire streams are muted/paused by the shell side (`ruya-devices`) so no stuck buffer repeats; an app that holds the `audio` reason keeps its stream; volume ducking is out.
+3b. **Online session flag (owner, 2026-11-08, ADR-019):** an app tells the platform that it has a live online session (a metadata key such as `X-Ruya-Online` or the lifecycle API of `Platform1`: decide here and document it) so the switcher (T-277) can warn once before freezing it; the flag is advisory, size- and rate-capped, and never makes an app exempt from freezing.
 4. **Developer guide** chapter "Running in the background" and the sample app shows save-on-pause; HIG rule in T-249 if it exists.
 
 ## Out of scope

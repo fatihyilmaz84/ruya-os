@@ -1,8 +1,8 @@
 # T-352 - ruya-platform: the one door for sandboxed apps (caller identity, permission table, rate limits)
 
-Status: blocked · Phase: 7 · Depends: T-250, T-351 · Area: services, api, image, docs · Size: M · Owner: lead · Developer surface: public-API
+Status: todo · Phase: 7 · Depends: T-351 · Area: services, api, image, docs · Size: M · Owner: lead · Developer surface: public-API
 
-**Blocked on the owner:** ADR-022 (Proposed, `docs/specs/00-overview.md`) must be accepted, with the tier-B list approved, and decided together with ADR-015 (T-250). Do not start before. Unblocks the app-facing capability tasks (T-245, T-246, T-279, T-304/T-306).
+**Unblocked by the owner, 2026-11-08:** ADR-022 is Accepted (the tier-B list approved as drafted, the never-public list unchanged, stability promises only from the first release) and ADR-015 is Accepted (the `org.ruyaos.Platform` runtime extension will carry the client bindings; T-250 runs in parallel and is not a dependency of this skeleton). **Step one stays the caller-identity spike (scope 1):** if a caller behind `xdg-dbus-proxy` cannot be mapped to its Flatpak app id, write the fallback into ADR-022 and stop for the lead. Unblocks the app-facing capability tasks (T-245, T-246, T-279, T-304/T-306).
 
 ## Goal
 A sandboxed app has exactly one bus permission, `--system-talk-name=org.ruyaos.Platform1`, and through it can reach only the capabilities the player allowed. This task builds the empty door and the first interface (Lifecycle); the other capabilities plug in through the same skeleton.
@@ -34,7 +34,7 @@ A sandboxed app has exactly one bus permission, `--system-talk-name=org.ruyaos.P
 Then the VM check (`scripts/build.sh`, `make-disk.sh`, `scripts\smoke-test.ps1`).
 
 ## Docs to update
-- ADR-022 status, `03` §4.4 and a new section, `api-surface.md` ("What is public today"), `fullscreen-and-lifecycle.md`, `dev-setup.md`.
+- ADR-022 (Accepted; record the spike result in it), `03` §4.4 and a new section, `api-surface.md` ("What is public today"), `fullscreen-and-lifecycle.md`, `dev-setup.md`.
 
 ## Hints
 - Owner is `lead` because the identity mapping and the bus policy are security-critical.

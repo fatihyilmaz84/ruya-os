@@ -1,8 +1,8 @@
 # T-248 — EPIC: first-party RuyaOS apps (and the platform they need)
 
-Status: blocked · Phase: 7 · Depends: — · Area: docs, shell, services, samples · Size: epic (not a build task; nobody implements it directly) · Owner: lead · Developer surface: none
+Status: todo · Phase: 7 · Depends: — · Area: docs, shell, services, samples · Size: epic (not a build task; nobody implements it directly) · Owner: lead · Developer surface: none
 
-**Blocked on owner decisions** (see "Owner-level decisions"): the app platform ADR (T-250) and the browser scope (T-258) are Proposed, and the owner picks which apps come first. The foundations (the HIG, the platform spike) can start earlier: they are a document and a spike.
+**Owner decisions of 2026-11-08 (no longer blocked):** ADR-015 is Accepted (a runtime extension `org.ruyaos.Platform` with the RuyaKit module, versioned separately from the shell; T-250 is now its implementation spike); ADR-016 is Accepted as "no browser first" (T-258 is parked); the first apps are **picture viewer, weather, media player, files, Jellyfin** (the emulator frontend after them). Still open: whether any app is installed by default (an image-size and product-scope call) and the emulator legal note (see "Owner-level decisions"). The foundations (the HIG, the spike) can start now.
 
 ## Goal
 RuyaOS gets apps that we develop ourselves, **distributed separately** (their own Flatpaks from our `ruyaos` remote, **not baked into the image**), built to our **Human Interface Guidelines** and using the OS's components and APIs: a picture viewer, weather, a media player, a file manager, a Jellyfin client, a browser, emulator frontends. They also prove that the developer guide (T-214) is enough, and serve as examples that third parties copy. Request from the owner, 2026-11-07. Media and streaming apps stay out of the first MVP (owner, 2026-11-06, `00-overview.md` §2): this epic is the plan for after it, and the foundations are useful before.
@@ -12,7 +12,7 @@ RuyaOS gets apps that we develop ourselves, **distributed separately** (their ow
 | Step | Task | What | Verifiable on this host |
 |---|---|---|---|
 | 0 | T-249 [lead] | `docs/specs/06-hig.md`: Human Interface Guidelines for app authors | yes (docs) |
-| 0 | T-250 [lead] | Spike and ADR-015 (Proposed): how apps use the OS components (Flatpak runtime or extension, a RuyaKit QML module) | partly (VM) |
+| 0 | T-250 [lead] | Spike for ADR-015 (Accepted): the `org.ruyaos.Platform` runtime extension with the RuyaKit QML module | partly (VM) |
 | 1 | T-251 | RuyaKit: extract the shared components into a module apps can use | yes |
 | 1 | T-252 | App template, CI recipe, publish to the Store (base: `samples/hello-game`) | yes + VM (lead run) |
 | 2 | T-253 | Picture viewer (small first app; proves T-251 and T-252) | yes |
@@ -21,7 +21,7 @@ RuyaOS gets apps that we develop ourselves, **distributed separately** (their ow
 | 3 | T-256 | File manager (storage browser, USB; nothing auto-runs from removable media) | yes + VM |
 | 4 | T-257 | Jellyfin client (login by text input, direct play) | yes (mock server) |
 | 4 | T-259 | Emulator frontend (launches separately installed emulator Flatpaks; no ROMs, no BIOS) | yes |
-| 5 | T-258 [lead] | Browser: Proposed ADR-016 (engine, cursor-by-controller mode, scope), then the build | owner decision first |
+| - | T-258 [lead] | Browser: **parked by the owner 2026-11-08** (ADR-016: no browser first; its own decision later) | not planned |
 
 ## Dogfooding rule (ADR-022)
 A first-party app uses **only the public surface** of `docs/developers/api-surface.md`: the Platform API, the data formats and the freedesktop portals the runtime ships, never a private RuyaOS service, a shell-only bus name or an extra Flatpak permission a third party could not get. If an app needs more, that is an Inbox line proposing the capability (the lead places it inside the approved list or writes a Proposed ADR), not a back door. The apps are the cheapest proof that the developer guide is enough; every child task carries this rule in its Hints.
@@ -33,9 +33,9 @@ A first-party app uses **only the public surface** of `docs/developers/api-surfa
 - **T-164 and T-147:** an app's window only appears when per-profile Wayland sockets work: end-to-end tests of any app need T-164; code and mock tests do not.
 
 ## Owner-level decisions (Proposed ADRs; the lead does not decide them)
-1. **ADR-015 App platform** (T-250): runtime or extension versus bundled sources versus a custom runtime; who maintains `org.ruyaos.Platform`; versioning against the shell.
-2. **ADR-016 Browser** (T-258): the engine (QtWebEngine or another), its size and update burden, the password manager and permission scope, and whether a browser ships at all in the first release.
-3. **Which apps, in what order**, and whether any of them is installed by default (an image-size and product-scope call).
+1. ~~ADR-015 App platform~~ **Decided 2026-11-08 (owner):** the runtime extension `org.ruyaos.Platform` with RuyaKit, versioned separately from the shell; the spike T-250 answers the remaining technical questions (base runtime, Qt version, theme delivery, update flow).
+2. ~~ADR-016 Browser~~ **Decided 2026-11-08 (owner):** no browser first; T-258 is parked and gets its own decision later.
+3. **Which apps, in what order:** decided 2026-11-08 (picture viewer, weather, media player, files, Jellyfin; then the emulator frontend). **Open:** whether any of them is installed by default (an image-size and product-scope call).
 4. **Legal note (emulators):** no ROMs, BIOS or firmware are shipped or linked to; emulators are separate Flatpaks the user installs. Confirm before T-259.
 
 ## Not planned yet

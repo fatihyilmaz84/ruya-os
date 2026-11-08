@@ -31,7 +31,7 @@ Games can award achievements; players see them per profile, with progress and a 
 - `03` (service and portal), `05` §4 (the manifest key), `02`, the XML, `docs/developers/`, `dev-setup.md`.
 
 ## Hints
-- Developer surface (ADR-022, `docs/developers/api-surface.md`): its own portal `org.ruyaos.portal.Achievements` and `Achievements1` are re-seated behind `Platform1` (T-352) once ADR-022 is accepted. Missing: mock support for off-device tests, a conformance test with abuse cases, the stability tags in the XML.
+- Developer surface (ADR-022, `docs/developers/api-surface.md`): its own portal `org.ruyaos.portal.Achievements` and `Achievements1` are re-seated behind `Platform1` (T-352; ADR-022 is Accepted, owner 2026-11-08). Missing: mock support for off-device tests, a conformance test with abuse cases, the stability tags in the XML.
 
 ## Outcome
 _Filled in by the implementer. First line: `Verified: host | vm | unverified | hw`. Then: what was built, files, deviations, follow-ups._
