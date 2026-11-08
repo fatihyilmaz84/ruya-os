@@ -1,6 +1,6 @@
 # T-294 — Sound theme follow-ups: delete a saved theme, import limits tested, clear refusal message, one copy of the ambient file
 
-Status: todo · Phase: 2 · Depends: — · Area: shell (SoundThemes, SoundThemeCheck, AudioPane, resources), scripts · Size: S · Owner: builder
+Status: in-progress · Phase: 2 · Depends: — · Area: shell (SoundThemes, SoundThemeCheck, AudioPane, resources), scripts · Size: S · Owner: builder
 
 ## Goal
 A player can delete a saved sound theme (the console keeps up to 8), a drive theme the checker refuses says why in one line, the import limits are proven by tests, and the 1.1 MB ambient file is not shipped twice.
