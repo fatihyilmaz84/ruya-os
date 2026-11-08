@@ -63,7 +63,12 @@ QtObject {
         const name = plain(d.name)
         const key = name.toLowerCase()
         const twins = list.filter(x => plain(x.name).toLowerCase() === key).length
-        return twins > 1 ? qsTr("%1 (%2)").arg(name).arg(addressTail(d.id)) : name
+        if (twins <= 1)
+            return name
+        // The tail goes in first and the name last, as functions: an alias that contains "%2" or "$&"
+        // must come out as typed (QString.arg() would read it as the next placeholder).
+        const tail = addressTail(d.id)
+        return qsTr("%1 (%2)").replace("%2", () => tail).replace("%1", () => name)
     }
 
     // What to call a pad that connected: the alias of the Bluetooth device with that address (what the

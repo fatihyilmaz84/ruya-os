@@ -1,6 +1,6 @@
 # T-334 - Two controllers at once: tests that prove the second pad does not disturb the first
 
-Status: in-progress · Phase: 2 · Depends: — · Area: services (ruya-devices tests), shell (tests, mock), scripts · Size: M · Owner: builder
+Status: done · Phase: 2 · Depends: — · Area: services (ruya-devices tests), shell (tests, mock), scripts · Size: M · Owner: builder
 
 ## Goal
 Owner report (2026-11-08): "the second DualSense overrides the first". A read-only investigation of the Dell (image 0.0.53) found no override in the code: both pads were paired, bonded and trusted, `ListDevices` returned two entries with different ids, and the first pad never left (the second dropped 21 s after it connected: T-338). Every existing fixture holds one pad, so nothing stops a later change from breaking two. This task adds the missing two-pad tests; it changes no product code unless a test finds a defect (then fix it and say so in the Outcome).
@@ -42,7 +42,7 @@ Owner report (2026-11-08): "the second DualSense overrides the first". A read-on
 - T-336 (second adapter) and T-337 (inputd) need their own fakes; do not fold them in.
 
 ## Outcome
-Verified: host (vm pending: vm-devices-check.sh twopads)
+Verified: host (vm pending: vm-devices-check.sh twopads). Review APPROVE round 1; lead fixed `shownName` for aliases containing %1/%2 in a review commit (test added).
 
 UX notes: one screen changed, Settings -> Bluetooth & controllers (no new state, no new key). Two paired devices with the same alias now carry the end of their address ("Wireless Controller (00:04)" / "(00:05)") in the device row, its accessible name, the Rename / Forget / Pair-again rows, the Forget confirmation title and its red button, and the connected / disconnected toasts. Back from the pane, from the rename keyboard (Back deletes a letter, on an empty field it cancels) and from the confirmation leaves as before, and focus lands on the row that opened it (asserted in `test_two_controllers_same_name_two_rows`); after Forget, focus moves to the next row, or up from the last one (asserted in `test_forget_one_keeps_the_other_row`). A name nobody shares gets no suffix, so forgetting one of two pads makes the other lose it (spec 02 says so). Not doubted: the "(00:04)" form is readable but terse at 10 ft; a screenshot was not taken (no `shots` while the image build runs), the text is the existing row/toast text and only longer.
 

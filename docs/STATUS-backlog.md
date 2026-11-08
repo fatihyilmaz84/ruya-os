@@ -15,7 +15,6 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | [T-343](tasks/T-343-settings-first-focus-and-manage-profiles-follow-ups.md) | Settings follow-ups: first focus skips disabled rows, read-only rows in the spec, Manage profiles result and Guest | todo | — |
 | [T-289](tasks/T-289-system-information-follow-ups.md) | System information follow-ups: Bluetooth address from BlueZ, image from a root source, one info row, drive chooser | todo | — |
 | [T-299](tasks/T-299-image-follow-ups-secure-boot-bluez-grub-menu.md) | Image follow-ups (VM this task): quiet bootloader-update on Secure Boot, BlueZ pairable timeout, grub-menu ordering, webp | todo | — |
-| [T-334](tasks/T-334-two-controllers-tests.md) | Two controllers at once: tests that prove the second pad does not disturb the first | in-progress | — |
 | [T-338](tasks/T-338-dell-second-pad-drop-repro.md) | **[lead]** Dell: why did the second DualSense drop after 21 s? (live repro and report) | todo | T-335 |
 | [T-349](tasks/T-349-settings-opens-slowly-lazy-panes-and-modals.md) | Opening Settings is slow (Store to Settings): lazy panes and modals, measure on the Dell | in-progress | — |
 | [T-355](tasks/T-355-dell-real-game-smoke-test-supertuxkart.md) | **[lead]** Dell smoke test with a real game: SuperTuxKart through the shell | blocked | T-164 |

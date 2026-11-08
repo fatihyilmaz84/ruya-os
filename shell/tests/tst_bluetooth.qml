@@ -521,6 +521,16 @@ Item {
         // rows and the confirmation say which one by the end of the address; the alias itself (what
         // Rename pre-fills) stays "Wireless Controller", and a device with a name of its own is
         // not touched.
+        // The user's alias is typed text: "%2" or "$&" in it must not be read as a placeholder.
+        function test_shown_name_keeps_an_alias_with_placeholders_as_typed() {
+            const list = [{ id: "AA:00:00:00:00:04", name: "Pad %2" }, { id: "AA:00:00:00:00:05", name: "Pad %2" }]
+            compare(DeviceIcons.shownName(list, list[0]), "Pad %2 (00:04)")
+            compare(DeviceIcons.shownName(list, list[1]), "Pad %2 (00:05)")
+            const odd = [{ id: "AA:00:00:00:00:06", name: "$& %1" }, { id: "AA:00:00:00:00:07", name: "$& %1" }]
+            compare(DeviceIcons.shownName(odd, odd[0]), "$& %1 (00:06)")
+            compare(DeviceIcons.shownName([list[0]], list[0]), "Pad %2")
+        }
+
         function test_two_controllers_same_name_two_rows() {
             Bluetooth.mockTwoPads()
             tryVerify(() => Bluetooth.devices.length === 5, 2000, "both pads are listed")
