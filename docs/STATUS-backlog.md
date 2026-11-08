@@ -18,6 +18,7 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | [T-334](tasks/T-334-two-controllers-tests.md) | Two controllers at once: tests that prove the second pad does not disturb the first | in-progress | — |
 | [T-338](tasks/T-338-dell-second-pad-drop-repro.md) | **[lead]** Dell: why did the second DualSense drop after 21 s? (live repro and report) | todo | T-335 |
 | [T-349](tasks/T-349-settings-opens-slowly-lazy-panes-and-modals.md) | Opening Settings is slow (Store to Settings): lazy panes and modals, measure on the Dell | in-progress | — |
+| [T-355](tasks/T-355-dell-real-game-smoke-test-supertuxkart.md) | **[lead]** Dell smoke test with a real game: SuperTuxKart through the shell | todo | — |
 | [T-331](tasks/T-331-removable-drive-recognised-data-scan.md) | Settings > Storage shows what RuyaOS finds on a removable drive (read-only scan) | in-progress | T-196 |
 | [T-332](tasks/T-332-format-removable-drive-service.md) | Format a removable drive: the service (udisks2, polkit, refusals, identity re-check) | todo | T-196, T-194 |
 | [T-333](tasks/T-333-format-drive-settings-flow.md) | Settings > Storage > Format drive...: choose, confirm, PIN, progress, result | todo | T-331, T-332 |
