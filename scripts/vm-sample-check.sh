@@ -67,19 +67,33 @@ cleanup() {
     flatpak uninstall --system -y --noninteractive "$app" >/dev/null 2>&1
     flatpak remote-delete --system --force "$remote" >/dev/null 2>&1
 }
+# T-296: runs on every exit (also an early `exit 1` after a failed step): stops the signal monitor,
+# deletes the profiles the check created, removes the app, the override and the remote, and the work
+# directory. Safe to run twice (the normal end runs it too).
+created=0; mon=""; admin=""
+finish() {
+    [ -n "$mon" ] && kill "$mon" 2>/dev/null
+    mon=""
+    if [ "$created" = 1 ]; then
+        created=0
+        busctl --system call "$psvc" "$ppath" "$psvc" DeleteProfile sss "$admin" 1234 "$pid" >/dev/null 2>&1
+    fi
+    cleanup
+    rm -rf "$work"
+}
 
 if [ "$mode" = clean ]; then
     cleanup
     rm -rf "$work"
     exit 0
 fi
+trap finish EXIT
 
 echo "--- the services"
 systemctl is-active ruya-session >/dev/null && ok "ruya-session is active" || { bad "ruya-session is not active"; exit 1; }
 flatpak --version
 
 echo "--- a profile to run the game as"
-created=0
 pid="$(busctl --system call "$psvc" "$ppath" "$psvc" ListProfiles | grep -o '"p[0-9]*"' | head -1 | tr -d '"')"
 if [ -z "$pid" ]; then
     busctl --system call "$psvc" "$ppath" "$psvc" CreateProfile sssss "" "" "Check Admin" admin 1234
@@ -129,7 +143,8 @@ case "$(stop_app "$inst")" in 's "ok"') ok "Stop answered ok";; *) bad "Stop";; 
 wait_sig "\"member\":\"AppExited\".*$app" 20 && ok "AppExited arrived after $(( $(date +%s) - t0 )) s" || bad "no AppExited within 20 s"
 line="$(grep -E "\"member\":\"AppExited\".*$app" "$work/signals.log" | head -1)"
 echo "$line" | grep -q '"quit"' && ok "reason quit (not killed)" || bad "AppExited: $line"
-[ $(( $(date +%s) - t0 )) -le 5 ] && ok "it was gone within the 5 s grace" || bad "it needed more than 5 s"
+# The clock has whole seconds and wait_sig polls once a second: 5 s of grace can read as 6 here.
+[ $(( $(date +%s) - t0 )) -le 6 ] && ok "it was gone within the 5 s grace (6 s measured with a 1 s poll)" || bad "it needed more than 6 s (grace 5 s)"
 v="$(field played)"
 [ -n "$v" ] && [ "$v" -ge 3 ] && ok "the save written at SIGTERM holds the play time (played=$v s)" || bad "played=$v: the stop did not save"
 [ -f "$slot.bak" ] && ok "the previous save is kept as slot1.sav.bak" || bad "no .bak"
@@ -166,12 +181,7 @@ n=0; while flatpak list --system --app | grep -q "$app" && [ "$n" -lt 60 ]; do s
 flatpak list --system --app | grep -q "$app" && bad "the game is still installed" || ok "the game is uninstalled"
 [ -f "$slot" ] && ok "the save is still there: $slot" || bad "the save was deleted"
 
-kill "$mon" 2>/dev/null
-if [ "$created" = 1 ]; then
-    busctl --system call "$psvc" "$ppath" "$psvc" DeleteProfile sss "$admin" 1234 "$pid" >/dev/null
-fi
-cleanup
-rm -rf "$work"
+finish
 echo "--- journal of the service (warnings)"
 journalctl -u ruya-session -b --no-pager -p warning | tail -5
 [ "$fail" = 0 ] && echo "ALL CHECKS PASSED" || echo "SOME CHECKS FAILED"

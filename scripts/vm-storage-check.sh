@@ -50,7 +50,9 @@ polkit_expect() { # polkit_expect <action-id> <pid> <allow|deny> <text>; T-193
     if [ "$want" = allow ]; then
         [ "$rc" = 0 ] && ok "$text" || bad "polkit verdict for $action: exit $rc (want 0)"
     else
-        [ "$rc" != 0 ] && ok "$text (exit $rc)" || bad "polkit allows $action, it must not"
+        # Exactly 1 (not authorized): 2 would mean "asks for a password", a different policy, and any
+        # other code (127, 126, a crash) means pkcheck itself broke and proves nothing.
+        if [ "$rc" = 1 ]; then ok "$text (exit 1)"; elif [ "$rc" = 0 ]; then bad "polkit allows $action, it must not"; else bad "polkit verdict for $action: exit $rc (want 1, not authorized)"; fi
     fi
 }
 
@@ -68,6 +70,9 @@ if not isinstance(vols, list) or not all(isinstance(v, dict) for v in vols):
 print(len(vols))
 '
 volume_count() { list_json 2>/dev/null | python3 -c "$vol_count_py" 2>/dev/null; }
+# list_ok: ListVolumes answered a parsable list. A "left the list" wait must hold this first: an error
+# reply (service down, call refused) has no volumes in it either, and would pass as "gone".
+list_ok() { volume_count >/dev/null; }
 # One field of the volume labelled $1: field_of LABEL KEY. Prints nothing when there is no such
 # volume or key; booleans print as true/false.
 vol_field_py='
@@ -141,7 +146,8 @@ gone() {
     # (it did on 0.0.46-t195, where logins are fast enough to start the recording within 0.3 s of
     # the detach). So wait until the service's own list is empty and its quiet time has passed.
     n=0; while [ "$(volume_count)" != 0 ] && [ "$n" -lt 30 ]; do sleep 1; n=$((n + 1)); done
-    [ "$(volume_count)" = 0 ] && ok "the service lists no volume" || bad "the service still lists volumes"
+    if ! list_ok; then bad "ListVolumes failed (an error reply is not an empty list)"
+    elif [ "$(volume_count)" = 0 ]; then ok "the service lists no volume"; else bad "the service still lists volumes"; fi
     sleep 2
 }
 
@@ -214,8 +220,9 @@ eject() {
     [ -n "$id" ] || { bad "no stick listed"; return; }
     r="$(busctl --system call "$svc" "$path" "$st" Eject s "$id")"
     [ "$r" = 's "ok"' ] && ok "Eject answers ok" || bad "Eject answered $r"
-    n=0; while [ -n "$(stick_id)" ] && [ "$n" -lt 20 ]; do sleep 1; n=$((n + 1)); done
-    [ -z "$(stick_id)" ] && ok "the volume left the list" || bad "still listed"
+    n=0; while { ! list_ok || [ -n "$(stick_id)" ]; } && [ "$n" -lt 20 ]; do sleep 1; n=$((n + 1)); done
+    if ! list_ok; then bad "ListVolumes failed (an error reply is not an empty list)"
+    elif [ -z "$(stick_id)" ]; then ok "the volume left the list"; else bad "still listed"; fi
     findmnt "$mp" >/dev/null 2>&1 && bad "still mounted at $mp" || ok "nothing mounted at $mp"
     if usb_disk | grep -q .; then echo "note: the USB disk $(usb_disk) is still known to the kernel (QEMU keeps the device after PowerOff)"; else ok "the USB disk is gone from the kernel"; fi
     sleep 2
@@ -298,8 +305,9 @@ meject() {
     [ -n "$id1" ] || { bad "no partition listed"; return; }
     r="$(busctl --system call "$svc" "$path" "$st" Eject s "$id1")"
     [ "$r" = 's "ok"' ] && ok "Eject answers ok" || bad "Eject answered $r"
-    n=0; while { [ -n "$(field_of "$part1" id)" ] || [ -n "$(field_of "$part2" id)" ] || [ -n "$(field_of "$rawpart" id)" ]; } && [ "$n" -lt 20 ]; do sleep 1; n=$((n + 1)); done
-    if [ -z "$(field_of "$part1" id)" ] && [ -z "$(field_of "$part2" id)" ] && [ -z "$(field_of "$rawpart" id)" ]; then ok "all three partitions left the list"; else bad "a partition is still listed"; fi
+    n=0; while { ! list_ok || [ -n "$(field_of "$part1" id)" ] || [ -n "$(field_of "$part2" id)" ] || [ -n "$(field_of "$rawpart" id)" ]; } && [ "$n" -lt 20 ]; do sleep 1; n=$((n + 1)); done
+    if ! list_ok; then bad "ListVolumes failed (an error reply is not an empty list)"
+    elif [ -z "$(field_of "$part1" id)" ] && [ -z "$(field_of "$part2" id)" ] && [ -z "$(field_of "$rawpart" id)" ]; then ok "all three partitions left the list"; else bad "a partition is still listed"; fi
     for mp in "$mp1" "$mp2"; do
         findmnt "$mp" >/dev/null 2>&1 && bad "still mounted at $mp" || ok "nothing mounted at $mp"
     done
@@ -307,6 +315,9 @@ meject() {
     as_shell systemctl --user is-active ruya-devices >/dev/null && ok "ruya-devices still active" || bad "ruya-devices not active"
     pkill -f "busctl --system monitor $svc" 2>/dev/null
 }
+
+# scripts/lint-vm-checks.ps1 sources this file with the variable set to run its helpers on canned data.
+if [ "${VM_CHECK_LIB_ONLY:-0}" = 1 ]; then return 0 2>/dev/null || exit 0; fi
 
 case "${1:-}" in
 baseline) baseline ;;
