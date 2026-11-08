@@ -1515,12 +1515,15 @@ Bu geri alınamaz.</translation>
         <translation>Giriş yapılamadı (%1).</translation>
     </message>
     <message>
-        <location line="+31"/>
+        <location line="+27"/>
+        <location line="+6"/>
+        <location line="+19"/>
         <source>Enter PIN for %1</source>
         <translation>%1 için PIN girin</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-24"/>
+        <location line="+25"/>
         <source>Confirm PIN</source>
         <translation>PIN&apos;i onaylayın</translation>
     </message>

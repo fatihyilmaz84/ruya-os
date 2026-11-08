@@ -138,12 +138,26 @@ Item {
             tryVerify(() => find("pinPad") !== null && find("pinPad").visible, 2000, "the PIN pad opens")
             const title = find("pinTitle")
             verify(title !== null)
-            tryVerify(() => title.text === "Enter PIN for " + tc.longA, 2000, "title is: " + title.text)
             const cap = 3 * Theme.cardProfileWidth * tc.shell.u
-            verify(title.implicitWidth > cap, "the title needs more than the cap: " + title.implicitWidth)
-            verify(title.width <= cap + 0.5, "the title is " + title.width + ", the cap " + cap)
-            verify(title.truncated, "the title ends in an ellipsis")
+            const pad = find("pinPad")
+            // English: the name is cut inside the title, which stays one line within the cap.
+            tryVerify(() => title.text.indexOf("Enter PIN for Mehmet") === 0, 2000, "title is: " + title.text)
+            verify(title.text.endsWith("…"), "the name ends in an ellipsis: " + title.text)
+            verify(title.text.length < ("Enter PIN for " + tc.longA).length, "the title is shorter than the whole text")
+            verify(title.implicitWidth <= cap + 0.5, "the title is " + title.implicitWidth + " wide, the cap " + cap)
+            verify(title.width <= cap + 0.5)
+            verify(!title.truncated, "the Text itself cuts nothing: the name was cut before")
             compare(title.Accessible.name, "Enter PIN for " + tc.longA, "the accessible name is the whole title")
+            // Turkish puts the name first: the instruction after it must survive.
+            DeviceSettings.language = "tr"
+            tryVerify(() => title.text.endsWith(" için PIN girin"), 2000, "the Turkish title keeps its instruction: " + title.text)
+            verify(title.text.indexOf("…") > 0, "the name is cut: " + title.text)
+            verify(title.implicitWidth <= cap + 0.5, "the Turkish title is " + title.implicitWidth + " wide, the cap " + cap)
+            verify(!title.truncated)
+            compare(title.Accessible.name, tc.longA + " için PIN girin", "the accessible name is the whole Turkish title")
+            DeviceSettings.language = "en"
+            tryVerify(() => title.text.indexOf("Enter PIN for") === 0)
+            verify(pad.visible)
             keyClick(Qt.Key_Escape)                      // Back closes the pad
             tryVerify(() => !find("pinPad").visible, 2000, "Back closes the pad")
             tryVerify(() => find("profileList").activeFocus, 2000, "focus returns to the picker")
@@ -207,9 +221,19 @@ Item {
             tryVerify(() => find("rowWallpaperDim").y > 0, 2000, "the rows are laid out")
             wait(300)
             grabImage(tc.shell).save(shotsDir + "/73-dim-row-caption.png")
+            DeviceSettings.language = "tr"
+            tryCompare(findChild(find("rowWallpaperDim"), "caption"), "text", "Bu resim için artırıldı")
+            wait(400)
+            grabImage(tc.shell).save(shotsDir + "/73-dim-row-caption-tr.png")
+            DeviceSettings.language = "en"
+            tryCompare(findChild(find("rowWallpaperDim"), "caption"), "text", "Raised for this picture")
             // The picker with two 32-character names.
             DeviceSettings.wallpaper = ""
             renameBoth()
+            tryCompare(find("activeProfileName"), "text", tc.longB)
+            wait(400)
+            grabImage(find("statusGlass")).save(shotsDir + "/73-long-names-status-crop.png")
+            grabImage(tc.shell).save(shotsDir + "/73-long-names-status.png")
             lockToPicker()
             wait(700)
             grabImage(tc.shell).save(shotsDir + "/73-long-names-picker.png")

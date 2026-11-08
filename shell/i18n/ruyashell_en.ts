@@ -1519,12 +1519,15 @@ This can&apos;t be undone.</translation>
         <translation>Could not sign in (%1).</translation>
     </message>
     <message>
-        <location line="+31"/>
+        <location line="+27"/>
+        <location line="+6"/>
+        <location line="+19"/>
         <source>Enter PIN for %1</source>
         <translation>Enter PIN for %1</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-24"/>
+        <location line="+25"/>
         <source>Confirm PIN</source>
         <translation>Confirm PIN</translation>
     </message>
