@@ -48,7 +48,7 @@ One line each: `- (source) what, and why it matters`. Dispatched builders put th
 - (T-330 builder, lead-5) Ogg beds get no level or bass check (needs a decoder: planning call); the bundled theme grew 1.1 -> 2.5 MB (image size). Decoder follow-ups are T-346.
 - (lead-5) `tst_battery_cluster::test_the_chip_shrinks_to_plus_n_in_a_narrow_room` fails under load (nav gap 23 against 24 px at 1290 px wide; passes alone and on rerun): make the gap check independent of font metrics or settle longer.
 
-**Empty as of 2026-11-08 (lead-5 triage).** The 17 lines it held are verbatim in [`STATUS-parked.md`](STATUS-parked.md), "Inbox triage 2026-11-08 (lead-5)", each tagged with the task it became (T-339..T-345, T-322, T-288, T-211) or marked parked.
+Triaged 2026-11-08 (lead-5): earlier lines are verbatim in [`STATUS-parked.md`](STATUS-parked.md).
 
 ## Blocked (need something this host doesn't have)
 
