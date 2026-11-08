@@ -459,20 +459,15 @@ sysinfo_check() {
     else
         echo "$out"; ok "SaveReport from nobody refused"
     fi
-    vols="$(busctl --system call "$svc" "$path" "$stor" ListVolumes)"
-    # One record per volume (each starts at its "drive" key): the first REMOVABLE, mounted, writable one,
-    # not the first listed (an internal volume may come first).
+    # The first REMOVABLE, mounted, writable volume, not the first listed (an internal volume may come
+    # first). T-296: the reply is read as JSON and each volume by its keys; the old split at the "drive"
+    # key broke when the dictionary's key order changed (the service sorts them, a BTreeMap).
     id=""; mp=""
-    while IFS= read -r rec; do
-        case "$rec" in *'"removable" b true'*'"mounted" b true'*|*'"mounted" b true'*'"removable" b true'*) ;; *) continue;; esac
-        case "$rec" in *'"read_only" b false'*) ;; *) continue;; esac
-        id="$(echo "$rec" | grep -o '"id" s "[^"]*"' | head -1 | sed 's/^"id" s "//; s/"$//')"
-        mp="$(echo "$rec" | grep -o '"mount_point" s "[^"]*"' | head -1 | sed 's/^"mount_point" s "//; s/"$//')"
-        [ -n "$id" ] && [ -n "$mp" ] && break
-        id=""; mp=""
-    done <<VOLEOF
-$(echo "$vols" | sed 's/"drive" s/\n"drive" s/g')
-VOLEOF
+    if pick="$(busctl --system --json=short call "$svc" "$path" "$stor" ListVolumes | pick_removable_volume)"; then
+        { IFS= read -r id; IFS= read -r mp; } <<< "$pick"
+    else
+        bad "ListVolumes did not answer parsable JSON (busctl --json=short | python3)"
+    fi
     if [ -n "$id" ]; then
         out="$(busctl --system call "$svc" "$path" "$stor" SaveReport 'sa{ss}' "$id" 2 "RuyaOS-system-report.txt" "report text" "RuyaOS-system-report.json" "{}")"
         echo "SaveReport on $id ($mp): $out"
@@ -487,6 +482,23 @@ VOLEOF
         echo "SKIP: no mounted removable volume in the VM (attach a USB stick, see the T-226 Outcome)"
     fi
 }
+
+# T-296: the first removable, mounted, writable volume of a `busctl --json=short call ... ListVolumes`
+# reply on stdin, printed as two lines (the id, then the mount point); nothing when there is none, exit 1
+# when the input is not that JSON. {"type":"aa{sv}","data":[[{"id":{"type":"s","data":".."}, ...}, ...]]}
+volume_pick_py='
+import json, sys
+vols = json.load(sys.stdin)["data"][0]
+def get(v, k):
+    return v.get(k, {}).get("data")
+for v in vols:
+    if get(v, "removable") is True and get(v, "mounted") is True and get(v, "read_only") is False:
+        if get(v, "id") and get(v, "mount_point"):
+            print(get(v, "id"))
+            print(get(v, "mount_point"))
+            break
+'
+pick_removable_volume() { python3 -c "$volume_pick_py"; }
 
 thermal_check() {
     echo "--- thermal (T-200): Devices1.Thermal"
@@ -637,6 +649,9 @@ time_check() {
     timedatectl set-timezone "$orig"
     [ "$(timedatectl show -p Timezone --value)" = "$orig" ] && ok "zone restored to $orig" || bad "could not restore $orig"
 }
+
+# scripts/lint-vm-checks.ps1 sources this file with the variable set to run its helpers on canned data.
+if [ "${VM_CHECK_LIB_ONLY:-0}" = 1 ]; then return 0 2>/dev/null || exit 0; fi
 
 case "${1:-check}" in
 security)

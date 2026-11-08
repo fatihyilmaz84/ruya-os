@@ -47,6 +47,17 @@ if [ -x "$shell" ]; then
     "$shell" --check-sound-theme "$tmp/escape" >/dev/null 2>&1 && bad "a path outside the folder was accepted" || ok "a path outside the folder is refused"
     cp -r "$dir" "$tmp/link"; rm -f "$tmp/link/back.wav"; ln -s "$dir/select.wav" "$tmp/link/back.wav"
     "$shell" --check-sound-theme "$tmp/link" >/dev/null 2>&1 && bad "a linked cue file was accepted" || ok "a linked cue file is refused"
+    # T-296: a folder inside the theme that is a link to somewhere else. Each file below it is a plain
+    # file and not a link itself, so only the check that the real path stays inside the theme refuses it.
+    # The control right before it has the same layout with a real folder and must be accepted, so the
+    # refusal is the link's and not a side effect of the subfolder or of the changed manifest.
+    cp -r "$dir" "$tmp/subdir"; mkdir "$tmp/subdir/sub"; mv "$tmp/subdir/select.wav" "$tmp/subdir/sub/select.wav"
+    sed -i 's#"select.wav"#"sub/select.wav"#' "$tmp/subdir/theme.json"
+    "$shell" --check-sound-theme "$tmp/subdir" >/dev/null 2>&1 && ok "a cue in a real subfolder is accepted (control)" || bad "a cue in a real subfolder was refused (the control for the next case)"
+    cp -r "$dir" "$tmp/dirlink"; mkdir "$tmp/elsewhere"; mv "$tmp/dirlink/select.wav" "$tmp/elsewhere/select.wav"
+    ln -s "$tmp/elsewhere" "$tmp/dirlink/sub"
+    sed -i 's#"select.wav"#"sub/select.wav"#' "$tmp/dirlink/theme.json"
+    "$shell" --check-sound-theme "$tmp/dirlink" >/dev/null 2>&1 && bad "a subfolder linking outside the theme was accepted" || ok "a subfolder that links outside the theme is refused"
     rm -rf "$tmp"
 else
     bad "ruya-shell not found"
@@ -60,10 +71,12 @@ else
 fi
 
 # The image's own Qt Multimedia plays the ambient loop (FLAC): the probe loads it at volume 0 as the shell's user.
+# runuser does not start a session, so XDG_RUNTIME_DIR is set to the shell user's own (/run/user/<uid>, where its
+# PipeWire socket is): without it Qt Multimedia finds no audio server and "PlayingState not reached" is a false alarm.
 # scp scripts/vm-sounds-probe.qml to /root/ together with this script.
 if [ -f /root/vm-sounds-probe.qml ]; then
     work=$(mktemp -d); cp /root/vm-sounds-probe.qml "$work/probe.qml"; chmod 755 "$work"; chmod 644 "$work/probe.qml"
-    runuser -u ruya-shell -- env QT_QPA_PLATFORM=offscreen timeout 30 "$shell" --load "$work/probe.qml" > "$work/probe.log" 2>&1
+    runuser -u ruya-shell -- env QT_QPA_PLATFORM=offscreen XDG_RUNTIME_DIR="/run/user/$(id -u ruya-shell)" timeout 30 "$shell" --load "$work/probe.qml" > "$work/probe.log" 2>&1
     last=$(grep -a "sounds-probe:" "$work/probe.log" | tail -1)
     echo "    $last"
     echo "$last" | grep -q "loaded=true" && ok "Qt Multimedia loaded ambient.flac (LoadedMedia)" || bad "the ambient file did not load under the image's Qt: $(grep -a -i 'error\|fail' "$work/probe.log" | head -2)"

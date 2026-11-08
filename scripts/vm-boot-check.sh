@@ -29,10 +29,21 @@ fi
 [ "$(systemctl show -p Result --value ruya-grub-menu.service)" = success ] && ok "ruya-grub-menu.service succeeded" || bad "ruya-grub-menu.service: $(systemctl show -p Result --value ruya-grub-menu.service)"
 cmp -s /usr/lib/ruyaos/grub-menu-custom.cfg /boot/grub2/custom.cfg && ok "custom.cfg equals /usr/lib/ruyaos/grub-menu-custom.cfg" || echo "note: custom.cfg differs or is absent"
 echo "grubenv: $(grub2-editenv list | tr '\n' ' ')"
-# The service remounts /boot read-write and back to read-only before it exits, which cannot be seen from
-# here; this only shows the host's view after the boot (read-only), so it is a sanity check, not a proof
-# that the service restored the flag.
-findmnt -n -o OPTIONS /boot | tr ',' '\n' | grep -qx ro && ok "/boot is read-only in the host namespace" || bad "/boot is read-write in the host namespace"
+# T-296: ruya-grub-menu.service remounts /boot read-write and back to read-only inside its own private mount
+# namespace (PrivateMounts / ProtectSystem in the unit), so the remount itself cannot be seen from here, not even
+# while the unit runs. What this can and does check is the result in the host's namespace afterwards: /boot is
+# its own mount (not just a directory of the read-only root, which would be "ro" for the wrong reason), it is
+# mounted ro, and a write really fails with EROFS. That the service restores the flag in its namespace is only
+# implied by the host view staying read-only.
+boot_target="$(findmnt -n --target /boot -o TARGET)"
+if [ "$boot_target" = /boot ]; then ok "/boot is its own mount"; else bad "/boot is not a mount of its own (findmnt says $boot_target)"; fi
+findmnt -n --target /boot -o OPTIONS | tr ',' '\n' | grep -qx ro && ok "/boot is mounted ro in the host namespace" || bad "/boot is not mounted ro in the host namespace"
+if wr="$({ : > /boot/.ruya-write-test; } 2>&1)"; then
+    rm -f /boot/.ruya-write-test
+    bad "a file could be created in /boot: it is writable in the host namespace"
+else
+    case "$wr" in *"ead-only"*) ok "writing to /boot fails with 'Read-only file system'" ;; *) bad "writing to /boot failed for another reason: $wr" ;; esac
+fi
 
 # No text console: nothing started a login on tty1.
 if journalctl -b -q -u getty@tty1.service --no-pager | grep -q -E 'Started|Starting'; then

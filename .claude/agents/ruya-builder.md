@@ -34,7 +34,7 @@ The lead gives you: the task file, the worktree path and the branch `t/T-nnn-slu
 - Every command must finish on its own. Long work (image builds, VM boots) runs with `run_in_background`, and you wait for its notification; **never end your turn while something you started still runs**. Before your final message, stop what you started (`qemu-system-x86_64`, `ruya-shell`, `podman` containers you ran).
 - After any image build, passed or failed: `.\scripts\free-space.ps1` once your VM checks are done.
 - Run `dev.ps1` from **your worktree** (`Set-Location` there, use its own `.\scripts\dev.ps1`): the script from the main checkout tests main's tree, not yours.
-- Never `cargo clean`, never copy `target/` or `shell\build-win` (disk is limited); iterate with `dev.ps1 rust` or `dev.ps1 shell`, run the full `test` at the end.
+- Never `cargo clean`, never copy `target/` or `shell\build-win` (disk is limited); iterate with `dev.ps1 qml tst_x [tst_y]` (builds the runner, runs only those files; PARTIAL, never evidence for a HANDOFF), `revert-check.ps1 ... -Test tst_x`, `dev.ps1 rust` or `dev.ps1 shell`; run the full `test` once at the end.
 - Text with backslashes (Windows paths, regex) goes through Write/Edit, never heredocs or `sed`. Python only as `python -I` with `encoding="utf-8"`. Commit messages: write a file, `git commit -F <file>`. Run git from the Bash tool only (PowerShell's `git` is an MSYS2 build that can't read worktree links). Scratch files (logs, backups, helper scripts) go under your worktree's `output\`, never next to it in `RuyaOS-worktrees\`.
 
 ## If review findings come back
