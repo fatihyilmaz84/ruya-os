@@ -43,6 +43,7 @@ Bluetooth::Bluetooth(std::unique_ptr<BluetoothBackend> backend, QObject *parent)
                 {QStringLiteral("connected"), d.connected},
                 {QStringLiteral("trusted"), d.trusted},
                 {QStringLiteral("battery"), d.battery},
+                {QStringLiteral("adapter"), d.adapter},
             });
         }
         checkBatteries(list);

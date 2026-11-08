@@ -323,6 +323,8 @@ cmake --build shell\build-win --config Release --target all_qmllint
 
 **Controller pairing screens (T-203).** In a VM, `scripts/vm-devices-check.sh bluetooth` (part of `check`) also checks `InputPresent` (QEMU's keyboard), that the window answers `unavailable` without an adapter and refuses another user. The shell's mock has an input device, so the "no controller" wizard stage and picker hint are not shown. In the mock, `Bluetooth.mockSetInputPresent(false)` and `Bluetooth.mockPairingScript("success"|"timeout"|"rejected"|"wait")` play them (the tests do). Against `ruya-devices --session`, `RUYA_DEVICES_NO_INPUT=1` makes the fake service report no input device (`busctl --user get-property org.ruyaos.Devices1 /org/ruyaos/Devices1 org.ruyaos.Devices1.Bluetooth InputPresent`); `StartControllerPairing` and `StopControllerPairing` work there too, but the session fakes follow nothing, so the window never ends by itself (no timeout, no pairing).
 
+**Two Bluetooth adapters (T-336).** `RUYA_DEVICES_FAKE_BLUETOOTH=two-adapters ruya-devices --session` serves a fake machine with two adapters (`hci0`, and a USB `hci1` that holds two bonded pads and is the primary adapter); `ListDevices` then carries `adapter`. `vm-devices-check.sh bluetooth` starts it that way on ruya-shell's user bus and calls `Connect` and `Forget` on a pad of `hci1`. The shell's mock has one pad (`bt-pad-old`) on `hci1`.
+
 **Against the real profiles service (Linux):** in `--session` mode the service uses the session bus and creates no Unix users, so it runs fine without root.
 
 ```bash

@@ -20,7 +20,8 @@ class Bluetooth : public QObject
 
     Q_PROPERTY(bool powered READ powered NOTIFY stateChanged)
     Q_PROPERTY(bool discovering READ discovering NOTIFY stateChanged)
-    // [{ id, name, deviceName, kind, family, paired, bonded, connected, trusted, battery }]; battery -1 = unknown;
+    // [{ id, name, deviceName, kind, family, paired, bonded, connected, trusted, battery, adapter }]; battery -1 = unknown;
+    // adapter: the adapter that holds it ("hci0"; "" from an older service), shown nowhere;
     // name: the alias; deviceName: the model it advertises ("" when unknown); bonded: false for a device
     // paired without its keys kept (a missing key from an older service reads as true);
     // kind: "controller" | "headset" | "speaker" | "keyboard" | "mouse" | "phone" | "other";

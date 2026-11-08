@@ -179,6 +179,7 @@ bluetooth_check() {
     done
     as_shell systemctl --user is-active ruya-devices >/dev/null && ok "ruya-devices still active after the Bluetooth calls" || bad "ruya-devices not active"
     bluetooth_fake_check
+    bluetooth_two_adapters_check
 }
 
 # T-300: the VM has no Bluetooth adapter, so ListDevices is empty on the system bus. `bonded` and
@@ -236,6 +237,69 @@ else:
     case "$verdict" in
     *"VERDICT ok"*) ok "ListDevices carries bonded and device_name (a renamed DualSense: alias, model, playstation, paired and not bonded)";;
     *) bad "ListDevices of the fake BlueZ: $verdict $out";;
+    esac
+}
+
+# T-336: a second instance of the service with the two-adapter fake (RUYA_DEVICES_FAKE_BLUETOOTH=two-adapters)
+# on ruya-shell's user bus: AA:..:11 lives on hci1; it must be listed with adapter hci1, and Connect and
+# Forget of it must answer ok (the fake only accepts a call that goes through the adapter holding the device).
+bluetooth_two_adapters_check() {
+    local out verdict ubus="unix:path=/run/user/$uid/bus" bt_user=org.ruyaos.Devices1.Bluetooth
+    echo "--- bluetooth (T-336): two adapters (ruya-shell's user bus, FakeBluez::with_two_adapters)"
+    if ! command -v python3 >/dev/null; then
+        bad "python3 is needed for the two-adapter check"
+        return
+    fi
+    if as_shell env DBUS_SESSION_BUS_ADDRESS="$ubus" busctl --user status org.ruyaos.Devices1 >/dev/null 2>&1; then
+        bad "org.ruyaos.Devices1 is already on ruya-shell's user bus: the two-adapter check needs the name free"
+        return
+    fi
+    out="$(as_shell env DBUS_SESSION_BUS_ADDRESS="$ubus" RUYA_DEVICES_FAKE_BLUETOOTH=two-adapters bash -c '
+        /usr/bin/ruya-devices --session >/dev/null 2>&1 &
+        pid=$!
+        n=0
+        until busctl --user status org.ruyaos.Devices1 >/dev/null 2>&1 || [ "$n" -ge 50 ]; do sleep 0.2; n=$((n + 1)); done
+        call() { busctl --user --json=short call org.ruyaos.Devices1 /org/ruyaos/Devices1 '"$bt_user"' "$@"; }
+        echo "LIST $(call ListDevices)"
+        echo "CONNECT $(call Connect s AA:00:00:00:00:11)"
+        echo "FORGET $(call Forget s AA:00:00:00:00:11)"
+        echo "LIST2 $(call ListDevices)"
+        kill "$pid" 2>/dev/null
+        wait "$pid" 2>/dev/null
+    ' 2>&1)"
+    verdict="$(printf '%s' "$out" | python3 -I -c '
+import json, sys
+rows = {}
+for line in sys.stdin.read().splitlines():
+    key, _, body = line.partition(" ")
+    try:
+        rows[key] = json.loads(body)["data"]
+    except Exception:
+        pass
+try:
+    first = {d["id"]["data"]: d for d in rows["LIST"][0]}
+    second = {d["id"]["data"] for d in rows["LIST2"][0]}
+    pad = first["AA:00:00:00:00:11"]
+    other = first["AA:00:00:00:00:01"]
+except Exception as err:
+    print("unparsable: %r" % (err,)); sys.exit(0)
+for d in first.values():
+    print("device %s adapter=%r" % (d["id"]["data"], d.get("adapter", {}).get("data")))
+if pad["adapter"]["data"] != "hci1" or other["adapter"]["data"] != "hci0":
+    print("wrong: the pads should say hci1 and hci0")
+elif rows.get("CONNECT") != ["ok"]:
+    print("wrong: Connect of the pad on hci1 answered %r" % (rows.get("CONNECT"),))
+elif rows.get("FORGET") != ["ok"]:
+    print("wrong: Forget of the pad on hci1 answered %r" % (rows.get("FORGET"),))
+elif "AA:00:00:00:00:11" in second or "AA:00:00:00:00:01" not in second:
+    print("wrong: Forget should remove only the pad of hci1")
+else:
+    print("VERDICT ok")
+' 2>&1)"
+    echo "$verdict"
+    case "$verdict" in
+    *"VERDICT ok"*) ok "a pad on hci1 is listed with adapter hci1; Connect and Forget of it answer ok";;
+    *) bad "ListDevices/Connect/Forget of the two-adapter fake: $verdict $out";;
     esac
 }
 

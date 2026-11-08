@@ -371,6 +371,7 @@ mod tests {
             connected: true,
             trusted: true,
             battery: 50,
+            adapter: "hci0".to_owned(),
         }
     }
 

@@ -12,7 +12,8 @@ use zbus::zvariant::{ObjectPath, OwnedObjectPath, OwnedValue, Value};
 use zbus::{interface, Connection, DBusError};
 
 use crate::bluetooth::{
-    AgentCall, AgentSlot, Bluez, BtError, Raw, RawAdapter, RawDevice, LOCAL_TIMEOUT,
+    adapter_name, AdapterInfo, AgentCall, AgentSlot, Bluez, BtError, Raw, RawAdapter, RawDevice,
+    LOCAL_TIMEOUT,
 };
 
 pub const BLUEZ: &str = "org.bluez";
@@ -152,6 +153,19 @@ fn name_of(err: &zbus::Error) -> BtError {
     }
 }
 
+/// `/org/bluez/hci1/dev_..` -> `/org/bluez/hci1`.
+fn parent_of(path: &str) -> String {
+    path.rsplit_once('/')
+        .map_or_else(|| path.to_owned(), |(parent, _)| parent.to_owned())
+}
+
+/// Whether `hciN` hangs off a USB bus: its sysfs path (`/sys/class/bluetooth/hci0` is a symlink
+/// into the device tree) has a `usb` component. Unreadable: not USB.
+fn is_usb(name: &str) -> bool {
+    std::fs::canonicalize(format!("/sys/class/bluetooth/{name}"))
+        .is_ok_and(|p| p.to_string_lossy().contains("/usb"))
+}
+
 /// A device's object path under the adapter that BlueZ named it with (`/org/bluez/hci0`).
 fn device_path(adapter: &str, address: &str) -> String {
     format!("{adapter}/dev_{}", address.replace(':', "_"))
@@ -232,31 +246,30 @@ impl BluezClient {
             .map_err(|e| BtError(format!("org.ruyaos.Error.Io: {e}")))
     }
 
-    /// The path of the first adapter, and the read of everything.
-    async fn read(&self) -> Result<(Option<String>, Raw), BtError> {
+    /// Every adapter and every device of every adapter. The primary adapter is `Raw::primary`.
+    async fn read(&self) -> Result<Raw, BtError> {
         let objects = match self.objects().await {
             Ok(o) => o,
-            Err(e) if is_absent(&e.0) => return Ok((None, Raw::default())),
+            Err(e) if is_absent(&e.0) => return Ok(Raw::default()),
             Err(e) => return Err(e),
         };
         let mut paths: Vec<_> = objects.keys().collect();
         paths.sort_by(|a, b| a.as_str().cmp(b.as_str()));
-        let mut adapter = None;
+        let mut adapters = Vec::new();
         let mut devices = Vec::new();
         for p in paths {
             let ifaces = &objects[p];
             if let Some(a) = ifaces.get(ADAPTER) {
-                if adapter.is_none() {
-                    adapter = Some((
-                        p.as_str().to_owned(),
-                        RawAdapter {
-                            powered: flag(a, "Powered"),
-                            discovering: flag(a, "Discovering"),
-                            pairable: flag(a, "Pairable"),
-                            discoverable: flag(a, "Discoverable"),
-                        },
-                    ));
-                }
+                adapters.push(AdapterInfo {
+                    path: p.as_str().to_owned(),
+                    usb: is_usb(adapter_name(p.as_str())),
+                    state: RawAdapter {
+                        powered: flag(a, "Powered"),
+                        discovering: flag(a, "Discovering"),
+                        pairable: flag(a, "Pairable"),
+                        discoverable: flag(a, "Discoverable"),
+                    },
+                });
             }
             if let Some(d) = ifaces.get(DEVICE) {
                 let battery = match ifaces
@@ -286,24 +299,12 @@ impl BluezClient {
                         Some(Value::U16(a)) => Some(*a),
                         _ => None,
                     },
+                    // `/org/bluez/hci1/dev_..` is the device of `/org/bluez/hci1`.
+                    adapter: parent_of(p.as_str()),
                 });
             }
         }
-        let path = adapter.as_ref().map(|(p, _)| p.clone());
-        Ok((
-            path,
-            Raw {
-                adapter: adapter.map(|(_, a)| a),
-                devices,
-            },
-        ))
-    }
-
-    async fn adapter_path(&self) -> Result<String, BtError> {
-        self.read()
-            .await?
-            .0
-            .ok_or_else(|| BtError::new("org.bluez.Error.NotReady"))
+        Ok(Raw { adapters, devices })
     }
 
     async fn set(&self, path: &str, iface: &str, prop: &str, on: bool) -> Result<(), BtError> {
@@ -342,28 +343,45 @@ fn is_absent(name: &str) -> bool {
 
 impl Bluez for BluezClient {
     fn snapshot(&self) -> Result<Raw, BtError> {
-        future::block_on(self.read()).map(|(_, raw)| raw)
+        future::block_on(self.read())
     }
 
+    /// Every adapter: off for all of them; on for every one that lets itself be switched (an
+    /// rfkill-blocked one refuses). The first refusal is the answer when none could be.
     fn set_powered(&self, on: bool) -> Result<(), BtError> {
         future::block_on(async {
-            let adapter = self.adapter_path().await?;
-            self.set(&adapter, ADAPTER, "Powered", on).await
+            let raw = self.read().await?;
+            if raw.adapters.is_empty() {
+                return Err(BtError::new("org.bluez.Error.NotReady"));
+            }
+            let mut first_error = None;
+            let mut switched = 0;
+            for a in &raw.adapters {
+                match self.set(&a.path, ADAPTER, "Powered", on).await {
+                    Ok(()) => switched += 1,
+                    Err(e) => {
+                        eprintln!(
+                            "ruya-devices: {} Powered {on} failed: {}",
+                            adapter_name(&a.path),
+                            e.0
+                        );
+                        first_error.get_or_insert(e);
+                    }
+                }
+            }
+            match first_error {
+                Some(e) if switched == 0 || !on => Err(e),
+                _ => Ok(()),
+            }
         })
     }
 
-    fn set_pairable(&self, on: bool) -> Result<(), BtError> {
-        future::block_on(async {
-            let adapter = self.adapter_path().await?;
-            self.set(&adapter, ADAPTER, "Pairable", on).await
-        })
+    fn set_pairable(&self, adapter: &str, on: bool) -> Result<(), BtError> {
+        future::block_on(self.set(adapter, ADAPTER, "Pairable", on))
     }
 
-    fn set_discoverable(&self, on: bool) -> Result<(), BtError> {
-        future::block_on(async {
-            let adapter = self.adapter_path().await?;
-            self.set(&adapter, ADAPTER, "Discoverable", on).await
-        })
+    fn set_discoverable(&self, adapter: &str, on: bool) -> Result<(), BtError> {
+        future::block_on(self.set(adapter, ADAPTER, "Discoverable", on))
     }
 
     fn register_agent(&self) -> Result<(), BtError> {
@@ -405,10 +423,9 @@ impl Bluez for BluezClient {
         })
     }
 
-    fn start_discovery(&self) -> Result<(), BtError> {
+    fn start_discovery(&self, adapter: &str) -> Result<(), BtError> {
         future::block_on(async {
-            let adapter = self.adapter_path().await?;
-            match self.call(&adapter, ADAPTER, "StartDiscovery", &()).await {
+            match self.call(adapter, ADAPTER, "StartDiscovery", &()).await {
                 // Someone else (or an earlier call of ours) already runs it.
                 Err(e) if e.0 == "org.bluez.Error.InProgress" => Ok(()),
                 other => other.map(|_| ()),
@@ -416,64 +433,57 @@ impl Bluez for BluezClient {
         })
     }
 
-    fn stop_discovery(&self) -> Result<(), BtError> {
+    fn stop_discovery(&self, adapter: &str) -> Result<(), BtError> {
         future::block_on(async {
-            let adapter = self.adapter_path().await?;
-            self.call(&adapter, ADAPTER, "StopDiscovery", &())
+            self.call(adapter, ADAPTER, "StopDiscovery", &())
                 .await
                 .map(|_| ())
         })
     }
 
-    fn pair(&self, address: &str, timeout: Duration) -> Result<(), BtError> {
+    fn pair(&self, adapter: &str, address: &str, timeout: Duration) -> Result<(), BtError> {
         future::block_on(async {
-            let adapter = self.adapter_path().await?;
-            let path = device_path(&adapter, address);
+            let path = device_path(adapter, address);
             self.call_within(&path, DEVICE, "Pair", "CancelPairing", timeout)
                 .await
         })
     }
 
-    fn set_trusted(&self, address: &str) -> Result<(), BtError> {
+    fn set_trusted(&self, adapter: &str, address: &str) -> Result<(), BtError> {
         future::block_on(async {
-            let adapter = self.adapter_path().await?;
-            self.set(&device_path(&adapter, address), DEVICE, "Trusted", true)
+            self.set(&device_path(adapter, address), DEVICE, "Trusted", true)
                 .await
         })
     }
 
-    fn connect(&self, address: &str, timeout: Duration) -> Result<(), BtError> {
+    fn connect(&self, adapter: &str, address: &str, timeout: Duration) -> Result<(), BtError> {
         future::block_on(async {
-            let adapter = self.adapter_path().await?;
-            let path = device_path(&adapter, address);
+            let path = device_path(adapter, address);
             self.call_within(&path, DEVICE, "Connect", "Disconnect", timeout)
                 .await
         })
     }
 
-    fn disconnect(&self, address: &str) -> Result<(), BtError> {
+    fn disconnect(&self, adapter: &str, address: &str) -> Result<(), BtError> {
         future::block_on(async {
-            let adapter = self.adapter_path().await?;
-            self.call(&device_path(&adapter, address), DEVICE, "Disconnect", &())
+            self.call(&device_path(adapter, address), DEVICE, "Disconnect", &())
                 .await
                 .map(|_| ())
         })
     }
 
-    fn set_alias(&self, address: &str, alias: &str) -> Result<(), BtError> {
+    fn set_alias(&self, adapter: &str, address: &str, alias: &str) -> Result<(), BtError> {
         future::block_on(async {
-            let adapter = self.adapter_path().await?;
-            self.set_text(&device_path(&adapter, address), DEVICE, "Alias", alias)
+            self.set_text(&device_path(adapter, address), DEVICE, "Alias", alias)
                 .await
         })
     }
 
-    fn remove(&self, address: &str) -> Result<(), BtError> {
+    fn remove(&self, adapter: &str, address: &str) -> Result<(), BtError> {
         future::block_on(async {
-            let adapter = self.adapter_path().await?;
-            let path = OwnedObjectPath::try_from(device_path(&adapter, address))
+            let path = OwnedObjectPath::try_from(device_path(adapter, address))
                 .map_err(|_| BtError::new("org.bluez.Error.InvalidArguments"))?;
-            self.call(&adapter, ADAPTER, "RemoveDevice", &(path,))
+            self.call(adapter, ADAPTER, "RemoveDevice", &(path,))
                 .await
                 .map(|_| ())
         })

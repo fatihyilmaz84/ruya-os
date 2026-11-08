@@ -222,7 +222,14 @@
       every device, stops a running scan and empties the list (ListDevices answers an empty
       list while Powered is false); switching on reconnects paired, trusted devices that are in
       range and brings the list back. A failed Set (no adapter, rfkill blocked) answers a D-Bus
-      error. Powered is false when there is no adapter.
+      error. Powered is false when there is no adapter. With several adapters (T-336) Powered is true
+      when any adapter is on; setting it false switches every adapter off, true every adapter that
+      lets itself be switched on (an rfkill-blocked one is skipped), so a pad bonded on the second
+      adapter does not keep working while Bluetooth looks off. Switching off answers the first
+      error if any adapter refused, even when the others did switch off; switching on answers an
+      error only when no adapter could be switched. Discovering, StartScan and the
+      controller pairing window are those of the primary adapter (the one with the most paired
+      devices; a tie goes to a USB-attached one, then to the lowest hciN).
     -->
     <property name="Powered" type="b" access="readwrite">
       <annotation name="org.freedesktop.DBus.Property.EmitsChangedSignal" value="true"/>
@@ -264,6 +271,12 @@
         connected  b
         trusted    b   may reconnect by itself
         battery    i   0-100, or -1 when the device reports none
+        adapter    s   the name of the Bluetooth adapter that holds the device ("hci0", "hci1"), for a
+                       log or a bug report; no screen shows it. A machine can have more than one
+                       adapter (the Dell has two): the list holds the devices of all of them, a device
+                       is always operated through its own adapter, and one that two adapters have seen
+                       is listed once under the one that has it paired or connected. Clients treat a
+                       missing key as ""
       Empty while Powered is false.
     -->
     <method name="ListDevices">

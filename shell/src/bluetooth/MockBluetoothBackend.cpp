@@ -352,6 +352,7 @@ void MockBluetoothBackend::populate()
         e.dev.id = QString::fromLatin1(s.id);
         e.dev.name = QString::fromLatin1(s.name);
         e.dev.deviceName = e.dev.name;
+        e.dev.adapter = QStringLiteral("hci0");
         e.dev.bonded = true;
         e.dev.kind = QString::fromLatin1(s.kind);
         e.dev.family = QString::fromLatin1(s.family);
@@ -395,6 +396,7 @@ void MockBluetoothBackend::initState()
         e.dev.id = QString::fromLatin1(id);
         e.dev.name = QString::fromLatin1(name);
         e.dev.deviceName = e.dev.name;
+        e.dev.adapter = QStringLiteral("hci0");
         e.dev.kind = QString::fromLatin1(kind);
         e.dev.paired = paired;
         e.dev.bonded = paired;
@@ -415,6 +417,8 @@ void MockBluetoothBackend::initState()
         entry("bt-sleepy", "Old Headset", "headset", false, false, -1, 1, "timeout"),
         entry("bt-pad-new", "Ruya Pad", "controller", false, false, 64, 2, "ok"),
     };
+    // One pad is bonded on a second adapter, like on the Dell (T-336).
+    m_entries[indexOf(QStringLiteral("bt-pad-old"))].dev.adapter = QStringLiteral("hci1");
 }
 
 int MockBluetoothBackend::indexOf(const QString &id) const

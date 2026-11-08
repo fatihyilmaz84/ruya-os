@@ -350,6 +350,18 @@ Item {
             tryVerify(() => device("bt-pad-old").paired && device("bt-pad-old").bonded, 2000, "pairing again bonds")
         }
 
+        // T-336: ListDevices names the adapter that holds each device ("hci0"); no screen shows it. The
+        // mock has one pad on a second adapter. A client that gets no key (an older service) reads "".
+        function test_adapter_field_reaches_the_model() {
+            compare(device("bt-pad-main").adapter, "hci0")
+            compare(device("bt-pad-old").adapter, "hci1", "bonded on the second adapter")
+            Bluetooth.forget("bt-pad-old")
+            tryVerify(() => device("bt-pad-old") === undefined, 2000, "forgotten")
+            Bluetooth.mockReveal("bt-pad-old")
+            tryVerify(() => device("bt-pad-old") !== undefined, 2000)
+            compare(device("bt-pad-old").adapter, "hci1", "found again under the same adapter")
+        }
+
         // T-301: a paired device that is not bonded says "Not fully paired" and offers "Pair again" among its
         // actions: Forget, a scan that finds it again, then Pair. Bonded devices have no such row.
         function test_pair_again_for_unbonded() {
