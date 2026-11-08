@@ -74,7 +74,7 @@ No cue is ever the only signal: every cue has something on screen next to it (a 
 The console checks these before it uses a theme, and ignores a theme that breaks one (it writes a line to the log and plays the bundled theme; it never stops booting for a theme).
 
 - **Cues:** WAV, PCM 16-bit, mono or stereo, **48 kHz**, at most **1.5 s** and **200 KB** each, **peak below -3 dBFS** (0.708 of full scale). Start and end on silence: a cue that ends on a step clicks.
-- **Ambient:** Ogg Vorbis, Ogg Opus or FLAC (`.ogg`, `.opus`, `.flac`), mono or stereo, 8 to 96 kHz, at most **3 MB**, a loop of at least **5 s**. The loop must lie inside the file. Aim for a minute or more so that the repeat is not noticed.
+- **Ambient:** Ogg Vorbis, Ogg Opus or FLAC (`.ogg`, `.opus`, `.flac`), mono or stereo, 8 to 96 kHz, at most **3 MB**, a loop of at least **5 s**. The loop must lie inside the file. A FLAC file's frames must name their sample rate (the `flac` tool and `ffmpeg` always do; a frame that says "the rate is in the header" plays as silence on the console and is refused). Aim for a minute or more so that the repeat is not noticed.
 - `theme.json` at most 64 KB; at most 64 cue entries; text fields as in the table.
 - **Copying:** a theme folder may hold at most **100 files** and **12 MB** in all (every regular file counts, also the ones the manifest does not name). Exactly 100 files and exactly 12 MB are accepted; one more of either is refused and the console says which ("That sound theme has more than 100 files." / "... is larger than 12 MB."). Links are not copied.
 - Numbers in `theme.json` (the loop's `start` and `end`) are read as milliseconds up to 10^15; a larger one is treated as 10^15 and the loop is then "not inside the file".

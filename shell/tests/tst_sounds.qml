@@ -85,6 +85,14 @@ Item {
             rejected("bad-cue-not-wav", "not a WAV file")
             rejected("bad-ambient-not-audio", "not a FLAC file")
         }
+        function test_flac_frames_must_name_their_sample_rate() {
+            // T-321: frames with rate code 0 ("as in STREAMINFO", valid FLAC) play at 0 Hz under Qt 6.11's
+            // FFmpeg player: no sound, and "QAudioSink::start: QAudioFormat not valid" several times a second.
+            rejected("bad-flac-frame-rate", "do not name their sample rate")
+            rejected("bad-flac-no-frames", "has no audio frames")
+            const r = SoundThemes.check(checker.root + "/ok-flac-padding")
+            verify(r.ok, "a PADDING block before the first frame (past the 4 KB head) is walked: " + r.problems.join("; "))
+        }
         function test_path_escaping_the_folder() {
             rejected("bad-escape", "leaves the theme folder")
             rejected("bad-absolute", "not a plain relative path")
