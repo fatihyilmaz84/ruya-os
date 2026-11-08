@@ -449,7 +449,8 @@ QVariantMap SoundThemes::check(const QString &folder)
     return {{QStringLiteral("ok"), r.ok}, {QStringLiteral("problems"), r.problems}, {QStringLiteral("warnings"), r.warnings},
             {QStringLiteral("name"), r.manifest.name}, {QStringLiteral("cues"), r.manifest.cues.size()},
             {QStringLiteral("hasAmbient"), r.manifest.hasAmbient}, {QStringLiteral("loopStart"), r.manifest.ambient.loopStartMs},
-            {QStringLiteral("loopEnd"), r.manifest.ambient.loopEndMs}};
+            {QStringLiteral("loopEnd"), r.manifest.ambient.loopEndMs}, {QStringLiteral("ambientMeasured"), r.manifest.ambient.measured},
+            {QStringLiteral("ambientLevel"), r.manifest.ambient.levelDbfs}, {QStringLiteral("ambientLowShare"), r.manifest.ambient.lowShare}};
 }
 
 QString SoundThemes::fixturesDir()

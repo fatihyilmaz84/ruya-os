@@ -64,24 +64,36 @@ CUES = {
 }
 
 # ---------------------------------------------------------------------------------------------
-# The ambient pad: a slow loop of detuned sine layers whose levels drift (the "filter drift": the
-# upper layers swell and fade at their own slow rate). Every frequency and every drift is snapped
-# to a whole number of cycles per loop, so the last sample joins the first one without a click.
+# The ambient pad: a slow loop of detuned voices whose levels drift (the "filter drift": each voice
+# swells and fades at its own slow rate). A voice is a few harmonics, softer the higher they are,
+# shaped by a gentle low-pass, so the pad sounds warm and still has its energy where a 5 cm
+# speaker and a TV play it (T-330: a pad at 73-150 Hz was silent on a small speaker). Every
+# frequency and every drift is a whole number of cycles per loop, so the last sample joins the
+# first one without a click.
 # ---------------------------------------------------------------------------------------------
-AMBIENT_RATE = 24000                 # Hz; the pad has nothing above a few hundred Hz
+AMBIENT_RATE = 24000                 # Hz; the pad has nothing above about 5 kHz
 AMBIENT_BLOCKS = 440                 # loop length in FLAC blocks of 4096 samples (75.09 s)
-AMBIENT_PEAK = 0.35                  # loudest sample; the manifest's gain lowers it further
+AMBIENT_LUFS = -22.5                 # integrated loudness of the file (EBU R 128), before the manifest's gain
 AMBIENT_GAIN = 0.7
-# (frequency Hz, level, drift cycles per loop, drift phase 0..1, detune): a chord of D with a
-# ninth, each layer twice (one slightly above, one slightly below) for the slow beating.
+# (frequency Hz, level, drift cycles per loop, drift phase 0..1, detune): D in fifths and octaves
+# from D4 (A4, D5, A5 and E5, the fifth above A), each voice twice (one slightly above, one
+# slightly below) for the slow beating, and a quiet D3 for warmth on a TV.
 PAD = (
-    (73.42, 0.9, 1, 0.00, 0.0020),
-    (110.00, 0.8, 2, 0.20, 0.0025),
-    (146.83, 0.7, 3, 0.45, 0.0020),
-    (185.00, 0.5, 2, 0.70, 0.0030),
-    (220.00, 0.45, 4, 0.10, 0.0025),
-    (329.63, 0.30, 3, 0.85, 0.0030),
+    (146.83, 0.12, 1, 0.00, 0.0020),
+    (293.66, 0.90, 2, 0.20, 0.0020),
+    (440.00, 0.75, 3, 0.45, 0.0025),
+    (587.33, 0.55, 2, 0.70, 0.0020),
+    (659.26, 0.30, 4, 0.10, 0.0030),
+    (880.00, 0.35, 3, 0.85, 0.0025),
 )
+PAD_HARMONICS = 6                    # harmonics per voice; harmonic h has the level h ** -1.5
+PAD_CUTOFF = 4000.0                  # Hz; the gentle low-pass: 1 / sqrt(1 + (f / cutoff) ** 4)
+
+# The level and band rules a bed of this script must meet (--verify; docs/developers/sound-themes.md).
+AMBIENT_LUFS_RANGE = (-26.0, -22.0)  # integrated loudness before the gain
+AMBIENT_TRUE_PEAK = 10 ** (-3 / 20)  # true peak (4x oversampled) below -3 dBFS
+AMBIENT_MAX_BELOW_120 = 0.03         # share of the energy below 120 Hz
+AMBIENT_MIN_BAND = 0.85              # share of the energy between 200 Hz and 4 kHz
 
 THEME = {
     "name": "Dreamglass",
@@ -192,20 +204,79 @@ def render_cues(table):
     return {name: render_cue(spec) for name, spec in table.items()}
 
 
-def make_pad(rate, blocks, layers, peak):
-    """A seamless pad: every frequency and drift is a whole number of cycles in the loop."""
+def make_pad(rate, blocks, voices, lufs):
+    """A seamless pad at the integrated loudness `lufs`: every frequency and drift is a whole
+    number of cycles in the loop (the phase is computed from whole numbers, k * i mod n)."""
     n = 4096 * blocks
     seconds = n / rate
-    t = np.arange(n) / rate
+    i = np.arange(n, dtype=np.int64)
     out = np.zeros(n)
-    for freq, level, drift_cycles, drift_phase, detune in layers:
+    for v, (freq, level, drift_cycles, drift_phase, detune) in enumerate(voices):
         for sign in (1, -1):
             cycles = round(freq * (1 + sign * detune) * seconds)     # whole cycles per loop
-            f = cycles / seconds
-            drift = 0.6 + 0.4 * np.sin(2 * np.pi * (drift_cycles * t / seconds + drift_phase + (0.5 if sign < 0 else 0)))
-            out += level * drift * np.sin(2 * np.pi * f * t + (0.0 if sign > 0 else 1.3))
-    out *= peak / np.max(np.abs(out))
+            drift = 0.6 + 0.4 * np.sin(2 * np.pi * (drift_cycles * i / n + drift_phase + (0.5 if sign < 0 else 0)))
+            voice = np.zeros(n)
+            for h in range(1, PAD_HARMONICS + 1):
+                f = h * cycles / seconds
+                if f >= 0.45 * rate:
+                    break
+                amp = h ** -1.5 / math.sqrt(1 + (f / PAD_CUTOFF) ** 4)
+                phase = (0.0 if sign > 0 else 1.3) + 0.9 * h * (v + 1)       # spread phases: a lower crest factor
+                voice += amp * np.sin(2 * np.pi * ((h * cycles * i) % n) / n + phase)
+            out += level * drift * voice
+    out *= 10 ** ((lufs - loudness(out, rate)) / 20)
     return np.round(out * 32767).astype(np.int16)
+
+
+# ---------------------------------------------------------------------------------------------
+# Measuring a loop. The pad is periodic, so filtering it in the frequency domain (one FFT of the
+# whole loop) is exact, and so is oversampling it for the true peak.
+# ---------------------------------------------------------------------------------------------
+def _k_weighting(freqs, rate):
+    """The complex response of the ITU-R BS.1770 K-weighting (shelf and high-pass) at `freqs`."""
+    z = np.exp(-1j * 2 * np.pi * freqs / rate)           # z^-1
+    k = math.tan(math.pi * 1681.974450955533 / rate)
+    q = 0.7071752369554196
+    vh = 10 ** (3.999843853973347 / 20)
+    vb = vh ** 0.4996667741545416
+    a0 = 1 + k / q + k * k
+    shelf = (((vh + vb * k / q + k * k) + 2 * (k * k - vh) * z + (vh - vb * k / q + k * k) * z * z)
+             / (a0 + 2 * (k * k - 1) * z + (1 - k / q + k * k) * z * z))
+    k = math.tan(math.pi * 38.13547087602444 / rate)
+    q = 0.5003270373238773
+    high = (1 - 2 * z + z * z) / ((1 + k / q + k * k) + 2 * (k * k - 1) * z + (1 - k / q + k * k) * z * z)
+    return shelf * high
+
+
+def loudness(x, rate):
+    """Integrated loudness (LUFS, EBU R 128: 400 ms blocks, 75 % overlap, the absolute gate at
+    -70 LUFS and the relative gate 10 LU down) of a mono loop (1.0 = full scale)."""
+    x = np.asarray(x, dtype=np.float64)
+    y = np.fft.irfft(np.fft.rfft(x) * _k_weighting(np.fft.rfftfreq(len(x), 1 / rate), rate), n=len(x))
+    block, step = int(0.4 * rate), int(0.1 * rate)
+    sq = np.concatenate([[0.0], np.cumsum(np.concatenate([y, y[:block]]) ** 2)])    # the loop wraps
+    starts = np.arange(0, len(x), step)
+    z = (sq[starts + block] - sq[starts]) / block
+    z = z[-0.691 + 10 * np.log10(np.maximum(z, 1e-20)) > -70]
+    if len(z) == 0:
+        return -math.inf
+    gate = -0.691 + 10 * math.log10(np.mean(z)) - 10
+    z = z[-0.691 + 10 * np.log10(z) > gate]
+    return -0.691 + 10 * math.log10(np.mean(z))
+
+
+def true_peak(x):
+    """The loudest point of a loop (1.0 = full scale), between the samples too (4x band-limited oversampling)."""
+    x = np.asarray(x, dtype=np.float64)
+    return float(np.max(np.abs(np.fft.irfft(np.fft.rfft(x), n=4 * len(x)) * 4)))
+
+
+def band_shares(x, rate):
+    """Shares of the loop's energy below 120 Hz, below 150 Hz and between 200 Hz and 4 kHz."""
+    p = np.abs(np.fft.rfft(np.asarray(x, dtype=np.float64))) ** 2
+    f = np.fft.rfftfreq(len(x), 1 / rate)
+    total = p.sum()
+    return p[f < 120].sum() / total, p[f < 150].sum() / total, p[(f >= 200) & (f < 4000)].sum() / total
 
 
 # ---------------------------------------------------------------------------------------------
@@ -427,7 +498,7 @@ def build_theme(out_dir):
     for name, samples in cues.items():
         files[name] = name + ".wav"
         write_wav(os.path.join(out_dir, name + ".wav"), samples)
-    pad = make_pad(AMBIENT_RATE, AMBIENT_BLOCKS, PAD, AMBIENT_PEAK)
+    pad = make_pad(AMBIENT_RATE, AMBIENT_BLOCKS, PAD, AMBIENT_LUFS)
     with open(os.path.join(out_dir, "ambient.flac"), "wb") as f:
         f.write(encode_flac(pad, AMBIENT_RATE))
     loop_end = len(pad) * 1000 // AMBIENT_RATE
@@ -440,7 +511,7 @@ def build_theme(out_dir):
 
 # The example theme: one short tone per cue and an 8-second ambient, to show the format, nothing more.
 EXAMPLE_RATE = 16000
-EXAMPLE_PAD = ((110.0, 1.0, 1, 0.0, 0.002), (165.0, 0.6, 2, 0.3, 0.002))
+EXAMPLE_PAD = ((220.0, 1.0, 1, 0.0, 0.002), (330.0, 0.6, 2, 0.3, 0.002), (440.0, 0.4, 1, 0.6, 0.002))   # A3, E4, A4
 
 
 def example_cues():
@@ -458,7 +529,7 @@ def build_example(out_dir):
     for name, samples in cues.items():
         files[name] = name + ".wav"
         write_wav(os.path.join(out_dir, name + ".wav"), samples)
-    pad = make_pad(EXAMPLE_RATE, 32, EXAMPLE_PAD, 0.3)       # 8.19 s
+    pad = make_pad(EXAMPLE_RATE, 32, EXAMPLE_PAD, AMBIENT_LUFS)       # 8.19 s
     with open(os.path.join(out_dir, "ambient.flac"), "wb") as f:
         f.write(encode_flac(pad, EXAMPLE_RATE))
     loop_end = len(pad) * 1000 // EXAMPLE_RATE
@@ -505,6 +576,25 @@ def check_theme_dir(directory, label, problems, ambient_pad=None):
                 problems.append("%s/%s: %d bytes" % (label, name, len(data)))
 
 
+def check_bed(label, loop, rate):
+    """The level and band rules of a bed (AMBIENT_LUFS_RANGE ...); returns the problems, prints the numbers."""
+    x = loop.astype(np.float64) / 32768.0
+    lufs, peak = loudness(x, rate), true_peak(x)
+    below120, below150, band = band_shares(x, rate)
+    print("    %s: %.1f LUFS, true peak %.1f dBFS, energy below 120 Hz %.1f %%, below 150 Hz %.1f %%, 200 Hz-4 kHz %.1f %%"
+          % (label, lufs, 20 * math.log10(peak), 100 * below120, 100 * below150, 100 * band))
+    problems = []
+    if not AMBIENT_LUFS_RANGE[0] <= lufs <= AMBIENT_LUFS_RANGE[1]:
+        problems.append("%s: %.1f LUFS is outside %g to %g" % (label, lufs, AMBIENT_LUFS_RANGE[0], AMBIENT_LUFS_RANGE[1]))
+    if peak >= AMBIENT_TRUE_PEAK:
+        problems.append("%s: true peak %.1f dBFS is not below -3 dBFS" % (label, 20 * math.log10(peak)))
+    if below120 > AMBIENT_MAX_BELOW_120:
+        problems.append("%s: %.1f %% of the energy is below 120 Hz (at most %g %%)" % (label, 100 * below120, 100 * AMBIENT_MAX_BELOW_120))
+    if band < AMBIENT_MIN_BAND:
+        problems.append("%s: only %.1f %% of the energy is between 200 Hz and 4 kHz (at least %g %%)" % (label, 100 * band, 100 * AMBIENT_MIN_BAND))
+    return problems
+
+
 def verify():
     problems = []
     with tempfile.TemporaryDirectory() as tmp:
@@ -520,11 +610,12 @@ def verify():
             problems.append("example: two runs give different bytes")
         check_theme_dir(a, "dreamglass", problems)
         check_theme_dir(ex_a, "example", problems)
-        for label, loop in (("dreamglass ambient", pad), ("example ambient", ex_pad)):
+        for label, loop, rate in (("dreamglass ambient", pad, AMBIENT_RATE), ("example ambient", ex_pad, EXAMPLE_RATE)):
             smooth, seam, inner = seam_is_smooth(loop)
             if not smooth:
                 problems.append("%s: seam step %d is bigger than the biggest inner step %d" % (label, seam, inner))
             print("    %s: seam step %d, biggest inner step %d" % (label, seam, inner))
+            problems.extend(check_bed(label, loop, rate))
         # The FLAC must decode to the samples it was made from (the encoder is ours).
         with open(os.path.join(a, "ambient.flac"), "rb") as f:
             decoded, rate = decode_flac(f.read())

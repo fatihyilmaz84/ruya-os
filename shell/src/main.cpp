@@ -58,8 +58,12 @@ static int runSoundThemeCheck(int argc, char *argv[])
     for (const QString &folder : args.mid(1)) {
         const SoundTheme::Result r = SoundTheme::check(folder);
         if (r.ok) {
+            const SoundTheme::Ambient &a = r.manifest.ambient;
+            const QString ambient = !r.manifest.hasAmbient ? QString()
+                : !a.measured ? QStringLiteral(", ambient")
+                              : QStringLiteral(", ambient at %1 dBFS, %2 % below 150 Hz").arg(a.levelDbfs, 0, 'f', 1).arg(a.lowShare * 100, 0, 'f', 1);
             std::printf("ok   %s (%s, %d cues%s)\n", qPrintable(folder), qPrintable(r.manifest.name), int(r.manifest.cues.size()),
-                        r.manifest.hasAmbient ? ", ambient" : "");
+                        qPrintable(ambient));
             for (const QString &w : r.warnings)
                 std::printf("     warning: %s\n", qPrintable(w));
         } else {

@@ -27,6 +27,13 @@ QtObject {
             return qsTr("A file is outside the theme folder")
         if (/^theme\.json |^'(name|author|licence|version|cues)'|SPDX|must look like|more than \d+ cues|'cues' must/.test(first))
             return qsTr("The theme.json file has a mistake")
+        // T-330: these three name "the loop" too, so they come before the loop's own line.
+        if (/ of its energy is below 150 Hz/.test(first))
+            return qsTr("The ambient sound is too deep for TV speakers")
+        if (/nearly silent/.test(first))
+            return qsTr("The ambient sound is almost silent")
+        if (/the FLAC audio is damaged/.test(first))
+            return qsTr("A sound file is not in a format that can be played")
         if (/the loop |'loop' needs/.test(first))
             return qsTr("The ambient loop does not fit the file")
         if (/'gain' must|'file' must be|must be an object with a file/.test(first))

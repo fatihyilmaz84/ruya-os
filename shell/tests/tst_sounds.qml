@@ -140,6 +140,9 @@ Item {
                 "bad-loud-cue": ["A cue is louder than allowed", "Bir arayüz sesi izin verilenden daha yüksek"],
                 "bad-long-cue": ["A cue is longer than allowed", "Bir arayüz sesi izin verilenden daha uzun"],
                 "bad-loop-short": ["The ambient loop does not fit the file", "Ortam sesi döngüsü dosyaya uymuyor"],
+                "bad-ambient-sub-bass": ["The ambient sound is too deep for TV speakers", "Ortam sesi TV hoparlörleri için fazla pes"],
+                "bad-ambient-silent": ["The ambient sound is almost silent", "Ortam sesi neredeyse sessiz"],
+                "bad-flac-cut-short": ["A sound file is not in a format that can be played", "Bir ses dosyası çalınabilecek biçimde değil"],
             }
             for (const language of ["en", "tr"]) {
                 DeviceSettings.language = language
@@ -186,6 +189,59 @@ Item {
             verify(r.ok, path + ": " + r.problems.join("; "))
             compare(r.cues, 13)
             verify(r.hasAmbient)
+        }
+
+        // ---- T-330: the bed must be heard on a TV and a 5 cm speaker
+        function examplePath() {
+            const url = Qt.resolvedUrl("../../samples/sound-theme-example").toString()
+            return url.replace(/^file:\/\/\/([A-Za-z]:)/, "$1").replace(/^file:\/\//, "")
+        }
+
+        function test_the_shipped_beds_play_on_a_small_speaker() {
+            // The T-321 Dreamglass bed had 78 % of its energy below 150 Hz and was silent on the OptiPlex 7080's
+            // speaker at a normal volume. The beds now have it between 200 Hz and 4 kHz, at about -22 dBFS.
+            for (const p of [":/qt/qml/RuyaShell/sounds/dreamglass", examplePath()]) {
+                const r = SoundThemes.check(p)
+                verify(r.ok, p + ": " + r.problems.join("; "))
+                verify(r.ambientMeasured, p + ": the FLAC bed is decoded and measured")
+                // The checker's 4th-order low-pass lets a little of a 220 Hz tone through: the example (A3 at
+                // 220 Hz) reads 2.4 %, Dreamglass 0.5 %; the T-321 bed read 69 %.
+                verify(r.ambientLowShare < 0.05, p + ": share below 150 Hz " + r.ambientLowShare)
+                verify(r.ambientLevel > -26 && r.ambientLevel < -18, p + ": level " + r.ambientLevel + " dBFS")
+            }
+        }
+
+        function test_a_bed_a_small_speaker_cannot_play_is_refused() {
+            rejected("bad-ambient-sub-bass", "100 % of its energy is below 150 Hz (at most 50 %)")
+            rejected("bad-ambient-silent", "nearly silent: the loop's median 1 s level is -51 dBFS (at least -40 dBFS)")
+            const r = SoundThemes.check(checker.root + "/ok-ambient-some-bass")
+            verify(r.ok, "38 % below 150 Hz is still played: " + r.problems.join("; "))
+            verify(r.ambientMeasured)
+            fuzzyCompare(r.ambientLowShare, 0.384, 0.02)
+        }
+
+        function test_damaged_flac_audio_is_refused() {
+            rejected("bad-flac-damaged", "the FLAC audio is damaged")
+            rejected("bad-flac-cut-short", "ends before the loop does")
+        }
+
+        function test_every_stereo_layout_decodes_to_the_same_audio() {
+            // Left 440 Hz at 0.3, right 100 Hz at 0.1: a median level of -16.0 dBFS and 9.6 % below 150 Hz, in
+            // each channel layout a FLAC encoder may choose (ffmpeg and flac use mid/side for most stereo).
+            for (const layout of ["left-right", "left-side", "side-right", "mid-side"]) {
+                const r = SoundThemes.check(checker.root + "/ok-flac-" + layout)
+                verify(r.ok, layout + ": " + r.problems.join("; "))
+                verify(r.ambientMeasured, layout)
+                fuzzyCompare(r.ambientLevel, -16.0, 0.2)
+                fuzzyCompare(r.ambientLowShare, 0.096, 0.01)
+            }
+        }
+
+        function test_an_ogg_bed_is_not_measured_and_the_checker_says_so() {
+            const r = SoundThemes.check(checker.root + "/ok-ogg")
+            verify(r.ok, r.problems.join("; "))
+            verify(!r.ambientMeasured)
+            verify(r.warnings.join("\n").includes("an Ogg ambient is not decoded"), r.warnings.join("; "))
         }
     }
 
