@@ -42,7 +42,8 @@
 # page with `lscpu`, `free`, `lspci`) is done by eye on the machine, see the T-226 Outcome.
 # inputd (T-337, not part of check): virtual gamepads from /dev/uinput; a pad destroyed while holding Down and A leaves KEY_DOWN and KEY_ENTER up on
 # "RuyaOS Navigation" (read with EVIOCGKEY); two pads hold Down, one lets go, Down stays down, the other lets go, Down is up; the journal line
-# `gone: ...; released ...` is there. No /dev/uinput access as root: prints UNVERIFIED and passes nothing.
+# `gone: ...; released ...` is there. WARNING: it sends real Down and Enter key presses to the running shell, which activates whatever has focus:
+# run it last, or with a throwaway screen focused. No /dev/uinput access as root: prints UNVERIFIED and passes nothing.
 # events: only the PipeWire event checks (T-133); IDLE=60 adds the idle-process count (also part of check; samples the process list for IDLE seconds).
 # state: prints State and Primary (for the link test, see docs/dev-setup.md).
 set -u

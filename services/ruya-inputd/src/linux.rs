@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -118,14 +118,16 @@ struct Pad {
 
 impl Drop for Pad {
     fn drop(&mut self) {
+        let held = self.mapper.held_keys();
         let mut out = lock(&self.output);
         let keys = out.board.pad_gone(&mut self.mapper);
         write_keys(&mut out.device, &keys);
-        let released = if keys.is_empty() {
+        // What the pad held; a key another pad still holds stays down on the keyboard.
+        let released = if held.is_empty() {
             "nothing".to_owned()
         } else {
-            keys.iter()
-                .map(|(key, _)| format!("{key:?}"))
+            held.iter()
+                .map(|key| format!("{key:?}"))
                 .collect::<Vec<_>>()
                 .join(", ")
         };
@@ -133,6 +135,21 @@ impl Drop for Pad {
             "ruya-inputd: {} gone: {}; released {released}",
             self.name, self.gone
         );
+    }
+}
+
+/// Takes a path out of the served set when its pump thread ends, however it ends.
+struct Serving {
+    active: Arc<Mutex<HashSet<PathBuf>>>,
+    path: PathBuf,
+}
+
+impl Drop for Serving {
+    fn drop(&mut self) {
+        self.active
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .remove(&self.path);
     }
 }
 
@@ -230,8 +247,11 @@ pub fn run() -> io::Result<()> {
                     active.lock().unwrap().insert(path.clone());
                     let (output, active) = (Arc::clone(&output), Arc::clone(&active));
                     thread::spawn(move || {
-                        pump(device, path.clone(), output);
-                        active.lock().unwrap().remove(Path::new(&path));
+                        let _serving = Serving {
+                            active,
+                            path: path.clone(),
+                        };
+                        pump(device, path, output);
                     });
                 }
                 Ok(_) => {

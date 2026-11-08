@@ -152,8 +152,9 @@ impl Mapper {
             return Vec::new(); // a repeated press is not a second hold
         }
         if !pressed && !*down {
-            // Released without a press seen (the pad connected with it held): nothing of ours.
-            return vec![(key, false)];
+            // Released without a press seen (the pad was opened with it held): it holds nothing
+            // of this key here, so it must not take away what another source or pad holds.
+            return Vec::new();
         }
         *down = pressed;
         self.settle(vec![(key, pressed)])
@@ -188,6 +189,15 @@ impl Mapper {
     /// Counts the sources behind each key and keeps only the pad's own transitions.
     fn settle(&mut self, events: Vec<KeyEvent>) -> Vec<KeyEvent> {
         count_transitions(&mut self.held, &events)
+    }
+
+    /// The keys this pad holds now, in release order.
+    pub fn held_keys(&self) -> Vec<NavKey> {
+        ALL_KEYS
+            .iter()
+            .copied()
+            .filter(|&key| self.held[key_index(key)] > 0)
+            .collect()
     }
 
     /// The pad is gone: a release for every key it holds, then it holds nothing.
@@ -233,6 +243,7 @@ mod tests {
     fn buttons_map_to_navigation() {
         let mut m = Mapper::default();
         assert_eq!(m.button(Button::South, true), vec![(NavKey::Accept, true)]);
+        assert_eq!(m.button(Button::East, true), vec![(NavKey::Back, true)]);
         assert_eq!(m.button(Button::East, false), vec![(NavKey::Back, false)]);
         assert_eq!(m.button(Button::Mode, true), vec![(NavKey::Guide, true)]);
     }
@@ -389,5 +400,29 @@ mod tests {
         kb.route(&a.button(Button::South, true));
         kb.route(&a.button(Button::South, false));
         assert_eq!(kb.pad_gone(&mut a), vec![]);
+    }
+
+    #[test]
+    fn a_release_never_seen_pressed_does_not_release_another_pads_key() {
+        // Case 1: pad B was opened while its Down was already held; A really holds Down.
+        let (mut a, mut b, mut kb) = (Mapper::default(), Mapper::default(), KeyBoard::default());
+        assert_eq!(
+            kb.route(&a.button(Button::DpadDown, true)),
+            vec![(NavKey::Down, true)]
+        );
+        assert_eq!(kb.route(&b.button(Button::DpadDown, false)), vec![]);
+        // A still holds Down: only A's own release lifts it.
+        assert_eq!(
+            kb.route(&a.button(Button::DpadDown, false)),
+            vec![(NavKey::Down, false)]
+        );
+        // Case 2: one pad, the stick holds Down and an unseen d-pad Down release arrives.
+        let mut m = Mapper::default();
+        assert_eq!(
+            m.stick(Axis::Vertical, 30000, -32768, 32767),
+            vec![(NavKey::Down, true)]
+        );
+        assert_eq!(m.button(Button::DpadDown, false), vec![]);
+        assert_eq!(m.held_keys(), vec![NavKey::Down]);
     }
 }
