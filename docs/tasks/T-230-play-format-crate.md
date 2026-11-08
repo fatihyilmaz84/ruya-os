@@ -1,6 +1,6 @@
 # T-230 — `.play` format: schema, parser and the hostile-package tests
 
-Status: todo · Phase: 7 · Depends: T-228 · Area: services, api · Size: M · Owner: builder
+Status: todo · Phase: 7 · Depends: T-228 · Area: services, api · Size: M · Owner: builder · Developer surface: public-format
 
 ## Goal
 One pure-Rust library that reads a `.play` folder or `.play.zip` and says "valid, with this manifest and file table" or names exactly what is wrong. It is the only parser: the importer, the shell's package page (through the service), `ruya-pack` and the Store all use it.
@@ -38,6 +38,7 @@ One pure-Rust library that reads a `.play` folder or `.play.zip` and says "valid
 ## Hints
 - Do the names pass first, content second, so a hostile package is rejected without reading it.
 - Keep error codes stable strings; the shell maps them to translated text later (T-236).
+- Developer surface (ADR-022, `docs/developers/api-surface.md`): the format crate is the one parser; the format's chapter and samples are T-243.
 
 ## Outcome
 _Filled in by the implementer. First line: `Verified: host | vm | unverified | hw`._

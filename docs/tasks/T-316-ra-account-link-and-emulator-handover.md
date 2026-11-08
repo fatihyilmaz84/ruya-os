@@ -1,6 +1,6 @@
 # T-316 — RetroAchievements account link in Settings and the credential hand-over to emulators
 
-Status: todo · Phase: 5 · Depends: T-315, T-304, T-220, T-211 · Area: services, shell · Size: M · Owner: builder
+Status: todo · Phase: 5 · Depends: T-315, T-304, T-220, T-211 · Area: services, shell · Size: M · Owner: builder · Developer surface: public-API
 
 ## Goal
 A player links a RetroAchievements account to their profile from the couch (no password typed more than once), and an emulator that is allowed to gets logged in at start without the player touching the emulator's own menus. Part of epic T-314.
@@ -21,6 +21,9 @@ A player links a RetroAchievements account to their profile from the couch (no p
 - [ ] `tst_retro_achievements_link.qml` (mock): every state, focus after each step, Back leaves each, child profile blocked, late replies dropped; screenshots (English, Turkish).
 - [ ] XML, mock, client and service agree. VM (lead run): `scripts/vm-retroachievements-check.sh` with a local fake site: link, hand-over, unlink, `systemd-analyze security`.
 - [ ] `.\scripts\dev.ps1 test` and `shots` ALL GREEN.
+
+## Hints
+- Developer surface (ADR-022, `docs/developers/api-surface.md`): what an emulator is handed (a token, not a password) is a contract developers rely on: document it in the emulator-author paragraph (T-308 chapter), with a sample and a conformance test of the hand-over, per-app permission and revocation.
 
 ## Outcome
 _Filled in by the implementer. First line: `Verified: host (vm pending: …)`._

@@ -1,6 +1,6 @@
 # T-273 — EPIC: multitasking and task switching (app sessions, task switcher, background policy)
 
-Status: todo · Phase: 3 · Depends: T-164 · Area: docs · Size: M · Owner: lead
+Status: todo · Phase: 3 · Depends: T-164 · Area: docs · Size: M · Owner: lead · Developer surface: internal
 
 ## Goal
 The player can have several apps open and move between them quickly and smoothly, like iOS, Xbox or PlayStation: a task switcher with a live-looking card per open app, one button to jump back to the last app, apps that wait frozen in the background (a paused game, the weather app where you left it), and a system that closes background apps by itself, politely, when memory is needed for the game in front. The shell must never feel slow while this happens. Owner request, 2026-11-07: "session management ... switch between apps ... with games if we could pause them somehow ... smooth, similar to iOS, Xbox or PlayStation ... the system could kill background apps to improve performance when a game is running ... a dedicated button for switching, or a long press".

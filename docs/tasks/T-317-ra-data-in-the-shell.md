@@ -1,6 +1,6 @@
 # T-317 — RetroAchievements data in the shell: cached progress, Library rings, profile tab, game page
 
-Status: todo · Phase: 5 · Depends: T-316, T-307, T-246 · Area: services, shell · Size: M · Owner: builder
+Status: todo · Phase: 5 · Depends: T-316, T-307, T-246 · Area: services, shell · Size: M · Owner: builder · Developer surface: none
 
 ## Goal
 Completion and recent unlocks of the linked account show where the player looks: a ring or "12 / 40" on retro game cards, a "Retro" tab beside the native achievements on the profile page, and the achievement list on the game page, always instantly (cached) and honest about being stale. Part of epic T-314.

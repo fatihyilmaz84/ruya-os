@@ -1,6 +1,6 @@
 # T-279 — App cooperation: save state before close/freeze, audio and downloads in the background, developer guide
 
-Status: todo · Phase: 3 · Depends: T-273, T-275 · Area: services, docs · Size: M · Owner: builder
+Status: todo · Phase: 3 · Depends: T-273, T-275 · Area: services, docs · Size: M · Owner: builder · Developer surface: public-API
 
 ## Goal
 Apps (first-party and third-party) know what happens to them in the background and can behave: they get told they will be frozen or closed, a music or download app may declare a reason to keep running, and a frozen app never makes noise. Part of epic T-273.
@@ -24,6 +24,9 @@ Apps (first-party and third-party) know what happens to them in the background a
 
 ## Docs to update
 - `docs/developers/fullscreen-and-lifecycle.md`, 03 §4.6, AppStream metadata chapter.
+
+## Hints
+- Developer surface (ADR-022, `docs/developers/api-surface.md`): lifecycle (about to be frozen, closing, save now) is a public capability: build it as `Platform1.Lifecycle` on the T-352 skeleton (do not add a second door). Missing: a paragraph in `fullscreen-and-lifecycle.md`, a sample, mock support and a conformance test.
 
 ## Outcome
 _Filled in by the implementer. First line: `Verified: host (vm pending: …)`._

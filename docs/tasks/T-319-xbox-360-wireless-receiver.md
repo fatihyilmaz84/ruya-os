@@ -1,6 +1,6 @@
 # T-319 — Xbox 360 wireless receiver (the "Xbox 360 dongle"): make it work and say so honestly
 
-Status: todo · Phase: 2 · Depends: — · Area: image, services, shell, docs · Size: S · Owner: builder
+Status: todo · Phase: 2 · Depends: — · Area: image, services, shell, docs · Size: S · Owner: builder · Developer surface: none
 
 ## Goal
 A player plugs in an Xbox 360 Wireless Gaming Receiver for Windows (Microsoft's, or a third-party clone with the same USB ids), switches on up to four Xbox 360 wireless pads, and each pad is detected, classified, named, shown with its battery and usable in the shell and in apps, with the guidance text for the sync buttons. Owner request, 2026-11-08: "xbox 360 dongle driver, if not supported yet". Not the Xbox One/Series Wireless Adapter (that needs out-of-tree drivers and Microsoft firmware: T-261, owner-level).

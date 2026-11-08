@@ -1,6 +1,6 @@
 # T-220 — Privacy settings and what each app may access
 
-Status: todo · Phase: 3 · Depends: — · Area: shell, services · Size: M · Owner: builder
+Status: todo · Phase: 3 · Depends: — · Area: shell, services · Size: M · Owner: builder · Developer surface: internal
 
 ## Goal
 Settings -> Privacy tells the player plainly what the console shares and lets them control what apps can reach. Owner request, 2026-11-06: "privacy settings". A console is a shared family device, so privacy has three parts: what the console itself sends out, what is visible to others on the network or to other profiles, and what each app may access.
@@ -27,6 +27,9 @@ Settings -> Privacy tells the player plainly what the console shares and lets th
 
 ## Docs to update
 - `01-platform.md` (Privacy), `03` §4.4, the Store XML, `02-shell.md` (Settings), `docs/developers/` (permissions chapter, T-214: players can withdraw network/microphone, so apps must cope).
+
+## Hints
+- Developer surface (ADR-022, `docs/developers/api-surface.md`): this pane is where the player sets the per-app permission table of `Platform1` (T-352); keep its model (app, capability, on/off, revoke) generic.
 
 ## Outcome
 _Filled in by the implementer. First line: `Verified: host | vm | unverified | hw`. Then: what was built, files, deviations, follow-ups._

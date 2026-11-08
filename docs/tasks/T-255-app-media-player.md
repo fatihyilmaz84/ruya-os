@@ -1,6 +1,6 @@
 # T-255 — First-party app: Media player (local files)
 
-Status: todo · Phase: 7 · Depends: T-251, T-252, T-256 · Area: apps · Size: M · Owner: builder
+Status: todo · Phase: 7 · Depends: T-251, T-252, T-256 · Area: apps · Size: M · Owner: builder · Developer surface: none
 
 ## Goal
 Play video and music from the console's storage and USB drives with a controller: a library view per folder, a playback screen with the usual controls, subtitles and audio tracks, resume where you stopped. Part of T-248; its own Flatpak (`org.ruyaos.Player`); streaming and network libraries are T-257 and later.
@@ -23,6 +23,9 @@ Play video and music from the console's storage and USB drives with a controller
 - [ ] The codec table in the Outcome is verified by playing sample files in the VM (lead run: H.264 and one audio format at least; hardware decode noted when available).
 - [ ] Screenshots (English and Turkish) against `04` §8 and the HIG checklist.
 - [ ] Builds as a Flatpak from the template; `.\scripts\dev.ps1 test` green.
+
+## Hints
+- Developer surface (ADR-022, `docs/developers/api-surface.md`): none. Dogfooding rule: this app may use only the public surface; if it needs something else, add an Inbox line proposing the capability, do not use a private service.
 
 ## Outcome
 _Filled in by the implementer. First line: `Verified: host | vm | unverified`._

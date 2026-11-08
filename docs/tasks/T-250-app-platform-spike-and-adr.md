@@ -1,6 +1,6 @@
 # T-250 — Spike and ADR-015 (Proposed): how apps use the OS's own components
 
-Status: todo · Phase: 7 · Depends: — · Area: docs, shell, services · Size: M · Owner: lead
+Status: todo · Phase: 7 · Depends: — · Area: docs, shell, services · Size: M · Owner: lead · Developer surface: public-API
 
 ## Goal
 Decide, with evidence, how a first-party (or third-party) app can use "our OS components": the design tokens, `FocusGlide`, `GlassPill`, cards, lists, dialogs, the on-screen keyboard hook and controller focus handling, plus the OS APIs. The result is a **Proposed** ADR-015 in `00-overview.md` for the owner to accept (an owner-level product and maintenance choice) and a recommendation. Owner request, 2026-11-07; part of T-248.
@@ -25,6 +25,9 @@ For each: size, the update flow through `ruya-store`, how a theme change (T-209)
 - [ ] Audit tables for the components and the APIs, in an appendix of the ADR or in `docs/specs/06-hig.md`.
 - [ ] The spike's results are in the ADR (what worked, what did not, numbers); the VM run is `Verified: vm` or marked pending.
 - [ ] ADR-015 is *Proposed*; nothing in the repo depends on its acceptance yet.
+
+## Hints
+- Developer surface (ADR-022, `docs/developers/api-surface.md`): decide ADR-015 together with ADR-022: a runtime extension would also carry the `Platform1` client bindings and the stability tags; the spike names which public capabilities RuyaKit exposes (none of the shell-private ones).
 
 ## Outcome
 _Filled in by the implementer. First line: `Verified: host | vm | unverified`. Then: findings, files, the recommendation._

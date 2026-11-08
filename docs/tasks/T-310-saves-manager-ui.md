@@ -1,6 +1,6 @@
 # T-310 — Saves manager UI: browse, copy, move, delete, export and import saves, from Settings and from a game's page
 
-Status: todo · Phase: 5 · Depends: T-309 · Area: shell · Size: M · Owner: builder
+Status: todo · Phase: 5 · Depends: T-309 · Area: shell · Size: M · Owner: builder · Developer surface: none
 
 ## Goal
 A player can see all saves and save states of a game (or of everything), with size, date and a thumbnail where there is one, and copy, move, delete, export to a USB drive or import from one, with a controller. Part of the saves manager (T-309).

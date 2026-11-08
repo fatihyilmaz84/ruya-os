@@ -1,6 +1,6 @@
 # T-253 — First-party app: Picture viewer
 
-Status: todo · Phase: 7 · Depends: T-251, T-252 · Area: samples, apps · Size: M · Owner: builder
+Status: todo · Phase: 7 · Depends: T-251, T-252 · Area: samples, apps · Size: M · Owner: builder · Developer surface: none
 
 ## Goal
 The smallest real app, and the proof that the template, RuyaKit and the HIG work together: browse pictures from the console's storage and USB drives, view them full screen with controller zoom and pan, and run a slideshow. Part of T-248; distributed as its own Flatpak (`org.ruyaos.Pictures`), never in the image.
@@ -22,6 +22,9 @@ The smallest real app, and the proof that the template, RuyaKit and the HIG work
 - [ ] Screenshots (English and Turkish) against `04` §8 and the HIG checklist, passed.
 - [ ] Builds as a Flatpak from the template; `appstreamcli validate` passes. VM (lead run): installs through the Store and opens a folder on a mounted USB stick.
 - [ ] `.\scripts\dev.ps1 test` green.
+
+## Hints
+- Developer surface (ADR-022, `docs/developers/api-surface.md`): none. Dogfooding rule: this app may use only the public surface; if it needs something else, add an Inbox line proposing the capability, do not use a private service.
 
 ## Outcome
 _Filled in by the implementer. First line: `Verified: host | vm | unverified`._

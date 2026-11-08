@@ -1,6 +1,6 @@
 # T-211 — Parental controls, service side: age limits, install approval, play time and bedtime
 
-Status: todo · Phase: 3 · Depends: T-210, T-213, T-247 · Area: api, services · Size: M · Owner: lead
+Status: todo · Phase: 3 · Depends: T-210, T-213, T-247 · Area: api, services · Size: M · Owner: lead · Developer surface: internal
 
 ## Goal
 A parent can restrict a child's profile and the console enforces it where it cannot be talked around: apps above the profile's age limit do not launch, a restricted profile cannot install without a parent, play time per day and a bedtime window end a session politely and on time. Owner request, 2026-11-06. Spec 03 §1.3 already says "per-profile age limit for store and launch, plus a 'requires admin to install' toggle"; this task builds the services; T-212 builds the screens.
@@ -38,6 +38,7 @@ A parent can restrict a child's profile and the console enforces it where it can
 
 - Store review note (T-291, 2026-11-08): an empty `age_rating` from `ruya-store` means unrated; treat unrated as 18+ for a child profile. Check the age mapping against malcontent's table (T-342 does the attribute coverage); the "Not rated" meaning line for child profiles belongs to this task.
 - Planner notes (2026-11-07 inbox triage): (1) the parent report needs an **admin-gated `GetUsage`** or an internal reader in `ruya-session` (the Activity pages call `GetUsage` for the signed-in profile only); (2) decide what a **child's "Clear my activity"** deletes once a parent report exists (T-247) and reword the Activity empty-state privacy sentence to match; (3) the time zone: services reading local time must call `tzset()` before `localtime_r` (T-213); (4) an unrated app counts as 18+ here while the Store says "Not rated" (T-291); (5) the age-rating ids come from T-291's table.
+- Developer surface (ADR-022, `docs/developers/api-surface.md`): the age limit later becomes a read-only flag for apps (unplanned until ADR-022 is accepted); keep the private limits private.
 
 ## Outcome
 _Filled in by the implementer. First line: `Verified: host | vm | unverified | hw`. Then: what was built, files, deviations, follow-ups._

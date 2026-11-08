@@ -1,6 +1,6 @@
 # T-267 — A pad remembers its owner: Guide on the profile picker highlights that profile
 
-Status: todo · Phase: 2 · Depends: T-264, T-265 · Area: shell · Size: S · Owner: builder
+Status: todo · Phase: 2 · Depends: T-264, T-265 · Area: shell · Size: S · Owner: builder · Developer surface: none
 
 ## Goal
 At the "Who's playing?" profile picker (the login screen), pressing Guide on a known pad highlights its default owner's profile, as on PlayStation. The PIN is still required for a protected profile. A first-ever pad has no default. Part of epic ADR-017 (T-263).

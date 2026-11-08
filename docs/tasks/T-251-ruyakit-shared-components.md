@@ -1,6 +1,6 @@
 # T-251 — RuyaKit: the shared components as a module apps can use
 
-Status: todo · Phase: 7 · Depends: T-250 · Area: shell, docs · Size: M · Owner: builder
+Status: todo · Phase: 7 · Depends: T-250 · Area: shell, docs · Size: M · Owner: builder · Developer surface: public-API
 
 ## Goal
 The design tokens and the building blocks that apps need move into a QML module (working name **RuyaKit**) that both the shell and first-party apps use, so an app looks and behaves like the shell without copying it. The shape (a Flatpak runtime extension, or a module each app bundles) is decided in **ADR-015 (T-250, Proposed: the owner accepts it first)**; this task builds what the accepted ADR says. Part of T-248.
@@ -24,6 +24,9 @@ The design tokens and the building blocks that apps need move into a QML module 
 - [ ] Gallery tests: every component renders in all themes and tiers, focus and keys behave as in the shell, reduced motion holds, the theme follows a change.
 - [ ] A component used by both the shell and the gallery has one source file.
 - [ ] `lint-dev-docs.ps1` passes for the new chapter; screenshots read against `04` §8.
+
+## Hints
+- Developer surface (ADR-022, `docs/developers/api-surface.md`): RuyaKit is what third parties build on. Missing: a chapter in `docs/developers/`, a sample using only RuyaKit, API-level declaration (T-351).
 
 ## Outcome
 _Filled in by the implementer. First line: `Verified: host | vm | unverified`._

@@ -1,6 +1,6 @@
 # T-233 — `ruya-pack`: the developer's command-line tool
 
-Status: todo · Phase: 7 · Depends: T-230, T-231, T-232 · Area: services (tools) · Size: M · Owner: builder
+Status: todo · Phase: 7 · Depends: T-230, T-231, T-232 · Area: services (tools) · Size: M · Owner: builder · Developer surface: public-format
 
 ## Goal
 A developer on Windows, Linux or macOS can create, validate, build, sign and inspect a `.play` package with one tool, and what the tool accepts is what the console accepts (it links the same crates).
@@ -38,6 +38,7 @@ A developer on Windows, Linux or macOS can create, validate, build, sign and ins
 
 ## Hints
 - Runner resolution is one pure function shared with the launcher (T-239): put it in the format crate, test it there, and call it from both.
+- Developer surface (ADR-022, `docs/developers/api-surface.md`): the developer tool; its documentation is T-243.
 
 ## Outcome
 _Filled in by the implementer._

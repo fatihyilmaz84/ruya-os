@@ -1,6 +1,6 @@
 # T-258 — First-party app: Web browser (Proposed ADR-016 first)
 
-Status: todo · Phase: 7 · Depends: T-250, T-252 · Area: docs, apps · Size: L (split after the ADR) · Owner: lead
+Status: todo · Phase: 7 · Depends: T-250, T-252 · Area: docs, apps · Size: L (split after the ADR) · Owner: lead · Developer surface: none
 
 ## Goal
 A browser for the couch: open pages, search, watch web video, with a controller. It is the biggest and riskiest app in T-248: an engine is large, needs constant security updates and handles untrusted code. So the **first deliverable is a Proposed ADR-016 for the owner**, then (only if accepted) a build task split from this one. Own Flatpak (`org.ruyaos.Browser`) if built.
@@ -19,6 +19,9 @@ A browser for the couch: open pages, search, watch web video, with a controller.
 ## Acceptance criteria
 - [ ] ADR-016 is written with the options, the spike numbers and a recommendation, marked *Proposed*; the owner's decision is requested in `STATUS.md` (Open owner decisions) and nothing is built before it.
 - [ ] If accepted: build tasks exist with acceptance criteria, including a security section (update cadence, sandbox, content-security tests with hostile pages) and the HIG checklist.
+
+## Hints
+- Developer surface (ADR-022, `docs/developers/api-surface.md`): none. Dogfooding rule: this app may use only the public surface; if it needs something else, add an Inbox line proposing the capability, do not use a private service.
 
 ## Outcome
 _Filled in by the lead. First line: `Verified: host | vm | unverified`._

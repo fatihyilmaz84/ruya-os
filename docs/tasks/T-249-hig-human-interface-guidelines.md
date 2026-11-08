@@ -1,6 +1,6 @@
 # T-249 — Human Interface Guidelines for app authors (`docs/specs/06-hig.md`)
 
-Status: todo · Phase: 7 · Depends: — · Area: docs · Size: M · Owner: lead
+Status: todo · Phase: 7 · Depends: — · Area: docs · Size: M · Owner: lead · Developer surface: none
 
 ## Goal
 One document that tells the author of an app (first-party or third-party) how an app must look and behave on RuyaOS: the rules the shell already follows, written for people who do not read our source. Part of the first-party apps epic (T-248). It reuses spec 04 rather than copying it, and is linked from the developer guide (T-214).

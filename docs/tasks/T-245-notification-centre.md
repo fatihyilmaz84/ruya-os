@@ -1,6 +1,6 @@
 # T-245 — Notification centre: history, quiet mode, and notifications from apps
 
-Status: todo · Phase: 2 · Depends: — · Area: api, services, shell · Size: M · Owner: lead
+Status: todo · Phase: 2 · Depends: — · Area: api, services, shell · Size: M · Owner: lead · Developer surface: public-API
 
 ## Goal
 Every notification the console shows is kept, can be read later and can be controlled (owner request, 2026-11-07; Xbox, PlayStation, Steam TV mode and Android TV all have one). Today toasts are ephemeral (`Notifications` singleton: drive inserted, controller battery low, the sticky update restart notice, the heat notice, app crashed...): look away and it is gone, and apps cannot notify at all. Owner: lead because it adds a service and a bus bridge.
@@ -26,6 +26,9 @@ Every notification the console shows is kept, can be read later and can be contr
 - [ ] Screenshots (English and Turkish) read against `04` §8.
 - [ ] VM (lead run): a Flatpak test app sends a notification as a profile user; it appears in that profile's centre only; an action comes back to the app; quiet mode suppresses the toast but keeps the item. `scripts/vm-notify-check.sh`.
 - [ ] `lint-dev-docs.ps1` passes for the new chapter; `.\scripts\dev.ps1 test` and `shots` ALL GREEN.
+
+## Hints
+- Developer surface (ADR-022, `docs/developers/api-surface.md`): apps will post notifications through `Platform1` (T-352). Missing: a paragraph in `docs/developers/`, a sample call, mock support for off-device tests, a conformance test with abuse cases (flood, oversized text, another app's id).
 
 ## Outcome
 _Filled in by the implementer. First line: `Verified: host | vm | unverified | hw`. Then: what was built, files, deviations, follow-ups._

@@ -112,3 +112,7 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | [T-317](tasks/T-317-ra-data-in-the-shell.md) | RetroAchievements data in the shell: cache, Library rings, profile tab, game page | todo | T-316, T-307, T-246 |
 | [T-318](tasks/T-318-ra-unlock-moment-and-presence.md) | **[lead]** Retro unlock moment and presence: toast, report event, polling fallback | todo | T-317, T-246, T-245, T-306 |
 | [T-319](tasks/T-319-xbox-360-wireless-receiver.md) | Xbox 360 wireless receiver ("360 dongle"): in-kernel `xpad`, classification, battery, sync guidance | todo | — |
+| [T-350](tasks/T-350-lint-dev-docs-public-api-coverage-and-samples.md) | lint-dev-docs: every public API element is documented, every sample builds | todo | — |
+| [T-351](tasks/T-351-api-level-and-changelog.md) | API level: RUYA_API_LEVEL, the AppStream minimum, the Store filter, an XML-diff changelog | todo | — |
+| [T-352](tasks/T-352-ruya-platform-service-skeleton.md) | ruya-platform: the one door for sandboxed apps (blocked on ADR-022) | blocked | T-250, T-351 |
+| [T-353](tasks/T-353-developer-mock-and-sample-harness.md) | Developer harness: a Platform mock, a sample app and a conformance runner in CI | blocked | T-352, T-350 |
