@@ -19,8 +19,12 @@ class Power : public QObject
     // The console may put itself to sleep after idle time (T-202): logind allows suspend AND
     // suspend is known to work on this image (T-166). The mock always says yes; on the image the
     // file /usr/share/ruyaos/suspend-verified (or RUYA_SUSPEND_VERIFIED=1) is what T-166 provides.
-    // Settings -> Power saving shows the Sleep row only while this is true.
+    // The Sleep step exists only while this is true.
     Q_PROPERTY(bool sleepAllowed READ sleepAllowed NOTIFY capabilitiesChanged)
+    // Suspend is known to work on this image: the marker file above (or the env switch). The mock
+    // has it unless a test removes it. Settings -> Power saving shows the Sleep row without it,
+    // disabled, saying sleep is not available yet (T-293).
+    Q_PROPERTY(bool suspendVerified READ suspendVerified NOTIFY capabilitiesChanged)
     Q_PROPERTY(bool canRestart READ canRestart NOTIFY capabilitiesChanged)
     Q_PROPERTY(bool canPowerOff READ canPowerOff NOTIFY capabilitiesChanged)
     // The last action handed to the backend ("suspend", "restart", "poweroff", or empty).
@@ -38,6 +42,7 @@ public:
     // Only "yes" counts: "challenge" would need an interactive prompt the shell never shows.
     bool canSuspend() const { return m_suspend; }
     bool sleepAllowed() const;
+    bool suspendVerified() const;
     bool canRestart() const { return m_restart; }
     bool canPowerOff() const { return m_poweroff; }
     QString lastAction() const { return m_lastAction; }
@@ -50,6 +55,7 @@ public:
     Q_INVOKABLE void refresh();
     // Tests only: narrows what the mock backend allows. Does nothing against logind.
     Q_INVOKABLE void mockSetCapabilities(const QString &suspend, const QString &restart, const QString &poweroff);
+    Q_INVOKABLE void mockSetSuspendVerified(bool verified);
     Q_INVOKABLE void mockReset();
 
 signals:
@@ -67,4 +73,5 @@ private:
     bool m_poweroff = false;
     QString m_lastAction;
     int m_actionCount = 0;
+    bool m_mockVerified = true;
 };

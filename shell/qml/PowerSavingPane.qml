@@ -5,8 +5,9 @@ import RuyaShell
 // Settings -> Power saving (T-202, 02 "Power saving"): when the console dims to a screen saver,
 // turns the screen off, goes to sleep, and switches idle controllers off. Every row writes to
 // DeviceSettings at once and the idle clock (IdleClock) follows, so nothing restarts. The times
-// are minutes without input; Off / Never skips the step. The Sleep row exists only where the
-// console can suspend and that is known to work (`Power.sleepAllowed`). The last row says what is
+// are minutes without input; Off / Never skips the step. The Sleep row works only where the
+// console can suspend and that is known to work (`Power.sleepAllowed`); where logind allows it but
+// it is not verified yet the row says "Sleep is not available on this console yet" and is disabled. The last row says what is
 // keeping the console awake right now, so a stuck inhibitor is easy to find.
 SettingsPane {
     id: pane
@@ -51,7 +52,7 @@ SettingsPane {
         if (saverOn && sleepOn && DeviceSettings.sleepMinutes <= DeviceSettings.saverMinutes)
             return [qsTr("The screen saver never shows"), qsTr("The console sleeps first")]
         if (offOn && sleepOn && DeviceSettings.sleepMinutes <= DeviceSettings.screenOffMinutes)
-            return [qsTr("The screen is not turned off"), qsTr("The console sleeps first")]
+            return [qsTr("The screen is not turned off"), qsTr("The console sleeps instead")]
         return ["", ""]
     }
     readonly property var note: orderNote()
@@ -80,8 +81,12 @@ SettingsPane {
         id: sleep
         objectName: "rowSleep"
         u: pane.u
-        visible: Power.sleepAllowed
-        label: qsTr("Sleep")
+        // Where logind allows suspend but the image does not yet vouch for it (no suspend-verified
+        // marker, T-166) the row stays, says so, and takes no focus: Sleep is never silently missing.
+        visible: Power.canSuspend
+        enabled: Power.sleepAllowed
+        label: Power.sleepAllowed ? qsTr("Sleep") : qsTr("Sleep is not available on this console yet")
+        valueText.visible: Power.sleepAllowed
         options: pane.options([0, 30, 60, 120, 240], qsTr("Never"))
         onEdited: v => DeviceSettings.sleepMinutes = v
     }

@@ -31,7 +31,7 @@ Item {
     readonly property bool animating: stage === "saver" && Theme.ambientMotion && pool.length > 1
 
     // The clock's place: one of many, chosen from the minute of the day, so it differs every minute.
-    // IdleClock's clock is the one the tests replace; the tick below reads it.
+    // The time of day is the wall clock (IdleClock.wallNow, which the tests replace); the idle clock itself is monotonic.
     property int slot: 0
     property double shownMs: 0
     readonly property real golden: 0.6180339887
@@ -144,8 +144,9 @@ Item {
         running: saver.stage === "saver"
         triggeredOnStart: true
         onTriggered: {
-            saver.shownMs = IdleClock.now()
-            saver.slot = Math.floor(IdleClock.now() / 60000)
+            const wall = IdleClock.wallNow()
+            saver.shownMs = wall
+            saver.slot = Math.floor(wall / 60000)
         }
     }
 }

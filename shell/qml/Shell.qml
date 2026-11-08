@@ -259,8 +259,9 @@ FocusScope {
         onGuidePressed: autoRepeat => { if (root.signedIn && !systemPanel.open) root.guideDown(autoRepeat) }
         onGuideReleased: autoRepeat => root.guideUp(autoRepeat)
         // While the screen saver or the dark screen is up, the first input only wakes the console
-        // (IdleClock.covered): KeyRouter eats it, so no page and no app sees it (T-202).
-        swallowInput: IdleClock.covered
+        // (IdleClock.covered): KeyRouter eats it, so no page and no app sees it (T-202). Input in
+        // the second after the screen came back is eaten too (IdleClock.wakeGapMs, T-293).
+        swallowInput: IdleClock.swallowInput
         onActivity: IdleClock.noteInput()
     }
 
@@ -443,6 +444,7 @@ FocusScope {
             anchors.fill: parent
             tint: Profiles.active.avatar ?? Theme.defaultTint
             shown: !wallpaperLayer.covering && !IdleClock.covered   // a wallpaper covers it (T-208); the saver covers all (T-202)
+            paused: root.focusedApp !== null                         // an app in front covers it: no frames for the drift (T-293)
         }
 
         // The wallpaper (Settings -> Display & motion): the picture under the hero art, blurred on pages.

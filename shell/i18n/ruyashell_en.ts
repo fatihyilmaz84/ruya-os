@@ -1689,6 +1689,16 @@ This can&apos;t be undone.</translation>
         <translation>The screen is not turned off</translation>
     </message>
     <message>
+        <location line="+0"/>
+        <source>The console sleeps instead</source>
+        <translation>The console sleeps instead</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Sleep is not available on this console yet</source>
+        <translation>Sleep is not available on this console yet</translation>
+    </message>
+    <message>
         <location line="+9"/>
         <source>Screen saver</source>
         <translation>Screen saver</translation>

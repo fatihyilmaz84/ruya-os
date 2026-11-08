@@ -15,6 +15,11 @@ Item {
         Shell { anchors.fill: parent; version: "test"; focus: true }
     }
 
+    Component {
+        id: appComponent
+        Item { objectName: "standInApp" }
+    }
+
     TestCase {
         id: tc
         name: "Shell"
@@ -156,6 +161,20 @@ Item {
             keyClick(Qt.Key_Return)                    // "Switch profile"
             tryCompare(Profiles, "activeProfile", "")
             tryVerify(() => find("profileList").activeFocus, 2000, "picker regains focus after lock")
+        }
+
+        // T-293: the drift of the animated backdrop costs frames; with an app in front nobody sees it.
+        function test_backdrop_stops_while_app_focused() {
+            DeviceSettings.reducedMotion = false
+            DeviceSettings.effectsQuality = "high"
+            signInAsAda()
+            const backdrop = find("backdrop")
+            tryVerify(() => backdrop.drifting, 2000, "the blobs drift on Home")
+            const app = createTemporaryObject(appComponent, host)
+            tc.shell.addApp(app)
+            tryCompare(backdrop, "drifting", false)
+            tc.shell.removeApp(app)
+            tryCompare(backdrop, "drifting", true)
         }
 
         function test_zz_screenshots() {

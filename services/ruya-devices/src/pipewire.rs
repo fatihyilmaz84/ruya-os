@@ -55,17 +55,30 @@ pub fn parse_dump(json: &str) -> Result<(Vec<Sink>, Option<String>), String> {
     Ok((sinks, default.or(configured)))
 }
 
-/// Whether any output node is running (PipeWire's `info.state`), i.e. a stream plays through it.
-/// An idle sink is "idle" or "suspended".
+/// Whether something plays: an output stream (`Stream/Output/Audio`) is running (PipeWire's
+/// `info.state`) and not corked. A paused or corked stream is "idle"/"paused" in the graph (or
+/// carries `pulse.corked`), and the sink it feeds can stay "running" for a while after it
+/// (T-293), so the sink's own state is not used: a player that paused must not keep the console
+/// awake. A running microphone or monitor stream is not output either.
 pub fn parse_playing(json: &str) -> bool {
     let Ok(doc) = serde_json::from_str::<Value>(json) else {
         return false;
     };
     doc.as_array().into_iter().flatten().any(|obj| {
         obj.get("type").and_then(Value::as_str) == Some("PipeWire:Interface:Node")
-            && obj["info"]["props"]["media.class"].as_str() == Some("Audio/Sink")
+            && obj["info"]["props"]["media.class"].as_str() == Some("Stream/Output/Audio")
             && obj["info"]["state"].as_str() == Some("running")
+            && !corked(&obj["info"]["props"])
     })
+}
+
+/// pipewire-pulse marks a corked stream `pulse.corked` (a string or a boolean, depending on the version).
+fn corked(props: &Value) -> bool {
+    match &props["pulse.corked"] {
+        Value::String(s) => s.eq_ignore_ascii_case("true"),
+        Value::Bool(b) => *b,
+        _ => false,
+    }
 }
 
 /// hdmi / analog / usb / bluetooth from the node's properties; analog when unsure.
@@ -228,20 +241,49 @@ mod tests {
     }
 
     #[test]
-    fn a_running_output_means_something_plays() {
+    fn a_running_output_stream_means_something_plays() {
         assert!(!parse_playing(DUMP), "no state at all");
         let node = |state: &str, class: &str| {
             format!(
                 r#"[{{"id":1,"type":"PipeWire:Interface:Node","info":{{"state":"{state}","props":{{"media.class":"{class}"}}}}}}]"#
             )
         };
-        assert!(parse_playing(&node("running", "Audio/Sink")));
-        assert!(!parse_playing(&node("idle", "Audio/Sink")));
-        assert!(!parse_playing(&node("suspended", "Audio/Sink")));
-        // A running microphone or a stream is not an output.
+        assert!(parse_playing(&node("running", "Stream/Output/Audio")));
+        // A paused stream is idle in the graph, and a stopped one suspended.
+        assert!(!parse_playing(&node("idle", "Stream/Output/Audio")));
+        assert!(!parse_playing(&node("paused", "Stream/Output/Audio")));
+        assert!(!parse_playing(&node("suspended", "Stream/Output/Audio")));
+        // A sink that is still running after its stream paused is not playing, and neither is a
+        // running microphone or an input stream.
+        assert!(!parse_playing(&node("running", "Audio/Sink")));
         assert!(!parse_playing(&node("running", "Audio/Source")));
-        assert!(!parse_playing(&node("running", "Stream/Output/Audio")));
+        assert!(!parse_playing(&node("running", "Stream/Input/Audio")));
         assert!(!parse_playing("not json"));
+    }
+
+    #[test]
+    fn a_corked_stream_does_not_count_even_when_running() {
+        let stream = |corked: &str| {
+            format!(
+                r#"[{{"id":1,"type":"PipeWire:Interface:Node","info":{{"state":"running","props":{{"media.class":"Stream/Output/Audio"{corked}}}}}}}]"#
+            )
+        };
+        assert!(parse_playing(&stream("")));
+        assert!(parse_playing(&stream(r#","pulse.corked":"false""#)));
+        assert!(!parse_playing(&stream(r#","pulse.corked":"true""#)));
+        assert!(!parse_playing(&stream(r#","pulse.corked":true"#)));
+    }
+
+    #[test]
+    fn a_paused_stream_beside_a_running_sink_is_quiet_and_a_running_one_is_not() {
+        let graph = |stream_state: &str| {
+            format!(
+                r#"[{{"id":1,"type":"PipeWire:Interface:Node","info":{{"state":"running","props":{{"media.class":"Audio/Sink"}}}}}},
+                    {{"id":2,"type":"PipeWire:Interface:Node","info":{{"state":"{stream_state}","props":{{"media.class":"Stream/Output/Audio"}}}}}}]"#
+            )
+        };
+        assert!(!parse_playing(&graph("paused")));
+        assert!(parse_playing(&graph("running")));
     }
 
     #[test]
