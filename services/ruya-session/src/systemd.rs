@@ -12,6 +12,10 @@
 //! (logind stops an idle manager after ten seconds, taking the app with it), so the account is
 //! made to linger before its first launch (`loginctl enable-linger`, idempotent). `ruya-profiles`
 //! ends the manager and the linger when it deletes the profile.
+//!
+//! A restart of this service leaves the apps running (they belong to the users' managers), but
+//! ends the `systemd-run --wait` processes that told us when they ended. `adopt_running` finds the
+//! `ruya-app-*` units again and follows each with a poll of `systemctl show` (`UnitWatch`).
 
 use std::collections::HashMap;
 use std::fs::File;
@@ -24,7 +28,9 @@ use std::time::Duration;
 use async_channel::Sender;
 
 use crate::spawner::{
-    flatpak_app_installed, launch_command, scope_pattern, unit_name, LineTail, RunFollower,
+    flatpak_app_installed, launch_command, parse_profile_users, parse_show, scope_pattern,
+    unit_app_id, unit_name, LineTail, RunFollower, RunningUnit, ShowUnit, UnitWatch,
+    SHOW_PROPERTIES,
 };
 use crate::spawner::{Spawner, UnitEvent};
 
@@ -33,6 +39,8 @@ const FLATPAK_ROOT: &str = "/var/lib/flatpak";
 const LOG_DIR: &str = "/run/ruya-session";
 /// How often the status file of a running `systemd-run` is read.
 const POLL: Duration = Duration::from_millis(100);
+/// How often an adopted unit is looked at.
+const WATCH_POLL: Duration = Duration::from_secs(2);
 
 pub struct SystemdSpawner {
     flatpak_root: PathBuf,
@@ -131,6 +139,109 @@ impl Spawner for SystemdSpawner {
 
     fn kill(&self, unit: &str) -> Result<(), String> {
         self.systemctl(unit, &["kill", "--signal=SIGKILL", "--kill-whom=all"])
+    }
+
+    fn adopt_running(&self) -> Vec<RunningUnit> {
+        let users = Command::new("loginctl")
+            .args(["list-users", "--no-legend", "--no-pager"])
+            .stdin(Stdio::null())
+            .stderr(Stdio::inherit())
+            .output()
+            .ok()
+            .filter(|out| out.status.success())
+            .map(|out| parse_profile_users(&String::from_utf8_lossy(&out.stdout)))
+            .unwrap_or_else(|| {
+                eprintln!("ruya-session: loginctl list-users failed: no app is adopted");
+                Vec::new()
+            });
+        let mut found = Vec::new();
+        for user in users {
+            let Some(text) = show_units(&user, "ruya-app-*.service") else {
+                eprintln!("ruya-session: cannot list the apps of {user}");
+                continue;
+            };
+            for show in parse_show(&text).into_iter().filter(ShowUnit::alive) {
+                let Some(app_id) = unit_app_id(&user, &show.id) else {
+                    continue;
+                };
+                self.units
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .insert(show.id.clone(), (user.clone(), app_id.clone()));
+                let watcher = Watcher {
+                    user: user.clone(),
+                    unit: show.id.clone(),
+                    events: self.events.clone(),
+                    units: self.units.clone(),
+                };
+                let spawned = std::thread::Builder::new()
+                    .name("watch".to_owned())
+                    .spawn(move || watcher.run());
+                if let Err(err) = spawned {
+                    eprintln!("ruya-session: cannot watch {}: {err}", show.id);
+                    self.units
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .remove(&show.id);
+                    continue;
+                }
+                eprintln!("ruya-session: adopted {}", show.id);
+                found.push(RunningUnit {
+                    unit: show.id,
+                    user: user.clone(),
+                    app_id,
+                    started: show.entered,
+                });
+            }
+        }
+        found
+    }
+}
+
+/// `systemctl --user -M <user>@.host show` of the units matching `pattern`, or `None` when the
+/// call failed. Times come as `@<unix seconds>`.
+fn show_units(user: &str, pattern: &str) -> Option<String> {
+    let mut cmd = Command::new("systemctl");
+    cmd.args(["--user", "--no-pager", "--timestamp=unix"])
+        .arg(format!("--machine={user}@.host"))
+        .arg("show");
+    for property in SHOW_PROPERTIES {
+        cmd.arg(format!("--property={property}"));
+    }
+    let out = cmd
+        .arg(pattern)
+        .stdin(Stdio::null())
+        .stderr(Stdio::inherit())
+        .output()
+        .ok()
+        .filter(|out| out.status.success())?;
+    Some(String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
+/// Follows one adopted unit until it ends, on its own thread.
+struct Watcher {
+    user: String,
+    unit: String,
+    events: Sender<UnitEvent>,
+    units: Arc<Mutex<HashMap<String, (String, String)>>>,
+}
+
+impl Watcher {
+    fn run(self) {
+        let mut watch = UnitWatch::new(&self.unit);
+        loop {
+            std::thread::sleep(WATCH_POLL);
+            let seen = show_units(&self.user, &self.unit)
+                .and_then(|text| parse_show(&text).into_iter().next());
+            if let Some(event) = watch.observe(seen.as_ref()) {
+                self.units
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .remove(&self.unit);
+                let _ = self.events.send_blocking(event);
+                return;
+            }
+        }
     }
 }
 

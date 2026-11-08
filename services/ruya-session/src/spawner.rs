@@ -24,6 +24,19 @@ pub enum UnitEvent {
         code: i32,
         signaled: bool,
     },
+    /// The program of the unit could not be executed (exit status 203/EXEC): the app never ran.
+    ExecFailed { unit: String },
+}
+
+/// An app unit that was already running when the service started (see `Spawner::adopt_running`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RunningUnit {
+    pub unit: String,
+    /// The Unix user whose manager runs it ("ruya-p1").
+    pub user: String,
+    pub app_id: String,
+    /// When the unit became active, in unix seconds (0 when unknown).
+    pub started: i64,
 }
 
 pub trait Spawner {
@@ -35,6 +48,12 @@ pub trait Spawner {
     fn stop(&self, unit: &str) -> Result<(), String>;
     /// Ends the unit by force (SIGKILL).
     fn kill(&self, unit: &str) -> Result<(), String>;
+    /// The app units that run already (a restart of this service does not end them), in every
+    /// profile's manager. From now on their end is reported as a `UnitEvent::Exited`. Stop and
+    /// kill work on them like on a unit this service started.
+    fn adopt_running(&self) -> Vec<RunningUnit> {
+        Vec::new()
+    }
 }
 
 impl<T: Spawner + ?Sized> Spawner for Box<T> {
@@ -49,6 +68,9 @@ impl<T: Spawner + ?Sized> Spawner for Box<T> {
     }
     fn kill(&self, unit: &str) -> Result<(), String> {
         (**self).kill(unit)
+    }
+    fn adopt_running(&self) -> Vec<RunningUnit> {
+        (**self).adopt_running()
     }
 }
 
@@ -203,8 +225,16 @@ pub fn launch_command(
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RunLine {
     Running,
-    Ended { code: i32, signaled: bool },
+    Ended {
+        code: i32,
+        signaled: bool,
+    },
+    /// `status=203/EXEC`: systemd could not execute the program.
+    ExecFailed,
 }
+
+/// The exit status systemd gives a service whose program it could not execute.
+const EXIT_EXEC: i32 = 203;
 
 pub fn parse_run_line(line: &str) -> Option<RunLine> {
     let line = line.trim();
@@ -215,6 +245,7 @@ pub fn parse_run_line(line: &str) -> Option<RunLine> {
     let rest = rest.split_once("terminated with:")?.1;
     let mut code_kind = None;
     let mut status = None;
+    let mut status_name = "";
     for part in rest.split(',') {
         let part = part.trim();
         if let Some(kind) = part.strip_prefix("code=") {
@@ -222,10 +253,12 @@ pub fn parse_run_line(line: &str) -> Option<RunLine> {
         } else if let Some(num) = part.strip_prefix("status=") {
             // "3/NOTIMPLEMENTED": the number comes first.
             status = num.split('/').next().and_then(|n| n.trim().parse().ok());
+            status_name = num.split('/').nth(1).map_or("", str::trim);
         }
     }
     let code = status?;
     match code_kind? {
+        "exited" if code == EXIT_EXEC && status_name == "EXEC" => Some(RunLine::ExecFailed),
         "exited" => Some(RunLine::Ended {
             code,
             signaled: false,
@@ -246,6 +279,7 @@ pub struct RunFollower {
     unit: String,
     started: bool,
     ended: Option<(i32, bool)>,
+    exec_failed: bool,
 }
 
 impl RunFollower {
@@ -254,6 +288,7 @@ impl RunFollower {
             unit: unit.to_owned(),
             started: false,
             ended: None,
+            exec_failed: false,
         }
     }
 
@@ -270,11 +305,21 @@ impl RunFollower {
                 self.ended.get_or_insert((code, signaled));
                 None
             }
+            RunLine::ExecFailed => {
+                if self.ended.is_none() {
+                    self.ended = Some((EXIT_EXEC, false));
+                    self.exec_failed = true;
+                }
+                None
+            }
         }
     }
 
     /// `systemd-run` ended: with this exit code, or (`signaled`) killed by this signal.
     pub fn finish(self, code: i32, signaled: bool) -> UnitEvent {
+        if self.exec_failed {
+            return UnitEvent::ExecFailed { unit: self.unit };
+        }
         let (code, signaled) = self.ended.unwrap_or((code, signaled));
         UnitEvent::Exited {
             unit: self.unit,
@@ -316,6 +361,152 @@ impl LineTail {
     }
 }
 
+/// The application id of a unit this service named (`unit_name`), given the user whose manager
+/// runs it. The user is known from the manager that was asked, so the split is never a guess (a
+/// profile id and the first element of an app id may both contain `-`).
+pub fn unit_app_id(user: &str, unit: &str) -> Option<String> {
+    let app = unit
+        .strip_prefix("ruya-app-")?
+        .strip_prefix(user)?
+        .strip_prefix('-')?
+        .strip_suffix(".service")?;
+    valid_app_id(app).then(|| app.to_owned())
+}
+
+/// The profile users out of `loginctl list-users --no-legend` (`UID USER LINGER STATE` per
+/// line): the names `ruya-<id>`. `ruya-shell` is a name of that shape too; whether it is a
+/// profile is for the directory to say, not for this parser.
+pub fn parse_profile_users(output: &str) -> Vec<String> {
+    output
+        .lines()
+        .filter_map(|line| line.split_whitespace().nth(1))
+        .filter(|name| name.strip_prefix("ruya-").is_some_and(valid_profile_id))
+        .map(str::to_owned)
+        .collect()
+}
+
+/// What `systemctl show` says about one unit (the properties `SHOW_PROPERTIES` asks for).
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct ShowUnit {
+    pub id: String,
+    pub load_state: String,
+    pub active_state: String,
+    /// `ActiveEnterTimestamp` in unix seconds (`--timestamp=unix` prints `@<seconds>`), 0 if none.
+    pub entered: i64,
+    /// `ExecMainStatus`: the exit status, or the signal number when `exec_main_code` is 2 or 3.
+    pub exec_main_status: i32,
+    /// `ExecMainCode`: 1 exited, 2 killed, 3 dumped (the `CLD_*` codes), 0 not ended yet.
+    pub exec_main_code: i32,
+}
+
+impl ShowUnit {
+    /// Is it still a unit with a running (or starting, or stopping) program?
+    pub fn alive(&self) -> bool {
+        self.load_state != "not-found"
+            && !matches!(self.active_state.as_str(), "inactive" | "failed" | "")
+    }
+}
+
+/// The `-p` arguments of the `systemctl show` call that `parse_show` reads.
+pub const SHOW_PROPERTIES: [&str; 6] = [
+    "Id",
+    "LoadState",
+    "ActiveState",
+    "ActiveEnterTimestamp",
+    "ExecMainStatus",
+    "ExecMainCode",
+];
+
+/// The units of a `systemctl show` output: `Key=Value` lines, a blank line between units.
+pub fn parse_show(output: &str) -> Vec<ShowUnit> {
+    let mut units = Vec::new();
+    let mut cur = ShowUnit::default();
+    let mut any = false;
+    for line in output.lines().chain(std::iter::once("")) {
+        let line = line.trim_end();
+        if line.is_empty() {
+            if any && !cur.id.is_empty() {
+                units.push(std::mem::take(&mut cur));
+            }
+            cur = ShowUnit::default();
+            any = false;
+            continue;
+        }
+        let Some((key, value)) = line.split_once('=') else {
+            continue;
+        };
+        any = true;
+        match key {
+            "Id" => cur.id = value.to_owned(),
+            "LoadState" => cur.load_state = value.to_owned(),
+            "ActiveState" => cur.active_state = value.to_owned(),
+            "ActiveEnterTimestamp" => {
+                cur.entered = value
+                    .strip_prefix('@')
+                    .and_then(|n| n.trim().parse().ok())
+                    .unwrap_or(0);
+            }
+            "ExecMainStatus" => cur.exec_main_status = value.trim().parse().unwrap_or(0),
+            "ExecMainCode" => cur.exec_main_code = value.trim().parse().unwrap_or(0),
+            _ => {}
+        }
+    }
+    units
+}
+
+/// Follows a unit this service did not start (it has no `systemd-run --wait` to tell its end):
+/// fed with what `systemctl show` said about it about every two seconds, it reports the end once.
+/// The exit status is the last one seen while the unit was alive: a `--collect`ed unit is gone
+/// the moment it ends, so for an app that dies on its own this is mostly 0.
+pub struct UnitWatch {
+    unit: String,
+    code: i32,
+    signaled: bool,
+    misses: u32,
+}
+
+/// Consecutive failed `systemctl` calls after which the unit counts as gone (the manager that
+/// ran it is gone, for instance when its profile was deleted).
+const WATCH_MAX_MISSES: u32 = 5;
+
+impl UnitWatch {
+    pub fn new(unit: &str) -> Self {
+        UnitWatch {
+            unit: unit.to_owned(),
+            code: 0,
+            signaled: false,
+            misses: 0,
+        }
+    }
+
+    /// `seen` is the unit's `show` block, or `None` when `systemctl` failed.
+    pub fn observe(&mut self, seen: Option<&ShowUnit>) -> Option<UnitEvent> {
+        match seen {
+            Some(show) if show.alive() => {
+                self.misses = 0;
+                if show.exec_main_code != 0 {
+                    self.code = show.exec_main_status;
+                    self.signaled = matches!(show.exec_main_code, 2 | 3);
+                }
+                None
+            }
+            Some(_) => Some(self.ended()),
+            None => {
+                self.misses += 1;
+                (self.misses >= WATCH_MAX_MISSES).then(|| self.ended())
+            }
+        }
+    }
+
+    fn ended(&self) -> UnitEvent {
+        UnitEvent::Exited {
+            unit: self.unit.clone(),
+            code: self.code,
+            signaled: self.signaled,
+        }
+    }
+}
+
 /// For tests and `--session`. Records the calls; with an event channel it behaves like a quick
 /// OS: `start` is followed by `Started`, `stop` by a normal exit, `kill` by a signal exit.
 #[derive(Default)]
@@ -329,6 +520,7 @@ struct FakeState {
     installed: HashSet<String>,
     fail_start: bool,
     calls: Vec<String>,
+    running: Vec<RunningUnit>,
 }
 
 impl FakeSpawner {
@@ -343,6 +535,17 @@ impl FakeSpawner {
 
     pub fn with_app(self, app_id: &str) -> Self {
         self.lock().installed.insert(app_id.to_owned());
+        self
+    }
+
+    /// A unit that runs already when the service starts (`adopt_running`).
+    pub fn with_running(self, user: &str, app_id: &str, started: i64) -> Self {
+        self.lock().running.push(RunningUnit {
+            unit: unit_name(user, app_id),
+            user: user.to_owned(),
+            app_id: app_id.to_owned(),
+            started,
+        });
         self
     }
 
@@ -403,6 +606,12 @@ impl Spawner for FakeSpawner {
             signaled: true,
         });
         Ok(())
+    }
+
+    fn adopt_running(&self) -> Vec<RunningUnit> {
+        let mut state = self.lock();
+        state.calls.push("adopt".to_owned());
+        state.running.clone()
     }
 }
 
@@ -563,8 +772,25 @@ mod tests {
         );
         // The padding systemd-run puts in front, and a single process.
         assert_eq!(
+            parse_run_line("  Main process terminated with: code=exited, status=1/FAILURE "),
+            ended(1, false)
+        );
+        // 203 is the exec failure only under its own name; a bare 203 is an exit code like any.
+        assert_eq!(
             parse_run_line("  Main process terminated with: code=exited, status=203/EXEC "),
+            Some(RunLine::ExecFailed)
+        );
+        assert_eq!(
+            parse_run_line("Main processes terminated with: code=exited, status=203/EXEC"),
+            Some(RunLine::ExecFailed)
+        );
+        assert_eq!(
+            parse_run_line("Main process terminated with: code=exited, status=203"),
             ended(203, false)
+        );
+        assert_eq!(
+            parse_run_line("Main process terminated with: code=killed, status=203/EXEC"),
+            ended(203, true)
         );
         for other in [
             "",
@@ -643,6 +869,179 @@ mod tests {
             "Main processes terminated with: code=exited, status=2/INVALIDARGUMENT",
         ];
         assert_eq!(follow(&lines, 0, false), [started(), exited(1, false)]);
+    }
+
+    #[test]
+    fn follower_reports_an_exec_failure_as_its_own_event() {
+        let lines = [
+            "Running as unit: u.service",
+            "Main process terminated with: code=exited, status=203/EXEC",
+        ];
+        assert_eq!(
+            follow(&lines, 203, false),
+            [
+                started(),
+                UnitEvent::ExecFailed {
+                    unit: "u.service".to_owned()
+                }
+            ]
+        );
+        // Any other non-zero status stays an exit code (the core calls it `crashed`).
+        let lines = [
+            "Running as unit: u.service",
+            "Main process terminated with: code=exited, status=1/FAILURE",
+        ];
+        assert_eq!(follow(&lines, 1, false), [started(), exited(1, false)]);
+    }
+
+    #[test]
+    fn the_app_id_comes_back_out_of_a_unit_name() {
+        let unit = unit_name("ruya-p-1", "my-org.ruyaos.Racer");
+        // The profile id and the app id both contain a dash: the user decides the split.
+        assert_eq!(
+            unit_app_id("ruya-p-1", &unit).as_deref(),
+            Some("my-org.ruyaos.Racer")
+        );
+        assert_eq!(unit_app_id("ruya-p", &unit), None);
+        for bad in [
+            "ruya-app-ruya-p1-Racer.service",
+            "ruya-app-ruya-p1-org.ruyaos.Racer.scope",
+            "other-ruya-p1-org.ruyaos.Racer.service",
+            "ruya-app-ruya-p1-org.ruyaos.Racer",
+            "",
+        ] {
+            assert_eq!(unit_app_id("ruya-p1", bad), None, "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn profile_users_out_of_loginctl() {
+        let out = "  1000 ruya-shell yes active
+  1002 ruya-p1    yes lingering
+                   1003 ruya-guest no  active
+    0 root      no  active
+  1004 someone   no active
+
+";
+        assert_eq!(
+            parse_profile_users(out),
+            ["ruya-shell", "ruya-p1", "ruya-guest"]
+        );
+        assert!(parse_profile_users("").is_empty());
+    }
+
+    const SHOW_TWO: &str = "Id=ruya-app-ruya-p1-org.ruyaos.Racer.service
+LoadState=loaded
+ActiveState=active
+ActiveEnterTimestamp=@1731000000
+ExecMainStatus=0
+ExecMainCode=0
+
+Id=ruya-app-ruya-p1-org.ruyaos.Puzzle.service
+LoadState=loaded
+ActiveState=deactivating
+ActiveEnterTimestamp=
+ExecMainStatus=15
+ExecMainCode=2
+";
+
+    #[test]
+    fn systemctl_show_blocks_are_parsed() {
+        let units = parse_show(SHOW_TWO);
+        assert_eq!(units.len(), 2);
+        assert_eq!(units[0].id, "ruya-app-ruya-p1-org.ruyaos.Racer.service");
+        assert_eq!(units[0].entered, 1_731_000_000);
+        assert!(units[0].alive());
+        assert_eq!(
+            (
+                units[1].entered,
+                units[1].exec_main_status,
+                units[1].exec_main_code
+            ),
+            (0, 15, 2)
+        );
+        assert!(units[1].alive(), "deactivating still runs");
+        assert!(parse_show("").is_empty());
+        assert!(parse_show(
+            "
+
+"
+        )
+        .is_empty());
+        let gone = parse_show(
+            "Id=x.service
+LoadState=not-found
+ActiveState=inactive
+",
+        );
+        assert!(!gone[0].alive());
+        let failed = parse_show(
+            "Id=x.service
+LoadState=loaded
+ActiveState=failed
+",
+        );
+        assert!(!failed[0].alive());
+    }
+
+    fn show(state: &str, status: i32, code: i32) -> ShowUnit {
+        ShowUnit {
+            id: "u.service".to_owned(),
+            load_state: "loaded".to_owned(),
+            active_state: state.to_owned(),
+            entered: 0,
+            exec_main_status: status,
+            exec_main_code: code,
+        }
+    }
+
+    #[test]
+    fn a_watched_unit_reports_its_end_once_with_the_last_status_seen() {
+        let mut w = UnitWatch::new("u.service");
+        assert_eq!(w.observe(Some(&show("active", 0, 0))), None);
+        assert_eq!(w.observe(Some(&show("deactivating", 15, 2))), None);
+        assert_eq!(
+            w.observe(Some(&show("inactive", 0, 0))),
+            Some(exited(15, true))
+        );
+        let mut w = UnitWatch::new("u.service");
+        w.observe(Some(&show("active", 0, 0)));
+        assert_eq!(
+            w.observe(Some(&show("failed", 0, 0))),
+            Some(exited(0, false))
+        );
+        let mut w = UnitWatch::new("u.service");
+        w.observe(Some(&show("active", 3, 1)));
+        assert_eq!(
+            w.observe(Some(&ShowUnit {
+                load_state: "not-found".to_owned(),
+                ..show("inactive", 0, 0)
+            })),
+            Some(exited(3, false))
+        );
+    }
+
+    #[test]
+    fn a_manager_that_stays_unreachable_ends_the_watch() {
+        let mut w = UnitWatch::new("u.service");
+        for _ in 0..WATCH_MAX_MISSES - 1 {
+            assert_eq!(w.observe(None), None);
+        }
+        // One good answer in between starts the count again.
+        assert_eq!(w.observe(Some(&show("active", 0, 0))), None);
+        for _ in 0..WATCH_MAX_MISSES - 1 {
+            assert_eq!(w.observe(None), None);
+        }
+        assert_eq!(w.observe(None), Some(exited(0, false)));
+    }
+
+    #[test]
+    fn the_fake_lists_the_units_that_run_already() {
+        let fake = FakeSpawner::new().with_running("ruya-p1", "org.ruyaos.Racer", 77);
+        let found = fake.adopt_running();
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].unit, unit_name("ruya-p1", "org.ruyaos.Racer"));
+        assert_eq!((found[0].user.as_str(), found[0].started), ("ruya-p1", 77));
     }
 
     #[test]

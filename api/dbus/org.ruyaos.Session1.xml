@@ -92,6 +92,11 @@
       <arg name="status" type="s" direction="out"/>
     </method>
 
+    <!-- Apps that keep running when ruya-session restarts are still listed (state "running",
+         their original start time): the service finds them again before it takes the bus name,
+         announces nothing for them (no AppStarted) and reports their end with AppExited. The
+         exit code of such an app is the last one the service saw: usually 0, even for an app
+         that crashed while the service was not following its process. -->
     <method name="ListRunning">
       <arg name="apps" type="aa{sv}" direction="out"/>
     </method>
@@ -158,7 +163,8 @@
     <!-- Sent once per instance. reason: "quit" (stopped on request or ended normally), "crashed"
          (exited abnormally by itself), "killed" (ended by the kill after a Stop it ignored, or by
          a signal from the system while it ran; dying of the Stop's own SIGTERM is "quit"),
-         "launch-failed" (never reached running; exit_code is then -1). The play-time ledger
+         "launch-failed" (never reached running, or its program could not be executed [exit
+         status 203/EXEC]; exit_code is then -1). The play-time ledger
          additionally knows "time-limit" and "bedtime" (T-211 ends a session with them). -->
     <signal name="AppExited">
       <arg name="instance" type="s"/>

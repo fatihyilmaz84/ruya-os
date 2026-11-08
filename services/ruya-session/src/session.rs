@@ -112,6 +112,9 @@ struct Instance {
     reached_running: bool,
     stop_asked: Option<Instant>,
     kill_sent: bool,
+    /// An adopted unit of a profile that no longer exists: being stopped, never listed or
+    /// reported (the shell never heard of it).
+    hidden: bool,
 }
 
 pub struct Session<S, D> {
@@ -166,6 +169,7 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
                     reached_running: false,
                     stop_asked: None,
                     kill_sent: false,
+                    hidden: false,
                 });
                 (Status::Ok, unit)
             }
@@ -198,9 +202,59 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
         }
     }
 
+    /// Start-up: takes over the app units that run already (a restart of this service does not
+    /// end the apps). They are `running` from the start and announce nothing; their end is
+    /// reported like any other. When the profiles are `known` (the directory is current), a unit
+    /// of a profile that no longer exists is stopped and never listed. Returns what was adopted.
+    pub fn adopt(&mut self, unix: i64, now: Instant, profiles_known: bool) -> Vec<RunningApp> {
+        for found in self.spawner.adopt_running() {
+            let Some(profile) = found
+                .user
+                .strip_prefix("ruya-")
+                .filter(|p| valid_profile_id(p))
+            else {
+                continue;
+            };
+            if !valid_app_id(&found.app_id) || self.instances.iter().any(|i| i.unit == found.unit) {
+                continue;
+            }
+            let orphan = profiles_known && self.directory.unix_user(profile).is_none();
+            let mut inst = Instance {
+                unit: found.unit,
+                app_id: found.app_id,
+                profile: profile.to_owned(),
+                started: if found.started > 0 {
+                    found.started
+                } else {
+                    unix
+                },
+                state: State::Running,
+                reached_running: true,
+                stop_asked: None,
+                kill_sent: false,
+                hidden: orphan,
+            };
+            if orphan {
+                match self.spawner.stop(&inst.unit) {
+                    Ok(()) => {
+                        inst.state = State::Stopping;
+                        inst.stop_asked = Some(now);
+                    }
+                    Err(err) => {
+                        eprintln!("ruya-session: stopping {} failed: {err}", inst.unit);
+                        continue;
+                    }
+                }
+            }
+            self.instances.push(inst);
+        }
+        self.list()
+    }
+
     pub fn list(&self) -> Vec<RunningApp> {
         self.instances
             .iter()
+            .filter(|i| !i.hidden)
             .map(|i| RunningApp {
                 instance: i.unit.clone(),
                 app_id: i.app_id.clone(),
@@ -216,7 +270,7 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
         match event {
             UnitEvent::Started { unit } => {
                 let inst = self.instances.iter_mut().find(|i| i.unit == unit)?;
-                if inst.reached_running {
+                if inst.reached_running || inst.hidden {
                     return None;
                 }
                 inst.reached_running = true;
@@ -235,7 +289,30 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
             } => {
                 let at = self.instances.iter().position(|i| i.unit == unit)?;
                 let inst = self.instances.remove(at);
+                if inst.hidden {
+                    return None;
+                }
                 let (exit_code, reason) = exit_reason(&inst, code, signaled);
+                Some(Notice::Exited {
+                    instance: inst.unit,
+                    app_id: inst.app_id,
+                    exit_code,
+                    reason,
+                })
+            }
+            UnitEvent::ExecFailed { unit } => {
+                let at = self.instances.iter().position(|i| i.unit == unit)?;
+                let inst = self.instances.remove(at);
+                if inst.hidden {
+                    return None;
+                }
+                // The program never ran, whatever `Running as unit` said before: `launch-failed`
+                // (code -1) unless the app was being stopped anyway.
+                let (exit_code, reason) = if inst.state == State::Stopping {
+                    exit_reason(&inst, 0, false)
+                } else {
+                    (-1, ExitReason::LaunchFailed)
+                };
                 Some(Notice::Exited {
                     instance: inst.unit,
                     app_id: inst.app_id,
@@ -609,5 +686,215 @@ mod tests {
             .is_some());
         assert_eq!(s.list()[0].state, State::Stopping);
         assert_eq!(reason(s.on_event(exited(&unit, 0, false))), (0, "quit"));
+    }
+
+    const PUZZLE: &str = "org.ruyaos.Puzzle";
+
+    /// A service that restarts while `ruya-p1` runs Racer and `ruya-p2` runs Puzzle.
+    fn restarted() -> Session<FakeSpawner, ProfileSnapshot> {
+        let spawner = FakeSpawner::new()
+            .with_app(APP)
+            .with_app(PUZZLE)
+            .with_running("ruya-p1", APP, 1_000)
+            .with_running("ruya-p2", PUZZLE, 2_000);
+        let dir = ProfileSnapshot::new(["p1".to_owned(), "p2".to_owned()]);
+        Session::new(spawner, dir, vec![])
+    }
+
+    #[test]
+    fn adopted_units_are_listed_as_running_with_their_start_time() {
+        let mut s = restarted();
+        let adopted = s.adopt(5_000, Instant::now(), true);
+        assert_eq!(adopted, s.list());
+        let mut got: Vec<_> = s
+            .list()
+            .into_iter()
+            .map(|a| (a.instance, a.app_id, a.profile, a.started, a.state))
+            .collect();
+        got.sort_by(|a, b| a.0.cmp(&b.0));
+        assert_eq!(
+            got,
+            [
+                (
+                    unit_name("ruya-p1", APP),
+                    APP.to_owned(),
+                    "p1".to_owned(),
+                    1_000,
+                    State::Running
+                ),
+                (
+                    unit_name("ruya-p2", PUZZLE),
+                    PUZZLE.to_owned(),
+                    "p2".to_owned(),
+                    2_000,
+                    State::Running
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_relaunch_of_an_adopted_app_is_already_running() {
+        let mut s = restarted();
+        s.adopt(5_000, Instant::now(), true);
+        assert_eq!(
+            s.launch(APP, "p1", 6_000),
+            (Status::AlreadyRunning, String::new())
+        );
+        // The same app for another profile is another instance.
+        assert_eq!(s.launch(APP, "p2", 6_000).0, Status::Ok);
+        assert!(
+            s.spawner
+                .calls()
+                .iter()
+                .filter(|c| c.starts_with("start"))
+                .count()
+                == 1
+        );
+    }
+
+    #[test]
+    fn an_adopted_app_that_ends_is_reported_once_with_its_reason() {
+        let mut s = restarted();
+        s.adopt(5_000, Instant::now(), true);
+        let racer = unit_name("ruya-p1", APP);
+        let puzzle = unit_name("ruya-p2", PUZZLE);
+        // Adoption announced nothing and a late `Started` of the same unit is not news either.
+        assert_eq!(
+            s.on_event(UnitEvent::Started {
+                unit: racer.clone()
+            }),
+            None
+        );
+        assert_eq!(reason(s.on_event(exited(&racer, 0, false))), (0, "quit"));
+        assert_eq!(s.on_event(exited(&racer, 0, false)), None);
+        assert_eq!(
+            reason(s.on_event(exited(&puzzle, 11, true))),
+            (11, "killed")
+        );
+        assert!(s.list().is_empty());
+        // Gone, so it can be launched again.
+        assert_eq!(s.launch(APP, "p1", 7_000).0, Status::Ok);
+    }
+
+    #[test]
+    fn an_adopted_app_can_be_stopped_and_killed() {
+        let mut s = restarted();
+        s.adopt(5_000, Instant::now(), true);
+        let racer = unit_name("ruya-p1", APP);
+        let t0 = Instant::now();
+        assert_eq!(s.stop(&racer, t0), Status::Ok);
+        assert_eq!(
+            s.list()
+                .iter()
+                .filter(|a| a.state == State::Stopping)
+                .count(),
+            1
+        );
+        s.tick(t0 + STOP_GRACE);
+        assert!(s.spawner.calls().contains(&format!("kill {racer}")));
+        assert_eq!(reason(s.on_event(exited(&racer, 9, true))), (9, "killed"));
+    }
+
+    #[test]
+    fn a_unit_of_a_profile_that_is_gone_is_stopped_and_stays_unseen() {
+        let spawner = FakeSpawner::new()
+            .with_app(APP)
+            .with_running("ruya-p1", APP, 1_000)
+            .with_running("ruya-p9", APP, 1_000);
+        let dir = ProfileSnapshot::new(["p1".to_owned()]);
+        let mut s = Session::new(spawner, dir, vec![]);
+        let t0 = Instant::now();
+        let adopted = s.adopt(5_000, t0, true);
+        let orphan = unit_name("ruya-p9", APP);
+        assert_eq!(adopted.len(), 1);
+        assert_eq!(adopted[0].profile, "p1");
+        assert!(s.spawner.calls().contains(&format!("stop {orphan}")));
+        assert!(!s
+            .spawner
+            .calls()
+            .contains(&format!("stop {}", unit_name("ruya-p1", APP))));
+        // It is not listed and its end is not announced; it is killed if it ignores the stop.
+        assert!(s.list().iter().all(|a| a.profile != "p9"));
+        s.tick(t0 + STOP_GRACE);
+        assert!(s.spawner.calls().contains(&format!("kill {orphan}")));
+        assert_eq!(s.on_event(exited(&orphan, 0, false)), None);
+    }
+
+    #[test]
+    fn units_are_kept_when_the_profile_list_could_not_be_read() {
+        let mut s = restarted();
+        *s.directory_mut() = ProfileSnapshot::default();
+        assert_eq!(s.adopt(5_000, Instant::now(), false).len(), 2);
+        assert!(!s.spawner.calls().iter().any(|c| c.starts_with("stop")));
+    }
+
+    #[test]
+    fn units_that_are_not_ours_are_skipped() {
+        let spawner = FakeSpawner::new()
+            .with_running("root", APP, 1)
+            .with_running("ruya-", APP, 1)
+            .with_running("ruya-p 1", APP, 1)
+            .with_running("ruya-p1", "Racer", 1);
+        let dir = ProfileSnapshot::new(["p1".to_owned()]);
+        let mut s = Session::new(spawner, dir, vec![]);
+        assert!(s.adopt(5_000, Instant::now(), true).is_empty());
+        assert!(s.spawner.calls().iter().all(|c| !c.starts_with("stop")));
+    }
+
+    #[test]
+    fn adopting_twice_does_not_duplicate() {
+        let mut s = restarted();
+        s.adopt(5_000, Instant::now(), true);
+        s.adopt(5_001, Instant::now(), true);
+        assert_eq!(s.list().len(), 2);
+    }
+
+    #[test]
+    fn a_unit_without_a_start_time_gets_the_adoption_time() {
+        let spawner = FakeSpawner::new()
+            .with_app(APP)
+            .with_running("ruya-p1", APP, 0);
+        let dir = ProfileSnapshot::new(["p1".to_owned()]);
+        let mut s = Session::new(spawner, dir, vec![]);
+        assert_eq!(s.adopt(5_000, Instant::now(), true)[0].started, 5_000);
+    }
+
+    fn exec_failed(unit: &str) -> UnitEvent {
+        UnitEvent::ExecFailed {
+            unit: unit.to_owned(),
+        }
+    }
+
+    #[test]
+    fn an_exec_failure_is_launch_failed_not_crashed() {
+        let mut s = session();
+        let unit = running(&mut s); // `Running as unit` came first, as systemd-run prints it
+        assert_eq!(
+            reason(s.on_event(exec_failed(&unit))),
+            (-1, "launch-failed")
+        );
+        assert!(s.list().is_empty());
+        // The same status as a plain exit code stays what it was.
+        let unit = running(&mut s);
+        assert_eq!(
+            reason(s.on_event(exited(&unit, 203, false))),
+            (203, "crashed")
+        );
+        // Never started at all: also launch-failed.
+        let (_, unit) = s.launch(APP, "p1", 0);
+        assert_eq!(
+            reason(s.on_event(exec_failed(&unit))),
+            (-1, "launch-failed")
+        );
+        assert_eq!(s.on_event(exec_failed(&unit)), None);
+    }
+
+    #[test]
+    fn an_exec_failure_while_stopping_is_a_quit() {
+        let mut s = session();
+        let unit = running(&mut s);
+        s.stop(&unit, Instant::now());
+        assert_eq!(reason(s.on_event(exec_failed(&unit))), (0, "quit"));
     }
 }
