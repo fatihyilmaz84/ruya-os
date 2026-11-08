@@ -81,6 +81,7 @@ impl AgentIface {
 
     fn refuse<T>() -> Result<T, AgentError> {
         // PIN and passkey pairing is not offered (B-006).
+        crate::log::info("agent refused a PIN or passkey request (not offered)");
         Err(AgentError::Rejected("no PIN or passkey".to_owned()))
     }
 }

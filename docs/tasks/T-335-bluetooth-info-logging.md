@@ -1,6 +1,6 @@
 # T-335 - ruya-devices logs what it does to Bluetooth devices, so the next report is diagnosable
 
-Status: in-progress · Phase: 2 · Depends: — · Area: services (ruya-devices) · Size: S · Owner: builder
+Status: done · Phase: 2 · Depends: — · Area: services (ruya-devices) · Size: S · Owner: builder
 
 ## Goal
 Today `ruya-devices` writes a line only when something fails, so "my second controller vanished" could not be explained from the journal (T-334 and T-338 had to guess). After this task the journal tells, for every pairing window, pairing, removal, connect, disconnect and idle disconnect, what happened to which device and why, without secrets.
