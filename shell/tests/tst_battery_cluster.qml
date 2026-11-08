@@ -289,7 +289,8 @@ Item {
                 verify(chip.Accessible.name.indexOf(d.percent + " percent") >= 0, d.name + " shows " + d.percent + ": " + chip.Accessible.name)
                 verify(chip.Accessible.name.indexOf(d.name) >= 0)
             }
-            compare(find("hintBar").hints[0].text, "Close", "the hint bar says what B does")
+            compare(find("hintBar").hints[0].button + " " + find("hintBar").hints[0].text, "A Close", "the hint bar says what A does")
+            compare(find("hintBar").hints[1].button + " " + find("hintBar").hints[1].text, "B Back")
             keyClick(Qt.Key_Escape)
             tryVerify(() => !list.shown, 2000, "Back closes")
             tryVerify(() => more.activeFocus, 2000, "focus returns to the chip")
@@ -304,6 +305,37 @@ Item {
             tryVerify(() => more.activeFocus)
             keyClick(Qt.Key_Down)
             tryVerify(() => find("homePlay").activeFocus, 2000, "Down: the page")
+            tc.shell.destroy()
+            wait(50)
+        }
+
+        // The chip does not swallow keys it does not handle: Guide opens the system panel from it as from the nav.
+        function test_guide_opens_the_panel_from_the_chip() {
+            Batteries.mockPopulate()
+            openShell(1920, 1080)
+            tryVerify(() => find("batteryMore").visible, 2000)
+            openMore()
+            compare(find("systemPanel").open, false)
+            keyClick(Qt.Key_HomePage)
+            tryVerify(() => find("systemPanel").open, 2000, "Guide opens the system panel with the chip focused")
+            keyClick(Qt.Key_HomePage)
+            tryCompare(find("systemPanel"), "open", false)
+            tc.shell.destroy()
+            wait(50)
+        }
+
+        // The chip goes away under the focus with no list open: the focus goes to the nav, not nowhere.
+        function test_the_focused_chip_going_away_hands_the_focus_to_the_nav() {
+            Batteries.mockPopulate()
+            openShell(1920, 1080)
+            tryVerify(() => find("batteryMore").visible, 2000)
+            openMore()
+            Batteries.mockClear()
+            Batteries.mockSet("pad-1", 62, "discharging", "controller", "Pad One")
+            tryVerify(() => !find("batteryMore").visible, 2000)
+            tryVerify(() => find("sectionNav").activeFocus, 2000, "focus moved to the nav, not nowhere")
+            keyClick(Qt.Key_Down)
+            tryVerify(() => find("homePlay").activeFocus, 2000, "and the keys still work from there")
             tc.shell.destroy()
             wait(50)
         }
@@ -405,6 +437,24 @@ Item {
                 wait(50)
             }
             DeviceSettings.language = "en"
+            // The chip and its list on the light theme (the stack glyph must still read).
+            const before = DeviceSettings.theme
+            DeviceSettings.theme = "daylight"
+            openShell(1920, 1080)
+            tryCompare(Theme, "mix", 1, 5000, "the theme has finished fading")
+            tryVerify(() => !Theme.fade.running)
+            tryVerify(() => find("batteryMore").visible, 2000)
+            openMore()
+            wait(500)
+            grabImage(find("statusGlass")).save(shotsDir + "/battery-more-daylight-crop.png")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("batteryList").shown, 2000)
+            wait(600)
+            grabImage(tc.shell).save(shotsDir + "/battery-list-daylight.png")
+            keyClick(Qt.Key_Escape)
+            tc.shell.destroy()
+            DeviceSettings.theme = before
+            wait(50)
             for (const percent of [150, 200]) {
                 Display.setUiScale(percent)
                 tryCompare(Theme, "uiScale", percent / 100)

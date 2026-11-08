@@ -49,8 +49,8 @@ FocusScope {
         anchors.centerIn: parent
         spacing: Theme.spaceXs * more.u
 
-        // A stack of two batteries: the front one in the text colour, the one behind it dimmer
-        // and shifted, so the glyph reads as "several".
+        // A stack of two batteries: the front one in the text colour, the one behind it at the peek opacity
+        // (textDim is for opaque surfaces only, 04 section 3) and shifted, so the glyph reads as "several".
         Item {
             id: stack
             visible: !more.compact
@@ -63,7 +63,8 @@ FocusScope {
                 x: stack.shift
                 u: more.u
                 name: "battery_full"
-                color: Theme.textDim
+                color: Theme.text
+                opacity: Theme.peekOpacity
             }
             Icon {
                 id: front
@@ -83,6 +84,9 @@ FocusScope {
         }
     }
 
+    // Only the keys the chip handles are accepted; the rest (Guide, Menu, volume) bubble up to the Shell
+    // like they do from the nav and from Home. Right and Up are the edge of the screen: nothing moves,
+    // nothing leaks to the page below.
     Keys.onPressed: event => {
         if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
             if (!event.isAutoRepeat) {
@@ -97,8 +101,9 @@ FocusScope {
             more.stepRequested(event.key === Qt.Key_PageDown ? 1 : -1)
         } else if (BackKey.isBackOrBackspace(event.key)) {
             more.backRequested()
+        } else if (event.key !== Qt.Key_Right && event.key !== Qt.Key_Up) {
+            return
         }
-        // Right and Up are the edge of the screen: nothing moves, nothing leaks to the page below.
         event.accepted = true
     }
 }

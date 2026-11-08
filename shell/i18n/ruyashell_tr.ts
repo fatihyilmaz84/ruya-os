@@ -601,7 +601,12 @@ Bu geri alınamaz.</translation>
         <translation>Kapat</translation>
     </message>
     <message>
-        <location line="-59"/>
+        <location line="-120"/>
+        <source>Back</source>
+        <translation>Geri</translation>
+    </message>
+    <message>
+        <location line="+61"/>
         <source>More devices</source>
         <translation>Diğer cihazlar</translation>
     </message>
@@ -621,7 +626,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 yüzde %2</translation>
     </message>
     <message numerus="yes">
-        <location line="+45"/>
+        <location line="+46"/>
         <source>%n more</source>
         <translation>
             <numerusform>%n tane daha</numerusform>
@@ -646,12 +651,12 @@ Bu geri alınamaz.</translation>
         <translation>Kontrolcü adı</translation>
     </message>
     <message>
-        <location line="+93"/>
+        <location line="+102"/>
         <source>Bluetooth is off.</source>
         <translation>Bluetooth kapalı.</translation>
     </message>
     <message>
-        <location line="-45"/>
+        <location line="-50"/>
         <source>Pairing…</source>
         <translation>Eşleştiriliyor…</translation>
     </message>
@@ -671,7 +676,7 @@ Bu geri alınamaz.</translation>
         <translation>Bağlı</translation>
     </message>
     <message>
-        <location line="+95"/>
+        <location line="+100"/>
         <source>Pair a new controller</source>
         <translation>Yeni kontrolcü eşleştir</translation>
     </message>
@@ -681,12 +686,17 @@ Bu geri alınamaz.</translation>
         <translation>%1 cihazını yeniden eşleştir</translation>
     </message>
     <message>
+        <location line="+1"/>
+        <source>Put it in pairing mode first</source>
+        <translation>Önce eşleştirme moduna alın</translation>
+    </message>
+    <message>
         <location line="+15"/>
         <source>Rename %1</source>
         <translation>%1 adını değiştir</translation>
     </message>
     <message>
-        <location line="-185"/>
+        <location line="-191"/>
         <source>Paired</source>
         <translation>Eşleşti</translation>
     </message>
@@ -706,7 +716,7 @@ Bu geri alınamaz.</translation>
         <translation>Pil %1%</translation>
     </message>
     <message>
-        <location line="+37"/>
+        <location line="+42"/>
         <source>Could not start looking for controllers.</source>
         <translation>Kontrolcü aramaya başlanamadı.</translation>
     </message>
@@ -746,8 +756,8 @@ Bu geri alınamaz.</translation>
         <translation>Taranıyor…</translation>
     </message>
     <message>
-        <location line="-149"/>
-        <location line="+260"/>
+        <location line="-158"/>
+        <location line="+270"/>
         <source>Forget %1</source>
         <translation>%1 cihazını unut</translation>
     </message>

@@ -328,6 +328,7 @@ SettingsPane {
             visible: paired && !bonded && Bluetooth.powered
             u: pane.u
             label: qsTr("Pair again %1").arg(name)
+            value: qsTr("Put it in pairing mode first")
             onActivated: pane.startRepair(devId)
         }
     }

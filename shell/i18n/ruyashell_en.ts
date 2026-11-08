@@ -603,7 +603,12 @@ This can&apos;t be undone.</translation>
         <translation>Close</translation>
     </message>
     <message>
-        <location line="-59"/>
+        <location line="-120"/>
+        <source>Back</source>
+        <translation>Back</translation>
+    </message>
+    <message>
+        <location line="+61"/>
         <source>More devices</source>
         <translation>More devices</translation>
     </message>
@@ -624,7 +629,7 @@ This can&apos;t be undone.</translation>
         <translation>%1 %2 percent</translation>
     </message>
     <message numerus="yes">
-        <location line="+45"/>
+        <location line="+46"/>
         <source>%n more</source>
         <translation>
             <numerusform>%n more</numerusform>
@@ -650,12 +655,12 @@ This can&apos;t be undone.</translation>
         <translation>Controller name</translation>
     </message>
     <message>
-        <location line="+93"/>
+        <location line="+102"/>
         <source>Bluetooth is off.</source>
         <translation>Bluetooth is off.</translation>
     </message>
     <message>
-        <location line="-45"/>
+        <location line="-50"/>
         <source>Pairing…</source>
         <translation>Pairing…</translation>
     </message>
@@ -675,7 +680,7 @@ This can&apos;t be undone.</translation>
         <translation>Connected</translation>
     </message>
     <message>
-        <location line="+95"/>
+        <location line="+100"/>
         <source>Pair a new controller</source>
         <translation>Pair a new controller</translation>
     </message>
@@ -685,12 +690,17 @@ This can&apos;t be undone.</translation>
         <translation>Pair again %1</translation>
     </message>
     <message>
+        <location line="+1"/>
+        <source>Put it in pairing mode first</source>
+        <translation>Put it in pairing mode first</translation>
+    </message>
+    <message>
         <location line="+15"/>
         <source>Rename %1</source>
         <translation>Rename %1</translation>
     </message>
     <message>
-        <location line="-185"/>
+        <location line="-191"/>
         <source>Paired</source>
         <translation>Paired</translation>
     </message>
@@ -710,7 +720,7 @@ This can&apos;t be undone.</translation>
         <translation>Battery %1%</translation>
     </message>
     <message>
-        <location line="+37"/>
+        <location line="+42"/>
         <source>Could not start looking for controllers.</source>
         <translation>Could not start looking for controllers.</translation>
     </message>
@@ -750,8 +760,8 @@ This can&apos;t be undone.</translation>
         <translation>Scanning…</translation>
     </message>
     <message>
-        <location line="-149"/>
-        <location line="+260"/>
+        <location line="-158"/>
+        <location line="+270"/>
         <source>Forget %1</source>
         <translation>Forget %1</translation>
     </message>

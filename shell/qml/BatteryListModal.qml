@@ -17,7 +17,7 @@ FocusScope {
     property bool shown: false
     property Item returnTo: null
     // What the hint bar says while this is open (Shell.modalHintsOf).
-    readonly property var modalHints: [{ button: "B", text: qsTr("Close") }]
+    readonly property var modalHints: [{ button: "A", text: qsTr("Close") }, { button: "B", text: qsTr("Back") }]
 
     signal closed()
 

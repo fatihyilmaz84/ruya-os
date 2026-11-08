@@ -363,6 +363,7 @@ Item {
             tryCompare(find("btDev_bt-pad-main"), "value", "Connected · Battery 80%")
             goTo("btRepair_bt-pad-old")
             compare(find("btRepair_bt-pad-old").label, "Pair again Retro Pad")
+            compare(find("btRepair_bt-pad-old").value, "Put it in pairing mode first", "it says what the device must do")
             host.answers = []
             keyClick(Qt.Key_Return)
             tryVerify(() => device("bt-pad-old") !== undefined && device("bt-pad-old").paired && device("bt-pad-old").bonded,
