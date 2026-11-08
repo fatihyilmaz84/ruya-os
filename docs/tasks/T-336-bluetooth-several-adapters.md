@@ -1,6 +1,6 @@
 # T-336 - Bluetooth with more than one adapter: every device is operated through its own adapter
 
-Status: todo · Phase: 2 · Depends: — · Area: api, services (ruya-devices), shell (Bluetooth backend, mock) · Size: M · Owner: builder
+Status: in-progress · Phase: 2 · Depends: — · Area: api, services (ruya-devices), shell (Bluetooth backend, mock) · Size: M · Owner: builder
 
 ## Goal
 The Dell has two Bluetooth adapters (`hci0` 00:E0:4C:23:99:87 and `hci1` 34:2E:B7:CE:C3:9E: presumably the built-in Realtek and a USB dongle). `bluez.rs` merges the devices of all adapters into one list but builds every device path (`Pair`, `Trust`, `Connect`, `Disconnect`, `Remove`, rename) and the pairing window from the first adapter only. A pad bonded on `hci1`, or an `hci0`/`hci1` order that flips between boots, is listed but cannot be connected or forgotten and looks "gone". After this task a listed device always works, and there is one deliberate rule for which adapter new pairings use.

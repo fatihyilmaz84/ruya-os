@@ -17,7 +17,7 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | [T-334](tasks/T-334-two-controllers-tests.md) | Two controllers at once: tests that prove the second pad does not disturb the first | todo | — |
 | [T-335](tasks/T-335-bluetooth-info-logging.md) | ruya-devices logs window, pairing, removal, connect and idle disconnect with the reason | todo | — |
 | [T-337](tasks/T-337-inputd-releases-keys-when-a-pad-vanishes.md) | ruya-inputd: a vanished pad never leaves a key held; two pads share keys safely | todo | — |
-| [T-336](tasks/T-336-bluetooth-several-adapters.md) | Bluetooth with more than one adapter: every device is operated through its own adapter | todo | — |
+| [T-336](tasks/T-336-bluetooth-several-adapters.md) | Bluetooth with more than one adapter: every device is operated through its own adapter | in-progress | — |
 | [T-338](tasks/T-338-dell-second-pad-drop-repro.md) | **[lead]** Dell: why did the second DualSense drop after 21 s? (live repro and report) | todo | T-335 |
 | [T-331](tasks/T-331-removable-drive-recognised-data-scan.md) | Settings > Storage shows what RuyaOS finds on a removable drive (read-only scan) | todo | T-196 |
 | [T-332](tasks/T-332-format-removable-drive-service.md) | Format a removable drive: the service (udisks2, polkit, refusals, identity re-check) | todo | T-196, T-194 |
