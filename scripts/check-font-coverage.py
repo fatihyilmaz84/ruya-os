@@ -301,7 +301,7 @@ def main():
     if "--self-test" in sys.argv[1:]:
         print("check-font-coverage self-test: ok")
         return 0
-    root =sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+    root = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
     used = {}
     for pat in ("shell/qml/**/*.qml", "shell/qml/**/*.js", "shell/i18n/*.ts", "shell/src/**/*.cpp", "shell/src/**/*.h"):
         for f in sorted(glob.glob(os.path.join(root, pat), recursive=True)):
