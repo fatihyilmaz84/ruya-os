@@ -20,9 +20,9 @@ Silent sound is the first thing a player needs to fix, and today neither the def
 
 ## Hints
 - **Sliced 2026-11-08 (lead-5):** this task is the policy, the saved choice, the contract and the service (items 1, 2, 5); **T-347** adds card profile/port switching and the volumes; **T-348** is the Settings pane. Each keeps contract, mock, client and service in step.
-- Related: T-330 (the ambient bed must be audible) is independent; the 'Settings > Audio should list the card's other outputs by switching its profile' and 'first-start volume 40 % is low' Inbox notes of 2026-11-08 are item 4 and 6 here.
+- Related: T-330 (the ambient bed must be audible) is independent; the 'Settings > Audio should list the card's other outputs by switching its profile' and 'first-start volume 40 % is low' Inbox notes of 2026-11-08 are item 4 and 6 here. **Owner decision (2026-11-08): the first-start volume is HIGH (about 1.00), set once on the first output with a marker file so it never re-applies, later changes are kept; implemented in T-347.**
 
-- (T-330 builder, 2026-11-08) The first-start 0.40 is WirePlumber 0.5.19's own default (`device.routes.default-sink-volume = 0.064`, shown by wpctl as 0.40 on its cubic scale); nothing in `image/` or `ruya-devices` sets a volume. Item 6 can be a drop-in `wireplumber.conf.d/50-ruyaos-volume.conf` (1.0, optionally a `monitor.alsa.rules` override for analog devices) or the service; decide in the slice. Details: T-330 Outcome.
+- (T-330 builder, 2026-11-08) The first-start 0.40 is WirePlumber 0.5.19's own default (`device.routes.default-sink-volume = 0.064`, shown by wpctl as 0.40 on its cubic scale); nothing in `image/` or `ruya-devices` sets a volume. Decided by the owner on 2026-11-08: about 1.00, once (marker file), by `ruya-devices` (T-347); a WirePlumber drop-in is not the route because it cannot be "once". Details: T-330 Outcome.
 
 ## Outcome
 _Filled in by the implementer._

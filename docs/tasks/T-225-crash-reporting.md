@@ -3,7 +3,7 @@
 Status: todo · Phase: 3 · Depends: T-224 · Area: services, image, scripts, shell · Size: M · Owner: lead
 
 ## Goal
-When the shell or a console service crashes, the project can see what happened without asking the user to do anything, and the user stays in control. Owner request, 2026-11-06: "which crashes occur and report them; the user can turn them all off". Proof that it is needed: on the first real-hardware run the shell segfaulted when a Bluetooth headset disconnected (T-197); the only evidence was a core dump found by SSH.
+When the shell or a console service crashes, the project can see what happened without asking the user to do anything, and the user stays in control. Owner request, 2026-11-06: "which crashes occur and report them; the user can turn them all off". **Consent decided by the owner on 2026-11-08 (see T-224):** an explicit first-boot Share / Don't share, nothing sent before the answer, everything switchable off later; backend, retention and the privacy notice remain the owner's, later. Proof that it is needed: on the first real-hardware run the shell segfaulted when a Bluetooth headset disconnected (T-197); the only evidence was a core dump found by SSH.
 
 ## Read first
 - T-224 (service, consent, settings, schema, queue, send), `docs/specs/01-platform.md` (services, hardening), `systemd-coredump` (`coredumpctl`, `/var/lib/systemd/coredump`, the `Storage=`/`ProcessSizeMax=` settings, the `.coredump` metadata in the journal: `COREDUMP_EXE`, `COREDUMP_SIGNAL`, `COREDUMP_PID`, the stack trace in `coredumpctl info`), `ruya-session` (`AppExited` reasons: `crashed`, `killed`, `launch-failed`), `image/Containerfile` and `scripts/build.sh` (how binaries are built and stripped), the `Restart=always` of `ruya-compositor@.service`

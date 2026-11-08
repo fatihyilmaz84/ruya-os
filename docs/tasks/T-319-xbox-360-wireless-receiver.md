@@ -21,7 +21,7 @@ A player plugs in an Xbox 360 Wireless Gaming Receiver for Windows (Microsoft's,
 5. **Docs:** add the row to the T-261 family table and to `docs/hw-checklists/controllers.md` (if they exist by then; otherwise leave the lines for T-261), `01-platform.md` (the 360 receiver is in-kernel, the One/Series adapter is not) and the STATUS Dell look-at list.
 
 ## Out of scope
-- The Xbox One/Series Wireless Adapter, `xone`/`xow`/`xpadneo`, Microsoft firmware (T-261, owner decision); pairing UI (the dongle pairs by its own buttons); wake from suspend by the pad (T-262).
+- The Xbox One/Series Wireless Adapter, `xone`/`xow`/`xpadneo`, Microsoft firmware (T-261; researched in T-354); pairing UI (the dongle pairs by its own buttons); wake from suspend by the pad (T-262).
 
 ## Acceptance criteria
 - [ ] Rust tests: classification of the receiver (not a pad), of a 360 pad behind it (family, kind, battery), of an unknown dongle with a similar name (not matched).
