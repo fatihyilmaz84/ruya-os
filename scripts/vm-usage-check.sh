@@ -146,7 +146,10 @@ check)
     present_loop "$kid" "$inst" & loop=$!
     sleep 40
     kill "$loop" 2>/dev/null
-    pkill -9 -f '/usr/bin/ruya-session' ; echo "(service killed with SIGKILL)"
+    # A power cut takes the app down with the service. Since T-290 the service adopts a running app after a
+    # restart, so killing only the service would (rightly) leave the session open.
+    pkill -9 -f '/usr/bin/ruya-session' ; systemctl --user -M "$user@.host" kill --signal=SIGKILL 'ruya-app-*.service' </dev/null >/dev/null 2>&1
+    echo "(service and app killed with SIGKILL)"
     n=0; until systemctl is-active ruya-session >/dev/null 2>&1 || [ "$n" -ge 20 ]; do sleep 1; n=$((n + 1)); done
     sleep 3
     prof SwitchTo ss "$kid" "" >/dev/null

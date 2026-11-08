@@ -43,10 +43,10 @@ wait_sig() {
     done
     return 1
 }
-# Waits until `$1` (a command line) has no process of ruya-p1 any more, up to 15 s.
+# Waits until `$1` (a command line) has no process of the profile user ($user, else ruya-p1) any more, up to 15 s.
 gone() {
     n=0
-    while pgrep -u ruya-p1 -f "$1" >/dev/null 2>&1; do
+    while pgrep -u "${user:-ruya-p1}" -f "$1" >/dev/null 2>&1; do
         [ "$n" -ge 15 ] && return 1
         sleep 1; n=$((n + 1))
     done
@@ -130,10 +130,15 @@ restart)
     out="$(launch "$sleeper" "$pid")"; inst2="$(echo "$out" | unit_of)"
     [ -n "$inst2" ] && ok "a new Launch works again ($inst2)" || bad "Launch after the stop: $out"
     stop_app "$inst2" >/dev/null
+    n=0; until ! running | grep -q "$inst2" || [ "$n" -ge 20 ]; do sleep 1; n=$((n + 1)); done
 
     echo "--- an adopted app killed from outside (reason is informational)"
     out="$(launch "$sleeper" "$pid")"; inst3="$(echo "$out" | unit_of)"
     sleep 3
+    if pgrep -u "$user" -f "sleep 3000" >/dev/null; then ok "the app to be adopted runs"; else
+        bad "the third launch did not stay up"
+        echo "$out"; journalctl -M "$user@.host" --no-pager -n 25 2>&1 | cut -c1-220; journalctl -u ruya-session -b --no-pager -n 12 | cut -c1-220
+    fi
     systemctl restart ruya-session; n=0
     until running >/dev/null 2>&1 || [ "$n" -ge 60 ]; do sleep 1; n=$((n + 1)); done
     : > "$work/signals.log"
