@@ -43,6 +43,8 @@ The Store never shows a stale installed set because of two overlapping reads, an
 ## Outcome
 Verified: host (vm pending: vm-store-check.sh). `dev.ps1 test` ALL GREEN (861 QML passed, 66 skips for screenshots, Rust 690 passed), `dev.ps1 shots` ALL GREEN (141); nothing ran in the VM.
 
+VM 0.0.54 (lead): `vm-store-check.sh` 70 PASS.
+
 UX notes: nothing new to navigate. The only change on screen is the age badge of the app page: an app with no rating reads "Not rated" (tr "Derecelendirilmemiş"), a rated "all" app still "All ages". States reached: the app page of Racer Beta (unrated, reviewed in `57-store-detail-unrated.png`); Back leaves it to the Store as before and focus lands on Install (`detailPrimary`) when the page opens, unchanged. Nothing doubted: the badge is the same component, only its text changes.
 
 What was built

@@ -47,6 +47,8 @@ The idle clock survives a wall-clock change and a resume, the Power saving pane 
 ## Outcome
 Verified: host (vm pending: vm-power-saving-check.sh audio)
 
+VM 0.0.54 (lead): `vm-power-saving-check.sh` service PASS, audio PASS (Playing true for a running pw-cat stream, false after; the SIGSTOP pause stays UNVERIFIED: PipeWire keeps the node running), timeline: display off by DPMS, a key brings it back with 95 page flips in 4 s; journal showed 3 x `Could not queue DRM page flip (Invalid argument)` around the wake (virtio-gpu; Dell to confirm). Fixed in the script: the stopped player was never killed (hang).
+
 UX notes: new states: the Sleep row disabled (logind allows suspend, no marker): it reads "Sleep is not available on this console yet", has no value, takes no focus (Up/Down pass over it, like a hidden row; focus on entering the pane stays on the first row), Back leaves the pane and the page as before; with the marker it is the old ChoiceRow. The order note reads "The screen is not turned off: The console sleeps instead". The disabled row is not dimmed (a dim at `disabledOpacity` 0.4 would make the one sentence it carries hard to read at 10 ft; same as the "Bluetooth is off" information row). Wake gap and backdrop pause have no visible state. Screenshot reviewed: `92-power-saving-no-sleep-en.png`.
 
 What was built:

@@ -102,7 +102,8 @@ audio_check() {
         echo "UNVERIFIED: Playing stays true after SIGSTOP of pw-cat (PipeWire keeps the node running); a real pause is checked on the Dell"
     fi
     pkill -CONT -x pw-cat
-    pkill -x pw-cat
+    pkill -KILL -x pw-cat
+    kill -KILL "$player" 2>/dev/null
     wait "$player" 2>/dev/null
     wait_playing false 8 && ok "Playing is false again once the stream is gone" || bad "Playing stayed true after the stream ended: $(playing)"
 }

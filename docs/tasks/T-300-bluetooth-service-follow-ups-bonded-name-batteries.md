@@ -44,6 +44,8 @@ The service tells the shell whether a paired device is actually bonded and what 
 ## Outcome
 Verified: host (vm pending: vm-devices-check.sh bluetooth batteries). `dev.ps1 test` ALL GREEN (891 QML passed, 67 skipped screenshot tests; 344 `ruya-devices` lib tests plus the other crates). No UI changed, so no `shots`.
 
+VM 0.0.54 (lead): `vm-devices-check.sh bluetooth` 21 PASS including the fake device on ruya-shell's user bus (renamed DualSense: alias, device_name, paired, bonded=false, family playstation); `batteries` ALL PASS (structure only, no pad in the VM).
+
 **Built**
 - **Contract** (`api/dbus/org.ruyaos.Devices1.xml`): `ListDevices` gained `bonded` (b) and `device_name` (s); missing keys read as bonded=true / device_name="". `BatteriesChanged` is documented as also sent for a family-only change.
 - **Service**: `bluez.rs` reads `Bonded` and `Name`; `bluetooth.rs` `RawDevice`/`Device` carry `name`/`device_name` and `bonded`; `families::family_of_device(modalias, device_name, alias)` (modalias, else the device's own name, else the alias); `dbus.rs` sends both keys.

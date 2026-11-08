@@ -38,6 +38,8 @@ With the ambient sound theme on, the screen saver, display-off and sleep stages 
 ## Outcome
 Verified: host (vm pending: vm-power-saving-check.sh audio)
 
+VM 0.0.54 (lead): `vm-power-saving-check.sh audio`: Playing is false with the ambient bed in the graph and true for a running app-like stream.
+
 Rule (spec 03, Devices1 `Playing`; XML comment): the shell's own streams do not count. `pipewire::parse_playing` skips a `Stream/Output/Audio` node whose `application.process.binary` is `ruya-shell` (`SHELL_BINARY`); an app's stream, and the corked/paused rules, are as before. This is the task's fallback rule, not the preferred one: Qt Multimedia (`MediaPlayer`/`AudioOutput`, `SoundEffect`) has no API for a stream's `media.role`, and libpulse fills `application.process.binary` in from the process by itself (the shell's executable is `ruya-shell`). Unverified on this host: that the real stream carries that property in the VM (the `audio` check prints `UNVERIFIED:` if no `ruya-shell` stream shows in `pw-dump`). Because the rule is by process, the shell's UI-sound streams are skipped too (they are not playback an app does; no contract change).
 
 Tests: five Rust tests in `pipewire.rs` (ambient alone false; plus a game stream true; a corked or paused game beside the bed false; only the exact binary is skipped, an imposter `application.name` and a stream with no property count). Shell: `test_the_ambient_bed_does_not_hold_the_saver` in `tst_power_saving.qml` (bed on and wanted, `Audio.playing` false after a true -> no `audio` hold, saver at 10 min, display off at 30).
