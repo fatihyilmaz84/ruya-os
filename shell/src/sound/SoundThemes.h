@@ -46,7 +46,8 @@ class SoundThemes : public QObject
     // [{ id, name, author, licence, kind: "bundled"|"installed"|"drive", path }]: bundled first, then the
     // copies, then the themes found on drives by the last refresh().
     Q_PROPERTY(QVariantList themes READ themes NOTIFY themesChanged)
-    // [{ folder, problem }]: folders on a drive that the checker refused in the last refresh().
+    // [{ id, folder, problem, problems }]: folders on a drive that the checker refused in the last refresh();
+    // `problems` is the checker's list, `problem` the same joined (SoundThemeText.qml puts it into plain words).
     Q_PROPERTY(QVariantList driveProblems READ driveProblems NOTIFY themesChanged)
     // "idle" | "copying" while importTheme works; the answer is importFinished.
     Q_PROPERTY(QString importState READ importState NOTIFY importStateChanged)
@@ -60,6 +61,8 @@ class SoundThemes : public QObject
     Q_PROPERTY(QVariantMap cueMs READ cueLengths NOTIFY activeChanged)
     Q_PROPERTY(qreal duckGain READ duckGain CONSTANT)
     Q_PROPERTY(int installedLimit READ installedLimit CONSTANT)
+    Q_PROPERTY(int maxCopyFiles READ maxCopyFiles CONSTANT)      // a theme may have at most this many files ...
+    Q_PROPERTY(int maxCopyMb READ maxCopyMb CONSTANT)            // ... and this many MiB to be copied
     // RUYA_SOUNDS_DRY=1 (tests): the ambient players are given no file, so a test run makes no noise.
     Q_PROPERTY(bool dry READ isDry CONSTANT)
     Q_PROPERTY(bool mock READ isMock CONSTANT)
@@ -73,6 +76,9 @@ public:
     static constexpr double DuckDb = -8.0;
     static constexpr int InstalledLimit = 8;
     static constexpr int MaxDriveFolders = 16;      // folders looked at per drive
+    static constexpr int MaxCopyFiles = 100;        // a theme is at most 64 cues, one ambient file and a few texts
+    static constexpr int MaxCopyMb = 12;
+    static constexpr qint64 MaxCopyBytes = qint64(MaxCopyMb) * 1024 * 1024;
 
     explicit SoundThemes(QObject *parent = nullptr);
     ~SoundThemes() override;
@@ -100,6 +106,8 @@ public:
     QVariantMap cueLengths() const { return m_cueMs; }
     qreal duckGain() const;
     int installedLimit() const { return InstalledLimit; }
+    int maxCopyFiles() const { return MaxCopyFiles; }
+    int maxCopyMb() const { return MaxCopyMb; }
     bool isMock() const { return m_mock; }
     bool isDry() const { return qEnvironmentVariableIntValue("RUYA_SOUNDS_DRY") != 0; }
 
@@ -107,10 +115,15 @@ public:
     // each), off the GUI thread; themesChanged follows. A newer call drops an older one's answer.
     Q_INVOKABLE void refresh(const QStringList &mountPoints);
     // Copies a theme listed with kind "drive" (its `path`) into the data directory; any other path is
-    // refused. importState is "copying" at once; importFinished(status, id) follows: "ok" (id is the
-    // new "user:<folder>"), "invalid" (the checker refused it, also after copying), "limit" (already
-    // InstalledLimit copies), "unknown" (not a listed drive theme) or "io".
+    // refused. importState is "copying" at once; importFinished(status, id, problems) follows: "ok" (id is
+    // the new "user:<folder>"), "invalid" (the checker refused it, also after copying; `problems` is its
+    // list), "limit" (already InstalledLimit copies), "too-many-files" (more than MaxCopyFiles files),
+    // "too-large" (more than MaxCopyMb MiB), "unknown" (not a listed drive theme) or "io".
     Q_INVOKABLE void importTheme(const QString &path);
+    // Deletes the copy "user:<folder>" from the data directory. False when `id` is not a copy that exists
+    // (the bundled theme and the themes on drives cannot be deleted). If it is the chosen theme, the bundled
+    // one is chosen instead; the caller also resets the setting (DeviceSettings.soundTheme) first.
+    Q_INVOKABLE bool removeTheme(const QString &id);
 
     // The checker for QML: { ok, problems, warnings, name, cues (count), hasAmbient }.
     Q_INVOKABLE static QVariantMap check(const QString &folder);
@@ -127,6 +140,9 @@ public:
     // import take this long (ms) on its worker. mockReset deletes the copies.
     Q_INVOKABLE QString mockPrepareDrive();
     Q_INVOKABLE void mockSetCopyDelay(int ms);
+    // Adds a usable theme folder to the mock stick (after mockPrepareDrive) with exactly `files` files and
+    // `bytes` bytes in all, to try the copy limits; false when it cannot be made that way.
+    Q_INVOKABLE bool mockAddDriveTheme(const QString &folder, int files, qint64 bytes);
     Q_INVOKABLE void mockReset();
 
 signals:
@@ -134,7 +150,7 @@ signals:
     void activeChanged();
     void themesChanged();
     void importStateChanged();
-    void importFinished(const QString &status, const QString &id);
+    void importFinished(const QString &status, const QString &id, const QStringList &problems);
 
 private:
     struct Scan;

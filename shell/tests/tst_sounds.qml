@@ -119,6 +119,45 @@ Item {
             verify(r.cases > 1500, "cases tried: " + r.cases)
         }
 
+        function test_granule_and_loop_numbers_that_do_not_fit() {
+            // An Ogg granule position of 2^63 - 1, and a loop end of 1e300 ms (clamped before it becomes a
+            // 64-bit number: the message shows the clamped value, not whatever the cast happened to give).
+            rejected("bad-granule-overflow", "no usable length")
+            rejected("bad-loop-overflow", "the loop (0 to 1000000000000000 ms) is not inside the file")
+        }
+
+        function test_refusal_message_names_the_problem() {
+            // Three refusals, said in plain words (no file name, no path), in English and in Turkish.
+            const wanted = {
+                "bad-loud-cue": ["A cue is louder than allowed", "Bir arayüz sesi izin verilenden daha yüksek"],
+                "bad-long-cue": ["A cue is longer than allowed", "Bir arayüz sesi izin verilenden daha uzun"],
+                "bad-loop-short": ["The ambient loop does not fit the file", "Ortam sesi döngüsü dosyaya uymuyor"],
+            }
+            for (const language of ["en", "tr"]) {
+                DeviceSettings.language = language
+                for (const theme in wanted) {
+                    const r = SoundThemes.check(checker.root + "/" + theme)
+                    verify(!r.ok, theme)
+                    const text = SoundThemeText.describe(r.problems)
+                    compare(text, wanted[theme][language === "en" ? 0 : 1], theme + " in " + language)
+                    verify(!text.includes("/") && !text.includes(".wav") && !text.includes(".flac"), "no file name: " + text)
+                }
+            }
+            DeviceSettings.language = "en"
+            compare(SoundThemeText.describe([]), "", "nothing wrong, nothing said")
+        }
+
+        function test_every_refused_fixture_gets_a_specific_message() {
+            const fallback = "Something in the theme is not right"
+            for (const c of SoundThemes.fixtureCases()) {
+                if (c.shouldPass)
+                    continue
+                const r = SoundThemes.check(checker.root + "/" + c.name)
+                const text = SoundThemeText.describe(r.problems)
+                verify(text.length > 0 && text !== fallback, c.name + ": " + r.problems[0] + " -> " + text)
+            }
+        }
+
         function test_a_folder_that_does_not_exist() {
             verify(!SoundThemes.check(checker.root + "/no-such-theme").ok)
         }
@@ -310,7 +349,66 @@ Item {
             tryVerify(() => SoundThemes.driveProblems.length === 1, 5000)
             compare(SoundThemes.driveProblems[0].folder, "Broken")
             verify(SoundThemes.driveProblems[0].problem.includes("not a JSON object"))
+            compare(SoundThemes.driveProblems[0].problems.length, 1)
+            compare(SoundThemes.driveProblems[0].id, "drive:Ruya Stick/Broken")
             verify(!SoundThemes.themes.some(t => t.id.endsWith("/Broken")))
+        }
+
+        // A drive theme with this many files and bytes in all (the mock stick), listed and tried; the answer of
+        // importTheme. A copy is made of at most 100 files and 12 MB: exactly that much is fine, one more is not.
+        function importWith(folder, files, bytes) {
+            importSpy.clear()
+            SoundThemes.mockPrepareDrive()
+            verify(SoundThemes.mockAddDriveTheme(folder, files, bytes), "the test theme is written")
+            SoundThemes.refresh(["/run/media/mock/Ruya Stick"])
+            tryVerify(() => SoundThemes.themes.some(t => t.kind === "drive" && t.id.endsWith("/" + folder)), 5000, folder + " is listed")
+            SoundThemes.importTheme(SoundThemes.themes.find(t => t.kind === "drive" && t.id.endsWith("/" + folder)).path)
+            tryCompare(importSpy, "count", 1, 20000)
+            return importSpy.signalArguments[0]
+        }
+
+        function test_import_at_the_limits() {
+            const answer = importWith("AtLimits", SoundThemes.maxCopyFiles, SoundThemes.maxCopyMb * 1024 * 1024)
+            compare(answer[0], "ok", "exactly 100 files and exactly 12 MB are accepted")
+            compare(answer[1], "user:AtLimits")
+            verify(SoundThemes.themes.some(t => t.id === "user:AtLimits"))
+        }
+
+        function test_import_over_the_limits() {
+            compare(SoundThemes.maxCopyFiles, 100)
+            compare(SoundThemes.maxCopyMb, 12)
+            let answer = importWith("TooManyFiles", SoundThemes.maxCopyFiles + 1, 100000)
+            compare(answer[0], "too-many-files", "101 files")
+            verify(!SoundThemes.themes.some(t => t.id === "user:TooManyFiles"), "nothing is left behind")
+            answer = importWith("TooLarge", 6, SoundThemes.maxCopyMb * 1024 * 1024 + 1)
+            compare(answer[0], "too-large", "12 MB and one byte")
+            verify(!SoundThemes.themes.some(t => t.id === "user:TooLarge"))
+        }
+
+        function test_only_a_copy_can_be_removed() {
+            importSpy.clear()
+            SoundThemes.mockPrepareDrive()
+            SoundThemes.refresh(["/run/media/mock/Ruya Stick"])
+            tryVerify(() => SoundThemes.themes.filter(t => t.kind === "drive").length === 2, 5000)
+            const plain = SoundThemes.themes.find(t => t.kind === "drive" && t.id.endsWith("/Plain"))
+            SoundThemes.importTheme(plain.path)
+            tryCompare(importSpy, "count", 1, 5000)
+            // (the path as a string now: an entry found in the list reads from the list, which changes)
+            const copyPath = SoundThemes.themes.find(t => t.id === "user:Plain").path
+            verify(SoundThemes.check(copyPath).ok)
+            verify(!SoundThemes.removeTheme("dreamglass"), "the bundled theme stays")
+            verify(!SoundThemes.removeTheme(plain.id), "a theme on a drive is not ours to delete")
+            verify(!SoundThemes.removeTheme("user:../x"), "an id with a path")
+            verify(!SoundThemes.removeTheme("user:Nothing"), "a copy that does not exist")
+            verify(SoundThemes.check(copyPath).ok, "still there")
+            DeviceSettings.soundTheme = "user:Plain"
+            tryCompare(SoundThemes, "activeId", "user:Plain")
+            verify(SoundThemes.removeTheme("user:Plain"))
+            compare(SoundThemes.selectedId, "dreamglass", "the chosen copy is gone: the bundled theme is chosen")
+            compare(SoundThemes.activeId, "dreamglass")
+            verify(!SoundThemes.themes.some(t => t.id === "user:Plain"))
+            verify(!SoundThemes.check(copyPath).ok, "the folder is gone")
+            DeviceSettings.soundTheme = "dreamglass"
         }
 
         function test_only_a_listed_drive_theme_is_copied() {
