@@ -53,6 +53,8 @@ One line each: `- (source) what, and why it matters`. Dispatched builders put th
 
 - (T-300 review, lead 2026-11-08) `BatteriesChanged` from `BluetoothIface::emit` has no test (needs a fake UPower plus fake BlueZ over D-Bus); the D-Bus client defaults for a missing `bonded`/`device_name` are untested off Linux; `refresh_with`/`recheck` take the Bluetooth snapshot before the Batteries lock (a stale snapshot costs at most one extra signal); PATTERNS note: a `const` inside a block-bodied arrow function blinds `lint-qml-members` for the whole test file; T-301 can now use `bonded` and `deviceName`.
 
+- (T-312 reviews, lead 2026-11-08) Settings Display rows stayed unlaid (all y=0) in a real 1080p window after a wallpaper change until `Column.forceLayout()` (tst_long_names shot): find out whether a user can hit it; spec-gap "layout constants without token (220, 48, 320)" rejected: promote to `Theme` at a second use; caption colour is `text` (a muted token is a later design call).
+
 - (T-281 reviews, lead 2026-11-08) Store source badges (OFFICIAL/COMMUNITY) unreadable over saturated art (give `Badge` a scrim/glass backing on pictures, 04 7); Home hero and Backdrop tint do not read `ArtPalette` yet; the icon card (`cardIconSize`) is defined but unused; cards read their library record once at build; https tiles are downloaded twice (share a `QNetworkDiskCache` or sample the decoded Image); the glow ends in a hard clip 24 px out in lists (a fade would be nicer); Store second row's captions meet the hint bar on short screens; Dell: the halo and the picture mask are extra layers (T-205 frame budget). Reviewed screenshots exist for 720p/1080p Dreamglass and Daylight.
 
 ## Blocked (need something this host doesn't have)

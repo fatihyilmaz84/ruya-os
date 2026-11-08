@@ -5,11 +5,10 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | ID | Title | Status | Depends |
 |---|---|---|---|
 | [T-285](tasks/T-285-hint-bar-and-focus-follow-ups.md) | Hint bar and focus follow-ups: Accept hints, keyboard hints, Tab, tests that could not fail | todo | — |
-| [T-312](tasks/T-312-long-outside-names-capped-and-elided.md) | Long names from outside are capped and elided: profile card, status cluster, PIN pad title, Dim row caption | in-progress | T-286 |
 | [T-292](tasks/T-292-activity-page-follow-ups.md) | Activity page follow-ups: refresh only when visible, paging, retry, icons, focus order | todo | — |
 | [T-294](tasks/T-294-sound-theme-follow-ups.md) | Sound theme follow-ups: delete a saved theme, import limits tested, clear refusal message, one ambient copy | todo | — |
 | [T-295](tasks/T-295-time-zone-follow-ups.md) | Time zone follow-ups: say it when Setup cannot set the zone, type to filter the chooser | todo | — |
-| [T-301](tasks/T-301-controller-and-battery-ui-follow-ups.md) | Controller and battery UI follow-ups: Pair again, keyboard announcement, one status mapping, a clearer "+N" | todo | T-300 |
+| [T-301](tasks/T-301-controller-and-battery-ui-follow-ups.md) | Controller and battery UI follow-ups: Pair again, keyboard announcement, one status mapping, a clearer "+N" | in-progress | T-300 |
 | [T-287](tasks/T-287-display-hotplug-and-mode-check.md) | Display service follow-ups: hot-plug signal, check the real mode after the restart, recovery argument | todo | T-282 |
 | [T-288](tasks/T-288-display-pane-layout-and-ui-size-reflow.md) | Display pane order, layout at large UI size, a Screen row, and the late-filled Column reflow | todo | T-282 |
 | [T-289](tasks/T-289-system-information-follow-ups.md) | System information follow-ups: Bluetooth address from BlueZ, image from a root source, one info row, drive chooser | todo | — |

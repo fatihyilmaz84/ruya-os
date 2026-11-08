@@ -1,6 +1,6 @@
 # T-301 — Controller and battery UI follow-ups: Pair again, keyboard announcement, one status mapping, a clearer "+N"
 
-Status: todo · Phase: 2 · Depends: T-300 · Area: shell (BluetoothPane, ControllerOnboarding, ControllerToasts, status cluster in Shell.qml, BatteryChip) · Size: M · Owner: builder
+Status: in-progress · Phase: 2 · Depends: T-300 · Area: shell (BluetoothPane, ControllerOnboarding, ControllerToasts, status cluster in Shell.qml, BatteryChip) · Size: M · Owner: builder
 
 ## Goal
 A headset or pad that is paired but not bonded can be repaired in one step, the status cluster in the top bar ranks and explains what it shows, a Bluetooth keyboard connecting is announced like a pad, and the shell has one place that turns a Bluetooth status into words.
