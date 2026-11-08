@@ -18,6 +18,9 @@ Page {
     // not cut off (04 §3.8). Its width is the columns that fit the place (`root.width`) plus the pad, and
     // it is centred, which splits the leftover width between left and right.
     readonly property real glowPad: Theme.glowPad * u
+    // Above and below the free gap is only `spaceM` (the filter row, the hint bar): the grid extends
+    // that far and no more, so no card is drawn over the hint bar; the glow is clipped there.
+    readonly property real glowPadV: Math.min(Theme.glowPad, Theme.spaceM) * u
     readonly property int columns: Math.max(1, Math.floor((root.width + gap) / (cardWidth + gap)))
     property string sourceFilter: "all"
 
@@ -92,13 +95,13 @@ Page {
             width: page.columns * grid.cellWidth - page.gap + 2 * page.glowPad
             anchors {
                 horizontalCenter: parent.horizontalCenter
-                top: filterRow.bottom; topMargin: Theme.spaceM * page.u - page.glowPad
-                bottom: parent.bottom; bottomMargin: -page.glowPad
+                top: filterRow.bottom; topMargin: Theme.spaceM * page.u - page.glowPadV
+                bottom: parent.bottom; bottomMargin: -page.glowPadV
             }
             clip: true
             focus: true
             leftMargin: page.glowPad
-            topMargin: page.glowPad + Theme.spaceS * page.u
+            topMargin: page.glowPadV + Theme.spaceS * page.u
             cellWidth: page.cardWidth + page.gap
             cellHeight: Theme.cardArtHeight(page.cardWidth) + page.gap
             keyNavigationEnabled: true

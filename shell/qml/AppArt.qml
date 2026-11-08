@@ -120,6 +120,7 @@ Rectangle {
         fillMode: Image.PreserveAspectCrop
         asynchronous: true
         layer.enabled: art.masked && visible
+        layer.smooth: true
         layer.effect: MultiEffect {
             maskEnabled: true
             maskSource: art.maskItem
@@ -133,6 +134,6 @@ Rectangle {
         anchors.fill: parent
         radius: art.radius
         visible: false
-        layer.enabled: art.masked
+        layer.enabled: art.masked && image.visible
     }
 }

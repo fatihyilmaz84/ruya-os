@@ -25,6 +25,9 @@ Page {
     // The lists are `glowPad` larger than their place on every side, so the glow of a card at an edge
     // is not cut off (04 §3.8).
     readonly property real glowPad: Theme.glowPad * u
+    // Above and below the free gap is only `spaceM` (the toolbar, the hint bar): a list extends that far
+    // and no more, so no card is drawn over the hint bar; the glow is clipped there.
+    readonly property real glowPadV: Math.min(Theme.glowPad, Theme.spaceM) * u
 
     function rowTitle(key) {
         switch (key) {
@@ -129,12 +132,12 @@ Page {
             Sfx.navigate()
             const row = rowRepeater.itemAt(i)
             row.forceActiveFocus()
-            const top = row.y                      // in the column, which sits `glowPad` into the flickable
-            const bottom = row.y + row.height + page.glowPad
+            const top = row.y                      // in the column, which sits `glowPadV` into the flickable
+            const bottom = row.y + row.height + page.glowPadV
             if (top < flick.contentY)
                 flick.contentY = top
-            else if (bottom > flick.contentY + flick.height - page.glowPad)
-                flick.contentY = Math.min(bottom + page.glowPad - flick.height, Math.max(0, flick.contentHeight - flick.height))
+            else if (bottom > flick.contentY + flick.height - page.glowPadV)
+                flick.contentY = Math.min(bottom + page.glowPadV - flick.height, Math.max(0, flick.contentHeight - flick.height))
         }
     }
 
@@ -296,11 +299,11 @@ Page {
             anchors {
                 left: parent.left; leftMargin: -page.glowPad
                 right: parent.right; rightMargin: -page.glowPad
-                top: toolbar.bottom; topMargin: Theme.spaceM * page.u - page.glowPad
-                bottom: parent.bottom; bottomMargin: -page.glowPad
+                top: toolbar.bottom; topMargin: Theme.spaceM * page.u - page.glowPadV
+                bottom: parent.bottom; bottomMargin: -page.glowPadV
             }
             contentWidth: width
-            contentHeight: rowColumn.height + 2 * page.glowPad
+            contentHeight: rowColumn.height + 2 * page.glowPadV
             clip: true
             interactive: false
             Behavior on contentY { NumberAnimation { duration: Theme.focusMs; easing.type: Easing.OutCubic } }
@@ -308,7 +311,7 @@ Page {
             Column {
                 id: rowColumn
                 x: page.glowPad
-                y: page.glowPad
+                y: page.glowPadV
                 width: flick.width - 2 * page.glowPad
 
                 Repeater {
@@ -392,14 +395,14 @@ Page {
             anchors {
                 left: parent.left; leftMargin: -page.glowPad
                 right: parent.right; rightMargin: -page.glowPad
-                top: toolbar.bottom; topMargin: Theme.spaceM * page.u - page.glowPad
-                bottom: parent.bottom; bottomMargin: -page.glowPad
+                top: toolbar.bottom; topMargin: Theme.spaceM * page.u - page.glowPadV
+                bottom: parent.bottom; bottomMargin: -page.glowPadV
             }
             clip: true
             cellWidth: page.cardWidth + Theme.cardGap * page.u
             cellHeight: page.cardHeight + Theme.cardGap * page.u
             leftMargin: page.glowPad + Theme.spaceS * page.u
-            topMargin: page.glowPad + Theme.spaceS * page.u
+            topMargin: page.glowPadV + Theme.spaceS * page.u
             keyNavigationEnabled: true
             highlightMoveDuration: 0
             model: page.resultIds

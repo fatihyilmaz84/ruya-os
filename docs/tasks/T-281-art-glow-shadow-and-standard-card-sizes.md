@@ -75,5 +75,10 @@ Revert checks (`scripts\revert-check.ps1`, rebuild and full `dev.ps1 shell` each
 - **Checks:** `dev.ps1 test` ALL GREEN (856 QML, 65 skips), `dev.ps1 shots` ALL GREEN (140), review PNGs kept. Not tested: the download timeout and the teardown hand-over (no server or teardown harness here); the halo and the mask on the Dell.
 - The 04 text the lead decided (spacing, no straight edges, strength follows lightness, text under a glowing card) is in 3.3, 3.8, 5.2 and 7.
 
+### Round 3 (review: lists over the hint bar)
+- The top and bottom extension of the Games grid, the Store rows and the results is `min(glowPad, spaceM)` (`glowPadV`), not `glowPad`: the page ends only `spaceM` above the hint bar, so 36u of cards were drawn over it. The sides stay `glowPad`. The glow is clipped at that distance (a hard edge `spaceM` out, accepted; no fade).
+- Tests: `test_glow_room_never_reaches_over_the_hint_bar_on_a_short_screen` (1280 x 450, the reviewer's probe) and `..._at_1080p`: `list.mapToItem(shell, 0, list.height).y <= hintBar.y` for `gamesGrid`, `storeRows`, `storeResults`. Revert checks (each rebuilt): P Games bottom back to `glowPad`, Q Store rows bottom, R results bottom: all caught by both tests.
+- Cheap items: `layer.smooth: true` on the masked picture; the mask item is a layer only while the picture is visible.
+
 ### Files
 `shell/src/art/{ArtPalette.h,ArtPalette.cpp,MockArt.h}`, `shell/CMakeLists.txt`, `shell/qml/{AppArt,ArtCard,GlassShadow,Theme,GamesPage,StorePage,Shell,ProfileCard}.qml`, `shell/src/library/{Library.h,MockLibraryBackend.h,MockLibraryBackend.cpp}`, `shell/src/store/{Store.h,Store.cpp,MockStoreBackend.h,MockStoreBackend.cpp}`, `shell/tests/{tst_main.cpp,tst_artglow.qml}`, `docs/specs/{04-design-system.md,02-shell.md}`.

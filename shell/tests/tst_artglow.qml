@@ -23,6 +23,14 @@ Item {
         Shell { width: 1280; height: 720; version: "test"; focus: true }   // a real 720p screen, whatever the test window is
     }
     Component {
+        id: shell450Component
+        Shell { width: 1280; height: 450; version: "test"; focus: true }   // a short screen: the hint bar is close to the content
+    }
+    Component {
+        id: shell1080Component
+        Shell { width: 1920; height: 1080; version: "test"; focus: true }
+    }
+    Component {
         id: galleryComponent
         // Six cards that all glow at once, to see the colour families side by side.
         Rectangle {
@@ -471,12 +479,51 @@ Item {
             verify(left >= pad && right >= pad, "room for the glow: " + left + " / " + right + " >= " + pad)
             verify(Math.abs(left - right) < 1.5, "centred: " + left + " vs " + right)
             verify(Math.abs(grid.x + grid.width / 2 - grid.parent.width / 2) < 1, "the grid is centred in its place")
-            verify(grid.itemAtIndex(0).y - grid.contentY >= pad, "room above the first row")
+            verify(grid.itemAtIndex(0).y - grid.contentY >= Math.min(Theme.glowPad, Theme.spaceM) * u, "room above the first row (the free gap, not more)")
             verify(grid.width <= grid.parent.width + 2 * pad + 0.5, "the columns fit the place")
             verify(grid.cellHeight - game.height - Theme.cardGap * u < 0.001)
             compare(artOf(game).radius, Theme.radiusM * u)
             tryVerify(() => artOf(game).sampled, 5000)
             tc.shell.destroy()
+        }
+
+        // A list that is larger than its place (for the glow) must not reach over the hint bar.
+        function listEnd(list) { return list.mapToItem(tc.shell, 0, list.height).y }
+
+        function checkListsStayAboveTheHintBar(component, label) {
+            signIn(component)
+            openSection(1, "games")
+            const grid = find("gamesGrid")
+            tryVerify(() => grid.activeFocus, 2000)
+            const hint = find("hintBar")
+            verify(listEnd(grid) <= hint.y + 0.5, label + ": the Games grid ends at " + listEnd(grid) + ", the hint bar starts at " + hint.y)
+            keyClick(Qt.Key_Escape)
+            tryCompare(tc.shell, "currentPage", "")
+            tryVerify(() => find("homePlay") !== null)
+            tc.shell.destroy()
+
+            signIn(component)
+            openSection(3, "store")
+            tryVerify(() => find("storeCards_featured") && find("storeCards_featured").activeFocus, 2000)
+            const rows = find("storeRows")
+            verify(listEnd(rows) <= find("hintBar").y + 0.5, label + ": the Store rows end at " + listEnd(rows) + ", the hint bar starts at " + find("hintBar").y)
+            keyClick(Qt.Key_Up)
+            verify(find("storeSearch").activeFocus)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("storeSearchEntry").visible, 2000)
+            find("storeSearchEntry").accepted("o")
+            tryVerify(() => find("storeResults").visible, 2000, "results replace the rows")
+            const results = find("storeResults")
+            verify(listEnd(results) <= find("hintBar").y + 0.5, label + ": the results end at " + listEnd(results) + ", the hint bar starts at " + find("hintBar").y)
+            tc.shell.destroy()
+        }
+
+        function test_glow_room_never_reaches_over_the_hint_bar_on_a_short_screen() {
+            checkListsStayAboveTheHintBar(shell450Component, "1280x450")
+        }
+
+        function test_glow_room_never_reaches_over_the_hint_bar_at_1080p() {
+            checkListsStayAboveTheHintBar(shell1080Component, "1920x1080")
         }
 
         function test_store_cards_use_the_compact_size() {
@@ -506,7 +553,7 @@ Item {
             const pad = Theme.glowPad * u
             const at = card.mapToItem(find("storeRows"), 0, 0)
             verify(at.x >= pad - 0.5, "room left of the first card: " + at.x + " >= " + pad)
-            verify(at.y >= pad - 0.5, "room above the first row: " + at.y)
+            verify(at.y >= Math.min(Theme.glowPad, Theme.spaceM) * u - 0.5, "room above the first row: " + at.y)
             const shadow = findChild(card, "cardLiftShadow")
             compare(shadow.halo, true)
             tryCompare(shadow, "glowMix", 1, 3000)
