@@ -3,7 +3,9 @@
 Status: todo · Phase: 2 · Depends: — · Area: hardware test (the Dell), no image change · Size: M · Owner: lead · Developer surface: none
 
 ## Goal
-Owner OK (2026-11-08): install a real game on the Dell over SSH and run it THROUGH THE SHELL, to find what breaks between the services, the session, the compositor, the audio and the pads. SuperTuxKart (Flathub `org.supertuxkart.SuperTuxKart`) installs into the system Flatpak installation that `ruya-session` launches from (check how the Store installs: same remote and installation, same permission flow). No image change; STK stays installed on the Dell for later tests (it is not part of any image). Note: per-profile Wayland sockets (T-164) may not be done: "Play does nothing yet" is itself a finding, record exactly what happens.
+Owner OK (2026-11-08): install a real game on the Dell over SSH and run it THROUGH THE SHELL, to find what breaks between the services, the session, the compositor, the audio and the pads. SuperTuxKart (Flathub `net.supertuxkart.SuperTuxKart`) installs into the system Flatpak installation that `ruya-session` launches from (check how the Store installs: same remote and installation, same permission flow). No image change; STK stays installed on the Dell for later tests (it is not part of any image). Note: per-profile Wayland sockets (T-164) may not be done: "Play does nothing yet" is itself a finding, record exactly what happens.
+
+**Update 2026-11-08 (lead-5):** the other lead already installed it on the Dell: `flatpak install --system -y flathub net.supertuxkart.SuperTuxKart` (the `flathub` remote there is filtered; STK 1.5 is 831 MB plus runtime `org.freedesktop.Platform` 26.08 (724 MB), GL.default 26.2.5 (470 MB), VAAPI.Intel, codecs-extra; `/var` is 17 GB used of 463 GB). It was not launched or tested. Scope item 1 is the Store-path check and the timing only.
 
 ## Read first
 - `docs/specs/03-services-and-apps.md` §4.5a (save data), `ruya-session` (T-162, T-290), `ruya-store` install path, `docs/tasks/T-164-per-profile-wayland-sockets.md`, ADR-017 (players), T-313 (ambient hold), T-337 (stuck key), B-003 in STATUS
@@ -17,7 +19,7 @@ Owner OK (2026-11-08): install a real game on the Dell over SSH and run it THROU
 5. Audio: the sink, the ambient bed stops or ducks when an app is in front (T-313), the game's music, volume.
 6. Guide overlay over the running game, Resume / Quit / Stop and the kill path (T-162 grace).
 7. Suspend/resume with the game running (`rtcwake -m mem -s 30`): picture, audio and pad after resume.
-8. Save data under `~/.var/app/org.supertuxkart.SuperTuxKart` per spec 03 §4.5a; per-profile isolation (a second profile does not see the first's data).
+8. Save data under `~/.var/app/net.supertuxkart.SuperTuxKart` per spec 03 §4.5a; per-profile isolation (a second profile does not see the first's data).
 
 ## Out of scope
 - Fixing what is found (each finding becomes its own task), adding STK to any image, benchmarks beyond a first look.
