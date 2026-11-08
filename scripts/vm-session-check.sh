@@ -5,7 +5,9 @@
 # creates a profile through Profiles1 if there is none, and drives Launch / Stop over the system
 # bus as ruya-shell. Copy and run (boot with plain smoke-test.ps1 -Keep):
 #   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-session-check.sh scripts/vm-session-probe.qml root@127.0.0.1:/root/
-#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-session-check.sh [check|security|clean]
+#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-session-check.sh [check|restart|security|clean]
+# `restart` (T-290) needs a profile (run `check` once on an empty store, or create one) and
+# installs the test apps itself when they are missing.
 # On an empty profile store the check creates the admin "Check Admin" (PIN 1234) and a standard
 # profile "Check Kid", runs the apps as the kid and deletes it at the end (which also checks that a
 # profile with a lingering manager and a running app can be deleted); the admin stays. Profiles
@@ -74,6 +76,84 @@ build_repo() {
 case "${1:-check}" in
 security)
     systemd-analyze security ruya-session --no-pager | tail -14
+    ls -Zd /var/lib/ruya-session /var/lib/ruya-session/usage 2>&1
+    ;;
+restart)
+    echo "--- a profile and the test apps"
+    pid="$(busctl --system call "$psvc" "$ppath" "$psvc" ListProfiles | grep -o '"p[0-9]*"' | tail -1 | tr -d '"')"
+    [ -n "$pid" ] && ok "profile $pid" || { bad "no profile: run 'check' on an empty store first"; exit 1; }
+    user="ruya-$pid"
+    if ! flatpak info --system "$sleeper" >/dev/null 2>&1; then
+        build_repo && ok "repository built" || { bad "cannot build the test repository"; exit 1; }
+        flatpak remote-add --system --if-not-exists --no-gpg-verify "$remote" "file://$work/repo" || { bad "remote-add"; exit 1; }
+        flatpak install --system -y --noninteractive "$remote" "$rt" "$sleeper" "$crasher" >/dev/null 2>&1             && ok "test apps installed" || { bad "flatpak install of the test apps failed"; exit 1; }
+    fi
+    mkdir -p "$work"
+    systemctl --user -M "$user@.host" stop 'ruya-app-*.service' </dev/null 2>&1 | cat >/dev/null
+    pkill -u "$user" -f "sleep 3000" 2>/dev/null
+    : > "$work/signals.log"
+    busctl --system --json=short monitor "$svc" >> "$work/signals.log" 2>&1 &
+    mon=$!
+    sleep 2
+
+    echo "--- Launch, then restart ruya-session while the app runs"
+    out="$(launch "$sleeper" "$pid")"; echo "$out"
+    inst="$(echo "$out" | unit_of)"
+    [ -n "$inst" ] && ok "Launch answered ok ($inst)" || { bad "Launch: $out"; exit 1; }
+    wait_sig "\"member\":\"AppStarted\".*$sleeper" 30 && ok "AppStarted arrived" || bad "no AppStarted within 30 s"
+    pgrep -u "$user" -f "sleep 3000" >/dev/null && ok "the app runs" || bad "no sleep process of $user"
+    kill "$mon" 2>/dev/null
+    systemctl restart ruya-session && ok "ruya-session restarted" || bad "restart failed"
+    n=0
+    until running >/dev/null 2>&1 || [ "$n" -ge 60 ]; do sleep 1; n=$((n + 1)); done
+    run="$(running)"; echo "$run"
+    echo "$run" | grep -q "$inst" && echo "$run" | grep -q '"running"'         && ok "ListRunning still lists it as running (name back after about $n s)" || bad "ListRunning after the restart: $run"
+    echo "$run" | grep -q "\"$pid\"" && ok "ListRunning names the profile $pid" || bad "profile missing after the restart"
+    echo "$run" | grep -q "\"$sleeper\"" && ok "ListRunning names the app" || bad "app id missing after the restart"
+    pgrep -u "$user" -f "sleep 3000" >/dev/null && ok "the app was not touched by the restart" || bad "the app died with the restart"
+    journalctl -u ruya-session -b --no-pager | grep -a "adopted $inst" | tail -1
+    journalctl -u ruya-session -b --no-pager | grep -a -q "adopted $inst" && ok "the journal says it was adopted" || bad "no 'adopted' line in the journal"
+    case "$(launch "$sleeper" "$pid")" in 'ss "already-running" ""') ok "a relaunch: already-running";; *) bad "relaunch after the restart";; esac
+
+    : > "$work/signals.log"
+    busctl --system --json=short monitor "$svc" >> "$work/signals.log" 2>&1 &
+    mon=$!
+    sleep 2
+    echo "--- Stop an adopted app"
+    t0="$(date +%s)"
+    case "$(stop_app "$inst")" in 's "ok"') ok "Stop answered ok";; *) bad "Stop after the restart";; esac
+    wait_sig "\"member\":\"AppExited\".*$sleeper" 30         && ok "AppExited arrived after $(( $(date +%s) - t0 )) s" || bad "no AppExited within 30 s"
+    grep -E "\"member\":\"AppExited\".*$sleeper" "$work/signals.log" | head -1
+    grep -E "\"member\":\"AppExited\".*$sleeper" "$work/signals.log" | grep -q '"quit"' && ok "reason quit" || bad "reason is not quit"
+    gone "sleep 3000" && ok "the app's process is gone" || bad "the app is still running after Stop"
+    running | grep -q "$inst" && bad "ListRunning still lists it" || ok "ListRunning is empty again"
+    out="$(launch "$sleeper" "$pid")"; inst2="$(echo "$out" | unit_of)"
+    [ -n "$inst2" ] && ok "a new Launch works again ($inst2)" || bad "Launch after the stop: $out"
+    stop_app "$inst2" >/dev/null
+
+    echo "--- an adopted app killed from outside (reason is informational)"
+    out="$(launch "$sleeper" "$pid")"; inst3="$(echo "$out" | unit_of)"
+    sleep 3
+    systemctl restart ruya-session; n=0
+    until running >/dev/null 2>&1 || [ "$n" -ge 60 ]; do sleep 1; n=$((n + 1)); done
+    : > "$work/signals.log"
+    kill "$mon" 2>/dev/null
+    busctl --system --json=short monitor "$svc" >> "$work/signals.log" 2>&1 &
+    mon=$!
+    sleep 2
+    systemctl --user -M "$user@.host" kill --signal=SIGKILL --kill-whom=all "app-flatpak-$sleeper-*.scope" </dev/null 2>&1 | cat
+    wait_sig "\"member\":\"AppExited\".*$sleeper" 30 && ok "AppExited arrived for the adopted app that was killed" || bad "no AppExited for the killed adopted app"
+    grep -E "\"member\":\"AppExited\".*$sleeper" "$work/signals.log" | head -1
+    running | grep -q "$inst3" && bad "ListRunning still lists the killed app" || ok "the killed app is no longer listed"
+
+    echo "--- unit security and the label of the state directory"
+    systemd-analyze security ruya-session --no-pager | tail -14
+    ls -Zd /var/lib/ruya-session /var/lib/ruya-session/usage 2>&1
+    kill "$mon" 2>/dev/null
+    flatpak uninstall --system -y "$sleeper" "$crasher" "$rt" >/dev/null 2>&1
+    flatpak remote-delete --system --force "$remote" >/dev/null 2>&1
+    rm -rf "$work"
+    journalctl -u ruya-session -b --no-pager -p warning | tail -5
     ;;
 clean)
     flatpak uninstall --system -y "$sleeper" "$crasher" "$rt" >/dev/null 2>&1

@@ -7,19 +7,15 @@ use std::error::Error;
 use std::sync::{Arc, Mutex};
 
 use async_channel::{Receiver, Sender};
-use ruya_session::dbus::{forward, DynSpawner, SessionIface, SharedUsage, BUS_NAME, OBJECT_PATH};
+use ruya_session::dbus::{
+    adopt_running, forward, DynSpawner, SessionIface, SharedUsage, BUS_NAME, OBJECT_PATH,
+};
 use ruya_session::directory::ProfileSnapshot;
 use ruya_session::session::Session;
 use ruya_session::spawner::{FakeSpawner, UnitEvent};
 use ruya_session::usage::SystemZone;
 use ruya_session::usage_store::FileStore;
 use ruya_session::usage_tracker::Tracker;
-
-fn unix_now() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |d| i64::try_from(d.as_secs()).unwrap_or(i64::MAX))
-}
 
 fn main() {
     if let Err(err) = run() {
@@ -69,12 +65,7 @@ fn run() -> Result<(), Box<dyn Error>> {
         },
         std::path::PathBuf::from,
     );
-    let mut tracker = Tracker::new(FileStore::new(usage_dir), SystemZone);
-    // Runs that never ended (crash, power cut) end at their last heartbeat.
-    let recovered = tracker.recover(unix_now());
-    if !recovered.is_empty() {
-        eprintln!("ruya-session: recovered play sessions of {recovered:?}");
-    }
+    let tracker = Tracker::new(FileStore::new(usage_dir), SystemZone);
     let usage: SharedUsage = Arc::new(Mutex::new(tracker));
 
     futures_lite::future::block_on(async {
@@ -84,13 +75,17 @@ fn run() -> Result<(), Box<dyn Error>> {
             zbus::connection::Builder::system()?
         };
         let connection = builder
-            .name(BUS_NAME)?
             .serve_at(
                 OBJECT_PATH,
                 SessionIface::new(session.clone(), usage.clone(), !dev),
             )?
             .build()
             .await?;
+        // Apps that kept running through a restart are taken over, and play runs that never
+        // ended (crash, power cut) end at their last heartbeat, before the name is taken: the
+        // first `ListRunning` of the shell already sees them.
+        adopt_running(&connection, &session, &usage, !dev).await;
+        connection.request_name(BUS_NAME).await?;
         forward(connection, session, usage, !dev, rx).await;
         Ok::<(), Box<dyn Error>>(())
     })

@@ -16,7 +16,7 @@ use crate::session::{ExitReason, Notice, RunningApp, Session};
 use crate::spawner::{flatpak_app_version, valid_profile_id, Spawner, UnitEvent};
 use crate::usage::{DayRow, EndReason, SessionRecord, SystemZone, MAX_LIST};
 use crate::usage_store::FileStore;
-use crate::usage_tracker::{clear_route, may_read, Attention, ClearRoute, Tracker};
+use crate::usage_tracker::{clear_route, may_read, Attention, ClearRoute, LiveApp, Tracker};
 
 pub const BUS_NAME: &str = "org.ruyaos.Session1";
 pub const OBJECT_PATH: &str = "/org/ruyaos/Session1";
@@ -72,6 +72,50 @@ pub async fn fetch_profile_ids(connection: &Connection) -> zbus::Result<Vec<Stri
         .await?;
     let rows: Vec<ProfileRow> = reply.body().deserialize()?;
     Ok(profile_ids(rows))
+}
+
+/// Start-up, before the bus name is taken: the apps that kept running through a restart of this
+/// service become instances again (T-290), and the play ledger takes their open runs over
+/// instead of ending them. In system mode the profile list is asked first so that the units of
+/// a profile that no longer exists can be stopped; when it cannot be read nothing is stopped.
+pub async fn adopt_running(
+    connection: &Connection,
+    session: &Shared,
+    usage: &SharedUsage,
+    system: bool,
+) {
+    let known = if system {
+        match fetch_profile_ids(connection).await {
+            Ok(ids) => {
+                lock(session).directory_mut().set(ids);
+                true
+            }
+            Err(err) => {
+                eprintln!("ruya-session: Profiles1 not readable, no unit is stopped: {err}");
+                false
+            }
+        }
+    } else {
+        true
+    };
+    let adopted = lock(session).adopt(unix_now(), Instant::now(), known);
+    let live: Vec<LiveApp> = adopted
+        .into_iter()
+        .map(|a| LiveApp {
+            version: flatpak_app_version(Path::new(FLATPAK_ROOT), &a.app_id),
+            instance: a.instance,
+            profile: a.profile,
+            app_id: a.app_id,
+            started: a.started,
+        })
+        .collect();
+    if !live.is_empty() {
+        eprintln!("ruya-session: {} app(s) kept running", live.len());
+    }
+    let recovered = usage_lock(usage).recover_with(unix_now(), &live, Instant::now());
+    if !recovered.is_empty() {
+        eprintln!("ruya-session: recovered play sessions of {recovered:?}");
+    }
 }
 
 fn usage_lock(shared: &SharedUsage) -> MutexGuard<'_, Tracker<FileStore, SystemZone>> {

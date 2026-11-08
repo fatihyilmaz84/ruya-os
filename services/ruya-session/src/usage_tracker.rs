@@ -95,6 +95,37 @@ impl Open {
     }
 }
 
+/// An app that runs already when the service starts (adopted by the session core).
+#[derive(Debug, Clone)]
+pub struct LiveApp {
+    pub instance: String,
+    pub profile: String,
+    pub app_id: String,
+    pub version: String,
+    /// When the app started, in unix seconds.
+    pub started: i64,
+}
+
+/// The instance as it appears in a file name: `[A-Za-z0-9.-]`, at most 80 characters.
+fn sanitize(instance: &str) -> String {
+    instance
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || matches!(c, '.' | '-') {
+                c
+            } else {
+                '_'
+            }
+        })
+        .take(80)
+        .collect()
+}
+
+/// The instance part of a heartbeat key (`<start>-<instance>`).
+fn key_instance(key: &str) -> Option<&str> {
+    key.split_once('-').map(|(_, rest)| rest)
+}
+
 pub struct Tracker<S, Z> {
     store: S,
     zone: Z,
@@ -134,16 +165,66 @@ impl<S: UsageStore, Z: Zone> Tracker<S, Z> {
             .ok_or_else(|| "ledger vanished".to_owned())
     }
 
-    /// Start-up: runs that never ended (crash, power cut) end at their last heartbeat.
-    /// Returns the profiles whose ledger changed.
+    /// Start-up, nothing running: runs that never ended (crash, power cut) end at their last
+    /// heartbeat. Returns the profiles whose ledger changed.
     pub fn recover(&mut self, unix: i64) -> Vec<String> {
+        self.recover_with(unix, &[], Instant::now())
+    }
+
+    /// Start-up when this service restarted but the apps did not: a leftover heartbeat of an app
+    /// that is still `live` is not an ended run. It is taken over where it left off (the time it
+    /// had, its start, its file, so the end writes the one row and no second one), and a live app
+    /// with no heartbeat starts a run now, dated from when the app started. Every other leftover
+    /// ends at its last heartbeat as in `recover`. Returns the profiles whose ledger changed.
+    pub fn recover_with(&mut self, unix: i64, live: &[LiveApp], now: Instant) -> Vec<String> {
         let mut changed = Vec::new();
+        let mut taken = vec![false; live.len()];
         for (profile, key, mut s) in self.store.list_open() {
+            let found = live.iter().position(|l| {
+                l.profile == profile
+                    && l.app_id == s.app_id
+                    && key_instance(&key) == Some(sanitize(&l.instance).as_str())
+            });
+            if let Some(at) = found.filter(|&at| !taken[at]) {
+                taken[at] = true;
+                if !self.open.iter().any(|o| o.instance == live[at].instance) {
+                    self.open.push(Open {
+                        instance: live[at].instance.clone(),
+                        profile,
+                        app_id: s.app_id.clone(),
+                        version: s.app_version.clone(),
+                        key,
+                        start: s.start,
+                        ms: s
+                            .days
+                            .iter()
+                            .map(|(d, secs)| (*d, u64::from(*secs) * 1000))
+                            .collect(),
+                        last_mark: now,
+                        last_beat: now,
+                        dirty: false,
+                        reason: None,
+                    });
+                }
+                continue;
+            }
             s.open = false;
             s.reason = EndReason::Crashed;
             self.store.remove_open(&profile, &key);
             if s.foreground_seconds >= MIN_SESSION_SECS && self.add_session(&profile, s, unix) {
                 changed.push(profile);
+            }
+        }
+        for (l, taken) in live.iter().zip(taken) {
+            if !taken {
+                self.app_started(
+                    &l.instance,
+                    &l.profile,
+                    &l.app_id,
+                    &l.version,
+                    now,
+                    l.started,
+                );
             }
         }
         changed
@@ -188,17 +269,7 @@ impl<S: UsageStore, Z: Zone> Tracker<S, Z> {
         {
             return;
         }
-        let sanitized: String = instance
-            .chars()
-            .map(|c| {
-                if c.is_ascii_alphanumeric() || matches!(c, '.' | '-') {
-                    c
-                } else {
-                    '_'
-                }
-            })
-            .take(80)
-            .collect();
+        let sanitized = sanitize(instance);
         self.open.push(Open {
             instance: instance.to_owned(),
             profile: profile.to_owned(),
@@ -638,6 +709,113 @@ mod tests {
         assert_eq!(s[0].foreground_seconds, 60);
         assert_eq!(s[0].end, beat_wall);
         assert_eq!(s[0].reason, EndReason::Crashed);
+    }
+
+    fn live(instance: &str, profile: &str, app: &str, started: i64) -> LiveApp {
+        LiveApp {
+            instance: instance.to_owned(),
+            profile: profile.to_owned(),
+            app_id: app.to_owned(),
+            version: "1.0".to_owned(),
+            started,
+        }
+    }
+
+    /// A service that dies after 60 counted seconds and a new one that takes the store over.
+    fn restarted_after_60s() -> (T, Clock, i64) {
+        let mut t = tracker();
+        let mut c = Clock::new();
+        let started = c.wall;
+        start(&mut t, &c, IA, "p1", A);
+        run(&mut t, &mut c, 60, "p1", Some(IA), Attention::Active);
+        assert_eq!(t.store().opens.len(), 1);
+        let store = std::mem::take(&mut t.store);
+        (Tracker::new(store, FixedZone(0)), c, started)
+    }
+
+    #[test]
+    fn a_restart_mid_session_keeps_counting_and_writes_one_row() {
+        let (mut t2, mut c, started) = restarted_after_60s();
+        let changed = t2.recover_with(c.wall, &[live(IA, "p1", A, started)], c.now());
+        assert!(changed.is_empty(), "the run did not end");
+        assert_eq!(t2.store().opens.len(), 1, "its heartbeat file is kept");
+        // What was counted before the restart shows, as a running session.
+        let running = sessions(&mut t2, "p1", &c);
+        assert_eq!(running.len(), 1);
+        assert!(running[0].open);
+        assert_eq!(running[0].foreground_seconds, 60);
+        // It goes on counting from there ...
+        run(&mut t2, &mut c, 40, "p1", Some(IA), Attention::Active);
+        assert_eq!(quit(&mut t2, &c, IA).as_deref(), Some("p1"));
+        // ... and ends as ONE row of the whole run: no crashed row, no second row.
+        let s = sessions(&mut t2, "p1", &c);
+        assert_eq!(s.len(), 1, "{s:?}");
+        assert_eq!(s[0].foreground_seconds, 100);
+        assert_eq!(s[0].start, started);
+        assert_eq!(s[0].reason, EndReason::Quit);
+        assert!(!s[0].open);
+        assert!(t2.store().opens.is_empty(), "the heartbeat file is gone");
+    }
+
+    #[test]
+    fn without_adoption_the_same_restart_splits_the_run() {
+        // The behaviour this task removes: recover() ends the run as crashed at the heartbeat,
+        // and the app that goes on starts a second one.
+        let (mut t2, mut c, started) = restarted_after_60s();
+        assert_eq!(t2.recover(c.wall), ["p1"]);
+        t2.app_started(IA, "p1", A, "1.0", c.now(), started);
+        run(&mut t2, &mut c, 40, "p1", Some(IA), Attention::Active);
+        quit(&mut t2, &c, IA);
+        assert_eq!(sessions(&mut t2, "p1", &c).len(), 2);
+    }
+
+    #[test]
+    fn a_live_app_without_a_heartbeat_starts_a_run_dated_from_its_start() {
+        let mut t = tracker();
+        let mut c = Clock::new();
+        let started = c.wall - 300;
+        let changed = t.recover_with(c.wall, &[live(IA, "p1", A, started)], c.now());
+        assert!(changed.is_empty());
+        run(&mut t, &mut c, 30, "p1", Some(IA), Attention::Active);
+        quit(&mut t, &c, IA);
+        let s = sessions(&mut t, "p1", &c);
+        assert_eq!(
+            (s.len(), s[0].foreground_seconds, s[0].start),
+            (1, 30, started)
+        );
+    }
+
+    #[test]
+    fn leftovers_of_apps_that_are_not_live_still_end_as_crashed() {
+        let mut t = tracker();
+        let mut c = Clock::new();
+        start(&mut t, &c, IA, "p1", A);
+        start(&mut t, &c, IB, "p1", B);
+        run(&mut t, &mut c, 60, "p1", Some(IA), Attention::Active);
+        run(&mut t, &mut c, 60, "p1", Some(IB), Attention::Active);
+        assert_eq!(t.store().opens.len(), 2);
+        let store = std::mem::take(&mut t.store);
+        let mut t2 = Tracker::new(store, FixedZone(0));
+        // Only B is still running; A is not.
+        let changed = t2.recover_with(c.wall, &[live(IB, "p1", B, c.wall - 120)], c.now());
+        assert_eq!(changed, ["p1"]);
+        assert_eq!(t2.store().opens.len(), 1);
+        let s = sessions(&mut t2, "p1", &c);
+        let ended: Vec<_> = s.iter().filter(|x| !x.open).collect();
+        assert_eq!(ended.len(), 1);
+        assert_eq!(
+            (ended[0].app_id.as_str(), ended[0].reason),
+            (A, EndReason::Crashed)
+        );
+        assert!(s.iter().any(|x| x.open && x.app_id == B));
+    }
+
+    #[test]
+    fn a_leftover_is_not_taken_by_an_app_of_another_profile() {
+        let (mut t2, c, started) = restarted_after_60s();
+        let changed = t2.recover_with(c.wall, &[live(IA, "p2", A, started)], c.now());
+        assert_eq!(changed, ["p1"], "p1's run ended at its heartbeat");
+        assert!(sessions(&mut t2, "p1", &c).iter().all(|x| !x.open));
     }
 
     #[test]
