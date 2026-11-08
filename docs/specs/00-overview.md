@@ -236,3 +236,12 @@ Shell icons come from Google's **Material Symbols Rounded** (Apache-2.0), bundle
 
 **Consequences.** A new service, hub policy and unit, a compositor capture path, Library changes, a developer-guide chapter and a sample. Epic T-302, tasks T-303..T-308.
 
+### ADR-021 — Retro achievements: link a RetroAchievements account per profile and show its unlocks, without the OS running the achievement logic — *Proposed (2026-11-08), owner decisions on the third-party service, privacy and branding*
+**Question.** The owner wants achievement support for retro games, next to the retro ROM support (hub, ADR-020) and the native achievements (T-246). RetroAchievements (retroachievements.org) is the established community service: sets are tied to a ROM hash and emulators unlock through the open `rcheevos` runtime. Should the console run that logic itself, leave it entirely to each emulator, or sit in between?
+
+**Proposal.** The emulator keeps doing the detection and the reporting (it has the memory and the rules, including hardcore mode). The OS adds what an OS can: one account link per profile (token only, root-only store, password never kept), a per-app permission that hands the credentials to an opted-in emulator, a cached read of the player's progress (offline-first) shown in the Library, on the game page and in a Retro tab next to the native achievements, and the console's own unlock toast fed by the hub's `Report` event or, as a fallback, a slow poll. Off by default for child profiles. No ROM, set or site image is shipped; badge images are fetched at run time and cached per profile. Epic T-314, tasks T-315..T-318.
+
+**Owner-level parts** (STATUS, Open owner decisions): whether the console may talk to a third-party service for the player, with the privacy cost that the ROM hash sent to the site reveals what is played; use of the RetroAchievements name and images (ask the operators); token storage and backup; child profiles. The facts about the site (terms, rate limits, hashing, `rcheevos` licence) are unverified until the spike T-315.
+
+**Consequences.** A new service and bus policy, `Hub1` additions, a Settings pane, Library and profile changes, a developer-guide note for emulator authors. Depends on the hub (T-302..T-304, T-306, T-307) and the native achievements (T-246).
+

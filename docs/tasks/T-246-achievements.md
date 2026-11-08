@@ -18,7 +18,7 @@ Games can award achievements; players see them per profile, with progress and a 
 6. **Shell:** (a) the **unlock moment**: a distinct toast through the notification centre (T-245 kind "achievement": name, icon, points; its own cue from the sound theme if T-227 exists, else the select sound), respecting quiet mode and "don't interrupt games" (a small corner toast while a game runs); it is kept in the centre. (b) **Profile page:** Settings -> Profiles -> you -> Achievements (score, games with completion %). (c) **Games and app pages:** a completion ring or "12 / 40" on the card and hero, an "Achievements" tab on the app page (locked and unlocked, progress bars, hidden ones as "Hidden achievement", sorted by unlocked-last or points). Empty states, Turkish, controller-first, focus asserted.
 
 ## Out of scope
-- Imports (Steam's local stats cache, RetroAchievements for emulator apps), cloud or accounts, leaderboards, friends, sharing: Inbox items.
+- Imports (Steam's local stats cache; RetroAchievements is epic T-314), cloud or accounts, leaderboards, friends, sharing: Inbox items.
 
 ## Acceptance criteria
 - [ ] Rust tests: schema validation and caps, Unlock idempotency, progress monotonic and capped, peer-credential attribution (an app cannot write another app's or profile's data), rate limits, store atomicity and modes, profile deletion, backup inclusion, privacy between profiles; bridge-core tests with fakes.
