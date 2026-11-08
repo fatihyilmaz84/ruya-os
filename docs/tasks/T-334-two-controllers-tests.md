@@ -1,6 +1,6 @@
 # T-334 - Two controllers at once: tests that prove the second pad does not disturb the first
 
-Status: todo · Phase: 2 · Depends: — · Area: services (ruya-devices tests), shell (tests, mock), scripts · Size: M · Owner: builder
+Status: in-progress · Phase: 2 · Depends: — · Area: services (ruya-devices tests), shell (tests, mock), scripts · Size: M · Owner: builder
 
 ## Goal
 Owner report (2026-11-08): "the second DualSense overrides the first". A read-only investigation of the Dell (image 0.0.53) found no override in the code: both pads were paired, bonded and trusted, `ListDevices` returned two entries with different ids, and the first pad never left (the second dropped 21 s after it connected: T-338). Every existing fixture holds one pad, so nothing stops a later change from breaking two. This task adds the missing two-pad tests; it changes no product code unless a test finds a defect (then fix it and say so in the Outcome).
