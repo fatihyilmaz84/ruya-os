@@ -93,7 +93,7 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | [T-310](tasks/T-310-saves-manager-ui.md) | Saves manager UI: browse, copy, move, delete, export and import saves | todo | T-309 |
 | [T-311](tasks/T-311-saves-manager-for-external-emulators.md) | External emulators and apps integrate with the saves manager (declare, register, open, notify) | todo | T-309, T-304, T-306 |
 
-| [T-314](tasks/T-314-epic-retro-achievements.md) | **[lead]** EPIC retro achievements (RetroAchievements): spec, ADR-021 Proposed | todo | T-302, T-246 |
+| [T-314](tasks/T-314-epic-retro-achievements.md) | **[lead]** EPIC retro achievements (RetroAchievements): spec, ADR-021 Accepted | todo | T-302, T-246 |
 | [T-315](tasks/T-315-spike-ra-terms-hashes-and-contract.md) | **[lead]** Spike: RetroAchievements terms, ROM hash rules, supported systems, service contract | todo | T-314, T-302 |
 | [T-316](tasks/T-316-ra-account-link-and-emulator-handover.md) | RetroAchievements account link in Settings and credential hand-over to emulators | todo | T-315, T-304, T-220, T-211 |
 | [T-317](tasks/T-317-ra-data-in-the-shell.md) | RetroAchievements data in the shell: cache, Library rings, profile tab, game page | todo | T-316, T-307, T-246 |
