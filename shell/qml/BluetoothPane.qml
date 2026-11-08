@@ -33,7 +33,7 @@ SettingsPane {
         }
         for (let i = 0; i < list.length; ++i) {
             const d = list[i]
-            const entry = { devId: d.id, name: d.name, kind: d.kind, family: d.family ?? "", paired: d.paired,
+            const entry = { devId: d.id, name: d.name, shown: DeviceIcons.shownName(list, d), kind: d.kind, family: d.family ?? "", paired: d.paired,
                             bonded: d.bonded ?? true, connected: d.connected, trusted: d.trusted ?? false, battery: d.battery }
             let at = -1
             for (let j = 0; j < deviceModel.count; ++j) {
@@ -297,6 +297,7 @@ SettingsPane {
         SettingRow {
             required property string devId
             required property string name
+            required property string shown
             required property string kind
             required property string family
             required property bool paired
@@ -307,7 +308,7 @@ SettingsPane {
             objectName: "btDev_" + devId
             visible: Bluetooth.powered
             u: pane.u
-            label: name
+            label: shown
             iconName: DeviceIcons.iconFor(kind, family)
             value: pane.deviceValue(pane.busyId === devId, paired, bonded, connected, battery, kind, trusted)
             // The screen reader says the name, what it is, then the state: "DualSense, PlayStation
@@ -321,13 +322,13 @@ SettingsPane {
         model: deviceModel
         SettingRow {
             required property string devId
-            required property string name
+            required property string shown
             required property bool paired
             required property bool bonded
             objectName: "btRepair_" + devId
             visible: paired && !bonded && Bluetooth.powered
             u: pane.u
-            label: qsTr("Pair again %1").arg(name)
+            label: qsTr("Pair again %1").arg(shown)
             value: qsTr("Put it in pairing mode first")
             onActivated: pane.startRepair(devId)
         }
@@ -338,12 +339,13 @@ SettingsPane {
         SettingRow {
             required property string devId
             required property string name
+            required property string shown
             required property string kind
             required property bool paired
             objectName: "btRename_" + devId
             visible: paired && kind === "controller" && Bluetooth.powered
             u: pane.u
-            label: qsTr("Rename %1").arg(name)
+            label: qsTr("Rename %1").arg(shown)
             onActivated: pane.askRename(devId, name)
         }
     }
@@ -352,13 +354,13 @@ SettingsPane {
         model: deviceModel
         SettingRow {
             required property string devId
-            required property string name
+            required property string shown
             required property bool paired
             objectName: "btForget_" + devId
             visible: paired && Bluetooth.powered
             u: pane.u
-            label: qsTr("Forget %1").arg(name)
-            onActivated: pane.askForget(devId, name)
+            label: qsTr("Forget %1").arg(shown)
+            onActivated: pane.askForget(devId, shown)
         }
     }
 }

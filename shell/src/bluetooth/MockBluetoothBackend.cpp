@@ -365,6 +365,30 @@ void MockBluetoothBackend::populate()
     publish();
 }
 
+void MockBluetoothBackend::addTwoPads()
+{
+    const struct { const char *id; int battery; } pads[] = {{"AA:00:00:00:00:04", 80}, {"AA:00:00:00:00:05", 55}};
+    for (const auto &p : pads) {
+        if (indexOf(QString::fromLatin1(p.id)) >= 0)
+            continue;
+        Entry e;
+        e.dev.id = QString::fromLatin1(p.id);
+        e.dev.name = QStringLiteral("Wireless Controller");
+        e.dev.deviceName = e.dev.name;
+        e.dev.adapter = QStringLiteral("hci0");
+        e.dev.bonded = true;
+        e.dev.kind = QStringLiteral("controller");
+        e.dev.family = QStringLiteral("playstation");
+        e.dev.paired = true;
+        e.dev.connected = true;
+        e.dev.trusted = true;
+        e.dev.battery = p.battery;
+        e.listed = true;
+        m_entries.append(e);
+    }
+    publish();
+}
+
 void MockBluetoothBackend::reset()
 {
     initState();

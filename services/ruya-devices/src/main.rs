@@ -81,6 +81,8 @@ fn bluez(session: bool) -> Result<(DynBluez, AgentSlot), Box<dyn Error>> {
     // `RUYA_DEVICES_FAKE_BLUETOOTH=two-adapters`: a machine with two adapters (T-336).
     let fake = match std::env::var("RUYA_DEVICES_FAKE_BLUETOOTH").as_deref() {
         Ok("two-adapters") => FakeBluez::with_two_adapters(),
+        // Two pads with the same name, one connected and one in pairing mode (T-334).
+        Ok("two-pads") => FakeBluez::with_two_pads(),
         _ => FakeBluez::with_old_pad(),
     };
     Ok((Box::new(fake), AgentSlot::default()))

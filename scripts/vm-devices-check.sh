@@ -184,6 +184,7 @@ bluetooth_check() {
     as_shell systemctl --user is-active ruya-devices >/dev/null && ok "ruya-devices still active after the Bluetooth calls" || bad "ruya-devices not active"
     bluetooth_fake_check
     bluetooth_two_adapters_check
+    bluetooth_two_pads_check
 }
 
 # T-300: the VM has no Bluetooth adapter, so ListDevices is empty on the system bus. `bonded` and
@@ -321,6 +322,96 @@ else:
     else
         echo "--- log:"; cat "$log" 2>/dev/null
         bad "the service's log lacks:$missing"
+    fi
+    rm -f "$log"
+}
+
+# T-334: two pads of one model at once (RUYA_DEVICES_FAKE_BLUETOOTH=two-pads, FakeBluez::with_two_pads) on
+# ruya-shell's user bus: AA:..:04 is paired, bonded and connected, AA:..:05 is in range; both are called
+# "Wireless Controller" with the same modalias. The pairing window is opened and the second pad is paired
+# (by hand, as the Settings pane does; the --session service has no BlueZ signals to wake the window's own
+# pairing, so the real window path is covered by the Rust tests). Then ListDevices must carry both pads,
+# both paired and bonded, the first still connected; Forget of the second must leave the first; and the
+# service's log (the journal's text) must not say "remove" for the first pad at any point.
+bluetooth_two_pads_check() {
+    local out verdict ubus="unix:path=/run/user/$uid/bus" bt_user=org.ruyaos.Devices1.Bluetooth
+    local log="/run/user/$uid/ruya-devices-two-pads.log"
+    echo "--- bluetooth (T-334): two pads of one model (ruya-shell's user bus, FakeBluez::with_two_pads)"
+    if ! command -v python3 >/dev/null; then
+        bad "python3 is needed for the two-pads check"
+        return
+    fi
+    if as_shell env DBUS_SESSION_BUS_ADDRESS="$ubus" busctl --user status org.ruyaos.Devices1 >/dev/null 2>&1; then
+        bad "org.ruyaos.Devices1 is already on ruya-shell's user bus: the two-pads check needs the name free"
+        return
+    fi
+    out="$(as_shell env DBUS_SESSION_BUS_ADDRESS="$ubus" RUYA_DEVICES_FAKE_BLUETOOTH=two-pads bash -c '
+        /usr/bin/ruya-devices --session >/dev/null 2>'"$log"' &
+        pid=$!
+        n=0
+        until busctl --user status org.ruyaos.Devices1 >/dev/null 2>&1 || [ "$n" -ge 50 ]; do sleep 0.2; n=$((n + 1)); done
+        call() { busctl --user --json=short call org.ruyaos.Devices1 /org/ruyaos/Devices1 '"$bt_user"' "$@"; }
+        echo "LIST0 $(call ListDevices)"
+        echo "START $(call StartControllerPairing u 0)"
+        echo "PAIR $(call Pair s AA:00:00:00:00:05)"
+        echo "STOP $(call StopControllerPairing)"
+        echo "LIST $(call ListDevices)"
+        echo "FORGET $(call Forget s AA:00:00:00:00:05)"
+        echo "LIST2 $(call ListDevices)"
+        kill "$pid" 2>/dev/null
+        wait "$pid" 2>/dev/null
+    ' 2>&1)"
+    verdict="$(printf '%s' "$out" | python3 -I -c '
+import json, sys
+rows = {}
+for line in sys.stdin.read().splitlines():
+    key, _, body = line.partition(" ")
+    try:
+        rows[key] = json.loads(body)["data"]
+    except Exception:
+        pass
+A, B = "AA:00:00:00:00:04", "AA:00:00:00:00:05"
+try:
+    before = {d["id"]["data"]: d for d in rows["LIST0"][0]}
+    after = {d["id"]["data"]: d for d in rows["LIST"][0]}
+    last = {d["id"]["data"]: d for d in rows["LIST2"][0]}
+except Exception as err:
+    print("unparsable: %r" % (err,)); sys.exit(0)
+def flag(table, address, key):
+    return table[address][key]["data"]
+for d in after.values():
+    print("device %s name=%r paired=%s bonded=%s connected=%s" % (
+        d["id"]["data"], d["name"]["data"], d["paired"]["data"], d["bonded"]["data"], d["connected"]["data"]))
+if set(before) != {A, B} or flag(before, B, "paired") is not False or flag(before, A, "connected") is not True:
+    print("wrong: before the pairing A should be connected and B in range, got %r" % (sorted(before),))
+elif flag(before, A, "name") != flag(before, B, "name"):
+    print("wrong: the two pads should have the same name")
+elif rows.get("START") != ["ok"] or rows.get("PAIR") != ["ok"] or rows.get("STOP") != ["ok"]:
+    print("wrong: START/PAIR/STOP answered %r / %r / %r" % (rows.get("START"), rows.get("PAIR"), rows.get("STOP")))
+elif set(after) != {A, B}:
+    print("wrong: after the pairing both pads should be listed, got %r" % (sorted(after),))
+elif not all(flag(after, x, k) is True for x in (A, B) for k in ("paired", "bonded")):
+    print("wrong: both pads should be paired and bonded")
+elif flag(after, A, "connected") is not True:
+    print("wrong: the first pad should still be connected")
+elif rows.get("FORGET") != ["ok"] or set(last) != {A} or flag(last, A, "connected") is not True:
+    print("wrong: Forget of the second pad should leave the first, connected: %r %r" % (rows.get("FORGET"), sorted(last)))
+else:
+    print("VERDICT ok")
+' 2>&1)"
+    echo "$verdict"
+    case "$verdict" in
+    *"VERDICT ok"*) ok "two pads of one name: the second pairs in the window, both paired and bonded, the first stays connected, Forget of the second leaves the first";;
+    *) bad "ListDevices/Pair/Forget of the two-pads fake: $verdict $out";;
+    esac
+    if grep -qF -- "remove AA:00:00:00:00:04" "$log" 2>/dev/null; then
+        echo "--- log:"; cat "$log"
+        bad "the service's log says it removed the first pad"
+    elif grep -qF -- "ruya-devices: remove AA:00:00:00:00:05" "$log" 2>/dev/null; then
+        ok "the service's log shows only the second pad removed (forget); the first was never removed"
+    else
+        echo "--- log:"; cat "$log" 2>/dev/null
+        bad "the service's log lacks the removal of the second pad"
     fi
     rm -f "$log"
 }
@@ -1067,6 +1158,9 @@ check)
     ;;
 bluetooth)
     bluetooth_check
+    ;;
+twopads)
+    bluetooth_two_pads_check
     ;;
 storage)
     storage_usage_check

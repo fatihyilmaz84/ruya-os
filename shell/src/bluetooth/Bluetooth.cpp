@@ -249,6 +249,12 @@ void Bluetooth::mockPopulate()
         mock->populate();
 }
 
+void Bluetooth::mockTwoPads()
+{
+    if (auto *mock = qobject_cast<MockBluetoothBackend *>(m_backend.get()))
+        mock->addTwoPads();
+}
+
 void Bluetooth::mockHoldPairing(bool hold)
 {
     if (auto *mock = qobject_cast<MockBluetoothBackend *>(m_backend.get()))

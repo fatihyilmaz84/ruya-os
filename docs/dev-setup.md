@@ -328,6 +328,8 @@ cmake --build shell\build-win --config Release --target all_qmllint
 
 **Two Bluetooth adapters (T-336).** `RUYA_DEVICES_FAKE_BLUETOOTH=two-adapters ruya-devices --session` serves a fake machine with two adapters (`hci0`, and a USB `hci1` that holds two bonded pads and is the primary adapter); `ListDevices` then carries `adapter`. `vm-devices-check.sh bluetooth` starts it that way on ruya-shell's user bus and calls `Connect` and `Forget` on a pad of `hci1`. The shell's mock has one pad (`bt-pad-old`) on `hci1`.
 
+**Two pads of one model (T-334).** `RUYA_DEVICES_FAKE_BLUETOOTH=two-pads ruya-devices --session` serves `FakeBluez::with_two_pads`: `AA:00:00:00:00:04` paired, bonded and connected, `AA:00:00:00:00:05` in range, both "Wireless Controller" with the same modalias. `vm-devices-check.sh twopads` (also part of `bluetooth` and `check`) opens the pairing window, pairs the second pad by hand (the `--session` service has no BlueZ signals to wake the window's own pairing; the Rust tests drive that path), and requires both pads paired and bonded, the first still connected, and Forget of the second to leave the first; it fails if the service's log says it removed the first pad. The shell's mock has `Bluetooth.mockTwoPads()` (the same two addresses, connected, batteries 80 and 55 %).
+
 **Against the real profiles service (Linux):** in `--session` mode the service uses the session bus and creates no Unix users, so it runs fine without root.
 
 ```bash

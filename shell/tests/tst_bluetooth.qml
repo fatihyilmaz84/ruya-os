@@ -517,6 +517,75 @@ Item {
             tryVerify(() => device("bt-pad-old") !== undefined && !device("bt-pad-old").paired, 2000)
         }
 
+        // T-334: two DualSense pads are both "Wireless Controller". Each row, its Rename and Forget
+        // rows and the confirmation say which one by the end of the address; the alias itself (what
+        // Rename pre-fills) stays "Wireless Controller", and a device with a name of its own is
+        // not touched.
+        function test_two_controllers_same_name_two_rows() {
+            Bluetooth.mockTwoPads()
+            tryVerify(() => Bluetooth.devices.length === 5, 2000, "both pads are listed")
+            openBluetoothPane()
+            const a = "AA:00:00:00:00:04"
+            const b = "AA:00:00:00:00:05"
+            tryVerify(() => find("btDev_" + a) !== null && find("btDev_" + b) !== null, 2000, "a row for each pad")
+            compare(find("btDev_" + a).label, "Wireless Controller (00:04)")
+            compare(find("btDev_" + b).label, "Wireless Controller (00:05)")
+            const nameA = find("btDev_" + a).Accessible.name
+            const nameB = find("btDev_" + b).Accessible.name
+            compare(nameA, "Wireless Controller (00:04), PlayStation controller, Connected · Battery 80%")
+            compare(nameB, "Wireless Controller (00:05), PlayStation controller, Connected · Battery 55%")
+            verify(nameA !== nameB, "a screen reader can tell them apart")
+            compare(find("btRename_" + a).label, "Rename Wireless Controller (00:04)")
+            compare(find("btForget_" + b).label, "Forget Wireless Controller (00:05)")
+            compare(find("btDev_bt-pad-main").label, "Ruya Pad Pro", "a name nobody shares stays as it is")
+            compare(find("btForget_bt-pad-old").label, "Forget Retro Pad")
+            // Rename starts from the alias, not from the suffixed text.
+            goTo("btRename_" + b)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("btRenameEntry").shown, 2000)
+            compare(find("btRenameEntry").text, "Wireless Controller", "pre-filled with the alias")
+            for (let i = 0; i < 25 && find("btRenameEntry").shown; ++i)
+                keyClick(Qt.Key_Escape)                  // Back deletes a letter; on an empty field it cancels
+            tryVerify(() => !find("btRenameEntry").shown, 2000)
+            tryVerify(() => find("btRename_" + b).activeFocus, 2000, "focus is back on the row")
+            // The confirmation names the pad it is about; Back leaves the pane.
+            goTo("btForget_" + a)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("btForgetConfirm").shown, 2000)
+            compare(inConfirm("powerConfirmTitle").text, "Forget Wireless Controller (00:04)?")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !find("btForgetConfirm").shown, 2000)
+            tryVerify(() => find("btForget_" + a).activeFocus, 2000)
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => find("categoryList").activeFocus, 2000, "Back leaves the pane")
+        }
+
+        // T-334: forgetting one of two like pads leaves the other: its row stays (and loses the suffix,
+        // nobody shares its name now) and focus lands on a row that exists.
+        function test_forget_one_keeps_the_other_row() {
+            Bluetooth.mockTwoPads()
+            tryVerify(() => Bluetooth.devices.length === 5, 2000)
+            openBluetoothPane()
+            const a = "AA:00:00:00:00:04"
+            const b = "AA:00:00:00:00:05"
+            tryVerify(() => find("btForget_" + a) !== null && find("btForget_" + b) !== null, 2000)
+            goTo("btForget_" + a)
+            confirmForget("Wireless Controller (00:04)")
+            tryVerify(() => device(a) === undefined, 2000, "pad A is gone")
+            tryVerify(() => find("btDev_" + a) === null, 2000, "its row is gone")
+            verify(device(b) !== undefined && device(b).paired && device(b).connected, "pad B is as it was")
+            tryVerify(() => find("btDev_" + b) !== null, 2000, "its row stays")
+            tryCompare(find("btDev_" + b), "label", "Wireless Controller")
+            compare(find("btDev_" + b).Accessible.name, "Wireless Controller, PlayStation controller, Connected · Battery 55%")
+            tryVerify(() => find("btForget_" + b).activeFocus, 2000, "focus moves to the next row, which is pad B's")
+            verify(find("paneBluetooth").activeFocus)
+            // The other way round: the second pad is forgotten, the first stays.
+            confirmForget("Wireless Controller")
+            tryVerify(() => device(b) === undefined, 2000)
+            tryVerify(() => find("btForget_bt-soundbar").activeFocus, 2000, "focus moves up from the last row")
+            verify(find("paneBluetooth").activeFocus)
+        }
+
         function test_low_battery_toast_once_per_crossing() {
             // The soundbar stands for any connected device that is not a controller; controllers
             // are reported by Batteries (UPower), see tst_battery.qml.
