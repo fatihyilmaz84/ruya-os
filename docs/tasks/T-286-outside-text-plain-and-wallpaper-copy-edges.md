@@ -1,6 +1,6 @@
 # T-286 — Names from outside are drawn as plain text everywhere; wallpaper copy edge cases
 
-Status: in-progress · Phase: 2 · Depends: — · Area: shell (QML text surfaces, Wallpapers.cpp, tests) · Size: S · Owner: builder
+Status: done · Phase: 2 · Depends: — · Area: shell (QML text surfaces, Wallpapers.cpp, tests) · Size: S · Owner: builder
 
 ## Goal
 A profile, device, drive, Wi-Fi or app name that contains `<b>` or `<img>` is drawn as the characters it is, on every screen. A wallpaper copied from a USB stick with an emoji in its name keeps a sensible name, and the Dim row shows the dim actually applied.
