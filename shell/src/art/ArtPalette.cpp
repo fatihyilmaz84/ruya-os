@@ -1,5 +1,7 @@
 #include "ArtPalette.h"
 
+#include <QBuffer>
+#include <QCoreApplication>
 #include <QElapsedTimer>
 #include <QImageReader>
 #include <QMetaObject>
@@ -79,9 +81,10 @@ QString localPath(const QString &source)
     return source;
 }
 
-QImage decodeFile(const QString &path)
+// A picture from a file or from downloaded bytes: refused above 100 megapixels, decoded at a reduced
+// size (JPEG decodes small natively) since the sampler looks at 32 x 32 pixels anyway.
+QImage decode(QImageReader &reader)
 {
-    QImageReader reader(path);
     reader.setAutoTransform(true);
     const QSize size = reader.size();
     if (size.isValid() && qint64(size.width()) * size.height() > 100LL * 1000 * 1000)
@@ -92,11 +95,31 @@ QImage decodeFile(const QString &path)
     return reader.read();
 }
 
+QImage decodeFile(const QString &path)
+{
+    QImageReader reader(path);
+    return decode(reader);
+}
+
 QImage decodeBytes(const QByteArray &bytes)
 {
-    QImage image;
-    image.loadFromData(bytes);
-    return image;
+    QByteArray copy = bytes;
+    QBuffer buffer(&copy);
+    buffer.open(QIODevice::ReadOnly);
+    QImageReader reader(&buffer);
+    return decode(reader);
+}
+
+// From a worker thread: hand the result to the GUI thread through the application object (not through
+// `self`, which may be gone while the worker runs), and look at the QPointer only there.
+void post(const QPointer<ArtPalette> &self, const QString &source, const ArtColors &colors, qint64 us)
+{
+    if (!qApp)
+        return;
+    QMetaObject::invokeMethod(qApp, [self, source, colors, us] {
+        if (self)
+            ArtPalette::deliver(self.data(), source, colors, us);
+    }, Qt::QueuedConnection);
 }
 
 } // namespace
@@ -235,12 +258,7 @@ void ArtPalette::startFile(const QString &source)
         timer.start();
         const ArtColors colors = analyse(image);
         const qint64 us = timer.nsecsElapsed() / 1000;
-        if (!self)
-            return;
-        QMetaObject::invokeMethod(self.data(), [self, source, colors, us] {
-            if (self)
-                self->finish(source, colors, us);
-        }, Qt::QueuedConnection);
+        post(self, source, colors, us);
     });
 }
 
@@ -253,6 +271,7 @@ void ArtPalette::startDownload(const QString &source)
     }
     QNetworkRequest request{QUrl(source)};
     request.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
+    request.setTransferTimeout(DownloadTimeoutMs);   // a stalled server ends as a failure, not a source pending for ever
     QNetworkReply *reply = nam->get(request);
     QPointer<ArtPalette> self(this);
     connect(reply, &QNetworkReply::downloadProgress, reply, [reply](qint64 got, qint64) {
@@ -274,12 +293,7 @@ void ArtPalette::startDownload(const QString &source)
             timer.start();
             const ArtColors colors = analyse(image);
             const qint64 us = timer.nsecsElapsed() / 1000;
-            if (!self)
-                return;
-            QMetaObject::invokeMethod(self.data(), [self, source, colors, us] {
-                if (self)
-                    self->finish(source, colors, us);
-            }, Qt::QueuedConnection);
+            post(self, source, colors, us);
         });
     });
 }

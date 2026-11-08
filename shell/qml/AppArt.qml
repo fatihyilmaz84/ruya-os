@@ -1,4 +1,6 @@
+pragma ComponentBehavior: Bound
 import QtQuick
+import QtQuick.Effects
 import RuyaShell
 
 // Art of an app: a gradient whose hue comes from the app id (the ProfileCard idea), the first
@@ -53,7 +55,14 @@ Rectangle {
     }
 
     radius: Theme.radiusM * u
-    clip: true
+    border.width: 0    // the focus ring is the card's own item above the picture (ArtCard, the Store card)
+    clip: true      // rectangular: on the software renderer the picture's square corners stay (no MultiEffect there)
+
+    // The picture's corners follow `radius` (a Rectangle's `clip` is rectangular): on a GPU the
+    // picture is drawn through a rounded mask, as the wallpaper picker's tiles are. A square art
+    // (`radius` 0, the Home hero) needs no mask.
+    readonly property alias maskItem: imageMask
+    readonly property bool masked: GraphicsInfo.api !== GraphicsInfo.Software && radius > 0
     // `bare`: both stops clear. (Setting `gradient` to null instead leaves a white rectangle on a GPU window.)
     gradient: Gradient {
         GradientStop { position: 0.0; color: art.bare ? "transparent" : Theme.artTop(art.hue) }
@@ -110,5 +119,20 @@ Rectangle {
                                           : /^[A-Za-z]:\//.test(art.picture) ? "file:///" + art.picture : art.picture) : ""
         fillMode: Image.PreserveAspectCrop
         asynchronous: true
+        layer.enabled: art.masked && visible
+        layer.effect: MultiEffect {
+            maskEnabled: true
+            maskSource: art.maskItem
+            autoPaddingEnabled: false
+        }
+    }
+
+    Rectangle {
+        id: imageMask
+        objectName: "artImageMask"
+        anchors.fill: parent
+        radius: art.radius
+        visible: false
+        layer.enabled: art.masked
     }
 }

@@ -65,8 +65,6 @@ Item {
         appName: card.title
         picture: card.picture
         glowing: true
-        border.width: card.focused ? Theme.focusRingWidth * card.u : 0
-        border.color: Theme.focusRing
 
         CardFocusLayers {
             id: focusLayers
@@ -105,5 +103,19 @@ Item {
             text: card.stateText
             kind: card.running ? "success" : "info"
         }
+    }
+
+    // The focus ring (04 §4): its own item above the picture, the caption, the badge and the card
+    // layers (a border on the art would be covered by the picture). It follows the art's scale, so
+    // the Accept pulse shrinks it with the art.
+    Rectangle {
+        id: ring
+        objectName: "cardRing"
+        anchors.fill: art
+        scale: art.scale
+        radius: Theme.radiusM * card.u
+        color: "transparent"
+        border.width: card.focused ? Theme.focusRingWidth * card.u : 0
+        border.color: Theme.focusRing
     }
 }

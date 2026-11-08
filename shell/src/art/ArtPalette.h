@@ -55,6 +55,7 @@ public:
     static constexpr int SampleSize = 32;
     static constexpr int CacheLimit = 256;          // pictures remembered; the cache starts over beyond this
     static constexpr qint64 MaxDownloadBytes = 8LL * 1024 * 1024;
+    static constexpr int DownloadTimeoutMs = 15000;   // a download that stalls this long is a failure
 
     explicit ArtPalette(QQmlEngine *engine = nullptr, QObject *parent = nullptr);
     ~ArtPalette() override;
@@ -72,6 +73,12 @@ public:
     // picture is loaded and analysed in the background; `sampled(source)` follows. A picture that
     // cannot be read stays empty for good (the card keeps its placeholder colour) and emits nothing.
     Q_INVOKABLE QVariantMap colorsOf(const QString &source);
+
+    // The worker's result, on the GUI thread (called by the worker's queued hand-over; not for callers).
+    static void deliver(ArtPalette *self, const QString &source, const ArtColors &colors, qint64 us)
+    {
+        self->finish(source, colors, us);
+    }
 
 signals:
     // The colours of `source` are known (a later colorsOf returns them).

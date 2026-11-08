@@ -298,18 +298,24 @@ QtObject {
     // like a Hue light behind a TV. `glowShadow(colour, strength)` is the shadow colour: the theme's
     // shadow colour mixed toward the art colour by `glowShare` times the picture's strength, the
     // art colour darkened on light themes (`glowDarken` times `lightness`) so it still reads on a
-    // pale ground; `glowBoost` is the alpha factor of a glowing shadow (twice on a light theme, whose
-    // shadows are weaker). On the High tier a wider, softer halo sits behind it (`glowHalo`).
-    readonly property real glowShare: 0.9
-    readonly property real glowDarken: 0.35
-    readonly property real glowBoost: 1 + lightness
+    // pale ground and made `glowChroma` x `lightness` more saturated (a darkened colour alone reads
+    // grey); `glowBoost` is the alpha factor of a glowing shadow (it follows `lightness` continuously:
+    // 1 on dark themes, 2.5 on Daylight, whose shadows are weaker). On the High tier a wider, softer
+    // halo sits behind it (`glowHalo`). A list that hosts glowing cards leaves `glowPad` design px
+    // unclipped around them (half the halo's blur), so the glow never ends in a straight edge.
+    readonly property real glowShare: 0.95
+    readonly property real glowDarken: 0.2
+    readonly property real glowChroma: 0.35
+    readonly property real glowBoost: 1 + 1.5 * lightness
     readonly property bool haloOn: DeviceSettings.effectsQuality === "high"
-    readonly property var glowHalo: ({ blur: 120, alpha: 0.45 })
+    readonly property var glowHalo: ({ blur: 120, alpha: 0.8 })
+    readonly property real glowPad: glowHalo.blur / 2
     readonly property real glowFallbackStrength: 0.7   // a card without a picture (yet): its placeholder hue at this volume
     function glowFallback(hue) { return Qt.hsla(hue, 0.6, 0.5, 1) }
     function glowShadow(colour, strength) {
-        const d = 1 - glowDarken * lightness
-        return ThemeMath.blend(shadowColor, Qt.rgba(colour.r * d, colour.g * d, colour.b * d, 1), glowShare * strength)
+        const c = Qt.hsla(Math.max(0, colour.hslHue), Math.min(1, colour.hslSaturation * (1 + glowChroma * lightness)),
+                          colour.hslLightness * (1 - glowDarken * lightness), 1)
+        return ThemeMath.blend(shadowColor, c, glowShare * strength)
     }
 
     // Card focus: a white top sheen (all tiers) and a one-time glare sweep (04 §3.8).

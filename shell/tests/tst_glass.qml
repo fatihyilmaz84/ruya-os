@@ -273,14 +273,15 @@ Item {
             tryCompare(card, "scale", Theme.focusScale)
             compare(Theme.focusScale, 1.08)
             const art = findChild(card, "artMonogram").parent
-            compare(art.border.width, Theme.focusRingWidth * card.u)
-            compare(art.border.color, Theme.focusRing)
+            const ring = findChild(card, "cardRing")
+            compare(ring.border.width, Theme.focusRingWidth * card.u)
+            compare(ring.border.color, Theme.focusRing)
             verify(card.z > 0)
 
             card.focused = false
             compare(findChild(card, "cardSheen").visible, false)
             compare(findChild(card, "cardLiftShadow").shown, false)
-            compare(art.border.width, 0)
+            compare(ring.border.width, 0)
         }
 
         // The Accept pulse shrinks the art only; the lift shadow must shrink with it, or its

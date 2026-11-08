@@ -19,6 +19,10 @@ Item {
         Shell { anchors.fill: parent; version: "test"; focus: true }
     }
     Component {
+        id: shell720Component
+        Shell { width: 1280; height: 720; version: "test"; focus: true }   // a real 720p screen, whatever the test window is
+    }
+    Component {
         id: galleryComponent
         // Six cards that all glow at once, to see the colour families side by side.
         Rectangle {
@@ -69,6 +73,8 @@ Item {
         }
 
         function path(name) { return artFixtures + "/" + name + ".png" }
+        // The same picture under another cache key: a file URL (a Windows drive path needs three slashes).
+        function fileUrl(name) { return path(name).startsWith("/") ? "file://" + path(name) : "file:///" + path(name) }
 
         // The colours of a fixture picture, waiting for the background analysis.
         function colorsOf(name) {
@@ -281,25 +287,88 @@ Item {
             compare(plain.haloShown, false, "no halo unless the owner asks for one")
         }
 
-        function test_daylight_glow_is_darker_and_louder() {
+        function test_daylight_glow_is_darker_more_saturated_and_louder() {
             const red = Qt.rgba(0.85, 0.2, 0.2, 1)
-            const night = Theme.glowShadow(red, 1)
             DeviceSettings.reducedMotion = true
+            DeviceSettings.theme = "dreamglass"
+            tryCompare(Theme, "lightness", 0)
+            compare(Theme.glowBoost, 1)
+            const night = Theme.glowShadow(red, 1)
+            verify(hueGap(night.hslHue, red.hslHue) < 0.02, "on a dark theme the glow is the art colour mixed toward black")
             DeviceSettings.theme = "daylight"
             tryCompare(Theme, "lightness", 1)
             const day = Theme.glowShadow(red, 1)
-            verify(day.hslLightness < night.hslLightness + 0.001 || day.hslLightness < red.hslLightness,
-                   "the art colour is darkened on the pale ground: " + day.hslLightness)
+            // What the glow would be without the light-theme treatment: the plain mix toward the shadow colour.
+            const plain = ThemeMath.blend(Theme.shadowColor, red, Theme.glowShare)
+            verify(day.hslLightness < plain.hslLightness - 0.03,
+                   "the art colour is darkened on the pale ground: " + day.hslLightness + " vs " + plain.hslLightness)
+            verify(day.hslSaturation > plain.hslSaturation + 0.1,
+                   "and more saturated, so it reads coloured and not grey: " + day.hslSaturation + " vs " + plain.hslSaturation)
             verify(hueGap(day.hslHue, red.hslHue) < 0.03, "and keeps its hue")
-            compare(Theme.glowBoost, 2)
+            compare(Theme.glowBoost, 1 + 1.5 * Theme.lightness)
             const card = createTemporaryObject(cardComponent, host, { picture: path("red"), focused: true })
             const shadow = shadowOf(card)
             tryVerify(() => artOf(card).sampled, 5000)
-            compare(shadow.alpha, shadow.spec.alpha * 2, "a glowing shadow is twice as strong on a pale ground")
+            tryCompare(shadow, "glowMix", 1)
+            compare(shadow.alpha, shadow.spec.alpha * Theme.glowBoost, "a glowing shadow is louder on a pale ground")
             verify(shadow.alpha <= 1)
             DeviceSettings.theme = "dreamglass"
             tryCompare(Theme, "lightness", 0)
             compare(Theme.glowBoost, 1)
+        }
+
+        // The colours of a picture that has not been analysed yet arrive after the card exists: the
+        // card must pick them up (a new cache key, so nothing is known when the card is made).
+        function test_a_late_sample_reaches_the_card_and_its_shadow() {
+            const card = createTemporaryObject(cardComponent, host, { picture: fileUrl("blue"), focused: true })
+            const art = artOf(card)
+            const shadow = shadowOf(card)
+            compare(art.sampled, false, "nothing is known when the card is made")
+            compare(art.glowColor, Theme.glowFallback(art.hue), "it glows in its placeholder hue first")
+            tryVerify(() => art.sampled, 5000, "the analysis arrives")
+            verify(hueGap(art.glowColor.hslHue, 0.62) < 0.05, "and the glow turns blue: " + art.glowColor.hslHue)
+            tryVerify(() => near(shadow.glow, art.glowColor, 0.01), 3000, "the focused shadow's glow follows")
+            tryCompare(shadow, "glowMix", 1, 3000)
+            verify(hueGap(shadow.tint.hslHue, 0.62) < 0.05, "the shadow is blue")
+        }
+
+        // --- the focus ring and the picture's corners ---------------------------------------------
+
+        function test_the_ring_is_the_top_most_item_and_fits_the_card() {
+            for (const size of [{ w: 400, u: 1 }, { w: 267, u: 0.667 }]) {
+                const card = createTemporaryObject(cardComponent, host, { width: size.w, u: size.u, focused: true, picture: path("red") })
+                const art = artOf(card)
+                const ring = findChild(card, "cardRing")
+                verify(ring, "the card has a ring item")
+                compare(ring.parent, card, "the ring is not inside the art (the picture would cover it)")
+                compare(ring.width, art.width)
+                compare(ring.height, art.height)
+                compare(ring.border.width, Theme.focusRingWidth * size.u, "ring width at u " + size.u)
+                compare(ring.border.color, Theme.focusRing)
+                compare(ring.radius, Theme.radiusM * size.u)
+                compare(art.border.width, 0, "the art draws no ring of its own")
+                const kids = card.children
+                verify(kids[kids.length - 1] === ring, "the ring is the last (top-most) child")
+                verify(kids.indexOf(ring) > kids.indexOf(art))
+                for (let i = 0; i < kids.length; ++i)
+                    verify(kids[i].z <= ring.z, "no sibling is above the ring")
+                card.focused = false
+                compare(ring.border.width, 0, "no ring at rest")
+            }
+        }
+
+        function test_the_picture_is_masked_to_the_corners_on_a_gpu() {
+            const card = createTemporaryObject(cardComponent, host, { picture: path("red") })
+            const art = artOf(card)
+            const gpu = host.GraphicsInfo.api !== GraphicsInfo.Software
+            compare(art.masked, gpu, "masked on a GPU, rectangular clip on the software renderer")
+            const image = findChild(art, "artImage")
+            tryVerify(() => image.visible, 3000)
+            compare(image.layer.enabled, gpu, "the picture is drawn through the mask")
+            compare(findChild(art, "artImageMask").layer.enabled, gpu)
+            compare(findChild(art, "artImageMask").radius, art.radius)
+            art.radius = 0
+            compare(art.masked, false, "a square art (the Home hero) needs no mask")
         }
 
         // --- the card family -------------------------------------------------------------------
@@ -328,7 +397,7 @@ Item {
             compare(artOf(card).radius, Theme.radiusM * card.u)
         }
 
-        function signIn() {
+        function signIn(component) {
             Library.resetMockForTests("art:" + artFixtures)
             Store.mockReset()
             Store.mockArtDir(artFixtures)
@@ -338,7 +407,7 @@ Item {
                             && Store.catalogue.find(a => a.id === "org.example.Racer").tile.length > 0, 2000, "the store has pictures")
             Profiles.lock()
             tryCompare(Profiles, "activeProfile", "")
-            tc.shell = createTemporaryObject(shellComponent, host)
+            tc.shell = createTemporaryObject(component ?? shellComponent, host)
             verify(tc.shell)
             tc.shell.forceActiveFocus()
             tryVerify(() => Profiles.profiles.length === 3)
@@ -390,6 +459,20 @@ Item {
             compare(game.width, Theme.cardWidthHero * u)
             compare(game.height, Theme.cardArtHeight(Theme.cardWidthHero) * u)
             compare(grid.cellWidth, game.width + Theme.cardGap * u)
+            // Room for the glow on every side, and the leftover width split between left and right.
+            const pad = Theme.glowPad * u
+            const columns = Math.round((grid.width - 2 * pad + Theme.cardGap * u) / grid.cellWidth)
+            verify(columns >= 1)
+            const last = columns - 1
+            tryVerify(() => grid.itemAtIndex(last) !== null, 3000, "the last card of the first row is built")
+            // Item positions, not mapped ones: the focused card is scaled and would shift.
+            const left = grid.itemAtIndex(0).x - grid.contentX
+            const right = grid.width - (grid.itemAtIndex(last).x - grid.contentX + grid.itemAtIndex(last).width)
+            verify(left >= pad && right >= pad, "room for the glow: " + left + " / " + right + " >= " + pad)
+            verify(Math.abs(left - right) < 1.5, "centred: " + left + " vs " + right)
+            verify(Math.abs(grid.x + grid.width / 2 - grid.parent.width / 2) < 1, "the grid is centred in its place")
+            verify(grid.itemAtIndex(0).y - grid.contentY >= pad, "room above the first row")
+            verify(grid.width <= grid.parent.width + 2 * pad + 0.5, "the columns fit the place")
             verify(grid.cellHeight - game.height - Theme.cardGap * u < 0.001)
             compare(artOf(game).radius, Theme.radiusM * u)
             tryVerify(() => artOf(game).sampled, 5000)
@@ -411,6 +494,19 @@ Item {
             compare(art.height, Theme.cardArtHeight(Theme.cardWidthCompact) * u)
             compare(art.radius, Theme.radiusM * u)
             tryVerify(() => art.sampled, 5000, "a Store card samples its tile")
+            const ring = findChild(card, "cardRing")
+            verify(ring, "the Store card has a ring item above its art")
+            compare(ring.width, art.width)
+            compare(ring.height, art.height)
+            compare(ring.border.width, Theme.focusRingWidth * u)
+            verify(card.children.indexOf(ring) > card.children.indexOf(art))
+            for (let i = 0; i < card.children.length; ++i)
+                verify(card.children[i].z <= ring.z)
+            // The glow of a card at the left or top edge is not cut off: the list is larger than its place.
+            const pad = Theme.glowPad * u
+            const at = card.mapToItem(find("storeRows"), 0, 0)
+            verify(at.x >= pad - 0.5, "room left of the first card: " + at.x + " >= " + pad)
+            verify(at.y >= pad - 0.5, "room above the first row: " + at.y)
             const shadow = findChild(card, "cardLiftShadow")
             compare(shadow.halo, true)
             tryCompare(shadow, "glowMix", 1, 3000)
@@ -487,9 +583,18 @@ Item {
                 openSection(1, "games")
                 tryVerify(() => find("gamesGrid").activeFocus, 2000)
                 shoot(out + "games-" + theme)
-                for (let i = 0; i < 4; ++i)
-                    keyClick(Qt.Key_Right)
-                shoot(out + "games-next-" + theme)
+                keyClick(Qt.Key_Right)                             // the blue one
+                shoot(out + "games-blue-" + theme)
+                for (let i = 0; i < 3; ++i)
+                    keyClick(Qt.Key_Right)                         // the dark one: a faint glow, the ring still shows
+                shoot(out + "games-dark-" + theme)
+                tc.shell.destroy()
+
+                signIn(shell720Component)                          // a real 720p screen
+                openSection(1, "games")
+                tryVerify(() => find("gamesGrid").activeFocus, 2000)
+                keyClick(Qt.Key_Right)
+                shoot(out + "games-720p-" + theme)
                 tc.shell.destroy()
 
                 signIn()

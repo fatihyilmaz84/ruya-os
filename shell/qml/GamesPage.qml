@@ -14,7 +14,11 @@ Page {
 
     readonly property real gap: Theme.cardGap * u
     readonly property real cardWidth: Theme.cardWidthHero * u
-    readonly property int columns: Math.max(1, Math.floor((grid.width - grid.leftMargin) / (cardWidth + gap)))
+    // The grid is `glowPad` larger than its place on every side, so the glow of a card at an edge is
+    // not cut off (04 §3.8). Its width is the columns that fit the place (`root.width`) plus the pad, and
+    // it is centred, which splits the leftover width between left and right.
+    readonly property real glowPad: Theme.glowPad * u
+    readonly property int columns: Math.max(1, Math.floor((root.width + gap) / (cardWidth + gap)))
     property string sourceFilter: "all"
 
     // Ids of the games to show; a list of ids keeps the grid from rebuilding on unrelated changes.
@@ -85,11 +89,16 @@ Page {
             Accessible.role: Accessible.List
             Accessible.name: currentItem ? currentItem.Accessible.name : qsTr("Games")
             visible: Library.games.length > 0
-            anchors { left: parent.left; right: parent.right; top: filterRow.bottom; topMargin: Theme.spaceM * page.u; bottom: parent.bottom }
+            width: page.columns * grid.cellWidth - page.gap + 2 * page.glowPad
+            anchors {
+                horizontalCenter: parent.horizontalCenter
+                top: filterRow.bottom; topMargin: Theme.spaceM * page.u - page.glowPad
+                bottom: parent.bottom; bottomMargin: -page.glowPad
+            }
             clip: true
             focus: true
-            leftMargin: Theme.spaceS * page.u
-            topMargin: Theme.spaceS * page.u
+            leftMargin: page.glowPad
+            topMargin: page.glowPad + Theme.spaceS * page.u
             cellWidth: page.cardWidth + page.gap
             cellHeight: Theme.cardArtHeight(page.cardWidth) + page.gap
             keyNavigationEnabled: true
