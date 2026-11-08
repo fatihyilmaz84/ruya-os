@@ -5,7 +5,7 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | ID | Title | Status | Depends |
 |---|---|---|---|
 | [T-314](tasks/T-314-ugly-rounded-corners-on-wallpaper-tiles-and-cards.md) | Rounded corners of the wallpaper tiles and the cards look rough (owner, 2026-11-08; run by an Opus builder) | in-progress | — |
-| [T-315](tasks/T-315-settings-my-profile-and-manage-profiles.md) | Settings: "My profile" and "Manage profiles" are two categories (owner, 2026-11-08) | todo | — |
+| [T-315](tasks/T-315-settings-my-profile-and-manage-profiles.md) | Settings: "My profile" and "Manage profiles" are two categories (owner, 2026-11-08) | in-progress | — |
 | [T-285](tasks/T-285-hint-bar-and-focus-follow-ups.md) | Hint bar and focus follow-ups: Accept hints, keyboard hints, Tab, tests that could not fail | todo | — |
 | [T-292](tasks/T-292-activity-page-follow-ups.md) | Activity page follow-ups: refresh only when visible, paging, retry, icons, focus order | todo | — |
 | [T-295](tasks/T-295-time-zone-follow-ups.md) | Time zone follow-ups: say it when Setup cannot set the zone, type to filter the chooser | todo | — |
@@ -93,7 +93,7 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | [T-311](tasks/T-311-saves-manager-for-external-emulators.md) | External emulators and apps integrate with the saves manager (declare, register, open, notify) | todo | T-309, T-304, T-306 |
 
 | [T-314](tasks/T-314-epic-retro-achievements.md) | **[lead]** EPIC retro achievements (RetroAchievements): spec, ADR-021 Accepted | todo | T-302, T-246 |
-| [T-315](tasks/T-315-spike-ra-terms-hashes-and-contract.md) | **[lead]** Spike: RetroAchievements terms, ROM hash rules, supported systems, service contract | todo | T-314, T-302 |
+| [T-315](tasks/T-315-spike-ra-terms-hashes-and-contract.md) | **[lead]** Spike: RetroAchievements terms, ROM hash rules, supported systems, service contract | in-progress | T-314, T-302 |
 | [T-316](tasks/T-316-ra-account-link-and-emulator-handover.md) | RetroAchievements account link in Settings and credential hand-over to emulators | todo | T-315, T-304, T-220, T-211 |
 | [T-317](tasks/T-317-ra-data-in-the-shell.md) | RetroAchievements data in the shell: cache, Library rings, profile tab, game page | todo | T-316, T-307, T-246 |
 | [T-318](tasks/T-318-ra-unlock-moment-and-presence.md) | **[lead]** Retro unlock moment and presence: toast, report event, polling fallback | todo | T-317, T-246, T-245, T-306 |

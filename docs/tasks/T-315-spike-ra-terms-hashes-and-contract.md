@@ -1,6 +1,6 @@
 # T-315 — Spike: RetroAchievements terms, hash rules, supported systems and the service contract
 
-Status: todo · Phase: 5 · Depends: T-314, T-302 · Area: api, docs · Size: M · Owner: lead
+Status: in-progress · Phase: 5 · Depends: T-314, T-302 · Area: api, docs · Size: M · Owner: lead
 
 ## Goal
 Replace the unverified facts in T-314 with checked ones and fix the contract the children build on: what the site allows (terms, rate limits, API key rules, logo use), how a ROM is hashed per console, which of our systems (T-303 list) have sets, how credentials are exchanged, and the D-Bus contract for the RA service and the hub additions. Written, not coded, apart from XML and a hash prototype.

@@ -1,6 +1,6 @@
 # T-315 — Settings: "My profile" and "Manage profiles" are two categories
 
-Status: todo · Phase: 2 · Depends: — · Area: shell (SettingsPage, ProfilesPane, a new pane, tests, spec 02 and 03 §1.1) · Size: M · Owner: builder
+Status: in-progress · Phase: 2 · Depends: — · Area: shell (SettingsPage, ProfilesPane, a new pane, tests, spec 02 and 03 §1.1) · Size: M · Owner: builder
 
 ## Goal
 The owner (2026-11-08) wants user management and a person's own profile options kept apart in Settings. Today **Settings -> Profiles** is one pane that mixes both: the list of every profile with Rename and Delete for the selected one, the admin's Add profile form, and the signed-in person's own PIN rows plus the Activity row. After this task there are two categories:
