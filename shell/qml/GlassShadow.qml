@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Effects
 import RuyaShell
 
 // A soft drop shadow under a surface (04 §3.5, §3.8), on the High and Balanced tiers only.
@@ -80,6 +79,7 @@ Item {
         height: box.height
         visible: false
         layer.enabled: shadow.visible
+        layer.smooth: true
         Rectangle {
             x: shadow.pad
             y: shadow.pad
@@ -91,7 +91,9 @@ Item {
     }
 
     // The halo of the art glow: wider and softer than the lift shadow, behind it, centred on the card.
-    MultiEffect {
+    // Both effects cut the surface out through SmoothMask (T-314): the shadow reaches under the
+    // surface's antialiased edge instead of stopping a pixel short of it (a light seam at the corners).
+    SmoothMask {
         objectName: "haloEffect"
         visible: shadow.haloShown
         x: box.x
@@ -99,8 +101,6 @@ Item {
         width: box.width
         height: box.height
         source: box
-        autoPaddingEnabled: false
-        maskEnabled: true
         maskInverted: true
         maskSource: cutout
         blurMax: shadow.haloBlurMax
@@ -110,15 +110,13 @@ Item {
         shadowBlur: Math.min(1, shadow.haloBlurPx / shadow.haloBlurMax)
     }
 
-    MultiEffect {
+    SmoothMask {
         objectName: "shadowEffect"
         x: box.x
         y: box.y
         width: box.width
         height: box.height
         source: box
-        autoPaddingEnabled: false
-        maskEnabled: true
         maskInverted: true
         maskSource: cutout
         blurMax: shadow.effectBlurMax

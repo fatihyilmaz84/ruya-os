@@ -1,6 +1,5 @@
 pragma ComponentBehavior: Bound
 import QtQuick
-import QtQuick.Effects
 import RuyaShell
 
 // Art of an app: a gradient whose hue comes from the app id (the ProfileCard idea), the first
@@ -59,14 +58,20 @@ Rectangle {
     clip: true      // rectangular: on the software renderer the picture's square corners stay (no MultiEffect there)
 
     // The picture's corners follow `radius` (a Rectangle's `clip` is rectangular): on a GPU the
-    // picture is drawn through a rounded mask, as the wallpaper picker's tiles are. A square art
-    // (`radius` 0, the Home hero) needs no mask.
+    // picture is drawn through a rounded mask (`SmoothMask`, which keeps the mask's antialiased
+    // edge, T-314), as the wallpaper picker's tiles are. A square art (`radius` 0, the Home hero)
+    // needs no mask.
     readonly property alias maskItem: imageMask
-    readonly property bool masked: GraphicsInfo.api !== GraphicsInfo.Software && radius > 0
-    // `bare`: both stops clear. (Setting `gradient` to null instead leaves a white rectangle on a GPU window.)
+    property bool gpu: GraphicsInfo.api !== GraphicsInfo.Software   // overridable, so tests reach the GPU path offscreen
+    readonly property bool masked: gpu && radius > 0
+    // No fill under a masked picture (T-314): the picture covers the art, and the tint below it
+    // would only show in the edge's half-covered pixels, as a coloured fringe round the corners and
+    // a dark line under a picture that does not sit on a whole pixel.
+    readonly property bool fillClear: bare || (masked && image.visible)
+    // Both stops clear. (Setting `gradient` to null instead leaves a white rectangle on a GPU window.)
     gradient: Gradient {
-        GradientStop { position: 0.0; color: art.bare ? "transparent" : Theme.artTop(art.hue) }
-        GradientStop { position: 1.0; color: art.bare ? "transparent" : Theme.artBottom(art.hue) }
+        GradientStop { position: 0.0; color: art.fillClear ? "transparent" : Theme.artTop(art.hue) }
+        GradientStop { position: 1.0; color: art.fillClear ? "transparent" : Theme.artBottom(art.hue) }
     }
 
     Text {
@@ -122,10 +127,8 @@ Rectangle {
         asynchronous: true
         layer.enabled: art.masked && visible
         layer.smooth: true
-        layer.effect: MultiEffect {
-            maskEnabled: true
+        layer.effect: SmoothMask {
             maskSource: art.maskItem
-            autoPaddingEnabled: false
         }
     }
 
@@ -136,5 +139,6 @@ Rectangle {
         radius: art.radius
         visible: false
         layer.enabled: art.masked && image.visible
+        layer.smooth: true      // a focused card is scaled: the mask is sampled between texels (SmoothMask)
     }
 }

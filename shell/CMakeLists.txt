@@ -175,6 +175,7 @@ qt_add_qml_module(ruyashell
         qml/GlassSheet.qml
         qml/ModalLayer.qml
         qml/CardFocusLayers.qml
+        qml/SmoothMask.qml
         qml/GlareGate.qml
         qml/Icon.qml
         qml/BatteryChip.qml

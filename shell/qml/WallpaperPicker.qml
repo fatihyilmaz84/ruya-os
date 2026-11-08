@@ -1,6 +1,5 @@
 pragma ComponentBehavior: Bound
 import QtQuick
-import QtQuick.Effects
 import RuyaShell
 
 // Settings -> Display & motion -> Wallpaper (T-208): a modal grid of thumbnails. The first tile is
@@ -328,10 +327,11 @@ FocusScope {
                         clip: !art.masked
                         visible: !art.masked
                         layer.enabled: art.masked
+                        layer.smooth: true
                         // The default look: the backdrop's gradient and two soft blobs.
                         Rectangle {
                             anchors.fill: parent
-                            radius: art.radius
+                            radius: art.masked ? 0 : art.radius     // the mask rounds it (a second antialiased edge would thin the corner)
                             gradient: Gradient {
                                 GradientStop { position: 0.0; color: Theme.backdropTop(Theme.blobTintA(Theme.defaultTint)) }
                                 GradientStop { position: 1.0; color: Theme.background }
@@ -363,18 +363,18 @@ FocusScope {
                         radius: art.radius
                         visible: false
                         layer.enabled: art.masked
+                        layer.smooth: true
                     }
-                    MultiEffect {
+                    SmoothMask {
                         objectName: "wallpaperTileMask_" + (picker.usbMode ? tile.index : tile.modelData.id)
                         anchors.fill: parent
                         visible: art.masked
                         source: artContent
-                        maskEnabled: true
                         maskSource: artMask
-                        autoPaddingEnabled: false
                     }
                     // Selected but focus is elsewhere (the buttons): a hairline.
                     Rectangle {
+                        objectName: "wallpaperHairline_" + (picker.usbMode ? tile.index : tile.modelData.id)
                         anchors.fill: parent
                         radius: art.radius
                         color: "transparent"
