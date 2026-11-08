@@ -16,6 +16,12 @@
 // "vol-card" (an SD card on a drive of its own) and "vol-odd" (a drive that is not supported at
 // all); see plug(). Ejecting it removes it (the tests can plug it in again); a stick marked busy
 // answers "busy" and stays. Nothing is ever read from or run on a mock volume.
+//
+// scanVolume() follows the service's rules (one scan at a time, "unsupported" for what is not a
+// mounted removable volume) and finishes a moment later with a made-up breakdown: "Ruya Stick"
+// has games 12 GB, backups 2 GB, captures 1.5 GB and pictures 300 MB, 3.7 GB of other; the photos
+// partition only pictures; the camera card nothing RuyaOS knows. holdScan(true) keeps a scan
+// running until released; setScanPartial(true) makes the results "at least" numbers.
 class MockStorageBackend final : public StorageBackend
 {
     Q_OBJECT
@@ -28,8 +34,17 @@ public:
     void eject(const QString &id) override;
     void saveReport(const QString &id, const QMap<QString, QString> &files) override;
     void refreshUsage() override;
+    void scanVolume(const QString &id) override;
+    void cancelScan(const QString &id) override;
 
     // Tests only.
+    // While held a scan stays "running" (a walk takes seconds); releasing finishes the running one.
+    void holdScan(bool hold);
+    QStringList scanCalls() const { return m_scanCalls; }     // the ids of scanVolume() calls, in order
+    QStringList cancelCalls() const { return m_cancelCalls; } // the ids of cancelScan() calls, in order
+    void setScanPartial(bool partial) { m_scanPartial = partial; }
+    // Asks for the scan state of a volume; the reply (a snapshot of it as it is now) arrives after `ms`.
+    void refreshScanDelayed(const QString &id, int ms);
     // Replaces the internal storage numbers and publishes them. system is the rest of the used
     // space (never negative), -1 while any part is -1, as the service computes it.
     void setUsage(qint64 total, qint64 free, qint64 apps, qint64 data);
@@ -43,6 +58,8 @@ public:
     void setBusy(const QString &id, bool busy);
     // A volume's label as a drive could carry it (any text); publishes the list.
     void setLabel(const QString &id, const QString &label);
+    // A volume's free space (bytes); publishes the list.
+    void setFree(const QString &id, qint64 freeBytes);
     // While held, eject() is counted but unanswered (an unmount takes seconds) until released.
     void holdEject(bool hold);
     int ejectCalls() const { return m_ejectCalls; }
@@ -69,6 +86,10 @@ private:
     void doEject(const QString &id);
     void publish(int delayMs = 0);
     void publishUsage(int delayMs = 0);
+    void publishScan(const QString &id, int delayMs = 0);
+    void finishScan(const QString &id);
+    void dropScans(const QString &drive); // the drive left: its volumes' scans go
+    VolumeScan contentFor(const QString &id) const;
     void answer(const QString &op, const QString &id, const QString &status);
     int indexOf(const QString &id) const;
 
@@ -84,4 +105,10 @@ private:
     QString m_saveStatus;
     int m_delay = 0;
     int m_pending = 0;
+    QHash<QString, VolumeScan> m_scans;
+    QString m_scanning; // the volume being scanned, "" if none
+    bool m_holdScan = false;
+    bool m_scanPartial = false;
+    QStringList m_scanCalls;
+    QStringList m_cancelCalls;
 };

@@ -2707,7 +2707,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>StoragePane</name>
     <message>
-        <location filename="../qml/StoragePane.qml" line="+168"/>
+        <location filename="../qml/StoragePane.qml" line="+301"/>
         <source>%1 is still in use. Close what uses it and try again.</source>
         <translation>%1 hâlâ kullanımda. Kullanan uygulamayı kapatıp tekrar deneyin.</translation>
     </message>
@@ -2732,18 +2732,73 @@ Bu geri alınamaz.</translation>
         <translation>Desteklenmiyor</translation>
     </message>
     <message>
-        <location line="-138"/>
-        <location line="+139"/>
+        <location line="-262"/>
+        <location line="+263"/>
         <source>%1 free of %2</source>
         <translation>%2 içinde %1 boş</translation>
     </message>
     <message>
+        <location line="-206"/>
+        <source>Games</source>
+        <translation>Oyunlar</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Backups</source>
+        <translation>Yedekler</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Captures</source>
+        <translation>Ekran kayıtları</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Packages</source>
+        <translation>Paketler</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Pictures</source>
+        <translation>Resimler</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>System reports</source>
+        <translation>Sistem raporları</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>at least %1</source>
+        <translation>en az %1</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Scanning…</source>
+        <translation>Taranıyor…</translation>
+    </message>
+    <message>
         <location line="+2"/>
+        <source>Could not read this drive</source>
+        <translation>Bu sürücü okunamadı</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Nothing from RuyaOS on this drive</source>
+        <translation>Bu sürücüde RuyaOS'a ait bir şey yok</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>not everything was read</source>
+        <translation>tamamı okunamadı</translation>
+    </message>
+    <message>
+        <location line="+169"/>
         <source>Read-only</source>
         <translation>Salt okunur</translation>
     </message>
     <message>
-        <location line="+43"/>
+        <location line="+60"/>
         <source>This console</source>
         <translation>Bu konsol</translation>
     </message>
@@ -2768,7 +2823,8 @@ Bu geri alınamaz.</translation>
         <translation>Sistem</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="-263"/>
+        <location line="+263"/>
         <source>Other</source>
         <translation>Diğer</translation>
     </message>
@@ -2778,7 +2834,7 @@ Bu geri alınamaz.</translation>
         <translation>Sürücüler</translation>
     </message>
     <message>
-        <location line="+34"/>
+        <location line="-257"/>
         <source>Eject %1</source>
         <translation>%1 sürücüsünü çıkar</translation>
     </message>

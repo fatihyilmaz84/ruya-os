@@ -2716,7 +2716,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>StoragePane</name>
     <message>
-        <location filename="../qml/StoragePane.qml" line="+168"/>
+        <location filename="../qml/StoragePane.qml" line="+301"/>
         <source>%1 is still in use. Close what uses it and try again.</source>
         <translation>%1 is still in use. Close what uses it and try again.</translation>
     </message>
@@ -2741,18 +2741,73 @@ This can&apos;t be undone.</translation>
         <translation>Not supported</translation>
     </message>
     <message>
-        <location line="-138"/>
-        <location line="+139"/>
+        <location line="-262"/>
+        <location line="+263"/>
         <source>%1 free of %2</source>
         <translation>%1 free of %2</translation>
     </message>
     <message>
+        <location line="-206"/>
+        <source>Games</source>
+        <translation>Games</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Backups</source>
+        <translation>Backups</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Captures</source>
+        <translation>Captures</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Packages</source>
+        <translation>Packages</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Pictures</source>
+        <translation>Pictures</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>System reports</source>
+        <translation>System reports</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>at least %1</source>
+        <translation>at least %1</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Scanning…</source>
+        <translation>Scanning…</translation>
+    </message>
+    <message>
         <location line="+2"/>
+        <source>Could not read this drive</source>
+        <translation>Could not read this drive</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Nothing from RuyaOS on this drive</source>
+        <translation>Nothing from RuyaOS on this drive</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>not everything was read</source>
+        <translation>not everything was read</translation>
+    </message>
+    <message>
+        <location line="+169"/>
         <source>Read-only</source>
         <translation>Read-only</translation>
     </message>
     <message>
-        <location line="+43"/>
+        <location line="+60"/>
         <source>This console</source>
         <translation>This console</translation>
     </message>
@@ -2777,7 +2832,8 @@ This can&apos;t be undone.</translation>
         <translation>System</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="-263"/>
+        <location line="+263"/>
         <source>Other</source>
         <translation>Other</translation>
     </message>
@@ -2787,7 +2843,7 @@ This can&apos;t be undone.</translation>
         <translation>Drives</translation>
     </message>
     <message>
-        <location line="+34"/>
+        <location line="-257"/>
         <source>Eject %1</source>
         <translation>Eject %1</translation>
     </message>

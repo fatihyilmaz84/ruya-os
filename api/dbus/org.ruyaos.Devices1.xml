@@ -55,6 +55,14 @@
     "invalid"         malformed argument (an empty id)
     "failed"          internal error, or Eject of a volume that is not removable
 
+  org.ruyaos.Devices1.Storage.ScanVolume status strings (T-331; names and sizes only, nothing on the volume is opened or run):
+    "ok"              a scan of this volume is running, or a fresh result is cached; call GetVolumeScan
+    "unknown-volume"  no volume with that id in the list
+    "unsupported"     the volume is not removable, or not mounted
+    "busy"            a scan of another volume is running (one at a time)
+    "invalid"         malformed argument (an empty id)
+    "failed"          internal error
+
   org.ruyaos.Devices1.Storage.SaveReport status strings (T-226; plain files onto a removable volume, nothing is run):
     "ok"              the files are on the volume (path answers where)
     "unknown-volume"  no volume with that id in the list
@@ -538,6 +546,66 @@
       <arg name="status" type="s" direction="out"/>
       <arg name="path" type="s" direction="out"/>
     </method>
+
+    <!--
+      Starts a scan of one mounted removable volume: what RuyaOS recognises on it, as sizes per
+      category (T-331). The call answers at once; the walk runs in the background, one at a time
+      (see the status strings in the header), and VolumeScanChanged tells when it ended or was
+      cancelled. A fresh result is kept until the volume changes (a VolumesChanged that alters the
+      volume's mount point, size, free space or read-only flag) or is unplugged, and a second call
+      then answers "ok" without a new walk; a call for the volume that is being scanned also
+      answers "ok". A cancelled or failed result is not fresh: the next call walks again.
+
+      The scan reads names and sizes only (readdir and lstat; the service has no way to open a
+      file on the volume), never follows a symlink, never enters another mount and never runs
+      anything. Bounds: 6 directory levels below the mount point, 200000 entries, 10 s of wall
+      clock; a bound that was hit, a directory that could not be read, a name that is not UTF-8
+      and a cancel make the result partial. Sizes are allocated blocks, like GetSystemUsage.
+
+      Categories are a table in the service (drive_scan.rs, documented in 03 section 2.2); each
+      has a key, a folder convention and a file match. A file or directory belongs to the first
+      category that matches, anything else counts as other_bytes. Keys today: games, backups,
+      captures, packages, pictures, reports. Folder names match without regard to case (FAT).
+    -->
+    <method name="ScanVolume">
+      <arg name="id" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <!--
+      The scan of one volume as it is now. Never starts a walk and never waits for one. One
+      dictionary:
+        state        s   "idle" (no scan, or the volume is not known), "running", "done",
+                         "cancelled" (CancelScan; what was found before is in the numbers) or
+                         "failed" (the mount point itself could not be read)
+        partial      b   the numbers count at least this much (a bound, an unreadable directory or
+                         a cancel); false while idle, running and failed
+        used_bytes   x   everything the walk counted: the categories plus other_bytes
+        categories   aa{sv}   only categories that have at least one entry, largest first (ties
+                         in table order); each dictionary has
+                           key    s   the category key (see ScanVolume)
+                           bytes  x   allocated bytes
+                           files  x   files in it (directories are counted in bytes only)
+        other_bytes  x   the rest of used_bytes, which no category claims
+      All numbers are 0 while idle, running and failed. An unknown id answers "idle".
+    -->
+    <method name="GetVolumeScan">
+      <arg name="id" type="s" direction="in"/>
+      <arg name="scan" type="a{sv}" direction="out"/>
+    </method>
+
+    <!--
+      Stops the scan of this volume within one directory; it then ends as "cancelled". Does
+      nothing when no scan of it is running. Eject cancels it too.
+    -->
+    <method name="CancelScan">
+      <arg name="id" type="s" direction="in"/>
+    </method>
+
+    <!-- The scan of this volume ended (done, cancelled or failed); call GetVolumeScan. -->
+    <signal name="VolumeScanChanged">
+      <arg name="id" type="s"/>
+    </signal>
 
     <!-- A volume appeared, disappeared or changed (mounted, free space, ...); call ListVolumes again. -->
     <signal name="VolumesChanged"/>
