@@ -47,7 +47,6 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | [T-212](tasks/T-212-parental-controls-screens.md) | Parental controls screens | todo | T-211 |
 | [T-165](tasks/T-165-profile-switch-freezes-apps.md) | Profile switch and sign-out freeze the profile's apps | todo | T-164 |
 | [T-147](tasks/T-147-fullscreen-app-flow.md) | Full-screen apps: launch, quick menu, return, close | todo | T-164 |
-| [T-166](tasks/T-166-suspend-under-eglfs.md) | **[lead]** Suspend and resume under eglfs | todo | — |
 | [T-245](tasks/T-245-notification-centre.md) | **[lead]** Notification centre: history, quiet mode, notifications from apps (bridge) | todo | — |
 | [T-246](tasks/T-246-achievements.md) | **[lead]** Achievements: portal for games, per-profile service, unlock moment | todo | T-245, T-164 |
 | [T-228](tasks/T-228-epic-play-packages.md) | **[lead]** EPIC: `.play` packages (ADR-014 accepted; parked by the owner until visual polish and T-164) | blocked | owner |

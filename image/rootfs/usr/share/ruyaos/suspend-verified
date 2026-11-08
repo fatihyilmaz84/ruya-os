@@ -1,0 +1,2 @@
+Suspend to RAM (S3) and resume were verified on the Dell OptiPlex 7080 (i915, eglfs) with image 0.0.55: 4 cycles with rtcwake, picture back at 60 Hz, compositor active (T-166).
+The shell shows the Sleep choice in Settings > Power saving when this file exists. Remove the file to hide it.

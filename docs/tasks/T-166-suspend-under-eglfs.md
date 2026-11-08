@@ -1,6 +1,6 @@
 # T-166 — Suspend and resume with the shell on KMS (eglfs)
 
-Status: todo · Phase: 2 · Depends: T-130 · Area: image, shell · Size: S · Owner: lead
+Status: done · Phase: 2 · Depends: T-130 · Area: image, shell · Size: S · Owner: lead
 
 ## Goal
 Choosing Suspend in the Guide power menu suspends the console, and a key press brings back a working shell (picture, input, sound), or else Suspend is not offered until it works.
@@ -39,4 +39,10 @@ Then the image recipe in `docs/dev-setup.md` and the VM steps above.
 - Planner note (2026-11-07): T-202 shows "Sleep is not available" in Power saving until the file `/usr/share/ruyaos/suspend-verified` exists (T-293 implements the row): this task creates that marker when suspend/resume is verified on the image, and does not create it if suspend cannot work.
 
 ## Outcome
-_Filled in by the implementer. First line: `Verified: host | vm | unverified | hw` (say what ran where). Then: what was built, files, deviations, follow-ups (each also an Inbox line)._
+Verified: hw (Dell OptiPlex 7080, BIOS 1.12.1, i915, image 0.0.55; lead-5, 2026-11-08 23:00). The VM (QEMU/WHPX) was not used: the Dell is the real target and S3 under WHPX proves nothing about i915.
+
+Done over SSH with `rtcwake -m mem -s 20` (S3, `mem_sleep` `s2idle [deep]`): four suspend/resume cycles in a row. After each: `ruya-compositor@tty1` active, the CRTC enabled at 1920x1080@60, **60 vblank events per second** (the `drm_vblank_event_delivered` tracepoint: 241 in 4 s, 180 in 3 s three times), no `page flip` error, no failed unit but the known `bootloader-update`. The kernel log shows `Waking up from system sleep state S3`, `PM: suspend exit`, bluetoothd `Controller resume`. The DualSense is disconnected after resume (as expected, it needs a PS press; reconnect not tested), the ambient stream stays in the PipeWire graph. Not observed by a person: the picture itself and keys after resume (the owner confirms on the Dell: Guide > Suspend, any key wakes). VT switching (Scope 4) not tried.
+
+Decision (marker): a **build-time file** `image/rootfs/usr/share/ruyaos/suspend-verified`, because a runtime marker could never exist before the first suspend and the Sleep row only exposes an opt-in choice (default Never); the Guide already offers a manual Suspend. Hardware that cannot resume must delete the file (documented in `dev-setup.md`). T-262 (wake by controller) is the next step; idle sleep default stays Never.
+
+Follow-ups: the owner's look at the picture and a key after wake; reconnect of the DualSense after resume; `bootloader-update` failing (T-269/T-299).
