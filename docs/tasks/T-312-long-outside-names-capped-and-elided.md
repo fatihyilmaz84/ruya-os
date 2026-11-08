@@ -1,6 +1,6 @@
 # T-312 — Long names from outside are capped and elided: profile card, status cluster, PIN pad title, Dim row caption
 
-Status: todo · Phase: 2 · Depends: T-286 · Area: shell (ProfileCard, Shell status cluster, PinPad title, DisplayPane) · Size: S · Owner: builder
+Status: in-progress · Phase: 2 · Depends: T-286 · Area: shell (ProfileCard, Shell status cluster, PinPad title, DisplayPane) · Size: S · Owner: builder
 
 ## Goal
 A 32-character profile name (the shipped maximum) no longer runs into the next card, and a name that is too wide for its container ends in an ellipsis everywhere it is drawn. The Dim wallpaper row explains why Left/Right can look dead.
