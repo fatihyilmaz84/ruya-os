@@ -4,6 +4,8 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 
 | ID | Title | Status | Depends |
 |---|---|---|---|
+| [T-321](tasks/T-321-shell-sounds-never-start-audio-format-not-valid.md) | **[lead]** The shell's own sounds never start on real hardware (`QAudioSink::start: QAudioFormat not valid`) | todo | — |
+| [T-322](tasks/T-322-sound-output-policy-and-picker.md) | **[lead]** Choose the sound output by what is usable; Settings > Audio output with ports, test sound, remembered | todo | — |
 | [T-315](tasks/T-315-settings-my-profile-and-manage-profiles.md) | Settings: "My profile" and "Manage profiles" are two categories (owner, 2026-11-08) | in-progress | — |
 | [T-285](tasks/T-285-hint-bar-and-focus-follow-ups.md) | Hint bar and focus follow-ups: Accept hints, keyboard hints, Tab, tests that could not fail | todo | — |
 | [T-292](tasks/T-292-activity-page-follow-ups.md) | Activity page follow-ups: refresh only when visible, paging, retry, icons, focus order | todo | — |
@@ -91,6 +93,7 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | [T-310](tasks/T-310-saves-manager-ui.md) | Saves manager UI: browse, copy, move, delete, export and import saves | todo | T-309 |
 | [T-311](tasks/T-311-saves-manager-for-external-emulators.md) | External emulators and apps integrate with the saves manager (declare, register, open, notify) | todo | T-309, T-304, T-306 |
 
+| [T-314](tasks/T-314-epic-retro-achievements.md) | **[lead]** EPIC: retro achievements (RetroAchievements) for emulated games | todo | — |
 | [T-315](tasks/T-315-spike-ra-terms-hashes-and-contract.md) | **[lead]** Spike: RetroAchievements terms, ROM hash rules, supported systems, service contract | in-progress | T-314, T-302 |
 | [T-316](tasks/T-316-ra-account-link-and-emulator-handover.md) | RetroAchievements account link in Settings and credential hand-over to emulators | todo | T-315, T-304, T-220, T-211 |
 | [T-317](tasks/T-317-ra-data-in-the-shell.md) | RetroAchievements data in the shell: cache, Library rings, profile tab, game page | todo | T-316, T-307, T-246 |

@@ -1,4 +1,6 @@
-# T-314 — Rounded corners of the wallpaper tiles and the cards look rough
+# T-323 — Rounded corners of the wallpaper tiles and the cards look rough
+
+> Renumbered 2026-11-08: this task was called T-314 in its commits, in the shell comments (`SmoothMask`, `AppArt`) and in 04, until the RetroAchievements epic took T-314 at the same time. `T-314` in those places means this task.
 
 Status: done · Phase: 2 · Depends: — · Area: shell (WallpaperPicker, AppArt, the card family, CardFocusLayers) · Size: M · Owner: builder
 

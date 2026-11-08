@@ -25,6 +25,8 @@ runuser -u ruya-shell -- env XDG_RUNTIME_DIR=/run/user/$(id -u ruya-shell) wpctl
 - `docs/dev-setup.md` if the audio look-at list changes.
 
 ## Outcome
+**Superseded (lead, 2026-11-08, same day):** the owner's Dell has internal speakers and a monitor without any, so HDMI-first is the wrong default. The rule file was removed from `image/rootfs` again and from the Dell; the real work is T-321 (the shell's own sounds never start) and T-322 (output policy and chooser). What is below is the diagnosis.
+
 Verified: hw (Dell: the rule works and survives a reboot; audibility is for the owner to confirm).
 
 On 2026-11-08 the lead switched the Dell's card profile at runtime with `pw-cli set-param 42 Profile { index: 3, save: false }` (reversible: it returns to analog on the next WirePlumber restart or reboot): a sink `Built-in Audio Digital Stereo (HDMI) [G32QC]` appeared, became the default (volume 40 %) and the shell's stream moved to it. This proved the cause. Installing the rule on the Dell itself was refused by the auto-mode classifier (a remote write needs the owner's own authorization): the owner can run the command above after copying the file.
