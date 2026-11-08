@@ -11,7 +11,8 @@ The player presses a button (or picks it in the Guide menu) and gets a screensho
 ## Scope
 1. **Screenshot:** capture the app layer's front surface (not the quick menu) at its native size to PNG, name `<game> <date time>.png`, JSON sidecar `{game_id, title, system, app, profile, time, size}`; a toast "Screenshot saved" with the thumbnail; a button chord (decide with the owner's gesture decision, ADR-019; default Guide + X) and a quick-menu entry; controller-only.
 2. **Recording:** spike first (lead): GPU/CPU cost on the Dell of an H.264/AV1 encode through VA-API (`intel-media-driver` is in the image) of the composited frame plus PipeWire audio, versus the frame budget; ring buffer for "clip the last 30 s" (memory, power). Build the shipped variant only if it keeps the shell and the game inside budget; otherwise ship screenshots and document recording as later.
-3. **Captures library:** the profile's `~/Captures`, listed by a Library page (grid of thumbnails, date, game), actions Delete / Copy to USB / Set as wallpaper; storage limit and oldest-first cleanup prompt (never silent deletion).
+3. **Where captures go:** the console by default; the player may choose a drive (Settings > Storage), identified by UUID; if it is missing the capture goes to the console and a toast says so; a drive that is full or read-only is refused with a message, never a silent loss.
+3b. **Captures library:** the profile's `~/Captures`, listed by a Library page (grid of thumbnails, date, game), actions Delete / Copy to USB / Set as wallpaper; storage limit and oldest-first cleanup prompt (never silent deletion).
 4. Privacy: captures never leave the console; DRM/protected content windows (none yet) are excluded by a flag.
 
 ## Out of scope

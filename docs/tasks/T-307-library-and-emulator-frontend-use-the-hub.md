@@ -10,7 +10,8 @@ The Library lists the player's retro games from the hub's ROM roots (profile, sh
 
 ## Scope
 1. A ROM scanner in the library service (or the hub, decide in the Outcome): walks the roots with limits (depth, count, time), reads only names and sizes, hashes lazily on demand, never executes or opens a file as code; USB roots are scanned only after the player chooses "Add games from this drive".
-2. Game records: `game_id`, title (from name cleaning, then DAT/art match when available), system, file, art path; stored per profile; a rescan merges without losing play stats.
+2. **Drives:** a game record keeps its drive UUID; when the drive is absent the game stays listed, greyed, with "Insert <drive name>" (Play is disabled with that reason), and it returns when the drive is mounted again; "Copy to this console" for a game from a drive (progress, free-space check, cancellable); a drive removed during a scan stops the scan cleanly. FAT/exFAT/NTFS names are matched case-insensitively.
+2b. Game records: `game_id`, title (from name cleaning, then DAT/art match when available), system, file, art path; stored per profile; a rescan merges without losing play stats.
 3. Launch: emulator choice per system (the player's pick or the only installed one), command from the emulator's metadata (`x-ruya-emulator` AppStream keys: systems, launch template) — document the keys; the app gets the ROM through the sandbox path from T-303.
 4. T-259's own scanning is replaced by hub calls (coordinate: if T-259 is not merged, add the hub client there).
 
