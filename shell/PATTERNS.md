@@ -33,6 +33,10 @@ Colours live in `qml/themes/` and nowhere else: `ThemeSet.qml` (every themeable 
 - **A white overlay is not a token of its own:** use `focusFill`, `selectedFill` or the key fills (they are dark on Daylight). The art effects `cardSheen`, `glarePeak` and `shimmerPeak` stay white (they sit on art).
 - **Switching** is `DeviceSettings.theme = key`; `Theme` cross-fades over `tintMs` and is immediate under reduced motion. A component never needs to know; if it computes a colour from a token, derive it in a binding (it re-evaluates on every blend step), as `Backdrop.qml` does with `Theme.backdropTop(tint)`.
 
+## Pitfall: a ternary inside a product in an anchor offset (T-260, T-297)
+
+`anchors.verticalCenterOffset: (picker.needsController ? -150 : 40) * picker.u` did not update in the offscreen build: the item stayed at the first value after the condition changed. Put the multiplication inside the branches, `anchors.verticalCenterOffset: controllerHint.visible ? -150 * picker.u : 40 * picker.u` (as `ProfilePicker.qml` does), or bind a property (`readonly property real offset: cond ? -150 * u : 40 * u`) and use that, or give an `Item` an explicit `y`. `scripts/lint-qml-members.ps1` rejects the parenthesised form for `verticalCenterOffset` and `horizontalCenterOffset` on one line; a ternary in a product elsewhere is not caught, so assert the moved position in a test (`tryCompare` on `y`).
+
 ## Modals from pages
 
 A page that needs a full-screen modal (PIN pad, `TextEntry`) declares it as `parent: page.overlay` (the shell's `modalLayer`) with `width/height` taken from that parent, not as a child of the page, so it covers the whole screen and sits above toasts. Save `Window.activeFocusItem` before opening and refocus it when the modal closes (see `ProfilesPane.qml`); `TextEntry` does this itself. `PinPad` has three modes: `open(profile)` verifies with `Profiles.switchTo`; `collect(prompt, confirm)` hands the PIN back through `collected(pin)` (and `cancelled()`), calling no service. Multi-step flows are small state machines in their own non-visual file (`ProfileAddFlow.qml`, `ChangePinFlow.qml`).

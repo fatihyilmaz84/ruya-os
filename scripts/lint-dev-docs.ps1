@@ -5,6 +5,10 @@
 #     `json` parses;
 #   - a fenced `c` block whose first line is `/* sample: <repo path> */` is the sample's code: each
 #     of its lines must be in that file, in order (a line that is only `...` or `/* ... */` is a gap);
+#   - a fenced `xml` block that starts with `<component` and is introduced (within the three lines
+#     before the fence) by a `samples/.../*.metainfo.xml` path in backticks is compared with that
+#     file (T-297): the same elements at the same places, with the same attribute names, and the
+#     same value of `id`, `type` and `key`; text, other values and the order do not matter;
 #   - every chapter ends with a "## Sources" section that names a date (YYYY-MM-DD).
 #
 # Used by dev.ps1 (test) and by the CI workflow. Works on Windows PowerShell 5.1 and on pwsh.
@@ -94,7 +98,22 @@ function Read-Markdown([string]$path) {
         }
     }
     if ($null -ne $open) { $blocks.Add($open); $open.unterminated = $true }
-    return @{ prose = $prose; blocks = $blocks; text = $text }
+    return @{ prose = $prose; blocks = $blocks; text = $text; lines = $lines }
+}
+
+# The shape of an XML document: one string per element, "/a/b[attr1,attr2,id=x,type=y]", sorted.
+# Attribute names count; only the values of id, type and key identify an element and are kept.
+function Get-XmlShape($node, [string]$path, $out) {
+    foreach ($c in $node.ChildNodes) {
+        if ($c.NodeType -ne [System.Xml.XmlNodeType]::Element) { continue }
+        $p = "$path/$($c.LocalName)"
+        $attrs = @()
+        foreach ($a in $c.Attributes) {
+            if ($a.Name -in @("id", "type", "key")) { $attrs += "$($a.Name)=$($a.Value)" } else { $attrs += $a.Name }
+        }
+        $out.Add("$p[" + ((@($attrs) | Sort-Object) -join ",") + "]")
+        Get-XmlShape $c $p $out
+    }
 }
 
 if (-not (Test-Path $Dir)) { Write-Host "dev docs lint: $Dir does not exist" -ForegroundColor Red; exit 1 }
@@ -178,7 +197,31 @@ foreach ($f in $files) {
             }
             '^xml$' {
                 try { $d = New-Object System.Xml.XmlDocument; $d.LoadXml($body) }
-                catch { Fail $where "xml block is not well-formed: $($_.Exception.Message)" }
+                catch { Fail $where "xml block is not well-formed: $($_.Exception.Message)"; break }
+                if ($d.DocumentElement.LocalName -ne "component") { break }
+                # The sample's real metainfo, named in the lines just before the fence.
+                $rel = $null
+                $lines = $parsed[$f.Name].lines
+                for ($k = $b.start - 2; $k -ge [Math]::Max(0, $b.start - 4); $k--) {
+                    $mm = [regex]::Match($lines[$k], '`(samples/[^`\s]+\.metainfo\.xml)`')
+                    if ($mm.Success) { $rel = $mm.Groups[1].Value; break }
+                }
+                if (-not $rel) { break }
+                $src = Join-Path $Repo $rel
+                if (-not (Test-Path $src)) { Fail $where "sample metainfo $rel does not exist"; break }
+                $real = New-Object System.Xml.XmlDocument
+                try { $real.LoadXml([IO.File]::ReadAllText($src, $Utf8)) }
+                catch { Fail $where "sample metainfo $rel is not well-formed: $($_.Exception.Message)"; break }
+                $a = New-Object System.Collections.Generic.List[string]
+                $c2 = New-Object System.Collections.Generic.List[string]
+                Get-XmlShape $d "" $a
+                Get-XmlShape $real "" $c2
+                $ga = @{}; foreach ($s in $a) { $ga[$s] = 1 + [int]$ga[$s] }
+                $gc = @{}; foreach ($s in $c2) { $gc[$s] = 1 + [int]$gc[$s] }
+                foreach ($s in (@($ga.Keys) + @($gc.Keys) | Sort-Object -Unique)) {
+                    $na = [int]$ga[$s]; $nc = [int]$gc[$s]
+                    if ($na -ne $nc) { Fail $where "the example differs from $rel`: $s appears $na time(s) in the example and $nc in the file" }
+                }
             }
             '^json$' {
                 try { $null = $body | ConvertFrom-Json }

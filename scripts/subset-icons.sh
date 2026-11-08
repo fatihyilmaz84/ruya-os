@@ -1,7 +1,8 @@
 #!/bin/bash
 # Cuts the shell's icon fonts from Material Symbols Rounded (T-157, ADR-013).
 # Run in the WSL distribution: python3-fonttools is needed (sudo dnf install python3-fonttools);
-# skia-pathops (overlap removal, see below) is installed into a throwaway virtual environment.
+# skia-pathops (overlap removal, see below) is installed into a throwaway virtual environment from
+# scripts/subset-icons-requirements.txt (pinned version, SHA-256 of the wheels, pip --require-hashes).
 #
 #   scripts/subset-icons.sh
 #
@@ -23,8 +24,6 @@ AXES="MaterialSymbolsRounded%5BFILL%2CGRAD%2Copsz%2Cwght%5D"
 SHA_FONT=7e74e36533ccee12c2b81e75bfcf3ccf123d3bb7e7e46d65d94445f23db0c97c
 SHA_CODEPOINTS=a7404d9e5a1b63f496cf05ace45d386075886b5a7f123fba9f29527cb6006fde
 SHA_LICENSE=58d1e17ffe5109a7ae296caafcadfdbe6a7d176f0bc4ab01e12a689b0499d8bd
-PATHOPS=0.9.2                      # skia-pathops, for --remove-overlaps
-
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 out="$repo/shell/fonts"
 list="$out/icons.txt"
@@ -34,7 +33,8 @@ trap 'rm -rf "$work"' EXIT
 cd "$work"
 
 python3 -m venv --system-site-packages venv
-venv/bin/pip install -q "skia-pathops==$PATHOPS"
+# skia-pathops (for --remove-overlaps): pinned, hash-checked wheels only (T-297)
+venv/bin/pip install -q --only-binary=:all: --require-hashes -r "$repo/scripts/subset-icons-requirements.txt"
 PY="$work/venv/bin/python"
 
 fetch() {   # fetch <url path> <file> <sha256>

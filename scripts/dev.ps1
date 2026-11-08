@@ -233,6 +233,13 @@ function Test-Tokens {
     [IO.File]::WriteAllText((Join-Path $memberFix "qml\Bad.qml"), "import QtQuick`nItem {`n    readonly property string state: `"x`"`n}`n")
     & (Join-Path $PSScriptRoot "lint-qml-members.ps1") -QmlDir $memberFix 6>&1 | Out-Null
     Record "QML member lint self-check (rejects a redeclared state)" ($LASTEXITCODE -ne 0)
+    # T-297: a ternary inside a product in an anchor offset is rejected; the working form is accepted.
+    [IO.File]::WriteAllText((Join-Path $memberFix "qml\Bad.qml"), "import QtQuick`nItem {`n    anchors.verticalCenterOffset: (flag ? -150 : 40) * u`n}`n")
+    & (Join-Path $PSScriptRoot "lint-qml-members.ps1") -QmlDir $memberFix 6>&1 | Out-Null
+    $offsetRejected = ($LASTEXITCODE -ne 0)
+    [IO.File]::WriteAllText((Join-Path $memberFix "qml\Bad.qml"), "import QtQuick`nItem {`n    anchors.verticalCenterOffset: flag ? -150 * u : 40 * u`n}`n")
+    & (Join-Path $PSScriptRoot "lint-qml-members.ps1") -QmlDir $memberFix 6>&1 | Out-Null
+    Record "QML member lint self-check (rejects a ternary inside a product in an anchor offset, accepts the working form)" ($offsetRejected -and $LASTEXITCODE -eq 0)
     Remove-Item -Recurse -Force $memberFix -ErrorAction SilentlyContinue
 
     # Self-check: the lint must reject a literal font size.
@@ -456,7 +463,19 @@ Checked 2026-11-06.
         @{ name = "ill-formed xml"; a = $chapter + "`n${fence}xml`n<a><b></a>`n${fence}`n"; other = $other; expect = 1; text = "not well-formed" },
         @{ name = "invalid json"; a = $chapter + "`n${fence}json`n{`"a`": }`n${fence}`n"; other = $other; expect = 1; text = "json block does not parse" },
         @{ name = "a chapter the README does not list"; a = $chapter; other = $other; extra = "orphan.md"; expect = 1; text = "is not listed" },
-        @{ name = "a chapter without a Sources footer"; a = $chapter; other = "# Other chapter`n`nText.`n"; expect = 1; text = "no '## Sources'" }
+        @{ name = "a chapter without a Sources footer"; a = $chapter; other = "# Other chapter`n`nText.`n"; expect = 1; text = "no '## Sources'" },
+        # T-297: the `/* sample: <path> */` C block must be the sample's own code, in order.
+        @{ name = "a C block that is the sample's code"; a = $chapter + "`n${fence}c`n/* sample: s/game.c */`nint main(void) {`n...`n    return 0;`n}`n${fence}`n"; other = $other;
+           files = @{ "s/game.c" = "#include <stdio.h>`nint main(void) {`n    puts(`"hi`");`n    return 0;`n}`n" }; expect = 0; text = "" },
+        @{ name = "a C block whose code differs from the sample file"; a = $chapter + "`n${fence}c`n/* sample: s/game.c */`nint main(void) {`n    return 1;`n}`n${fence}`n"; other = $other;
+           files = @{ "s/game.c" = "#include <stdio.h>`nint main(void) {`n    puts(`"hi`");`n    return 0;`n}`n" }; expect = 1; text = "line is not in s/game.c" },
+        # T-297: an AppStream example is compared with the sample's real metainfo (names and attributes, not text).
+        @{ name = "an AppStream example with the sample's elements and other text"; a = $chapter + "`nThe file (``samples/s/data/x.metainfo.xml``):`n`n${fence}xml`n<component type=`"desktop-application`"><id>a</id><name>Other name</name><releases><release version=`"2`" date=`"2030-01-01`"/></releases></component>`n${fence}`n"; other = $other;
+           files = @{ "samples/s/data/x.metainfo.xml" = "<component type=`"desktop-application`"><id>b</id><name>Name</name><releases><release version=`"1`" date=`"2026-11-06`"/></releases></component>`n" }; expect = 0; text = "" },
+        @{ name = "an AppStream example with a renamed element"; a = $chapter + "`nThe file (``samples/s/data/x.metainfo.xml``):`n`n${fence}xml`n<component type=`"desktop-application`"><id>a</id><title>Name</title><releases><release version=`"1`" date=`"2026-11-06`"/></releases></component>`n${fence}`n"; other = $other;
+           files = @{ "samples/s/data/x.metainfo.xml" = "<component type=`"desktop-application`"><id>b</id><name>Name</name><releases><release version=`"1`" date=`"2026-11-06`"/></releases></component>`n" }; expect = 1; text = "the example differs from samples/s/data/x.metainfo.xml" },
+        @{ name = "an AppStream example that drops a required attribute"; a = $chapter + "`nThe file (``samples/s/data/x.metainfo.xml``):`n`n${fence}xml`n<component type=`"desktop-application`"><id>a</id><name>Name</name><releases><release version=`"1`"/></releases></component>`n${fence}`n"; other = $other;
+           files = @{ "samples/s/data/x.metainfo.xml" = "<component type=`"desktop-application`"><id>b</id><name>Name</name><releases><release version=`"1`" date=`"2026-11-06`"/></releases></component>`n" }; expect = 1; text = "/component/releases/release[date,version]" }
     )
     foreach ($c in $cases) {
         $fx = Join-Path ([IO.Path]::GetTempPath()) ("ruya-devdocs-fx-" + [guid]::NewGuid().ToString("N"))
@@ -465,6 +484,13 @@ Checked 2026-11-06.
         [IO.File]::WriteAllText((Join-Path $fx "a.md"), $c.a)
         [IO.File]::WriteAllText((Join-Path $fx "other.md"), $c.other)
         if ($c.extra) { [IO.File]::WriteAllText((Join-Path $fx $c.extra), $other) }
+        if ($c.files) {
+            foreach ($rel in $c.files.Keys) {
+                $dest = Join-Path $fx ($rel -replace '/', [IO.Path]::DirectorySeparatorChar)
+                New-Item -ItemType Directory -Force (Split-Path -Parent $dest) | Out-Null
+                [IO.File]::WriteAllText($dest, $c.files[$rel])
+            }
+        }
         $out = & $lint -Dir $fx -Repo $fx *>&1 | Out-String
         $code = $LASTEXITCODE
         Remove-Item -Recurse -Force $fx
@@ -547,6 +573,9 @@ function Test-FontCoverage {
     }
     & $py.Source -I (Join-Path $PSScriptRoot "check-font-coverage.py") (Join-Path $PSScriptRoot "..")
     Record "font coverage" ($LASTEXITCODE -eq 0)
+    # T-297: the overlap geometry on hand-made outlines (two overlapping squares flagged, two disjoint not).
+    & $py.Source -I (Join-Path $PSScriptRoot "check-font-coverage.py") --self-test
+    Record "font coverage self-test (overlap helper: overlapping squares flagged, disjoint ones not)" ($LASTEXITCODE -eq 0)
 }
 
 # Every QML file is named in 04-design-system.md (or on the baseline): scripts\lint-spec-components.ps1 (shared with CI).
