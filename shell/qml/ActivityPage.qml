@@ -93,7 +93,6 @@ Page {
             if (status === "ok") {
                 Notifications.show(qsTr("Your activity was cleared."), "success")
             } else {
-                Sfx.back()
                 Notifications.show(qsTr("Your activity could not be cleared."), "error")
             }
         }

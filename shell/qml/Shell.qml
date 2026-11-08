@@ -239,7 +239,6 @@ FocusScope {
     function guideDown(autoRepeat) {
         if (!autoRepeat) {
             systemPanel.open = true
-            Sfx.select()
             guideHeld = true
             guideHoldTimer.restart()
         }
@@ -839,6 +838,7 @@ FocusScope {
             }
             while (pageOpen)
                 closePage()
+            Sfx.page()
             if (key === "home") {
                 heroBlock.forceActiveFocus()
                 return
@@ -846,6 +846,8 @@ FocusScope {
         } else if (key === "home") {
             heroBlock.forceActiveFocus()
             return
+        } else {
+            Sfx.page()
         }
         openPage(key)
     }
@@ -1133,6 +1135,10 @@ FocusScope {
         Behavior on opacity { NumberAnimation { duration: Theme.overlayMs; easing.type: Easing.Bezier; easing.bezierCurve: Theme.easeSnap } }
         onOpenChanged: {
             powerMode = false
+            if (open)
+                Sfx.open()
+            else
+                Sfx.close()
             if (open) {
                 if (home.shown)
                     root.rememberHomeFocus()
@@ -1237,7 +1243,6 @@ FocusScope {
                         activate("back")
                     } else if (BackKey.isBackOrBackspace(event.key) || root.isGuideKey(event.key)) {
                         systemPanel.open = false
-                        Sfx.back()
                     }
                     event.accepted = true      // modal: nothing leaks to the shelf underneath
                 }
@@ -1311,6 +1316,31 @@ FocusScope {
         u: root.u
         kind: "warning"
         text: qsTr("mock services")
+    }
+
+    // The ambient bed behind Home and the menus (T-227): silent while an app is in front and while the
+    // screen saver, the dark screen or sleep is up; see AmbientLoop.
+    AmbientLoop {
+        id: ambientBed
+        objectName: "ambientBed"
+        wanted: !root.appOpen && !IdleClock.covered
+    }
+
+    // A chosen sound theme that fails the checker is ignored (the bundled one plays); say so once.
+    Connections {
+        target: SoundThemes
+        function onActiveChanged() {
+            if (SoundThemes.selectedBroken)
+                Notifications.show(qsTr("The chosen sound theme can't be used. The standard one plays instead."), "warning")
+        }
+    }
+
+    // The start-up cue, once, when the first frame is on screen.
+    Connections {
+        id: startupCue
+        target: root.Window.window
+        enabled: Sfx.startupCount === 0
+        function onFrameSwapped() { Sfx.startup() }
     }
 
     VolumeOsd {

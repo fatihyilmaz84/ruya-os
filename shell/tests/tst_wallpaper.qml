@@ -27,6 +27,16 @@ Item {
 
         property Shell shell: null
         property string usbRoot: ""
+        property int lastBakes: -1
+
+        // True when the sheet's capture count has stopped changing: a late height change of the picker
+        // (the owner sizes it a moment after it opens) re-bakes once through Qt.callLater, and that bake
+        // must have landed before the count is read.
+        function bakesSettled(sheet) {
+            const stable = sheet.bakeCount === tc.lastBakes
+            tc.lastBakes = sheet.bakeCount
+            return stable && sheet.bakeCount >= 1
+        }
 
         function find(name) { return findChild(tc.shell, name) }
 
@@ -810,7 +820,12 @@ Item {
             // On a GPU the sheet blurs L0 (found on the modal layer) and bakes it once for this opening.
             const sheet = find("wallpaperPanel")
             compare(sheet.blurred, true, "the sheet found L0 and draws the blur")
-            compare(sheet.bakeCount, 1, "captured once, not per frame")
+            tc.lastBakes = -1
+            tryVerify(() => tc.bakesSettled(sheet), 3000, "the captures settle")
+            const settled = sheet.bakeCount
+            verify(settled <= 2, "one capture for the opening, at most one more for a late resize: " + settled)
+            wait(500)                                    // frames are drawn meanwhile
+            compare(sheet.bakeCount, settled, "captured once per size, not per frame")
             keyClick(Qt.Key_Down)
             keyClick(Qt.Key_Down)
             keyClick(Qt.Key_Down)

@@ -3,7 +3,8 @@ import QtQuick
 import RuyaShell
 
 // Settings -> Audio: pick the output (Accept makes it the default), the master level, the
-// three channel levels (UI sounds, Ambient, Media) and Mute. Everything goes through the
+// three channel levels (UI sounds, Ambient, Media), the Ambient switch, Mute and the sound theme
+// (T-227: the bundled one or a copy, and the themes found on a USB drive). Everything goes through the
 // Audio singleton (org.ruyaos.Devices1.Audio), so changes apply live; the Bindings keep each
 // row in step with the service, e.g. after the volume keys or a hot-plugged headset.
 SettingsPane {
@@ -47,13 +48,86 @@ SettingsPane {
         const first = sinkRepeater.itemAt(0)
         if (first)
             first.focus = true
+        pane.refreshThemes()
+    }
+
+    // The sound themes on USB drives follow the drives in place, like the outputs, so focus stays on a
+    // row when a stick comes or goes. Each is a row of its own: copying one while only browsing the
+    // choice row would be a surprise.
+    ListModel { id: driveModel }
+    function usbMounts() {
+        return Storage.volumes.filter(v => v.mounted && v.removable && v.mountPoint.length > 0).map(v => v.mountPoint)
+    }
+    function refreshThemes() { SoundThemes.refresh(pane.usbMounts()) }
+    // The path of the drive theme being copied: only its row says "Copying…".
+    property string copyingPath: ""
+    function driveRowHasFocus() {
+        for (let i = 0; i < driveRepeater.count; ++i) {
+            if (driveRepeater.itemAt(i)?.activeFocus)
+                return true
+        }
+        return false
+    }
+    // After the drive rows changed: when the row that had focus has gone, focus goes to the Sound theme row
+    // (the nearest row above), not to the first row of the pane.
+    // (A second change right after the first must not forget that a drive row had focus: Qt.callLater keeps
+    // only the arguments of the last call, so the fact is a property.)
+    property bool driveFocusLost: false
+    function afterDriveSync() {
+        const lost = pane.driveFocusLost
+        pane.driveFocusLost = false
+        if (lost && pane.activeFocus && !pane.driveRowHasFocus() && themeRow.visible && themeRow.enabled)
+            themeRow.forceActiveFocus()
+        else
+            pane.settleFocus()
+    }
+    function syncDriveThemes() {
+        if (pane.driveRowHasFocus())
+            pane.driveFocusLost = true
+        const list = SoundThemes.themes.filter(t => t.kind === "drive")
+        for (let i = driveModel.count - 1; i >= 0; --i) {
+            const id = driveModel.get(i).themeId
+            if (!list.some(t => t.id === id))
+                driveModel.remove(i)
+        }
+        for (let i = 0; i < list.length; ++i) {
+            const t = list[i]
+            let at = -1
+            for (let j = 0; j < driveModel.count; ++j) {
+                if (driveModel.get(j).themeId === t.id)
+                    at = j
+            }
+            if (at < 0)
+                driveModel.insert(i, { themeId: t.id, themeName: t.name, themePath: t.path })
+        }
+        Qt.callLater(pane.afterDriveSync)
+    }
+    // The choice row lists the themes the console holds: the bundled one and the copies.
+    readonly property var themeOptions: SoundThemes.themes.filter(t => t.kind !== "drive").map(t => ({ value: t.id, label: t.name }))
+    Connections {
+        target: SoundThemes
+        function onThemesChanged() { pane.syncDriveThemes() }
+        function onImportFinished(status, id) {
+            pane.copyingPath = ""
+            if (status === "ok") {
+                DeviceSettings.soundTheme = id
+                const t = SoundThemes.themes.find(e => e.id === id)
+                Notifications.show(qsTr("Sound theme: %1").arg(t ? t.name : id), "success")
+            } else {
+                Notifications.show(status === "limit" ? qsTr("The console keeps up to %1 sound themes. Copy over one with the same name to replace it.").arg(SoundThemes.installedLimit)
+                                                       : qsTr("That sound theme could not be used."), "warning")
+            }
+        }
+    }
+    Connections {
+        target: Storage
+        function onVolumesChanged() { pane.refreshThemes() }
     }
     Connections {
         target: Audio
         function onSinksChanged() { pane.syncSinks() }
         function onSetDefaultSinkFinished(id, status) {
             if (status !== "ok") {
-                Sfx.back()
                 Notifications.show(qsTr("Could not switch the audio output."), "warning")
             }
         }
@@ -113,6 +187,15 @@ SettingsPane {
     }
     Binding { target: ambient; property: "value"; value: Audio.channelVolumes.ambient ?? 100 }
 
+    ToggleRow {
+        id: ambientSwitch
+        objectName: "rowAmbientSound"
+        u: pane.u
+        label: qsTr("Ambient sound")
+        onToggled: checked => DeviceSettings.ambientSound = checked
+    }
+    Binding { target: ambientSwitch; property: "checked"; value: DeviceSettings.ambientSound }
+
     SliderRow {
         id: media
         objectName: "rowMedia"
@@ -134,4 +217,35 @@ SettingsPane {
         onToggled: checked => Audio.setMuted(checked)
     }
     Binding { target: mute; property: "checked"; value: Audio.muted }
+
+    ChoiceRow {
+        id: themeRow
+        objectName: "rowSoundTheme"
+        u: pane.u
+        label: qsTr("Sound theme")
+        options: pane.themeOptions
+        onEdited: v => DeviceSettings.soundTheme = v
+    }
+    // The theme that plays (the bundled one when the chosen one cannot be used).
+    Binding { target: themeRow; property: "value"; value: SoundThemes.activeId }
+
+    Repeater {
+        id: driveRepeater
+        model: driveModel
+        SettingRow {
+            required property string themeId
+            required property string themeName
+            required property string themePath
+            objectName: "driveTheme_" + themeId
+            u: pane.u
+            label: qsTr("Use “%1” from the USB drive").arg(themeName)
+            value: SoundThemes.importState === "copying" && pane.copyingPath === themePath ? qsTr("Copying…") : ""
+            onActivated: {
+                if (SoundThemes.importState !== "copying") {
+                    pane.copyingPath = themePath
+                    SoundThemes.importTheme(themePath)
+                }
+            }
+        }
+    }
 }

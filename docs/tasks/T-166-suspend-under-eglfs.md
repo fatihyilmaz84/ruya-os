@@ -36,5 +36,7 @@ Then the image recipe in `docs/dev-setup.md` and the VM steps above.
 ## Hints
 - WHPX may not support S3 well; if QEMU cannot suspend at all on this host, record it, mark this task blocked on hardware (B-002) and still do the hide-Suspend fallback only if the owner agrees: it is a product choice (ask in the lead report).
 
+- Planner note (2026-11-07): T-202 shows "Sleep is not available" in Power saving until the file `/usr/share/ruyaos/suspend-verified` exists (T-293 implements the row): this task creates that marker when suspend/resume is verified on the image, and does not create it if suspend cannot work.
+
 ## Outcome
 _Filled in by the implementer. First line: `Verified: host | vm | unverified | hw` (say what ran where). Then: what was built, files, deviations, follow-ups (each also an Inbox line)._

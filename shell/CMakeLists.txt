@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(ruya-shell VERSION 0.1.0 LANGUAGES CXX)
+project(ruya-shell VERSION 0.1.0 LANGUAGES C CXX)
 
 option(RUYA_BUILD_TESTS "Build the Qt Quick tests" ON)
 # The image build turns this on (image/Containerfile): ruya-shell is then the Wayland compositor
@@ -101,6 +101,8 @@ qt_add_qml_module(ruyashell
         src/input/KeyRouter.h src/input/KeyRouter.cpp
         src/wallpaper/Wallpapers.h src/wallpaper/Wallpapers.cpp
         src/art/ArtPalette.h src/art/ArtPalette.cpp src/art/MockArt.h
+        src/sound/SoundThemeCheck.h src/sound/SoundThemeCheck.cpp
+        src/sound/SoundThemes.h src/sound/SoundThemes.cpp
     QML_FILES
         qml/Main.qml
         qml/Shell.qml
@@ -109,6 +111,7 @@ qt_add_qml_module(ruyashell
         qml/themes/Themes.qml
         qml/themes/ThemeMath.qml
         qml/Sfx.qml
+        qml/AmbientLoop.qml
         qml/BackKey.qml
         qml/ThermalText.qml
         qml/Notifications.qml
@@ -198,9 +201,23 @@ qt_add_qml_module(ruyashell
         qml/controls/SliderRow.qml
         qml/controls/ThemeRow.qml
     RESOURCES
-        sounds/navigate.wav
-        sounds/select.wav
-        sounds/back.wav
+        sounds/dreamglass/navigate.wav
+        sounds/dreamglass/select.wav
+        sounds/dreamglass/back.wav
+        sounds/dreamglass/error.wav
+        sounds/dreamglass/notification.wav
+        sounds/dreamglass/warning.wav
+        sounds/dreamglass/open.wav
+        sounds/dreamglass/close.wav
+        sounds/dreamglass/page.wav
+        sounds/dreamglass/volume.wav
+        sounds/dreamglass/startup.wav
+        sounds/dreamglass/toggle-on.wav
+        sounds/dreamglass/toggle-off.wav
+        sounds/dreamglass/ambient.flac
+        sounds/dreamglass/theme.json
+        sounds/dreamglass/README.md
+        sounds/dreamglass/LICENSE-Sounds.txt
         assets/glass-grain.png
         assets/wallpapers/catalog.json
         assets/wallpapers/dusk.jpg
@@ -229,7 +246,7 @@ else()
 endif()
 
 # qmltyperegistrar includes the QML_ELEMENT headers by file name.
-target_include_directories(ruyashell PUBLIC src/backend src/profiles src/settings src/audio src/network src/bluetooth src/battery src/time src/display src/thermal src/storage src/system src/power src/store src/library src/update src/session src/usage src/input src/wallpaper src/art)
+target_include_directories(ruyashell PUBLIC src/backend src/profiles src/settings src/audio src/network src/bluetooth src/battery src/time src/display src/thermal src/storage src/system src/power src/store src/library src/update src/session src/usage src/input src/wallpaper src/sound src/art)
 # Qt6::GuiPrivate: ScreenPower calls QPlatformScreen::setPowerState (DPMS under eglfs_kms, T-202).
 target_link_libraries(ruyashell PRIVATE Qt6::Network Qt6::Quick Qt6::Multimedia Qt6::DBus Qt6::GuiPrivate)
 
@@ -268,6 +285,7 @@ endif()
 
 qt_add_executable(ruya-shell src/main.cpp)
 target_link_libraries(ruya-shell PRIVATE Qt6::Gui Qt6::Quick ruyashellplugin)
+target_include_directories(ruya-shell PRIVATE src/sound)   # --check-sound-theme (T-227) uses the checker without the UI
 
 # A module of its own, outside RuyaShell, so qmllint, lupdate and the tests (Windows) never see it.
 if(RUYA_COMPOSITOR)
@@ -294,6 +312,9 @@ include(GNUInstallDirs)
 install(TARGETS ruya-shell RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 # Licences of the bundled fonts (T-157, T-145) and wallpapers (T-208).
 install(FILES fonts/LICENSE-MaterialSymbols.txt fonts/OFL-Inter.txt assets/wallpapers/LICENSE-Wallpapers.txt DESTINATION share/licenses/ruyaos)
+# The bundled sound theme (T-227): the shell looks in /usr/share/ruyaos/sounds first (a Qt resource is the fallback).
+install(DIRECTORY sounds/dreamglass DESTINATION share/ruyaos/sounds)
+install(FILES sounds/dreamglass/LICENSE-Sounds.txt DESTINATION share/licenses/ruyaos)
 
 if(RUYA_BUILD_TESTS)
     find_package(Qt6 REQUIRED COMPONENTS QuickTest)

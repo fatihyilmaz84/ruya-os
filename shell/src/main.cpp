@@ -1,9 +1,13 @@
+#include "SoundThemeCheck.h"
+
 #include <QCommandLineParser>
+#include <QCoreApplication>
 #include <QFile>
 #include <QFontDatabase>
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
 #include <QQuickWindow>
+#include <QTemporaryDir>
 #include <QtQml/qqmlextensionplugin.h>
 
 #include <cstdio>
@@ -23,8 +27,54 @@ static QString imageVersion()
     return QStringLiteral("dev");
 }
 
+// `ruya-shell --check-sound-theme <folder>...` and `--check-sound-theme-fixtures` (T-227,
+// scripts/lint-sound-themes.ps1): run the sound theme checker without starting the UI. Exit code 0
+// when every folder passes (or, for the fixtures, every case ends as expected), 1 otherwise.
+static int runSoundThemeCheck(int argc, char *argv[])
+{
+    QCoreApplication app(argc, argv);
+    const QStringList args = app.arguments().mid(1);
+    int failures = 0;
+    if (args.first() == QLatin1String("--check-sound-theme-fixtures")) {
+        QTemporaryDir dir;
+        if (!dir.isValid() || !SoundTheme::writeFixtures(dir.path())) {
+            std::printf("FAIL: cannot write the fixtures\n");
+            return 1;
+        }
+        for (const SoundTheme::FixtureCase &c : SoundTheme::fixtureCases()) {
+            const SoundTheme::Result r = SoundTheme::check(dir.filePath(c.name));
+            const bool matched = c.shouldPass ? r.ok : (!r.ok && r.problems.join(QLatin1Char('\n')).contains(c.expect));
+            std::printf("%s %s%s\n", matched ? "ok  " : "FAIL", qPrintable(c.name),
+                        matched || r.problems.isEmpty() ? "" : qPrintable(QStringLiteral(": ") + r.problems.join(QStringLiteral("; "))));
+            failures += matched ? 0 : 1;
+        }
+        QString problem;
+        int cases = 0;
+        const bool fuzzOk = SoundTheme::fuzz(&problem, &cases);
+        std::printf("%s fuzz: %d hostile files, %s\n", fuzzOk ? "ok  " : "FAIL", cases, qPrintable(fuzzOk ? QStringLiteral("every one got a verdict") : problem));
+        failures += fuzzOk ? 0 : 1;
+        return failures ? 1 : 0;
+    }
+    for (const QString &folder : args.mid(1)) {
+        const SoundTheme::Result r = SoundTheme::check(folder);
+        if (r.ok) {
+            std::printf("ok   %s (%s, %d cues%s)\n", qPrintable(folder), qPrintable(r.manifest.name), int(r.manifest.cues.size()),
+                        r.manifest.hasAmbient ? ", ambient" : "");
+            for (const QString &w : r.warnings)
+                std::printf("     warning: %s\n", qPrintable(w));
+        } else {
+            std::printf("FAIL %s: %s\n", qPrintable(folder), qPrintable(r.problems.join(QStringLiteral("; "))));
+            ++failures;
+        }
+    }
+    return failures ? 1 : 0;
+}
+
 int main(int argc, char *argv[])
 {
+    if (argc >= 2 && (QLatin1String(argv[1]) == QLatin1String("--check-sound-theme")
+                      || QLatin1String(argv[1]) == QLatin1String("--check-sound-theme-fixtures")))
+        return runSoundThemeCheck(argc, argv);
     QGuiApplication app(argc, argv);
     app.setApplicationName(QStringLiteral("ruya-shell"));
     app.setOrganizationDomain(QStringLiteral("ruyaos.org"));

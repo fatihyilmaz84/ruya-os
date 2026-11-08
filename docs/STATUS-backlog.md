@@ -4,6 +4,25 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 
 | ID | Title | Status | Depends |
 |---|---|---|---|
+| [T-296](tasks/T-296-vm-check-script-fixes.md) | VM check script fixes: checks that pass for the wrong reason, early exits, missing cases | todo | — |
+| [T-297](tasks/T-297-lint-script-and-docs-hygiene.md) | Lint, script and docs hygiene: self-check fixtures, hashed download, overlap check, a QML pitfall note | todo | — |
+| [T-290](tasks/T-290-ruya-session-hardening.md) | ruya-session hardening: adopt running apps after a restart, exec failures, unit security | todo | — |
+| [T-291](tasks/T-291-ruya-store-follow-ups.md) | ruya-store follow-ups: ordered installed-set reads, the age label, "Not rated" | todo | — |
+| [T-285](tasks/T-285-hint-bar-and-focus-follow-ups.md) | Hint bar and focus follow-ups: Accept hints, keyboard hints, Tab, tests that could not fail | todo | — |
+| [T-286](tasks/T-286-outside-text-plain-and-wallpaper-copy-edges.md) | Names from outside are drawn as plain text everywhere; wallpaper copy edge cases | todo | — |
+| [T-293](tasks/T-293-power-saving-follow-ups.md) | Power saving follow-ups: monotonic idle clock, honest Sleep row, audio inhibit, wake input gap, backdrop pause | todo | — |
+| [T-292](tasks/T-292-activity-page-follow-ups.md) | Activity page follow-ups: refresh only when visible, paging, retry, icons, focus order | todo | — |
+| [T-294](tasks/T-294-sound-theme-follow-ups.md) | Sound theme follow-ups: delete a saved theme, import limits tested, clear refusal message, one ambient copy | todo | — |
+| [T-295](tasks/T-295-time-zone-follow-ups.md) | Time zone follow-ups: say it when Setup cannot set the zone, type to filter the chooser | todo | — |
+| [T-300](tasks/T-300-bluetooth-service-follow-ups-bonded-name-batteries.md) | Bluetooth service follow-ups: `bonded` and the device's own name, Batteries re-announce, one format-character list | todo | — |
+| [T-301](tasks/T-301-controller-and-battery-ui-follow-ups.md) | Controller and battery UI follow-ups: Pair again, keyboard announcement, one status mapping, a clearer "+N" | todo | T-300 |
+| [T-287](tasks/T-287-display-hotplug-and-mode-check.md) | Display service follow-ups: hot-plug signal, check the real mode after the restart, recovery argument | todo | T-282 |
+| [T-288](tasks/T-288-display-pane-layout-and-ui-size-reflow.md) | Display pane order, layout at large UI size, a Screen row, and the late-filled Column reflow | todo | T-282 |
+| [T-289](tasks/T-289-system-information-follow-ups.md) | System information follow-ups: Bluetooth address from BlueZ, image from a root source, one info row, drive chooser | todo | — |
+| [T-299](tasks/T-299-image-follow-ups-secure-boot-bluez-grub-menu.md) | Image follow-ups (VM this task): quiet bootloader-update on Secure Boot, BlueZ pairable timeout, grub-menu ordering, webp | todo | — |
+| [T-283](tasks/T-283-contrast-gate-rows-and-chart-bar-marker.md) | Contrast gate rows: glass sheet, chart bars, saver, bare backdrop, avatars; the chart's read-bar marker | todo | T-282 |
+| [T-284](tasks/T-284-glass-sheet-and-dialog-card-follow-ups.md) | Glass sheet follow-ups and one dialog card for the confirm dialogs | todo | T-282 |
+| [T-298](tasks/T-298-ci-qt-floor-and-linux-clippy-gate.md) | **[lead]** CI: decide the Qt floor and add a Linux-native clippy gate at Rust 1.92 | todo | — |
 | [T-201](tasks/T-201-recover-from-stuck-processes.md) | **[lead]** Recover from stuck processes (watchdogs, OOM) | todo | — |
 | [T-207](tasks/T-207-faster-bluetooth-controller-reconnect.md) | **[lead]** Faster Bluetooth controller reconnect | todo | — |
 | [T-210](tasks/T-210-profile-customisation.md) | Profile customisation: avatar, colour, name | todo | — |

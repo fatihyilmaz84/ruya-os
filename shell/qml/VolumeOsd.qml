@@ -22,6 +22,8 @@ Item {
     Connections {
         target: Audio
         function onAdjusted() {
+            if (!Audio.muted)
+                Sfx.volume()
             osd.shown = true
             hideTimer.restart()
         }

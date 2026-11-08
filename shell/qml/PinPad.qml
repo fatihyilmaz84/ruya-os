@@ -137,7 +137,7 @@ FocusScope {
             finishCollect()
         } else {
             message = qsTr("PINs don't match")
-            Sfx.back()
+            Sfx.error()
             shakeDots()
             entered = ""
             firstEntry = ""
@@ -163,11 +163,11 @@ FocusScope {
             } else if (status === "locked-out") {
                 pad.lockSecs = retryAfterSecs
                 pad.message = ""
-                Sfx.back()
+                Sfx.error()
                 pad.shakeDots()
             } else if (status === "wrong-pin") {
                 pad.message = qsTr("Wrong PIN. %n attempt(s) left.", "", attemptsLeft)
-                Sfx.back()
+                Sfx.error()
                 pad.shakeDots()
             } else {
                 pad.message = qsTr("Could not sign in (%1).").arg(status)

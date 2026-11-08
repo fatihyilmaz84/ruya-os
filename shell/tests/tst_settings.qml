@@ -594,6 +594,8 @@ Item {
             spy.signalName = "toggled"
             spy.clear()
             const selects = Sfx.selectCount
+            const ons = Sfx.toggleOnCount
+            const offs = Sfx.toggleOffCount
             keyClick(Qt.Key_Left)
             keyClick(Qt.Key_Right)
             keyClick(Qt.Key_Up)
@@ -603,7 +605,9 @@ Item {
             keyClick(Qt.Key_Enter)
             compare(toggle.checked, false)
             compare(spy.count, 2)
-            compare(Sfx.selectCount, selects + 2, "Accept takes the select sound path")
+            compare(Sfx.toggleOnCount, ons + 1, "switching on takes the toggle-on cue")
+            compare(Sfx.toggleOffCount, offs + 1, "switching off takes the toggle-off cue")
+            compare(Sfx.selectCount, selects, "a switch no longer uses the select cue")
 
             // ChoiceRow: Left/Right cycle (wrapping), nothing else changes it.
             const choice = createTemporaryObject(choiceComponent, host)
