@@ -1,6 +1,9 @@
 #include "DeviceSettings.h"
 
 #include <QFontDatabase>
+#include <QImage>
+#include <QLinearGradient>
+#include <QPainter>
 #include <QGuiApplication>
 #include <QPointer>
 #include <QSettings>
@@ -70,6 +73,42 @@ public:
 private:
     QPointer<QQuickWindow> m_last;
 };
+
+// Pictures for the art glow (T-281): solid-ish 160 x 90 pictures in a temporary directory, so no
+// binary is committed. red, blue, green, white and dark are a gentle diagonal gradient of one
+// colour; redblue is red on the left half and blue on the right; grey and pastel exercise the
+// sampler's limits. Exposed to the tests as `artFixtures` (a path); the mock library and store take
+// the first six as card art (MockArt.h).
+static QString writeArtFixtures(const QTemporaryDir &dir)
+{
+    if (!dir.isValid())
+        return {};
+    auto gradient = [&](const char *name, const QColor &from, const QColor &to) {
+        QImage image(160, 90, QImage::Format_RGB32);
+        QPainter p(&image);
+        QLinearGradient g(0, 0, 160, 90);
+        g.setColorAt(0, from);
+        g.setColorAt(1, to);
+        p.fillRect(image.rect(), g);
+        p.end();
+        image.save(dir.filePath(QString::fromLatin1(name) + QStringLiteral(".png")));
+    };
+    gradient("red", QColor(235, 40, 40), QColor(140, 15, 20));
+    gradient("blue", QColor(50, 90, 235), QColor(20, 40, 140));
+    gradient("green", QColor(50, 200, 80), QColor(20, 120, 50));
+    gradient("white", QColor(255, 255, 255), QColor(235, 235, 240));
+    gradient("dark", QColor(16, 16, 24), QColor(6, 6, 10));
+    gradient("grey", QColor(150, 150, 150), QColor(110, 110, 110));
+    gradient("pastel", QColor(255, 225, 230), QColor(245, 205, 215));
+    gradient("darkred", QColor(40, 4, 4), QColor(20, 2, 2));
+    QImage two(160, 90, QImage::Format_RGB32);
+    QPainter p(&two);
+    p.fillRect(0, 0, 80, 90, QColor(230, 30, 30));
+    p.fillRect(80, 0, 80, 90, QColor(40, 80, 230));
+    p.end();
+    two.save(dir.filePath(QStringLiteral("redblue.png")));
+    return dir.path();
+}
 
 // DeviceSettings.theme survives a restart (T-209): a second instance on the same store reads what
 // the first wrote, and a stored value that is not a theme falls back to the default. Runs against an
@@ -187,6 +226,9 @@ public slots:
         engine->rootContext()->setContextProperty(QStringLiteral("themePersistence"), persistence);
         static const QString wallpaperCheck = checkWallpaperPersistence();
         engine->rootContext()->setContextProperty(QStringLiteral("wallpaperPersistence"), wallpaperCheck);
+        static QTemporaryDir artDir;
+        static const QString artPath = writeArtFixtures(artDir);
+        engine->rootContext()->setContextProperty(QStringLiteral("artFixtures"), artPath);
         engine->rootContext()->setContextProperty(QStringLiteral("windowGuard"), new WindowGuard(engine));
         engine->rootContext()->setContextProperty(QStringLiteral("shotsDir"),
                                                   qEnvironmentVariable("RUYA_SHOTS_DIR"));

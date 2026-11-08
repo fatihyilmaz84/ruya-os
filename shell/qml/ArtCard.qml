@@ -20,8 +20,8 @@ Item {
     readonly property string stateText: running ? qsTr("Running")
                                       : installing ? qsTr("Installing %1 %").arg(installPercent) : ""
 
-    implicitWidth: 360 * u
-    implicitHeight: width * 9 / 16      // stays 16:9 when a grid or row sets the width
+    implicitWidth: Theme.cardWidthShelf * u
+    implicitHeight: Theme.cardArtHeight(width)      // stays 16:9 when a grid or row sets the width
     scale: focused ? Theme.focusScale : 1.0
     z: focused ? 1 : 0
     Behavior on scale { NumberAnimation { duration: Theme.focusMs; easing.type: Easing.Bezier; easing.bezierCurve: Theme.easeGlide } }
@@ -51,6 +51,9 @@ Item {
         radius: Theme.radiusM * card.u
         kind: "lift"
         active: card.focused
+        glow: art.glowColor       // the colour of the picture (T-281): the lift shadow takes it, and a halo on High
+        glowStrength: art.glowStrength
+        halo: true
         scale: art.scale          // the Accept pulse shrinks the art; the shadow follows it
     }
 
@@ -61,8 +64,7 @@ Item {
         appId: card.itemId
         appName: card.title
         picture: card.picture
-        border.width: card.focused ? Theme.focusRingWidth * card.u : 0
-        border.color: Theme.focusRing
+        glowing: true
 
         CardFocusLayers {
             id: focusLayers
@@ -101,5 +103,19 @@ Item {
             text: card.stateText
             kind: card.running ? "success" : "info"
         }
+    }
+
+    // The focus ring (04 §4): its own item above the picture, the caption, the badge and the card
+    // layers (a border on the art would be covered by the picture). It follows the art's scale, so
+    // the Accept pulse shrinks it with the art.
+    Rectangle {
+        id: ring
+        objectName: "cardRing"
+        anchors.fill: art
+        scale: art.scale
+        radius: Theme.radiusM * card.u
+        color: "transparent"
+        border.width: card.focused ? Theme.focusRingWidth * card.u : 0
+        border.color: Theme.focusRing
     }
 }

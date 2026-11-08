@@ -18,10 +18,16 @@ Page {
     property string query: ""
     property var resultIds: []
 
-    readonly property real cardWidth: 300 * u
-    readonly property real cardHeight: 290 * u
+    readonly property real cardWidth: Theme.cardWidthCompact * u
+    readonly property real cardHeight: (Theme.cardArtHeight(Theme.cardWidthCompact) + Theme.cardCaptionHeight) * u
     readonly property real rowTitleHeight: 56 * u
     readonly property real rowHeight: rowTitleHeight + cardHeight + Theme.spaceL * u
+    // The lists are `glowPad` larger than their place on every side, so the glow of a card at an edge
+    // is not cut off (04 §3.8).
+    readonly property real glowPad: Theme.glowPad * u
+    // Above and below the free gap is only `spaceM` (the toolbar, the hint bar): a list extends that far
+    // and no more, so no card is drawn over the hint bar; the glow is clipped there.
+    readonly property real glowPadV: Math.min(Theme.glowPad, Theme.spaceM) * u
 
     function rowTitle(key) {
         switch (key) {
@@ -126,12 +132,12 @@ Page {
             Sfx.navigate()
             const row = rowRepeater.itemAt(i)
             row.forceActiveFocus()
-            const top = row.y
-            const bottom = row.y + row.height
+            const top = row.y                      // in the column, which sits `glowPadV` into the flickable
+            const bottom = row.y + row.height + page.glowPadV
             if (top < flick.contentY)
                 flick.contentY = top
-            else if (bottom > flick.contentY + flick.height)
-                flick.contentY = Math.min(bottom - flick.height, Math.max(0, flick.contentHeight - flick.height))
+            else if (bottom > flick.contentY + flick.height - page.glowPadV)
+                flick.contentY = Math.min(bottom + page.glowPadV - flick.height, Math.max(0, flick.contentHeight - flick.height))
         }
     }
 
@@ -178,18 +184,20 @@ Page {
             radius: Theme.radiusM * card.u
             kind: "lift"
             active: card.focused
+            glow: art.glowColor
+            glowStrength: art.glowStrength
+            halo: true
         }
 
         AppArt {
             id: art
             width: parent.width
-            height: 190 * card.u
+            height: Theme.cardArtHeight(width)
             u: card.u
+            glowing: true
             appId: card.modelData
             appName: card.app.name ?? ""
             picture: card.app.tile ?? ""
-            border.width: card.focused ? Theme.focusRingWidth * card.u : 0
-            border.color: Theme.focusRing
 
             CardFocusLayers {
                 objectName: "cardFocusLayers"
@@ -205,6 +213,16 @@ Page {
                 text: page ? page.sourceText(card.app.source ?? "") : ""
                 kind: page ? page.sourceKind(card.app.source ?? "") : "info"
             }
+        }
+
+        // The focus ring: above the picture and its badge (a border on the art is covered by the picture).
+        Rectangle {
+            objectName: "cardRing"
+            anchors.fill: art
+            radius: Theme.radiusM * card.u
+            color: "transparent"
+            border.width: card.focused ? Theme.focusRingWidth * card.u : 0
+            border.color: Theme.focusRing
         }
 
         Text {
@@ -278,16 +296,23 @@ Page {
             id: flick
             objectName: "storeRows"
             visible: !page.searching
-            anchors { left: parent.left; right: parent.right; top: toolbar.bottom; topMargin: Theme.spaceM * page.u; bottom: parent.bottom }
+            anchors {
+                left: parent.left; leftMargin: -page.glowPad
+                right: parent.right; rightMargin: -page.glowPad
+                top: toolbar.bottom; topMargin: Theme.spaceM * page.u - page.glowPadV
+                bottom: parent.bottom; bottomMargin: -page.glowPadV
+            }
             contentWidth: width
-            contentHeight: rowColumn.height
+            contentHeight: rowColumn.height + 2 * page.glowPadV
             clip: true
             interactive: false
             Behavior on contentY { NumberAnimation { duration: Theme.focusMs; easing.type: Easing.OutCubic } }
 
             Column {
                 id: rowColumn
-                width: flick.width
+                x: page.glowPad
+                y: page.glowPadV
+                width: flick.width - 2 * page.glowPad
 
                 Repeater {
                     id: rowRepeater
@@ -337,10 +362,10 @@ Page {
                             Accessible.role: Accessible.List
                             Accessible.name: currentItem ? currentItem.Accessible.name : page.rowTitle(row.modelData)
                             anchors { left: parent.left; right: parent.right; top: rowHeading.bottom }
-                            height: page.cardHeight + Theme.spaceM * page.u
+                            height: page.cardHeight + Theme.cardGap * page.u
                             focus: true
                             orientation: ListView.Horizontal
-                            spacing: Theme.spaceM * page.u
+                            spacing: Theme.cardGap * page.u
                             leftMargin: Theme.spaceS * page.u
                             rightMargin: Theme.spaceS * page.u
                             topMargin: Theme.spaceS * page.u
@@ -367,12 +392,17 @@ Page {
             Accessible.role: Accessible.List
             Accessible.name: currentItem ? currentItem.Accessible.name : qsTr("Search results")
             visible: page.searching
-            anchors { left: parent.left; right: parent.right; top: toolbar.bottom; topMargin: Theme.spaceM * page.u; bottom: parent.bottom }
+            anchors {
+                left: parent.left; leftMargin: -page.glowPad
+                right: parent.right; rightMargin: -page.glowPad
+                top: toolbar.bottom; topMargin: Theme.spaceM * page.u - page.glowPadV
+                bottom: parent.bottom; bottomMargin: -page.glowPadV
+            }
             clip: true
-            cellWidth: page.cardWidth + Theme.spaceM * page.u
-            cellHeight: page.cardHeight + Theme.spaceL * page.u
-            leftMargin: Theme.spaceS * page.u
-            topMargin: Theme.spaceS * page.u
+            cellWidth: page.cardWidth + Theme.cardGap * page.u
+            cellHeight: page.cardHeight + Theme.cardGap * page.u
+            leftMargin: page.glowPad + Theme.spaceS * page.u
+            topMargin: page.glowPadV + Theme.spaceS * page.u
             keyNavigationEnabled: true
             highlightMoveDuration: 0
             model: page.resultIds
@@ -383,7 +413,7 @@ Page {
             Keys.onReturnPressed: if (currentIndex >= 0) page.openApp(page.resultIds[currentIndex])
             Keys.onEnterPressed: if (currentIndex >= 0) page.openApp(page.resultIds[currentIndex])
             Keys.onUpPressed: {
-                if (currentIndex < Math.max(1, Math.floor(width / cellWidth))) {
+                if (currentIndex < Math.max(1, Math.floor((width - 2 * page.glowPad) / cellWidth))) {
                     Sfx.navigate()
                     searchRow.forceActiveFocus()
                 } else {

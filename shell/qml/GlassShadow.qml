@@ -10,6 +10,13 @@ import RuyaShell
 // shape is cut out by an inverted mask), so it is safe under translucent surfaces too, and during a
 // scale or fade of the owner. A card's shadow follows the art's scale (ArtCard). Reduced motion does
 // not remove shadows, it only makes the fade instant.
+//
+// The art glow (T-281, 04 §3.8): a card hands in the colour of its picture (`glow`, `glowStrength`
+// from AppArt). While `active` the shadow's colour moves from the theme's shadow colour to
+// `Theme.glowShadow(glow, glowStrength)` over `tintMs` (at once under reduced motion), and a "lift"
+// shadow with `halo` set draws a second, wider and softer shadow of the same colour behind it on
+// the High tier only. A change of `glow` (the picture's colours arrived) fades over `tintMs` too.
+// Without `glowStrength` the shadow is the plain neutral one.
 Item {
     id: shadow
 
@@ -17,15 +24,28 @@ Item {
     property real radius: 0
     property string kind: "panel"
     property bool active: true
+    property color glow: Theme.shadowColor
+    property real glowStrength: 0
+    property bool halo: false
+    Behavior on glow { ColorAnimation { duration: Theme.tintMs } }
+
+    // 0..1: how far the shadow has moved to the glow; animated over tintMs when `active` changes.
+    property real glowMix: active && glowStrength > 0 ? 1 : 0
+    Behavior on glowMix { NumberAnimation { duration: Theme.tintMs } }
+    readonly property color tint: ThemeMath.blend(Theme.shadowColor, Theme.glowShadow(glow, glowStrength), glowMix)
 
     readonly property var spec: kind === "lift" ? Theme.shadowLift : kind === "pill" ? Theme.shadowPill : Theme.shadowPanel
     readonly property real offsetY: kind === "pill" ? Theme.shadowPill.offsetFactor * height : spec.offsetY * u
     readonly property real blurPx: kind === "pill" ? Math.min(Theme.shadowPill.blurFactor * height, Theme.shadowPill.blurMax * u) : spec.blur * u
-    readonly property real alpha: spec.alpha
+    readonly property real alpha: spec.alpha * (1 + (Theme.glowBoost - 1) * glowMix)
+    readonly property bool haloShown: halo && kind === "lift" && Theme.haloOn && Theme.shadowsOn && glowStrength > 0
+    readonly property real haloBlurPx: Theme.glowHalo.blur * u
+    readonly property real haloAlpha: Math.min(1, Theme.glowHalo.alpha * glowStrength * glowMix * (1 + (Theme.glowBoost - 1) * glowMix))
     readonly property bool shown: Theme.shadowsOn && active
 
-    readonly property real pad: Math.ceil(blurPx + Math.abs(offsetY)) + 2
+    readonly property real pad: Math.ceil(Math.max(blurPx, haloShown ? haloBlurPx : 0) + Math.abs(offsetY)) + 2
     readonly property real effectBlurMax: 64
+    readonly property real haloBlurMax: 128
 
     // Fades in and out with the owner's condition: the effect and its layers stay alive until the
     // fade-out ends (`visible` drops only at opacity 0).
@@ -70,6 +90,26 @@ Item {
         }
     }
 
+    // The halo of the art glow: wider and softer than the lift shadow, behind it, centred on the card.
+    MultiEffect {
+        objectName: "haloEffect"
+        visible: shadow.haloShown
+        x: box.x
+        y: box.y
+        width: box.width
+        height: box.height
+        source: box
+        autoPaddingEnabled: false
+        maskEnabled: true
+        maskInverted: true
+        maskSource: cutout
+        blurMax: shadow.haloBlurMax
+        shadowEnabled: true
+        shadowColor: shadow.tint
+        shadowOpacity: shadow.haloAlpha
+        shadowBlur: Math.min(1, shadow.haloBlurPx / shadow.haloBlurMax)
+    }
+
     MultiEffect {
         objectName: "shadowEffect"
         x: box.x
@@ -83,7 +123,7 @@ Item {
         maskSource: cutout
         blurMax: shadow.effectBlurMax
         shadowEnabled: true
-        shadowColor: Theme.shadowColor
+        shadowColor: shadow.tint
         shadowOpacity: shadow.alpha
         shadowBlur: Math.min(1, shadow.blurPx / shadow.effectBlurMax)
         shadowVerticalOffset: shadow.offsetY

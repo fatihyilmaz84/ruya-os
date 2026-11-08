@@ -737,9 +737,9 @@ FocusScope {
             anchors { left: parent.left; right: parent.right; bottom: parent.bottom; bottomMargin: root.marginY + hintBar.height + Theme.spaceM * root.u }
             leftMargin: root.marginX
             rightMargin: root.marginX
-            height: 220 * root.u
+            height: (Theme.cardArtHeight(Theme.cardWidthShelf) + 2 * Theme.cardGap) * root.u
             orientation: ListView.Horizontal
-            spacing: Theme.spaceL * root.u
+            spacing: Theme.cardGap * root.u
             keyNavigationWraps: false
             highlightMoveDuration: Theme.focusMs
             highlightRangeMode: ListView.ApplyRange
@@ -761,7 +761,7 @@ FocusScope {
 
                 objectName: "recentCard_" + modelData
                 u: root.u
-                width: 320 * root.u
+                width: Theme.cardWidthShelf * root.u
                 y: (ListView.view.height - height) / 2
                 itemId: modelData
                 title: entry.title ?? ""

@@ -1,4 +1,6 @@
+pragma ComponentBehavior: Bound
 import QtQuick
+import QtQuick.Effects
 import RuyaShell
 
 // Art of an app: a gradient whose hue comes from the app id (the ProfileCard idea), the first
@@ -21,6 +23,30 @@ Rectangle {
     readonly property bool pending: picture.length > 0 && imageStatus === Image.Loading
     readonly property bool shimmering: shimmer && pending && Theme.shimmerOn
 
+    // The art's colours for the card glow (T-281, 04 §3.8): the sampled colour of the picture
+    // (ArtPalette decodes it once, in the background, and remembers it) and how loud the glow may be.
+    // Until it is known, and for a card without a picture, the glow takes the placeholder's own hue.
+    // Only cards that glow ask for it (`glowing`); the hero and the saver do not.
+    property bool glowing: false
+    property var sample: ({})
+    readonly property bool sampled: sample.color !== undefined
+    readonly property color glowColor: sampled ? sample.color : Theme.glowFallback(hue)
+    readonly property real glowStrength: sampled ? sample.strength : Theme.glowFallbackStrength
+
+    function lookup() {
+        sample = glowing && picture.length > 0 ? ArtPalette.colorsOf(picture) : ({})
+    }
+    onPictureChanged: lookup()
+    onGlowingChanged: lookup()
+    Component.onCompleted: lookup()
+    Connections {
+        target: ArtPalette
+        function onSampled(source) {
+            if (source === art.picture)
+                art.lookup()
+        }
+    }
+
     readonly property real hue: {
         let h = 0
         for (let i = 0; i < appId.length; ++i)
@@ -29,7 +55,14 @@ Rectangle {
     }
 
     radius: Theme.radiusM * u
-    clip: true
+    border.width: 0    // the focus ring is the card's own item above the picture (ArtCard, the Store card)
+    clip: true      // rectangular: on the software renderer the picture's square corners stay (no MultiEffect there)
+
+    // The picture's corners follow `radius` (a Rectangle's `clip` is rectangular): on a GPU the
+    // picture is drawn through a rounded mask, as the wallpaper picker's tiles are. A square art
+    // (`radius` 0, the Home hero) needs no mask.
+    readonly property alias maskItem: imageMask
+    readonly property bool masked: GraphicsInfo.api !== GraphicsInfo.Software && radius > 0
     // `bare`: both stops clear. (Setting `gradient` to null instead leaves a white rectangle on a GPU window.)
     gradient: Gradient {
         GradientStop { position: 0.0; color: art.bare ? "transparent" : Theme.artTop(art.hue) }
@@ -81,8 +114,26 @@ Rectangle {
         objectName: "artImage"
         anchors.fill: parent
         visible: status === Image.Ready
-        source: art.picture.length > 0 ? (art.picture.startsWith("/") ? "file://" + art.picture : art.picture) : ""
+        // A path (Linux "/..." or a Windows drive "C:/...") becomes a file URL; a URL stays as it is.
+        source: art.picture.length > 0 ? (art.picture.startsWith("/") ? "file://" + art.picture
+                                          : /^[A-Za-z]:\//.test(art.picture) ? "file:///" + art.picture : art.picture) : ""
         fillMode: Image.PreserveAspectCrop
         asynchronous: true
+        layer.enabled: art.masked && visible
+        layer.smooth: true
+        layer.effect: MultiEffect {
+            maskEnabled: true
+            maskSource: art.maskItem
+            autoPaddingEnabled: false
+        }
+    }
+
+    Rectangle {
+        id: imageMask
+        objectName: "artImageMask"
+        anchors.fill: parent
+        radius: art.radius
+        visible: false
+        layer.enabled: art.masked && image.visible
     }
 }

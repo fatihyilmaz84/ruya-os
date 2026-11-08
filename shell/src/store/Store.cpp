@@ -345,6 +345,12 @@ int Store::mockSearchCount() const
     return mock ? mock->searchCount() : 0;
 }
 
+void Store::mockArtDir(const QString &dir)
+{
+    if (auto *mock = qobject_cast<MockStoreBackend *>(m_backend.get()))
+        mock->setArtDir(dir);
+}
+
 void Store::mockCatalogChanged()
 {
     if (auto *mock = qobject_cast<MockStoreBackend *>(m_backend.get()))

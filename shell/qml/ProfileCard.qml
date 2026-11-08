@@ -13,8 +13,8 @@ Item {
     Accessible.name: modelData.hasPin ? qsTr("%1, PIN protected").arg(modelData.name) : modelData.name
     Accessible.selected: focused
 
-    width: 260 * u
-    height: 320 * u
+    width: Theme.cardProfileWidth * u
+    height: Theme.cardProfileHeight * u
     scale: focused ? Theme.focusScale : 1.0
     Behavior on scale { NumberAnimation { duration: Theme.focusMs; easing.type: Easing.Bezier; easing.bezierCurve: Theme.easeGlide } }
 

@@ -1,4 +1,5 @@
 #include "MockStoreBackend.h"
+#include "MockArt.h"
 
 #include <algorithm>
 
@@ -68,6 +69,13 @@ void MockStoreBackend::initState()
     chess.updateAvailable = true;
     chess.newPermissions = {QStringLiteral("all-devices")};
     m_apps[indexOf(QStringLiteral("org.example.Editor"))].updateAvailable = true; // adds nothing
+}
+
+void MockStoreBackend::setArtDir(const QString &dir)
+{
+    for (int i = 0; i < m_apps.size(); ++i)
+        m_apps[i].tile = mockArtPath(dir, i);
+    emit catalogChanged();
 }
 
 void MockStoreBackend::reset()
