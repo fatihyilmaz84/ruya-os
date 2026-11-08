@@ -379,6 +379,77 @@ Item {
             compare(art.masked, false, "a square art (the Home hero) needs no mask")
         }
 
+        // T-314: MultiEffect's default mask thresholds turn the mask's antialiased edge into hard steps
+        // that reach past the ring. Every rounded cut goes through SmoothMask, which keeps the ramp.
+        function smoothEdge(fx, what) {
+            verify(fx, what + ": the effect exists")
+            compare(fx.maskEnabled, true, what + ": masked")
+            compare(fx.maskThresholdMin, 0.5, what + ": the 50 % point of the mask is the outline")
+            compare(fx.maskSpreadAtMin, 1, what + ": a one-pixel ramp, not a step")
+            compare(fx.autoPaddingEnabled, false, what + ": no padding")
+        }
+
+        function test_the_picture_mask_keeps_the_antialiased_edge() {
+            const card = createTemporaryObject(cardComponent, host, { picture: path("red") })
+            const art = artOf(card)
+            const image = findChild(art, "artImage")
+            tryVerify(() => image.visible, 3000)
+            // The layer's effect, instantiated here: on the software renderer the layer is off and the
+            // effect is never made, so the component itself is checked.
+            const fx = image.layer.effect.createObject(host)
+            smoothEdge(fx, "the picture")
+            compare(fx.maskSource, art.maskItem, "cut by the art's own mask")
+            fx.destroy()
+            compare(image.layer.smooth, true, "the picture's layer is filtered (the focused card is scaled)")
+            compare(art.maskItem.layer.smooth, true, "so is the mask's")
+            smoothEdge(findChild(card, "glareEffect"), "the glare")
+            const shadow = findChild(card, "cardLiftShadow")
+            for (const name of ["shadowEffect", "haloEffect"]) {
+                const cut = findChild(shadow, name)
+                smoothEdge(cut, name)
+                compare(cut.maskInverted, true, name + ": only the outside is drawn")
+                compare(cut.maskSource.layer.smooth, true, name + ": the cut-out layer is filtered")
+            }
+        }
+
+        // No tint under a masked picture: it would only show in the half-covered edge pixels as a
+        // coloured fringe. The software renderer keeps it (the picture is square there and covers it).
+        function test_no_fill_under_a_masked_picture() {
+            const card = createTemporaryObject(cardComponent, host, { picture: path("red") })
+            const art = artOf(card)
+            tryVerify(() => findChild(art, "artImage").visible, 3000)
+            for (const gpu of [false, true]) {
+                art.gpu = gpu                     // the GPU path, reached offscreen
+                compare(art.masked, gpu)
+                compare(art.fillClear, gpu, "clear under a masked picture only")
+                compare(art.gradient.stops[0].color.a, gpu ? 0 : 1, "the top stop, gpu " + gpu)
+                compare(art.gradient.stops[1].color.a, gpu ? 0 : 1, "the bottom stop, gpu " + gpu)
+            }
+            card.picture = ""
+            compare(art.fillClear, false, "without a picture the tint is the art")
+            compare(art.gradient.stops[0].color.a, 1)
+        }
+
+        // One radius for everything drawn on the card's outline: the picture's mask, the caption fade,
+        // the sheen and glare, the shadow's cut-out and the ring. They bind to the art's radius, so
+        // they cannot drift apart (the guard: change the art's radius and all of them follow).
+        function test_one_radius_for_picture_shadow_and_ring() {
+            for (const u of [1, 0.667, 2]) {
+                const card = createTemporaryObject(cardComponent, host, { width: 320 * u, u: u, focused: true, picture: path("red") })
+                const art = artOf(card)
+                compare(art.radius, Theme.radiusM * u, "the art at u " + u)
+                for (const r of [art.radius, 7]) {
+                    art.radius = r
+                    compare(art.maskItem.radius, r, "the picture's mask")
+                    compare(findChild(card, "artCaptionFade").radius, r, "the caption fade")
+                    compare(findChild(card, "cardFocusLayers").radius, r, "the sheen and glare")
+                    compare(findChild(card, "cardSheen").radius, r, "the sheen")
+                    compare(findChild(card, "cardLiftShadow").radius, r, "the shadow's cut-out")
+                    compare(findChild(card, "cardRing").radius, r, "the ring at u " + u)
+                }
+            }
+        }
+
         // --- the card family -------------------------------------------------------------------
 
         function test_the_tokens() {
@@ -546,6 +617,15 @@ Item {
             compare(ring.width, art.width)
             compare(ring.height, art.height)
             compare(ring.border.width, Theme.focusRingWidth * u)
+            // One radius on the outline (T-314): the ring, the picture's mask and the shadow's cut-out
+            // bind to the art's, so changing it moves all of them.
+            for (const r of [art.radius, 5]) {
+                art.radius = r
+                compare(ring.radius, r, "the Store card's ring")
+                compare(art.maskItem.radius, r, "the Store card's picture mask")
+                compare(findChild(card, "cardLiftShadow").radius, r, "the Store card's shadow")
+                compare(findChild(card, "cardFocusLayers").radius, r, "the Store card's sheen and glare")
+            }
             verify(card.children.indexOf(ring) > card.children.indexOf(art))
             for (let i = 0; i < card.children.length; ++i)
                 verify(card.children[i].z <= ring.z)

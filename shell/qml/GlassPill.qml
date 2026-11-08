@@ -1,6 +1,5 @@
 pragma ComponentBehavior: Bound
 import QtQuick
-import QtQuick.Effects
 import RuyaShell
 
 // Glass pill (04 §3.6): `glassStrong` over a blurred crop of `source` (the shared L0 layer),
@@ -43,16 +42,15 @@ Item {
         radius: height / 2
         visible: false
         layer.enabled: true
+        layer.smooth: true
     }
-    MultiEffect {
+    SmoothMask {
         id: blurFx
         objectName: "glassBlur"
         anchors.fill: parent
         visible: Theme.blurMax > 0 && !glass.liquid   // performance tier: no blur, opaque pill below; the liquid pill draws this through its shader
         source: crop
-        maskEnabled: true
         maskSource: mask
-        autoPaddingEnabled: false
         blurEnabled: true
         blur: 1.0
         blurMax: Theme.blurMax * (glass.liquid ? Theme.liquidBlurFactor : 1)   // a lighter blur keeps the detail the edge bends

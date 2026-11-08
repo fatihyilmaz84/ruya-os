@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Effects
 import RuyaShell
 
 // What a focused card shows on top of the ring and the 1.08 scale (04 §3.8): a white sheen over
@@ -82,14 +81,13 @@ Item {
         radius: fx.radius
         visible: false
         layer.enabled: glareAnim.running
+        layer.smooth: true
     }
-    MultiEffect {
+    SmoothMask {
         objectName: "glareEffect"
         anchors.fill: parent
         visible: glareAnim.running
         source: glareLayer
-        maskEnabled: true
         maskSource: glareMask
-        autoPaddingEnabled: false
     }
 }

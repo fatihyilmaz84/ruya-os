@@ -1,6 +1,5 @@
 pragma ComponentBehavior: Bound
 import QtQuick
-import QtQuick.Effects
 import RuyaShell
 
 // The glass sheet of a picker modal (04 §3.6, §3.7, T-272): `glassStrong` over a blurred crop of
@@ -90,15 +89,14 @@ Item {
         radius: sheet.radius
         visible: false
         layer.enabled: sheet.blurred
+        layer.smooth: true
     }
-    MultiEffect {
+    SmoothMask {
         objectName: "glassSheetBlur"
         anchors.fill: parent
         visible: sheet.blurred
         source: crop
-        maskEnabled: true
         maskSource: mask
-        autoPaddingEnabled: false
         blurEnabled: true
         blur: 1.0
         blurMax: Theme.blurMax

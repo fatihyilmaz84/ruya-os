@@ -48,7 +48,7 @@ Item {
         objectName: "cardLiftShadow"
         anchors.fill: parent
         u: card.u
-        radius: Theme.radiusM * card.u
+        radius: art.radius        // one radius for the picture, the shadow's cut-out and the ring (T-314)
         kind: "lift"
         active: card.focused
         glow: art.glowColor       // the colour of the picture (T-281): the lift shadow takes it, and a halo on High
@@ -76,6 +76,7 @@ Item {
         }
 
         Rectangle {
+            objectName: "artCaptionFade"
             anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
             height: parent.height * 0.5
             radius: parent.radius
@@ -114,7 +115,7 @@ Item {
         objectName: "cardRing"
         anchors.fill: art
         scale: art.scale
-        radius: Theme.radiusM * card.u
+        radius: art.radius
         color: "transparent"
         border.width: card.focused ? Theme.focusRingWidth * card.u : 0
         border.color: Theme.focusRing

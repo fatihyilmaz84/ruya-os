@@ -443,14 +443,21 @@ Item {
             DeviceSettings.theme = "dreamglass"
             tryCompare(Theme, "mix", 1, 3000)
             compare(panel.radius, Theme.radiusL * u)
-            // Every tile: the mask has the tile's radius, and the ring hugs it.
+            // Every tile: the mask and the hairline have the tile's radius, and the ring hugs it.
+            const gpu = host.GraphicsInfo.api !== GraphicsInfo.Software
             for (const id of ["", "dusk", "daybreak"]) {
                 const art = find("wallpaperTile_" + id)
                 compare(art.radius, Theme.radiusM * u)
                 compare(art.maskRadius, Theme.radiusM * u, "the picture is masked to radiusM: " + id)
+                compare(find("wallpaperHairline_" + id).radius, art.radius, "the hairline has the picture's radius: " + id)
+                // T-314: the cut keeps the mask's antialiased edge (MultiEffect's default makes hard steps).
+                checkSmoothCut(find("wallpaperTileMask_" + id), "tile " + id)
+                compare(art.masked, gpu, "masked on a GPU only: " + id)
+                compare(find("wallpaperTileMask_" + id).visible, gpu, "the mask is drawn on a GPU only: " + id)
             }
             const ring = find("wallpaperRing_")
             compare(ring.radius, find("wallpaperTile_").radius + Theme.focusRingOffset * u, "the ring follows the picture's shape")
+            checkSmoothCut(findChild(panel, "glassSheetBlur"), "the sheet's blur")
             // The Current badge sits inside the tile's corner.
             const badge = find("wallpaperCurrent_dusk")
             verify(badge.visible)
@@ -466,6 +473,16 @@ Item {
             tryCompare(find("wallpaperPicker"), "mode", "usb")
             compare(find("wallpaperPanel").layers !== undefined, true)
             compare(find("wallpaperTile_0").maskRadius, Theme.radiusM * u, "the USB grid is masked too")
+            compare(find("wallpaperHairline_0").radius, Theme.radiusM * u, "the USB hairline")
+            checkSmoothCut(find("wallpaperTileMask_0"), "a USB tile")
+        }
+
+        function checkSmoothCut(fx, what) {
+            verify(fx, what + ": the effect exists")
+            compare(fx.maskEnabled, true, what)
+            compare(fx.maskThresholdMin, 0.5, what + ": the 50 % point of the mask is the outline")
+            compare(fx.maskSpreadAtMin, 1, what + ": a one-pixel ramp, not a step")
+            compare(fx.maskSource.layer.smooth, true, what + ": the mask's layer is filtered")
         }
 
         function test_the_ring_reads_against_the_panel_in_every_theme() {

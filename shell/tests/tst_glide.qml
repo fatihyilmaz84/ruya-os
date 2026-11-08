@@ -411,6 +411,10 @@ Item {
             // The plain pill is drawn unless the shader compiled; the software renderer never
             // compiles it, a GPU does (the screenshots).
             compare(blur.visible, !p.liquid)
+            // T-314: the blur is cut to the pill through SmoothMask (an antialiased edge, not steps).
+            compare(blur.maskThresholdMin, 0.5, "the 50 % point of the mask is the outline")
+            compare(blur.maskSpreadAtMin, 1, "a one-pixel ramp")
+            compare(blur.maskSource.layer.smooth, true, "the mask's layer is filtered")
             DeviceSettings.effectsQuality = "balanced"
             compare(p.liquid, false)
             compare(blur.visible, true, "Balanced: plain blurred pill")

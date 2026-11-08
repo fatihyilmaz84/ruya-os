@@ -181,7 +181,7 @@ Page {
             objectName: "cardLiftShadow"
             anchors.fill: art
             u: card.u
-            radius: Theme.radiusM * card.u
+            radius: art.radius        // one radius for the picture, the shadow's cut-out and the ring (T-314)
             kind: "lift"
             active: card.focused
             glow: art.glowColor
@@ -219,7 +219,7 @@ Page {
         Rectangle {
             objectName: "cardRing"
             anchors.fill: art
-            radius: Theme.radiusM * card.u
+            radius: art.radius
             color: "transparent"
             border.width: card.focused ? Theme.focusRingWidth * card.u : 0
             border.color: Theme.focusRing
