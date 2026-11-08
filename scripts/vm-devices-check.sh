@@ -182,23 +182,29 @@ bluetooth_check() {
 }
 
 # T-300: the VM has no Bluetooth adapter, so ListDevices is empty on the system bus. `bonded` and
-# `device_name` are read from a second instance of the service on a private session bus (as
-# ruya-shell, `ruya-devices --session`: the fake BlueZ with a renamed pad that is paired but not
-# bonded). JSON is parsed, key order is never relied on.
+# `device_name` are read from a second instance of the service on ruya-shell's own user bus
+# (`ruya-devices --session`: the fake BlueZ with a renamed pad that is paired but not bonded). The
+# real unit owns org.ruyaos.Devices1 on the SYSTEM bus only, so the name is free on the user bus.
+# JSON is parsed (python3 stays in the image), key order is never relied on.
 bluetooth_fake_check() {
-    local out verdict
-    echo "--- bluetooth (T-300): bonded and device_name of a fake device (private session bus, FakeBluez)"
-    if ! command -v dbus-run-session >/dev/null || ! command -v python3 >/dev/null; then
-        bad "dbus-run-session and python3 are needed for the fake-device check"
+    local out verdict ubus="unix:path=/run/user/$uid/bus"
+    echo "--- bluetooth (T-300): bonded and device_name of a fake device (ruya-shell's user bus, FakeBluez)"
+    if ! command -v python3 >/dev/null; then
+        bad "python3 is needed for the fake-device check"
         return
     fi
-    out="$(as_shell dbus-run-session -- bash -c '
+    if as_shell env DBUS_SESSION_BUS_ADDRESS="$ubus" busctl --user status org.ruyaos.Devices1 >/dev/null 2>&1; then
+        bad "org.ruyaos.Devices1 is already on ruya-shell's user bus: the fake-device check needs the name free"
+        return
+    fi
+    out="$(as_shell env DBUS_SESSION_BUS_ADDRESS="$ubus" bash -c '
         /usr/bin/ruya-devices --session >/dev/null 2>&1 &
         pid=$!
         n=0
         until busctl --user status org.ruyaos.Devices1 >/dev/null 2>&1 || [ "$n" -ge 50 ]; do sleep 0.2; n=$((n + 1)); done
         busctl --user --json=short call org.ruyaos.Devices1 /org/ruyaos/Devices1 org.ruyaos.Devices1.Bluetooth ListDevices
         kill "$pid" 2>/dev/null
+        wait "$pid" 2>/dev/null
     ' 2>&1)"
     verdict="$(printf '%s' "$out" | python3 -I -c '
 import json, sys
