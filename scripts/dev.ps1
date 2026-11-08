@@ -8,12 +8,17 @@
 #   .\scripts\dev.ps1 shots     # run the screenshot tests on real windows, save to output\shell-shots
 #   .\scripts\dev.ps1 rust      # Rust checks only (fmt, clippy for Windows + Linux, tests)
 #   .\scripts\dev.ps1 shell     # shell checks only (build, token lint, qmllint, Qt Quick tests)
+#   .\scripts\dev.ps1 qml tst_themes tst_glass   # PARTIAL: builds the test runner, runs only these files
+#   .\scripts\dev.ps1 docs      # the checks that read docs\ (text, board, developer guide, spec lint)
 #
 # Qt location: $env:RUYA_QT_DIR, default D:\dev\Qt\6.10.3\msvc2022_64.
 param(
     [Parameter(Position = 0)]
-    [ValidateSet("check", "build", "test", "run", "shots", "rust", "shell")]
-    [string]$Command = "test"
+    [ValidateSet("check", "build", "test", "run", "shots", "rust", "shell", "qml", "docs")]
+    [string]$Command = "test",
+    # qml only: test files of shell\tests by name (tst_themes, tst_themes.qml; several, or comma-separated).
+    [Parameter(Position = 1, ValueFromRemainingArguments = $true)]
+    [string[]]$Tests = @()
 )
 
 # Native tools write progress to stderr; never let PowerShell turn that into errors.
@@ -23,8 +28,30 @@ $QtDir = if ($env:RUYA_QT_DIR) { $env:RUYA_QT_DIR } else { "D:\dev\Qt\6.10.3\msv
 $ShellBuild = Join-Path $Repo "shell\build-win"
 $Services = Join-Path $Repo "services"
 $script:Failures = @()
+# Git for Windows: the `git` on PATH can be devkitPro's MSYS2 build, which cannot read worktree links.
+$Git = Join-Path $env:ProgramFiles "Git\cmd\git.exe"
+if (-not (Test-Path $Git)) { $Git = "git" }
+# Written by `test` only when it ends ALL GREEN on a clean tree whose HEAD did not move during the
+# run; scripts\push-main.ps1 reads it to skip re-running `test` on content that already passed.
+$GreenMarker = Join-Path $Repo "output\last-green-test.txt"
 
-function Step([string]$Name) { Write-Host ""; Write-Host "==> $Name" -ForegroundColor Cyan }
+# Per-step wall time, printed at the end (LEAD.md 6b: time the gates).
+$script:Clock = [Diagnostics.Stopwatch]::StartNew()
+$script:StepTimes = @()
+$script:StepName = $null
+$script:StepStart = 0.0
+function Close-Step {
+    if ($script:StepName) {
+        $script:StepTimes += [pscustomobject]@{ Name = $script:StepName; Sec = $script:Clock.Elapsed.TotalSeconds - $script:StepStart }
+        $script:StepName = $null
+    }
+}
+function Step([string]$Name) {
+    Close-Step
+    Write-Host ""; Write-Host "==> $Name" -ForegroundColor Cyan
+    $script:StepName = $Name
+    $script:StepStart = $script:Clock.Elapsed.TotalSeconds
+}
 
 function Record([string]$Name, [bool]$Ok) {
     if ($Ok) { Write-Host "    ok: $Name" -ForegroundColor Green }
@@ -90,13 +117,16 @@ function Do-Check {
     Record "prerequisites" $ok
 }
 
-function Do-Build {
+# -Target: one CMake target and what it needs (the `qml` fast mode builds only tst_ruyashell).
+function Do-Build([string]$Target) {
     Use-Qt
-    Step "Build shell (Release)"
+    Step "Build shell (Release$(if ($Target) { ", target $Target" }))"
     if (-not (Test-Path (Join-Path $ShellBuild "CMakeCache.txt"))) {
         Invoke-Native "cmake configure" { & $script:CMake -S (Join-Path $Repo "shell") -B $ShellBuild -G "Visual Studio 18 2026" -A x64 "-DCMAKE_PREFIX_PATH=$($QtDir -replace '\\','/')" }
     }
-    Invoke-Native "cmake build" { & $script:CMake --build $ShellBuild --config Release -- -m '-v:minimal' -nologo }   # quoted: PS 5.1 splits -v:x
+    $targetArgs = @()
+    if ($Target) { $targetArgs = @("--target", $Target) }
+    Invoke-Native "cmake build$(if ($Target) { " ($Target)" })" { & $script:CMake --build $ShellBuild --config Release @targetArgs -- -m '-v:minimal' -nologo }   # quoted: PS 5.1 splits -v:x
 }
 
 function Do-Rust {
@@ -127,10 +157,18 @@ function Get-ScreenshotFunctions {
     return $fns
 }
 
-function Run-QmlTests([string]$ShotsDir) {
+# -InputFile: one test file (the `qml` fast mode), through the runner's -input, offscreen, with its own log.
+function Run-QmlTests([string]$ShotsDir, [string]$InputFile) {
     # Per checkout: worktree lanes run `test` at the same time (a shared %TEMP% log collided, 2026-11-04).
     $log = Join-Path $ShellBuild "ruya-qmltest.txt"
     $only = @()
+    $label = "Qt Quick tests"
+    if ($InputFile) {
+        $base = [IO.Path]::GetFileNameWithoutExtension($InputFile)
+        $log = Join-Path $ShellBuild "ruya-qmltest-$base.txt"
+        $only = @("-input", $InputFile)
+        $label = "Qt Quick tests ($base only)"
+    }
     if ($ShotsDir) {
         # Screenshots need a real GPU window (offscreen = software renderer, no MultiEffect).
         # Real windows depend on the desktop: keep it unlocked and don't click other windows.
@@ -159,7 +197,7 @@ function Run-QmlTests([string]$ShotsDir) {
     # A run that failed while the desktop is locked says so too; the failures above stay visible,
     # since LogonUI can also belong to another session or a lock that came after a real failure.
     if ($ShotsDir -and $code -ne 0 -and (Test-SessionLocked)) { Stop-SessionLocked; return }
-    Record "Qt Quick tests" ($code -eq 0)
+    Record $label ($code -eq 0)
 }
 
 # Half-size copies (960x540) in <dir>\review: an AI reviewer reads these instead of the full
@@ -537,12 +575,80 @@ function Do-Shell {
     Run-QmlTests $null
 }
 
+# Every check that reads docs\ (text lint: all tracked files; board lint: STATUS and tasks;
+# developer guide lint: docs\developers; spec lint: 04-design-system.md). A check that starts
+# reading docs\ belongs here too: push-main.ps1 and the reviewer's round 2 run only this group
+# when nothing but docs\*.md changed since a green `test`.
+function Do-Docs { Test-Text; Test-Board; Test-DevDocs; Test-SpecComponents }
+
+# HEAD and whether the working tree is clean (no tracked change, no untracked file that is not ignored).
+function Get-TreeState {
+    $head = "$(& $Git -C $Repo rev-parse HEAD 2>$null)".Trim()
+    $okHead = ($LASTEXITCODE -eq 0) -and ($head -match '^[0-9a-f]{40}$')
+    $dirty = & $Git -C $Repo status --porcelain 2>$null
+    $okStatus = ($LASTEXITCODE -eq 0)
+    return [pscustomobject]@{ Head = $head; Clean = $okHead -and $okStatus -and (-not $dirty) }
+}
+
+function Write-GreenMarker($Before, $After) {
+    $why = $null
+    if (-not $Before.Clean) { $why = "the tree was not clean when the run started" }
+    elseif (-not $After.Clean) { $why = "the tree changed during the run" }
+    elseif ($Before.Head -ne $After.Head) { $why = "HEAD moved during the run" }
+    if ($why) { Write-Host "    no green marker: $why (push-main.ps1 will run test itself)"; return }
+    New-Item -ItemType Directory -Force (Split-Path -Parent $GreenMarker) | Out-Null
+    $stamp = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+    [IO.File]::WriteAllText($GreenMarker, "commit $($After.Head)`ntime $stamp`n", (New-Object Text.UTF8Encoding($false)))
+    Write-Host "    green marker: $($After.Head) ($GreenMarker)"
+}
+
+# shell\tests\<name>.qml for each name; an unknown name is a failure, not a silent skip.
+function Resolve-QmlTestFiles([string[]]$Names) {
+    $files = @()
+    foreach ($n in $Names) {
+        $base = [IO.Path]::GetFileNameWithoutExtension($n.Trim())
+        $path = Join-Path $Repo "shell\tests\$base.qml"
+        if ($base -and (Test-Path -LiteralPath $path)) { $files += $path }
+        else { Write-Host "    no such test file: shell\tests\$base.qml" -ForegroundColor Red; Record "test file $n" $false }
+    }
+    return $files
+}
+
+$PartialBanner = "PARTIAL: dev.ps1 qml ran only the named test files (no lints, no Rust, no other tests). NOT a substitute for dev.ps1 test."
+$TestNames = @($Tests | ForEach-Object { "$_" -split ',' } | Where-Object { $_.Trim() })
+if ($TestNames.Count -gt 0 -and $Command -ne "qml") {
+    Write-Host "Only 'qml' takes test file names: .\scripts\dev.ps1 qml tst_themes" -ForegroundColor Red
+    exit 2
+}
+
 switch ($Command) {
     "check" { Do-Check }
     "build" { Do-Build }
     "rust" { Do-Rust }
     "shell" { Do-Shell }
-    "test" { Test-Text; Test-Board; Test-Boot; Test-DevDocs; Do-Rust; Do-Shell }
+    "docs" { Do-Docs }
+    "qml" {
+        Write-Host $PartialBanner -ForegroundColor Yellow
+        if ($TestNames.Count -eq 0) { Write-Host "Name at least one test file: .\scripts\dev.ps1 qml tst_themes" -ForegroundColor Red; exit 2 }
+        $files = @(Resolve-QmlTestFiles $TestNames)
+        if ($script:Failures.Count -eq 0) {
+            Remove-Item (Join-Path $ShellBuild "ruya-qmltest-*.txt") -ErrorAction SilentlyContinue
+            Do-Build "tst_ruyashell"
+            if ($script:Failures.Count -eq 0) {
+                foreach ($f in $files) {
+                    Step "Qt Quick tests (offscreen): $([IO.Path]::GetFileName($f)) only"
+                    Run-QmlTests $null $f
+                }
+            }
+        }
+    }
+    "test" {
+        # A stale marker must never outlive a run that did not finish green.
+        Remove-Item $GreenMarker -ErrorAction SilentlyContinue
+        $treeBefore = Get-TreeState
+        Test-Text; Test-Board; Test-Boot; Test-DevDocs; Do-Rust; Do-Shell
+        if ($script:Failures.Count -eq 0) { Write-GreenMarker $treeBefore (Get-TreeState) }
+    }
     "shots" {
         if (Test-SessionLocked) { Stop-SessionLocked } else {
             Do-Build
@@ -580,10 +686,22 @@ switch ($Command) {
     }
 }
 
+Close-Step
 Write-Host ""
+if ($Command -ne "run" -and $script:StepTimes.Count -gt 0) {
+    $slow = $script:StepTimes | Sort-Object Sec -Descending | Select-Object -First 5 | ForEach-Object { "$($_.Name) $([int]$_.Sec) s" }
+    Write-Host "time: $([int]$script:Clock.Elapsed.TotalSeconds) s; slowest steps: $($slow -join '; ')"
+}
 if ($script:Failures.Count -gt 0) {
     Write-Host "FAILED: $($script:Failures -join ', ')" -ForegroundColor Red
+    if ($Command -eq "qml") { Write-Host $PartialBanner -ForegroundColor Yellow }
     exit 1
+}
+# The fast mode never prints ALL GREEN: that phrase means a full gate (push-main.ps1 matches it).
+if ($Command -eq "qml") {
+    Write-Host "PARTIAL PASS (qml: $($TestNames -join ', '))" -ForegroundColor Yellow
+    Write-Host $PartialBanner -ForegroundColor Yellow
+    exit 0
 }
 if ($Command -ne "run") { Write-Host "ALL GREEN ($Command)" -ForegroundColor Green }
 exit 0
