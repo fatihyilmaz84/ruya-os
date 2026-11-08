@@ -98,3 +98,4 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | [T-316](tasks/T-316-ra-account-link-and-emulator-handover.md) | RetroAchievements account link in Settings and credential hand-over to emulators | todo | T-315, T-304, T-220, T-211 |
 | [T-317](tasks/T-317-ra-data-in-the-shell.md) | RetroAchievements data in the shell: cache, Library rings, profile tab, game page | todo | T-316, T-307, T-246 |
 | [T-318](tasks/T-318-ra-unlock-moment-and-presence.md) | **[lead]** Retro unlock moment and presence: toast, report event, polling fallback | todo | T-317, T-246, T-245, T-306 |
+| [T-319](tasks/T-319-xbox-360-wireless-receiver.md) | Xbox 360 wireless receiver ("360 dongle"): in-kernel `xpad`, classification, battery, sync guidance | todo | — |
