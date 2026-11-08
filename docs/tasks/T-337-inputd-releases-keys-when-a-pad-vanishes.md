@@ -1,6 +1,6 @@
 # T-337 - ruya-inputd: a pad that vanishes never leaves a key held, and two pads share keys safely
 
-Status: in-progress · Phase: 2 · Depends: — · Area: services (ruya-inputd), scripts · Size: S · Owner: builder
+Status: done · Phase: 2 · Depends: — · Area: services (ruya-inputd), scripts · Size: S · Owner: builder
 
 ## Goal
 `ruya-inputd` turns every gamepad into key events on one shared virtual keyboard ("RuyaOS Navigation"). If a pad disappears (batteries, link loss, idle disconnect) while a button, a d-pad direction or a stick direction is held, its pump thread ends on the read error and the key stays pressed on the virtual keyboard: the shell sees a stuck Down or Accept, and every other pad's input is wrong until some pad presses and releases that key. With two pads a second problem exists: both write to the same keys, so pad B letting go of Down releases it while pad A still holds it.
