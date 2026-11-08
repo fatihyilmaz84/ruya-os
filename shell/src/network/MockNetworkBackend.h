@@ -23,6 +23,8 @@ public:
     // Tests only.
     void setCable(bool plugged);
     void reset();
+    // A network's name as an access point could broadcast it (any text); publishes the lists.
+    void setSsid(const QString &id, const QString &ssid);
     // Replies to refresh() arrive after `ms` (0: at once), with the state as it was when asked;
     // the number of replies still on their way. Lets a test play an old reply landing after a
     // new one.

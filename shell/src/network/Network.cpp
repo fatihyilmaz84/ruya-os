@@ -79,6 +79,12 @@ void Network::mockSetCable(bool plugged)
         mock->setCable(plugged);
 }
 
+void Network::mockSetSsid(const QString &id, const QString &ssid)
+{
+    if (auto *mock = qobject_cast<MockNetworkBackend *>(m_backend.get()))
+        mock->setSsid(id, ssid);
+}
+
 void Network::mockReset()
 {
     if (auto *mock = qobject_cast<MockNetworkBackend *>(m_backend.get()))

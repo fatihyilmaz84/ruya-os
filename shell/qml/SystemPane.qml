@@ -443,6 +443,7 @@ SettingsPane {
         objectName: "updateMessage"
         width: parent ? parent.width : 0
         visible: pane.message.length > 0
+        textFormat: Text.PlainText
         text: pane.message
         color: pane.messageIsError ? Theme.errorText : Theme.toastSuccess
         font.pixelSize: Theme.typeBody * pane.u
@@ -462,6 +463,7 @@ SettingsPane {
         objectName: "healthLine"
         width: parent ? parent.width : 0
         visible: Thermal.level !== "normal"
+        textFormat: Text.PlainText
         text: pane.healthLine()
         color: ThermalText.levelColor(Thermal.level)
         font.pixelSize: Theme.typeBody * pane.u

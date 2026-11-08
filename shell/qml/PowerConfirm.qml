@@ -116,6 +116,7 @@ FocusScope {
             id: titleText
             objectName: "powerConfirmTitle"
             anchors.horizontalCenter: parent.horizontalCenter
+            textFormat: Text.PlainText
             text: dialog.action === "custom" ? dialog.customTitle : (dialog.titles[dialog.action] ?? "")
             color: Theme.text
             font.pixelSize: Theme.typeTitle * dialog.u
@@ -127,6 +128,7 @@ FocusScope {
             anchors.horizontalCenter: parent.horizontalCenter
             visible: dialog.detail.length > 0
             width: Math.min(implicitWidth, 1100 * dialog.u)
+            textFormat: Text.PlainText
             text: dialog.detail
             color: Theme.textDim
             font.pixelSize: Theme.typeBody * dialog.u

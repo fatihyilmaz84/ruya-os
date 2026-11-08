@@ -305,6 +305,7 @@ FocusScope {
         Text {
             objectName: "entryTitle"
             anchors.horizontalCenter: parent.horizontalCenter
+            textFormat: Text.PlainText
             text: entry.title
             color: Theme.text
             font.pixelSize: Theme.typeHeadline * entry.u
@@ -330,6 +331,7 @@ FocusScope {
                 x: Math.min(28 * entry.u, field.width - 28 * entry.u - width)
                 Text {
                     objectName: "entryDisplay"
+                    textFormat: Text.PlainText
                     text: entry.displayText
                     color: Theme.text
                     font.pixelSize: Theme.typeHeadline * entry.u

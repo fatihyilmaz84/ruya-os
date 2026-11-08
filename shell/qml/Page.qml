@@ -39,6 +39,7 @@ FocusScope {
         id: heading
         x: page.marginX
         y: page.marginY + 110 * page.u
+        textFormat: Text.PlainText
         text: page.title
         color: Theme.text
         font.pixelSize: Theme.typeDisplay * page.u

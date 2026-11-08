@@ -30,6 +30,7 @@ Item {
 
         Text {
             anchors.centerIn: parent
+            textFormat: Text.PlainText
             text: card.modelData.name.charAt(0).toUpperCase()
             color: Theme.text
             font.pixelSize: Theme.typeHero * card.u
@@ -39,6 +40,7 @@ Item {
 
     Text {
         anchors { horizontalCenter: parent.horizontalCenter; top: avatar.bottom; topMargin: Theme.spaceM * card.u }
+        textFormat: Text.PlainText
         text: card.modelData.name
         color: Theme.text
         font.pixelSize: Theme.typeHeadline * card.u

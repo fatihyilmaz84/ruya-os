@@ -80,6 +80,18 @@ SettingsPane {
         onActivated: picker.open()
     }
 
+    // The least dim the current picture needs for legible text under the current theme (04 §3, T-208).
+    function requiredWallpaperDim() {
+        let entry = ({})
+        for (const list of [Wallpapers.bundled, Wallpapers.user]) {
+            for (const w of list) {
+                if (w.id === DeviceSettings.wallpaper)
+                    entry = w
+            }
+        }
+        return Wallpapers.requiredDim(entry.peak ?? 0, entry.floor ?? 0, Theme.background, Theme.text)
+    }
+
     SliderRow {
         id: dim
         objectName: "rowWallpaperDim"
@@ -90,6 +102,9 @@ SettingsPane {
         to: 60
         stepSize: 5
         unit: "%"
+        // The dim that is applied: the larger of the slider and the legibility rule for this picture
+        // under this theme (WallpaperLayer.effectiveDim without the page-blur tier rule).
+        shownValue: Math.max(value, pane.requiredWallpaperDim() * 100)
         onEdited: v => {
             DeviceSettings.wallpaperDim = v / 100
             dim.value = Math.round(DeviceSettings.wallpaperDim * 100)

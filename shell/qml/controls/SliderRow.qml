@@ -11,11 +11,14 @@ SettingControl {
     property real to: 100
     property real stepSize: 1
     property real value: 0
+    // What the bar and the number show; the slider position (`value`) unless a rule raises it above
+    // what the keys set (the Dim row: a bright picture is veiled harder than the owner asked, T-286).
+    property real shownValue: value
     property string unit: ""          // appended to the number, e.g. "%"
 
     signal edited(real value)
 
-    accessibleValue: Math.round(value) + unit
+    accessibleValue: Math.round(shownValue) + unit
     Accessible.role: Accessible.Slider
 
     function step(delta) {
@@ -33,7 +36,7 @@ SettingControl {
         anchors { right: parent.right; rightMargin: Theme.spaceL * row.u; verticalCenter: parent.verticalCenter }
         width: 90 * row.u
         horizontalAlignment: Text.AlignRight
-        text: Math.round(row.value) + row.unit
+        text: Math.round(row.shownValue) + row.unit
         color: Theme.text
         font.pixelSize: Theme.typeBody * row.u
     }
@@ -44,7 +47,7 @@ SettingControl {
         radius: height / 2
         color: Theme.glass
         Rectangle {
-            width: row.to > row.from ? parent.width * (row.value - row.from) / (row.to - row.from) : 0
+            width: row.to > row.from ? parent.width * (row.shownValue - row.from) / (row.to - row.from) : 0
             height: parent.height
             radius: parent.radius
             color: Theme.text

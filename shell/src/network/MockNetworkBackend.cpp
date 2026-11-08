@@ -63,6 +63,16 @@ void MockNetworkBackend::setCable(bool plugged)
     publishState();
 }
 
+void MockNetworkBackend::setSsid(const QString &id, const QString &ssid)
+{
+    const int at = indexOf(id);
+    if (at < 0)
+        return;
+    m_networks[at].ssid = ssid;
+    publishState();
+    publishNetworks();
+}
+
 void MockNetworkBackend::reset()
 {
     initState();

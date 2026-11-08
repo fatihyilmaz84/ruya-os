@@ -228,6 +228,7 @@ Page {
         Text {
             id: nameText
             anchors { left: parent.left; right: parent.right; top: art.bottom; topMargin: Theme.spaceXs * card.u }
+            textFormat: Text.PlainText
             text: card.app.name ?? ""
             color: Theme.text
             font.pixelSize: Theme.typeCaption * card.u
@@ -237,6 +238,7 @@ Page {
 
         Text {
             anchors { left: parent.left; right: parent.right; top: nameText.bottom }
+            textFormat: Text.PlainText
             text: card.app.updateAvailable ? qsTr("Update available")
                 : card.app.installed ? qsTr("Installed") : (card.app.developer ?? "")
             color: card.app.updateAvailable ? Theme.warningText : Theme.text
@@ -350,6 +352,7 @@ Page {
                             id: rowHeading
                             height: page.rowTitleHeight
                             verticalAlignment: Text.AlignVCenter
+                            textFormat: Text.PlainText
                             text: page.rowTitle(row.modelData)
                             color: Theme.text
                             font.pixelSize: Theme.typeHeadline * page.u
@@ -426,6 +429,7 @@ Page {
             objectName: "storeNoResults"
             visible: page.searching && page.resultIds.length === 0
             anchors { horizontalCenter: parent.horizontalCenter; top: toolbar.bottom; topMargin: Theme.spaceXxl * page.u }
+            textFormat: Text.PlainText
             text: qsTr("No apps found for \"%1\"").arg(page.query)
             color: Theme.text
             font.pixelSize: Theme.typeBody * page.u

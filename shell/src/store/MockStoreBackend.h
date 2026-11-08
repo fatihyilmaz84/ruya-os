@@ -63,6 +63,8 @@ public:
     int pendingReplies() const { return m_pendingReplies; }
     int searchCount() const { return m_searchCount; }
     void announceCatalogChanged() { emit catalogChanged(); }
+    // Tests only: an app's text as AppStream could carry it (any text); then CatalogChanged.
+    void setAppText(const QString &id, const QString &name, const QString &summary, const QString &developer);
     // Tests only: a tile picture for every app (see mockArtPath), then CatalogChanged.
     void setArtDir(const QString &dir);
 

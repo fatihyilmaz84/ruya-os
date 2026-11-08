@@ -724,6 +724,80 @@ Item {
             compare(DeviceSettings.wallpaperDim, 0.6)
         }
 
+        // T-286: the row shows the dim that is applied. Daybreak is a bright picture: under a dark theme
+        // the rule veils it harder than the slider (20 %), and the number follows the layer; a dark
+        // picture shows the slider's own value.
+        function test_dim_row_shows_effective_dim() {
+            openSettingsDisplay()
+            const layer = find("wallpaperLayer")
+            const row = find("rowWallpaperDim")
+            DeviceSettings.wallpaper = "dusk"
+            tryVerify(() => row.visible)
+            tryCompare(layer, "blurred", true)
+            compare(row.value, 20)
+            compare(row.shownValue, 20, "a dark picture needs nothing beyond the slider")
+            compare(findChild(row, "value").text, "20%")
+
+            DeviceSettings.wallpaper = "daybreak"
+            tryVerify(() => layer.requiredDim > 0.5)
+            compare(row.value, 20, "the slider keeps the owner's position")
+            verify(row.shownValue > row.value, "the bright picture raises the shown value: " + row.shownValue)
+            compare(findChild(row, "value").text, Math.round(layer.effectiveDim * 100) + "%")
+            verify(row.Accessible.name.indexOf(findChild(row, "value").text) >= 0, "a reader hears the applied dim: " + row.Accessible.name)
+
+            DeviceSettings.wallpaperDim = 0.6
+            tryCompare(row, "shownValue", 60)
+            compare(findChild(row, "value").text, "60%", "an owner dim above the rule shows as set")
+        }
+
+        // True when no UTF-16 unit of the string is half of a pair.
+        function wellFormed(text) {
+            for (let i = 0; i < text.length; ++i) {
+                const c = text.charCodeAt(i)
+                if (c >= 0xd800 && c <= 0xdbff) {
+                    const d = text.charCodeAt(i + 1)
+                    if (!(d >= 0xdc00 && d <= 0xdfff))
+                        return false
+                    ++i
+                } else if (c >= 0xdc00 && c <= 0xdfff) {
+                    return false
+                }
+            }
+            return true
+        }
+
+        // T-286: a name from a drive is cut by code points. An emoji is kept or cut whole; a name of
+        // nothing but emoji is not "Wallpaper"; a long name is cut to 40 characters.
+        function test_safe_name_code_points() {
+            const game = String.fromCodePoint(0x1F3AE)
+            const bell = String.fromCharCode(7)
+            // The filter itself, for a name that this machine's file system could not hold (300 characters).
+            compare(Wallpapers.mockSafeName("a".repeat(300)), "a".repeat(40))
+            const edge = Wallpapers.mockSafeName("x".repeat(39) + game + "y".repeat(260))
+            verify(wellFormed(edge), "the emoji at the cut is whole")
+            compare(edge, "x".repeat(39) + game)
+            compare(Wallpapers.mockSafeName("x".repeat(41) + game), "x".repeat(40), "an emoji past the cut goes whole")
+            compare(Wallpapers.mockSafeName("a" + bell + "b" + String.fromCharCode(10) + game), "ab" + game, "control characters go, the emoji stays")
+            compare(Wallpapers.mockSafeName(""), "Wallpaper")
+            compare(Wallpapers.mockSafeName(bell + bell), "Wallpaper")
+
+            // Copies of files with such names: the copy succeeds and the name keeps its emoji.
+            const names = ["Holiday " + game + " 2026", game + game + game, "n".repeat(150)]
+            const expected = ["Holiday " + game + " 2026", game + game + game, "n".repeat(40)]
+            for (let i = 0; i < names.length; ++i) {
+                const path = Wallpapers.mockPlantPicture(names[i])
+                verify(path.length > 0, "a picture was planted for " + i)
+                copySpy.clear()
+                Wallpapers.mockImportAny(path, Theme.background)
+                tryCompare(copySpy, "count", 1, 5000)
+                compare(copySpy.signalArguments[0][0], "ok", "the copy of name " + i + " succeeds")
+                const w = Wallpapers.user[Wallpapers.user.length - 1]
+                verify(wellFormed(w.name), "no lone surrogate in " + i)
+                compare(w.name, expected[i], "name " + i + " became [" + w.name + "] (" + w.name.length + " units)")
+            }
+            compare(Wallpapers.user.length, 3)
+        }
+
         function test_home_over_a_wallpaper_shows_it_instead_of_a_colour_field() {
             const artA = find("heroArtA")
             const artB = find("heroArtB")

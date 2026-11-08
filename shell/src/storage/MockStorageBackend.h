@@ -41,6 +41,8 @@ public:
     // Plugs these volumes in together: one list, one announcement each (in the order given).
     void plug(const QStringList &ids);
     void setBusy(const QString &id, bool busy);
+    // A volume's label as a drive could carry it (any text); publishes the list.
+    void setLabel(const QString &id, const QString &label);
     // While held, eject() is counted but unanswered (an unmount takes seconds) until released.
     void holdEject(bool hold);
     int ejectCalls() const { return m_ejectCalls; }

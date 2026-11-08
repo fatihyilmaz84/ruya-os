@@ -78,6 +78,20 @@ void MockStoreBackend::setArtDir(const QString &dir)
     emit catalogChanged();
 }
 
+void MockStoreBackend::setAppText(const QString &id, const QString &name, const QString &summary,
+                                  const QString &developer)
+{
+    const int at = indexOf(id);
+    if (at < 0)
+        return;
+    m_apps[at].name = name;
+    m_apps[at].summary = summary;
+    m_apps[at].description = summary;
+    m_apps[at].developer = developer;
+    emit installedChanged();
+    emit catalogChanged();
+}
+
 void MockStoreBackend::reset()
 {
     m_timer.stop();

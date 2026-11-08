@@ -485,6 +485,7 @@ FocusScope {
             width: parent.width
             height: 40 * setup.u
             horizontalAlignment: Text.AlignHCenter
+            textFormat: Text.PlainText
             text: setup.message
             color: Theme.errorText
             font.pixelSize: Theme.typeBody * setup.u
@@ -511,6 +512,7 @@ FocusScope {
             width: parent.width
             horizontalAlignment: Text.AlignHCenter
             wrapMode: Text.Wrap
+            textFormat: Text.PlainText
             text: qsTr("Welcome, %1.").arg(setup.adminName.trim())
             color: Theme.text
             font.pixelSize: Theme.typeBody * setup.u

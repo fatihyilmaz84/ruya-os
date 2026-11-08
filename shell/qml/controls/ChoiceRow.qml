@@ -40,6 +40,7 @@ SettingControl {
         id: valueLabel
         objectName: "value"
         anchors { right: parent.right; rightMargin: Theme.spaceL * row.u; verticalCenter: parent.verticalCenter }
+        textFormat: Text.PlainText
         text: "‹  " + row.currentLabel + "  ›"
         color: Theme.text
         font.pixelSize: Theme.typeBody * row.u
