@@ -1,6 +1,6 @@
 # T-313 — The shell's own ambient sound must not count as "something is playing"
 
-Status: in-progress · Phase: 2 · Depends: — · Area: services (ruya-devices pipewire), shell (ambient loop, power saving), scripts (vm-power-saving-check) · Size: S · Owner: builder
+Status: done · Phase: 2 · Depends: — · Area: services (ruya-devices pipewire), shell (ambient loop, power saving), scripts (vm-power-saving-check) · Size: S · Owner: builder
 
 ## Goal
 With the ambient sound theme on, the screen saver, display-off and sleep stages still start on Home. Today the shell's own ambient loop is a `Stream/Output/Audio` node in state `running`, so `Devices1.Audio.Playing` is true while the console sits at Home and the idle clock never advances (T-293 review, an old bug that the old `Audio/Sink` filter had as well).

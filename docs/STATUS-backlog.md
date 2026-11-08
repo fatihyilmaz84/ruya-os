@@ -5,7 +5,6 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | ID | Title | Status | Depends |
 |---|---|---|---|
 | [T-285](tasks/T-285-hint-bar-and-focus-follow-ups.md) | Hint bar and focus follow-ups: Accept hints, keyboard hints, Tab, tests that could not fail | todo | — |
-| [T-313](tasks/T-313-ambient-bed-must-not-hold-the-screen-saver.md) | The shell's own ambient sound must not count as "something is playing" (the saver never starts on Home) | in-progress | — |
 | [T-312](tasks/T-312-long-outside-names-capped-and-elided.md) | Long names from outside are capped and elided: profile card, status cluster, PIN pad title, Dim row caption | in-progress | T-286 |
 | [T-292](tasks/T-292-activity-page-follow-ups.md) | Activity page follow-ups: refresh only when visible, paging, retry, icons, focus order | todo | — |
 | [T-294](tasks/T-294-sound-theme-follow-ups.md) | Sound theme follow-ups: delete a saved theme, import limits tested, clear refusal message, one ambient copy | todo | — |
