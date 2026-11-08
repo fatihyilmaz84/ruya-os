@@ -1,0 +1,5 @@
+# T-262: let the Bluetooth adapter wake the console from sleep, so a bonded controller
+# (BlueZ Device1.WakeAllowed, default yes for HID devices) wakes it with its PS/Xbox button.
+# Kernel default is "disabled" for the adapter's USB device (the USB keyboard has it enabled).
+# Wireless Controller class e0, subclass 01, protocol 01 = Bluetooth radio.
+ACTION=="add", SUBSYSTEM=="usb", ATTR{bDeviceClass}=="e0", ATTR{bDeviceSubClass}=="01", ATTR{bDeviceProtocol}=="01", TEST=="power/wakeup", ATTR{power/wakeup}="enabled"
