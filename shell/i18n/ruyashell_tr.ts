@@ -306,7 +306,7 @@ Bu geri alınamaz.</translation>
         <translation>Klavye veya fare gerekir</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+5"/>
         <source>All ages</source>
         <translation>Her yaş</translation>
     </message>
@@ -314,6 +314,11 @@ Bu geri alınamaz.</translation>
         <location line="+0"/>
         <source>Ages %1</source>
         <translation>%1 yaş ve üzeri</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Not rated</source>
+        <translation>Derecelendirilmemiş</translation>
     </message>
     <message>
         <location line="+5"/>
@@ -432,17 +437,17 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+10"/>
-        <location line="+256"/>
+        <location line="+257"/>
         <source>Uninstall</source>
         <translation>Kaldır</translation>
     </message>
     <message>
-        <location line="-244"/>
+        <location line="-245"/>
         <source>Your activity</source>
         <translation>Etkinliğiniz</translation>
     </message>
     <message>
-        <location line="+99"/>
+        <location line="+100"/>
         <source>This app can</source>
         <translation>Bu uygulama şunları yapabilir</translation>
     </message>
@@ -498,7 +503,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>AudioPane</name>
     <message>
-        <location filename="../qml/AudioPane.qml" line="+109"/>
+        <location filename="../qml/AudioPane.qml" line="+115"/>
         <source>Sound theme: %1</source>
         <translation>Ses teması: %1</translation>
     </message>
@@ -1264,8 +1269,8 @@ Bu geri alınamaz.</translation>
 <context>
     <name>GamesPage</name>
     <message>
-        <location filename="../qml/GamesPage.qml" line="+12"/>
-        <location line="+73"/>
+        <location filename="../qml/GamesPage.qml" line="+13"/>
+        <location line="+80"/>
         <source>Games</source>
         <translation>Oyunlar</translation>
     </message>
@@ -1295,7 +1300,7 @@ Bu geri alınamaz.</translation>
         <translation>Flatpak</translation>
     </message>
     <message>
-        <location line="+61"/>
+        <location line="+66"/>
         <source>No games yet — visit the Store</source>
         <translation>Henüz oyun yok — Mağaza&apos;yı ziyaret et</translation>
     </message>
@@ -2547,7 +2552,7 @@ Bu geri alınamaz.</translation>
         <translation>Mağaza</translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+21"/>
         <source>Featured</source>
         <translation>Öne çıkanlar</translation>
     </message>
@@ -2564,12 +2569,12 @@ Bu geri alınamaz.</translation>
     <message>
         <location line="+1"/>
         <location line="+136"/>
-        <location line="+56"/>
+        <location line="+68"/>
         <source>Installed</source>
         <translation>Kurulu</translation>
     </message>
     <message>
-        <location line="-168"/>
+        <location line="-180"/>
         <source>Official</source>
         <translation>Resmi</translation>
     </message>
@@ -2585,7 +2590,7 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+111"/>
-        <location line="+56"/>
+        <location line="+68"/>
         <source>Update available</source>
         <translation>Güncelleme var</translation>
     </message>
@@ -2605,12 +2610,12 @@ Bu geri alınamaz.</translation>
         <translation>Tüm uygulamaları göster</translation>
     </message>
     <message>
-        <location line="+99"/>
+        <location line="+106"/>
         <source>Search results</source>
         <translation>Arama sonuçları</translation>
     </message>
     <message>
-        <location line="+31"/>
+        <location line="+36"/>
         <source>No apps found for &quot;%1&quot;</source>
         <translation>&quot;%1&quot; için uygulama bulunamadı</translation>
     </message>

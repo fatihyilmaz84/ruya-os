@@ -308,7 +308,7 @@ This can&apos;t be undone.</translation>
         <translation>Needs a keyboard or mouse</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+5"/>
         <source>All ages</source>
         <translation>All ages</translation>
     </message>
@@ -316,6 +316,11 @@ This can&apos;t be undone.</translation>
         <location line="+0"/>
         <source>Ages %1</source>
         <translation>Ages %1</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Not rated</source>
+        <translation>Not rated</translation>
     </message>
     <message>
         <location line="+5"/>
@@ -434,17 +439,17 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+10"/>
-        <location line="+256"/>
+        <location line="+257"/>
         <source>Uninstall</source>
         <translation>Uninstall</translation>
     </message>
     <message>
-        <location line="-244"/>
+        <location line="-245"/>
         <source>Your activity</source>
         <translation>Your activity</translation>
     </message>
     <message>
-        <location line="+99"/>
+        <location line="+100"/>
         <source>This app can</source>
         <translation>This app can</translation>
     </message>
@@ -500,7 +505,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>AudioPane</name>
     <message>
-        <location filename="../qml/AudioPane.qml" line="+109"/>
+        <location filename="../qml/AudioPane.qml" line="+115"/>
         <source>Sound theme: %1</source>
         <translation>Sound theme: %1</translation>
     </message>
@@ -1266,8 +1271,8 @@ This can&apos;t be undone.</translation>
 <context>
     <name>GamesPage</name>
     <message>
-        <location filename="../qml/GamesPage.qml" line="+12"/>
-        <location line="+73"/>
+        <location filename="../qml/GamesPage.qml" line="+13"/>
+        <location line="+80"/>
         <source>Games</source>
         <translation>Games</translation>
     </message>
@@ -1297,7 +1302,7 @@ This can&apos;t be undone.</translation>
         <translation>Flatpak</translation>
     </message>
     <message>
-        <location line="+61"/>
+        <location line="+66"/>
         <source>No games yet — visit the Store</source>
         <translation>No games yet — visit the Store</translation>
     </message>
@@ -2555,7 +2560,7 @@ This can&apos;t be undone.</translation>
         <translation>Store</translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+21"/>
         <source>Featured</source>
         <translation>Featured</translation>
     </message>
@@ -2572,12 +2577,12 @@ This can&apos;t be undone.</translation>
     <message>
         <location line="+1"/>
         <location line="+136"/>
-        <location line="+56"/>
+        <location line="+68"/>
         <source>Installed</source>
         <translation>Installed</translation>
     </message>
     <message>
-        <location line="-168"/>
+        <location line="-180"/>
         <source>Official</source>
         <translation>Official</translation>
     </message>
@@ -2593,7 +2598,7 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+111"/>
-        <location line="+56"/>
+        <location line="+68"/>
         <source>Update available</source>
         <translation>Update available</translation>
     </message>
@@ -2613,12 +2618,12 @@ This can&apos;t be undone.</translation>
         <translation>Show all apps</translation>
     </message>
     <message>
-        <location line="+99"/>
+        <location line="+106"/>
         <source>Search results</source>
         <translation>Search results</translation>
     </message>
     <message>
-        <location line="+31"/>
+        <location line="+36"/>
         <source>No apps found for &quot;%1&quot;</source>
         <translation>No apps found for &quot;%1&quot;</translation>
     </message>

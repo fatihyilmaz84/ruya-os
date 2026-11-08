@@ -58,7 +58,7 @@ void MockStoreBackend::initState()
         app("org.example.Tools", "Dev Tools", "Experimental tools, may break.", "Some Developer", "developer", "none",
             "all", {"host-files", "session-bus", "network"}, 75),
         app("org.example.Beta", "Racer Beta", "Next version of Turbo Racer.", "Example Games", "developer", "full",
-            "7+", {"audio", "gamepad", "network"}, 840),
+            "", {"audio", "gamepad", "network"}, 840),
         app("org.example.Broken", "Broken App", "Always fails to install; for tests.", "Example Games", "official",
             "partial", "all", {"audio"}, 20),
     };

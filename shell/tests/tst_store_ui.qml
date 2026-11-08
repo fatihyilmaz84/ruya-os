@@ -486,6 +486,25 @@ Item {
             tryVerify(() => find("storeCards_featured").activeFocus, 2000)
         }
 
+        // T-291: no content rating is "Not rated", not "All ages".
+        function test_unrated_app_says_not_rated() {
+            compare(Store.catalogue.find(a => a.id === "org.example.Beta").ageRating, "", "the mock app has no rating")
+            openStore()
+            openApp("org.example.Beta")
+            compare(find("detailAge").text, "Not rated")
+        }
+
+        function test_all_ages_stays() {
+            openStore()
+            openApp("org.example.Player")
+            compare(Store.catalogue.find(a => a.id === "org.example.Player").ageRating, "all")
+            compare(find("detailAge").text, "All ages")
+            keyClick(Qt.Key_Escape)
+            tryCompare(tc.shell, "currentPage", "store")
+            openApp("org.example.Racer")
+            compare(find("detailAge").text, "Ages 7+")
+        }
+
         function test_zz_screenshots() {
             if (!shotsDir)
                 skip("set RUYA_SHOTS_DIR to save screenshots")
@@ -509,6 +528,15 @@ Item {
             keyClick(Qt.Key_Return)
             tryVerify(() => Store.jobs["org.example.Racer"] !== undefined, 2000)
             grabImage(tc.shell).save(shotsDir + "/19-store-installing.png")
+        }
+
+        function test_zz_screenshots_unrated() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            openStore()
+            openApp("org.example.Beta")                // no content rating
+            wait(800)
+            grabImage(tc.shell).save(shotsDir + "/57-store-detail-unrated.png")
         }
 
         function test_zz_screenshots_update() {

@@ -76,6 +76,10 @@ struct State {
     announced: Vec<(String, bool)>,
     /// Bumped by every `refresh`; `sync_installed` drops a read that a refresh overtook.
     generation: u64,
+    /// Tickets for `sync_installed`: `last_ticket` is the last one handed out (taken before the
+    /// read), `applied_ticket` the newest one whose read has been applied.
+    last_ticket: u64,
+    applied_ticket: u64,
     /// The job table (`ListJobs`): active jobs and the last finished ones, oldest first.
     jobs: Vec<JobInfo>,
     /// Jobs a previous run of the service left queued or running; `recover` settles them.
@@ -295,7 +299,11 @@ impl<F: Flatpak> Store<F> {
     /// the clients have to be told (`InstalledChanged`). The change is recorded as announced, so
     /// the next `refresh` does not report it a second time.
     fn sync_installed(&self) -> bool {
-        let generation = self.state().generation;
+        let (generation, ticket) = {
+            let mut state = self.state();
+            state.last_ticket += 1;
+            (state.generation, state.last_ticket)
+        };
         let Ok(installed) = self.flatpak.installed() else {
             return false;
         };
@@ -304,6 +312,12 @@ impl<F: Flatpak> Store<F> {
             // A refresh finished while `flatpak list` ran: its catalogue is newer than this read.
             return false;
         }
+        if state.applied_ticket > ticket {
+            // Reads overlap (the calls run on separate threads): one that started later has
+            // already applied its answer, which is newer than this one.
+            return false;
+        }
+        state.applied_ticket = ticket;
         for app in &mut state.catalogue {
             match installed.iter().find(|i| i.id == app.id) {
                 Some(i) => {
@@ -921,6 +935,48 @@ mod tests {
         });
         assert!(s.list_installed(&mut |_| {}).is_empty());
         assert!(!s.get_app("org.ruya.Racer").1.installed);
+    }
+
+    #[test]
+    fn a_slow_list_read_does_not_undo_a_newer_one() {
+        let s = std::sync::Arc::new(store(fake().with_installed(
+            "ruyaos",
+            "org.ruya.Racer",
+            5_000_000,
+        )));
+        assert!(s.get_app("org.ruya.Racer").1.installed);
+        // The first read is slow: it has already answered "installed" when the app is removed
+        // and a second, fast read (started later) corrects the catalogue. The first read
+        // finishing afterwards must not mark the app installed again.
+        let later = std::sync::Arc::downgrade(&s);
+        s.flatpak.after_next_installed(move || {
+            let s = later.upgrade().unwrap();
+            s.flatpak.remove_installed("org.ruya.Racer");
+            let mut events = Vec::new();
+            s.sync_and_announce(&mut |e| events.push(e));
+            assert_eq!(
+                events,
+                [Event::InstalledChanged],
+                "the newer read announces"
+            );
+        });
+        let mut events = Vec::new();
+        assert!(s.list_installed(&mut |e| events.push(e)).is_empty());
+        assert!(events.is_empty(), "the stale read says nothing");
+        assert!(!s.get_app("org.ruya.Racer").1.installed);
+        // The ticket does not block later reads.
+        s.flatpak
+            .add_installed("ruyaos", "org.ruya.Racer", 5_000_000);
+        assert_eq!(s.list_installed(&mut |_| {}).len(), 1);
+    }
+
+    #[test]
+    fn an_app_installed_outside_the_store_is_not_added() {
+        let s = store(fake());
+        s.flatpak
+            .add_installed("elsewhere", "org.foreign.Tool", 1_000);
+        assert!(s.list_installed(&mut |_| {}).is_empty());
+        assert_eq!(s.get_app("org.foreign.Tool").0, Status::UnknownApp);
     }
 
     #[test]

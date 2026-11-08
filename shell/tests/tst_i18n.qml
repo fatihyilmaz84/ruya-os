@@ -213,6 +213,24 @@ Item {
             compare(nav.currentKey, "settings", "back on the Settings pill")
         }
 
+        // T-291: the app page's age badge for an app with no rating (Racer Beta in the mock).
+        function test_unrated_app_age_is_translated() {
+            startShell()
+            keyClick(Qt.Key_Return)                    // Player One
+            const pad = find("pinPad")
+            tryVerify(() => pad.shown)
+            for (const d of "1234") keyClick(d)
+            keyClick(Qt.Key_Enter)
+            tryCompare(Profiles, "activeProfile", "p1")
+            tc.shell.openPage("appDetail", { appId: "org.example.Beta" })
+            tryCompare(tc.shell, "currentPage", "appDetail")
+            tryCompare(find("detailAge"), "text", "Not rated")
+            DeviceSettings.language = "tr"
+            tryCompare(find("detailAge"), "text", "Derecelendirilmemiş")
+            DeviceSettings.language = "en"
+            tryCompare(find("detailAge"), "text", "Not rated")
+        }
+
         function test_zz_screenshots() {
             if (!shotsDir)
                 skip("set RUYA_SHOTS_DIR to save screenshots")

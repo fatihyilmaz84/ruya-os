@@ -559,6 +559,16 @@ impl FakeFlatpak {
         self.state().after_installed = Some(Box::new(hook));
     }
 
+    /// An app installed behind the Store's back (`flatpak install` by hand).
+    pub fn add_installed(&self, remote: &str, id: &str, size: u64) {
+        self.state().installed.push(InstalledApp {
+            id: id.to_owned(),
+            branch: "stable".to_owned(),
+            remote: remote.to_owned(),
+            installed_size: size,
+        });
+    }
+
     /// An app removed behind the Store's back (`flatpak uninstall` by hand).
     pub fn remove_installed(&self, id: &str) {
         let mut state = self.state();

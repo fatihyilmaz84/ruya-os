@@ -42,6 +42,14 @@ fn severity(word: &str) -> u8 {
     }
 }
 
+/// The OARS 1.1 attributes whose `intense` level means 18+ (the others top out at 16+): sex,
+/// sexual violence, drugs and gambling. OARS names gambling `money-gambling`.
+fn adult_attribute(id: &str) -> bool {
+    ["sex-", "violence-sexual", "drugs-", "money-gambling"]
+        .iter()
+        .any(|prefix| id.starts_with(prefix))
+}
+
 #[derive(Default)]
 struct Builder {
     c: Component,
@@ -207,10 +215,7 @@ fn on_text(b: &mut Builder, stack: &[Open], text: &str, icon_base: &str) {
             b.rated = true;
             let level = severity(text);
             b.worst = b.worst.max(level);
-            let adult = ["sex-", "violence-sexual", "drugs-", "gambling"]
-                .iter()
-                .any(|prefix| top.id.starts_with(prefix));
-            if adult && level >= 3 {
+            if adult_attribute(&top.id) && level >= 3 {
                 b.adult = true;
             }
         }
@@ -437,6 +442,51 @@ mod tests {
             rate("<content_attribute id=\"drugs-narcotics\">intense</content_attribute>"),
             "18+"
         );
+    }
+
+    #[test]
+    fn every_oars_attribute_gives_its_age() {
+        let rate = |id: &str, level: &str| {
+            let xml = format!(
+                "<components><component><id>a.b.C</id><name>C</name><content_rating type=\"oars-1.1\"><content_attribute id=\"{id}\">{level}</content_attribute></content_rating></component></components>"
+            );
+            parse(&xml, "/i")[0].age_rating.clone()
+        };
+        // (attribute, age at mild / moderate / intense)
+        let table: [(&str, [&str; 3]); 26] = [
+            ("violence-cartoon", ["7+", "12+", "16+"]),
+            ("violence-fantasy", ["7+", "12+", "16+"]),
+            ("violence-realistic", ["7+", "12+", "16+"]),
+            ("violence-bloodshed", ["7+", "12+", "16+"]),
+            ("violence-sexual", ["7+", "12+", "18+"]),
+            ("violence-desecration", ["7+", "12+", "16+"]),
+            ("violence-slavery", ["7+", "12+", "16+"]),
+            ("drugs-alcohol", ["7+", "12+", "18+"]),
+            ("drugs-narcotics", ["7+", "12+", "18+"]),
+            ("drugs-tobacco", ["7+", "12+", "18+"]),
+            ("sex-nudity", ["7+", "12+", "18+"]),
+            ("sex-themes", ["7+", "12+", "18+"]),
+            ("sex-homosexuality", ["7+", "12+", "18+"]),
+            ("sex-prostitution", ["7+", "12+", "18+"]),
+            ("sex-adultery", ["7+", "12+", "18+"]),
+            ("sex-appearance", ["7+", "12+", "18+"]),
+            ("language-profanity", ["7+", "12+", "16+"]),
+            ("language-humor", ["7+", "12+", "16+"]),
+            ("language-discrimination", ["7+", "12+", "16+"]),
+            ("money-gambling", ["7+", "12+", "18+"]),
+            ("money-purchasing", ["7+", "12+", "16+"]),
+            ("social-chat", ["7+", "12+", "16+"]),
+            ("social-audio", ["7+", "12+", "16+"]),
+            ("social-contacts", ["7+", "12+", "16+"]),
+            ("social-info", ["7+", "12+", "16+"]),
+            ("social-location", ["7+", "12+", "16+"]),
+        ];
+        for (id, [mild, moderate, intense]) in table {
+            assert_eq!(rate(id, "none"), "all", "{id} none");
+            assert_eq!(rate(id, "mild"), mild, "{id} mild");
+            assert_eq!(rate(id, "moderate"), moderate, "{id} moderate");
+            assert_eq!(rate(id, "intense"), intense, "{id} intense");
+        }
     }
 
     #[test]

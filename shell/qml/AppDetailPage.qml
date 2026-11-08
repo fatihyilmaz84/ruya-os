@@ -56,7 +56,8 @@ Page {
     }
 
     function ageText(rating) {
-        return rating === "all" || !rating ? qsTr("All ages") : qsTr("Ages %1").arg(rating)
+        // No rating in the metadata is not "all ages": the contract sends an empty rating.
+        return rating === "all" ? qsTr("All ages") : !rating ? qsTr("Not rated") : qsTr("Ages %1").arg(rating)
     }
 
     function permissionText(id) {
@@ -384,8 +385,9 @@ Page {
                 kind: page.sourceKind(page.app.source ?? "")
             }
             Badge {
+                objectName: "detailAge"
                 u: page.u
-                text: page.ageText(page.app.ageRating)
+                text: page.ageText(page.app.ageRating ?? "")
             }
         }
 
