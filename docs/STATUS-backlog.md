@@ -88,4 +88,11 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | [T-278](tasks/T-278-background-and-memory-policy-game-mode.md) | **[lead]** Background and memory policy ("game mode") | todo | T-273, T-274, T-275, T-201 |
 | [T-279](tasks/T-279-app-cooperation-save-state-and-background-audio.md) | App cooperation: save state, background audio, developer guide | todo | T-273, T-275 |
 | [T-280](tasks/T-280-gap-free-boot-handover.md) | **[lead]** Close the dark gap between the boot splash and the shell's first frame | todo | T-269 |
+| [T-302](tasks/T-302-epic-game-data-hub-api.md) | **[lead]** EPIC game data hub (ADR-020 Proposed): ROM folders, save and capture paths, now-playing: spec | todo | — |
+| [T-303](tasks/T-303-spike-hub-systems-layout-sandbox.md) | **[lead]** Spike and spec: system ids, ROM and capture layout, sandbox reach | todo | T-302 |
+| [T-304](tasks/T-304-hub1-contract-and-service.md) | `Hub1`: contract, `ruya-hub` service, mock and client | todo | T-302, T-303 |
+| [T-305](tasks/T-305-captures-screenshot-recording-clip.md) | **[lead]** Captures: screenshots, recordings and clip-the-last-seconds by the OS | todo | T-302, T-304, T-164 |
+| [T-306](tasks/T-306-now-playing-exchange.md) | Now playing: apps report, the OS shows and shares it | todo | T-302, T-304, T-247 |
+| [T-307](tasks/T-307-library-and-emulator-frontend-use-the-hub.md) | Library and the emulator frontend use the hub | todo | T-302, T-304, T-259 |
+| [T-308](tasks/T-308-hub-developer-guide-sample-and-permissions.md) | Hub developer guide, sample app and per-app permissions | todo | T-302, T-304, T-306, T-220 |
 
