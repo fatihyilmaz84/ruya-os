@@ -3,7 +3,7 @@
 Status: todo · Phase: 7 · Depends: T-250 · Area: shell, docs · Size: M · Owner: builder · Developer surface: public-API
 
 ## Goal
-The design tokens and the building blocks that apps need move into a QML module (working name **RuyaKit**) that both the shell and first-party apps use, so an app looks and behaves like the shell without copying it. The shape (a Flatpak runtime extension, or a module each app bundles) is decided in **ADR-015 (T-250, Proposed: the owner accepts it first)**; this task builds what the accepted ADR says. Part of T-248.
+The design tokens and the building blocks that apps need move into a QML module (working name **RuyaKit**) that both the shell and first-party apps use, so an app looks and behaves like the shell without copying it. The shape is decided: **ADR-015, Accepted (owner, 2026-11-08), a Flatpak runtime extension `org.ruyaos.Platform` that carries RuyaKit and is versioned separately from the shell** (not a module per app); the spike T-250 supplies the details (base runtime, Qt version, theme delivery) as amendments to the ADR; this task builds what the ADR says. Part of T-248.
 
 ## Read first
 - ADR-015 and the audit tables of T-250; `docs/specs/04-design-system.md` §8 (a new token or component comes with the spec update); `docs/specs/06-hig.md` (T-249); `shell/CLAUDE.md`, `shell/PATTERNS.md`; `shell/CMakeLists.txt` (the `ruyashell` module)

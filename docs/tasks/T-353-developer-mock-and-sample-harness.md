@@ -1,8 +1,8 @@
 # T-353 - Developer harness: a Platform mock, a sample app and a conformance runner that run in CI
 
-Status: blocked · Phase: 7 · Depends: T-352, T-350 · Area: samples, scripts, ci, docs · Size: M · Owner: builder · Developer surface: public-API
+Status: todo · Phase: 7 · Depends: T-352, T-350 · Area: samples, scripts, ci, docs · Size: M · Owner: builder · Developer surface: public-API
 
-**Blocked on** T-352 (which is blocked on ADR-022). Planned now so the Definition of done of a public API has somewhere to land.
+**Waits for** T-352 (ADR-022 is Accepted since 2026-11-08, so only the code dependency remains). Planned now so the Definition of done of a public API has somewhere to land.
 
 ## Goal
 A developer without a console can build a sample, call every documented Platform API against a mock, and run the same conformance checks the console passes (ADR-022, `docs/developers/api-surface.md`). The harness exists once; each capability task only adds its interface to it.

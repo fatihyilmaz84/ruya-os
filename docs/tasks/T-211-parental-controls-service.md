@@ -38,7 +38,7 @@ A parent can restrict a child's profile and the console enforces it where it can
 
 - Store review note (T-291, 2026-11-08): an empty `age_rating` from `ruya-store` means unrated; treat unrated as 18+ for a child profile. Check the age mapping against malcontent's table (T-342 does the attribute coverage); the "Not rated" meaning line for child profiles belongs to this task.
 - Planner notes (2026-11-07 inbox triage): (1) the parent report needs an **admin-gated `GetUsage`** or an internal reader in `ruya-session` (the Activity pages call `GetUsage` for the signed-in profile only); (2) decide what a **child's "Clear my activity"** deletes once a parent report exists (T-247) and reword the Activity empty-state privacy sentence to match; (3) the time zone: services reading local time must call `tzset()` before `localtime_r` (T-213); (4) an unrated app counts as 18+ here while the Store says "Not rated" (T-291); (5) the age-rating ids come from T-291's table.
-- Developer surface (ADR-022, `docs/developers/api-surface.md`): the age limit later becomes a read-only flag for apps (unplanned until ADR-022 is accepted); keep the private limits private.
+- Developer surface (ADR-022, `docs/developers/api-surface.md`): the age limit later becomes a read-only flag for apps (an approved tier-B capability of ADR-022, Accepted 2026-11-08; no task yet); keep the private limits private.
 
 ## Outcome
 _Filled in by the implementer. First line: `Verified: host | vm | unverified | hw`. Then: what was built, files, deviations, follow-ups._

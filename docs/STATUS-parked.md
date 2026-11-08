@@ -189,3 +189,49 @@ Long form (as before the 2026-11-08 trim): `STATUS-parked.md`.
 - **Real hardware:** a spare low-tier x86-64 PC would unblock KPIs and the ADR-002 check. **One admin or several?** (recommendation: one in the UI for the MVP). **Turkish wording review** by a native speaker before release. **libdvdcss / AACS:** not included; needs an explicit decision. **Host disk or RAM:** if WSL `ext4` errors return, move the VHD off C:; Claude recreates the distro.
 
 - Decided (record in `STATUS-parked.md`): storage shows the internal disk; Steam, RetroArch and media apps are separate Store apps; blur and shadows stay the default; agents in worktrees with a reviewer verdict; icon set Material Symbols; the lead pushes `main` after the secret scan.
+
+## Decided 2026-11-08 (owner)
+
+The owner answered these directly on 2026-11-08. The bullets are verbatim as they stood in `STATUS.md` before the decision; the decision follows each in italics and is recorded in the ADR and the task named.
+
+- **Public developer surface (ADR-022, T-352).** Proposed charter: three tiers (shell-private, one narrow `Platform1` door for sandboxed apps, data-only formats), approve the candidate capability list once (lifecycle, achievements, play stats and now-playing, notifications, controller extras, text input, read-only display/theme/age flag, storage picker; never profiles, update, install, system settings, telemetry); the lead places tasks inside it. Recommended: yes; stability promises only from the first release. Decide with ADR-015.
+
+  *Decided: approved as drafted (ADR-022 Accepted): the tier-B list, the never-public list, stability promises only from the first release. T-352 and T-250 are unblocked from the ADR side; the caller-identity spike stays step one of T-352.*
+
+- **First-party apps (T-248).** Proposed ADR-015 (T-250: runtime extension `org.ruyaos.Platform` with RuyaKit versus a module per app) and ADR-016 (T-258: browser engine or none first); which apps first. T-249 and T-250 can start anytime.
+
+  *Decided: ADR-015 Accepted as a Flatpak runtime extension `org.ruyaos.Platform` with the RuyaKit QML module, versioned separately from the shell, not a module per app (T-250 is now its spike). ADR-016 Accepted as "no browser first": the first apps are picture viewer, weather, media player, files and Jellyfin; the browser gets its own decision later and T-258 is parked. Still open: whether any app is installed by default.*
+
+- **Controller drivers and firmware (T-261).** Xbox Wireless Adapter needs out-of-tree drivers and non-redistributable firmware; proposed: ship none until you decide.
+
+  *Decided: do not ship "none"; investigate. Research task T-354 (driver on an immutable image, Secure Boot, a button where the user downloads Microsoft's firmware, legal risk, the cable and Bluetooth alternative) ends in a recommended task list and builds nothing. The legal question stays the owner's, as a Proposed line.*
+
+- **Multitasking (T-273).** Proposed ADR-019: one foreground app, others frozen, LRU close under memory pressure. For you: Guide short = quick menu with switcher and double-press = previous app (recommended); background apps opt in; a frozen online game warns once.
+
+  *Decided: ADR-019 Accepted. Guide short press = quick menu with the switcher, double press = previous app, hold = power menu; one foreground app, the others frozen (cgroup freezer); LRU close under memory pressure with a toast; background apps opt in (`X-Ruya-Background`); a frozen online game warns once in the switcher.*
+
+- **Game data hub (T-302).** Proposed ADR-020 (`org.ruyaos.Hub1`): other apps read now-playing and captures off by default, asked per app, revocable (recommended); a shared read-only ROM folder besides per-profile ones (yes); captures local in v1 (yes); saves stay on the console, drives hold ROMs, captures and backups.
+
+  *Decided: ADR-020 Accepted. Other apps may read now-playing and captures, off by default, asked per app, revocable in Settings > Privacy; a shared read-only ROM folder besides per-profile ones; captures stay local in v1; saves and states stay on the console. Premise change: `Hub1` sits behind `Platform1` (ADR-022), it is not reachable from a sandbox directly.*
+
+- **Telemetry (T-224/T-225).** Consent: explicit first-boot Share / Don't share, nothing sent before the answer (recommended); backend, retention, privacy notice and a data-processing agreement are yours. T-220 and the first-boot screen follow the recommendation until you answer.
+
+  *Decided (consent only): an explicit first-boot Share / Don't share, nothing sent before the answer, everything switchable off later. Still the owner's, later: the backend, retention, the privacy notice and a data-processing agreement.*
+
+- **Default output volume on a fresh install (T-347/T-322; decided 2026-11-08, not a STATUS bullet before).** *High, set once: about 1.00 on the first output only (the TV or monitor controls the loudness); `ruya-devices` sets it at first boot / when the first sink appears and writes a marker file so it never re-applies; later changes are kept. Replaces the 70 % of the T-347 draft.*
+
+## Open owner decisions: bullets shortened 2026-11-08 (second trim, verbatim)
+
+- **`.play` packages (T-228).** Decided 2026-11-06, parked until you say start: ADR-014 accepted, no emulators, Proton/Steam runtime, firmware or discs shipped, the image preinstalls the Wine runner. Questions: `05-play-packages.md` §16.
+
+- **Epic Games Store (T-270).** Proposed ADR-018: first-party Store app driving Legendary through the Wine runner, versus the Heroic Flatpak, versus nothing. Recommendation: first-party after T-229/T-244, neutral text, no logo. Parked by you; nothing is built.
+
+- **Controller brand art and pad glyph licence (T-199).** Sony/Microsoft/Nintendo pad pictures need a legal decision (we draw our own). ControllerCons (SIL OFL) says "cannot be redistributed or sold": ask the author first. Our own pad glyphs: Apache-2.0 with a notice in About (recommended).
+
+- **Drive formats (T-332, asked for 2026-11-08; the feature is approved).** `exfatprogs` and `ntfs-3g` ship. Proposed: add `dosfstools` (FAT32) and `ntfsprogs` (mkntfs) only if missing; offer exFAT (default), ext4, FAT32, NTFS. GPL, small. Say if you object; T-332 checks the image first.
+
+- **Small ones:** Dolby/DTS names need a licence (T-219); update size vs rechunking (T-195); HDR and VRR after the spikes (T-218/T-222); Flatpak runtime in a dev image (T-214); the dev ISO erases every disk and carries the SSH key (B-002).
+
+- Decided (record in `STATUS-parked.md`): storage shows the internal disk; Steam, RetroArch and media apps are separate Store apps; blur and shadows stay the default; agents in worktrees with a reviewer verdict; icon set Material Symbols; the lead pushes `main` after the secret scan.
+
+- **Brand: logo and boot wordmark (T-269).** The splash shows "RuyaOS" in Inter; a logo is yours; recommendation: keep the Inter wordmark until one exists.

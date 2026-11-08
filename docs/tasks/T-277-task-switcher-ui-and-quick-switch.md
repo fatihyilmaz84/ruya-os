@@ -6,7 +6,7 @@ Status: todo · Phase: 3 · Depends: T-273, T-147, T-275, T-276 · Area: shell �
 Pressing Guide shows the quick menu with a row of open apps (cards with the last frame, name, running time and a "frozen"/"playing audio" mark); Left/Right and A switch; one extra press jumps straight back to the previous app. Part of epic T-273.
 
 ## Read first
-- T-273 (the gesture proposal, ADR-019), 02 §1.5 and the Guide overlay, T-147 (`QuickMenu.qml`: build on it, do not fork it), T-275 contract, T-276 snapshots, 04 §5 (cards, rows, focus), §8; `shell/PATTERNS.md`
+- T-273 (the gesture, decided in ADR-019, Accepted by the owner 2026-11-08), 02 §1.5 and the Guide overlay, T-147 (`QuickMenu.qml`: build on it, do not fork it), T-275 contract, T-276 snapshots, 04 §5 (cards, rows, focus), §8; `shell/PATTERNS.md`
 - `shell/src/input` (KeyRouter: how Guide/Home arrives), T-202 (`IdleClock`: input wakes)
 
 ## Scope
@@ -14,6 +14,7 @@ Pressing Guide shows the quick menu with a row of open apps (cards with the last
 2. **Quick switch:** a double press of Guide within a constant (350 ms, in settings later) switches to the previous app without opening the menu; hold Guide stays the power menu (02 §1.5). From Home, the Running row of Recent shows the same cards.
 3. Hint bar for the menu and the switcher; Turkish; at most N cards (policy value from the service) with a "+N" mark.
 4. The switcher never shows another profile's apps (ADR-004).
+5. **Online-game warning (owner, 2026-11-08, ADR-019):** the first time an app that reports a live online session (the field comes from T-275/T-279; until then an app declaring it in its metadata) is about to be frozen by a switch, the switcher shows one plain warning that it may disconnect, once per app and profile; the choice to switch anyway stays with the player. Test: the warning shows once, not on the second switch, and Back cancels the switch.
 
 ## Out of scope
 - Snapshot capture (T-276), freezing (T-275), the killer (T-278), new input hardware mapping (ruya-inputd already delivers Guide).

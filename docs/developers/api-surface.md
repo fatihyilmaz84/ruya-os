@@ -2,7 +2,7 @@
 
 What an app may rely on, what it may not, how the console will open more, and how a change to the public surface is made safely. This chapter is the charter behind `docs/developers/`: a feature is **documented here or it is not public**.
 
-*Status: **Proposed** (ADR-022 in `docs/specs/00-overview.md` waits for the owner). Until it is accepted this is the plan, and nothing in tier B below can be called yet. Everything public is **experimental** until the first release: names, arguments and behaviour may change without notice.*
+*Status: **Accepted** (ADR-022 in `docs/specs/00-overview.md`, owner, 2026-11-08, approved as drafted: the tier-B list below, the never-public list, and stability promises only from the first release). The Platform service that opens tier B is planned (T-352), so nothing in tier B can be called yet. The apps reach the client bindings through the `org.ruyaos.Platform` runtime extension (ADR-015, Accepted the same day; spike T-250). Everything public is **experimental** until the first release: names, arguments and behaviour may change without notice.*
 
 ## Why a charter
 
@@ -24,9 +24,9 @@ Rules that hold for every tier-B capability:
 - **A malicious app is the test case.** Every capability has abuse tests: flood, oversized and malformed input, another app's id, a profile that is not active, a call while the app is not running.
 - **Deprecation before removal**, see Versioning.
 
-## The candidate tier-B list (to approve once)
+## The tier-B list (approved by the owner, 2026-11-08)
 
-Anything not on this list needs a new line in ADR-022 first. "Missing" means the doc, sample, mock or conformance piece no task owns yet.
+Anything not on this list needs a new line in ADR-022 first (the owner's approval). "Missing" means the doc, sample, mock or conformance piece no task owns yet.
 
 | Capability | What an app can do | Task | Missing |
 |---|---|---|---|
@@ -42,7 +42,7 @@ Anything not on this list needs a new line in ADR-022 first. "Missing" means the
 | Storage picker | choose a file or folder on the console or a USB drive | none (portal backend gap, `03` §4.4) | whole capability: unplanned |
 | Game data hub | where ROMs, saves, states, captures live; identify a file; read now-playing/captures with a permission | T-302..T-308 (ADR-020) | re-seat as a `Platform1` interface; T-308 owns the chapter and sample |
 
-Unplanned capabilities are **not** turned into tasks until the owner approves the list, so the plan never depends on an open decision.
+The list is approved, so the lead may now plan the unplanned capabilities (text input, display information, theme accent, age rating, storage picker) as tasks inside the charter; each is `Developer surface: public-API` with the Definition of done below. Nothing outside the list is planned without a new ADR line.
 
 ## Never public
 
@@ -104,7 +104,7 @@ One-time audit by the lead: T-245 to T-247, T-262 to T-268, T-217, T-248 to T-25
 | T-263 spec, T-264 registry, T-265 UI, T-267, T-268 | internal / none | none (not seen by apps) |
 | T-266 virtual pads per slot | public-API (evdev) | `controller-input.md` update, sample reading pad order, conformance |
 | T-248 epic and apps T-253..T-259 | none | the dogfooding rule is added to T-248; T-259 uses the hub, not private services |
-| T-250 platform spike (ADR-015) | public-API | decide together with ADR-022 |
+| T-250 platform spike (ADR-015) | public-API | ADR-015 Accepted (the `org.ruyaos.Platform` runtime extension carries the client bindings); the spike answers the open questions |
 | T-251 RuyaKit | public-API | chapter and sample if it is a runtime extension |
 | T-252 app template | public-format | none (it is the sample) |
 | T-302 hub epic, T-304 `Hub1`, T-306 now-playing | public-API | re-seat behind `Platform1`; T-308 owns chapter and sample |
@@ -115,4 +115,4 @@ One-time audit by the lead: T-245 to T-247, T-262 to T-268, T-217, T-248 to T-25
 
 ## Sources
 
-Checked on 2026-11-08 against: `docs/specs/00-overview.md` (ADR-015 and ADR-016 are written by T-250 and T-258, not yet there; ADR-017, ADR-020 and ADR-022), `docs/specs/03-services-and-apps.md` §4.4 to §4.6, `docs/tasks/PLANNING.md`, `.claude/agents/ruya-api-reviewer.md` and `ruya-devdocs-auditor.md`, and the open tasks named in the audit. Nothing described as planned here exists yet.
+Checked on 2026-11-08 against: `docs/specs/00-overview.md` (ADR-015 and ADR-016 are Accepted since 2026-11-08; ADR-017, ADR-020 and ADR-022), `docs/specs/03-services-and-apps.md` §4.4 to §4.6, `docs/tasks/PLANNING.md`, `.claude/agents/ruya-api-reviewer.md` and `ruya-devdocs-auditor.md`, and the open tasks named in the audit. Nothing described as planned here exists yet.

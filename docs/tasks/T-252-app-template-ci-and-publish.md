@@ -6,7 +6,7 @@ Status: todo · Phase: 7 · Depends: T-250, T-251, T-214 · Area: samples, ci, d
 Anyone, and every first-party app of T-248, starts from one template that builds, themes itself like the shell, follows the HIG and ends as a signed Flatpak on a Store remote. Base: `samples/hello-game` and the guide's `publishing.md`. Part of T-248.
 
 ## Read first
-- `docs/developers/` (`getting-started.md`, `publishing.md`, `testing-and-debugging.md`), `samples/hello-game/`, `docs/specs/06-hig.md` (T-249), ADR-015 (T-250) and RuyaKit (T-251); `scripts/lint-dev-docs.ps1`; the `ruyaos` remote and `ruya-store` (spec 03)
+- `docs/developers/` (`getting-started.md`, `publishing.md`, `testing-and-debugging.md`), `samples/hello-game/`, `docs/specs/06-hig.md` (T-249), ADR-015 (Accepted: the `org.ruyaos.Platform` runtime extension; details from the spike T-250) and RuyaKit (T-251); `scripts/lint-dev-docs.ps1`; the `ruyaos` remote and `ruya-store` (spec 03)
 
 ## Scope
 1. **Template** `samples/app-template/`: a minimal QML app (CC0), the Flatpak manifest, AppStream metadata with the `x-ruya-*` keys and OARS, icons, a controller-navigable first screen built from RuyaKit, a Turkish translation example, a unit test, a README linking the HIG checklist.

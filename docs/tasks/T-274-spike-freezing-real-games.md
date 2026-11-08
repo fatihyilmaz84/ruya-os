@@ -19,7 +19,7 @@ Know, with numbers from the Dell, whether the cgroup freezer is a safe way to "p
 - Building the switcher or the killer (T-275..T-278).
 
 ## Acceptance criteria
-- [ ] The Outcome has the measured table and the recommendation; ADR-019 is updated (Accepted by the lead, or sent to the owner if a product decision remains).
+- [ ] The Outcome has the measured table and the recommendation; ADR-019 (Accepted by the owner, 2026-11-08) is amended with the numbers; if the spike shows that freezing cannot work for a class of games, write the fallback (cooperative pause or save-and-close) and send a changed product decision to the owner.
 
 ## Outcome
 _Filled in by the lead. First line: `Verified: hw | vm | host`._

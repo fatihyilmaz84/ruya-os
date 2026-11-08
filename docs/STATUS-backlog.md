@@ -67,9 +67,9 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | [T-242](tasks/T-242-play-library-home-and-preview.md) | `.play` in Library and Home: art, preview loop, save paths | todo | T-232, T-238 |
 | [T-243](tasks/T-243-play-developer-guide-and-samples.md) | `.play` developer guide and two samples | todo | T-233 |
 | [T-244](tasks/T-244-system-wine-runner-pack.md) | **[lead]** System Wine runner pack on the `ruyaos` remote | todo | T-229, T-239 |
-| [T-248](tasks/T-248-epic-first-party-apps.md) | **[lead]** EPIC: first-party apps (picture viewer, weather, media player, files, Jellyfin, browser, emulator frontend) and the platform they need | blocked | owner |
+| [T-248](tasks/T-248-epic-first-party-apps.md) | **[lead]** EPIC: first-party apps (picture viewer, weather, media player, files, Jellyfin, then the emulator frontend; no browser first) and the platform they need | todo | — |
 | [T-249](tasks/T-249-hig-human-interface-guidelines.md) | **[lead]** Human Interface Guidelines for app authors (`docs/specs/06-hig.md`) | todo | — |
-| [T-250](tasks/T-250-app-platform-spike-and-adr.md) | **[lead]** Spike and ADR-015 (Proposed): how apps use the OS components (runtime extension, RuyaKit) | todo | — |
+| [T-250](tasks/T-250-app-platform-spike-and-adr.md) | **[lead]** Spike for ADR-015 (Accepted): the `org.ruyaos.Platform` runtime extension with RuyaKit | todo | — |
 | [T-251](tasks/T-251-ruyakit-shared-components.md) | RuyaKit: shared components as a module apps can use | todo | T-250 |
 | [T-252](tasks/T-252-app-template-ci-and-publish.md) | App template, CI recipe, publish to the Store | todo | T-250, T-251, T-214 |
 | [T-253](tasks/T-253-app-picture-viewer.md) | App: Picture viewer | todo | T-251, T-252 |
@@ -77,7 +77,7 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | [T-255](tasks/T-255-app-media-player.md) | App: Media player (local files; codec situation) | todo | T-251, T-252, T-256 |
 | [T-256](tasks/T-256-app-file-manager.md) | App: File manager (and the shared folder browser) | todo | T-251, T-252 |
 | [T-257](tasks/T-257-app-jellyfin-client.md) | App: Jellyfin client | todo | T-251, T-252, T-255 |
-| [T-258](tasks/T-258-app-browser.md) | **[lead]** App: Browser: Proposed ADR-016 first | todo | T-250, T-252 |
+| [T-258](tasks/T-258-app-browser.md) | **[lead]** App: Browser (parked by the owner 2026-11-08, ADR-016: no browser first) | todo | owner, T-250, T-252 |
 | [T-259](tasks/T-259-app-emulator-frontend.md) | App: Emulator frontend (no emulators, ROMs or BIOS shipped) | todo | T-251, T-252, T-256 |
 | [T-262](tasks/T-262-wake-from-suspend-by-controller.md) | Wake from suspend with a controller (hardware-dependent; honest UI) | todo | T-166, T-202, T-203 |
 | [T-263](tasks/T-263-controller-registry-and-player-model-spec.md) | **[lead]** EPIC multiple controllers (ADR-017): spec of the registry and the player model | todo | T-260 |
@@ -87,7 +87,7 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | [T-267](tasks/T-267-pad-default-owner-at-login.md) | A pad remembers its owner: Guide on the picker highlights that profile | todo | T-264, T-265 |
 | [T-268](tasks/T-268-guest-player.md) | Guest as a temporary player | todo | T-264, T-265, T-211 |
 | [T-270](tasks/T-270-epic-games-store-integration.md) | **[lead]** Epic Games Store integration (Legendary, Heroic-style): Proposed ADR-018 first | blocked | owner |
-| [T-273](tasks/T-273-epic-multitasking-and-task-switching.md) | **[lead]** EPIC multitasking and task switching (ADR-019 Proposed): spec | todo | T-164 |
+| [T-273](tasks/T-273-epic-multitasking-and-task-switching.md) | **[lead]** EPIC multitasking and task switching (ADR-019 Accepted): spec | todo | T-164 |
 | [T-274](tasks/T-274-spike-freezing-real-games.md) | **[lead]** Spike: freeze and thaw real apps and games on the Dell | todo | T-164, T-162 |
 | [T-275](tasks/T-275-session-per-app-freeze-and-switch.md) | `ruya-session`: per-app freeze/thaw and an atomic `Switch` | todo | T-273, T-274, T-165 |
 | [T-276](tasks/T-276-compositor-snapshots-visibility-smooth-switch.md) | **[lead]** Compositor: last-frame snapshots, visibility events, smooth switch | todo | T-273, T-164, T-147 |
@@ -95,7 +95,7 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | [T-278](tasks/T-278-background-and-memory-policy-game-mode.md) | **[lead]** Background and memory policy ("game mode") | todo | T-273, T-274, T-275, T-201 |
 | [T-279](tasks/T-279-app-cooperation-save-state-and-background-audio.md) | App cooperation: save state, background audio, developer guide | todo | T-273, T-275 |
 | [T-280](tasks/T-280-gap-free-boot-handover.md) | **[lead]** Close the dark gap between the boot splash and the shell's first frame | todo | T-269 |
-| [T-302](tasks/T-302-epic-game-data-hub-api.md) | **[lead]** EPIC game data hub (ADR-020 Proposed): ROM folders, save and capture paths, now-playing: spec | todo | — |
+| [T-302](tasks/T-302-epic-game-data-hub-api.md) | **[lead]** EPIC game data hub (ADR-020 Accepted): ROM folders, save and capture paths, now-playing: spec | todo | — |
 | [T-303](tasks/T-303-spike-hub-systems-layout-sandbox.md) | **[lead]** Spike and spec: system ids, ROM and capture layout, sandbox reach | todo | T-302 |
 | [T-304](tasks/T-304-hub1-contract-and-service.md) | `Hub1`: contract, `ruya-hub` service, mock and client | todo | T-302, T-303 |
 | [T-305](tasks/T-305-captures-screenshot-recording-clip.md) | **[lead]** Captures: screenshots, recordings and clip-the-last-seconds by the OS | todo | T-302, T-304, T-164 |
@@ -114,5 +114,6 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | [T-319](tasks/T-319-xbox-360-wireless-receiver.md) | Xbox 360 wireless receiver ("360 dongle"): in-kernel `xpad`, classification, battery, sync guidance | todo | — |
 | [T-350](tasks/T-350-lint-dev-docs-public-api-coverage-and-samples.md) | lint-dev-docs: every public API element is documented, every sample builds | todo | — |
 | [T-351](tasks/T-351-api-level-and-changelog.md) | API level: RUYA_API_LEVEL, the AppStream minimum, the Store filter, an XML-diff changelog | todo | — |
-| [T-352](tasks/T-352-ruya-platform-service-skeleton.md) | ruya-platform: the one door for sandboxed apps (blocked on ADR-022) | blocked | T-250, T-351 |
-| [T-353](tasks/T-353-developer-mock-and-sample-harness.md) | Developer harness: a Platform mock, a sample app and a conformance runner in CI | blocked | T-352, T-350 |
+| [T-352](tasks/T-352-ruya-platform-service-skeleton.md) | ruya-platform: the one door for sandboxed apps (ADR-022 Accepted; step one: the caller-identity spike) | todo | T-351 |
+| [T-353](tasks/T-353-developer-mock-and-sample-harness.md) | Developer harness: a Platform mock, a sample app and a conformance runner in CI | todo | T-352, T-350 |
+| [T-354](tasks/T-354-research-xbox-wireless-adapter-support.md) | **[lead]** Research: Xbox Wireless Adapter support (driver, user-downloaded firmware, legal risk) and a recommended task list; builds nothing | todo | — |
