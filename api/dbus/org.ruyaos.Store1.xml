@@ -41,7 +41,8 @@
     developer       s    developer or publisher name
     source          s    "official" | "community" | "developer" (spec §4.2: the remote's trust level)
     controller      s    "full" | "partial" | "none" (x-ruya-controller / <control>gamepad)
-    age_rating      s    OARS summary: "all" | "7+" | "12+" | "16+" | "18+"
+    age_rating      s    OARS summary: "all" | "7+" | "12+" | "16+" | "18+"; absent for an app
+                         with no content rating (not rated; a client must not read it as "all")
     permissions     as   (GetApp reads them on first use; the lists carry the ones already read)
                          stable keys, in plain-language order: "network", "home-files",
                          "host-files", "all-devices", "audio", "gamepad", "session-bus", ...

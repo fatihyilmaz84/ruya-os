@@ -20,7 +20,7 @@ struct AppInfo
     QString developer;
     QString source = QStringLiteral("community"); // "official" | "community" | "developer"
     QString controller = QStringLiteral("none");  // "full" | "partial" | "none"
-    QString ageRating = QStringLiteral("all");
+    QString ageRating;   // "all" | "7+" | ... ; empty = not rated
     QStringList permissions;
     QStringList newPermissions; // what the available update adds; only getApp fills it
     qulonglong installedSize = 0;
