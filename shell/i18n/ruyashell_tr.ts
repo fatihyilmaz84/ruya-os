@@ -1598,7 +1598,18 @@ Bu geri alınamaz.</translation>
 <context>
     <name>MyProfilePane</name>
     <message>
-        <location filename="../qml/MyProfilePane.qml" line="+53"/>
+        <location filename="../qml/MyProfilePane.qml" line="+20"/>
+        <location line="+1"/>
+        <source>Back</source>
+        <translation>Geri</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Select</source>
+        <translation>Seç</translation>
+    </message>
+    <message>
+        <location line="+36"/>
         <source>Profile renamed.</source>
         <translation>Profil yeniden adlandırıldı.</translation>
     </message>

@@ -835,6 +835,38 @@ Item {
             tryVerify(() => find("myProfileMessage").text === "Profile renamed.")
         }
 
+        // A second admin: Manage profiles offers Delete for it while another admin (the signed-in
+        // one) exists, and the delete goes through. Deleting the last admin is refused by the mock
+        // (test_delete_rules above) and cannot be reached here: the only admin who can open this pane
+        // is the signed-in one, who is never offered Delete for themselves.
+        function test_second_admin_is_deletable_in_manage() {
+            startShell()
+            signIn("p1", "1234")
+            compare(create("p1", "1234", "Admin2", "admin", "4321")[0], "ok")
+            tryVerify(() => Profiles.profiles.length === 4)
+            openProfilesPane()
+            selectRow("p4")
+            tryVerify(() => find("rowRename").activeFocus, 2000, "actions open on Rename")
+            verify(find("rowDelete").visible, "a second admin can be deleted while another admin exists")
+            keyClick(Qt.Key_Down)
+            tryVerify(() => find("rowDelete").activeFocus)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("profilesDeleteConfirm").shown)
+            keyClick(Qt.Key_Right)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("profilesPinPad").shown)
+            enterPin("1234")
+            tryVerify(() => Profiles.profiles.length === 3, 3000, "the second admin was deleted")
+            tryVerify(() => find("profileRow_p4") === null)
+            // The one admin left is the signed-in one: selecting oneself offers no Delete.
+            tryVerify(() => find("profileRow_p3").activeFocus, 2000)
+            keyClick(Qt.Key_Up)
+            keyClick(Qt.Key_Up)
+            tryVerify(() => find("profileRow_p1").activeFocus)
+            keyClick(Qt.Key_Return)
+            verify(!find("rowDelete").visible)
+        }
+
         function test_back_leaves_each_pane_to_the_category_list() {
             startShell()
             signIn("p1", "1234")

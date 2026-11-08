@@ -16,9 +16,19 @@ ProfilePaneBase {
     namePrefix: "myProfile"
     fallbackRow: changePinRow
 
+    // The identity row is read-only: on it the hint bar shows Back only (04 Settings pane rule).
+    hints: whoRow.activeFocus ? [{ button: "B", text: qsTr("Back") }]
+                              : [{ button: "A", text: qsTr("Select") }, { button: "B", text: qsTr("Back") }]
+
     readonly property bool canRename: myRole === "admin" || myRole === "standard"
     readonly property bool canChangePin: myRole === "admin" || myRole === "standard"
     readonly property bool canRemovePin: myRole === "standard" && (me.hasPin ?? false)
+
+    // Rows come and go with the signed-in profile (Rename, PIN rows): lay the column out now
+    // (SettingsPane.reflow), or a real window can keep them unlaid and clipped to one row.
+    onMyRoleChanged: Qt.callLater(reflow)
+    onMeChanged: Qt.callLater(reflow)
+    Component.onCompleted: Qt.callLater(reflow)
 
     // The "Activity" row was activated: the Settings page opens the Activity page (T-247).
     signal activityRequested()
