@@ -1,6 +1,6 @@
 # T-164 — Per-profile Wayland sockets: an app launched for a profile appears in the shell
 
-Status: todo · Phase: 2 · Depends: T-162 · Area: shell, services, api, image · Size: M · Owner: lead
+Status: in-progress · Phase: 2 · Depends: T-162 · Area: shell, services, api, image · Size: M · Owner: lead
 
 ## Goal
 An app that `ruya-session` starts as a profile's Unix user connects to a Wayland socket only that user can open, and its window appears full-screen in the shell's app layer. No app window is ever drawn while nobody is signed in.
