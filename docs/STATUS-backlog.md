@@ -4,7 +4,6 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 
 | ID | Title | Status | Depends |
 |---|---|---|---|
-| [T-330](tasks/T-330-ambient-bed-must-be-audible-on-small-speakers.md) | **[lead]** The ambient bed must be audible on a small speaker and on a TV; the checker says so | in-progress | T-321 |
 | [T-322](tasks/T-322-sound-output-policy-and-picker.md) | **[lead]** Choose the sound output by what is usable; Settings > Audio output with ports, test sound, remembered | todo | — |
 | [T-285](tasks/T-285-hint-bar-and-focus-follow-ups.md) | Hint bar and focus follow-ups: Accept hints, keyboard hints, Tab, tests that could not fail | todo | — |
 | [T-292](tasks/T-292-activity-page-follow-ups.md) | Activity page follow-ups: refresh only when visible, paging, retry, icons, focus order | todo | — |
@@ -28,6 +27,7 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | [T-342](tasks/T-342-store-age-rating-and-sync-follow-ups.md) | Store follow-ups: every OARS attribute, the long Turkish badge, installed-list reads in order | todo | — |
 | [T-344](tasks/T-344-audio-pane-delete-and-confirm-detail-follow-ups.md) | Sound theme delete and confirm dialogs: refused delete, guard test, wrapped details | todo | — |
 | [T-345](tasks/T-345-appart-gpu-check-masked-tint-and-shots.md) | AppArt and rounded corners: one GPU check, tint under masked pictures, shots at 4K and DPR 1 | todo | — |
+| [T-346](tasks/T-346-sound-theme-checker-work-cap-and-flac-fixtures.md) | Sound theme checker: cap the decode work, fuzz the decoder, FLAC fixtures from real encoders | todo | T-330 |
 | [T-283](tasks/T-283-contrast-gate-rows-and-chart-bar-marker.md) | Contrast gate rows: glass sheet, chart bars, saver, bare backdrop, avatars; the chart's read-bar marker | todo | T-282 |
 | [T-284](tasks/T-284-glass-sheet-and-dialog-card-follow-ups.md) | Glass sheet follow-ups and one dialog card for the confirm dialogs | todo | T-282 |
 | [T-298](tasks/T-298-ci-qt-floor-and-linux-clippy-gate.md) | **[lead]** CI: decide the Qt floor and add a Linux-native clippy gate at Rust 1.92 | todo | — |

@@ -27,5 +27,7 @@ Silent sound is the first thing a player needs to fix, and today neither the def
 - **Size L: slice before dispatch** (the lead decides): (a) policy + persistence + first-start volume + contract + service + mock (items 1, 2, 5, 6), (b) the pane, test sound and screenshots (item 3), (c) card-profile/port switching if (a) grows past M (item 4). Each slice keeps contract, mock, client and service in step; the pane slice depends on the contract slice.
 - Related: T-330 (the ambient bed must be audible) is independent; the 'Settings > Audio should list the card's other outputs by switching its profile' and 'first-start volume 40 % is low' Inbox notes of 2026-11-08 are item 4 and 6 here.
 
+- (T-330 builder, 2026-11-08) The first-start 0.40 is WirePlumber 0.5.19's own default (`device.routes.default-sink-volume = 0.064`, shown by wpctl as 0.40 on its cubic scale); nothing in `image/` or `ruya-devices` sets a volume. Item 6 can be a drop-in `wireplumber.conf.d/50-ruyaos-volume.conf` (1.0, optionally a `monitor.alsa.rules` override for analog devices) or the service; decide in the slice. Details: T-330 Outcome.
+
 ## Outcome
 _Filled in by the implementer._

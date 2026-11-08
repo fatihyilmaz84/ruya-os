@@ -1,6 +1,6 @@
 # T-330 — The ambient bed must be audible on a small speaker and on a TV, and the checker must say so
 
-Status: in-progress · Phase: 2 · Depends: T-321 · Area: scripts (make-sounds.py), shell (SoundThemeCheck, fixtures, sound-themes guide), image (sink default volume, as a finding) · Size: M · Owner: lead
+Status: done · Phase: 2 · Depends: T-321 · Area: scripts (make-sounds.py), shell (SoundThemeCheck, fixtures, sound-themes guide), image (sink default volume, as a finding) · Size: M · Owner: lead
 
 ## Goal
 With T-321 the Dreamglass ambient bed finally plays on the Dell (stream `running` at 24 kHz, no format errors), but the owner hears nothing: the bed has its energy at 73-150 Hz (peak -12 dBFS before gain) and plays at theme gain 0.7, Ambient slider 100 % and a sink volume of 0.40 through the OptiPlex 7080's tiny internal speaker, which does not reproduce below about 200 Hz. A bed that cannot be heard on a 5 cm speaker or a TV is a design failure.
@@ -12,12 +12,12 @@ With T-321 the Dreamglass ambient bed finally plays on the Dell (stream `running
 4. **Finding to record (no code):** the sink volume at first start was 0.40 on the Dell. Say in the Outcome whether that is our default or a leftover (look for `ruya-devices`/WirePlumber defaults) and propose a sane console default (a high sink volume, the TV controls the loudness): that becomes part of T-322.
 
 ## Acceptance criteria
-- [ ] The regenerated Dreamglass and example beds measure within the stated level and band rules (numbers in the Outcome); loops still whole cycles, `--verify` green.
-- [ ] The checker refuses the two bad fixtures and accepts the shipped themes; `.\scripts\dev.ps1 test` ALL GREEN.
-- [ ] On the Dell the new bed is `running` and measured at the sink; the lead gets a sentence to relay to the owner.
+- [x] The regenerated Dreamglass and example beds measure within the stated level and band rules (numbers in the Outcome); loops still whole cycles, `--verify` green.
+- [x] The checker refuses the two bad fixtures and accepts the shipped themes; `.\scripts\dev.ps1 test` ALL GREEN.
+- [x] On the Dell the new bed is `running` and measured at the sink; the lead gets a sentence to relay to the owner.
 
 ## Outcome
-Verified: host (vm pending: Dell sink measurement and listen test of the new bed, `sh /run/t321/t330-swap.sh new`, `measure`, `old`; lead run, because the lead asked that the live file is not swapped without the owner being told)
+Verified: host + hw (Dell, 0.0.53 with the staged bed, lead-5 2026-11-08 21:25): `t330-swap.sh new` then `measure` at the sink with the sink volume 0.30: overall RMS -28.5 dBFS (peak -16.2), 200 Hz-4 kHz band RMS -29.3 dBFS (before: -35.2), the stream plays on the analog speaker sink. The prediction was -28.1. The owner listens; the bed stays in `/run/t321` until the next reboot; the image gets it with the next build (0.0.56). Review: APPROVE (decoder checked line by line, 600 generated hostile FLACs: verdict every time, worst case 1.35 s).
 
 **Baseline the owner confirmed by ear** (the T-321 bed, `/run/t321/ambient.flac`, sha256 b1039984..., live since 19:23). File: RMS -19.9 dBFS, peak -9.1 dBFS, -21.6 LUFS, 58.4 % of the energy below 120 Hz, 78.1 % below 150 Hz, 11.8 % between 200 Hz and 4 kHz, the 200 Hz-4 kHz band at -29.2 dBFS RMS, A-weighted -34.2 dB (above 200 Hz -37.6). At the sink monitor (`pw-record -P '{ stream.capture.sink=true }' --target alsa_output.pci-0000_00_1f.3.analog-stereo`, 30 s, bed only, sink volume 1.00): RMS -26.1 dBFS, 1 s windows -25.0 to -27.9, peak -12.5 dBFS, band shares 0.778 below 150 Hz and 0.124 between 200 Hz and 4 kHz (the file's), the 200 Hz-4 kHz band at -35.2 dBFS (FFT band) or -36.7 dBFS (ffmpeg 4-pole filters). The monitor is 6.2 dB below the file: the theme gain 0.7 (-3.1 dB) and the mono-to-stereo pan (-3 dB). An earlier 20 s capture with cues in it read -27.6 dBFS. A capture at sink volume 0.30 read the same -26.1 dBFS: on this Intel HDA codec the sink volume is the hardware mixer, after the monitor, so the monitor does not show the sink volume.
 
