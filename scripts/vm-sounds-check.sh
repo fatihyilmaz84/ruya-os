@@ -5,7 +5,10 @@
 #   - the shell binary's own checker (the function the shell uses) accepts it, and refuses a broken copy
 #     and a copy whose manifest points outside its folder;
 #   - the shell's journal has no complaint about a sound theme;
-#   - the licence notice is installed.
+#   - the licence notice is installed;
+#   - (T-321) the playback probe's output and the shell's own output opened (no "QAudioFormat not valid", no
+#     "Requested output sample rate 0"), and with a sound device (-Audio) the shell's ambient stream is
+#     `running` in PipeWire; if it is not (the screen saver pauses the bed) the script restarts the shell once.
 # What it cannot do: hear anything. With the VM booted with -Audio (docs/dev-setup.md "Audio in the VM",
 # scripts/vm-audio-check.sh) the owner listens to the cues and to the ambient loop; that is the
 # listening criterion of T-227 and stays with the owner.
@@ -80,7 +83,15 @@ fi
 # scp scripts/vm-sounds-probe.qml to /root/ together with this script.
 if [ -f /root/vm-sounds-probe.qml ]; then
     work=$(mktemp -d); cp /root/vm-sounds-probe.qml "$work/probe.qml"; chmod 755 "$work"; chmod 644 "$work/probe.qml"
-    runuser -u ruya-shell -- env QT_QPA_PLATFORM=offscreen XDG_RUNTIME_DIR="/run/user/$(id -u ruya-shell)" timeout 30 "$shell" --load "$work/probe.qml" > "$work/probe.log" 2>&1
+    # QT_FORCE_STDERR_LOGGING: Fedora's Qt otherwise sends console.warn and its own warnings to the journal, and
+    # probe.log would hold only FFmpeg's lines. QT_AUDIO_BACKEND as in the compositor unit.
+    runuser -u ruya-shell -- env QT_QPA_PLATFORM=offscreen QT_FORCE_STDERR_LOGGING=1 QT_AUDIO_BACKEND=pulseaudio \
+        XDG_RUNTIME_DIR="/run/user/$(id -u ruya-shell)" timeout 30 "$shell" --load "$work/probe.qml" > "$work/probe.log" 2>&1
+    # T-321: an ambient FLAC whose frames do not name their sample rate makes Qt 6.11 open its output at 0 Hz:
+    # PlayingState and a moving position, but no sound and these two lines (the first several times a second).
+    bad_fmt=$(grep -a -c "QAudioFormat not valid" "$work/probe.log"); bad_rate=$(grep -a -c "Requested output sample rate 0" "$work/probe.log")
+    [ "$bad_fmt" = 0 ] && [ "$bad_rate" = 0 ] && ok "the probe's audio output opened with a valid format" \
+        || bad "the probe's audio output never opened: $bad_fmt x 'QAudioFormat not valid', $bad_rate x 'Requested output sample rate 0'"
     last=$(grep -a "sounds-probe:" "$work/probe.log" | tail -1)
     echo "    $last"
     echo "$last" | grep -q "loaded=true" && ok "Qt Multimedia loaded ambient.flac (LoadedMedia)" || bad "the ambient file did not load under the image's Qt: $(grep -a -i 'error\|fail' "$work/probe.log" | head -2)"
@@ -90,6 +101,65 @@ if [ -f /root/vm-sounds-probe.qml ]; then
     rm -rf "$work"
 else
     echo "SKIP: /root/vm-sounds-probe.qml not copied, no playback probe"
+fi
+
+# T-321: the shell's own ambient bed really sounds. Its output stream must be `running` in PipeWire (not only
+# present: the broken bed had a stream that stayed idle, ports in [init]) and the shell's journal must not have
+# the two lines of an output that never opened. Needs a sound device: boot the VM with -Audio.
+uid=$(id -u ruya-shell)
+as_shell() { runuser -u ruya-shell -- env XDG_RUNTIME_DIR="/run/user/$uid" "$@"; }
+# The running shell is the compositor unit's main process; its own lines only, so that a restart starts clean.
+shell_pid() {
+    local unit; unit=$(systemctl list-units 'ruya-compositor@*' --plain --no-legend 2>/dev/null | awk '{print $1}' | head -1)
+    [ -n "$unit" ] && systemctl show -p MainPID --value "$unit"
+}
+journal_bad() {
+    local pid; pid=$(shell_pid)
+    if [ -n "$pid" ] && [ "$pid" != 0 ]; then journalctl -b "_PID=$pid" --no-pager 2>/dev/null; else journalctl -b "_UID=$uid" --no-pager 2>/dev/null; fi \
+        | grep -a -c "QAudioFormat not valid\|Requested output sample rate 0"
+}
+n=$(journal_bad)
+[ "$n" = 0 ] && ok "no 'QAudioFormat not valid' or 'sample rate 0' in the running shell's journal (pid $(shell_pid))" \
+    || bad "the shell's journal has $n lines of an audio output that never opened ('QAudioFormat not valid', 'Requested output sample rate 0')"
+nodes() { as_shell pw-dump 2>/dev/null | jq -r '.[] | select(.type == "PipeWire:Interface:Node") | "\(.info.props["media.class"] // "-") \(.info.props["application.process.binary"] // "-") \(.info.state // "-") \(.info.props["node.name"] // "-") \(.id)"'; }
+running_ids() { nodes | awk '$1 == "Stream/Output/Audio" && $2 == "ruya-shell" && $3 == "running" {print $5}' | sort; }
+# A cue is a running shell stream too, for at most 1.5 s (the startup cue right after a restart): the bed is
+# the stream that stays running for 3 s, sampled every half second.
+shell_running() {
+    local ids next i
+    ids=$(running_ids)
+    for i in 1 2 3 4 5 6; do
+        [ -n "$ids" ] || return 1
+        sleep 0.5
+        next=$(running_ids)
+        ids=$(comm -12 <(echo "$ids") <(echo "$next"))
+    done
+    [ -n "$ids" ]
+}
+if ! command -v jq >/dev/null 2>&1; then
+    bad "jq is not installed (needed to read pw-dump)"
+elif ! nodes | awk '$1 == "Audio/Sink" && $4 != "auto_null"' | grep -q .; then
+    echo "SKIP: no sound device, so no running stream to look for (boot the VM with -Audio)"
+else
+    # The bed plays on the picker and Home, and pauses under the screen saver (10 min idle by default): if it
+    # is not running now, restart the shell, which starts it again, and look once more.
+    # Each look takes 3 s while a stream runs, well under 1 s while none does.
+    bed=no; tries=0
+    until [ $bed = yes ] || [ $tries -ge 3 ]; do shell_running && bed=yes || sleep 1; tries=$((tries + 1)); done
+    if [ $bed = no ]; then
+        echo "    no running ambient stream yet (screen saver up?): restarting the shell"
+        systemctl restart 'ruya-compositor@*'
+        tries=0
+        until [ $bed = yes ] || [ $tries -ge 20 ]; do shell_running && bed=yes || sleep 1; tries=$((tries + 1)); done
+    fi
+    if [ $bed = yes ]; then
+        ok "the shell's ambient stream is running in PipeWire"
+    else
+        nodes | grep ruya-shell | sed 's/^/    /'
+        bad "no ruya-shell output stream is running (is Settings -> Audio -> Ambient sound on, the Ambient level above 0?)"
+    fi
+    n=$(journal_bad)
+    [ "$n" = 0 ] && ok "still no 'QAudioFormat not valid' after the stream started" || bad "the shell's journal now has $n lines of an output that never opened"
 fi
 
 [ -s /usr/share/licenses/ruyaos/LICENSE-Sounds.txt ] && ok "licence notice installed" || bad "no LICENSE-Sounds.txt"

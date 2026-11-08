@@ -280,9 +280,13 @@ def _rice(u, k):
 
 BLOCK = 4096
 PARTITION_ORDER = 4
+# The frame header's sample rate code for the rates this file writes. Every frame names its rate:
+# code 0 ("see STREAMINFO") is valid FLAC, but Qt 6.11's FFmpeg player then opens its output at
+# 0 Hz and never plays (T-321: "QAudioSink::start: QAudioFormat not valid" in a loop, no sound).
+FLAC_RATE_CODES = {8000: 4, 16000: 5, 22050: 6, 24000: 7, 32000: 8, 44100: 9, 48000: 10, 96000: 11}
 
 
-def _frame(index, x):
+def _frame(index, x, rate):
     """One mono 16-bit FLAC frame: the best fixed predictor (order 0..4), Rice coded."""
     best = None
     for order in range(5):
@@ -310,7 +314,7 @@ def _frame(index, x):
         pieces.append(_rice(u, k))
     body = np.concatenate(pieces)
     body = np.concatenate([body, np.zeros((-len(body)) % 8, dtype=np.uint8)])
-    header = bytes([0xFF, 0xF8, (12 << 4) | 0, (0 << 4) | (4 << 1) | 0]) + chr(index).encode("utf-8")
+    header = bytes([0xFF, 0xF8, (12 << 4) | FLAC_RATE_CODES[rate], (0 << 4) | (4 << 1) | 0]) + chr(index).encode("utf-8")
     header += bytes([crc8(header)])
     frame = header + np.packbits(body).tobytes()
     return frame + crc16(frame).to_bytes(2, "big")
@@ -325,7 +329,7 @@ def encode_flac(samples, rate):
             + ((rate << 44) | (0 << 41) | (15 << 36) | len(x)).to_bytes(8, "big") + md5)
     out = [b"fLaC", bytes([0x80, 0, 0, 34]), info]
     for i in range(len(x) // BLOCK):
-        out.append(_frame(i, x[i * BLOCK:(i + 1) * BLOCK]))
+        out.append(_frame(i, x[i * BLOCK:(i + 1) * BLOCK], rate))
     return b"".join(out)
 
 
@@ -352,7 +356,7 @@ def decode_flac(data):
     done = 0
     while done < total:
         start = pos
-        assert data[pos:pos + 4] == bytes([0xFF, 0xF8, 0xC0, 0x08])
+        assert data[pos:pos + 4] == bytes([0xFF, 0xF8, 0xC0 | FLAC_RATE_CODES[rate], 0x08]), "frame header (block size, rate, channels)"
         lead = data[pos + 4]
         head = 5 if lead < 0x80 else (6 if lead < 0xE0 else 7)
         assert data[pos + head] == crc8(data[pos:pos + head]), "frame header CRC"

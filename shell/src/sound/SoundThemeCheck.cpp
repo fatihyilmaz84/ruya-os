@@ -170,8 +170,12 @@ bool parseWav(const QByteArray &data, Audio *out, QString *why)
     return false;
 }
 
-// FLAC: the STREAMINFO block at the head.
-bool parseFlac(const QByteArray &head, Audio *out, QString *why)
+// FLAC: the STREAMINFO block at the head, then the header of the first audio frame, found by walking the
+// metadata blocks in the file (an encoder's PADDING block often puts it past `head`). Every frame must name
+// its sample rate: rate code 0 ("as in STREAMINFO") is valid FLAC, but Qt 6.11's FFmpeg player then opens its
+// output at 0 Hz, never sounds and retries several times a second (T-321, "QAudioSink::start: QAudioFormat
+// not valid"). Common encoders (flac, ffmpeg) always write the code for the rates a theme may use.
+bool parseFlac(const QString &path, const QByteArray &head, Audio *out, QString *why)
 {
     if (head.size() < 42 || head.left(4) != "fLaC" || (quint8(head[4]) & 0x7F) != 0 || head.mid(5, 3) != QByteArray("\0\0\x22", 3)) {
         *why = QStringLiteral("not a FLAC file");
@@ -185,6 +189,35 @@ bool parseFlac(const QByteArray &head, Audio *out, QString *why)
     const quint64 total = packed & ((quint64(1) << 36) - 1);
     if (rate == 0 || total == 0) {
         *why = QStringLiteral("the FLAC header does not give a sample rate and length");
+        return false;
+    }
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly)) {
+        *why = QStringLiteral("the file cannot be read");
+        return false;
+    }
+    const qint64 size = file.size();
+    qint64 at = 4;                              // after "fLaC"
+    for (;;) {                                  // ends: `at` grows by at least 4 each turn and stops at the file size
+        QByteArray block;
+        if (at + 4 > size || !file.seek(at) || (block = file.read(4)).size() != 4) {
+            *why = QStringLiteral("the FLAC file has no audio frames");
+            return false;
+        }
+        const qint64 length = (qint64(quint8(block[1])) << 16) | (qint64(quint8(block[2])) << 8) | qint64(quint8(block[3]));
+        at += 4 + length;
+        if (quint8(block[0]) & 0x80)            // the last metadata block
+            break;
+    }
+    QByteArray frame;
+    if (at + 4 > size || !file.seek(at) || (frame = file.read(4)).size() != 4
+        || quint8(frame[0]) != 0xFF || (quint8(frame[1]) & 0xFE) != 0xF8) {
+        *why = QStringLiteral("the FLAC file has no audio frames");
+        return false;
+    }
+    const int rateCode = quint8(frame[2]) & 0x0F;
+    if (rateCode == 0 || rateCode == 15) {
+        *why = QStringLiteral("the FLAC frames do not name their sample rate (encode it again with flac or ffmpeg)");
         return false;
     }
     out->rate = int(rate);
@@ -436,7 +469,7 @@ Result check(const QString &dir)
                 if (!readHeadAndTail(path, &head, &tail)) {
                     fail(label + QStringLiteral("the file cannot be read"));
                 } else if (hasExtension(path, {QStringLiteral("flac")})) {
-                    parsed = parseFlac(head, &audio, &why);
+                    parsed = parseFlac(path, head, &audio, &why);
                 } else {
                     parsed = parseOgg(head, tail, &audio, &why);
                 }
@@ -542,11 +575,14 @@ QByteArray wavWithChunk(const QByteArray &wav, const QByteArray &id, quint32 dec
     return wav.left(36) + chunk + wav.mid(36);
 }
 
-// A FLAC file that is only a STREAMINFO header (enough for the checker, which reads data, never decodes).
-QByteArray makeFlacHeader(int rate, int channels, quint64 totalSamples, qint64 padTo = 0)
+// A FLAC file that is a STREAMINFO header and the header of one frame (enough for the checker, which reads
+// data, never decodes: the frame's CRC and body are not there). `rateCode` is the frame header's sample rate
+// code (7 = 24 kHz; 0 = "as in STREAMINFO", which the checker refuses); `paddingBytes` puts a PADDING
+// block between STREAMINFO and the frame, as the flac encoder does (8 KB, past the checker's 4 KB head).
+QByteArray makeFlacHeader(int rate, int channels, quint64 totalSamples, qint64 padTo = 0, int rateCode = 7, int paddingBytes = 0)
 {
     QByteArray b("fLaC");
-    b.append(char(0x80));
+    b.append(char(paddingBytes > 0 ? 0x00 : 0x80));  // STREAMINFO, the last metadata block unless padding follows
     b.append(QByteArray("\0\0\x22", 3));
     b.append(QByteArray("\x10\x00\x10\x00", 4));    // block size 4096
     b.append(QByteArray(6, '\0'));                  // frame sizes unknown
@@ -554,6 +590,19 @@ QByteArray makeFlacHeader(int rate, int channels, quint64 totalSamples, qint64 p
     for (int shift = 56; shift >= 0; shift -= 8)
         b.append(char((packed >> shift) & 0xFF));
     b.append(QByteArray(16, '\0'));                 // MD5
+    if (paddingBytes > 0) {
+        b.append(char(0x81));                       // PADDING, the last metadata block
+        b.append(char((paddingBytes >> 16) & 0xFF));
+        b.append(char((paddingBytes >> 8) & 0xFF));
+        b.append(char(paddingBytes & 0xFF));
+        b.append(QByteArray(paddingBytes, '\0'));
+    }
+    // Frame header: sync, block size 4096 and the rate code, mono 16-bit, frame number 0, a CRC-8 left at 0.
+    b.append(char(0xFF));
+    b.append(char(0xF8));
+    b.append(char(0xC0 | (rateCode & 0x0F)));
+    b.append(char(0x08));
+    b.append(QByteArray(2, '\0'));
     if (padTo > b.size())
         b.append(QByteArray(int(padTo - b.size()), '\0'));
     return b;
@@ -646,6 +695,9 @@ QList<FixtureCase> fixtureCases()
         {QStringLiteral("ok-wav-extra-chunk"), true, {}},
         {QStringLiteral("bad-granule-overflow"), false, QStringLiteral("no usable length")},          // an Ogg granule of 2^63 - 1
         {QStringLiteral("bad-loop-overflow"), false, QStringLiteral("0 to 1000000000000000 ms")},   // a loop end of 1e300, clamped before the cast
+        {QStringLiteral("bad-flac-frame-rate"), false, QStringLiteral("do not name their sample rate")}, // T-321: Qt plays it at 0 Hz
+        {QStringLiteral("bad-flac-no-frames"), false, QStringLiteral("has no audio frames")},
+        {QStringLiteral("ok-flac-padding"), true, {}},                                               // the first frame past the 4 KB head
     };
 }
 
@@ -727,6 +779,12 @@ bool writeFixtures(const QString &root)
     QJsonObject huge = ambientOf(QStringLiteral("ambient.flac"), 0, 10000);
     huge.insert(QStringLiteral("loop"), QJsonObject{{QStringLiteral("start"), 0.0}, {QStringLiteral("end"), 1e300}});
     withAmbient(QStringLiteral("bad-loop-overflow"), QStringLiteral("ambient.flac"), flac, huge);
+    withAmbient(QStringLiteral("bad-flac-frame-rate"), QStringLiteral("ambient.flac"), makeFlacHeader(24000, 1, 24000 * 10, 0, 0),
+                ambientOf(QStringLiteral("ambient.flac"), 0, 10000));
+    withAmbient(QStringLiteral("bad-flac-no-frames"), QStringLiteral("ambient.flac"), flac.left(42),
+                ambientOf(QStringLiteral("ambient.flac"), 0, 10000));
+    withAmbient(QStringLiteral("ok-flac-padding"), QStringLiteral("ambient.flac"), makeFlacHeader(24000, 1, 24000 * 10, 0, 7, 8192),
+                ambientOf(QStringLiteral("ambient.flac"), 0, 10000));
     return ok;
 }
 
