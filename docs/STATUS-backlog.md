@@ -95,4 +95,7 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | [T-306](tasks/T-306-now-playing-exchange.md) | Now playing: apps report, the OS shows and shares it | todo | T-302, T-304, T-247 |
 | [T-307](tasks/T-307-library-and-emulator-frontend-use-the-hub.md) | Library and the emulator frontend use the hub | todo | T-302, T-304, T-259 |
 | [T-308](tasks/T-308-hub-developer-guide-sample-and-permissions.md) | Hub developer guide, sample app and per-app permissions | todo | T-302, T-304, T-306, T-220 |
+| [T-309](tasks/T-309-saves-catalog-and-operations-service.md) | **[lead]** Saves manager, service: catalog of saves per game and safe operations (copy, move, delete, export, import) | todo | T-215, T-302, T-304 |
+| [T-310](tasks/T-310-saves-manager-ui.md) | Saves manager UI: browse, copy, move, delete, export and import saves | todo | T-309 |
+| [T-311](tasks/T-311-saves-manager-for-external-emulators.md) | External emulators and apps integrate with the saves manager (declare, register, open, notify) | todo | T-309, T-304, T-306 |
 
