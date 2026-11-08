@@ -439,17 +439,17 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+10"/>
-        <location line="+257"/>
+        <location line="+263"/>
         <source>Uninstall</source>
         <translation>Uninstall</translation>
     </message>
     <message>
-        <location line="-245"/>
+        <location line="-251"/>
         <source>Your activity</source>
         <translation>Your activity</translation>
     </message>
     <message>
-        <location line="+100"/>
+        <location line="+103"/>
         <source>This app can</source>
         <translation>This app can</translation>
     </message>
@@ -459,7 +459,7 @@ This can&apos;t be undone.</translation>
         <translation>High risk</translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+17"/>
         <source>The update adds: %1</source>
         <translation>The update adds: %1</translation>
     </message>
@@ -474,7 +474,7 @@ This can&apos;t be undone.</translation>
         <translation>An admin&apos;s PIN is needed to install this app.</translation>
     </message>
     <message>
-        <location line="+61"/>
+        <location line="+62"/>
         <source>Uninstall %1?</source>
         <translation>Uninstall %1?</translation>
     </message>
@@ -1008,7 +1008,7 @@ This can&apos;t be undone.</translation>
         <translation>No controller or keyboard found. Hold the pairing button on your controller (on a DualSense: PS + Create) until its light blinks.</translation>
     </message>
     <message>
-        <location line="+172"/>
+        <location line="+173"/>
         <source>A device that is not a controller tried to connect and was ignored.</source>
         <translation>A device that is not a controller tried to connect and was ignored.</translation>
     </message>
@@ -1132,12 +1132,17 @@ This can&apos;t be undone.</translation>
         <translation>Wallpaper</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+22"/>
         <source>Dim wallpaper</source>
         <translation>Dim wallpaper</translation>
     </message>
     <message>
-        <location line="+19"/>
+        <location line="+9"/>
+        <source>Raised for this picture</source>
+        <translation>Raised for this picture</translation>
+    </message>
+    <message>
+        <location line="+15"/>
         <location line="+16"/>
         <source>Recommended</source>
         <translation>Recommended</translation>
@@ -1514,7 +1519,7 @@ This can&apos;t be undone.</translation>
         <translation>Could not sign in (%1).</translation>
     </message>
     <message>
-        <location line="+24"/>
+        <location line="+31"/>
         <source>Enter PIN for %1</source>
         <translation>Enter PIN for %1</translation>
     </message>
@@ -1524,7 +1529,7 @@ This can&apos;t be undone.</translation>
         <translation>Confirm PIN</translation>
     </message>
     <message>
-        <location line="+38"/>
+        <location line="+39"/>
         <source>Too many attempts. Try again in %1 s.</source>
         <translation>Too many attempts. Try again in %1 s.</translation>
     </message>
@@ -1577,13 +1582,13 @@ This can&apos;t be undone.</translation>
         <translation>Power off now</translation>
     </message>
     <message>
-        <location line="+104"/>
+        <location line="+106"/>
         <location line="+10"/>
         <source>Cancel</source>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location line="-111"/>
+        <location line="-113"/>
         <source>Confirm</source>
         <translation>Confirm</translation>
     </message>
@@ -1621,7 +1626,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>PowerSavingPane</name>
     <message>
-        <location filename="../qml/PowerSavingPane.qml" line="+14"/>
+        <location filename="../qml/PowerSavingPane.qml" line="+15"/>
         <source>Select</source>
         <translation>Select</translation>
     </message>
@@ -1679,12 +1684,11 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+2"/>
         <source>The console sleeps first</source>
         <translation>The console sleeps first</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="+2"/>
         <source>The screen is not turned off</source>
         <translation>The screen is not turned off</translation>
     </message>
@@ -1694,12 +1698,12 @@ This can&apos;t be undone.</translation>
         <translation>The console sleeps instead</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="+33"/>
         <source>Sleep is not available on this console yet</source>
         <translation>Sleep is not available on this console yet</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="-24"/>
         <source>Screen saver</source>
         <translation>Screen saver</translation>
     </message>
@@ -1715,18 +1719,18 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+11"/>
+        <location line="+15"/>
         <location line="+10"/>
         <source>Never</source>
         <translation>Never</translation>
     </message>
     <message>
-        <location line="-11"/>
+        <location line="-12"/>
         <source>Sleep</source>
         <translation>Sleep</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+11"/>
         <source>Controllers turn off</source>
         <translation>Controllers turn off</translation>
     </message>
@@ -1762,7 +1766,7 @@ This can&apos;t be undone.</translation>
         <translation>%1, PIN protected</translation>
     </message>
     <message>
-        <location line="+39"/>
+        <location line="+47"/>
         <source>PIN</source>
         <translation>PIN</translation>
     </message>
@@ -2205,12 +2209,12 @@ This can&apos;t be undone.</translation>
     <message>
         <location line="+16"/>
         <location line="+63"/>
-        <location line="+79"/>
+        <location line="+81"/>
         <source>Press A to continue</source>
         <translation>Press A to continue</translation>
     </message>
     <message>
-        <location line="-310"/>
+        <location line="-312"/>
         <location line="+218"/>
         <source>Network</source>
         <translation>Network</translation>
@@ -2290,12 +2294,12 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="-272"/>
-        <location line="+298"/>
+        <location line="+299"/>
         <source>You&apos;re all set</source>
         <translation>You&apos;re all set</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+10"/>
         <source>Welcome, %1.</source>
         <translation>Welcome, %1.</translation>
     </message>
@@ -2303,7 +2307,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+345"/>
+        <location filename="../qml/Shell.qml" line="+346"/>
         <source>Could not %1.</source>
         <translation>Could not %1.</translation>
     </message>
@@ -2328,7 +2332,7 @@ This can&apos;t be undone.</translation>
         <translation>Audio output: %1</translation>
     </message>
     <message numerus="yes">
-        <location line="+255"/>
+        <location line="+258"/>
         <source>%n more device(s) with a battery: %1</source>
         <translation>
             <numerusform>%n more device with a battery: %1</numerusform>
@@ -2341,12 +2345,12 @@ This can&apos;t be undone.</translation>
         <translation>%1 %2 percent</translation>
     </message>
     <message>
-        <location line="+590"/>
+        <location line="+592"/>
         <source>Power</source>
         <translation>Power</translation>
     </message>
     <message>
-        <location line="-838"/>
+        <location line="-843"/>
         <source>Update ready. Restart to finish.</source>
         <translation>Update ready. Restart to finish.</translation>
     </message>
@@ -2366,12 +2370,12 @@ This can&apos;t be undone.</translation>
         <translation>The screen did not answer, so the previous resolution is back.</translation>
     </message>
     <message>
-        <location line="+47"/>
+        <location line="+48"/>
         <source>Wallpaper could not be loaded</source>
         <translation>Wallpaper could not be loaded</translation>
     </message>
     <message>
-        <location line="+262"/>
+        <location line="+266"/>
         <source>Continue playing</source>
         <translation>Continue playing</translation>
     </message>
@@ -2419,12 +2423,12 @@ This can&apos;t be undone.</translation>
         <translation>Select</translation>
     </message>
     <message>
-        <location line="+235"/>
+        <location line="+236"/>
         <source>The chosen sound theme can&apos;t be used. The standard one plays instead.</source>
         <translation>The chosen sound theme can&apos;t be used. The standard one plays instead.</translation>
     </message>
     <message>
-        <location line="-256"/>
+        <location line="-257"/>
         <location line="+16"/>
         <source>Cancel</source>
         <translation>Cancel</translation>
@@ -2478,7 +2482,7 @@ This can&apos;t be undone.</translation>
         <translation>Back</translation>
     </message>
     <message>
-        <location line="+109"/>
+        <location line="+110"/>
         <source>mock services</source>
         <translation>mock services</translation>
     </message>
@@ -2587,12 +2591,12 @@ This can&apos;t be undone.</translation>
     <message>
         <location line="+1"/>
         <location line="+136"/>
-        <location line="+68"/>
+        <location line="+70"/>
         <source>Installed</source>
         <translation>Installed</translation>
     </message>
     <message>
-        <location line="-180"/>
+        <location line="-182"/>
         <source>Official</source>
         <translation>Official</translation>
     </message>
@@ -2608,7 +2612,7 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+111"/>
-        <location line="+68"/>
+        <location line="+70"/>
         <source>Update available</source>
         <translation>Update available</translation>
     </message>
@@ -2628,12 +2632,12 @@ This can&apos;t be undone.</translation>
         <translation>Show all apps</translation>
     </message>
     <message>
-        <location line="+106"/>
+        <location line="+107"/>
         <source>Search results</source>
         <translation>Search results</translation>
     </message>
     <message>
-        <location line="+36"/>
+        <location line="+37"/>
         <source>No apps found for &quot;%1&quot;</source>
         <translation>No apps found for &quot;%1&quot;</translation>
     </message>
@@ -3263,17 +3267,17 @@ This can&apos;t be undone.</translation>
         <translation>Could not change the time zone.</translation>
     </message>
     <message>
-        <location line="+83"/>
+        <location line="+84"/>
         <source>Device health</source>
         <translation>Device health</translation>
     </message>
     <message>
-        <location line="+19"/>
+        <location line="+20"/>
         <source>No temperature sensors were found on this device.</source>
         <translation>No temperature sensors were found on this device.</translation>
     </message>
     <message>
-        <location line="-180"/>
+        <location line="-182"/>
         <location line="+8"/>
         <location line="+69"/>
         <source>Only an admin can do this.</source>
@@ -3419,7 +3423,7 @@ This can&apos;t be undone.</translation>
         <translation>The console is too hot</translation>
     </message>
     <message numerus="yes">
-        <location line="+21"/>
+        <location line="+22"/>
         <source>Apps are being closed. If the console does not cool down, it powers off in %n second(s).</source>
         <translation>
             <numerusform>Apps are being closed. If the console does not cool down, it powers off in %n second.</numerusform>
@@ -3652,7 +3656,7 @@ This can&apos;t be undone.</translation>
         <translation>Copying…</translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+14"/>
         <source>Choose a picture to copy to this console. It is shrunk to fit the screen.</source>
         <translation>Choose a picture to copy to this console. It is shrunk to fit the screen.</translation>
     </message>

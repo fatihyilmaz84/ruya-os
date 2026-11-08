@@ -15,10 +15,13 @@ SettingControl {
     // what the keys set (the Dim row: a bright picture is veiled harder than the owner asked, T-286).
     property real shownValue: value
     property string unit: ""          // appended to the number, e.g. "%"
+    // Optional short note between the label and the bar (the Dim row: why the keys may change nothing
+    // visible, T-312). One line, elided; empty = nothing drawn.
+    property string caption: ""
 
     signal edited(real value)
 
-    accessibleValue: Math.round(shownValue) + unit
+    accessibleValue: Math.round(shownValue) + unit + (caption.length > 0 ? ", " + caption : "")
     Accessible.role: Accessible.Slider
 
     function step(delta) {
@@ -40,7 +43,23 @@ SettingControl {
         color: Theme.text
         font.pixelSize: Theme.typeBody * row.u
     }
+    Text {
+        objectName: "caption"
+        visible: row.caption.length > 0
+        anchors {
+            left: parent.left; leftMargin: row.labelRight + Theme.spaceM * row.u
+            right: track.left; rightMargin: Theme.spaceM * row.u
+            verticalCenter: parent.verticalCenter
+        }
+        horizontalAlignment: Text.AlignRight
+        textFormat: Text.PlainText
+        elide: Text.ElideRight
+        text: row.caption
+        color: Theme.text
+        font.pixelSize: Theme.typeCaption * row.u
+    }
     Rectangle {
+        id: track
         anchors { right: valueText.left; rightMargin: Theme.spaceM * row.u; verticalCenter: parent.verticalCenter }
         width: 320 * row.u
         height: 12 * row.u

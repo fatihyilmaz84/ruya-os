@@ -193,8 +193,14 @@ FocusScope {
         spacing: Theme.spaceM * pad.u
 
         Text {
+            objectName: "pinTitle"
             anchors.horizontalCenter: parent.horizontalCenter
+            // One line, at most three card widths, cut with an ellipsis; the full text is the accessible name (T-312).
+            width: Math.min(implicitWidth, 3 * Theme.cardProfileWidth * pad.u)
+            elide: Text.ElideRight
             textFormat: Text.PlainText
+            Accessible.role: Accessible.StaticText
+            Accessible.name: text
             text: pad.mode === "verify" ? qsTr("Enter PIN for %1").arg(pad.profile.name ?? "")
                 : pad.stage === 1 ? qsTr("Confirm PIN") : pad.prompt
             color: Theme.text

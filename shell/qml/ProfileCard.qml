@@ -38,8 +38,14 @@ Item {
         }
     }
 
+    // A name from outside: one line, no wider than the card, cut with an ellipsis (the full name is in
+    // the accessible name above, T-312).
     Text {
+        objectName: "profileCardName"
         anchors { horizontalCenter: parent.horizontalCenter; top: avatar.bottom; topMargin: Theme.spaceM * card.u }
+        width: card.width
+        horizontalAlignment: Text.AlignHCenter
+        elide: Text.ElideRight
         textFormat: Text.PlainText
         text: card.modelData.name
         color: Theme.text

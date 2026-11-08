@@ -22,6 +22,9 @@ FocusScope {
     property real cornerRadius: height / 2
     property bool labelVisible: true
 
+    // Where the label ends, so a subtype can place text after it (SliderRow's caption, T-312).
+    readonly property real labelRight: labelText.x + labelText.width
+
     // The pane navigates over children that set this.
     readonly property bool focusable: true
 
