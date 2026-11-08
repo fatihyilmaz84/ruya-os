@@ -1,6 +1,6 @@
 # T-281 — Cards glow in the colour of their art (Hue-style shadow), and one standard set of card sizes
 
-Status: in-progress · Phase: 2 · Depends: — · Area: shell · Size: M · Owner: builder
+Status: done · Phase: 2 · Depends: — · Area: shell · Size: M · Owner: builder
 
 ## Goal
 Game and app cards cast a soft shadow in the dominant colours of their own picture, like a Philips Hue sync box lighting the wall behind a TV: a red game glows red, a blue one blue, and the glow follows the focused card smoothly. And every kind of card uses one small, documented set of sizes and proportions instead of ad-hoc numbers. Owner request, 2026-11-07: "give the game/app cards a hue shadow ... the shadow color based on the card's colours ... changes based on the image ... also standardize the card sizes etc".
