@@ -726,7 +726,7 @@ This can&apos;t be undone.</translation>
         <translation>Pair a new controller</translation>
     </message>
     <message>
-        <location line="+74"/>
+        <location line="+75"/>
         <source>Pair again %1</source>
         <translation>Pair again %1</translation>
     </message>
@@ -736,12 +736,12 @@ This can&apos;t be undone.</translation>
         <translation>Put it in pairing mode first</translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+16"/>
         <source>Rename %1</source>
         <translation>Rename %1</translation>
     </message>
     <message>
-        <location line="-191"/>
+        <location line="-193"/>
         <source>Paired</source>
         <translation>Paired</translation>
     </message>
@@ -802,7 +802,7 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="-158"/>
-        <location line="+270"/>
+        <location line="+272"/>
         <source>Forget %1</source>
         <translation>Forget %1</translation>
     </message>
@@ -1141,7 +1141,12 @@ This can&apos;t be undone.</translation>
 <context>
     <name>DeviceIcons</name>
     <message>
-        <location filename="../qml/DeviceIcons.qml" line="+67"/>
+        <location filename="../qml/DeviceIcons.qml" line="+66"/>
+        <source>%1 (%2)</source>
+        <translation>%1 (%2)</translation>
+    </message>
+    <message>
+        <location line="+21"/>
         <source>PlayStation controller</source>
         <translation>PlayStation controller</translation>
     </message>

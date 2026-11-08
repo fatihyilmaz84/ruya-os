@@ -61,6 +61,9 @@ public:
     // Adds one paired, connected device of every kind and every controller family the shell
     // draws, and one of a kind it does not know (icons: T-199). The ids are "bt-gallery-<what>".
     void populate();
+    // Two paired, connected pads that differ only in their address (T-334): the same name, model
+    // and family. Their ids are Bluetooth addresses, like the service's.
+    void addTwoPads();
     void reset();
     // While held, pair() is counted but unanswered (a pairing that takes a while) until released.
     void holdPairing(bool hold);

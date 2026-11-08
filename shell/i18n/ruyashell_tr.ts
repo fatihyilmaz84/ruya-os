@@ -722,7 +722,7 @@ Bu geri alınamaz.</translation>
         <translation>Yeni kontrolcü eşleştir</translation>
     </message>
     <message>
-        <location line="+74"/>
+        <location line="+75"/>
         <source>Pair again %1</source>
         <translation>%1 cihazını yeniden eşleştir</translation>
     </message>
@@ -732,12 +732,12 @@ Bu geri alınamaz.</translation>
         <translation>Önce eşleştirme moduna alın</translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+16"/>
         <source>Rename %1</source>
         <translation>%1 adını değiştir</translation>
     </message>
     <message>
-        <location line="-191"/>
+        <location line="-193"/>
         <source>Paired</source>
         <translation>Eşleşti</translation>
     </message>
@@ -798,7 +798,7 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="-158"/>
-        <location line="+270"/>
+        <location line="+272"/>
         <source>Forget %1</source>
         <translation>%1 cihazını unut</translation>
     </message>
@@ -1137,7 +1137,12 @@ Bu geri alınamaz.</translation>
 <context>
     <name>DeviceIcons</name>
     <message>
-        <location filename="../qml/DeviceIcons.qml" line="+67"/>
+        <location filename="../qml/DeviceIcons.qml" line="+66"/>
+        <source>%1 (%2)</source>
+        <translation>%1 (%2)</translation>
+    </message>
+    <message>
+        <location line="+21"/>
         <source>PlayStation controller</source>
         <translation>PlayStation kontrolcüsü</translation>
     </message>

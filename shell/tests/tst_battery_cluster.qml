@@ -205,6 +205,28 @@ Item {
             wait(50)
         }
 
+        // T-334: two pads of one model, one chip each: the chips are two (told apart by their
+        // own ids and levels), both inside the cluster, none squeezed into the "+N".
+        function test_battery_chips_for_two_pads() {
+            Batteries.mockClear()
+            Batteries.mockSet("padA", 80, "discharging", "controller", "Wireless Controller", "playstation")
+            Batteries.mockSet("padB", 55, "discharging", "controller", "Wireless Controller", "playstation")
+            openShell(1920, 1080)
+            tryVerify(() => chipIds().length === 2, 2000, "a chip for each pad: " + chipIds())
+            compare(chipIds(), ["batteryChip_padB", "batteryChip_padA"], "the lower one first")
+            verify(!find("batteryMore").visible, "both fit: nothing is hidden")
+            compare(find("batteryChip_padA").percent, 80)
+            compare(find("batteryChip_padB").percent, 55)
+            compare(find("batteryChip_padA").Accessible.name, "Wireless Controller battery 80 percent")
+            compare(find("batteryChip_padB").Accessible.name, "Wireless Controller battery 55 percent")
+            checkCluster([1920, 1080], "two like pads", ["Wireless Controller battery 80 percent", "Wireless Controller battery 55 percent"])
+            // One goes away: its chip goes and the other stays.
+            Batteries.mockRemove("padB")
+            tryVerify(() => chipIds().join() === "batteryChip_padA", 2000, "only the first pad's chip is left: " + chipIds())
+            tc.shell.destroy()
+            wait(50)
+        }
+
         // T-301: with larger text the "N more" chip still fits beside the shortest profile name and the pill keeps
         // its gap to the nav. The accessibility text scale (04 section 1) is not built yet, so the nearest thing
         // is the UI size: at 125 % the words no longer fit beside a battery chip, so one chip and the "+N" show
