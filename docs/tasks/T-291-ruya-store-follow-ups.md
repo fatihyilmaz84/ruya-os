@@ -1,6 +1,6 @@
 # T-291 — ruya-store follow-ups: ordered installed-set reads, the age label, "Not rated"
 
-Status: todo · Phase: 2 · Depends: — · Area: services (ruya-store), shell (AppDetailPage, store backend mock) · Size: S · Owner: builder
+Status: in-progress · Phase: 2 · Depends: — · Area: services (ruya-store), shell (AppDetailPage, store backend mock) · Size: S · Owner: builder
 
 ## Goal
 The Store never shows a stale installed set because of two overlapping reads, an app rated for gambling or intense content gets the right age, and an unrated app says "Not rated" instead of "All ages".
