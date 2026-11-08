@@ -1,6 +1,6 @@
 # T-297 — Lint, script and docs hygiene: self-check fixtures, hashed download, overlap check, a QML pitfall note
 
-Status: todo · Phase: 2 · Depends: — · Area: scripts (lint-dev-docs, subset-icons, check-font-coverage), docs (developers, PATTERNS) · Size: S · Owner: builder
+Status: in-progress · Phase: 2 · Depends: — · Area: scripts (lint-dev-docs, subset-icons, check-font-coverage), docs (developers, PATTERNS) · Size: S · Owner: builder
 
 ## Goal
 Five small gaps in the guard rails that review rounds found are closed, so the lints fail when they should and the one unchecked download is checked.

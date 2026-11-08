@@ -1,6 +1,6 @@
 # T-290 — ruya-session hardening: adopt running apps after a restart, exec failures, unit security
 
-Status: todo · Phase: 2 · Depends: — · Area: services (ruya-session), scripts (vm-session-check) · Size: M · Owner: builder
+Status: in-progress · Phase: 2 · Depends: — · Area: services (ruya-session), scripts (vm-session-check) · Size: M · Owner: builder
 
 ## Goal
 Restarting `ruya-session` no longer loses track of the apps that keep running (a relaunch works, `ListRunning` is right, usage time keeps counting), and an app whose binary cannot be executed reports `launch-failed`, not `crashed`.
