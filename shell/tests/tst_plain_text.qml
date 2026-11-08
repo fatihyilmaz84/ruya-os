@@ -158,7 +158,24 @@ Item {
             renameBoth()
             expectPlain(tc.shell, tc.hostileProfile, 1, "status bar", ["activeProfileName"])
             openSettings()
-            expectPlain(find("paneProfiles"), tc.hostileProfile, 2, "Settings -> Profiles")
+            expectPlain(find("paneMyProfile"), tc.hostileProfile, 2, "Settings -> My profile")
+        }
+
+        // Manage profiles (an admin's): the list and the Rename / Delete rows of the selected profile.
+        function test_profile_name_in_the_manage_profiles_pane() {
+            renameBoth()
+            Profiles.switchTo("p1", "1234")
+            tryCompare(Profiles, "activeProfile", "p1")
+            openSettings()
+            keyClick(Qt.Key_Down)                        // Manage profiles
+            tryVerify(() => find("paneProfiles").visible, 2000, "the Manage profiles pane shows")
+            keyClick(Qt.Key_Right)
+            tryVerify(() => find("paneProfiles").activeFocus, 2000)
+            keyClick(Qt.Key_Down)
+            tryVerify(() => find("profileRow_p2").activeFocus, 2000, "Ada's row has focus")
+            keyClick(Qt.Key_Return)                      // select: Rename and Delete name the profile
+            tryVerify(() => find("rowDelete").visible, 2000)
+            expectPlain(find("paneProfiles"), tc.hostileProfile, 4, "Settings -> Manage profiles")
         }
 
         function test_profile_name_on_the_picker_and_the_pin_pad() {

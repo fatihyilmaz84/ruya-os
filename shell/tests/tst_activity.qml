@@ -100,7 +100,7 @@ Item {
             verify(false, "could not reach " + name)
         }
 
-        // Home -> Settings -> Profiles -> Activity, with the keys; the data is set before.
+        // Home -> Settings -> My profile -> Activity, with the keys; the data is set before.
         function openActivity(data) {
             Usage.mockSetData("p2", data, today)
             startShell()
@@ -111,8 +111,8 @@ Item {
             keyClick(Qt.Key_Return)                      // Settings
             tryCompare(tc.shell, "currentPage", "settings")
             tryVerify(() => find("categoryList") !== null && find("categoryList").activeFocus)
-            keyClick(Qt.Key_Right)                       // into the Profiles pane
-            tryVerify(() => find("paneProfiles").focusableRows().some(r => r.activeFocus), 2000, "a row has focus")
+            keyClick(Qt.Key_Right)                       // into the My profile pane (Ada is a standard profile)
+            tryVerify(() => find("paneMyProfile").focusableRows().some(r => r.activeFocus), 2000, "a row has focus")
             goToRow("rowActivity")
             keyClick(Qt.Key_Return)
             tryCompare(tc.shell, "currentPage", "activity")

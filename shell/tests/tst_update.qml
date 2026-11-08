@@ -28,7 +28,6 @@ Item {
         when: windowShown
 
         property Shell shell: null
-        readonly property int systemIndex: 8
 
         function find(name) { return findChild(tc.shell, name) }
 
@@ -99,9 +98,9 @@ Item {
             tryCompare(tc.shell, "currentPage", "settings")
             const list = find("categoryList")
             tryVerify(() => list.activeFocus, 2000, "category list has focus")
-            for (let i = 0; i < 20 && list.currentIndex < systemIndex; ++i)
+            for (let i = 0; i < 20 && list.currentItem.objectName !== "category_system"; ++i)   // an admin has Manage profiles too: select by key
                 keyClick(Qt.Key_Down)
-            compare(list.currentIndex, systemIndex)
+            compare(list.currentItem.objectName, "category_system")
             keyClick(Qt.Key_Right)
             tryVerify(() => find("paneSystem").activeFocus, 2000, "System pane has focus")
         }

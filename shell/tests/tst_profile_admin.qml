@@ -29,7 +29,8 @@ Item {
         property Shell shell: null
 
         function find(name) { return findChild(tc.shell, name) }
-        function padKeys() { return findChild(find("profilesPinPad"), "pinKeys") }
+        property string padName: "profilesPinPad"     // the pad of the pane under test
+        function padKeys() { return findChild(find(padName), "pinKeys") }
 
         function init() {
             verify(windowGuard.ensureActive() === "", windowGuard.ensureActive())
@@ -89,17 +90,38 @@ Item {
             tryVerify(() => find("homePlay").activeFocus, 2000, "Play takes focus after sign-in")
         }
 
-        function openProfilesPane() {
+        function openSettingsList() {
             keyClick(Qt.Key_Up)                          // the section nav
             for (let i = 0; i < 4; ++i)
                 keyClick(Qt.Key_Right)
             keyClick(Qt.Key_Return)                      // Settings
             tryCompare(tc.shell, "currentPage", "settings")
             tryVerify(() => find("categoryList") !== null && find("categoryList").activeFocus)
-            compare(find("categoryList").currentIndex, 0) // Profiles
+            compare(find("categoryList").currentIndex, 0) // My profile
+        }
+
+        function enterPane(name) {
             keyClick(Qt.Key_Right)                        // enter the pane
-            tryVerify(() => find("paneProfiles").activeFocus, 2000, "pane has focus")
-            tryVerify(() => find("paneProfiles").focusableRows().some(r => r.activeFocus), 2000, "a row has focus")
+            tryVerify(() => find(name).activeFocus, 2000, "pane has focus")
+            tryVerify(() => find(name).focusableRows().some(r => r.activeFocus), 2000, "a row has focus")
+        }
+
+        // Settings -> Manage profiles (admins): the second category.
+        function openProfilesPane() {
+            openSettingsList()
+            keyClick(Qt.Key_Down)
+            compare(find("categoryList").currentIndex, 1)
+            verify(find("paneProfiles").visible)
+            tc.padName = "profilesPinPad"
+            enterPane("paneProfiles")
+        }
+
+        // Settings -> My profile: the first category.
+        function openMyProfilePane() {
+            openSettingsList()
+            verify(find("paneMyProfile").visible)
+            tc.padName = "myProfilePinPad"
+            enterPane("paneMyProfile")
         }
 
         function goToRow(name) {
@@ -117,7 +139,7 @@ Item {
             const order = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "del", "0", "ok"]
             const target = order.indexOf(label)
             verify(target >= 0)
-            const pad = find("profilesPinPad")
+            const pad = find(padName)
             const keys = padKeys()
             verify(pad.shown, "the PIN pad is open")
             for (let step = 0; step < 12; ++step) {
@@ -444,40 +466,41 @@ Item {
         function test_add_hidden_for_standard() {
             startShell()
             signIn("p2", "")                              // Ada, a standard profile
-            openProfilesPane()
-            verify(!find("rowAdd").visible, "Add profile is for admins")
-            verify(!find("rowNewName").visible)
-            verify(!find("rowCreate").visible)
+            openMyProfilePane()
+            verify(find("category_profiles") === null, "Manage profiles is not listed for a standard profile")
+            compare(findChild(find("rowWho"), "label").text, "Ada")
+            compare(findChild(find("rowWho"), "value").text, "Standard")
             verify(find("rowChangePin").visible)
             compare(findChild(find("rowChangePin"), "label").text, "Set a PIN")
             verify(!find("rowRemovePin").visible, "no PIN to remove")
-            // The first visible row has focus, and the hidden ones are skipped when moving.
-            tryVerify(() => find("profileRow_p1").activeFocus)
+            // The first row has focus, and the hidden ones are skipped when moving.
+            tryVerify(() => find("rowWho").activeFocus)
             for (let i = 0; i < 6; ++i)
                 keyClick(Qt.Key_Down)
             verify(find("rowActivity").activeFocus, "the last row is Activity (T-247)")
             keyClick(Qt.Key_Up)
             verify(find("rowChangePin").activeFocus)
-            verify(!find("rowAdd").activeFocus)
         }
 
         function test_admin_cannot_remove_pin() {
             startShell()
             signIn("p1", "1234")
-            openProfilesPane()
-            verify(find("rowAdd").visible)
+            openMyProfilePane()
             compare(findChild(find("rowChangePin"), "label").text, "Change my PIN")
             verify(!find("rowRemovePin").visible, "an admin keeps a PIN")
+            verify(find("category_profiles") !== null, "an admin sees Manage profiles")
+            verify(!find("paneProfiles").visible, "and it is another category")
+            verify(find("rowAdd") === null || !find("rowAdd").visible, "Add profile is not in My profile")
         }
 
         function test_change_pin() {
             startShell()
             signIn("p2", "")
-            openProfilesPane()
+            openMyProfilePane()
             goToRow("rowChangePin")
             keyClick(Qt.Key_Return)
-            tryVerify(() => find("profilesPinPad").shown)
-            const pad = find("profilesPinPad")
+            tryVerify(() => find("myProfilePinPad").shown)
+            const pad = find("myProfilePinPad")
             compare(pad.mode, "collect-confirm")          // Ada has no PIN: no current-PIN step
 
             enterPin("1357")
@@ -494,7 +517,7 @@ Item {
             tryVerify(() => pinSpy.count === 1, 3000)
             compare(pinSpy.signalArguments[0][0], "p2")
             compare(pinSpy.signalArguments[0][1], "ok")
-            tryVerify(() => find("profilesMessage").text === "PIN changed.")
+            tryVerify(() => find("myProfileMessage").text === "PIN changed.")
             verify(Profiles.profiles[1].hasPin)
             tryVerify(() => find("rowChangePin").activeFocus, 2000, "focus is back on the row")
             compare(findChild(find("rowChangePin"), "label").text, "Change my PIN")
@@ -517,16 +540,16 @@ Item {
             startShell()
             changePin("p2", "", "2468")
             signIn("p2", "2468")
-            openProfilesPane()
+            openMyProfilePane()
             goToRow("rowChangePin")
             keyClick(Qt.Key_Return)
-            tryVerify(() => find("profilesPinPad").shown)
-            compare(find("profilesPinPad").mode, "collect")   // asks for the current PIN first
+            tryVerify(() => find("myProfilePinPad").shown)
+            compare(find("myProfilePinPad").mode, "collect")   // asks for the current PIN first
             enterPin("0000")
             enterPin("1357")
             enterPin("1357")
-            tryVerify(() => find("profilesMessage").text.indexOf("attempt") >= 0, 3000)
-            verify(find("profilesMessage").text.indexOf("4") >= 0)
+            tryVerify(() => find("myProfileMessage").text.indexOf("attempt") >= 0, 3000)
+            verify(find("myProfileMessage").text.indexOf("4") >= 0)
             compare(Profiles.profiles[1].hasPin, true)
             changePin("p2", "2468", "2468")
             compare(pinSpy.signalArguments[pinSpy.count - 1][1], "ok", "the PIN did not change")
@@ -536,14 +559,14 @@ Item {
             startShell()
             changePin("p2", "", "2468")
             signIn("p2", "2468")
-            openProfilesPane()
+            openMyProfilePane()
             verify(find("rowRemovePin").visible)
             goToRow("rowRemovePin")
             keyClick(Qt.Key_Return)
-            tryVerify(() => find("profilesPinPad").shown)
-            compare(find("profilesPinPad").mode, "collect")
+            tryVerify(() => find("myProfilePinPad").shown)
+            compare(find("myProfilePinPad").mode, "collect")
             enterPin("2468")
-            tryVerify(() => find("profilesMessage").text === "PIN removed.", 3000)
+            tryVerify(() => find("myProfileMessage").text === "PIN removed.", 3000)
             compare(Profiles.profiles[1].hasPin, false)
             verify(!find("rowRemovePin").visible)
             tryVerify(() => find("rowChangePin").activeFocus, 2000, "focus is not lost when the focused row disappears")
@@ -565,7 +588,7 @@ Item {
             keyClick(Qt.Key_Down)
             tryVerify(() => find("rowDelete").activeFocus)
             keyClick(Qt.Key_Return)
-            tryVerify(() => find("profileDeleteConfirm").shown)
+            tryVerify(() => find("profilesDeleteConfirm").shown)
         }
 
         function test_rename_other() {
@@ -575,9 +598,9 @@ Item {
             selectRow("p2")
             tryVerify(() => find("rowRename").activeFocus, 2000, "Rename is focused")
             keyClick(Qt.Key_Return)
-            tryVerify(() => find("profileRenameEntry").shown)
-            compare(find("profileRenameEntry").text, "Ada", "pre-filled with the current name")
-            typeName("m", "profileRenameEntry")
+            tryVerify(() => find("profilesRenameEntry").shown)
+            compare(find("profilesRenameEntry").text, "Ada", "pre-filled with the current name")
+            typeName("m", "profilesRenameEntry")
             tryVerify(() => find("profilesPinPad").shown, 2000, "the admin PIN is asked")
             enterPin("1234")
             tryVerify(() => Profiles.profiles[1].name === "Adam", 3000)
@@ -588,16 +611,15 @@ Item {
         function test_rename_self_standard() {
             startShell()
             signIn("p2", "")
-            openProfilesPane()
-            selectRow("p2")
-            tryVerify(() => find("rowRename").activeFocus)
-            verify(!find("rowDelete").visible, "a standard profile cannot delete")
+            openMyProfilePane()
+            goToRow("rowRenameMe")
             keyClick(Qt.Key_Return)
-            tryVerify(() => find("profileRenameEntry").shown)
-            typeName("m", "profileRenameEntry")
+            tryVerify(() => find("myProfileRenameEntry").shown)
+            typeName("m", "myProfileRenameEntry")
             tryVerify(() => Profiles.profiles[1].name === "Adam", 3000)   // Ada has no PIN: none asked
-            verify(!find("profilesPinPad").shown)
-            tryVerify(() => find("profileRow_p2").activeFocus, 2000)
+            verify(!find("myProfilePinPad").shown)
+            tryVerify(() => find("rowRenameMe").activeFocus, 2000, "focus is back on Rename")
+            compare(findChild(find("rowWho"), "label").text, "Adam", "the identity row shows the new name")
         }
 
         function test_delete_cancel() {
@@ -605,9 +627,9 @@ Item {
             signIn("p1", "1234")
             openProfilesPane()
             openConfirmFor("p4")
-            verify(findChild(find("profileDeleteConfirm"), "powerCancel").activeFocus, "Cancel is focused first")
+            verify(findChild(find("profilesDeleteConfirm"), "powerCancel").activeFocus, "Cancel is focused first")
             keyClick(Qt.Key_Return)
-            tryVerify(() => !find("profileDeleteConfirm").shown)
+            tryVerify(() => !find("profilesDeleteConfirm").shown)
             compare(Profiles.profiles.length, 4)
             compare(deleteSpy.count, 0)
             tryVerify(() => find("rowDelete").activeFocus, 2000, "focus is back on Delete")
@@ -619,7 +641,7 @@ Item {
             openProfilesPane()
             openConfirmFor("p4")
             keyClick(Qt.Key_Right)
-            verify(findChild(find("profileDeleteConfirm"), "powerConfirm").activeFocus)
+            verify(findChild(find("profilesDeleteConfirm"), "powerConfirm").activeFocus)
             keyClick(Qt.Key_Return)
             tryVerify(() => find("profilesPinPad").shown)
             enterPin("1234")
@@ -634,10 +656,14 @@ Item {
             startShell()
             signIn("p1", "1234")
             openProfilesPane()
-            selectRow("p1")                               // the active profile and the last admin
-            tryVerify(() => find("rowRename").activeFocus)
+            selectRow("p1")                               // the active profile: renamed and PIN'd under My profile
+            verify(!find("rowRename").visible, "your own profile is not renamed here")
             verify(!find("rowDelete").visible)
-            keyClick(Qt.Key_Up)                           // back up the list to the Guest entry
+            verify(find("profilesMessage").text.indexOf("My profile") >= 0, "and the pane says where")
+            tryVerify(() => find("profileRow_p1").activeFocus, 2000, "focus stays on the row")
+            keyClick(Qt.Key_Down)                         // down the list to the Guest entry
+            tryVerify(() => find("profileRow_p2").activeFocus)
+            keyClick(Qt.Key_Down)
             tryVerify(() => find("profileRow_p3").activeFocus)
             keyClick(Qt.Key_Return)
             verify(!find("rowRename").visible)
@@ -659,6 +685,227 @@ Item {
             enterPin("0000")
             tryVerify(() => find("profilesMessage").text.indexOf("4 attempt") >= 0, 3000)
             compare(Profiles.profiles.length, 4, "nothing was deleted")
+        }
+
+        // ---- My profile and Manage profiles (T-315) ----
+
+        function rowNames(pane) { return pane.focusableRows().map(r => r.objectName) }
+
+        function categoryKeys() {
+            return find("categoryList").model.map(c => "category_" + c.key)
+        }
+
+        function test_categories_for_an_admin() {
+            startShell()
+            signIn("p1", "1234")
+            openSettingsList()
+            const keys = categoryKeys()
+            compare(keys[0], "category_myprofile", "My profile is first")
+            compare(keys[1], "category_profiles", "Manage profiles is second")
+            compare(find("categoryList").count, 11)
+            compare(find("categoryList").currentItem.Accessible.name, "My profile")
+            keyClick(Qt.Key_Down)
+            compare(find("categoryList").currentItem.Accessible.name, "Manage profiles")
+        }
+
+        function test_each_row_is_in_exactly_one_pane() {
+            startShell()
+            signIn("p1", "1234")
+            openSettingsList()
+            // My profile: who I am, rename me, the PIN row (an admin keeps theirs), Activity.
+            compare(rowNames(find("paneMyProfile")), ["rowWho", "rowRenameMe", "rowChangePin", "rowActivity"])
+            keyClick(Qt.Key_Down)
+            // Manage profiles: the list, Add profile; Rename / Delete only for a selected other profile.
+            compare(rowNames(find("paneProfiles")), ["profileRow_p1", "profileRow_p2", "profileRow_p3", "rowAdd"])
+            compare(find("paneMyProfile").pad.objectName, "myProfilePinPad")
+            compare(find("paneProfiles").pad.objectName, "profilesPinPad")
+        }
+
+        function test_categories_for_a_standard_profile() {
+            startShell()
+            signIn("p2", "")
+            openSettingsList()
+            verify(find("category_profiles") === null, "no Manage profiles")
+            compare(find("categoryList").count, 10)
+            compare(categoryKeys()[0], "category_myprofile")
+            compare(categoryKeys()[1], "category_network", "the next category follows My profile at once")
+            compare(rowNames(find("paneMyProfile")), ["rowWho", "rowRenameMe", "rowChangePin", "rowActivity"])
+        }
+
+        function test_guest_has_a_small_my_profile() {
+            startShell()
+            signIn("p3", "")
+            openSettingsList()
+            verify(find("category_profiles") === null, "no Manage profiles for a guest")
+            compare(rowNames(find("paneMyProfile")), ["rowWho", "rowActivity"], "a guest cannot rename or set a PIN")
+            compare(findChild(find("rowWho"), "value").text, "Guest")
+        }
+
+        function test_standard_cannot_reach_manage_by_keys() {
+            startShell()
+            signIn("p2", "")
+            openSettingsList()
+            const list = find("categoryList")
+            for (let i = 0; i < list.count; ++i) {      // the last Down is clamped
+                verify(!find("paneProfiles").visible, "Manage profiles never shows (index " + list.currentIndex + ")")
+                verify(!find("paneProfiles").activeFocus)
+                verify(list.currentItem.objectName !== "category_profiles")
+                keyClick(Qt.Key_Down)
+            }
+            compare(list.currentIndex, list.count - 1)
+            for (let i = list.count - 1; i > 0; --i)
+                keyClick(Qt.Key_Up)
+            compare(list.currentIndex, 0)
+            keyClick(Qt.Key_Right)
+            verify(!find("paneProfiles").activeFocus)
+            tryVerify(() => find("paneMyProfile").activeFocus, 2000, "Right enters My profile")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => list.activeFocus)
+            // A deep link to it opens My profile instead.
+            keyClick(Qt.Key_Escape)
+            tryCompare(tc.shell, "currentPage", "")
+            tc.shell.openPage("settings", { category: "profiles" })
+            tryCompare(tc.shell, "currentPage", "settings")
+            tryVerify(() => find("categoryList").activeFocus, 2000)
+            compare(find("categoryList").currentIndex, 0)
+            verify(find("paneMyProfile").visible)
+        }
+
+        function test_admin_deep_link_lands_on_manage() {
+            startShell()
+            signIn("p1", "1234")
+            tc.shell.openPage("settings", { category: "profiles" })
+            tryCompare(tc.shell, "currentPage", "settings")
+            tryVerify(() => find("categoryList").activeFocus, 2000)
+            compare(find("categoryList").currentIndex, 1)
+            verify(find("paneProfiles").visible)
+        }
+
+        // The signed-in profile changes to a standard one while Manage profiles is open: the
+        // category disappears and focus lands on the category list.
+        function test_role_switch_while_manage_is_open_leaves_it() {
+            startShell()
+            signIn("p1", "1234")
+            openProfilesPane()
+            verify(find("paneProfiles").activeFocus)
+            Profiles.switchTo("p2", "")
+            tryCompare(Profiles, "activeProfile", "p2")
+            tryVerify(() => find("category_profiles") === null, 2000, "Manage profiles left the list")
+            tryVerify(() => find("categoryList").activeFocus, 2000, "focus lands on the category list")
+            verify(!find("paneProfiles").activeFocus)
+            verify(!find("paneProfiles").visible)
+            compare(find("categoryList").currentIndex, 0, "My profile is selected")
+            verify(find("paneMyProfile").visible)
+            keyClick(Qt.Key_Right)
+            tryVerify(() => find("paneMyProfile").activeFocus, 2000, "and it can be entered")
+            compare(findChild(find("rowWho"), "label").text, "Ada")
+        }
+
+        // The selected category stays selected when the list changes around it.
+        function test_role_switch_keeps_the_selected_category() {
+            startShell()
+            signIn("p1", "1234")
+            openSettingsList()
+            keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Down)                         // Network (third with Manage profiles)
+            compare(find("categoryList").currentItem.objectName, "category_network")
+            Profiles.switchTo("p2", "")
+            tryCompare(Profiles, "activeProfile", "p2")
+            tryVerify(() => find("category_profiles") === null, 2000)
+            compare(find("categoryList").currentItem.objectName, "category_network")
+            compare(find("categoryList").currentIndex, 1)
+            verify(find("paneNetwork").visible)
+        }
+
+        function test_rename_self_as_admin_under_my_profile() {
+            startShell()
+            signIn("p1", "1234")
+            openMyProfilePane()
+            tryVerify(() => find("rowWho").activeFocus, 2000, "the pane opens on the identity row")
+            keyClick(Qt.Key_Down)
+            tryVerify(() => find("rowRenameMe").activeFocus)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("myProfileRenameEntry").shown)
+            typeName("2", "myProfileRenameEntry")
+            tryVerify(() => find("myProfilePinPad").shown, 2000, "the admin's PIN is asked")
+            enterPin("1234")
+            tryVerify(() => Profiles.profiles[0].name === "Player One2", 3000)
+            tryVerify(() => find("rowRenameMe").activeFocus, 2000, "focus is back on Rename")
+            compare(findChild(find("rowWho"), "label").text, "Player One2")
+            tryVerify(() => find("myProfileMessage").text === "Profile renamed.")
+        }
+
+        // A second admin: Manage profiles offers Delete for it while another admin (the signed-in
+        // one) exists, and the delete goes through. Deleting the last admin is refused by the mock
+        // (test_delete_rules above) and cannot be reached here: the only admin who can open this pane
+        // is the signed-in one, who is never offered Delete for themselves.
+        function test_second_admin_is_deletable_in_manage() {
+            startShell()
+            signIn("p1", "1234")
+            compare(create("p1", "1234", "Admin2", "admin", "4321")[0], "ok")
+            tryVerify(() => Profiles.profiles.length === 4)
+            openProfilesPane()
+            selectRow("p4")
+            tryVerify(() => find("rowRename").activeFocus, 2000, "actions open on Rename")
+            verify(find("rowDelete").visible, "a second admin can be deleted while another admin exists")
+            keyClick(Qt.Key_Down)
+            tryVerify(() => find("rowDelete").activeFocus)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("profilesDeleteConfirm").shown)
+            keyClick(Qt.Key_Right)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("profilesPinPad").shown)
+            enterPin("1234")
+            tryVerify(() => Profiles.profiles.length === 3, 3000, "the second admin was deleted")
+            tryVerify(() => find("profileRow_p4") === null)
+            // The one admin left is the signed-in one: selecting oneself offers no Delete.
+            tryVerify(() => find("profileRow_p3").activeFocus, 2000)
+            keyClick(Qt.Key_Up)
+            keyClick(Qt.Key_Up)
+            tryVerify(() => find("profileRow_p1").activeFocus)
+            keyClick(Qt.Key_Return)
+            verify(!find("rowDelete").visible)
+        }
+
+        function test_back_leaves_each_pane_to_the_category_list() {
+            startShell()
+            signIn("p1", "1234")
+            openMyProfilePane()
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => find("categoryList").activeFocus, 2000, "My profile -> list")
+            compare(find("categoryList").currentIndex, 0)
+            keyClick(Qt.Key_Down)
+            enterPane("paneProfiles")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => find("categoryList").activeFocus, 2000, "Manage profiles -> list")
+            compare(find("categoryList").currentIndex, 1)
+            compare(tc.shell.currentPage, "settings")
+        }
+
+        function test_zz_screenshots_my_profile() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            Notifications.pending = []
+            while (Notifications.model.count > 0)
+                Notifications.dismiss(Notifications.model.get(0).toastId)
+            startShell()
+            signIn("p1", "1234")
+            openMyProfilePane()
+            wait(600)
+            grabImage(tc.shell).save(shotsDir + "/11-settings-my-profile.png")
+        }
+
+        function test_zz_screenshots_standard_categories() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            Notifications.pending = []
+            while (Notifications.model.count > 0)
+                Notifications.dismiss(Notifications.model.get(0).toastId)
+            startShell()
+            signIn("p2", "")
+            openSettingsList()
+            wait(600)
+            grabImage(tc.shell).save(shotsDir + "/12-settings-categories-standard.png")
         }
 
         function test_zz_screenshots() {

@@ -1,7 +1,7 @@
 # Takes a running VM (smoke-test.ps1 -Work -Keep, monitor on 127.0.0.1:4444, SSH on 2222) past the
 # first-boot wizard to a named page and saves a screenshot of it (T-141).
 #   .\scripts\vm-goto.ps1 settings-network       # -> output\vm-shots\settings-network.png
-# Targets: home, settings-profiles, settings-network, settings-audio, settings-system, store.
+# Targets: home, settings-myprofile, settings-profiles, settings-network, settings-audio, settings-system, store.
 #
 # Fixed wizard answers: English, profile "Player One" (admin), PIN 1234. With a profile already
 # on the disk the wizard is skipped: the shell is locked and restarted (systemctl restart
@@ -32,14 +32,15 @@ $Svc = "org.ruyaos.Profiles1"
 $Path = "/org/ruyaos/Profiles1"
 
 # Target -> keys from the home shelf (tiles: games media store settings power; Settings
-# categories: profiles network bluetooth display audio storage ...).
+# categories as the admin of the VM sees them: myprofile profiles network bluetooth display audio storage ...).
 $targets = @{
     "home"              = @()
     "store"             = @("right", "right", "ret")
-    "settings-profiles" = @("right", "right", "right", "ret")
-    "settings-network"  = @("right", "right", "right", "ret", "down")
-    "settings-audio"    = @("right", "right", "right", "ret", "down", "down", "down", "down")
-    "settings-system"   = @("right", "right", "right", "ret", "down", "down", "down", "down", "down", "down", "down")
+    "settings-myprofile" = @("right", "right", "right", "ret")
+    "settings-profiles" = @("right", "right", "right", "ret", "down")
+    "settings-network"  = @("right", "right", "right", "ret", "down", "down")
+    "settings-audio"    = @("right", "right", "right", "ret", "down", "down", "down", "down", "down")
+    "settings-system"   = @("right", "right", "right", "ret", "down", "down", "down", "down", "down", "down", "down", "down", "down")
 }
 if (-not $targets.ContainsKey($Target)) {
     throw "vm-goto: unknown target '$Target'. Known: $(($targets.Keys | Sort-Object) -join ', ')"

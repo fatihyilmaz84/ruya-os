@@ -25,7 +25,6 @@ PowerSavingPane.qml
 ProfileAddFlow.qml
 ProfileManageFlow.qml
 ProfilePicker.qml
-ProfilesPane.qml
 ProfileStatus.qml
 Sfx.qml
 StorePage.qml

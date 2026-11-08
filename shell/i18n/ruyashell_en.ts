@@ -1433,6 +1433,119 @@ This can&apos;t be undone.</translation>
     </message>
 </context>
 <context>
+    <name>ManageProfilesPane</name>
+    <message>
+        <location filename="../qml/ManageProfilesPane.qml" line="+41"/>
+        <source>Your own profile is under My profile.</source>
+        <translation>Your own profile is under My profile.</translation>
+    </message>
+    <message>
+        <location line="+48"/>
+        <source>Enter a name first.</source>
+        <translation>Enter a name first.</translation>
+    </message>
+    <message>
+        <location line="+31"/>
+        <source>Profile “%1” created.</source>
+        <translation>Profile “%1” created.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Profile “%1” created</source>
+        <translation>Profile “%1” created</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Profile renamed.</source>
+        <translation>Profile renamed.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Profile renamed</source>
+        <translation>Profile renamed</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Profile “%1” deleted.</source>
+        <translation>Profile “%1” deleted.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Profile “%1” deleted</source>
+        <translation>Profile “%1” deleted</translation>
+    </message>
+    <message>
+        <location line="+24"/>
+        <source>PIN</source>
+        <translation>PIN</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>You</source>
+        <translation>You</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Rename %1</source>
+        <translation>Rename %1</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Delete %1</source>
+        <translation>Delete %1</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Add profile</source>
+        <translation>Add profile</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Close</source>
+        <translation>Close</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Name</source>
+        <translation>Name</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Not set</source>
+        <translation>Not set</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Profile name</source>
+        <translation>Profile name</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Role</source>
+        <translation>Role</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Standard</source>
+        <translation>Standard</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Guest</source>
+        <translation>Guest</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Protect with a PIN</source>
+        <translation>Protect with a PIN</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Create profile</source>
+        <translation>Create profile</translation>
+    </message>
+</context>
+<context>
     <name>MediaPage</name>
     <message>
         <location filename="../qml/MediaPage.qml" line="+6"/>
@@ -1485,6 +1598,75 @@ This can&apos;t be undone.</translation>
         <location line="+0"/>
         <source>Cancel</source>
         <translation>Cancel</translation>
+    </message>
+</context>
+<context>
+    <name>MyProfilePane</name>
+    <message>
+        <location filename="../qml/MyProfilePane.qml" line="+20"/>
+        <location line="+1"/>
+        <source>Back</source>
+        <translation>Back</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Select</source>
+        <translation>Select</translation>
+    </message>
+    <message>
+        <location line="+36"/>
+        <source>Profile renamed.</source>
+        <translation>Profile renamed.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Profile renamed</source>
+        <translation>Profile renamed</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>PIN removed.</source>
+        <translation>PIN removed.</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>PIN changed.</source>
+        <translation>PIN changed.</translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <source>PIN</source>
+        <translation>PIN</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Rename %1</source>
+        <translation>Rename %1</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Change my PIN</source>
+        <translation>Change my PIN</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Set a PIN</source>
+        <translation>Set a PIN</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Remove my PIN</source>
+        <translation>Remove my PIN</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Activity</source>
+        <translation>Activity</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>What you played</source>
+        <translation>What you played</translation>
     </message>
 </context>
 <context>
@@ -1910,6 +2092,24 @@ This can&apos;t be undone.</translation>
     </message>
 </context>
 <context>
+    <name>ProfilePaneBase</name>
+    <message>
+        <location filename="../qml/ProfilePaneBase.qml" line="+36"/>
+        <source>Admin</source>
+        <translation>Admin</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Guest</source>
+        <translation>Guest</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Standard</source>
+        <translation>Standard</translation>
+    </message>
+</context>
+<context>
     <name>ProfilePicker</name>
     <message>
         <location filename="../qml/ProfilePicker.qml" line="+43"/>
@@ -1979,156 +2179,6 @@ This can&apos;t be undone.</translation>
     </message>
 </context>
 <context>
-    <name>ProfilesPane</name>
-    <message>
-        <location filename="../qml/ProfilesPane.qml" line="+51"/>
-        <source>Admin</source>
-        <translation>Admin</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <location line="+278"/>
-        <source>Guest</source>
-        <translation>Guest</translation>
-    </message>
-    <message>
-        <location line="-278"/>
-        <location line="+277"/>
-        <source>Standard</source>
-        <translation>Standard</translation>
-    </message>
-    <message>
-        <location line="-189"/>
-        <source>Enter a name first.</source>
-        <translation>Enter a name first.</translation>
-    </message>
-    <message>
-        <location line="+47"/>
-        <source>Profile “%1” created.</source>
-        <translation>Profile “%1” created.</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Profile “%1” created</source>
-        <translation>Profile “%1” created</translation>
-    </message>
-    <message>
-        <location line="+39"/>
-        <source>Profile renamed.</source>
-        <translation>Profile renamed.</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Profile renamed</source>
-        <translation>Profile renamed</translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>Profile “%1” deleted.</source>
-        <translation>Profile “%1” deleted.</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Profile “%1” deleted</source>
-        <translation>Profile “%1” deleted</translation>
-    </message>
-    <message>
-        <location line="+16"/>
-        <source>PIN removed.</source>
-        <translation>PIN removed.</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>PIN changed.</source>
-        <translation>PIN changed.</translation>
-    </message>
-    <message>
-        <location line="+24"/>
-        <source>PIN</source>
-        <translation>PIN</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>You</source>
-        <translation>You</translation>
-    </message>
-    <message>
-        <location line="+9"/>
-        <source>Rename %1</source>
-        <translation>Rename %1</translation>
-    </message>
-    <message>
-        <location line="+8"/>
-        <source>Delete %1</source>
-        <translation>Delete %1</translation>
-    </message>
-    <message>
-        <location line="+9"/>
-        <source>Add profile</source>
-        <translation>Add profile</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Close</source>
-        <translation>Close</translation>
-    </message>
-    <message>
-        <location line="+14"/>
-        <source>Name</source>
-        <translation>Name</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Not set</source>
-        <translation>Not set</translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>Profile name</source>
-        <translation>Profile name</translation>
-    </message>
-    <message>
-        <location line="+8"/>
-        <source>Role</source>
-        <translation>Role</translation>
-    </message>
-    <message>
-        <location line="+17"/>
-        <source>Protect with a PIN</source>
-        <translation>Protect with a PIN</translation>
-    </message>
-    <message>
-        <location line="+9"/>
-        <source>Create profile</source>
-        <translation>Create profile</translation>
-    </message>
-    <message>
-        <location line="+9"/>
-        <source>Change my PIN</source>
-        <translation>Change my PIN</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Set a PIN</source>
-        <translation>Set a PIN</translation>
-    </message>
-    <message>
-        <location line="+15"/>
-        <source>Activity</source>
-        <translation>Activity</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>What you played</source>
-        <translation>What you played</translation>
-    </message>
-    <message>
-        <location line="-9"/>
-        <source>Remove my PIN</source>
-        <translation>Remove my PIN</translation>
-    </message>
-</context>
-<context>
     <name>ScreenSaver</name>
     <message>
         <location filename="../qml/ScreenSaver.qml" line="+56"/>
@@ -2168,14 +2218,19 @@ This can&apos;t be undone.</translation>
     <name>SettingsPage</name>
     <message>
         <location filename="../qml/SettingsPage.qml" line="+12"/>
-        <location line="+66"/>
+        <location line="+93"/>
         <source>Settings</source>
         <translation>Settings</translation>
     </message>
     <message>
-        <location line="-55"/>
-        <source>Profiles</source>
-        <translation>Profiles</translation>
+        <location line="-58"/>
+        <source>My profile</source>
+        <translation>My profile</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Manage profiles</source>
+        <translation>Manage profiles</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -2223,7 +2278,7 @@ This can&apos;t be undone.</translation>
         <translation>About</translation>
     </message>
     <message>
-        <location line="+17"/>
+        <location line="+18"/>
         <source>Select</source>
         <translation>Select</translation>
     </message>
@@ -2233,7 +2288,7 @@ This can&apos;t be undone.</translation>
         <translation>Back</translation>
     </message>
     <message>
-        <location line="+214"/>
+        <location line="+225"/>
         <source>Coming soon</source>
         <translation>Coming soon</translation>
     </message>

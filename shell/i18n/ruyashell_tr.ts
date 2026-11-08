@@ -1429,6 +1429,119 @@ Bu geri alınamaz.</translation>
     </message>
 </context>
 <context>
+    <name>ManageProfilesPane</name>
+    <message>
+        <location filename="../qml/ManageProfilesPane.qml" line="+41"/>
+        <source>Your own profile is under My profile.</source>
+        <translation>Kendi profiliniz Profilim bölümünde.</translation>
+    </message>
+    <message>
+        <location line="+48"/>
+        <source>Enter a name first.</source>
+        <translation>Önce bir ad girin.</translation>
+    </message>
+    <message>
+        <location line="+31"/>
+        <source>Profile “%1” created.</source>
+        <translation>“%1” profili oluşturuldu.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Profile “%1” created</source>
+        <translation>“%1” profili oluşturuldu</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Profile renamed.</source>
+        <translation>Profil yeniden adlandırıldı.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Profile renamed</source>
+        <translation>Profil yeniden adlandırıldı</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Profile “%1” deleted.</source>
+        <translation>“%1” profili silindi.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Profile “%1” deleted</source>
+        <translation>“%1” profili silindi</translation>
+    </message>
+    <message>
+        <location line="+24"/>
+        <source>PIN</source>
+        <translation>PIN</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>You</source>
+        <translation>Siz</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Rename %1</source>
+        <translation>%1 profilini yeniden adlandır</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Delete %1</source>
+        <translation>%1 profilini sil</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Add profile</source>
+        <translation>Profil ekle</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Close</source>
+        <translation>Kapat</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Name</source>
+        <translation>Ad</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Not set</source>
+        <translation>Ayarlanmadı</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Profile name</source>
+        <translation>Profil adı</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Role</source>
+        <translation>Rol</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Standard</source>
+        <translation>Standart</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Guest</source>
+        <translation>Misafir</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Protect with a PIN</source>
+        <translation>PIN ile koru</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Create profile</source>
+        <translation>Profil oluştur</translation>
+    </message>
+</context>
+<context>
     <name>MediaPage</name>
     <message>
         <location filename="../qml/MediaPage.qml" line="+6"/>
@@ -1480,6 +1593,75 @@ Bu geri alınamaz.</translation>
         <location line="+0"/>
         <source>Cancel</source>
         <translation>İptal</translation>
+    </message>
+</context>
+<context>
+    <name>MyProfilePane</name>
+    <message>
+        <location filename="../qml/MyProfilePane.qml" line="+20"/>
+        <location line="+1"/>
+        <source>Back</source>
+        <translation>Geri</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Select</source>
+        <translation>Seç</translation>
+    </message>
+    <message>
+        <location line="+36"/>
+        <source>Profile renamed.</source>
+        <translation>Profil yeniden adlandırıldı.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Profile renamed</source>
+        <translation>Profil yeniden adlandırıldı</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>PIN removed.</source>
+        <translation>PIN kaldırıldı.</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>PIN changed.</source>
+        <translation>PIN değiştirildi.</translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <source>PIN</source>
+        <translation>PIN</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Rename %1</source>
+        <translation>%1 profilini yeniden adlandır</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Change my PIN</source>
+        <translation>PIN&apos;imi değiştir</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Set a PIN</source>
+        <translation>PIN belirle</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Remove my PIN</source>
+        <translation>PIN&apos;imi kaldır</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Activity</source>
+        <translation>Etkinlik</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>What you played</source>
+        <translation>Ne oynadınız</translation>
     </message>
 </context>
 <context>
@@ -1902,6 +2084,24 @@ Bu geri alınamaz.</translation>
     </message>
 </context>
 <context>
+    <name>ProfilePaneBase</name>
+    <message>
+        <location filename="../qml/ProfilePaneBase.qml" line="+36"/>
+        <source>Admin</source>
+        <translation>Yönetici</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Guest</source>
+        <translation>Misafir</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Standard</source>
+        <translation>Standart</translation>
+    </message>
+</context>
+<context>
     <name>ProfilePicker</name>
     <message>
         <location filename="../qml/ProfilePicker.qml" line="+43"/>
@@ -1970,156 +2170,6 @@ Bu geri alınamaz.</translation>
     </message>
 </context>
 <context>
-    <name>ProfilesPane</name>
-    <message>
-        <location filename="../qml/ProfilesPane.qml" line="+51"/>
-        <source>Admin</source>
-        <translation>Yönetici</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <location line="+278"/>
-        <source>Guest</source>
-        <translation>Misafir</translation>
-    </message>
-    <message>
-        <location line="-278"/>
-        <location line="+277"/>
-        <source>Standard</source>
-        <translation>Standart</translation>
-    </message>
-    <message>
-        <location line="-189"/>
-        <source>Enter a name first.</source>
-        <translation>Önce bir ad girin.</translation>
-    </message>
-    <message>
-        <location line="+47"/>
-        <source>Profile “%1” created.</source>
-        <translation>“%1” profili oluşturuldu.</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Profile “%1” created</source>
-        <translation>“%1” profili oluşturuldu</translation>
-    </message>
-    <message>
-        <location line="+39"/>
-        <source>Profile renamed.</source>
-        <translation>Profil yeniden adlandırıldı.</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Profile renamed</source>
-        <translation>Profil yeniden adlandırıldı</translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>Profile “%1” deleted.</source>
-        <translation>“%1” profili silindi.</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Profile “%1” deleted</source>
-        <translation>“%1” profili silindi</translation>
-    </message>
-    <message>
-        <location line="+16"/>
-        <source>PIN removed.</source>
-        <translation>PIN kaldırıldı.</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>PIN changed.</source>
-        <translation>PIN değiştirildi.</translation>
-    </message>
-    <message>
-        <location line="+24"/>
-        <source>PIN</source>
-        <translation>PIN</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>You</source>
-        <translation>Siz</translation>
-    </message>
-    <message>
-        <location line="+9"/>
-        <source>Rename %1</source>
-        <translation>%1 profilini yeniden adlandır</translation>
-    </message>
-    <message>
-        <location line="+8"/>
-        <source>Delete %1</source>
-        <translation>%1 profilini sil</translation>
-    </message>
-    <message>
-        <location line="+9"/>
-        <source>Add profile</source>
-        <translation>Profil ekle</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Close</source>
-        <translation>Kapat</translation>
-    </message>
-    <message>
-        <location line="+14"/>
-        <source>Name</source>
-        <translation>Ad</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Not set</source>
-        <translation>Ayarlanmadı</translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>Profile name</source>
-        <translation>Profil adı</translation>
-    </message>
-    <message>
-        <location line="+8"/>
-        <source>Role</source>
-        <translation>Rol</translation>
-    </message>
-    <message>
-        <location line="+17"/>
-        <source>Protect with a PIN</source>
-        <translation>PIN ile koru</translation>
-    </message>
-    <message>
-        <location line="+9"/>
-        <source>Create profile</source>
-        <translation>Profil oluştur</translation>
-    </message>
-    <message>
-        <location line="+9"/>
-        <source>Change my PIN</source>
-        <translation>PIN&apos;imi değiştir</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Set a PIN</source>
-        <translation>PIN belirle</translation>
-    </message>
-    <message>
-        <location line="+15"/>
-        <source>Activity</source>
-        <translation>Etkinlik</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>What you played</source>
-        <translation>Ne oynadınız</translation>
-    </message>
-    <message>
-        <location line="-9"/>
-        <source>Remove my PIN</source>
-        <translation>PIN&apos;imi kaldır</translation>
-    </message>
-</context>
-<context>
     <name>ScreenSaver</name>
     <message>
         <location filename="../qml/ScreenSaver.qml" line="+56"/>
@@ -2159,14 +2209,19 @@ Bu geri alınamaz.</translation>
     <name>SettingsPage</name>
     <message>
         <location filename="../qml/SettingsPage.qml" line="+12"/>
-        <location line="+66"/>
+        <location line="+93"/>
         <source>Settings</source>
         <translation>Ayarlar</translation>
     </message>
     <message>
-        <location line="-55"/>
-        <source>Profiles</source>
-        <translation>Profiller</translation>
+        <location line="-58"/>
+        <source>My profile</source>
+        <translation>Profilim</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Manage profiles</source>
+        <translation>Profilleri yönet</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -2214,7 +2269,7 @@ Bu geri alınamaz.</translation>
         <translation>Hakkında</translation>
     </message>
     <message>
-        <location line="+17"/>
+        <location line="+18"/>
         <source>Select</source>
         <translation>Seç</translation>
     </message>
@@ -2224,7 +2279,7 @@ Bu geri alınamaz.</translation>
         <translation>Geri</translation>
     </message>
     <message>
-        <location line="+214"/>
+        <location line="+225"/>
         <source>Coming soon</source>
         <translation>Yakında</translation>
     </message>
