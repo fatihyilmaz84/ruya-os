@@ -1,6 +1,6 @@
 # T-296 — VM check script fixes: checks that pass for the wrong reason, early exits, missing cases
 
-Status: todo · Phase: 2 · Depends: — · Area: scripts (vm-*-check) · Size: M · Owner: builder
+Status: in-progress · Phase: 2 · Depends: — · Area: scripts (vm-*-check) · Size: M · Owner: builder
 
 ## Goal
 The VM checks fail when the thing they check is broken (not only when the call itself fails), clean up after themselves on every exit, and cover the cases review rounds found missing. The lead's next VM run exercises them.

@@ -25,6 +25,7 @@ Open work only (the front of the board; the rest is in `STATUS-backlog.md`), in 
 |---|---|---|---|
 | [T-197](tasks/T-197-shell-crash-on-bluetooth-audio-disconnect.md) | **[lead]** Shell crash when a Bluetooth headset disconnects | in-progress | — |
 | [T-281](tasks/T-281-art-glow-shadow-and-standard-card-sizes.md) | Cards glow in the colour of their art (Hue-style shadow) and one standard set of card sizes (owner request) | in-progress | — |
+| [T-296](tasks/T-296-vm-check-script-fixes.md) | VM check script fixes: checks that pass for the wrong reason, early exits, missing cases | in-progress | — |
 | [T-282](tasks/T-282-design-decisions-contrast-themes-dialogs.md) | **[lead]** Design decisions queue: glass text contrast, theme looks, dialogs, Tab, display recovery | todo | — |
 | [T-261](tasks/T-261-controller-families-and-drivers-audit.md) | **[lead]** Controller families and drivers audit (DualSense, Xbox, 8BitDo, Switch), detection table, hardware checklist | todo | — |
 | [T-164](tasks/T-164-per-profile-wayland-sockets.md) | **[lead]** Per-profile Wayland sockets | todo | T-162 |

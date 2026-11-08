@@ -4,7 +4,6 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 
 | ID | Title | Status | Depends |
 |---|---|---|---|
-| [T-296](tasks/T-296-vm-check-script-fixes.md) | VM check script fixes: checks that pass for the wrong reason, early exits, missing cases | todo | — |
 | [T-297](tasks/T-297-lint-script-and-docs-hygiene.md) | Lint, script and docs hygiene: self-check fixtures, hashed download, overlap check, a QML pitfall note | todo | — |
 | [T-290](tasks/T-290-ruya-session-hardening.md) | ruya-session hardening: adopt running apps after a restart, exec failures, unit security | todo | — |
 | [T-291](tasks/T-291-ruya-store-follow-ups.md) | ruya-store follow-ups: ordered installed-set reads, the age label, "Not rated" | todo | — |
