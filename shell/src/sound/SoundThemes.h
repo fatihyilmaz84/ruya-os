@@ -125,7 +125,8 @@ public:
     // one is chosen instead; the caller also resets the setting (DeviceSettings.soundTheme) first.
     Q_INVOKABLE bool removeTheme(const QString &id);
 
-    // The checker for QML: { ok, problems, warnings, name, cues (count), hasAmbient }.
+    // The checker for QML: { ok, problems, warnings, name, cues (count), hasAmbient, loopStart, loopEnd,
+    // ambientMeasured, ambientLevel (dBFS, the median 1 s RMS of the loop), ambientLowShare (0..1, below 150 Hz) }.
     Q_INVOKABLE static QVariantMap check(const QString &folder);
     // Tests and the lint: fixture folders (SoundTheme::fixtureCases) written under a temporary
     // directory that lives as long as this object; the path, or "" on failure.

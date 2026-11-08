@@ -1609,7 +1609,7 @@ Bu geri alınamaz.</translation>
         <translation>Seç</translation>
     </message>
     <message>
-        <location line="+36"/>
+        <location line="+42"/>
         <source>Profile renamed.</source>
         <translation>Profil yeniden adlandırıldı.</translation>
     </message>
@@ -2668,7 +2668,17 @@ Bu geri alınamaz.</translation>
         <translation>theme.json dosyasında bir hata var</translation>
     </message>
     <message>
+        <location line="+3"/>
+        <source>The ambient sound is too deep for TV speakers</source>
+        <translation>Ortam sesi TV hoparlörleri için fazla pes</translation>
+    </message>
+    <message>
         <location line="+2"/>
+        <source>The ambient sound is almost silent</source>
+        <translation>Ortam sesi neredeyse sessiz</translation>
+    </message>
+    <message>
+        <location line="+4"/>
         <source>The ambient loop does not fit the file</source>
         <translation>Ortam sesi döngüsü dosyaya uymuyor</translation>
     </message>
@@ -2683,7 +2693,8 @@ Bu geri alınamaz.</translation>
         <translation>Bir dosya izin verilenden büyük</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="-6"/>
+        <location line="+8"/>
         <source>A sound file is not in a format that can be played</source>
         <translation>Bir ses dosyası çalınabilecek biçimde değil</translation>
     </message>
@@ -3754,7 +3765,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>WallpaperPicker</name>
     <message>
-        <location filename="../qml/WallpaperPicker.qml" line="+24"/>
+        <location filename="../qml/WallpaperPicker.qml" line="+23"/>
         <source>Select</source>
         <translation>Seç</translation>
     </message>
@@ -3850,7 +3861,7 @@ Bu geri alınamaz.</translation>
         <translation>%1, geçerli</translation>
     </message>
     <message>
-        <location line="+82"/>
+        <location line="+83"/>
         <source>Current</source>
         <translation>Geçerli</translation>
     </message>

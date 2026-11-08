@@ -11,9 +11,13 @@
 #include <QThread>
 #include <QtMath>
 
+#include <algorithm>
+#include <array>
+#include <cmath>
 #include <cstdlib>
 #include <limits>
 #include <memory>
+#include <vector>
 
 namespace SoundTheme {
 
@@ -274,6 +278,451 @@ bool parseOgg(const QByteArray &head, const QByteArray &tail, Audio *out, QStrin
     return true;
 }
 
+// ---------------------------------------------------------------------------------------------
+// The FLAC decoder of the level check (T-330). It follows RFC 9639 (every subframe type, Rice and
+// escaped residuals, wasted bits, the stereo decorrelations) and trusts nothing in the file: every
+// read is inside the buffer, the frame's CRC-8 and CRC-16 must match, every count and shift is
+// checked before it is used, and a decoded sample must fit its bit depth, so the arithmetic stays
+// far inside 64 bits. Work is bounded by the caller: it decodes frames only until it has the
+// samples it measures.
+// ---------------------------------------------------------------------------------------------
+quint8 crc8(const uchar *p, qint64 n)
+{
+    static const auto table = [] {
+        std::array<quint8, 256> t{};
+        for (int i = 0; i < 256; ++i) {
+            quint8 c = quint8(i);
+            for (int b = 0; b < 8; ++b)
+                c = quint8((c & 0x80) ? (c << 1) ^ 0x07 : c << 1);
+            t[size_t(i)] = c;
+        }
+        return t;
+    }();
+    quint8 c = 0;
+    for (qint64 i = 0; i < n; ++i)
+        c = table[c ^ p[i]];
+    return c;
+}
+
+quint16 crc16(const uchar *p, qint64 n)
+{
+    static const auto table = [] {
+        std::array<quint16, 256> t{};
+        for (int i = 0; i < 256; ++i) {
+            quint16 c = quint16(i << 8);
+            for (int b = 0; b < 8; ++b)
+                c = quint16((c & 0x8000) ? (c << 1) ^ 0x8005 : c << 1);
+            t[size_t(i)] = c;
+        }
+        return t;
+    }();
+    quint16 c = 0;
+    for (qint64 i = 0; i < n; ++i)
+        c = quint16((c << 8) ^ table[(c >> 8) ^ p[i]]);
+    return c;
+}
+
+class BitReader
+{
+public:
+    BitReader(const uchar *data, qint64 size, qint64 bytePos) : m_data(data), m_end(size * 8), m_bit(bytePos * 8) {}
+    bool ok() const { return m_ok; }
+    qint64 bytePos() const { return (m_bit + 7) / 8; }
+    void align() { m_bit = (m_bit + 7) / 8 * 8; }
+
+    // `n` bits (0..40) as an unsigned number; past the end: 0 and ok() turns false.
+    quint64 bits(int n)
+    {
+        if (!m_ok || n < 0 || n > 40 || m_bit + n > m_end) {
+            m_ok = false;
+            return 0;
+        }
+        if (n == 0)
+            return 0;
+        // The bytes that hold the n bits: at most 6, and the last one is inside the buffer (m_bit + n <= m_end).
+        const int at = int(m_bit & 7);
+        const int count = (at + n + 7) / 8;
+        const uchar *p = m_data + (m_bit >> 3);
+        quint64 word = 0;
+        for (int i = 0; i < count; ++i)
+            word = (word << 8) | p[i];
+        m_bit += n;
+        return (word >> (count * 8 - at - n)) & ((quint64(1) << n) - 1);
+    }
+    // `n` bits (1..40) as a two's complement number.
+    qint64 sbits(int n)
+    {
+        const quint64 v = bits(n);
+        if (n <= 0)
+            return 0;
+        return (v & (quint64(1) << (n - 1))) ? qint64(v) - (qint64(1) << n) : qint64(v);
+    }
+    // The number of 0 bits before the next 1 bit (which is consumed); more than `limit` is a failure.
+    quint32 unary(quint32 limit)
+    {
+        quint32 count = 0;
+        while (m_ok) {
+            if (m_bit >= m_end || count > limit) {
+                m_ok = false;
+                break;
+            }
+            const int at = int(m_bit & 7);
+            quint8 rest = quint8(m_data[m_bit >> 3] << at);    // the byte's bits from m_bit on, at the top
+            if (rest == 0) {                                    // no 1 in the rest of this byte
+                count += quint32(8 - at);
+                m_bit += 8 - at;
+                continue;
+            }
+            int zeros = 0;
+            while (!(rest & 0x80)) {
+                rest = quint8(rest << 1);
+                ++zeros;
+            }
+            count += quint32(zeros);
+            m_bit += zeros + 1;
+            if (count > limit) {
+                m_ok = false;
+                break;
+            }
+            return count;
+        }
+        return 0;
+    }
+
+private:
+    const uchar *m_data;
+    qint64 m_end;
+    qint64 m_bit;
+    bool m_ok = true;
+};
+
+constexpr int FlacMaxBlock = 65535;
+constexpr qint64 MaxDecodedMs = 600000;          // 10 minutes of audio at most, whatever the file claims
+constexpr quint32 MaxRiceQuotient = 1u << 20;   // with a parameter of at most 30: below 2^51
+
+// The residual of a subframe into `out[order..blockSize)`.
+bool flacResidual(BitReader &in, int blockSize, int order, qint64 *out)
+{
+    const int method = int(in.bits(2));
+    if (method > 1)
+        return false;
+    const int paramBits = method == 0 ? 4 : 5;
+    const int escape = method == 0 ? 15 : 31;
+    const int partitionOrder = int(in.bits(4));
+    const int partitions = 1 << partitionOrder;
+    if (!in.ok() || blockSize % partitions != 0 || (blockSize >> partitionOrder) < order)
+        return false;
+    const int size = blockSize >> partitionOrder;
+    int at = order;
+    for (int p = 0; p < partitions; ++p) {
+        const int param = int(in.bits(paramBits));
+        const int count = size - (p == 0 ? order : 0);
+        if (!in.ok())
+            return false;
+        if (param == escape) {
+            const int raw = int(in.bits(5));
+            for (int i = 0; i < count; ++i)
+                out[at++] = raw ? in.sbits(raw) : 0;
+        } else {
+            for (int i = 0; i < count; ++i) {
+                const quint64 q = in.unary(MaxRiceQuotient);
+                const quint64 u = (q << param) | in.bits(param);
+                out[at++] = (u & 1) ? -qint64(u >> 1) - 1 : qint64(u >> 1);
+            }
+        }
+        if (!in.ok())
+            return false;
+    }
+    return true;
+}
+
+// One subframe of `bits` bits per sample into `out[0..blockSize)`.
+bool flacSubframe(BitReader &in, int blockSize, int bits, qint64 *out)
+{
+    if (in.bits(1) != 0)
+        return false;
+    const int type = int(in.bits(6));
+    int wasted = 0;
+    if (in.bits(1))
+        wasted = int(in.unary(32)) + 1;
+    if (!in.ok() || wasted >= bits)
+        return false;
+    bits -= wasted;
+    if (type == 0) {                                    // CONSTANT
+        const qint64 v = in.sbits(bits);
+        for (int i = 0; i < blockSize; ++i)
+            out[i] = v;
+    } else if (type == 1) {                             // VERBATIM
+        for (int i = 0; i < blockSize; ++i)
+            out[i] = in.sbits(bits);
+    } else if (type >= 8 && type <= 12) {               // FIXED, order 0..4
+        const int order = type - 8;
+        if (order > blockSize)
+            return false;
+        for (int i = 0; i < order; ++i)
+            out[i] = in.sbits(bits);
+        if (!flacResidual(in, blockSize, order, out))
+            return false;
+        for (int i = order; i < blockSize; ++i) {
+            switch (order) {
+            case 1: out[i] += out[i - 1]; break;
+            case 2: out[i] += 2 * out[i - 1] - out[i - 2]; break;
+            case 3: out[i] += 3 * out[i - 1] - 3 * out[i - 2] + out[i - 3]; break;
+            case 4: out[i] += 4 * out[i - 1] - 6 * out[i - 2] + 4 * out[i - 3] - out[i - 4]; break;
+            default: break;
+            }
+            if (out[i] >= (qint64(1) << (bits - 1)) || out[i] < -(qint64(1) << (bits - 1)))
+                return false;                           // a damaged residual; also keeps the next sums small
+        }
+    } else if (type >= 32) {                            // LPC, order 1..32
+        const int order = type - 31;
+        if (order > blockSize)
+            return false;
+        for (int i = 0; i < order; ++i)
+            out[i] = in.sbits(bits);
+        const int precision = int(in.bits(4)) + 1;
+        const qint64 shift = in.sbits(5);
+        if (!in.ok() || precision == 16 || shift < 0)
+            return false;
+        qint64 coefficients[32];
+        for (int i = 0; i < order; ++i)
+            coefficients[i] = in.sbits(precision);
+        if (!flacResidual(in, blockSize, order, out))
+            return false;
+        for (int i = order; i < blockSize; ++i) {
+            qint64 sum = 0;                             // |coefficient| < 2^15, |sample| < 2^32, 32 terms: < 2^52
+            for (int j = 0; j < order; ++j)
+                sum += coefficients[j] * out[i - 1 - j];
+            out[i] += sum >> shift;
+            if (out[i] >= (qint64(1) << (bits - 1)) || out[i] < -(qint64(1) << (bits - 1)))
+                return false;
+        }
+    } else {
+        return false;                                   // a reserved type
+    }
+    if (!in.ok())
+        return false;
+    if (wasted) {
+        for (int i = 0; i < blockSize; ++i)
+            out[i] *= qint64(1) << wasted;
+    }
+    return true;
+}
+
+struct FlacStream
+{
+    int channels = 0;
+    int bits = 0;                                       // from STREAMINFO
+    QByteArray data;                                    // the whole file
+    qint64 pos = 0;                                     // the next frame
+    std::vector<qint64> samples[2];                     // the last frame, per channel
+    int blockSize = 0;
+    int frameBits = 16;                                 // the last frame's bit depth (its header or STREAMINFO)
+};
+
+// The frame at `s.pos` into `s.samples`; false when it is damaged or the file ends.
+bool flacFrame(FlacStream &s)
+{
+    const uchar *d = reinterpret_cast<const uchar *>(s.data.constData());
+    const qint64 size = s.data.size();
+    const qint64 start = s.pos;
+    BitReader in(d, size, start);
+    if (in.bits(15) != 0x7FFC)                          // sync code and a reserved 0
+        return false;
+    in.bits(1);                                         // blocking strategy
+    const int blockCode = int(in.bits(4));
+    const int rateCode = int(in.bits(4));
+    const int assignment = int(in.bits(4));
+    const int bitsCode = int(in.bits(3));
+    if (in.bits(1) != 0 || !in.ok() || blockCode == 0 || rateCode == 15 || assignment > 10 || bitsCode == 3)
+        return false;
+    // The coded frame or sample number: UTF-8 style, 1 to 7 bytes.
+    const quint64 lead = in.bits(8);
+    int more = 0;
+    if (lead >= 0xFE)
+        more = 6;
+    else if (lead >= 0xFC)
+        more = 5;
+    else if (lead >= 0xF8)
+        more = 4;
+    else if (lead >= 0xF0)
+        more = 3;
+    else if (lead >= 0xE0)
+        more = 2;
+    else if (lead >= 0xC0)
+        more = 1;
+    else if (lead >= 0x80)
+        return false;
+    for (int i = 0; i < more; ++i) {
+        if ((in.bits(8) & 0xC0) != 0x80)
+            return false;
+    }
+    int blockSize = 0;
+    if (blockCode == 1)
+        blockSize = 192;
+    else if (blockCode <= 5)
+        blockSize = 576 << (blockCode - 2);
+    else if (blockCode == 6)
+        blockSize = int(in.bits(8)) + 1;
+    else if (blockCode == 7)
+        blockSize = int(in.bits(16)) + 1;
+    else
+        blockSize = 256 << (blockCode - 8);
+    if (rateCode == 12)
+        in.bits(8);
+    else if (rateCode == 13 || rateCode == 14)
+        in.bits(16);
+    if (!in.ok())
+        return false;
+    const qint64 headerEnd = in.bytePos();
+    if (headerEnd >= size || d[headerEnd] != crc8(d + start, headerEnd - start))
+        return false;
+    in.bits(8);
+    static const int bitsTable[8] = {0, 8, 12, 0, 16, 20, 24, 32};
+    const int bits = bitsCode ? bitsTable[bitsCode] : s.bits;
+    const int channels = assignment < 8 ? assignment + 1 : 2;
+    if (channels != s.channels || bits < 4 || bits > 32 || blockSize > FlacMaxBlock)
+        return false;
+    for (int c = 0; c < channels; ++c) {
+        s.samples[c].resize(size_t(blockSize));
+        const bool side = (assignment == 8 && c == 1) || (assignment == 9 && c == 0) || (assignment == 10 && c == 1);
+        if (!flacSubframe(in, blockSize, bits + (side ? 1 : 0), s.samples[c].data()))
+            return false;
+    }
+    in.align();
+    const qint64 end = in.bytePos();
+    if (!in.ok() || end + 2 > size || ((quint16(d[end]) << 8) | d[end + 1]) != crc16(d + start, end - start))
+        return false;
+    qint64 *a = s.samples[0].data();
+    qint64 *b = channels > 1 ? s.samples[1].data() : nullptr;
+    for (int i = 0; i < blockSize && assignment >= 8; ++i) {
+        if (assignment == 8) {                          // left, side
+            b[i] = a[i] - b[i];
+        } else if (assignment == 9) {                   // side, right
+            a[i] += b[i];
+        } else {                                        // mid, side
+            const qint64 mid = a[i] * 2 + (b[i] & 1);
+            a[i] = (mid + b[i]) >> 1;
+            b[i] = (mid - b[i]) >> 1;
+        }
+    }
+    s.blockSize = blockSize;
+    s.frameBits = bits;
+    s.pos = end + 2;
+    return true;
+}
+
+// A two-pole low-pass (RBJ, bilinear with the cutoff prewarped); two in a row make a 4th-order
+// Butterworth with Q 0.5412 and 1.3066.
+struct Biquad
+{
+    double b0 = 0, b1 = 0, b2 = 0, a1 = 0, a2 = 0;
+    double x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+    Biquad(double cutoff, double rate, double q)
+    {
+        const double w = 2 * M_PI * cutoff / rate;
+        const double alpha = std::sin(w) / (2 * q);
+        const double a0 = 1 + alpha;
+        b0 = (1 - std::cos(w)) / 2 / a0;
+        b1 = (1 - std::cos(w)) / a0;
+        b2 = b0;
+        a1 = -2 * std::cos(w) / a0;
+        a2 = (1 - alpha) / a0;
+    }
+    double operator()(double x)
+    {
+        const double y = b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
+        x2 = x1;
+        x1 = x;
+        y2 = y1;
+        y1 = y;
+        return y;
+    }
+};
+
+// Decodes the FLAC ambient at `path` from its first frame and measures the samples in
+// [fromMs, toMs): the median RMS of its 1 s windows (dBFS) and the share of its energy below
+// LowCutHz. False with `why` when the audio is damaged or ends early.
+bool measureFlac(const QString &path, const Audio &audio, qint64 fromMs, qint64 toMs, double *levelDbfs, double *lowShare, QString *why)
+{
+    // Frames are decoded from the start of the file. STREAMINFO may claim hours of audio in 3 MB of
+    // CONSTANT frames, so nothing past MaxDecodedMs is decoded; a loop that starts later is not measured.
+    toMs = qMin(qMin(toMs, fromMs + MaxMeasuredMs), MaxDecodedMs);
+    if (fromMs >= toMs) {
+        *why = QString();
+        return false;
+    }
+    FlacStream s;
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly) || (s.data = file.read(MaxAmbientBytes + 1)).size() > MaxAmbientBytes) {
+        *why = QStringLiteral("the file cannot be read");
+        return false;
+    }
+    const QByteArray &data = s.data;
+    if (data.size() < 42) {
+        *why = QStringLiteral("not a FLAC file");
+        return false;
+    }
+    s.channels = audio.channels;
+    s.bits = int((quint8(data[20]) & 1) << 4 | quint8(data[21]) >> 4) + 1;
+    qint64 at = 4;                                      // the metadata blocks, as in parseFlac
+    for (;;) {
+        if (at + 4 > data.size()) {
+            *why = QStringLiteral("the FLAC file has no audio frames");
+            return false;
+        }
+        const quint8 type = quint8(data[int(at)]);
+        at += 4 + ((qint64(quint8(data[int(at) + 1])) << 16) | (qint64(quint8(data[int(at) + 2])) << 8) | qint64(quint8(data[int(at) + 3])));
+        if (type & 0x80)
+            break;
+    }
+    s.pos = at;
+    const qint64 from = fromMs * audio.rate / 1000;
+    const qint64 to = toMs * audio.rate / 1000;
+    const qint64 window = audio.rate;                   // 1 s
+    std::vector<Biquad> low;
+    for (int c = 0; c < s.channels; ++c) {
+        low.emplace_back(LowCutHz, audio.rate, 0.54119610);
+        low.emplace_back(LowCutHz, audio.rate, 1.30656296);
+    }
+    double total = 0, below = 0, windowSum = 0;
+    qint64 inWindow = 0;
+    std::vector<double> windows;
+    qint64 done = 0;                                    // samples per channel decoded so far
+    while (done < to) {
+        if (!flacFrame(s)) {
+            *why = QStringLiteral("the FLAC audio is damaged or ends before the loop does (at %1 ms)").arg(done * 1000 / audio.rate);
+            return false;
+        }
+        const double scale = 1.0 / double(qint64(1) << (s.frameBits - 1));     // full scale is 1.0
+        for (int i = 0; i < s.blockSize && done < to; ++i, ++done) {
+            if (done < from)
+                continue;
+            double square = 0;
+            for (int c = 0; c < s.channels; ++c) {
+                const double x = double(s.samples[c][size_t(i)]) * scale;
+                const double y = low[size_t(2 * c + 1)](low[size_t(2 * c)](x));
+                square += x * x;
+                below += y * y;
+            }
+            total += square;
+            windowSum += square / s.channels;
+            if (++inWindow == window) {
+                windows.push_back(windowSum / window);
+                windowSum = 0;
+                inWindow = 0;
+            }
+        }
+    }
+    if (windows.empty())
+        windows.push_back(inWindow ? windowSum / inWindow : 0.0);
+    std::sort(windows.begin(), windows.end());
+    const double median = windows[windows.size() / 2];
+    *levelDbfs = median > 1e-12 ? 10 * std::log10(median) : -120.0;
+    *lowShare = total > 0 ? qBound(0.0, below / total, 1.0) : 0.0;
+    return true;
+}
+
 // A number from the manifest as whole milliseconds. Converting a double that does not fit into 64 bits is
 // undefined behaviour, so it is clamped first (to far more than any file's length: the verdict stays "not
 // inside the file", and the message names a number that can be printed).
@@ -500,8 +949,36 @@ Result check(const QString &dir)
                             fail(label + QStringLiteral("the loop is shorter than 5 s"));
                             loopOk = false;
                         }
-                        if (loopOk && gain >= 0.0 && gain <= 1.0) {
+                        bool audible = true, measured = false;
+                        double level = 0, lowShare = 0;
+                        const bool flac = hasExtension(path, {QStringLiteral("flac")});
+                        if (loopOk && flac) {
+                            // T-330: a bed must be heard on a TV and a 5 cm speaker.
+                            measured = measureFlac(path, audio, start, end, &level, &lowShare, &why);
+                            if (!measured) {
+                                if (!why.isEmpty()) {
+                                    fail(label + why);
+                                    audible = false;
+                                } else {
+                                    r.warnings.append(label + QStringLiteral("the loop starts after 10 minutes; its level was not measured"));
+                                }
+                            } else if (lowShare > MaxLowShare) {
+                                fail(label + QStringLiteral("%1 % of its energy is below 150 Hz (at most %2 %): a TV or a small speaker hardly plays it")
+                                                 .arg(qRound(lowShare * 100)).arg(qRound(MaxLowShare * 100)));
+                                audible = false;
+                            } else if (level < MinAmbientDbfs) {
+                                fail(label + QStringLiteral("nearly silent: the loop's median 1 s level is %1 dBFS (at least %2 dBFS)")
+                                                 .arg(qRound(level)).arg(qRound(MinAmbientDbfs)));
+                                audible = false;
+                            }
+                        } else if (loopOk) {
+                            r.warnings.append(label + QStringLiteral("an Ogg ambient is not decoded, so its level and its share below 150 Hz were not checked"));
+                        }
+                        if (loopOk && audible && gain >= 0.0 && gain <= 1.0) {
                             m.hasAmbient = true;
+                            m.ambient.measured = measured;
+                            m.ambient.levelDbfs = level;
+                            m.ambient.lowShare = lowShare;
                             m.ambient.file = path;
                             m.ambient.loopStartMs = start;
                             m.ambient.loopEndMs = end;
@@ -575,21 +1052,104 @@ QByteArray wavWithChunk(const QByteArray &wav, const QByteArray &id, quint32 dec
     return wav.left(36) + chunk + wav.mid(36);
 }
 
-// A FLAC file that is a STREAMINFO header and the header of one frame (enough for the checker, which reads
-// data, never decodes: the frame's CRC and body are not there). `rateCode` is the frame header's sample rate
-// code (7 = 24 kHz; 0 = "as in STREAMINFO", which the checker refuses); `paddingBytes` puts a PADDING
-// block between STREAMINFO and the frame, as the flac encoder does (8 KB, past the checker's 4 KB head).
-QByteArray makeFlacHeader(int rate, int channels, quint64 totalSamples, qint64 padTo = 0, int rateCode = 7, int paddingBytes = 0)
+// A sine mix in 16-bit samples: `partials` are (frequency Hz, amplitude 0..1).
+QVector<qint16> toneSamples(int rate, int count, const QList<QPair<double, double>> &partials)
 {
+    QVector<qint16> out(count);
+    for (int i = 0; i < count; ++i) {
+        double v = 0;
+        for (const auto &p : partials)
+            v += p.second * qSin(2 * M_PI * p.first * i / rate);
+        out[i] = qint16(qBound(-32768, qRound(v * 32767.0), 32767));
+    }
+    return out;
+}
+
+class BitWriter
+{
+public:
+    void put(quint64 value, int bits)
+    {
+        for (int i = bits - 1; i >= 0; --i) {
+            m_byte = quint8((m_byte << 1) | ((value >> i) & 1));
+            if (++m_count == 8) {
+                m_bytes.append(char(m_byte));
+                m_byte = 0;
+                m_count = 0;
+            }
+        }
+    }
+    void putSigned(qint64 value, int bits) { put(quint64(value) & ((quint64(1) << bits) - 1), bits); }
+    void align()
+    {
+        while (m_count)
+            put(0, 1);
+    }
+    const QByteArray &bytes() const { return m_bytes; }
+
+private:
+    QByteArray m_bytes;
+    quint8 m_byte = 0;
+    int m_count = 0;
+};
+
+// A FIXED order-2 subframe, Rice coded in one partition with the best parameter.
+void flacFixedSubframe(BitWriter &w, const qint64 *x, int n, int bits)
+{
+    w.put(0, 1);
+    w.put(8 + 2, 6);
+    w.put(0, 1);
+    w.putSigned(x[0], bits);
+    w.putSigned(x[1], bits);
+    std::vector<quint64> u;
+    for (int i = 2; i < n; ++i) {
+        const qint64 r = x[i] - 2 * x[i - 1] + x[i - 2];
+        u.push_back(r >= 0 ? quint64(r) * 2 : quint64(-r) * 2 - 1);
+    }
+    int best = 0;
+    quint64 bestCost = std::numeric_limits<quint64>::max();
+    for (int k = 0; k < 15; ++k) {
+        quint64 cost = 0;
+        for (quint64 v : u)
+            cost += (v >> k) + 1 + quint64(k);
+        if (cost < bestCost) {
+            bestCost = cost;
+            best = k;
+        }
+    }
+    w.put(0, 2);                                        // Rice, 4-bit parameters
+    w.put(0, 4);                                        // partition order 0
+    w.put(quint64(best), 4);
+    for (quint64 v : u) {
+        for (quint64 q = v >> best; q > 0; --q)
+            w.put(0, 1);
+        w.put(1, 1);
+        w.put(v & ((quint64(1) << best) - 1), best);
+    }
+}
+
+// A real FLAC file (16-bit, frames of 4096 samples, FIXED order-2 subframes, the CRCs right) that the
+// checker's decoder reads like one from an encoder. `channels` holds one or two channels of the same
+// length, a multiple of 4096. `assignment` is the frame's channel assignment for stereo (1 = left and
+// right, 8 = left and side, 9 = side and right, 10 = mid and side); `rateCode` the frame header's sample
+// rate code (-1: the code of `rate`; 0 = "as in STREAMINFO", which the checker refuses); `paddingBytes`
+// puts a PADDING block between STREAMINFO and the first frame, as the flac encoder does (8 KB, past the
+// checker's 4 KB head); `padTo` appends zeros up to that size.
+QByteArray makeFlac(int rate, const QList<QVector<qint16>> &channels, int assignment = 1, int rateCode = -1, int paddingBytes = 0,
+                    qint64 padTo = 0)
+{
+    static const QMap<int, int> rateCodes{{8000, 4}, {16000, 5}, {22050, 6}, {24000, 7}, {32000, 8}, {44100, 9}, {48000, 10}, {96000, 11}};
+    const int count = int(channels.first().size());
+    const int frames = count / 4096;
     QByteArray b("fLaC");
     b.append(char(paddingBytes > 0 ? 0x00 : 0x80));  // STREAMINFO, the last metadata block unless padding follows
     b.append(QByteArray("\0\0\x22", 3));
     b.append(QByteArray("\x10\x00\x10\x00", 4));    // block size 4096
     b.append(QByteArray(6, '\0'));                  // frame sizes unknown
-    const quint64 packed = (quint64(rate) << 44) | (quint64(channels - 1) << 41) | (quint64(15) << 36) | totalSamples;
+    const quint64 packed = (quint64(rate) << 44) | (quint64(channels.size() - 1) << 41) | (quint64(15) << 36) | quint64(count);
     for (int shift = 56; shift >= 0; shift -= 8)
         b.append(char((packed >> shift) & 0xFF));
-    b.append(QByteArray(16, '\0'));                 // MD5
+    b.append(QByteArray(16, '\0'));                 // MD5 unknown
     if (paddingBytes > 0) {
         b.append(char(0x81));                       // PADDING, the last metadata block
         b.append(char((paddingBytes >> 16) & 0xFF));
@@ -597,15 +1157,58 @@ QByteArray makeFlacHeader(int rate, int channels, quint64 totalSamples, qint64 p
         b.append(char(paddingBytes & 0xFF));
         b.append(QByteArray(paddingBytes, '\0'));
     }
-    // Frame header: sync, block size 4096 and the rate code, mono 16-bit, frame number 0, a CRC-8 left at 0.
-    b.append(char(0xFF));
-    b.append(char(0xF8));
-    b.append(char(0xC0 | (rateCode & 0x0F)));
-    b.append(char(0x08));
-    b.append(QByteArray(2, '\0'));
+    const int code = rateCode >= 0 ? rateCode : rateCodes.value(rate, 0);
+    const int stereo = channels.size() > 1 ? assignment : 0;
+    std::vector<qint64> first(4096), second(4096);
+    for (int f = 0; f < frames; ++f) {
+        BitWriter w;
+        w.put(0xFFF8, 16);                          // sync, fixed block size
+        w.put(0xC, 4);                              // 4096 samples
+        w.put(quint64(code), 4);
+        w.put(quint64(stereo), 4);
+        w.put(4, 3);                                // 16-bit
+        w.put(0, 1);
+        if (f < 0x80) {                             // the frame number, UTF-8 style
+            w.put(quint64(f), 8);
+        } else {
+            w.put(0xC0 | quint64(f >> 6), 8);
+            w.put(0x80 | quint64(f & 0x3F), 8);
+        }
+        const QByteArray head = w.bytes();
+        w.put(crc8(reinterpret_cast<const uchar *>(head.constData()), head.size()), 8);
+        for (int i = 0; i < 4096; ++i) {
+            const qint64 l = channels.first()[f * 4096 + i];
+            const qint64 r = channels.size() > 1 ? channels.last()[f * 4096 + i] : 0;
+            switch (stereo) {
+            case 8: first[size_t(i)] = l; second[size_t(i)] = l - r; break;
+            case 9: first[size_t(i)] = l - r; second[size_t(i)] = r; break;
+            case 10: first[size_t(i)] = (l + r) >> 1; second[size_t(i)] = l - r; break;
+            default: first[size_t(i)] = l; second[size_t(i)] = r; break;
+            }
+        }
+        flacFixedSubframe(w, first.data(), 4096, 16 + (stereo == 9 ? 1 : 0));
+        if (channels.size() > 1)
+            flacFixedSubframe(w, second.data(), 4096, 16 + (stereo == 8 || stereo == 10 ? 1 : 0));
+        w.align();
+        const QByteArray frame = w.bytes();
+        const quint16 crc = crc16(reinterpret_cast<const uchar *>(frame.constData()), frame.size());
+        b.append(frame);
+        b.append(char(crc >> 8));
+        b.append(char(crc & 0xFF));
+    }
     if (padTo > b.size())
         b.append(QByteArray(int(padTo - b.size()), '\0'));
     return b;
+}
+
+// The fixtures' ambient: 20 frames of 4096 samples at 8 kHz (10.24 s), so a loop of 0 to 10 000 ms fits.
+constexpr int FixtureRate = 8000;
+constexpr int FixtureSamples = 20 * 4096;
+
+// An audible bed: A4 and E5 at about -22 dBFS, nothing below 150 Hz.
+QVector<qint16> fixtureBed()
+{
+    return toneSamples(FixtureRate, FixtureSamples, {{440.0, 0.08}, {660.0, 0.04}});
 }
 
 QByteArray oggPage(quint8 type, qint64 granule, const QByteArray &packet)
@@ -698,6 +1301,16 @@ QList<FixtureCase> fixtureCases()
         {QStringLiteral("bad-flac-frame-rate"), false, QStringLiteral("do not name their sample rate")}, // T-321: Qt plays it at 0 Hz
         {QStringLiteral("bad-flac-no-frames"), false, QStringLiteral("has no audio frames")},
         {QStringLiteral("ok-flac-padding"), true, {}},                                               // the first frame past the 4 KB head
+        // T-330: the bed must be heard on a TV and a 5 cm speaker; the decoder reads every stereo layout.
+        {QStringLiteral("bad-ambient-sub-bass"), false, QStringLiteral("of its energy is below 150 Hz")},
+        {QStringLiteral("bad-ambient-silent"), false, QStringLiteral("nearly silent")},
+        {QStringLiteral("ok-ambient-some-bass"), true, {}},                                          // 38 % below 150 Hz
+        {QStringLiteral("bad-flac-damaged"), false, QStringLiteral("the FLAC audio is damaged")},    // one byte changed in frame 5
+        {QStringLiteral("bad-flac-cut-short"), false, QStringLiteral("ends before the loop does")},
+        {QStringLiteral("ok-flac-left-right"), true, {}},
+        {QStringLiteral("ok-flac-left-side"), true, {}},
+        {QStringLiteral("ok-flac-side-right"), true, {}},
+        {QStringLiteral("ok-flac-mid-side"), true, {}},
     };
 }
 
@@ -716,7 +1329,8 @@ bool writeFixtures(const QString &root)
             put(theme, cue + QStringLiteral(".wav"), tone);
         put(theme, QStringLiteral("README.md"), "fixture");
     };
-    const QByteArray flac = makeFlacHeader(24000, 1, 24000 * 10);        // 10 s
+    const QVector<qint16> bed = fixtureBed();
+    const QByteArray flac = makeFlac(FixtureRate, {bed});               // 10.24 s, audible
 
     putAllCues(QStringLiteral("ok-full"));
     put(QStringLiteral("ok-full"), QStringLiteral("ambient.flac"), flac);
@@ -765,7 +1379,7 @@ bool writeFixtures(const QString &root)
     };
     withAmbient(QStringLiteral("bad-loop-outside"), QStringLiteral("ambient.flac"), flac, ambientOf(QStringLiteral("ambient.flac"), 0, 12000));
     withAmbient(QStringLiteral("bad-loop-short"), QStringLiteral("ambient.flac"), flac, ambientOf(QStringLiteral("ambient.flac"), 2000, 4000));
-    withAmbient(QStringLiteral("bad-ambient-oversize"), QStringLiteral("ambient.flac"), makeFlacHeader(24000, 1, 24000 * 10, MaxAmbientBytes + 1),
+    withAmbient(QStringLiteral("bad-ambient-oversize"), QStringLiteral("ambient.flac"), makeFlac(FixtureRate, {bed}, 1, -1, 0, MaxAmbientBytes + 1),
                 ambientOf(QStringLiteral("ambient.flac"), 0, 10000));
     withAmbient(QStringLiteral("bad-ambient-extension"), QStringLiteral("ambient.mp3"), flac, ambientOf(QStringLiteral("ambient.mp3"), 0, 10000));
     withAmbient(QStringLiteral("bad-ambient-not-audio"), QStringLiteral("ambient.flac"), QByteArray(100, 'x'),
@@ -779,12 +1393,30 @@ bool writeFixtures(const QString &root)
     QJsonObject huge = ambientOf(QStringLiteral("ambient.flac"), 0, 10000);
     huge.insert(QStringLiteral("loop"), QJsonObject{{QStringLiteral("start"), 0.0}, {QStringLiteral("end"), 1e300}});
     withAmbient(QStringLiteral("bad-loop-overflow"), QStringLiteral("ambient.flac"), flac, huge);
-    withAmbient(QStringLiteral("bad-flac-frame-rate"), QStringLiteral("ambient.flac"), makeFlacHeader(24000, 1, 24000 * 10, 0, 0),
-                ambientOf(QStringLiteral("ambient.flac"), 0, 10000));
-    withAmbient(QStringLiteral("bad-flac-no-frames"), QStringLiteral("ambient.flac"), flac.left(42),
-                ambientOf(QStringLiteral("ambient.flac"), 0, 10000));
-    withAmbient(QStringLiteral("ok-flac-padding"), QStringLiteral("ambient.flac"), makeFlacHeader(24000, 1, 24000 * 10, 0, 7, 8192),
-                ambientOf(QStringLiteral("ambient.flac"), 0, 10000));
+    const QJsonObject whole = ambientOf(QStringLiteral("ambient.flac"), 0, 10000);
+    withAmbient(QStringLiteral("bad-flac-frame-rate"), QStringLiteral("ambient.flac"), makeFlac(FixtureRate, {bed}, 1, 0), whole);
+    withAmbient(QStringLiteral("bad-flac-no-frames"), QStringLiteral("ambient.flac"), flac.left(42), whole);
+    withAmbient(QStringLiteral("ok-flac-padding"), QStringLiteral("ambient.flac"), makeFlac(FixtureRate, {bed}, 1, -1, 8192), whole);
+
+    // T-330: the level and band rules, and the decoder on what real encoders write.
+    withAmbient(QStringLiteral("bad-ambient-sub-bass"), QStringLiteral("ambient.flac"),
+                makeFlac(FixtureRate, {toneSamples(FixtureRate, FixtureSamples, {{55.0, 0.25}, {82.5, 0.25}})}), whole);
+    withAmbient(QStringLiteral("bad-ambient-silent"), QStringLiteral("ambient.flac"),
+                makeFlac(FixtureRate, {toneSamples(FixtureRate, FixtureSamples, {{440.0, 0.004}})}), whole);
+    withAmbient(QStringLiteral("ok-ambient-some-bass"), QStringLiteral("ambient.flac"),
+                makeFlac(FixtureRate, {toneSamples(FixtureRate, FixtureSamples, {{100.0, 0.2}, {440.0, 0.245}})}), whole);
+    QByteArray damaged = flac;
+    damaged[damaged.size() / 4] = char(damaged[damaged.size() / 4] ^ 0x10);     // inside frame 5 of 20
+    withAmbient(QStringLiteral("bad-flac-damaged"), QStringLiteral("ambient.flac"), damaged, whole);
+    withAmbient(QStringLiteral("bad-flac-cut-short"), QStringLiteral("ambient.flac"), flac.left(flac.size() / 2), whole);
+    // Stereo: left 440 Hz at 0.3, right 100 Hz at 0.1 (median level -16.0 dBFS, 9.6 % below 150 Hz), in
+    // each channel layout of the format.
+    const QList<QVector<qint16>> stereo{toneSamples(FixtureRate, FixtureSamples, {{440.0, 0.3}}),
+                                        toneSamples(FixtureRate, FixtureSamples, {{100.0, 0.1}})};
+    withAmbient(QStringLiteral("ok-flac-left-right"), QStringLiteral("ambient.flac"), makeFlac(FixtureRate, stereo, 1), whole);
+    withAmbient(QStringLiteral("ok-flac-left-side"), QStringLiteral("ambient.flac"), makeFlac(FixtureRate, stereo, 8), whole);
+    withAmbient(QStringLiteral("ok-flac-side-right"), QStringLiteral("ambient.flac"), makeFlac(FixtureRate, stereo, 9), whole);
+    withAmbient(QStringLiteral("ok-flac-mid-side"), QStringLiteral("ambient.flac"), makeFlac(FixtureRate, stereo, 10), whole);
     return ok;
 }
 
@@ -850,21 +1482,36 @@ bool fuzz(QString *problem, int *cases, int timeoutMs)
         const QByteArray plain = makeWav(10, CueSampleRate, 1, 0.4);
         const QByteArray wav = wavWithChunk(plain, "LIST", 4, QByteArray(4, 'x'));
         const QByteArray ogg = makeOgg(48000, 2, 48000LL * 20);
-        const QByteArray flac = makeFlacHeader(24000, 1, 24000 * 10);
-        const auto writeTheme = [&folder](const QByteArray &cue, const QByteArray &ambient, const QString &ambientName) {
-            writeFile(folder + QStringLiteral("/select.wav"), cue);
+        // A real FLAC file (T-330: the checker decodes it): the first 128 bytes are STREAMINFO, the first
+        // frame's header, its subframe header, the warm-up samples, the Rice parameter and residuals. It is
+        // 5.12 s long (the shortest loop is 5 s) to keep the 1 600 decodes quick. The stereo layouts are
+        // fixtures (ok-flac-*); a channel assignment set by a mutation of this file is refused as a mismatch.
+        const QVector<qint16> bed = fixtureBed().mid(0, FixtureSamples / 2);
+        const QByteArray flac = makeFlac(FixtureRate, {bed});
+        // A file is written only when its bytes change (the cue and the manifest stay the same over a whole
+        // series of ambient mutations): the file system, not the checker, is what takes the time here.
+        QByteArray lastCue, lastManifest;
+        const auto writeTheme = [&](const QByteArray &cue, const QByteArray &ambient, const QString &ambientName, qint64 loopEnd = 10000) {
+            if (cue != lastCue || lastCue.isNull()) {
+                writeFile(folder + QStringLiteral("/select.wav"), cue);
+                lastCue = cue;
+            }
             QJsonObject cues{{QStringLiteral("select"), QStringLiteral("select.wav")}};
             QJsonObject amb;
             if (!ambientName.isEmpty()) {
                 writeFile(folder + QLatin1Char('/') + ambientName, ambient);
-                amb = ambientOf(ambientName, 0, 10000);
+                amb = ambientOf(ambientName, 0, loopEnd);
             }
-            writeFile(folder + QStringLiteral("/theme.json"), manifest(cues, amb));
+            const QByteArray json = manifest(cues, amb);
+            if (json != lastManifest) {
+                writeFile(folder + QStringLiteral("/theme.json"), json);
+                lastManifest = json;
+            }
         };
         // The file under test is rewritten for each mutation; the verdict is not looked at, only that one comes.
         state->cases += mutations(wav, [&](const QByteArray &b) { writeTheme(b, QByteArray(), QString()); (void)check(folder); });
         state->cases += mutations(ogg, [&](const QByteArray &b) { writeTheme(plain, b, QStringLiteral("pad.ogg")); (void)check(folder); });
-        state->cases += mutations(flac, [&](const QByteArray &b) { writeTheme(plain, b, QStringLiteral("pad.flac")); (void)check(folder); });
+        state->cases += mutations(flac, [&](const QByteArray &b) { writeTheme(plain, b, QStringLiteral("pad.flac"), 5000); (void)check(folder); });
         state->done = true;
     });
     thread->start();

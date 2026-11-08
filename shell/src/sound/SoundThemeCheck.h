@@ -9,9 +9,10 @@
 // "usable or not, and why". The shell calls it for the bundled theme, the copies and the folders on a
 // USB drive; `ruya-shell --check-sound-theme <folder>` (scripts/lint-sound-themes.ps1) calls the same
 // one. It reads the folder as DATA only: sizes are checked before a file is read, a cue file is read
-// whole only when it is at most MaxCueBytes, an ambient file only at its head and tail, nothing is
-// decoded by a codec and nothing is executed. A path that leaves the folder (`..`, absolute, a drive
-// letter, a symlink) is refused.
+// whole only when it is at most MaxCueBytes, an Ogg ambient only at its head and tail, a FLAC ambient
+// whole (at most MaxAmbientBytes) and decoded by the checker's own small decoder over at most
+// MaxMeasuredMs of its loop (no codec library), and nothing is executed. A path that leaves the folder
+// (`..`, absolute, a drive letter, a symlink) is refused.
 //
 // The folder may be a Qt resource (":/..."): the bundled theme of the Windows dev build.
 namespace SoundTheme {
@@ -24,6 +25,12 @@ constexpr qint64 MinLoopMs = 5000;         // a loop shorter than this repeats t
 constexpr int CueSampleRate = 48000;
 constexpr int MaxCues = 64;                // entries in the manifest's "cues"
 constexpr double PeakLimit = 0.70794578;   // -3 dBFS
+// The ambient must be heard on a TV and a 5 cm speaker (T-330), measured on the decoded loop of a FLAC
+// ambient (an Ogg one is not decoded: a warning says it was not measured).
+constexpr double LowCutHz = 150.0;
+constexpr double MaxLowShare = 0.5;        // refused when more than half the energy is below 150 Hz
+constexpr double MinAmbientDbfs = -40.0;   // refused when the median 1 s RMS of the loop is below this
+constexpr qint64 MaxMeasuredMs = 60000;    // the first minute of the loop is measured, the rest is not decoded
 
 // The cue names: the contract between the shell and a theme (Sfx.qml has one function for each).
 const QStringList &cueNames();
@@ -35,6 +42,9 @@ struct Ambient
     qint64 loopEndMs = 0;
     double gain = 1.0;         // 0..1, before the Ambient slider
     qint64 durationMs = 0;
+    bool measured = false;     // a FLAC ambient: the two numbers below are known
+    double levelDbfs = 0;      // the median 1 s RMS of the measured loop, before the gain
+    double lowShare = 0;       // the share of its energy below LowCutHz, 0..1
 };
 
 struct Manifest
