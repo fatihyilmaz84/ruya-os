@@ -134,8 +134,9 @@
       True while something plays: an output stream (PipeWire media.class Stream/Output/Audio) is
       "running" and not corked (T-202, T-293; the shell keeps the screen saver and sleep off while it
       is true). A paused or corked stream does not count, nor does a sink that is still running after
-      its stream paused, nor a microphone. It follows the graph by the same events as the outputs; a
-      UI sound makes it true for the few seconds PipeWire keeps its stream running.
+      its stream paused, nor a microphone. The shell's own streams (its ambient bed and UI sounds:
+      application.process.binary "ruya-shell") do not count either (T-313), or Home would never idle.
+      It follows the graph by the same events as the outputs.
     -->
     <property name="Playing" type="b" access="read">
       <annotation name="org.freedesktop.DBus.Property.EmitsChangedSignal" value="true"/>

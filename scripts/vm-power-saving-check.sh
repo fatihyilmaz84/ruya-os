@@ -4,7 +4,8 @@
 #   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-power-saving-check.sh [service|audio|timeline|all]
 #
 #   service   Devices1.Bluetooth.ReportIdle exists and answers "ok" (also with Bluetooth off, as in the VM)
-#   audio     Devices1.Audio.Playing exists and reads false on a quiet console. T-293: it then plays a
+#   audio     Devices1.Audio.Playing exists and reads false on a quiet console, with the shell's ambient bed
+#             playing (T-313: the shell's own streams do not count). T-293: it then plays a
 #             silent stream with pw-cat as ruya-shell (Playing must become true: a running output
 #             stream), stops the player with SIGSTOP (a stream that stopped feeding the graph; where
 #             PipeWire then reports it as not running Playing must become false, otherwise the part
@@ -54,10 +55,34 @@ wait_playing() {
     return 1
 }
 
+# T-313: makes sure the shell's ambient bed is on (the Ambient sound switch, `sound/ambient`, is on by
+# default; a conf that says false is put right and the shell restarted), then waits until the shell has a
+# running output stream, which is what used to make Playing true at Home.
+ambient_on() {
+    home="$(getent passwd ruya-shell | cut -d: -f6)"
+    conf="$home/.config/ruyaos/shell.conf"
+    if [ -f "$conf" ] && grep -q '^ambient=false' "$conf"; then
+        sed -i 's/^ambient=false/ambient=true/' "$conf"
+        chown ruya-shell: "$conf"
+        systemctl restart ruya-compositor@tty1
+        sleep 15
+    fi
+    for _ in $(seq 1 30); do
+        runuser -u ruya-shell -- env "XDG_RUNTIME_DIR=/run/user/$uid" pw-dump 2>/dev/null | tr -d ' \n' | grep -q '"application.process.binary":"ruya-shell"' && return 0
+        sleep 1
+    done
+    return 1
+}
+
 audio_check() {
-    echo "--- Audio.Playing (T-202, T-293)"
+    echo "--- Audio.Playing (T-202, T-293, T-313)"
+    if ambient_on; then
+        echo "the shell's ambient bed is a stream in the graph"
+    else
+        echo "UNVERIFIED: no ruya-shell stream in pw-dump (no sound theme or no audio device): the first assertion did not run with the bed playing"
+    fi
     out="$(playing)"
-    [ "$out" = "b false" ] && ok "Playing is false on a quiet console" || bad "Playing read: $out"
+    [ "$out" = "b false" ] && ok "Playing is false on a quiet console, with the ambient bed on" || bad "Playing read: $out"
     if ! command -v pw-cat >/dev/null 2>&1; then
         echo "UNVERIFIED: pw-cat is not installed: no stream was played"
         return

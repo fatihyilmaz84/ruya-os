@@ -60,6 +60,11 @@ pub fn parse_dump(json: &str) -> Result<(Vec<Sink>, Option<String>), String> {
 /// carries `pulse.corked`), and the sink it feeds can stay "running" for a while after it
 /// (T-293), so the sink's own state is not used: a player that paused must not keep the console
 /// awake. A running microphone or monitor stream is not output either.
+///
+/// **The shell's own streams do not count (T-313):** its ambient bed is a running output stream
+/// for as long as Home is up, and it must not hold the screen saver off. A stream is the shell's
+/// when its `application.process.binary` is [`SHELL_BINARY`] (libpulse fills it in from the process;
+/// Qt Multimedia has no way to set a stream's `media.role`). An app's stream still counts.
 pub fn parse_playing(json: &str) -> bool {
     let Ok(doc) = serde_json::from_str::<Value>(json) else {
         return false;
@@ -69,7 +74,16 @@ pub fn parse_playing(json: &str) -> bool {
             && obj["info"]["props"]["media.class"].as_str() == Some("Stream/Output/Audio")
             && obj["info"]["state"].as_str() == Some("running")
             && !corked(&obj["info"]["props"])
+            && !shells_own(&obj["info"]["props"])
     })
+}
+
+/// `application.process.binary` of the shell's streams (its executable is `ruya-shell`).
+pub const SHELL_BINARY: &str = "ruya-shell";
+
+/// Whether the stream belongs to the shell itself (its ambient bed and UI sounds).
+fn shells_own(props: &Value) -> bool {
+    props["application.process.binary"].as_str() == Some(SHELL_BINARY)
 }
 
 /// pipewire-pulse marks a corked stream `pulse.corked` (a string or a boolean, depending on the version).
@@ -284,6 +298,61 @@ mod tests {
         };
         assert!(!parse_playing(&graph("paused")));
         assert!(parse_playing(&graph("running")));
+    }
+
+    /// A running output stream with the given extra properties (T-313).
+    fn stream(id: u32, state: &str, extra: &str) -> String {
+        format!(
+            r#"{{"id":{id},"type":"PipeWire:Interface:Node","info":{{"state":"{state}","props":{{"media.class":"Stream/Output/Audio"{extra}}}}}}}"#
+        )
+    }
+    const SHELL: &str =
+        r#","application.name":"ruya-shell","application.process.binary":"ruya-shell""#;
+    const GAME: &str = r#","application.name":"Celeste","application.process.binary":"celeste""#;
+
+    #[test]
+    fn the_shells_ambient_bed_alone_does_not_play() {
+        let dump = format!("[{}]", stream(1, "running", SHELL));
+        assert!(!parse_playing(&dump));
+    }
+
+    #[test]
+    fn a_game_stream_beside_the_ambient_bed_plays() {
+        let dump = format!(
+            "[{},{}]",
+            stream(1, "running", SHELL),
+            stream(2, "running", GAME)
+        );
+        assert!(parse_playing(&dump));
+    }
+
+    #[test]
+    fn a_corked_game_beside_the_ambient_bed_does_not() {
+        let corked = format!(r#"{GAME},"pulse.corked":"true""#);
+        let dump = format!(
+            "[{},{}]",
+            stream(1, "running", SHELL),
+            stream(2, "running", &corked)
+        );
+        assert!(!parse_playing(&dump));
+        let paused = format!(
+            "[{},{}]",
+            stream(1, "running", SHELL),
+            stream(2, "paused", GAME)
+        );
+        assert!(!parse_playing(&paused));
+    }
+
+    #[test]
+    fn only_the_shells_own_binary_is_skipped() {
+        // Another program that happens to be called the same in `application.name` is not skipped.
+        let imposter = r#","application.name":"ruya-shell","application.process.binary":"mpv""#;
+        assert!(parse_playing(&format!(
+            "[{}]",
+            stream(1, "running", imposter)
+        )));
+        // A stream without the property (a bare pipewire client) counts.
+        assert!(parse_playing(&format!("[{}]", stream(1, "running", ""))));
     }
 
     #[test]
