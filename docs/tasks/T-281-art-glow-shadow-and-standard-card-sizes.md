@@ -42,7 +42,13 @@ UX notes: states reached: a card at rest (no shadow, as before), a focused card 
 ### Tests (`shell/tests/tst_artglow.qml`, 24 + 2 shots)
 Sampler families and bounds, neutral and faint cases, two-colour picture, once per picture (analysed counter and microseconds), unreadable picture, the card's glow and fallback, the focused shadow's tint equals the sampled colour, cross-fade to the next card (mid-fade `glowMix < 1`, then the new colour, the old back to neutral), no fade under reduced motion, halo per tier, Daylight, every card kind's tokens and sizes on the real pages (Home, Games, Store, profile picker), focus kept while the glow moves.
 
-Revert checks (`scripts\revert-check.ps1`, each CAUGHT): A `ArtCard` hands `Theme.shadowColor` to the shadow instead of the art colour; B `GlassShadow` halo without the `Theme.haloOn` tier test; C `GamesPage.cardWidth` 360 instead of the token; D `ArtPalette` without the lightness clamp; E `ArtPalette` decodes on every ask (`test_each_picture_is_analysed_once`); F `GlassShadow` `glowMix` with a 0 ms animation (no cross-fade).
+Revert checks (`scripts\revert-check.ps1`, rebuild and full `dev.ps1 shell` each; failing tests as printed):
+- A `ArtCard` hands `Theme.shadowColor` to the shadow instead of the art colour: `test_the_shadow_of_the_focused_card_is_the_sampled_colour`, `test_the_glow_crosses_over_to_the_next_card`, `test_no_fade_under_reduced_motion`, `test_focus_moves_the_glow_with_the_selection`.
+- B `GlassShadow` halo without the `Theme.haloOn` tier test: `test_halo_per_tier`.
+- C `GamesPage.cardWidth` 360 instead of the token: `test_games_home_and_store_use_the_documented_sizes`.
+- D `ArtPalette` without the lightness clamp: `test_output_is_bounded`.
+- E `ArtPalette` decodes on every ask: `test_each_picture_is_analysed_once` (run before the merge).
+- F `GlassShadow` `glowMix` with a 0 ms animation (no cross-fade): `test_the_glow_crosses_over_to_the_next_card`.
 
 ### Deviations
 - The task says a card without a picture falls back to "its tile accent". The tile accents belong to the Home section tiles; a card has no section key, and a glow in the accent colour would not match the visible placeholder. The fallback is the placeholder's own hue (`Theme.glowFallback(hue)`, strength 0.7).
@@ -54,7 +60,9 @@ Revert checks (`scripts\revert-check.ps1`, each CAUGHT): A `ArtCard` hands `Them
 ### Not verified
 - The Dell frame times and the look on a TV (shots are 1280 x 720 windows scaled to 1920 x 1080).
 - The http(s) branch of the sampler (no server in the tests; the file branch is tested).
-- **`shots` is red in one test**: `Wallpaper::test_zz_screenshots` (`tst_wallpaper.qml`, "captured once, not per frame": `wallpaperPanel.bakeCount` is 2, expected 1). The other 136 screenshot tests pass, `test` is ALL GREEN, and the same test passes on `main`'s build (run twice, isolated, with a real window). On this branch it fails every time (full run, twice; isolated, five times). What I found: the sheet's height changes once after it is shown (605 to 453 design px at the test size, `GlassSheet` re-captures on a size change), and it is not the Home row (`Shell.qml` reverted: still red) and not the user copies arriving late (a `tryVerify` on `Wallpapers.user.length === 5` before opening changed nothing; reverted). I could not find which part of this diff changes the order of events there. It needs a look by someone who can bisect on a fresh build: `git stash` the pieces of the diff one at a time and run `tst_ruyashell.exe -input tests\tst_wallpaper.qml` with `RUYA_SHOTS_DIR` set and `QSG_RENDER_LOOP=basic` (50 s).
+
+### After the merge of main (round 1b)
+`Wallpaper::test_zz_screenshots` was red on the first cut (a `GlassSheet` re-bake on a late resize, fixed on main by T-227 round 2). After `git merge main` (conflict only in the lists of `shell/CMakeLists.txt`) `dev.ps1 test` is ALL GREEN (853 QML, 65 skips) and `dev.ps1 shots` is ALL GREEN (140). **Rounded corners of the picture (Inbox, not done):** `AppArt` clips its children to a rectangle, so the picture's square corners show at the card corners. The fix is a masked layer around AppArt's content on GPU (the `WallpaperPicker` tile `artMask` / `MultiEffect` pattern) with the rectangular clip kept on the software renderer; it touches every AppArt user (hero, saver, detail page), so it is more than a few lines.
 
 ### Files
 `shell/src/art/{ArtPalette.h,ArtPalette.cpp,MockArt.h}`, `shell/CMakeLists.txt`, `shell/qml/{AppArt,ArtCard,GlassShadow,Theme,GamesPage,StorePage,Shell,ProfileCard}.qml`, `shell/src/library/{Library.h,MockLibraryBackend.h,MockLibraryBackend.cpp}`, `shell/src/store/{Store.h,Store.cpp,MockStoreBackend.h,MockStoreBackend.cpp}`, `shell/tests/{tst_main.cpp,tst_artglow.qml}`, `docs/specs/{04-design-system.md,02-shell.md}`.
