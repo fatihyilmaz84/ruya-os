@@ -30,7 +30,7 @@ Open work only (the front of the board; the rest is in `STATUS-backlog.md`), in 
 
 Later (ordered): [`STATUS-backlog.md`](STATUS-backlog.md) holds the rest of the open board, same columns; `lint-board.ps1` reads both. A planner or the lead moves rows up when they become ready.
 
-**VM queue** (the lead runs them with one image build; long form of the old paragraph: `STATUS-parked.md`, "Moved from STATUS 2026-11-08"): **0.0.55 passed on 2026-11-08** (lead-5; image 15 min + disk 18 min + ISO 19 min with the WSL disk on F:; boot OK; sounds ALL PASS with `-Audio`: bed stream running, no `QAudioFormat not valid`, no second copy of the theme; usage 33, session 37, library 34, store 70, devices bluetooth 21, boot 21, display 40, storage all steps; power-saving all but the known page-flip error after the wake key on virtio-gpu: the Dell decides). Left: `vm-iso-check.ps1` on the 0.0.55 ISO (running), `subset-icons.sh` in WSL (T-297), `vm-devices-check.sh system` with a FAT stick (T-226 `ReadWritePaths`), sample re-run, the greenboot drill. New checks arrive with T-332 (storage format), T-334 and T-336 (two pads, two adapters), T-337 (stuck key), T-339 (scripts) and T-340 (session).
+**VM queue** (the lead runs them with one image build; long form of the old paragraph: `STATUS-parked.md`, "Moved from STATUS 2026-11-08"): **0.0.55 passed on 2026-11-08** (lead-5; image 15 min + disk 18 min + ISO 19 min with the WSL disk on F:; boot OK; sounds ALL PASS with `-Audio`: bed stream running, no `QAudioFormat not valid`, no second copy of the theme; usage 33, session 37, library 34, store 70, devices bluetooth 21, boot 21, display 40, storage all steps; power-saving all but the known page-flip error after the wake key on virtio-gpu: the Dell decides). Left: `vm-iso-check.ps1` on the 0.0.55 ISO (running), `subset-icons.sh` in WSL (T-297), `vm-devices-check.sh system` with a FAT stick (T-226 `ReadWritePaths`), sample re-run, the greenboot drill. Pending since the T-336 merge: `vm-devices-check.sh bluetooth` (two-adapter fake) and the Dell's two real adapters (hw). New checks arrive with T-332 (storage format), T-334 and T-336 (two pads, two adapters), T-337 (stuck key), T-339 (scripts) and T-340 (session).
 
 **Dell look-at list** (one pass with the next ISO; the long text with task ids is in `STATUS-parked.md`, "Moved from STATUS 2026-11-08"):
 
@@ -43,6 +43,10 @@ Later (ordered): [`STATUS-backlog.md`](STATUS-backlog.md) holds the rest of the 
 ## Inbox
 
 One line each: `- (source) what, and why it matters`. Dispatched builders put them in their HANDOFF; the lead copies them here. Plan at 5+ items.
+
+- (T-336 reviews, lead-5) Secure Pairable/Discoverable of an adapter that appears after the service started; stop a window's scan on the window's adapter when a user scan on another adapter took over (primary flip between StartScan and the window); answer `unavailable` for StartScan/Pair when the primary is off but another adapter is on; sysinfo (T-289) should use `bluetooth::primary_index`/`Raw::primary()`; the `BatteriesChanged` test of T-300 is still missing.
+- (T-330 builder, lead-5) Ogg beds get no level or bass check (needs a decoder: planning call); the bundled theme grew 1.1 -> 2.5 MB (image size). Decoder follow-ups are T-346.
+- (lead-5) `tst_battery_cluster::test_the_chip_shrinks_to_plus_n_in_a_narrow_room` fails under load (nav gap 23 against 24 px at 1290 px wide; passes alone and on rerun): make the gap check independent of font metrics or settle longer.
 
 **Empty as of 2026-11-08 (lead-5 triage).** The 17 lines it held are verbatim in [`STATUS-parked.md`](STATUS-parked.md), "Inbox triage 2026-11-08 (lead-5)", each tagged with the task it became (T-339..T-345, T-322, T-288, T-211) or marked parked.
 

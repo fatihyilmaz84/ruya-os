@@ -1,6 +1,6 @@
 # T-336 - Bluetooth with more than one adapter: every device is operated through its own adapter
 
-Status: in-progress · Phase: 2 · Depends: — · Area: api, services (ruya-devices), shell (Bluetooth backend, mock) · Size: M · Owner: builder
+Status: done · Phase: 2 · Depends: — · Area: api, services (ruya-devices), shell (Bluetooth backend, mock) · Size: M · Owner: builder
 
 ## Goal
 The Dell has two Bluetooth adapters (`hci0` 00:E0:4C:23:99:87 and `hci1` 34:2E:B7:CE:C3:9E: presumably the built-in Realtek and a USB dongle). `bluez.rs` merges the devices of all adapters into one list but builds every device path (`Pair`, `Trust`, `Connect`, `Disconnect`, `Remove`, rename) and the pairing window from the first adapter only. A pad bonded on `hci1`, or an `hci0`/`hci1` order that flips between boots, is listed but cannot be connected or forgotten and looks "gone". After this task a listed device always works, and there is one deliberate rule for which adapter new pairings use.
@@ -42,7 +42,7 @@ The Dell has two Bluetooth adapters (`hci0` 00:E0:4C:23:99:87 and `hci1` 34:2E:B
 - Overlaps T-334 (same files, tests) and T-335 (log lines gain the adapter name): sequence them, do not run in parallel.
 
 ## Outcome
-Verified: host (vm pending: vm-devices-check.sh bluetooth)
+Verified: host (vm pending: vm-devices-check.sh bluetooth). Review APPROVE round 2.
 
 **What was built.** A device is always operated through the adapter that holds it; new pairings, the scan and the window use one deliberate primary adapter.
 - **Contract (`org.ruyaos.Devices1.xml`):** `ListDevices` entries gained `adapter` (`hci0`); the `Powered` text says any-adapter-on / all-adapters-off and that scan and window are the primary's. No new method or property: the shell needs nothing beyond the field (justified: no adapter chooser, no per-adapter switch).
