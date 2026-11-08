@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Checks the Devices service (audio T-128, network T-132, controller batteries T-161, Bluetooth T-173) inside a running VM booted with sound. Copy and run as root:
 #   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-devices-check.sh root@127.0.0.1:/root/
-#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-devices-check.sh [check|events|security|state|batteries|bluetooth|storage|thermal|thermal-fake|time|system]
+#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-devices-check.sh [check|events|security|state|batteries|bluetooth|storage|thermal|thermal-fake|time|system|inputd]
 # check (default): unit active, name owned by ruya-shell, ListSinks, a MasterVolume write reaches
 # PipeWire, a call from another user is refused; then the network part: State is connected, Primary is
 # the ethernet link with an IPv4 address, ListWifi and Scan answer, unknown ids are refused, another
@@ -40,6 +40,10 @@
 # refused, and with a mounted removable volume (attach one to QEMU: -drive if=none,id=u,file=stick.img,format=raw -device usb-storage,drive=u)
 # the two report files are written there and read back. `system` runs only these parts. The hardware part (the Dell: compare the
 # page with `lscpu`, `free`, `lspci`) is done by eye on the machine, see the T-226 Outcome.
+# inputd (T-337, not part of check): virtual gamepads from /dev/uinput; a pad destroyed while holding Down and A leaves KEY_DOWN and KEY_ENTER up on
+# "RuyaOS Navigation" (read with EVIOCGKEY); two pads hold Down, one lets go, Down stays down, the other lets go, Down is up; the journal line
+# `gone: ...; released ...` is there. WARNING: it sends real Down and Enter key presses to the running shell, which activates whatever has focus:
+# run it last, or with a throwaway screen focused. No /dev/uinput access as root: prints UNVERIFIED and passes nothing.
 # events: only the PipeWire event checks (T-133); IDLE=60 adds the idle-process count (also part of check; samples the process list for IDLE seconds).
 # state: prints State and Primary (for the link test, see docs/dev-setup.md).
 set -u
@@ -773,6 +777,155 @@ time_check() {
     [ "$(timedatectl show -p Timezone --value)" = "$orig" ] && ok "zone restored to $orig" || bad "could not restore $orig"
 }
 
+# T-337: ruya-inputd releases the keys a vanished pad held, and two pads share a key safely.
+# Virtual gamepads come from /dev/uinput (python3 standard library only); the keys are read back from the
+# "RuyaOS Navigation" device with the EVIOCGKEY ioctl. Prints PASS:/FAIL:/UNVERIFIED: lines.
+inputd_py='
+import fcntl, glob, os, struct, sys, time
+
+EV_SYN, EV_KEY = 0, 1
+BTN_SOUTH, BTN_DPAD_DOWN = 0x130, 0x221
+KEY_ENTER, KEY_DOWN = 28, 108
+UI_SET_EVBIT, UI_SET_KEYBIT = 0x40045564, 0x40045565
+UI_DEV_SETUP, UI_DEV_CREATE, UI_DEV_DESTROY = 0x405C5503, 0x5501, 0x5502
+EVIOCGKEY = (2 << 30) | (96 << 16) | (0x45 << 8) | 0x18   # _IOR("E", 0x18, 96 bytes)
+bad = False
+
+
+def say(kind, text):
+    global bad
+    if kind == "FAIL":
+        bad = True
+    print(kind + ": " + text, flush=True)
+
+
+def make_pad(tag):
+    fd = os.open("/dev/uinput", os.O_WRONLY | os.O_NONBLOCK)
+    fcntl.ioctl(fd, UI_SET_EVBIT, EV_KEY)
+    for code in (BTN_SOUTH, BTN_DPAD_DOWN):
+        fcntl.ioctl(fd, UI_SET_KEYBIT, code)
+    name = ("ruya-test-pad-" + tag).encode().ljust(80, b"\0")
+    fcntl.ioctl(fd, UI_DEV_SETUP, struct.pack("HHHH80sI", 0x03, 0x1209, 0x0002, 1, name, 0))
+    fcntl.ioctl(fd, UI_DEV_CREATE)
+    return fd
+
+
+def send(fd, code, value):
+    os.write(fd, struct.pack("llHHi", 0, 0, EV_KEY, code, value))
+    os.write(fd, struct.pack("llHHi", 0, 0, EV_SYN, 0, 0))
+
+
+def nav_node():
+    for name_file in glob.glob("/sys/class/input/input*/name"):
+        with open(name_file) as f:
+            if f.read().strip() == "RuyaOS Navigation":
+                for ev in glob.glob(os.path.dirname(name_file) + "/event*"):
+                    return "/dev/input/" + os.path.basename(ev)
+    return None
+
+
+def down(nav, code):
+    buf = bytearray(96)
+    fcntl.ioctl(nav, EVIOCGKEY, buf)
+    return bool(buf[code // 8] & (1 << (code % 8)))
+
+
+def wait_for(nav, code, want, seconds):
+    end = time.time() + seconds
+    while time.time() < end:
+        if down(nav, code) == want:
+            return True
+        time.sleep(0.1)
+    return down(nav, code) == want
+
+
+def picked_up(nav, fd):
+    """The daemon rescans every 2 s and sees no state of a pad it opens late: press until it answers."""
+    for _ in range(25):
+        send(fd, BTN_DPAD_DOWN, 1)
+        if wait_for(nav, KEY_DOWN, True, 0.4):
+            send(fd, BTN_DPAD_DOWN, 0)
+            return wait_for(nav, KEY_DOWN, False, 2)
+        send(fd, BTN_DPAD_DOWN, 0)
+    return False
+
+
+try:
+    probe = os.open("/dev/uinput", os.O_WRONLY | os.O_NONBLOCK)
+    os.close(probe)
+except OSError as err:
+    say("UNVERIFIED", "no access to /dev/uinput as root (" + str(err) + "): the vanished-pad check did not run")
+    sys.exit(0)
+
+node = nav_node()
+if node is None:
+    say("FAIL", "no RuyaOS Navigation input device (ruya-inputd not running?)")
+    sys.exit(0)
+nav = os.open(node, os.O_RDONLY)
+
+# 1. A pad that vanishes while holding Down and Accept leaves neither key down.
+pad = make_pad("a")
+if not picked_up(nav, pad):
+    say("FAIL", "ruya-inputd did not take the virtual pad within 10 s")
+    sys.exit(0)
+send(pad, BTN_DPAD_DOWN, 1)
+send(pad, BTN_SOUTH, 1)
+if wait_for(nav, KEY_DOWN, True, 2) and wait_for(nav, KEY_ENTER, True, 2):
+    say("PASS", "a held d-pad Down and A press KEY_DOWN and KEY_ENTER")
+else:
+    say("FAIL", "holding Down and A did not press KEY_DOWN and KEY_ENTER")
+fcntl.ioctl(pad, UI_DEV_DESTROY)
+os.close(pad)
+if wait_for(nav, KEY_DOWN, False, 3) and wait_for(nav, KEY_ENTER, False, 3):
+    say("PASS", "the pad vanished while holding Down and A: KEY_DOWN and KEY_ENTER are up")
+else:
+    say("FAIL", "a vanished pad left a key down: KEY_DOWN=%s KEY_ENTER=%s" % (down(nav, KEY_DOWN), down(nav, KEY_ENTER)))
+
+# 2. Two pads hold Down; one lets go; the key stays down until the last one does.
+p1, p2 = make_pad("b"), make_pad("c")
+if not (picked_up(nav, p1) and picked_up(nav, p2)):
+    say("FAIL", "ruya-inputd did not take both virtual pads")
+    sys.exit(0)
+send(p1, BTN_DPAD_DOWN, 1)
+send(p2, BTN_DPAD_DOWN, 1)
+time.sleep(0.5)
+send(p2, BTN_DPAD_DOWN, 0)
+time.sleep(1)
+if down(nav, KEY_DOWN):
+    say("PASS", "pad 2 let go of Down while pad 1 holds it: KEY_DOWN stays down")
+else:
+    say("FAIL", "pad 2 releasing Down released it for pad 1 too")
+send(p1, BTN_DPAD_DOWN, 0)
+if wait_for(nav, KEY_DOWN, False, 2):
+    say("PASS", "pad 1 let go: KEY_DOWN is up")
+else:
+    say("FAIL", "KEY_DOWN stayed down after both pads let go")
+for fd in (p1, p2):
+    fcntl.ioctl(fd, UI_DEV_DESTROY)
+    os.close(fd)
+'
+
+inputd_check() {
+    echo "--- ruya-inputd (T-337): a vanished pad releases its keys, two pads share a key"
+    if systemctl is-active ruya-inputd >/dev/null; then ok "ruya-inputd is active"; else bad "ruya-inputd not active"; return; fi
+    local line out
+    out="$(python3 -c "$inputd_py" 2>&1)"
+    while IFS= read -r line; do
+        case "$line" in
+        PASS:*) ok "${line#PASS: }" ;;
+        FAIL:*) bad "${line#FAIL: }" ;;
+        UNVERIFIED:*) echo "$line" ;;
+        *) echo "$line"; bad "inputd check printed an unexpected line (traceback?)" ;;
+        esac
+    done <<<"$out"
+    case "$out" in *UNVERIFIED:*) return ;; esac
+    if journalctl -u ruya-inputd --no-pager -n 40 2>/dev/null | grep -q 'gone: .*; released'; then
+        ok "ruya-inputd logged the vanished pad and what it released"
+    else
+        bad "no 'gone: ...; released ...' line in the ruya-inputd journal"
+    fi
+}
+
 # scripts/lint-vm-checks.ps1 sources this file with the variable set to run its helpers on canned data.
 if [ "${VM_CHECK_LIB_ONLY:-0}" = 1 ]; then return 0 2>/dev/null || exit 0; fi
 
@@ -905,6 +1058,9 @@ thermal)
     ;;
 thermal-fake)
     thermal_fake_check
+    ;;
+inputd)
+    inputd_check
     ;;
 time)
     time_check
