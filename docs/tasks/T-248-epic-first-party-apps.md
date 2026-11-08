@@ -1,6 +1,6 @@
 # T-248 — EPIC: first-party RuyaOS apps (and the platform they need)
 
-Status: blocked · Phase: 7 · Depends: — · Area: docs, shell, services, samples · Size: epic (not a build task; nobody implements it directly) · Owner: lead
+Status: blocked · Phase: 7 · Depends: — · Area: docs, shell, services, samples · Size: epic (not a build task; nobody implements it directly) · Owner: lead · Developer surface: none
 
 **Blocked on owner decisions** (see "Owner-level decisions"): the app platform ADR (T-250) and the browser scope (T-258) are Proposed, and the owner picks which apps come first. The foundations (the HIG, the platform spike) can start earlier: they are a document and a spike.
 
@@ -22,6 +22,9 @@ RuyaOS gets apps that we develop ourselves, **distributed separately** (their ow
 | 4 | T-257 | Jellyfin client (login by text input, direct play) | yes (mock server) |
 | 4 | T-259 | Emulator frontend (launches separately installed emulator Flatpaks; no ROMs, no BIOS) | yes |
 | 5 | T-258 [lead] | Browser: Proposed ADR-016 (engine, cursor-by-controller mode, scope), then the build | owner decision first |
+
+## Dogfooding rule (ADR-022)
+A first-party app uses **only the public surface** of `docs/developers/api-surface.md`: the Platform API, the data formats and the freedesktop portals the runtime ships, never a private RuyaOS service, a shell-only bus name or an extra Flatpak permission a third party could not get. If an app needs more, that is an Inbox line proposing the capability (the lead places it inside the approved list or writes a Proposed ADR), not a back door. The apps are the cheapest proof that the developer guide is enough; every child task carries this rule in its Hints.
 
 ## Overlap and dependencies with the other plans
 - **`.play` packages (T-228..T-244):** a `.play` is how a *game* is packaged; first-party apps are ordinary Flatpaks from the `ruyaos` remote. They share the Store, the permission vocabulary and the HIG. T-259 must not duplicate T-239 and T-244 (runners): the frontend launches emulators that are separate Flatpaks or `.play` packages and never bundles one.

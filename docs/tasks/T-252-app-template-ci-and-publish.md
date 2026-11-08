@@ -1,6 +1,6 @@
 # T-252 — App template, CI recipe and publishing to the Store
 
-Status: todo · Phase: 7 · Depends: T-250, T-251, T-214 · Area: samples, ci, docs · Size: M · Owner: builder
+Status: todo · Phase: 7 · Depends: T-250, T-251, T-214 · Area: samples, ci, docs · Size: M · Owner: builder · Developer surface: public-format
 
 ## Goal
 Anyone, and every first-party app of T-248, starts from one template that builds, themes itself like the shell, follows the HIG and ends as a signed Flatpak on a Store remote. Base: `samples/hello-game` and the guide's `publishing.md`. Part of T-248.
@@ -22,6 +22,9 @@ Anyone, and every first-party app of T-248, starts from one template that builds
 - [ ] The CI workflow lints (act or a dry run on the host; the first real run is a lead run on GitHub) and contains no secret.
 - [ ] VM (lead run): the built Flatpak installs through `ruya-store` from a local repository, launches for a profile (needs T-164 for a window) and shows the themed first screen.
 - [ ] `lint-dev-docs.ps1` and `.\scripts\dev.ps1 test` pass.
+
+## Hints
+- Developer surface (ADR-022, `docs/developers/api-surface.md`): the template is the sample for every public capability; it may use only the public surface and declares `x-ruya-min-api-level` (T-351).
 
 ## Outcome
 _Filled in by the implementer. First line: `Verified: host | vm | unverified`._

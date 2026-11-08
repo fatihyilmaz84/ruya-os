@@ -1,6 +1,6 @@
 # T-256 — First-party app: File manager
 
-Status: todo · Phase: 7 · Depends: T-251, T-252 · Area: apps · Size: M · Owner: builder
+Status: todo · Phase: 7 · Depends: T-251, T-252 · Area: apps · Size: M · Owner: builder · Developer surface: none
 
 ## Goal
 A controller-first file manager: browse the console's storage and USB drives, copy, move, rename, delete, see free space, safely. It also provides the folder-browser component that the picture viewer and the media player reuse. Part of T-248; its own Flatpak (`org.ruyaos.Files`).
@@ -24,6 +24,9 @@ A controller-first file manager: browse the console's storage and USB drives, co
 - [ ] No code path executes or auto-opens a file from a drive (a test greps the app for launch calls and asserts the handler list is the allowed set).
 - [ ] Screenshots (English and Turkish) against `04` §8 and the HIG checklist.
 - [ ] Builds as a Flatpak from the template; VM (lead run): copy a file to and from a real mounted stick and eject it. `.\scripts\dev.ps1 test` green.
+
+## Hints
+- Developer surface (ADR-022, `docs/developers/api-surface.md`): none. Dogfooding rule: this app may use only the public surface; if it needs something else, add an Inbox line proposing the capability, do not use a private service.
 
 ## Outcome
 _Filled in by the implementer. First line: `Verified: host | vm | unverified`._

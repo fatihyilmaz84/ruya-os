@@ -1,6 +1,6 @@
 # T-259 — First-party app: Emulator frontend
 
-Status: todo · Phase: 7 · Depends: T-251, T-252, T-256 · Area: apps · Size: M · Owner: builder
+Status: todo · Phase: 7 · Depends: T-251, T-252, T-256 · Area: apps · Size: M · Owner: builder · Developer surface: none
 
 ## Goal
 A launcher for retro games that the player owns: it finds game files on storage and USB drives, matches them to an installed emulator, shows them with art, and starts them. **RuyaOS and this app ship no emulators, no ROMs, no BIOS or firmware, and link to none** (owner, 2026-11-06; `05-play-packages.md`): emulators are separate Flatpaks (or `.play` packages) that the user installs. Part of T-248; its own Flatpak (`org.ruyaos.Retro`).
@@ -24,6 +24,9 @@ A launcher for retro games that the player owns: it finds game files on storage 
 - [ ] The app contains no emulator binary, no ROM, no BIOS (a check in the build lists the Flatpak's files against an allow-list).
 - [ ] Screenshots (English and Turkish) against `04` §8 and the HIG checklist.
 - [ ] Builds as a Flatpak from the template; VM (lead run, needs T-164 for windows): launches an installed emulator test app with a dummy file. `.\scripts\dev.ps1 test` green.
+
+## Hints
+- Developer surface (ADR-022, `docs/developers/api-surface.md`): none. Dogfooding rule: this app may use only the public surface; if it needs something else, add an Inbox line proposing the capability, do not use a private service. It reads ROM roots and paths through the hub (ADR-020) only via `Platform1`.
 
 ## Outcome
 _Filled in by the implementer. First line: `Verified: host | vm | unverified`._

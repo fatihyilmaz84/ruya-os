@@ -1,6 +1,6 @@
 # T-318 — Retro unlock moment and presence: the console toast for emulator unlocks, the report event, the polling fallback
 
-Status: todo · Phase: 5 · Depends: T-317, T-246, T-245, T-306 · Area: services, shell · Size: M · Owner: lead
+Status: todo · Phase: 5 · Depends: T-317, T-246, T-245, T-306 · Area: services, shell · Size: M · Owner: lead · Developer surface: internal
 
 ## Goal
 When an emulator unlocks a RetroAchievement, the console shows its own "Achievement unlocked" moment (the T-246 toast: name, badge, points, the RetroAchievements credit), kept in the notification centre, without a second toast war with the emulator, and the Library's "now playing" line can show the game's rich-presence text. Part of epic T-314.

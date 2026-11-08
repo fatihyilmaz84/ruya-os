@@ -1,6 +1,6 @@
 # T-243 — Developer guide chapter and two sample packages
 
-Status: todo · Phase: 7 · Depends: T-233 · Area: docs, samples · Size: M · Owner: builder
+Status: todo · Phase: 7 · Depends: T-233 · Area: docs, samples · Size: M · Owner: builder · Developer surface: public-format
 
 ## Goal
 An outside developer can package a game as a `.play`, sign it, test it on a console and understand the security rules, from the guide and two working samples alone.

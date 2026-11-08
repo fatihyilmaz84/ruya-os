@@ -1,6 +1,6 @@
 # T-275 — `ruya-session`: per-app freeze/thaw and an atomic `Switch`
 
-Status: todo · Phase: 3 · Depends: T-273, T-274, T-165 · Area: api, services, shell · Size: M · Owner: builder
+Status: todo · Phase: 3 · Depends: T-273, T-274, T-165 · Area: api, services, shell · Size: M · Owner: builder · Developer surface: internal
 
 ## Goal
 The session service knows which app is in front and which are in the background, can freeze and thaw one app, and switches the foreground in one call so the shell never shows two apps running or a frozen app in front. Part of epic T-273.

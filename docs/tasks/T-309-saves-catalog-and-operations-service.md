@@ -1,6 +1,6 @@
 # T-309 — Saves manager, service: a catalog of saves per game and safe operations (copy, move, delete, export, import)
 
-Status: todo · Phase: 5 · Depends: T-215, T-302, T-304 · Area: api, services · Size: M · Owner: lead
+Status: todo · Phase: 5 · Depends: T-215, T-302, T-304 · Area: api, services · Size: M · Owner: lead · Developer surface: internal
 
 ## Goal
 The OS knows, per profile, which save files, save states and configs belong to which game and app (kind, size, time, optional thumbnail and label), and can copy, move, delete, export and import them safely: never while the app runs, never losing data on a power cut, with undo for deletes. Backup of whole apps is T-215; this is the item-level layer (a single slot, a single game) that both the shell and external emulators use. Owner request, 2026-11-08: "a saves management tool, for managing save games (copy, delete, move, etc...), also for those external emulators since they can integrate those".

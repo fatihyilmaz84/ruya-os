@@ -1,6 +1,6 @@
 # T-264 — Controller registry and player slots: contract, `ruya-inputd` service, mock, client
 
-Status: todo · Phase: 2 · Depends: T-263 · Area: api, services, shell · Size: M · Owner: builder
+Status: todo · Phase: 2 · Depends: T-263 · Area: api, services, shell · Size: M · Owner: builder · Developer surface: internal
 
 ## Goal
 The system knows which pad is which player: a registry of known pads and the slot assignment (slot → profile or Guest) for the active session, exposed over D-Bus with the shell client and a mock. Part of epic ADR-017 (T-263).

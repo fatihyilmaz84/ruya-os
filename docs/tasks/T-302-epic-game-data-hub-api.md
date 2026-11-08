@@ -1,6 +1,6 @@
 # T-302 — EPIC: the game data hub (ROM folders, save and capture paths, now-playing metadata) as an OS API
 
-Status: todo · Phase: 5 · Depends: — · Area: docs · Size: M · Owner: lead
+Status: todo · Phase: 5 · Depends: — · Area: docs · Size: M · Owner: lead · Developer surface: public-API
 
 ## Goal
 RuyaOS becomes the hub between game apps: an emulator asks the OS where the SNES ROMs are, where to put saves, states, configs, screenshots and recordings; the OS in turn learns from the app what is being played (game, emulator, core, settings, state) and exposes it to the shell and to other apps that are allowed to see it. Owner request, 2026-11-07: "an os level api for rom management ... where it can find roms for SNES, where it should save save states, saves, configs, screenshots, screen recordings ... the os can ask the app for metadata ... who was playing, which emulator, which settings ... use Ruya also as a hub between apps that can use this data".
@@ -33,6 +33,9 @@ Write the spec (03 new section "Game data hub", 02 captures and Library display)
 
 ## Acceptance criteria
 - [ ] The spec sections exist and agree with ADR-020 and the children; `.\scripts\dev.ps1 docs` green.
+
+## Hints
+- Developer surface (ADR-022, `docs/developers/api-surface.md`): the hub's app-facing calls become an interface of `Platform1` (T-352), `Hub1` stays an internal service. Each child that is public carries the DoD of `api-surface.md`; T-308 owns the chapter and the sample.
 
 ## Outcome
 _Filled in by the implementer. First line: `Verified: host`._

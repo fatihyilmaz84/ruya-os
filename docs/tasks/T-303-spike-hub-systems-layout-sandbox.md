@@ -1,6 +1,6 @@
 # T-303 — Spike and spec: system ids, ROM and capture layout, and how a sandboxed app reaches the hub
 
-Status: todo · Phase: 5 · Depends: T-302 · Area: services, docs, image · Size: M · Owner: lead
+Status: todo · Phase: 5 · Depends: T-302 · Area: services, docs, image · Size: M · Owner: lead · Developer surface: internal
 
 ## Goal
 Decide, with a working prototype, the three things the rest of epic T-302 stands on: the standard system list and folder layout, how a Flatpak app gets read/write access to those folders, and how it talks to the hub. Part of T-302.

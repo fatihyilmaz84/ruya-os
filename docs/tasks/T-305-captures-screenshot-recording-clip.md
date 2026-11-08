@@ -1,6 +1,6 @@
 # T-305 — Captures: screenshots, recordings and "clip the last seconds" by the OS, for any app
 
-Status: todo · Phase: 5 · Depends: T-302, T-304, T-164 · Area: shell, services · Size: M · Owner: lead
+Status: todo · Phase: 5 · Depends: T-302, T-304, T-164 · Area: shell, services · Size: M · Owner: lead · Developer surface: public-API
 
 ## Goal
 The player presses a button (or picks it in the Guide menu) and gets a screenshot or a recording of whatever is in front, with the game name, time and profile attached, in one Captures library. No app needs code for this: the shell is the compositor. Part of epic T-302.
@@ -22,6 +22,9 @@ The player presses a button (or picks it in the Guide menu) and gets a screensho
 - [ ] Tests: the capture writes PNG + sidecar with the right fields, names are safe (no path separators from a game title), the quick menu is not in the picture, limit/cleanup rules, reduced motion toast; screenshots of the Captures page; UX note.
 - [ ] VM (lead run) a screenshot of a running sample app; Dell (hw): frame-time cost of a capture and, if built, of recording.
 - [ ] `.\scripts\dev.ps1 test` and `shots` ALL GREEN.
+
+## Hints
+- Developer surface (ADR-022, `docs/developers/api-surface.md`): other apps read captures only with a per-app permission, off by default. Missing: a paragraph for developers, a conformance test (permission off, another profile).
 
 ## Outcome
 _Filled in by the implementer. First line: `Verified: host (hw pending: …)`._

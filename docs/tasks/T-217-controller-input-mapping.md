@@ -1,6 +1,6 @@
 # T-217 — Controller input mapping: InputPlumber, button test, player numbers, remapping
 
-Status: todo · Phase: 3 · Depends: — · Area: image, services, shell · Size: M · Owner: lead
+Status: todo · Phase: 3 · Depends: — · Area: image, services, shell · Size: M · Owner: lead · Developer surface: public-API
 
 ## Goal
 Controllers behave the same in every game and the player can see and adjust how: the console presents every pad to apps as a standard virtual gamepad, shows each connected controller with its battery and player number, has a button test, and lets the player swap A/B, adjust dead zones and, in a second step, remap buttons. Owner request, 2026-11-06 ("input mapping"). Today `ruya-inputd` (a stopgap, ADR-003) turns pad events into navigation keys for the shell and does not grab devices; games read the raw devices.
@@ -28,6 +28,9 @@ Controllers behave the same in every game and the player can see and adjust how:
 
 ## Docs to update
 - ADR-003 status in `00-overview.md`, `01-platform.md`/`02-shell.md` (input), `03` (the controller paragraphs), `docs/developers/` (the controller input chapter, T-214: what apps receive), `docs/dev-setup.md`, B-006 in `STATUS.md`.
+
+## Hints
+- Developer surface (ADR-022, `docs/developers/api-surface.md`): the standard virtual gamepad is what every app sees. Missing: update `docs/developers/controller-input.md` (button map, dead zones as the app sees them), a sample, a conformance check; rumble pass-through is unplanned.
 
 ## Outcome
 _Filled in by the implementer. First line: `Verified: host | vm | unverified | hw`. Then: what was built, files, deviations, follow-ups._

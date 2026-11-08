@@ -1,6 +1,6 @@
 # T-254 — First-party app: Weather
 
-Status: todo · Phase: 7 · Depends: T-251, T-252 · Area: apps · Size: M · Owner: builder
+Status: todo · Phase: 7 · Depends: T-251, T-252 · Area: apps · Size: M · Owner: builder · Developer surface: none
 
 ## Goal
 A glanceable weather app for the living room: the current conditions and the next days for a few saved places, in the Dreamglass look, with no account and no tracking. Part of T-248; its own Flatpak (`org.ruyaos.Weather`).
@@ -23,6 +23,9 @@ A glanceable weather app for the living room: the current conditions and the nex
 - [ ] Screenshots (English and Turkish) against `04` §8 and the HIG checklist.
 - [ ] Builds as a Flatpak from the template; VM (lead run): it fetches a real forecast through the guest's network.
 - [ ] `.\scripts\dev.ps1 test` green.
+
+## Hints
+- Developer surface (ADR-022, `docs/developers/api-surface.md`): none. Dogfooding rule: this app may use only the public surface; if it needs something else, add an Inbox line proposing the capability, do not use a private service.
 
 ## Outcome
 _Filled in by the implementer. First line: `Verified: host | vm | unverified`._

@@ -1,6 +1,6 @@
 # T-308 — Hub developer guide, sample app, and per-app permissions for reading hub data
 
-Status: todo · Phase: 5 · Depends: T-302, T-304, T-306, T-220 · Area: docs, services, shell · Size: M · Owner: builder
+Status: todo · Phase: 5 · Depends: T-302, T-304, T-306, T-220 · Area: docs, services, shell · Size: M · Owner: builder · Developer surface: public-API
 
 ## Goal
 App and emulator authors can use the hub from a guide and a working sample, and the player decides which apps may read what other apps are playing and the Captures library. Part of epic T-302.
@@ -21,6 +21,9 @@ App and emulator authors can use the hub from a guide and a working sample, and 
 - [ ] `dev.ps1 docs` green (dev-docs lint runs the chapter's code blocks as written); Rust tests for the permission checks (default deny, grant, revoke, unknown app); `tst_*.qml` for the ask modal (focus, Back = deny) and the Settings rows; screenshots; UX note.
 - [ ] VM (lead run): the sample works sandboxed; a second app is denied until granted.
 - [ ] `.\scripts\dev.ps1 test` ALL GREEN.
+
+## Hints
+- Developer surface (ADR-022, `docs/developers/api-surface.md`): this is the chapter and sample task of the hub; use the T-353 harness for the mock and the conformance runner, and add `ruya-api-reviewer` to the review.
 
 ## Outcome
 _Filled in by the implementer. First line: `Verified: host (vm pending: …)`._

@@ -1,6 +1,6 @@
 # T-306 — Now playing: apps report what is being played; the OS shows and shares it
 
-Status: todo · Phase: 5 · Depends: T-302, T-304, T-247 · Area: api, services, shell · Size: M · Owner: builder
+Status: todo · Phase: 5 · Depends: T-302, T-304, T-247 · Area: api, services, shell · Size: M · Owner: builder · Developer surface: public-API
 
 ## Goal
 An emulator (or any game) tells the OS, in one small call, what is running: which game, system, emulator and core, a summary of the settings, and a state ("playing", "menu", "paused"). The shell shows it on the Library game page and in the Activity page, the play ledger (T-247) keys time to the game id, and permitted apps can read it. Part of epic T-302.
@@ -21,6 +21,9 @@ An emulator (or any game) tells the OS, in one small call, what is running: whic
 - [ ] Rust tests: key validation, caps and truncation, rate limit, hostile strings, instance end clears the record, other profile cannot read; mock/client tests; `tst_*.qml` for the game page lines (empty state when nothing reported).
 - [ ] VM (lead run): the sample app reports; the record shows in `busctl`; dropped on stop.
 - [ ] `.\scripts\dev.ps1 test` and `shots` ALL GREEN; `UX notes:` line.
+
+## Hints
+- Developer surface (ADR-022, `docs/developers/api-surface.md`): the app-facing `Report` is a public call. Missing: a rich-presence sample, a chapter paragraph, mock support, abuse tests (rate, size) in a conformance test; it plugs into `Platform1` (T-352).
 
 ## Outcome
 _Filled in by the implementer. First line: `Verified: host (vm pending: …)`._

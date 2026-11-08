@@ -1,6 +1,6 @@
 # T-147 — Full-screen apps: launch splash, quick menu, return and close
 
-Status: todo · Phase: 3 · Depends: T-138, T-146, T-164 · Area: shell · Size: M
+Status: todo · Phase: 3 · Depends: T-138, T-146, T-164 · Area: shell · Size: M · Developer surface: internal
 
 ## Goal
 Pressing Play starts the game full screen with a short art-led launch; Guide brings up the quick menu over the running game; Home and Close work as on a console. Owner decision 2026-10-28 (ADR-012 amendment).

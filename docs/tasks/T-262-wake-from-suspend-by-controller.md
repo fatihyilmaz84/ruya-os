@@ -1,6 +1,6 @@
 # T-262 — Wake from suspend with a controller
 
-Status: todo · Phase: 3 · Depends: T-166, T-202, T-203 · Area: services, shell (the mechanism is done, see below) · Size: M · Owner: builder
+Status: todo · Phase: 3 · Depends: T-166, T-202, T-203 · Area: services, shell (the mechanism is done, see below) · Size: M · Owner: builder · Developer surface: internal
 
 ## Goal
 When the console is asleep, pressing the PS or Xbox button of a paired controller (or a key on a USB pad or keyboard) wakes it, where the hardware allows, and the UI is honest where it does not. Owner request, 2026-11-07 (controller onboarding, "ideally"). It needs suspend itself (T-166: under eglfs, in the VM and on the Dell), the sleep timeout (T-202) and the pairing/reconnect work (T-203). Real hardware only for the final check: mark `hw`.

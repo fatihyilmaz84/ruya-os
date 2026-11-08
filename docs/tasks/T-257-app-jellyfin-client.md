@@ -1,6 +1,6 @@
 # T-257 — First-party app: Jellyfin client
 
-Status: todo · Phase: 7 · Depends: T-251, T-252, T-255 · Area: apps · Size: M · Owner: builder
+Status: todo · Phase: 7 · Depends: T-251, T-252, T-255 · Area: apps · Size: M · Owner: builder · Developer surface: none
 
 ## Goal
 Watch and listen to a Jellyfin server (the owner's own, on the home network) from the couch: sign in, browse libraries, play with direct play first. Part of T-248; its own Flatpak (`org.ruyaos.Jellyfin`). Jellyfin is a separate app from the media player (T-255) and shares its playback component.
@@ -23,6 +23,9 @@ Watch and listen to a Jellyfin server (the owner's own, on the home network) fro
 - [ ] A hostile server answer (huge JSON, wrong types, a redirect to another host) is handled without a crash and without leaking the token to another host.
 - [ ] Screenshots (English and Turkish) against `04` §8 and the HIG checklist.
 - [ ] Builds as a Flatpak from the template; VM or hardware (lead run, needs a Jellyfin server): sign in and direct-play one file. `.\scripts\dev.ps1 test` green.
+
+## Hints
+- Developer surface (ADR-022, `docs/developers/api-surface.md`): none. Dogfooding rule: this app may use only the public surface; if it needs something else, add an Inbox line proposing the capability, do not use a private service.
 
 ## Outcome
 _Filled in by the implementer. First line: `Verified: host | vm | unverified`._

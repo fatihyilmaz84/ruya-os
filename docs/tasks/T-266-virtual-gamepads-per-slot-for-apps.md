@@ -1,6 +1,6 @@
 # T-266 — Ordered virtual gamepads per slot for apps (physical pads hidden)
 
-Status: todo · Phase: 2 · Depends: T-264, T-217 · Area: services, image · Size: M · Owner: lead
+Status: todo · Phase: 2 · Depends: T-264, T-217 · Area: services, image · Size: M · Owner: lead · Developer surface: public-API
 
 ## Goal
 A game sees player 1, 2, ... in exactly the order the owner assigned: `ruya-inputd` creates one virtual gamepad (uinput) per slot and hides the physical pads from apps (Steam-Input style), so slot order, remapping and per-profile mapping work. Part of epic ADR-017 (T-263).
@@ -25,6 +25,9 @@ A game sees player 1, 2, ... in exactly the order the owner assigned: `ruya-inpu
 
 ## Docs to update
 - `03-services-and-apps.md`, developer guide, `image/CLAUDE.md` if a quirk is found.
+
+## Hints
+- Developer surface (ADR-022, `docs/developers/api-surface.md`): apps see ordered virtual gamepads (an evdev surface, no D-Bus half). Missing: update `docs/developers/controller-input.md`, a sample that reads pad order, a conformance check in the VM script. Player slot, rumble and battery for apps are unplanned until ADR-022 is accepted.
 
 ## Outcome
 _Filled in by the implementer. First line: `Verified: host (vm pending: …) | vm | hw`._

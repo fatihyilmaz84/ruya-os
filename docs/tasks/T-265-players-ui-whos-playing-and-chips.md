@@ -1,6 +1,6 @@
 # T-265 — Players UI: "Who's playing?" dialog, player chips, Settings > Players
 
-Status: todo · Phase: 2 · Depends: T-264, T-223 · Area: shell · Size: M · Owner: builder
+Status: todo · Phase: 2 · Depends: T-264, T-223 · Area: shell · Size: M · Owner: builder · Developer surface: none
 
 ## Goal
 A second person can pick up a pad and join: a non-blocking "Who's playing?" dialog on that pad (profile list, Guest, Skip), player chips (P1/P2 + avatar) in the top-right cluster, a disconnect toast, and a Settings page to manage slots. Part of epic ADR-017 (T-263).

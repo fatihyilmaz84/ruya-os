@@ -1,6 +1,6 @@
 # T-314 — EPIC: retro achievements (RetroAchievements) for emulated games
 
-Status: todo · Phase: 5 · Depends: — · Area: docs · Size: M · Owner: lead
+Status: todo · Phase: 5 · Depends: — · Area: docs · Size: M · Owner: lead · Developer surface: internal
 
 ## Goal
 A player who plays retro games through an emulator earns, sees and keeps RetroAchievements (retroachievements.org) the same way as the console's own achievements (T-246): one account link per profile in Settings, the emulator logged in without typing a password on a TV, the unlock moment shown by the console, progress and completion in the Library and on the profile page. Owner request, 2026-11-08: "there is an epic for retro rom support, lets also think about retro achievement support." Builds on the game data hub (T-302) and the native achievements (T-246).

@@ -1,6 +1,6 @@
 # T-304 — `Hub1`: contract, `ruya-hub` service, mock and client (ROM roots, paths, game identity, players)
 
-Status: todo · Phase: 5 · Depends: T-302, T-303 · Area: api, services, shell · Size: M · Owner: builder
+Status: todo · Phase: 5 · Depends: T-302, T-303 · Area: api, services, shell · Size: M · Owner: builder · Developer surface: public-API
 
 ## Goal
 A system service answers, per profile and for sandboxed callers, where ROMs live, where saves/states/config/captures go, what a file is (stable game id), and who is playing. Part of epic T-302.
@@ -23,6 +23,9 @@ A system service answers, per profile and for sandboxed callers, where ROMs live
 
 ## Docs to update
 - the XML, 03 (game data hub), `docs/developers/saves-and-data.md`.
+
+## Hints
+- Developer surface (ADR-022, `docs/developers/api-surface.md`): `Hub1` must not be reachable from a sandbox directly; expose its app-facing part through `Platform1` (T-352) after ADR-022. Missing: stability tags in the XML, mock for developers, conformance test (T-308 has the chapter and sample).
 
 ## Outcome
 _Filled in by the implementer. First line: `Verified: host (vm pending: …)`._

@@ -1,6 +1,6 @@
 # T-246 — Achievements: a console API for games, a per-profile service, and the unlock moment
 
-Status: todo · Phase: 2 · Depends: T-245, T-164 · Area: api, services, shell, docs · Size: M · Owner: lead
+Status: todo · Phase: 2 · Depends: T-245, T-164 · Area: api, services, shell, docs · Size: M · Owner: lead · Developer surface: public-API
 
 ## Goal
 Games can award achievements; players see them per profile, with progress and a score; the console shows a clear "Achievement unlocked" moment (owner request, 2026-11-07). Today apps have no console API and Steam's achievements live inside Steam only. New service, app-facing API and design: owner: lead. Dependencies: T-245 (the profile-bus bridge and the notification kind: **one bridge for both**) and T-164 (apps must run for the real end-to-end test; the code and mock tests do not need it).
@@ -29,6 +29,9 @@ Games can award achievements; players see them per profile, with progress and a 
 
 ## Docs to update
 - `03` (service and portal), `05` §4 (the manifest key), `02`, the XML, `docs/developers/`, `dev-setup.md`.
+
+## Hints
+- Developer surface (ADR-022, `docs/developers/api-surface.md`): its own portal `org.ruyaos.portal.Achievements` and `Achievements1` are re-seated behind `Platform1` (T-352) once ADR-022 is accepted. Missing: mock support for off-device tests, a conformance test with abuse cases, the stability tags in the XML.
 
 ## Outcome
 _Filled in by the implementer. First line: `Verified: host | vm | unverified | hw`. Then: what was built, files, deviations, follow-ups._
