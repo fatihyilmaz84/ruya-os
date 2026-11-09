@@ -36,6 +36,7 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | [T-217](tasks/T-217-controller-input-mapping.md) | **[lead]** Controller mapping (InputPlumber, B-006) | todo | — |
 | [T-218](tasks/T-218-hdr-feasibility-spike.md) | **[lead]** HDR feasibility spike | todo | — |
 | [T-219](tasks/T-219-audio-formats-and-surround.md) | **[lead]** Audio formats and surround, passthrough | todo | — |
+| [T-357](tasks/T-357-headphone-virtual-surround-hrtf.md) | **[lead]** Headphone virtual surround: a licence-clean HRTF through PipeWire (owner pointer: HRTF Database) | todo | T-322 |
 | [T-220](tasks/T-220-privacy-settings.md) | Privacy settings and per-app permissions | todo | — |
 | [T-221](tasks/T-221-app-management.md) | App management: sizes, update, remove, bulk | todo | — |
 | [T-222](tasks/T-222-refresh-rate-matching-and-vrr.md) | **[lead]** Refresh-rate matching and VRR | todo | T-198 |
