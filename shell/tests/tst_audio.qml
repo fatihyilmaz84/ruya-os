@@ -46,6 +46,7 @@ Item {
         }
 
         function cleanup() {
+            DeviceSettings.language = "en"
             Notifications.durationMs = Theme.toastMs
             clearToasts()
         }
@@ -97,12 +98,12 @@ Item {
             verify(Audio.mockPlug("usb-headset"))
             tryCompare(Audio, "defaultSink", "usb-headset")
             compare(Audio.defaultSinkName, "USB headset")
-            tryVerify(() => tc.toastTexts().includes("Audio output: USB headset"), 2000, "a toast names the output")
+            tryVerify(() => tc.toastTexts().includes("Sound moved to USB headset"), 2000, "a toast names the output")
             compare(Audio.sinks.length, 3)
 
             verify(Audio.mockPlug("bt-headphones"))     // the most recent headset wins
             tryCompare(Audio, "defaultSink", "bt-headphones")
-            tryVerify(() => tc.toastTexts().includes("Audio output: BT headphones"))
+            tryVerify(() => tc.toastTexts().includes("Sound moved to BT headphones"))
 
             Audio.mockUnplug("usb-headset")             // not the default: nothing changes
             tryVerify(() => Audio.sinks.length === 3)
@@ -110,7 +111,7 @@ Item {
 
             Audio.mockUnplug("bt-headphones")           // the default left: back to HDMI
             tryCompare(Audio, "defaultSink", "hdmi-0")
-            tryVerify(() => tc.toastTexts().includes("Audio output: TV (HDMI)"))
+            tryVerify(() => tc.toastTexts().includes("Sound moved to TV (HDMI)"))
             compare(Audio.sinks.length, 2)
             verify(!Audio.mockPlug("no-such-device"))
         }
@@ -176,19 +177,107 @@ Item {
 
         Component { id: spyComponent; SignalSpy {} }
 
+        function focusedOutputRow(id) {
+            for (let i = 0; i < 6 && !find("sink_" + id).activeFocus; ++i)
+                keyClick(Qt.Key_Down)
+            verify(find("sink_" + id).activeFocus, "focus reached " + id)
+        }
+
+        function test_output_list_marks_the_current_one() {
+            openAudioPane()
+            compare(find("sink_hdmi-0").value, "Current")
+            compare(find("sink_analog-0").value, "")
+            compare(find("sink_hdmi-0").iconName, "volume_up")
+            compare(find("sink_analog-0").iconName, "speaker")
+            compare(find("sink_headphones-0").iconName, "headphones")
+            verify(!find("sink_hdmi-0").dimmed)
+            Audio.setOutput("analog-0")
+            tryCompare(find("sink_analog-0"), "value", "Current")
+            compare(find("sink_hdmi-0").value, "")
+        }
+
+        function test_unavailable_output_is_greyed_with_its_reason_and_cannot_be_chosen() {
+            openAudioPane()
+            const row = find("sink_headphones-0")
+            verify(row.dimmed, "greyed")
+            compare(row.value, "Not connected")
+            verify(!find("sink_analog-0").dimmed)
+            const spy = createTemporaryObject(spyComponent, host, { target: Audio, signalName: "setOutputFinished" })
+            focusedOutputRow("headphones-0")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => tc.toastTexts().includes("Headphones: Not connected."), 2000, "the reason is said")
+            compare(spy.count, 0, "no SetOutput call")
+            compare(Audio.defaultSink, "hdmi-0")
+            verify(find("sink_headphones-0").activeFocus, "focus stays")
+        }
+
+        function test_choosing_an_output_calls_set_output_and_refreshes() {
+            openAudioPane()
+            const spy = createTemporaryObject(spyComponent, host, { target: Audio, signalName: "setOutputFinished" })
+            keyClick(Qt.Key_Down)
+            tryVerify(() => find("sink_analog-0").activeFocus)
+            keyClick(Qt.Key_Return)
+            tryCompare(spy, "count", 1)
+            compare(spy.signalArguments[0][0], "analog-0")
+            compare(spy.signalArguments[0][1], "ok")
+            tryCompare(find("sink_analog-0"), "value", "Current")
+            tryVerify(() => Audio.outputs.find(o => o.id === "analog-0").isSaved)
+            verify(find("sink_analog-0").activeFocus, "focus stays on the chosen output")
+        }
+
+        function test_test_sound_row_plays_on_the_focused_output_without_choosing_it() {
+            openAudioPane()
+            const spy = createTemporaryObject(spyComponent, host, { target: Audio, signalName: "testOutputFinished" })
+            const choose = createTemporaryObject(spyComponent, host, { target: Audio, signalName: "setOutputFinished" })
+            keyClick(Qt.Key_Down)                        // the speaker
+            tryVerify(() => find("sink_analog-0").activeFocus)
+            keyClick(Qt.Key_Down)                        // the empty jack
+            keyClick(Qt.Key_Down)                        // Test sound
+            tryVerify(() => find("rowTestSound").activeFocus)
+            tryCompare(find("rowTestSound"), "value", "Analog output")
+            keyClick(Qt.Key_Return)
+            tryCompare(spy, "count", 1)
+            compare(spy.signalArguments[0][0], "analog-0", "the empty jack on the way down is not the target")
+            compare(Audio.defaultSink, "hdmi-0", "the default is untouched")
+            compare(choose.count, 0)
+        }
+
+        function test_an_inactive_but_available_output_can_be_chosen() {
+            Audio.mockSetJackPlugged(true)
+            openAudioPane()
+            tryVerify(() => find("sink_headphones-0").value === "")
+            verify(!find("sink_headphones-0").dimmed, "not greyed: a plug is in, only its profile is not active")
+            const spy = createTemporaryObject(spyComponent, host, { target: Audio, signalName: "setOutputFinished" })
+            focusedOutputRow("headphones-0")
+            keyClick(Qt.Key_Return)
+            tryCompare(spy, "count", 1)
+            compare(spy.signalArguments[0][0], "headphones-0", "setOutput was called")
+            compare(spy.signalArguments[0][1], "inactive")
+            tryVerify(() => tc.toastTexts().includes("Could not switch the audio output."))
+            verify(!tc.toastTexts().includes("Headphones: Not connected."))
+        }
+
+        function test_moved_toast_when_the_default_changes() {
+            openAudioPane()
+            keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Return)
+            tryCompare(Audio, "defaultSink", "analog-0")
+            tryVerify(() => tc.toastTexts().includes("Sound moved to Analog output"), 2000, "the toast names the output")
+        }
+
         function test_select_output() {
             openAudioPane()
-            compare(find("sink_hdmi-0").value, "Default")
+            compare(find("sink_hdmi-0").value, "Current")
             compare(find("sink_analog-0").value, "")
 
             keyClick(Qt.Key_Down)
             tryVerify(() => find("sink_analog-0").activeFocus)
             keyClick(Qt.Key_Return)
             tryCompare(Audio, "defaultSink", "analog-0")
-            tryCompare(find("sink_analog-0"), "value", "Default")
+            tryCompare(find("sink_analog-0"), "value", "Current")
             compare(find("sink_hdmi-0").value, "")
             verify(find("sink_analog-0").activeFocus, "focus stays on the chosen output")
-            tryVerify(() => tc.toastTexts().includes("Audio output: Analog output"))
+            tryVerify(() => tc.toastTexts().includes("Sound moved to Analog output"))
         }
 
         function test_pane_follows_hotplug() {
@@ -196,7 +285,7 @@ Item {
             verify(find("sink_usb-headset") === null)
             Audio.mockPlug("usb-headset")
             tryVerify(() => find("sink_usb-headset") !== null, 2000, "a row appears")
-            compare(find("sink_usb-headset").value, "Default")
+            compare(find("sink_usb-headset").value, "Current")
             compare(find("sink_hdmi-0").value, "")
 
             keyClick(Qt.Key_Down)                       // rows: hdmi, analog, usb
@@ -204,7 +293,7 @@ Item {
             tryVerify(() => find("sink_usb-headset").activeFocus)
             Audio.mockUnplug("usb-headset")             // the focused row goes away
             tryVerify(() => find("sink_usb-headset") === null, 2000, "the row disappears")
-            tryVerify(() => find("sink_hdmi-0").value === "Default")
+            tryVerify(() => find("sink_hdmi-0").value === "Current")
             tryVerify(() => find("paneAudio").activeFocus, 2000, "focus stays in the pane")
             keyClick(Qt.Key_Down)                       // and the pane still navigates
             tryVerify(() => find("sink_analog-0").activeFocus || find("sink_hdmi-0").activeFocus)
@@ -213,7 +302,9 @@ Item {
         function test_sliders_and_mute_in_pane() {
             openAudioPane()
             keyClick(Qt.Key_Down)
-            keyClick(Qt.Key_Down)                       // master
+            keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Down)                       // master (after analog, the jack, Test sound)
             tryVerify(() => find("rowMaster").activeFocus)
             compare(find("rowMaster").value, 50)
             keyClick(Qt.Key_Right)
@@ -274,9 +365,8 @@ Item {
             Audio.setChannelVolume("ui", 100)
             tryCompare(Sfx.selectEffect, "volume", 1)
             openAudioPane()
-            keyClick(Qt.Key_Down)
-            keyClick(Qt.Key_Down)
-            keyClick(Qt.Key_Down)
+            for (let i = 0; i < 5; ++i)
+                keyClick(Qt.Key_Down)
             tryVerify(() => find("rowUiSounds").activeFocus)
             keyClick(Qt.Key_Left)
             keyClick(Qt.Key_Left)
@@ -378,11 +468,30 @@ Item {
             clearToasts()
             openAudioPane()
             tryCompare(find("volumeOsd"), "shown", false, 5000, "the OSD is not in the shot")
-            keyClick(Qt.Key_Down)
-            keyClick(Qt.Key_Down)
-            keyClick(Qt.Key_Down)
+            for (let i = 0; i < 3; ++i)                  // usb headset (current), the jack (greyed)
+                keyClick(Qt.Key_Down)
+            tryVerify(() => find("sink_headphones-0").activeFocus)
             wait(800)
             grabImage(tc.shell).save(shotsDir + "/22-settings-audio.png")
+            keyClick(Qt.Key_Down)                        // Test sound
+            tryVerify(() => find("rowTestSound").activeFocus)
+            wait(600)
+            grabImage(tc.shell).save(shotsDir + "/22-settings-audio-test.png")
+        }
+
+        function test_zz_screenshots_tr() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            DeviceSettings.language = "tr"
+            openAudioPane()
+            tryCompare(find("sink_headphones-0"), "value", "Bağlı değil")
+            tryCompare(find("sink_hdmi-0"), "value", "Geçerli")
+            focusedOutputRow("headphones-0")
+            keyClick(Qt.Key_Down)
+            tryVerify(() => find("rowTestSound").activeFocus)
+            tryCompare(find("volumeOsd"), "shown", false, 5000)
+            wait(800)
+            grabImage(tc.shell).save(shotsDir + "/22-settings-audio-tr.png")
         }
     }
 }

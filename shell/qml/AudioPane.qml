@@ -13,12 +13,12 @@ SettingsPane {
 
     property Item overlay      // where the confirmation of "Delete" is parented
 
-    // The output rows follow Audio.sinks by id (updated in place), so focus stays on a row
-    // when the list is re-published, e.g. after choosing an output.
+    // The output rows follow Audio.outputs by id (updated in place), so focus stays on a row
+    // when the list is re-published, e.g. after choosing an output (T-348).
     ListModel { id: sinkModel }
 
     function syncSinks() {
-        const list = Audio.sinks
+        const list = Audio.outputs
         for (let i = sinkModel.count - 1; i >= 0; --i) {
             const id = sinkModel.get(i).sinkId
             if (!list.some(s => s.id === id))
@@ -26,7 +26,8 @@ SettingsPane {
         }
         for (let i = 0; i < list.length; ++i) {
             const s = list[i]
-            const entry = { sinkId: s.id, sinkName: s.name, sinkDefault: s.isDefault }
+            const entry = { sinkId: s.id, sinkName: s.name, sinkKind: s.kind, sinkAvailable: s.available,
+                            sinkActive: s.active, sinkDefault: s.isDefault }
             let at = -1
             for (let j = 0; j < sinkModel.count; ++j) {
                 if (sinkModel.get(j).sinkId === s.id) {
@@ -43,6 +44,31 @@ SettingsPane {
             }
         }
         Qt.callLater(pane.settleFocus)   // the focused row may have been removed
+    }
+    // The icon of an output: a name from the bundled set (the kinds without a glyph of their own share the speaker's).
+    function outputIcon(kind) {
+        switch (kind) {
+        case "headphones": return "headphones"
+        case "bluetooth": return "bluetooth"
+        case "speaker": return "speaker"
+        }
+        return "volume_up"
+    }
+    // What the value of an output row says: "Not connected" when its route says so (the row is greyed and cannot be
+    // chosen), else "Current" for the default. An output on another card profile (no sink yet) is listed like any
+    // other: choosing it makes the service switch the profile (03 section 2.3).
+    function outputValue(available, isDefault) {
+        if (available === "no")
+            return qsTr("Not connected")
+        return isDefault ? qsTr("Current") : ""
+    }
+    // The output the Test sound row plays on: the last usable one (route not "no") whose row had focus, else the default.
+    property string focusedOutputId: ""
+    readonly property string testOutputId: pane.focusedOutputId.length > 0 && Audio.outputs.some(o => o.id === pane.focusedOutputId)
+                                           ? pane.focusedOutputId : Audio.defaultSink
+    readonly property string testOutputName: {
+        const o = Audio.outputs.find(e => e.id === pane.testOutputId)
+        return o ? o.name : ""
     }
     // The first output is where focus lands when the pane is first entered (the base pane
     // picks the first row it finds, which is a slider while the list is still empty).
@@ -164,11 +190,14 @@ SettingsPane {
     }
     Connections {
         target: Audio
-        function onSinksChanged() { pane.syncSinks() }
-        function onSetDefaultSinkFinished(id, status) {
-            if (status !== "ok") {
+        function onOutputsChanged() { pane.syncSinks() }
+        function onSetOutputFinished(id, status) {
+            if (status !== "ok")
                 Notifications.show(qsTr("Could not switch the audio output."), "warning")
-            }
+        }
+        function onTestOutputFinished(id, status) {
+            if (status !== "ok")
+                Notifications.show(qsTr("Could not play the test sound."), "warning")
         }
     }
 
@@ -178,13 +207,36 @@ SettingsPane {
         SettingRow {
             required property string sinkId
             required property string sinkName
+            required property string sinkKind
+            required property string sinkAvailable
+            required property bool sinkActive
             required property bool sinkDefault
             objectName: "sink_" + sinkId
             u: pane.u
             label: sinkName
-            value: sinkDefault ? qsTr("Default") : ""
-            onActivated: Audio.setDefaultSink(sinkId)
+            iconName: pane.outputIcon(sinkKind)
+            dimmed: sinkAvailable === "no"
+            value: pane.outputValue(sinkAvailable, sinkDefault)
+            onActiveFocusChanged: if (activeFocus && sinkAvailable !== "no") pane.focusedOutputId = sinkId
+            onActivated: {
+                if (sinkAvailable === "no")
+                    Notifications.show(qsTr("%1: %2.").arg(sinkName).arg(value), "warning")
+                else
+                    Audio.setOutput(sinkId)
+            }
         }
+    }
+
+    // Plays a short tone on the output whose row was focused last, without choosing it.
+    SettingRow {
+        id: testSound
+        objectName: "rowTestSound"
+        u: pane.u
+        visible: Audio.outputs.length > 0
+        label: qsTr("Test sound")
+        iconName: "volume_up"
+        value: pane.testOutputName
+        onActivated: Audio.testOutput(pane.testOutputId)
     }
 
     SliderRow {

@@ -17,6 +17,11 @@ FocusScope {
     property string iconName
     readonly property bool hasIcon: iconName !== "" && !hasSwatch
 
+    // The row is there but cannot be used now (an audio output that is not connected, T-348): its label
+    // and icon are drawn at Theme.disabledOpacity (a value text, e.g. the reason, stays whole). It still takes
+    // focus, so the reason can be read.
+    property bool dimmed: false
+
     // A tall row (a chart, T-247) rounds its corners with a token instead of height / 2, and may
     // draw its own text in place of the label.
     property real cornerRadius: height / 2
@@ -75,7 +80,7 @@ FocusScope {
         anchors { left: parent.left; leftMargin: Theme.spaceL * control.u; verticalCenter: parent.verticalCenter }
         u: control.u
         name: control.hasIcon ? control.iconName : ""
-        color: Theme.text
+        color: Qt.alpha(Theme.text, control.dimmed ? Theme.disabledOpacity : 1)
     }
 
     Text {
@@ -91,7 +96,7 @@ FocusScope {
         }
         textFormat: Text.PlainText      // a label can be a device's own name (Bluetooth, UPower): never markup
         text: control.label
-        color: Theme.text
+        color: Qt.alpha(Theme.text, control.dimmed ? Theme.disabledOpacity : 1)
         font.pixelSize: Theme.typeBody * control.u
     }
 }

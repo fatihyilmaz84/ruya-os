@@ -459,7 +459,7 @@ FocusScope {
     Connections {
         target: Audio
         function onOutputSwitched() {
-            Notifications.show(qsTr("Audio output: %1").arg(Audio.defaultSinkName), "info")
+            Notifications.show(qsTr("Sound moved to %1").arg(Audio.defaultSinkName), "info")
         }
     }
 

@@ -521,7 +521,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>AudioPane</name>
     <message>
-        <location filename="../qml/AudioPane.qml" line="+155"/>
+        <location filename="../qml/AudioPane.qml" line="+181"/>
         <source>Sound theme: %1</source>
         <translation>Ses teması: %1</translation>
     </message>
@@ -531,7 +531,17 @@ Bu geri alınamaz.</translation>
         <translation>Konsol en fazla %1 ses teması tutar. Önce birini silin ya da aynı adlı bir temanın üzerine kopyalayarak değiştirin.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="-29"/>
+        <source>Not connected</source>
+        <translation>Bağlı değil</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Current</source>
+        <translation>Geçerli</translation>
+    </message>
+    <message>
+        <location line="+30"/>
         <source>That sound theme has more than %1 files.</source>
         <translation>Bu ses temasında %1 dosyadan fazlası var.</translation>
     </message>
@@ -556,12 +566,22 @@ Bu geri alınamaz.</translation>
         <translation>Ses çıkışı değiştirilemedi.</translation>
     </message>
     <message>
-        <location line="+15"/>
-        <source>Default</source>
-        <translation>Varsayılan</translation>
+        <location line="+4"/>
+        <source>Could not play the test sound.</source>
+        <translation>Deneme sesi çalınamadı.</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+23"/>
+        <source>%1: %2.</source>
+        <translation>%1: %2.</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Test sound</source>
+        <translation>Deneme sesi</translation>
+    </message>
+    <message>
+        <location line="+10"/>
         <source>Master volume</source>
         <translation>Ana ses</translation>
     </message>
@@ -2547,12 +2567,7 @@ Bu geri alınamaz.</translation>
         <translation>kapatma</translation>
     </message>
     <message>
-        <location line="+9"/>
-        <source>Audio output: %1</source>
-        <translation>Ses çıkışı: %1</translation>
-    </message>
-    <message>
-        <location line="+972"/>
+        <location line="+981"/>
         <source>Power</source>
         <translation>Güç</translation>
     </message>
@@ -2562,7 +2577,12 @@ Bu geri alınamaz.</translation>
         <translation>Güncelleme hazır. Bitirmek için yeniden başlat.</translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="-8"/>
+        <source>Sound moved to %1</source>
+        <translation>Ses %1 cihazına taşındı</translation>
+    </message>
+    <message>
+        <location line="+19"/>
         <source>Restarting to finish the update in 2 minutes. Press any button to wait.</source>
         <translation>Güncellemeyi bitirmek için 2 dakika içinde yeniden başlatılıyor. Beklemek için herhangi bir düğmeye bas.</translation>
     </message>
