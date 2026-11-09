@@ -130,26 +130,26 @@ Item {
 
         function test_back_cue() {
             openEntry("Name", "ab")
-            compare(shownHint(), "B Delete")
+            compare(shownHint(), "A Type|B Delete|Start Done")
             compare(entry.Accessible.description, "Press Back to delete, Back on an empty field to cancel")
             keyClick(Qt.Key_Escape)
             compare(entry.text, "a")
-            compare(shownHint(), "B Delete")
+            compare(shownHint(), "A Type|B Delete|Start Done")
             keyClick(Qt.Key_Escape)
             compare(entry.text, "")
-            compare(shownHint(), "B Cancel", "an empty field: Back cancels")
+            compare(shownHint(), "A Type|B Cancel|Start Done", "an empty field: Back cancels")
             compare(entry.Accessible.description, "Press Back to cancel")
             pressKey("a")
-            compare(shownHint(), "B Delete", "typing brings the delete cue back")
+            compare(shownHint(), "A Type|B Delete|Start Done", "typing brings the delete cue back")
             keyClick(Qt.Key_Backspace)
-            compare(shownHint(), "B Cancel")
+            compare(shownHint(), "B Cancel|Start Done", "a physical key was used: no A")
             // After typing on a physical keyboard Esc cancels at once.
             keyClick("x")
             compare(entry.text, "x")
-            compare(shownHint(), "B Cancel", "keyboard mode: Esc cancels even with text")
+            compare(shownHint(), "B Cancel|Start Done", "keyboard mode: Esc cancels even with text, Return is Done (no A)")
             compare(entry.Accessible.description, "Press Back to cancel")
             keyClick(Qt.Key_Left)                      // the D-pad takes over again
-            compare(shownHint(), "B Delete")
+            compare(shownHint(), "A Type|B Delete|Start Done")
         }
 
         // T-179: Backspace is Back on pages, but in a text field it only deletes.

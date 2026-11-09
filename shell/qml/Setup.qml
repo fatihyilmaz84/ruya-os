@@ -71,7 +71,7 @@ FocusScope {
         if (pairingStage)
             return pairHint.timedOut ? [{ button: "A", text: qsTr("Try again") }, { button: "B", text: qsTr("Skip") }]
                                      : [{ button: "B", text: qsTr("Skip") }]
-        if (nameEntry.shown || pad.shown)
+        if (pad.shown)
             return [{ button: "B", text: qsTr("Cancel") }]
         const a = { button: "A", text: step === stepAdmin || step === stepZone ? qsTr("Select") : qsTr("Next") }
         if (step === 0 || step === stepDone || busy)

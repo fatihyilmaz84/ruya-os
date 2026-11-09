@@ -20,6 +20,8 @@ FocusScope {
     property string customConfirmName: ""
     property bool shown: false
     property Item returnTo: null
+    // What the hint bar says while this is open (Shell.modalHintsOf).
+    readonly property var modalHints: [{ button: "A", text: qsTr("Select") }, { button: "B", text: qsTr("Cancel") }]
 
     // Emitted after the dialog closed because of Confirm (the action is already requested).
     signal confirmed(string action)

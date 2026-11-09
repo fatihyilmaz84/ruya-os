@@ -115,7 +115,9 @@ Page {
         u: page.u
         focus: true
         // The chart and the two highlight facts only read; the other rows do something on Accept.
-        hints: (chartRow.activeFocus || longestRow.activeFocus || streakRow.activeFocus)
+        // The chart is read with Left and Right (a bar at a time); the two highlight facts only read.
+        hints: chartRow.activeFocus ? [{ button: "Left/Right", text: qsTr("Browse") }, { button: "B", text: qsTr("Back") }]
+               : (longestRow.activeFocus || streakRow.activeFocus)
                ? [{ button: "B", text: qsTr("Back") }]
                : [{ button: "A", text: qsTr("Select") }, { button: "B", text: qsTr("Back") }]
         onExitRequested: page.backRequested()

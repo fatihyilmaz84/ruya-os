@@ -50,7 +50,14 @@ FocusScope {
     // letter and only an empty field is cancelled; after typing on a physical keyboard Esc
     // cancels at once. Said to a screen reader and shown by the hint bar (Shell.hintList).
     readonly property bool backDeletes: text.length > 0 && !keyboardMode
-    readonly property var entryHints: [{ button: "B", text: backDeletes ? qsTr("Delete") : qsTr("Cancel") }]
+    // A types the focused key and Start finishes (T-285); after typing on a physical keyboard
+    // Return finishes, so A has no verb then.
+    readonly property var entryHints: keyboardMode
+        ? [{ button: "B", text: backDeletes ? qsTr("Delete") : qsTr("Cancel") },
+           { button: "Start", text: qsTr("Done") }]
+        : [{ button: "A", text: qsTr("Type") },
+           { button: "B", text: backDeletes ? qsTr("Delete") : qsTr("Cancel") },
+           { button: "Start", text: qsTr("Done") }]
     Accessible.description: backDeletes ? qsTr("Press Back to delete, Back on an empty field to cancel")
                                         : qsTr("Press Back to cancel")
 

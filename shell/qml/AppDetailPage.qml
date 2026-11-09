@@ -494,6 +494,8 @@ Page {
 
         property bool shown: false
         property Item returnTo: null
+        // What the hint bar says while this is open (Shell.modalHintsOf).
+        readonly property var modalHints: [{ button: "A", text: qsTr("Select") }, { button: "B", text: qsTr("Cancel") }]
 
         function open() {
             returnTo = Window.activeFocusItem

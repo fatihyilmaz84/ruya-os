@@ -330,7 +330,10 @@ Item {
             compare(hintsShown(), "A Select|B Back")
             keyClick(Qt.Key_Return)                           // the name row opens the keyboard
             tryVerify(() => find("setupNameEntry").shown, 2000, "the keyboard opens")
-            compare(hintsShown(), "B Cancel")
+            // The bar says what the keyboard says (T-285); Setup.hints has no branch of its own for it.
+            compare(hintsShown(), "A Type|B Cancel|Start Done")
+            compare(setup().hints.map(h => h.button + " " + h.text).join("|"), "A Select|B Back",
+                    "Setup.hints does not answer for the keyboard")
             keyClick(Qt.Key_Escape)
             tryVerify(() => !find("setupNameEntry").shown, 2000)
             compare(hintsShown(), "A Select|B Back")
