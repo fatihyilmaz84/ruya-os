@@ -413,6 +413,54 @@ Item {
             return y >= -0.5 && y + row.height <= pane.viewport.height + 0.5
         }
 
+        // T-356: a focused row that hides hands the focus to the nearest visible row (the one before,
+        // else the next one); with no row left the pane holds it itself, Back still leaves, and the
+        // first row that appears takes it.
+        function test_a_hidden_focused_row_hands_the_focus_on() {
+            const pane = createTemporaryObject(barePaneComponent, host)
+            verify(pane)
+            const r = n => findChild(pane, "r" + n)
+            const holder = () => pane.Window.window.activeFocusItem
+            pane.forceActiveFocus()
+            tryVerify(() => r(0).activeFocus, 2000)
+            keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Down)
+            verify(r(2).activeFocus)
+            r(2).visible = false
+            tryCompare(r(1), "activeFocus", true)        // the row before
+            r(1).visible = false
+            tryCompare(r(0), "activeFocus", true)
+            r(0).visible = false
+            tryCompare(r(3), "activeFocus", true)        // none before: the next one
+            r(3).visible = false                         // r4, r5 are hidden too
+            tryVerify(() => holder() === pane, 2000, "no row left: the pane, not a hidden row")
+            spy.target = pane
+            spy.signalName = "exitRequested"
+            spy.clear()
+            keyClick(Qt.Key_Escape)
+            compare(spy.count, 1, "Back still leaves")
+            pane.forceActiveFocus()
+            r(4).visible = true                          // data arrives
+            tryCompare(r(4), "activeFocus", true)
+        }
+
+        // T-356: a pane whose first rows are hidden when it is entered (a page waiting for data) gives
+        // the focus to the first visible row, or with none holds it itself.
+        function test_a_pane_entered_with_hidden_rows_never_focuses_a_hidden_row() {
+            const pane = createTemporaryObject(barePaneComponent, host)
+            verify(pane)
+            const r = n => findChild(pane, "r" + n)
+            r(0).visible = false
+            pane.forceActiveFocus()
+            tryCompare(r(1), "activeFocus", true)
+            const empty = createTemporaryObject(barePaneComponent, host)
+            for (let i = 0; i < 4; ++i)
+                findChild(empty, "r" + i).visible = false
+            empty.forceActiveFocus()
+            tryVerify(() => empty.Window.window.activeFocusItem === empty, 2000, "the pane itself")
+            verify(!findChild(empty, "r0").activeFocus)
+        }
+
         // T-190: rows that appear below the focused row (a message, devices found) while it is the
         // last row in view bring the next row whole into view.
         // Revert check: dropping the ensureFocusedVisible() call at the end of relayout() fails this.
