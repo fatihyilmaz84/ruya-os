@@ -225,6 +225,14 @@ Page {
         }
     }
 
+    // Uninstall or "Your activity" was hidden (an install started, the app was removed): the primary
+    // button becomes the page's focused item. `focus`, not forceActiveFocus(): a page covered by
+    // another one also hides these buttons when its fade-out ends, and forcing the focus then pulled
+    // it out of the page on top, which lost every key (T-356, seen on the Dell after "Your activity").
+    function buttonHidden() {
+        primary.focus = true
+    }
+
     component ActionButton: Rectangle {
         id: button
 
@@ -302,7 +310,7 @@ Page {
                 onActivated: confirm.open()
                 Keys.onUpPressed: { Sfx.navigate(); primary.forceActiveFocus() }
                 Keys.onDownPressed: if (activity.visible) { Sfx.navigate(); activity.forceActiveFocus() }
-                onVisibleChanged: if (!visible) primary.forceActiveFocus()
+                onVisibleChanged: if (!visible) page.buttonHidden()
             }
 
             // What this profile played of the app (T-247): private to the active profile.
@@ -313,7 +321,7 @@ Page {
                 text: qsTr("Your activity")
                 onActivated: page.openRequested("activityGame", ({ appId: page.appId }))
                 Keys.onUpPressed: { Sfx.navigate(); (uninstall.visible ? uninstall : primary).forceActiveFocus() }
-                onVisibleChanged: if (!visible) primary.forceActiveFocus()
+                onVisibleChanged: if (!visible) page.buttonHidden()
             }
 
             Item {

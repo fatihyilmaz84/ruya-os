@@ -72,6 +72,8 @@ Item {
         }
 
         function cleanup() {
+            Store.mockPauseJobs(false)                   // a job started by a test (an update of Chess) ends
+            Store.mockReset()
             Usage.mockRefreshDelayed(0)
             DeviceSettings.language = "en"
             DeviceSettings.reducedMotion = false
@@ -440,6 +442,133 @@ Item {
             tryVerify(() => find("detailActivity").activeFocus, 2000, "focus is back on the button")
         }
 
+        // The item with the active focus and its parents, for failure messages.
+        function describeFocus() {
+            const f = tc.shell.Window.window.activeFocusItem
+            let s = ""
+            for (let p = f; p; p = p.parent)
+                s += (p.objectName || String(p)) + (p.visible ? "" : "[hidden]") + (p.enabled ? "" : "[disabled]") + " < "
+            return s || "nothing"
+        }
+
+        // Once the page below has faded out (its items hide then, T-356): the active focus is a
+        // visible item of the page on top.
+        function verifyFocusOnTop(below, what) {
+            tryVerify(() => { const s = find("pageSlot_" + below); return s !== null && !s.visible }, 2000,
+                      below + " has faded out")
+            const top = tc.shell.slots[tc.shell.slots.length - 1]
+            const f = tc.shell.Window.window.activeFocusItem
+            let inside = false
+            for (let p = f; p; p = p.parent)
+                inside = inside || p === top.page
+            verify(inside && f.visible && f.enabled, what + ": " + describeFocus())
+        }
+
+        // The owner's path on the Dell (2026-11-09): Store -> an installed game without stats ->
+        // "Your activity". The app page, covered by the activity page, hid its buttons when its fade-out
+        // ended, and their handler forced the focus back into the covered page: every key was lost.
+        function test_the_store_path_to_a_game_page_keeps_the_focus() {
+            Usage.mockSetData("p2", [], today)
+            startShell()
+            signInAda()
+            tryVerify(() => Store.catalogue.length > 0)
+            keyClick(Qt.Key_Up)                          // the section nav
+            for (let i = 0; i < 3; ++i)
+                keyClick(Qt.Key_Right)
+            keyClick(Qt.Key_Return)                      // Store
+            tryCompare(tc.shell, "currentPage", "store")
+            tryVerify(() => find("storeCards_featured") && find("storeCards_featured").activeFocus, 2000)
+            const installed = find("storeCards_installed")
+            for (let i = 0; i < 10 && !installed.activeFocus; ++i)
+                keyClick(Qt.Key_Down)
+            verify(installed.activeFocus, describeFocus())
+            compare(installed.model[installed.currentIndex], puzzle)
+            keyClick(Qt.Key_Return)
+            tryCompare(tc.shell, "currentPage", "appDetail")
+            tryVerify(() => find("detailPrimary").activeFocus, 2000)
+            verifyFocusOnTop("store", "the app page over the Store")
+            keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Down)
+            verify(find("detailActivity").activeFocus, describeFocus())
+            keyClick(Qt.Key_Return)
+            tryCompare(tc.shell, "currentPage", "activityGame")
+            tryVerify(() => find("gameMessage").visible)
+            verifyFocusOnTop("appDetail", "the activity page over the app page")
+            compare(tc.shell.Window.window.activeFocusItem, find("gameBody"), "no row to focus: the pane holds it")
+            keyClick(Qt.Key_Down)                        // nothing to move to
+            verify(find("gameBody").activeFocus, describeFocus())
+            keyClick(Qt.Key_Escape)
+            tryCompare(tc.shell, "currentPage", "appDetail")
+            tryVerify(() => find("detailActivity").activeFocus, 2000, "focus is back on the button")
+            keyClick(Qt.Key_Escape)
+            tryCompare(tc.shell, "currentPage", "store")
+            tryVerify(() => installed.activeFocus, 2000, "and on the card")
+            compare(tc.shell.focusRepairs, 0, "the pages kept the focus themselves")
+        }
+
+        // "Your activity" hides while the activity page covers the app page (an update started): Back
+        // lands on the primary button, not on the hidden one that had the focus.
+        function test_back_to_the_app_page_skips_a_button_hidden_meanwhile() {
+            Usage.mockSetData("p2", sessions(), today)
+            startShell()
+            signInAda()
+            tryVerify(() => Store.catalogue.length > 0)
+            tc.shell.openPage("appDetail", { appId: chess })
+            tryVerify(() => find("detailPrimary") && find("detailPrimary").activeFocus, 2000)
+            keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Down)
+            verify(find("detailActivity").activeFocus)
+            keyClick(Qt.Key_Return)
+            tryCompare(tc.shell, "currentPage", "activityGame")
+            verifyFocusOnTop("appDetail", "the game page")
+            Store.update(chess)
+            tryVerify(() => Store.jobs[chess] !== undefined, 2000, "progress arrived")
+            Store.mockPauseJobs(true)                    // the update stands still
+            tryVerify(() => !find("detailActivity").visible)
+            verify(find("gameBody").activeFocus, "the covered page leaves the focus alone: " + describeFocus())
+            keyClick(Qt.Key_Escape)
+            tryCompare(tc.shell, "currentPage", "appDetail")
+            verify(!find("detailActivity").visible)
+            tryVerify(() => find("detailPrimary").activeFocus, 2000, "the primary button: " + describeFocus())
+            compare(tc.shell.focusRepairs, 0)
+        }
+
+        // A failed read hides every row of the Activity page: the pane holds the focus itself (never a
+        // hidden row), and Back leaves.
+        function test_the_activity_page_after_a_failed_read_holds_the_focus_and_leaves() {
+            Usage.mockSetData("p2", sessions(), today)
+            startShell()
+            signInAda()
+            Usage.mockFailNextRefresh("failed")
+            tc.shell.openPage("activity")
+            tryCompare(tc.shell, "currentPage", "activity")
+            tryCompare(Usage, "status", "failed")
+            verify(!find("activityWeek").visible)
+            tryVerify(() => tc.shell.Window.window.activeFocusItem === find("activityBody"), 2000,
+                      "the pane, not a hidden row: " + describeFocus())
+            keyClick(Qt.Key_Down)
+            verify(find("activityBody").activeFocus, describeFocus())
+            keyClick(Qt.Key_Escape)
+            tryCompare(tc.shell, "currentPage", "")
+            tryVerify(() => find("homePlay").activeFocus, 2000, "back on Home")
+            compare(tc.shell.focusRepairs, 0)
+        }
+
+        // The shell's safety net: a covered page that takes the focus anyway loses it again to the
+        // page on top, and the keys work.
+        function test_a_covered_page_that_takes_the_focus_gives_it_back() {
+            openActivity(sessions())
+            tc.shell.openPage("activityGame", { appId: chess })
+            tryCompare(tc.shell, "currentPage", "activityGame")
+            verifyFocusOnTop("activity", "the game page")
+            compare(tc.shell.focusRepairs, 0)
+            find("activityBody").forceActiveFocus()      // the Activity page below grabs it
+            tryVerify(() => find("gameBody").activeFocus, 2000, "the shell gives it back")
+            compare(tc.shell.focusRepairs, 1)
+            keyClick(Qt.Key_Escape)
+            tryCompare(tc.shell, "currentPage", "activity")
+        }
+
         // Found on the Dell (2026-11-09): app page -> "Your activity" of an app with no stats at all,
         // then neither the pad's B nor Esc left the page (the Guide overlay did, and closing it
         // gave the keys back): the page must own the focus whatever the data is.
@@ -458,9 +587,11 @@ Item {
             tryCompare(tc.shell, "currentPage", "activityGame")
             tryVerify(() => find("gameMessage").visible)
             tryVerify(() => find("gameBody").activeFocus, 2000, "the page owns the focus although it has no rows")
+            verifyFocusOnTop("appDetail", "and keeps it once the app page has faded out")
             keyClick(Qt.Key_Escape)
             tryCompare(tc.shell, "currentPage", "appDetail")
             tryVerify(() => find("detailActivity").activeFocus, 2000, "focus is back on the button")
+            compare(tc.shell.focusRepairs, 0, "the pages kept the focus themselves")
         }
 
         // The same path while the usage service answers late or with an error: the page has no rows
@@ -479,6 +610,7 @@ Item {
             keyClick(Qt.Key_Return)
             tryCompare(tc.shell, "currentPage", "activityGame")
             tryVerify(() => find("gameBody").activeFocus, 2000, "the page owns the focus before the data arrives")
+            verifyFocusOnTop("appDetail", "and once the app page has faded out")
             keyClick(Qt.Key_Escape)
             tryCompare(tc.shell, "currentPage", "appDetail")
             tryVerify(() => find("detailActivity").activeFocus, 2000, "focus is back on the button")
@@ -486,8 +618,10 @@ Item {
             keyClick(Qt.Key_Return)
             tryCompare(tc.shell, "currentPage", "activityGame")
             tryVerify(() => find("gameBody").activeFocus, 2000, "and after a failed read")
+            verifyFocusOnTop("appDetail", "and once the app page has faded out again")
             keyClick(Qt.Key_Escape)
             tryCompare(tc.shell, "currentPage", "appDetail")
+            compare(tc.shell.focusRepairs, 0, "the pages kept the focus themselves")
         }
 
         // The focus can fall out of a page (seen on the Dell): a Back that then reaches the shell

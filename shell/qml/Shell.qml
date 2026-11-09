@@ -318,47 +318,56 @@ FocusScope {
                && root.Window.window.visibility !== Window.Minimized
     }
 
-    // The focus fell out of the page: nothing, the shell itself or the window's content item holds it,
-    // so a page's keys (Back above all) go nowhere. Seen on the Dell (2026-11-09): neither the pad's B
-    // nor Esc left the Activity page, only the Guide overlay did, and closing it gave the focus back.
-    // The cause is not found yet: a Back that reaches the shell is logged with the item that held the
-    // focus (`journalctl -b _UID=<ruya-shell> | grep "reached the shell"`), and it still leaves the page.
+    // The safety net for a page's focus (T-356). The focus has fallen out of the open page when,
+    // with no app, Guide overlay or setup in front, nothing, the shell itself or the window's content
+    // item holds it, or an item of a page below the top one does (a covered page that took the focus
+    // back: the page's keys, Back above all, then go nowhere). Seen on the Dell (2026-11-09): the app
+    // page, covered by "Your activity", gave the focus to its own button when its fade-out hid it.
+    // Modals live outside the pages (the modal layer), so a modal with the focus is never "lost".
     property bool focusLostTest: false      // tests: pretend the focus is lost
-    readonly property bool focusLost: {
+    property int focusRepairs: 0            // how often refocusIfLost() acted (tests: a page's own focus never needs it)
+    function focusIsLost() {
         if (focusLostTest)
             return true
-        if (!signedIn || !pageOpen || focusedApp || systemPanel.open || setupActive)
+        const w = root.Window.window
+        if (!w || !w.active || !signedIn || !pageOpen || focusedApp || systemPanel.open || setupActive)
             return false
-        const f = root.Window.window ? root.Window.window.activeFocusItem : null
-        return f === null || f === root || f === root.Window.window.contentItem
+        const f = w.activeFocusItem
+        if (f === null || f === root || f === w.contentItem)
+            return true
+        for (let p = f; p; p = p.parent) {
+            if (p.parent === pageHost)
+                return p !== slots[slots.length - 1]
+        }
+        return false
     }
 
-    // Restores the focus as soon as it is lost, not only when a key shows it (a row that held the
-    // focus was hidden by a failed read: the whole focus chain fell out to the shell, T-356).
+    // Repaired once the current event is over (a page change moves the focus in several steps, the
+    // last one in the page on top), and logged: `journalctl -b _UID=<ruya-shell> | grep "fell out"`.
     Connections {
         target: root.Window.window
         ignoreUnknownSignals: true
-        function onActiveFocusItemChanged() {
-            if (root.focusLost)
-                Qt.callLater(root.refocusIfLost)
-        }
+        function onActiveFocusItemChanged() { Qt.callLater(root.refocusIfLost) }
+        function onActiveChanged() { Qt.callLater(root.refocusIfLost) }
     }
     function refocusIfLost() {
-        if (!focusLost || focusLostTest)
+        if (focusLostTest || !focusIsLost())
             return
-        console.warn("ruya-shell: the focus fell out of the page, restoring it")
+        const f = root.Window.window.activeFocusItem
+        console.warn("ruya-shell: the focus fell out of page", currentPage, "(on",
+                     f ? (f.objectName || String(f)) : "nothing", "), restoring it")
+        focusRepairs += 1
         focusCurrent()
     }
 
-    // A key that nothing below the shell took. Returns true when it was used.
+    // A Back key that nothing below the shell took while the focus is lost leaves the page (not on
+    // auto-repeat). Returns true when it was used.
     function orphanKey(key, isAutoRepeat) {
-        if (!BackKey.isBackOrBackspace(key))
+        if (!BackKey.isBackOrBackspace(key) || isAutoRepeat || !pageOpen || !focusIsLost())
             return false
         const f = root.Window.window ? root.Window.window.activeFocusItem : null
         console.warn("ruya-shell: Back reached the shell; focus on", f ? (f.objectName || String(f)) : "nothing",
-                     "page", currentPage, "lost", focusLost)
-        if (!focusLost || isAutoRepeat || !pageOpen)
-            return false
+                     "page", currentPage)
         focusCurrent()
         Sfx.back()
         closePage()
@@ -1122,7 +1131,7 @@ FocusScope {
                 savedFocus = p ? f : null
             }
             function restoreFocus() {
-                if (savedFocus && savedFocus.enabled)
+                if (savedFocus && savedFocus.enabled && savedFocus.visible)
                     savedFocus.forceActiveFocus()
                 else if (page)
                     page.forceActiveFocus()

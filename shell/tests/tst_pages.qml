@@ -73,6 +73,10 @@ Item {
             signInAsAda()
         }
 
+        function cleanup() {
+            Usage.mockFailNextRefresh("")            // a failure armed by a test that stopped early
+        }
+
         function test_each_section_opens_its_page_data() {
             return [
                 { tag: "games", focusName: "gamesGrid" },   // T-113: real page
@@ -338,6 +342,81 @@ Item {
             compare(nav.enabled, false)
             keyClick(Qt.Key_Escape)
             tryCompare(nav, "enabled", true)
+        }
+
+        // T-356: every page owns the focus once it is open and the page below has faded out (a covered
+        // page hides its items then), opened from Home and over the app page (whose hidden buttons
+        // once pulled the focus out of the page on top), with every Settings pane entered; with
+        // healthy services and with failing or late ones. Back leaves each one, and the shell's
+        // safety net is never needed.
+        function test_every_page_owns_the_focus_data() {
+            return [{ tag: "healthy", bad: false }, { tag: "failing or late services", bad: true }]
+        }
+        function test_every_page_owns_the_focus(data) {
+            tryVerify(() => Store.catalogue.length > 0 && Library.games.length > 0)
+            const chess = "org.example.Chess"
+            const params = { appDetail: { appId: chess }, activityGame: { appId: chess },
+                             details: { id: Library.games[0].id } }
+            const describe = f => {
+                let s = ""
+                for (let p = f; p; p = p.parent)
+                    s += (p.objectName || String(p)) + (p.visible ? "" : "[hidden]") + (p.enabled ? "" : "[disabled]") + " < "
+                return s || "nothing"
+            }
+            const checkFocus = what => {
+                const top = tc.shell.slots[tc.shell.slots.length - 1]
+                tryCompare(top, "opacity", 1)
+                tryVerify(() => tc.shell.slots.slice(0, -1).every(s => !s.visible), 2000, what + ": the page below faded out")
+                const f = tc.shell.Window.window.activeFocusItem
+                let inside = false
+                for (let p = f; p; p = p.parent)
+                    inside = inside || p === top.page
+                verify(inside && f.visible && f.enabled, what + ": " + describe(f))
+            }
+            const settle = what => {
+                checkFocus(what)
+                if (!data.bad)
+                    return
+                Bluetooth.mockRefreshDelayed(100)        // replies still on their way, then arriving
+                Network.mockRefreshDelayed(100)
+                Library.mockListDelayed(100)
+                checkFocus(what + " (replies due)")
+                tryVerify(() => Bluetooth.mockPendingReplies() === 0 && Network.mockPendingReplies() === 0
+                          && Library.mockPendingReplies() === 0, 3000)
+                checkFocus(what + " (replies in)")
+            }
+            const backTo = (key, what) => {
+                for (let i = 0; i < 2 && tc.shell.currentPage !== key; ++i)
+                    keyClick(Qt.Key_Escape)                  // a Settings pane hands Back to its list first
+                compare(tc.shell.currentPage, key, what + ": Back leaves")
+            }
+            const open = (key, extra) => {
+                if (data.bad)
+                    Usage.mockFailNextRefresh("failed")
+                tc.shell.openPage(key, Object.assign({}, params[key] ?? {}, extra ?? {}))
+                tryCompare(tc.shell, "currentPage", key)
+            }
+
+            for (const key of Object.keys(tc.shell.builtinPages)) {
+                open(key)
+                settle(key + " from Home")
+                backTo("", key)
+                open("appDetail")
+                settle("appDetail")
+                open(key)
+                settle(key + " over the app page")
+                backTo("appDetail", key + " over the app page")
+                backTo("", "appDetail")
+            }
+            for (const category of ["myprofile", "network", "bluetooth", "display", "audio", "storage",
+                                    "accessibility", "power", "system", "about"]) {
+                open("settings", { category: category })
+                tryVerify(() => find("categoryList").activeFocus)
+                keyClick(Qt.Key_Right)                   // into the pane (nothing for a category without one)
+                settle("settings: " + category)
+                backTo("", "settings: " + category)
+            }
+            compare(tc.shell.focusRepairs, 0, "every page kept the focus itself")
         }
 
         function test_zz_screenshots() {
