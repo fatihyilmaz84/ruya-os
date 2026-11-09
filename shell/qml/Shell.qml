@@ -543,6 +543,7 @@ FocusScope {
         id: l0
         objectName: "l0"
         anchors.fill: parent
+        visible: !root.appOpen       // an app in front covers it all: nothing is drawn or sampled behind it (T-376)
 
         Backdrop {
             id: backdrop
@@ -621,7 +622,7 @@ FocusScope {
     GlassPill {
         id: statusGlass
         objectName: "statusGlass"
-        visible: root.signedIn
+        visible: root.signedIn && !root.appOpen    // covered by an app; its glass would sample the hidden L0 (T-376)
         height: Theme.buttonHeight * root.u + 2 * Theme.spaceXs * root.u
         width: statusRow.width + 2 * Theme.spaceL * root.u
         x: root.width - root.marginX - width

@@ -27,4 +27,20 @@ A game gets the GPU the shell does not need. On the Dell (0.0.58, lead-7, STK fu
 - `02` power saving (what stops behind an app).
 
 ## Outcome
-_Filled in by the implementer._
+Verified: host (vm pending: vm-session-check.sh display)
+
+UX notes: no new state; Back/focus unchanged (an app in front keeps the focus; closing it gives Home's Play button the focus, asserted). Screenshots read: `guide-over-app.png` (the panel over the app area, which is empty in the test, so just the scrim colour) and `home-after-app.png` (backdrop, hero art and glass pills all back). Not judged: a flash on real hardware, since offscreen/`shots` cannot show one frame; Home's own fade (`home.opacity`) covers L0 coming back as before.
+
+What was built
+1. `Shell.qml`: `l0.visible = !root.appOpen`, so the backdrop, the wallpaper layer and the hero art are all not visible (and draw nothing) while an app is in front, also under the Guide overlay. The status cluster (`statusGlass`) is hidden with an app too: it is under the app layer anyway and its glass (`GlassPill` crop plus `LiquidGlass`'s live `ShaderEffectSource`) sampled `l0`. SectionNav already hides when an app is open. The Guide panel is opaque and the pickers' `GlassSheet`s only open from pages, so nothing else samples `l0` behind an app.
+2. `AmbientLoop.qml`: `pauseLoop()` became `stopLoop()` (stops both players, the cross-fade, resets `current`/`blend`, counts `stopCount`). It runs whenever the bed has faded out (an app, the saver, the dark screen), so the PipeWire output closes in all those cases; `onPlayingChanged` already restarts a stopped player with `startLoop()`. The bed's position restarts from the loop start on return.
+3. The log line `Texture t7 is not assigned a valid texture provider`: **not reproduced on the host**. The likely source is the status pill's glass (`LiquidGlass.blurred` / the pill crop) keeping a live source on L0 while it is behind an app; it is now hidden then. To be confirmed on the Dell: look for the line after a game takes the focus.
+
+Tests (all in `shell/tests/tst_sound_ui.qml`): `test_l0_is_hidden_behind_a_focused_app`, `test_ambient_bed_stops_under_an_app_and_restarts` (players `StoppedState`, `stopCount`; in the offscreen dry run players have no file, so Stopped alone could not tell stop from pause, the counter does), `test_no_effect_samples_a_hidden_layer` (the pill that blurs `l0` and the nav are not visible behind an app), and `test_zz_screenshots_app`.
+Revert checks (`revert-check.ps1 -Test tst_sound_ui`): `l0.visible` back to `true` -> `test_l0_is_hidden...` and `test_no_effect...` red; `statusGlass` visible without `!appOpen` -> `test_no_effect...` red; `stopLoop()` call replaced by a pause -> `test_ambient_bed_stops...` red.
+
+VM (lead run): `scripts/vm-session-check.sh display` now, with the test app's window in front, waits 4 s and asserts that `pw-dump` shows no `Stream/Output/Audio` node of `ruya-shell` (skips without `jq`). Not run here. hw (lead, Dell): the shell's GPU share with STK in front is still to be measured (before: 8.8 %).
+
+Checks: `dev.ps1 test` ALL GREEN (1010 QML passed, 79 skipped, Rust green); `shots` ALL GREEN (158 passed; main's three red shots were green on this run).
+
+Files: shell/qml/Shell.qml, shell/qml/AmbientLoop.qml, shell/tests/tst_sound_ui.qml, scripts/vm-session-check.sh, docs/specs/02-shell.md (1.4a "Behind an app", 5.3 ambient bed).

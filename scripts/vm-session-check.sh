@@ -6,7 +6,8 @@
 # bus as ruya-shell. Copy and run (boot with plain smoke-test.ps1 -Keep):
 #   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-session-check.sh scripts/vm-session-probe.qml root@127.0.0.1:/root/
 #   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-session-check.sh [check|restart|security|display|display-clean|clean]
-# `display` (T-164) checks the per-profile Wayland sockets and a profile's window in the app layer;
+# `display` (T-164) checks the per-profile Wayland sockets and a profile's window in the app layer, and (T-376)
+# that no ruya-shell PipeWire output stream exists with that window in front;
 # it also needs vm-key-client.qml and vm-inject-key.py in /root (see the `display)` case).
 # `restart` (T-290) needs a profile (run `check` once on an empty store, or create one) and
 # installs the test apps itself when they are missing.
@@ -323,6 +324,18 @@ display)
     echo "$line" | grep -q "socket-dir-visible=no" && ok "the sandbox does not see $dir (no path to the other profiles' sockets)" || bad "the sandbox sees $dir"
     echo "$line" | grep -q "uid=$muid " && ok "the app runs as $user" || bad "app uid: $line"
     systemctl --user -M "$user@.host" show -p Environment "$inst" </dev/null 2>&1 | cat | tr ' ' '\n' | grep -E "WAYLAND_DISPLAY|SDL_VIDEODRIVER"
+
+    echo "--- nothing of the shell sounds behind the app (T-376)"
+    # The ambient bed fades out over 800 ms and then stops its players, so the PipeWire output closes; a
+    # paused player left a silent stream open. A cue is a stream for at most 1.5 s, hence the wait.
+    sleep 4
+    if ! command -v jq >/dev/null 2>&1; then
+        echo "SKIP: jq is not installed (needed to read pw-dump)"
+    else
+        sid="$(id -u ruya-shell)"
+        streams="$(runuser -u ruya-shell -- env XDG_RUNTIME_DIR="/run/user/$sid" pw-dump 2>/dev/null | jq -r '.[] | select(.type == "PipeWire:Interface:Node" and .info.props["media.class"] == "Stream/Output/Audio" and .info.props["application.process.binary"] == "ruya-shell") | "\(.id) \(.info.state)"')"
+        [ -z "$streams" ] && ok "no ruya-shell output stream exists with the app in front" || { echo "$streams" | sed 's/^/    /'; bad "a ruya-shell output stream still exists with the app in front"; }
+    fi
 
     echo "--- Guide over the app"
     t2="$(date +%s)"

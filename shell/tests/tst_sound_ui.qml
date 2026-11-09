@@ -1,5 +1,6 @@
 import QtQuick
 import QtTest
+import QtMultimedia
 import RuyaShell
 
 // The ambient bed and Settings -> Audio -> Ambient sound / Sound theme (T-227, 02 §5.3), driven with
@@ -195,6 +196,60 @@ Item {
             tryVerify(() => bed.fade === 0, 3000, "faded out")
             Audio.setChannelVolume("ambient", 100)
             tryCompare(bed, "fade", 1, 3000)
+        }
+
+        function test_ambient_bed_stops_under_an_app_and_restarts() {
+            const bed = find("ambientBed")
+            tryCompare(bed, "fade", 1, 3000)
+            const stops = bed.stopCount
+            const app = createTemporaryObject(appComponent, host)
+            tc.shell.addApp(app)
+            tryVerify(() => app.activeFocus, 2000, "the app takes focus")
+            tryVerify(() => !bed.playing, 3000, "the bed has faded out")
+            compare(bed.stopCount, stops + 1, "the players were stopped, not paused")
+            compare(bed.player(0).playbackState, MediaPlayer.StoppedState)
+            compare(bed.player(1).playbackState, MediaPlayer.StoppedState)
+            tc.shell.removeApp(app)
+            tryCompare(bed, "playing", true, 3000, "and it starts again on return")
+            tryCompare(bed, "fade", 1, 3000)
+        }
+
+        function test_l0_is_hidden_behind_a_focused_app() {
+            const names = ["backdrop", "wallpaperLayer", "heroArt"]
+            for (const n of names)
+                verify(find(n).visible, n + " is drawn on Home")
+            const app = createTemporaryObject(appComponent, host)
+            tc.shell.addApp(app)
+            tryVerify(() => app.activeFocus, 2000, "the app takes focus")
+            for (const n of names)
+                compare(find(n).visible, false, n + " is not drawn behind an app")
+            keyClick(Qt.Key_HomePage)
+            tryVerify(() => find("systemPanel").open, 2000, "the Guide overlay opens over the app")
+            for (const n of names)
+                compare(find(n).visible, false, n + " stays hidden under the Guide overlay")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !find("systemPanel").open, 2000)
+            tc.shell.removeApp(app)
+            tryVerify(() => find("homePlay").activeFocus, 2000)
+            for (const n of ["backdrop", "wallpaperLayer"])
+                verify(find(n).visible, n + " is back on Home")
+            tryVerify(() => find("heroArt").visible, 2000, "the hero art is back")
+        }
+
+        function test_no_effect_samples_a_hidden_layer() {
+            const l0 = find("l0")
+            const pill = find("statusGlass")
+            verify(pill.visible, "the status glass samples L0 on Home")
+            compare(pill.source, l0)
+            const app = createTemporaryObject(appComponent, host)
+            tc.shell.addApp(app)
+            tryVerify(() => app.activeFocus, 2000, "the app takes focus")
+            compare(l0.visible, false)
+            compare(pill.visible, false, "the glass pill that blurs L0 is not drawn while L0 is hidden")
+            tryVerify(() => !find("sectionNav").visible, 2000, "nor the nav glass, once it has faded")
+            tc.shell.removeApp(app)
+            tryVerify(() => find("homePlay").activeFocus, 2000)
+            verify(pill.visible)
         }
 
         function test_a_cue_ducks_the_bed_by_8_dB() {
@@ -527,6 +582,26 @@ Item {
             grabImage(tc.shell).save(shotsDir + "/sound-delete-confirm-en.png")
             keyClick(Qt.Key_Escape)
             tryVerify(() => !find("soundDeleteConfirm").shown, 2000)
+        }
+
+        // The Guide overlay over an app, and Home again after the app closed (T-376): L0 is hidden behind the app
+        // and is back, without a gap, when it goes.
+        function test_zz_screenshots_app() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            const app = createTemporaryObject(appComponent, host)
+            tc.shell.addApp(app)
+            tryVerify(() => app.activeFocus, 2000)
+            keyClick(Qt.Key_HomePage)
+            tryVerify(() => find("systemPanel").open, 2000)
+            wait(600)
+            grabImage(tc.shell).save(shotsDir + "/guide-over-app.png")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !find("systemPanel").open, 2000)
+            tc.shell.removeApp(app)
+            tryVerify(() => find("homePlay").activeFocus, 2000)
+            wait(800)
+            grabImage(tc.shell).save(shotsDir + "/home-after-app.png")
         }
 
         // Settings -> Audio in Turkish, with the stick plugged in after the language was chosen: a toast keeps
