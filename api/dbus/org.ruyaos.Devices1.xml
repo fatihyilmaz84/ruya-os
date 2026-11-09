@@ -17,6 +17,9 @@
   org.ruyaos.Devices1.Audio status strings:
     "ok"            success
     "unknown-sink"  no output with that id (SetDefaultSink)
+    "unknown-output" no output with that id (SetOutput, TestOutput)
+    "inactive"      the output exists but its card profile is not the active one, so there is no sink
+                    to play on yet (TestOutput; SetOutput on it is "failed" until profile switching, T-347)
     "invalid"       malformed argument (unknown channel name)
     "failed"        internal error (e.g. PipeWire refused)
 
@@ -110,6 +113,54 @@
     <method name="ListSinks">
       <arg name="sinks" type="aa{sv}" direction="out"/>
     </method>
+
+    <!--
+      Every output the sound cards offer, also those whose card profile is not the active one (PipeWire
+      shows only the sinks of the active profile; the ports come from the device's routes), in a stable
+      order. One dictionary per output (T-322):
+        id          s   stable across boots: "<card name>:<port name>" (a sink without ports: its node name)
+        name        s   display name, readable ("Speakers", "HDMI / DisplayPort")
+        kind        s   "speaker" | "headphones" | "hdmi" | "usb" | "bluetooth"
+        card        s   the card's name ("" for a sink that belongs to none)
+        port        s   the port's name ("" for a sink without ports)
+        available   s   "yes" | "no" | "unknown" (jack or ELD detection; speakers are "unknown")
+        active      b   a sink exists for it now (its profile is active)
+        is_default  b   true for the output PipeWire's default sink is on
+        is_saved    b   true for the output the player chose (SetOutput); at most one
+      Default policy (spec 03 section 2.3), applied by the service at start and on every hot-plug: the
+      saved choice wins; else a plugged headset (usb, bluetooth, headphones with available "yes"); else
+      an HDMI output whose ELD is valid (available "yes") that the player has not rejected; else the
+      internal speaker; else whatever exists. An absent saved output is skipped, never forgotten: it
+      becomes the default again when it returns.
+    -->
+    <method name="ListOutputs">
+      <arg name="outputs" type="aa{sv}" direction="out"/>
+    </method>
+
+    <!--
+      The player's choice: make the output the default, remember it (per card and port, in
+      /var/lib/ruya-devices, kept over reboots and hot-plug), and, when the policy would have picked a
+      valid-ELD HDMI output instead, remember that one as rejected (it stays out of the automatic
+      choice). Choosing an HDMI output again lifts its rejection.
+    -->
+    <method name="SetOutput">
+      <arg name="id" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <!-- Plays a short tone on that output without changing the default or the saved choice. -->
+    <method name="TestOutput">
+      <arg name="id" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <!-- Forgets the saved choice and the rejected outputs, and applies the policy table now. -->
+    <method name="ResetOutputChoice">
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <!-- An output appeared or disappeared, or its availability, the saved choice or the default changed; call ListOutputs again. -->
+    <signal name="OutputsChanged"/>
 
     <!--
       Make an output the default; running streams move to it. Policy (spec §2.3), applied by the

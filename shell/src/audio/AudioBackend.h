@@ -15,6 +15,20 @@ struct SinkInfo
     bool isDefault = false;
 };
 
+// One output of a sound card (Devices1.Audio ListOutputs, T-322).
+struct OutputInfo
+{
+    QString id;
+    QString name;
+    QString kind;      // "speaker" | "headphones" | "hdmi" | "usb" | "bluetooth"
+    QString card;
+    QString port;
+    QString available; // "yes" | "no" | "unknown"
+    bool active = false; // a sink exists for it (its card profile is the active one)
+    bool isDefault = false;
+    bool isSaved = false; // the player's choice (SetOutput)
+};
+
 // Transport behind the Audio QML singleton: org.ruyaos.Devices1.Audio over D-Bus
 // (api/dbus/org.ruyaos.Devices1.xml), or an in-memory mock. Results arrive asynchronously
 // through signals. stateChanged is emitted after every command, even when the state did not
@@ -35,6 +49,12 @@ public:
     virtual void setMuted(bool muted) = 0;
     virtual void setChannelVolume(const QString &channel, int value) = 0; // 0-100, clamped
     virtual void setDefaultSink(const QString &id) = 0;
+    // The player's choice (kept by the service over reboots), a short tone on one output without
+    // changing the default, and forgetting the choice. Results: setOutputFinished,
+    // testOutputFinished, and a new outputsListed.
+    virtual void setOutput(const QString &id) = 0;
+    virtual void testOutput(const QString &id) = 0;
+    virtual void resetOutputChoice() = 0;
 
 signals:
     // channels: channel name -> 0-100, all channels of channelNames().
@@ -45,6 +65,10 @@ signals:
     void sinksListed(const QList<SinkInfo> &sinks);
     // status: see the XML ("ok", "unknown-sink", "failed").
     void setDefaultSinkFinished(const QString &id, const QString &status);
+    void outputsListed(const QList<OutputInfo> &outputs);
+    // status: "ok", "unknown-output", "inactive", "failed" (see the XML).
+    void setOutputFinished(const QString &id, const QString &status);
+    void testOutputFinished(const QString &id, const QString &status);
 
 protected:
     // Replies can arrive out of order: number each request when it is sent and report a reply only
@@ -65,7 +89,15 @@ protected:
             emit sinksListed(sinks);
     }
 
+    quint64 beginOutputsRequest() { return m_outputsSeq.begin(); }
+    void deliverOutputs(quint64 request, const QList<OutputInfo> &outputs)
+    {
+        if (m_outputsSeq.accept(request))
+            emit outputsListed(outputs);
+    }
+
 private:
+    RequestSequence m_outputsSeq;
     RequestSequence m_stateSeq;
     RequestSequence m_sinksSeq;
 };

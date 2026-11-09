@@ -38,6 +38,7 @@ void MockAudioBackend::refresh()
 {
     publishState(m_delay);
     publishSinks(m_delay);
+    publishOutputs(m_delay);
 }
 
 void MockAudioBackend::setVolume(int volume)
@@ -67,8 +68,75 @@ void MockAudioBackend::setDefaultSink(const QString &id)
     QTimer::singleShot(0, this, [this, id, known] {
         emit setDefaultSinkFinished(id, known ? QStringLiteral("ok") : QStringLiteral("unknown-sink"));
     });
-    if (known)
+    if (known) {
         publishSinks();
+        publishOutputs();
+    }
+}
+
+// The mock's outputs: one per connected sink (the analog one is the speaker), plus the headphones
+// jack of the card, which is empty and has no sink.
+QList<OutputInfo> MockAudioBackend::outputs() const
+{
+    QList<OutputInfo> out;
+    for (const SinkInfo &s : m_sinks) {
+        OutputInfo o;
+        o.id = s.id;
+        o.name = s.name;
+        o.kind = s.kind == QLatin1String("analog") ? QStringLiteral("speaker") : s.kind;
+        o.available = s.kind == QLatin1String("analog") ? QStringLiteral("unknown") : QStringLiteral("yes");
+        o.active = true;
+        o.isDefault = s.isDefault;
+        o.isSaved = s.id == m_saved;
+        out.append(o);
+    }
+    OutputInfo jack;
+    jack.id = QStringLiteral("headphones-0");
+    jack.name = QStringLiteral("Headphones");
+    jack.kind = QStringLiteral("headphones");
+    jack.available = QStringLiteral("no");
+    jack.isSaved = jack.id == m_saved;
+    out.append(jack);
+    return out;
+}
+
+void MockAudioBackend::setOutput(const QString &id)
+{
+    QString status = QStringLiteral("unknown-output");
+    for (const OutputInfo &o : outputs()) {
+        if (o.id != id)
+            continue;
+        status = o.active ? QStringLiteral("ok") : QStringLiteral("inactive");
+        if (o.active) {
+            m_saved = id;
+            if (!o.isDefault)
+                makeDefault(id);
+        }
+    }
+    QTimer::singleShot(0, this, [this, id, status] { emit setOutputFinished(id, status); });
+    if (status == QLatin1String("ok")) {
+        publishSinks();
+        publishOutputs();
+    }
+}
+
+void MockAudioBackend::testOutput(const QString &id)
+{
+    QString status = QStringLiteral("unknown-output");
+    for (const OutputInfo &o : outputs()) {
+        if (o.id == id) {
+            status = o.active ? QStringLiteral("ok") : QStringLiteral("inactive");
+            if (o.active)
+                m_tested.append(id);
+        }
+    }
+    QTimer::singleShot(0, this, [this, id, status] { emit testOutputFinished(id, status); });
+}
+
+void MockAudioBackend::resetOutputChoice()
+{
+    m_saved.clear();
+    publishOutputs();
 }
 
 bool MockAudioBackend::plug(const QString &id)
@@ -80,6 +148,7 @@ bool MockAudioBackend::plug(const QString &id)
         m_sinks.append(sink);
         makeDefault(id); // a new headset becomes the default
         publishSinks();
+        publishOutputs();
     }
     return true;
 }
@@ -106,6 +175,7 @@ void MockAudioBackend::unplug(const QString &id)
             s.isDefault = s.id == next;
     }
     publishSinks();
+    publishOutputs();
 }
 
 void MockAudioBackend::reset()
@@ -113,6 +183,7 @@ void MockAudioBackend::reset()
     initState();
     publishState();
     publishSinks();
+    publishOutputs();
 }
 
 // No publishing here: the constructor runs before anybody listens.
@@ -126,6 +197,8 @@ void MockAudioBackend::initState()
         m_channels.insert(name, 100);
     m_sinks = {hdmi(), analog()};
     m_previous.clear();
+    m_saved.clear();
+    m_tested.clear();
 }
 
 int MockAudioBackend::indexOf(const QString &id) const
@@ -179,5 +252,18 @@ void MockAudioBackend::publishSinks(int delayMs)
         if (delayMs > 0)
             --m_pending;
         deliverSinks(request, sinks);
+    });
+}
+
+void MockAudioBackend::publishOutputs(int delayMs)
+{
+    const QList<OutputInfo> list = outputs();
+    const quint64 request = beginOutputsRequest();
+    if (delayMs > 0)
+        ++m_pending;
+    QTimer::singleShot(delayMs, this, [this, request, list, delayMs] {
+        if (delayMs > 0)
+            --m_pending;
+        deliverOutputs(request, list);
     });
 }

@@ -31,3 +31,24 @@ as_shell wpctl inspect @DEFAULT_AUDIO_SINK@ 2>&1 | grep -E "node.name|node.descr
 echo "--- shell log: audio, multimedia, sound (count, message)"
 journalctl -b -q -o cat _UID="$uid" | grep -iE "qsound|multimedia|audio|pulse|pipewire|ffmpeg|alsa|sound" \
     | grep -v "^spa\.\|libcamera\|^Started \|^Listening on " | sort | uniq -c | sort -rn | head -20
+
+# --- T-322: the output policy and the saved choice (ruya-devices, Devices1.Audio)
+dev_call() { busctl --system call org.ruyaos.Devices1 /org/ruyaos/Devices1 org.ruyaos.Devices1.Audio "$@" 2>&1; }
+default_node() { as_shell wpctl inspect @DEFAULT_AUDIO_SINK@ 2>&1 | sed -n 's/.*node.name = "\(.*\)"/\1/p' | head -1; }
+echo "--- outputs (ListOutputs)"
+dev_call ListOutputs
+echo "--- default sink before: $(default_node)"
+echo "--- saved choice file"
+cat "/var/lib/ruya-devices/outputs.toml" 2>&1 || echo "(none: the policy table decides)"
+first_id="$(dev_call ListOutputs | grep -o 'id" s "[^"]*"' | head -1 | sed 's/.*s "\(.*\)"/\1/')"
+if [ -n "$first_id" ]; then
+    echo "--- SetOutput $first_id -> $(dev_call SetOutput s "$first_id")"
+    before="$(default_node)"
+    echo "--- restarting pipewire and wireplumber"
+    as_shell systemctl --user restart pipewire.service wireplumber.service 2>&1
+    sleep 8
+    after="$(default_node)"
+    echo "default sink: before=$before after=$after"
+    if [ "$before" = "$after" ] && [ -n "$after" ]; then echo "AUDIO_SAVED_OUTPUT_OK"; else echo "AUDIO_SAVED_OUTPUT_FAIL"; fi
+    echo "--- ResetOutputChoice -> $(dev_call ResetOutputChoice)"
+fi

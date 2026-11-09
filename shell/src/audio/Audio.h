@@ -27,6 +27,8 @@ class Audio : public QObject
     Q_PROPERTY(QVariantMap channelVolumes READ channelVolumes NOTIFY channelVolumesChanged)
     // [{ id, name, kind, isDefault }]
     Q_PROPERTY(QVariantList sinks READ sinks NOTIFY sinksChanged)
+    // Every output of the cards (T-322): [{ id, name, kind, card, port, available, active, isDefault, isSaved }]
+    Q_PROPERTY(QVariantList outputs READ outputs NOTIFY outputsChanged)
     Q_PROPERTY(QString defaultSink READ defaultSink NOTIFY defaultSinkChanged)
     Q_PROPERTY(QString defaultSinkName READ defaultSinkName NOTIFY defaultSinkChanged)
     Q_PROPERTY(bool mock READ isMock CONSTANT)
@@ -42,6 +44,7 @@ public:
     bool isPlaying() const { return m_playing; }
     QVariantMap channelVolumes() const { return m_channels; }
     QVariantList sinks() const { return m_sinks; }
+    QVariantList outputs() const { return m_outputs; }
     QString defaultSink() const { return m_defaultSink; }
     QString defaultSinkName() const { return m_defaultSinkName; }
     bool isMock() const { return m_backend->isMock(); }
@@ -55,6 +58,11 @@ public:
     // channel: "ui" | "ambient" | "media"; value is clamped to 0-100. An unknown channel is ignored.
     Q_INVOKABLE void setChannelVolume(const QString &channel, int value);
     Q_INVOKABLE void setDefaultSink(const QString &id);
+    // The player's choice, remembered by the service; a test sound on one output (the default is
+    // not changed); forgetting the choice. Results: setOutputFinished / testOutputFinished.
+    Q_INVOKABLE void setOutput(const QString &id);
+    Q_INVOKABLE void testOutput(const QString &id);
+    Q_INVOKABLE void resetOutputChoice();
 
     // Tests only, and only with the mock backend (otherwise no-ops; mockPlug returns false):
     // plug in / remove "usb-headset" or "bt-headphones", or restore the initial state.
@@ -74,6 +82,7 @@ signals:
     void playingChanged();
     void channelVolumesChanged();
     void sinksChanged();
+    void outputsChanged();
     void defaultSinkChanged();
     // The master volume or mute was reported after a command or from outside (not the initial
     // read): what the volume OSD listens to. Also fires when a master command changed nothing
@@ -84,6 +93,9 @@ signals:
     void outputSwitched();
     // status: see api/dbus/org.ruyaos.Devices1.xml
     void setDefaultSinkFinished(const QString &id, const QString &status);
+    // status: "ok", "unknown-output", "inactive", "failed"
+    void setOutputFinished(const QString &id, const QString &status);
+    void testOutputFinished(const QString &id, const QString &status);
 
 private:
     std::unique_ptr<AudioBackend> m_backend;
@@ -97,6 +109,7 @@ private:
     bool m_sinksReady = false;
     QVariantMap m_channels;
     QVariantList m_sinks;
+    QVariantList m_outputs;
     QString m_defaultSink;
     QString m_defaultSinkName;
 };

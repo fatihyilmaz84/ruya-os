@@ -72,6 +72,26 @@ Audio::Audio(std::unique_ptr<AudioBackend> backend, QObject *parent)
         m_sinksReady = true; // the first list is the initial read
     });
     connect(m_backend.get(), &AudioBackend::setDefaultSinkFinished, this, &Audio::setDefaultSinkFinished);
+    connect(m_backend.get(), &AudioBackend::outputsListed, this, [this](const QList<OutputInfo> &list) {
+        QVariantList out;
+        for (const OutputInfo &o : list) {
+            out.append(QVariantMap{
+                {QStringLiteral("id"), o.id},
+                {QStringLiteral("name"), o.name},
+                {QStringLiteral("kind"), o.kind},
+                {QStringLiteral("card"), o.card},
+                {QStringLiteral("port"), o.port},
+                {QStringLiteral("available"), o.available},
+                {QStringLiteral("active"), o.active},
+                {QStringLiteral("isDefault"), o.isDefault},
+                {QStringLiteral("isSaved"), o.isSaved},
+            });
+        }
+        m_outputs = out;
+        emit outputsChanged();
+    });
+    connect(m_backend.get(), &AudioBackend::setOutputFinished, this, &Audio::setOutputFinished);
+    connect(m_backend.get(), &AudioBackend::testOutputFinished, this, &Audio::testOutputFinished);
     m_backend->refresh();
 }
 
@@ -137,6 +157,21 @@ void Audio::setChannelVolume(const QString &channel, int value)
 void Audio::setDefaultSink(const QString &id)
 {
     m_backend->setDefaultSink(id);
+}
+
+void Audio::setOutput(const QString &id)
+{
+    m_backend->setOutput(id);
+}
+
+void Audio::testOutput(const QString &id)
+{
+    m_backend->testOutput(id);
+}
+
+void Audio::resetOutputChoice()
+{
+    m_backend->resetOutputChoice();
 }
 
 bool Audio::mockPlug(const QString &id)

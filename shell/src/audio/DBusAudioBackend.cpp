@@ -70,6 +70,29 @@ QList<SinkInfo> parseSinks(const QDBusArgument &arg)
     return out;
 }
 
+// aa{sv}
+QList<OutputInfo> parseOutputs(const QDBusArgument &arg)
+{
+    QList<OutputInfo> out;
+    arg.beginArray();
+    while (!arg.atEnd()) {
+        const QVariantMap dict = parseDict(arg);
+        OutputInfo o;
+        o.id = dict.value(QStringLiteral("id")).toString();
+        o.name = dict.value(QStringLiteral("name")).toString();
+        o.kind = dict.value(QStringLiteral("kind")).toString();
+        o.card = dict.value(QStringLiteral("card")).toString();
+        o.port = dict.value(QStringLiteral("port")).toString();
+        o.available = dict.value(QStringLiteral("available")).toString();
+        o.active = dict.value(QStringLiteral("active")).toBool();
+        o.isDefault = dict.value(QStringLiteral("is_default")).toBool();
+        o.isSaved = dict.value(QStringLiteral("is_saved")).toBool();
+        out.append(o);
+    }
+    arg.endArray();
+    return out;
+}
+
 // The properties of the Audio interface as the shell wants them. Missing or malformed values
 // fall back to silence-safe defaults (channels full, master 0, unmuted).
 void parseState(const QVariantMap &props, int *volume, bool *muted, QVariantMap *channels)
@@ -95,6 +118,7 @@ DBusAudioBackend::DBusAudioBackend(QObject *parent)
     connect(&m_watcher, &QDBusServiceWatcher::serviceRegistered, this, [this] { refresh(); });
     m_bus.connect(Service, Path, Interface, QStringLiteral("SinksChanged"), this, SLOT(onSinksChanged()));
     m_bus.connect(Service, Path, Interface, QStringLiteral("DefaultSinkChanged"), this, SLOT(onSinksChanged()));
+    m_bus.connect(Service, Path, Interface, QStringLiteral("OutputsChanged"), this, SLOT(onSinksChanged()));
     m_bus.connect(Service, Path, PropertiesInterface, QStringLiteral("PropertiesChanged"), this,
                   SLOT(onPropertiesChanged(QString, QVariantMap, QStringList)));
 }
@@ -103,6 +127,7 @@ void DBusAudioBackend::refresh()
 {
     refreshState();
     refreshSinks();
+    refreshOutputs();
 }
 
 void DBusAudioBackend::refreshState()
@@ -141,6 +166,22 @@ void DBusAudioBackend::refreshSinks()
             return;
         }
         deliverSinks(request, parseSinks(reply.arguments().constFirst().value<QDBusArgument>()));
+    });
+}
+
+void DBusAudioBackend::refreshOutputs()
+{
+    auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("ListOutputs"));
+    const quint64 request = beginOutputsRequest();
+    auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, request](QDBusPendingCallWatcher *w) {
+        w->deleteLater();
+        const QDBusMessage reply = w->reply();
+        if (reply.type() != QDBusMessage::ReplyMessage || reply.arguments().isEmpty()) {
+            qWarning("ruya-shell: Devices1.Audio ListOutputs failed: %s", qPrintable(reply.errorMessage()));
+            return;
+        }
+        deliverOutputs(request, parseOutputs(reply.arguments().constFirst().value<QDBusArgument>()));
     });
 }
 
@@ -202,9 +243,48 @@ void DBusAudioBackend::setDefaultSink(const QString &id)
     });
 }
 
+void DBusAudioBackend::callOutput(const QString &method, const QString &id)
+{
+    auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, method);
+    msg << id;
+    auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, method, id](QDBusPendingCallWatcher *w) {
+        w->deleteLater();
+        QDBusPendingReply<QString> reply = *w;
+        const QString status = reply.isValid() ? reply.value() : QStringLiteral("failed");
+        if (method == QLatin1String("SetOutput")) {
+            emit setOutputFinished(id, status);
+            refreshOutputs(); // the list shows the new choice; the signal may have been missed
+        } else {
+            emit testOutputFinished(id, status);
+        }
+    });
+}
+
+void DBusAudioBackend::setOutput(const QString &id)
+{
+    callOutput(QStringLiteral("SetOutput"), id);
+}
+
+void DBusAudioBackend::testOutput(const QString &id)
+{
+    callOutput(QStringLiteral("TestOutput"), id);
+}
+
+void DBusAudioBackend::resetOutputChoice()
+{
+    auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("ResetOutputChoice"));
+    auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this](QDBusPendingCallWatcher *w) {
+        w->deleteLater();
+        refreshOutputs();
+    });
+}
+
 void DBusAudioBackend::onSinksChanged()
 {
     refreshSinks();
+    refreshOutputs();
 }
 
 void DBusAudioBackend::onPropertiesChanged(const QString &interface, const QVariantMap &, const QStringList &)
