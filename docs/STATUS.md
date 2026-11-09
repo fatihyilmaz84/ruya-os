@@ -48,6 +48,11 @@ One line each: `- (source) what, and why it matters`. Dispatched builders put th
 
 Triaged 2026-11-09 (lead-8): the lines before are verbatim in [`STATUS-parked.md`](STATUS-parked.md), "Inbox triage 2026-11-09 (lead-8)"; they became T-378 (session follow-ups), T-379 (`shots` reds), T-380 (profile audio isolation), the Dell look-at list (T-376 hw checks), or stay parked there (T-348 pane notes, T-361 test notes, lead-7 Dell probes).
 
+- (T-377, lead-8) Dell: `page-open-bench.py` Store, 5 opens, maxFrame under 50 ms (host offscreen: 243-287 ms before, 31-49 after; GPU side unmeasured); then decide whether each Store card's 3 MultiEffects (lift shadow, halo, glare) are made only for the focused card, keeping the shadow fade-in.
+- (T-377 reviews) A Store row not yet built forgets its remembered card index (a `pendingIndex` applied when the model fills); a `shots` frame of the Store scrolled to Apps & media; `slotY` recomputes for every row on each `rowIds` change (cheap with 4 rows).
+- (T-363, lead-8) CPU per game is only in the journal (`scope gone, cpu N ms`): putting it in the ledger or `ListSessions` changes a format; ask the owner whether "CPU per game" is wanted.
+- (lead-8) The `.githooks/pre-commit` text lint needs `git config core.hooksPath .githooks` once per clone (the owner; the lead's harness refused to set it).
+
 ## Blocked (need something this host doesn't have)
 
 | ID | What | Needs | Notes |

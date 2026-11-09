@@ -4,7 +4,6 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 
 | ID | Title | Status | Depends |
 |---|---|---|---|
-| [T-377](tasks/T-377-store-page-opens-with-a-long-frame.md) | The Store page opens with one 275 ms frame: find it and remove it | in-progress | — |
 | [T-378](tasks/T-378-session-follow-ups-alive-reset-user-link.md) | ruya-session follow-ups: Alive resets the miss count, user unknown vs a logind error, a strict restart check | todo | T-363 |
 | [T-379](tasks/T-379-shots-reds-plain-read-after-change.md) | `shots` reds on main: tst_store_ui:81, tst_system_info:502, tst_wallpaper:898, tst_display:101 | todo | T-377 |
 | [T-380](tasks/T-380-profile-audio-isolation.md) | **[lead]** Profiles apart in the audio graph: what a profile's app may see and change in PipeWire | todo | — |
