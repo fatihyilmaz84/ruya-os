@@ -2,7 +2,7 @@
 
 **Read this first in every session; update it last.** Rules: root `CLAUDE.md`. Roles (Opus lead, Sonnet builders): `docs/LEAD.md`. Task format: `docs/tasks/README.md`. Finished work: each task's own file (`Status: done`, Outcome starting with `Verified:`); history before T-132 in [`STATUS-done.md`](STATUS-done.md), old sessions in [`STATUS-log.md`](STATUS-log.md), parked Inbox lines, the long form of owner decisions and decided records in [`STATUS-parked.md`](STATUS-parked.md). `scripts/lint-board.ps1` (part of `dev.ps1 test`) keeps this board and the task files in step.
 
-Last updated: 2026-11-08 (Sonnet 5.5, planning)
+Last updated: 2026-11-09 (Opus 5.5, lead-6)
 
 ## Where we are
 
@@ -29,7 +29,7 @@ Open work only (the front of the board; the rest is in `STATUS-backlog.md`), in 
 
 Later (ordered): [`STATUS-backlog.md`](STATUS-backlog.md) holds the rest of the open board, same columns; `lint-board.ps1` reads both. A planner or the lead moves rows up when they become ready.
 
-**VM queue** (one image build runs them all; history in `STATUS-parked.md`): **0.0.57 passed on 2026-11-09** (lead-6, image-chain 10 + 17 min; T-164 `vm-session-check.sh display` 30 PASS and `check` 38 PASS; the Dell runs 0.0.57). Left for the next build (a **fresh disk**): `vm-audio-check.sh` (T-322 `AUDIO_SAVED_OUTPUT_OK`, T-347 `AUDIO_FIRST_VOLUME_OK` and `AUDIO_VOLUME_KEPT_OK`), `vm-storage-check.ps1` step `scan` (T-331), `vm-devices-check.sh twopads|inputd|bluetooth` (T-334..T-337), `vm-devices-check.sh system` with a FAT stick (T-226), `subset-icons.sh` in WSL (T-297), the sample re-run, the greenboot drill.
+**VM queue** (one image build runs them all; history in `STATUS-parked.md`): **0.0.58 passed on 2026-11-09** (lead-6; image-chain build 23 + qcow2 17 min; fresh disk with `-Audio`: `vm-session-check.sh display` and `check` ALL PASSED, `vm-audio-check.sh` AUDIO_SAVED_OUTPUT_OK, AUDIO_FIRST_VOLUME_OK (1.00), AUDIO_VOLUME_KEPT_OK; the Dell runs 0.0.58). Left for the next build: `vm-storage-check.ps1` step `scan` (T-331), `vm-devices-check.sh twopads|inputd|bluetooth` (T-334..T-337), `vm-devices-check.sh system` with a FAT stick (T-226), `subset-icons.sh` in WSL (T-297), the sample re-run, the greenboot drill, `vm-reboot-check.ps1` saved-output case (not written yet).
 
 **Dell look-at list** (one pass with the next ISO; the long text with task ids is in `STATUS-parked.md`, "Moved from STATUS 2026-11-08"):
 
@@ -94,6 +94,8 @@ Long forms: `STATUS-parked.md`.
 
 One entry per session, at most 700 characters (`lint-board.ps1`): date · model · tasks · what happened · numbers · follow-ups. Detail belongs in the task Outcome.
 
+- 2026-11-09 · Opus 5.5 · Lead (lead-6: T-164 per-profile Wayland sockets, T-322 output policy, T-347 card profiles, T-285 hint bar merged; T-358 GPU buffers by the lead; T-355 first pass; T-357 written) · `test` 1001 QML + 77 skips ALL GREEN; VM 0.0.57/0.0.58 PASS; Dell 0.0.58: STK through the shell on the UHD 630 at 15 % CPU (was llvmpipe 563 %) via our patched Qt linux-dmabuf v4 plugin. Process: `image-chain.sh`; builders run `test` in the foreground (two stalled).
+
 - 2026-11-09 · Sonnet 5.5 · Lead (lead-5 part 2: T-356 focus-loss dead end, T-349 lazy Settings, T-331 drive scan merged after a checkpoint; T-164 open) · `test` 987 QML + 77 skips ALL GREEN; ISO built only when needed (owner rule), lead efficiency rules in LEAD.md. Found with the owner: covered pages stole the window focus (T-356). Process: reviewers must run the revert check; waits stay inside one turn.
 
 - 2026-11-09 · Sonnet 5.5 · Lead (lead-5: T-330, T-336, T-335, T-337, T-334 merged, T-166 suspend verified, T-262 wake mechanism; planning batches T-331..T-356, ADR-015/016/019/020/022 accepted; checkpoint with T-356, T-349, T-331, T-164 on WIP branches) · `test` ALL GREEN; VM `0.0.55`/`0.0.56` queues PASS, both ISO checks PASSED; Dell on 0.0.56 (oci-archive route). Found with the owner: the dead-end focus bug (T-356; inputd innocent). Process: Dell upgrades need no owner; builders asked to kill processes are refused.
@@ -102,9 +104,3 @@ One entry per session, at most 700 characters (`lint-board.ps1`): date · model 
 - 2026-11-08 · Sonnet 5.5 · Lead (build loop from `d09da99`: T-290, T-291, T-293, T-294, T-297, T-286, T-300, T-301, T-312, T-313, T-321, T-323 (corners), T-324 (profile settings) merged; 8 of 13 needed a round 2; T-330 in flight) · `test` 931 QML + 73 skips; VM `0.0.54`: usage 33, session 37 + restart 22 (exposure 1.1), store 70, library 34, bluetooth 21, display, power-saving incl. wake. Found: the ambient bed never played (FLAC rate code 0), the Dell sound path (HDMI-first was wrong), `lint-text` skipped lone-CR files. Process: Opus builders for owner-visible fixes; ID clash with the other planner (T-314/T-315 renumbered).
 
 - 2026-11-08 · Sonnet 5.5 · Planning (Inbox triage, docs only) · 33 Inbox lines emptied: 20 tasks T-282..T-301 (lead: T-282 design decisions, T-298 CI gate; builder: contrast rows, glass sheet and dialogs, hints, plain text, display x2, system info, session, store, Activity, power saving, sound themes, time zone, VM scripts, lint, image, Bluetooth service and UI), notes merged into T-147/T-164/T-166/T-211, 7 dropped as done, 2 owner decisions added (pad glyph licence, wordmark). STATUS 34 KB to about 14 KB; full lines in STATUS-parked.md. Next: T-164, then the builder lanes at the top of the backlog.
-
-
-- 2026-11-07 · Sonnet 5.5 · Lead (build loop from `e73e081`: T-200, T-214, T-206, T-204, T-209, T-208, T-205, T-190, T-223, T-203, T-194, T-199, T-213, T-226, T-260 merged; most needed a round 2, T-203/T-226 found real security/privacy defects) · `test` 674 QML + 57 skips, `shots` 111 green (basic render loop). VM `0.0.48/.50`: devices 106, store 71, library 35, storage, sample 28 PASS; ISOs `0.0.49`/`0.0.50` verified (whole disk), on F:. CI fixes (clippy cast, qmllint property-override). Board split, ~30 backlog tasks written. Process: shots loop, member lint, QEMU overlay cleanup.
-
-
-
