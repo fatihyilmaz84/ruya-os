@@ -81,6 +81,7 @@ Item {
             frameCounter.target = null
             settleWatch.target = null
             reapWatch.target = null
+            Theme.motionFactor = 1.0
             Bluetooth.mockReset()
             Display.mockReset()
         }
@@ -371,6 +372,58 @@ Item {
         function test_unopened_pane_modals_do_not_count_as_a_modal() {
             openSettings()
             compare(tc.shell.modalShown(), false, "Settings is open, no modal is")
+        }
+        // The same with the modals built (their Loaders hold an item, hidden since the keyboard closed):
+        // that is no modal either, so the focus safety net still acts when a pane's focus falls out.
+        function test_the_focus_net_works_with_a_settings_pane_loaded() {
+            openSettings()
+            enterPane("paneMyProfile")
+            goToRow("rowRenameMe")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("myProfileRenameEntry") !== null && find("myProfileRenameEntry").shown, 2000, "the keyboard opens")
+            backOut("myProfileRenameEntry")
+            tryVerify(() => find("rowRenameMe").activeFocus, 2000, "focus returns to the row")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => find("categoryList").activeFocus, 2000)
+            const entry = find("myProfileRenameEntry")
+            verify(entry !== null, "the keyboard is built")
+            tryVerify(() => !entry.visible, 2000, "and hidden once it has faded out; its Loader still shows")
+            compare(tc.shell.modalShown(), false, "a built, closed modal is no modal")
+            tc.shell.openPage("power")                   // a page over Settings
+            tryCompare(tc.shell, "currentPage", "power")
+            tryVerify(() => find("powerSuspend").activeFocus, 2000, "the Power page has the focus")
+            tryVerify(() => !find("pageSlot_settings").visible, 2000, "Settings faded out")
+            const repairs = tc.shell.focusRepairs
+            find("categoryList").forceActiveFocus()      // the covered page takes the focus back
+            verify(tc.shell.focusIsLost(), "lost: nothing in the modal layer shows")
+            tryVerify(() => find("powerSuspend").activeFocus, 2000, "the net gives it to the page on top")
+            compare(tc.shell.focusRepairs, repairs + 1, "the net acted once")
+            keyClick(Qt.Key_Escape)
+            tryCompare(tc.shell, "currentPage", "settings", 3000, "Back works again")
+        }
+
+        // A popped page is destroyed only once the page on top has settled and a frame is on screen. A
+        // page popped before its fade-in progressed is already at opacity 0 when it closes, so only
+        // topSettled() keeps it: the Settings page opened over the Store is popped at once, and the Store
+        // beneath it is still gliding in (a long glide here, so the wait is wide).
+        function test_reap_waits_for_the_top_to_settle() {
+            Theme.motionFactor = 4
+            tc.shell.openPage("store")
+            tc.shell.openPage("settings", {})
+            const popped = find("pageSlot_settings")
+            verify(popped !== null)
+            frameCounter.target = tc.shell.Window.window
+            tc.shell.closePage()
+            compare(popped.closing, true)
+            compare(popped.opacity, 0, "it never faded in: nothing but the gate holds it")
+            verify(!tc.shell.topSettled(), "the Store has not settled")
+            const frames = tc.frames
+            tryVerify(() => tc.frames >= frames + 5, 3000, "frames are drawn meanwhile")
+            verify(!tc.shell.topSettled(), "and the Store has still not settled")
+            verify(find("pageSlot_settings") !== null, "the popped page is still there")
+            compare(popped.reaped, false)
+            tryVerify(() => find("pageSlot_settings") === null, 8000, "destroyed after the Store settled")
+            verify(find("pageSlot_store").settled, "which it had")
         }
     }
 }

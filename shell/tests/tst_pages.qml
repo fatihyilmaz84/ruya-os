@@ -75,6 +75,7 @@ Item {
 
         function cleanup() {
             Usage.mockFailNextRefresh("")            // a failure armed by a test that stopped early
+            Theme.motionFactor = 1.0                 // short fades set by a test (the focus tests)
         }
 
         function test_each_section_opens_its_page_data() {
@@ -353,28 +354,40 @@ Item {
         }
         // The page on top has faded in, the pages below have faded out, and the active focus is a
         // visible, enabled item of the page on top.
-        function checkFocusOnTop(what) {
+        function checkFocusOnTop(what, frames) {
             const top = tc.shell.slots[tc.shell.slots.length - 1]
             tryCompare(top, "opacity", 1)
             tryVerify(() => tc.shell.slots.slice(0, -1).every(s => !s.visible), 2000, what + ": the page below faded out")
+            // `frames` drawn frames of grace (a pane hands the focus on from a hidden item in a
+            // Qt.callLater of its own: one or two frames, whatever the fades). 0 is a single read: the
+            // "replies due" state is in between and must already be right (T-356); the shell's safety
+            // net does not stand in for it (focusRepairs is asserted by the callers).
+            let problem = focusProblem(top, what)
+            for (let i = 0; i < frames && problem !== ""; ++i) {
+                waitForRendering(tc.shell)
+                problem = focusProblem(top, what)
+            }
+            compare(problem, "")
+        }
+        function focusProblem(top, what) {
             const f = tc.shell.Window.window.activeFocusItem
             let inside = false
             for (let p = f; p; p = p.parent)
                 inside = inside || p === top.page
-            verify(inside && f.visible && f.enabled, what + ": " + describeFocus(f))
+            return inside && f.visible && f.enabled ? "" : what + ": " + describeFocus(f)
         }
         // With bad services, also while replies are on their way and once they are in.
         function settleAndCheck(what, bad) {
-            checkFocusOnTop(what)
+            checkFocusOnTop(what, 3)
             if (!bad)
                 return
-            Bluetooth.mockRefreshDelayed(100)
-            Network.mockRefreshDelayed(100)
-            Library.mockListDelayed(100)
-            checkFocusOnTop(what + " (replies due)")
+            Bluetooth.mockRefreshDelayed(40)
+            Network.mockRefreshDelayed(40)
+            Library.mockListDelayed(40)
+            checkFocusOnTop(what + " (replies due)", 0)
             tryVerify(() => Bluetooth.mockPendingReplies() === 0 && Network.mockPendingReplies() === 0
                       && Library.mockPendingReplies() === 0, 3000)
-            checkFocusOnTop(what + " (replies in)")
+            checkFocusOnTop(what + " (replies in)", 3)
         }
         function openForFocus(key, extra, bad) {
             const chess = "org.example.Chess"
@@ -401,6 +414,9 @@ Item {
         }
         function test_every_page_owns_the_focus(data) {
             tryVerify(() => Store.catalogue.length > 0 && Library.games.length > 0)
+            // Short but real fades (30 ms instead of 300): about 90 page changes would wait ~35 s for
+            // them, and the covered page must still hide itself in a fade for this to test the race.
+            Theme.motionFactor = 0.03
             for (const key of Object.keys(tc.shell.builtinPages)) {
                 openForFocus(key, {}, data.bad)
                 settleAndCheck(key + " from Home", data.bad)
@@ -412,10 +428,16 @@ Item {
                 backTo("appDetail", key + " over the app page")
                 backTo("", "appDetail")
             }
-            for (const category of ["myprofile", "network", "bluetooth", "display", "audio", "storage",
+            // Player One is an admin: his list also has Manage profiles ("profiles"), which Ada's has not.
+            Profiles.switchTo("p1", "1234")
+            tryCompare(Profiles, "activeProfile", "p1")
+            tryVerify(() => find("homePlay").activeFocus, 2000, "Play takes focus after the switch")
+            for (const category of ["myprofile", "profiles", "network", "bluetooth", "display", "audio", "storage",
                                     "accessibility", "power", "system", "about"]) {
                 openForFocus("settings", { category: category }, data.bad)
                 tryVerify(() => find("categoryList").activeFocus)
+                // SettingsPage opens on its first category when the one asked for is not listed.
+                compare(find("page_settings").current.key, category, "the requested category opened")
                 keyClick(Qt.Key_Right)                   // into the pane (nothing for a category without one)
                 settleAndCheck("settings: " + category, data.bad)
                 backTo("", "settings: " + category)

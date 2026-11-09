@@ -76,19 +76,43 @@ Item {
             return found
         }
 
-        function checkCluster(size, what, expectedDevices) {
-            waitForRendering(tc.shell)       // the Row lays out on the next frame
-            tryVerify(() => settled(), 2000, what + ": the chips are laid out")
+        // The pill is laid out when it is as wide as the row inside it plus its padding. The budget
+        // that picks the chips is computed at once from the fonts, but the Row (and so the pill) follows
+        // one frame later, and the clock text changes width (HH:mm in a proportional font) every
+        // minute: right after either, the pill's edge is still the old one (the gap read 23 or 25 px
+        // against 24 under load). Measured widths only: nothing here depends on a font's metrics.
+        function pillIsLaidOut() {
+            const pill = find("statusGlass")
+            const inner = find("batteryStatus").parent
+            return Math.abs(pill.width - (inner.width + 2 * Theme.spaceL * tc.shell.u)) < 0.5
+        }
+        // "" when the cluster clears the nav and sits in the safe area, else what is wrong.
+        function clusterProblem(size, what) {
             const nav = find("sectionNav")
             const pill = find("statusGlass")
             const u = tc.shell.u
             const navRight = nav.mapToItem(tc.shell, nav.width, 0).x
-            verify(navRight + 24 * u <= pill.x + 0.5, what + " at " + size[1] + "p: the cluster starts at " + pill.x
-                   + ", the nav ends at " + navRight)
-            verify(pill.x + pill.width <= tc.shell.width - tc.shell.marginX + 1,
-                   what + " at " + size[1] + "p: inside the safe area, right edge " + (pill.x + pill.width))
+            if (navRight + 24 * u > pill.x + 0.5)
+                return what + " at " + size[1] + "p: the cluster starts at " + pill.x + ", the nav ends at " + navRight
+            if (pill.x + pill.width > tc.shell.width - tc.shell.marginX + 1)
+                return what + " at " + size[1] + "p: inside the safe area, right edge " + (pill.x + pill.width)
+            if (find("batteryStatus").width + 2 * 8 * u > pill.width)
+                return what + ": the chips sit inside the pill"
+            return ""
+        }
+
+        function checkCluster(size, what, expectedDevices) {
+            waitForRendering(tc.shell)       // the Row lays out on the next frame
+            tryVerify(() => settled() && pillIsLaidOut(), 2000, what + ": the chips and the pill are laid out")
+            // Re-read for up to 2 s: a change of the clock text re-budgets the chips at once and the pill
+            // follows a frame later; an overlap that stays is still reported, with its numbers.
+            let problem = clusterProblem(size, what)
+            for (let i = 0; i < 40 && problem !== ""; ++i) {
+                wait(50)
+                problem = clusterProblem(size, what)
+            }
+            compare(problem, "")
             const row = find("batteryStatus")
-            verify(row.width + 2 * 8 * u <= pill.width, what + ": the chips sit inside the pill")
             // The name is not squeezed under about six characters.
             const nameItem = find("activeProfileName")
             verify(nameItem.width >= Math.min(nameItem.implicitWidth, 3 * nameItem.font.pixelSize), what + ": the name keeps a minimum: " + nameItem.width)

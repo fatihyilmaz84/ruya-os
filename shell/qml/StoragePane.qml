@@ -270,8 +270,8 @@ SettingsPane {
         onTriggered: pane.pumpScan(true)
     }
 
-    // Free space changes without a signal: read the numbers when this pane is shown (not when
-    // Settings opens: the pane is created then, hidden).
+    // Free space changes without a signal: read the numbers whenever this pane is shown (each time
+    // its category is selected, T-349), not once when the pane is built.
     onVisibleChanged: {
         if (visible) {
             Storage.refreshInternal()
