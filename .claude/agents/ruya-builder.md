@@ -35,7 +35,7 @@ You never decide or expand what is public. The task's `Developer surface:` heade
 
 ## Tooling on this machine (Windows)
 
-- Every command must finish on its own. Long work (image builds, VM boots) runs with `run_in_background`, and you wait for its notification; **never end your turn while something you started still runs**. Before your final message, stop what you started (`qemu-system-x86_64`, `ruya-shell`, `podman` containers you ran).
+- Every command must finish on its own. Long work (image builds, VM boots) runs with `run_in_background`, and you wait for its notification; **never end your turn while something you started still runs**. Run `dev.ps1 test` in the **foreground** with `timeout: 600000` (it takes about 5-6 minutes): a background test whose notification you end the turn on leaves the lead with no HANDOFF (T-322 round 2 stalled twice that way, 2026-11-09). Before your final message, stop what you started (`qemu-system-x86_64`, `ruya-shell`, `podman` containers you ran).
 - After any image build, passed or failed: `.\scripts\free-space.ps1` once your VM checks are done.
 - Run `dev.ps1` from **your worktree** (`Set-Location` there, use its own `.\scripts\dev.ps1`): the script from the main checkout tests main's tree, not yours.
 - Never `cargo clean`, never copy `target/` or `shell\build-win` (disk is limited); iterate with `dev.ps1 qml tst_x [tst_y]` (builds the runner, runs only those files; PARTIAL, never evidence for a HANDOFF), `revert-check.ps1 ... -Test tst_x`, `dev.ps1 rust` or `dev.ps1 shell`; run the full `test` once at the end.
