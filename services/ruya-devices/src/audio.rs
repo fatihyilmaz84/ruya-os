@@ -1616,7 +1616,11 @@ mod tests {
         assert_eq!(a.set_volume(30), Status::Ok);
         assert_eq!(a.set_output("card:tv"), Status::Ok);
         a.refresh().unwrap();
-        assert_eq!(a.volume(), 100, "an output never seen starts at the first volume");
+        assert_eq!(
+            a.volume(),
+            100,
+            "an output never seen starts at the first volume"
+        );
         assert_eq!(a.set_volume(70), Status::Ok);
         assert_eq!(a.set_output("card:spk"), Status::Ok);
         a.refresh().unwrap();
@@ -1675,19 +1679,34 @@ mod tests {
         std::fs::create_dir_all(&state).unwrap();
         let audio_toml = state.join("audio.toml");
         assert!(!existing_install(&audio_toml), "a fresh console");
-        std::fs::write(state.join("outputs.toml"), "saved = \"card:tv\"
-").unwrap();
+        std::fs::write(
+            state.join("outputs.toml"),
+            "saved = \"card:tv\"
+",
+        )
+        .unwrap();
         assert!(existing_install(&audio_toml), "a saved output");
         std::fs::remove_file(state.join("outputs.toml")).unwrap();
         let wp = root.path().join("wireplumber");
         std::fs::create_dir_all(&wp).unwrap();
-        assert!(!existing_install(&audio_toml), "an empty WirePlumber directory");
-        std::fs::write(wp.join("default-routes"), "[default-routes]
-").unwrap();
+        assert!(
+            !existing_install(&audio_toml),
+            "an empty WirePlumber directory"
+        );
+        std::fs::write(
+            wp.join("default-routes"),
+            "[default-routes]
+",
+        )
+        .unwrap();
         assert!(existing_install(&audio_toml), "WirePlumber's saved volumes");
         std::fs::remove_file(wp.join("default-routes")).unwrap();
-        std::fs::write(&audio_toml, "ui = 50
-").unwrap();
+        std::fs::write(
+            &audio_toml,
+            "ui = 50
+",
+        )
+        .unwrap();
         assert!(existing_install(&audio_toml), "channel sliders");
     }
 
