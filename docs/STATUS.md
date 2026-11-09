@@ -90,6 +90,8 @@ Long forms: `STATUS-parked.md`.
 
 One entry per session, at most 700 characters (`lint-board.ps1`): date · model · tasks · what happened · numbers · follow-ups. Detail belongs in the task Outcome.
 
+- 2026-11-09 · Sonnet 5.5 · Lead (lead-5 part 2: T-356 focus-loss dead end, T-349 lazy Settings, T-331 drive scan merged after a checkpoint; T-164 open) · `test` 987 QML + 77 skips ALL GREEN; ISO built only when needed (owner rule), lead efficiency rules in LEAD.md. Found with the owner: covered pages stole the window focus (T-356). Process: reviewers must run the revert check; waits stay inside one turn.
+
 - 2026-11-09 · Sonnet 5.5 · Lead (lead-5: T-330, T-336, T-335, T-337, T-334 merged, T-166 suspend verified, T-262 wake mechanism; planning batches T-331..T-356, ADR-015/016/019/020/022 accepted; checkpoint with T-356, T-349, T-331, T-164 on WIP branches) · `test` ALL GREEN; VM `0.0.55`/`0.0.56` queues PASS, both ISO checks PASSED; Dell on 0.0.56 (oci-archive route). Found with the owner: the dead-end focus bug (T-356; inputd innocent). Process: Dell upgrades need no owner; builders asked to kill processes are refused.
 
 
@@ -100,6 +102,5 @@ One entry per session, at most 700 characters (`lint-board.ps1`): date · model 
 
 - 2026-11-07 · Sonnet 5.5 · Lead (build loop from `e73e081`: T-200, T-214, T-206, T-204, T-209, T-208, T-205, T-190, T-223, T-203, T-194, T-199, T-213, T-226, T-260 merged; most needed a round 2, T-203/T-226 found real security/privacy defects) · `test` 674 QML + 57 skips, `shots` 111 green (basic render loop). VM `0.0.48/.50`: devices 106, store 71, library 35, storage, sample 28 PASS; ISOs `0.0.49`/`0.0.50` verified (whole disk), on F:. CI fixes (clippy cast, qmllint property-override). Board split, ~30 backlog tasks written. Process: shots loop, member lint, QEMU overlay cleanup.
 
-- 2026-11-06 · Sonnet 5.5 · Planning (owner request: `.play` packages; no code) · Wrote spec `05-play-packages.md` (format, runners bundled/system/newest, closed permissions, signing and trust tiers, updates), Proposed ADR-014 (a container that installs as a sandboxed Flatpak, amends ADR-005) and epic T-228 with T-229..T-244. Epic is `blocked` on the owner (ADR-014, D1-D3). Open: Xwayland or Wine Wayland (none today), Proton nesting, emulator content policy. Inbox untouched.
 
 
