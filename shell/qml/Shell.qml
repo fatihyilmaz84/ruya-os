@@ -484,6 +484,32 @@ FocusScope {
         }
     }
 
+    // Play on a game (Home, Games): the Library says what to start, Session1.Launch starts it as the
+    // signed-in profile (T-386). Session1 takes Flatpak application ids, so "flatpak:<id>" goes as
+    // <id>; any other launch spec (Steam) goes as it is and the service answers "unknown-app".
+    // The window itself comes with AppStarted (appOpen); only a refusal is heard here.
+    property var launchTitles: ({})
+    Connections {
+        target: Library
+        function onLaunchRequested(id, launchSpec) {
+            const prefix = "flatpak:"
+            const appId = launchSpec.startsWith(prefix) ? launchSpec.substring(prefix.length) : launchSpec
+            root.launchTitles[appId] = Library.item(id).title ?? id
+            Session.launch(appId, Profiles.activeProfile)
+        }
+    }
+    Connections {
+        target: Session
+        function onLaunchFinished(appId, profile, status, instance) {
+            const title = root.launchTitles[appId] ?? (Store.app(appId).name || appId)
+            delete root.launchTitles[appId]
+            // "already-running": the game is there already, nothing went wrong.
+            if (status === "ok" || status === "already-running")
+                return
+            Notifications.show(qsTr("%1 could not be started").arg(title), "error")
+        }
+    }
+
     // An app that crashed or never got to run is the only exit the user hears about; a normal
     // quit (including a Stop from the shell) is silent.
     Connections {

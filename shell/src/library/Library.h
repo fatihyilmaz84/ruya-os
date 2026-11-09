@@ -43,8 +43,8 @@ public:
 
     // rescanned follows when the service has read its files again.
     Q_INVOKABLE void rescan();
-    // Asks for the item to be started. Only emits launchRequested: the session service will start
-    // it from the launch spec, and nothing does yet.
+    // Asks for the item to be started. Only emits launchRequested; Shell.qml answers it with
+    // Session.launch for the signed-in profile (T-386).
     Q_INVOKABLE void launch(const QString &id);
     // The record of an item, or an empty object.
     Q_INVOKABLE QVariantMap item(const QString &id) const;

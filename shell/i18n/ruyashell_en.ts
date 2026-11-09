@@ -2576,12 +2576,12 @@ This can&apos;t be undone.</translation>
         <translation>power off</translation>
     </message>
     <message>
-        <location line="+981"/>
+        <location line="+1011"/>
         <source>Power</source>
         <translation>Power</translation>
     </message>
     <message>
-        <location line="-964"/>
+        <location line="-994"/>
         <source>Update ready. Restart to finish.</source>
         <translation>Update ready. Restart to finish.</translation>
     </message>
@@ -2596,7 +2596,12 @@ This can&apos;t be undone.</translation>
         <translation>Restarting to finish the update in 2 minutes. Press any button to wait.</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+28"/>
+        <source>%1 could not be started</source>
+        <translation>%1 could not be started</translation>
+    </message>
+    <message>
+        <location line="+12"/>
         <source>%1 stopped unexpectedly</source>
         <translation>%1 stopped unexpectedly</translation>
     </message>
@@ -2606,12 +2611,12 @@ This can&apos;t be undone.</translation>
         <translation>The screen did not answer, so the previous resolution is back.</translation>
     </message>
     <message>
-        <location line="+48"/>
+        <location line="+49"/>
         <source>Wallpaper could not be loaded</source>
         <translation>Wallpaper could not be loaded</translation>
     </message>
     <message>
-        <location line="+309"/>
+        <location line="+312"/>
         <source>Continue playing</source>
         <translation>Continue playing</translation>
     </message>
@@ -2956,7 +2961,7 @@ This can&apos;t be undone.</translation>
         <translation>Store</translation>
     </message>
     <message>
-        <location line="+21"/>
+        <location line="+27"/>
         <source>Featured</source>
         <translation>Featured</translation>
     </message>
@@ -2972,13 +2977,13 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+136"/>
+        <location line="+140"/>
         <location line="+70"/>
         <source>Installed</source>
         <translation>Installed</translation>
     </message>
     <message>
-        <location line="-182"/>
+        <location line="-179"/>
         <source>Official</source>
         <translation>Official</translation>
     </message>
@@ -2993,13 +2998,13 @@ This can&apos;t be undone.</translation>
         <translation>Community</translation>
     </message>
     <message>
-        <location line="+111"/>
+        <location line="+108"/>
         <location line="+70"/>
         <source>Update available</source>
         <translation>Update available</translation>
     </message>
     <message>
-        <location line="+34"/>
+        <location line="+109"/>
         <source>Search</source>
         <translation>Search</translation>
     </message>
@@ -3014,12 +3019,12 @@ This can&apos;t be undone.</translation>
         <translation>Show all apps</translation>
     </message>
     <message>
-        <location line="+107"/>
+        <location line="+43"/>
         <source>Search results</source>
         <translation>Search results</translation>
     </message>
     <message>
-        <location line="+37"/>
+        <location line="+38"/>
         <source>No apps found for &quot;%1&quot;</source>
         <translation>No apps found for &quot;%1&quot;</translation>
     </message>

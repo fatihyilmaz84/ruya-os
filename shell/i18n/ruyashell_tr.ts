@@ -2567,12 +2567,12 @@ Bu geri alınamaz.</translation>
         <translation>kapatma</translation>
     </message>
     <message>
-        <location line="+981"/>
+        <location line="+1011"/>
         <source>Power</source>
         <translation>Güç</translation>
     </message>
     <message>
-        <location line="-964"/>
+        <location line="-994"/>
         <source>Update ready. Restart to finish.</source>
         <translation>Güncelleme hazır. Bitirmek için yeniden başlat.</translation>
     </message>
@@ -2587,7 +2587,12 @@ Bu geri alınamaz.</translation>
         <translation>Güncellemeyi bitirmek için 2 dakika içinde yeniden başlatılıyor. Beklemek için herhangi bir düğmeye bas.</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+28"/>
+        <source>%1 could not be started</source>
+        <translation>%1 başlatılamadı</translation>
+    </message>
+    <message>
+        <location line="+12"/>
         <source>%1 stopped unexpectedly</source>
         <translation>%1 beklenmedik şekilde durdu</translation>
     </message>
@@ -2597,12 +2602,12 @@ Bu geri alınamaz.</translation>
         <translation>Ekran yanıt vermedi, bu yüzden önceki çözünürlük geri geldi.</translation>
     </message>
     <message>
-        <location line="+48"/>
+        <location line="+49"/>
         <source>Wallpaper could not be loaded</source>
         <translation>Duvar kağıdı yüklenemedi</translation>
     </message>
     <message>
-        <location line="+309"/>
+        <location line="+312"/>
         <source>Continue playing</source>
         <translation>Oynamaya devam et</translation>
     </message>
@@ -2947,7 +2952,7 @@ Bu geri alınamaz.</translation>
         <translation>Mağaza</translation>
     </message>
     <message>
-        <location line="+21"/>
+        <location line="+27"/>
         <source>Featured</source>
         <translation>Öne çıkanlar</translation>
     </message>
@@ -2963,13 +2968,13 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+136"/>
+        <location line="+140"/>
         <location line="+70"/>
         <source>Installed</source>
         <translation>Kurulu</translation>
     </message>
     <message>
-        <location line="-182"/>
+        <location line="-179"/>
         <source>Official</source>
         <translation>Resmi</translation>
     </message>
@@ -2984,13 +2989,13 @@ Bu geri alınamaz.</translation>
         <translation>Topluluk</translation>
     </message>
     <message>
-        <location line="+111"/>
+        <location line="+108"/>
         <location line="+70"/>
         <source>Update available</source>
         <translation>Güncelleme var</translation>
     </message>
     <message>
-        <location line="+34"/>
+        <location line="+109"/>
         <source>Search</source>
         <translation>Ara</translation>
     </message>
@@ -3005,12 +3010,12 @@ Bu geri alınamaz.</translation>
         <translation>Tüm uygulamaları göster</translation>
     </message>
     <message>
-        <location line="+107"/>
+        <location line="+43"/>
         <source>Search results</source>
         <translation>Arama sonuçları</translation>
     </message>
     <message>
-        <location line="+37"/>
+        <location line="+38"/>
         <source>No apps found for &quot;%1&quot;</source>
         <translation>&quot;%1&quot; için uygulama bulunamadı</translation>
     </message>
