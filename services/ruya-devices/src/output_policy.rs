@@ -164,6 +164,12 @@ impl ChoiceStore {
     }
 }
 
+/// The loudest the test tone gets, as a share of full scale (T-347): the first-start sink
+/// volume is high, so the tone itself must not be painful.
+pub const TONE_CAP: f64 = 0.8;
+/// The tone's own level, never above [`TONE_CAP`].
+const TONE_LEVEL: f64 = 0.4;
+
 /// A 0.4 s, 440 Hz tone as a 16-bit stereo 48 kHz WAV file, faded at both ends (no click):
 /// what `TestOutput` plays.
 pub fn tone_wav() -> Vec<u8> {
@@ -173,7 +179,7 @@ pub fn tone_wav() -> Vec<u8> {
     for i in 0..frames {
         let t = f64::from(i) / f64::from(RATE);
         let fade = (f64::from(i.min(frames - 1 - i)) / 2_400.0).min(1.0);
-        let v = (t * 440.0 * std::f64::consts::TAU).sin() * fade * 0.4;
+        let v = (t * 440.0 * std::f64::consts::TAU).sin() * fade * TONE_LEVEL.min(TONE_CAP);
         let s = (v * f64::from(i16::MAX)) as i16;
         for _ in 0..2 {
             data.extend_from_slice(&s.to_le_bytes());
@@ -301,6 +307,21 @@ mod tests {
         assert_eq!(ChoiceStore::at(&path).load().unwrap(), c);
         fs::write(&path, "saved = 3").unwrap();
         assert!(ChoiceStore::at(&path).load().is_err());
+    }
+
+    #[test]
+    fn test_tone_is_capped_at_80_percent() {
+        let w = tone_wav();
+        let peak = w[44..]
+            .chunks_exact(2)
+            .map(|b| i32::from(i16::from_le_bytes([b[0], b[1]])).abs())
+            .max()
+            .unwrap();
+        assert!(
+            f64::from(peak) <= TONE_CAP * f64::from(i16::MAX),
+            "peak {peak}"
+        );
+        assert!(peak > 1000, "still audible");
     }
 
     #[test]

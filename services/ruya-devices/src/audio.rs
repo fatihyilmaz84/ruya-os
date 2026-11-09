@@ -3,6 +3,7 @@
 //! the `PipeWire` trait and the channel `Store`.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::path::{Path, PathBuf};
 
 use crate::output_policy::{rank, Avail, Choice, ChoiceStore, OutKind, Output};
 use crate::store::{Channels, Store};
@@ -79,13 +80,20 @@ pub struct Snapshot {
 pub trait PipeWire: Send {
     fn snapshot(&mut self) -> Result<Snapshot, String>;
     fn set_default(&mut self, id: &str) -> Result<(), String>;
-    /// Makes the output the default: its sink when it has one. Switching a card profile so an
-    /// output without a sink gets one is T-347; until then that is an error.
-    fn activate(&mut self, output: &Output) -> Result<(), String> {
-        match &output.node {
-            Some(node) => self.set_default(node),
-            None => Err(format!("{}: its card profile is not active", output.id)),
-        }
+    /// An opaque description of the card's active profile and route, to hand back to
+    /// `restore_profile` (T-347).
+    fn card_profile(&mut self, _card: &str) -> Result<String, String> {
+        Err("card profiles are not supported".to_owned())
+    }
+    /// Switches the output's card to the profile and route that carry the output and returns the
+    /// `node.name` of its sink once it exists. Does not change the default. On an error the card
+    /// may be left on the new profile: the caller restores it.
+    fn switch_to(&mut self, output: &Output) -> Result<String, String> {
+        Err(format!("{}: its card profile is not active", output.id))
+    }
+    /// Puts the card back as `card_profile` described it.
+    fn restore_profile(&mut self, _card: &str, _state: &str) -> Result<(), String> {
+        Ok(())
     }
     /// Plays a short tone on the output's sink without changing the default.
     fn play_tone(&mut self, node: &str) -> Result<(), String>;
@@ -129,6 +137,9 @@ pub struct Audio<P: PipeWire> {
     muted: bool,
     playing: bool,
     channels: Channels,
+    /// The marker file of the one-time first-start volume; `None` = never apply it.
+    first_start_marker: Option<PathBuf>,
+    first_start_done: bool,
 }
 
 impl<P: PipeWire> Audio<P> {
@@ -149,7 +160,18 @@ impl<P: PipeWire> Audio<P> {
             muted: false,
             playing: false,
             channels,
+            first_start_marker: None,
+            first_start_done: true,
         })
+    }
+
+    /// The first output starts at full volume, once (owner, 2026-11-08): the TV or monitor sets
+    /// the loudness. `marker` is written after the volume was set and its presence stops it for
+    /// good (reboot, restart, update); a volume the player sets later is never touched.
+    pub fn with_first_start_marker(mut self, marker: &Path) -> Self {
+        self.first_start_done = marker.exists();
+        self.first_start_marker = Some(marker.to_owned());
+        self
     }
 
     /// Keeps the saved choice in `store` (loaded now; a corrupt file is an error).
@@ -166,10 +188,15 @@ impl<P: PipeWire> Audio<P> {
         Ok(self.apply(snap))
     }
 
-    fn apply(&mut self, snap: Snapshot) -> Changes {
+    fn apply(&mut self, mut snap: Snapshot) -> Changes {
         let mut changes = Changes::default();
-        let first = !self.loaded;
-        self.loaded = true;
+        // The first read that shows an output takes over the state; an empty list (PipeWire or
+        // WirePlumber not settled yet at boot) waits, so the policy still runs once outputs exist.
+        let nothing_yet = snap.outputs.is_empty() && snap.sinks.is_empty();
+        let first = !self.loaded && !nothing_yet;
+        if first {
+            self.loaded = true;
+        }
 
         let old_default = self.default.clone();
         let connected = |id: &str| snap.sinks.iter().any(|s| s.id == id);
@@ -203,9 +230,9 @@ impl<P: PipeWire> Audio<P> {
             // A default WirePlumber remembered (even one that does not exist this boot) never decides.
             self.follow_policy(&snap.outputs, &mut default);
         } else if let Some(h) = headset {
-            if (h.node.is_none() || h.node != default) && self.pw.activate(h).is_ok() {
-                if let Some(n) = &h.node {
-                    default = Some(n.clone());
+            if h.node.is_none() || h.node != default {
+                if let Ok(node) = self.activate_output(h) {
+                    default = Some(node);
                 }
             }
         } else if default_gone {
@@ -216,6 +243,18 @@ impl<P: PipeWire> Audio<P> {
                     }
                 }
                 None => self.follow_policy(&snap.outputs, &mut default),
+            }
+        }
+
+        if !self.first_start_done && default.is_some() && self.pw.set_volume(100).is_ok() {
+            snap.volume = 100;
+            self.first_start_done = true;
+            if let Some(marker) = &self.first_start_marker {
+                // A marker that can't be written still holds for this run (first_start_done).
+                if let Some(dir) = marker.parent() {
+                    let _ = std::fs::create_dir_all(dir);
+                }
+                let _ = std::fs::write(marker, "the first-start volume was set\n");
             }
         }
 
@@ -258,13 +297,32 @@ impl<P: PipeWire> Audio<P> {
             if o.node.is_some() && o.node == *default {
                 return;
             }
-            if self.pw.activate(o).is_ok() {
-                if let Some(n) = &o.node {
-                    *default = Some(n.clone());
-                }
+            if let Ok(node) = self.activate_output(o) {
+                *default = Some(node);
                 return;
             }
         }
+    }
+
+    /// Makes the output the default and returns its sink. An output on another profile of its
+    /// card first gets its profile and route switched; a card is never left on a profile
+    /// without a sink: when the switch or the default fails, the old profile comes back.
+    fn activate_output(&mut self, o: &Output) -> Result<String, String> {
+        if let Some(node) = &o.node {
+            self.pw.set_default(node)?;
+            return Ok(node.clone());
+        }
+        let old = self.pw.card_profile(&o.card).ok();
+        let result = self
+            .pw
+            .switch_to(o)
+            .and_then(|node| self.pw.set_default(&node).map(|()| node));
+        if result.is_err() {
+            if let Some(old) = old {
+                let _ = self.pw.restore_profile(&o.card, &old);
+            }
+        }
+        result
     }
 
     /// Every output, with whether it is the default and whether it is the saved choice.
@@ -296,12 +354,13 @@ impl<P: PipeWire> Audio<P> {
         next.rejected.extend(auto);
         next.saved = Some(id.to_owned());
         let on_it = out.node.is_some() && out.node == self.default;
-        if !on_it && self.pw.activate(&out).is_err() {
-            return if out.node.is_none() {
-                Status::Inactive
-            } else {
-                Status::Failed
-            };
+        let mut node = out.node.clone();
+        if !on_it {
+            match self.activate_output(&out) {
+                Ok(n) => node = Some(n),
+                Err(_) if out.node.is_none() => return Status::Inactive,
+                Err(_) => return Status::Failed,
+            }
         }
         if self.choice_store.save(&next).is_err() {
             return Status::Failed;
@@ -312,7 +371,7 @@ impl<P: PipeWire> Audio<P> {
                 self.previous.retain(|p| *p != old);
                 self.previous.push(old);
             }
-            if let Some(node) = &out.node {
+            if let Some(node) = &node {
                 self.previous.retain(|p| p != node);
                 self.default = Some(node.clone());
             }
@@ -322,20 +381,32 @@ impl<P: PipeWire> Audio<P> {
 
     /// A short tone on the output, without touching the default.
     pub fn test_output(&mut self, id: &str) -> Status {
-        let Some(node) = self
-            .outputs
-            .iter()
-            .find(|o| o.id == id)
-            .map(|o| o.node.clone())
-        else {
+        let Some(out) = self.outputs.iter().find(|o| o.id == id).cloned() else {
             return Status::UnknownOutput;
         };
-        match node {
-            None => Status::Inactive,
-            Some(node) => match self.pw.play_tone(&node) {
+        if let Some(node) = &out.node {
+            return match self.pw.play_tone(node) {
                 Ok(()) => Status::Ok,
                 Err(_) => Status::Failed,
-            },
+            };
+        }
+        // Another profile of the card: borrow it for the tone and give it back, so the default
+        // output and what the player hears do not change.
+        let Ok(old) = self.pw.card_profile(&out.card) else {
+            return Status::Inactive;
+        };
+        let played = self
+            .pw
+            .switch_to(&out)
+            .and_then(|node| self.pw.play_tone(&node));
+        let restored = self.pw.restore_profile(&out.card, &old);
+        // The default sink may have vanished with the profile; WirePlumber picks another one.
+        if let Some(default) = self.default.clone() {
+            let _ = self.pw.set_default(&default);
+        }
+        match (played, restored) {
+            (Ok(()), Ok(())) => Status::Ok,
+            _ => Status::Failed,
         }
     }
 
@@ -449,6 +520,75 @@ impl<P: PipeWire> Audio<P> {
     }
 }
 
+/// A profile of a fake sound card: the ports it can carry and whether it has a sink at all.
+#[derive(Clone)]
+pub struct FakeProfile {
+    pub name: String,
+    pub ports: Vec<(String, OutKind, Avail)>,
+    pub sink: bool,
+}
+
+/// A fake sound card (T-347): one active profile and route, like PipeWire shows it, and the
+/// volume WirePlumber keeps per route.
+#[derive(Clone)]
+pub struct FakeCard {
+    pub name: String,
+    pub profiles: Vec<FakeProfile>,
+    pub active: String,
+    pub route: String,
+    /// The volume each route had when it was left (WirePlumber's route persistence).
+    pub volumes: BTreeMap<String, u32>,
+    /// What a route never seen before starts at (WirePlumber's own default, 40).
+    pub fresh_volume: u32,
+}
+
+impl FakeCard {
+    /// The Dell: `analog` (speaker, empty headphone jack), `hdmi` (a monitor, no ELD yet) and
+    /// `off` (no sink). Starts on `analog` and the speaker.
+    pub fn dell() -> FakeCard {
+        let profile = |name: &str, sink: bool, ports: Vec<(&str, OutKind, Avail)>| FakeProfile {
+            name: name.to_owned(),
+            sink,
+            ports: ports
+                .into_iter()
+                .map(|(p, k, a)| (p.to_owned(), k, a))
+                .collect(),
+        };
+        FakeCard {
+            name: "card".to_owned(),
+            profiles: vec![
+                profile(
+                    "analog",
+                    true,
+                    vec![
+                        ("spk", OutKind::Speaker, Avail::Unknown),
+                        ("hp", OutKind::Headphones, Avail::No),
+                    ],
+                ),
+                profile("hdmi", true, vec![("tv", OutKind::Hdmi, Avail::Unknown)]),
+                profile(
+                    "dead",
+                    false,
+                    vec![("ghost", OutKind::Hdmi, Avail::Unknown)],
+                ),
+                profile("off", false, vec![]),
+            ],
+            active: "analog".to_owned(),
+            route: "spk".to_owned(),
+            volumes: BTreeMap::new(),
+            fresh_volume: 40,
+        }
+    }
+
+    fn active_profile(&self) -> Option<&FakeProfile> {
+        self.profiles.iter().find(|p| p.name == self.active)
+    }
+
+    fn node(&self) -> String {
+        format!("{}.{}", self.name, self.active)
+    }
+}
+
 /// An in-memory PipeWire for tests and `--session` development: an HDMI and an analog output.
 #[derive(Clone)]
 pub struct FakePipeWire {
@@ -463,6 +603,10 @@ pub struct FakePipeWire {
     pub playing: bool,
     /// Make every write fail (to test the "failed" status).
     pub broken: bool,
+    /// A sound card with profiles; when set it decides `sinks` and `outputs` (T-347).
+    pub card: Option<FakeCard>,
+    /// How often a volume was written (the service must not write a volume it need not).
+    pub volume_writes: u32,
 }
 
 impl FakePipeWire {
@@ -484,7 +628,74 @@ impl FakePipeWire {
             muted: false,
             playing: false,
             broken: false,
+            card: None,
+            volume_writes: 0,
         }
+    }
+
+    /// A fake with one sound card; the default is its active sink, at the volume it starts at.
+    pub fn with_card(card: FakeCard) -> Self {
+        let mut pw = FakePipeWire::new();
+        pw.volume = card.fresh_volume;
+        pw.card = Some(card);
+        pw.sync_card();
+        pw.default = pw.sinks.first().map(|s| s.id.clone());
+        pw
+    }
+
+    /// Rebuilds the sinks and outputs from the card: only the active profile has a sink, and
+    /// only the route in use is tied to it.
+    fn sync_card(&mut self) {
+        let Some(card) = &self.card else { return };
+        self.sinks.clear();
+        if card.active_profile().is_some_and(|p| p.sink) {
+            let kind = match card
+                .profiles
+                .iter()
+                .flat_map(|p| &p.ports)
+                .find(|p| p.0 == card.route)
+            {
+                Some((_, OutKind::Hdmi, _)) => Kind::Hdmi,
+                _ => Kind::Analog,
+            };
+            self.sinks.push(Sink {
+                id: card.node(),
+                name: card.node(),
+                kind,
+            });
+        }
+        let mut outputs = Vec::new();
+        for profile in &card.profiles {
+            for (port, kind, available) in &profile.ports {
+                let live = profile.name == card.active && profile.sink && *port == card.route;
+                outputs.push(Output {
+                    id: format!("{}:{port}", card.name),
+                    name: port.clone(),
+                    kind: *kind,
+                    card: card.name.clone(),
+                    port: port.clone(),
+                    available: *available,
+                    node: live.then(|| card.node()),
+                });
+            }
+        }
+        self.outputs = Some(outputs);
+    }
+
+    /// Moves the card to the profile and route, keeping each route's volume as WirePlumber does.
+    fn move_card(&mut self, profile: &str, route: &str) {
+        let Some(card) = &mut self.card else { return };
+        if card.active_profile().is_some_and(|p| p.sink) {
+            card.volumes.insert(card.route.clone(), self.volume);
+        }
+        card.active = profile.to_owned();
+        card.route = route.to_owned();
+        self.volume = card
+            .volumes
+            .get(route)
+            .copied()
+            .unwrap_or(card.fresh_volume);
+        self.sync_card();
     }
 }
 
@@ -536,6 +747,44 @@ impl PipeWire for FakePipeWire {
         Ok(())
     }
 
+    fn card_profile(&mut self, card: &str) -> Result<String, String> {
+        match &self.card {
+            Some(c) if c.name == card => Ok(format!("{}/{}", c.active, c.route)),
+            _ => Err("no such card".to_owned()),
+        }
+    }
+
+    fn switch_to(&mut self, output: &Output) -> Result<String, String> {
+        if self.broken {
+            return Err("refused".to_owned());
+        }
+        let profile = self
+            .card
+            .as_ref()
+            .filter(|c| c.name == output.card)
+            .and_then(|c| {
+                c.profiles
+                    .iter()
+                    .find(|p| p.ports.iter().any(|x| x.0 == output.port))
+            })
+            .map(|p| p.name.clone())
+            .ok_or_else(|| "no profile carries it".to_owned())?;
+        self.move_card(&profile, &output.port);
+        self.sinks
+            .first()
+            .map(|s| s.id.clone())
+            .ok_or_else(|| "the profile has no sink".to_owned())
+    }
+
+    fn restore_profile(&mut self, card: &str, state: &str) -> Result<(), String> {
+        let (profile, route) = state.split_once('/').ok_or("bad state")?;
+        if !self.card.as_ref().is_some_and(|c| c.name == card) {
+            return Err("no such card".to_owned());
+        }
+        self.move_card(profile, route);
+        Ok(())
+    }
+
     fn play_tone(&mut self, node: &str) -> Result<(), String> {
         if self.broken {
             return Err("refused".to_owned());
@@ -549,6 +798,7 @@ impl PipeWire for FakePipeWire {
             return Err("refused".to_owned());
         }
         self.volume = volume;
+        self.volume_writes += 1;
         Ok(())
     }
 
@@ -984,5 +1234,220 @@ mod tests {
                 ("tv".into(), false, false)
             ]
         );
+    }
+
+    // --- T-347: card profiles and volumes ---
+
+    const MARKER: &str = "first-volume-done";
+
+    /// The Dell card with the marker in `dir`; the choice file lives there too.
+    fn card_audio(pw: FakePipeWire, dir: &std::path::Path) -> Audio<FakePipeWire> {
+        with_choice(pw, dir).with_first_start_marker(&dir.join(MARKER))
+    }
+
+    #[test]
+    fn choose_output_switches_the_card_profile() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut a = card_audio(FakePipeWire::with_card(FakeCard::dell()), dir.path());
+        a.refresh().unwrap();
+        assert_eq!(a.default_sink(), Some("card.analog"));
+        // The HDMI port is listed and selectable although its profile is not the active one.
+        let ids: Vec<_> = a
+            .list_outputs()
+            .iter()
+            .map(|(o, _, _)| o.id.clone())
+            .collect();
+        assert!(ids.contains(&"card:tv".to_owned()));
+        assert_eq!(a.set_output("card:tv"), Status::Ok);
+        assert_eq!(a.pw.card.as_ref().unwrap().active, "hdmi");
+        assert_eq!(a.default_sink(), Some("card.hdmi"));
+        assert_eq!(a.pw.default.as_deref(), Some("card.hdmi"));
+        assert_eq!(saved_file(dir.path()).saved.as_deref(), Some("card:tv"));
+        // The next read agrees, and the speaker is still listed and reachable.
+        a.refresh().unwrap();
+        assert_eq!(a.default_sink(), Some("card.hdmi"));
+        assert!(a
+            .list_outputs()
+            .iter()
+            .any(|(o, d, s)| o.id == "card:tv" && *d && *s));
+        assert_eq!(a.set_output("card:spk"), Status::Ok);
+        assert_eq!(a.pw.card.as_ref().unwrap().active, "analog");
+        assert_eq!(a.default_sink(), Some("card.analog"));
+    }
+
+    #[test]
+    fn the_policy_may_pick_an_hdmi_port_on_an_inactive_profile() {
+        let mut card = FakeCard::dell();
+        card.profiles[1].ports[0].2 = Avail::Yes; // the monitor announced itself
+        let mut a = Audio::new(FakePipeWire::with_card(card), Store::in_memory()).unwrap();
+        a.refresh().unwrap();
+        assert_eq!(a.default_sink(), Some("card.hdmi"));
+        assert_eq!(a.pw.card.as_ref().unwrap().active, "hdmi");
+    }
+
+    #[test]
+    fn an_empty_first_read_waits_for_the_outputs_and_then_applies_the_policy() {
+        let mut pw = FakePipeWire::with_card(FakeCard::dell());
+        pw.card.as_mut().unwrap().profiles[1].ports[0].2 = Avail::Yes;
+        pw.sinks.clear();
+        pw.outputs = Some(Vec::new());
+        pw.default = None;
+        let card = pw.card.take();
+        let mut a = Audio::new(pw, Store::in_memory()).unwrap();
+        assert_eq!(a.refresh().unwrap().default, None);
+        assert_eq!(a.default_sink(), None);
+        // WirePlumber is up: the card appears on its analog profile with a remembered default.
+        a.pw.card = card;
+        a.pw.sync_card();
+        a.pw.default = Some("card.analog".to_owned());
+        a.refresh().unwrap();
+        assert_eq!(a.default_sink(), Some("card.hdmi"));
+    }
+
+    #[test]
+    fn test_output_restores_the_profile() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut a = card_audio(FakePipeWire::with_card(FakeCard::dell()), dir.path());
+        a.refresh().unwrap();
+        assert_eq!(a.test_output("card:tv"), Status::Ok);
+        assert_eq!(a.pw.tones, ["card.hdmi"]);
+        let card = a.pw.card.as_ref().unwrap();
+        assert_eq!(
+            (card.active.as_str(), card.route.as_str()),
+            ("analog", "spk")
+        );
+        assert_eq!(a.pw.default.as_deref(), Some("card.analog"));
+        assert_eq!(a.default_sink(), Some("card.analog"));
+        assert!(saved_file(dir.path()).saved.is_none());
+        // The speaker's own volume came back with its route.
+        a.refresh().unwrap();
+        assert_eq!(a.volume(), 100);
+    }
+
+    #[test]
+    fn a_card_is_never_left_without_a_sink() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut a = card_audio(FakePipeWire::with_card(FakeCard::dell()), dir.path());
+        a.refresh().unwrap();
+        // A profile that has no sink: the choice is refused and the old profile comes back.
+        assert_eq!(a.set_output("card:ghost"), Status::Inactive);
+        let card = a.pw.card.as_ref().unwrap();
+        assert_eq!(card.active, "analog");
+        assert_eq!(a.pw.sinks.len(), 1);
+        assert_eq!(a.pw.default.as_deref(), Some("card.analog"));
+        assert!(saved_file(dir.path()).saved.is_none());
+        // The same for a tone.
+        assert_ne!(a.test_output("card:ghost"), Status::Ok);
+        assert_eq!(a.pw.card.as_ref().unwrap().active, "analog");
+        assert_eq!(a.pw.sinks.len(), 1);
+        assert_eq!(a.default_sink(), Some("card.analog"));
+    }
+
+    #[test]
+    fn first_output_starts_at_full_volume() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut a = card_audio(FakePipeWire::with_card(FakeCard::dell()), dir.path());
+        assert_eq!(a.pw.volume, 40, "WirePlumber's own default");
+        a.refresh().unwrap();
+        assert_eq!(a.pw.volume, 100);
+        assert_eq!(a.volume(), 100);
+        // The second output keeps WirePlumber's own default (recorded in the Outcome).
+        assert_eq!(a.set_output("card:tv"), Status::Ok);
+        assert_eq!(a.pw.volume, 40);
+    }
+
+    #[test]
+    fn first_start_volume_waits_for_the_first_output() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut pw = FakePipeWire::with_card(FakeCard::dell());
+        let card = pw.card.take();
+        pw.sinks.clear();
+        pw.outputs = Some(Vec::new());
+        pw.default = None;
+        let mut a = card_audio(pw, dir.path());
+        a.refresh().unwrap();
+        assert_eq!(a.pw.volume_writes, 0);
+        assert!(!dir.path().join(MARKER).exists());
+        a.pw.card = card;
+        a.pw.sync_card();
+        a.pw.default = Some("card.analog".to_owned());
+        a.refresh().unwrap();
+        assert_eq!(a.pw.volume, 100);
+        assert!(dir.path().join(MARKER).exists());
+    }
+
+    #[test]
+    fn first_start_volume_is_applied_once_and_the_marker_is_written() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut a = card_audio(FakePipeWire::with_card(FakeCard::dell()), dir.path());
+        assert!(!dir.path().join(MARKER).exists());
+        a.refresh().unwrap();
+        assert!(dir.path().join(MARKER).exists());
+        assert_eq!(a.pw.volume_writes, 1);
+        // Reads, an output change and the way back write no volume again.
+        a.refresh().unwrap();
+        assert_eq!(a.set_output("card:tv"), Status::Ok);
+        a.refresh().unwrap();
+        assert_eq!(a.set_output("card:spk"), Status::Ok);
+        a.refresh().unwrap();
+        assert_eq!(a.pw.volume_writes, 1);
+    }
+
+    #[test]
+    fn first_start_volume_never_reapplies_after_the_player_changed_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut a = card_audio(FakePipeWire::with_card(FakeCard::dell()), dir.path());
+        a.refresh().unwrap();
+        assert_eq!(a.set_volume(30), Status::Ok);
+        // The service restarts (and the machine reboots: PipeWire keeps what WirePlumber saved).
+        let pw = a.pw.clone();
+        let mut b = card_audio(pw, dir.path());
+        b.refresh().unwrap();
+        assert_eq!(b.volume(), 30);
+        assert_eq!(b.pw.volume, 30);
+        assert!(dir.path().join(MARKER).exists());
+        // The marker alone stops it: even a fresh PipeWire at its default stays as it is.
+        let mut c = card_audio(FakePipeWire::with_card(FakeCard::dell()), dir.path());
+        c.refresh().unwrap();
+        assert_eq!(c.pw.volume, 40);
+        assert_eq!(c.pw.volume_writes, 0);
+    }
+
+    #[test]
+    fn a_set_volume_is_never_touched() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut a = card_audio(FakePipeWire::with_card(FakeCard::dell()), dir.path());
+        a.refresh().unwrap();
+        assert_eq!(a.set_volume(30), Status::Ok);
+        let writes = a.pw.volume_writes;
+        for _ in 0..3 {
+            a.refresh().unwrap();
+        }
+        assert_eq!(a.test_output("card:tv"), Status::Ok);
+        a.refresh().unwrap();
+        assert_eq!((a.volume(), a.pw.volume), (30, 30));
+        assert_eq!(a.pw.volume_writes, writes);
+    }
+
+    #[test]
+    fn volume_is_remembered_per_output() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut a = card_audio(FakePipeWire::with_card(FakeCard::dell()), dir.path());
+        a.refresh().unwrap();
+        assert_eq!(a.set_volume(30), Status::Ok);
+        assert_eq!(a.set_output("card:tv"), Status::Ok);
+        a.refresh().unwrap();
+        assert_eq!(
+            a.volume(),
+            40,
+            "an output never seen starts at WirePlumber's default"
+        );
+        assert_eq!(a.set_volume(70), Status::Ok);
+        assert_eq!(a.set_output("card:spk"), Status::Ok);
+        a.refresh().unwrap();
+        assert_eq!(a.volume(), 30);
+        assert_eq!(a.set_output("card:tv"), Status::Ok);
+        a.refresh().unwrap();
+        assert_eq!(a.volume(), 70);
     }
 }

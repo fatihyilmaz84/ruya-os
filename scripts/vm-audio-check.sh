@@ -85,3 +85,27 @@ for o in json.load(sys.stdin)["data"][0]:
     fi
     echo "--- ResetOutputChoice -> $(dev_call ResetOutputChoice)"
 fi
+
+# --- T-347: the first-start volume is high, set once (marker), and a volume set by hand survives restarts
+vol_of() { as_shell wpctl get-volume @DEFAULT_AUDIO_SINK@ 2>&1 | sed -n 's/^Volume: \([0-9.]*\).*/\1/p'; }
+echo "--- first-start volume (T-347)"
+if [ -e /var/lib/ruya-devices/first-volume-done ]; then
+    echo "marker: present ($(stat -c %y /var/lib/ruya-devices/first-volume-done))"
+else
+    echo "AUDIO_FIRST_VOLUME_FAIL (no marker /var/lib/ruya-devices/first-volume-done)"
+fi
+echo "volume now: $(vol_of) (about 1.00 on a fresh install if nothing lowered it)"
+as_shell wpctl set-volume @DEFAULT_AUDIO_SINK@ 0.30 2>&1
+sleep 1
+echo "--- volume set by hand: $(vol_of); restarting pipewire, wireplumber, then ruya-devices"
+as_shell systemctl --user restart pipewire.service wireplumber.service 2>&1
+sleep 8
+echo "after pipewire+wireplumber restart: $(vol_of)"
+as_shell systemctl --user restart ruya-devices.service 2>&1
+sleep 5
+after_vol="$(vol_of)"
+echo "after ruya-devices restart: $after_vol"
+case "$after_vol" in
+    0.3*|0.29*) echo "AUDIO_VOLUME_KEPT_OK" ;;
+    *) echo "AUDIO_VOLUME_KEPT_FAIL (set 0.30, now $after_vol)" ;;
+esac

@@ -35,4 +35,18 @@ Two findings from the Dell (2026-11-08): (1) PipeWire shows only the sinks of th
 - `image/` changes (the drop-in) need the "VM (this task)" rule of CLAUDE.md only if they are unit/policy changes; a conf drop-in is checked by `vm-audio-check.sh` in the lead's image run.
 
 ## Outcome
-_Filled in by the implementer._
+Verified: host (vm pending: vm-audio-check.sh)
+
+Built (all in `services/ruya-devices`):
+- **Profiles:** the `PipeWire` trait lost `activate` and gained `card_profile`, `switch_to`, `restore_profile`; `Audio::activate_output` is the one path for `SetOutput`, the policy and the headset rule. `WpCtl` (Linux, `pipewire.rs`) implements them with `wpctl set-profile`, `pw-cli set-param ... Route {save: true}` and polling `pw-dump`; the pure planning (`plan_switch`, `card_state`, `parse_state`, `find_sink`) is unit-tested on a dump. A failed switch or default restores the old profile. `TestOutput` on a sink-less output borrows the profile and restores it (the call waits for the tone, under half a second), then re-asserts the default.
+- **First-start volume:** `Audio::with_first_start_marker` (main.rs passes `first-volume-done` next to `audio.toml`): the first time a default sink exists, `set_volume(100)`, then the marker is written; a marker that exists or a failed write never lets it repeat. Service, not a drop-in (as the task prefers). Second output: WirePlumber's own default (0.40 as `wpctl` shows it), then WirePlumber's per-route saved volume; the service never writes a volume otherwise. If 0.40 is too low for the second output, see the inbox line.
+- **Policy re-apply:** the first read with any output (not an empty list at boot) is the "first" one, so the policy still runs once WirePlumber has outputs.
+- **Tone:** `TONE_CAP = 0.8`, tone level 0.4.
+- Fake: `FakeCard`/`FakeProfile` (analog: speaker + empty jack, hdmi, a `dead` profile with no sink, `off`), per-route volumes like WirePlumber.
+
+Tests (445 lib tests in ruya-devices): the nine named in the criteria plus `the_policy_may_pick_an_hdmi_port_on_an_inactive_profile`, `an_empty_first_read_waits_...`, `first_start_volume_waits_for_the_first_output`, and three `pipewire.rs` parser tests. Revert checks (done by hand with a mutate-build-test-restore script, `revert-check.ps1` is QML-only): no restore after a failed switch -> `a_card_is_never_left_without_a_sink`; no restore after the tone -> `test_output_restores_the_profile`; volume 50 instead of 100 -> `first_output_starts_at_full_volume`; marker not honoured -> `first_start_volume_never_reapplies_...`; `first_start_done` never set -> `first_start_volume_is_applied_once_...`, `a_set_volume_is_never_touched`; fake without per-route memory -> `volume_is_remembered_per_output`; switch always failing -> `choose_output_switches_the_card_profile`; tone level 1.0 without the cap -> `test_tone_is_capped_at_80_percent`.
+
+Files: `audio.rs`, `pipewire.rs`, `output_policy.rs`, `dbus.rs` (trait forwarding), `main.rs`, `scripts/vm-audio-check.sh` (marker, volume set by hand survives pipewire/wireplumber/ruya-devices restarts: `AUDIO_VOLUME_KEPT_OK`), `docs/specs/03-services-and-apps.md` (`01` needs no change). 
+
+Unverified on the host: `WpCtl` switching (`wpctl set-profile`, `pw-cli set-param Route`, the settle polling), the marker under the unit's real state directory, WirePlumber restoring each route's volume (the fake models it). Dell: high volume after a fresh boot, HDMI selectable.
+

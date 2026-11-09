@@ -44,8 +44,14 @@ impl crate::audio::PipeWire for DynPipeWire {
     fn set_default(&mut self, id: &str) -> Result<(), String> {
         (**self).set_default(id)
     }
-    fn activate(&mut self, output: &crate::output_policy::Output) -> Result<(), String> {
-        (**self).activate(output)
+    fn card_profile(&mut self, card: &str) -> Result<String, String> {
+        (**self).card_profile(card)
+    }
+    fn switch_to(&mut self, output: &crate::output_policy::Output) -> Result<String, String> {
+        (**self).switch_to(output)
+    }
+    fn restore_profile(&mut self, card: &str, state: &str) -> Result<(), String> {
+        (**self).restore_profile(card, state)
     }
     fn play_tone(&mut self, node: &str) -> Result<(), String> {
         (**self).play_tone(node)
