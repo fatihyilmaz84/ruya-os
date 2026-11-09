@@ -85,7 +85,8 @@ FocusScope {
         const gone = slots[slots.length - 1]
         slots = slots.slice(0, -1)
         pageStack = pageStack.slice(0, -1)
-        gone.closing = true          // destroyed once its fade-out has ended
+        closingSlots = closingSlots.concat([gone])
+        gone.closing = true          // destroyed once its fade-out has ended and the page on top has settled
         gone.shown = false
         if (slots.length > 0)
             slots[slots.length - 1].shown = true
@@ -97,6 +98,7 @@ FocusScope {
         slots = []
         pageStack = []
         slotCount = 0
+        closingSlots = []
         for (const s of all)
             s.destroy()
     }
@@ -220,6 +222,10 @@ FocusScope {
     }
     Component.onCompleted: {
         Power.refresh()          // creates the singleton early, so the rows know what is allowed
+        // Settings -> Network is the one pane whose service is not created at start by something
+        // else: create it now, not in the frame that builds the pane (T-349). Its first list arrives
+        // asynchronously, so the pane has it when it is first shown.
+        Network.state
         if (setupNeeded) {
             setupActive = true
             setup.start()
@@ -1035,6 +1041,20 @@ FocusScope {
         visible: root.appOpen
     }
 
+    // The page on top has finished its slide and fade (or no page is open): a popped page waits
+    // for this before it is destroyed, so tearing it down (a Store grid) does not cost a frame of
+    // the glide of the page that replaces it (T-349).
+    function topSettled() {
+        return slots.length === 0 || slots[slots.length - 1].settled
+    }
+    // Popped slots that are not destroyed yet (closePage adds them, reap() removes them).
+    property var closingSlots: []
+    function reapClosed() {
+        for (const s of closingSlots)
+            s.reapIfDone()
+    }
+    onSlotsChanged: Qt.callLater(reapClosed)
+
     // The probe of how long a page takes to open (T-349): one log line per page open.
     PageProbe {
         id: pageProbe
@@ -1044,7 +1064,8 @@ FocusScope {
 
     // One per stack entry. The top slot is shown and enabled (it fades and slides in while
     // the shelf slides out); lower ones stay alive but hidden and disabled, so their state is
-    // kept. A popped slot fades out, then is destroyed.
+    // kept. A popped slot fades out, waits until the page on top has settled and one more frame
+    // is on screen, then is destroyed.
     Component {
         id: pageSlot
         FocusScope {
@@ -1056,6 +1077,7 @@ FocusScope {
             property bool shown: false
             property bool closing: false
             property bool reaped: false
+            property bool reapPending: false
             property Item savedFocus: null
             // Shown and at rest: the fade-in and the slide have ended.
             readonly property bool settled: shown && opacity === 1 && slide.x === 0
@@ -1072,15 +1094,37 @@ FocusScope {
             }
             onOpacityChanged: reapIfDone()
             onClosingChanged: reapIfDone()
-            onSettledChanged: if (settled) pageProbe.settled(key)
+            onSettledChanged: {
+                if (!settled)
+                    return
+                pageProbe.settled(key)
+                root.reapClosed()
+            }
 
             // A page popped before its fade-in has progressed is already at opacity 0.
             function reapIfDone() {
-                if (closing && opacity === 0 && !reaped) {
-                    reaped = true
-                    root.slotCount -= 1
-                    destroy()
+                if (!closing || opacity !== 0 || reaped || reapPending || !root.topSettled())
+                    return
+                const win = slot.Window.window
+                if (!win) {
+                    reap()
+                    return
                 }
+                reapPending = true
+                win.update()                 // a still screen draws no frame by itself
+            }
+            function reap() {
+                if (reaped)
+                    return
+                reaped = true
+                root.slotCount -= 1
+                root.closingSlots = root.closingSlots.filter(s => s !== slot)
+                destroy()
+            }
+            // The frame with the settled page on top is on screen: now the popped page goes.
+            Connections {
+                target: slot.reapPending ? slot.Window.window : null
+                function onFrameSwapped() { slot.reap() }
             }
 
             // Disabling a slot drops its focus, so the focused item is noted when a page

@@ -579,7 +579,7 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+14"/>
-        <location line="+10"/>
+        <location line="+11"/>
         <source>Delete “%1”</source>
         <translation>“%1” temasını sil</translation>
     </message>
@@ -594,7 +594,7 @@ Bu geri alınamaz.</translation>
         <translation>Temayı bir USB sürücüsünden yeniden kopyalayabilirsiniz.</translation>
     </message>
     <message>
-        <location line="+31"/>
+        <location line="+38"/>
         <source>Use “%1” from the USB drive</source>
         <translation>USB sürücüsündeki “%1” temasını kullan</translation>
     </message>
@@ -677,7 +677,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>BluetoothPane</name>
     <message>
-        <location filename="../qml/BluetoothPane.qml" line="+88"/>
+        <location filename="../qml/BluetoothPane.qml" line="+93"/>
         <source>Forget %1?</source>
         <translation>%1 unutulsun mu?</translation>
     </message>
@@ -687,7 +687,7 @@ Bu geri alınamaz.</translation>
         <translation>Kullanılması için yeniden eşleştirilmesi gerekir.</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+9"/>
         <source>Controller name</source>
         <translation>Kontrolcü adı</translation>
     </message>
@@ -722,7 +722,7 @@ Bu geri alınamaz.</translation>
         <translation>Yeni kontrolcü eşleştir</translation>
     </message>
     <message>
-        <location line="+74"/>
+        <location line="+92"/>
         <source>Pair again %1</source>
         <translation>%1 cihazını yeniden eşleştir</translation>
     </message>
@@ -737,7 +737,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 adını değiştir</translation>
     </message>
     <message>
-        <location line="-191"/>
+        <location line="-209"/>
         <source>Paired</source>
         <translation>Eşleşti</translation>
     </message>
@@ -797,8 +797,8 @@ Bu geri alınamaz.</translation>
         <translation>Taranıyor…</translation>
     </message>
     <message>
-        <location line="-158"/>
-        <location line="+270"/>
+        <location line="-159"/>
+        <location line="+289"/>
         <source>Forget %1</source>
         <translation>%1 cihazını unut</translation>
     </message>
@@ -1195,7 +1195,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>DisplayPane</name>
     <message>
-        <location filename="../qml/DisplayPane.qml" line="+21"/>
+        <location filename="../qml/DisplayPane.qml" line="+27"/>
         <source>Effects quality</source>
         <translation>Efekt kalitesi</translation>
     </message>
@@ -1235,7 +1235,7 @@ Bu geri alınamaz.</translation>
         <translation>Duvar kağıdı</translation>
     </message>
     <message>
-        <location line="+22"/>
+        <location line="+25"/>
         <source>Dim wallpaper</source>
         <translation>Duvar kağıdını karart</translation>
     </message>
@@ -1258,18 +1258,18 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+11"/>
-        <location line="+66"/>
+        <location line="+75"/>
         <source>Resolution</source>
         <translation>Çözünürlük</translation>
     </message>
     <message>
-        <location line="-56"/>
-        <location line="+72"/>
+        <location line="-62"/>
+        <location line="+84"/>
         <source>Refresh rate</source>
         <translation>Yenileme hızı</translation>
     </message>
     <message>
-        <location line="-62"/>
+        <location line="-71"/>
         <source>UI size</source>
         <translation>Arayüz boyutu</translation>
     </message>
@@ -1284,7 +1284,7 @@ Bu geri alınamaz.</translation>
         <translation>Önce çalışan oyunları ve uygulamaları kapatın: ekran modunu değiştirmek konsolu yeniden başlatır.</translation>
     </message>
     <message>
-        <location line="+40"/>
+        <location line="+52"/>
         <location line="+6"/>
         <source>Try again in a minute: the console has just restarted several times.</source>
         <translation>Bir dakika sonra yeniden deneyin: konsol az önce birkaç kez yeniden başladı.</translation>
@@ -1308,7 +1308,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>DisplayText</name>
     <message>
-        <location filename="../qml/DisplayText.qml" line="+9"/>
+        <location filename="../qml/DisplayText.qml" line="+12"/>
         <source>%1 × %2</source>
         <translation>%1 × %2</translation>
     </message>
@@ -1331,6 +1331,41 @@ Bu geri alınamaz.</translation>
         <location line="+0"/>
         <source>%1 %</source>
         <translation>%%1</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Default (animated blobs)</source>
+        <translation>Varsayılan (hareketli lekeler)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Dusk</source>
+        <translation>Alacakaranlık</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Aurora</source>
+        <translation>Kutup ışığı</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Ember</source>
+        <translation>Kor</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Lagoon</source>
+        <translation>Lagün</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Orchid</source>
+        <translation>Orkide</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Daybreak</source>
+        <translation>Şafak</translation>
     </message>
 </context>
 <context>
@@ -1441,7 +1476,7 @@ Bu geri alınamaz.</translation>
         <translation>Önce bir ad girin.</translation>
     </message>
     <message>
-        <location line="+31"/>
+        <location line="+38"/>
         <source>Profile “%1” created.</source>
         <translation>“%1” profili oluşturuldu.</translation>
     </message>
@@ -1511,7 +1546,7 @@ Bu geri alınamaz.</translation>
         <translation>Ayarlanmadı</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+4"/>
         <source>Profile name</source>
         <translation>Profil adı</translation>
     </message>
@@ -1738,7 +1773,7 @@ Bu geri alınamaz.</translation>
         <translation>%1%</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+9"/>
         <source>Password for %1</source>
         <translation>%1 parolası</translation>
     </message>
@@ -2086,7 +2121,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>ProfilePaneBase</name>
     <message>
-        <location filename="../qml/ProfilePaneBase.qml" line="+36"/>
+        <location filename="../qml/ProfilePaneBase.qml" line="+39"/>
         <source>Admin</source>
         <translation>Yönetici</translation>
     </message>
@@ -2208,13 +2243,13 @@ Bu geri alınamaz.</translation>
 <context>
     <name>SettingsPage</name>
     <message>
-        <location filename="../qml/SettingsPage.qml" line="+12"/>
-        <location line="+93"/>
+        <location filename="../qml/SettingsPage.qml" line="+13"/>
+        <location line="+116"/>
         <source>Settings</source>
         <translation>Ayarlar</translation>
     </message>
     <message>
-        <location line="-58"/>
+        <location line="-81"/>
         <source>My profile</source>
         <translation>Profilim</translation>
     </message>
@@ -2269,7 +2304,7 @@ Bu geri alınamaz.</translation>
         <translation>Hakkında</translation>
     </message>
     <message>
-        <location line="+18"/>
+        <location line="+21"/>
         <source>Select</source>
         <translation>Seç</translation>
     </message>
@@ -2279,7 +2314,7 @@ Bu geri alınamaz.</translation>
         <translation>Geri</translation>
     </message>
     <message>
-        <location line="+225"/>
+        <location line="+275"/>
         <source>Coming soon</source>
         <translation>Yakında</translation>
     </message>
@@ -2463,7 +2498,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+346"/>
+        <location filename="../qml/Shell.qml" line="+359"/>
         <source>Could not %1.</source>
         <translation>%1 işlemi yapılamadı.</translation>
     </message>
@@ -2488,12 +2523,12 @@ Bu geri alınamaz.</translation>
         <translation>Ses çıkışı: %1</translation>
     </message>
     <message>
-        <location line="+921"/>
+        <location line="+972"/>
         <source>Power</source>
         <translation>Güç</translation>
     </message>
     <message>
-        <location line="-913"/>
+        <location line="-964"/>
         <source>Update ready. Restart to finish.</source>
         <translation>Güncelleme hazır. Bitirmek için yeniden başlat.</translation>
     </message>
@@ -2559,7 +2594,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 başlatılıyor…</translation>
     </message>
     <message>
-        <location line="+294"/>
+        <location line="+345"/>
         <location line="+12"/>
         <location line="+3"/>
         <source>Select</source>
@@ -3353,18 +3388,18 @@ Bu geri alınamaz.</translation>
     <name>SystemPane</name>
     <message>
         <location filename="../qml/SystemPane.qml" line="+133"/>
-        <location line="+269"/>
+        <location line="+300"/>
         <source>Beta</source>
         <translation>Beta</translation>
     </message>
     <message>
-        <location line="-269"/>
-        <location line="+268"/>
+        <location line="-300"/>
+        <location line="+299"/>
         <source>Stable</source>
         <translation>Kararlı</translation>
     </message>
     <message>
-        <location line="-263"/>
+        <location line="-294"/>
         <source>Last checked %1</source>
         <translation>Son kontrol: %1</translation>
     </message>
@@ -3424,12 +3459,12 @@ Bu geri alınamaz.</translation>
         <translation>Güncelleme bulundu</translation>
     </message>
     <message>
-        <location line="+43"/>
+        <location line="+45"/>
         <source>Enter your PIN</source>
         <translation>PIN kodunu gir</translation>
     </message>
     <message>
-        <location line="+67"/>
+        <location line="+87"/>
         <source>Roll back to the previous version?</source>
         <translation>Önceki sürüme dönülsün mü?</translation>
     </message>
@@ -3469,12 +3504,12 @@ Bu geri alınamaz.</translation>
         <translation>Saat dilimi</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+12"/>
         <source>The clock has not been set from the internet yet, so the time may be wrong.</source>
         <translation>Saat henüz internetten ayarlanmadı, bu yüzden saat yanlış olabilir.</translation>
     </message>
     <message>
-        <location line="+26"/>
+        <location line="+32"/>
         <source>Time zone set to %1</source>
         <translation>Saat dilimi %1 olarak ayarlandı</translation>
     </message>
@@ -3494,14 +3529,14 @@ Bu geri alınamaz.</translation>
         <translation>Bu cihazda sıcaklık sensörü bulunamadı.</translation>
     </message>
     <message>
-        <location line="-182"/>
+        <location line="-191"/>
         <location line="+8"/>
-        <location line="+69"/>
+        <location line="+78"/>
         <source>Only an admin can do this.</source>
         <translation>Bunu yalnızca bir yönetici yapabilir.</translation>
     </message>
     <message>
-        <location line="-253"/>
+        <location line="-284"/>
         <source>The console is warm. Nothing needs to be done.</source>
         <translation>Konsol sıcak. Yapılması gereken bir şey yok.</translation>
     </message>
@@ -3516,12 +3551,12 @@ Bu geri alınamaz.</translation>
         <translation>Konsol aşırı sıcak. Uygulamalar kapatıldı; soğumazsa konsol kapanır.</translation>
     </message>
     <message>
-        <location line="+196"/>
+        <location line="+218"/>
         <source>Language</source>
         <translation>Dil</translation>
     </message>
     <message>
-        <location line="+65"/>
+        <location line="+74"/>
         <source>Updates</source>
         <translation>Güncellemeler</translation>
     </message>
@@ -3775,42 +3810,7 @@ Bu geri alınamaz.</translation>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="+28"/>
-        <source>Default (animated blobs)</source>
-        <translation>Varsayılan (hareketli lekeler)</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Dusk</source>
-        <translation>Alacakaranlık</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Aurora</source>
-        <translation>Kutup ışığı</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Ember</source>
-        <translation>Kor</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Lagoon</source>
-        <translation>Lagün</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Orchid</source>
-        <translation>Orkide</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Daybreak</source>
-        <translation>Şafak</translation>
-    </message>
-    <message>
-        <location line="+85"/>
+        <location line="+101"/>
         <source>Wallpaper deleted</source>
         <translation>Duvar kağıdı silindi</translation>
     </message>
@@ -3845,7 +3845,7 @@ Bu geri alınamaz.</translation>
         <translation>Duvar kağıdı eklenemedi</translation>
     </message>
     <message>
-        <location line="+28"/>
+        <location line="+27"/>
         <source>Pictures on the USB drive</source>
         <translation>USB sürücüdeki resimler</translation>
     </message>
@@ -3944,7 +3944,7 @@ Bu geri alınamaz.</translation>
         <translation>Diğer</translation>
     </message>
     <message>
-        <location line="+118"/>
+        <location line="+123"/>
         <source>Loading time zones…</source>
         <translation>Saat dilimleri yükleniyor…</translation>
     </message>

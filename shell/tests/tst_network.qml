@@ -138,7 +138,7 @@ Item {
             goTo("wifi_wifi-cafe", 2)
             keyClick(Qt.Key_Return)
             tryVerify(() => network("wifi-cafe").active, 2000)
-            verify(!find("wifiPasswordEntry").shown, "no password asked for an open network")
+            compare(find("wifiPasswordEntry"), null, "no password asked for an open network (the keyboard is not even built, T-349)")
             tryVerify(() => find("wifi_wifi-cafe").activeFocus)
         }
 
@@ -146,7 +146,7 @@ Item {
             openNetworkPane()
             keyClick(Qt.Key_Return)                      // Lounge 5G is saved
             tryVerify(() => network("wifi-lounge").active, 2000)
-            verify(!find("wifiPasswordEntry").shown)
+            compare(find("wifiPasswordEntry"), null, "no password asked")
         }
 
         function test_enterprise_unsupported() {

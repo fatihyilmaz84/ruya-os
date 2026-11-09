@@ -14,6 +14,8 @@ Read this when your task adds a page, a settings row, a modal, text input or a t
 
 Reusable settings rows. All extend `SettingControl` (a `FocusScope` with the label, the glass bar and a focus ring; pass `u` and `label`). Put rows in a `SettingsPane` (`qml/SettingsPane.qml`): it moves between rows with Up/Down, and Left/Back leave it (`exitRequested`). Rows handle only their own keys and let everything else bubble. A pane taller than the screen shows its scroll cue by itself (T-185: the first / last visible row is dimmed while more rows exist beyond it); nothing to set, but do not bind `opacity` on a row, the pane owns it.
 
+**A new Settings pane (T-349).** Settings builds a pane the first time its category is selected and keeps it (hidden) afterwards, so opening Settings builds one pane and each pane remembers its last focused row. Add the category key to `SettingsPage.buildCategories` and `labelFor`, then a `PaneSlot` (a latching `Loader`) in `paneArea` with `selected: page.ready && page.current.key === "xxx"` and the pane in its `sourceComponent` (`objectName: "paneXxx"`, `anchors.fill: parent`, `u`, `overlay` if it has modals, `onExitRequested: page.leavePane()`), and its line in `currentPane`. The pane is created visible, in the key frame that selects it: do no service call in its `Component.onCompleted` that can wait (`Qt.callLater`, as `AudioPane` does for the sound themes), and build its modals on their first opening (below). A test finds a pane only after selecting it (`find("paneXxx")` is `null` before).
+
 | Control | Keys it consumes | Value and signal |
 |---|---|---|
 | `SettingRow` | Accept | `value` (text); `activated()` |
@@ -43,7 +45,28 @@ Qt's default `Text.AutoText` renders anything that looks like HTML: a Bluetooth 
 
 ## Modals from pages
 
-A page that needs a full-screen modal (PIN pad, `TextEntry`) declares it as `parent: page.overlay` (the shell's `modalLayer`) with `width/height` taken from that parent, not as a child of the page, so it covers the whole screen and sits above toasts. Save `Window.activeFocusItem` before opening and refocus it when the modal closes (see `ProfilePaneBase.qml`); `TextEntry` does this itself. `PinPad` has three modes: `open(profile)` verifies with `Profiles.switchTo`; `collect(prompt, confirm)` hands the PIN back through `collected(pin)` (and `cancelled()`), calling no service. Multi-step flows are small state machines in their own non-visual file (`ProfileAddFlow.qml`, `ChangePinFlow.qml`).
+A page that needs a full-screen modal (PIN pad, `TextEntry`) declares it as `parent: page.overlay` (the shell's `modalLayer`) with `width/height` taken from that parent, not as a child of the page, so it covers the whole screen and sits above toasts.
+
+**Build a modal on its first opening (T-349).** A modal costs its whole tree (a keyboard `Repeater`, a `GlassSheet` with its crop and mask, a thumbnail grid) when its screen is built, so a Settings pane or page puts it in a `Loader` and switches it on just before the first `open()`; the `Loader` latches (it stays active), so the modal keeps its state between openings. The `Loader` is what sits on the overlay and sizes the modal:
+
+```qml
+Loader {
+    id: entrySlot
+    parent: pane.overlay
+    width: parent ? parent.width : 0
+    height: parent ? parent.height : 0
+    active: false                       // built on the first opening, then kept
+    sourceComponent: Component {
+        TextEntry { objectName: "xxxEntry"; u: pane.u; onAccepted: text => pane.use(text) }
+    }
+}
+readonly property TextEntry entry: entrySlot.item as TextEntry
+// where it opens:
+entrySlot.active = true
+entry.open(qsTr("Name"), "", {})
+```
+
+Keep per-opening data (the id a confirmation is for) on the pane, not as an extra property of the modal (`BluetoothPane.forgetId`). Modals that one flow drives together are built together (`ProfilePaneBase.modalsBuilt`, set in `beginModal()`). Anything that must exist before the first opening (a row's value, like the wallpaper's name: `DisplayText.wallpaperName`) lives outside the modal. A test finds the modal only after it opened (`find("xxxEntry")` is `null` before); `tst_settings_lazy.qml` asserts each family is not built with its pane. Save `Window.activeFocusItem` before opening and refocus it when the modal closes (see `ProfilePaneBase.qml`); `TextEntry` does this itself. `PinPad` has three modes: `open(profile)` verifies with `Profiles.switchTo`; `collect(prompt, confirm)` hands the PIN back through `collected(pin)` (and `cancelled()`), calling no service. Multi-step flows are small state machines in their own non-visual file (`ProfileAddFlow.qml`, `ChangePinFlow.qml`).
 
 Messages for Profiles1 statuses (`invalid`, `wrong-pin`, ...) come from the `ProfileStatus` singleton (`ProfileStatus.describe`); don't write a second mapping. The first-boot wizard (`Setup.qml`, not a page) hosts its own modals in an inner full-screen layer and is shown by `Shell` while no profile exists.
 

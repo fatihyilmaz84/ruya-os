@@ -1,8 +1,11 @@
 pragma Singleton
 import QtQuick
+import RuyaShell
 
 // The words for a screen mode and the UI size, shared by the Display pane, its pickers and the
-// "Keep this resolution?" dialog (T-198). Functions, not a model: the labels follow the language.
+// "Keep this resolution?" dialog (T-198), and the names of the wallpapers (the Wallpaper row and
+// the picker, T-208; here since T-349, so the row does not need the picker built). Functions, not
+// a model: the labels follow the language.
 QtObject {
     // "3840 × 2160"
     function resolutionLabel(width, height) {
@@ -28,5 +31,23 @@ QtObject {
     // The UI size choices: 0 is Auto.
     function uiScaleLabel(percent) {
         return percent === 0 ? qsTr("Auto") : qsTr("%1 %").arg(percent)
+    }
+
+    // The display name of a wallpaper id ("" is the default look); a copy keeps its file's name.
+    function wallpaperName(id) {
+        switch (id) {
+        case "": return qsTr("Default (animated blobs)")
+        case "dusk": return qsTr("Dusk")
+        case "aurora": return qsTr("Aurora")
+        case "ember": return qsTr("Ember")
+        case "lagoon": return qsTr("Lagoon")
+        case "orchid": return qsTr("Orchid")
+        case "daybreak": return qsTr("Daybreak")
+        }
+        for (const w of Wallpapers.user) {
+            if (w.id === id)
+                return w.name
+        }
+        return id
     }
 }

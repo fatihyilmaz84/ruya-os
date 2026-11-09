@@ -52,6 +52,8 @@ public:
     // as they are now. mockPendingReplies: how many are still on their way.
     Q_INVOKABLE void mockRefreshDelayed(int ms);
     Q_INVOKABLE int mockPendingReplies() const;
+    // How many times the backend was asked for the state and the networks (T-349).
+    Q_INVOKABLE int mockRefreshCalls() const;
 
 signals:
     void stateChanged();

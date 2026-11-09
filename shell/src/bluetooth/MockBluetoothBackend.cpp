@@ -17,6 +17,7 @@ MockBluetoothBackend::MockBluetoothBackend(QObject *parent)
 
 void MockBluetoothBackend::refresh()
 {
+    ++m_refreshCalls;
     publish(m_delay);
 }
 

@@ -94,18 +94,25 @@ ProfilePaneBase {
         addFlow.start(Profiles.activeProfile, newName.trim(), newRole, newUsePin)
     }
 
-    TextEntry {
-        id: nameEntry
-        objectName: "profileNameEntry"
+    // The keyboard for the new profile's name, built when it first opens (T-349).
+    Loader {
+        id: nameEntrySlot
         parent: pane.overlay
         width: parent ? parent.width : 0
         height: parent ? parent.height : 0
-        u: pane.u
-        onAccepted: text => {
-            pane.newName = text
-            pane.report("", false)
+        active: false
+        sourceComponent: Component {
+            TextEntry {
+                objectName: "profileNameEntry"
+                u: pane.u
+                onAccepted: text => {
+                    pane.newName = text
+                    pane.report("", false)
+                }
+            }
         }
     }
+    readonly property TextEntry nameEntry: nameEntrySlot.item as TextEntry
 
     ProfileAddFlow {
         id: addFlow
@@ -210,7 +217,8 @@ ProfilePaneBase {
         value: pane.newName.length > 0 ? pane.newName : qsTr("Not set")
         onActivated: {
             pane.beginModal()
-            nameEntry.open(qsTr("Profile name"), pane.newName, { maxLength: 32, layout: "text" })
+            nameEntrySlot.active = true
+            pane.nameEntry.open(qsTr("Profile name"), pane.newName, { maxLength: 32, layout: "text" })
         }
     }
     ChoiceRow {

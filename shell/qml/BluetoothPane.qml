@@ -69,7 +69,7 @@ SettingsPane {
     onVisibleChanged: {
         if (!visible && Bluetooth.discovering)
             Bluetooth.stopScan()
-        if (!visible && onboarding.shown)
+        if (!visible && onboarding && onboarding.shown)
             onboarding.close()                  // closes its pairing window with it
     }
 
@@ -84,16 +84,22 @@ SettingsPane {
         Qt.callLater(pane.ensureFocusedVisible)
     }
 
+    // The device the confirmation and the keyboard are for.
+    property string forgetId: ""
+    property string renameId: ""
+
     function askForget(id, name) {
+        forgetSlot.active = true
         forgetConfirm.customTitle = qsTr("Forget %1?").arg(name)
         forgetConfirm.detail = qsTr("It will have to be paired again to be used.")
         forgetConfirm.customConfirmName = qsTr("Forget %1").arg(name)
-        forgetConfirm.pendingId = id
+        pane.forgetId = id
         forgetConfirm.open("custom")
     }
 
     function askRename(id, name) {
-        renameEntry.pendingId = id
+        pane.renameId = id
+        renameSlot.active = true
         renameEntry.open(qsTr("Controller name"), name, { maxLength: 48, layout: "text" })
     }
 
@@ -256,41 +262,59 @@ SettingsPane {
         label: qsTr("Pair a new controller")
         onActivated: {
             pane.beginModal()
-            onboarding.open()
+            onboardingSlot.active = true
+            pane.onboarding.open()
         }
     }
 
-    ControllerOnboarding {
-        id: onboarding
-        objectName: "controllerOnboarding"
+    // The pairing screen, the keyboard and the confirmation are built when each first opens (T-349).
+    Loader {
+        id: onboardingSlot
         parent: pane.overlay
         width: parent ? parent.width : 0
         height: parent ? parent.height : 0
-        u: pane.u
-        onClosed: pane.restoreFocus()
+        active: false
+        sourceComponent: Component {
+            ControllerOnboarding {
+                objectName: "controllerOnboarding"
+                u: pane.u
+                onClosed: pane.restoreFocus()
+            }
+        }
     }
+    readonly property ControllerOnboarding onboarding: onboardingSlot.item as ControllerOnboarding
 
-    TextEntry {
-        id: renameEntry
-        objectName: "btRenameEntry"
+    Loader {
+        id: renameSlot
         parent: pane.overlay
         width: parent ? parent.width : 0
         height: parent ? parent.height : 0
-        u: pane.u
-        property string pendingId: ""
-        onAccepted: text => Bluetooth.rename(pendingId, text)
+        active: false
+        sourceComponent: Component {
+            TextEntry {
+                objectName: "btRenameEntry"
+                u: pane.u
+                onAccepted: text => Bluetooth.rename(pane.renameId, text)
+            }
+        }
     }
+    readonly property TextEntry renameEntry: renameSlot.item as TextEntry
 
-    PowerConfirm {
-        id: forgetConfirm
-        objectName: "btForgetConfirm"
+    Loader {
+        id: forgetSlot
         parent: pane.overlay
         width: parent ? parent.width : 0
         height: parent ? parent.height : 0
-        u: pane.u
-        property string pendingId: ""
-        onConfirmed: Bluetooth.forget(pendingId)
+        active: false
+        sourceComponent: Component {
+            PowerConfirm {
+                objectName: "btForgetConfirm"
+                u: pane.u
+                onConfirmed: Bluetooth.forget(pane.forgetId)
+            }
+        }
     }
+    readonly property PowerConfirm forgetConfirm: forgetSlot.item as PowerConfirm
 
     Repeater {
         model: deviceModel

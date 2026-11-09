@@ -16,6 +16,7 @@ public:
 
     bool isMock() const override { return true; }
     void refresh() override;
+    int refreshCalls() const { return m_refreshCalls; } // refresh() calls since the start (tests)
     void scan() override;
     void connectWifi(const QString &id, const QString &password) override;
     void forget(const QString &id) override;
@@ -41,4 +42,5 @@ private:
     QList<WifiInfo> m_networks;
     int m_delay = 0;
     int m_pending = 0;
+    int m_refreshCalls = 0;
 };

@@ -65,6 +65,7 @@ public:
     // While held, pair() is counted but unanswered (a pairing that takes a while) until released.
     void holdPairing(bool hold);
     int pairCalls() const { return m_pairCalls; }
+    int refreshCalls() const { return m_refreshCalls; } // refresh() calls since the start (tests)
     // Replies to refresh() arrive after `ms` (0: at once), with the state as it was when asked;
     // the number of replies still on their way. Lets a test play an old reply landing after a
     // new one.
@@ -95,6 +96,7 @@ private:
     bool m_holdPairing = false;
     QStringList m_heldPairs;
     int m_pairCalls = 0;
+    int m_refreshCalls = 0;
     int m_delay = 0;
     int m_pending = 0;
     int m_scans = 0;

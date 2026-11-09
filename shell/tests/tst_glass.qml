@@ -35,6 +35,19 @@ Item {
         }
     }
     Component { id: sourceComponent; Rectangle { width: 400; height: 80; color: "#336699" } }
+    // A picker modal's shape (T-349): it fades, and is visible only while its opacity is above 0.
+    Component {
+        id: fadingModalComponent
+        Item {
+            id: fader
+            property bool shown: false
+            width: 800; height: 480
+            opacity: shown ? 1 : 0
+            visible: opacity > 0
+            Behavior on opacity { NumberAnimation { duration: Theme.pageMs } }
+            GlassSheet { objectName: "fadingSheet"; width: 400; height: 240; gpu: true; shown: fader.shown }
+        }
+    }
 
     // The stage of the screenshots. Outside the TestCase, which is invisible itself.
     Rectangle {
@@ -240,6 +253,33 @@ Item {
             sheet.shown = false
             sheet.shown = true
             tryCompare(sheet, "bakeCount", 2, 2000, "once more on the next opening")
+        }
+
+        // A closed sheet holds no texture (T-349): no crop of L0 (which would make L0 render into a
+        // layer for it), no mask layer and nothing captured until the modal first opens; both are let
+        // go once the modal has faded out, and kept while it fades.
+        function test_sheet_takes_no_texture_until_shown() {
+            const layer = createTemporaryObject(layerComponent, host)
+            const modal = createTemporaryObject(fadingModalComponent, layer)
+            const sheet = findChild(modal, "fadingSheet")
+            const mask = findChild(sheet, "glassSheetMask")
+            tryVerify(() => sheet.source === layer.glassSource, 2000, "found on the modal layer")
+            compare(sheet.blurred, true)
+            compare(sheet.backdropCrop.sourceItem, null, "no crop of L0 before the first opening")
+            compare(mask.layer.enabled, false, "and no mask layer")
+            compare(sheet.bakeCount, 0, "nothing captured")
+            modal.shown = true
+            verify(sheet.backdropCrop.sourceItem === layer.glassSource, "the crop is taken when it opens")
+            verify(mask.layer.enabled)
+            tryCompare(sheet, "bakeCount", 1, 2000, "and captured once")
+            tryCompare(modal, "opacity", 1, 2000, "the modal has faded in")
+            modal.shown = false
+            verify(sheet.backdropCrop.sourceItem === layer.glassSource, "kept while the modal fades out")
+            tryCompare(sheet.backdropCrop, "sourceItem", null, 3000, "let go once the modal is hidden")
+            compare(mask.layer.enabled, false)
+            modal.shown = true
+            verify(sheet.backdropCrop.sourceItem === layer.glassSource, "taken again on the next opening")
+            tryCompare(sheet, "bakeCount", 2, 2000)
         }
 
         // --- card focus ------------------------------------------------------------------------

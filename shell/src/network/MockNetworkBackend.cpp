@@ -10,6 +10,7 @@ MockNetworkBackend::MockNetworkBackend(QObject *parent)
 
 void MockNetworkBackend::refresh()
 {
+    ++m_refreshCalls;
     publishState(m_delay);
     publishNetworks(m_delay);
 }
