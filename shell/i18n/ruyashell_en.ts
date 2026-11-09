@@ -3826,34 +3826,6 @@ This can&apos;t be undone.</translation>
         <translation>Cancel</translation>
     </message>
     <message>
-        <source>Default (animated blobs)</source>
-        <translation type="vanished">Default (animated blobs)</translation>
-    </message>
-    <message>
-        <source>Dusk</source>
-        <translation type="vanished">Dusk</translation>
-    </message>
-    <message>
-        <source>Aurora</source>
-        <translation type="vanished">Aurora</translation>
-    </message>
-    <message>
-        <source>Ember</source>
-        <translation type="vanished">Ember</translation>
-    </message>
-    <message>
-        <source>Lagoon</source>
-        <translation type="vanished">Lagoon</translation>
-    </message>
-    <message>
-        <source>Orchid</source>
-        <translation type="vanished">Orchid</translation>
-    </message>
-    <message>
-        <source>Daybreak</source>
-        <translation type="vanished">Daybreak</translation>
-    </message>
-    <message>
         <location line="+101"/>
         <source>Wallpaper deleted</source>
         <translation>Wallpaper deleted</translation>

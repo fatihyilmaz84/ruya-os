@@ -3815,34 +3815,6 @@ Bu geri alınamaz.</translation>
         <translation>İptal</translation>
     </message>
     <message>
-        <source>Default (animated blobs)</source>
-        <translation type="vanished">Varsayılan (hareketli lekeler)</translation>
-    </message>
-    <message>
-        <source>Dusk</source>
-        <translation type="vanished">Alacakaranlık</translation>
-    </message>
-    <message>
-        <source>Aurora</source>
-        <translation type="vanished">Kutup ışığı</translation>
-    </message>
-    <message>
-        <source>Ember</source>
-        <translation type="vanished">Kor</translation>
-    </message>
-    <message>
-        <source>Lagoon</source>
-        <translation type="vanished">Lagün</translation>
-    </message>
-    <message>
-        <source>Orchid</source>
-        <translation type="vanished">Orkide</translation>
-    </message>
-    <message>
-        <source>Daybreak</source>
-        <translation type="vanished">Şafak</translation>
-    </message>
-    <message>
         <location line="+101"/>
         <source>Wallpaper deleted</source>
         <translation>Duvar kağıdı silindi</translation>
