@@ -9,6 +9,11 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | [T-299](tasks/T-299-image-follow-ups-secure-boot-bluez-grub-menu.md) | Image follow-ups (VM this task): quiet bootloader-update on Secure Boot, BlueZ pairable timeout, grub-menu ordering, webp | todo | — |
 | [T-364](tasks/T-364-storage-scan-follow-ups.md) | Storage scan follow-ups: a real-directory test, a Rescan row, a calmer busy retry | todo | — |
 | [T-339](tasks/T-339-vm-check-script-follow-ups.md) | VM check scripts: power-saving wake, sounds probe and jq | todo | — |
+| [T-388](tasks/T-388-downloads-spike-and-contract.md) | **[lead]** Downloads: spike (bytes, rate, pause) and the job record v2 in Store1 and Update1 | todo | — |
+| [T-389](tasks/T-389-store-jobs-v2-and-actions.md) | Store1 jobs v2: bytes, rate, ETA, queue order; cancel, pause, resume, move | todo | T-388 |
+| [T-390](tasks/T-390-update-download-v2-and-actions.md) | Update1: the OS download as a v2 job (bytes, rate), cancel, pause, resume | todo | T-388 |
+| [T-391](tasks/T-391-downloads-page.md) | The Downloads page: current, queued and finished downloads, speed, actions; a status pill | todo | T-389, T-390 |
+| [T-392](tasks/T-392-download-stats-and-policy.md) | Download stats and policy: per-day totals and history; pause while playing, download in standby | todo | T-389, T-390, T-391 |
 | [T-381](tasks/T-381-ge-proton-spike.md) | **[lead]** Spike: GE-Proton outside Steam (umu, runtime, display, size, licences, codecs) | todo | — |
 | [T-380](tasks/T-380-profile-audio-isolation.md) | **[lead]** Profiles apart in the audio graph: what a profile's app may see and change in PipeWire | todo | — |
 | [T-382](tasks/T-382-ge-proton-preinstalled-and-updated.md) | GE-Proton preinstalled in the image, updated through the Store, named in About | todo | T-381 |
