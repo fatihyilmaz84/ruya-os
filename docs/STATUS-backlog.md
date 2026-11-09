@@ -11,6 +11,13 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | [T-363](tasks/T-363-follow-flatpak-app-scopes.md) | ruya-session follows a Flatpak game's own scope (usage, limits, stop) | todo | T-340 |
 | [T-359](tasks/T-359-bluetooth-follow-ups-adapters-names.md) | Bluetooth follow-ups: late adapters, scan ownership, telling like pads apart | todo | — |
 | [T-364](tasks/T-364-storage-scan-follow-ups.md) | Storage scan follow-ups: a real-directory test, a Rescan row, a calmer busy retry | todo | — |
+| [T-368](tasks/T-368-controllers-pane-capabilities-button-test.md) | Settings > Controllers: connected pads, capabilities and a live button test | todo | T-367 |
+| [T-369](tasks/T-369-input-mapping-v1-profiles.md) | Mapping v1: button layout, remapping, dead zones, curves; global profiles with import and export | todo | T-368 |
+| [T-370](tasks/T-370-game-and-platform-input-profiles.md) | Game and platform controller profiles: inheritance, applied on focus, a Controller entry on the game page | todo | T-369 |
+| [T-371](tasks/T-371-input-ownership-passthrough-and-steam.md) | **[lead]** Ownership modes: direct passthrough and Steam-managed controllers | todo | T-367 |
+| [T-372](tasks/T-372-input-keyboard-mouse-layers-chords.md) | Keyboard and mouse output, action layers, chords and controller shortcuts | todo | T-369 |
+| [T-373](tasks/T-373-input-gyro-touchpad-haptics.md) | Gyro, touchpad and haptics | todo | T-369 |
+| [T-374](tasks/T-374-input-semantic-actions-and-glyphs-for-apps.md) | Semantic actions and controller glyphs for native apps (Platform1) | todo | T-369 |
 | [T-292](tasks/T-292-activity-page-follow-ups.md) | Activity page follow-ups: refresh only when visible, paging, retry, icons, focus order | todo | — |
 | [T-295](tasks/T-295-time-zone-follow-ups.md) | Time zone follow-ups: say it when Setup cannot set the zone, type to filter the chooser | todo | — |
 | [T-287](tasks/T-287-display-hotplug-and-mode-check.md) | Display service follow-ups: hot-plug signal, check the real mode after the restart, recovery argument | todo | T-282 |
@@ -37,7 +44,6 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | [T-210](tasks/T-210-profile-customisation.md) | Profile customisation: avatar, colour, name | todo | — |
 | [T-215](tasks/T-215-save-backup-and-keep-data.md) | **[lead]** Saves: back up/restore, keep on uninstall | todo | — |
 | [T-216](tasks/T-216-network-connection-options.md) | **[lead]** Network options: IP, DNS, proxy, hidden Wi-Fi | todo | — |
-| [T-217](tasks/T-217-controller-input-mapping.md) | **[lead]** Controller mapping (InputPlumber, B-006) | todo | — |
 | [T-218](tasks/T-218-hdr-feasibility-spike.md) | **[lead]** HDR feasibility spike | todo | — |
 | [T-219](tasks/T-219-audio-formats-and-surround.md) | **[lead]** Audio formats and surround, passthrough | todo | — |
 | [T-357](tasks/T-357-headphone-virtual-surround-hrtf.md) | **[lead]** Headphone virtual surround: a licence-clean HRTF through PipeWire (owner pointer: HRTF Database) | todo | T-322 |
@@ -85,7 +91,7 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | [T-263](tasks/T-263-controller-registry-and-player-model-spec.md) | **[lead]** EPIC multiple controllers (ADR-017): spec of the registry and the player model | todo | T-260 |
 | [T-264](tasks/T-264-controller-registry-and-slots-service.md) | Controller registry and player slots: contract, `ruya-inputd`, mock, client | todo | T-263 |
 | [T-265](tasks/T-265-players-ui-whos-playing-and-chips.md) | Players UI: "Who's playing?" dialog, player chips, Settings > Players | todo | T-264, T-223 |
-| [T-266](tasks/T-266-virtual-gamepads-per-slot-for-apps.md) | **[lead]** Ordered virtual gamepads per slot for apps (physical pads hidden) | todo | T-264, T-217 |
+| [T-266](tasks/T-266-virtual-gamepads-per-slot-for-apps.md) | **[lead]** Ordered virtual gamepads per slot for apps (physical pads hidden) | todo | T-264, T-367 |
 | [T-267](tasks/T-267-pad-default-owner-at-login.md) | A pad remembers its owner: Guide on the picker highlights that profile | todo | T-264, T-265 |
 | [T-268](tasks/T-268-guest-player.md) | Guest as a temporary player | todo | T-264, T-265, T-211 |
 | [T-270](tasks/T-270-epic-games-store-integration.md) | **[lead]** Epic Games Store integration (Legendary, Heroic-style): Proposed ADR-018 first | blocked | owner |

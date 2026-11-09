@@ -15,7 +15,7 @@ Verification legend: **host** = built and tested on Windows · **host (vm pendin
 
 ## Board
 
-**NEXT → T-355** ([lead], second pass on the Dell: STK now renders on the GPU (T-358); frame times, pads, split screen, suspend, saves), then profile-app sound (T-365, B-007, lead, after T-340 merges). **Builder lanes**: the first rows of `STATUS-backlog.md` in order (T-348, ...); one "VM (this task)" at a time. T-283, T-284, T-287, T-288 wait for the lead's design pass T-282.
+**NEXT → T-355** ([lead], second pass on the Dell: STK now renders on the GPU (T-358); frame times, pads, split screen, suspend, saves), then profile-app sound (T-365, B-007, lead, after T-340 merges), then **Ruya Input** (ADR-024: T-366 spike, T-367 a game sees the pad; owner request 2026-11-09). **Builder lanes**: the first rows of `STATUS-backlog.md` in order (T-348, ...); one "VM (this task)" at a time. T-283, T-284, T-287, T-288 wait for the lead's design pass T-282.
 
 **How work runs (owner, 2026-11-04):** the lead dispatches `ruya-builder` agents (at most two at a time, own worktrees, different areas), has each branch reviewed by `ruya-reviewer` and merges it (`docs/LEAD.md`). Dispatched builders never edit this file; one "VM (this task)" runs at a time. A builder the owner starts directly takes NEXT alone in the main checkout and does the bookkeeping (`CLAUDE.md`).
 
@@ -24,6 +24,8 @@ Open work only (the front of the board; the rest is in `STATUS-backlog.md`), in 
 | ID | Title | Status | Depends |
 |---|---|---|---|
 | [T-365](tasks/T-365-sound-for-profile-apps-pulse-socket.md) | **[lead]** Sound for profile apps: a pulse socket per profile (B-007) | in-progress | T-340 |
+| [T-366](tasks/T-366-ruya-input-spike-engine-and-design.md) | **[lead]** Ruya Input: spike, engine decision and the design (06-input.md, Input1 draft) | todo | — |
+| [T-367](tasks/T-367-a-game-sees-the-pad.md) | **[lead]** A game sees the pad: a virtual pad per controller, for the signed-in profile only, routed by focus | todo | T-366 |
 | [T-197](tasks/T-197-shell-crash-on-bluetooth-audio-disconnect.md) | **[lead]** Shell crash when a Bluetooth headset disconnects | in-progress | — |
 | [T-282](tasks/T-282-design-decisions-contrast-themes-dialogs.md) | **[lead]** Design decisions queue: glass text contrast, theme looks, dialogs, Tab, display recovery | todo | — |
 | [T-261](tasks/T-261-controller-families-and-drivers-audit.md) | **[lead]** Controller families and drivers audit (DualSense, Xbox, 8BitDo, Switch), detection table, hardware checklist | todo | — |
@@ -52,7 +54,7 @@ Triaged 2026-11-09 (lead-7): the earlier lines are verbatim in [`STATUS-parked.m
 |---|---|---|---|
 | B-002 | Install on a real low-tier machine; first frame-time numbers (spec 02 §8) | Hardware | The Dell (Intel UHD 630, 8 GB, Secure Boot) boots the installer ISO to the shell, greenboot green, `vm-session-check.sh` 45 PASS (0.0.44). No frame times yet. Checks: the Dell look-at list. |
 | B-003 | Compositor performance: blurred Guide overlay over a running game at ≥ 55 FPS on the mid tier (ADR-002) | A GPU | Functional part done in the VM (T-123, T-130). Left: frame rates, dmabuf clients, blur over a client surface, gamescope nesting. |
-| B-006 | Replace the `ruya-inputd` stopgap with InputPlumber (ADR-003), grab and re-emit | Linux + controllers | Also owns key repeat, stick repeat, long-press and context menu (spec 02 §4.3), Bluetooth PIN pairing, player assignment, button test, remapping (T-136, T-217), pad activity for the idle clock. |
+| B-006 | Controllers for games and the input service (ADR-024, replaces the old InputPlumber line) | Linux + controllers | Now the tasks T-366..T-374 (spike first); games see no pad today (physical nodes are shell-only). Key repeat, stick repeat, long-press, PIN pairing, player assignment go to T-366's design and ADR-017's tasks. |
 | B-007 | `ruya-devices` remainder: `ambient`/`media` levels on app streams, PipeWire for profile apps | `ruya-session` in the image | Audio and network are done and VM-verified (ADR-010). Media access on `/run/media/ruya-shell/...` for profile users belongs to the Media task. |
 
 ## Open owner decisions

@@ -1,6 +1,6 @@
 # T-217 — Controller input mapping: InputPlumber, button test, player numbers, remapping
 
-Status: todo · Phase: 3 · Depends: — · Area: image, services, shell · Size: M · Owner: lead · Developer surface: public-API
+Status: done · Phase: 3 · Depends: — · Area: image, services, shell · Size: M · Owner: lead · Developer surface: public-API
 
 ## Goal
 Controllers behave the same in every game and the player can see and adjust how: the console presents every pad to apps as a standard virtual gamepad, shows each connected controller with its battery and player number, has a button test, and lets the player swap A/B, adjust dead zones and, in a second step, remap buttons. Owner request, 2026-11-06 ("input mapping"). Today `ruya-inputd` (a stopgap, ADR-003) turns pad events into navigation keys for the shell and does not grab devices; games read the raw devices.
@@ -33,4 +33,6 @@ Controllers behave the same in every game and the player can see and adjust how:
 - Developer surface (ADR-022, `docs/developers/api-surface.md`): the standard virtual gamepad is what every app sees. Missing: update `docs/developers/controller-input.md` (button map, dead zones as the app sees them), a sample, a conformance check; rumble pass-through is unplanned.
 
 ## Outcome
-_Filled in by the implementer. First line: `Verified: host | vm | unverified | hw`. Then: what was built, files, deviations, follow-ups._
+Verified: unverified (nothing built)
+
+Dropped (lead-7, 2026-11-09): split into T-366..T-374 by ADR-024 after the owner handed over the input requirements (`docs/specs/06-input-requirements.md`). Scope 1 (spike) is T-366; 2a/2b T-367; 2c/2d T-368; layout swap, dead zones and remapping T-369; vibration and motion T-373. The B-006 questions (key repeat, stick repeat, long-press) go to T-366's design.

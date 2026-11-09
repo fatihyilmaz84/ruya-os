@@ -38,6 +38,8 @@ Then the image recipe in `docs/dev-setup.md` and `vm-session-check.sh` over SSH.
 
 - (T-164 reviews, lead-6; added lead-7) Decide a hidden profile's running app: suspend or stop it, tell the new profile (Home hint or toast) and give a way to close it. A locked profile's client is closed on its next surface (whole-client verdict). A Flatpak game lives in its own scope: freeze that (T-363).
 
+- (lead-7) Input on suspend and resume (input requirements §14, ADR-024): the suspended app's virtual pads go idle (neutral state) and lose their ACL until it resumes; no input leaks into a hidden app.
+
 ## Outcome
 _Filled in by the implementer. First line: `Verified: host | vm | unverified | hw` (say what ran where). Then: what was built, files, deviations, follow-ups (each also an Inbox line)._
 
