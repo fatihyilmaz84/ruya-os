@@ -26,5 +26,8 @@ Anyone, and every first-party app of T-248, starts from one template that builds
 ## Hints
 - Developer surface (ADR-022, `docs/developers/api-surface.md`): the template is the sample for every public capability; it may use only the public surface and declares `x-ruya-min-api-level` (T-351).
 
+## Note (lead-8, ADR-031)
+The template is what `ruya app create` writes (T-416); it carries an `AGENTS.md` (T-417) and passes `ruya app validate --level compatible` out of the box.
+
 ## Outcome
 _Filled in by the implementer. First line: `Verified: host | vm | unverified`._

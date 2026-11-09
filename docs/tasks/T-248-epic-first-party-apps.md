@@ -41,5 +41,8 @@ A first-party app uses **only the public surface** of `docs/developers/api-surfa
 ## Not planned yet
 - More apps the owner may name (music, podcasts, game launchers); per-app update channels; an app-side telemetry SDK (none: T-224 covers the OS).
 
+## Note (lead-8, ADR-031)
+Each first-party app is also a reference app for developers (ADR-031): it must pass `ruya app validate --level verified`; the emulator frontend (T-259) is the test of the owner's "Genesis brief".
+
 ## Outcome
 _Epic: nothing to implement here. The children carry the work; update the table as tasks finish._

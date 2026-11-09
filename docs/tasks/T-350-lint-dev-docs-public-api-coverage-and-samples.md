@@ -40,5 +40,8 @@ A public D-Bus method, signal or property cannot reach `main` undocumented, and 
 - Parse the XML with `System.Xml.XmlDocument`; the interface name is the `name` attribute of `node/interface`.
 - Keep the lint's PowerShell 5.1 compatibility (no `&&`, no ternary).
 
+## Note (lead-8, ADR-031)
+The checks run through `ruya app validate` and the generators of T-417 where they overlap, so the repository lint and the developer's tool never disagree.
+
 ## Outcome
 _Filled in by the implementer. First line: `Verified: host | vm | unverified | hw`. Then: what was built, files, deviations, follow-ups._

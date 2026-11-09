@@ -137,6 +137,10 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | [T-351](tasks/T-351-api-level-and-changelog.md) | API level: RUYA_API_LEVEL, the AppStream minimum, the Store filter, an XML-diff changelog | todo | — |
 | [T-352](tasks/T-352-ruya-platform-service-skeleton.md) | ruya-platform: the one door for sandboxed apps (ADR-022 Accepted; step one: the caller-identity spike) | todo | T-351 |
 | [T-353](tasks/T-353-developer-mock-and-sample-harness.md) | Developer harness: a Platform mock, a sample app and a conformance runner in CI | todo | T-352, T-350 |
+| [T-416](tasks/T-416-ruya-cli-and-validators.md) | The `ruya` developer CLI: SDK discovery and app validation with JSON output and an error catalogue | todo | T-351, T-350 |
+| [T-417](tasks/T-417-llms-txt-and-catalogues.md) | AI entry points: `llms.txt`, a generated `llms-full.txt`, component and API catalogues, `AGENTS.md` for apps | todo | T-416, T-251 |
+| [T-418](tasks/T-418-dev-image-ui-inspector-and-input.md) | Development images: inspect a running app's UI as data, drive it with a virtual pad, collect its logs | todo | T-416, T-367 |
+| [T-419](tasks/T-419-developer-mcp-server.md) | Ruya Developer MCP server (optional, host-side): the CLI's commands as typed tools for AI agents | todo | T-416, T-417, T-418 |
 | [T-354](tasks/T-354-research-xbox-wireless-adapter-support.md) | **[lead]** Research: Xbox Wireless Adapter support (driver, user-downloaded firmware, legal risk) and a recommended task list; builds nothing | todo | — |
 | [T-404](tasks/T-404-ruya-web-threat-model-and-allow-list.md) | **[lead]** Ruya Web: threat model, the bus allow-list per service, pairing and session design | blocked | owner |
 | [T-411](tasks/T-411-gateway-protocol-for-web-and-companion.md) | **[lead]** The `ruya-link` gateway protocol for Ruya Web and Companion: identities, pairing, permissions, events, capabilities | todo | T-404 |

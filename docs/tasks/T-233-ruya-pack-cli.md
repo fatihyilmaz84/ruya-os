@@ -40,5 +40,8 @@ A developer on Windows, Linux or macOS can create, validate, build, sign and ins
 - Runner resolution is one pure function shared with the launcher (T-239): put it in the format crate, test it there, and call it from both.
 - Developer surface (ADR-022, `docs/developers/api-surface.md`): the developer tool; its documentation is T-243.
 
+## Note (lead-8, ADR-031)
+`ruya-pack` becomes the `pack` subcommand of the one `ruya` CLI (T-416): same JSON output, exit codes and error catalogue.
+
 ## Outcome
 _Filled in by the implementer._

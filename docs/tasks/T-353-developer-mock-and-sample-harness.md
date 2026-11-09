@@ -38,5 +38,8 @@ A developer without a console can build a sample, call every documented Platform
 ## Hints
 - Missing today for every other public capability: its interface in the mock, its sample lines and its chapter paragraph; that work belongs to the capability's own task, not to this one.
 
+## Note (lead-8, ADR-031)
+The conformance runner is the engine of ADR-031's three levels (Basic, Compatible, Verified), driven by `ruya app validate --level`; a check that cannot run on this setup is reported as not run, never as passed.
+
 ## Outcome
 _Filled in by the implementer. First line: `Verified: host | vm | unverified | hw`. Then: what was built, files, deviations, follow-ups._
