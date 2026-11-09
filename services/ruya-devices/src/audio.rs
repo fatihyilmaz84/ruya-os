@@ -140,6 +140,21 @@ pub type SharedView = Arc<Mutex<View>>;
 /// The volume an output starts at the first time the console uses it (owner, 2026-11-08).
 pub const FIRST_VOLUME: u32 = 100;
 
+/// What an output that may sit on someone's ears starts at (hearing safety, lead 2026-11-09):
+/// WirePlumber's own 0.40.
+pub const SAFE_NEW_VOLUME: u32 = 40;
+
+/// Where an output used for the first time starts. Only line-level outputs (a TV or monitor over
+/// HDMI/DisplayPort, the built-in or external speakers) start at [`FIRST_VOLUME`]; headphones, a
+/// Bluetooth or USB audio device (it may be a headset) and anything not known start at
+/// [`SAFE_NEW_VOLUME`]. `None` (no output explains the sink) is unknown, so safe.
+pub fn start_volume(kind: Option<OutKind>) -> u32 {
+    match kind {
+        Some(OutKind::Speaker | OutKind::Hdmi) => FIRST_VOLUME,
+        _ => SAFE_NEW_VOLUME,
+    }
+}
+
 pub struct Audio<P: PipeWire> {
     view: SharedView,
     pw: P,
@@ -345,17 +360,20 @@ impl<P: PipeWire> Audio<P> {
             }
         }
 
-        if !self.first_start_done && default.is_some() && self.pw.set_volume(100).is_ok() {
-            snap.volume = 100;
-            self.first_start_done = true;
-            self.write_marker();
-        }
-
         let live = default
             .as_ref()
             .and_then(|d| snap.outputs.iter().find(|o| o.node.as_ref() == Some(d)))
-            .map(|o| o.id.clone());
-        if let Some(id) = live {
+            .map(|o| (o.id.clone(), o.kind));
+        // Before T-360 the first start set 100 % whatever the output was; headphones get 40 % now.
+        if !self.first_start_done && default.is_some() {
+            let volume = start_volume(live.as_ref().map(|l| l.1));
+            if self.pw.set_volume(volume).is_ok() {
+                snap.volume = volume;
+                self.first_start_done = true;
+                self.write_marker();
+            }
+        }
+        if let Some((id, _)) = live {
             self.mark_seen(&id);
         }
 
@@ -425,8 +443,9 @@ impl<P: PipeWire> Audio<P> {
         } else if !self.choice.seen.contains(&o.id) {
             // An output used for the first time: WirePlumber gives it 0.40, the console its own
             // first volume. A failed write leaves it unseen, so the next switch tries again.
-            if self.pw.set_volume(FIRST_VOLUME).is_ok() {
-                self.volume = FIRST_VOLUME;
+            let volume = start_volume(Some(o.kind));
+            if self.pw.set_volume(volume).is_ok() {
+                self.volume = volume;
                 self.mark_seen(&o.id);
             }
         }
@@ -1722,5 +1741,56 @@ mod tests {
         let first_good = a.refresh().unwrap();
         assert!(first_good.sinks && first_good.outputs, "{first_good:?}");
         assert_eq!(first_good.default.as_deref(), Some("card.analog"));
+    }
+
+    /// A card whose analog profile carries headphones as the route in use (a plugged jack).
+    fn headphone_card() -> FakeCard {
+        let mut card = FakeCard::dell();
+        card.route = "hp".to_owned();
+        card.profiles[0].ports[1].2 = Avail::Yes;
+        card
+    }
+
+    #[test]
+    fn a_new_headphone_output_starts_at_the_safe_volume() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut a = card_audio(FakePipeWire::with_card(FakeCard::dell()), dir.path());
+        a.refresh().unwrap();
+        assert_eq!(a.pw.volume, 100);
+        // A profile on which the jack is the route in use: first time this output is used.
+        let mut card = FakeCard::dell();
+        card.profiles[1]
+            .ports
+            .push(("hp2".to_owned(), OutKind::Headphones, Avail::Yes));
+        a.pw.card = Some(card);
+        a.pw.sync_card();
+        a.refresh().unwrap();
+        assert_eq!(a.set_output("card:hp2"), Status::Ok);
+        assert_eq!(a.pw.volume, SAFE_NEW_VOLUME);
+        // A TV on the same card, never used, is line level.
+        assert_eq!(a.set_output("card:tv"), Status::Ok);
+        assert_eq!(a.pw.volume, FIRST_VOLUME);
+    }
+
+    #[test]
+    fn an_unknown_kind_counts_as_headphones() {
+        assert_eq!(start_volume(None), SAFE_NEW_VOLUME);
+        // A USB or Bluetooth device may be a headset.
+        assert_eq!(start_volume(Some(OutKind::Usb)), SAFE_NEW_VOLUME);
+        assert_eq!(start_volume(Some(OutKind::Bluetooth)), SAFE_NEW_VOLUME);
+        assert_eq!(start_volume(Some(OutKind::Headphones)), SAFE_NEW_VOLUME);
+        assert_eq!(start_volume(Some(OutKind::Speaker)), FIRST_VOLUME);
+        assert_eq!(start_volume(Some(OutKind::Hdmi)), FIRST_VOLUME);
+    }
+
+    #[test]
+    fn the_first_start_on_headphones_gets_the_safe_volume() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut pw = FakePipeWire::with_card(headphone_card());
+        pw.volume = 90; // whatever it is, the first start sets the rule's volume
+        let mut a = card_audio(pw, dir.path());
+        a.refresh().unwrap();
+        assert_eq!(a.pw.volume, SAFE_NEW_VOLUME);
+        assert!(dir.path().join(MARKER).exists());
     }
 }
