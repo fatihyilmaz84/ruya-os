@@ -5,6 +5,11 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | ID | Title | Status | Depends |
 |---|---|---|---|
 | [T-362](tasks/T-362-compositor-xdg-output-and-socket-follow-ups.md) | Compositor: xdg-output for games, profile-socket and log follow-ups | todo | — |
+| [T-394](tasks/T-394-options-menu-on-game-cards.md) | Options menu on game and app cards: Details, Activity, Uninstall and the rest of T-393's list | todo | T-393, T-386 |
+| [T-398](tasks/T-398-controller-family-button-mapping.md) | The family's own confirm button: Nintendo A on the right, PlayStation Cross (or Circle), a Confirm-button setting | todo | T-396 |
+| [T-397](tasks/T-397-one-controller-drives-the-ui.md) | One controller drives the UI: owner pads per signed-in profile, takeover when they are gone, Guide on a foreign pad | todo | T-396 |
+| [T-399](tasks/T-399-action-glyphs-follow-the-active-controller.md) | Glyphs follow the active controller: action glyphs for Xbox, PlayStation, Nintendo, keyboard and a generic pad | todo | T-396, T-398 |
+| [T-395](tasks/T-395-options-menu-on-other-surfaces.md) | Options menu on the other surfaces: Store cards, Downloads rows, device rows | todo | T-394 |
 | [T-378](tasks/T-378-session-follow-ups-alive-reset-user-link.md) | ruya-session follow-ups: Alive resets the miss count, user unknown vs a logind error, a strict restart check | todo | T-363 |
 | [T-299](tasks/T-299-image-follow-ups-secure-boot-bluez-grub-menu.md) | Image follow-ups (VM this task): quiet bootloader-update on Secure Boot, BlueZ pairable timeout, grub-menu ordering, webp | todo | — |
 | [T-364](tasks/T-364-storage-scan-follow-ups.md) | Storage scan follow-ups: a real-directory test, a Rescan row, a calmer busy retry | todo | — |
