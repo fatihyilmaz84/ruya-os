@@ -21,7 +21,7 @@ Status: done · Phase: 2 · Depends: — · Area: image (BlueZ config) · Size: 
 - [x] hw (Dell): every check of Scope 2 with numbers; `bluetoothd` under 2 % CPU with the pad in use (was 10-12 %).
 
 ## Outcome
-Verified: vm (0.0.59 boots, `RUYA_BOOT_OK`; `vm-devices-check.sh bluetooth` pending in the 0.0.60 queue) + hw (Dell 0.0.59)
+Verified: vm (0.0.59 boots; 0.0.60, lead-8: `vm-devices-check.sh bluetooth` ALL CHECKS PASSED) + hw (Dell 0.0.59)
 
 Built (lead, 2026-11-09): `image/rootfs/etc/bluetooth/input.conf` with `[General] UserspaceHID=false` (merged with T-365's branch, image 0.0.59).
 

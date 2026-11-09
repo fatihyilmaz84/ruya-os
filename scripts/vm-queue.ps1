@@ -39,7 +39,7 @@ function Keyline([string[]]$Text) {
     if (-not $t) { return "(no output)" }
     $k = $t | Where-Object { $_ -match "ALL CHECKS PASSED|SOME CHECKS FAILED|ALL PASS|PASSED|FAILED|_OK" } | Select-Object -Last 1
     if (-not $k) { $k = $t[-1] }
-    $nfail = @($t | Where-Object { $_ -match "^FAIL" }).Count
+    $nfail = @($t | Where-Object { $_ -cmatch "^FAIL\b" }).Count
     $s = if ($nfail) { "$nfail FAIL line(s); $k" } else { $k }
     if ($s.Length -gt 110) { $s = $s.Substring(0, 110) }
     return $s

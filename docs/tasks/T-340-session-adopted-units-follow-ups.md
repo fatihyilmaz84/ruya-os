@@ -39,7 +39,7 @@ Since T-290 `ruya-session` adopts running `ruya-app-*` units after a restart, bu
 - Image risk is low (no unit, policy or hardening change): "VM (lead run)".
 
 ## Outcome
-Verified: host (vm pending: vm-session-check.sh restart)
+Verified: vm (0.0.60, lead-8: `vm-session-check.sh restart` ALL CHECKS PASSED with the zbus `Unixexec` fix)
 
 **Built.** `services/ruya-session/src/follow.rs` (new): `Follower` follows the adopted units of one profile manager through a `ManagerLink` (wait for a signal, reconnect, probe one unit, "does it still exist"). Events: `PropertiesChanged` (`ActiveState`, `ExecMainStatus`, `ExecMainCode`) and `UnitRemoved`; the real status is kept by `UnitWatch::apply` (non-zero exit = `crashed`, 0 = `quit`, signal = `killed` in the core). A lost connection falls back to a probe per unit every 2 s with a reconnect attempt each round and one look at every unit after it; 5 failed looks in a row ask `exists` first and only a "no" (or no manager for that user) ends the watch, "cannot tell" keeps the unit. `systemd.rs`: `UserLink` (bridge connection, `Subscribe`, bus `GetUnit`/`GetAll` for probes), `follow_user` (one thread per manager instead of one per unit), the per-unit `Watcher` is gone. `session.rs`/`dbus.rs`: `Launch` waits (`wait_while_stopping`, `LAUNCH_WAIT` 8 s, lock not held) while an instance of the same app is stopping; the core answers `already-running` only for an instance that is not stopping, and `failed` (no second unit on the taken name) if the old one is still there after the wait. I chose "wait", not "rename": a deterministic unit name stays the instance name the shell and the ledger know. 
 

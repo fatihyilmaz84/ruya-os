@@ -36,7 +36,7 @@ The audio service never stalls other D-Bus calls during a card switch, picks the
 - Inbox lines (T-322, T-347 reviews) are verbatim in `STATUS-parked.md`, "Inbox triage 2026-11-09 (lead-7)". The Dell recipe for a fresh-boot 100 % (delete `audio.toml`, `first-volume-done`, WirePlumber state) belongs in the Outcome as the hw step for the lead.
 
 ## Outcome
-Verified: host (vm pending: vm-reboot-check.ps1 saved-output)
+Verified: vm (0.0.60, lead-8: `vm-reboot-check.ps1 -SavedOutput` AUDIO_REBOOT_SAVED_OUTPUT_OK; the relaunch now has `-Audio`)
 
 Built (all in `services/ruya-devices`):
 1. **No blocking.** `Audio` keeps a `View` (sinks, outputs, volume, mute, playing, channels) behind its own small lock, refreshed by `publish()` after every change (`refresh`, `set_output`, `reset_choice`, `set_default_sink`, `set_volume`, `set_muted`, `set_channel`). The `AudioIface` getters read it, so they never wait for the `Audio` mutex a card switch holds (a `with_audio` getter would still have waited the 4-8 s). The setters (`SetDefaultSink`, `SetChannelVolume`, `MasterVolume`/`Muted` writes) now run through `with_audio`.

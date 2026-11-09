@@ -27,7 +27,7 @@ A game gets the GPU the shell does not need. On the Dell (0.0.58, lead-7, STK fu
 - `02` power saving (what stops behind an app).
 
 ## Outcome
-Verified: host (vm pending: vm-session-check.sh display)
+Verified: vm (0.0.60, lead-8: `vm-session-check.sh display` ALL CHECKS PASSED; the check counts running streams, as the criterion says: 0.0.60 keeps one idle ruya-shell node) + hw pending (Dell look-at list)
 
 UX notes: no new state; Back/focus unchanged (an app in front keeps the focus; closing it gives Home's Play button the focus, asserted). Screenshots read: `guide-over-app.png` (the panel over the app area, which is empty in the test, so just the scrim colour) and `home-after-app.png` (backdrop, hero art and glass pills all back). Not judged: a flash on real hardware, since offscreen/`shots` cannot show one frame; Home's own fade (`home.opacity`) covers L0 coming back as before.
 
