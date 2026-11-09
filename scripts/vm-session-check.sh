@@ -355,7 +355,8 @@ nodes = json.load(open(sys.argv[1], encoding="utf-8"))
 for n in nodes:
     p = (n.get("info") or {}).get("props") or {}
     if (n.get("type") == "PipeWire:Interface:Node" and p.get("media.class") == "Stream/Output/Audio"
-            and (p.get("application.process.binary") == "ruya-shell" or p.get("application.process.user") == "ruya-shell")):
+            and (p.get("application.process.binary") == "ruya-shell" or p.get("application.process.user") == "ruya-shell")
+            and (n.get("info") or {}).get("state") == "running"):
         print(n.get("id"), (n.get("info") or {}).get("state"))
 ' "$dump")"; then
         [ -z "$streams" ] && ok "no ruya-shell output stream exists with the app in front" || { echo "$streams" | sed 's/^/    /'; bad "a ruya-shell output stream still exists with the app in front"; }

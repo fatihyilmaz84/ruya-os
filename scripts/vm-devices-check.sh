@@ -628,8 +628,11 @@ sysinfo_check() {
     want=$(( $(awk '/^MemAvailable:/ {print $2}' /proc/meminfo) * 1024 ))
     v="$(sys_key memory.available_bytes)"
     if near "${v:-0}" "$want" 5; then ok "memory.available_bytes ($v) is within 5 % of MemAvailable ($want)"; else bad "memory.available_bytes '$v' vs $want"; fi
-    n="$(sys_key memory.used_bytes)"
-    [ $(( ${n:-0} + ${v:-0} )) = "$(sys_key memory.total_bytes)" ] && ok "used + available = total" || bad "used $n + available $v is not the total"
+    # used + available = total within one GetInfo reply (two calls see memory move in between).
+    snap="$(busctl --system call "$svc" "$path" "$sysi" GetInfo 2>/dev/null)"
+    snap_key() { echo "$snap" | grep -o "\"$1\" [stb] [0-9]*" | head -1 | sed 's/^"[^"]*" [stb] //'; }
+    n="$(snap_key memory.used_bytes)"; a="$(snap_key memory.available_bytes)"; t="$(snap_key memory.total_bytes)"
+    [ -n "$t" ] && [ $(( ${n:-0} + ${a:-0} )) = "$t" ] && ok "used + available = total" || bad "used $n + available $a is not the total $t"
     want=$(( $(awk '/^SwapTotal:/ {print $2}' /proc/meminfo) * 1024 ))
     v="$(sys_key memory.swap_total_bytes)"
     if [ "$want" = 0 ]; then

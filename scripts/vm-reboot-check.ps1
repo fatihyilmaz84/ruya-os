@@ -7,12 +7,15 @@
 #   .\scripts\vm-reboot-check.ps1 [-Disk output\qcow2\drill.qcow2] [-TimeoutSec 600] [-SavedOutput]
 # -SavedOutput (T-360): before the reboot choose a sound output (SetOutput), after it check that
 # output is the default again (scripts/vm-saved-output-check.sh, AUDIO_REBOOT_SAVED_OUTPUT_OK).
+# -Audio restarts the VM with a sound card (implied by -SavedOutput: without one the saved output
+# cannot come back and the default is auto_null).
 # Exits with smoke-test.ps1's result (0 = the shell became ready on the new boot); with
 # -SavedOutput also 1 when the saved output is not the default again.
 param(
     [string]$Disk = "output\qcow2\drill.qcow2",
     [int]$TimeoutSec = 600,
     [switch]$SavedOutput,
+    [switch]$Audio,
     [string]$Key = (Join-Path $env:USERPROFILE ".ssh\ruyaos_dev")
 )
 $ErrorActionPreference = "Continue"
@@ -34,7 +37,9 @@ $deadline = (Get-Date).AddSeconds(180)
 while ((Get-Process qemu-system-x86_64 -ErrorAction SilentlyContinue) -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 3 }
 Get-Process qemu-system-x86_64 -ErrorAction SilentlyContinue | Stop-Process -Force
 
-& (Join-Path $PSScriptRoot "smoke-test.ps1") -Disk $Disk -Persistent -Keep -TimeoutSec $TimeoutSec
+$smokeArgs = @{ Disk = $Disk; Persistent = $true; Keep = $true; TimeoutSec = $TimeoutSec }
+if ($Audio -or $SavedOutput) { $smokeArgs.Audio = $true }
+& (Join-Path $PSScriptRoot "smoke-test.ps1") @smokeArgs
 $code = $LASTEXITCODE
 # Give greenboot's health check time to record its verdict before reporting.
 Start-Sleep -Seconds 30
