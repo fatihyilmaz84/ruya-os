@@ -252,7 +252,7 @@ Item {
 
         function test_the_rows_work_with_a_controller() {
             openAudioPane()
-            for (let i = 0; i < 5; ++i)                  // analog, master, UI sounds, Ambient, Ambient sound
+            for (let i = 0; i < 7; ++i)                  // analog, the jack, Test sound, master, UI sounds, Ambient, Ambient sound
                 keyClick(Qt.Key_Down)
             tryVerify(() => find("rowAmbientSound").activeFocus, 2000, "the switch sits under the Ambient slider")
             verify(find("rowAmbientSound").checked, "on by default")
@@ -277,7 +277,7 @@ Item {
         function test_a_drive_theme_is_copied_and_focus_survives_the_drive_list_changing() {
             SoundThemes.mockPrepareDrive()
             openAudioPane()
-            for (let i = 0; i < 8; ++i)
+            for (let i = 0; i < 10; ++i)
                 keyClick(Qt.Key_Down)                    // to the sound theme row
             tryVerify(() => find("rowSoundTheme").activeFocus, 2000)
             verify(!find("driveTheme_drive:Ruya Stick/Glassy"), "no drive yet")
@@ -450,7 +450,7 @@ Item {
             verify(del, "the row exists")
             verify(!del.visible, "but is not shown for the bundled theme")
             verify(!SoundThemes.removeTheme("dreamglass"))
-            for (let i = 0; i < 8; ++i)
+            for (let i = 0; i < 10; ++i)
                 keyClick(Qt.Key_Down)                    // to the sound theme row, the last one
             tryVerify(() => find("rowSoundTheme").activeFocus, 2000)
             keyClick(Qt.Key_Down)
@@ -507,7 +507,7 @@ Item {
             openAudioPane()
             Storage.mockPlugStick()
             tryVerify(() => find("driveTheme_drive:Ruya Stick/Glassy") !== null, 5000)
-            for (let i = 0; i < 9; ++i)
+            for (let i = 0; i < 11; ++i)
                 keyClick(Qt.Key_Down)                    // down to the first drive theme
             tryVerify(() => find("driveTheme_drive:Ruya Stick/Glassy").activeFocus, 2000)
             tryCompare(find("volumeOsd"), "shown", false, 5000)

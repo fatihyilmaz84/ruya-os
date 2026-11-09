@@ -523,7 +523,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>AudioPane</name>
     <message>
-        <location filename="../qml/AudioPane.qml" line="+155"/>
+        <location filename="../qml/AudioPane.qml" line="+181"/>
         <source>Sound theme: %1</source>
         <translation>Sound theme: %1</translation>
     </message>
@@ -533,7 +533,22 @@ This can&apos;t be undone.</translation>
         <translation>The console keeps up to %1 sound themes. Delete one first, or copy over one with the same name to replace it.</translation>
     </message>
     <message>
+        <location line="-31"/>
+        <source>Not connected</source>
+        <translation>Not connected</translation>
+    </message>
+    <message>
         <location line="+2"/>
+        <source>Not available now</source>
+        <translation>Not available now</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Current</source>
+        <translation>Current</translation>
+    </message>
+    <message>
+        <location line="+30"/>
         <source>That sound theme has more than %1 files.</source>
         <translation>That sound theme has more than %1 files.</translation>
     </message>
@@ -558,12 +573,22 @@ This can&apos;t be undone.</translation>
         <translation>Could not switch the audio output.</translation>
     </message>
     <message>
-        <location line="+15"/>
-        <source>Default</source>
-        <translation>Default</translation>
+        <location line="+4"/>
+        <source>Could not play the test sound.</source>
+        <translation>Could not play the test sound.</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+23"/>
+        <source>%1: %2.</source>
+        <translation>%1: %2.</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Test sound</source>
+        <translation>Test sound</translation>
+    </message>
+    <message>
+        <location line="+10"/>
         <source>Master volume</source>
         <translation>Master volume</translation>
     </message>
@@ -2556,12 +2581,7 @@ This can&apos;t be undone.</translation>
         <translation>power off</translation>
     </message>
     <message>
-        <location line="+9"/>
-        <source>Audio output: %1</source>
-        <translation>Audio output: %1</translation>
-    </message>
-    <message>
-        <location line="+972"/>
+        <location line="+981"/>
         <source>Power</source>
         <translation>Power</translation>
     </message>
@@ -2571,7 +2591,12 @@ This can&apos;t be undone.</translation>
         <translation>Update ready. Restart to finish.</translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="-8"/>
+        <source>Sound moved to %1</source>
+        <translation>Sound moved to %1</translation>
+    </message>
+    <message>
+        <location line="+19"/>
         <source>Restarting to finish the update in 2 minutes. Press any button to wait.</source>
         <translation>Restarting to finish the update in 2 minutes. Press any button to wait.</translation>
     </message>
