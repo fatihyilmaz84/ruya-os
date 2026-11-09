@@ -45,6 +45,8 @@ Builder: Opus 5.5, effort medium, round 1.
 - `shots` `test_zz_sheet_after_an_app`: red on main (above), green with the fix.
 - `test_the_panel_is_glass_and_the_thumbnails_are_rounded` reads the sheet blur's `maskSource.layer`; offscreen the sheet is not blurred, so the mask is now null there: the test sets `panel.gpu = true` for that check (the blurred branch, where the hand-off exists) and puts it back. Not weakened: it checks the same smooth-layer property on the branch that has it.
 
+**Checks:** `dev.ps1 test` ALL GREEN (1021 QML passed, 81 skipped; 851 Rust). `dev.ps1 shots` ALL GREEN (160); reviewed `70-wallpaper-picker-again-app.png` (blurred sheet like the fresh one, every tile with its picture), `70-wallpaper-picker-fresh-reopened.png`, `70-wallpaper-picker-usb.png`. Scratch note: experiments were made by overwriting my own `shell/qml/GlassSheet.qml` and `Shell.qml` and restoring them with `cp output/*.bak` (this worktree only).
+
 **T-359 keyboard (lead hint):** not the same cause. `TextEntry.qml` has no glass sheet and samples nothing; its field and keys are translucent `Theme.glass` over the `scrim`, so a busy page shows through (and that shot is taken 500 ms into a 300 ms fade, so it is settled). Inbox line below.
 
 Files: `shell/qml/GlassSheet.qml`, `shell/qml/Shell.qml`, `shell/qml/WallpaperPicker.qml`, `shell/tests/tst_glass.qml`, `shell/tests/tst_sound_ui.qml`, `shell/tests/tst_wallpaper.qml`, `docs/specs/02-shell.md`, `docs/specs/04-design-system.md`.
