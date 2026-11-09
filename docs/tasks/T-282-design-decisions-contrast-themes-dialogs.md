@@ -45,5 +45,7 @@ powershell -File scripts\lint-board.ps1
 - Measure with `ThemeMath` and `tst_theme_contrast.qml` figures, not by eye. Five themes: Dreamglass, Midnight, Aurora, Ember, Daylight (plus Performance tier).
 - Items 7 and 8 are quick; 1-4 need screenshots of `dev.ps1 shots` (themes board).
 
+- (owner question 2026-11-09; added lead-7) **Card styles.** The owner sees three card types (Home, Store, Games). By design (04 5.2, T-281) one family in three sizes (Games hero 400x225, Home shelf 320x180, Store compact 288x162), same radius, ring, glare and glow; the visible difference is the caption (over the art on Home/Games, below it in the Store). Run `ruya-design-reviewer` + `ruya-ux-reviewer` on screenshots of the three pages, decide whether the Store caption and the three sizes stay or unify, answer the owner. Also: a drive with six scan categories adds seven Storage rows; a collapsed "Show details" needs a component (T-364 left it out).
+
 ## Outcome
 _Filled in by the implementer. First line: `Verified: host | vm | unverified | hw` (say what ran where). Then: what was built, files, deviations, follow-ups (each also an Inbox line)._

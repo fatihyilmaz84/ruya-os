@@ -36,6 +36,8 @@ Then the image recipe in `docs/dev-setup.md` and `vm-session-check.sh` over SSH.
 ## Hints
 - `FreezeUnit` is a method on `org.freedesktop.systemd1.Manager` of the user's manager; T-162 found how the service reaches that manager.
 
+- (T-164 reviews, lead-6; added lead-7) Decide a hidden profile's running app: suspend or stop it, tell the new profile (Home hint or toast) and give a way to close it. A locked profile's client is closed on its next surface (whole-client verdict). A Flatpak game lives in its own scope: freeze that (T-363).
+
 ## Outcome
 _Filled in by the implementer. First line: `Verified: host | vm | unverified | hw` (say what ran where). Then: what was built, files, deviations, follow-ups (each also an Inbox line)._
 

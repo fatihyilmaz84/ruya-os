@@ -5,6 +5,12 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | ID | Title | Status | Depends |
 |---|---|---|---|
 | [T-348](tasks/T-348-settings-audio-output-pane.md) | Settings > Audio > Output: choose where the sound plays, with a test sound | in-progress | T-322 |
+| [T-361](tasks/T-361-flaky-qml-tests-and-focus-net-loaders.md) | Test reliability: two load-flaky QML tests, a faster page-focus test, the focus net with lazy panes | todo | — |
+| [T-362](tasks/T-362-compositor-xdg-output-and-socket-follow-ups.md) | Compositor: xdg-output for games, profile-socket and log follow-ups | todo | — |
+| [T-360](tasks/T-360-audio-service-follow-ups-executor-and-boot-race.md) | Audio service follow-ups: no executor blocking, the boot race, a fresh-install check that holds | todo | — |
+| [T-363](tasks/T-363-follow-flatpak-app-scopes.md) | ruya-session follows a Flatpak game's own scope (usage, limits, stop) | todo | T-340 |
+| [T-359](tasks/T-359-bluetooth-follow-ups-adapters-names.md) | Bluetooth follow-ups: late adapters, scan ownership, telling like pads apart | todo | — |
+| [T-364](tasks/T-364-storage-scan-follow-ups.md) | Storage scan follow-ups: a real-directory test, a Rescan row, a calmer busy retry | todo | — |
 | [T-292](tasks/T-292-activity-page-follow-ups.md) | Activity page follow-ups: refresh only when visible, paging, retry, icons, focus order | todo | — |
 | [T-295](tasks/T-295-time-zone-follow-ups.md) | Time zone follow-ups: say it when Setup cannot set the zone, type to filter the chooser | todo | — |
 | [T-287](tasks/T-287-display-hotplug-and-mode-check.md) | Display service follow-ups: hot-plug signal, check the real mode after the restart, recovery argument | todo | T-282 |
