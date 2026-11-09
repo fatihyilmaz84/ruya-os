@@ -328,9 +328,11 @@ FocusScope {
                             color: Theme.blobTintA(Theme.defaultTint)
                             opacity: Theme.blobOpacityA
                         }
+                        // No `visible` binding on the status: an Image that is not ready draws nothing, and one
+                        // turned visible after the first frame inside this hidden layer source never showed (T-387).
                         Image {
+                            objectName: "wallpaperTileImage_" + (picker.usbMode ? tile.index : tile.modelData.id)
                             anchors.fill: parent
-                            visible: status === Image.Ready
                             source: tile.modelData.source ?? ""
                             asynchronous: true
                             cache: false

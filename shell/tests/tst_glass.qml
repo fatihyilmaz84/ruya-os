@@ -282,6 +282,30 @@ Item {
             tryCompare(sheet, "bakeCount", 2, 2000)
         }
 
+        // T-387: the blur's mask is handed to MultiEffect only while the mask's layer is on, so every
+        // opening gives it the new layer. Under one unchanged `maskSource` a layer turned off and on again
+        // masked the whole blur away on a GPU: every opening after the first was a flat sheet (`shots`
+        // Wallpaper::test_zz_sheet_after_an_app, which checks the pixels).
+        function test_sheet_hands_the_new_mask_layer_to_the_blur_on_every_opening() {
+            const layer = createTemporaryObject(layerComponent, host)
+            const modal = createTemporaryObject(fadingModalComponent, layer)
+            const sheet = findChild(modal, "fadingSheet")
+            const mask = findChild(sheet, "glassSheetMask")
+            const blur = findChild(sheet, "glassSheetBlur")
+            tryVerify(() => sheet.source === layer.glassSource, 2000, "found on the modal layer")
+            compare(blur.maskSource, null, "no mask before the first opening (it has no layer)")
+            for (let opening = 1; opening <= 2; ++opening) {
+                modal.shown = true
+                verify(mask.layer.enabled, "opening " + opening + ": the mask's layer is on")
+                verify(blur.maskSource === mask, "opening " + opening + ": the blur is cut by it")
+                tryCompare(modal, "opacity", 1, 2000)
+                modal.shown = false
+                tryCompare(sheet, "engaged", false, 3000, "let go once the modal is hidden")
+                compare(mask.layer.enabled, false)
+                compare(blur.maskSource, null, "opening " + opening + ": the blur lets go of the layer with it")
+            }
+        }
+
         // --- card focus ------------------------------------------------------------------------
 
         function glareOf(card) { return findChild(card, "cardFocusLayers") }
