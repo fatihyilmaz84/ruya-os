@@ -23,6 +23,8 @@ Open work only (the front of the board; the rest is in `STATUS-backlog.md`), in 
 
 | ID | Title | Status | Depends |
 |---|---|---|---|
+| [T-386](tasks/T-386-play-starts-the-game.md) | Play starts the game: the Library's launch reaches Session1.Launch | in-progress | T-164 |
+| [T-387](tasks/T-387-glass-after-an-app-and-picker-thumbnails.md) | **[lead]** Glass sheets lose their blur after an app was in front; wallpaper picker tiles stay blank | in-progress | — |
 | [T-366](tasks/T-366-ruya-input-spike-engine-and-design.md) | **[lead]** Ruya Input: spike, engine decision and the design (06-input.md, Input1 draft) | todo | — |
 | [T-367](tasks/T-367-a-game-sees-the-pad.md) | **[lead]** A game sees the pad: a virtual pad per controller, for the signed-in profile only, routed by focus | todo | T-366 |
 | [T-197](tasks/T-197-shell-crash-on-bluetooth-audio-disconnect.md) | **[lead]** Shell crash when a Bluetooth headset disconnects | in-progress | — |
@@ -54,6 +56,7 @@ Triaged 2026-11-09 (lead-8): the lines before are verbatim in [`STATUS-parked.md
 - (lead-8) The `.githooks/pre-commit` text lint needs `git config core.hooksPath .githooks` once per clone (the owner; the lead's harness refused to set it).
 - (T-379, lead-8) The four `shots` reds did not reproduce (158 passed twice; all are already `tryVerify`/`tryCompare`); closed as not reproducible. Make `WindowGuard` fail a test with its own message when the window lost activation mid-test and did not regain it (today it checks only in `init()`, so a desktop loss shows as a random `activeFocus` line); keep the build-win ruya-qmltest.txt log with any new red.
 uya-qmltest.txt` with any new red.
+- (lead-8, Dell 0.0.60) ruya-session starts before Profiles1 is activatable and before ruya-p1's user manager: "Profiles1 not readable, no unit is stopped" and "cannot list the apps of ruya-p1" (Transport endpoint is not connected) at boot; it does not retry, so adoption after a reboot may miss a running app. Order it after the profile service or retry.
 
 ## Blocked (need something this host doesn't have)
 
