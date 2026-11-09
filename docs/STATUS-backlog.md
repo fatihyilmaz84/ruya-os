@@ -138,3 +138,10 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | [T-352](tasks/T-352-ruya-platform-service-skeleton.md) | ruya-platform: the one door for sandboxed apps (ADR-022 Accepted; step one: the caller-identity spike) | todo | T-351 |
 | [T-353](tasks/T-353-developer-mock-and-sample-harness.md) | Developer harness: a Platform mock, a sample app and a conformance runner in CI | todo | T-352, T-350 |
 | [T-354](tasks/T-354-research-xbox-wireless-adapter-support.md) | **[lead]** Research: Xbox Wireless Adapter support (driver, user-downloaded firmware, legal risk) and a recommended task list; builds nothing | todo | — |
+| [T-404](tasks/T-404-ruya-web-threat-model-and-allow-list.md) | **[lead]** Ruya Web: threat model, the bus allow-list per service, pairing and session design | blocked | owner |
+| [T-405](tasks/T-405-ruya-web-spike.md) | **[lead]** Spike: Ruya Web stack, TLS certificate, TV pairing, LAN-only enforcement, design tokens as CSS | todo | T-404 |
+| [T-406](tasks/T-406-ruya-web-foundation-and-dashboard.md) | Ruya Web foundation: the service, Settings > Web management, pairing, sessions, a read-only dashboard | todo | T-405 |
+| [T-407](tasks/T-407-ruya-web-library-and-artwork.md) | Ruya Web: library and game details, custom artwork and metadata (stored by the Library) | todo | T-406, T-401 |
+| [T-408](tasks/T-408-ruya-web-rom-upload-and-import.md) | Ruya Web: ROM and BIOS upload, then import through the hub (identify, duplicates, archives) | todo | T-406, T-304 |
+| [T-409](tasks/T-409-ruya-web-system-pages.md) | Ruya Web: downloads, apps, storage and saves pages over their own services | todo | T-406, T-391, T-403, T-310 |
+| [T-410](tasks/T-410-ruya-web-diagnostics.md) | Ruya Web: logs and a diagnostic report, redacted | todo | T-406, T-225 |
