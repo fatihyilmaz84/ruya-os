@@ -1,6 +1,6 @@
 # T-376 - The shell draws and plays nothing behind a full-screen app
 
-Status: todo · Phase: 2 · Depends: — · Area: shell (Shell.qml, Backdrop, WallpaperLayer, AmbientLoop) · Size: S · Owner: builder · Complexity: normal · Developer surface: none
+Status: in-progress · Phase: 2 · Depends: — · Area: shell (Shell.qml, Backdrop, WallpaperLayer, AmbientLoop) · Size: S · Owner: builder · Complexity: normal · Developer surface: none
 
 ## Goal
 A game gets the GPU the shell does not need. On the Dell (0.0.58, lead-7, STK full-screen) the GPU was saturated (RC6 idle 3 %, clock at 1150 MHz): the game used about 96 % of the render engine and **the shell about 8.8 %**, because the L0 backdrop (full-screen gradient plus three alpha-blended circles, about 3.6 screen fills per frame) is drawn behind the opaque app every frame: `Shell.qml` (~line 552) bases `Backdrop.shown` on wallpaper and saver only, and T-293's `paused` stops the drift but keeps the item visible. The ambient bed's `pauseLoop()` (`MediaPlayer.pause()`) also leaves a silent 24 kHz PipeWire stream running (about 4 % CPU in QPulseAudioEngine and QFFmpeg::AudioRenderer, 95 wakeups/s each).
