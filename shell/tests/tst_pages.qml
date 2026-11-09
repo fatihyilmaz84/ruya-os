@@ -354,16 +354,17 @@ Item {
         }
         // The page on top has faded in, the pages below have faded out, and the active focus is a
         // visible, enabled item of the page on top.
-        function checkFocusOnTop(what) {
+        function checkFocusOnTop(what, frames) {
             const top = tc.shell.slots[tc.shell.slots.length - 1]
             tryCompare(top, "opacity", 1)
             tryVerify(() => tc.shell.slots.slice(0, -1).every(s => !s.visible), 2000, what + ": the page below faded out")
-            // A page may hand the focus on from a hidden item in a deferred call of its own (a pane's
-            // settleFocus): the focus must be valid soon, whatever the length of the fades. The shell's
-            // safety net must not be the one that fixes it (focusRepairs is asserted by the callers).
+            // `frames` drawn frames of grace (a pane hands the focus on from a hidden item in a
+            // Qt.callLater of its own: one or two frames, whatever the fades). 0 is a single read: the
+            // "replies due" state is in between and must already be right (T-356); the shell's safety
+            // net does not stand in for it (focusRepairs is asserted by the callers).
             let problem = focusProblem(top, what)
-            for (let i = 0; i < 40 && problem !== ""; ++i) {
-                wait(50)
+            for (let i = 0; i < frames && problem !== ""; ++i) {
+                waitForRendering(tc.shell)
                 problem = focusProblem(top, what)
             }
             compare(problem, "")
@@ -377,16 +378,16 @@ Item {
         }
         // With bad services, also while replies are on their way and once they are in.
         function settleAndCheck(what, bad) {
-            checkFocusOnTop(what)
+            checkFocusOnTop(what, 3)
             if (!bad)
                 return
             Bluetooth.mockRefreshDelayed(40)
             Network.mockRefreshDelayed(40)
             Library.mockListDelayed(40)
-            checkFocusOnTop(what + " (replies due)")
+            checkFocusOnTop(what + " (replies due)", 0)
             tryVerify(() => Bluetooth.mockPendingReplies() === 0 && Network.mockPendingReplies() === 0
                       && Library.mockPendingReplies() === 0, 3000)
-            checkFocusOnTop(what + " (replies in)")
+            checkFocusOnTop(what + " (replies in)", 3)
         }
         function openForFocus(key, extra, bad) {
             const chess = "org.example.Chess"

@@ -423,7 +423,8 @@ Item {
             const holder = () => pane.Window.window.activeFocusItem
             // activeFocus is false everywhere while the window is not the active one (the desktop took
             // it: the one way this test was seen to fail): take it back first, or say so plainly.
-            verify(windowGuard.ensureActive() === "", windowGuard.ensureActive())
+            const inactive = windowGuard.ensureActive()
+            verify(inactive === "", inactive)
             pane.forceActiveFocus()
             tryVerify(() => r(0).activeFocus, 5000)
             keyClick(Qt.Key_Down)
