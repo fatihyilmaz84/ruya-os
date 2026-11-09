@@ -43,5 +43,8 @@ Settings > System information is correct on a real image (image name and digest 
 - Reference for a root source and its fake: `services/ruya-devices/src/sysusage.rs` and the `Source` trait in `ruya-sysinfo/src/source.rs`.
 - Overlaps T-288 (`SystemInfoRows.qml`, `SystemInfoPage.qml`): run after T-288.
 
+## Note (lead-8)
+T-359 did half of item 1: `AdapterInfo.address` from BlueZ and the primary adapter's address in sysinfo; only the `bluetoothctl show` fallback and its parser are left.
+
 ## Outcome
 _Filled in by the implementer. First line: `Verified: host | vm | unverified | hw` (say what ran where). Then: what was built, files, deviations, follow-ups (each also an Inbox line)._

@@ -29,5 +29,8 @@ Answer, on the VM, the questions that decide the install and run model of `docs/
 ## Verification
 VM runs only (`docs/dev-setup.md`), one image build; end with `scripts\free-space.ps1`.
 
+## Note (lead-8)
+Proton outside Steam (umu, Steam Linux Runtime nested in Flatpak, Wine's Wayland driver) is answered by T-381 (ADR-025); this spike reuses its answers and covers only the `.play`-specific parts.
+
 ## Outcome
 _Filled in by the implementer._

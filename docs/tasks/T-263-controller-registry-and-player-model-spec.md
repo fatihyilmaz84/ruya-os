@@ -1,6 +1,6 @@
 # T-263 — EPIC: multiple controllers and local players: spec for the registry and the player model
 
-Status: todo · Phase: 2 · Depends: T-260 · Area: docs · Size: S · Owner: lead · Developer surface: internal
+Status: todo · Phase: 2 · Depends: T-260, T-366 · Area: docs · Size: S · Owner: lead · Developer surface: internal
 
 ## Goal
 The design of ADR-017 (accepted by the owner, 2026-11-07) is written down as a spec section that the child tasks build from: the data model, the D-Bus surface (draft), the flows and the states. Epic children: T-264 services, T-265 shell UX, T-266 virtual pads for apps, T-267 default owner at login, T-268 guest player. The owner's question: "when we add a second controller how do we use it; which controller is used by who; on PS it asks which user; what about guests".
@@ -24,6 +24,9 @@ The design of ADR-017 (accepted by the owner, 2026-11-07) is written down as a s
 
 ## Docs to update
 - the specs named above.
+
+## Note (lead-8)
+ADR-024 (Ruya Input) makes one input service the owner of the pads; T-366 decides the engine and the service. The registry and player slots of ADR-017 must be designed inside that service, not as a separate `ruya-inputd` registry: rewrite this task with T-366's result before anyone builds T-264.
 
 ## Outcome
 _Filled in by the implementer. First line: `Verified: host | unverified`._

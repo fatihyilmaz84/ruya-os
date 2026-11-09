@@ -1,6 +1,6 @@
 # T-147 — Full-screen apps: launch splash, quick menu, return and close
 
-Status: todo · Phase: 3 · Depends: T-138, T-146, T-164 · Area: shell · Size: M · Developer surface: internal
+Status: todo · Phase: 3 · Depends: T-138, T-146, T-164, T-386 · Area: shell · Size: M · Developer surface: internal
 
 ## Goal
 Pressing Play starts the game full screen with a short art-led launch; Guide brings up the quick menu over the running game; Home and Close work as on a console. Owner decision 2026-10-28 (ADR-012 amendment).
@@ -12,7 +12,7 @@ Pressing Play starts the game full screen with a short art-led launch; Guide bri
 - `shell/qml/Shell.qml` (Guide handling, `systemPanel`, `PowerConfirm`)
 
 ## Scope
-1. **Launch:** Play / Accept on a card calls `Session.launch(appId, profile)`; the launch transition and `LaunchSplash.qml` run until the app layer reports the app's first window (on the host: the stand-in app item appears), then focus goes to the app. Input to the shell is locked meanwhile (Guide still works). Failure status or `AppExited` with `launch-failed` → error toast, splash closes, focus back to Play. 20 s without a window → "Still starting" + Close.
+1. **Launch:** (the call itself, `Session.launch` and its error toast, is T-386, lead-8) on Play / Accept the launch transition and `LaunchSplash.qml` run until the app layer reports the app's first window (on the host: the stand-in app item appears), then focus goes to the app. Input to the shell is locked meanwhile (Guide still works). Failure status or `AppExited` with `launch-failed` → error toast, splash closes, focus back to Play. 20 s without a window → "Still starting" + Close.
 2. **Quick menu** (`QuickMenu.qml`, replaces the centred Guide card): over an app: header (art, title, running time), Resume (focus first), Home, Close game, Switch to (other running apps from `Session.running`), volume row, profile, Power (opens the existing power choices). Without an app: the same panel without the app part. `glassOpaque` on every tier until B-003 (04 §3.6).
 3. **Home** from the quick menu: app stays running and loses focus; Home shows its card with a Running pill (from `Session.running`); Accept on it resumes the app. **Close game:** `Session.stop(instance)`; the card's pill goes away on `AppExited`.
 4. While an app has focus, only the quick menu, volume OSD and toasts of kind `error`/`warning` are drawn; other toasts queue until the shell is in front (02-shell §1.5).

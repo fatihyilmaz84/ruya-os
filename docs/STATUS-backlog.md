@@ -4,11 +4,13 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 
 | ID | Title | Status | Depends |
 |---|---|---|---|
-| [T-378](tasks/T-378-session-follow-ups-alive-reset-user-link.md) | ruya-session follow-ups: Alive resets the miss count, user unknown vs a logind error, a strict restart check | todo | T-363 |
-| [T-380](tasks/T-380-profile-audio-isolation.md) | **[lead]** Profiles apart in the audio graph: what a profile's app may see and change in PipeWire | todo | — |
 | [T-362](tasks/T-362-compositor-xdg-output-and-socket-follow-ups.md) | Compositor: xdg-output for games, profile-socket and log follow-ups | todo | — |
+| [T-378](tasks/T-378-session-follow-ups-alive-reset-user-link.md) | ruya-session follow-ups: Alive resets the miss count, user unknown vs a logind error, a strict restart check | todo | T-363 |
+| [T-299](tasks/T-299-image-follow-ups-secure-boot-bluez-grub-menu.md) | Image follow-ups (VM this task): quiet bootloader-update on Secure Boot, BlueZ pairable timeout, grub-menu ordering, webp | todo | — |
 | [T-364](tasks/T-364-storage-scan-follow-ups.md) | Storage scan follow-ups: a real-directory test, a Rescan row, a calmer busy retry | todo | — |
+| [T-339](tasks/T-339-vm-check-script-follow-ups.md) | VM check scripts: power-saving wake, sounds probe and jq | todo | — |
 | [T-381](tasks/T-381-ge-proton-spike.md) | **[lead]** Spike: GE-Proton outside Steam (umu, runtime, display, size, licences, codecs) | todo | — |
+| [T-380](tasks/T-380-profile-audio-isolation.md) | **[lead]** Profiles apart in the audio graph: what a profile's app may see and change in PipeWire | todo | — |
 | [T-382](tasks/T-382-ge-proton-preinstalled-and-updated.md) | GE-Proton preinstalled in the image, updated through the Store, named in About | todo | T-381 |
 | [T-383](tasks/T-383-steam-uses-ge-proton-by-default.md) | Steam uses GE-Proton by default once installed | todo | T-381, T-382 |
 | [T-384](tasks/T-384-ge-proton-for-developers.md) | Developers: run a Windows game on the console's GE-Proton (tier-C format, chapter, sample) | todo | T-382 |
@@ -26,12 +28,10 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | [T-288](tasks/T-288-display-pane-layout-and-ui-size-reflow.md) | Display pane order, layout at large UI size, a Screen row, and the late-filled Column reflow | todo | T-282 |
 | [T-343](tasks/T-343-settings-first-focus-and-manage-profiles-follow-ups.md) | Settings follow-ups: first focus skips disabled rows, read-only rows in the spec, Manage profiles result and Guest | todo | — |
 | [T-289](tasks/T-289-system-information-follow-ups.md) | System information follow-ups: Bluetooth address from BlueZ, image from a root source, one info row, drive chooser | todo | — |
-| [T-299](tasks/T-299-image-follow-ups-secure-boot-bluez-grub-menu.md) | Image follow-ups (VM this task): quiet bootloader-update on Secure Boot, BlueZ pairable timeout, grub-menu ordering, webp | todo | — |
 | [T-338](tasks/T-338-dell-second-pad-drop-repro.md) | **[lead]** Dell: why did the second DualSense drop after 21 s? (live repro and report) | todo | T-335 |
-| [T-355](tasks/T-355-dell-real-game-smoke-test-supertuxkart.md) | **[lead]** Dell smoke test with a real game: SuperTuxKart through the shell | todo | — |
+| [T-355](tasks/T-355-dell-real-game-smoke-test-supertuxkart.md) | **[lead]** Dell smoke test with a real game: SuperTuxKart through the shell | todo | T-386 |
 | [T-332](tasks/T-332-format-removable-drive-service.md) | Format a removable drive: the service (udisks2, polkit, refusals, identity re-check) | todo | T-196, T-194 |
 | [T-333](tasks/T-333-format-drive-settings-flow.md) | Settings > Storage > Format drive...: choose, confirm, PIN, progress, result | todo | T-331, T-332 |
-| [T-339](tasks/T-339-vm-check-script-follow-ups.md) | VM check scripts: power-saving wake, sounds probe and jq | todo | — |
 | [T-341](tasks/T-341-lint-icon-and-docs-follow-ups.md) | Lint and docs follow-ups: sample metainfo check, icon spike contour, member-lint note, vm-goto | todo | — |
 | [T-342](tasks/T-342-store-age-rating-and-sync-follow-ups.md) | Store follow-ups: every OARS attribute, the long Turkish badge, installed-list reads in order | todo | — |
 | [T-344](tasks/T-344-audio-pane-delete-and-confirm-detail-follow-ups.md) | Sound theme delete and confirm dialogs: refused delete, guard test, wrapped details | todo | — |
@@ -87,7 +87,7 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | [T-258](tasks/T-258-app-browser.md) | **[lead]** App: Browser (parked by the owner 2026-11-08, ADR-016: no browser first) | todo | owner, T-250, T-252 |
 | [T-259](tasks/T-259-app-emulator-frontend.md) | App: Emulator frontend (no emulators, ROMs or BIOS shipped) | todo | T-251, T-252, T-256 |
 | [T-262](tasks/T-262-wake-from-suspend-by-controller.md) | Wake from suspend with a controller (hardware-dependent; honest UI) | todo | T-166, T-202, T-203 |
-| [T-263](tasks/T-263-controller-registry-and-player-model-spec.md) | **[lead]** EPIC multiple controllers (ADR-017): spec of the registry and the player model | todo | T-260 |
+| [T-263](tasks/T-263-controller-registry-and-player-model-spec.md) | **[lead]** EPIC multiple controllers (ADR-017): spec of the registry and the player model | todo | T-260, T-366 |
 | [T-264](tasks/T-264-controller-registry-and-slots-service.md) | Controller registry and player slots: contract, `ruya-inputd`, mock, client | todo | T-263 |
 | [T-265](tasks/T-265-players-ui-whos-playing-and-chips.md) | Players UI: "Who's playing?" dialog, player chips, Settings > Players | todo | T-264, T-223 |
 | [T-266](tasks/T-266-virtual-gamepads-per-slot-for-apps.md) | **[lead]** Ordered virtual gamepads per slot for apps (physical pads hidden) | todo | T-264, T-367 |

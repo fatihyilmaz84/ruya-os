@@ -1,6 +1,6 @@
 # T-197 — The shell crashes when a Bluetooth headset disconnects
 
-Status: in-progress · Phase: 2 · Depends: — · Area: shell, image · Size: S · Owner: lead
+Status: blocked (needs the owner's Bluetooth headset at the Dell for the five cycles; the fix `QT_AUDIO_BACKEND=pulseaudio` is in the image, `ruya-compositor@.service`) · Phase: 2 · Depends: — · Area: shell, image · Size: S · Owner: lead
 
 ## Goal
 Switching a Bluetooth headset off, or out of range, never takes the shell down. Owner report, 2026-11-06 (Dell, Sony WH-1000XM4 paired as an A2DP sink): "disconnecting a bluetooth headset seems to crash the shell".

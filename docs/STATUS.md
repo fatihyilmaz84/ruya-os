@@ -15,7 +15,7 @@ Verification legend: **host** = built and tested on Windows · **host (vm pendin
 
 ## Board
 
-**NEXT → T-366** ([lead] Ruya Input spike, ADR-024), then the Dell second pass T-355 with image 0.0.60. **Builder lanes**: the first rows of `STATUS-backlog.md` in order (T-377, T-363 in flight; then T-362, T-359, T-364, T-379, T-378); one "VM (this task)" at a time. T-283, T-284, T-287, T-288 wait for the lead's design pass T-282. Ruya Hub (`07-hub-requirements.md`) waits for the owner's answers (STATUS, open owner decisions).
+**NEXT → T-366** ([lead] Ruya Input spike, ADR-024; then T-367, T-381 GE-Proton, T-380), and the Dell second pass T-355 once Play works (T-386, image 0.0.61). **Builder lanes**: the first rows of `STATUS-backlog.md` in order (T-386, T-387 in flight; then T-147, T-362, T-378, T-299, T-364, T-339); one "VM (this task)" at a time. T-283, T-284, T-287, T-288 wait for the lead's design pass T-282. Ruya Hub (`07-hub-requirements.md`) waits for the owner's answers (STATUS, open owner decisions).
 
 **How work runs (owner, 2026-11-04):** the lead dispatches `ruya-builder` agents (at most two at a time, own worktrees, different areas), has each branch reviewed by `ruya-reviewer` and merges it (`docs/LEAD.md`). Dispatched builders never edit this file; one "VM (this task)" runs at a time. A builder the owner starts directly takes NEXT alone in the main checkout and does the bookkeeping (`CLAUDE.md`).
 
@@ -25,10 +25,10 @@ Open work only (the front of the board; the rest is in `STATUS-backlog.md`), in 
 |---|---|---|---|
 | [T-386](tasks/T-386-play-starts-the-game.md) | Play starts the game: the Library's launch reaches Session1.Launch | in-progress | T-164 |
 | [T-387](tasks/T-387-glass-after-an-app-and-picker-thumbnails.md) | Glass sheets lose their blur after an app was in front; wallpaper picker tiles stay blank | in-progress | — |
-| [T-147](tasks/T-147-fullscreen-app-flow.md) | Full-screen apps: launch, quick menu, return, close | todo | T-164 |
+| [T-147](tasks/T-147-fullscreen-app-flow.md) | Full-screen apps: launch, quick menu, return, close | todo | T-164, T-386 |
 | [T-366](tasks/T-366-ruya-input-spike-engine-and-design.md) | **[lead]** Ruya Input: spike, engine decision and the design (06-input.md, Input1 draft) | todo | — |
 | [T-367](tasks/T-367-a-game-sees-the-pad.md) | **[lead]** A game sees the pad: a virtual pad per controller, for the signed-in profile only, routed by focus | todo | T-366 |
-| [T-197](tasks/T-197-shell-crash-on-bluetooth-audio-disconnect.md) | **[lead]** Shell crash when a Bluetooth headset disconnects | in-progress | — |
+| [T-197](tasks/T-197-shell-crash-on-bluetooth-audio-disconnect.md) | **[lead]** Shell crash when a Bluetooth headset disconnects | blocked | — |
 | [T-282](tasks/T-282-design-decisions-contrast-themes-dialogs.md) | **[lead]** Design decisions queue: glass text contrast, theme looks, dialogs, Tab, display recovery | todo | — |
 | [T-261](tasks/T-261-controller-families-and-drivers-audit.md) | **[lead]** Controller families and drivers audit (DualSense, Xbox, 8BitDo, Switch), detection table, hardware checklist | todo | — |
 
@@ -57,7 +57,6 @@ Triaged 2026-11-09 (lead-8): the lines before are verbatim in [`STATUS-parked.md
 - (lead-8) The `.githooks/pre-commit` text lint needs `git config core.hooksPath .githooks` once per clone (the owner; the lead's harness refused to set it).
 - (T-379, lead-8) The four `shots` reds did not reproduce (158 passed twice; all are already `tryVerify`/`tryCompare`); closed as not reproducible. Make `WindowGuard` fail a test with its own message when the window lost activation mid-test and did not regain it (today it checks only in `init()`, so a desktop loss shows as a random `activeFocus` line); keep the build-win ruya-qmltest.txt log with any new red.
 uya-qmltest.txt` with any new red.
-- (lead-8, Dell 0.0.60) ruya-session starts before Profiles1 is activatable and before ruya-p1's user manager: "Profiles1 not readable, no unit is stopped" and "cannot list the apps of ruya-p1" (Transport endpoint is not connected) at boot; it does not retry, so adoption after a reboot may miss a running app. Order it after the profile service or retry.
 - (T-359 reviews, lead-8) Bluetooth leftovers: a user scan on a non-window adapter keeps running after a primary flip (`stop_scan`/`tick`); the low-battery toast names a pad by its UPower id, not the paired alias; `dbus.rs` `eprintln!` lines bypass `log::info`; `SettingRow` labels still elide the address tail (needs `TailText`); a translator comment on `qsTr("%1 (%2)")` in `DeviceIcons.shownParts` (the name must stay first); "primary adapter off, another on" should say which adapter is off. T-289 item 1 is half done (primary address); only the `bluetoothctl` fallback remains.
 
 ## Blocked (need something this host doesn't have)
