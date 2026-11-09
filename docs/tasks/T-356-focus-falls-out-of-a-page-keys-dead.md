@@ -1,6 +1,6 @@
 # T-356 - Focus falls out of a page: neither the pad's B nor Esc leaves it (found on the Dell)
 
-Status: in-progress · Phase: 2 · Depends: — · Area: shell (Shell.qml focus, SettingsPane, ActivityGamePage, Page) · Size: M · Owner: builder (Opus recommended) · Developer surface: none
+Status: done · Phase: 2 · Depends: — · Area: shell (Shell.qml focus, SettingsPane, ActivityGamePage, Page) · Size: M · Owner: builder (Opus recommended) · Developer surface: none
 
 ## Goal
 Owner report (Dell, image 0.0.56, 2026-11-09, reproducible): on SuperTuxKart's activity screen (app page -> "Your activity" -> `ActivityGamePage`, STK has no stats) neither the pad's B nor the keyboard's Esc goes back; the hint bar says "B Back"; the Guide key works, and Esc works again after opening and closing the Guide overlay. A raw capture on the Dell proved the pad's B arrives as KEY_ESC from `ruya-inputd` exactly like the keyboard's Esc: the shell receives the key and no item takes it, i.e. **the window's active focus is not in the page** (it sits on the `Shell` root; the Guide key works because `Shell` handles it itself; closing the overlay runs `focusCurrent()`).
