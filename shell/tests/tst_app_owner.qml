@@ -125,6 +125,28 @@ Item {
             compare(app.keys, [Qt.Key_C])
         }
 
+        // T-164 review: a hidden app still runs, so the update service must not restart under it.
+        function test_a_hidden_app_still_counts_as_running_for_updates() {
+            signIn("p2", "")
+            tryVerify(() => find("homePlay").activeFocus, 2000)
+            const app = newApp()
+            tc.shell.addApp(app, "p2")
+            tryVerify(() => app.activeFocus, 2000)
+            compare(Update.mockLastActivityAppRunning(), true)
+
+            Profiles.lock()
+            tryCompare(Profiles, "activeProfile", "")
+            compare(tc.shell.appOpen, false, "the app is hidden")
+            compare(tc.shell.appRunning, true, "but it still runs")
+            keyClick(Qt.Key_Down)                        // input on the picker
+            compare(Update.mockLastActivityAppRunning(), true,
+                    "the update service never hears 'no app' while a hidden app runs")
+
+            app.destroy()
+            tryCompare(tc.shell, "appRunning", false)
+            compare(Update.mockLastActivityAppRunning(), false, "the app closing is reported")
+        }
+
         function test_another_profiles_app_stays_hidden() {
             signIn("p2", "")
             tryVerify(() => find("homePlay").activeFocus, 2000)
