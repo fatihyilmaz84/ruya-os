@@ -9,7 +9,7 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | [T-363](tasks/T-363-follow-flatpak-app-scopes.md) | ruya-session follows a Flatpak game's own scope (usage, limits, stop) | todo | T-340 |
 | [T-361](tasks/T-361-flaky-qml-tests-and-focus-net-loaders.md) | Test reliability: two load-flaky QML tests, a faster page-focus test, the focus net with lazy panes | todo | — |
 | [T-362](tasks/T-362-compositor-xdg-output-and-socket-follow-ups.md) | Compositor: xdg-output for games, profile-socket and log follow-ups | todo | — |
-| [T-360](tasks/T-360-audio-service-follow-ups-executor-and-boot-race.md) | Audio service follow-ups: no executor blocking, the boot race, a fresh-install check that holds | todo | — |
+| [T-360](tasks/T-360-audio-service-follow-ups-executor-and-boot-race.md) | Audio service follow-ups: no executor blocking, the boot race, a fresh-install check that holds | in-progress | — |
 | [T-359](tasks/T-359-bluetooth-follow-ups-adapters-names.md) | Bluetooth follow-ups: late adapters, scan ownership, telling like pads apart | todo | — |
 | [T-364](tasks/T-364-storage-scan-follow-ups.md) | Storage scan follow-ups: a real-directory test, a Rescan row, a calmer busy retry | todo | — |
 | [T-368](tasks/T-368-controllers-pane-capabilities-button-test.md) | Settings > Controllers: connected pads, capabilities and a live button test | todo | T-367 |
