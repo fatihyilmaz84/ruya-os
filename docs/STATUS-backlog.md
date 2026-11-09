@@ -9,7 +9,7 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | [T-379](tasks/T-379-shots-reds-plain-read-after-change.md) | `shots` reds on main: tst_store_ui:81, tst_system_info:502, tst_wallpaper:898 | todo | T-377 |
 | [T-380](tasks/T-380-profile-audio-isolation.md) | **[lead]** Profiles apart in the audio graph: what a profile's app may see and change in PipeWire | todo | — |
 | [T-362](tasks/T-362-compositor-xdg-output-and-socket-follow-ups.md) | Compositor: xdg-output for games, profile-socket and log follow-ups | todo | — |
-| [T-359](tasks/T-359-bluetooth-follow-ups-adapters-names.md) | Bluetooth follow-ups: late adapters, scan ownership, telling like pads apart | todo | — |
+| [T-359](tasks/T-359-bluetooth-follow-ups-adapters-names.md) | Bluetooth follow-ups: late adapters, scan ownership, telling like pads apart | in-progress | — |
 | [T-364](tasks/T-364-storage-scan-follow-ups.md) | Storage scan follow-ups: a real-directory test, a Rescan row, a calmer busy retry | todo | — |
 | [T-381](tasks/T-381-ge-proton-spike.md) | **[lead]** Spike: GE-Proton outside Steam (umu, runtime, display, size, licences, codecs) | todo | — |
 | [T-382](tasks/T-382-ge-proton-preinstalled-and-updated.md) | GE-Proton preinstalled in the image, updated through the Store, named in About | todo | T-381 |

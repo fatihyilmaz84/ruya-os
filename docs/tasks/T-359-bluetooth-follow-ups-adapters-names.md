@@ -1,6 +1,6 @@
 # T-359 - Bluetooth follow-ups: late adapters, scan ownership, telling like pads apart
 
-Status: todo · Phase: 2 · Depends: — · Area: api, services (ruya-devices bluetooth, pairing, battery), shell (Bluetooth pane, onboarding, battery chips) · Size: M · Owner: builder · Developer surface: internal
+Status: in-progress · Phase: 2 · Depends: — · Area: api, services (ruya-devices bluetooth, pairing, battery), shell (Bluetooth pane, onboarding, battery chips) · Size: M · Owner: builder · Developer surface: internal
 
 ## Goal
 Bluetooth behaves on consoles with more than one adapter or a late adapter, and two identical pads can be told apart everywhere the shell names them.
