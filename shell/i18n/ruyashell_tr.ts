@@ -674,13 +674,13 @@ Bu geri alınamaz.</translation>
     <name>BatteryListModal</name>
     <message>
         <location filename="../qml/BatteryListModal.qml" line="+20"/>
-        <location line="+111"/>
+        <location line="+114"/>
         <location line="+10"/>
         <source>Close</source>
         <translation>Kapat</translation>
     </message>
     <message>
-        <location line="-121"/>
+        <location line="-124"/>
         <source>Back</source>
         <translation>Geri</translation>
     </message>
@@ -725,7 +725,7 @@ Bu geri alınamaz.</translation>
         <translation>Kullanılması için yeniden eşleştirilmesi gerekir.</translation>
     </message>
     <message>
-        <location line="+113"/>
+        <location line="+115"/>
         <source>Bluetooth is off.</source>
         <translation>Bluetooth kapalı.</translation>
     </message>
@@ -830,8 +830,8 @@ Bu geri alınamaz.</translation>
         <translation>Taranıyor…</translation>
     </message>
     <message>
-        <location line="-161"/>
-        <location line="+293"/>
+        <location line="-163"/>
+        <location line="+295"/>
         <source>Forget %1</source>
         <translation>%1 cihazını unut</translation>
     </message>
@@ -993,7 +993,7 @@ Bu geri alınamaz.</translation>
         <translation>Seç</translation>
     </message>
     <message>
-        <location line="+158"/>
+        <location line="+159"/>
         <location line="+54"/>
         <source>Try your controller</source>
         <translation>Kontrolcünüzü deneyin</translation>
@@ -1011,12 +1011,12 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+36"/>
-        <location line="+164"/>
+        <location line="+166"/>
         <source>Other</source>
         <translation>Diğer</translation>
     </message>
     <message>
-        <location line="-127"/>
+        <location line="-129"/>
         <source>Press A to search again</source>
         <translation>Yeniden aramak için A&apos;ya basın</translation>
     </message>
@@ -1031,7 +1031,7 @@ Bu geri alınamaz.</translation>
         <translation>Henüz bir şey bulunamadı</translation>
     </message>
     <message>
-        <location line="+40"/>
+        <location line="+41"/>
         <source>Pairing…</source>
         <translation>Eşleştiriliyor…</translation>
     </message>
@@ -1051,7 +1051,7 @@ Bu geri alınamaz.</translation>
         <translation>A: eşleştir</translation>
     </message>
     <message>
-        <location line="+51"/>
+        <location line="+52"/>
         <source>%1 is connected. Press its buttons: they light up here.</source>
         <translation>%1 bağlı. Düğmelerine basın: burada yanarlar.</translation>
     </message>
@@ -1170,12 +1170,12 @@ Bu geri alınamaz.</translation>
 <context>
     <name>DeviceIcons</name>
     <message>
-        <location filename="../qml/DeviceIcons.qml" line="+71"/>
+        <location filename="../qml/DeviceIcons.qml" line="+78"/>
         <source>%1 (%2)</source>
         <translation>%1 (%2)</translation>
     </message>
     <message>
-        <location line="+39"/>
+        <location line="+45"/>
         <source>PlayStation controller</source>
         <translation>PlayStation kontrolcüsü</translation>
     </message>
@@ -2562,12 +2562,12 @@ Bu geri alınamaz.</translation>
         <translation>kapatma</translation>
     </message>
     <message>
-        <location line="+985"/>
+        <location line="+1011"/>
         <source>Power</source>
         <translation>Güç</translation>
     </message>
     <message>
-        <location line="-968"/>
+        <location line="-994"/>
         <source>Update ready. Restart to finish.</source>
         <translation>Güncelleme hazır. Bitirmek için yeniden başlat.</translation>
     </message>
@@ -2582,12 +2582,17 @@ Bu geri alınamaz.</translation>
         <translation>Güncellemeyi bitirmek için 2 dakika içinde yeniden başlatılıyor. Beklemek için herhangi bir düğmeye bas.</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+40"/>
         <source>%1 stopped unexpectedly</source>
         <translation>%1 beklenmedik şekilde durdu</translation>
     </message>
     <message>
-        <location line="+21"/>
+        <location line="-12"/>
+        <source>%1 could not be started</source>
+        <translation>%1 başlatılamadı</translation>
+    </message>
+    <message>
+        <location line="+33"/>
         <source>The screen did not answer, so the previous resolution is back.</source>
         <translation>Ekran yanıt vermedi, bu yüzden önceki çözünürlük geri geldi.</translation>
     </message>
@@ -2942,7 +2947,7 @@ Bu geri alınamaz.</translation>
         <translation>Mağaza</translation>
     </message>
     <message>
-        <location line="+21"/>
+        <location line="+27"/>
         <source>Featured</source>
         <translation>Öne çıkanlar</translation>
     </message>
@@ -2958,13 +2963,13 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+136"/>
+        <location line="+140"/>
         <location line="+70"/>
         <source>Installed</source>
         <translation>Kurulu</translation>
     </message>
     <message>
-        <location line="-182"/>
+        <location line="-179"/>
         <source>Official</source>
         <translation>Resmi</translation>
     </message>
@@ -2979,13 +2984,13 @@ Bu geri alınamaz.</translation>
         <translation>Topluluk</translation>
     </message>
     <message>
-        <location line="+111"/>
+        <location line="+108"/>
         <location line="+70"/>
         <source>Update available</source>
         <translation>Güncelleme var</translation>
     </message>
     <message>
-        <location line="+34"/>
+        <location line="+109"/>
         <source>Search</source>
         <translation>Ara</translation>
     </message>
@@ -3000,12 +3005,12 @@ Bu geri alınamaz.</translation>
         <translation>Tüm uygulamaları göster</translation>
     </message>
     <message>
-        <location line="+107"/>
+        <location line="+43"/>
         <source>Search results</source>
         <translation>Arama sonuçları</translation>
     </message>
     <message>
-        <location line="+37"/>
+        <location line="+38"/>
         <source>No apps found for &quot;%1&quot;</source>
         <translation>&quot;%1&quot; için uygulama bulunamadı</translation>
     </message>
@@ -3700,7 +3705,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>TextEntry</name>
     <message>
-        <location filename="../qml/TextEntry.qml" line="+56"/>
+        <location filename="../qml/TextEntry.qml" line="+59"/>
         <location line="+3"/>
         <source>Delete</source>
         <translation>Sil</translation>
@@ -3727,14 +3732,14 @@ Bu geri alınamaz.</translation>
         <translation>İptal etmek için Geri&apos;ye basın</translation>
     </message>
     <message>
-        <location line="+82"/>
+        <location line="+83"/>
         <source>Space</source>
         <translation>Boşluk</translation>
     </message>
     <message>
-        <location line="-87"/>
+        <location line="-88"/>
         <location line="+3"/>
-        <location line="+85"/>
+        <location line="+86"/>
         <source>Done</source>
         <translation>Bitti</translation>
     </message>

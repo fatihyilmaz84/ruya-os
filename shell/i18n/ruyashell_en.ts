@@ -676,13 +676,13 @@ This can&apos;t be undone.</translation>
     <name>BatteryListModal</name>
     <message>
         <location filename="../qml/BatteryListModal.qml" line="+20"/>
-        <location line="+111"/>
+        <location line="+114"/>
         <location line="+10"/>
         <source>Close</source>
         <translation>Close</translation>
     </message>
     <message>
-        <location line="-121"/>
+        <location line="-124"/>
         <source>Back</source>
         <translation>Back</translation>
     </message>
@@ -729,7 +729,7 @@ This can&apos;t be undone.</translation>
         <translation>It will have to be paired again to be used.</translation>
     </message>
     <message>
-        <location line="+113"/>
+        <location line="+115"/>
         <source>Bluetooth is off.</source>
         <translation>Bluetooth is off.</translation>
     </message>
@@ -834,8 +834,8 @@ This can&apos;t be undone.</translation>
         <translation>Scanning…</translation>
     </message>
     <message>
-        <location line="-161"/>
-        <location line="+293"/>
+        <location line="-163"/>
+        <location line="+295"/>
         <source>Forget %1</source>
         <translation>Forget %1</translation>
     </message>
@@ -997,7 +997,7 @@ This can&apos;t be undone.</translation>
         <translation>Select</translation>
     </message>
     <message>
-        <location line="+158"/>
+        <location line="+159"/>
         <location line="+54"/>
         <source>Try your controller</source>
         <translation>Try your controller</translation>
@@ -1015,12 +1015,12 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+36"/>
-        <location line="+164"/>
+        <location line="+166"/>
         <source>Other</source>
         <translation>Other</translation>
     </message>
     <message>
-        <location line="-127"/>
+        <location line="-129"/>
         <source>Press A to search again</source>
         <translation>Press A to search again</translation>
     </message>
@@ -1035,7 +1035,7 @@ This can&apos;t be undone.</translation>
         <translation>Nothing found yet</translation>
     </message>
     <message>
-        <location line="+40"/>
+        <location line="+41"/>
         <source>Pairing…</source>
         <translation>Pairing…</translation>
     </message>
@@ -1055,7 +1055,7 @@ This can&apos;t be undone.</translation>
         <translation>A: pair</translation>
     </message>
     <message>
-        <location line="+51"/>
+        <location line="+52"/>
         <source>%1 is connected. Press its buttons: they light up here.</source>
         <translation>%1 is connected. Press its buttons: they light up here.</translation>
     </message>
@@ -1174,12 +1174,12 @@ This can&apos;t be undone.</translation>
 <context>
     <name>DeviceIcons</name>
     <message>
-        <location filename="../qml/DeviceIcons.qml" line="+71"/>
+        <location filename="../qml/DeviceIcons.qml" line="+78"/>
         <source>%1 (%2)</source>
         <translation>%1 (%2)</translation>
     </message>
     <message>
-        <location line="+39"/>
+        <location line="+45"/>
         <source>PlayStation controller</source>
         <translation>PlayStation controller</translation>
     </message>
@@ -2571,12 +2571,12 @@ This can&apos;t be undone.</translation>
         <translation>power off</translation>
     </message>
     <message>
-        <location line="+985"/>
+        <location line="+1011"/>
         <source>Power</source>
         <translation>Power</translation>
     </message>
     <message>
-        <location line="-968"/>
+        <location line="-994"/>
         <source>Update ready. Restart to finish.</source>
         <translation>Update ready. Restart to finish.</translation>
     </message>
@@ -2591,12 +2591,17 @@ This can&apos;t be undone.</translation>
         <translation>Restarting to finish the update in 2 minutes. Press any button to wait.</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+40"/>
         <source>%1 stopped unexpectedly</source>
         <translation>%1 stopped unexpectedly</translation>
     </message>
     <message>
-        <location line="+21"/>
+        <location line="-12"/>
+        <source>%1 could not be started</source>
+        <translation>%1 could not be started</translation>
+    </message>
+    <message>
+        <location line="+33"/>
         <source>The screen did not answer, so the previous resolution is back.</source>
         <translation>The screen did not answer, so the previous resolution is back.</translation>
     </message>
@@ -2951,7 +2956,7 @@ This can&apos;t be undone.</translation>
         <translation>Store</translation>
     </message>
     <message>
-        <location line="+21"/>
+        <location line="+27"/>
         <source>Featured</source>
         <translation>Featured</translation>
     </message>
@@ -2967,13 +2972,13 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+136"/>
+        <location line="+140"/>
         <location line="+70"/>
         <source>Installed</source>
         <translation>Installed</translation>
     </message>
     <message>
-        <location line="-182"/>
+        <location line="-179"/>
         <source>Official</source>
         <translation>Official</translation>
     </message>
@@ -2988,13 +2993,13 @@ This can&apos;t be undone.</translation>
         <translation>Community</translation>
     </message>
     <message>
-        <location line="+111"/>
+        <location line="+108"/>
         <location line="+70"/>
         <source>Update available</source>
         <translation>Update available</translation>
     </message>
     <message>
-        <location line="+34"/>
+        <location line="+109"/>
         <source>Search</source>
         <translation>Search</translation>
     </message>
@@ -3009,12 +3014,12 @@ This can&apos;t be undone.</translation>
         <translation>Show all apps</translation>
     </message>
     <message>
-        <location line="+107"/>
+        <location line="+43"/>
         <source>Search results</source>
         <translation>Search results</translation>
     </message>
     <message>
-        <location line="+37"/>
+        <location line="+38"/>
         <source>No apps found for &quot;%1&quot;</source>
         <translation>No apps found for &quot;%1&quot;</translation>
     </message>
@@ -3709,7 +3714,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>TextEntry</name>
     <message>
-        <location filename="../qml/TextEntry.qml" line="+56"/>
+        <location filename="../qml/TextEntry.qml" line="+59"/>
         <location line="+3"/>
         <source>Delete</source>
         <translation>Delete</translation>
@@ -3736,14 +3741,14 @@ This can&apos;t be undone.</translation>
         <translation>Press Back to cancel</translation>
     </message>
     <message>
-        <location line="+82"/>
+        <location line="+83"/>
         <source>Space</source>
         <translation>Space</translation>
     </message>
     <message>
-        <location line="-87"/>
+        <location line="-88"/>
         <location line="+3"/>
-        <location line="+85"/>
+        <location line="+86"/>
         <source>Done</source>
         <translation>Done</translation>
     </message>
