@@ -178,7 +178,23 @@ restart)
     stop_app "$inst2" >/dev/null
     n=0; until ! running | grep -q "$inst2" || [ "$n" -ge 20 ]; do sleep 1; n=$((n + 1)); done
 
-    echo "--- an adopted app killed from outside (reason is informational)"
+    echo "--- Stop, then Launch at once (T-340): no already-running, no taken unit name"
+    out="$(launch "$sleeper" "$pid")"; inst4="$(echo "$out" | unit_of)"
+    [ -n "$inst4" ] && ok "Launch answered ok ($inst4)" || bad "Launch before the quick relaunch: $out"
+    sleep 3
+    stop_app "$inst4" >/dev/null
+    out="$(launch "$sleeper" "$pid")"; echo "$out"
+    case "$out" in
+    *already-running*) bad "a launch right after Stop answered already-running";;
+    *'s "ok"'*|*'ss "ok"'*) ok "a launch right after Stop worked: $(echo "$out" | unit_of)";;
+    *) bad "a launch right after Stop: $out";;
+    esac
+    inst4="$(echo "$out" | unit_of)"
+    sleep 3
+    stop_app "$inst4" >/dev/null
+    n=0; until ! running | grep -q "$inst4" || [ "$n" -ge 20 ]; do sleep 1; n=$((n + 1)); done
+
+    echo "--- an adopted app killed from outside (real exit status, T-340)"
     out="$(launch "$sleeper" "$pid")"; inst3="$(echo "$out" | unit_of)"
     sleep 3
     if pgrep -u "$user" -f "sleep 3000" >/dev/null; then ok "the app to be adopted runs"; else
@@ -192,9 +208,25 @@ restart)
     busctl --system --json=short monitor "$svc" >> "$work/signals.log" 2>&1 &
     mon=$!
     sleep 2
+    # While the adopted app runs, the service follows it over its connection to the user manager:
+    # no `systemctl` process may be started for it (T-340; before it was one per unit every 2 s).
+    n=0; spawned=0
+    while [ "$n" -lt 20 ]; do
+        pgrep -f "systemctl.*ruya-app" >/dev/null && spawned=$((spawned + 1))
+        sleep 0.3; n=$((n + 1))
+    done
+    pgrep -u "$user" -f systemd-stdio-bridge >/dev/null && ok "the bridge to the manager of $user is running" || bad "no systemd-stdio-bridge of $user: the service has no connection to the manager"
+    [ "$spawned" -eq 0 ] && ok "no systemctl process while following the adopted app (6 s)" || bad "systemctl ran $spawned times in 6 s while following"
+    journalctl -u ruya-session -b --no-pager | grep -a "no connection to the manager" | tail -2
     systemctl --user -M "$user@.host" kill --signal=SIGKILL --kill-whom=all "app-flatpak-$sleeper-*.scope" </dev/null 2>&1 | cat
     wait_sig "\"member\":\"AppExited\".*$sleeper" 30 && ok "AppExited arrived for the adopted app that was killed" || bad "no AppExited for the killed adopted app"
     grep -E "\"member\":\"AppExited\".*$sleeper" "$work/signals.log" | head -1
+    # The status comes from the manager's own signals now: a killed app is no clean `quit`.
+    if grep -E "\"member\":\"AppExited\".*$sleeper" "$work/signals.log" | grep -q '"quit"'; then
+        echo "NOTE: the killed adopted app was reported as quit (the old poll's default); look at the exit code above"
+    else
+        ok "the killed adopted app was not reported as a clean quit"
+    fi
     running | grep -q "$inst3" && bad "ListRunning still lists the killed app" || ok "the killed app is no longer listed"
 
     echo "--- unit security and the label of the state directory"
@@ -370,7 +402,8 @@ check)
     # Not as a lingering manager's guest: the first launch must work from a cold start.
     loginctl show-user "$user" -p Linger 2>/dev/null | grep -q yes && echo "(linger already on for $user)"
 
-    # Apps left running by an earlier run (the service forgets them when it restarts).
+    # Apps left running by an earlier run (the service takes them over when it restarts, T-290, but
+    # this check starts from a clean slate).
     systemctl --user -M "$user@.host" stop 'ruya-app-*.service' </dev/null 2>&1 | cat >/dev/null
     : > "$work/signals.log"
     busctl --system --json=short monitor "$svc" >> "$work/signals.log" 2>&1 &

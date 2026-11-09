@@ -9,6 +9,7 @@
 
 pub mod dbus;
 pub mod directory;
+pub mod follow;
 pub mod session;
 pub mod spawner;
 #[cfg(target_os = "linux")]

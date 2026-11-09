@@ -39,6 +39,28 @@ fn lock(shared: &Shared) -> MutexGuard<'_, Session<DynSpawner, ProfileSnapshot>>
     shared.lock().unwrap_or_else(|e| e.into_inner())
 }
 
+/// How long a `Launch` waits for the old instance of the same app to end after a `Stop`: the
+/// grace time, the kill and a moment for the unit to go (T-340).
+pub const LAUNCH_WAIT: Duration = Duration::from_secs(8);
+
+/// Waits (without holding the lock) until no instance of `app_id` of `profile` is on its way out,
+/// for at most `bound`. True when it is gone: the unit name is free and a launch can go on.
+pub async fn wait_while_stopping(
+    session: &Shared,
+    app_id: &str,
+    profile: &str,
+    bound: Duration,
+) -> bool {
+    let start = Instant::now();
+    while lock(session).is_stopping(app_id, profile) {
+        if start.elapsed() >= bound {
+            return false;
+        }
+        async_io::Timer::after(Duration::from_millis(50)).await;
+    }
+    true
+}
+
 fn unix_now() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -250,6 +272,8 @@ impl SessionIface {
                 }
             }
         }
+        // A launch right after a `Stop` waits for the old unit instead of failing on its name.
+        wait_while_stopping(&self.session, app_id, profile, LAUNCH_WAIT).await;
         let (status, instance) = lock(&self.session).launch(app_id, profile, unix_now());
         (status.as_str().to_owned(), instance)
     }
@@ -539,4 +563,68 @@ pub async fn forward(
         }
     };
     futures_lite::future::zip(tick_loop, event_loop).await;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::session::Status;
+    use crate::spawner::{unit_name, FakeSpawner};
+
+    const APP: &str = "org.ruyaos.Racer";
+
+    fn stopping_session() -> (Shared, String) {
+        let spawner: DynSpawner = Box::new(FakeSpawner::new().with_app(APP));
+        let dir = ProfileSnapshot::new(["p1".to_owned()]);
+        let shared: Shared = Arc::new(Mutex::new(Session::new(spawner, dir, Vec::new())));
+        let (status, unit) = lock(&shared).launch(APP, "p1", 1);
+        assert_eq!(
+            (status, unit.as_str()),
+            (Status::Ok, unit_name("ruya-p1", APP).as_str())
+        );
+        lock(&shared).on_event(UnitEvent::Started { unit: unit.clone() });
+        assert_eq!(lock(&shared).stop(&unit, Instant::now()), Status::Ok);
+        (shared, unit)
+    }
+
+    #[test]
+    fn launch_into_a_taken_unit_name_waits_or_renames() {
+        // The old unit ends 200 ms after the Stop: the wait sees it go and the launch works.
+        let (shared, unit) = stopping_session();
+        let ender = shared.clone();
+        let old = unit.clone();
+        let t = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(200));
+            lock(&ender).on_event(UnitEvent::Exited {
+                unit: old,
+                code: 0,
+                signaled: false,
+            });
+        });
+        let t0 = Instant::now();
+        assert!(futures_lite::future::block_on(wait_while_stopping(
+            &shared,
+            APP,
+            "p1",
+            Duration::from_secs(5)
+        )));
+        assert!(
+            t0.elapsed() < Duration::from_secs(4),
+            "it did not wait the whole bound"
+        );
+        t.join().unwrap_or_else(|_| panic!("ender"));
+        assert_eq!(lock(&shared).launch(APP, "p1", 2).0, Status::Ok);
+
+        // The old unit never ends: the wait stops at its bound and the launch is not
+        // `already-running` but a plain failure, and it does not start a second unit.
+        let (shared, _unit) = stopping_session();
+        assert!(!futures_lite::future::block_on(wait_while_stopping(
+            &shared,
+            APP,
+            "p1",
+            Duration::from_millis(120)
+        )));
+        let (status, instance) = lock(&shared).launch(APP, "p1", 2);
+        assert_eq!((status, instance.as_str()), (Status::Failed, ""));
+    }
 }
