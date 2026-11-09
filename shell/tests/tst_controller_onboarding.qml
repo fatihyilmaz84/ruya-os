@@ -283,6 +283,51 @@ Item {
             verify(find("onbRow_bt-pad-main") === null)
         }
 
+        // T-359: two pads of one make that turn up while the screen is open: the end of the address tells
+        // the rows apart, as it does in Settings. A pad alone keeps its plain name.
+        function test_found_nearby_tells_like_pads_apart() {
+            Bluetooth.mockPairingScript("wait")
+            opener.forceActiveFocus()
+            onb.open()
+            compare(onb.rowCount, 0)
+            Bluetooth.mockTwoPads()
+            tryVerify(() => find("onbRow_" + tc.padA) !== null && find("onbRow_" + tc.padB) !== null, 2000, "a row for each pad")
+            compare(find("onboardingFoundTitle").text, "Found nearby")
+            compare(find("onbRowName_" + tc.padA).text, "Wireless Controller (00:04)")
+            compare(find("onbRowName_" + tc.padB).text, "Wireless Controller (00:05)")
+            verify(find("onbRow_" + tc.padA).Accessible.name.indexOf("Wireless Controller (00:04),") === 0, find("onbRow_" + tc.padA).Accessible.name)
+            verify(find("onbRow_" + tc.padB).Accessible.name.indexOf("Wireless Controller (00:05),") === 0, find("onbRow_" + tc.padB).Accessible.name)
+            keyClick(Qt.Key_Down)
+            verify(find("onbRow_" + tc.padA).activeFocus, "Down enters the list")
+            // One of them is renamed: it has a name of its own, the other no twin any more.
+            Bluetooth.mockSetName(tc.padB, "Ada's pad")
+            tryCompare(find("onbRowName_" + tc.padB), "text", "Ada's pad")
+            tryCompare(find("onbRowName_" + tc.padA), "text", "Wireless Controller")
+            verify(find("onbRow_" + tc.padA).activeFocus, "focus stayed on the row")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !onb.shown, 2000, "Back leaves the screen")
+            tryVerify(() => opener.activeFocus, 2000, "focus is back where it was")
+        }
+
+        // T-359: a too long name is cut before the end of the address, which stays whole.
+        function test_found_nearby_cuts_a_long_name_before_its_address() {
+            Bluetooth.mockPairingScript("wait")
+            onb.open()
+            Bluetooth.mockTwoPads()
+            const wide = "W".repeat(48)
+            Bluetooth.mockSetName(tc.padA, wide)
+            Bluetooth.mockSetName(tc.padB, wide)
+            tryVerify(() => find("onbRowName_" + tc.padB) !== null && find("onbRowName_" + tc.padB).name === wide, 2000)
+            const name = find("onbRowName_" + tc.padB)
+            verify(name.text.endsWith(" (00:05)"), "the tail is whole: " + name.text)
+            verify(name.text.indexOf("\u2026") > 0, "the name is cut: " + name.text)
+            verify(name.paintedWidth <= name.width + 0.5, "one line: " + name.paintedWidth + " > " + name.width)
+            verify(name.width <= find("onbRow_" + tc.padB).width * 0.4 + 0.5)
+            verify(find("onbRow_" + tc.padB).Accessible.name.indexOf(wide + " (00:05),") === 0, "the whole name is the accessible one")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !onb.shown, 2000, "Back leaves the screen")
+        }
+
         function test_found_controllers_appear_in_place_and_focus_stays() {
             Bluetooth.mockPairingScript("wait")
             onb.open()
@@ -467,6 +512,25 @@ Item {
             tryCompare(Notifications.model, "count", 1)
             compare(Notifications.model.get(0).text, "PlayStation kontrolcüsü bağlandı · pil 60%")
             onb.close()
+        }
+
+        // T-359: "Found nearby" with two like pads, in English and Turkish.
+        function test_zz_like_pads_screenshots() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            Bluetooth.mockPairingScript("wait")
+            onb.open()
+            Bluetooth.mockTwoPads()
+            tryVerify(() => find("onbRow_" + tc.padA) !== null && find("onbRow_" + tc.padB) !== null, 2000)
+            keyClick(Qt.Key_Down)
+            wait(600)
+            grabImage(host)
+            wait(600)
+            grabImage(host).save(shotsDir + "/T359-found-nearby-like-pads.png")
+            DeviceSettings.language = "tr"
+            wait(600)
+            grabImage(host).save(shotsDir + "/T359-found-nearby-like-pads-tr.png")
+            DeviceSettings.language = "en"
         }
 
         function test_zz_screenshots() {

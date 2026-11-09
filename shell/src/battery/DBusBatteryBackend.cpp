@@ -47,6 +47,7 @@ QList<DeviceBattery> parseBatteries(const QDBusArgument &arg)
         c.percent = d.contains(QStringLiteral("percent")) ? qBound(0, int(d.value(QStringLiteral("percent")).toUInt()), 100) : -1;
         c.state = d.value(QStringLiteral("state"), c.state).toString();
         c.family = d.value(QStringLiteral("family")).toString();     // an older service tells none
+        c.address = d.value(QStringLiteral("address")).toString();   // nor an address
         out.append(c);
     }
     arg.endArray();

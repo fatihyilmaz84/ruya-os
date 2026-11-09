@@ -674,13 +674,13 @@ Bu geri alınamaz.</translation>
     <name>BatteryListModal</name>
     <message>
         <location filename="../qml/BatteryListModal.qml" line="+20"/>
-        <location line="+110"/>
+        <location line="+111"/>
         <location line="+10"/>
         <source>Close</source>
         <translation>Kapat</translation>
     </message>
     <message>
-        <location line="-120"/>
+        <location line="-121"/>
         <source>Back</source>
         <translation>Geri</translation>
     </message>
@@ -725,12 +725,7 @@ Bu geri alınamaz.</translation>
         <translation>Kullanılması için yeniden eşleştirilmesi gerekir.</translation>
     </message>
     <message>
-        <location line="+9"/>
-        <source>Controller name</source>
-        <translation>Kontrolcü adı</translation>
-    </message>
-    <message>
-        <location line="+102"/>
+        <location line="+113"/>
         <source>Bluetooth is off.</source>
         <translation>Bluetooth kapalı.</translation>
     </message>
@@ -835,8 +830,8 @@ Bu geri alınamaz.</translation>
         <translation>Taranıyor…</translation>
     </message>
     <message>
-        <location line="-159"/>
-        <location line="+291"/>
+        <location line="-161"/>
+        <location line="+293"/>
         <source>Forget %1</source>
         <translation>%1 cihazını unut</translation>
     </message>
@@ -998,7 +993,7 @@ Bu geri alınamaz.</translation>
         <translation>Seç</translation>
     </message>
     <message>
-        <location line="+157"/>
+        <location line="+158"/>
         <location line="+54"/>
         <source>Try your controller</source>
         <translation>Kontrolcünüzü deneyin</translation>
@@ -1180,7 +1175,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 (%2)</translation>
     </message>
     <message>
-        <location line="+21"/>
+        <location line="+39"/>
         <source>PlayStation controller</source>
         <translation>PlayStation kontrolcüsü</translation>
     </message>
@@ -2567,12 +2562,12 @@ Bu geri alınamaz.</translation>
         <translation>kapatma</translation>
     </message>
     <message>
-        <location line="+981"/>
+        <location line="+985"/>
         <source>Power</source>
         <translation>Güç</translation>
     </message>
     <message>
-        <location line="-964"/>
+        <location line="-968"/>
         <source>Update ready. Restart to finish.</source>
         <translation>Güncelleme hazır. Bitirmek için yeniden başlat.</translation>
     </message>
@@ -2597,12 +2592,12 @@ Bu geri alınamaz.</translation>
         <translation>Ekran yanıt vermedi, bu yüzden önceki çözünürlük geri geldi.</translation>
     </message>
     <message>
-        <location line="+48"/>
+        <location line="+49"/>
         <source>Wallpaper could not be loaded</source>
         <translation>Duvar kağıdı yüklenemedi</translation>
     </message>
     <message>
-        <location line="+309"/>
+        <location line="+312"/>
         <source>Continue playing</source>
         <translation>Oynamaya devam et</translation>
     </message>

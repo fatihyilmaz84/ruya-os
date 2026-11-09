@@ -546,6 +546,7 @@ impl BatteriesIface {
                     ("percent", own(Value::from(b.percent))),
                     ("state", own(Value::from(b.state.as_str()))),
                     ("family", own(Value::from(b.family))),
+                    ("address", own(Value::from(b.address.clone()))),
                 ]
                 .into_iter()
                 .filter_map(|(k, v)| v.map(|v| (k.to_owned(), v)))
@@ -595,7 +596,7 @@ pub async fn watch_batteries(
     while stream.next().await.is_some() {
         debounce::settle(&mut stream, debounce::QUIET, debounce::MAX_WAIT, None).await;
         let (batteries, bluetooth) = (batteries.clone(), bluetooth.clone());
-        match unblock(move || batteries.refresh_with(&bluetooth.list())).await {
+        match unblock(move || batteries_due(&batteries, &bluetooth)).await {
             Ok(true) => {
                 if let Err(err) = announce_batteries(&connection).await {
                     eprintln!("ruya-devices: emitting battery signals failed: {err}");
@@ -605,6 +606,15 @@ pub async fn watch_batteries(
             Err(err) => eprintln!("ruya-devices: reading UPower failed: {err}"),
         }
     }
+}
+
+/// Reads UPower again and says whether `BatteriesChanged` is due: a level, a state, a device or
+/// a family differs from what clients were last told. Blocks (UPower): call it off the executor.
+pub fn batteries_due(
+    batteries: &SharedBatteries,
+    bluetooth: &SharedBluetooth,
+) -> Result<bool, String> {
+    batteries.refresh_with(&bluetooth.list())
 }
 
 #[cfg(target_os = "linux")]
@@ -2068,6 +2078,87 @@ pub async fn refresh_system(connection: Connection, system: SharedSystem) {
 mod tests {
     use super::*;
     use ruya_sysinfo::{collect, FakeSource};
+
+    /// A fake UPower that the test keeps hold of, to change what the next read finds.
+    struct SharedUPower(Arc<crate::battery::FakeUPower>);
+
+    impl UPower for SharedUPower {
+        fn devices(&self) -> Result<Vec<crate::battery::RawDevice>, String> {
+            self.0.devices()
+        }
+    }
+
+    fn upower_pad(address: &str, percentage: f64) -> crate::battery::RawDevice {
+        crate::battery::RawDevice {
+            id: format!("/pad/{address}"),
+            kind: crate::battery::KIND_GAMING_INPUT,
+            model: "Wireless Controller".to_owned(),
+            percentage,
+            state: 2,
+            serial: address.to_lowercase(),
+            ..crate::battery::RawDevice::default()
+        }
+    }
+
+    fn rig(
+        pads: Vec<crate::battery::RawDevice>,
+    ) -> (
+        Arc<crate::battery::FakeUPower>,
+        SharedBatteries,
+        SharedBluetooth,
+    ) {
+        let fake = Arc::new(crate::battery::FakeUPower::new(pads));
+        let batteries: SharedBatteries = Arc::new(Batteries::new(Box::new(SharedUPower(
+            fake.clone(),
+        )) as DynUPower));
+        let bluetooth: SharedBluetooth = Arc::new(Bluetooth::new(Box::new(
+            crate::bluetooth::FakeBluez::with_two_pads(),
+        ) as DynBluez));
+        bluetooth.refresh().expect("fake reads");
+        (fake, batteries, bluetooth)
+    }
+
+    /// T-300: the watcher announces `BatteriesChanged` when `batteries_due` says so. A level that
+    /// changed is due, a read that finds the same list is not.
+    #[test]
+    fn batteries_changed_is_emitted_on_a_level_change() {
+        let (upower, batteries, bluetooth) = rig(vec![upower_pad("AA:00:00:00:00:04", 62.0)]);
+        assert_eq!(
+            batteries_due(&batteries, &bluetooth),
+            Ok(true),
+            "the first read lists the pad"
+        );
+        assert_eq!(
+            batteries_due(&batteries, &bluetooth),
+            Ok(false),
+            "same level: no signal"
+        );
+        upower.set(vec![upower_pad("AA:00:00:00:00:04", 61.0)]);
+        assert_eq!(
+            batteries_due(&batteries, &bluetooth),
+            Ok(true),
+            "the level changed"
+        );
+    }
+
+    #[test]
+    fn list_batteries_carries_the_bluetooth_address() {
+        let (_upower, batteries, bluetooth) = rig(vec![
+            upower_pad("AA:00:00:00:00:04", 62.0),
+            upower_pad("AA:00:00:00:00:05", 40.0),
+        ]);
+        batteries_due(&batteries, &bluetooth).expect("reads");
+        let iface = BatteriesIface::new(batteries, bluetooth);
+        let listed = iface.list_batteries();
+        let addresses: Vec<String> = listed
+            .iter()
+            .filter_map(|b| match b.get("address").map(|v| &**v) {
+                Some(Value::Str(s)) => Some(s.as_str().to_owned()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(addresses, ["AA:00:00:00:00:04", "AA:00:00:00:00:05"]);
+    }
 
     #[test]
     fn the_collector_result_has_the_contracts_types() {

@@ -162,7 +162,7 @@ The gliding highlight (§3.8) is a fill under the ring, never a replacement for 
 
 Each entry: file, status, and the rules a change must keep. A new component gets a row here before it is built (§8).
 
-**Names from outside** (profile, device, drive, Wi-Fi) are one line, capped to their container's width and elided at the end; the full name is in the accessible name. Built (T-312) for the profile card (the card's width), the status cluster (the name stops growing at 220 px x `u`; `nameFull` still feeds the narrow-screen rule) and the PIN pad title (three card widths; the name inside it is cut, not the end of the sentence); the rows of the lists already elide.
+**Names from outside** (profile, device, drive, Wi-Fi) are one line, capped to their container's width and elided at the end; the full name is in the accessible name. Built (T-312) for the profile card (the card's width), the status cluster (the name stops growing at 220 px x `u`; `nameFull` still feeds the narrow-screen rule) and the PIN pad title (three card widths; the name inside it is cut, not the end of the sentence); the rows of the lists already elide. A device name that carries the end of its address (`DeviceIcons.shownName`, T-334/T-359) is cut before the tail, never after it: "Wireless Controll... (00:05)". The keyboard title (`TextEntry.title`) and the "Found nearby" rows follow the same one-line, elide-at-the-end rule.
 
 | Component | File | Status | Rules |
 |---|---|---|---|
@@ -202,6 +202,7 @@ Each entry: file, status, and the rules a change must keep. A new component gets
 | Heat notice | `ThermalNotice.qml` (T-200) | built | Modal card like Dialog buttons, title `typeTitle` in `errorText`, one "OK" pill (focused first) that only hides it; a seconds countdown in the text; accepts every key |
 | PIN pad | `PinPad.qml` | built | 3 × 4 grid of `radiusS` keys, digit dots, message in `errorText` below; the title ("Enter PIN for <name>") is one line, at most three `cardProfileWidth`; only the name is elided (a `TextMetrics` fits it into what the rest of the title leaves), so the instruction survives in a language that puts the name first (T-312); the grid stays left to right in RTL |
 | On-screen keyboard | `TextEntry.qml` | built | Key fills rest 8 % / focused / latched (`entryKeyActiveFill`) |
+| Name line | `TailText.qml` | built | One line of a name from outside with a tail that stays whole ("Wireless Controll... (00:05)"): rename keyboard title, "Found nearby", "More devices"; section 3 |
 | Toast | `ToastLayer.qml` | built | `toastBackground` card `radiusM` (20 today) with `shadowPanel` and the glass layers (sheen and lit rim replace the `glassBorder` hairline; no grain), status bar in the status colour + an optional glyph (a text character, or an `Icon` by `iconName`, T-199: the device's own icon in the status colour) + title word + one line; a sticky one (no timer, `Notifications.showSticky`, T-159) for a state that lasts, such as the pending automatic restart |
 | Volume OSD | `VolumeOsd.qml` | built (icon: T-157) | Bottom centre, pill, `volume_up` / `volume_off` icon + bar + number; muted: `volume_off` and "Muted" in words in `toastWarning` |
 | Guide overlay | `Shell.qml` | built | `scrimOverlay` + `panel` card `radiusL` with `shadowPanel` and the glass layers (sheen, rim; opaque, so no grain), title `typeTitle`, actions as rows |

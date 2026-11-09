@@ -15,6 +15,7 @@ use crate::bluetooth::{
     adapter_name, AdapterInfo, AgentCall, AgentSlot, Bluez, BtError, Raw, RawAdapter, RawDevice,
     LOCAL_TIMEOUT,
 };
+use crate::log;
 
 pub const BLUEZ: &str = "org.bluez";
 const ADAPTER: &str = "org.bluez.Adapter1";
@@ -264,6 +265,7 @@ impl BluezClient {
                 adapters.push(AdapterInfo {
                     path: p.as_str().to_owned(),
                     usb: is_usb(adapter_name(p.as_str())),
+                    address: text(a, "Address").to_uppercase(),
                     state: RawAdapter {
                         powered: flag(a, "Powered"),
                         discovering: flag(a, "Discovering"),
@@ -361,11 +363,11 @@ impl Bluez for BluezClient {
                 match self.set(&a.path, ADAPTER, "Powered", on).await {
                     Ok(()) => switched += 1,
                     Err(e) => {
-                        eprintln!(
-                            "ruya-devices: {} Powered {on} failed: {}",
+                        log::info(&format!(
+                            "{} Powered {on} failed: {}",
                             adapter_name(&a.path),
                             e.0
-                        );
+                        ));
                         first_error.get_or_insert(e);
                     }
                 }

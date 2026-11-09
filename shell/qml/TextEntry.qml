@@ -22,6 +22,9 @@ FocusScope {
     property real u: 1
 
     property string title
+    // The end of `title` that is never cut when the title is too long for one line: a device name that
+    // carries the end of its address ("Wireless Controller (00:05)") is cut before " (00:05)" (T-359, 04 section 3).
+    property string titleTail: ""
     property string text
     property bool mask: false
     property string layout: "text"        // "text" | "email" | "url"
@@ -74,6 +77,7 @@ FocusScope {
     function open(title, initialText, options) {
         const o = options ?? {}
         entry.title = title ?? ""
+        entry.titleTail = o.titleTail ?? ""
         entry.maxLength = o.maxLength ?? 0
         entry.mask = o.mask ?? false
         entry.layout = ["text", "email", "url"].includes(o.layout) ? o.layout : "text"
@@ -309,11 +313,18 @@ FocusScope {
         anchors.centerIn: parent
         spacing: Theme.spaceM * entry.u
 
-        Text {
+        // The title is often a name from outside (a device's): one line, as wide as the keys at most, the name cut
+        // at its end and never inside `titleTail`. The full title is the accessible name of the entry.
+        TailText {
+            id: entryTitle
             objectName: "entryTitle"
+            readonly property real cap: (10 * (entry.keyUnit + entry.keyGap) - entry.keyGap) * entry.u
+            readonly property bool hasTail: entry.titleTail !== "" && entry.title.endsWith(entry.titleTail)
             anchors.horizontalCenter: parent.horizontalCenter
-            textFormat: Text.PlainText
-            text: entry.title
+            maxWidth: cap
+            width: Math.min(implicitWidth, cap)
+            name: hasTail ? entry.title.slice(0, entry.title.length - entry.titleTail.length) : entry.title
+            tail: hasTail ? entry.titleTail : ""
             color: Theme.text
             font.pixelSize: Theme.typeHeadline * entry.u
             font.weight: Theme.weightDemiBold

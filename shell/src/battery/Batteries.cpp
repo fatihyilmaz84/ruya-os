@@ -59,6 +59,7 @@ void Batteries::apply(const QList<DeviceBattery> &input)
             {QStringLiteral("percent"), c.percent},
             {QStringLiteral("state"), c.state},
             {QStringLiteral("family"), c.family},
+            {QStringLiteral("address"), c.address},
             {QStringLiteral("low"), low},
         };
         devices.append(entry);
@@ -95,10 +96,10 @@ void Batteries::apply(const QList<DeviceBattery> &input)
 }
 
 void Batteries::mockSet(const QString &id, int percent, const QString &state, const QString &kind, const QString &name,
-                        const QString &family)
+                        const QString &family, const QString &address)
 {
     if (auto *mock = qobject_cast<MockBatteryBackend *>(m_backend.get()))
-        mock->setDevice(id, percent, state, kind, name, family);
+        mock->setDevice(id, percent, state, kind, name, family, address);
 }
 
 void Batteries::mockRemove(const QString &id)

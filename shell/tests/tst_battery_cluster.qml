@@ -200,6 +200,7 @@ Item {
             Display.setUiScale(0)               // a test that enlarged the UI puts it back
             DeviceSettings.language = "en"
             tryCompare(Theme, "uiScale", 1)
+            Bluetooth.mockReset()               // the two pads a test added are listed, connected and have batteries of their own
         }
 
         // T-301: the three slots go to pads and headsets before mice and keyboards, each group lowest first;
@@ -247,6 +248,102 @@ Item {
             // One goes away: its chip goes and the other stays.
             Batteries.mockRemove("padB")
             tryVerify(() => chipIds().join() === "batteryChip_padA", 2000, "only the first pad's chip is left: " + chipIds())
+            tc.shell.destroy()
+            wait(50)
+        }
+
+        // T-359: the service tells a battery's Bluetooth address. Two like pads are named after their paired
+        // devices (the end of the address added, as in Settings) in the chip's accessible name, in the
+        // "N more" chip's and in the "More devices" list; a pad with a name of its own, and a battery that
+        // has no address (a wired pad), keep their plain names.
+        readonly property string padA: "AA:00:00:00:00:04"
+        readonly property string padB: "AA:00:00:00:00:05"
+
+        function twoLikePads() {
+            Bluetooth.mockReset()
+            Bluetooth.mockTwoPads()
+            tryVerify(() => Bluetooth.devices.find(d => d.id === tc.padA) !== undefined
+                      && Bluetooth.devices.find(d => d.id === tc.padB) !== undefined, 2000, "both pads are listed")
+        }
+
+        function test_like_pads_are_told_apart_in_the_chips() {
+            twoLikePads()
+            Batteries.mockClear()
+            Batteries.mockSet("padA", 80, "discharging", "controller", "Wireless Controller", "playstation", tc.padA)
+            Batteries.mockSet("padB", 55, "discharging", "controller", "Wireless Controller", "playstation", tc.padB)
+            openShell(1920, 1080)
+            tryVerify(() => chipIds().length === 2, 2000, "a chip for each pad: " + chipIds())
+            compare(find("batteryChip_padA").Accessible.name, "Wireless Controller (00:04) battery 80 percent")
+            compare(find("batteryChip_padB").Accessible.name, "Wireless Controller (00:05) battery 55 percent")
+            // One pad gets a name of its own: the other has no twin any more.
+            Bluetooth.mockSetName(tc.padB, "Ada's pad")
+            tryCompare(find("batteryChip_padB").Accessible, "name", "Ada's pad battery 55 percent")
+            compare(find("batteryChip_padA").Accessible.name, "Wireless Controller battery 80 percent")
+            // A battery UPower knows by address but Bluetooth does not list (the radio is off): two like
+            // names still get their tails, a wired pad without an address keeps its name.
+            Bluetooth.mockReset()
+            tryVerify(() => Bluetooth.devices.find(d => d.id === tc.padA) === undefined, 2000)
+            tryCompare(find("batteryChip_padA").Accessible, "name", "Wireless Controller (00:04) battery 80 percent")
+            Batteries.mockSet("wired", 90, "discharging", "controller", "Wireless Controller", "playstation")
+            tryVerify(() => find("batteryChip_wired") !== null, 2000)
+            compare(find("batteryChip_wired").Accessible.name, "Wireless Controller battery 90 percent")
+            tc.shell.destroy()
+            wait(50)
+        }
+
+        function test_like_pads_are_told_apart_in_more_devices() {
+            twoLikePads()
+            Batteries.mockClear()
+            // Three controllers with a lower level take the chips; the two pads are the "N more".
+            Batteries.mockSet("c1", 10, "discharging", "controller", "Xbox Wireless Controller", "xbox")
+            Batteries.mockSet("c2", 20, "discharging", "controller", "Pro Controller", "nintendo")
+            Batteries.mockSet("c3", 30, "discharging", "controller", "8BitDo Pro 2", "8bitdo")
+            Batteries.mockSet("padA", 80, "discharging", "controller", "Wireless Controller", "playstation", tc.padA)
+            Batteries.mockSet("padB", 55, "discharging", "controller", "Wireless Controller", "playstation", tc.padB)
+            openShell(1920, 1080)
+            tryVerify(() => find("batteryMore").visible, 2000)
+            const more = find("batteryMore")
+            verify(more.Accessible.name.indexOf("Wireless Controller (00:04) 80 percent") >= 0, more.Accessible.name)
+            verify(more.Accessible.name.indexOf("Wireless Controller (00:05) 55 percent") >= 0, more.Accessible.name)
+            openMore()
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("batteryList").shown, 2000, "Accept opens the list")
+            tryVerify(() => find("batteryListClose").activeFocus, 2000, "Close has focus")
+            compare(find("batteryListName_padA").text, "Wireless Controller (00:04)")
+            compare(find("batteryListName_padB").text, "Wireless Controller (00:05)")
+            compare(find("batteryListChip_padA").Accessible.name, "Wireless Controller (00:04) battery 80 percent")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !find("batteryList").shown, 2000, "Back closes")
+            tryVerify(() => more.activeFocus, 2000, "focus returns to the chip")
+            tc.shell.destroy()
+            wait(50)
+        }
+
+        // T-359: in "More devices" a too long name is cut before the end of the address, which stays whole.
+        function test_more_devices_cuts_a_long_name_before_its_address() {
+            twoLikePads()
+            const wide = "W".repeat(48)
+            Bluetooth.mockSetName(tc.padA, wide)
+            Bluetooth.mockSetName(tc.padB, wide)
+            tryVerify(() => Bluetooth.devices.find(d => d.id === tc.padB).name === wide, 2000)
+            Batteries.mockClear()
+            Batteries.mockSet("c1", 10, "discharging", "controller", "Xbox Wireless Controller", "xbox")
+            Batteries.mockSet("c2", 20, "discharging", "controller", "Pro Controller", "nintendo")
+            Batteries.mockSet("c3", 30, "discharging", "controller", "8BitDo Pro 2", "8bitdo")
+            Batteries.mockSet("padA", 80, "discharging", "controller", "Wireless Controller", "playstation", tc.padA)
+            Batteries.mockSet("padB", 55, "discharging", "controller", "Wireless Controller", "playstation", tc.padB)
+            openShell(1920, 1080)
+            tryVerify(() => find("batteryMore").visible, 2000)
+            openMore()
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("batteryList").shown, 2000, "Accept opens the list")
+            const name = find("batteryListName_padB")
+            verify(name.text.endsWith(" (00:05)"), "the tail is whole: " + name.text)
+            verify(name.text.indexOf("\u2026") > 0, "the name is cut: " + name.text)
+            verify(name.paintedWidth <= name.width + 0.5, "one line: " + name.paintedWidth + " > " + name.width)
+            compare(name.Accessible.name, wide + " (00:05)")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !find("batteryList").shown, 2000, "Back closes")
             tc.shell.destroy()
             wait(50)
         }
@@ -457,6 +554,32 @@ Item {
             grabImage(find("statusGlass")).save(shotsDir + "/battery-1080-daylight-crop.png")
             tc.shell.destroy()
             DeviceSettings.theme = before
+        }
+
+        // T-359: the cluster with two like pads and "More devices" naming them apart.
+        function test_zz_like_pads_screenshots() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            twoLikePads()
+            Batteries.mockClear()
+            Batteries.mockSet("c1", 10, "discharging", "controller", "Xbox Wireless Controller", "xbox")
+            Batteries.mockSet("c2", 20, "discharging", "controller", "Pro Controller", "nintendo")
+            Batteries.mockSet("c3", 30, "discharging", "controller", "8BitDo Pro 2", "8bitdo")
+            Batteries.mockSet("padA", 80, "discharging", "controller", "Wireless Controller", "playstation", tc.padA)
+            Batteries.mockSet("padB", 55, "discharging", "controller", "Wireless Controller", "playstation", tc.padB)
+            openShell(1920, 1080)
+            tryVerify(() => find("batteryMore").visible, 2000)
+            openMore()
+            wait(500)
+            grabImage(find("statusGlass")).save(shotsDir + "/T359-battery-like-pads-crop.png")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("batteryList").shown, 2000)
+            wait(600)
+            grabImage(tc.shell).save(shotsDir + "/T359-battery-list-like-pads.png")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !find("batteryList").shown, 2000)
+            tc.shell.destroy()
+            wait(50)
         }
 
         // T-301: the "N more" chip with its focus ring and the list it opens, in English and Turkish, and

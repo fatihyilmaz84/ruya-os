@@ -30,7 +30,7 @@ use ruya_devices::network::{FakeNetworkManager, Network};
 use ruya_devices::output_policy::ChoiceStore;
 use ruya_devices::storage::{FakeUdisks, RawVolume, Storage};
 use ruya_devices::store::Store;
-use ruya_devices::sysinfo::{DynInfoSource, SystemInfo};
+use ruya_devices::sysinfo::{DynInfoSource, SystemInfo, WithPrimaryAdapter};
 #[cfg(target_os = "linux")]
 use ruya_devices::sysusage::LinuxSource;
 use ruya_devices::sysusage::{FakeSource, MonotonicClock, SystemUsage};
@@ -477,7 +477,11 @@ fn run() -> Result<(), Box<dyn Error>> {
     ));
 
     // The slow part is read once, now, off the main thread, so the first call finds it.
-    let system: SharedSystem = Arc::new(SystemInfo::new(info_source(session)));
+    let primary_bt = bluetooth.clone();
+    let system: SharedSystem = Arc::new(SystemInfo::new(Box::new(WithPrimaryAdapter::new(
+        info_source(session),
+        Box::new(move || primary_bt.primary_adapter()),
+    ))));
     {
         let warm = system.clone();
         std::thread::spawn(move || {

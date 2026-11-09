@@ -36,7 +36,7 @@ Row {
     }
 
     readonly property var device: Batteries.devices.find(d => d.id === chip.deviceId) ?? ({})
-    readonly property string deviceName: chip.device.name ?? ""
+    readonly property string deviceName: DeviceIcons.batteryName(chip.device)
     readonly property int percent: chip.device.percent ?? 0
     readonly property string chargeState: chip.device.state ?? "unknown"
     readonly property bool low: chip.device.low ?? false

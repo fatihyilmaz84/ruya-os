@@ -28,7 +28,7 @@ void MockBatteryBackend::publish()
 }
 
 void MockBatteryBackend::setDevice(const QString &id, int percent, const QString &state, const QString &kind,
-                                   const QString &name, const QString &family)
+                                   const QString &name, const QString &family, const QString &address)
 {
     for (DeviceBattery &existing : m_list) {
         if (existing.id != id)
@@ -41,6 +41,8 @@ void MockBatteryBackend::setDevice(const QString &id, int percent, const QString
             existing.name = name;
         if (!family.isEmpty())
             existing.family = family;
+        if (!address.isEmpty())
+            existing.address = address;
         publish();
         return;
     }
@@ -51,6 +53,7 @@ void MockBatteryBackend::setDevice(const QString &id, int percent, const QString
     c.percent = percent < 0 ? -1 : qMin(percent, 100);
     c.state = state;
     c.family = family;
+    c.address = address;
     m_list.append(c);
     publish();
 }

@@ -26,6 +26,13 @@ pub trait Source {
     /// The standard output of a command that exited successfully.
     fn run(&self, program: &str, args: &[&str]) -> Option<String>;
 
+    /// The Bluetooth adapter the console uses, as its service (`ruya-devices`) picked it: its name
+    /// (`hci1`) and its address, "" when not known. A source that does not know answers `None`
+    /// and the collector takes the first adapter in sysfs (T-359).
+    fn primary_bluetooth(&self) -> Option<(String, String)> {
+        None
+    }
+
     /// A file's text, trimmed; `None` when it is missing or empty.
     fn read_trim(&self, path: &str) -> Option<String> {
         let text = self.read(path)?;

@@ -60,15 +60,22 @@ QtObject {
     // end of its address is added so the two can be told apart: "Wireless Controller (00:05)". The
     // alias itself, which the user edits, is never changed.
     function shownName(list, d) {
+        const parts = shownParts(list, d)
+        return parts.name + parts.tail
+    }
+
+    // The same name in two parts, { name, tail }: tail is " (00:05)" for a like-named device, else "". A line that
+    // can be too long (TailText) cuts the name and keeps the tail.
+    function shownParts(list, d) {
         const name = plain(d.name)
         const key = name.toLowerCase()
         const twins = list.filter(x => plain(x.name).toLowerCase() === key).length
         if (twins <= 1)
-            return name
-        // The tail goes in first and the name last, as functions: an alias that contains "%2" or "$&"
-        // must come out as typed (QString.arg() would read it as the next placeholder).
-        const tail = addressTail(d.id)
-        return qsTr("%1 (%2)").replace("%2", () => tail).replace("%1", () => name)
+            return { name: name, tail: "" }
+        // The tail is put into the format apart from the name, so an alias that contains "%2" or "$&" comes out
+        // as typed (QString.arg() would read it as the next placeholder).
+        const address = addressTail(d.id)
+        return { name: name, tail: qsTr("%1 (%2)").replace("%1", () => "").replace("%2", () => address) }
     }
 
     // What to call a pad that connected: the alias of the Bluetooth device with that address (what the
@@ -82,6 +89,30 @@ QtObject {
         if (family !== "")
             return kindText("controller", family)
         return plain(name)
+    }
+
+    // What to call a device in the battery chips and in "More devices" (T-359): the alias of the Bluetooth
+    // device with the address the service gave (the name the user chose, with the end of its address
+    // when another device has the same name, like the Bluetooth pane), else the name UPower gave, with
+    // the end of its address when another battery of the same name has one. A battery without an address
+    // (a wired pad) keeps its name.
+    function batteryName(d) {
+        const parts = batteryParts(d)
+        return parts.name + parts.tail
+    }
+
+    // `batteryName` in two parts, { name, tail } (see shownParts).
+    function batteryParts(d) {
+        const address = String(d.address ?? "")
+        if (address === "")
+            return { name: plain(d.name), tail: "" }
+        const wanted = address.toLowerCase()
+        const paired = Bluetooth.devices.find(x => x.id.toLowerCase() === wanted)
+        if (paired)
+            return shownParts(Bluetooth.devices, paired)
+        const withAddress = Batteries.devices.filter(x => String(x.address ?? "") !== "")
+                                    .map(x => ({ id: x.address, name: x.name }))
+        return shownParts(withAddress, { id: address, name: d.name })
     }
 
     // The kind in words, for a screen reader and for text ("PlayStation controller", "Headset").
