@@ -1,6 +1,6 @@
 # T-244 — System runner pack: Wine as a Flatpak extension on the `ruyaos` remote
 
-Status: todo · Phase: 7 · Depends: T-229, T-239 · Area: image, services, docs · Size: M · Owner: lead
+Status: done · Phase: 7 · Depends: T-229, T-239 · Area: image, services, docs · Size: M · Owner: lead
 
 ## Goal
 `source: system` and `newest` have something to resolve to: a Wine runner (with DXVK and VKD3D-Proton) published as a Flatpak extension, one branch per Wine major, installable from the Store, updated independently of the OS, shared by all packages. The size/preinstall question (owner D3) is answered with a measured number.
@@ -32,4 +32,6 @@ VM build and check (background).
 - Spec 05 §6.4 and D3; spec 03 §4.2 (remote table), `docs/image-packages.md`, `docs/dev-setup.md`, STATUS decisions.
 
 ## Outcome
-_Filled in by the implementer._
+Verified: unverified
+
+Dropped: merged into T-385 (lead-8, 2026-11-09). ADR-025 (owner) makes GE-Proton the preinstalled default and Wine one of several Store runners; T-385 builds the whole runner catalogue with T-382's script, including this Wine pack.

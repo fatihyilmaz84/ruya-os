@@ -16,6 +16,7 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | [T-382](tasks/T-382-ge-proton-preinstalled-and-updated.md) | GE-Proton preinstalled in the image, updated through the Store, named in About | todo | T-381 |
 | [T-383](tasks/T-383-steam-uses-ge-proton-by-default.md) | Steam uses GE-Proton by default once installed | todo | T-381, T-382 |
 | [T-384](tasks/T-384-ge-proton-for-developers.md) | Developers: run a Windows game on the console's GE-Proton (tier-C format, chapter, sample) | todo | T-382 |
+| [T-385](tasks/T-385-runner-catalogue-and-per-game-choice.md) | Windows runner catalogue (Wine, Wine-GE, UMU-Proton, ...) in the Store and a per-game runner choice | todo | T-382 |
 | [T-368](tasks/T-368-controllers-pane-capabilities-button-test.md) | Settings > Controllers: connected pads, capabilities and a live button test | todo | T-367 |
 | [T-369](tasks/T-369-input-mapping-v1-profiles.md) | Mapping v1: button layout, remapping, dead zones, curves; global profiles with import and export | todo | T-368 |
 | [T-370](tasks/T-370-game-and-platform-input-profiles.md) | Game and platform controller profiles: inheritance, applied on focus, a Controller entry on the game page | todo | T-369 |
@@ -78,7 +79,6 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | [T-241](tasks/T-241-play-updates.md) | **[lead]** `.play` updates: signed feeds, same-key rule, rollback | todo | T-231, T-238, T-240 |
 | [T-242](tasks/T-242-play-library-home-and-preview.md) | `.play` in Library and Home: art, preview loop, save paths | todo | T-232, T-238 |
 | [T-243](tasks/T-243-play-developer-guide-and-samples.md) | `.play` developer guide and two samples | todo | T-233 |
-| [T-244](tasks/T-244-system-wine-runner-pack.md) | **[lead]** System Wine runner pack on the `ruyaos` remote | todo | T-229, T-239 |
 | [T-248](tasks/T-248-epic-first-party-apps.md) | **[lead]** EPIC: first-party apps (picture viewer, weather, media player, files, Jellyfin, then the emulator frontend; no browser first) and the platform they need | todo | — |
 | [T-249](tasks/T-249-hig-human-interface-guidelines.md) | **[lead]** Human Interface Guidelines for app authors (`docs/specs/06-hig.md`) | todo | — |
 | [T-250](tasks/T-250-app-platform-spike-and-adr.md) | **[lead]** Spike for ADR-015 (Accepted): the `org.ruyaos.Platform` runtime extension with RuyaKit | todo | — |
