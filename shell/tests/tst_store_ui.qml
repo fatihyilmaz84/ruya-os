@@ -64,7 +64,8 @@ Item {
                 const list = find("storeCards_" + r)
                 if (!list || !list.visible)
                     continue
-                const at = list.model.indexOf(id)
+                // The row's ids: a row below the fold has no cards until it takes focus (T-377).
+                const at = find("storeRow_" + r).ids.indexOf(id)
                 if (at < 0)
                     continue
                 // The row may be above the focused one (after Back): up to the toolbar, then down.
@@ -90,7 +91,10 @@ Item {
             // Hidden by default: the three apps without controller support.
             compare(Store.controllerFilter, "gamepad")
             tryCompare(Store.results, "length", 9)
-            compare(find("appCard_org.example.Browser"), null)
+            // Browser belongs to "Apps & media", below the fold: its cards wait for the row to show
+            // (T-377), so the row's ids say whether it is listed.
+            const apps = find("storeRow_apps")
+            compare(apps.ids.indexOf("org.example.Browser"), -1)
             verify(find("appCard_org.example.Racer"))
             // Up from the first row reaches the toolbar, Right the toggle.
             keyClick(Qt.Key_Up)
@@ -101,17 +105,18 @@ Item {
             keyClick(Qt.Key_Return)
             tryCompare(Store, "controllerFilter", "any")
             tryVerify(() => Store.results.length === 12)
-            tryVerify(() => find("appCard_org.example.Browser") !== null, 2000, "Editor shows with all apps")
+            tryVerify(() => apps.ids.indexOf("org.example.Browser") >= 0, 2000, "Browser shows with all apps")
             keyClick(Qt.Key_Return)
             tryCompare(Store, "controllerFilter", "gamepad")
-            tryVerify(() => find("appCard_org.example.Browser") === null)
+            tryVerify(() => apps.ids.indexOf("org.example.Browser") < 0)
+            compare(find("appCard_org.example.Browser"), null)
         }
 
         function test_rows_follow_the_catalogue() {
             openStore()
-            tryVerify(() => find("storeCards_featured").model.length === 4)
-            tryVerify(() => find("storeCards_games").model.length === 5)
-            tryVerify(() => find("storeCards_installed").model.length === 3)
+            tryVerify(() => find("storeRow_featured").ids.length === 4)
+            tryVerify(() => find("storeRow_games").ids.length === 5)
+            tryVerify(() => find("storeRow_installed").ids.length === 3)   // its cards wait for it to show (T-377)
             keyClick(Qt.Key_Down)
             verify(find("storeCards_games").activeFocus)
         }

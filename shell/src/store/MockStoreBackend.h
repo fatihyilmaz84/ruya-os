@@ -59,6 +59,9 @@ public:
     // snapshot of now) after ms.
     void refreshDelayed(int ms);
     void searchDelayed(int ms);
+    // Tests only: every later search() answers after ms (0, the default: on the next turn of the
+    // event loop) until reset() (T-377).
+    void setSearchReplyMs(int ms) { m_searchReplyMs = ms; }
     int pendingJobLists() const { return m_pendingJobLists; }
     int pendingReplies() const { return m_pendingReplies; }
     int searchCount() const { return m_searchCount; }
@@ -69,6 +72,9 @@ public:
                     const QStringList &permissions = {});
     // Tests only: a tile picture for every app (see mockArtPath), then CatalogChanged.
     void setArtDir(const QString &dir);
+    // Tests only: `count` more community apps (org.example.Many0...), one in five with full controller
+    // support and one in five partial, the size of a real remote's catalogue; then CatalogChanged (T-377).
+    void addApps(int count);
 
 private:
     struct Job
@@ -102,5 +108,6 @@ private:
     QTimer m_timer;
     int m_stepMs = 100;
     int m_searchCount = 0;
+    int m_searchReplyMs = 0;
     bool m_paused = false;
 };

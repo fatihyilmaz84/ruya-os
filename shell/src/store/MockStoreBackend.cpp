@@ -78,6 +78,18 @@ void MockStoreBackend::setArtDir(const QString &dir)
     emit catalogChanged();
 }
 
+void MockStoreBackend::addApps(int count)
+{
+    for (int i = 0; i < count; ++i) {
+        const QByteArray id = "org.example.Many" + QByteArray::number(i);
+        const QByteArray name = "Sample App " + QByteArray::number(i);
+        const char *controller = i % 5 == 0 ? "full" : i % 5 == 1 ? "partial" : "none";
+        m_apps.append(app(id.constData(), name.constData(), "A made-up app of a large catalogue.", "Community",
+                          "community", controller, "all", {"audio"}, 10));
+    }
+    emit catalogChanged();
+}
+
 void MockStoreBackend::setAppText(const QString &id, const QString &name, const QString &summary,
                                   const QString &developer, const QStringList &permissions)
 {
@@ -105,6 +117,7 @@ void MockStoreBackend::reset()
     jobBook().forgetAll();
     m_finishedJobs.clear();
     m_dataDeleted.clear();
+    m_searchReplyMs = 0;
     initState();
     emit installedChanged();
 }
@@ -176,7 +189,7 @@ void MockStoreBackend::refreshAfter(int ms)
 
 void MockStoreBackend::search(const QString &query, bool gamepadOnly, uint limit)
 {
-    searchAfter(query, gamepadOnly, limit, 0);
+    searchAfter(query, gamepadOnly, limit, m_searchReplyMs);
 }
 
 void MockStoreBackend::searchDelayed(int ms)
