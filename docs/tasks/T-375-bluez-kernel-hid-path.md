@@ -1,6 +1,6 @@
 # T-375 - BlueZ: handle Bluetooth pads in the kernel (UserspaceHID=false), not through bluetoothd
 
-Status: todo · Phase: 2 · Depends: — · Area: image (BlueZ config) · Size: S · Owner: lead · Developer surface: none
+Status: in-progress · Phase: 2 · Depends: — · Area: image (BlueZ config) · Size: S · Owner: lead · Developer surface: none
 
 ## Goal
 `bluetoothd` stops spending about 11 % of a core while a DualSense is connected. On the Dell (0.0.58, lead-7 investigation) BlueZ 5.88 runs with its built-in default `UserspaceHID=true` (`/etc/bluetooth/input.conf` all comments): every input report (about 730 per second, HID report 0x31) is read from L2CAP and written to `/dev/uhid` by the single-threaded daemon (about 1160 reads, 1740 writes and 370 context switches per second); `hidp` is not loaded. D-Bus clients, discovery and pairing windows were ruled out (idle).

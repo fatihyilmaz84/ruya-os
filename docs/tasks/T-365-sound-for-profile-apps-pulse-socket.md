@@ -18,9 +18,9 @@ A game launched from the shell plays sound. On the Dell SuperTuxKart said "Could
 - Per-profile levels on app streams (`ambient`/`media`, rest of B-007), stopping a deleted profile's server (it is unreachable and ends with the shell's session), microphone privacy (T-220).
 
 ## Acceptance criteria
-- [ ] Rust tests: `an_app_gets_its_profiles_pulse_server`, `the_pulse_server_is_started_before_the_app`, `a_failed_pulse_start_still_launches_the_app` (red when removed).
-- [ ] VM (this task): `vm-session-check.sh check` asserts the socket directory's mode and ACL, that `ruya-p1` can connect and another user cannot, and that the server's config refuses module loading; `RUYA_BOOT_OK`.
-- [ ] hw: SuperTuxKart launched through the shell on the Dell has an output stream owned by `ruya-p1`.
+- [x] Rust tests: `an_app_gets_its_profiles_pulse_server`, `the_pulse_server_is_started_before_the_app`, `a_failed_pulse_start_still_launches_the_app` (red when removed).
+- [x] VM (this task): `vm-session-check.sh check` asserts the socket directory's mode and ACL, that `ruya-p1` can connect and another user cannot, and that the server's config refuses module loading; `RUYA_BOOT_OK`.
+- [x] hw: SuperTuxKart launched through the shell on the Dell has an output stream owned by `ruya-p1`.
 
 ## Outcome
 Verified: vm (0.0.59) + hw (Dell 0.0.59; audible sound to be confirmed by the owner at the TV)
