@@ -322,7 +322,23 @@ display)
     echo "$line" | grep -q "WAYLAND_DISPLAY=wayland-0 socket=yes" && ok "inside the sandbox: WAYLAND_DISPLAY=wayland-0, the socket is there" || bad "sandbox display: $line"
     echo "$line" | grep -q "socket-dir-visible=no" && ok "the sandbox does not see $dir (no path to the other profiles' sockets)" || bad "the sandbox sees $dir"
     echo "$line" | grep -q "uid=$muid " && ok "the app runs as $user" || bad "app uid: $line"
-    systemctl --user -M "$user@.host" show -p Environment "$inst" </dev/null 2>&1 | cat | tr ' ' '\n' | grep -E "WAYLAND_DISPLAY|SDL_VIDEODRIVER"
+    systemctl --user -M "$user@.host" show -p Environment "$inst" </dev/null 2>&1 | cat | tr ' ' '\n' | grep -E "WAYLAND_DISPLAY|SDL_VIDEODRIVER|PULSE_SERVER"
+
+    echo "--- the profile's sound server (T-365, ADR-010)"
+    pdir="/run/ruya-pulse/$user"; psock="$pdir/native"
+    systemctl --user -M "$user@.host" show -p Environment "$inst" </dev/null 2>&1 | cat | grep -q "PULSE_SERVER=unix:$psock" \
+        && ok "the app got PULSE_SERVER=unix:$psock" || bad "the app has no PULSE_SERVER for $psock"
+    [ "$(systemctl --user -M ruya-shell@.host is-active "ruya-pulse@$user.service" </dev/null 2>&1 | cat)" = active ] \
+        && ok "ruya-pulse@$user runs in ruya-shell's manager" || bad "ruya-pulse@$user is not active"
+    [ "$(stat -c '%a %U' /run/ruya-pulse 2>&1)" = "711 ruya-shell" ] && ok "/run/ruya-pulse: 0711, owned by ruya-shell" || bad "/run/ruya-pulse: $(stat -c '%a %U' /run/ruya-pulse 2>&1)"
+    pacl="$(getfacl -p "$pdir" 2>/dev/null | grep -v '^#' | grep -v '^$' | tr '\n' ' ')"
+    [ "$pacl" = "user::rwx user:$user:--x group::--- mask::--x other::--- " ] && ok "$pdir: only $user may pass" || bad "ACL of $pdir: $pacl"
+    out="$(probe_connect "$user" "$psock")"; [ "$out" = connected ] && ok "$user connects to its sound server" || bad "$user -> $psock: $out"
+    out="$(probe_connect "$ouser" "$psock")"; case "$out" in PermissionError*) ok "$ouser cannot reach $user's sound server";; *) bad "$ouser -> $psock: $out";; esac
+    ppid="$(systemctl --user -M ruya-shell@.host show -p MainPID --value "ruya-pulse@$user.service" </dev/null 2>&1 | cat)"
+    tr '\0' ' ' < "/proc/$ppid/cmdline" 2>/dev/null | grep -q -- "-c ruya-profile-pulse.conf" \
+        && grep -q "pulse.allow-module-loading = false" /usr/share/pipewire/ruya-profile-pulse.conf \
+        && ok "the server runs ruya-profile-pulse.conf, which refuses module loading" || bad "the sound server's config (pid $ppid)"
 
     echo "--- Guide over the app"
     t2="$(date +%s)"
