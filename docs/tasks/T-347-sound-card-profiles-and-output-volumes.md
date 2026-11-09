@@ -1,6 +1,6 @@
 # T-347 - Sound outputs on other card profiles, and a sane volume per output
 
-Status: in-progress · Phase: 2 · Depends: T-322 · Area: services (ruya-devices audio), image (WirePlumber drop-in), scripts · Size: M · Owner: builder
+Status: done · Phase: 2 · Depends: T-322 · Area: services (ruya-devices audio), image (WirePlumber drop-in), scripts · Size: M · Owner: builder
 
 ## Goal
 Two findings from the Dell (2026-11-08): (1) PipeWire shows only the sinks of the card's active profile (`Analog Stereo Duplex`: the jack only; `HDMI Stereo`: HDMI only), so an output on another profile cannot be chosen; (2) the first-start volume was 0.40: WirePlumber 0.5.19's own default (`device.routes.default-sink-volume = 0.064`, shown by `wpctl` as 0.40 on its cubic scale), nothing in `image/` or `ruya-devices` sets a volume. This task makes every usable port selectable and gives each output a sensible, remembered volume.
