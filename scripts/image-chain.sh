@@ -37,6 +37,15 @@ cd "$root" || exit 2
 # A worktree made by Git for Windows has a D:/ gitdir that Linux git cannot read: say so, don't fail.
 rev="$(git rev-parse --short HEAD 2>/dev/null || echo "unknown (worktree gitdir not readable in WSL)")"
 say "image-chain $version at $rev"
+# In a worktree the git-ignored image/bib/config.toml (the dev SSH key) is missing and make-disk.sh
+# would stop after a 20-minute build (lead-7): take it from the main checkout the worktree's .git
+# file points to ("gitdir: D:/dev/RuyaOS/.git/worktrees/<name>").
+if [ ! -f image/bib/config.toml ] && [ -f .git ]; then
+    main="$(sed -n 's|^gitdir: \([A-Za-z]\):\(.*\)/\.git/worktrees/.*$|/mnt/\L\1\E\2|p' .git)"
+    if [ -n "$main" ] && [ -f "$main/image/bib/config.toml" ]; then
+        cp "$main/image/bib/config.toml" image/bib/config.toml && say "config.toml copied from $main"
+    fi
+fi
 step build scripts/build.sh "$version" || { say "CHAIN FAILED"; exit 1; }
 step disk scripts/make-disk.sh qcow2 || { say "CHAIN FAILED"; exit 1; }
 if [ "$want_oci" = "oci" ]; then
