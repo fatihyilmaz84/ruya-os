@@ -1,6 +1,6 @@
 # T-164 — Per-profile Wayland sockets: an app launched for a profile appears in the shell
 
-Status: in-progress · Phase: 2 · Depends: T-162 · Area: shell, services, api, image · Size: M · Owner: lead · Developer surface: public-format
+Status: done · Phase: 2 · Depends: T-162 · Area: shell, services, api, image · Size: M · Owner: lead · Developer surface: public-format
 
 ## Goal
 An app that `ruya-session` starts as a profile's Unix user connects to a Wayland socket only that user can open, and its window appears full-screen in the shell's app layer. No app window is ever drawn while nobody is signed in.
@@ -21,9 +21,9 @@ An app that `ruya-session` starts as a profile's Unix user connects to a Wayland
 - Freezing or stopping apps on a profile switch (T-165), the full-screen app flow (T-147), PipeWire sockets for profile apps (B-007, ADR-010), Xwayland.
 
 ## Acceptance criteria
-- [ ] `dev.ps1 test` ALL GREEN; any shell-side mapping logic that can run on Windows has a QML or C++ test.
-- [ ] VM (this task): image built, `RUYA_BOOT_OK`; the Scope 5 checks ALL PASSED; one VM screenshot of a profile's app in the app layer, reviewed.
-- [ ] The socket's owner and mode, and the refusal for the other user, recorded in the Outcome.
+- [x] `dev.ps1 test` ALL GREEN; any shell-side mapping logic that can run on Windows has a QML or C++ test.
+- [x] VM (this task): image built, `RUYA_BOOT_OK`; the Scope 5 checks ALL PASSED; one VM screenshot of a profile's app in the app layer, reviewed.
+- [x] The socket's owner and mode, and the refusal for the other user, recorded in the Outcome.
 
 ## Verification
 ```powershell
@@ -42,7 +42,7 @@ Then the image recipe in `docs/dev-setup.md`, `scripts\smoke-test.ps1` and the V
 - Planner notes (2026-11-07 inbox triage): (1) **GL clients on KMS (Dell, B-003):** the shell logs `Failed to initialize EGL display ... no EGL_WL_bind_wayland_display extension` on real Intel hardware (and in the VM); pick a Qt Wayland hardware integration that works on KMS (`linux-dmabuf-v1`) and test a **GL client on the Dell**, not only the software test client. (2) **Input for profile apps:** a game running as `ruya-p<N>` cannot open `/dev/input/event*` (the udev ACL is for the shell's session) and `ruya-inputd` does not grab, so every pad press also arrives as a key (B-006): decide per-profile access to the pads here or record it for T-217/T-266. (3) `IdleInhibitManager` (T-202) ignores which surface holds an inhibitor: key it by the client surface once clients are mapped. (4) `Library.launch` only emits `launchRequested`: T-147 wires it to `Session.launch`.
 
 ## Outcome
-Verified: host (vm pending: vm-session-check.sh display) — CHECKPOINT (round 1, 2026-11-09), not finished.
+Verified: vm (0.0.57, 2026-11-09, lead-6): `vm-session-check.sh display` ALL CHECKS PASSED (30), `check` ALL CHECKS PASSED (38), screenshot reviewed. Dell STK acceptance is T-355.
 
 **Design (decided, ADR-023 in `00-overview.md`, Accepted (lead, 2026-11-09)):** the compositor makes one socket per profile, `/run/ruya-wayland/ruya-<id>` (the compositor unit's `RuntimeDirectory`, 0711, `ruya-shell`), mode 0600 plus ACL `user:ruya-<id>:rw-`, bound in a private `.staging` dir and renamed into place, served with `addSocketDescriptor`; `ruya-session` sets `WAYLAND_DISPLAY=/run/ruya-wayland/ruya-<id>` and `SDL_VIDEODRIVER=wayland`; Flatpak binds only that socket as `wayland-0`. Clients are mapped by peer uid (`AppGate.verdict`); other users and everyone but the shell while nobody is signed in are closed at their first surface; `Shell.addApp(item, profile)` shows a window only to its profile and nothing while nobody is signed in. Rejected alternatives (fd handoff from `ruya-session`, one shared socket, a socket unit per profile, `--filesystem` on the directory) are in the ADR. Input: through the compositor only (no `/dev/input` for profile users). GL: Fedora's qt6-qtwayland has no `linux-dmabuf-unstable-v1` plugin, so GL clients cannot share GPU buffers (expected to fall back to software; unverified).
 
@@ -52,10 +52,8 @@ Verified: host (vm pending: vm-session-check.sh display) — CHECKPOINT (round 1
 
 **Image:** `scripts/build.sh 0.0.57` finished in WSL (lint passed): `localhost/ruyaos:dev` = image `0c6bc410c343`, version 0.0.57, built from this branch's working tree (before the WIP commit; same content). `make-disk.sh qcow2` was aborted by the lead for the checkpoint: no disk exists yet.
 
-**Next steps (exact):**
-1. WSL: `cd /mnt/d/dev/RuyaOS-worktrees/T-164 && scripts/make-disk.sh qcow2` (needs `image/bib/config.toml`, already copied into the worktree; rebuild with `scripts/build.sh 0.0.57` first if `localhost/ruyaos:dev` is no longer `0c6bc410c343`).
-2. Windows, in the worktree: `.\scripts\smoke-test.ps1 -Keep` (snapshot mode, no work copy) until `RUYA_BOOT_OK 0.0.57`; `.\scripts\vm-goto.ps1 home` (wizard: Player One, PIN 1234).
-3. `scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-session-check.sh scripts/vm-key-client.qml scripts/vm-inject-key.py root@127.0.0.1:/root/`, then `ssh ... bash /root/vm-session-check.sh display` (must end ALL CHECKS PASSED), `.\scripts\vm-screenshot.ps1 profile-app` and review it, `ssh ... bash /root/vm-session-check.sh display-clean`; also `ssh ... bash /root/vm-session-check.sh check` (regression of the T-162 checks with the new env).
-4. Stop QEMU, `.\scripts\free-space.ps1`; finish this Outcome (UX notes, socket owner/mode recorded above, the refusal lines), commit, HANDOFF with the Dell commands for STK.
+**VM (lead-6, 2026-11-09):** image 0.0.57 rebuilt from this branch after merging main (`scripts/image-chain.sh`: build 10 min, qcow2 17 min, image `4c757a864ead`), `RUYA_BOOT_OK 0.0.57`, `vm-goto.ps1 home`. `display`: socket `/run/ruya-wayland/ruya-p1` owned by `ruya-shell`, 0600 + `user:ruya-p1:rw-`, listed by the shell (`ss -xlp`); ruya-p1 connects, ruya-p2 and nobody get "Permission denied", ruya-p1 cannot reach `ruya-0`; while nobody is signed in the profile's client is refused (`refused surface of uid 1000 ... (nobody-signed-in)`) and ends; signed in, its window is in the app layer (`app ... uid 1000 profile p1`), inside the sandbox `WAYLAND_DISPLAY=wayland-0`, `/run/ruya-wayland` invisible; Guide takes the keys from the app (the System panel over it, screenshot) and closing gives them back; the other profile's client is refused (`not the signed-in profile`). `check` (T-162 regression with the new env): 38 PASS. Screenshot `profile-app`: the test client fills the screen.
+Script fixes found by the run (not product bugs): the test client (the host's `ruya-shell` via `ld.so`) needs `/usr/lib64/pulseaudio` and `/usr/lib64/libproxy` on `--library-path` (RUNPATH libraries), otherwise it exits 127 and the refusal checks pass for the wrong reason; the Guide step waited for a focus line naming `systemActions`, but the logged active-focus item had no name while the list had the focus, so it now waits for the app losing the keys; `check` now fails clearly when `vm-session-probe.qml` was not copied; `vm-goto.ps1` skips past the T-213 time zone step.
+**Review (lead-6):** `ruya-reviewer` CHANGES_REQUESTED: `appOpen` now means "shown", but the update service needs "running": a hidden game of a locked profile could have been restarted under. Fixed: `Shell.appRunning` (`apps.length > 0`) feeds both `Update.noteActivity` calls; new test `test_a_hidden_app_still_counts_as_running_for_updates` (revert-checked). UX review: no dead end; `addApp` now sets the item's visibility at once. API review: no blocking; stale sample/developer-guide lines fixed; `Developer surface: public-format` (experimental).
 
-Inbox (for the HANDOFF): GL clients need a `linux-dmabuf-v1` server integration (missing from Fedora's Qt, B-003); `IdleInhibitManager` still counts inhibitors of hidden apps (planner note 3); pad access for games (T-217/T-266, B-006); possibly public: the app display environment (`WAYLAND_DISPLAY` path, `wayland-0` in Flatpak, `SDL_VIDEODRIVER=wayland`), documented as experimental.
+Inbox: GL clients need a `linux-dmabuf-v1` server integration (missing from Fedora's Qt, B-003); `IdleInhibitManager` still counts inhibitors of hidden apps (planner note 3); pad access for games (T-217/T-266, B-006); possibly public: the app display environment (`WAYLAND_DISPLAY` path, `wayland-0` in Flatpak, `SDL_VIDEODRIVER=wayland`), documented as experimental.

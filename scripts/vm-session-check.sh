@@ -89,7 +89,7 @@ dir=no; [ -e /run/ruya-wayland ] && dir=yes
 echo "test-wayland-client: uid=$UID WAYLAND_DISPLAY=$WAYLAND_DISPLAY socket=$sock socket-dir-visible=$dir"
 export QT_QPA_PLATFORM=wayland QT_QUICK_BACKEND=software QT_FORCE_STDERR_LOGGING=1
 export QT_PLUGIN_PATH=/run/host/usr/lib64/qt6/plugins QML_IMPORT_PATH=/run/host/usr/lib64/qt6/qml
-exec /run/host/usr/lib64/ld-linux-x86-64.so.2 --library-path /run/host/usr/lib64 /run/host/usr/bin/ruya-shell --load /app/share/key-client.qml
+exec /run/host/usr/lib64/ld-linux-x86-64.so.2 --library-path /run/host/usr/lib64:/run/host/usr/lib64/pulseaudio:/run/host/usr/lib64/libproxy /run/host/usr/bin/ruya-shell --load /app/share/key-client.qml
 EOF
         chmod 755 "$work/$id/files/bin/run"
         printf '[Application]\nname=%s\nruntime=%s/x86_64/stable\nsdk=%s/x86_64/stable\ncommand=run\n' "$id" "$rt" "$rt" > "$work/$id/metadata"
@@ -291,7 +291,9 @@ display)
     echo "--- Guide over the app"
     t2="$(date +%s)"
     python3 /root/vm-inject-key.py guide >/dev/null 2>&1
-    wait_shell "ruya-compositor: focus systemActions" "$t2" 15 && ok "Guide opened the overlay over the app" || bad "Guide did not open the overlay"
+    # The overlay takes the keys from the app (the focused item's name in the "focus" line is not
+    # reliable: it was empty on 0.0.57 while the list had the focus; the screenshot shows the panel).
+    wait_shell "ruya-compositor: app focus app:.* false" "$t2" 15 && ok "Guide took the keys from the app (the overlay)" || bad "Guide did not take the focus from the app"
     t3="$(date +%s)"
     python3 /root/vm-inject-key.py guide >/dev/null 2>&1
     wait_shell "ruya-compositor: app focus app:.* true" "$t3" 15 && ok "closing the overlay gave the focus back to the app" || bad "the app did not get the focus back"
@@ -327,6 +329,7 @@ clean)
     rm -rf "$work"
     ;;
 check)
+    [ -f /root/vm-session-probe.qml ] || { bad "/root/vm-session-probe.qml is missing: copy it next to this script"; exit 1; }
     echo "--- unit and bus name"
     systemctl is-active ruya-session && ok "ruya-session is active" || bad "ruya-session not active"
     busctl --system status "$svc" | grep -E '^(UID|Comm)='
