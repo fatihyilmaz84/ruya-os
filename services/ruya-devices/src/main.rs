@@ -57,7 +57,7 @@ fn main() {
 fn pipewire(session: bool) -> DynPipeWire {
     #[cfg(target_os = "linux")]
     if !session {
-        return Box::new(ruya_devices::pipewire::WpCtl);
+        return Box::new(ruya_devices::pipewire::WpCtl::default());
     }
     let _ = session;
     Box::new(FakePipeWire::new())
@@ -394,6 +394,12 @@ fn run() -> Result<(), Box<dyn Error>> {
         ChoiceStore::at(&p.with_file_name("outputs.toml"))
     });
     let mut audio = Audio::new(pipewire(session), store)?.with_choice_store(choice_store)?;
+    // The high first-start volume is set once, never again (T-347); `--session` has no state dir.
+    if let Some(p) = state_file() {
+        // An existing install (audio.toml is there) never gets the volume forced.
+        let existing = p.exists();
+        audio = audio.with_first_start_marker(&p.with_file_name("first-volume-done"), existing);
+    }
     // The first read only takes over the state; a failure here (PipeWire not up yet) is retried
     // by the watcher, so it must not stop the service.
     if let Err(err) = audio.refresh() {

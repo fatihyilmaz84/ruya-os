@@ -32,6 +32,7 @@ echo "--- shell log: audio, multimedia, sound (count, message)"
 journalctl -b -q -o cat _UID="$uid" | grep -iE "qsound|multimedia|audio|pulse|pipewire|ffmpeg|alsa|sound" \
     | grep -v "^spa\.\|libcamera\|^Started \|^Listening on " | sort | uniq -c | sort -rn | head -20
 
+state=/var/lib/ruya-shell/.local/state/ruya-devices   # the state directory of the ruya-shell user unit
 # --- T-322: the output policy and the saved choice (ruya-devices, Devices1.Audio)
 dev_call() { busctl --system call org.ruyaos.Devices1 /org/ruyaos/Devices1 org.ruyaos.Devices1.Audio "$@" 2>&1; }
 default_node() { as_shell wpctl inspect @DEFAULT_AUDIO_SINK@ 2>&1 | sed -n 's/.*node.name = "\(.*\)"/\1/p' | head -1; }
@@ -39,7 +40,7 @@ echo "--- outputs (ListOutputs)"
 dev_call ListOutputs
 echo "--- default sink before: $(default_node)"
 echo "--- saved choice file"
-cat "/var/lib/ruya-devices/outputs.toml" 2>&1 || echo "(none: the policy table decides)"
+cat "$state/outputs.toml" 2>&1 || echo "(none: the policy table decides)"
 # Prints "<id> <is_default> <is_saved>" of the first active output of the wanted kind (python3 reads busctl's JSON).
 pick_output() {
     busctl --system --json=short call org.ruyaos.Devices1 /org/ruyaos/Devices1 org.ruyaos.Devices1.Audio ListOutputs 2>/dev/null         | python3 -c '
@@ -85,3 +86,29 @@ for o in json.load(sys.stdin)["data"][0]:
     fi
     echo "--- ResetOutputChoice -> $(dev_call ResetOutputChoice)"
 fi
+
+# --- T-347: the first-start volume is high, set once (marker), and a volume set by hand survives restarts
+vol_of() { as_shell wpctl get-volume @DEFAULT_AUDIO_SINK@ 2>&1 | sed -n 's/^Volume: \([0-9.]*\).*/\1/p'; }
+echo "--- first-start volume (T-347)"
+marker="$state/first-volume-done"
+vol0="$(vol_of)"
+echo "volume before touching it: $vol0 (a fresh disk: >= 0.95)"
+if [ -e "$marker" ] && awk -v v="${vol0:-0}" 'BEGIN { exit !(v >= 0.95) }'; then
+    echo "AUDIO_FIRST_VOLUME_OK (marker $(stat -c %y "$marker"), volume $vol0)"
+else
+    echo "AUDIO_FIRST_VOLUME_FAIL (marker present: $([ -e "$marker" ] && echo yes || echo NO) at $marker; volume $vol0; on a disk that was used before, the volume may have been lowered by hand)"
+fi
+as_shell wpctl set-volume @DEFAULT_AUDIO_SINK@ 0.30 2>&1
+echo "--- volume set by hand: $(vol_of); letting WirePlumber save it, then restarting pipewire and wireplumber, then ruya-devices"
+sleep 12   # WirePlumber saves its state a few seconds after a change
+as_shell systemctl --user restart pipewire.service wireplumber.service 2>&1
+sleep 10
+echo "after pipewire+wireplumber restart: $(vol_of)"
+as_shell systemctl --user restart ruya-devices.service 2>&1
+sleep 8
+after_vol="$(vol_of)"
+echo "after ruya-devices restart: $after_vol"
+case "$after_vol" in
+    0.3|0.30|0.29) echo "AUDIO_VOLUME_KEPT_OK" ;;
+    *) echo "AUDIO_VOLUME_KEPT_FAIL (set 0.30, now $after_vol)" ;;
+esac
