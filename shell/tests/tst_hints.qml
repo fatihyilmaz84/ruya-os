@@ -258,6 +258,27 @@ Item {
             return false
         }
 
+        function test_mode_picker_says_select() {
+            Display.mockReset()
+            tryVerify(() => Display.available)
+            signInAsAda()
+            tc.shell.openPage("settings", { category: "display" })
+            tryCompare(tc.shell, "currentPage", "settings")
+            tryVerify(() => find("categoryList").activeFocus, 2000)
+            keyClick(Qt.Key_Right)
+            tryVerify(() => find("rowQuality").activeFocus, 2000)
+            for (let i = 0; i < 12 && !find("rowResolution").activeFocus; ++i)
+                keyClick(Qt.Key_Down)
+            verify(find("rowResolution").activeFocus)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("resolutionPicker").shown)
+            tryVerify(() => tc.hasAncestor(tc.shell.Window.window.activeFocusItem, find("resolutionPicker")), 2000)
+            compare(tc.shown(), "A Select|B Cancel", "mode picker")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !find("resolutionPicker").shown)
+            Display.mockReset()
+        }
+
         function test_choice_row_pane_says_left_right() {
             signInAsAda()
             tc.shell.openPage("settings")
