@@ -30,8 +30,12 @@ FocusScope {
 
     function openPage(key, params) {
         const component = pageComponents[key]
-        if (!signedIn || !component || systemPanel.open)
+        if (!signedIn || !component || systemPanel.open) {
+            pageProbe.cancel()
             return
+        }
+        if (!pageProbe.waiting || pageProbe.pendingKey !== key)
+            pageProbe.begin(key)            // else openSection began it, before closing the pages
         const below = slots.length > 0 ? slots[slots.length - 1] : null
         if (below)
             below.rememberFocus()
@@ -41,6 +45,7 @@ FocusScope {
         const slot = pageSlot.createObject(pageHost, { key: key })
         if (!slot) {
             console.warn("ruya-shell: could not create the slot for page", key)
+            pageProbe.cancel()
             return
         }
         const page = component.createObject(slot, {
@@ -51,8 +56,10 @@ FocusScope {
         if (!page) {
             console.warn("ruya-shell: could not create page", key)
             slot.destroy()
+            pageProbe.cancel()
             return
         }
+        pageProbe.created(key)
         page.u = Qt.binding(() => root.u)
         page.version = Qt.binding(() => root.version)
         page.marginX = Qt.binding(() => root.marginX)
@@ -880,6 +887,8 @@ FocusScope {
     // section page the open pages are closed first (Back from the new one lands on Home, where
     // it started); "home" then stays there, and the page's own pill returns focus to its content.
     function openSection(key) {
+        if (key !== "home" && key !== navSection)
+            pageProbe.begin(key)            // the time to close the pages below counts too
         if (pageOpen) {
             if (key === navSection) {
                 leaveNavDown()
@@ -1026,6 +1035,13 @@ FocusScope {
         visible: root.appOpen
     }
 
+    // The probe of how long a page takes to open (T-349): one log line per page open.
+    PageProbe {
+        id: pageProbe
+        objectName: "pageProbe"
+        window: root.Window.window
+    }
+
     // One per stack entry. The top slot is shown and enabled (it fades and slides in while
     // the shelf slides out); lower ones stay alive but hidden and disabled, so their state is
     // kept. A popped slot fades out, then is destroyed.
@@ -1041,6 +1057,8 @@ FocusScope {
             property bool closing: false
             property bool reaped: false
             property Item savedFocus: null
+            // Shown and at rest: the fade-in and the slide have ended.
+            readonly property bool settled: shown && opacity === 1 && slide.x === 0
 
             anchors.fill: parent
             opacity: shown ? 1 : 0
@@ -1048,11 +1066,13 @@ FocusScope {
             enabled: shown
             Behavior on opacity { NumberAnimation { duration: Theme.pageMs; easing.type: Easing.Bezier; easing.bezierCurve: Theme.easeSnap } }
             transform: Translate {
+                id: slide
                 x: slot.shown ? 0 : Theme.pageSlide * root.u
                 Behavior on x { NumberAnimation { duration: Theme.pageMs; easing.type: Easing.Bezier; easing.bezierCurve: Theme.easeSnap } }
             }
             onOpacityChanged: reapIfDone()
             onClosingChanged: reapIfDone()
+            onSettledChanged: if (settled) pageProbe.settled(key)
 
             // A page popped before its fade-in has progressed is already at opacity 0.
             function reapIfDone() {
