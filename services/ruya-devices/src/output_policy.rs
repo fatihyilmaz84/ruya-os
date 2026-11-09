@@ -116,6 +116,10 @@ pub struct Choice {
     pub saved: Option<String>,
     #[serde(default)]
     pub rejected: BTreeSet<String>,
+    /// Outputs the console has used before (T-360): they keep the volume WirePlumber saved for
+    /// them; any other starts at the first volume.
+    #[serde(default)]
+    pub seen: BTreeSet<String>,
 }
 
 pub struct ChoiceStore {
@@ -302,6 +306,7 @@ mod tests {
         let c = Choice {
             saved: Some("card:spk".to_owned()),
             rejected: BTreeSet::from(["card:hdmi".to_owned()]),
+            seen: BTreeSet::from(["card:spk".to_owned()]),
         };
         ChoiceStore::at(&path).save(&c).unwrap();
         assert_eq!(ChoiceStore::at(&path).load().unwrap(), c);

@@ -85,19 +85,27 @@ pub async fn with_audio<T: Send + 'static>(
 
 pub struct AudioIface {
     audio: Shared,
+    /// What the getters answer from: never behind the `Audio` lock, which a card switch holds
+    /// for seconds (T-360).
+    view: crate::audio::SharedView,
 }
 
 impl AudioIface {
     pub fn new(audio: Shared) -> Self {
-        AudioIface { audio }
+        let view = lock(&audio).view();
+        AudioIface { audio, view }
+    }
+
+    fn view(&self) -> crate::audio::View {
+        self.view.lock().unwrap_or_else(|e| e.into_inner()).clone()
     }
 }
 
 #[interface(name = "org.ruyaos.Devices1.Audio")]
 impl AudioIface {
     fn list_sinks(&self) -> Vec<HashMap<String, OwnedValue>> {
-        lock(&self.audio)
-            .list_sinks()
+        self.view()
+            .sinks
             .into_iter()
             .map(|(s, is_default)| {
                 let own = |v: Value<'_>| OwnedValue::try_from(v).ok();
@@ -115,8 +123,8 @@ impl AudioIface {
     }
 
     fn list_outputs(&self) -> Vec<HashMap<String, OwnedValue>> {
-        lock(&self.audio)
-            .list_outputs()
+        self.view()
+            .outputs
             .into_iter()
             .map(|(o, is_default, is_saved)| {
                 let own = |v: Value<'_>| OwnedValue::try_from(v).ok();
@@ -193,12 +201,13 @@ impl AudioIface {
         id: &str,
         #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
     ) -> String {
-        let (status, before, after) = {
-            let mut audio = lock(&self.audio);
+        let id = id.to_owned();
+        let (status, before, after) = with_audio(&self.audio, move |audio| {
             let before = audio.default_sink().map(str::to_owned);
-            let status = audio.set_default_sink(id);
+            let status = audio.set_default_sink(&id);
             (status, before, audio.default_sink().map(str::to_owned))
-        };
+        })
+        .await;
         if before != after {
             let _ = Self::sinks_changed(&emitter).await;
             let _ = Self::default_sink_changed(&emitter, after.unwrap_or_default()).await;
@@ -212,7 +221,8 @@ impl AudioIface {
         value: u32,
         #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
     ) -> String {
-        let status = lock(&self.audio).set_channel(channel, value);
+        let channel = channel.to_owned();
+        let status = with_audio(&self.audio, move |audio| audio.set_channel(&channel, value)).await;
         if status == crate::Status::Ok {
             let _ = self.channel_volumes_changed(&emitter).await;
         }
@@ -221,12 +231,12 @@ impl AudioIface {
 
     #[zbus(property)]
     fn master_volume(&self) -> u32 {
-        lock(&self.audio).volume()
+        self.view().volume
     }
 
     #[zbus(property)]
-    fn set_master_volume(&mut self, value: u32) {
-        let status = lock(&self.audio).set_volume(value);
+    async fn set_master_volume(&mut self, value: u32) {
+        let status = with_audio(&self.audio, move |audio| audio.set_volume(value)).await;
         if status != crate::Status::Ok {
             eprintln!("ruya-devices: setting the volume failed");
         }
@@ -234,17 +244,17 @@ impl AudioIface {
 
     #[zbus(property)]
     fn muted(&self) -> bool {
-        lock(&self.audio).muted()
+        self.view().muted
     }
 
     #[zbus(property)]
     fn playing(&self) -> bool {
-        lock(&self.audio).playing()
+        self.view().playing
     }
 
     #[zbus(property)]
-    fn set_muted(&mut self, value: bool) {
-        let status = lock(&self.audio).set_muted(value);
+    async fn set_muted(&mut self, value: bool) {
+        let status = with_audio(&self.audio, move |audio| audio.set_muted(value)).await;
         if status != crate::Status::Ok {
             eprintln!("ruya-devices: setting mute failed");
         }
@@ -252,7 +262,7 @@ impl AudioIface {
 
     #[zbus(property)]
     fn channel_volumes(&self) -> HashMap<String, u32> {
-        lock(&self.audio).channels().into_iter().collect()
+        self.view().channels.into_iter().collect()
     }
 
     #[zbus(signal)]
@@ -2100,6 +2110,46 @@ mod tests {
         assert_eq!(status, crate::Status::Ok);
         assert!(started.elapsed() >= Duration::from_millis(600));
         assert!(other_done < Duration::from_millis(300), "{other_done:?}");
+    }
+
+    /// The getters answer from a copy, not behind the lock a card switch holds (T-360).
+    #[test]
+    fn a_getter_does_not_wait_for_a_card_switch() {
+        use crate::audio::{FakeCard, FakePipeWire};
+        use std::time::{Duration, Instant};
+        let mut pw = FakePipeWire::with_card(FakeCard::dell());
+        pw.switch_delay = Duration::from_millis(1500);
+        let audio: Shared = Arc::new(Mutex::new(
+            Audio::new(
+                Box::new(pw) as DynPipeWire,
+                crate::store::Store::in_memory(),
+            )
+            .unwrap(),
+        ));
+        lock(&audio).refresh().unwrap();
+        let iface = AudioIface::new(audio.clone());
+        let switching = audio.clone();
+        let worker = std::thread::spawn(move || {
+            futures_lite::future::block_on(with_audio(&switching, |a| a.set_output("card:tv")))
+        });
+        // Wait until the switch really holds the audio state.
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while audio.try_lock().is_ok() {
+            assert!(Instant::now() < deadline, "the switch never started");
+            std::thread::yield_now();
+        }
+        let started = Instant::now();
+        let volume = iface.master_volume();
+        let outputs = iface.list_outputs();
+        let channels = iface.channel_volumes();
+        let answered = started.elapsed();
+        assert!(answered < Duration::from_millis(100), "{answered:?}");
+        assert_eq!(volume, 40);
+        assert_eq!(outputs.len(), 4);
+        assert_eq!(channels.len(), 3);
+        assert_eq!(worker.join().unwrap(), crate::Status::Ok);
+        // The switch is done: the copy shows it.
+        assert_eq!(iface.master_volume(), 100);
     }
 
     #[test]
