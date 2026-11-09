@@ -44,6 +44,13 @@ foreach ($f in $files) {
         Write-Host "    ${f}:${line}: control character $what" -ForegroundColor Yellow
         $findings++
     }
+    # A merge conflict sealed into a commit (lead-7: the T-360 merge, 03-services-and-apps.md).
+    # The three markers at a line start, each followed by a space or the end of the line.
+    foreach ($m in [regex]::Matches($text, '(?m)^(<{7}|={7}|>{7})( |\r?$)')) {
+        $at = ([regex]::Matches($text.Substring(0, $m.Index), "`n")).Count + 1
+        Write-Host "    ${f}:${at}: merge conflict marker '$($m.Groups[1].Value)'" -ForegroundColor Yellow
+        $findings++
+    }
 }
 if ($findings -gt 0) {
     Write-Host "    Fix these bytes. Write text with backslashes through the Write/Edit tools, not heredocs or sed."

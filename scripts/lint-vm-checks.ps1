@@ -52,6 +52,16 @@ foreach ($f in $bashScripts) {
     if (-not $modes.ContainsKey($rel)) { $problems.Add("${rel}: not tracked by git (git add it, then the exec bit can be checked)") }
     elseif ($modes[$rel] -ne "100755") { $problems.Add("${rel}: mode $($modes[$rel]), want 100755 (git update-index --chmod=+x $rel)") }
 }
+# 1b. A check that passes without checking (lead-6 T-322, lead-7 T-376): the image has no jq, so a
+# step that needs it must fail, not skip; parse JSON with python3 (PLANNING.md, Lessons).
+foreach ($f in $bashScripts) {
+    $n = 0
+    foreach ($l in [IO.File]::ReadAllLines($f.FullName)) {
+        $n++
+        if ($l -match '^\s*#') { continue }
+        if ($l -match '(^|[\s|;(&`$])jq(\s|$)') { $problems.Add("scripts/$($f.Name):${n}: uses jq, which the image does not have (parse with python3 -I -c)") }
+    }
+}
 foreach ($f in Get-ChildItem $Scripts -Filter "vm-*.ps1") {
     $errors = $null
     [void][System.Management.Automation.Language.Parser]::ParseFile($f.FullName, [ref]$null, [ref]$errors)

@@ -121,7 +121,24 @@ journal_bad() {
 n=$(journal_bad)
 [ "$n" = 0 ] && ok "no 'QAudioFormat not valid' or 'sample rate 0' in the running shell's journal (pid $(shell_pid))" \
     || bad "the shell's journal has $n lines of an audio output that never opened ('QAudioFormat not valid', 'Requested output sample rate 0')"
-nodes() { as_shell pw-dump 2>/dev/null | jq -r '.[] | select(.type == "PipeWire:Interface:Node") | "\(.info.props["media.class"] // "-") \(.info.props["application.process.binary"] // "-") \(.info.state // "-") \(.info.props["node.name"] // "-") \(.id)"'; }
+# One line per PipeWire node: media.class, process binary, state, node.name, id. python3, not jq:
+# the image has no jq (lint-vm-checks.ps1). A pw-dump that does not parse prints PWDUMP_PARSE_FAILED.
+nodes() {
+    as_shell pw-dump 2>/dev/null | python3 -I -c '
+import json, sys
+try:
+    objs = json.load(sys.stdin)
+except Exception:
+    print("PWDUMP_PARSE_FAILED"); sys.exit(0)
+for o in objs:
+    if o.get("type") != "PipeWire:Interface:Node":
+        continue
+    info = o.get("info") or {}
+    p = info.get("props") or {}
+    print(p.get("media.class") or "-", p.get("application.process.binary") or "-",
+          info.get("state") or "-", p.get("node.name") or "-", o.get("id"))
+'
+}
 running_ids() { nodes | awk '$1 == "Stream/Output/Audio" && $2 == "ruya-shell" && $3 == "running" {print $5}' | sort; }
 # A cue is a running shell stream too, for at most 1.5 s (the startup cue right after a restart): the bed is
 # the stream that stays running for 3 s, sampled every half second.
@@ -136,8 +153,8 @@ shell_running() {
     done
     [ -n "$ids" ]
 }
-if ! command -v jq >/dev/null 2>&1; then
-    bad "jq is not installed (needed to read pw-dump)"
+if nodes | grep -q PWDUMP_PARSE_FAILED; then
+    bad "pw-dump as ruya-shell gave no JSON (is PipeWire running?)"
 elif ! nodes | awk '$1 == "Audio/Sink" && $4 != "auto_null"' | grep -q .; then
     echo "SKIP: no sound device, so no running stream to look for (boot the VM with -Audio)"
 else
