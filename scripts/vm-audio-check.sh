@@ -40,15 +40,48 @@ dev_call ListOutputs
 echo "--- default sink before: $(default_node)"
 echo "--- saved choice file"
 cat "/var/lib/ruya-devices/outputs.toml" 2>&1 || echo "(none: the policy table decides)"
-first_id="$(dev_call ListOutputs | grep -o 'id" s "[^"]*"' | head -1 | sed 's/.*s "\(.*\)"/\1/')"
-if [ -n "$first_id" ]; then
-    echo "--- SetOutput $first_id -> $(dev_call SetOutput s "$first_id")"
-    before="$(default_node)"
+# Prints "<id> <is_default> <is_saved>" of the first active output of the wanted kind (python3 reads busctl's JSON).
+pick_output() {
+    busctl --system --json=short call org.ruyaos.Devices1 /org/ruyaos/Devices1 org.ruyaos.Devices1.Audio ListOutputs 2>/dev/null         | python3 -c '
+import json, sys
+kind = sys.argv[1]
+rows = [{k: v["data"] for k, v in o.items()} for o in json.load(sys.stdin)["data"][0]]
+rows = [o for o in rows if o.get("active")]
+if kind != "any":
+    rows = [o for o in rows if o.get("kind") == kind]
+if rows:
+    o = rows[0]
+    print(o["id"], str(o["is_default"]).lower(), str(o["is_saved"]).lower())
+' "$1"
+}
+policy_pick="$(pick_output speaker)"
+[ -n "$policy_pick" ] || policy_pick="$(pick_output any)"
+set -- $policy_pick
+out_id="${1:-}"
+was_default="${2:-}"
+if [ -z "$out_id" ]; then
+    echo "AUDIO_SAVED_OUTPUT_FAIL (no active output in ListOutputs)"
+else
+    echo "--- the speaker/first active output $out_id: is_default=$was_default (the policy table's pick before any choice; must be true for the speaker)"
+    status="$(dev_call SetOutput s "$out_id")"
+    echo "--- SetOutput $out_id -> $status"
     echo "--- restarting pipewire and wireplumber"
     as_shell systemctl --user restart pipewire.service wireplumber.service 2>&1
     sleep 8
     after="$(default_node)"
-    echo "default sink: before=$before after=$after"
-    if [ "$before" = "$after" ] && [ -n "$after" ]; then echo "AUDIO_SAVED_OUTPUT_OK"; else echo "AUDIO_SAVED_OUTPUT_FAIL"; fi
+    set -- $(busctl --system --json=short call org.ruyaos.Devices1 /org/ruyaos/Devices1 org.ruyaos.Devices1.Audio ListOutputs 2>/dev/null         | python3 -c '
+import json, sys
+want = sys.argv[1]
+for o in json.load(sys.stdin)["data"][0]:
+    o = {k: v["data"] for k, v in o.items()}
+    if o.get("id") == want:
+        print(o["id"], str(o["is_default"]).lower(), str(o["is_saved"]).lower())
+' "$out_id")
+    echo "after the restart: $out_id is_default=${2:-?} is_saved=${3:-?}, default sink node=$after"
+    if [ "$status" = 's "ok"' ] && [ "$was_default" = true ] && [ "${2:-}" = true ] && [ "${3:-}" = true ] && [ -n "$after" ]; then
+        echo "AUDIO_SAVED_OUTPUT_OK"
+    else
+        echo "AUDIO_SAVED_OUTPUT_FAIL"
+    fi
     echo "--- ResetOutputChoice -> $(dev_call ResetOutputChoice)"
 fi

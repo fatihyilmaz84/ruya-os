@@ -135,7 +135,7 @@ Item {
         // T-322: the outputs of the cards, the player's choice and the test sound, over the same
         // contract the service speaks (ListOutputs, SetOutput, TestOutput).
         function test_outputs_list_choose_and_test() {
-            tryCompare(Audio.outputs, "length", 3)
+            tryVerify(() => Audio.outputs.length === 3)
             compare(Audio.outputs[0].id, "hdmi-0")
             compare(Audio.outputs[0].kind, "hdmi")
             verify(Audio.outputs[0].isDefault)

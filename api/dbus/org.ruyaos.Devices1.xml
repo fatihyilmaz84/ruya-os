@@ -19,7 +19,7 @@
     "unknown-sink"  no output with that id (SetDefaultSink)
     "unknown-output" no output with that id (SetOutput, TestOutput)
     "inactive"      the output exists but its card profile is not the active one, so there is no sink
-                    to play on yet (TestOutput; SetOutput on it is "failed" until profile switching, T-347)
+                    to play on yet (TestOutput and SetOutput until profile switching, T-347; SetOutput saves nothing then)
     "invalid"       malformed argument (unknown channel name)
     "failed"        internal error (e.g. PipeWire refused)
 
