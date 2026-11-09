@@ -4,6 +4,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 
 use crate::output_policy::{rank, Avail, Choice, ChoiceStore, OutKind, Output};
 use crate::store::{Channels, Store};
@@ -120,7 +121,42 @@ impl Changes {
     }
 }
 
+/// What the getters of the bus interface answer from (T-360): a copy of the state, refreshed
+/// after every change, behind its own small lock. A card switch holds the `Audio` for seconds;
+/// a read of this view never waits for it.
+#[derive(Debug, Clone, Default)]
+pub struct View {
+    pub sinks: Vec<(Sink, bool)>,
+    /// With whether it is the default and whether it is the saved choice.
+    pub outputs: Vec<(Output, bool, bool)>,
+    pub volume: u32,
+    pub muted: bool,
+    pub playing: bool,
+    pub channels: BTreeMap<String, u32>,
+}
+
+pub type SharedView = Arc<Mutex<View>>;
+
+/// The volume an output starts at the first time the console uses it (owner, 2026-11-08).
+pub const FIRST_VOLUME: u32 = 100;
+
+/// What an output that may sit on someone's ears starts at (hearing safety, lead 2026-11-09):
+/// WirePlumber's own 0.40.
+pub const SAFE_NEW_VOLUME: u32 = 40;
+
+/// Where an output used for the first time starts. Only line-level outputs (a TV or monitor over
+/// HDMI/DisplayPort, the built-in or external speakers) start at [`FIRST_VOLUME`]; headphones, a
+/// Bluetooth or USB audio device (it may be a headset) and anything not known start at
+/// [`SAFE_NEW_VOLUME`]. `None` (no output explains the sink) is unknown, so safe.
+pub fn start_volume(kind: Option<OutKind>) -> u32 {
+    match kind {
+        Some(OutKind::Speaker | OutKind::Hdmi) => FIRST_VOLUME,
+        _ => SAFE_NEW_VOLUME,
+    }
+}
+
 pub struct Audio<P: PipeWire> {
+    view: SharedView,
     pw: P,
     store: Store,
     loaded: bool,
@@ -147,7 +183,8 @@ pub struct Audio<P: PipeWire> {
 impl<P: PipeWire> Audio<P> {
     pub fn new(pw: P, store: Store) -> std::io::Result<Self> {
         let channels = store.load()?;
-        Ok(Audio {
+        let audio = Audio {
+            view: SharedView::default(),
             pw,
             store,
             loaded: false,
@@ -165,7 +202,34 @@ impl<P: PipeWire> Audio<P> {
             first_start_marker: None,
             first_start_done: true,
             read_once: false,
-        })
+        };
+        audio.publish();
+        Ok(audio)
+    }
+
+    /// The copy the bus getters read.
+    pub fn view(&self) -> SharedView {
+        self.view.clone()
+    }
+
+    fn publish(&self) {
+        let view = View {
+            sinks: self
+                .list_sinks()
+                .into_iter()
+                .map(|(s, d)| (s.clone(), d))
+                .collect(),
+            outputs: self
+                .list_outputs()
+                .into_iter()
+                .map(|(o, d, s)| (o.clone(), d, s))
+                .collect(),
+            volume: self.volume,
+            muted: self.muted,
+            playing: self.playing,
+            channels: self.channels(),
+        };
+        *self.view.lock().unwrap_or_else(|e| e.into_inner()) = view;
     }
 
     /// The first output starts at full volume, once (owner, 2026-11-08): the TV or monitor sets
@@ -210,15 +274,39 @@ impl<P: PipeWire> Audio<P> {
     /// Reads PipeWire and applies the hot-plug policy. The first call only takes over the
     /// state (the outputs present at start are no "new headset").
     pub fn refresh(&mut self) -> Result<Changes, String> {
-        let snap = self.pw.snapshot()?;
-        Ok(self.apply(snap))
+        let snap = match self.pw.snapshot() {
+            Ok(snap) => snap,
+            Err(err) => {
+                // The boot read failed (PipeWire not up): nobody was told anything yet, and the
+                // watcher's first good read must report what it finds (T-360).
+                self.read_once = true;
+                return Err(err);
+            }
+        };
+        let changes = self.apply(snap);
+        self.publish();
+        Ok(changes)
+    }
+
+    /// Remembers that the console has used this output, so a later switch to it keeps the volume
+    /// WirePlumber saved for it. Only a choice that can't be saved is lost (it is retried).
+    fn mark_seen(&mut self, id: &str) {
+        if self.choice.seen.contains(id) {
+            return;
+        }
+        let mut next = self.choice.clone();
+        next.seen.insert(id.to_owned());
+        if self.choice_store.save(&next).is_ok() {
+            self.choice = next;
+        }
     }
 
     fn apply(&mut self, mut snap: Snapshot) -> Changes {
         let mut changes = Changes::default();
         // The first read that shows an output takes over the state; an empty list (PipeWire or
         // WirePlumber not settled yet at boot) waits, so the policy still runs once outputs exist.
-        let nothing_yet = snap.outputs.is_empty() && snap.sinks.is_empty();
+        // A sink without an output (the card list not read yet) waits too: the policy ranks outputs.
+        let nothing_yet = snap.outputs.is_empty();
         let first = !self.loaded && !nothing_yet;
         if first {
             self.loaded = true;
@@ -272,10 +360,21 @@ impl<P: PipeWire> Audio<P> {
             }
         }
 
-        if !self.first_start_done && default.is_some() && self.pw.set_volume(100).is_ok() {
-            snap.volume = 100;
-            self.first_start_done = true;
-            self.write_marker();
+        let live = default
+            .as_ref()
+            .and_then(|d| snap.outputs.iter().find(|o| o.node.as_ref() == Some(d)))
+            .map(|o| (o.id.clone(), o.kind));
+        // Before T-360 the first start set 100 % whatever the output was; headphones get 40 % now.
+        if !self.first_start_done && default.is_some() {
+            let volume = start_volume(live.as_ref().map(|l| l.1));
+            if self.pw.set_volume(volume).is_ok() {
+                snap.volume = volume;
+                self.first_start_done = true;
+                self.write_marker();
+            }
+        }
+        if let Some((id, _)) = live {
+            self.mark_seen(&id);
         }
 
         // A change we didn't make (or PipeWire's own pick) keeps the old default as "previous".
@@ -341,6 +440,14 @@ impl<P: PipeWire> Audio<P> {
             if let Some(old) = old {
                 let _ = self.pw.restore_profile(&o.card, &old);
             }
+        } else if !self.choice.seen.contains(&o.id) {
+            // An output used for the first time: WirePlumber gives it 0.40, the console its own
+            // first volume. A failed write leaves it unseen, so the next switch tries again.
+            let volume = start_volume(Some(o.kind));
+            if self.pw.set_volume(volume).is_ok() {
+                self.volume = volume;
+                self.mark_seen(&o.id);
+            }
         }
         result
     }
@@ -362,6 +469,12 @@ impl<P: PipeWire> Audio<P> {
     /// The player's choice: switch to it, remember it, and remember a valid-ELD HDMI output the
     /// policy would have picked instead as rejected.
     pub fn set_output(&mut self, id: &str) -> Status {
+        let status = self.choose_output(id);
+        self.publish();
+        status
+    }
+
+    fn choose_output(&mut self, id: &str) -> Status {
         let Some(out) = self.outputs.iter().find(|o| o.id == id).cloned() else {
             return Status::UnknownOutput;
         };
@@ -382,6 +495,7 @@ impl<P: PipeWire> Audio<P> {
                 Err(_) => return Status::Failed,
             }
         }
+        next.seen = self.choice.seen.clone(); // activate_output may have added to it
         if self.choice_store.save(&next).is_err() {
             return Status::Failed;
         }
@@ -433,10 +547,20 @@ impl<P: PipeWire> Audio<P> {
 
     /// Forgets the saved choice and the rejected outputs and applies the policy table now.
     pub fn reset_choice(&mut self) -> Status {
-        if self.choice_store.save(&Choice::default()).is_err() {
+        let status = self.forget_choice();
+        self.publish();
+        status
+    }
+
+    fn forget_choice(&mut self) -> Status {
+        let reset = Choice {
+            seen: self.choice.seen.clone(),
+            ..Choice::default()
+        };
+        if self.choice_store.save(&reset).is_err() {
             return Status::Failed;
         }
-        self.choice = Choice::default();
+        self.choice = reset;
         let outputs = self.outputs.clone();
         let mut default = self.default.clone();
         self.follow_policy(&outputs, &mut default);
@@ -463,6 +587,12 @@ impl<P: PipeWire> Audio<P> {
     }
 
     pub fn set_default_sink(&mut self, id: &str) -> Status {
+        let status = self.move_default(id);
+        self.publish();
+        status
+    }
+
+    fn move_default(&mut self, id: &str) -> Status {
         if !self.sinks.iter().any(|s| s.id == id) {
             return Status::UnknownSink;
         }
@@ -499,6 +629,7 @@ impl<P: PipeWire> Audio<P> {
         match self.pw.set_volume(volume) {
             Ok(()) => {
                 self.volume = volume;
+                self.publish();
                 Status::Ok
             }
             Err(_) => Status::Failed,
@@ -509,6 +640,7 @@ impl<P: PipeWire> Audio<P> {
         match self.pw.set_muted(muted) {
             Ok(()) => {
                 self.muted = muted;
+                self.publish();
                 Status::Ok
             }
             Err(_) => Status::Failed,
@@ -537,8 +669,26 @@ impl<P: PipeWire> Audio<P> {
             return Status::Failed;
         }
         self.channels = next;
+        self.publish();
         Status::Ok
     }
+}
+
+/// Does this console hold anything a player produced? `audio.toml` (only the channel
+/// sliders write it), `outputs.toml` (the saved output) or WirePlumber's saved volumes
+/// (`default-routes`, `stream-properties`) in its state directory, a sibling of ours
+/// (T-360). Any of them means a volume may have been chosen: nothing is forced.
+pub fn existing_install(audio_toml: &Path) -> bool {
+    let dir = audio_toml.parent();
+    let wireplumber = dir.and_then(Path::parent).map(|p| p.join("wireplumber"));
+    let sibling = |name: &str| dir.is_some_and(|d| d.join(name).exists());
+    audio_toml.exists()
+        || sibling("outputs.toml")
+        || wireplumber.is_some_and(|w| {
+            ["default-routes", "stream-properties"]
+                .iter()
+                .any(|f| w.join(f).exists())
+        })
 }
 
 /// A profile of a fake sound card: the ports it can carry and whether it has a sink at all.
@@ -624,6 +774,8 @@ pub struct FakePipeWire {
     pub playing: bool,
     /// Make every write fail (to test the "failed" status).
     pub broken: bool,
+    /// Make every read fail (PipeWire not up yet at boot).
+    pub read_fails: bool,
     /// A sound card with profiles; when set it decides `sinks` and `outputs` (T-347).
     pub card: Option<FakeCard>,
     /// How often a volume was written (the service must not write a volume it need not).
@@ -651,6 +803,7 @@ impl FakePipeWire {
             muted: false,
             playing: false,
             broken: false,
+            read_fails: false,
             card: None,
             volume_writes: 0,
             switch_delay: std::time::Duration::ZERO,
@@ -731,6 +884,9 @@ impl Default for FakePipeWire {
 
 impl PipeWire for FakePipeWire {
     fn snapshot(&mut self) -> Result<Snapshot, String> {
+        if self.read_fails {
+            return Err("PipeWire is not up".to_owned());
+        }
         let outputs = self.outputs.clone().unwrap_or_else(|| {
             self.sinks
                 .iter()
@@ -1219,7 +1375,8 @@ mod tests {
         assert!(c.rejected.contains("tv"));
         assert_eq!(a.reset_choice(), Status::Ok);
         assert_eq!(a.default_sink(), Some("tv-node"));
-        assert_eq!(saved_file(dir.path()), Choice::default());
+        let c = saved_file(dir.path());
+        assert!(c.saved.is_none() && c.rejected.is_empty());
     }
 
     #[test]
@@ -1391,9 +1548,9 @@ mod tests {
         a.refresh().unwrap();
         assert_eq!(a.pw.volume, 100);
         assert_eq!(a.volume(), 100);
-        // The second output keeps WirePlumber's own default (recorded in the Outcome).
+        // The second output starts at the first volume too, not at WirePlumber's 0.40 (T-360).
         assert_eq!(a.set_output("card:tv"), Status::Ok);
-        assert_eq!(a.pw.volume, 40);
+        assert_eq!(a.pw.volume, 100);
     }
 
     #[test]
@@ -1424,13 +1581,14 @@ mod tests {
         a.refresh().unwrap();
         assert!(dir.path().join(MARKER).exists());
         assert_eq!(a.pw.volume_writes, 1);
-        // Reads, an output change and the way back write no volume again.
+        // Reads and the way back to a known output write no volume again; an output used for
+        // the first time gets its own first volume once (one more write).
         a.refresh().unwrap();
         assert_eq!(a.set_output("card:tv"), Status::Ok);
         a.refresh().unwrap();
         assert_eq!(a.set_output("card:spk"), Status::Ok);
         a.refresh().unwrap();
-        assert_eq!(a.pw.volume_writes, 1);
+        assert_eq!(a.pw.volume_writes, 2);
     }
 
     #[test]
@@ -1479,8 +1637,8 @@ mod tests {
         a.refresh().unwrap();
         assert_eq!(
             a.volume(),
-            40,
-            "an output never seen starts at WirePlumber's default"
+            100,
+            "an output never seen starts at the first volume"
         );
         assert_eq!(a.set_volume(70), Status::Ok);
         assert_eq!(a.set_output("card:spk"), Status::Ok);
@@ -1489,5 +1647,150 @@ mod tests {
         assert_eq!(a.set_output("card:tv"), Status::Ok);
         a.refresh().unwrap();
         assert_eq!(a.volume(), 70);
+    }
+
+    #[test]
+    fn a_new_output_starts_at_the_first_volume() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut a = card_audio(FakePipeWire::with_card(FakeCard::dell()), dir.path());
+        a.refresh().unwrap();
+        assert_eq!(a.set_volume(30), Status::Ok);
+        assert_eq!(a.set_output("card:tv"), Status::Ok);
+        a.refresh().unwrap();
+        assert_eq!((a.volume(), a.pw.volume), (FIRST_VOLUME, FIRST_VOLUME));
+        // Back on a known output: the volume WirePlumber saved for it, not the first volume.
+        assert_eq!(a.set_output("card:spk"), Status::Ok);
+        a.refresh().unwrap();
+        assert_eq!(a.volume(), 30);
+        // The memory survives a restart, and a reset of the choice.
+        assert_eq!(a.reset_choice(), Status::Ok);
+        let pw = a.pw.clone();
+        let mut b = card_audio(pw, dir.path());
+        b.refresh().unwrap();
+        assert_eq!(b.set_output("card:tv"), Status::Ok);
+        b.refresh().unwrap();
+        assert_eq!(b.volume(), FIRST_VOLUME);
+        assert_eq!(b.set_output("card:spk"), Status::Ok);
+        b.refresh().unwrap();
+        assert_eq!(b.volume(), 30);
+    }
+
+    #[test]
+    fn the_policy_is_reapplied_on_the_first_non_empty_list() {
+        // PipeWire already has the card's sink, but WirePlumber has not listed the outputs yet.
+        let mut pw = FakePipeWire::with_card(FakeCard::dell());
+        pw.card.as_mut().unwrap().profiles[1].ports[0].2 = Avail::Yes;
+        pw.outputs = Some(Vec::new());
+        let mut a = Audio::new(pw, Store::in_memory()).unwrap();
+        a.refresh().unwrap();
+        assert_eq!(a.default_sink(), Some("card.analog"));
+        // The outputs arrive: a monitor with a valid ELD outranks the speaker.
+        a.pw.sync_card();
+        let late = a.refresh().unwrap();
+        assert_eq!(late.default.as_deref(), Some("card.hdmi"));
+        assert_eq!(a.default_sink(), Some("card.hdmi"));
+    }
+
+    #[test]
+    fn saved_outputs_count_as_an_existing_install() {
+        let root = tempfile::tempdir().unwrap();
+        let state = root.path().join("ruya-devices");
+        std::fs::create_dir_all(&state).unwrap();
+        let audio_toml = state.join("audio.toml");
+        assert!(!existing_install(&audio_toml), "a fresh console");
+        std::fs::write(
+            state.join("outputs.toml"),
+            "saved = \"card:tv\"
+",
+        )
+        .unwrap();
+        assert!(existing_install(&audio_toml), "a saved output");
+        std::fs::remove_file(state.join("outputs.toml")).unwrap();
+        let wp = root.path().join("wireplumber");
+        std::fs::create_dir_all(&wp).unwrap();
+        assert!(
+            !existing_install(&audio_toml),
+            "an empty WirePlumber directory"
+        );
+        std::fs::write(
+            wp.join("default-routes"),
+            "[default-routes]
+",
+        )
+        .unwrap();
+        assert!(existing_install(&audio_toml), "WirePlumber's saved volumes");
+        std::fs::remove_file(wp.join("default-routes")).unwrap();
+        std::fs::write(
+            &audio_toml,
+            "ui = 50
+",
+        )
+        .unwrap();
+        assert!(existing_install(&audio_toml), "channel sliders");
+    }
+
+    #[test]
+    fn a_failed_boot_read_does_not_silence_the_first_good_read() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut pw = FakePipeWire::with_card(FakeCard::dell());
+        pw.read_fails = true;
+        let mut a = card_audio(pw, dir.path());
+        assert!(a.refresh().is_err());
+        a.pw.read_fails = false;
+        // The shell listens by now: what the watcher finds is announced.
+        let first_good = a.refresh().unwrap();
+        assert!(first_good.sinks && first_good.outputs, "{first_good:?}");
+        assert_eq!(first_good.default.as_deref(), Some("card.analog"));
+    }
+
+    /// A card whose analog profile carries headphones as the route in use (a plugged jack).
+    fn headphone_card() -> FakeCard {
+        let mut card = FakeCard::dell();
+        card.route = "hp".to_owned();
+        card.profiles[0].ports[1].2 = Avail::Yes;
+        card
+    }
+
+    #[test]
+    fn a_new_headphone_output_starts_at_the_safe_volume() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut a = card_audio(FakePipeWire::with_card(FakeCard::dell()), dir.path());
+        a.refresh().unwrap();
+        assert_eq!(a.pw.volume, 100);
+        // A profile on which the jack is the route in use: first time this output is used.
+        let mut card = FakeCard::dell();
+        card.profiles[1]
+            .ports
+            .push(("hp2".to_owned(), OutKind::Headphones, Avail::Yes));
+        a.pw.card = Some(card);
+        a.pw.sync_card();
+        a.refresh().unwrap();
+        assert_eq!(a.set_output("card:hp2"), Status::Ok);
+        assert_eq!(a.pw.volume, SAFE_NEW_VOLUME);
+        // A TV on the same card, never used, is line level.
+        assert_eq!(a.set_output("card:tv"), Status::Ok);
+        assert_eq!(a.pw.volume, FIRST_VOLUME);
+    }
+
+    #[test]
+    fn an_unknown_kind_counts_as_headphones() {
+        assert_eq!(start_volume(None), SAFE_NEW_VOLUME);
+        // A USB or Bluetooth device may be a headset.
+        assert_eq!(start_volume(Some(OutKind::Usb)), SAFE_NEW_VOLUME);
+        assert_eq!(start_volume(Some(OutKind::Bluetooth)), SAFE_NEW_VOLUME);
+        assert_eq!(start_volume(Some(OutKind::Headphones)), SAFE_NEW_VOLUME);
+        assert_eq!(start_volume(Some(OutKind::Speaker)), FIRST_VOLUME);
+        assert_eq!(start_volume(Some(OutKind::Hdmi)), FIRST_VOLUME);
+    }
+
+    #[test]
+    fn the_first_start_on_headphones_gets_the_safe_volume() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut pw = FakePipeWire::with_card(headphone_card());
+        pw.volume = 90; // whatever it is, the first start sets the rule's volume
+        let mut a = card_audio(pw, dir.path());
+        a.refresh().unwrap();
+        assert_eq!(a.pw.volume, SAFE_NEW_VOLUME);
+        assert!(dir.path().join(MARKER).exists());
     }
 }

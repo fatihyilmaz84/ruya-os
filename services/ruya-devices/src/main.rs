@@ -396,8 +396,9 @@ fn run() -> Result<(), Box<dyn Error>> {
     let mut audio = Audio::new(pipewire(session), store)?.with_choice_store(choice_store)?;
     // The high first-start volume is set once, never again (T-347); `--session` has no state dir.
     if let Some(p) = state_file() {
-        // An existing install (audio.toml is there) never gets the volume forced.
-        let existing = p.exists();
+        // An existing install (audio.toml, outputs.toml or WirePlumber's saved volumes are
+        // there) never gets the volume forced.
+        let existing = ruya_devices::audio::existing_install(&p);
         audio = audio.with_first_start_marker(&p.with_file_name("first-volume-done"), existing);
     }
     // The first read only takes over the state; a failure here (PipeWire not up yet) is retried

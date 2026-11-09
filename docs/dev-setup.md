@@ -132,6 +132,7 @@ python -I scripts\make-sounds.py --verify   # deterministic? within the limits? 
    ```
 3. **Update:** in the VM, `bootc switch <wsl-ip>:5000/ruyaos:<ver>` (about 2 minutes). Then `.\scripts\vm-reboot-check.ps1`, which reboots, waits for the shell, and prints the deployments and greenboot's verdict.
 4. **Manual rollback:** `bootc rollback`, then `.\scripts\vm-reboot-check.ps1`.
+   `.\scripts\vm-reboot-check.ps1 -SavedOutput` (T-360) first chooses a sound output in the guest (`scripts/vm-saved-output-check.sh choose`) and after the reboot checks that it is the default again (`AUDIO_REBOOT_SAVED_OUTPUT_OK`).
 5. **Automatic rollback (greenboot):** build a broken image on top of the pushed one (T-130 used a two-line Containerfile `FROM <wsl-ip>:5000/ruyaos:<ver>` adding a drop-in `ruya-compositor@.service.d/50-broken.conf` with `Environment=QT_QPA_PLATFORM=nonexistent`), push it, `bootc switch` to it, and reboot. QEMU exits at each greenboot reboot (`-no-reboot`): cold-start it with `smoke-test.ps1 -Work -Keep` until a boot prints `RUYA_BOOT_OK` (each failed boot takes about 2 minutes). Every boot fails the shell health check and greenboot reboots; after 3 failed boots GRUB falls back to the previous deployment. Results are in `docs/STATUS.md`, session log 2026-10-22.
 6. **Clean up** in WSL: `podman rm -f registry; podman rmi localhost:5000/ruyaos:<ver>` for every tag you pushed (each pins a ~4.7 GB image that `build.sh` never removes, because it is tagged).
 
