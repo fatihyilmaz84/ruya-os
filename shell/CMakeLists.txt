@@ -96,6 +96,7 @@ qt_add_qml_module(ruyashell
         src/session/MockSessionBackend.h src/session/MockSessionBackend.cpp
         src/session/DBusSessionBackend.h src/session/DBusSessionBackend.cpp
         src/session/Session.h src/session/Session.cpp
+        src/session/AppGate.h src/session/AppGate.cpp
         src/usage/UsageBackend.h
         src/usage/MockUsageBackend.h src/usage/MockUsageBackend.cpp
         src/usage/DBusUsageBackend.h src/usage/DBusUsageBackend.cpp
@@ -320,6 +321,7 @@ if(RUYA_COMPOSITOR)
         VERSION 1.0
         QML_FILES compositor/Compositor.qml
         SOURCES compositor/IdleInhibitManager.h compositor/IdleInhibitManager.cpp
+                compositor/ProfileSockets.h compositor/ProfileSockets.cpp
     )
     # The Wayland idle-inhibit protocol (T-202): qtwaylandscanner writes the server glue from the XML.
     qt6_generate_wayland_protocol_server_sources(ruyacompositor

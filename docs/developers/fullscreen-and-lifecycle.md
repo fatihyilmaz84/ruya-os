@@ -19,7 +19,7 @@ So:
 - It is started as `flatpak run <app-id>` **with no arguments**. Anything you need to configure goes in your config file, not on a command line.
 - There is **one instance per profile and app**: starting a game that is already running for that profile is refused (`already-running`).
 - Each profile has its own data ([Saves and data](saves-and-data.md)).
-- **Display: planned (T-164).** The unit is meant to get `WAYLAND_DISPLAY` pointing at a socket only that profile can open. Today it gets none, so no game window appears yet; a game that cannot open a window should exit with an error (the sample does) rather than hang.
+- **Display (T-164, *experimental*).** Your game needs the Flatpak permission `--socket=wayland`: the console has no X server and no Xwayland, so an X11-only game gets no window. Inside the sandbox you see `WAYLAND_DISPLAY=wayland-0`, a socket only your profile can open, and `SDL_VIDEODRIVER=wayland` is set for SDL games. Your window is shown only while your profile is signed in; when the console is locked or another profile signs in it is hidden (what then happens to the running game is not settled yet). There is no GPU buffer sharing with the compositor yet, so a GL game is expected to render in software (slowly; not yet confirmed on hardware). Pads reach the game as keyboard keys (arrows, Return, Escape) through the window, not as a gamepad device. A game that cannot open a window should exit with an error (the sample does) rather than hang.
 
 ## Full screen is not optional
 

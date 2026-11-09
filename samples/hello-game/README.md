@@ -69,7 +69,7 @@ flatpak remote-add --system --if-not-exists --no-gpg-verify hello-local /root/re
 flatpak install --system -y hello-local org.ruyaos.HelloGame
 ```
 
-The game then appears in the Games row. **Starting it from the shell does not show a window yet** (per-profile Wayland sockets, T-164), so on a RuyaOS machine today the game is exercised headlessly: `scripts/vm-sample-check.sh` installs it, launches it for a profile through `Session1`, stops it and checks the saves.
+The game then appears in the Games row. Starting it from the shell shows its window on the profile's own Wayland socket (**experimental**, T-164; the app needs `--socket=wayland`). The scripted check is still headless: `scripts/vm-sample-check.sh` installs it, launches it for a profile through `Session1`, stops it and checks the saves.
 
 ## Take the store screenshot
 

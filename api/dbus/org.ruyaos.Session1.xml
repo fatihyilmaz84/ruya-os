@@ -12,6 +12,10 @@
   to run anything as a non-profile account (root, system users, ruya-shell): such a name is
   "unknown-profile". Apps run as the profile's Unix user, never as ruya-shell or root (ADR-004).
 
+  Display (T-164, ADR-023; experimental for apps): every app unit gets
+  WAYLAND_DISPLAY=/run/ruya-wayland/ruya-<id> (the profile's own socket, made by the compositor,
+  0600 + ACL for that user only) and SDL_VIDEODRIVER=wayland. The interface itself is unchanged.
+
   Status strings are stable API:
     "ok"                success (for Launch: the app is starting, AppStarted follows when it runs)
     "unknown-app"       the app id is not installed

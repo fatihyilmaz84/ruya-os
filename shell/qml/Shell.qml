@@ -106,16 +106,42 @@ FocusScope {
     }
 
     // App items (a compositor's windows, T-130) live in `appLayer`: above home and pages, below
-    // toasts, modals and the Guide overlay. The shell API for a compositor: addApp(item),
+    // toasts, modals and the Guide overlay. The shell API for a compositor: addApp(item, profile),
     // focusApp(item), removeApp(item) (also run when the item is destroyed).
-    // One record {item} per app item. A destroyed item must not be touched (QML throws), so
-    // the list holds records and a guard child of each item removes its record on destruction.
+    // One record {item, id, profile} per app item. A destroyed item must not be touched (QML
+    // throws), so the list holds records and a guard child of each item removes its record on
+    // destruction.
+    // Whose app it is (T-164): `profile` is the profile the app runs as, "" for the shell's own
+    // (a test client). An app is shown only while someone is signed in, and only to its own
+    // profile; the others wait hidden, without focus (T-165 decides what a switch does to them).
     property var apps: []
     property Item focusedApp: null
-    readonly property bool appOpen: apps.length > 0
+    readonly property var shownApps: apps.filter(r => appShownTo(r.profile))
+    readonly property bool appOpen: shownApps.length > 0
+
+    function appShownTo(profile) {
+        return signedIn && (profile === "" || profile === Profiles.activeProfile)
+    }
+
+    // Shows and hides the app items as the signed-in profile changes, and moves the app focus
+    // off an app that is hidden now (to the newest shown one, else none).
+    onShownAppsChanged: {
+        for (const r of apps)
+            r.item.visible = appShownTo(r.profile)
+        if (shownApps.some(r => r.item === focusedApp))
+            return
+        const next = shownApps.length > 0 ? shownApps[shownApps.length - 1].item : null
+        if (next !== focusedApp) {
+            focusedApp = next
+            if (!systemPanel.open)
+                focusCurrent()
+        }
+    }
     // The update service restarts the console only when no app runs, also one left behind Home
-    // (input is reported by KeyRouter.onActivity).
-    onAppOpenChanged: Update.noteActivity(appOpen)
+    // or hidden from the signed-in profile (T-164 review: a game of a locked or switched-away
+    // profile still runs). Input is reported by KeyRouter.onActivity.
+    readonly property bool appRunning: apps.length > 0
+    onAppRunningChanged: Update.noteActivity(appRunning)
 
     property int appSerial: 0
 
@@ -123,19 +149,21 @@ FocusScope {
         return apps.find(r => r.item === item)
     }
 
-    function addApp(item) {
+    function addApp(item, profile) {
         if (!item || recordOf(item))
             return
         item.parent = appLayer
         item.anchors.fill = appLayer
-        const record = { item: item, id: ++appSerial }
+        const record = { item: item, id: ++appSerial, profile: profile ?? "" }
+        item.visible = appShownTo(record.profile)
         appGuard.createObject(item, { recordId: record.id })
         apps = apps.concat([record])
         focusApp(item)
     }
 
     function focusApp(item) {
-        if (!recordOf(item))
+        const record = recordOf(item)
+        if (!record || !appShownTo(record.profile))
             return
         focusedApp = item
         if (!systemPanel.open)          // the overlay keeps the focus until it closes
@@ -154,7 +182,7 @@ FocusScope {
             return
         apps = apps.filter(r => r.id !== id)
         if (!focusedApp || focusedApp === record.item)
-            focusedApp = apps.length > 0 ? apps[apps.length - 1].item : null
+            focusedApp = shownApps.length > 0 ? shownApps[shownApps.length - 1].item : null
         if (!systemPanel.open)
             focusCurrent()              // the next app, else the page or Home
     }
@@ -285,7 +313,7 @@ FocusScope {
         target: IdleClock
         // The update service restarts the console only when nobody is using it.
         function onInputNoted() {
-            Update.noteActivity(root.appOpen)
+            Update.noteActivity(root.appRunning)
             LiquidGate.noteInput()
             toasts.noteInput()
             presence.check()
@@ -298,9 +326,9 @@ FocusScope {
     }
 
     // The app in front, for the play ledger (T-247): the newest running app of the active profile
-    // while an app item has the screen and the Guide overlay is closed. (The compositor does not
-    // tell the shell which window belongs to which instance yet, T-164; with two apps running
-    // the newest is assumed.)
+    // while an app item has the screen and the Guide overlay is closed. (The compositor maps a
+    // window to its profile (T-164) but not to its instance; with two apps running the newest
+    // is assumed.)
     readonly property string foregroundInstance: {
         if (!focusedApp || systemPanel.open || !signedIn)
             return ""

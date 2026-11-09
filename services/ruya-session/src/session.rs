@@ -8,7 +8,7 @@
 use std::time::{Duration, Instant};
 
 use crate::directory::ProfileDirectory;
-use crate::spawner::{valid_app_id, valid_profile_id, Spawner, UnitEvent};
+use crate::spawner::{app_env, valid_app_id, valid_profile_id, Spawner, UnitEvent};
 
 /// After `Stop`, the app has this long to quit before it is killed.
 pub const STOP_GRACE: Duration = Duration::from_secs(5);
@@ -121,18 +121,27 @@ pub struct Session<S, D> {
     spawner: S,
     directory: D,
     env: Vec<(String, String)>,
+    wayland_dir: Option<String>,
     instances: Vec<Instance>,
 }
 
 impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
-    /// `env` is handed to every app (for instance `WAYLAND_DISPLAY`).
+    /// `env` is handed to every app (for instance `SDL_VIDEODRIVER`).
     pub fn new(spawner: S, directory: D, env: Vec<(String, String)>) -> Self {
         Session {
             spawner,
             directory,
             env,
+            wayland_dir: None,
             instances: Vec::new(),
         }
+    }
+
+    /// Each app then gets `WAYLAND_DISPLAY` set to its profile user's own socket in `dir`
+    /// (`spawner::app_env`, ADR-023).
+    pub fn with_wayland_dir(mut self, dir: &str) -> Self {
+        self.wayland_dir = Some(dir.to_owned());
+        self
     }
 
     pub fn directory_mut(&mut self) -> &mut D {
@@ -158,7 +167,8 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
         if !self.spawner.is_installed(app_id) {
             return (Status::UnknownApp, String::new());
         }
-        match self.spawner.start(&user, app_id, &self.env) {
+        let env = app_env(&self.env, self.wayland_dir.as_deref(), &user);
+        match self.spawner.start(&user, app_id, &env) {
             Ok(unit) => {
                 self.instances.push(Instance {
                     unit: unit.clone(),
@@ -465,6 +475,34 @@ mod tests {
         let mut s = session();
         s.launch(APP, "p2", 0);
         assert_eq!(s.spawner.calls(), [format!("start ruya-p2 {APP}")]);
+    }
+
+    #[test]
+    fn each_app_gets_the_wayland_socket_of_its_own_profile() {
+        let display = |s: &Session<FakeSpawner, ProfileSnapshot>| {
+            s.spawner
+                .last_env()
+                .into_iter()
+                .find(|(k, _)| k == "WAYLAND_DISPLAY")
+                .map(|(_, v)| v)
+        };
+        let mut s = session().with_wayland_dir("/run/ruya-wayland");
+        s.launch(APP, "p1", 0);
+        assert_eq!(display(&s).as_deref(), Some("/run/ruya-wayland/ruya-p1"));
+        s.launch("org.ruyaos.Puzzle", "p2", 0);
+        assert_eq!(display(&s).as_deref(), Some("/run/ruya-wayland/ruya-p2"));
+        // Exactly one WAYLAND_DISPLAY: the base one is replaced, not doubled.
+        let count = s
+            .spawner
+            .last_env()
+            .iter()
+            .filter(|(k, _)| k == "WAYLAND_DISPLAY")
+            .count();
+        assert_eq!(count, 1);
+        // Without a socket directory (development) the base environment is handed on as it is.
+        let mut dev = session();
+        dev.launch(APP, "p1", 0);
+        assert_eq!(display(&dev).as_deref(), Some("wayland-0"));
     }
 
     #[test]

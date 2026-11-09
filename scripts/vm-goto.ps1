@@ -119,6 +119,7 @@ if ($count -eq 0) {
     Start-Sleep -Milliseconds $SettleMs
     Send-Keys -Keys @("ret")                                  # welcome
     Send-Keys -Keys @("ret")                                  # language: English
+    Send-Keys -Keys @("ret", "ret")                           # where are you (T-213): region, city
     Send-Keys -Keys @("ret")                                  # network
     Send-Keys -Keys @("ret")                                  # name row: opens the keyboard
     Send-Keys -Text $AdminName -Keys @("ret")                 # type, accept
