@@ -21,6 +21,7 @@ Store::Store(std::unique_ptr<StoreBackend> backend, QObject *parent)
         const bool wanted = query == m_lastQuery && gamepadOnly == m_gamepadOnly;
         if (query.isEmpty() && !gamepadOnly) {
             m_catalogue = list;
+            indexCatalogue();
             emit catalogueChanged();
         }
         if (wanted) {
@@ -238,12 +239,50 @@ void Store::loadApp(const QString &appId)
 
 QVariantMap Store::app(const QString &appId) const
 {
-    for (const QVariant &v : m_catalogue) {
+    const auto it = m_catalogueIndex.constFind(appId);
+    return it == m_catalogueIndex.cend() ? QVariantMap() : m_catalogue.at(it.value()).toMap();
+}
+
+QVariantMap Store::rowIds(bool gamepadOnly) const
+{
+    const QString id = QStringLiteral("id");
+    const QString controller = QStringLiteral("controller");
+    const QString source = QStringLiteral("source");
+    QStringList all, featured, games, apps, installed;
+    for (const QVariant &v : m_results) {
         const QVariantMap m = v.toMap();
-        if (m.value(QStringLiteral("id")).toString() == appId)
-            return m;
+        const QString c = m.value(controller).toString();
+        if (gamepadOnly && c != QLatin1String("full") && c != QLatin1String("partial"))
+            continue;
+        const QString appId = m.value(id).toString();
+        all.append(appId);
+        if (m.value(source).toString() == QLatin1String("official"))
+            featured.append(appId);
+        if (c == QLatin1String("full"))
+            games.append(appId);
+        else
+            apps.append(appId);
     }
-    return {};
+    for (const QVariant &v : m_installed)
+        installed.append(v.toMap().value(id).toString());
+    return {{QStringLiteral("all"), all},
+            {QStringLiteral("featured"), featured},
+            {QStringLiteral("games"), games},
+            {QStringLiteral("apps"), apps},
+            {QStringLiteral("installed"), installed}};
+}
+
+void Store::indexCatalogue()
+{
+    // mergeDetails and patchFlags change records in place, never the order or the ids. An id listed
+    // twice answers with its first record, as the scan this replaces did.
+    m_catalogueIndex.clear();
+    m_catalogueIndex.reserve(m_catalogue.size());
+    for (int i = 0; i < m_catalogue.size(); ++i) {
+        const QString id = m_catalogue.at(i).toMap().value(QStringLiteral("id")).toString();
+        if (!m_catalogueIndex.contains(id))
+            m_catalogueIndex.insert(id, i);
+    }
 }
 
 bool Store::mockDataDeleted(const QString &appId) const
@@ -349,6 +388,18 @@ void Store::mockArtDir(const QString &dir)
 {
     if (auto *mock = qobject_cast<MockStoreBackend *>(m_backend.get()))
         mock->setArtDir(dir);
+}
+
+void Store::mockAddApps(int count)
+{
+    if (auto *mock = qobject_cast<MockStoreBackend *>(m_backend.get()))
+        mock->addApps(count);
+}
+
+void Store::mockSearchReplyDelay(int ms)
+{
+    if (auto *mock = qobject_cast<MockStoreBackend *>(m_backend.get()))
+        mock->setSearchReplyMs(ms);
 }
 
 void Store::mockSetAppText(const QString &appId, const QString &name, const QString &summary, const QString &developer,

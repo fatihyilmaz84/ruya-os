@@ -50,7 +50,11 @@ public:
 
     static Store *create(QQmlEngine *qmlEngine, QJSEngine *jsEngine);
 
-    QVariantList catalogue() const { return m_catalogue; }
+    QVariantList catalogue() const
+    {
+        ++m_catalogueReads;
+        return m_catalogue;
+    }
     QVariantList installed() const { return m_installed; }
     QVariantList results() const { return m_results; }
     QVariantMap jobs() const { return m_jobs; }
@@ -69,8 +73,15 @@ public:
     // Reads one app's permissions (and what its update adds) from the service and merges them into
     // the records held; answers with appLoaded or appLoadFailed. The app page calls it when it opens.
     Q_INVOKABLE void loadApp(const QString &appId);
-    // The record of an app from the catalogue, or an empty object.
+    // The record of an app from the catalogue, or an empty object. A hash lookup, cheap enough for
+    // every card of a page (T-377).
     Q_INVOKABLE QVariantMap app(const QString &appId) const;
+    // The ids of the Store page's rows, in one pass over the results without handing every record
+    // to QML (T-377): "all" (the results), "featured" (source official), "games" (controller full),
+    // "apps" (the others) and "installed" (the installed list). With gamepadOnly the results are
+    // cut to controller "full" or "partial" first, the rule of Search's "gamepad" filter: the page
+    // calls it while the results are still those of the other filter.
+    Q_INVOKABLE QVariantMap rowIds(bool gamepadOnly) const;
 
     // Tests only, and only with the mock backend (otherwise false / no-op).
     Q_INVOKABLE bool mockDataDeleted(const QString &appId) const;
@@ -104,6 +115,15 @@ public:
     // The catalogue's apps get a tile picture from <dir> (<dir>/<colour>.png, cycling red, blue, green,
     // white, dark, redblue) and the catalogue is announced as changed; mockReset takes them away (T-281).
     Q_INVOKABLE void mockArtDir(const QString &dir);
+    // `count` more apps in the mock's catalogue (a real remote's size), announced as changed; mockReset
+    // takes them away again (T-377).
+    Q_INVOKABLE void mockAddApps(int count);
+    // Every later search answers after ms, until mockReset (T-377: the Store page before the
+    // service's answer to its filter).
+    Q_INVOKABLE void mockSearchReplyDelay(int ms);
+    // How often `catalogue` was read (the whole list, converted for QML each time): the Store page
+    // reads it never, its cards look their records up with app() (T-377).
+    Q_INVOKABLE int mockCatalogueReads() const { return m_catalogueReads; }
 
 signals:
     void catalogueChanged();
@@ -126,9 +146,13 @@ private:
     bool mergeDetails(QVariantList &list, const AppInfo &app) const;
     // Copies the installed/updateAvailable flags of m_installed into the apps of list.
     bool patchFlags(QVariantList &list) const;
+    // Rebuilds m_catalogueIndex after m_catalogue was replaced.
+    void indexCatalogue();
 
     std::unique_ptr<StoreBackend> m_backend;
     QVariantList m_catalogue;
+    mutable int m_catalogueReads = 0;
+    QHash<QString, int> m_catalogueIndex; // app id -> its position in m_catalogue (app(), once per Store card: T-377)
     QVariantList m_installed;
     QVariantList m_results;
     QVariantMap m_jobs;
