@@ -110,6 +110,7 @@ qt_add_qml_module(ruyashell
         src/power/MonotonicClock.h src/power/MonotonicClock.cpp
         src/power/ScreenPower.h src/power/ScreenPower.cpp
         src/input/KeyRouter.h src/input/KeyRouter.cpp
+        src/probe/PageProbe.h src/probe/PageProbe.cpp
         src/wallpaper/Wallpapers.h src/wallpaper/Wallpapers.cpp
         src/art/ArtPalette.h src/art/ArtPalette.cpp src/art/MockArt.h
         src/sound/SoundThemeCheck.h src/sound/SoundThemeCheck.cpp
@@ -270,7 +271,7 @@ else()
 endif()
 
 # qmltyperegistrar includes the QML_ELEMENT headers by file name.
-target_include_directories(ruyashell PUBLIC src/backend src/profiles src/settings src/audio src/network src/bluetooth src/battery src/time src/display src/thermal src/storage src/system src/power src/store src/library src/update src/session src/usage src/input src/wallpaper src/sound src/art)
+target_include_directories(ruyashell PUBLIC src/backend src/profiles src/settings src/audio src/network src/bluetooth src/battery src/time src/display src/thermal src/storage src/system src/power src/store src/library src/update src/session src/usage src/input src/probe src/wallpaper src/sound src/art)
 # Qt6::GuiPrivate: ScreenPower calls QPlatformScreen::setPowerState (DPMS under eglfs_kms, T-202).
 target_link_libraries(ruyashell PRIVATE Qt6::Network Qt6::Quick Qt6::Multimedia Qt6::DBus Qt6::GuiPrivate)
 

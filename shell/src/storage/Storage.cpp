@@ -32,8 +32,25 @@ Storage::Storage(std::unique_ptr<StorageBackend> backend, QObject *parent)
                 {QStringLiteral("readOnly"), v.readOnly},
             });
         }
+        // A scan is of the volume as it was: gone with the volume, and with anything that changes it
+        // (free space, mount point), as the service drops it too.
+        bool scansDropped = false;
+        for (auto it = m_scans.begin(); it != m_scans.end();) {
+            const auto now = std::find_if(list.cbegin(), list.cend(), [&](const StorageVolume &v) { return v.id == it.key(); });
+            const bool same = now != list.cend()
+                && m_scanned.value(it.key()) == QVariantList{now->mountPoint, now->sizeBytes, now->freeBytes, now->readOnly};
+            if (same) {
+                ++it;
+            } else {
+                m_scanned.remove(it.key());
+                it = m_scans.erase(it);
+                scansDropped = true;
+            }
+        }
         m_volumes = out;
         emit volumesChanged();
+        if (scansDropped)
+            emit scansChanged(); // after the list: a client has the new rows by then
         for (const StorageVolume &v : list) {
             if (!m_pendingAdded.remove(v.id))
                 continue;
@@ -60,6 +77,47 @@ Storage::Storage(std::unique_ptr<StorageBackend> backend, QObject *parent)
         };
         emit internalChanged();
     });
+    connect(m_backend.get(), &StorageBackend::scanListed, this, [this](const QString &id, const VolumeScan &scan) {
+        // The volume as it is now, to tell later whether the scan still describes it.
+        const QVariantList fingerprint = fingerprintOf(id);
+        if (fingerprint.isEmpty())
+            return; // the volume left before the reply came
+        m_scanned.insert(id, fingerprint);
+        QVariantList categories;
+        for (const DriveCategory &c : scan.categories) {
+            categories.append(QVariantMap{
+                {QStringLiteral("key"), c.key},
+                {QStringLiteral("bytes"), c.bytes},
+                {QStringLiteral("files"), c.files},
+            });
+        }
+        m_scans.insert(id, QVariantMap{
+            {QStringLiteral("valid"), true},
+            {QStringLiteral("state"), scan.state},
+            {QStringLiteral("partial"), scan.partial},
+            {QStringLiteral("usedBytes"), scan.usedBytes},
+            {QStringLiteral("otherBytes"), scan.otherBytes},
+            {QStringLiteral("categories"), categories},
+            {QStringLiteral("status"), QString()},
+        });
+        emit scansChanged();
+    });
+    connect(m_backend.get(), &StorageBackend::scanStatus, this, [this](const QString &id, const QString &status) {
+        const QVariantList fingerprint = fingerprintOf(id);
+        if (fingerprint.isEmpty())
+            return;
+        m_scanned.insert(id, fingerprint);
+        m_scans.insert(id, QVariantMap{
+            {QStringLiteral("valid"), true},
+            {QStringLiteral("state"), QStringLiteral("idle")},
+            {QStringLiteral("partial"), false},
+            {QStringLiteral("usedBytes"), qint64(0)},
+            {QStringLiteral("otherBytes"), qint64(0)},
+            {QStringLiteral("categories"), QVariantList()},
+            {QStringLiteral("status"), status},
+        });
+        emit scansChanged();
+    });
     connect(m_backend.get(), &StorageBackend::finished, this, &Storage::finished);
     m_internal = unknownInternal();
     m_backend->refresh();
@@ -83,6 +141,28 @@ QVariantMap Storage::unknownInternal()
 void Storage::refreshInternal()
 {
     m_backend->refreshUsage();
+}
+
+QVariantList Storage::fingerprintOf(const QString &id) const
+{
+    for (const QVariant &v : m_volumes) {
+        const QVariantMap m = v.toMap();
+        if (m.value(QStringLiteral("id")).toString() == id) {
+            return {m.value(QStringLiteral("mountPoint")), m.value(QStringLiteral("sizeBytes")),
+                    m.value(QStringLiteral("freeBytes")), m.value(QStringLiteral("readOnly"))};
+        }
+    }
+    return {};
+}
+
+void Storage::scan(const QString &id)
+{
+    m_backend->scanVolume(id);
+}
+
+void Storage::cancelScan(const QString &id)
+{
+    m_backend->cancelScan(id);
 }
 
 void Storage::flushArrivals()
@@ -184,6 +264,11 @@ void Storage::mockReset(bool plugStick)
     m_arrivals.clear();
     m_groupTimer.stop();
     m_pendingAdded.clear();
+    if (!m_scans.isEmpty()) {
+        m_scans.clear();
+        m_scanned.clear();
+        emit scansChanged();
+    }
     if (auto *mock = qobject_cast<MockStorageBackend *>(m_backend.get()))
         mock->reset(plugStick);
 }
@@ -255,10 +340,52 @@ void Storage::mockRefreshInternalDelayed(int ms)
     }
 }
 
+void Storage::mockHoldScan(bool hold)
+{
+    if (auto *mock = qobject_cast<MockStorageBackend *>(m_backend.get()))
+        mock->holdScan(hold);
+}
+
+QStringList Storage::mockScanCalls() const
+{
+    auto *mock = qobject_cast<MockStorageBackend *>(m_backend.get());
+    return mock ? mock->scanCalls() : QStringList();
+}
+
+QStringList Storage::mockCancelCalls() const
+{
+    auto *mock = qobject_cast<MockStorageBackend *>(m_backend.get());
+    return mock ? mock->cancelCalls() : QStringList();
+}
+
+void Storage::mockSetScanPartial(bool partial)
+{
+    if (auto *mock = qobject_cast<MockStorageBackend *>(m_backend.get()))
+        mock->setScanPartial(partial);
+}
+
+void Storage::mockSetScanFailed(bool failed)
+{
+    if (auto *mock = qobject_cast<MockStorageBackend *>(m_backend.get()))
+        mock->setScanFailed(failed);
+}
+
+void Storage::mockRefreshScanDelayed(const QString &id, int ms)
+{
+    if (auto *mock = qobject_cast<MockStorageBackend *>(m_backend.get()))
+        mock->refreshScanDelayed(id, ms);
+}
+
 void Storage::mockSetLabel(const QString &id, const QString &label)
 {
     if (auto *mock = qobject_cast<MockStorageBackend *>(m_backend.get()))
         mock->setLabel(id, label);
+}
+
+void Storage::mockSetFree(const QString &id, double freeBytes)
+{
+    if (auto *mock = qobject_cast<MockStorageBackend *>(m_backend.get()))
+        mock->setFree(id, qint64(freeBytes));
 }
 
 void Storage::mockSetBusy(const QString &id, bool busy)

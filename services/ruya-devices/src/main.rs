@@ -16,12 +16,15 @@ use ruya_devices::dbus::{
 };
 use ruya_devices::dbus::{
     AudioIface, BatteriesIface, BluetoothIface, DisplayIface, DynBluez, DynNm, DynPipeWire,
-    DynSource, DynThermal, DynTimedate, DynUPower, DynUdisks, NetworkIface, Shared,
-    SharedBatteries, SharedBluetooth, SharedDisplay, SharedInput, SharedNet, SharedStorage,
-    SharedSystem, SharedThermal, SharedTime, SharedUsage, StorageIface, SystemIface, ThermalIface,
-    TimeIface, BUS_NAME, OBJECT_PATH,
+    DynScanSource, DynSource, DynThermal, DynTimedate, DynUPower, DynUdisks, NetworkIface, Shared,
+    SharedBatteries, SharedBluetooth, SharedDisplay, SharedInput, SharedNet, SharedScans,
+    SharedStorage, SharedSystem, SharedThermal, SharedTime, SharedUsage, StorageIface, SystemIface,
+    ThermalIface, TimeIface, BUS_NAME, OBJECT_PATH,
 };
 use ruya_devices::display::{self, Display, DynDrm, FakeDrm, Mode, Output, SysfsDrm};
+#[cfg(target_os = "linux")]
+use ruya_devices::drive_scan::FsSource;
+use ruya_devices::drive_scan::{FakeTree, Scans};
 use ruya_devices::input::{DynInputSource, FakeInput, InputDevice, InputPresence};
 use ruya_devices::network::{FakeNetworkManager, Network};
 use ruya_devices::storage::{FakeUdisks, RawVolume, Storage};
@@ -81,6 +84,8 @@ fn bluez(session: bool) -> Result<(DynBluez, AgentSlot), Box<dyn Error>> {
     // `RUYA_DEVICES_FAKE_BLUETOOTH=two-adapters`: a machine with two adapters (T-336).
     let fake = match std::env::var("RUYA_DEVICES_FAKE_BLUETOOTH").as_deref() {
         Ok("two-adapters") => FakeBluez::with_two_adapters(),
+        // Two pads with the same name, one connected and one in pairing mode (T-334).
+        Ok("two-pads") => FakeBluez::with_two_pads(),
         _ => FakeBluez::with_old_pad(),
     };
     Ok((Box::new(fake), AgentSlot::default()))
@@ -148,6 +153,17 @@ fn udisks(session: bool) -> Result<DynUdisks, Box<dyn Error>> {
         mount_points: Vec::new(),
         read_only: false,
     }])))
+}
+
+/// The walk over a removable drive: the real file system, or in `--session` a made-up stick
+/// where the fake udisks mounts "DEV STICK".
+fn scan_source(session: bool) -> DynScanSource {
+    #[cfg(target_os = "linux")]
+    if !session {
+        return Box::new(FsSource);
+    }
+    let _ = session;
+    Box::new(FakeTree::dev_stick("/run/media/ruya-shell/DEV STICK"))
 }
 
 fn usage_source(session: bool) -> DynSource {
@@ -425,6 +441,9 @@ fn run() -> Result<(), Box<dyn Error>> {
         MonotonicClock::new(),
     ));
 
+    // What is on a removable drive: names and sizes, one scan at a time (`drive_scan.rs`).
+    let scans: SharedScans = Arc::new(Scans::new(scan_source(session), MonotonicClock::new()));
+
     // The thresholds: the image's file, then the owner's own.
     let monitor: SharedThermal = Arc::new(Monitor::new(
         thermal_source(session),
@@ -475,7 +494,7 @@ fn run() -> Result<(), Box<dyn Error>> {
             )?
             .serve_at(
                 OBJECT_PATH,
-                StorageIface::new(storage.clone(), usage.clone()),
+                StorageIface::new(storage.clone(), usage.clone(), scans.clone()),
             )?
             .serve_at(OBJECT_PATH, ThermalIface::new(monitor.clone()))?
             .serve_at(OBJECT_PATH, TimeIface::new(time.clone(), session))?

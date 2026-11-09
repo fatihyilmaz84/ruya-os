@@ -58,6 +58,31 @@ QList<StorageVolume> parseVolumes(const QDBusArgument &arg)
     return out;
 }
 
+// The dictionary of GetVolumeScan; `categories` is an aa{sv} inside the variant.
+VolumeScan parseScan(const QVariantMap &d)
+{
+    VolumeScan scan;
+    scan.state = d.value(QStringLiteral("state"), scan.state).toString();
+    scan.partial = d.value(QStringLiteral("partial")).toBool();
+    scan.usedBytes = d.value(QStringLiteral("used_bytes")).toLongLong();
+    scan.otherBytes = d.value(QStringLiteral("other_bytes")).toLongLong();
+    const QVariant categories = d.value(QStringLiteral("categories"));
+    if (categories.canConvert<QDBusArgument>()) {
+        const QDBusArgument arg = categories.value<QDBusArgument>();
+        arg.beginArray();
+        while (!arg.atEnd()) {
+            const QVariantMap c = parseDict(arg);
+            DriveCategory category;
+            category.key = c.value(QStringLiteral("key")).toString();
+            category.bytes = c.value(QStringLiteral("bytes")).toLongLong();
+            category.files = c.value(QStringLiteral("files")).toLongLong();
+            scan.categories.append(category);
+        }
+        arg.endArray();
+    }
+    return scan;
+}
+
 qint64 number(const QVariantMap &d, const char *key)
 {
     const QVariant v = d.value(QString::fromLatin1(key));
@@ -77,6 +102,7 @@ DBusStorageBackend::DBusStorageBackend(QObject *parent)
     m_bus.connect(Service, Path, Interface, QStringLiteral("VolumesChanged"), this, SLOT(onVolumesChanged()));
     m_bus.connect(Service, Path, Interface, QStringLiteral("VolumeAdded"), this, SLOT(onVolumeAdded(QString)));
     m_bus.connect(Service, Path, Interface, QStringLiteral("SystemUsageChanged"), this, SLOT(onUsageChanged()));
+    m_bus.connect(Service, Path, Interface, QStringLiteral("VolumeScanChanged"), this, SLOT(onScanChanged(QString)));
 }
 
 void DBusStorageBackend::refresh()
@@ -116,6 +142,50 @@ void DBusStorageBackend::refreshUsage()
         usage.dataBytes = number(d, "data_bytes");
         usage.systemBytes = number(d, "system_bytes");
         deliverUsage(request, usage);
+    });
+}
+
+void DBusStorageBackend::scanVolume(const QString &id)
+{
+    auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("ScanVolume"));
+    msg << id;
+    auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, id](QDBusPendingCallWatcher *w) {
+        w->deleteLater();
+        const QDBusMessage reply = w->reply();
+        const bool ok = reply.type() == QDBusMessage::ReplyMessage && !reply.arguments().isEmpty();
+        if (!ok)
+            qWarning("ruya-shell: Devices1.Storage ScanVolume failed: %s", qPrintable(reply.errorMessage()));
+        const QString status = ok ? reply.arguments().constFirst().toString() : QStringLiteral("failed");
+        if (status == QLatin1String("ok"))
+            readScan(id); // running, or a cached result
+        else
+            emit scanStatus(id, status);
+    });
+}
+
+void DBusStorageBackend::cancelScan(const QString &id)
+{
+    auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("CancelScan"));
+    msg << id;
+    m_bus.asyncCall(msg); // nothing to wait for: VolumeScanChanged tells when it stopped
+}
+
+void DBusStorageBackend::readScan(const QString &id)
+{
+    auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("GetVolumeScan"));
+    msg << id;
+    const quint64 request = beginScanRequest(id);
+    auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, id, request](QDBusPendingCallWatcher *w) {
+        w->deleteLater();
+        const QDBusMessage reply = w->reply();
+        if (reply.type() != QDBusMessage::ReplyMessage || reply.arguments().isEmpty()) {
+            qWarning("ruya-shell: Devices1.Storage GetVolumeScan failed: %s", qPrintable(reply.errorMessage()));
+            acceptScan(id, request); // an outcome too: an older reply must not land after it
+            return;
+        }
+        deliverScan(id, request, parseScan(parseDict(reply.arguments().constFirst().value<QDBusArgument>())));
     });
 }
 
@@ -166,6 +236,11 @@ void DBusStorageBackend::onVolumesChanged()
 void DBusStorageBackend::onUsageChanged()
 {
     refreshUsage();
+}
+
+void DBusStorageBackend::onScanChanged(const QString &id)
+{
+    readScan(id);
 }
 
 void DBusStorageBackend::onVolumeAdded(const QString &id)

@@ -170,6 +170,69 @@ Item {
             compare(toasts.disconnectedShown, 0, "a pad nobody was told about leaves quietly")
         }
 
+        // ---- two pads of one model (T-334) ----
+
+        readonly property string padA: "AA:00:00:00:00:04"
+        readonly property string padB: "AA:00:00:00:00:05"
+
+        function twoPads() {
+            Bluetooth.mockTwoPads()
+            tryVerify(() => Bluetooth.devices.find(d => d.id === tc.padA) !== undefined
+                      && Bluetooth.devices.find(d => d.id === tc.padB) !== undefined, 2000, "both pads are listed")
+        }
+
+        function bt(connected, id) {
+            Bluetooth.mockGamepad(connected, id, "Wireless Controller", "playstation", "bluetooth")
+        }
+
+        function test_two_connect_toasts() {
+            twoPads()
+            bt(true, tc.padA)
+            bt(true, tc.padB)
+            tryCompare(Notifications.model, "count", 2)
+            tryCompare(toasts, "connectedShown", 2)
+            // Two toasts, each with its own pad's name and battery: the same name would not tell
+            // which one arrived.
+            const texts = toastTexts()
+            verify(texts.includes("Wireless Controller (00:04) connected · battery 80%"), texts.join(" | "))
+            verify(texts.includes("Wireless Controller (00:05) connected · battery 55%"), texts.join(" | "))
+            compare(Notifications.model.get(0).iconName, "pad_playstation")
+            compare(Notifications.model.get(1).iconName, "pad_playstation")
+            // The same connections again say nothing new.
+            bt(true, tc.padA)
+            bt(true, tc.padB)
+            wait(150)
+            compare(Notifications.model.count, 2, "once per connection")
+        }
+
+        function test_disconnect_toast_names_its_pad() {
+            twoPads()
+            bt(true, tc.padA)
+            bt(true, tc.padB)
+            tryCompare(toasts, "connectedShown", 2)
+            clearToasts()
+            toasts.noteInput()                                              // somebody pressed a key
+            bt(false, tc.padB)
+            tryCompare(toasts, "disconnectedShown", 1)
+            compare(toastTexts(), ["Wireless Controller (00:05) disconnected"], "the pad that left, not the other")
+            verify(tc.padA in toasts.shown, "pad A is still known as connected")
+            verify(!(tc.padB in toasts.shown))
+            // Then the other one.
+            clearToasts()
+            bt(false, tc.padA)
+            tryCompare(toasts, "disconnectedShown", 2)
+            compare(toastTexts(), ["Wireless Controller (00:04) disconnected"])
+        }
+
+        function test_a_pad_alone_keeps_its_plain_name() {
+            twoPads()
+            Bluetooth.mockSetName(tc.padB, "Ada's pad")
+            tryVerify(() => Bluetooth.devices.find(d => d.id === tc.padB).name === "Ada's pad")
+            bt(true, tc.padA)
+            tryCompare(Notifications.model, "count", 1)
+            compare(Notifications.model.get(0).text, "Wireless Controller connected · battery 80%", "no twin, no suffix")
+        }
+
         // ---- the guided pairing screen ----
 
         function chip(family) { return find("onbChip_" + family) }

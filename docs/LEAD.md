@@ -35,6 +35,7 @@ The lead follows the root `CLAUDE.md` (rules, commit format, definition of done)
 - `.\scripts\dev.ps1 test` → must be ALL GREEN.
 - `.\scripts\dev.ps1 shots`, then **look at the screenshots** of every screen that changed since the last review. Skip `shots` when no `.qml` file changed in the range.
 - **VM queue** (board): build one image of `main`, `make-disk.sh qcow2`, `scripts\smoke-test.ps1` (recipe in `docs/dev-setup.md`), then each queued task's check. Record each result in that task's Outcome (`Verified: vm`, with the numbers) and clear the queue; a failed check reopens its task. Also build when anything under `image/`, `services/` or the shell's Linux paths changed since the last VM verification and nothing in the range was VM-verified. Run the update/rollback drill when updates, health checks or greenboot are touched. End with `scripts\free-space.ps1`.
+  - **ISO only when needed (owner, 2026-11-09):** each image build ends with the oci-archive update of the Dell (`docs/dev-setup.md`, "When to build the ISO"); build the ISO and run `vm-iso-check.ps1` only when installer, kickstart, first-boot, partitioning or `bib` config changed, for a milestone or release candidate, or when the owner asks. First-boot features are tested on a fresh qcow2 or after a scripted factory reset of the Dell.
 - CI on GitHub: if the owner can share the Actions result, or it's visible from a pushed state, record it; otherwise note "CI not checked".
 - Write the numbers down (test counts, boot result, timings). They go into the log entry.
 
@@ -140,6 +141,16 @@ A lead session that runs too long loses detail (auto-compact starts at 97 % of t
 | A UX or design reviewer | **150k tokens or 10 min** | It stops and reports what it has. Two of them run per UI diff, in parallel with `ruya-reviewer`; skip them when the 5-hour window is at 80 %. |
 
 Reference figures from the 2026-11-05/06 sessions (one builder round): T-189 160k, T-191 235k + round 2 (small), T-195 290k, T-196 220k + 280k, T-200 335k, T-162 (lead, with VM debugging) several hundred thousand. A lead session of about 25 merges and a lot of planning reached 87 % of 1M.
+
+## Lead efficiency (owner, 2026-11-09)
+
+Every turn re-reads the whole context, and the owner-facing relay session reads along. Rules:
+- **No no-op turns.** While builders, reviewers or builds run, stay inside one turn with a long blocking wait (a Monitor with an until-loop on a marker file, a new commit or a summary file, or a background command whose completion notifies you) and end the turn only when something changed (a HANDOFF, a verdict, a failure, a budget limit) or the owner is needed. Never report "nothing changed".
+- **Batch reports.** One report of 5-8 lines per natural stop (a merged batch, a verified image, a blocker); no per-task play-by-play, no relaying reviewer notes.
+- **Shorter lead sessions.** Hand off at 50-60 % context, not 75 %: the cost per turn grows with context and a fresh lead orients from `LEAD-NOTES.md` for about 25k tokens. Keep `LEAD-NOTES.md` under about 6 KB and `STATUS.md` under about 10 KB (prune at each handoff); orientation reads only those two.
+- **Script the mechanical chains.** Merge, full test, secret scan, push (`push-main.ps1`); image build, `make-disk`, VM queue, oci-archive, Dell upgrade, `free-space`: one background script per chain that writes a summary of at most 15 lines; read the summary, never the raw logs. Write a missing chain script the next time a chain is run by hand (`docs/dev-setup.md`).
+- **Delegate reading.** Log, journal and diff digging goes to a subagent that returns at most 40 lines; never paste logs into the lead's context; read line ranges, not whole files.
+- **Model tiers.** A task header may carry `Complexity: simple | normal | complex | hard` (default normal), mapped to Sonnet medium, Sonnet high, Opus medium, Opus high for the builder; escalate one tier after two CHANGES_REQUESTED rounds or 300k tokens; the code reviewer is at least the builder's tier on complex and hard tasks; the Outcome records model, effort, rounds and tokens so the mapping can be calibrated after two weeks. The lead loop itself runs on Sonnet high; Opus is for architecture-level planning.
 
 ## Authority
 

@@ -156,6 +156,8 @@ Audio timing is not part of the design tokens and is not scaled by motionScale: 
 
 The gliding highlight (§3.8) is a fill under the ring, never a replacement for it: the ring sits on the focused item and shows at once while the highlight is still gliding. The ring never fades out during a move (it may fade in), is never hidden by a quality tier, and focus is never shown by colour alone. **Ring colour by theme (T-209, T-271):** white on Dreamglass and Midnight, a light mint (`#9ff5e4`) on Aurora and a light peach (`#ffc89a`) on Ember, a dark navy (`#0f1420`) on Daylight, where white would vanish on frosted white glass; its width and offset are the same everywhere, and `tst_theme_contrast.qml` holds it to 3:1 against the glass, the ground, the panel and the scrims of each theme. The task's idea of a 2 px opposite-lightness halo around the ring is **not built**: it needs one shared ring component (the ring is drawn by 18 separate `border` rectangles) and no surface of the five themes needs it today; it is an Inbox item for the day a theme or a wallpaper puts the ring over art of the ring's own lightness. Unavailable items use `disabledOpacity` (0.4) and are skipped or say why ("Not available").
 
+**Where the focus may be (T-356).** The focus is always on a visible, enabled item of the screen on top (the page, a modal, the Guide overlay, an app), whatever the data: a settings pane whose rows are all hidden (loading, a failed read, nothing yet) holds the focus itself, so Back still leaves; a focused row that hides hands it to the nearest visible row (the one before, else the next one). A page covered by another page never takes the focus. If the focus still ends up outside the page on top (on nothing, the shell, or a covered page) while no app, Guide overlay, setup or anything in the modal layer (PIN pad, keyboard, dialog) is in front, the shell gives it back to the page and logs `the focus fell out of page`; it never acts on keys.
+
 ## 5. Components
 
 Each entry: file, status, and the rules a change must keep. A new component gets a row here before it is built (§8).
@@ -211,6 +213,9 @@ Each entry: file, status, and the rules a change must keep. A new component gets
 | Icon | `Icon.qml` | built (T-157) | A Material Symbols glyph by name, `iconM`/`iconL`, colour from text tokens, `filled` for the current state (§3.7) |
 | Button glyph | `ButtonGlyph.qml` | built (T-158) | Controller button letter on a `primaryFill` circle, `glyphSize`, `typeMicro`, `onPrimary` (§3.7) |
 
+**Nested detail rows (T-331).** Read-only rows that belong to the row above them (what RuyaOS found on a drive: one row per category, "Other", "Scanning..." or "Nothing found here") are plain setting rows indented `spaceL` x `u` from the parent's left edge. They stay focusable so the list scrolls and reads in whole rows, but A does nothing on them (`SettingRow.inert`: silent), so the hint bar offers `B Back` only while one has focus. A size that could not be fully read is prefixed "at least". Rows are updated in place by key, so focus never moves when a value arrives. At most about seven rows per parent (six categories + Other); a longer list needs its own page.
+
+
 ### 5.1 Full-screen apps (look; behaviour in `02-shell.md` §1.5)
 
 Launch: Accept on Play → art takes the screen (chrome fades, hero art scales 1.0 → 1.04 and blurs in, `launchMs`) → splash until the first frame → cross-fade to the app. Guide over an app opens the quick menu (slides in from the left, `overlayMs`; the app keeps running behind it). Home from the quick menu shrinks the app into its Running card (`pageMs`). Reduced motion turns each step into a cut; the Performance tier skips every blur.
@@ -234,6 +239,7 @@ One small set of card sizes. Design px at 1080p, multiplied by `u`; corner radiu
 ## 6. Writing
 
 - Sentence case everywhere ("Reduced motion", not "Reduced Motion"); the brand "RuyaOS" and language names are never translated.
+- An empty-state or progress row (a label that is itself a sentence, such as "Nothing found here") stays under about 34 characters in English and carries no value, or one of at most about 20 characters; a longer reason goes in a toast.
 - Buttons and actions are verbs ("Restart", "Add profile"); a confirm repeats the verb of the question ("Restart now?" → Restart / Cancel).
 - Errors say what happened and what the user can do, in at most two short sentences ("Wrong PIN. 2 tries left."). No "please", no codes, no blame.
 - Row labels stay under about 28 characters in English so the Turkish fits.

@@ -33,7 +33,7 @@ SettingsPane {
         }
         for (let i = 0; i < list.length; ++i) {
             const d = list[i]
-            const entry = { devId: d.id, name: d.name, kind: d.kind, family: d.family ?? "", paired: d.paired,
+            const entry = { devId: d.id, name: d.name, shown: DeviceIcons.shownName(list, d), kind: d.kind, family: d.family ?? "", paired: d.paired,
                             bonded: d.bonded ?? true, connected: d.connected, trusted: d.trusted ?? false, battery: d.battery }
             let at = -1
             for (let j = 0; j < deviceModel.count; ++j) {
@@ -69,7 +69,7 @@ SettingsPane {
     onVisibleChanged: {
         if (!visible && Bluetooth.discovering)
             Bluetooth.stopScan()
-        if (!visible && onboarding.shown)
+        if (!visible && onboarding && onboarding.shown)
             onboarding.close()                  // closes its pairing window with it
     }
 
@@ -84,16 +84,22 @@ SettingsPane {
         Qt.callLater(pane.ensureFocusedVisible)
     }
 
+    // The device the confirmation and the keyboard are for.
+    property string forgetId: ""
+    property string renameId: ""
+
     function askForget(id, name) {
+        forgetSlot.active = true
         forgetConfirm.customTitle = qsTr("Forget %1?").arg(name)
         forgetConfirm.detail = qsTr("It will have to be paired again to be used.")
         forgetConfirm.customConfirmName = qsTr("Forget %1").arg(name)
-        forgetConfirm.pendingId = id
+        pane.forgetId = id
         forgetConfirm.open("custom")
     }
 
     function askRename(id, name) {
-        renameEntry.pendingId = id
+        pane.renameId = id
+        renameSlot.active = true
         renameEntry.open(qsTr("Controller name"), name, { maxLength: 48, layout: "text" })
     }
 
@@ -256,47 +262,66 @@ SettingsPane {
         label: qsTr("Pair a new controller")
         onActivated: {
             pane.beginModal()
-            onboarding.open()
+            onboardingSlot.active = true
+            pane.onboarding.open()
         }
     }
 
-    ControllerOnboarding {
-        id: onboarding
-        objectName: "controllerOnboarding"
+    // The pairing screen, the keyboard and the confirmation are built when each first opens (T-349).
+    Loader {
+        id: onboardingSlot
         parent: pane.overlay
         width: parent ? parent.width : 0
         height: parent ? parent.height : 0
-        u: pane.u
-        onClosed: pane.restoreFocus()
+        active: false
+        sourceComponent: Component {
+            ControllerOnboarding {
+                objectName: "controllerOnboarding"
+                u: pane.u
+                onClosed: pane.restoreFocus()
+            }
+        }
     }
+    readonly property ControllerOnboarding onboarding: onboardingSlot.item as ControllerOnboarding
 
-    TextEntry {
-        id: renameEntry
-        objectName: "btRenameEntry"
+    Loader {
+        id: renameSlot
         parent: pane.overlay
         width: parent ? parent.width : 0
         height: parent ? parent.height : 0
-        u: pane.u
-        property string pendingId: ""
-        onAccepted: text => Bluetooth.rename(pendingId, text)
+        active: false
+        sourceComponent: Component {
+            TextEntry {
+                objectName: "btRenameEntry"
+                u: pane.u
+                onAccepted: text => Bluetooth.rename(pane.renameId, text)
+            }
+        }
     }
+    readonly property TextEntry renameEntry: renameSlot.item as TextEntry
 
-    PowerConfirm {
-        id: forgetConfirm
-        objectName: "btForgetConfirm"
+    Loader {
+        id: forgetSlot
         parent: pane.overlay
         width: parent ? parent.width : 0
         height: parent ? parent.height : 0
-        u: pane.u
-        property string pendingId: ""
-        onConfirmed: Bluetooth.forget(pendingId)
+        active: false
+        sourceComponent: Component {
+            PowerConfirm {
+                objectName: "btForgetConfirm"
+                u: pane.u
+                onConfirmed: Bluetooth.forget(pane.forgetId)
+            }
+        }
     }
+    readonly property PowerConfirm forgetConfirm: forgetSlot.item as PowerConfirm
 
     Repeater {
         model: deviceModel
         SettingRow {
             required property string devId
             required property string name
+            required property string shown
             required property string kind
             required property string family
             required property bool paired
@@ -307,7 +332,7 @@ SettingsPane {
             objectName: "btDev_" + devId
             visible: Bluetooth.powered
             u: pane.u
-            label: name
+            label: shown
             iconName: DeviceIcons.iconFor(kind, family)
             value: pane.deviceValue(pane.busyId === devId, paired, bonded, connected, battery, kind, trusted)
             // The screen reader says the name, what it is, then the state: "DualSense, PlayStation
@@ -321,13 +346,13 @@ SettingsPane {
         model: deviceModel
         SettingRow {
             required property string devId
-            required property string name
+            required property string shown
             required property bool paired
             required property bool bonded
             objectName: "btRepair_" + devId
             visible: paired && !bonded && Bluetooth.powered
             u: pane.u
-            label: qsTr("Pair again %1").arg(name)
+            label: qsTr("Pair again %1").arg(shown)
             value: qsTr("Put it in pairing mode first")
             onActivated: pane.startRepair(devId)
         }
@@ -338,12 +363,13 @@ SettingsPane {
         SettingRow {
             required property string devId
             required property string name
+            required property string shown
             required property string kind
             required property bool paired
             objectName: "btRename_" + devId
             visible: paired && kind === "controller" && Bluetooth.powered
             u: pane.u
-            label: qsTr("Rename %1").arg(name)
+            label: qsTr("Rename %1").arg(shown)
             onActivated: pane.askRename(devId, name)
         }
     }
@@ -352,13 +378,13 @@ SettingsPane {
         model: deviceModel
         SettingRow {
             required property string devId
-            required property string name
+            required property string shown
             required property bool paired
             objectName: "btForget_" + devId
             visible: paired && Bluetooth.powered
             u: pane.u
-            label: qsTr("Forget %1").arg(name)
-            onActivated: pane.askForget(devId, name)
+            label: qsTr("Forget %1").arg(shown)
+            onActivated: pane.askForget(devId, shown)
         }
     }
 }

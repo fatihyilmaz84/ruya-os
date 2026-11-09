@@ -47,13 +47,38 @@ QtObject {
         return out.replace(/ +/g, " ").trim()
     }
 
+    // The end of a Bluetooth address, the part that tells two like pads apart ("00:05"). An id that
+    // is not an address (the mock's) gives its last five characters.
+    function addressTail(id) {
+        const text = String(id ?? "")
+        const m = /([0-9A-Fa-f]{2}:[0-9A-Fa-f]{2})$/.exec(text)
+        return m ? m[1].toUpperCase() : text.slice(-5)
+    }
+
+    // The name a list or a toast shows for the device `d` of `list` (T-334): its alias; when another
+    // device of the list has the same alias (two DualSense pads are both "Wireless Controller"), the
+    // end of its address is added so the two can be told apart: "Wireless Controller (00:05)". The
+    // alias itself, which the user edits, is never changed.
+    function shownName(list, d) {
+        const name = plain(d.name)
+        const key = name.toLowerCase()
+        const twins = list.filter(x => plain(x.name).toLowerCase() === key).length
+        if (twins <= 1)
+            return name
+        // The tail goes in first and the name last, as functions: an alias that contains "%2" or "$&"
+        // must come out as typed (QString.arg() would read it as the next placeholder).
+        const tail = addressTail(d.id)
+        return qsTr("%1 (%2)").replace("%2", () => tail).replace("%1", () => name)
+    }
+
     // What to call a pad that connected: the alias of the Bluetooth device with that address (what the
-    // user renamed it to), else the family's words, else the name the pad gave itself.
+    // user renamed it to; the end of its address is added when another device has the same name),
+    // else the family's words, else the name the pad gave itself.
     function padName(id, name, family) {
         const wanted = String(id).toLowerCase()
         const paired = Bluetooth.devices.find(d => d.id.toLowerCase() === wanted)
         if (paired)
-            return plain(paired.name)
+            return shownName(Bluetooth.devices, paired)
         if (family !== "")
             return kindText("controller", family)
         return plain(name)

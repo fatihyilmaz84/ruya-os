@@ -67,6 +67,7 @@ Write-Host "== host: hot-plug the formatted stick"
 # device_del takes the legacy drive with it: define it again (the image keeps what was formatted).
 Send-Monitor @("drive_add 0 if=none,id=stick0,format=raw,file=$monitorImage", "device_add usb-storage,id=stick,drive=stick0,removable=on")
 Step "plugged"
+Step "scan"
 Step "busy"
 Step "eject"
 

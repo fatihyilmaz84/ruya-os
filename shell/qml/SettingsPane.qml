@@ -89,9 +89,10 @@ FocusScope {
         updateView()
         // Rows inserted or removed, a message appearing, the pane resized: with focus in the pane
         // look ahead again, so the focused row is not left as the last visible one with rows
-        // beyond it (T-190). Without focus the pane keeps the view the snap above gave it.
+        // beyond it (T-190), and if the focused row was hidden, move to the nearest one (settleFocus,
+        // T-356). Without focus the pane keeps the view the snap above gave it.
         if (activeFocus)
-            ensureFocusedVisible()
+            settleFocus()
     }
 
     // Scrolls so the focused row is fully visible and, when there is room, so is the row above
@@ -133,17 +134,71 @@ FocusScope {
         flick.contentY = list[top < 0 ? i : top].y
         updateView()
     }
-    // On entering the pane: if no row holds focus (the remembered row is hidden, or there is
-    // none yet), take the first visible one; then scroll it into view.
+    // On entering the pane, and whenever rows appear or hide: if no row that can hold the focus
+    // holds it (the remembered row is hidden or disabled, or there is none yet), take the visible
+    // row nearest to the remembered one; with no such row the pane holds the focus itself, never a
+    // hidden row (T-356). Then scroll the focused row into view.
     function settleFocus() {
         if (!activeFocus)
             return                     // focus moved on meanwhile (e.g. to a modal opened by a row)
         const list = focusableRows()
-        if (list.length > 0 && !list.some(r => r.activeFocus))
-            list[0].forceActiveFocus()
+        if (!list.some(r => r.activeFocus)) {
+            const stale = staleRow()
+            if (list.length > 0)
+                nearestRow(list, stale).forceActiveFocus()
+            else if (stale)
+                stale.focus = false    // the active focus falls back to the pane
+        }
         ensureFocusedVisible()
     }
     onActiveFocusChanged: if (activeFocus) Qt.callLater(settleFocus)
+
+    // The pane's focused row: when it hides or is disabled, settle at once. relayout() also settles,
+    // but it waits for the column's height to change, which needs a polish (a frame) first.
+    readonly property Item focusedChild: {
+        for (let i = 0; i < column.children.length; ++i) {
+            if (column.children[i].focus)
+                return column.children[i]
+        }
+        return null
+    }
+    Connections {
+        target: pane.focusedChild
+        // `pane &&`: the rows outlive the pane's id while the page is torn down.
+        function onVisibleChanged() { if (pane && pane.activeFocus) Qt.callLater(pane.settleFocus) }
+        function onEnabledChanged() { if (pane && pane.activeFocus) Qt.callLater(pane.settleFocus) }
+    }
+
+    // The row that is the pane's focused item although it cannot hold the focus (hidden or
+    // disabled), or null.
+    function staleRow() {
+        for (let i = 0; i < column.children.length; ++i) {
+            const row = column.children[i] as SettingControl
+            if (row && row.focus && !(row.visible && row.enabled))
+                return row
+        }
+        return null
+    }
+
+    // Of `list` (focusable rows), the last one before `from` in the column (as the profile panes
+    // always did), else the first one after it; the first of the list without `from`.
+    function nearestRow(list, from) {
+        let before = null
+        let passed = false
+        for (let i = 0; i < column.children.length; ++i) {
+            const c = column.children[i]
+            if (c === from) {
+                if (before)
+                    return before
+                passed = true
+            } else if (list.indexOf(c) >= 0) {
+                if (passed)
+                    return c
+                before = c
+            }
+        }
+        return list[0]
+    }
 
     function focusableRows() {
         const found = []
@@ -219,7 +274,7 @@ FocusScope {
     }
 
     Keys.onPressed: event => {
-        // A hidden row cannot keep focus; if that left no row focused, repair it first.
+        // A hidden row keeps the active focus (Qt does not move it): if no row that can hold it does, repair it first.
         if (!focusableRows().some(r => r.activeFocus))
             settleFocus()
         switch (event.key) {

@@ -256,6 +256,7 @@ QString SoundThemes::mapMount(const QString &mountPoint) const
 
 void SoundThemes::refresh(const QStringList &mountPoints)
 {
+    ++m_refreshCalls;
     const quint64 serial = ++m_scanSerial;
     QStringList roots;
     QStringList volumes;

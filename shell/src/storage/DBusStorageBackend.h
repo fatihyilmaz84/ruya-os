@@ -20,13 +20,18 @@ public:
     void eject(const QString &id) override;
     void saveReport(const QString &id, const QMap<QString, QString> &files) override;
     void refreshUsage() override;
+    void scanVolume(const QString &id) override;
+    void cancelScan(const QString &id) override;
 
 private slots:
     void onVolumesChanged();
     void onUsageChanged();
     void onVolumeAdded(const QString &id);
+    void onScanChanged(const QString &id);
 
 private:
+    void readScan(const QString &id);
+
     QDBusConnection m_bus;
     QDBusServiceWatcher m_watcher;
 };

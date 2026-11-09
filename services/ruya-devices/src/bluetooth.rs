@@ -1572,6 +1572,40 @@ impl FakeBluez {
         })
     }
 
+    /// Two DualSense pads that look alike (T-334): `AA:00:00:00:00:04` is paired, bonded, trusted
+    /// and connected, `AA:00:00:00:00:05` is in range in pairing mode. Same alias, same `Name`,
+    /// same modalias; only the address differs. `--session` serves this one when
+    /// `RUYA_DEVICES_FAKE_BLUETOOTH` is `two-pads` (`vm-devices-check.sh twopads` reads it).
+    pub fn with_two_pads() -> Self {
+        let pad = |address: &str, paired: bool| RawDevice {
+            address: address.to_owned(),
+            alias: "Wireless Controller".to_owned(),
+            name: "Wireless Controller".to_owned(),
+            icon: "input-gaming".to_owned(),
+            modalias: "usb:v054Cp0CE6d0100".to_owned(),
+            paired,
+            bonded: paired,
+            connected: paired,
+            trusted: paired,
+            battery: None,
+            class: Some(0x2508),
+            appearance: None,
+            adapter: HCI0.to_owned(),
+        };
+        FakeBluez::new(Raw::single(
+            RawAdapter {
+                powered: true,
+                discovering: false,
+                pairable: false,
+                discoverable: false,
+            },
+            vec![
+                pad("AA:00:00:00:00:04", true),
+                pad("AA:00:00:00:00:05", false),
+            ],
+        ))
+    }
+
     /// `with_devices` and a third pad that was paired before the pairing fix (`Paired: yes,
     /// Bonded: no`) and that its user renamed: its `Name` is still the model (T-300; `--session`
     /// serves this one, `vm-devices-check.sh bluetooth` reads it).
@@ -4151,5 +4185,341 @@ mod tests {
             }
             assert!(!l.contains("link key") && !l.contains("linkkey"), "{line}");
         }
+    }
+
+    // ---- two controllers at once (T-334) ----
+    // `FakeBluez::with_two_pads`: pad A is paired, bonded, trusted and connected; pad B is in
+    // range in pairing mode. Same alias, same `Name`, same modalias; only the address differs.
+
+    const PAD_A: &str = "AA:00:00:00:00:04";
+    const PAD_B: &str = "AA:00:00:00:00:05";
+
+    fn two_pads() -> Bluetooth<FakeBluez> {
+        let bt = Bluetooth::new(FakeBluez::with_two_pads());
+        bt.refresh().expect("fake reads");
+        bt
+    }
+
+    fn device(bt: &Bluetooth<FakeBluez>, address: &str) -> Device {
+        bt.list()
+            .into_iter()
+            .find(|d| d.id == address)
+            .unwrap_or_else(|| panic!("{address} is not listed: {:?}", bt.list()))
+    }
+
+    fn calls_with(bt: &Bluetooth<FakeBluez>, verb: &str) -> Vec<String> {
+        bt.bluez
+            .calls()
+            .into_iter()
+            .filter(|c| c.starts_with(verb))
+            .collect()
+    }
+
+    /// Pad A is as it was: paired, bonded, trusted and connected, and nothing was asked of it.
+    fn assert_a_untouched(bt: &Bluetooth<FakeBluez>, since: usize) {
+        bt.refresh().expect("reads");
+        let a = device(bt, PAD_A);
+        assert!(a.paired && a.bonded && a.connected && a.trusted, "{a:?}");
+        let calls = bt.bluez.calls();
+        let on_a: Vec<&String> = calls[since..]
+            .iter()
+            .filter(|c| c.contains(PAD_A))
+            .collect();
+        assert!(on_a.is_empty(), "calls that named pad A: {on_a:?}");
+    }
+
+    #[test]
+    fn two_pads_with_identical_alias_and_modalias_have_two_ids() {
+        let bt = two_pads();
+        // Before: A is listed first (paired), B is the one in range.
+        let ids: Vec<String> = bt.list().into_iter().map(|d| d.id).collect();
+        assert_eq!(ids, [PAD_A, PAD_B]);
+        let (a, b) = (device(&bt, PAD_A), device(&bt, PAD_B));
+        assert_eq!(
+            (a.name.as_str(), a.device_name.as_str(), a.family),
+            ("Wireless Controller", "Wireless Controller", "playstation")
+        );
+        assert_eq!(
+            (a.name.clone(), a.device_name.clone(), a.family),
+            (b.name.clone(), b.device_name.clone(), b.family)
+        );
+        assert!(a.paired && !b.paired);
+        // After B pairs: still two entries, still two ids, A first (paired, then name, then id).
+        assert_eq!(bt.pair(PAD_B, Instant::now), Status::Ok);
+        bt.refresh().expect("reads");
+        let list = bt.list();
+        let ids: Vec<&str> = list.iter().map(|d| d.id.as_str()).collect();
+        assert_eq!(ids, [PAD_A, PAD_B]);
+        assert!(list.iter().all(|d| d.paired && d.connected && d.bonded));
+        assert_ne!(list[0].id, list[1].id);
+    }
+
+    #[test]
+    fn two_pads_a_second_pairing_never_removes_the_first() {
+        // The window pairs B by itself (pad in pairing mode), and B calling in by itself.
+        for by_itself in [true, false] {
+            let bt = two_pads();
+            log::take();
+            let t0 = Instant::now();
+            open(&bt, t0);
+            assert_eq!(bt.pairing_state(), PairingState::Open);
+            let since = bt.bluez.calls().len();
+            if by_itself {
+                // A is paired: it is not a candidate, B is.
+                assert_eq!(bt.pump().as_deref(), Some(PAD_B));
+                bt.window_pair(PAD_B, Instant::now);
+            } else {
+                let b = path_of(PAD_B);
+                assert!(bt.agent(AgentCall::Authorize { device: &b }, t0));
+                bt.bluez.bond(PAD_B);
+                bt.refresh().expect("reads");
+                assert_eq!(bt.pump(), None);
+            }
+            assert_eq!(bt.pairing_state(), PairingState::Paired, "{by_itself}");
+            assert!(
+                calls_with(&bt, "remove").is_empty(),
+                "{by_itself}: {:?}",
+                bt.bluez.calls()
+            );
+            let lines = log::take();
+            assert!(
+                lines_with(&lines, "remove").is_empty(),
+                "{by_itself}: {lines:?}"
+            );
+            assert!(calls_with(&bt, "disconnect").is_empty());
+            // A is left as it was and was never named in a call.
+            assert_a_untouched(&bt, since);
+            // B ends the window paired and trusted, and there are two pads.
+            let b = device(&bt, PAD_B);
+            assert!(b.paired && b.trusted, "{by_itself}: {b:?}");
+            assert!(calls_with(&bt, "trust").contains(&format!("trust {PAD_B}")));
+            assert_eq!(bt.list().len(), 2);
+            // The window is shut and the adapter as it was.
+            let a = adapter(&bt);
+            assert!(!a.pairable && !a.discoverable && !a.discovering);
+            assert!(has(&lines, &["paired", PAD_B, "window"]), "{lines:?}");
+        }
+    }
+
+    #[test]
+    fn manual_pair_of_a_second_pad_leaves_the_first() {
+        let bt = two_pads();
+        let since = bt.bluez.calls().len();
+        assert_eq!(bt.pair(PAD_B, Instant::now), Status::Ok);
+        // Every pad call is about B; A is never named, removed or disconnected.
+        let calls = bt.bluez.calls();
+        for want in [
+            format!("pair {PAD_B}"),
+            format!("trust {PAD_B}"),
+            format!("connect {PAD_B}"),
+        ] {
+            assert!(calls.contains(&want), "{want} in {calls:?}");
+        }
+        assert!(calls_with(&bt, "remove").is_empty() && calls_with(&bt, "disconnect").is_empty());
+        assert_a_untouched(&bt, since);
+        // Through the adapter that holds it, which stays closed afterwards.
+        assert!(bt.bluez.routes().iter().all(|r| r.ends_with(HCI0)));
+        assert!(!adapter(&bt).pairable);
+        let b = device(&bt, PAD_B);
+        assert!(b.paired && b.bonded && b.trusted && b.connected, "{b:?}");
+    }
+
+    #[test]
+    fn forget_removes_only_the_chosen_pad() {
+        // B is forgotten: A stays connected.
+        let bt = two_pads();
+        assert_eq!(bt.pair(PAD_B, Instant::now), Status::Ok);
+        let since = bt.bluez.calls().len();
+        assert_eq!(bt.forget(PAD_B), Status::Ok);
+        assert_eq!(
+            bt.bluez.calls()[since..],
+            [format!("remove {PAD_B}")],
+            "one call, about B"
+        );
+        assert_a_untouched(&bt, since);
+        assert_eq!(
+            bt.list().iter().map(|d| d.id.as_str()).collect::<Vec<_>>(),
+            [PAD_A]
+        );
+        // And the other way round: A is forgotten, B stays.
+        let bt = two_pads();
+        assert_eq!(bt.pair(PAD_B, Instant::now), Status::Ok);
+        let since = bt.bluez.calls().len();
+        assert_eq!(bt.forget(PAD_A), Status::Ok);
+        assert_eq!(bt.bluez.calls()[since..], [format!("remove {PAD_A}")]);
+        bt.refresh().expect("reads");
+        let b = device(&bt, PAD_B);
+        assert!(b.paired && b.connected && b.trusted, "{b:?}");
+        assert_eq!(bt.list().len(), 1);
+    }
+
+    #[test]
+    fn connect_and_disconnect_touch_only_their_pad() {
+        let bt = two_pads();
+        assert_eq!(bt.pair(PAD_B, Instant::now), Status::Ok);
+        let step = |bt: &Bluetooth<FakeBluez>, status: Status, call: &dyn Fn() -> Status| {
+            let since = bt.bluez.calls().len();
+            assert_eq!(call(), status);
+            bt.refresh().expect("reads");
+            bt.bluez.calls()[since..].to_vec()
+        };
+        // disconnect B: one call, about B; A stays connected
+        let calls = step(&bt, Status::Ok, &|| bt.disconnect(PAD_B));
+        assert_eq!(calls, [format!("disconnect {PAD_B}")]);
+        assert!(device(&bt, PAD_A).connected && !device(&bt, PAD_B).connected);
+        // connect B again: one call, about B
+        let calls = step(&bt, Status::Ok, &|| bt.connect(PAD_B));
+        assert_eq!(calls, [format!("connect {PAD_B}")]);
+        assert!(device(&bt, PAD_A).connected && device(&bt, PAD_B).connected);
+        // disconnect A: B stays connected; connect A: A only
+        let calls = step(&bt, Status::Ok, &|| bt.disconnect(PAD_A));
+        assert_eq!(calls, [format!("disconnect {PAD_A}")]);
+        assert!(!device(&bt, PAD_A).connected && device(&bt, PAD_B).connected);
+        let calls = step(&bt, Status::Ok, &|| bt.connect(PAD_A));
+        assert_eq!(calls, [format!("connect {PAD_A}")]);
+        assert!(device(&bt, PAD_A).connected && device(&bt, PAD_B).connected);
+        // The journal says which pad each time.
+        log::take();
+        bt.disconnect(PAD_B);
+        let lines = log::take();
+        assert!(has(&lines, &["disconnect", PAD_B, ": user"]), "{lines:?}");
+        assert!(!lines.iter().any(|l| l.contains(PAD_A)), "{lines:?}");
+    }
+
+    #[test]
+    fn a_second_pad_paired_by_hand_in_the_window_is_bonded_and_the_first_is_left() {
+        // The sequence `vm-devices-check.sh twopads` runs over D-Bus: open the window, Pair B,
+        // close the window.
+        let bt = two_pads();
+        open(&bt, Instant::now());
+        let since = bt.bluez.calls().len();
+        assert_eq!(bt.pair(PAD_B, Instant::now), Status::Ok);
+        assert_eq!(bt.stop_controller_pairing(true), Status::Ok);
+        bt.refresh().expect("reads");
+        let b = device(&bt, PAD_B);
+        assert!(b.paired && b.bonded && b.trusted && b.connected, "{b:?}");
+        assert_a_untouched(&bt, since);
+        assert!(calls_with(&bt, "remove").is_empty());
+        assert!(!adapter(&bt).pairable, "the window gave the adapter back");
+    }
+
+    /// Both pads and a phone in range, an adapter that is on and not pairable.
+    fn two_pads_and_a_phone() -> Bluetooth<FakeBluez> {
+        let bt = two_pads();
+        bt.bluez
+            .add_device(near(PHONE, "Some Phone", "phone", Some(0x5A020C)));
+        bt.refresh().expect("reads");
+        bt
+    }
+
+    #[test]
+    fn the_sweep_spares_both_pads() {
+        // 1. A paired before the window, B pairs in it, a phone bonds: only the phone goes.
+        let bt = two_pads_and_a_phone();
+        let t0 = Instant::now();
+        open(&bt, t0);
+        bt.bluez.bond(PHONE);
+        bt.refresh().expect("reads");
+        assert_eq!(
+            bt.pump().as_deref(),
+            Some(PAD_B),
+            "the pad in range is next"
+        );
+        assert_eq!(
+            calls_with(&bt, "remove"),
+            [format!("remove {PHONE}")],
+            "only the phone is a stranger"
+        );
+        assert_eq!(bt.pairing_state(), PairingState::Open, "A did not end it");
+        bt.window_pair(PAD_B, Instant::now);
+        assert_eq!(bt.pairing_state(), PairingState::Paired);
+        assert_eq!(calls_with(&bt, "remove"), [format!("remove {PHONE}")]);
+        bt.refresh().expect("reads");
+        assert!(device(&bt, PAD_A).connected && device(&bt, PAD_B).paired);
+
+        // 2. Both pads paired before the window opened: a phone bonds, a sweep runs: no pad goes.
+        let bt = two_pads();
+        assert_eq!(bt.pair(PAD_B, Instant::now), Status::Ok);
+        bt.bluez
+            .add_device(near(PHONE, "Some Phone", "phone", Some(0x5A020C)));
+        bt.refresh().expect("reads");
+        open(&bt, t0);
+        bt.bluez.bond(PHONE);
+        bt.refresh().expect("reads");
+        assert_eq!(bt.pump(), None);
+        for _ in 0..3 {
+            bt.refresh().expect("reads");
+            bt.pump();
+        }
+        assert_eq!(calls_with(&bt, "remove"), [format!("remove {PHONE}")]);
+        assert_eq!(bt.pairing_state(), PairingState::Open, "both were known");
+        let (a, b) = (device(&bt, PAD_A), device(&bt, PAD_B));
+        assert!(a.paired && a.connected && b.paired && b.connected);
+
+        // 3. Neither pad paired before the window: both bond in it. They are input devices, so
+        // neither is a stranger.
+        let bt = two_pads();
+        bt.bluez.set_raw({
+            let mut raw = bt.bluez.snapshot().expect("fake");
+            let a = raw.devices.iter_mut().find(|d| d.address == PAD_A);
+            let a = a.expect("pad A");
+            (a.paired, a.bonded, a.connected, a.trusted) = (false, false, false, false);
+            raw
+        });
+        bt.refresh().expect("reads");
+        open(&bt, t0);
+        bt.bluez.bond(PAD_A);
+        bt.bluez.bond(PAD_B);
+        bt.refresh().expect("reads");
+        bt.pump();
+        assert!(
+            calls_with(&bt, "remove").is_empty(),
+            "{:?}",
+            bt.bluez.calls()
+        );
+        assert_eq!(bt.pairing_state(), PairingState::Paired);
+        assert_eq!(bt.list().len(), 2);
+    }
+
+    #[test]
+    fn idle_policy_counts_each_pad_from_its_own_connection_through_the_service() {
+        let bt = two_pads();
+        let min = Duration::from_secs(60);
+        let t0 = Instant::now();
+        let report = |idle: u32| IdleReport::from_seconds(idle * 60, 15 * 60, false);
+        log::take();
+        // t0: A is connected and just seen: nothing is due.
+        assert!(bt.report_idle(t0, report(35)).is_empty());
+        // 21 s before A's timeout, B connects (its pairing may be the pad's first sign of life).
+        let b_at = t0 + min * 15 - Duration::from_secs(21);
+        assert_eq!(bt.pair(PAD_B, Instant::now), Status::Ok);
+        assert!(
+            bt.report_idle(b_at, report(35)).is_empty(),
+            "A has 21 s left"
+        );
+        // A's 15 minutes are up; B has been here for 21 s: only A is disconnected.
+        let due = t0 + min * 15;
+        assert_eq!(bt.report_idle(due, report(35)), [PAD_A.to_owned()]);
+        assert_eq!(
+            calls_with(&bt, "disconnect"),
+            [format!("disconnect {PAD_A}")]
+        );
+        assert!(device(&bt, PAD_B).connected, "B was not touched");
+        // Again, a minute later: A is gone and B is still young; nothing more, no second call.
+        assert!(bt.report_idle(due + min, report(36)).is_empty());
+        assert_eq!(calls_with(&bt, "disconnect").len(), 1);
+        // B's own 15 minutes are up: B alone is disconnected, once.
+        let b_due = b_at + min * 15;
+        assert_eq!(bt.report_idle(b_due, report(50)), [PAD_B.to_owned()]);
+        assert!(bt.report_idle(b_due + min, report(51)).is_empty());
+        assert_eq!(
+            calls_with(&bt, "disconnect"),
+            [format!("disconnect {PAD_A}"), format!("disconnect {PAD_B}")]
+        );
+        // The journal names each pad once.
+        let lines = log::take();
+        let idle = lines_with(&lines, "idle-timeout");
+        assert_eq!(idle.len(), 2, "{idle:?}");
+        assert!(has(&idle, &["disconnect", PAD_A]) && has(&idle, &["disconnect", PAD_B]));
     }
 }

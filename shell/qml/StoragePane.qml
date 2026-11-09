@@ -9,13 +9,29 @@ import RuyaShell
 // and an internal disk mounted outside the system paths) with its
 // filesystem and "x GB free of y GB", and an "Eject" row for each mounted removable one. Accept
 // on a removable volume moves to its Eject row; on a drive whose filesystem is not supported it
-// says why it can't be used. Nothing on a volume is opened or run from here. Everything goes
-// through the Storage singleton (org.ruyaos.Devices1.Storage); sizes come from
+// says why it can't be used.
+//
+// Under each mounted removable volume (T-331) come the rows of what RuyaOS finds on it, in the
+// style of "This console": "Scanning…" while the service walks the drive, then one row per
+// category (Games, Backups, ...) with its size, "Other" for the rest, or the one line "Nothing
+// from RuyaOS on this drive"; a partial result reads "at least". The scan (Storage.scan) starts
+// when the pane is shown, one drive at a time (the focused drive first), and is cancelled when the
+// pane hides or the drive is ejected. Rows are updated in place, so focus stays on its row.
+//
+// The service only reads names and sizes: nothing on a volume is opened or run from here.
+// Everything goes through the Storage singleton (org.ruyaos.Devices1.Storage); sizes come from
 // Storage.formatBytes. The "safe to remove" and "drive inserted" toasts are in ToastLayer.
 SettingsPane {
     id: pane
 
     readonly property var internal: Storage.internal
+
+    // Only a drive's own row and its Eject row do something on Accept; the "This console" rows and
+    // the scan rows are facts, so while one has focus the hint bar offers Back only (04 section 5).
+    // Each row says so when it takes focus.
+    property bool actionFocused: false
+    hints: actionFocused ? [{ button: "A", text: qsTr("Select") }, { button: "B", text: qsTr("Back") }]
+                         : [{ button: "B", text: qsTr("Back") }]
     // Less than this much free and the usage bar turns to the warning colour.
     readonly property real lowFreeFraction: 0.10
 
@@ -88,39 +104,105 @@ SettingsPane {
         }
     }
 
-    // Rows follow Storage.volumes by id (updated in place), so focus stays on a row when the
-    // list is re-published, e.g. after free space changes.
-    ListModel { id: volumeModel }
+    // One flat list of the rows under "Drives", in display order: per volume its row, the rows of
+    // its scan and its Eject row. Rows are matched by `rowKey` and updated in place, so focus
+    // stays on a row when the list is re-published (free space changed) or a scan reports.
+    ListModel { id: rowModel }
 
-    function syncVolumes() {
+    // The name of a category of the service (Devices1.Storage.GetVolumeScan); "" for a key this
+    // shell does not know, which then counts as "Other".
+    function categoryName(key) {
+        switch (key) {
+        case "games": return qsTr("Games")
+        case "backups": return qsTr("Backups")
+        case "captures": return qsTr("Captures")
+        case "packages": return qsTr("Packages")
+        case "pictures": return qsTr("Pictures")
+        case "reports": return qsTr("System reports")
+        }
+        return ""
+    }
+
+    // A size from a scan: "at least" when the walk could not see everything.
+    function scanSize(bytes, partial) {
+        const text = Storage.formatBytes(bytes)
+        return partial ? qsTr("at least %1").arg(text) : text
+    }
+
+    // The rows of one volume's scan.
+    function scanRows(id) {
+        const e = Storage.scans[id]
+        const row = (sub, name, value) => ({ rowKey: "scan:" + id + ":" + sub, kind: "scan", sub: sub, volId: id,
+                                             name: name, valueText: value, shown: true, removable: true, mounted: true })
+        // A refusal other than "busy" (another scan runs; asked again soon) is final for now.
+        const refused = e && e.status !== "" && e.status !== "busy"
+        if (!e || (e.state !== "done" && e.state !== "failed" && !refused))
+            return [row("wait", qsTr("Scanning…"), "")]
+        if (e.state === "failed" || refused)
+            return [row("failed", qsTr("Could not read this drive"), qsTr("Plug it in again"))]
+        const rows = []
+        let other = e.otherBytes
+        for (const c of e.categories) {
+            const name = categoryName(c.key)
+            if (name === "")
+                other += c.bytes             // a category this shell does not know
+            else
+                rows.push(row("cat:" + c.key, name, scanSize(c.bytes, e.partial)))
+        }
+        if (other > 0 && rows.length > 0)
+            rows.push(row("other", qsTr("Other"), scanSize(other, e.partial)))
+        // A partial walk may simply not have got to it yet.
+        if (rows.length === 0)
+            rows.push(row("none", e.partial ? qsTr("Nothing found so far") : qsTr("Nothing found here"), ""))
+        return rows
+    }
+
+    function desiredRows() {
+        const out = []
+        for (const v of Storage.volumes) {
+            const usable = v.removable && v.mounted
+            out.push({ rowKey: "vol:" + v.id, kind: "volume", sub: "", volId: v.id, name: v.label,
+                       valueText: volumeValue(v.filesystem, v.mounted, v.readOnly, v.freeBytes, v.sizeBytes),
+                       shown: true, removable: v.removable, mounted: v.mounted })
+            if (usable)
+                out.push(...scanRows(v.id))
+            out.push({ rowKey: "eject:" + v.id, kind: "eject", sub: "", volId: v.id, name: qsTr("Eject %1").arg(v.label),
+                       valueText: "", shown: usable, removable: v.removable, mounted: v.mounted })
+        }
+        return out
+    }
+
+    function syncRows() {
         // Where focus is now, to put it on a neighbour if its row goes away (Eject).
         const before = pane.activeFocus ? focusableRows().findIndex(r => r.activeFocus) : -1
-        const list = Storage.volumes
-        for (let i = volumeModel.count - 1; i >= 0; --i) {
-            const id = volumeModel.get(i).volId
-            if (!list.some(v => v.id === id))
-                volumeModel.remove(i)
+        const list = desiredRows()
+        for (let i = rowModel.count - 1; i >= 0; --i) {
+            const key = rowModel.get(i).rowKey
+            if (!list.some(r => r.rowKey === key))
+                rowModel.remove(i)
         }
         for (let i = 0; i < list.length; ++i) {
-            const v = list[i]
-            const entry = { volId: v.id, name: v.label, filesystem: v.filesystem, sizeBytes: v.sizeBytes,
-                            freeBytes: v.freeBytes, removable: v.removable, mounted: v.mounted, readOnly: v.readOnly }
             let at = -1
-            for (let j = 0; j < volumeModel.count; ++j) {
-                if (volumeModel.get(j).volId === v.id) {
+            for (let j = 0; j < rowModel.count; ++j) {
+                if (rowModel.get(j).rowKey === list[i].rowKey) {
                     at = j
                     break
                 }
             }
             if (at < 0) {
-                volumeModel.insert(i, entry)
+                rowModel.insert(i, list[i])
             } else {
-                volumeModel.set(at, entry)
+                rowModel.set(at, list[i])
                 if (at !== i)
-                    volumeModel.move(at, i, 1)
+                    rowModel.move(at, i, 1)
             }
         }
-        Qt.callLater(pane.refocus, before)
+        // (Qt.callLater keeps only the newest arguments of a pending call: a second sync after the
+        // focused row went must not cancel the refocus the first one asked for.)
+        if (before >= 0)
+            Qt.callLater(pane.refocus, before)
+        // Rows created or removed: lay them out now, so the view follows the focused row (SettingsPane.reflow).
+        reflow()
     }
 
     // After a list update: if the focused row vanished, focus the row now at its place (or the
@@ -134,22 +216,83 @@ SettingsPane {
         ensureFocusedVisible()
     }
 
+    // The scan: one drive at a time, the one with the focus first, then the others. A drive is asked
+    // for when it has no result yet (or was cancelled); `scanPending` is the one asked for whose first
+    // reply has not come, so no second is asked meanwhile.
+    property string scanPending
+
+    function scanRunning() {
+        return scanPending !== "" || Object.values(Storage.scans).some(e => e.state === "running")
+    }
+
+    function needsScan(id, retryBusy) {
+        const e = Storage.scans[id]
+        if (!e)
+            return true
+        if (e.status === "busy")
+            return retryBusy
+        return e.status === "" && (e.state === "cancelled" || e.state === "idle")
+    }
+
+    function focusedVolume() {
+        const row = focusableRows().find(r => r.activeFocus)
+        return row && row.volId ? row.volId : ""
+    }
+
+    function pumpScan(retryBusy) {
+        if (!visible || scanRunning())
+            return
+        const first = focusedVolume()
+        const wanted = Storage.volumes.filter(v => v.removable && v.mounted && v.id !== ejectingId && needsScan(v.id, retryBusy))
+        wanted.sort((a, b) => (b.id === first) - (a.id === first))
+        if (wanted.length > 0) {
+            scanPending = wanted[0].id
+            Storage.scan(wanted[0].id)
+        }
+    }
+
+    // The pane left the screen: stop walking the drives.
+    function stopScans() {
+        for (const id of Object.keys(Storage.scans)) {
+            if (Storage.scans[id].state === "running")
+                Storage.cancelScan(id)
+        }
+        if (scanPending !== "") {
+            Storage.cancelScan(scanPending)
+            scanPending = ""
+        }
+    }
+
+    // A refused scan ("busy": another one runs) is asked again in a moment.
+    Timer {
+        id: busyRetry
+        interval: 1500
+        onTriggered: pane.pumpScan(true)
+    }
+
     // Free space changes without a signal: read the numbers when this pane is shown (not when
     // Settings opens: the pane is created then, hidden).
-    onVisibleChanged: if (visible) Storage.refreshInternal()
+    onVisibleChanged: {
+        if (visible) {
+            Storage.refreshInternal()
+            pumpScan(false)
+        } else {
+            busyRetry.stop()
+            stopScans()
+        }
+    }
 
     Component.onCompleted: {
-        syncVolumes()
-        if (visible)
+        syncRows()
+        if (visible) {
             Storage.refreshInternal()
+            pumpScan(false)
+        }
     }
 
     function labelOf(id) {
-        for (let i = 0; i < volumeModel.count; ++i) {
-            if (volumeModel.get(i).volId === id)
-                return volumeModel.get(i).name
-        }
-        return ""
+        const v = Storage.volumes.find(x => x.id === id)
+        return v ? v.label : ""
     }
 
     function filesystemName(fs) {
@@ -191,6 +334,9 @@ SettingsPane {
         if (id === ejectingId)
             return                     // already ejecting: a second Accept or a key repeat does nothing
         ejectingId = id
+        Storage.cancelScan(id)         // a walk of the drive must not keep it busy
+        if (scanPending === id)
+            scanPending = ""
         Storage.eject(id)
     }
 
@@ -212,13 +358,27 @@ SettingsPane {
     Connections {
         target: Storage
         function onFinished(op, id, status) {
-            if (op === "eject" && id === pane.ejectingId)
+            if (op === "eject" && id === pane.ejectingId) {
                 pane.ejectingId = ""
+                pane.pumpScan(false)   // it stayed (busy): its numbers are wanted again
+            }
             if (status === "ok")
                 return
             Notifications.show(pane.statusText(status, pane.labelOf(id)), "warning")
         }
-        function onVolumesChanged() { pane.syncVolumes() }
+        function onVolumesChanged() {
+            pane.syncRows()
+            pane.pumpScan(false)
+        }
+        function onScansChanged() {
+            // The first reply of the drive that was asked for has come.
+            if (pane.scanPending !== "" && Storage.scans[pane.scanPending] !== undefined)
+                pane.scanPending = ""
+            pane.syncRows()
+            if (Object.values(Storage.scans).some(e => e.status === "busy"))
+                busyRetry.restart()
+            pane.pumpScan(false)
+        }
     }
 
     Text {
@@ -231,6 +391,7 @@ SettingsPane {
 
     UsageRow {
         objectName: "storageInternal"
+        onActiveFocusChanged: if (activeFocus) pane.actionFocused = false
         u: pane.u
         label: qsTr("Free space")
         value: pane.freeText()
@@ -240,6 +401,8 @@ SettingsPane {
 
     SettingRow {
         objectName: "storageApps"
+        inert: true
+        onActiveFocusChanged: if (activeFocus) pane.actionFocused = false
         u: pane.u
         label: qsTr("Apps and games")
         value: pane.sizeText(pane.internal.appsBytes)
@@ -247,6 +410,8 @@ SettingsPane {
 
     SettingRow {
         objectName: "storageData"
+        inert: true
+        onActiveFocusChanged: if (activeFocus) pane.actionFocused = false
         visible: pane.dataKnown()
         u: pane.u
         label: qsTr("Profile data")
@@ -255,6 +420,8 @@ SettingsPane {
 
     SettingRow {
         objectName: "storageSystem"
+        inert: true
+        onActiveFocusChanged: if (activeFocus) pane.actionFocused = false
         u: pane.u
         label: pane.dataKnown() ? qsTr("System") : qsTr("Other")
         value: pane.sizeText(pane.internal.systemBytes)
@@ -263,7 +430,7 @@ SettingsPane {
     Text {
         objectName: "storageHeadingDrives"
         width: parent ? parent.width : 0
-        visible: volumeModel.count > 0
+        visible: Storage.volumes.length > 0
         topPadding: Theme.spaceS * pane.u
         text: qsTr("Drives")
         color: Theme.text
@@ -271,36 +438,35 @@ SettingsPane {
     }
 
     Repeater {
-        model: volumeModel
+        model: rowModel
         SettingRow {
+            required property string rowKey
+            required property string kind          // "volume" | "scan" | "eject"
+            required property string sub           // a scan row: "wait", "cat:games", "other", ...
             required property string volId
             required property string name
-            required property string filesystem
-            required property real sizeBytes
-            required property real freeBytes
+            required property string valueText
+            required property bool shown
             required property bool removable
             required property bool mounted
-            required property bool readOnly
-            objectName: "storageVol_" + volId
+            objectName: kind === "volume" ? "storageVol_" + volId
+                      : kind === "eject" ? "storageEject_" + volId
+                      : "storageScan_" + volId + "_" + sub
+            visible: shown
+            inert: kind === "scan"
+            onActiveFocusChanged: if (activeFocus) pane.actionFocused = kind !== "scan"
             u: pane.u
+            // What was found on a drive sits a step in from the drive's own row.
+            x: kind === "scan" ? Theme.spaceL * pane.u : 0
+            width: parent ? parent.width - x : 0
             label: name
-            value: pane.volumeValue(filesystem, mounted, readOnly, freeBytes, sizeBytes)
-            onActivated: pane.activate(volId, removable, mounted)
-        }
-    }
-
-    Repeater {
-        model: volumeModel
-        SettingRow {
-            required property string volId
-            required property string name
-            required property bool removable
-            required property bool mounted
-            objectName: "storageEject_" + volId
-            visible: removable && mounted
-            u: pane.u
-            label: qsTr("Eject %1").arg(name)
-            onActivated: pane.ejectVolume(volId)
+            value: valueText
+            onActivated: {
+                if (kind === "volume")
+                    pane.activate(volId, removable, mounted)
+                else if (kind === "eject")
+                    pane.ejectVolume(volId)
+            }
         }
     }
 }

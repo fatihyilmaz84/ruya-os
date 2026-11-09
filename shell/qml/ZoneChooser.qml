@@ -88,8 +88,13 @@ FocusScope {
         cityList.positionViewAtIndex(cityList.currentIndex, ListView.Contain)
     }
     // The list arrives after the shell started (or after start()): begin again where we meant to.
+    // Not while the chooser is being built: `visible` is not settled then, and start() would take the
+    // focus for a picker that is still closed (T-349: the Time zone picker is built on its first
+    // opening, so this was the moment the row lost its focus).
     property string wanted: ""
-    onRegionsChanged: if (visible && regions.length > 0) start(wanted)
+    property bool built: false
+    Component.onCompleted: built = true
+    onRegionsChanged: if (built && visible && regions.length > 0) start(wanted)
 
     function move(list, count, delta) {
         if (count <= 0)

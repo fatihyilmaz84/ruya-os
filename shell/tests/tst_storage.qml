@@ -264,8 +264,8 @@ Item {
             tryVerify(() => find("storageVol_vol-stick") !== null, 2000, "the list gains the stick")
             tryCompare(addedSpy, "count", 1)
             tryVerify(() => toastCount("Drive inserted: Ruya Stick") === 1, 2000, "one toast")
-            compare(find("storageVol_vol-stick").value, "exFAT · " + Storage.formatBytes(21500000000)
-                    + " free of " + Storage.formatBytes(32000000000))
+            compare(find("storageVol_vol-stick").value, "exFAT · " + Storage.formatBytes(44500000000)
+                    + " free of " + Storage.formatBytes(64000000000))
             tryVerify(() => find("storageVol_vol-old").activeFocus, 2000, "focus stays on its row")
             verify(find("paneStorage").activeFocus)
             tryVerify(() => find("storageEject_vol-stick").visible, 2000, "the stick can be ejected")
@@ -504,6 +504,346 @@ Item {
             tryVerify(() => Storage.mockPendingReplies() === 0, 2000)
             compare(Storage.internal.freeBytes, 28000000000, "the late snapshot was dropped")
             Storage.mockLowSpace(false)
+        }
+
+        // ---- what RuyaOS finds on a removable drive (T-331) ----
+
+        // The scan state of a volume, "" while it has no entry (an entry goes when its volume changes).
+        function scanState(id) { return Storage.scans[id] ? Storage.scans[id].state : "" }
+
+        function scanRowNames(volId) {
+            const out = []
+            const prefix = "storageScan_" + volId + "_"
+            for (const r of find("paneStorage").focusableRows()) {
+                if (r.objectName.indexOf(prefix) === 0)
+                    out.push(r.objectName.substring(prefix.length))
+            }
+            return out
+        }
+
+        function test_removable_breakdown() {
+            Storage.mockPlugStick()
+            tryVerify(() => volume("vol-stick") !== undefined)
+            openStoragePane()
+            tryVerify(() => find("storageScan_vol-stick_cat:games") !== null, 3000, "the scan ends in rows")
+            compare(find("storageScan_vol-stick_cat:games").label, "Games")
+            compare(find("storageScan_vol-stick_cat:games").value, "12 GB")
+            compare(find("storageScan_vol-stick_cat:backups").label, "Backups")
+            compare(find("storageScan_vol-stick_cat:backups").value, "2 GB")
+            compare(find("storageScan_vol-stick_cat:captures").label, "Captures")
+            compare(find("storageScan_vol-stick_cat:captures").value, "1.5 GB")
+            compare(find("storageScan_vol-stick_cat:pictures").label, "Pictures")
+            compare(find("storageScan_vol-stick_cat:pictures").value, "300 MB")
+            compare(find("storageScan_vol-stick_other").label, "Other")
+            compare(find("storageScan_vol-stick_other").value, "3.7 GB")
+            compare(find("storageScan_vol-stick_wait"), null, "no Scanning row once it is done")
+            compare(scanRowNames("vol-stick").join(), "cat:games,cat:backups,cat:captures,cat:pictures,other")
+            // Under the drive's own row and above its Eject row, in the order of the service.
+            verify(find("storageVol_vol-stick").y < find("storageScan_vol-stick_cat:games").y)
+            // A step in from the drive's row, and still inside the pane.
+            const vol = find("storageVol_vol-stick")
+            const games = find("storageScan_vol-stick_cat:games")
+            verify(games.x > vol.x, "indented")
+            compare(games.x + games.width, vol.x + vol.width, "ends where the drive's row ends")
+            verify(find("storageScan_vol-stick_cat:games").y < find("storageScan_vol-stick_cat:backups").y)
+            verify(find("storageScan_vol-stick_other").y < find("storageEject_vol-stick").y)
+            // The internal disk is not scanned (the "This console" rows tell its story).
+            compare(find("storageScan_vol-internal_wait"), null)
+            compare(Storage.mockScanCalls().join(), "vol-stick")
+            // The parts add up to what the service counted.
+            const s = Storage.scans["vol-stick"]
+            compare(s.state, "done")
+            compare(s.partial, false)
+            compare(s.usedBytes, 19500000000)
+        }
+
+        function test_nothing_recognised_has_one_line() {
+            Storage.mockPlug(["vol-card"])
+            tryVerify(() => volume("vol-card") !== undefined)
+            openStoragePane()
+            tryVerify(() => find("storageScan_vol-card_none") !== null, 3000)
+            compare(find("storageScan_vol-card_none").label, "Nothing found here")
+            compare(find("storageScan_vol-card_none").value, "")
+            compare(scanRowNames("vol-card").join(), "none", "one line, no Other row")
+        }
+
+        function test_partial_result_reads_at_least() {
+            Storage.mockSetScanPartial(true)
+            Storage.mockPlug(["vol-stick", "vol-card"])
+            tryVerify(() => volume("vol-card") !== undefined)
+            openStoragePane()
+            tryVerify(() => find("storageScan_vol-stick_cat:games") !== null, 3000)
+            compare(find("storageScan_vol-stick_cat:games").value, "at least 12 GB")
+            compare(find("storageScan_vol-stick_other").value, "at least 3.7 GB")
+            tryVerify(() => find("storageScan_vol-card_none") !== null, 3000)
+            compare(find("storageScan_vol-card_none").label, "Nothing found so far", "a partial walk may not have got to it")
+            compare(find("storageScan_vol-card_none").value, "")
+            compare(Storage.scans["vol-stick"].partial, true)
+        }
+
+        // The Scanning row while the walk runs, then rows in its place; the focus stays where it was.
+        function test_scanning_row_then_results_and_focus_stays() {
+            Storage.mockHoldScan(true)
+            Storage.mockPlugStick()
+            tryVerify(() => volume("vol-stick") !== undefined)
+            openStoragePane()
+            tryVerify(() => find("storageScan_vol-stick_wait") !== null, 3000, "a Scanning row")
+            compare(find("storageScan_vol-stick_wait").label, "Scanning…")
+            compare(Storage.scans["vol-stick"].state, "running")
+            goTo("storageVol_vol-stick")
+            Storage.mockHoldScan(false)
+            tryVerify(() => find("storageScan_vol-stick_cat:games") !== null, 3000)
+            compare(find("storageScan_vol-stick_wait"), null)
+            verify(find("storageVol_vol-stick").activeFocus, "focus stays on the drive's row")
+            keyClick(Qt.Key_Down)
+            tryVerify(() => find("storageScan_vol-stick_cat:games").activeFocus, 2000, "Down reaches the first result")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => find("categoryList").activeFocus, 2000, "Back leaves")
+        }
+
+        // A second drive's numbers arriving change the rows around the focused one, not the row itself.
+        function test_focus_stays_on_its_row_while_another_drive_reports() {
+            Storage.mockHoldScan(true)
+            Storage.mockPlug(["vol-stick", "vol-card"])
+            tryVerify(() => volume("vol-card") !== undefined)
+            openStoragePane()
+            tryVerify(() => find("storageScan_vol-stick_wait") !== null, 3000)
+            Storage.mockHoldScan(false)                  // the stick finishes, then the card is asked
+            tryVerify(() => find("storageScan_vol-stick_cat:games") !== null, 3000)
+            goTo("storageScan_vol-stick_cat:games")
+            const games = find("storageScan_vol-stick_cat:games")
+            tryVerify(() => find("storageScan_vol-card_none") !== null, 3000, "the card's result appears below")
+            verify(find("storageScan_vol-stick_cat:games") === games, "the row was not recreated")
+            verify(games.activeFocus, "focus stays")
+            keyClick(Qt.Key_Down)
+            tryVerify(() => find("storageScan_vol-stick_cat:backups").activeFocus, 2000, "and the keys move on")
+        }
+
+        function test_one_scan_at_a_time_the_second_follows() {
+            Storage.mockHoldScan(true)
+            Storage.mockPlug(["vol-stick", "vol-card"])
+            tryVerify(() => volume("vol-card") !== undefined)
+            openStoragePane()
+            tryVerify(() => Storage.mockScanCalls().length === 1, 3000)
+            wait(100)
+            compare(Storage.mockScanCalls().join(), "vol-stick", "the card waits for the stick")
+            Storage.mockHoldScan(false)
+            tryVerify(() => Storage.mockScanCalls().join() === "vol-stick,vol-card", 3000)
+            tryVerify(() => find("storageScan_vol-card_none") !== null, 3000)
+        }
+
+        function test_scan_cancelled_when_pane_hides() {
+            Storage.mockHoldScan(true)
+            Storage.mockPlugStick()
+            tryVerify(() => volume("vol-stick") !== undefined)
+            openStoragePane()
+            tryVerify(() => Storage.mockScanCalls().length === 1, 3000)
+            tryVerify(() => scanState("vol-stick") === "running", 3000)
+            keyClick(Qt.Key_Left)                        // back to the category list
+            tryVerify(() => find("categoryList").activeFocus, 2000)
+            keyClick(Qt.Key_Down)                        // another category: the pane is hidden
+            tryVerify(() => !find("paneStorage").visible, 2000)
+            tryVerify(() => Storage.mockCancelCalls().join() === "vol-stick", 2000, "the walk was stopped")
+            tryVerify(() => scanState("vol-stick") === "cancelled", 2000)
+            // Shown again: a new scan, and its result.
+            Storage.mockHoldScan(false)
+            keyClick(Qt.Key_Up)
+            tryVerify(() => find("paneStorage").visible, 2000)
+            tryVerify(() => Storage.mockScanCalls().length === 2, 3000, "asked again")
+            tryVerify(() => scanState("vol-stick") === "done", 3000)
+        }
+
+        function test_eject_cancels_the_scan_first() {
+            Storage.mockHoldScan(true)
+            Storage.mockPlugStick()
+            tryVerify(() => volume("vol-stick") !== undefined)
+            openStoragePane()
+            tryVerify(() => find("storageScan_vol-stick_wait") !== null, 3000)
+            goTo("storageEject_vol-stick")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => volume("vol-stick") === undefined, 2000, "the drive is gone")
+            compare(Storage.mockCancelCalls().join(), "vol-stick", "its scan was cancelled")
+            compare(Storage.mockScanCalls().length, 1, "and not started again")
+            tryVerify(() => toastTexts().includes("Safe to remove"), 2000)
+            tryVerify(() => find("storageScan_vol-stick_wait") === null, 2000, "its rows are gone")
+            tryVerify(() => find("storageVol_vol-old").activeFocus, 2000, "focus lands on a valid row")
+            compare(Object.keys(Storage.scans).length, 0, "nothing is kept for a drive that left")
+        }
+
+        // The answer to an older question must not put an old state back (RequestSequence).
+        function test_late_scan_reply_is_dropped() {
+            Storage.mockHoldScan(true)
+            Storage.mockPlugStick()
+            tryVerify(() => volume("vol-stick") !== undefined)
+            openStoragePane()
+            tryVerify(() => Storage.scans["vol-stick"] !== undefined, 3000)
+            compare(Storage.scans["vol-stick"].state, "running")
+            Storage.mockRefreshScanDelayed("vol-stick", 300)   // a snapshot "running" is on its way
+            compare(Storage.mockPendingReplies(), 1)
+            Storage.mockHoldScan(false)                        // the scan ends: "done"
+            tryVerify(() => scanState("vol-stick") === "done", 3000)
+            tryVerify(() => Storage.mockPendingReplies() === 0, 2000)
+            compare(Storage.scans["vol-stick"].state, "done", "the late snapshot was dropped")
+            tryVerify(() => find("storageScan_vol-stick_cat:games") !== null, 2000)
+            compare(find("storageScan_vol-stick_wait"), null)
+        }
+
+        // The cache is the facade's too: a volume whose free space changed is asked again.
+        function test_a_changed_volume_is_scanned_again() {
+            Storage.mockPlugStick()
+            tryVerify(() => volume("vol-stick") !== undefined)
+            openStoragePane()
+            tryVerify(() => scanState("vol-stick") === "done", 3000)
+            Storage.mockRepublish()                      // unchanged: no new walk
+            wait(150)
+            compare(Storage.mockScanCalls().length, 1)
+            Storage.mockSetLabel("vol-stick", "Renamed")  // a label alone does not change what was scanned
+            wait(150)
+            compare(Storage.mockScanCalls().length, 1)
+            Storage.mockSetFree("vol-stick", 40000000000)
+            tryVerify(() => Storage.mockScanCalls().length === 2, 3000, "new free space: scanned again")
+            tryVerify(() => scanState("vol-stick") === "done", 3000)
+        }
+
+        function test_zz_screenshots_scan() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            Storage.mockPlug(["vol-stick", "vol-card"])
+            tryVerify(() => volume("vol-card") !== undefined)
+            openStoragePane()
+            tryVerify(() => find("storageScan_vol-card_none") !== null, 3000)
+            goTo("storageScan_vol-stick_cat:games")
+            wait(800)
+            grabImage(tc.shell).save(shotsDir + "/27-settings-storage-scan.png")
+        }
+
+        function test_zz_screenshots_scan_partial() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            Storage.mockSetScanPartial(true)
+            Storage.mockPlugStick()
+            tryVerify(() => volume("vol-stick") !== undefined)
+            openStoragePane()
+            tryVerify(() => find("storageScan_vol-stick_other") !== null, 3000)
+            goTo("storageScan_vol-stick_cat:backups")
+            wait(800)
+            grabImage(tc.shell).save(shotsDir + "/27-settings-storage-scan-partial.png")
+        }
+
+        function shownHints() { return find("paneStorage").hints.map(h => h.button + " " + h.text).join("|") }
+
+        // A row that does nothing on Accept says so: the hint bar offers Back only, and Accept is silent.
+        function test_scan_rows_offer_back_only_and_accept_does_nothing() {
+            Storage.mockPlugStick()
+            tryVerify(() => volume("vol-stick") !== undefined)
+            openStoragePane()
+            tryVerify(() => find("storageScan_vol-stick_cat:games") !== null, 3000)
+            compare(shownHints(), "B Back", "the first row (This console) is a fact")
+            goTo("storageVol_vol-stick")
+            compare(shownHints(), "A Select|B Back", "a drive's own row does something")
+            keyClick(Qt.Key_Down)
+            tryVerify(() => find("storageScan_vol-stick_cat:games").activeFocus, 2000)
+            compare(shownHints(), "B Back", "a result row does nothing on Accept")
+            const row = find("storageScan_vol-stick_cat:games")
+            verify(row.inert)
+            let hit = 0
+            row.activated.connect(() => { hit++ })
+            keyClick(Qt.Key_Return)
+            wait(100)
+            compare(hit, 0, "Accept on a result row emits nothing")
+            verify(row.activeFocus, "and focus stays")
+            goTo("storageEject_vol-stick")
+            compare(shownHints(), "A Select|B Back", "Eject does something")
+            goTo("storageApps")
+            compare(shownHints(), "B Back")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => find("categoryList").activeFocus, 2000, "Back leaves")
+        }
+
+        // The focused row is inside what the pane shows (rows rebuilt under it must not leave it off screen).
+        function focusedRowIsShown() {
+            const pane = find("paneStorage")
+            const row = pane.focusableRows().find(r => r.activeFocus)
+            if (!row)
+                return false
+            return row.y >= pane.scrollY - 0.5 && row.y + row.height <= pane.scrollY + pane.viewport.height + 0.5
+        }
+
+        function test_focus_stays_in_view_when_the_rows_under_it_are_rebuilt() {
+            Storage.mockPlug(["vol-card"])
+            tryVerify(() => volume("vol-card") !== undefined)
+            openStoragePane()
+            tryVerify(() => find("storageScan_vol-card_none") !== null, 3000)
+            goTo("storageScan_vol-card_none")
+            tryVerify(() => focusedRowIsShown(), 2000, "the focused result row is in view")
+            Storage.mockSetScanFailed(true)
+            Storage.mockSetFree("vol-card", 39000000000)   // the volume changed: scanned again, now unreadable
+            tryVerify(() => find("storageScan_vol-card_failed") !== null, 3000)
+            tryVerify(() => find("paneStorage").activeFocus, 2000)
+            tryVerify(() => focusedRowIsShown(), 2000, "the focused row is still in view")
+            keyClick(Qt.Key_Down)
+            tryVerify(() => focusedRowIsShown(), 2000, "and Down keeps it in view")
+        }
+
+        function test_unreadable_drive_says_so_and_how_to_retry() {
+            Storage.mockSetScanFailed(true)
+            Storage.mockPlug(["vol-card"])
+            tryVerify(() => volume("vol-card") !== undefined)
+            openStoragePane()
+            tryVerify(() => find("storageScan_vol-card_failed") !== null, 3000)
+            compare(find("storageScan_vol-card_failed").label, "Could not read this drive")
+            compare(find("storageScan_vol-card_failed").value, "Plug it in again")
+            compare(scanRowNames("vol-card").join(), "failed")
+            compare(Storage.mockScanCalls().length, 1, "not asked again in a loop")
+            wait(200)
+            compare(Storage.mockScanCalls().length, 1)
+            compare(Storage.scans["vol-card"].state, "failed")
+        }
+
+        function test_zz_screenshots_scan_states() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            // Scanning, then nothing recognised, then an unreadable drive; English and Turkish.
+            for (const lang of ["en", "tr"]) {
+                DeviceSettings.language = lang
+                Storage.mockReset()
+                tryVerify(() => Storage.volumes.length === 2)
+                Storage.mockSetScanFailed(false)
+                Storage.mockHoldScan(true)
+                Storage.mockPlug(["vol-card"])
+                tryVerify(() => volume("vol-card") !== undefined)
+                if (lang === "en")
+                    openStoragePane()
+                tryVerify(() => find("storageScan_vol-card_wait") !== null, 3000)
+                goTo("storageScan_vol-card_wait")
+                wait(800)
+                grabImage(tc.shell).save(shotsDir + "/27-settings-storage-scan-scanning" + (lang === "tr" ? "-tr" : "") + ".png")
+                Storage.mockHoldScan(false)
+                tryVerify(() => find("storageScan_vol-card_none") !== null, 3000)
+                goTo("storageScan_vol-card_none")
+                wait(800)
+                grabImage(tc.shell).save(shotsDir + "/27-settings-storage-scan-empty" + (lang === "tr" ? "-tr" : "") + ".png")
+                // An unreadable drive: scanned again after the volume changes.
+                Storage.mockSetScanFailed(true)
+                Storage.mockSetFree("vol-card", 39000000000)
+                tryVerify(() => find("storageScan_vol-card_failed") !== null, 3000)
+                goTo("storageScan_vol-card_failed")
+                wait(800)
+                grabImage(tc.shell).save(shotsDir + "/27-settings-storage-scan-failed" + (lang === "tr" ? "-tr" : "") + ".png")
+            }
+        }
+
+        function test_zz_screenshots_scan_turkish() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            Storage.mockPlug(["vol-stick", "vol-card"])
+            tryVerify(() => volume("vol-card") !== undefined)
+            DeviceSettings.language = "tr"
+            openStoragePane()
+            tryVerify(() => find("storageScan_vol-card_none") !== null, 3000)
+            goTo("storageScan_vol-stick_cat:games")
+            wait(800)
+            grabImage(tc.shell).save(shotsDir + "/27-settings-storage-scan-tr.png")
         }
 
         function test_zz_screenshots() {

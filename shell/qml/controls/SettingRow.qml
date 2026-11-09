@@ -6,6 +6,9 @@ SettingControl {
     id: row
 
     property string value
+    // A row that does nothing on Accept (a fact, a result): it makes no sound and emits nothing.
+    // The pane then also offers Back only in the hint bar while it has focus (04 section 5).
+    property bool inert: false
 
     signal activated()
 
@@ -21,6 +24,8 @@ SettingControl {
     }
 
     function accept() {
+        if (inert)
+            return
         Sfx.select()
         activated()
     }

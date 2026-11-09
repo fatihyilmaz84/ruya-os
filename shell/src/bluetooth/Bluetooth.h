@@ -79,6 +79,9 @@ public:
     // Adds a paired, connected device of every kind and controller family, and of one kind that
     // is not known (T-199); mockReset() takes them away again.
     Q_INVOKABLE void mockPopulate();
+    // Adds two paired, connected DualSense pads with the same name, "Wireless Controller", the
+    // addresses AA:00:00:00:00:04 and :05 (T-334; batteries 80 and 55 %); mockReset() removes them.
+    Q_INVOKABLE void mockTwoPads();
     // Asks the backend for the state and the devices; the replies arrive after `ms` and show them
     // as they are now. mockPendingReplies: how many are still on their way.
     Q_INVOKABLE void mockRefreshDelayed(int ms);
@@ -87,6 +90,8 @@ public:
     // since the last reset.
     Q_INVOKABLE void mockHoldPairing(bool hold);
     Q_INVOKABLE int mockPairCalls() const;
+    // How many times the backend was asked for the state and the devices (T-349).
+    Q_INVOKABLE int mockRefreshCalls() const;
     // How the window ends ("wait", "success", "timeout", "rejected"); whether an input device is
     // present; how many times the window was started.
     Q_INVOKABLE void mockPairingScript(const QString &outcome);

@@ -1,3 +1,4 @@
+pragma ComponentBehavior: Bound
 import QtQuick
 import RuyaShell
 
@@ -13,6 +14,22 @@ SettingsPane {
     id: pane
 
     property Item overlay        // the shell's modal layer: the wallpaper picker lives there
+
+    // The pickers are built when each first opens (T-349). Until the wallpaper picker is built, the
+    // pane looks for pictures on the USB drives in its place (when it is first shown and whenever the
+    // volumes change), as when the picker was built with the pane, so "Add from USB drive…" is there
+    // on the picker's first opening; once built, the picker does it itself.
+    function scanUsbPictures() {
+        Wallpapers.scanUsb(Storage.volumes.filter(v => v.mounted && v.removable && v.mountPoint.length > 0).map(v => v.mountPoint))
+    }
+    Component.onCompleted: Qt.callLater(scanUsbPictures)
+    Connections {
+        target: Storage
+        function onVolumesChanged() {
+            if (!pane.picker)
+                pane.scanUsbPictures()
+        }
+    }
 
     ChoiceRow {
         id: quality
@@ -76,8 +93,11 @@ SettingsPane {
         objectName: "rowWallpaper"
         u: pane.u
         label: qsTr("Wallpaper")
-        value: picker.nameOf(DeviceSettings.wallpaper)
-        onActivated: picker.open()
+        value: DisplayText.wallpaperName(DeviceSettings.wallpaper)
+        onActivated: {
+            pickerSlot.active = true
+            pane.picker.open()
+        }
     }
 
     // The least dim the current picture needs for legible text under the current theme (04 §3, T-208).
@@ -152,7 +172,10 @@ SettingsPane {
         visible: Display.available
         label: qsTr("Resolution")
         value: DisplayText.resolutionLabel(Display.currentWidth, Display.currentHeight)
-        onActivated: resolutionPicker.open()
+        onActivated: {
+            resolutionSlot.active = true
+            pane.resolutionPicker.open()
+        }
     }
 
     SettingRow {
@@ -162,7 +185,10 @@ SettingsPane {
         visible: Display.available && pane.refreshEntries.length > 1     // one rate, or none known: nothing to choose
         label: qsTr("Refresh rate")
         value: DisplayText.refreshLabel(Display.currentRefreshMhz)
-        onActivated: refreshPicker.open()
+        onActivated: {
+            refreshSlot.active = true
+            pane.refreshPicker.open()
+        }
     }
 
     ChoiceRow {
@@ -209,34 +235,46 @@ SettingsPane {
         apply()
     }
 
-    ModePicker {
-        id: resolutionPicker
-        objectName: "resolutionPicker"
+    Loader {
+        id: resolutionSlot
         parent: pane.overlay
         width: parent ? parent.width : 0
         height: parent ? parent.height : 0
-        u: pane.u
-        title: qsTr("Resolution")
-        entries: pane.resolutionEntries
-        currentKey: Display.currentWidth + "x" + Display.currentHeight
-        onChosen: key => {
-            const parts = key.split("x")
-            pane.applyMode(() => Display.chooseResolution(parseInt(parts[0]), parseInt(parts[1])))
+        active: false
+        sourceComponent: Component {
+            ModePicker {
+                objectName: "resolutionPicker"
+                u: pane.u
+                title: qsTr("Resolution")
+                entries: pane.resolutionEntries
+                currentKey: Display.currentWidth + "x" + Display.currentHeight
+                onChosen: key => {
+                    const parts = key.split("x")
+                    pane.applyMode(() => Display.chooseResolution(parseInt(parts[0]), parseInt(parts[1])))
+                }
+            }
         }
     }
+    readonly property ModePicker resolutionPicker: resolutionSlot.item as ModePicker
 
-    ModePicker {
-        id: refreshPicker
-        objectName: "refreshPicker"
+    Loader {
+        id: refreshSlot
         parent: pane.overlay
         width: parent ? parent.width : 0
         height: parent ? parent.height : 0
-        u: pane.u
-        title: qsTr("Refresh rate")
-        entries: pane.refreshEntries
-        currentKey: String(Display.currentRefreshMhz)
-        onChosen: key => pane.applyMode(() => Display.chooseRefresh(parseInt(key)))
+        active: false
+        sourceComponent: Component {
+            ModePicker {
+                objectName: "refreshPicker"
+                u: pane.u
+                title: qsTr("Refresh rate")
+                entries: pane.refreshEntries
+                currentKey: String(Display.currentRefreshMhz)
+                onChosen: key => pane.applyMode(() => Display.chooseRefresh(parseInt(key)))
+            }
+        }
     }
+    readonly property ModePicker refreshPicker: refreshSlot.item as ModePicker
 
     Connections {
         target: Display
@@ -257,12 +295,18 @@ SettingsPane {
         }
     }
 
-    WallpaperPicker {
-        id: picker
-        objectName: "wallpaperPicker"
+    Loader {
+        id: pickerSlot
         parent: pane.overlay
         width: parent ? parent.width : 0
         height: parent ? parent.height : 0
-        u: pane.u
+        active: false
+        sourceComponent: Component {
+            WallpaperPicker {
+                objectName: "wallpaperPicker"
+                u: pane.u
+            }
+        }
     }
+    readonly property WallpaperPicker picker: pickerSlot.item as WallpaperPicker
 }

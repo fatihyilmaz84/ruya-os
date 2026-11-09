@@ -21,6 +21,7 @@ use crate::battery::{Batteries, UPower};
 use crate::bluetooth::{self, Bluetooth, Bluez, BtError};
 use crate::debounce;
 use crate::display::{Display, DynDrm, Mode, OutputView};
+use crate::drive_scan::{self, Begin, Job, ScanSource, Scans};
 use crate::idle_pads::IdleReport;
 #[cfg(target_os = "linux")]
 use crate::input::GamepadEvent;
@@ -1074,14 +1075,24 @@ pub type DynSource = Box<dyn SystemSource>;
 
 pub type SharedUsage = Arc<SystemUsage<DynSource, MonotonicClock>>;
 
+/// Chosen at runtime: the real file system on Linux, a made-up stick in `--session`.
+pub type DynScanSource = Box<dyn ScanSource>;
+
+pub type SharedScans = Arc<Scans<DynScanSource, MonotonicClock>>;
+
 pub struct StorageIface {
     storage: SharedStorage,
     usage: SharedUsage,
+    scans: SharedScans,
 }
 
 impl StorageIface {
-    pub fn new(storage: SharedStorage, usage: SharedUsage) -> Self {
-        StorageIface { storage, usage }
+    pub fn new(storage: SharedStorage, usage: SharedUsage, scans: SharedScans) -> Self {
+        StorageIface {
+            storage,
+            usage,
+            scans,
+        }
     }
 
     /// `VolumeAdded` first, then `VolumesChanged` (the contract's order).
@@ -1164,9 +1175,50 @@ impl StorageIface {
         .collect()
     }
 
+    /// Answers at once; the walk runs on the blocking pool (`drive_scan.rs`) and ends in
+    /// `VolumeScanChanged`.
+    async fn scan_volume(
+        &self,
+        id: &str,
+        #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
+    ) -> String {
+        match self.scans.request(&self.storage.list(), id) {
+            Ok(Begin::Nothing) => drive_scan::Status::Ok,
+            Ok(Begin::Run(job)) => {
+                emitter
+                    .connection()
+                    .executor()
+                    .spawn(
+                        run_scan(emitter.connection().clone(), self.scans.clone(), job),
+                        "ruya-devices drive scan",
+                    )
+                    .detach();
+                drive_scan::Status::Ok
+            }
+            Err(status) => status,
+        }
+        .as_str()
+        .to_owned()
+    }
+
+    /// From the scans' state: a short lock, no walking.
+    fn get_volume_scan(&self, id: &str) -> BTreeMap<String, OwnedValue> {
+        scan_dict(&self.scans.get(&self.storage.list(), id))
+    }
+
+    fn cancel_scan(&self, id: &str) {
+        self.scans.cancel(id);
+    }
+
     async fn eject(&self, id: &str, #[zbus(signal_emitter)] emitter: SignalEmitter<'_>) -> String {
-        let (storage, id) = (self.storage.clone(), id.to_owned());
-        let status = unblock(move || storage.eject(&id)).await;
+        // A scan of the volume must not keep it busy: stop it first, and wait until its walk has
+        // let go of the directory it is reading (an open directory makes the unmount "busy").
+        let (storage, scans, id) = (self.storage.clone(), self.scans.clone(), id.to_owned());
+        let status = unblock(move || {
+            scans.cancel_and_wait(&id, SCAN_STOP_WAIT);
+            storage.eject(&id)
+        })
+        .await;
         // Do not wait for udisks' signals: the volume should leave the list as the call returns.
         let storage = self.storage.clone();
         match unblock(move || storage.refresh()).await {
@@ -1193,6 +1245,74 @@ impl StorageIface {
 
     #[zbus(signal)]
     async fn system_usage_changed(emitter: &SignalEmitter<'_>) -> zbus::Result<()>;
+
+    #[zbus(signal)]
+    async fn volume_scan_changed(emitter: &SignalEmitter<'_>, id: String) -> zbus::Result<()>;
+}
+
+/// How long `Eject` waits for a walk of the volume to stop before it unmounts.
+const SCAN_STOP_WAIT: Duration = Duration::from_secs(2);
+
+/// The dictionary of `GetVolumeScan`: `state` s, `partial` b, `used_bytes` x, `categories`
+/// aa{sv} (always present, empty when nothing was recognised), `other_bytes` x.
+pub fn scan_dict(got: &drive_scan::VolumeScan) -> BTreeMap<String, OwnedValue> {
+    let number = |v: u64| Value::from(i64::try_from(v).unwrap_or(i64::MAX));
+    dict(vec![
+        ("state", Value::from(got.state.as_str())),
+        ("partial", Value::from(got.scan.partial)),
+        ("used_bytes", number(got.scan.used_bytes)),
+        (
+            "categories",
+            scan_rows(&got.scan.categories).unwrap_or_else(|| {
+                Value::Array(Array::new(&Signature::dict(
+                    Signature::Str,
+                    Signature::Variant,
+                )))
+            }),
+        ),
+        ("other_bytes", number(got.scan.other_bytes)),
+    ])
+}
+
+/// `categories` of `GetVolumeScan` as `aa{sv}`.
+fn scan_rows(totals: &[drive_scan::Total]) -> Option<Value<'static>> {
+    let number = |v: u64| Value::from(i64::try_from(v).unwrap_or(i64::MAX));
+    let row_type = Signature::dict(Signature::Str, Signature::Variant);
+    let mut array = Array::new(&row_type);
+    for t in totals {
+        let mut row = Dict::new(&Signature::Str, &Signature::Variant);
+        let fields: [(&str, Value<'static>); 3] = [
+            ("key", Value::from(t.key)),
+            ("bytes", number(t.bytes)),
+            ("files", number(t.files)),
+        ];
+        for (k, v) in fields {
+            row.append(Value::from(k), Value::Value(Box::new(v))).ok()?;
+        }
+        array.append(Value::Dict(row)).ok()?;
+    }
+    Some(Value::Array(array))
+}
+
+/// One drive scan on the blocking pool, then `VolumeScanChanged` if its result changed.
+async fn run_scan(connection: Connection, scans: SharedScans, job: Job) {
+    let id = job.id.clone();
+    let changed = unblock(move || scans.run(&job)).await;
+    if !changed {
+        return;
+    }
+    match connection
+        .object_server()
+        .interface::<_, StorageIface>(OBJECT_PATH)
+        .await
+    {
+        Ok(iface) => {
+            if let Err(err) = StorageIface::volume_scan_changed(iface.signal_emitter(), id).await {
+                eprintln!("ruya-devices: emitting VolumeScanChanged failed: {err}");
+            }
+        }
+        Err(err) => eprintln!("ruya-devices: emitting VolumeScanChanged failed: {err}"),
+    }
 }
 
 /// Recomputes the directory sizes on the blocking pool if they are stale and sends
@@ -1881,5 +2001,71 @@ mod tests {
     fn what_cannot_be_read_is_not_in_the_dictionary() {
         let dict = system_dict(&collect(&FakeSource::new()));
         assert!(dict.is_empty());
+    }
+
+    #[test]
+    fn get_volume_scan_has_the_contracts_shape() {
+        use crate::drive_scan::{Scan, State, Total, VolumeScan};
+        let full = VolumeScan {
+            state: State::Done,
+            scan: Scan {
+                partial: true,
+                cancelled: false,
+                used_bytes: 15,
+                categories: vec![
+                    Total {
+                        key: "games",
+                        bytes: 10,
+                        files: 3,
+                    },
+                    Total {
+                        key: "backups",
+                        bytes: 2,
+                        files: 1,
+                    },
+                ],
+                other_bytes: 3,
+            },
+        };
+        let d = scan_dict(&full);
+        let sig = |k: &str| d[k].value_signature().to_string();
+        assert_eq!(
+            d.keys().map(String::as_str).collect::<Vec<_>>(),
+            [
+                "categories",
+                "other_bytes",
+                "partial",
+                "state",
+                "used_bytes"
+            ]
+        );
+        assert_eq!(sig("state"), "s");
+        assert_eq!(sig("partial"), "b");
+        assert_eq!(sig("used_bytes"), "x");
+        assert_eq!(sig("other_bytes"), "x");
+        assert_eq!(sig("categories"), "aa{sv}");
+        let Value::Array(rows) = &*d["categories"] else {
+            panic!("categories is not an array");
+        };
+        assert_eq!(rows.len(), 2);
+        let Value::Dict(first) = &rows[0] else {
+            panic!("a category is not a dictionary");
+        };
+        let key: &str = first.get(&"key").unwrap().unwrap();
+        let bytes: i64 = first.get(&"bytes").unwrap().unwrap();
+        let files: i64 = first.get(&"files").unwrap().unwrap();
+        assert_eq!((key, bytes, files), ("games", 10, 3));
+        // Nothing recognised, or no scan at all: the array is there and empty, numbers are 0.
+        let idle = scan_dict(&VolumeScan {
+            state: State::Idle,
+            scan: Scan::default(),
+        });
+        assert_eq!(idle["categories"].value_signature().to_string(), "aa{sv}");
+        let Value::Array(rows) = &*idle["categories"] else {
+            panic!("categories is not an array");
+        };
+        assert!(rows.is_empty());
+        assert_eq!(idle["state"].downcast_ref::<&str>().unwrap(), "idle");
+        assert_eq!(idle["used_bytes"].downcast_ref::<i64>().unwrap(), 0);
     }
 }
