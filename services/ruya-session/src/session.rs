@@ -8,7 +8,9 @@
 use std::time::{Duration, Instant};
 
 use crate::directory::ProfileDirectory;
-use crate::spawner::{app_env, valid_app_id, valid_profile_id, Spawner, UnitEvent};
+use crate::spawner::{
+    app_env, valid_app_id, valid_profile_id, with_pulse_server, Spawner, UnitEvent,
+};
 
 /// After `Stop`, the app has this long to quit before it is killed.
 pub const STOP_GRACE: Duration = Duration::from_secs(5);
@@ -122,6 +124,7 @@ pub struct Session<S, D> {
     directory: D,
     env: Vec<(String, String)>,
     wayland_dir: Option<String>,
+    pulse_dir: Option<String>,
     instances: Vec<Instance>,
 }
 
@@ -133,6 +136,7 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
             directory,
             env,
             wayland_dir: None,
+            pulse_dir: None,
             instances: Vec::new(),
         }
     }
@@ -141,6 +145,13 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
     /// (`spawner::app_env`, ADR-023).
     pub fn with_wayland_dir(mut self, dir: &str) -> Self {
         self.wayland_dir = Some(dir.to_owned());
+        self
+    }
+
+    /// Each app then gets its profile user's own sound server, started first, as `PULSE_SERVER`
+    /// (`spawner::with_pulse_server`, ADR-010).
+    pub fn with_pulse_dir(mut self, dir: &str) -> Self {
+        self.pulse_dir = Some(dir.to_owned());
         self
     }
 
@@ -176,7 +187,15 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
         if !self.spawner.is_installed(app_id) {
             return (Status::UnknownApp, String::new());
         }
-        let env = app_env(&self.env, self.wayland_dir.as_deref(), &user);
+        let mut env = app_env(&self.env, self.wayland_dir.as_deref(), &user);
+        if let Some(dir) = self.pulse_dir.as_deref() {
+            // The profile's own sound server must listen before the app looks for it. Without it
+            // the app still starts, without sound (ADR-010, T-365).
+            match self.spawner.start_sound(&user) {
+                Ok(()) => env = with_pulse_server(env, dir, &user),
+                Err(err) => eprintln!("ruya-session: no sound server for {user}: {err}"),
+            }
+        }
         match self.spawner.start(&user, app_id, &env) {
             Ok(unit) => {
                 self.instances.push(Instance {
@@ -491,6 +510,50 @@ mod tests {
         let mut s = session();
         s.launch(APP, "p2", 0);
         assert_eq!(s.spawner.calls(), [format!("start ruya-p2 {APP}")]);
+    }
+
+    fn pulse(s: &Session<FakeSpawner, ProfileSnapshot>) -> Option<String> {
+        s.spawner
+            .last_env()
+            .into_iter()
+            .find(|(k, _)| k == "PULSE_SERVER")
+            .map(|(_, v)| v)
+    }
+
+    #[test]
+    fn the_pulse_server_is_started_before_the_app() {
+        let mut s = session().with_pulse_dir("/run/ruya-pulse");
+        let (status, _) = s.launch(APP, "p1", 0);
+        assert_eq!(status, Status::Ok);
+        assert_eq!(
+            s.spawner.calls(),
+            vec!["sound ruya-p1".to_owned(), format!("start ruya-p1 {APP}")]
+        );
+        assert_eq!(
+            pulse(&s).as_deref(),
+            Some("unix:/run/ruya-pulse/ruya-p1/native")
+        );
+        // Without a pulse directory (`--session`): no server is started, no PULSE_SERVER.
+        let mut dev = session();
+        dev.launch(APP, "p2", 0);
+        assert_eq!(dev.spawner.calls(), vec![format!("start ruya-p2 {APP}")]);
+        assert_eq!(pulse(&dev), None);
+    }
+
+    #[test]
+    fn a_failed_pulse_start_still_launches_the_app() {
+        let spawner = FakeSpawner::new().with_app(APP).failing_sound();
+        let dir = ProfileSnapshot::new(["p1".to_owned()]);
+        let mut s = Session::new(spawner, dir, Vec::new()).with_pulse_dir("/run/ruya-pulse");
+        let (status, instance) = s.launch(APP, "p1", 0);
+        assert_eq!(status, Status::Ok);
+        assert!(!instance.is_empty());
+        assert_eq!(
+            s.spawner.calls().last(),
+            Some(&format!("start ruya-p1 {APP}"))
+        );
+        // No PULSE_SERVER pointing at a socket nobody listens on.
+        assert_eq!(pulse(&s), None);
     }
 
     #[test]

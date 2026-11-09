@@ -39,8 +39,9 @@ use zbus::{Connection, MatchRule, MessageStream};
 
 use crate::follow::{bridge_address, parse_signal, Backoff, Follower, ManagerLink, Probe, Wake};
 use crate::spawner::{
-    flatpak_app_installed, launch_command, parse_profile_users, parse_show, scope_pattern,
-    unit_app_id, unit_name, LineTail, RunFollower, RunningUnit, ShowUnit, SHOW_PROPERTIES,
+    flatpak_app_installed, launch_command, parse_profile_users, parse_show, pulse_start_command,
+    scope_pattern, unit_app_id, unit_name, LineTail, RunFollower, RunningUnit, ShowUnit,
+    SHOW_PROPERTIES,
 };
 use crate::spawner::{Spawner, UnitEvent};
 
@@ -111,6 +112,25 @@ impl SystemdSpawner {
 impl Spawner for SystemdSpawner {
     fn is_installed(&self, app_id: &str) -> bool {
         flatpak_app_installed(&self.flatpak_root, app_id)
+    }
+
+    /// `systemctl --machine=ruya-shell@.host --user start ruya-pulse@<user>.service`, the same
+    /// path as the app units, and waits for it: the socket must exist before the app looks for
+    /// it. Quick when the server already runs (every launch after the first).
+    fn start_sound(&self, user: &str) -> Result<(), String> {
+        let args = pulse_start_command(user)?;
+        let status = Command::new(&args[0])
+            .args(&args[1..])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::inherit())
+            .status()
+            .map_err(|err| format!("{}: {err}", args.join(" ")))?;
+        if status.success() {
+            Ok(())
+        } else {
+            Err(format!("{} failed: {status}", args.join(" ")))
+        }
     }
 
     fn start(&self, user: &str, app_id: &str, env: &[(String, String)]) -> Result<String, String> {
