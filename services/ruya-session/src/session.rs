@@ -157,12 +157,21 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
         let Some(user) = self.directory.unix_user(profile) else {
             return (Status::UnknownProfile, String::new());
         };
+        let same = |i: &&Instance| i.app_id == app_id && i.profile == profile;
         if self
             .instances
             .iter()
-            .any(|i| i.app_id == app_id && i.profile == profile)
+            .filter(same)
+            .any(|i| i.state != State::Stopping)
         {
             return (Status::AlreadyRunning, String::new());
+        }
+        if self.instances.iter().any(|i| same(&i)) {
+            // The old unit was told to stop and is not gone yet: its name is still taken, and the
+            // app is not "already running" either. The adapter waits for it (`is_stopping`)
+            // before it gets here; this is the answer when the wait ran out.
+            eprintln!("ruya-session: {app_id} is still ending, not launched");
+            return (Status::Failed, String::new());
         }
         if !self.spawner.is_installed(app_id) {
             return (Status::UnknownApp, String::new());
@@ -188,6 +197,13 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
                 (Status::Failed, String::new())
             }
         }
+    }
+
+    /// Is an instance of this app of this profile on its way out (told to stop, not gone yet)?
+    pub fn is_stopping(&self, app_id: &str, profile: &str) -> bool {
+        self.instances
+            .iter()
+            .any(|i| i.app_id == app_id && i.profile == profile && i.state == State::Stopping)
     }
 
     /// Asks the app to quit; `tick` kills it if it does not. Stopping an instance that is
@@ -934,5 +950,31 @@ mod tests {
         let unit = running(&mut s);
         s.stop(&unit, Instant::now());
         assert_eq!(reason(s.on_event(exec_failed(&unit))), (0, "quit"));
+    }
+
+    #[test]
+    fn launch_after_stop_does_not_answer_already_running() {
+        let mut s = session();
+        let unit = running(&mut s);
+        // Running: a second launch is already-running.
+        assert_eq!(s.launch(APP, "p1", 101).0, Status::AlreadyRunning);
+        assert_eq!(s.stop(&unit, Instant::now()), Status::Ok);
+        assert!(s.is_stopping(APP, "p1"));
+        // The old unit is still around: not "already running", and no second unit on its name.
+        assert_eq!(s.launch(APP, "p1", 102), (Status::Failed, String::new()));
+        assert_eq!(
+            s.spawner
+                .calls()
+                .iter()
+                .filter(|c| c.starts_with("start"))
+                .count(),
+            1
+        );
+        // Once the old one has ended the launch goes through.
+        s.on_event(exited(&unit, 0, false));
+        assert!(!s.is_stopping(APP, "p1"));
+        assert_eq!(s.launch(APP, "p1", 103).0, Status::Ok);
+        // Another profile was never in the way.
+        assert_eq!(s.launch(APP, "p2", 104).0, Status::Ok);
     }
 }

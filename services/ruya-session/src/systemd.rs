@@ -15,22 +15,35 @@
 //!
 //! A restart of this service leaves the apps running (they belong to the users' managers), but
 //! ends the `systemd-run --wait` processes that told us when they ended. `adopt_running` finds the
-//! `ruya-app-*` units again and follows each with a poll of `systemctl show` (`UnitWatch`).
+//! `ruya-app-*` units again and follows the ones of each profile user over one long-lived
+//! connection to that user's manager (`UserLink`, `follow::Follower`, T-340): the manager's own
+//! socket `/run/user/<uid>/systemd/private`, which root may use, a `Subscribe`, and the
+//! `PropertiesChanged` / `UnitRemoved` signals with the real exit status. Only when that
+//! connection is lost are the units looked at again with `systemctl show` every two seconds.
+//!
+//! Open point (VM): `ruya-session.service` has `ProtectHome=yes` and no capabilities, which hides
+//! `/run/user` and keeps root out of its 0700 directories, so on the image the socket may be
+//! refused and only the fallback runs. The unit is not changed by T-340.
 
 use std::collections::HashMap;
 use std::fs::File;
+use std::os::unix::net::UnixStream;
 use std::os::unix::process::ExitStatusExt;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use async_channel::Sender;
+use futures_lite::{future, StreamExt};
+use zbus::connection::{AuthMechanism, Builder};
+use zbus::zvariant::{OwnedObjectPath, OwnedValue};
+use zbus::{Connection, MessageStream};
 
+use crate::follow::{parse_signal, Follower, ManagerLink, Probe, Wake};
 use crate::spawner::{
     flatpak_app_installed, launch_command, parse_profile_users, parse_show, scope_pattern,
-    unit_app_id, unit_name, LineTail, RunFollower, RunningUnit, ShowUnit, UnitWatch,
-    SHOW_PROPERTIES,
+    unit_app_id, unit_name, LineTail, RunFollower, RunningUnit, ShowUnit, SHOW_PROPERTIES,
 };
 use crate::spawner::{Spawner, UnitEvent};
 
@@ -39,8 +52,6 @@ const FLATPAK_ROOT: &str = "/var/lib/flatpak";
 const LOG_DIR: &str = "/run/ruya-session";
 /// How often the status file of a running `systemd-run` is read.
 const POLL: Duration = Duration::from_millis(100);
-/// How often an adopted unit is looked at.
-const WATCH_POLL: Duration = Duration::from_secs(2);
 
 pub struct SystemdSpawner {
     flatpak_root: PathBuf,
@@ -160,6 +171,7 @@ impl Spawner for SystemdSpawner {
                 eprintln!("ruya-session: cannot list the apps of {user}");
                 continue;
             };
+            let mut mine = Vec::new();
             for show in parse_show(&text).into_iter().filter(ShowUnit::alive) {
                 let Some(app_id) = unit_app_id(&user, &show.id) else {
                     continue;
@@ -168,30 +180,35 @@ impl Spawner for SystemdSpawner {
                     .lock()
                     .unwrap_or_else(|e| e.into_inner())
                     .insert(show.id.clone(), (user.clone(), app_id.clone()));
-                let watcher = Watcher {
-                    user: user.clone(),
-                    unit: show.id.clone(),
-                    events: self.events.clone(),
-                    units: self.units.clone(),
-                };
-                let spawned = std::thread::Builder::new()
-                    .name("watch".to_owned())
-                    .spawn(move || watcher.run());
-                if let Err(err) = spawned {
-                    eprintln!("ruya-session: cannot watch {}: {err}", show.id);
-                    self.units
-                        .lock()
-                        .unwrap_or_else(|e| e.into_inner())
-                        .remove(&show.id);
-                    continue;
-                }
-                eprintln!("ruya-session: adopted {}", show.id);
-                found.push(RunningUnit {
+                mine.push(RunningUnit {
                     unit: show.id,
                     user: user.clone(),
                     app_id,
                     started: show.entered,
                 });
+            }
+            if mine.is_empty() {
+                continue;
+            }
+            // One thread and one connection per manager, however many apps it runs.
+            let names: Vec<String> = mine.iter().map(|u| u.unit.clone()).collect();
+            let events = self.events.clone();
+            let registry = self.units.clone();
+            let who = user.clone();
+            let spawned = std::thread::Builder::new()
+                .name("watch".to_owned())
+                .spawn(move || follow_user(&who, &names, &events, &registry));
+            if let Err(err) = spawned {
+                eprintln!("ruya-session: cannot watch the apps of {user}: {err}");
+                let mut registry = self.units.lock().unwrap_or_else(|e| e.into_inner());
+                for u in &mine {
+                    registry.remove(&u.unit);
+                }
+                continue;
+            }
+            for u in mine {
+                eprintln!("ruya-session: adopted {}", u.unit);
+                found.push(u);
             }
         }
         found
@@ -218,29 +235,253 @@ fn show_units(user: &str, pattern: &str) -> Option<String> {
     Some(String::from_utf8_lossy(&out.stdout).into_owned())
 }
 
-/// Follows one adopted unit until it ends, on its own thread.
-struct Watcher {
-    user: String,
-    unit: String,
-    events: Sender<UnitEvent>,
-    units: Arc<Mutex<HashMap<String, (String, String)>>>,
-}
-
-impl Watcher {
-    fn run(self) {
-        let mut watch = UnitWatch::new(&self.unit);
-        loop {
-            std::thread::sleep(WATCH_POLL);
-            let seen = show_units(&self.user, &self.unit)
-                .and_then(|text| parse_show(&text).into_iter().next());
-            if let Some(event) = watch.observe(seen.as_ref()) {
-                self.units
+/// Follows the adopted units of one profile user until the last one has ended.
+fn follow_user(
+    user: &str,
+    units: &[String],
+    events: &Sender<UnitEvent>,
+    registry: &Arc<Mutex<HashMap<String, (String, String)>>>,
+) {
+    let mut link = UserLink::new(user);
+    let mut follower = Follower::new(units);
+    while !follower.is_done() {
+        for event in follower.step(&mut link) {
+            if let UnitEvent::Exited { unit, .. } = &event {
+                registry
                     .lock()
                     .unwrap_or_else(|e| e.into_inner())
-                    .remove(&self.unit);
-                let _ = self.events.send_blocking(event);
-                return;
+                    .remove(unit);
             }
+            let _ = events.send_blocking(event);
+        }
+    }
+}
+
+const MANAGER_PATH: &str = "/org/freedesktop/systemd1";
+const MANAGER_IFACE: &str = "org.freedesktop.systemd1.Manager";
+const NO_SUCH_UNIT: &str = "org.freedesktop.systemd1.NoSuchUnit";
+
+/// The connection to one profile user's manager, and the means to look at a unit when it is down.
+struct UserLink {
+    user: String,
+    uid: Option<String>,
+    conn: Option<Connection>,
+    stream: Option<MessageStream>,
+    /// Was the failure to connect logged? Once per outage is enough.
+    warned: bool,
+}
+
+impl UserLink {
+    fn new(user: &str) -> Self {
+        let uid = Command::new("id")
+            .args(["-u", user])
+            .stdin(Stdio::null())
+            .stderr(Stdio::inherit())
+            .output()
+            .ok()
+            .and_then(|out| String::from_utf8(out.stdout).ok())
+            .map(|s| s.trim().to_owned())
+            .filter(|s| !s.is_empty() && s.chars().all(|c| c.is_ascii_digit()));
+        UserLink {
+            user: user.to_owned(),
+            uid,
+            conn: None,
+            stream: None,
+            warned: false,
+        }
+    }
+
+    fn drop_connection(&mut self) {
+        self.conn = None;
+        self.stream = None;
+    }
+
+    /// Connects to the manager's private socket and subscribes to its signals.
+    fn connect(&mut self) -> Result<(), String> {
+        let uid = self.uid.as_deref().ok_or("no uid")?;
+        let stream = UnixStream::connect(format!("/run/user/{uid}/systemd/private"))
+            .map_err(|e| e.to_string())?;
+        let conn = future::block_on(
+            Builder::async_io_unix_stream(stream)
+                .p2p()
+                .auth_mechanism(AuthMechanism::External)
+                .build(),
+        )
+        .map_err(|e| e.to_string())?;
+        // Open the stream first: nothing sent after `Subscribe` may be missed.
+        let stream = MessageStream::from(&conn);
+        future::block_on(conn.call_method(
+            None::<&str>,
+            MANAGER_PATH,
+            Some(MANAGER_IFACE),
+            "Subscribe",
+            &(),
+        ))
+        .map_err(|e| e.to_string())?;
+        self.conn = Some(conn);
+        self.stream = Some(stream);
+        Ok(())
+    }
+
+    /// A unit's state over the connection. `Err` is a broken connection.
+    fn probe_bus(&self, unit: &str) -> Result<Probe, zbus::Error> {
+        let Some(conn) = &self.conn else {
+            return Err(zbus::Error::Failure("no connection".to_owned()));
+        };
+        let reply = match future::block_on(conn.call_method(
+            None::<&str>,
+            MANAGER_PATH,
+            Some(MANAGER_IFACE),
+            "GetUnit",
+            &(unit,),
+        )) {
+            Ok(reply) => reply,
+            Err(zbus::Error::MethodError(name, _, _)) if name.as_str() == NO_SUCH_UNIT => {
+                return Ok(Probe::Gone);
+            }
+            Err(err) => return Err(err),
+        };
+        let path: OwnedObjectPath = reply.body().deserialize()?;
+        let all = |interface: &str| -> Result<HashMap<String, OwnedValue>, zbus::Error> {
+            future::block_on(conn.call_method(
+                None::<&str>,
+                &path,
+                Some("org.freedesktop.DBus.Properties"),
+                "GetAll",
+                &(interface,),
+            ))?
+            .body()
+            .deserialize()
+        };
+        let unit_props = all("org.freedesktop.systemd1.Unit")?;
+        let service_props = all("org.freedesktop.systemd1.Service")?;
+        let text = |key: &str| {
+            unit_props
+                .get(key)
+                .and_then(|v| String::try_from(v.clone()).ok())
+                .unwrap_or_default()
+        };
+        let int = |key: &str| {
+            service_props
+                .get(key)
+                .and_then(|v| i32::try_from(v.clone()).ok())
+                .unwrap_or(0)
+        };
+        let entered = unit_props
+            .get("ActiveEnterTimestamp")
+            .and_then(|v| u64::try_from(v.clone()).ok())
+            .map_or(0, |usec| i64::try_from(usec / 1_000_000).unwrap_or(0));
+        let show = ShowUnit {
+            id: unit.to_owned(),
+            load_state: text("LoadState"),
+            active_state: text("ActiveState"),
+            entered,
+            exec_main_status: int("ExecMainStatus"),
+            exec_main_code: int("ExecMainCode"),
+        };
+        Ok(if show.alive() {
+            Probe::Alive(show)
+        } else {
+            Probe::Gone
+        })
+    }
+}
+
+impl ManagerLink for UserLink {
+    fn wait(&mut self, max: Duration) -> Wake {
+        let deadline = Instant::now() + max;
+        loop {
+            let left = deadline.saturating_duration_since(Instant::now());
+            if left.is_zero() {
+                return Wake::Quiet;
+            }
+            let Some(stream) = self.stream.as_mut() else {
+                return Wake::Lost;
+            };
+            let got = future::block_on(future::or(async { Some(stream.next().await) }, async {
+                async_io::Timer::after(left).await;
+                None
+            }));
+            match got {
+                None => return Wake::Quiet,
+                Some(Some(Ok(message))) => {
+                    if let Some(event) = parse_signal(&message) {
+                        return Wake::Event(event);
+                    }
+                }
+                Some(_) => {
+                    self.drop_connection();
+                    return Wake::Lost;
+                }
+            }
+        }
+    }
+
+    fn reconnect(&mut self, pause: Duration) -> bool {
+        if !pause.is_zero() {
+            std::thread::sleep(pause);
+        }
+        self.drop_connection();
+        match self.connect() {
+            Ok(()) => {
+                self.warned = false;
+                true
+            }
+            Err(err) => {
+                if !self.warned {
+                    eprintln!(
+                        "ruya-session: no connection to the manager of {}: {err}",
+                        self.user
+                    );
+                    self.warned = true;
+                }
+                self.drop_connection();
+                false
+            }
+        }
+    }
+
+    fn probe(&mut self, unit: &str) -> Probe {
+        if self.conn.is_some() {
+            match self.probe_bus(unit) {
+                Ok(probe) => return probe,
+                Err(err) => {
+                    eprintln!("ruya-session: {unit}: {err}");
+                    self.drop_connection();
+                }
+            }
+        }
+        match show_units(&self.user, unit).and_then(|text| parse_show(&text).into_iter().next()) {
+            Some(show) if show.alive() => Probe::Alive(show),
+            Some(_) => Probe::Gone,
+            None => Probe::Unknown,
+        }
+    }
+
+    /// No manager for the user at all (its profile was deleted) is a clear "no"; otherwise the
+    /// manager itself says whether the unit is active.
+    fn exists(&mut self, unit: &str) -> Option<bool> {
+        let manager = Command::new("loginctl")
+            .args(["show-user", &self.user, "--property=State", "--value"])
+            .stdin(Stdio::null())
+            .stderr(Stdio::null())
+            .output()
+            .ok()?;
+        if !manager.status.success() {
+            return Some(false);
+        }
+        let out = Command::new("systemctl")
+            .args(["--user", "--no-pager"])
+            .arg(format!("--machine={}@.host", self.user))
+            .args(["is-active", unit])
+            .stdin(Stdio::null())
+            .stderr(Stdio::null())
+            .output()
+            .ok()?;
+        match String::from_utf8_lossy(&out.stdout).trim() {
+            "active" | "activating" | "deactivating" | "reloading" => Some(true),
+            "inactive" | "failed" => Some(false),
+            _ => None,
         }
     }
 }

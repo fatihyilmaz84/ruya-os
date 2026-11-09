@@ -484,55 +484,75 @@ pub fn parse_show(output: &str) -> Vec<ShowUnit> {
     units
 }
 
-/// Follows a unit this service did not start (it has no `systemd-run --wait` to tell its end):
-/// fed with what `systemctl show` said about it about every two seconds, it reports the end once.
-/// The exit status is the last one seen while the unit was alive: a `--collect`ed unit is gone
-/// the moment it ends, so for an app that dies on its own this is mostly 0.
-pub struct UnitWatch {
-    unit: String,
-    code: i32,
-    signaled: bool,
-    misses: u32,
+/// What the manager says changed about a unit (a `PropertiesChanged`): only the properties that
+/// were in the signal.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct UnitChange {
+    pub active_state: Option<String>,
+    pub exec_main_status: Option<i32>,
+    pub exec_main_code: Option<i32>,
 }
 
-/// Consecutive failed `systemctl` calls after which the unit counts as gone (the manager that
-/// ran it is gone, for instance when its profile was deleted).
-const WATCH_MAX_MISSES: u32 = 5;
+/// Follows a unit this service did not start (it has no `systemd-run --wait` to tell its end):
+/// fed with what the manager says about it (`apply` for a change signal, `observe` for a full
+/// `show`), it reports the end once. The exit status is the last one seen while the unit was
+/// alive or on its way out: the manager forgets a `--collect`ed unit the moment it ends, so only
+/// the change signals that come before `UnitRemoved` carry the real status.
+pub struct UnitWatch {
+    unit: String,
+    status: i32,
+    main_code: i32,
+}
 
 impl UnitWatch {
     pub fn new(unit: &str) -> Self {
         UnitWatch {
             unit: unit.to_owned(),
-            code: 0,
-            signaled: false,
-            misses: 0,
+            status: 0,
+            main_code: 0,
         }
     }
 
-    /// `seen` is the unit's `show` block, or `None` when `systemctl` failed.
-    pub fn observe(&mut self, seen: Option<&ShowUnit>) -> Option<UnitEvent> {
-        match seen {
-            Some(show) if show.alive() => {
-                self.misses = 0;
-                if show.exec_main_code != 0 {
-                    self.code = show.exec_main_status;
-                    self.signaled = matches!(show.exec_main_code, 2 | 3);
-                }
-                None
+    /// A full look at the unit.
+    pub fn observe(&mut self, show: &ShowUnit) -> Option<UnitEvent> {
+        if !show.alive() {
+            // A dead (or never loaded) unit says nothing about how its program ended.
+            return self.apply(&UnitChange {
+                active_state: Some("inactive".to_owned()),
+                ..UnitChange::default()
+            });
+        }
+        self.apply(&UnitChange {
+            active_state: Some(show.active_state.clone()),
+            exec_main_status: Some(show.exec_main_status),
+            exec_main_code: Some(show.exec_main_code),
+        })
+    }
+
+    /// A change of some properties. `Some` once the unit is no longer active.
+    pub fn apply(&mut self, change: &UnitChange) -> Option<UnitEvent> {
+        // `ExecMainCode` 0 means "the program has not ended": its status says nothing yet.
+        if change.exec_main_code != Some(0) {
+            if let Some(status) = change.exec_main_status {
+                self.status = status;
             }
-            Some(_) => Some(self.ended()),
-            None => {
-                self.misses += 1;
-                (self.misses >= WATCH_MAX_MISSES).then(|| self.ended())
-            }
+        }
+        if let Some(code) = change.exec_main_code.filter(|c| *c != 0) {
+            self.main_code = code;
+        }
+        match change.active_state.as_deref() {
+            Some("inactive" | "failed") => Some(self.ended()),
+            _ => None,
         }
     }
 
-    fn ended(&self) -> UnitEvent {
+    /// The exit as far as it is known. The signal number counts when the main process was
+    /// killed (`ExecMainCode` 2 or 3).
+    pub fn ended(&self) -> UnitEvent {
         UnitEvent::Exited {
             unit: self.unit.clone(),
-            code: self.code,
-            signaled: self.signaled,
+            code: self.status,
+            signaled: matches!(self.main_code, 2 | 3),
         }
     }
 }
@@ -1070,41 +1090,21 @@ ActiveState=failed
     #[test]
     fn a_watched_unit_reports_its_end_once_with_the_last_status_seen() {
         let mut w = UnitWatch::new("u.service");
-        assert_eq!(w.observe(Some(&show("active", 0, 0))), None);
-        assert_eq!(w.observe(Some(&show("deactivating", 15, 2))), None);
-        assert_eq!(
-            w.observe(Some(&show("inactive", 0, 0))),
-            Some(exited(15, true))
-        );
+        assert_eq!(w.observe(&show("active", 0, 0)), None);
+        assert_eq!(w.observe(&show("deactivating", 15, 2)), None);
+        assert_eq!(w.observe(&show("inactive", 0, 0)), Some(exited(15, true)));
         let mut w = UnitWatch::new("u.service");
-        w.observe(Some(&show("active", 0, 0)));
-        assert_eq!(
-            w.observe(Some(&show("failed", 0, 0))),
-            Some(exited(0, false))
-        );
+        w.observe(&show("active", 0, 0));
+        assert_eq!(w.observe(&show("failed", 0, 0)), Some(exited(0, false)));
         let mut w = UnitWatch::new("u.service");
-        w.observe(Some(&show("active", 3, 1)));
+        w.observe(&show("active", 3, 1));
         assert_eq!(
-            w.observe(Some(&ShowUnit {
+            w.observe(&ShowUnit {
                 load_state: "not-found".to_owned(),
                 ..show("inactive", 0, 0)
-            })),
+            }),
             Some(exited(3, false))
         );
-    }
-
-    #[test]
-    fn a_manager_that_stays_unreachable_ends_the_watch() {
-        let mut w = UnitWatch::new("u.service");
-        for _ in 0..WATCH_MAX_MISSES - 1 {
-            assert_eq!(w.observe(None), None);
-        }
-        // One good answer in between starts the count again.
-        assert_eq!(w.observe(Some(&show("active", 0, 0))), None);
-        for _ in 0..WATCH_MAX_MISSES - 1 {
-            assert_eq!(w.observe(None), None);
-        }
-        assert_eq!(w.observe(None), Some(exited(0, false)));
     }
 
     #[test]
