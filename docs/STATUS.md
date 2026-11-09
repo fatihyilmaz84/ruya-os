@@ -24,7 +24,7 @@ Open work only (the front of the board; the rest is in `STATUS-backlog.md`), in 
 | ID | Title | Status | Depends |
 |---|---|---|---|
 | [T-386](tasks/T-386-play-starts-the-game.md) | Play starts the game: the Library's launch reaches Session1.Launch | in-progress | T-164 |
-| [T-387](tasks/T-387-glass-after-an-app-and-picker-thumbnails.md) | **[lead]** Glass sheets lose their blur after an app was in front; wallpaper picker tiles stay blank | in-progress | — |
+| [T-387](tasks/T-387-glass-after-an-app-and-picker-thumbnails.md) | Glass sheets lose their blur after an app was in front; wallpaper picker tiles stay blank | in-progress | — |
 | [T-366](tasks/T-366-ruya-input-spike-engine-and-design.md) | **[lead]** Ruya Input: spike, engine decision and the design (06-input.md, Input1 draft) | todo | — |
 | [T-367](tasks/T-367-a-game-sees-the-pad.md) | **[lead]** A game sees the pad: a virtual pad per controller, for the signed-in profile only, routed by focus | todo | T-366 |
 | [T-197](tasks/T-197-shell-crash-on-bluetooth-audio-disconnect.md) | **[lead]** Shell crash when a Bluetooth headset disconnects | in-progress | — |
