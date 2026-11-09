@@ -343,8 +343,17 @@ FocusScope {
     property int focusRepairs: 0            // how often refocusIfLost() acted (tests: a page's own focus never needs it)
     function modalShown() {
         for (let i = 0; i < modalLayer.children.length; ++i) {
-            if (modalLayer.children[i].visible)
-                return true
+            const c = modalLayer.children[i]
+            if (!c.visible)
+                continue
+            // A pane's lazily built modal sits here in a Loader that is "visible" even when it
+            // holds nothing (T-349): only what it has loaded counts.
+            if (c.item !== undefined) {
+                if (c.item && c.item.visible)
+                    return true
+                continue
+            }
+            return true
         }
         return false
     }

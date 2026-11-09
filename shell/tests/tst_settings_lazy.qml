@@ -366,5 +366,11 @@ Item {
             wait(400)
             compare(probe.lineCount, lines, "and no line was written for it")
         }
+        // The panes' lazily built modals live in the modal layer inside Loaders: while none is open the
+        // shell must not count them as a modal (that would switch off the focus safety net, T-356).
+        function test_unopened_pane_modals_do_not_count_as_a_modal() {
+            openSettings()
+            compare(tc.shell.modalShown(), false, "Settings is open, no modal is")
+        }
     }
 }
