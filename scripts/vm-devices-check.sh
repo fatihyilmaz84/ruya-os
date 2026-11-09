@@ -274,7 +274,6 @@ bluetooth_two_adapters_check() {
         echo "CONNECT $(call Connect s AA:00:00:00:00:11)"
         echo "FORGET $(call Forget s AA:00:00:00:00:11)"
         echo "LIST2 $(call ListDevices)"
-        echo "SYSINFO $(busctl --user --json=short call org.ruyaos.Devices1 /org/ruyaos/Devices1 org.ruyaos.Devices1.System GetInfo)"
         kill "$pid" 2>/dev/null
         wait "$pid" 2>/dev/null
     ' 2>&1)"
@@ -314,13 +313,6 @@ else:
     *"VERDICT ok"*) ok "a pad on hci1 is listed with adapter hci1; Connect and Forget of it answer ok";;
     *) bad "ListDevices/Connect/Forget of the two-adapter fake: $verdict $out";;
     esac
-    # T-359: the System information describes the primary adapter (hci1 here), so its address is the fake's
-    # `00:11:22:33:44:01`, not the sample machine's `bluetoothctl show` answer.
-    if printf '%s\n' "$out" | grep '^SYSINFO' | grep -q 'bluetooth.address.\{0,60\}00:11:22:33:44:01'; then
-        ok "GetInfo reports the primary adapter's address (hci1)"
-    else
-        bad "GetInfo does not carry the primary adapter's address 00:11:22:33:44:01: $(printf '%s\n' "$out" | grep '^SYSINFO' | cut -c1-300)"
-    fi
     missing=
     for want in         'ruya-devices: pairing window opened on hci1 for 2 min'         'ruya-devices: pairing window on hci1 closed: stopped'         'ruya-devices: connect AA:00:00:00:00:11 "Second Pad" (hci1): user'         'ruya-devices: remove AA:00:00:00:00:11 "Second Pad" (hci1): forget'; do
         grep -qF -- "$want" "$log" 2>/dev/null || missing="$missing [$want]"

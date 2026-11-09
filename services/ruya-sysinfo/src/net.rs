@@ -73,10 +73,9 @@ fn bluetooth(src: &dyn Source, info: &mut Info) {
     // The adapter the service picked as the primary one (the one with the paired devices); the first
     // in sysfs only when the service says nothing or names one that is not there.
     let primary = src.primary_bluetooth();
-    let Some(adapter) = primary
-        .as_ref()
+    let matched = primary.as_ref().filter(|(name, _)| adapters.contains(name));
+    let Some(adapter) = matched
         .map(|(name, _)| name)
-        .filter(|name| adapters.contains(name))
         .or_else(|| adapters.first())
         .cloned()
     else {
@@ -124,8 +123,10 @@ fn bluetooth(src: &dyn Source, info: &mut Info) {
             }
         }
     }
-    let known = primary
-        .map(|(_, address)| address)
+    // The service's address is that of the adapter it named: used only when that adapter was the one described
+    // above, else `bluetoothctl show` (the default controller) stays the fallback.
+    let known = matched
+        .map(|(_, address)| address.clone())
         .filter(|address| !address.is_empty());
     if let Some(address) = known.or_else(|| {
         src.run("bluetoothctl", &["show"])

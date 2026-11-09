@@ -103,13 +103,16 @@ FocusScope {
                 objectName: "batteryListRow_" + modelData.id
                 width: list.width
                 height: Theme.rowHeight * dialog.u
-                Text {
+                // The name is cut at its end, the end of the address (a like-named pad) is not (04 section 3).
+                TailText {
+                    id: rowName
                     objectName: "batteryListName_" + row.modelData.id
+                    readonly property var parts: DeviceIcons.batteryParts(row.modelData)
                     anchors { left: parent.left; right: rowChip.left; rightMargin: Theme.spaceM * dialog.u
                               verticalCenter: parent.verticalCenter }
-                    textFormat: Text.PlainText
-                    text: DeviceIcons.batteryName(row.modelData)
-                    elide: Text.ElideRight
+                    maxWidth: width
+                    name: parts.name
+                    tail: parts.tail
                     color: Theme.text
                     font.pixelSize: Theme.typeBody * dialog.u
                 }

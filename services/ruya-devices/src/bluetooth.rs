@@ -1010,7 +1010,7 @@ impl<B: Bluez> Bluetooth<B> {
         if id.is_empty() {
             return Status::Invalid;
         }
-        if let Err(s) = self.ready_primary() {
+        if let Err(s) = self.ready() {
             return s;
         }
         let dev = match self.find(id) {
@@ -1020,6 +1020,11 @@ impl<B: Bluez> Bluetooth<B> {
         let end = clock() + CALL_TIMEOUT;
         let left = || end.saturating_duration_since(clock());
         if !dev.paired {
+            // A new pairing belongs to the primary adapter (T-359); a device that is paired only
+            // connects, through the adapter that holds it.
+            if let Err(s) = self.ready_primary() {
+                return s;
+            }
             // The adapter the pairing goes through (the device's own, not the primary one) has
             // to be bondable, for the pairing itself, and off again whatever it ends with. The
             // controller pairing window keeps its adapter pairable while it is open, and gives it

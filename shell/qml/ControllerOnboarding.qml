@@ -111,7 +111,8 @@ FocusScope {
             const d = list[i]
             const set = phases[d.id]
             // The name the Bluetooth pane shows: the end of the address is added for a like-named pad.
-            const entry = { devId: d.id, name: DeviceIcons.shownName(Bluetooth.devices, d), family: d.family ?? "", phase: phaseOf(d),
+            const parts = DeviceIcons.shownParts(Bluetooth.devices, d)
+            const entry = { devId: d.id, name: parts.name, tail: parts.tail, family: d.family ?? "", phase: phaseOf(d),
                             reason: set && set.reason ? set.reason : "" }
             let at = -1
             for (let j = 0; j < found.count; ++j) {
@@ -368,6 +369,7 @@ FocusScope {
                         required property int index
                         required property string devId
                         required property string name
+                        required property string tail
                         required property string family
                         required property string phase
                         required property string reason
@@ -387,7 +389,7 @@ FocusScope {
                             return qsTr("A: pair")
                         }
                         Accessible.role: Accessible.Button
-                        Accessible.name: name + ", " + DeviceIcons.kindText("controller", family) + ", " + stateText
+                        Accessible.name: name + tail + ", " + DeviceIcons.kindText("controller", family) + ", " + stateText
                         Accessible.focusable: true
                         Icon {
                             id: rowGlyph
@@ -396,15 +398,16 @@ FocusScope {
                             name: DeviceIcons.iconFor("controller", row.family)
                             anchors { left: parent.left; leftMargin: Theme.spaceM * onb.u; verticalCenter: parent.verticalCenter }
                         }
-                        Text {
+                        // A name the device chose: plain text (TailText), cut at the end of the name and never in the end
+                        // of its address (T-260, T-359).
+                        TailText {
                             id: rowName
                             anchors { left: rowGlyph.right; leftMargin: Theme.spaceM * onb.u; verticalCenter: parent.verticalCenter }
                             objectName: "onbRowName_" + row.devId
-                            width: Math.min(implicitWidth, row.width * 0.4)
-                            elide: Text.ElideRight
-                            // A name the device chose: plain text, never markup (T-260).
-                            textFormat: Text.PlainText
-                            text: row.name
+                            maxWidth: row.width * 0.4
+                            width: Math.min(implicitWidth, maxWidth)
+                            name: row.name
+                            tail: row.tail
                             color: Theme.text
                             font.pixelSize: Theme.typeBody * onb.u
                             font.weight: Theme.weightDemiBold

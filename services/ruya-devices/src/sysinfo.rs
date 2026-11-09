@@ -257,6 +257,18 @@ mod tests {
             Some("00:11:22:33:44:01"),
             "the primary adapter's own address, not bluetoothctl's default controller"
         );
+        // An adapter the service names that sysfs does not list: the first one is described, and the
+        // address is `bluetoothctl show`'s, not the other adapter's.
+        let source = WithPrimaryAdapter::new(
+            Box::new(two_dongles()),
+            Box::new(|| Some(("hci7".to_owned(), "00:11:22:33:44:99".to_owned()))),
+        );
+        let info = SystemInfo::new(Box::new(source)).current(Instant::now());
+        assert_eq!(info.get_text("bluetooth.usb_id"), Some("0a12:0001"));
+        assert_eq!(
+            info.get_text("bluetooth.address"),
+            Some("00:11:22:33:44:00")
+        );
         // Without the service's answer the first adapter in sysfs is taken, as before.
         let info = SystemInfo::new(Box::new(two_dongles())).current(Instant::now());
         assert_eq!(info.get_text("bluetooth.usb_id"), Some("0a12:0001"));

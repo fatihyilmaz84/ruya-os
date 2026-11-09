@@ -309,6 +309,25 @@ Item {
             tryVerify(() => opener.activeFocus, 2000, "focus is back where it was")
         }
 
+        // T-359: a too long name is cut before the end of the address, which stays whole.
+        function test_found_nearby_cuts_a_long_name_before_its_address() {
+            Bluetooth.mockPairingScript("wait")
+            onb.open()
+            Bluetooth.mockTwoPads()
+            const wide = "W".repeat(48)
+            Bluetooth.mockSetName(tc.padA, wide)
+            Bluetooth.mockSetName(tc.padB, wide)
+            tryVerify(() => find("onbRowName_" + tc.padB) !== null && find("onbRowName_" + tc.padB).name === wide, 2000)
+            const name = find("onbRowName_" + tc.padB)
+            verify(name.text.endsWith(" (00:05)"), "the tail is whole: " + name.text)
+            verify(name.text.indexOf("\u2026") > 0, "the name is cut: " + name.text)
+            verify(name.paintedWidth <= name.width + 0.5, "one line: " + name.paintedWidth + " > " + name.width)
+            verify(name.width <= find("onbRow_" + tc.padB).width * 0.4 + 0.5)
+            verify(find("onbRow_" + tc.padB).Accessible.name.indexOf(wide + " (00:05),") === 0, "the whole name is the accessible one")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !onb.shown, 2000, "Back leaves the screen")
+        }
+
         function test_found_controllers_appear_in_place_and_focus_stays() {
             Bluetooth.mockPairingScript("wait")
             onb.open()

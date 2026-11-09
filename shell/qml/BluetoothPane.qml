@@ -102,7 +102,9 @@ SettingsPane {
     function askRename(id, name, shown) {
         pane.renameId = id
         renameSlot.active = true
-        renameEntry.open(shown, name, { maxLength: 48, layout: "text" })
+        // The part of the shown name that is the end of the address stays whole when the title is cut.
+        const base = DeviceIcons.plain(name)
+        renameEntry.open(shown, name, { maxLength: 48, layout: "text", titleTail: shown.startsWith(base) ? shown.slice(base.length) : "" })
     }
 
     // The words for a failed operation: the one mapping the pairing screen shares (T-301).

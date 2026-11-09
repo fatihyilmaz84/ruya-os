@@ -575,6 +575,37 @@ Item {
             tryVerify(() => find("categoryList").activeFocus, 2000, "Back leaves the pane")
         }
 
+        // T-359: the Rename keyboard's title is a name from outside: one line, as wide as the keys at most, and a
+        // too long alias is cut before the end of the address ("WWWW... (00:05)"), never after it (04 section 3).
+        function test_rename_title_of_a_long_alias_keeps_the_address_tail() {
+            Bluetooth.mockTwoPads()
+            tryVerify(() => Bluetooth.devices.length === 5, 2000)
+            const wide = "W".repeat(48)
+            Bluetooth.mockSetName("AA:00:00:00:00:04", wide)
+            Bluetooth.mockSetName("AA:00:00:00:00:05", wide)
+            tryVerify(() => device("AA:00:00:00:00:05").name === wide, 2000)
+            openBluetoothPane()
+            goTo("btRename_AA:00:00:00:00:05")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("btRenameEntry").shown, 2000)
+            const title = findChild(find("btRenameEntry"), "entryTitle")
+            compare(find("btRenameEntry").title, wide + " (00:05)", "the entry keeps the full title")
+            verify(title.text.endsWith(" (00:05)"), "the tail is whole: " + title.text)
+            verify(title.text.indexOf("\u2026") > 0 && title.text.length < find("btRenameEntry").title.length, "the name is cut: " + title.text)
+            verify(title.paintedWidth <= title.width + 0.5, "one line inside its width: " + title.paintedWidth + " > " + title.width)
+            verify(title.width <= (10 * (find("btRenameEntry").keyUnit + find("btRenameEntry").keyGap) - find("btRenameEntry").keyGap)
+                   * find("btRenameEntry").u + 0.5, "no wider than the keys")
+            compare(title.Accessible.name, wide + " (00:05)", "the screen reader gets the whole name")
+            if (shotsDir) {
+                wait(500)
+                grabImage(host).save(shotsDir + "/T359-rename-long-title.png")
+            }
+            for (let i = 0; i < 60 && find("btRenameEntry").shown; ++i)
+                keyClick(Qt.Key_Escape)
+            tryVerify(() => !find("btRenameEntry").shown, 2000, "Back cancels")
+            tryVerify(() => find("btRename_AA:00:00:00:00:05").activeFocus, 2000, "focus is back on the row")
+        }
+
         // T-334: forgetting one of two like pads leaves the other: its row stays (and loses the suffix,
         // nobody shares its name now) and focus lands on a row that exists.
         function test_forget_one_keeps_the_other_row() {

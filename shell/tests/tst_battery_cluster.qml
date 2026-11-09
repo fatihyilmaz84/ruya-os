@@ -319,6 +319,35 @@ Item {
             wait(50)
         }
 
+        // T-359: in "More devices" a too long name is cut before the end of the address, which stays whole.
+        function test_more_devices_cuts_a_long_name_before_its_address() {
+            twoLikePads()
+            const wide = "W".repeat(48)
+            Bluetooth.mockSetName(tc.padA, wide)
+            Bluetooth.mockSetName(tc.padB, wide)
+            tryVerify(() => Bluetooth.devices.find(d => d.id === tc.padB).name === wide, 2000)
+            Batteries.mockClear()
+            Batteries.mockSet("c1", 10, "discharging", "controller", "Xbox Wireless Controller", "xbox")
+            Batteries.mockSet("c2", 20, "discharging", "controller", "Pro Controller", "nintendo")
+            Batteries.mockSet("c3", 30, "discharging", "controller", "8BitDo Pro 2", "8bitdo")
+            Batteries.mockSet("padA", 80, "discharging", "controller", "Wireless Controller", "playstation", tc.padA)
+            Batteries.mockSet("padB", 55, "discharging", "controller", "Wireless Controller", "playstation", tc.padB)
+            openShell(1920, 1080)
+            tryVerify(() => find("batteryMore").visible, 2000)
+            openMore()
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("batteryList").shown, 2000, "Accept opens the list")
+            const name = find("batteryListName_padB")
+            verify(name.text.endsWith(" (00:05)"), "the tail is whole: " + name.text)
+            verify(name.text.indexOf("\u2026") > 0, "the name is cut: " + name.text)
+            verify(name.paintedWidth <= name.width + 0.5, "one line: " + name.paintedWidth + " > " + name.width)
+            compare(name.Accessible.name, wide + " (00:05)")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !find("batteryList").shown, 2000, "Back closes")
+            tc.shell.destroy()
+            wait(50)
+        }
+
         // T-301: with larger text the "N more" chip still fits beside the shortest profile name and the pill keeps
         // its gap to the nav. The accessibility text scale (04 section 1) is not built yet, so the nearest thing
         // is the UI size: at 125 % the words no longer fit beside a battery chip, so one chip and the "+N" show

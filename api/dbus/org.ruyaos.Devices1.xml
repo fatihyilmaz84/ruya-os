@@ -42,8 +42,8 @@
                       D-Bus error. The pairing is cancelled when it times out.
     "unavailable"     Bluetooth is off or there is no adapter (StartScan, Pair, Connect,
                       StartControllerPairing). New pairings belong to the primary adapter, so StartScan,
-                      Pair and StartControllerPairing also answer it when the primary adapter is off
-                      while another one is on (T-359); Connect and the rest work through the adapter
+                      StartControllerPairing and Pair of a device that is not paired yet also answer it
+                      when the primary adapter is off while another one is on (T-359); Connect and the rest work through the adapter
                       that holds the device
     "invalid"         malformed argument (an empty id; a controller-pairing window longer than 300 s;
                       Rename: an empty, over-long or control-character name)
