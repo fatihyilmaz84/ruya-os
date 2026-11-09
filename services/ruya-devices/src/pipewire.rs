@@ -194,12 +194,12 @@ pub fn plan_switch(json: &str, card: &str, port: &str) -> Result<SwitchPlan, Str
         .find(|r| r["name"].as_str() == Some(port))
         .ok_or_else(|| format!("{card} has no port {port}"))?;
     let route_index = index_of(route, "index").ok_or("route without an index")?;
-    let route_device = route["devices"]
+    let route_devices: Vec<u32> = route["devices"]
         .as_array()
-        .and_then(|d| d.first())
-        .and_then(Value::as_u64)
-        .and_then(|d| u32::try_from(d).ok())
-        .ok_or("route without a device")?;
+        .into_iter()
+        .flatten()
+        .filter_map(|d| d.as_u64().and_then(|d| u32::try_from(d).ok()))
+        .collect();
     let wanted: Vec<u32> = route["profiles"]
         .as_array()
         .into_iter()
@@ -214,6 +214,23 @@ pub fn plan_switch(json: &str, card: &str, port: &str) -> Result<SwitchPlan, Str
         Some(a) if wanted.contains(&a) => None,
         _ => Some(*wanted.first().ok_or("route without a profile")?),
     };
+    // A route can list devices of several profiles: take one the chosen profile really has.
+    let target = profile.or(active);
+    let profile_devices = target
+        .and_then(|t| {
+            params["EnumProfile"]
+                .as_array()?
+                .iter()
+                .find(|p| index_of(p, "index") == Some(t))
+                .and_then(profile_devices)
+        })
+        .unwrap_or_default();
+    let route_device = route_devices
+        .iter()
+        .find(|d| profile_devices.contains(d))
+        .or_else(|| route_devices.first())
+        .copied()
+        .ok_or("route without a device")?;
     let route_active =
         params["Route"].as_array().into_iter().flatten().any(|r| {
             r["name"].as_str() == Some(port) && index_of(r, "device") == Some(route_device)
@@ -225,6 +242,41 @@ pub fn plan_switch(json: &str, card: &str, port: &str) -> Result<SwitchPlan, Str
         route_device,
         route_active,
     })
+}
+
+/// The card devices an `EnumProfile` entry has: the value after `card.profile.devices` in its
+/// `classes` (a flat struct in `pw-dump`, or an object key, depending on the version).
+fn profile_devices(profile: &Value) -> Option<Vec<u32>> {
+    fn numbers(v: &Value) -> Vec<u32> {
+        v.as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|n| n.as_u64().and_then(|n| u32::try_from(n).ok()))
+            .collect()
+    }
+    fn walk(v: &Value) -> Option<Vec<u32>> {
+        match v {
+            Value::Array(items) => {
+                for (i, item) in items.iter().enumerate() {
+                    if item.as_str() == Some("card.profile.devices") {
+                        if let Some(next) = items.get(i + 1) {
+                            return Some(numbers(next));
+                        }
+                    }
+                    if let Some(found) = walk(item) {
+                        return Some(found);
+                    }
+                }
+                None
+            }
+            Value::Object(map) => map
+                .get("card.profile.devices")
+                .map(numbers)
+                .or_else(|| map.values().find_map(walk)),
+            _ => None,
+        }
+    }
+    walk(&profile["classes"])
 }
 
 /// The sink (`node.name`) of a card device, once its profile is up.
@@ -550,6 +602,8 @@ mod linux {
                     })?;
                     Self::set_route(device, index, route_device)?;
                 }
+                // Back only when its sink is: the caller sets the default right after.
+                self.poll(|dump| find_sink(dump, device, route_device))?;
             }
             Ok(())
         }
@@ -674,10 +728,14 @@ mod tests {
       {"id":50,"type":"PipeWire:Interface:Device","info":{"props":{"device.name":"card0"},
        "params":{
          "Profile":[{"index":1,"name":"analog"}],
+         "EnumProfile":[
+           {"index":1,"name":"analog","classes":[["Audio/Sink",1,"card.profile.devices",[2]]]},
+           {"index":2,"name":"hdmi","classes":[["Audio/Sink",1,"card.profile.devices",[5]]]},
+           {"index":3,"name":"hdmi2","classes":[["Audio/Sink",1,"card.profile.devices",[6]]]}],
          "EnumRoute":[
            {"index":0,"direction":"Output","name":"speaker","profiles":[1],"devices":[2]},
            {"index":1,"direction":"Output","name":"headphones","profiles":[1],"devices":[2]},
-           {"index":2,"direction":"Output","name":"hdmi-0","profiles":[2],"devices":[5]}],
+           {"index":2,"direction":"Output","name":"hdmi-0","profiles":[2,3],"devices":[6,5]}],
          "Route":[{"index":0,"direction":"Output","name":"speaker","device":2}]}}},
       {"id":60,"type":"PipeWire:Interface:Node","info":{"props":{
          "media.class":"Audio/Sink","node.name":"sink.analog","device.id":50,"card.profile.device":2}}}

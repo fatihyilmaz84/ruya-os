@@ -91,7 +91,7 @@ pub trait PipeWire: Send {
     fn switch_to(&mut self, output: &Output) -> Result<String, String> {
         Err(format!("{}: its card profile is not active", output.id))
     }
-    /// Puts the card back as `card_profile` described it.
+    /// Puts the card back as `card_profile` described it, and returns once its sink is back.
     fn restore_profile(&mut self, _card: &str, _state: &str) -> Result<(), String> {
         Ok(())
     }
@@ -140,6 +140,8 @@ pub struct Audio<P: PipeWire> {
     /// The marker file of the one-time first-start volume; `None` = never apply it.
     first_start_marker: Option<PathBuf>,
     first_start_done: bool,
+    /// A read has happened; the very first one only takes over the state (no signals, nobody listens yet).
+    read_once: bool,
 }
 
 impl<P: PipeWire> Audio<P> {
@@ -162,16 +164,40 @@ impl<P: PipeWire> Audio<P> {
             channels,
             first_start_marker: None,
             first_start_done: true,
+            read_once: false,
         })
     }
 
     /// The first output starts at full volume, once (owner, 2026-11-08): the TV or monitor sets
     /// the loudness. `marker` is written after the volume was set and its presence stops it for
     /// good (reboot, restart, update); a volume the player sets later is never touched.
-    pub fn with_first_start_marker(mut self, marker: &Path) -> Self {
+    ///
+    /// `existing_install`: the state file was there before this start. Such a console may already
+    /// hold a volume the player chose, so the marker is written at once and nothing is forced.
+    pub fn with_first_start_marker(mut self, marker: &Path, existing_install: bool) -> Self {
         self.first_start_done = marker.exists();
         self.first_start_marker = Some(marker.to_owned());
+        if existing_install && !self.first_start_done {
+            self.first_start_done = true;
+            self.write_marker();
+        }
         self
+    }
+
+    fn write_marker(&self) {
+        let Some(marker) = &self.first_start_marker else {
+            return;
+        };
+        if let Some(dir) = marker.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        // A marker that can't be written still holds for this run (first_start_done).
+        if let Err(err) = std::fs::write(marker, "the first-start volume was handled\n") {
+            eprintln!(
+                "ruya-devices: cannot write {}: {err} (the first-start volume may be set again after a restart)",
+                marker.display()
+            );
+        }
     }
 
     /// Keeps the saved choice in `store` (loaded now; a corrupt file is an error).
@@ -249,13 +275,7 @@ impl<P: PipeWire> Audio<P> {
         if !self.first_start_done && default.is_some() && self.pw.set_volume(100).is_ok() {
             snap.volume = 100;
             self.first_start_done = true;
-            if let Some(marker) = &self.first_start_marker {
-                // A marker that can't be written still holds for this run (first_start_done).
-                if let Some(dir) = marker.parent() {
-                    let _ = std::fs::create_dir_all(dir);
-                }
-                let _ = std::fs::write(marker, "the first-start volume was set\n");
-            }
+            self.write_marker();
         }
 
         // A change we didn't make (or PipeWire's own pick) keeps the old default as "previous".
@@ -285,7 +305,7 @@ impl<P: PipeWire> Audio<P> {
         self.volume = snap.volume.min(100);
         self.muted = snap.muted;
         self.playing = snap.playing;
-        if first {
+        if !std::mem::replace(&mut self.read_once, true) {
             changes = Changes::default();
         }
         changes
@@ -399,8 +419,9 @@ impl<P: PipeWire> Audio<P> {
             .pw
             .switch_to(&out)
             .and_then(|node| self.pw.play_tone(&node));
+        // restore_profile returns once the old sink is back, so the default can be set again:
+        // it may have vanished with the profile and WirePlumber picked another one.
         let restored = self.pw.restore_profile(&out.card, &old);
-        // The default sink may have vanished with the profile; WirePlumber picks another one.
         if let Some(default) = self.default.clone() {
             let _ = self.pw.set_default(&default);
         }
@@ -607,6 +628,8 @@ pub struct FakePipeWire {
     pub card: Option<FakeCard>,
     /// How often a volume was written (the service must not write a volume it need not).
     pub volume_writes: u32,
+    /// How long a profile switch takes (a real card needs seconds).
+    pub switch_delay: std::time::Duration,
 }
 
 impl FakePipeWire {
@@ -630,6 +653,7 @@ impl FakePipeWire {
             broken: false,
             card: None,
             volume_writes: 0,
+            switch_delay: std::time::Duration::ZERO,
         }
     }
 
@@ -769,6 +793,7 @@ impl PipeWire for FakePipeWire {
             })
             .map(|p| p.name.clone())
             .ok_or_else(|| "no profile carries it".to_owned())?;
+        std::thread::sleep(self.switch_delay);
         self.move_card(&profile, &output.port);
         self.sinks
             .first()
@@ -1242,7 +1267,7 @@ mod tests {
 
     /// The Dell card with the marker in `dir`; the choice file lives there too.
     fn card_audio(pw: FakePipeWire, dir: &std::path::Path) -> Audio<FakePipeWire> {
-        with_choice(pw, dir).with_first_start_marker(&dir.join(MARKER))
+        with_choice(pw, dir).with_first_start_marker(&dir.join(MARKER), false)
     }
 
     #[test]
@@ -1300,8 +1325,23 @@ mod tests {
         a.pw.card = card;
         a.pw.sync_card();
         a.pw.default = Some("card.analog".to_owned());
-        a.refresh().unwrap();
+        // The watcher's late read reports what appeared (the very first read cannot: nobody listens).
+        let late = a.refresh().unwrap();
+        assert!(late.sinks && late.outputs, "{late:?}");
+        assert_eq!(late.default.as_deref(), Some("card.hdmi"));
         assert_eq!(a.default_sink(), Some("card.hdmi"));
+    }
+
+    #[test]
+    fn an_existing_install_gets_the_marker_and_no_forced_volume() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut pw = FakePipeWire::with_card(FakeCard::dell());
+        pw.volume = 25; // what the player chose before this update
+        let mut a =
+            with_choice(pw, dir.path()).with_first_start_marker(&dir.path().join(MARKER), true);
+        assert!(dir.path().join(MARKER).exists());
+        a.refresh().unwrap();
+        assert_eq!((a.volume(), a.pw.volume_writes), (25, 0));
     }
 
     #[test]

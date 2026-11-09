@@ -73,6 +73,16 @@ fn lock(shared: &Shared) -> MutexGuard<'_, Audio<DynPipeWire>> {
     shared.lock().unwrap_or_else(|e| e.into_inner())
 }
 
+/// Runs `f` on the audio state off the D-Bus executor (T-347): a card switch or a PipeWire read
+/// blocks for seconds, and the executor serves every Devices1 interface.
+pub async fn with_audio<T: Send + 'static>(
+    audio: &Shared,
+    f: impl FnOnce(&mut Audio<DynPipeWire>) -> T + Send + 'static,
+) -> T {
+    let audio = audio.clone();
+    unblock(move || f(&mut lock(&audio))).await
+}
+
 pub struct AudioIface {
     audio: Shared,
 }
@@ -133,12 +143,13 @@ impl AudioIface {
         id: &str,
         #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
     ) -> String {
-        let (status, before, after) = {
-            let mut audio = lock(&self.audio);
+        let id = id.to_owned();
+        let (status, before, after) = with_audio(&self.audio, move |audio| {
             let before = audio.default_sink().map(str::to_owned);
-            let status = audio.set_output(id);
+            let status = audio.set_output(&id);
             (status, before, audio.default_sink().map(str::to_owned))
-        };
+        })
+        .await;
         if status == crate::Status::Ok {
             let _ = Self::outputs_changed(&emitter).await;
             if before != after {
@@ -149,20 +160,24 @@ impl AudioIface {
         status.as_str().to_owned()
     }
 
-    fn test_output(&self, id: &str) -> String {
-        lock(&self.audio).test_output(id).as_str().to_owned()
+    async fn test_output(&self, id: &str) -> String {
+        let id = id.to_owned();
+        with_audio(&self.audio, move |audio| audio.test_output(&id))
+            .await
+            .as_str()
+            .to_owned()
     }
 
     async fn reset_output_choice(
         &self,
         #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
     ) -> String {
-        let (status, before, after) = {
-            let mut audio = lock(&self.audio);
+        let (status, before, after) = with_audio(&self.audio, |audio| {
             let before = audio.default_sink().map(str::to_owned);
             let status = audio.reset_choice();
             (status, before, audio.default_sink().map(str::to_owned))
-        };
+        })
+        .await;
         if status == crate::Status::Ok {
             let _ = Self::outputs_changed(&emitter).await;
             if before != after {
@@ -271,7 +286,7 @@ pub async fn watch(connection: Connection, audio: Shared) {
 /// Reads PipeWire once and emits the signals for what changed.
 #[cfg(target_os = "linux")]
 async fn refresh_audio(connection: &Connection, audio: &Shared) {
-    let result = lock(audio).refresh();
+    let result = with_audio(audio, |audio| audio.refresh()).await;
     match result {
         Ok(changes) if changes.any() => {
             if let Err(err) = announce(connection, &changes).await {
@@ -2055,6 +2070,36 @@ mod tests {
         assert_eq!(signature("memory.total_bytes").as_deref(), Some("t"));
         assert_eq!(signature("console.secure_boot").as_deref(), Some("b"));
         assert_eq!(signature("storage.drives").as_deref(), Some("aa{sv}"));
+    }
+
+    /// A slow card switch runs on the blocking pool: the executor stays free for every other
+    /// interface (T-347).
+    #[test]
+    fn a_slow_card_switch_does_not_block_the_executor() {
+        use crate::audio::{FakeCard, FakePipeWire};
+        use futures_lite::future;
+        use std::time::{Duration, Instant};
+        let mut pw = FakePipeWire::with_card(FakeCard::dell());
+        pw.switch_delay = Duration::from_millis(600);
+        let audio: Shared = Arc::new(Mutex::new(
+            Audio::new(
+                Box::new(pw) as DynPipeWire,
+                crate::store::Store::in_memory(),
+            )
+            .unwrap(),
+        ));
+        lock(&audio).refresh().unwrap();
+        let started = Instant::now();
+        let switch = with_audio(&audio, |a| a.set_output("card:tv"));
+        // Another interface's call, on the same single-threaded executor.
+        let other = async {
+            async_io::Timer::after(Duration::from_millis(20)).await;
+            started.elapsed()
+        };
+        let (status, other_done) = future::block_on(future::zip(switch, other));
+        assert_eq!(status, crate::Status::Ok);
+        assert!(started.elapsed() >= Duration::from_millis(600));
+        assert!(other_done < Duration::from_millis(300), "{other_done:?}");
     }
 
     #[test]
