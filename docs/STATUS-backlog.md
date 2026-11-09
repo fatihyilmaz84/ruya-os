@@ -16,7 +16,7 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | [T-289](tasks/T-289-system-information-follow-ups.md) | System information follow-ups: Bluetooth address from BlueZ, image from a root source, one info row, drive chooser | todo | — |
 | [T-299](tasks/T-299-image-follow-ups-secure-boot-bluez-grub-menu.md) | Image follow-ups (VM this task): quiet bootloader-update on Secure Boot, BlueZ pairable timeout, grub-menu ordering, webp | todo | — |
 | [T-338](tasks/T-338-dell-second-pad-drop-repro.md) | **[lead]** Dell: why did the second DualSense drop after 21 s? (live repro and report) | todo | T-335 |
-| [T-355](tasks/T-355-dell-real-game-smoke-test-supertuxkart.md) | **[lead]** Dell smoke test with a real game: SuperTuxKart through the shell | blocked | T-164 |
+| [T-355](tasks/T-355-dell-real-game-smoke-test-supertuxkart.md) | **[lead]** Dell smoke test with a real game: SuperTuxKart through the shell | todo | — |
 | [T-332](tasks/T-332-format-removable-drive-service.md) | Format a removable drive: the service (udisks2, polkit, refusals, identity re-check) | todo | T-196, T-194 |
 | [T-333](tasks/T-333-format-drive-settings-flow.md) | Settings > Storage > Format drive...: choose, confirm, PIN, progress, result | todo | T-331, T-332 |
 | [T-339](tasks/T-339-vm-check-script-follow-ups.md) | VM check scripts: power-saving wake, sounds probe and jq | todo | — |

@@ -15,7 +15,7 @@ Verification legend: **host** = built and tested on Windows · **host (vm pendin
 
 ## Board
 
-**NEXT → T-164** ([lead], the critical path: needs the Dell as the GL test). **Builder lanes** (planned 2026-11-08, in this order, the first rows of `STATUS-backlog.md`): T-281 is in progress; then T-296, T-297, T-290, T-291, T-285, T-286, T-293, T-292, T-294, T-295, T-300 (then T-301), T-287 (then T-288, T-289), T-299 (a "VM (this task)": one at a time). T-283 and T-284 wait for the lead's design pass T-282.
+**NEXT → T-355** ([lead], the Dell: a real game through the shell now that T-164 is done). **Builder lanes**: the first rows of `STATUS-backlog.md` in order (T-322 is in progress, then T-347, T-348, ...); one "VM (this task)" at a time. T-283, T-284, T-287, T-288 wait for the lead's design pass T-282.
 
 **How work runs (owner, 2026-11-04):** the lead dispatches `ruya-builder` agents (at most two at a time, own worktrees, different areas), has each branch reviewed by `ruya-reviewer` and merges it (`docs/LEAD.md`). Dispatched builders never edit this file; one "VM (this task)" runs at a time. A builder the owner starts directly takes NEXT alone in the main checkout and does the bookkeeping (`CLAUDE.md`).
 
@@ -26,7 +26,6 @@ Open work only (the front of the board; the rest is in `STATUS-backlog.md`), in 
 | [T-197](tasks/T-197-shell-crash-on-bluetooth-audio-disconnect.md) | **[lead]** Shell crash when a Bluetooth headset disconnects | in-progress | — |
 | [T-282](tasks/T-282-design-decisions-contrast-themes-dialogs.md) | **[lead]** Design decisions queue: glass text contrast, theme looks, dialogs, Tab, display recovery | todo | — |
 | [T-261](tasks/T-261-controller-families-and-drivers-audit.md) | **[lead]** Controller families and drivers audit (DualSense, Xbox, 8BitDo, Switch), detection table, hardware checklist | todo | — |
-| [T-164](tasks/T-164-per-profile-wayland-sockets.md) | **[lead]** Per-profile Wayland sockets | in-progress | T-162 |
 
 Later (ordered): [`STATUS-backlog.md`](STATUS-backlog.md) holds the rest of the open board, same columns; `lint-board.ps1` reads both. A planner or the lead moves rows up when they become ready.
 
@@ -46,6 +45,7 @@ One line each: `- (source) what, and why it matters`. Dispatched builders put th
 
 - (T-336 reviews, lead-5) Secure Pairable/Discoverable of an adapter that appears after the service started; stop a window's scan on the window's adapter when a user scan on another adapter took over (primary flip between StartScan and the window); answer `unavailable` for StartScan/Pair when the primary is off but another adapter is on; sysinfo (T-289) should use `bluetooth::primary_index`/`Raw::primary()`; the `BatteriesChanged` test of T-300 is still missing.
 - (T-330 builder, lead-5) Ogg beds get no level or bass check (needs a decoder: planning call); the bundled theme grew 1.1 -> 2.5 MB (image size). Decoder follow-ups are T-346.
+- (T-164 reviews, lead-6) T-165 must decide a hidden profile's running app: suspend or stop, tell the new profile (Home hint or toast) and give a way to close it; a locked profile's client is closed on its next surface (whole-client verdict); `ProfileSockets` leaks an idle listening fd each time the profile list empties briefly (skip the sync on an empty list); the compositor's `focus` log line named no item while the System list had the focus, and logs `appId`/`title` before they arrive; the VM test client runs as `org.ruyaos.ld-linux-x86-64` (pass an app id).
 - (lead-5) `tst_battery_cluster::test_the_chip_shrinks_to_plus_n_in_a_narrow_room` fails under load (nav gap 23 against 24 px at 1290 px wide; passes alone and on rerun): make the gap check independent of font metrics or settle longer.
 
 Triaged 2026-11-08 (lead-5): earlier lines are verbatim in [`STATUS-parked.md`](STATUS-parked.md).
