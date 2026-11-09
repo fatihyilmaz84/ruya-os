@@ -11,7 +11,7 @@ The procedure is in [`LEAD.md`](LEAD.md) (**Budgets and "Lead efficiency": hand 
 
 ## Next, in this order
 1. **0.0.61:** if `output/chain/summary.txt` ends `CHAIN OK`: `scripts\vm-queue.ps1` with the 0.0.61 queue in STATUS (`check` first: it makes the profile `display` needs), then `scripts/dell-update.sh 0.0.61` (Git Bash), then the owner checks STK from Games, the picker after an app, the T-376 hw items. If `make-disk` failed again: run it alone with nothing beside it.
-2. **Owner answers** (STATUS, Open owner decisions): Ruya Web, Companion, GE-Proton codecs, Ludusavi licence, developer platform, Hub naming. Turn answers into ADR status changes and unblock T-404/T-415.
+2. **Owner answers came in at the end of lead-8** and are recorded (commit 1b99152: ADR-029 Accepted and the CLAUDE.md invariant updated, ADR-030 parked, codecs shipped, content provider T-420, `ruya-gamedata`, Xbox firmware download allowed). Still open: Ludusavi licence (after T-400), iOS/Mac and store publishing (Companion is later). The 0.0.61 summary says "at ebd05f3" because of `SKIP_BUILD=1`: the image content is main 66d6f25.
 3. **Lead tasks:** T-393 (Options menu design) and T-396 (ADR-027 spec) first: they unblock T-394, T-397, T-398, T-399; then T-366/T-367 (Ruya Input), T-381 (GE-Proton spike), T-380.
 4. **Builder lanes:** T-147, T-362, T-378, T-299, T-364, T-339 (backlog order).
 5. Triage the Inbox (STATUS is 15 KB, budget 10 KB).
