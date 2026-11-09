@@ -54,15 +54,15 @@ SettingsPane {
         }
         return "volume_up"
     }
-    // What the value of an output row says: why it cannot be used, else "Current" for the default.
-    function outputValue(active, available, isDefault) {
+    // What the value of an output row says: "Not connected" when its route says so (the row is greyed and cannot be
+    // chosen), else "Current" for the default. An output on another card profile (no sink yet) is listed like any
+    // other: choosing it makes the service switch the profile (03 section 2.3).
+    function outputValue(available, isDefault) {
         if (available === "no")
             return qsTr("Not connected")
-        if (!active)
-            return qsTr("Not available now")
         return isDefault ? qsTr("Current") : ""
     }
-    // The output the Test sound row plays on: the one whose row had focus last (the default before any did).
+    // The output the Test sound row plays on: the last usable one (route not "no") whose row had focus, else the default.
     property string focusedOutputId: ""
     readonly property string testOutputId: pane.focusedOutputId.length > 0 && Audio.outputs.some(o => o.id === pane.focusedOutputId)
                                            ? pane.focusedOutputId : Audio.defaultSink
@@ -215,11 +215,11 @@ SettingsPane {
             u: pane.u
             label: sinkName
             iconName: pane.outputIcon(sinkKind)
-            dimmed: !sinkActive
-            value: pane.outputValue(sinkActive, sinkAvailable, sinkDefault)
-            onActiveFocusChanged: if (activeFocus) pane.focusedOutputId = sinkId
+            dimmed: sinkAvailable === "no"
+            value: pane.outputValue(sinkAvailable, sinkDefault)
+            onActiveFocusChanged: if (activeFocus && sinkAvailable !== "no") pane.focusedOutputId = sinkId
             onActivated: {
-                if (!sinkActive)
+                if (sinkAvailable === "no")
                     Notifications.show(qsTr("%1: %2.").arg(sinkName).arg(value), "warning")
                 else
                     Audio.setOutput(sinkId)

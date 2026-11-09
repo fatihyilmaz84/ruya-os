@@ -198,6 +198,12 @@ void Audio::mockSetPlaying(bool playing)
         mock->setPlaying(playing);
 }
 
+void Audio::mockSetJackPlugged(bool plugged)
+{
+    if (auto *mock = qobject_cast<MockAudioBackend *>(m_backend.get()))
+        mock->setJackPlugged(plugged);
+}
+
 void Audio::mockRefreshDelayed(int ms)
 {
     if (auto *mock = qobject_cast<MockAudioBackend *>(m_backend.get())) {

@@ -531,14 +531,9 @@ Bu geri alınamaz.</translation>
         <translation>Konsol en fazla %1 ses teması tutar. Önce birini silin ya da aynı adlı bir temanın üzerine kopyalayarak değiştirin.</translation>
     </message>
     <message>
-        <location line="-31"/>
+        <location line="-29"/>
         <source>Not connected</source>
         <translation>Bağlı değil</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>Not available now</source>
-        <translation>Şu an kullanılamıyor</translation>
     </message>
     <message>
         <location line="+1"/>

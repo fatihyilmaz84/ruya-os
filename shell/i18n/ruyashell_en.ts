@@ -533,14 +533,9 @@ This can&apos;t be undone.</translation>
         <translation>The console keeps up to %1 sound themes. Delete one first, or copy over one with the same name to replace it.</translation>
     </message>
     <message>
-        <location line="-31"/>
+        <location line="-29"/>
         <source>Not connected</source>
         <translation>Not connected</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>Not available now</source>
-        <translation>Not available now</translation>
     </message>
     <message>
         <location line="+1"/>

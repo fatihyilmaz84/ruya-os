@@ -32,6 +32,13 @@ public:
     // The outputs a test sound was asked for, in order (tests).
     QStringList testedOutputs() const { return m_tested; }
     void reset();
+    // Tests only: the headphones jack's route says a plug is in (available "yes") while its card
+    // profile is not the active one, so it has no sink: listed, usable, and setOutput answers "inactive".
+    void setJackPlugged(bool plugged)
+    {
+        m_jackPlugged = plugged;
+        publishOutputs();
+    }
     void setPlaying(bool playing)
     {
         m_playing = playing;
@@ -59,6 +66,7 @@ private:
     QList<SinkInfo> m_sinks;
     QString m_saved; // the player's choice (an output id)
     QStringList m_tested;
+    bool m_jackPlugged = false;
     QStringList m_previous; // earlier defaults, most recent last
     int m_delay = 0;
     int m_pending = 0;

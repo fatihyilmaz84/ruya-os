@@ -94,7 +94,7 @@ QList<OutputInfo> MockAudioBackend::outputs() const
     jack.id = QStringLiteral("headphones-0");
     jack.name = QStringLiteral("Headphones");
     jack.kind = QStringLiteral("headphones");
-    jack.available = QStringLiteral("no");
+    jack.available = m_jackPlugged ? QStringLiteral("yes") : QStringLiteral("no");
     jack.isSaved = jack.id == m_saved;
     out.append(jack);
     return out;
@@ -199,6 +199,7 @@ void MockAudioBackend::initState()
     m_previous.clear();
     m_saved.clear();
     m_tested.clear();
+    m_jackPlugged = false;
 }
 
 int MockAudioBackend::indexOf(const QString &id) const

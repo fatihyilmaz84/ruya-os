@@ -234,12 +234,27 @@ Item {
             keyClick(Qt.Key_Down)                        // the empty jack
             keyClick(Qt.Key_Down)                        // Test sound
             tryVerify(() => find("rowTestSound").activeFocus)
-            tryCompare(find("rowTestSound"), "value", "Headphones")
+            tryCompare(find("rowTestSound"), "value", "Analog output")
             keyClick(Qt.Key_Return)
             tryCompare(spy, "count", 1)
-            compare(spy.signalArguments[0][0], "headphones-0", "the row focused last was the jack")
+            compare(spy.signalArguments[0][0], "analog-0", "the empty jack on the way down is not the target")
             compare(Audio.defaultSink, "hdmi-0", "the default is untouched")
             compare(choose.count, 0)
+        }
+
+        function test_an_inactive_but_available_output_can_be_chosen() {
+            Audio.mockSetJackPlugged(true)
+            openAudioPane()
+            tryVerify(() => find("sink_headphones-0").value === "")
+            verify(!find("sink_headphones-0").dimmed, "not greyed: a plug is in, only its profile is not active")
+            const spy = createTemporaryObject(spyComponent, host, { target: Audio, signalName: "setOutputFinished" })
+            focusedOutputRow("headphones-0")
+            keyClick(Qt.Key_Return)
+            tryCompare(spy, "count", 1)
+            compare(spy.signalArguments[0][0], "headphones-0", "setOutput was called")
+            compare(spy.signalArguments[0][1], "inactive")
+            tryVerify(() => tc.toastTexts().includes("Could not switch the audio output."))
+            verify(!tc.toastTexts().includes("Headphones: Not connected."))
         }
 
         function test_moved_toast_when_the_default_changes() {
