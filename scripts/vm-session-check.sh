@@ -6,7 +6,8 @@
 # bus as ruya-shell. Copy and run (boot with plain smoke-test.ps1 -Keep):
 #   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-session-check.sh scripts/vm-session-probe.qml root@127.0.0.1:/root/
 #   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-session-check.sh [check|restart|security|display|display-clean|clean]
-# `display` (T-164) checks the per-profile Wayland sockets and a profile's window in the app layer;
+# `display` (T-164) checks the per-profile Wayland sockets and a profile's window in the app layer, and (T-376)
+# that no ruya-shell PipeWire output stream exists with that window in front;
 # it also needs vm-key-client.qml and vm-inject-key.py in /root (see the `display)` case).
 # `restart` (T-290) needs a profile (run `check` once on an empty store, or create one) and
 # installs the test apps itself when they are missing.
@@ -339,6 +340,28 @@ display)
     tr '\0' ' ' < "/proc/$ppid/cmdline" 2>/dev/null | grep -q -- "-c ruya-profile-pulse.conf" \
         && grep -q "pulse.allow-module-loading = false" /usr/share/pipewire/ruya-profile-pulse.conf \
         && ok "the server runs ruya-profile-pulse.conf, which refuses module loading" || bad "the sound server's config (pid $ppid)"
+
+    echo "--- nothing of the shell sounds behind the app (T-376)"
+    # The ambient bed fades out over 800 ms and then stops its players, so the PipeWire output closes; a
+    # paused player left a silent stream open. A cue is a stream for at most 1.5 s, hence the wait.
+    sleep 4
+    sid="$(id -u ruya-shell)"
+    dump="$work/pw-dump.json"
+    if ! runuser -u ruya-shell -- env XDG_RUNTIME_DIR="/run/user/$sid" pw-dump > "$dump" 2>/dev/null; then
+        bad "pw-dump failed as ruya-shell (is PipeWire running?)"
+    elif streams="$(python3 -I -c '
+import json, sys
+nodes = json.load(open(sys.argv[1], encoding="utf-8"))
+for n in nodes:
+    p = (n.get("info") or {}).get("props") or {}
+    if (n.get("type") == "PipeWire:Interface:Node" and p.get("media.class") == "Stream/Output/Audio"
+            and (p.get("application.process.binary") == "ruya-shell" or p.get("application.process.user") == "ruya-shell")):
+        print(n.get("id"), (n.get("info") or {}).get("state"))
+' "$dump")"; then
+        [ -z "$streams" ] && ok "no ruya-shell output stream exists with the app in front" || { echo "$streams" | sed 's/^/    /'; bad "a ruya-shell output stream still exists with the app in front"; }
+    else
+        bad "could not parse the pw-dump output"
+    fi
 
     echo "--- Guide over the app"
     t2="$(date +%s)"

@@ -8,7 +8,7 @@ import RuyaShell
 //  - It plays while `wanted` (the shell: no app in front, no screen saver, display off or sleep) and
 //    the Ambient sound switch is on, at the Ambient channel's level times the theme's own gain.
 //  - It fades out over `SoundThemes.ambientFadeMs` (800 ms) when `wanted` goes false and in again on
-//    return; once the fade has finished the players are paused, so nothing is decoded while an app is
+//    return; once the fade has finished the players are stopped (the output closes), so nothing is decoded while an app is
 //    in front. Reduced motion does not shorten it: this is sound, not motion.
 //  - It is lowered by `SoundThemes.duckGain` (-8 dB) while a UI cue sounds (`Sfx.ducking`). All the timing here
 //    (fade, ramp, cross-fade, poll) is a constant of SoundThemes (04 3.9).
@@ -45,6 +45,8 @@ Item {
     property real blend: 0
     // The loop has been restarted this many times (tests).
     property int loopCount: 0
+    // The players have been stopped this many times (tests).
+    property int stopCount: 0
 
     onWantsSoundChanged: fade = wantsSound ? 1 : 0
     Component.onCompleted: fade = wantsSound ? 1 : 0     // the first fade in, at start-up
@@ -68,9 +70,15 @@ Item {
         first.position = SoundThemes.ambientLoopStart
         first.play()
     }
-    function pauseLoop() {
-        voiceA.pause()
-        voiceB.pause()
+    // Stopped, not paused: a paused player keeps its audio output (a silent PipeWire stream, decoder
+    // wake-ups) open for as long as an app is in front (T-376). The next start begins the loop again.
+    function stopLoop() {
+        stopCount++
+        cross.stop()
+        voiceA.stop()
+        voiceB.stop()
+        current = 0
+        blend = 0
     }
     function restartFromScratch() {
         voiceA.stop()
@@ -91,7 +99,7 @@ Item {
             if (blend > 0)
                 player(1 - current).play()
         } else {
-            pauseLoop()
+            stopLoop()
         }
     }
     Connections {

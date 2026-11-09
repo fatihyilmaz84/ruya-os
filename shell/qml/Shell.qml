@@ -543,6 +543,7 @@ FocusScope {
         id: l0
         objectName: "l0"
         anchors.fill: parent
+        visible: !root.appOpen       // an app in front covers it all: nothing is drawn or sampled behind it (T-376)
 
         Backdrop {
             id: backdrop
@@ -621,7 +622,10 @@ FocusScope {
     GlassPill {
         id: statusGlass
         objectName: "statusGlass"
-        visible: root.signedIn
+        // Fades out when an app takes the screen and is not drawn once settled: its glass would sample the hidden L0 (T-376).
+        opacity: root.appOpen ? 0 : 1
+        visible: root.signedIn && (!root.appOpen || opacity > 0)
+        Behavior on opacity { NumberAnimation { duration: Theme.pageMs; easing.type: Easing.Bezier; easing.bezierCurve: Theme.easeSnap } }
         height: Theme.buttonHeight * root.u + 2 * Theme.spaceXs * root.u
         width: statusRow.width + 2 * Theme.spaceL * root.u
         x: root.width - root.marginX - width
