@@ -54,9 +54,17 @@ pub trait Spawner {
     fn adopt_running(&self) -> Vec<RunningUnit> {
         Vec::new()
     }
+    /// Makes sure `user`'s sound server runs (`ruya-pulse@<user>.service` in `ruya-shell`'s
+    /// manager, ADR-010, T-365) before an app of `user` starts. Returns once it is started.
+    fn start_sound(&self, _user: &str) -> Result<(), String> {
+        Ok(())
+    }
 }
 
 impl<T: Spawner + ?Sized> Spawner for Box<T> {
+    fn start_sound(&self, user: &str) -> Result<(), String> {
+        (**self).start_sound(user)
+    }
     fn is_installed(&self, app_id: &str) -> bool {
         (**self).is_installed(app_id)
     }
@@ -182,6 +190,49 @@ pub fn wayland_display(dir: &str, user: &str) -> Option<String> {
         .then(|| format!("{dir}/{user}"))
 }
 
+/// Where `ruya-pulse@.service` makes each profile user's sound server socket (ADR-010, T-365):
+/// `/run/ruya-pulse/<user>/native`, in a directory only that user can pass.
+pub const PULSE_DIR: &str = "/run/ruya-pulse";
+
+/// The `PULSE_SERVER` an app of `user` gets: that user's own pulse socket in `dir`. `flatpak run
+/// --socket=pulseaudio` binds exactly this socket into the sandbox. `None` for anything that is
+/// not a profile user.
+pub fn pulse_server(dir: &str, user: &str) -> Option<String> {
+    user.strip_prefix("ruya-")
+        .is_some_and(valid_profile_id)
+        .then(|| format!("unix:{dir}/{user}/native"))
+}
+
+/// `env` with `PULSE_SERVER` set to `user`'s own sound server (one already there is replaced).
+pub fn with_pulse_server(
+    mut env: Vec<(String, String)>,
+    dir: &str,
+    user: &str,
+) -> Vec<(String, String)> {
+    if let Some(server) = pulse_server(dir, user) {
+        env.retain(|(key, _)| key != "PULSE_SERVER");
+        env.push(("PULSE_SERVER".to_owned(), server));
+    }
+    env
+}
+
+/// The argument list that starts `user`'s sound server in `ruya-shell`'s manager and waits until
+/// it runs. Pure; the user is validated again, so the instance name is a plain identifier.
+pub fn pulse_start_command(user: &str) -> Result<Vec<String>, String> {
+    if !user.strip_prefix("ruya-").is_some_and(valid_profile_id) {
+        return Err(format!("not a profile user: {user:?}"));
+    }
+    Ok(vec![
+        "systemctl".to_owned(),
+        "--user".to_owned(),
+        "--no-pager".to_owned(),
+        "--no-ask-password".to_owned(),
+        "--machine=ruya-shell@.host".to_owned(),
+        "start".to_owned(),
+        format!("ruya-pulse@{user}.service"),
+    ])
+}
+
 /// The environment of one app of `user`: `base`, with `WAYLAND_DISPLAY` set to the user's own
 /// socket when there is a socket directory (one in `base` is replaced).
 pub fn app_env(
@@ -236,7 +287,8 @@ pub fn launch_command(
         let value_ok = !value.is_empty()
             && value
                 .chars()
-                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.' | '/'));
+                // `:` for `PULSE_SERVER=unix:/...` (T-365); still one plain argv entry.
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.' | '/' | ':'));
         if !key_ok || !value_ok {
             return Err(format!("bad environment entry: {key:?}"));
         }
@@ -569,6 +621,7 @@ pub struct FakeSpawner {
 struct FakeState {
     installed: HashSet<String>,
     fail_start: bool,
+    fail_sound: bool,
     calls: Vec<String>,
     running: Vec<RunningUnit>,
     last_env: Vec<(String, String)>,
@@ -605,7 +658,13 @@ impl FakeSpawner {
         self
     }
 
-    /// "start user app", "stop unit", "kill unit", in order.
+    /// `start_sound` fails (the profile's sound server cannot start).
+    pub fn failing_sound(self) -> Self {
+        self.lock().fail_sound = true;
+        self
+    }
+
+    /// "sound user", "start user app", "stop unit", "kill unit", in order.
     pub fn calls(&self) -> Vec<String> {
         self.lock().calls.clone()
     }
@@ -630,6 +689,15 @@ impl FakeSpawner {
 impl Spawner for FakeSpawner {
     fn is_installed(&self, app_id: &str) -> bool {
         self.lock().installed.contains(app_id)
+    }
+
+    fn start_sound(&self, user: &str) -> Result<(), String> {
+        let mut state = self.lock();
+        state.calls.push(format!("sound {user}"));
+        if state.fail_sound {
+            return Err("fake sound failure".to_owned());
+        }
+        Ok(())
     }
 
     fn start(&self, user: &str, app_id: &str, env: &[(String, String)]) -> Result<String, String> {
@@ -796,6 +864,45 @@ mod tests {
         // The absolute path passes the argument check of the launch command.
         let args = launch_command("ruya-p1", "org.ruyaos.Racer", &p1).expect("valid");
         assert!(args.contains(&"--setenv=WAYLAND_DISPLAY=/run/ruya-wayland/ruya-p1".to_owned()));
+    }
+
+    #[test]
+    fn an_app_gets_its_profiles_pulse_server() {
+        assert_eq!(
+            pulse_server(PULSE_DIR, "ruya-p1").as_deref(),
+            Some("unix:/run/ruya-pulse/ruya-p1/native")
+        );
+        for bad in ["root", "ruya-", "ruya-p1/../p2", "p1", "ruya-P 1"] {
+            assert_eq!(pulse_server(PULSE_DIR, bad), None, "{bad:?}");
+        }
+        let base = vec![("PULSE_SERVER".to_owned(), "unix:/tmp/other".to_owned())];
+        let env = with_pulse_server(base, PULSE_DIR, "ruya-p2");
+        assert_eq!(
+            env,
+            vec![(
+                "PULSE_SERVER".to_owned(),
+                "unix:/run/ruya-pulse/ruya-p2/native".to_owned()
+            )]
+        );
+        // It passes the argument check of the launch command.
+        let args = launch_command("ruya-p2", "org.ruyaos.Racer", &env).expect("valid");
+        assert!(
+            args.contains(&"--setenv=PULSE_SERVER=unix:/run/ruya-pulse/ruya-p2/native".to_owned())
+        );
+    }
+
+    #[test]
+    fn the_pulse_start_command_names_only_a_profile_users_instance() {
+        let args = pulse_start_command("ruya-p1").expect("valid");
+        assert_eq!(
+            args.last().map(String::as_str),
+            Some("ruya-pulse@ruya-p1.service")
+        );
+        assert!(args.contains(&"--machine=ruya-shell@.host".to_owned()));
+        assert!(args.contains(&"start".to_owned()));
+        for bad in ["root", "ruya-", "ruya-p1;x", "ruya-p1 x", "../ruya-p1"] {
+            assert!(pulse_start_command(bad).is_err(), "{bad:?}");
+        }
     }
 
     #[test]

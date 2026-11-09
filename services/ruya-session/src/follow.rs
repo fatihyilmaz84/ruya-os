@@ -189,12 +189,16 @@ impl Follower {
 /// The D-Bus address of the bridge to one profile user's manager, the same `unixexec:` route
 /// `systemctl --user --machine=<user>@.host` takes: `systemd-run` starts `systemd-stdio-bridge`
 /// inside that user's manager and its stdin/stdout are the bus connection. Built from a
-/// validated `ruya-<profile id>` user only, every value escaped for the address syntax.
-pub fn bridge_address(user: &str) -> Result<String, String> {
+/// validated `ruya-<profile id>` user only. These are the arguments of `systemd-run` (the
+/// program, `BRIDGE_PROGRAM`); the caller builds zbus's typed `Unixexec` address from them. Not
+/// an address string: zbus 5.19 does not percent-decode `unixexec` arguments, so an escaped
+/// `--machine%3d...` reached `systemd-run` literally and the bridge ended at once ("Unexpected
+/// EOF during handshake", VM 0.0.59, lead-7).
+pub fn bridge_args(user: &str) -> Result<Vec<String>, String> {
     if !user.strip_prefix("ruya-").is_some_and(valid_profile_id) {
         return Err(format!("not a profile user: {user:?}"));
     }
-    let args = [
+    Ok(vec![
         format!("--machine={user}@.host"),
         "--user".to_owned(),
         "--pipe".to_owned(),
@@ -202,26 +206,11 @@ pub fn bridge_address(user: &str) -> Result<String, String> {
         "--collect".to_owned(),
         "systemd-stdio-bridge".to_owned(),
         "--user".to_owned(),
-    ];
-    let mut address = String::from("unixexec:path=systemd-run");
-    for (i, arg) in args.iter().enumerate() {
-        address.push_str(&format!(",argv{}={}", i + 1, escape_address_value(arg)));
-    }
-    Ok(address)
+    ])
 }
 
-/// D-Bus address escaping: bytes outside the optionally-escaped set (letters, digits and `-_/.*`) become `%xx`.
-fn escape_address_value(value: &str) -> String {
-    let mut out = String::new();
-    for b in value.bytes() {
-        if b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'/' | b'.' | b'*') {
-            out.push(char::from(b));
-        } else {
-            out.push_str(&format!("%{b:02x}"));
-        }
-    }
-    out
-}
+/// The program `bridge_args` belongs to.
+pub const BRIDGE_PROGRAM: &str = "systemd-run";
 
 /// How long to wait before the next try to start the bridge again: 2 s, doubling, at most 60 s.
 #[derive(Debug, Default)]
@@ -576,10 +565,20 @@ mod tests {
 
     #[test]
     fn the_bridge_argv_is_built_from_validated_values_only() {
+        // Plain values, never percent-escaped: zbus passes unixexec arguments through as given.
         assert_eq!(
-            bridge_address("ruya-p1").as_deref(),
-            Ok("unixexec:path=systemd-run,argv1=--machine%3druya-p1%40.host,argv2=--user,argv3=--pipe,argv4=--quiet,argv5=--collect,argv6=systemd-stdio-bridge,argv7=--user")
+            bridge_args("ruya-p1").expect("valid"),
+            [
+                "--machine=ruya-p1@.host",
+                "--user",
+                "--pipe",
+                "--quiet",
+                "--collect",
+                "systemd-stdio-bridge",
+                "--user"
+            ]
         );
+        assert_eq!(BRIDGE_PROGRAM, "systemd-run");
         for bad in [
             "",
             "ruya-",
@@ -590,9 +589,8 @@ mod tests {
             "ruya-../x",
             "ruya-p1;",
         ] {
-            assert!(bridge_address(bad).is_err(), "{bad:?}");
+            assert!(bridge_args(bad).is_err(), "{bad:?}");
         }
-        assert_eq!(escape_address_value("a,b=c%d"), "a%2cb%3dc%25d");
     }
 
     #[test]

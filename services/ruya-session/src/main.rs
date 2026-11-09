@@ -12,7 +12,7 @@ use ruya_session::dbus::{
 };
 use ruya_session::directory::ProfileSnapshot;
 use ruya_session::session::Session;
-use ruya_session::spawner::{FakeSpawner, UnitEvent, WAYLAND_DIR};
+use ruya_session::spawner::{FakeSpawner, UnitEvent, PULSE_DIR, WAYLAND_DIR};
 use ruya_session::usage::SystemZone;
 use ruya_session::usage_store::FileStore;
 use ruya_session::usage_tracker::Tracker;
@@ -68,7 +68,8 @@ fn run() -> Result<(), Box<dyn Error>> {
     };
     let mut session = Session::new(spawner, profiles, env);
     if let Some(dir) = wayland_dir {
-        session = session.with_wayland_dir(dir);
+        // On the console each app also gets its profile's own sound server (ADR-010, T-365).
+        session = session.with_wayland_dir(dir).with_pulse_dir(PULSE_DIR);
     }
     let session = Arc::new(Mutex::new(session));
     // The play ledger (T-247): root-only files under /var/lib/ruya-session/usage (the unit's

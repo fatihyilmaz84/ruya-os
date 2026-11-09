@@ -1,0 +1,48 @@
+# The sound server one profile's apps use (ADR-010, T-365). Runs in ruya-shell's manager, as a
+# second pulse server against the shell's PipeWire; the instance is the profile's Unix user
+# (ruya-<id>). Its socket lives in /run/ruya-pulse/<user>/, a 0700 directory with one ACL entry
+# that lets only that user through, so no other profile can connect. ruya-session starts it
+# before an app of that profile and points the app at it with PULSE_SERVER.
+[Unit]
+Description=RuyaOS sound server for %i
+ConditionUser=ruya-shell
+Requires=pipewire.service
+After=pipewire.service wireplumber.service
+
+[Service]
+Type=simple
+Environment=PULSE_RUNTIME_PATH=/run/ruya-pulse/%i
+# The directory and its ACL exist before the socket does: no moment where another user could
+# connect. setfacl fails for a name that is not a user, and so does the unit. "+": outside the
+# sandbox, whose user namespace (implied by the options below) maps no other uid, so the ACL
+# entry could not be written there.
+ExecStartPre=+/usr/bin/install -d -m 0700 /run/ruya-pulse/%i
+ExecStartPre=+/usr/bin/setfacl -m u:%i:x,m::x /run/ruya-pulse/%i
+ExecStart=/usr/bin/pipewire -c ruya-profile-pulse.conf
+# pipewire does not notify: "started" means "the socket listens", so ruya-session's blocking
+# start returns only then and the app never looks too early. Bounded: a stuck start fails fast
+# instead of holding ruya-session for the manager's default 90 s.
+ExecStartPost=/usr/bin/timeout 4 /usr/bin/sh -c 'until [ -S /run/ruya-pulse/%i/native ]; do sleep 0.05; done'
+TimeoutStartSec=5s
+ExecStopPost=+/usr/bin/rm -rf /run/ruya-pulse/%i
+Restart=on-failure
+RestartSec=1
+UMask=0077
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/run/ruya-pulse
+PrivateTmp=yes
+NoNewPrivileges=yes
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+SystemCallArchitectures=native
+ProtectClock=yes
+ProtectHostname=yes
+ProtectKernelLogs=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX
+RestrictNamespaces=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes

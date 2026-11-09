@@ -37,12 +37,18 @@ use zbus::connection::Builder;
 use zbus::zvariant::{OwnedObjectPath, OwnedValue};
 use zbus::{Connection, MatchRule, MessageStream};
 
-use crate::follow::{bridge_address, parse_signal, Backoff, Follower, ManagerLink, Probe, Wake};
+use crate::follow::{
+    bridge_args, parse_signal, Backoff, Follower, ManagerLink, Probe, Wake, BRIDGE_PROGRAM,
+};
 use crate::spawner::{
-    flatpak_app_installed, launch_command, parse_profile_users, parse_show, scope_pattern,
-    unit_app_id, unit_name, LineTail, RunFollower, RunningUnit, ShowUnit, SHOW_PROPERTIES,
+    flatpak_app_installed, launch_command, parse_profile_users, parse_show, pulse_start_command,
+    scope_pattern, unit_app_id, unit_name, LineTail, RunFollower, RunningUnit, ShowUnit,
+    SHOW_PROPERTIES,
 };
 use crate::spawner::{Spawner, UnitEvent};
+use std::ffi::OsString;
+use zbus::address::transport::{Transport, Unixexec};
+use zbus::Address;
 
 const FLATPAK_ROOT: &str = "/var/lib/flatpak";
 /// `RuntimeDirectory=ruya-session` of the unit: where each app's `systemd-run` writes its status.
@@ -111,6 +117,38 @@ impl SystemdSpawner {
 impl Spawner for SystemdSpawner {
     fn is_installed(&self, app_id: &str) -> bool {
         flatpak_app_installed(&self.flatpak_root, app_id)
+    }
+
+    /// `systemctl --machine=ruya-shell@.host --user start ruya-pulse@<user>.service`, the same
+    /// path as the app units, and waits for it: the unit counts as started once its socket
+    /// listens (its `ExecStartPost`), so the app never looks too early. Quick when the server
+    /// already runs (every launch after the first). Runs under the session lock, so it is
+    /// bounded: the unit gives up after 5 s, and the `systemctl` child is killed after 10 s.
+    fn start_sound(&self, user: &str) -> Result<(), String> {
+        const LIMIT: Duration = Duration::from_secs(10);
+        let args = pulse_start_command(user)?;
+        let what = args.join(" ");
+        let mut child = Command::new(&args[0])
+            .args(&args[1..])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::inherit())
+            .spawn()
+            .map_err(|err| format!("{what}: {err}"))?;
+        let deadline = Instant::now() + LIMIT;
+        loop {
+            match child.try_wait() {
+                Ok(Some(status)) if status.success() => return Ok(()),
+                Ok(Some(status)) => return Err(format!("{what} failed: {status}")),
+                Ok(None) if Instant::now() >= deadline => {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return Err(format!("{what}: no answer in {} s", LIMIT.as_secs()));
+                }
+                Ok(None) => std::thread::sleep(Duration::from_millis(20)),
+                Err(err) => return Err(format!("{what}: {err}")),
+            }
+        }
     }
 
     fn start(&self, user: &str, app_id: &str, env: &[(String, String)]) -> Result<String, String> {
@@ -290,9 +328,16 @@ impl UserLink {
 
     /// Starts the bridge, connects over it and subscribes to the manager's signals.
     fn connect(&mut self) -> Result<(), String> {
-        let address = bridge_address(&self.user)?;
+        // The typed transport, not an address string (see `follow::bridge_args`).
+        let args = bridge_args(&self.user)?;
+        let exec = Unixexec::new(
+            PathBuf::from(BRIDGE_PROGRAM),
+            None,
+            args.into_iter().map(OsString::from).collect(),
+        );
+        let address = Address::from(Transport::Unixexec(exec));
         let conn = future::block_on(
-            Builder::address(address.as_str())
+            Builder::address(address)
                 .map_err(|e| e.to_string())?
                 .build(),
         )
