@@ -52,6 +52,8 @@ Triaged 2026-11-09 (lead-8): the lines before are verbatim in [`STATUS-parked.md
 - (T-377 reviews) A Store row not yet built forgets its remembered card index (a `pendingIndex` applied when the model fills); a `shots` frame of the Store scrolled to Apps & media; `slotY` recomputes for every row on each `rowIds` change (cheap with 4 rows).
 - (T-363, lead-8) CPU per game is only in the journal (`scope gone, cpu N ms`): putting it in the ledger or `ListSessions` changes a format; ask the owner whether "CPU per game" is wanted.
 - (lead-8) The `.githooks/pre-commit` text lint needs `git config core.hooksPath .githooks` once per clone (the owner; the lead's harness refused to set it).
+- (T-379, lead-8) The four `shots` reds did not reproduce (158 passed twice; all are already `tryVerify`/`tryCompare`); closed as not reproducible. Make `WindowGuard` fail a test with its own message when the window lost activation mid-test and did not regain it (today it checks only in `init()`, so a desktop loss shows as a random `activeFocus` line); keep the build-win ruya-qmltest.txt log with any new red.
+uya-qmltest.txt` with any new red.
 
 ## Blocked (need something this host doesn't have)
 

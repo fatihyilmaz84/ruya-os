@@ -1,6 +1,6 @@
 # T-379 - `shots` reds on main: tst_store_ui:81, tst_system_info:502, tst_wallpaper:898, tst_display:101
 
-Status: in-progress · Phase: 2 · Depends: T-377 · Area: shell (tests) · Size: S · Owner: builder · Complexity: normal · Developer surface: none
+Status: done · Phase: 2 · Depends: T-377 · Area: shell (tests) · Size: S · Owner: builder · Complexity: normal · Developer surface: none
 
 ## Goal
 `dev.ps1 shots` is green on main on real GPU windows, so a red `shots` means a real regression again.
