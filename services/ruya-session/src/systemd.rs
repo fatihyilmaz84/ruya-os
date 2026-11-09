@@ -115,21 +115,34 @@ impl Spawner for SystemdSpawner {
     }
 
     /// `systemctl --machine=ruya-shell@.host --user start ruya-pulse@<user>.service`, the same
-    /// path as the app units, and waits for it: the socket must exist before the app looks for
-    /// it. Quick when the server already runs (every launch after the first).
+    /// path as the app units, and waits for it: the unit counts as started once its socket
+    /// listens (its `ExecStartPost`), so the app never looks too early. Quick when the server
+    /// already runs (every launch after the first). Runs under the session lock, so it is
+    /// bounded: the unit gives up after 5 s, and the `systemctl` child is killed after 10 s.
     fn start_sound(&self, user: &str) -> Result<(), String> {
+        const LIMIT: Duration = Duration::from_secs(10);
         let args = pulse_start_command(user)?;
-        let status = Command::new(&args[0])
+        let what = args.join(" ");
+        let mut child = Command::new(&args[0])
             .args(&args[1..])
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::inherit())
-            .status()
-            .map_err(|err| format!("{}: {err}", args.join(" ")))?;
-        if status.success() {
-            Ok(())
-        } else {
-            Err(format!("{} failed: {status}", args.join(" ")))
+            .spawn()
+            .map_err(|err| format!("{what}: {err}"))?;
+        let deadline = Instant::now() + LIMIT;
+        loop {
+            match child.try_wait() {
+                Ok(Some(status)) if status.success() => return Ok(()),
+                Ok(Some(status)) => return Err(format!("{what} failed: {status}")),
+                Ok(None) if Instant::now() >= deadline => {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return Err(format!("{what}: no answer in {} s", LIMIT.as_secs()));
+                }
+                Ok(None) => std::thread::sleep(Duration::from_millis(20)),
+                Err(err) => return Err(format!("{what}: {err}")),
+            }
         }
     }
 

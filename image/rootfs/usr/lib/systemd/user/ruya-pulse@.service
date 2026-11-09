@@ -19,6 +19,11 @@ Environment=PULSE_RUNTIME_PATH=/run/ruya-pulse/%i
 ExecStartPre=+/usr/bin/install -d -m 0700 /run/ruya-pulse/%i
 ExecStartPre=+/usr/bin/setfacl -m u:%i:x,m::x /run/ruya-pulse/%i
 ExecStart=/usr/bin/pipewire -c ruya-profile-pulse.conf
+# pipewire does not notify: "started" means "the socket listens", so ruya-session's blocking
+# start returns only then and the app never looks too early. Bounded: a stuck start fails fast
+# instead of holding ruya-session for the manager's default 90 s.
+ExecStartPost=/usr/bin/timeout 4 /usr/bin/sh -c 'until [ -S /run/ruya-pulse/%i/native ]; do sleep 0.05; done'
+TimeoutStartSec=5s
 ExecStopPost=+/usr/bin/rm -rf /run/ruya-pulse/%i
 Restart=on-failure
 RestartSec=1
