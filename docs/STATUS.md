@@ -25,6 +25,7 @@ Open work only (the front of the board; the rest is in `STATUS-backlog.md`), in 
 |---|---|---|---|
 | [T-386](tasks/T-386-play-starts-the-game.md) | Play starts the game: the Library's launch reaches Session1.Launch | in-progress | T-164 |
 | [T-387](tasks/T-387-glass-after-an-app-and-picker-thumbnails.md) | Glass sheets lose their blur after an app was in front; wallpaper picker tiles stay blank | in-progress | — |
+| [T-147](tasks/T-147-fullscreen-app-flow.md) | Full-screen apps: launch, quick menu, return, close | todo | T-164 |
 | [T-366](tasks/T-366-ruya-input-spike-engine-and-design.md) | **[lead]** Ruya Input: spike, engine decision and the design (06-input.md, Input1 draft) | todo | — |
 | [T-367](tasks/T-367-a-game-sees-the-pad.md) | **[lead]** A game sees the pad: a virtual pad per controller, for the signed-in profile only, routed by focus | todo | T-366 |
 | [T-197](tasks/T-197-shell-crash-on-bluetooth-audio-disconnect.md) | **[lead]** Shell crash when a Bluetooth headset disconnects | in-progress | — |
@@ -33,7 +34,7 @@ Open work only (the front of the board; the rest is in `STATUS-backlog.md`), in 
 
 Later (ordered): [`STATUS-backlog.md`](STATUS-backlog.md) holds the rest of the open board, same columns; `lint-board.ps1` reads both. A planner or the lead moves rows up when they become ready.
 
-**VM queue** (one image build runs them all; `scripts/vm-queue.ps1`; history in `STATUS-parked.md`): **0.0.60 passed on 2026-11-09** (lead-8: session check/display/restart, sounds, devices bluetooth/twopads/inputd/system, audio, storage, reboot saved output; check's scope lines wait for T-363's image). For 0.0.61: `vm-session-check.sh check` scope lines (T-363) and the Dell STK repeat (journal `scope gone, cpu N ms`, about 45 min x 15 %), `subset-icons.sh` (T-297), the sample re-run, the greenboot drill.
+**VM queue** (one image build runs them all; `scripts/vm-queue.ps1`; history in `STATUS-parked.md`): **0.0.60 passed on 2026-11-09** (lead-8: session check/display/restart, sounds, devices bluetooth/twopads/inputd/system, audio, storage, reboot saved output; check's scope lines wait for T-363's image). For 0.0.61: `vm-devices-check.sh bluetooth` (T-359), `vm-session-check.sh check` scope lines (T-363) and the Dell STK repeat (journal `scope gone, cpu N ms`, about 45 min x 15 %), `subset-icons.sh` (T-297), the sample re-run, the greenboot drill.
 
 **Dell look-at list** (one pass with the next ISO; the long text with task ids is in `STATUS-parked.md`, "Moved from STATUS 2026-11-08"):
 
@@ -57,6 +58,7 @@ Triaged 2026-11-09 (lead-8): the lines before are verbatim in [`STATUS-parked.md
 - (T-379, lead-8) The four `shots` reds did not reproduce (158 passed twice; all are already `tryVerify`/`tryCompare`); closed as not reproducible. Make `WindowGuard` fail a test with its own message when the window lost activation mid-test and did not regain it (today it checks only in `init()`, so a desktop loss shows as a random `activeFocus` line); keep the build-win ruya-qmltest.txt log with any new red.
 uya-qmltest.txt` with any new red.
 - (lead-8, Dell 0.0.60) ruya-session starts before Profiles1 is activatable and before ruya-p1's user manager: "Profiles1 not readable, no unit is stopped" and "cannot list the apps of ruya-p1" (Transport endpoint is not connected) at boot; it does not retry, so adoption after a reboot may miss a running app. Order it after the profile service or retry.
+- (T-359 reviews, lead-8) Bluetooth leftovers: a user scan on a non-window adapter keeps running after a primary flip (`stop_scan`/`tick`); the low-battery toast names a pad by its UPower id, not the paired alias; `dbus.rs` `eprintln!` lines bypass `log::info`; `SettingRow` labels still elide the address tail (needs `TailText`); a translator comment on `qsTr("%1 (%2)")` in `DeviceIcons.shownParts` (the name must stay first); "primary adapter off, another on" should say which adapter is off. T-289 item 1 is half done (primary address); only the `bluetoothctl` fallback remains.
 
 ## Blocked (need something this host doesn't have)
 
