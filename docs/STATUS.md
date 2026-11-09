@@ -31,7 +31,7 @@ Open work only (the front of the board; the rest is in `STATUS-backlog.md`), in 
 
 Later (ordered): [`STATUS-backlog.md`](STATUS-backlog.md) holds the rest of the open board, same columns; `lint-board.ps1` reads both. A planner or the lead moves rows up when they become ready.
 
-**VM queue** (one image build runs them all; `scriptsm-queue.ps1`; history in `STATUS-parked.md`): **0.0.60 passed on 2026-11-09** (lead-8: session check/display/restart, sounds, devices bluetooth/twopads/inputd/system, audio, storage, reboot saved output; check's scope lines wait for T-363's image). For 0.0.61: `vm-session-check.sh check` scope lines (T-363) and the Dell STK repeat (journal `scope gone, cpu N ms`, about 45 min x 15 %), `subset-icons.sh` (T-297), the sample re-run, the greenboot drill.
+**VM queue** (one image build runs them all; `scripts/vm-queue.ps1`; history in `STATUS-parked.md`): **0.0.60 passed on 2026-11-09** (lead-8: session check/display/restart, sounds, devices bluetooth/twopads/inputd/system, audio, storage, reboot saved output; check's scope lines wait for T-363's image). For 0.0.61: `vm-session-check.sh check` scope lines (T-363) and the Dell STK repeat (journal `scope gone, cpu N ms`, about 45 min x 15 %), `subset-icons.sh` (T-297), the sample re-run, the greenboot drill.
 
 **Dell look-at list** (one pass with the next ISO; the long text with task ids is in `STATUS-parked.md`, "Moved from STATUS 2026-11-08"):
 
