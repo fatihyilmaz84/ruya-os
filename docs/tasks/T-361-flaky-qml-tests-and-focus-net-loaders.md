@@ -1,6 +1,6 @@
 # T-361 - Test reliability: two load-flaky QML tests, a faster page-focus test, the focus net with lazy panes
 
-Status: todo · Phase: 2 · Depends: — · Area: shell (tests, Shell.qml, Settings) · Size: S · Owner: builder · Developer surface: none
+Status: in-progress · Phase: 2 · Depends: — · Area: shell (tests, Shell.qml, Settings) · Size: S · Owner: builder · Developer surface: none
 
 ## Goal
 `dev.ps1 test` is green every run, not most runs, and the focus safety net still works now that Settings panes are lazy Loaders.
