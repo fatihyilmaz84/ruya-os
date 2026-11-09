@@ -38,5 +38,8 @@ Players can protect and move their game progress: back up a profile's saves to a
 - The restore of another profile's data must run extraction as that profile's Unix user (drop privileges) so a hostile archive cannot write outside its home.
 - A backup is read by people on other machines too: keep the manifest human-readable and the archive a plain tar.
 
+## Note (lead-8, ADR-028)
+Snapshots follow ADR-028: immutable, a manifest with checksums, good only after verification; every restore takes a safety snapshot first and goes through staging; retention never deletes the only valid backup; backup and restore are jobs with ADR-026's record (resumable after a power cut).
+
 ## Outcome
 _Filled in by the implementer. First line: `Verified: host | vm | unverified | hw`. Then: what was built, files, deviations, follow-ups._

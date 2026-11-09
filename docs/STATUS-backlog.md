@@ -113,6 +113,10 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | [T-279](tasks/T-279-app-cooperation-save-state-and-background-audio.md) | App cooperation: save state, background audio, developer guide | todo | T-273, T-275 |
 | [T-280](tasks/T-280-gap-free-boot-handover.md) | **[lead]** Close the dark gap between the boot splash and the shell's first frame | todo | T-269 |
 | [T-302](tasks/T-302-epic-game-data-hub-api.md) | **[lead]** EPIC game data hub (ADR-020 Accepted): ROM folders, save and capture paths, now-playing: spec | todo | — |
+| [T-400](tasks/T-400-save-discovery-spike.md) | **[lead]** Spike: where saves are, found as the profile user (agent, Ludusavi manifest, runner and Steam prefixes) | todo | T-302 |
+| [T-401](tasks/T-401-library-installations-of-one-game.md) | Library: one game, several installations (Flatpak, Steam, .play, ROM), a preferred one, no merging by title | todo | T-302, T-400 |
+| [T-402](tasks/T-402-windows-saves-in-prefixes.md) | Windows game saves: snapshot and restore the saves inside our runner prefixes and Steam's Proton prefixes | todo | T-400, T-382, T-215 |
+| [T-403](tasks/T-403-games-on-other-drives.md) | Games on other drives: install to a drive, move between drives, a missing drive leaves its games unavailable | todo | T-389, T-401 |
 | [T-303](tasks/T-303-spike-hub-systems-layout-sandbox.md) | **[lead]** Spike and spec: system ids, ROM and capture layout, sandbox reach | todo | T-302 |
 | [T-304](tasks/T-304-hub1-contract-and-service.md) | `Hub1`: contract, `ruya-hub` service, mock and client | todo | T-302, T-303 |
 | [T-305](tasks/T-305-captures-screenshot-recording-clip.md) | **[lead]** Captures: screenshots, recordings and clip-the-last-seconds by the OS | todo | T-302, T-304, T-164 |

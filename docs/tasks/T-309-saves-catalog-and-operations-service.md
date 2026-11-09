@@ -25,5 +25,8 @@ The OS knows, per profile, which save files, save states and configs belong to w
 ## Docs to update
 - 03 (saves manager), `saves-and-data.md`, the XML.
 
+## Note (lead-8, ADR-028)
+Discovery sources and confidence come from ADR-028 and T-400 (app-declared through the hub, our runner prefixes, the known-locations file, manual), run as the profile user (T-400's agent), never as root; state per item: verified / high / probable / unverified; nothing is moved or deleted on an uncertain find. Save states and in-game saves are separate kinds; a state is never assumed compatible across cores or versions.
+
 ## Outcome
 _Filled in by the implementer. First line: `Verified: host (vm pending: …)`._

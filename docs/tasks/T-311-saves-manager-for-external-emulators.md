@@ -27,5 +27,8 @@ Any emulator or game, not only first-party ones, can tell the OS where its saves
 ## Hints
 - Developer surface (ADR-022, `docs/developers/api-surface.md`): external emulators call it, so it follows the DoD of `api-surface.md`: stability tags, a paragraph, a sample, mock, conformance test (including a call for another app's saves).
 
+## Note (lead-8, ADR-028)
+The proposal's emulator adapters (`docs/archive/research/...`, §11) are rejected by ADR-028: an emulator tells the hub its save, state, memory-card and NAND locations and formats through this API; the OS never launches or configures emulators itself.
+
 ## Outcome
 _Filled in by the implementer. First line: `Verified: host (vm pending: …)`._

@@ -37,5 +37,8 @@ Write the spec (03 new section "Game data hub", 02 captures and Library display)
 ## Hints
 - Developer surface (ADR-022, `docs/developers/api-surface.md`): the hub's app-facing calls become an interface of `Platform1` (T-352), `Hub1` stays an internal service. Each child that is public carries the DoD of `api-surface.md`; T-308 owns the chapter and the sample.
 
+## Note (lead-8, ADR-028)
+Write the epic spec as `docs/specs/08-games-and-saves.md` from ADR-028 and the good parts of the owner's proposal (`docs/archive/research/universal-game-and-save-management-proposal.md`): the game/installation model (§3), the save rules (§6, §12-§13), discovery sources and confidence (§7), Proton/Wine prefixes (§8), data classification (§9.2), storage locations by volume id (§4.3), long operations (§22.3, as ADR-026's job record); take its edge-case table (§26) and test list (§27) as the acceptance matrix, and list what ADR-028 rejects. T-400 is the spike for discovery.
+
 ## Outcome
 _Filled in by the implementer. First line: `Verified: host`._

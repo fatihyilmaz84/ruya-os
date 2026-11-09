@@ -22,5 +22,8 @@ A player can see all saves and save states of a game (or of everything), with si
 - [ ] Screenshots (list with thumbnails, action sheet, delete confirm, trash, empty) in Dreamglass and Daylight read against 04 §7/§8; UX: Back leaves every state; `UX notes:` line.
 - [ ] `.\scripts\dev.ps1 test` and `shots` ALL GREEN.
 
+## Note (lead-8, ADR-028)
+A game page Saves section (last change, last backup, history, Back up now, Restore with the safety snapshot) is part of this screen; T-402 adds the Windows rows. A possible save location found by discovery is offered as "Ruya found a possible save location for this game" with Confirm / Ignore / Review, never applied silently.
+
 ## Outcome
 _Filled in by the implementer. First line: `Verified: host`._
