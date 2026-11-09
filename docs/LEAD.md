@@ -35,6 +35,7 @@ The lead follows the root `CLAUDE.md` (rules, commit format, definition of done)
 - `.\scripts\dev.ps1 test` → must be ALL GREEN.
 - `.\scripts\dev.ps1 shots`, then **look at the screenshots** of every screen that changed since the last review. Skip `shots` when no `.qml` file changed in the range.
 - **VM queue** (board): build one image of `main`, `make-disk.sh qcow2`, `scripts\smoke-test.ps1` (recipe in `docs/dev-setup.md`), then each queued task's check. Record each result in that task's Outcome (`Verified: vm`, with the numbers) and clear the queue; a failed check reopens its task. Also build when anything under `image/`, `services/` or the shell's Linux paths changed since the last VM verification and nothing in the range was VM-verified. Run the update/rollback drill when updates, health checks or greenboot are touched. End with `scripts\free-space.ps1`.
+  - **ISO only when needed (owner, 2026-11-09):** each image build ends with the oci-archive update of the Dell (`docs/dev-setup.md`, "When to build the ISO"); build the ISO and run `vm-iso-check.ps1` only when installer, kickstart, first-boot, partitioning or `bib` config changed, for a milestone or release candidate, or when the owner asks. First-boot features are tested on a fresh qcow2 or after a scripted factory reset of the Dell.
 - CI on GitHub: if the owner can share the Actions result, or it's visible from a pushed state, record it; otherwise note "CI not checked".
 - Write the numbers down (test counts, boot result, timings). They go into the log entry.
 
