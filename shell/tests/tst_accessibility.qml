@@ -315,6 +315,41 @@ Item {
             Display.mockReset()
         }
 
+        // ModePicker and ModeConfirm (T-285): the list and the two buttons carry a name and a role,
+        // and focus starts on the current mode / on Revert (the safe choice).
+        function test_mode_picker_and_mode_confirm_rows() {
+            Display.mockReset()
+            tryVerify(() => Display.available)
+            signInAsAda()
+            tc.shell.openPage("settings", { category: "display" })
+            tryCompare(tc.shell, "currentPage", "settings")
+            tryVerify(() => find("categoryList").activeFocus, 2000)
+            keyClick(Qt.Key_Right)
+            tryVerify(() => find("rowQuality").activeFocus, 2000)
+            for (let i = 0; i < 12 && !find("rowResolution").activeFocus; ++i)
+                keyClick(Qt.Key_Down)
+            verify(find("rowResolution").activeFocus)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("resolutionPicker").shown)
+            const list = find("resolutionPickerList")
+            compare(list.Accessible.role, Accessible.List)
+            verify(list.Accessible.name.length > 0, "the list is named")
+            tryVerify(() => find("resolutionPickerEntry_3840x2160").activeFocus, 2000, "focus starts on the current mode")
+            checkFocused("mode picker entry")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !find("resolutionPicker").shown)
+            Display.chooseResolution(1920, 1080)
+            tryCompare(Display, "confirming", true)
+            tryVerify(() => find("modeRevert").activeFocus, 2000, "focus starts on Revert")
+            for (const name of ["modeRevert", "modeKeep"]) {
+                compare(find(name).Accessible.role, Accessible.Button, name)
+                verify(find(name).Accessible.name.length > 0, name + " is named")
+            }
+            keyClick(Qt.Key_Escape)
+            tryCompare(Display, "pending", false)
+            Display.mockReset()
+        }
+
         // The Confirm button is named after the action, never the bare word "Confirm" (T-186).
         function test_power_confirm_names_follow_the_action() {
             signInAsAda()

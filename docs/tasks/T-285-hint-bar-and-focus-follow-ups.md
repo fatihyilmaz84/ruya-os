@@ -42,4 +42,19 @@ The hint bar tells the truth in every state review rounds found wrong or silent,
 - Overlaps T-284 (WallpaperPicker) only on that picker's Delete text; leave it to T-284.
 
 ## Outcome
-_Filled in by the implementer. First line: `Verified: host | vm | unverified | hw` (say what ran where). Then: what was built, files, deviations, follow-ups (each also an Inbox line)._
+Verified: host (`dev.ps1 test` ALL GREEN: 1001 QML + 77 skips, Rust ok; `shots` ALL GREEN).
+
+UX notes: states reached: the on-screen keyboard (A Type, B Delete/Cancel, Start Done; after a physical key A goes), PowerConfirm and the uninstall confirmation (A Select, B Cancel), Power saving (Left/Right Change, B Back), Activity chart row (Left/Right Browse, B Back; other rows unchanged). Back leaves each as before (nothing about keys changed). Focus is untouched. The new glyph is a pill reading "Left/Right" (the bar has no D-pad glyph), checked in `92-power-saving-settings-en.png` and `90-activity-week-en.png`: readable, same height as the others. I doubted that word as a glyph; a real D-pad glyph is an inbox line.
+
+Built:
+- `Setup.hints`: the `nameEntry.shown` half dropped. `TextEntry.entryHints` adds `A Type` and `Start Done` (no A after typing on a physical keyboard, where Enter finishes).
+- `modalHints` (A Select, B Cancel) on `PowerConfirm` and the uninstall confirmation. The wallpaper and mode pickers and the zone chooser already had them; ModeConfirm already followed its button. PinPad keeps `B Cancel` only (its keys are digits, not a choice), a call I made.
+- Power saving: `Left/Right Change`. Activity and the game page: `Left/Right Browse` while the chart has focus (the game page's strip, `ActivityGamePage.hints` now follows its body).
+- 02 section 4.2: Tab is unmapped on non-pane row lists (T-282 recommendation, no decision needed). Hint-bar rules updated. `ruyashell_*.ts` refreshed (Gez, Degistir, Yaz).
+- Tests: `tst_hints` (keyboard, the three modals, Power saving, Activity), `tst_setup` (the keyboard, not `Setup.hints`, says Cancel), `tst_textentry` strings, `tst_accessibility::test_mode_picker_and_mode_confirm_rows` (list name/role, initial focus, ModeConfirm buttons name/role, focus on Revert).
+
+Revert checks: restoring `nameEntry.shown ||` in `Setup.hints` fails `tst_setup::test_hints_follow_the_step`; setting Power saving's hint back to `A Select` fails `tst_hints::test_choice_row_pane_says_left_right`.
+
+Round 2: `tst_store_ui::test_uninstall_confirm` asserts `A Select|B Cancel` (revert: the uninstall confirmation's `modalHints` without A fails it), `tst_hints::test_mode_picker_says_select` (revert: ModePicker's `modalHints` without A), `tst_activity::test_most_played_in_order_and_the_game_page` asserts the strip's `Left/Right Browse` and `B Back` on a fact row (revert: the strip hint set to `false ?`). A TimeZone clock test failed once in a full run and passed alone and in the next full run (timing, unrelated); a `hintList` binding loop warning in tst_timezone is on main too.
+
+Unmet: the Bluetooth discovery test. The task names `tst_bluetooth.qml::test_discovery_focus_scrolls`, which does not exist; the test is `tst_settings.qml::test_bluetooth_discovery_keeps_the_focused_row_and_the_row_below_whole`. I could not make it go red: in the mock the row below "Add a device" (Pair a new controller) exists before and after the scan and the new devices land further down, after existing device rows, so reverting `settleFocus()` in `relayout()` changes nothing there at any pane height (tried 6 and 3 rows; reverting it fails three other tests, so that fix is covered). The test is left as is. A red case needs a mock where the scan inserts rows right under the focused row.

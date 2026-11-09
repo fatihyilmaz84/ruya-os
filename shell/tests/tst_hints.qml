@@ -20,6 +20,9 @@ Item {
     }
 
     Component { id: barePane; SettingsPane { } }
+    Component { id: wallpaperComponent; WallpaperPicker { anchors.fill: parent } }
+    Component { id: zoneComponent; ZonePicker { anchors.fill: parent } }
+    Component { id: confirmComponent; PowerConfirm { anchors.fill: parent } }
 
     Component {
         id: pinComponent
@@ -46,7 +49,7 @@ Item {
             if (!bar.visible)
                 return ""
             const parts = []
-            for (const b of ["A", "B", "X", "Y", "LBRB", "Start"]) {
+            for (const b of ["Left/Right", "A", "B", "X", "Y", "LBRB", "Start"]) {
                 const h = findChild(bar, "hint_" + b)
                 if (h)
                     parts.push(b + " " + h.verb)
@@ -219,12 +222,89 @@ Item {
             verify(entry)
             entry.open("Name", "ab")
             tryVerify(() => entry.activeFocus, 2000, "the keyboard takes focus")
-            compare(tc.shown(), "B Delete")
+            compare(tc.shown(), "A Type|B Delete|Start Done")
             keyClick(Qt.Key_Escape)
             keyClick(Qt.Key_Escape)
             compare(entry.text, "")
-            compare(tc.shown(), "B Cancel", "an empty field: Back cancels")
+            compare(tc.shown(), "A Type|B Cancel|Start Done", "an empty field: Back cancels")
             entry.destroy()
+        }
+
+        // T-285: every modal that takes Accept says "A Select".
+        function test_modals_that_take_accept_say_select() {
+            signInAsAda()
+            const layer = find("modalLayer")
+            const wp = createTemporaryObject(wallpaperComponent, layer)
+            wp.open()
+            tryVerify(() => tc.shell.Window.window.activeFocusItem && tc.hasAncestor(tc.shell.Window.window.activeFocusItem, wp), 2000)
+            compare(tc.shown(), "A Select|B Cancel", "wallpaper picker")
+            wp.close()
+            const zone = createTemporaryObject(zoneComponent, layer)
+            zone.open()
+            tryVerify(() => tc.hasAncestor(tc.shell.Window.window.activeFocusItem, zone), 2000)
+            compare(tc.shown(), "A Select|B Cancel", "zone chooser")
+            zone.close()
+            const confirm = createTemporaryObject(confirmComponent, layer)
+            confirm.open("restart")
+            tryVerify(() => confirm.shown && tc.hasAncestor(tc.shell.Window.window.activeFocusItem, confirm), 2000)
+            compare(tc.shown(), "A Select|B Cancel", "power confirm")
+            confirm.close()
+        }
+        function hasAncestor(item, ancestor) {
+            for (let p = item; p; p = p.parent) {
+                if (p === ancestor)
+                    return true
+            }
+            return false
+        }
+
+        function test_mode_picker_says_select() {
+            Display.mockReset()
+            tryVerify(() => Display.available)
+            signInAsAda()
+            tc.shell.openPage("settings", { category: "display" })
+            tryCompare(tc.shell, "currentPage", "settings")
+            tryVerify(() => find("categoryList").activeFocus, 2000)
+            keyClick(Qt.Key_Right)
+            tryVerify(() => find("rowQuality").activeFocus, 2000)
+            for (let i = 0; i < 12 && !find("rowResolution").activeFocus; ++i)
+                keyClick(Qt.Key_Down)
+            verify(find("rowResolution").activeFocus)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("resolutionPicker").shown)
+            tryVerify(() => tc.hasAncestor(tc.shell.Window.window.activeFocusItem, find("resolutionPicker")), 2000)
+            compare(tc.shown(), "A Select|B Cancel", "mode picker")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !find("resolutionPicker").shown)
+            Display.mockReset()
+        }
+
+        function test_choice_row_pane_says_left_right() {
+            signInAsAda()
+            tc.shell.openPage("settings")
+            tryCompare(tc.shell, "currentPage", "settings")
+            tryVerify(() => find("categoryList").activeFocus, 2000)
+            for (let i = 0; i < 7; ++i)
+                keyClick(Qt.Key_Down)
+            tryVerify(() => find("category_power"))
+            keyClick(Qt.Key_Right)
+            tryVerify(() => find("rowScreenSaver").activeFocus, 2000, "the first row has focus")
+            compare(tc.shown(), "Left/Right Change|B Back")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => find("categoryList").activeFocus, 2000)
+        }
+
+        function test_activity_chart_says_left_right() {
+            signInAsAda()
+            tc.shell.openPage("activity")
+            tryCompare(tc.shell, "currentPage", "activity")
+            tryCompare(Usage, "ready", true)
+            tryVerify(() => find("activityWeek").activeFocus, 2000, "the chart row has focus first")
+            compare(tc.shown(), "Left/Right Browse|B Back")
+            keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Down)
+            verify(!find("activityWeek").activeFocus)
+            verify(tc.shown().indexOf("Left/Right") < 0, "other rows: " + tc.shown())
         }
 
         function test_picker_pin_pad() {

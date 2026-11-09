@@ -129,6 +129,18 @@ Item {
 
         // ---- the words ----
 
+        // The hints drawn by the bar, "A Select|B Cancel" (T-285).
+        function barHints() {
+            const bar = find("hintBar")
+            const parts = []
+            for (const b of ["Left/Right", "A", "B", "Start"]) {
+                const h = findChild(bar, "hint_" + b)
+                if (h)
+                    parts.push(b + " " + h.verb)
+            }
+            return parts.join("|")
+        }
+
         function test_durations_in_plain_words() {
             compare(DurationText.plain(0), "0 min")
             compare(DurationText.plain(20), "Under 1 min")
@@ -304,6 +316,10 @@ Item {
             compare(valueOf("gameLast"), "Today")
             verify(find("gameStrip").visible)
             verify(find("gameTotal").activeFocus, "the first row has focus")
+            compare(barHints(), "B Back", "a fact row only reads")
+            find("gameStrip").forceActiveFocus()
+            tryVerify(() => find("gameStrip").activeFocus)
+            compare(barHints(), "Left/Right Browse|B Back", "the 30-day strip is read with Left and Right (T-285)")
             const strip = findChild(find("gameStrip"), "chart")
             compare(strip.values.length, 30)
             compare(strip.highlightIndex, 29)

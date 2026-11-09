@@ -64,11 +64,17 @@
     <name>ActivityGamePage</name>
     <message>
         <location filename="../qml/ActivityGamePage.qml" line="+65"/>
+        <location line="+1"/>
         <source>Back</source>
         <translation>Geri</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="-1"/>
+        <source>Browse</source>
+        <translation>Gez</translation>
+    </message>
+    <message>
+        <location line="+8"/>
         <source>Loading…</source>
         <translation>Yükleniyor…</translation>
     </message>
@@ -172,12 +178,18 @@
     </message>
     <message>
         <location line="+23"/>
+        <location line="+2"/>
         <location line="+1"/>
         <source>Back</source>
         <translation>Geri</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="-3"/>
+        <source>Browse</source>
+        <translation>Gez</translation>
+    </message>
+    <message>
+        <location line="+3"/>
         <source>Select</source>
         <translation>Seç</translation>
     </message>
@@ -437,12 +449,12 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+10"/>
-        <location line="+263"/>
+        <location line="+265"/>
         <source>Uninstall</source>
         <translation>Kaldır</translation>
     </message>
     <message>
-        <location line="-251"/>
+        <location line="-253"/>
         <source>Your activity</source>
         <translation>Etkinliğiniz</translation>
     </message>
@@ -472,7 +484,12 @@ Bu geri alınamaz.</translation>
         <translation>Bu uygulamayı yüklemek için bir yöneticinin PIN&apos;i gerekir.</translation>
     </message>
     <message>
-        <location line="+62"/>
+        <location line="+22"/>
+        <source>Select</source>
+        <translation>Seç</translation>
+    </message>
+    <message>
+        <location line="+42"/>
         <source>Uninstall %1?</source>
         <translation>%1 kaldırılsın mı?</translation>
     </message>
@@ -482,7 +499,8 @@ Bu geri alınamaz.</translation>
         <translation>Verilerimi de sil</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="-53"/>
+        <location line="+65"/>
         <source>Cancel</source>
         <translation>İptal</translation>
     </message>
@@ -1878,7 +1896,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>PowerConfirm</name>
     <message>
-        <location filename="../qml/PowerConfirm.qml" line="+29"/>
+        <location filename="../qml/PowerConfirm.qml" line="+31"/>
         <source>Suspend now?</source>
         <translation>Şimdi askıya alınsın mı?</translation>
     </message>
@@ -1908,13 +1926,19 @@ Bu geri alınamaz.</translation>
         <translation>Şimdi kapat</translation>
     </message>
     <message>
-        <location line="+106"/>
+        <location line="-20"/>
+        <location line="+126"/>
         <location line="+10"/>
         <source>Cancel</source>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="-113"/>
+        <location line="-136"/>
+        <source>Select</source>
+        <translation>Seç</translation>
+    </message>
+    <message>
+        <location line="+23"/>
         <source>Confirm</source>
         <translation>Onayla</translation>
     </message>
@@ -1952,14 +1976,14 @@ Bu geri alınamaz.</translation>
 <context>
     <name>PowerSavingPane</name>
     <message>
-        <location filename="../qml/PowerSavingPane.qml" line="+15"/>
-        <source>Select</source>
-        <translation>Seç</translation>
+        <location filename="../qml/PowerSavingPane.qml" line="+16"/>
+        <source>Back</source>
+        <translation>Geri</translation>
     </message>
     <message>
         <location line="+0"/>
-        <source>Back</source>
-        <translation>Geri</translation>
+        <source>Change</source>
+        <translation>Değiştir</translation>
     </message>
     <message numerus="yes">
         <location line="+6"/>
@@ -2503,7 +2527,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+415"/>
+        <location filename="../qml/Shell.qml" line="+452"/>
         <source>Could not %1.</source>
         <translation>%1 işlemi yapılamadı.</translation>
     </message>
@@ -2747,7 +2771,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>StoragePane</name>
     <message>
-        <location filename="../qml/StoragePane.qml" line="+309"/>
+        <location filename="../qml/StoragePane.qml" line="+311"/>
         <source>%1 is still in use. Close what uses it and try again.</source>
         <translation>%1 hâlâ kullanımda. Kullanan uygulamayı kapatıp tekrar deneyin.</translation>
     </message>
@@ -2772,13 +2796,13 @@ Bu geri alınamaz.</translation>
         <translation>Desteklenmiyor</translation>
     </message>
     <message>
-        <location line="-263"/>
-        <location line="+264"/>
+        <location line="-265"/>
+        <location line="+266"/>
         <source>%1 free of %2</source>
         <translation>%2 içinde %1 boş</translation>
     </message>
     <message>
-        <location line="-290"/>
+        <location line="-292"/>
         <source>Select</source>
         <translation>Seç</translation>
     </message>
@@ -2834,7 +2858,7 @@ Bu geri alınamaz.</translation>
         <translation>Bu sürücü okunamadı</translation>
     </message>
     <message>
-        <location line="+183"/>
+        <location line="+185"/>
         <source>Read-only</source>
         <translation>Salt okunur</translation>
     </message>
@@ -2864,13 +2888,13 @@ Bu geri alınamaz.</translation>
         <translation>Sistem</translation>
     </message>
     <message>
-        <location line="-271"/>
-        <location line="+271"/>
+        <location line="-273"/>
+        <location line="+273"/>
         <source>Other</source>
         <translation>Diğer</translation>
     </message>
     <message>
-        <location line="-282"/>
+        <location line="-284"/>
         <source>Plug it in again</source>
         <translation>Yeniden takın</translation>
     </message>
@@ -2885,12 +2909,12 @@ Bu geri alınamaz.</translation>
         <translation>Burada bir şey bulunamadı</translation>
     </message>
     <message>
-        <location line="+277"/>
+        <location line="+279"/>
         <source>Drives</source>
         <translation>Sürücüler</translation>
     </message>
     <message>
-        <location line="-264"/>
+        <location line="-266"/>
         <source>Eject %1</source>
         <translation>%1 sürücüsünü çıkar</translation>
     </message>
@@ -3661,17 +3685,24 @@ Bu geri alınamaz.</translation>
 <context>
     <name>TextEntry</name>
     <message>
-        <location filename="../qml/TextEntry.qml" line="+53"/>
+        <location filename="../qml/TextEntry.qml" line="+56"/>
+        <location line="+3"/>
         <source>Delete</source>
         <translation>Sil</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="-3"/>
+        <location line="+3"/>
         <source>Cancel</source>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-1"/>
+        <source>Type</source>
+        <translation>Yaz</translation>
+    </message>
+    <message>
+        <location line="+3"/>
         <source>Press Back to delete, Back on an empty field to cancel</source>
         <translation>Silmek için Geri&apos;ye basın; boş alanda Geri iptal eder</translation>
     </message>
@@ -3686,7 +3717,9 @@ Bu geri alınamaz.</translation>
         <translation>Boşluk</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-87"/>
+        <location line="+3"/>
+        <location line="+85"/>
         <source>Done</source>
         <translation>Bitti</translation>
     </message>

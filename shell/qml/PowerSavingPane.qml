@@ -12,7 +12,8 @@ import RuyaShell
 SettingsPane {
     id: pane
 
-    hints: [{ button: "A", text: qsTr("Select") }, { button: "B", text: qsTr("Back") }]
+    // Every row is a ChoiceRow: Left and Right change the value, A has nothing to do (T-285).
+    hints: [{ button: "Left/Right", text: qsTr("Change") }, { button: "B", text: qsTr("Back") }]
 
     function minutesLabel(minutes, zeroLabel) {
         if (minutes === 0)

@@ -29,7 +29,7 @@ Page {
         return last.length > 0 ? last : appId
     }
 
-    hints: backOnlyHints
+    hints: body.hints
 
     function dayText(unix) {
         if (!unix)
@@ -62,7 +62,8 @@ Page {
         anchors.fill: parent
         u: page.u
         focus: true
-        hints: [{ button: "B", text: qsTr("Back") }]
+        hints: strip.activeFocus ? [{ button: "Left/Right", text: qsTr("Browse") }, { button: "B", text: qsTr("Back") }]
+                                 : [{ button: "B", text: qsTr("Back") }]
         onExitRequested: page.backRequested()
 
         Text {
@@ -129,6 +130,7 @@ Page {
             font.weight: Theme.weightDemiBold
         }
         ChartRow {
+            id: strip
             objectName: "gameStrip"
             u: page.u
             visible: Usage.ready && page.played
