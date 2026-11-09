@@ -4,6 +4,7 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 
 | ID | Title | Status | Depends |
 |---|---|---|---|
+| [T-377](tasks/T-377-store-page-opens-with-a-long-frame.md) | The Store page opens with one 275 ms frame: find it and remove it | todo | — |
 | [T-363](tasks/T-363-follow-flatpak-app-scopes.md) | ruya-session follows a Flatpak game's own scope (usage, limits, stop) | todo | T-340 |
 | [T-362](tasks/T-362-compositor-xdg-output-and-socket-follow-ups.md) | Compositor: xdg-output for games, profile-socket and log follow-ups | todo | — |
 | [T-360](tasks/T-360-audio-service-follow-ups-executor-and-boot-race.md) | Audio service follow-ups: no executor blocking, the boot race, a fresh-install check that holds | in-progress | — |
