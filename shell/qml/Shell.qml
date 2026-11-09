@@ -486,7 +486,7 @@ FocusScope {
 
     // Play on a game (Home, Games): the Library says what to start, Session1.Launch starts it as the
     // signed-in profile (T-386). Session1 takes Flatpak application ids, so "flatpak:<id>" goes as
-    // <id>; any other launch spec (Steam) goes as it is and the service answers "unknown-app".
+    // <id>; any other launch spec (Steam) goes as it is and ruya-session answers "invalid" (valid_app_id; the mock says "unknown-app").
     // The window itself comes with AppStarted (appOpen); only a refusal is heard here.
     property var launchTitles: ({})
     Connections {

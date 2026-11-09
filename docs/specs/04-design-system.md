@@ -164,6 +164,8 @@ Each entry: file, status, and the rules a change must keep. A new component gets
 
 **Names from outside** (profile, device, drive, Wi-Fi) are one line, capped to their container's width and elided at the end; the full name is in the accessible name. Built (T-312) for the profile card (the card's width), the status cluster (the name stops growing at 220 px x `u`; `nameFull` still feeds the narrow-screen rule) and the PIN pad title (three card widths; the name inside it is cut, not the end of the sentence); the rows of the lists already elide. A device name that carries the end of its address (`DeviceIcons.shownName`, T-334/T-359) is cut before the tail, never after it: "Wireless Controll... (00:05)". The keyboard title (`TextEntry.title`) and the "Found nearby" rows follow the same one-line, elide-at-the-end rule.
 
+A **toast that names a thing from outside** (game, app, device: "%1 could not be started", "%1 stopped unexpectedly") caps the name (about 30 characters, elided at the end, as above) so the rest of the sentence always survives (lead-8, T-386 design review; to build: an Inbox line).
+
 | Component | File | Status | Rules |
 |---|---|---|---|
 | Art card | `ArtCard.qml` | built (T-113), reused by T-146; caption fade uses `artCaptionFade` (T-146); Home's Recent row reuses it; `pulse()` (the art shrinks to `pulseScale`; skipped under reduced motion) is run by the owner on Accept (T-155) | 16:9 key art edge to edge, `radiusM`, title on `artCaptionFade`, state pills in words (Running, Installing n %), card focus; no art: app icon on a tint from the id hash. **Glow (T-281):** its lift shadow takes the picture's colour (§3.8); default width `cardWidthShelf`, height `cardArtHeight(width)`; sizes in §5.2 |

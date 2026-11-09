@@ -1,6 +1,6 @@
 # T-386 - Play starts the game: the Library's launch reaches Session1.Launch
 
-Status: in-progress · Phase: 3 · Depends: T-164 · Area: shell (library, session facade) · Size: S · Owner: builder · Complexity: normal · Developer surface: none
+Status: done · Phase: 3 · Depends: T-164 · Area: shell (library, session facade) · Size: S · Owner: builder · Complexity: normal · Developer surface: none
 
 ## Goal
 Pressing Play (A) on a game in Games or Home starts it: the shell calls `Session1.Launch` for the signed-in profile and the game's window comes to the front. Owner report 2026-11-09 on the Dell (0.0.60): SuperTuxKart shows "Starting SuperTuxKart..." and then nothing happens.
