@@ -5,6 +5,7 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | ID | Title | Status | Depends |
 |---|---|---|---|
 | [T-348](tasks/T-348-settings-audio-output-pane.md) | Settings > Audio > Output: choose where the sound plays, with a test sound | in-progress | T-322 |
+| [T-376](tasks/T-376-shell-idle-behind-a-full-screen-app.md) | The shell draws and plays nothing behind a full-screen app | todo | — |
 | [T-363](tasks/T-363-follow-flatpak-app-scopes.md) | ruya-session follows a Flatpak game's own scope (usage, limits, stop) | todo | T-340 |
 | [T-361](tasks/T-361-flaky-qml-tests-and-focus-net-loaders.md) | Test reliability: two load-flaky QML tests, a faster page-focus test, the focus net with lazy panes | todo | — |
 | [T-362](tasks/T-362-compositor-xdg-output-and-socket-follow-ups.md) | Compositor: xdg-output for games, profile-socket and log follow-ups | todo | — |
