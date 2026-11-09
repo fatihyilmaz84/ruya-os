@@ -1,4 +1,4 @@
-# T-379 - `shots` reds on main: tst_store_ui:81, tst_system_info:502, tst_wallpaper:898
+# T-379 - `shots` reds on main: tst_store_ui:81, tst_system_info:502, tst_wallpaper:898, tst_display:101
 
 Status: todo · Phase: 2 · Depends: T-377 · Area: shell (tests) · Size: S · Owner: builder · Complexity: normal · Developer surface: none
 
@@ -7,7 +7,7 @@ Status: todo · Phase: 2 · Depends: T-377 · Area: shell (tests) · Size: S · 
 
 ## Read first
 - `shell/PATTERNS.md`, the section on reading a property right after a change (plain read after change; T-361)
-- `shell/tests/tst_store_ui.qml` near line 81, `tst_system_info.qml` near 502 ("the closed page is gone"), `tst_wallpaper.qml` near 898
+- `shell/tests/tst_store_ui.qml` near line 81, `tst_system_info.qml` near 502 ("the closed page is gone"), `tst_wallpaper.qml` near 898, `tst_display.qml:101` (`test_zz_screenshots`, "category list has focus"; found by the T-377 builder, red on main too)
 - `shell/CLAUDE.md`; the T-361 Outcome (deterministic focus/layout tests)
 
 ## Scope
