@@ -1,6 +1,6 @@
 # T-349 - Opening Settings is slow (esp. Store to Settings): build panes and modals lazily, measure on the Dell
 
-Status: in-progress · Phase: 2 · Depends: — · Area: shell (SettingsPage, Shell page open/close, GlassSheet, singletons' first use, probe) · Size: M · Owner: builder (Opus recommended: QML refactor with focus risk)
+Status: done · Phase: 2 · Depends: — · Area: shell (SettingsPage, Shell page open/close, GlassSheet, singletons' first use, probe) · Size: M · Owner: builder (Opus recommended: QML refactor with focus risk)
 
 ## Goal
 Owner report (Dell, 0.0.55, high tier, aurora wallpaper, 1080p): "a small delay when I go from Store to Settings; opening Settings seems demanding". A read-only analysis of the code (no timings yet) found the causes below. Fix them and prove it with numbers from the Dell.
