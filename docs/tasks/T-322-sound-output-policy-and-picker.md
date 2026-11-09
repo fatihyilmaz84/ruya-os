@@ -1,6 +1,6 @@
 # T-322 — Choose the sound output by what is usable, and let the player choose: ports, test sound, remembered
 
-Status: todo · Phase: 2 · Depends: — · Area: services (ruya-devices audio policy), api (Devices1), shell (AudioPane, mock) · Size: M · Owner: builder
+Status: in-progress · Phase: 2 · Depends: — · Area: services (ruya-devices audio policy), api (Devices1), shell (AudioPane, mock) · Size: M · Owner: builder
 
 ## Goal
 Silent sound is the first thing a player needs to fix, and today neither the default nor the chooser helps. Found on the Dell (2026-11-08): the card had `Analog Stereo Duplex` active, so the only sink was the analog jack; a monitor with a valid ELD sat on an unused HDMI profile. "HDMI first" (T-320) was wrong: the owner's monitor has no speakers and the Dell's internal speaker (`analog-output-speaker`, available "unknown", priority 10000) is the right output. Neither "HDMI first" nor "analog first" is right everywhere, and an ELD alone does not prove speakers.
