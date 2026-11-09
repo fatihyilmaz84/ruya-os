@@ -17,7 +17,7 @@ use std::time::Duration;
 
 use zbus::message::{Message, Type};
 
-use crate::spawner::{ShowUnit, UnitChange, UnitEvent, UnitWatch};
+use crate::spawner::{valid_profile_id, ShowUnit, UnitChange, UnitEvent, UnitWatch};
 
 /// How often a unit is looked at while the connection is down.
 pub const WATCH_POLL: Duration = Duration::from_secs(2);
@@ -183,6 +183,61 @@ impl Follower {
             }
         }
         ended
+    }
+}
+
+/// The D-Bus address of the bridge to one profile user's manager, the same `unixexec:` route
+/// `systemctl --user --machine=<user>@.host` takes: `systemd-run` starts `systemd-stdio-bridge`
+/// inside that user's manager and its stdin/stdout are the bus connection. Built from a
+/// validated `ruya-<profile id>` user only, every value escaped for the address syntax.
+pub fn bridge_address(user: &str) -> Result<String, String> {
+    if !user.strip_prefix("ruya-").is_some_and(valid_profile_id) {
+        return Err(format!("not a profile user: {user:?}"));
+    }
+    let args = [
+        format!("--machine={user}@.host"),
+        "--user".to_owned(),
+        "--pipe".to_owned(),
+        "--quiet".to_owned(),
+        "--collect".to_owned(),
+        "systemd-stdio-bridge".to_owned(),
+        "--user".to_owned(),
+    ];
+    let mut address = String::from("unixexec:path=systemd-run");
+    for (i, arg) in args.iter().enumerate() {
+        address.push_str(&format!(",argv{}={}", i + 1, escape_address_value(arg)));
+    }
+    Ok(address)
+}
+
+/// D-Bus address escaping: bytes outside the optionally-escaped set (letters, digits and `-_/.*`) become `%xx`.
+fn escape_address_value(value: &str) -> String {
+    let mut out = String::new();
+    for b in value.bytes() {
+        if b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'/' | b'.' | b'*') {
+            out.push(char::from(b));
+        } else {
+            out.push_str(&format!("%{b:02x}"));
+        }
+    }
+    out
+}
+
+/// How long to wait before the next try to start the bridge again: 2 s, doubling, at most 60 s.
+#[derive(Debug, Default)]
+pub struct Backoff {
+    failures: u32,
+}
+
+impl Backoff {
+    pub fn delay(&self) -> Duration {
+        Duration::from_secs((2_u64 << self.failures.min(5)).min(60))
+    }
+    pub fn failed(&mut self) {
+        self.failures = self.failures.saturating_add(1);
+    }
+    pub fn worked(&mut self) {
+        self.failures = 0;
     }
 }
 
@@ -517,6 +572,42 @@ mod tests {
         assert!(f.step(&mut link).is_empty());
         assert!(f.step(&mut link).is_empty());
         assert!(!f.is_done());
+    }
+
+    #[test]
+    fn the_bridge_argv_is_built_from_validated_values_only() {
+        assert_eq!(
+            bridge_address("ruya-p1").as_deref(),
+            Ok("unixexec:path=systemd-run,argv1=--machine%3druya-p1%40.host,argv2=--user,argv3=--pipe,argv4=--quiet,argv5=--collect,argv6=systemd-stdio-bridge,argv7=--user")
+        );
+        for bad in [
+            "",
+            "ruya-",
+            "root",
+            "ruya-p1,argv9=x",
+            "ruya-a b",
+            "ruya-p1@.host",
+            "ruya-../x",
+            "ruya-p1;",
+        ] {
+            assert!(bridge_address(bad).is_err(), "{bad:?}");
+        }
+        assert_eq!(escape_address_value("a,b=c%d"), "a%2cb%3dc%25d");
+    }
+
+    #[test]
+    fn a_dead_bridge_is_restarted_with_a_growing_pause() {
+        let mut b = Backoff::default();
+        let secs: Vec<u64> = (0..8)
+            .map(|_| {
+                let d = b.delay().as_secs();
+                b.failed();
+                d
+            })
+            .collect();
+        assert_eq!(secs, [2, 4, 8, 16, 32, 60, 60, 60]);
+        b.worked();
+        assert_eq!(b.delay().as_secs(), 2);
     }
 
     #[test]

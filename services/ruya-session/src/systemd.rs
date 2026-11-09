@@ -15,19 +15,16 @@
 //!
 //! A restart of this service leaves the apps running (they belong to the users' managers), but
 //! ends the `systemd-run --wait` processes that told us when they ended. `adopt_running` finds the
-//! `ruya-app-*` units again and follows the ones of each profile user over one long-lived
-//! connection to that user's manager (`UserLink`, `follow::Follower`, T-340): the manager's own
-//! socket `/run/user/<uid>/systemd/private`, which root may use, a `Subscribe`, and the
-//! `PropertiesChanged` / `UnitRemoved` signals with the real exit status. Only when that
-//! connection is lost are the units looked at again with `systemctl show` every two seconds.
-//!
-//! Open point (VM): `ruya-session.service` has `ProtectHome=yes` and no capabilities, which hides
-//! `/run/user` and keeps root out of its 0700 directories, so on the image the socket may be
-//! refused and only the fallback runs. The unit is not changed by T-340.
+//! `ruya-app-*` units again and follows the ones of each profile user over one long-lived bus
+//! connection to that user's manager (`UserLink`, `follow::Follower`, T-340). The connection goes
+//! the way `systemctl --machine=<user>@.host --user` goes, which works under this unit's
+//! hardening: zbus starts `systemd-run ... systemd-stdio-bridge --user` (`follow::bridge_address`,
+//! a `unixexec:` address) and talks over its pipes; `Subscribe` and the `PropertiesChanged` /
+//! `UnitRemoved` signals give the real exit status. Only while the bridge is dead are the units
+//! looked at with `systemctl show` every two seconds; the bridge is restarted with a growing pause.
 
 use std::collections::HashMap;
 use std::fs::File;
-use std::os::unix::net::UnixStream;
 use std::os::unix::process::ExitStatusExt;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
@@ -36,11 +33,11 @@ use std::time::{Duration, Instant};
 
 use async_channel::Sender;
 use futures_lite::{future, StreamExt};
-use zbus::connection::{AuthMechanism, Builder};
+use zbus::connection::Builder;
 use zbus::zvariant::{OwnedObjectPath, OwnedValue};
-use zbus::{Connection, MessageStream};
+use zbus::{Connection, MatchRule, MessageStream};
 
-use crate::follow::{parse_signal, Follower, ManagerLink, Probe, Wake};
+use crate::follow::{bridge_address, parse_signal, Backoff, Follower, ManagerLink, Probe, Wake};
 use crate::spawner::{
     flatpak_app_installed, launch_command, parse_profile_users, parse_show, scope_pattern,
     unit_app_id, unit_name, LineTail, RunFollower, RunningUnit, ShowUnit, SHOW_PROPERTIES,
@@ -257,6 +254,7 @@ fn follow_user(
     }
 }
 
+const SYSTEMD: &str = "org.freedesktop.systemd1";
 const MANAGER_PATH: &str = "/org/freedesktop/systemd1";
 const MANAGER_IFACE: &str = "org.freedesktop.systemd1.Manager";
 const NO_SUCH_UNIT: &str = "org.freedesktop.systemd1.NoSuchUnit";
@@ -264,7 +262,9 @@ const NO_SUCH_UNIT: &str = "org.freedesktop.systemd1.NoSuchUnit";
 /// The connection to one profile user's manager, and the means to look at a unit when it is down.
 struct UserLink {
     user: String,
-    uid: Option<String>,
+    backoff: Backoff,
+    /// Not before this moment is the bridge started again.
+    next_try: Option<Instant>,
     conn: Option<Connection>,
     stream: Option<MessageStream>,
     /// Was the failure to connect logged? Once per outage is enough.
@@ -273,18 +273,10 @@ struct UserLink {
 
 impl UserLink {
     fn new(user: &str) -> Self {
-        let uid = Command::new("id")
-            .args(["-u", user])
-            .stdin(Stdio::null())
-            .stderr(Stdio::inherit())
-            .output()
-            .ok()
-            .and_then(|out| String::from_utf8(out.stdout).ok())
-            .map(|s| s.trim().to_owned())
-            .filter(|s| !s.is_empty() && s.chars().all(|c| c.is_ascii_digit()));
         UserLink {
             user: user.to_owned(),
-            uid,
+            backoff: Backoff::default(),
+            next_try: None,
             conn: None,
             stream: None,
             warned: false,
@@ -296,22 +288,25 @@ impl UserLink {
         self.stream = None;
     }
 
-    /// Connects to the manager's private socket and subscribes to its signals.
+    /// Starts the bridge, connects over it and subscribes to the manager's signals.
     fn connect(&mut self) -> Result<(), String> {
-        let uid = self.uid.as_deref().ok_or("no uid")?;
-        let stream = UnixStream::connect(format!("/run/user/{uid}/systemd/private"))
-            .map_err(|e| e.to_string())?;
+        let address = bridge_address(&self.user)?;
         let conn = future::block_on(
-            Builder::async_io_unix_stream(stream)
-                .p2p()
-                .auth_mechanism(AuthMechanism::External)
+            Builder::address(address.as_str())
+                .map_err(|e| e.to_string())?
                 .build(),
         )
         .map_err(|e| e.to_string())?;
+        let rule = MatchRule::builder()
+            .msg_type(zbus::message::Type::Signal)
+            .sender(SYSTEMD)
+            .map_err(|e| e.to_string())?
+            .build();
         // Open the stream first: nothing sent after `Subscribe` may be missed.
-        let stream = MessageStream::from(&conn);
+        let stream = future::block_on(MessageStream::for_match_rule(rule, &conn, None))
+            .map_err(|e| e.to_string())?;
         future::block_on(conn.call_method(
-            None::<&str>,
+            Some(SYSTEMD),
             MANAGER_PATH,
             Some(MANAGER_IFACE),
             "Subscribe",
@@ -329,7 +324,7 @@ impl UserLink {
             return Err(zbus::Error::Failure("no connection".to_owned()));
         };
         let reply = match future::block_on(conn.call_method(
-            None::<&str>,
+            Some(SYSTEMD),
             MANAGER_PATH,
             Some(MANAGER_IFACE),
             "GetUnit",
@@ -344,7 +339,7 @@ impl UserLink {
         let path: OwnedObjectPath = reply.body().deserialize()?;
         let all = |interface: &str| -> Result<HashMap<String, OwnedValue>, zbus::Error> {
             future::block_on(conn.call_method(
-                None::<&str>,
+                Some(SYSTEMD),
                 &path,
                 Some("org.freedesktop.DBus.Properties"),
                 "GetAll",
@@ -421,9 +416,14 @@ impl ManagerLink for UserLink {
         if !pause.is_zero() {
             std::thread::sleep(pause);
         }
+        if self.next_try.is_some_and(|t| Instant::now() < t) {
+            return false;
+        }
         self.drop_connection();
         match self.connect() {
             Ok(()) => {
+                self.backoff.worked();
+                self.next_try = None;
                 self.warned = false;
                 true
             }
@@ -435,6 +435,8 @@ impl ManagerLink for UserLink {
                     );
                     self.warned = true;
                 }
+                self.next_try = Some(Instant::now() + self.backoff.delay());
+                self.backoff.failed();
                 self.drop_connection();
                 false
             }

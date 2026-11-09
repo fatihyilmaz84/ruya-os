@@ -215,6 +215,7 @@ restart)
         pgrep -f "systemctl.*ruya-app" >/dev/null && spawned=$((spawned + 1))
         sleep 0.3; n=$((n + 1))
     done
+    pgrep -u "$user" -f systemd-stdio-bridge >/dev/null && ok "the bridge to the manager of $user is running" || bad "no systemd-stdio-bridge of $user: the service has no connection to the manager"
     [ "$spawned" -eq 0 ] && ok "no systemctl process while following the adopted app (6 s)" || bad "systemctl ran $spawned times in 6 s while following"
     journalctl -u ruya-session -b --no-pager | grep -a "no connection to the manager" | tail -2
     systemctl --user -M "$user@.host" kill --signal=SIGKILL --kill-whom=all "app-flatpak-$sleeper-*.scope" </dev/null 2>&1 | cat
