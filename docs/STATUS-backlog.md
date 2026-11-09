@@ -4,7 +4,6 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 
 | ID | Title | Status | Depends |
 |---|---|---|---|
-| [T-322](tasks/T-322-sound-output-policy-and-picker.md) | Sound output policy, saved choice and the Outputs contract (service, mock, client) | in-progress | — |
 | [T-347](tasks/T-347-sound-card-profiles-and-output-volumes.md) | Sound outputs on other card profiles, and a sane volume per output | todo | T-322 |
 | [T-348](tasks/T-348-settings-audio-output-pane.md) | Settings > Audio > Output: choose where the sound plays, with a test sound | todo | T-322 |
 | [T-285](tasks/T-285-hint-bar-and-focus-follow-ups.md) | Hint bar and focus follow-ups: Accept hints, keyboard hints, Tab, tests that could not fail | todo | — |
