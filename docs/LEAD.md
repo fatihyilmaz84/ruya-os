@@ -142,6 +142,16 @@ A lead session that runs too long loses detail (auto-compact starts at 97 % of t
 
 Reference figures from the 2026-11-05/06 sessions (one builder round): T-189 160k, T-191 235k + round 2 (small), T-195 290k, T-196 220k + 280k, T-200 335k, T-162 (lead, with VM debugging) several hundred thousand. A lead session of about 25 merges and a lot of planning reached 87 % of 1M.
 
+## Lead efficiency (owner, 2026-11-09)
+
+Every turn re-reads the whole context, and the owner-facing relay session reads along. Rules:
+- **No no-op turns.** While builders, reviewers or builds run, stay inside one turn with a long blocking wait (a Monitor with an until-loop on a marker file, a new commit or a summary file, or a background command whose completion notifies you) and end the turn only when something changed (a HANDOFF, a verdict, a failure, a budget limit) or the owner is needed. Never report "nothing changed".
+- **Batch reports.** One report of 5-8 lines per natural stop (a merged batch, a verified image, a blocker); no per-task play-by-play, no relaying reviewer notes.
+- **Shorter lead sessions.** Hand off at 50-60 % context, not 75 %: the cost per turn grows with context and a fresh lead orients from `LEAD-NOTES.md` for about 25k tokens. Keep `LEAD-NOTES.md` under about 6 KB and `STATUS.md` under about 10 KB (prune at each handoff); orientation reads only those two.
+- **Script the mechanical chains.** Merge, full test, secret scan, push (`push-main.ps1`); image build, `make-disk`, VM queue, oci-archive, Dell upgrade, `free-space`: one background script per chain that writes a summary of at most 15 lines; read the summary, never the raw logs. Write a missing chain script the next time a chain is run by hand (`docs/dev-setup.md`).
+- **Delegate reading.** Log, journal and diff digging goes to a subagent that returns at most 40 lines; never paste logs into the lead's context; read line ranges, not whole files.
+- **Model tiers.** A task header may carry `Complexity: simple | normal | complex | hard` (default normal), mapped to Sonnet medium, Sonnet high, Opus medium, Opus high for the builder; escalate one tier after two CHANGES_REQUESTED rounds or 300k tokens; the code reviewer is at least the builder's tier on complex and hard tasks; the Outcome records model, effort, rounds and tokens so the mapping can be calibrated after two weeks. The lead loop itself runs on Sonnet high; Opus is for architecture-level planning.
+
 ## Authority
 
 | The lead may | The lead may not |
