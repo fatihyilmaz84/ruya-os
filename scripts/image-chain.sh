@@ -34,7 +34,9 @@ step() {
 }
 
 cd "$root" || exit 2
-say "image-chain $version at $(git rev-parse --short HEAD) ($(git rev-parse --abbrev-ref HEAD))"
+# A worktree made by Git for Windows has a D:/ gitdir that Linux git cannot read: say so, don't fail.
+rev="$(git rev-parse --short HEAD 2>/dev/null || echo "unknown (worktree gitdir not readable in WSL)")"
+say "image-chain $version at $rev"
 step build scripts/build.sh "$version" || { say "CHAIN FAILED"; exit 1; }
 step disk scripts/make-disk.sh qcow2 || { say "CHAIN FAILED"; exit 1; }
 if [ "$want_oci" = "oci" ]; then
