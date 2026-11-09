@@ -2,6 +2,25 @@
 
 Moved out of `docs/STATUS.md` by the lead on 2026-11-06 to keep STATUS under its budget. The planner (`docs/tasks/PLANNING.md`) reads the Inbox lines here when planning; nobody else needs this file. Items that became tasks are in their task file; pick the rest up when a task touches the area.
 
+## Dell look-at list (moved 2026-11-10, lead-8)
+
+**Dell look-at list** (one pass with the next ISO; the long text with task ids is in `STATUS-parked.md`, "Moved from STATUS 2026-11-08"):
+
+- *Boot:* Esc at power-on, the splash-to-shell gap, no text before the shell, `bootloader-update` status (T-269, T-280, T-299).
+- *Screen:* DPMS wake time and a clean wake (virtio-gpu logged 3 `Could not queue DRM page flip` right after the wake key), display modes with `display-capture.sh` and an unsupported mode that reverts (T-198), a DisplayPort cable for 1440p144, frame times with glide, liquid pill, backdrop, halo and picture mask and the 30 s idle pause (T-204, T-205, T-281), five themes, a 4K wallpaper copy from a real stick (T-208), the rounded corners on the real GPU (T-323), the gear cog (T-206).
+- *Sound (image 0.0.55 or newer):* the ambient bed audible on the small speaker (T-330) and ducking under cues; Settings > Audio sliders and "Sound theme"; first-start volume and which sink is the default after a reboot (T-322). Silent? The probe commands are in `STATUS-parked.md`.
+- *Pads:* T-203 checks 1-3 (cold boot with the bonded pad; bond-less pairing with PS + Create; a phone in pairing mode is never left bonded), a second pad beside the first and why pad 2 dropped after 21 s (T-338), DualSense disconnect/reconnect (T-202), a B press in the first second after wake is swallowed (T-293), controller-only play counts past 10 min (T-247), icons, toasts, Rename/Forget, 8BitDo (T-199, T-223, T-260).
+- *Behind a game (0.0.60, T-376):* the shell's GPU share with STK in front (was 8.8 %), the `ShaderEffect: Texture t7` line, a dark frame before the game's first buffer, no pop when the bed restarts on return.
+- *Settings:* My profile and Manage profiles (T-324). *Fixtures to capture:* `/sys/class/hwmon` and `thermal_zone` (T-200), `ruya-sysinfo --example dump` against `lscpu`/`free`/`lspci` (T-226).
+
+## Owner questions, long form (lead-8, 2026-11-10)
+
+- **GE-Proton by default (ADR-025, your request 2026-11-09; tasks T-381..T-384).** Accepted as you asked; two questions come with facts from the spike T-381: (1) its media codecs (H.264, AAC via FFmpeg/GStreamer, left out by Fedora for patents): ship, strip, or an optional extension (recommended: strip from the default, decide the extension after a legal look); (2) a source offer for its LGPL parts and a notice in About (recommended: yes, a mirror of the pinned sources). Developers use it as a data format, no API (ADR-025).
+- **Save locations database (ADR-028, T-400).** The best known list of where PC games keep their saves is Ludusavi's manifest; its data comes from PCGamingWiki, whose content licence may restrict reuse. T-400 brings the exact terms; then: use it, ask its authors, or build our own list. Nothing is shipped before you decide.
+- **Ruya Web (Proposed ADR-029, your document 2026-11-10; T-404..T-410, T-404 blocked on you).** A local-network admin page needs a new network-facing service that may call the system services: that changes the security invariant "D-Bus policies stay restrictive: the shell and root only". Proposed: a per-method allow-list, off by default, each browser paired on the TV with the admin PIN, LAN-only enforced three ways, HTTPS with a console-made certificate. Questions: (1) allow the invariant change on those terms? (2) which admin actions in the browser (recommended: what Settings can do, minus profiles, PINs, updates/rollback in v1)? (3) Avahi and nftables in the image?
+- **Ruya Companion (Proposed ADR-030, your document 2026-11-10; T-411..T-415).** It shares the gateway of Ruya Web (one pairing and permission model). Questions: (1) publishing: side-loaded Android builds first (recommended) or App Store and Google Play now (accounts, fees, terms)? (2) remote access: your own VPN only in v1 (recommended) or a Ruya relay someone must run and pay for? (3) a Mac for iOS builds and tests.
+- **AI-first developer platform (ADR-031, your document 2026-11-10; T-416..T-419).** Accepted inside ADR-015/022; two parts are yours: (1) a content provider and media sessions for apps ("Continue watching", search) are not on the approved tier-B list: add them? (2) show "Ruya Verified" to players as a Store badge?
+
 ## VM queue 2026-11-09 (lead-8)
 
 The NEXT and VM queue paragraphs of STATUS before the lead-8 trim, verbatim:

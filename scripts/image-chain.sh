@@ -46,7 +46,13 @@ if [ ! -f image/bib/config.toml ] && [ -f .git ]; then
         cp "$main/image/bib/config.toml" image/bib/config.toml && say "config.toml copied from $main"
     fi
 fi
-step build scripts/build.sh "$version" || { say "CHAIN FAILED"; exit 1; }
+# SKIP_BUILD=1 reuses localhost/ruyaos:dev from a build that passed (a later step failed, e.g.
+# make-disk ran out of memory while dev.ps1 test ran beside it, lead-8): never after a failed build.
+if [ "${SKIP_BUILD:-}" = "1" ]; then
+    say "SKIP build (SKIP_BUILD=1: the image built before is reused)"
+else
+    step build scripts/build.sh "$version" || { say "CHAIN FAILED"; exit 1; }
+fi
 step disk scripts/make-disk.sh qcow2 || { say "CHAIN FAILED"; exit 1; }
 if [ "$want_oci" = "oci" ]; then
     mkdir -p /mnt/f/RuyaOS-tmp
