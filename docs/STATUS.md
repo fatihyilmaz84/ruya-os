@@ -48,7 +48,7 @@ One line each: `- (source) what, and why it matters`. Dispatched builders put th
 
 Triaged 2026-11-09 (lead-7): the earlier lines are verbatim in [`STATUS-parked.md`](STATUS-parked.md), "Inbox triage 2026-11-09 (lead-7)"; they became T-359..T-364, notes in T-165 and T-282, or stay parked there (Ogg bed checks, D-pad glyph, Identify action, late pairing stranger, `inputd` default check, Dell A/B bench).
 
-- (lead-7, Dell) The owner's STK dropped from about 40 to 15 FPS: two hidden STK copies from the lead's T-365 sound probes kept running at about 80 % CPU each, because stopping the `systemd-run` unit does not stop Flatpak's own `app-flatpak-*.scope` (the T-363 gap: the shell's Stop has the same hole). Stopped by the lead at 16:24. T-363 moved up; a probe on the Dell stops the scope, not the unit.
+- (lead-7, Dell) The owner's STK dropped from about 40 to 15 FPS: two hidden STK copies from the lead's T-365 sound probes kept running at about 80 % CPU each, because the lead stopped only their `systemd-run` units, not Flatpak's own `app-flatpak-*.scope` (the product's Stop is fine: `ruya-session` stops the scope pattern too, `spawner::scope_pattern`). Stopped by the lead at 16:24. Lesson: a hand-run probe on the Dell is stopped by its scope. T-363 (usage and limits follow the scope) moved up anyway.
 - (lead-7, Dell) While STK runs alone: `bluetoothd` uses about 13 % CPU steadily (two DualSense bonded, one in use: find out why) and `ruya-shell` about 19 % (does the shell keep rendering the backdrop behind a full-screen game? B-003, direct scanout).
 
 ## Blocked (need something this host doesn't have)
