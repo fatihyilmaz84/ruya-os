@@ -213,6 +213,9 @@ Each entry: file, status, and the rules a change must keep. A new component gets
 | Icon | `Icon.qml` | built (T-157) | A Material Symbols glyph by name, `iconM`/`iconL`, colour from text tokens, `filled` for the current state (§3.7) |
 | Button glyph | `ButtonGlyph.qml` | built (T-158) | Controller button letter on a `primaryFill` circle, `glyphSize`, `typeMicro`, `onPrimary` (§3.7) |
 
+**Nested detail rows (T-331).** Read-only rows that belong to the row above them (what RuyaOS found on a drive: one row per category, "Other", "Scanning..." or "Nothing found here") are plain setting rows indented `spaceL` x `u` from the parent's left edge. They stay focusable so the list scrolls and reads in whole rows, but A does nothing on them (`SettingRow.inert`: silent), so the hint bar offers `B Back` only while one has focus. A size that could not be fully read is prefixed "at least". Rows are updated in place by key, so focus never moves when a value arrives. At most about seven rows per parent (six categories + Other); a longer list needs its own page.
+
+
 ### 5.1 Full-screen apps (look; behaviour in `02-shell.md` §1.5)
 
 Launch: Accept on Play → art takes the screen (chrome fades, hero art scales 1.0 → 1.04 and blurs in, `launchMs`) → splash until the first frame → cross-fade to the app. Guide over an app opens the quick menu (slides in from the left, `overlayMs`; the app keeps running behind it). Home from the quick menu shrinks the app into its Running card (`pageMs`). Reduced motion turns each step into a cut; the Performance tier skips every blur.
@@ -236,6 +239,7 @@ One small set of card sizes. Design px at 1080p, multiplied by `u`; corner radiu
 ## 6. Writing
 
 - Sentence case everywhere ("Reduced motion", not "Reduced Motion"); the brand "RuyaOS" and language names are never translated.
+- An empty-state or progress row (a label that is itself a sentence, such as "Nothing found here") stays under about 34 characters in English and carries no value, or one of at most about 20 characters; a longer reason goes in a toast.
 - Buttons and actions are verbs ("Restart", "Add profile"); a confirm repeats the verb of the question ("Restart now?" → Restart / Cancel).
 - Errors say what happened and what the user can do, in at most two short sentences ("Wrong PIN. 2 tries left."). No "please", no codes, no blame.
 - Row labels stay under about 28 characters in English so the Turkish fits.
