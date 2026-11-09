@@ -9,7 +9,7 @@ When an emulator unlocks a RetroAchievement, the console shows its own "Achievem
 - T-314, T-315, T-317, T-246 (toast kind and quiet mode), T-245 (bridge), T-306 (now-playing `Report`), T-227 (cue), T-273..T-279 if built (a frozen game must not poll)
 
 ## Scope
-1. **Report event:** `Hub1.Report` gets an optional `achievement_unlocked{id, title, points, badge}` (emulators that integrate send it); the service verifies it against the cached set (unknown ids are dropped) and raises the notification kind "achievement" with the retro credit.
+1. **Report event:** `GameData1.Report` gets an optional `achievement_unlocked{id, title, points, badge}` (emulators that integrate send it); the service verifies it against the cached set (unknown ids are dropped) and raises the notification kind "achievement" with the retro credit.
 2. **Fallback:** for a supported-system game with a linked account and no reporting emulator, poll the recent unlocks on a long interval while the game runs (backoff, off when the game is frozen or the network is down, a Settings switch "Show unlocks from emulators"); a missed poll only delays the toast, never loses the unlock.
 3. **Duplicate toasts:** a switch in the hand-over (T-316) asks RetroArch to hide its own notification (config key per T-315) when the console shows its own; documented, off when the user prefers the emulator's.
 4. **Presence:** the site's rich-presence string, when available, is shown as the second line of "now playing" (T-306) and sent to nobody else; off in quiet mode and for profiles that disabled presence.

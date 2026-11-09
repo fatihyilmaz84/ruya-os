@@ -10,7 +10,7 @@ A game installed twice (Steam and a `.play`, or two regions of a ROM) shows once
 
 ## Scope
 1. Contract first: `Library1` items become games with `installations` (source, id, location, runner, version or region, available, preferred); identification keys and confidence; `SetPreferredInstallation`, `LinkInstallations`/`UnlinkInstallations` (the player's confirmation).
-2. Matching only by ids (Steam app id, Flatpak id, `Hub1.Identify` hash when it exists), never by title; a title match is offered as "Are these the same game?" at most.
+2. Matching only by ids (Steam app id, Flatpak id, `GameData1.Identify` hash when it exists), never by title; a title match is offered as "Are these the same game?" at most.
 3. Shell: the game page lists installations; Play uses the preferred one; the Options menu (T-394) gets "Choose installation".
 
 ## Acceptance criteria

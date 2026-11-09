@@ -118,7 +118,7 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | [T-402](tasks/T-402-windows-saves-in-prefixes.md) | Windows game saves: snapshot and restore the saves inside our runner prefixes and Steam's Proton prefixes | todo | T-400, T-382, T-215 |
 | [T-403](tasks/T-403-games-on-other-drives.md) | Games on other drives: install to a drive, move between drives, a missing drive leaves its games unavailable | todo | T-389, T-401 |
 | [T-303](tasks/T-303-spike-hub-systems-layout-sandbox.md) | **[lead]** Spike and spec: system ids, ROM and capture layout, sandbox reach | todo | T-302 |
-| [T-304](tasks/T-304-hub1-contract-and-service.md) | `Hub1`: contract, `ruya-hub` service, mock and client | todo | T-302, T-303 |
+| [T-304](tasks/T-304-hub1-contract-and-service.md) | `GameData1`: contract, `ruya-gamedata` service, mock and client | todo | T-302, T-303 |
 | [T-305](tasks/T-305-captures-screenshot-recording-clip.md) | **[lead]** Captures: screenshots, recordings and clip-the-last-seconds by the OS | todo | T-302, T-304, T-164 |
 | [T-306](tasks/T-306-now-playing-exchange.md) | Now playing: apps report, the OS shows and shares it | todo | T-302, T-304, T-247 |
 | [T-307](tasks/T-307-library-and-emulator-frontend-use-the-hub.md) | Library and the emulator frontend use the hub | todo | T-302, T-304, T-259 |
@@ -137,12 +137,13 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | [T-351](tasks/T-351-api-level-and-changelog.md) | API level: RUYA_API_LEVEL, the AppStream minimum, the Store filter, an XML-diff changelog | todo | — |
 | [T-352](tasks/T-352-ruya-platform-service-skeleton.md) | ruya-platform: the one door for sandboxed apps (ADR-022 Accepted; step one: the caller-identity spike) | todo | T-351 |
 | [T-353](tasks/T-353-developer-mock-and-sample-harness.md) | Developer harness: a Platform mock, a sample app and a conformance runner in CI | todo | T-352, T-350 |
+| [T-420](tasks/T-420-content-provider-api.md) | Content provider API: apps put their items into Continue watching and the console search | todo | T-352, T-351 |
 | [T-416](tasks/T-416-ruya-cli-and-validators.md) | The `ruya` developer CLI: SDK discovery and app validation with JSON output and an error catalogue | todo | T-351, T-350 |
 | [T-417](tasks/T-417-llms-txt-and-catalogues.md) | AI entry points: `llms.txt`, a generated `llms-full.txt`, component and API catalogues, `AGENTS.md` for apps | todo | T-416, T-251 |
 | [T-418](tasks/T-418-dev-image-ui-inspector-and-input.md) | Development images: inspect a running app's UI as data, drive it with a virtual pad, collect its logs | todo | T-416, T-367 |
 | [T-419](tasks/T-419-developer-mcp-server.md) | Ruya Developer MCP server (optional, host-side): the CLI's commands as typed tools for AI agents | todo | T-416, T-417, T-418 |
 | [T-354](tasks/T-354-research-xbox-wireless-adapter-support.md) | **[lead]** Research: Xbox Wireless Adapter support (driver, user-downloaded firmware, legal risk) and a recommended task list; builds nothing | todo | — |
-| [T-404](tasks/T-404-ruya-web-threat-model-and-allow-list.md) | **[lead]** Ruya Web: threat model, the bus allow-list per service, pairing and session design | blocked | owner |
+| [T-404](tasks/T-404-ruya-web-threat-model-and-allow-list.md) | **[lead]** Ruya Web: threat model, the bus allow-list per service, pairing and session design | todo | — |
 | [T-411](tasks/T-411-gateway-protocol-for-web-and-companion.md) | **[lead]** The `ruya-link` gateway protocol for Ruya Web and Companion: identities, pairing, permissions, events, capabilities | todo | T-404 |
 | [T-405](tasks/T-405-ruya-web-spike.md) | **[lead]** Spike: Ruya Web stack, TLS certificate, TV pairing, LAN-only enforcement, design tokens as CSS | todo | T-404, T-411 |
 | [T-406](tasks/T-406-ruya-web-foundation-and-dashboard.md) | Ruya Web foundation: the service, Settings > Web management, pairing, sessions, a read-only dashboard | todo | T-405 |
@@ -150,7 +151,7 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | [T-408](tasks/T-408-ruya-web-rom-upload-and-import.md) | Ruya Web: ROM and BIOS upload, then import through the hub (identify, duplicates, archives) | todo | T-406, T-304 |
 | [T-409](tasks/T-409-ruya-web-system-pages.md) | Ruya Web: downloads, apps, storage and saves pages over their own services | todo | T-406, T-391, T-403, T-310 |
 | [T-410](tasks/T-410-ruya-web-diagnostics.md) | Ruya Web: logs and a diagnostic report, redacted | todo | T-406, T-225 |
-| [T-412](tasks/T-412-phone-as-a-controller.md) | The phone as a controller: D-pad, confirm, back, home, menu, pointer and the phone's keyboard, as a profile's controller | todo | T-411, T-397, T-367 |
+| [T-412](tasks/T-412-phone-as-a-controller.md) | The phone as a controller: D-pad, confirm, back, home, menu, pointer and the phone's keyboard, as a profile's controller | blocked | T-411, T-397, T-367 |
 | [T-413](tasks/T-413-power-and-wake-over-the-network.md) | Power over the network: sleep, restart, shut down from a paired client; Wake-on-LAN where the hardware does it | todo | T-411, T-262 |
-| [T-414](tasks/T-414-companion-app-android-first.md) | Ruya Companion app v1 (Flutter, Android first): discovery, pairing, Home, Library, Downloads, System, Remote | todo | T-411, T-406, T-412, T-413 |
+| [T-414](tasks/T-414-companion-app-android-first.md) | Ruya Companion app v1 (Flutter, Android first): discovery, pairing, Home, Library, Downloads, System, Remote | blocked | T-411, T-406, T-412, T-413 |
 | [T-415](tasks/T-415-remote-access-outside-home.md) | **[lead]** Companion outside the home: the player's own VPN first, a Ruya relay only if the owner decides to run one | blocked | owner |

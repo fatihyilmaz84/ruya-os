@@ -45,5 +45,8 @@ A written recommendation, **without building anything**, for how RuyaOS could su
 - The existing sentence in `01-platform.md` §2.3 ("handled the same way", i.e. akmods plus MOK) is an assumption, not a verified plan: test it against the controller-only first-boot reality.
 - Prefer facts from the projects' own repositories and Microsoft's own pages over forum posts; quote at most a short phrase and cite the URL.
 
+## Owner decision (2026-11-10)
+Yes: the console may offer a button that downloads Microsoft's adapter firmware from Microsoft's own server when the player asks; RuyaOS never ships or mirrors the file. Write the build task from this research.
+
 ## Outcome
 _Filled in by the lead. First line: `Verified: host | vm | unverified | hw`._

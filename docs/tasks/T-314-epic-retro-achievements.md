@@ -29,7 +29,7 @@ A player who plays retro games through an emulator earns, sees and keeps RetroAc
 5. Hardcore: the Guide menu's save-state and rewind entries (if the OS ever offers them, T-273/T-305) warn that they end a hardcore run.
 
 ## Children
-T-315 spike and contract (lead): ToS/rate-limit read, token handling, supported systems and hash rules, `ra` service and `Hub1` additions · T-316 account link UI and credential hand-over (RetroArch recipe) · T-317 RA data in the shell: cache service, Library rings, profile tab, game page · T-318 unlock moment and presence: toast through the notification bridge, `Report` event, polling fallback, now-playing "rich presence" line.
+T-315 spike and contract (lead): ToS/rate-limit read, token handling, supported systems and hash rules, `ra` service and `GameData1` additions · T-316 account link UI and credential hand-over (RetroArch recipe) · T-317 RA data in the shell: cache service, Library rings, profile tab, game page · T-318 unlock moment and presence: toast through the notification bridge, `Report` event, polling fallback, now-playing "rich presence" line.
 
 ## Owner decisions (ADR-021 Accepted, owner 2026-11-08)
 Decided: (a) yes, the console may talk to retroachievements.org for the player once an account is linked, and the OS shows the achievements in its own UI (the ROM hash sent reveals what is played: nothing is sent before the link). (b) yes, the name and badge images may be used and credited; fetched at run time, cached per profile, none bundled. (c) the token is root-only per profile and not in backups unless the player ticks it (lead's call). (d) child profiles off by default. (e) `rcheevos` and any bundling: licence check by the spike, no code taken before it. No ROM, set or image is ever shipped by us.

@@ -1,6 +1,6 @@
 # T-404 - Ruya Web: threat model, the bus allow-list per service, pairing and session design
 
-Status: blocked (owner decision: ADR-029 changes the invariant "D-Bus policies stay restrictive: the shell and root only") · Phase: 6 · Depends: — · Area: docs, api (bus policies) · Size: M · Owner: lead · Complexity: hard · Developer surface: internal
+Status: todo · Phase: 6 · Depends: — · Area: docs, api (bus policies) · Size: M · Owner: lead · Complexity: hard · Developer surface: internal
 
 ## Goal
 For both remote clients of the one gateway (`ruya-link`: Ruya Web and the Companion app, ADR-029/ADR-030), before any code: a written threat model and the exact list of methods `ruya-web` may call on each service, so the invariant change the owner approves is as small as possible and testable.

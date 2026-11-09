@@ -1,6 +1,6 @@
 # T-415 - Companion outside the home: the player's own VPN first, a Ruya relay only if the owner decides to run one
 
-Status: blocked (owner decision, ADR-030 question 2: VPN-only in v1 or a Ruya relay) · Phase: 6 · Depends: T-414 · Area: docs, services (ruya-link), image · Size: S · Owner: lead · Developer surface: internal
+Status: blocked (owner 2026-11-10: Companion is for later, not built now) · Phase: 6 · Depends: T-414 · Area: docs, services (ruya-link), image · Size: S · Owner: lead · Developer surface: internal
 
 ## Goal
 A player away from home can reach their console from the Companion app without exposing anything to the internet.

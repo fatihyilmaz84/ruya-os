@@ -66,13 +66,9 @@ uya-qmltest.txt` with any new red.
 ## Open owner decisions
 
 Long forms: `STATUS-parked.md`.
+- **Decided 2026-11-10 (owner, asked in lead-8):** Ruya Web allowed (ADR-029 Accepted: allow-list gateway, Settings-level actions minus profiles/PINs/update, Avahi and nftables); Companion later, remote only through your own VPN (ADR-030 parked); GE-Proton ships its codecs as other gaming distributions do, sources mirrored (ADR-025); a content-provider API (T-420), Verified levels internal only (ADR-031); the overlay keeps "Ruya Hub", the data service becomes `ruya-gamedata`; the Xbox adapter may download Microsoft's firmware on the player's request (T-354).
 
-- **Xbox Wireless Adapter (T-261, research T-354).** Investigated first, nothing built. Proposed, **undecided, yours:** may the console offer a button where the player downloads Microsoft's dongle firmware from Microsoft's own server (RuyaOS redistributes nothing)? Legal and terms risk; no button before you answer.
-- **GE-Proton (ADR-025):** codecs (strip, ship, extension) and the LGPL source offer; facts from T-381.
 - **Save locations list (ADR-028, T-400):** Ludusavi's manifest licence (PCGamingWiki data); use, ask, or our own.
-- **Ruya Web (Proposed ADR-029, T-404 blocked):** allow a LAN gateway under a method allow-list (changes the "shell and root only" invariant)? Which browser actions? Avahi and nftables in the image?
-- **Ruya Companion (Proposed ADR-030):** side-loaded Android first or the stores now; VPN-only remote access or a Ruya relay; a Mac for iOS.
-- **Developer platform (ADR-031):** a content-provider and media-session API (new tier-B line)? A "Ruya Verified" Store badge?
 - **Telemetry (T-224/T-225).** The consent flow is decided; the backend, retention, privacy notice and a data-processing agreement are yours, later.
 - **Parked by you, nothing built:** `.play` packages (T-228, ADR-014 accepted, questions in `05-play-packages.md` §16) and the Epic Games Store (T-270, Proposed ADR-018: first-party Store app on Legendary, the Heroic Flatpak, or nothing).
 - **Pad pictures and glyph licence (T-199).** Sony/Microsoft/Nintendo pad art needs a legal decision (we draw our own); ControllerCons (SIL OFL) says "cannot be redistributed or sold": ask the author. Recommended: our glyphs Apache-2.0, a notice in About.

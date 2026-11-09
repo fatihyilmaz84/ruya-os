@@ -1,6 +1,6 @@
 # T-412 - The phone as a controller: D-pad, confirm, back, home, menu, pointer and the phone's keyboard, as a profile's controller
 
-Status: todo · Phase: 6 · Depends: T-411, T-397, T-367 · Area: services (ruya-link, the input service), shell (text input) · Size: M · Owner: builder · Complexity: complex · Developer surface: internal
+Status: blocked (owner 2026-11-10: Companion is for later, not built now) · Phase: 6 · Depends: T-411, T-397, T-367 · Area: services (ruya-link, the input service), shell (text input) · Size: M · Owner: builder · Complexity: complex · Developer surface: internal
 
 ## Goal
 A paired phone works as a remote: its D-pad and buttons move the shell's focus like a pad of the profile it belongs to, its keyboard types into the focused text field, and its touchpad moves a pointer where a pointer exists.

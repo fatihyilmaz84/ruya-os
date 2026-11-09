@@ -60,7 +60,7 @@ RuyaOS is an open-source, immutable (Fedora bootc) console OS for living-room PC
   - Nothing auto-runs from removable media.
   - Third-party apps run only in Flatpak sandboxes, never as root or as `ruya-shell`.
   - Services keep their systemd hardening.
-  - D-Bus policies stay restrictive: the shell and root only.
+  - D-Bus policies stay restrictive: the shell and root only, plus `ruya-link` under its per-method allow-list (ADR-029, owner 2026-11-10).
 - **Honesty in the log.** STATUS and Outcomes report what actually happened, including failures and anything left undone.
 
 ## Working style

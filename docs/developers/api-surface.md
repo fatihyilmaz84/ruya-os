@@ -40,6 +40,7 @@ Anything not on this list needs a new line in ADR-022 first (the owner's approva
 | Theme accent | read the accent and the light/dark/glass state to match the shell | none | whole capability, read-only: unplanned |
 | Age rating and parental respect | read "this profile's age limit" to hide content in the app | none (T-211 has the limits, private) | whole capability, read-only flag: unplanned |
 | Storage picker | choose a file or folder on the console or a USB drive | none (portal backend gap, `03` §4.4) | whole capability: unplanned |
+| Content provider (owner, 2026-11-10, ADR-031) | publish its own items (episodes, albums, slots) with progress for Home's "Continue watching" and the console search; open the app at an item | T-420 | whole capability: planned |
 | Game data hub | where ROMs, saves, states, captures live; identify a file; read now-playing/captures with a permission | T-302..T-308 (ADR-020) | re-seat as a `Platform1` interface; T-308 owns the chapter and sample |
 
 The list is approved, so the lead may now plan the unplanned capabilities (text input, display information, theme accent, age rating, storage picker) as tasks inside the charter; each is `Developer surface: public-API` with the Definition of done below. Nothing outside the list is planned without a new ADR line.
@@ -107,7 +108,7 @@ One-time audit by the lead: T-245 to T-247, T-262 to T-268, T-217, T-248 to T-25
 | T-250 platform spike (ADR-015) | public-API | ADR-015 Accepted (the `org.ruyaos.Platform` runtime extension carries the client bindings); the spike answers the open questions |
 | T-251 RuyaKit | public-API | chapter and sample if it is a runtime extension |
 | T-252 app template | public-format | none (it is the sample) |
-| T-302 hub epic, T-304 `Hub1`, T-306 now-playing | public-API | re-seat behind `Platform1`; T-308 owns chapter and sample |
+| T-302 hub epic, T-304 `GameData1`, T-306 now-playing | public-API | re-seat behind `Platform1`; T-308 owns chapter and sample |
 | T-305 captures, T-311 saves for external emulators | public-API | chapter paragraph, conformance |
 | T-309, T-310 saves manager | internal / none | none |
 | T-316 RA hand-over | public-API | what an emulator is handed is a contract: chapter, sample |

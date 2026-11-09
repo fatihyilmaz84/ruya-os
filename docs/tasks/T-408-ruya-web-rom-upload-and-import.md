@@ -1,12 +1,12 @@
 # T-408 - Ruya Web: ROM and BIOS upload, then import through the hub (identify, duplicates, archives)
 
-Status: todo · Phase: 6 · Depends: T-406, T-304 · Area: services (the hub ruya-hub: import pipeline), services (ruya-web: uploads), web front end · Size: M · Owner: builder · Complexity: complex · Developer surface: internal
+Status: todo · Phase: 6 · Depends: T-406, T-304 · Area: services (the hub ruya-gamedata: import pipeline), services (ruya-web: uploads), web front end · Size: M · Owner: builder · Complexity: complex · Developer surface: internal
 
 ## Goal
 The player drags ROMs (or a zip of them) and the BIOS files they own onto the page, sees each file go through upload, validation, identification and registration, and finds the games in the Library on the TV; duplicates and unknown files are shown, never silently added.
 
 ## Read first
-- ADR-020 (ROM roots: shared read-only and per profile; `Identify`), ADR-028, ADR-029, T-304 (Hub1), T-232 (vetting pattern), the proposal §9 (upload vs import, states, archives, duplicates) and §11 (BIOS)
+- ADR-020 (ROM roots: shared read-only and per profile; `Identify`), ADR-028, ADR-029, T-304 (GameData1), T-232 (vetting pattern), the proposal §9 (upload vs import, states, archives, duplicates) and §11 (BIOS)
 
 ## Scope
 1. Upload: resumable chunks into a staging area owned by the hub (size and free-space checks, cancel, retry); upload and import are separate stages with their own states.

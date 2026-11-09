@@ -1,6 +1,6 @@
 # T-414 - Ruya Companion app v1 (Flutter, Android first): discovery, pairing, Home, Library, Downloads, System, Remote
 
-Status: todo · Phase: 6 · Depends: T-411, T-406, T-412, T-413 · Area: new `companion/` (Flutter), docs · Size: M · Owner: builder · Complexity: complex · Developer surface: internal
+Status: blocked (owner 2026-11-10: Companion is for later, not built now) · Phase: 6 · Depends: T-411, T-406, T-412, T-413 · Area: new `companion/` (Flutter), docs · Size: M · Owner: builder · Complexity: complex · Developer surface: internal
 
 ## Goal
 A side-loaded Android app finds the console on the LAN, pairs with the QR code on the TV, and shows the console's state: what is running, recent games with a Launch button, downloads with their actions, system information, power, and the remote. Publishing in the stores is the owner's decision (ADR-030 question 1).
