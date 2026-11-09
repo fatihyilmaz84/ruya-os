@@ -14,6 +14,7 @@ struct DeviceBattery
     int percent = 0;                                // 0-100, -1: no reading (the cluster shows no chip)
     QString state = QStringLiteral("unknown");      // "charging" | "discharging" | "full" | "unknown"
     QString family;                                 // a controller's: "playstation" | "xbox" | "nintendo" | "8bitdo" | "" (T-260)
+    QString address;                                // the Bluetooth address (the id in Bluetooth.devices) when UPower ties one to it, else "" (T-359)
 };
 
 // Transport behind the Batteries QML singleton: org.ruyaos.Devices1.Batteries over D-Bus

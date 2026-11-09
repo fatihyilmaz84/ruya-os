@@ -110,7 +110,8 @@ FocusScope {
         for (let i = 0; i < list.length; ++i) {
             const d = list[i]
             const set = phases[d.id]
-            const entry = { devId: d.id, name: DeviceIcons.plain(d.name), family: d.family ?? "", phase: phaseOf(d),
+            // The name the Bluetooth pane shows: the end of the address is added for a like-named pad.
+            const entry = { devId: d.id, name: DeviceIcons.shownName(Bluetooth.devices, d), family: d.family ?? "", phase: phaseOf(d),
                             reason: set && set.reason ? set.reason : "" }
             let at = -1
             for (let j = 0; j < found.count; ++j) {

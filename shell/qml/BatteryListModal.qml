@@ -104,10 +104,11 @@ FocusScope {
                 width: list.width
                 height: Theme.rowHeight * dialog.u
                 Text {
+                    objectName: "batteryListName_" + row.modelData.id
                     anchors { left: parent.left; right: rowChip.left; rightMargin: Theme.spaceM * dialog.u
                               verticalCenter: parent.verticalCenter }
                     textFormat: Text.PlainText
-                    text: DeviceIcons.plain(row.modelData.name)
+                    text: DeviceIcons.batteryName(row.modelData)
                     elide: Text.ElideRight
                     color: Theme.text
                     font.pixelSize: Theme.typeBody * dialog.u

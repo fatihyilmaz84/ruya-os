@@ -19,7 +19,8 @@ public:
     // defaults to "controller", the name to one made from the kind and the id.
     // `family`: a controller's (T-260), only when given.
     void setDevice(const QString &id, int percent, const QString &state, const QString &kind = QString(),
-                   const QString &name = QString(), const QString &family = QString());
+                   const QString &name = QString(), const QString &family = QString(),
+                   const QString &address = QString());
     void removeDevice(const QString &id);
     void clear();
     void reset();

@@ -41,7 +41,10 @@
                       keep the default timeout and Pair/Connect always get a status, never a
                       D-Bus error. The pairing is cancelled when it times out.
     "unavailable"     Bluetooth is off or there is no adapter (StartScan, Pair, Connect,
-                      StartControllerPairing)
+                      StartControllerPairing). New pairings belong to the primary adapter, so StartScan,
+                      Pair and StartControllerPairing also answer it when the primary adapter is off
+                      while another one is on (T-359); Connect and the rest work through the adapter
+                      that holds the device
     "invalid"         malformed argument (an empty id; a controller-pairing window longer than 300 s;
                       Rename: an empty, over-long or control-character name)
     "busy"            a controller-pairing window is already open (StartControllerPairing)
@@ -694,6 +697,13 @@
                      holds it for a BlueZ-fed pad) decides, so the two lists agree; a wired or dongle
                      pad is guessed from UPower's vendor and model through the same table (families.rs).
                      Clients treat a missing key or a family they do not know as ""
+        address  s   the Bluetooth address (upper case, "E4:17:D8:00:00:01") of a device UPower ties
+                     to one (its Serial or NativePath holds it for a BlueZ-fed device), "" for every
+                     other (a wired or dongle pad, a mouse on a receiver). It is the id of the same
+                     device in Bluetooth.ListDevices, so a client names the battery after the paired
+                     device (its alias, and the tail of the address when two devices are called the
+                     same) and two pads of one make can be told apart (T-359). Clients treat a missing
+                     key as ""
       A device that has no battery reading, or is gone, is not listed. A Bluetooth device can also
       be in Devices1.Bluetooth.ListDevices (with its own "battery"); this list is the one the
       status cluster uses for every kind, and the low-battery toast for controllers (the other

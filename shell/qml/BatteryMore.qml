@@ -32,7 +32,7 @@ FocusScope {
 
     Accessible.role: Accessible.Button
     Accessible.name: qsTr("%n more device(s) with a battery: %1", "", more.count)
-                     .arg(more.devices.map(d => qsTr("%1 %2 percent").arg(d.name).arg(d.percent)).join(", "))
+                     .arg(more.devices.map(d => qsTr("%1 %2 percent").arg(DeviceIcons.batteryName(d)).arg(d.percent)).join(", "))
     Accessible.focusable: true
 
     Rectangle {

@@ -189,6 +189,9 @@ pub struct AdapterInfo {
     pub path: String,
     /// Attached over USB (the sysfs path of `/sys/class/bluetooth/hciN` contains `/usb`).
     pub usb: bool,
+    /// The adapter's own Bluetooth address (`Adapter1.Address`, upper case), "" when BlueZ tells
+    /// none. The System information shows the primary adapter's (T-359).
+    pub address: String,
     pub state: RawAdapter,
 }
 
@@ -208,6 +211,7 @@ impl Raw {
             adapters: vec![AdapterInfo {
                 path: HCI0.to_owned(),
                 usb: false,
+                address: String::new(),
                 state,
             }],
             devices,
@@ -276,12 +280,13 @@ pub fn merge_devices(devices: Vec<RawDevice>, primary: &str) -> Vec<RawDevice> {
 }
 
 /// A device as the journal names it: `AA:.. "Alias" (hci0)`. Names are what a remote device
-/// chose, so control characters are cleaned.
+/// chose, so control characters are cleaned, and so are the quote that would end the alias early
+/// and the format characters that hide or reorder text (T-359).
 fn label_of(d: &RawDevice) -> String {
     format!(
         "{} \"{}\" ({})",
         clean(&d.address),
-        clean(&d.alias),
+        clean(&d.alias).replace('"', "").replace(is_format_char, ""),
         adapter_name(&d.adapter)
     )
 }
@@ -332,6 +337,31 @@ fn link_changes(
         ));
     }
     lines
+}
+
+/// The adapters whose radio went on or off between two reads without our asking (`rfkill`, a
+/// `bluetoothctl power`, a driver reset), as journal lines. `asked`: what `set_powered` asked
+/// for, which is not news. Only an adapter in both reads counts, so the first read and an adapter
+/// that was just plugged in say nothing.
+fn adapter_changes(
+    before: &[AdapterInfo],
+    after: &[AdapterInfo],
+    asked: Option<bool>,
+) -> Vec<String> {
+    after
+        .iter()
+        .filter_map(|a| {
+            let old = before.iter().find(|b| b.path == a.path)?;
+            if old.state.powered == a.state.powered || asked == Some(a.state.powered) {
+                return None;
+            }
+            Some(format!(
+                "{} powered {}: radio",
+                adapter_name(&a.path),
+                if a.state.powered { "on" } else { "off" }
+            ))
+        })
+        .collect()
 }
 
 /// A listed device (the contract's dictionary).
@@ -504,8 +534,15 @@ struct State {
     starting: bool,
     /// Manual pairings (`pair`) in progress: they hold `Pairable` open themselves.
     manual_pairs: u32,
-    /// The adapter was made not pairable and not discoverable once (after a crash in a window).
-    secured: bool,
+    /// The adapters (object paths) made not pairable and not discoverable once (after a crash in a
+    /// window). One that is not in a read any more is dropped, so it is secured again when it
+    /// comes back (a dongle plugged in later, BlueZ restarted).
+    secured: HashSet<String>,
+    /// Some adapters were secured already: a later one is "appeared", not "startup".
+    secured_before: bool,
+    /// What the radio was last asked for (`set_powered`), so the reads that follow do not log it as
+    /// a change of the radio's own.
+    power_intent: Option<bool>,
     pairing: PairingState,
     /// When the running scan has to be stopped (only for a scan we started).
     scan_until: Option<Instant>,
@@ -561,6 +598,15 @@ impl<B: Bluez> Bluetooth<B> {
         self.lock().devices.clone()
     }
 
+    /// The primary adapter of the last read: its name (`hci1`) and its address ("" when BlueZ told
+    /// none). The System information describes this one (T-359).
+    pub fn primary_adapter(&self) -> Option<(String, String)> {
+        let st = self.lock();
+        let path = st.primary.as_ref()?;
+        let adapter = st.adapters.iter().find(|a| &a.path == path)?;
+        Some((adapter_name(path).to_owned(), adapter.address.clone()))
+    }
+
     /// When the scan we started has to be ended, if one runs.
     pub fn scan_deadline(&self) -> Option<Instant> {
         self.lock().scan_until
@@ -574,32 +620,50 @@ impl<B: Bluez> Bluetooth<B> {
         Ok(std::mem::take(&mut self.lock().pending))
     }
 
-    /// The first time the adapters are seen (and no window is open) every one of them is made not
-    /// pairable and not discoverable: a service that crashed inside a window must not leave the
-    /// console open for pairing, whichever adapter that window had opened. The window and `pair`
-    /// open `Pairable` themselves, only for as long as they need.
+    /// The first time an adapter is seen (and no window is open) it is made not pairable and not
+    /// discoverable: a service that crashed inside a window must not leave the console open for
+    /// pairing, whichever adapter that window had opened. An adapter that shows up later (a USB
+    /// dongle plugged in, BlueZ restarted) gets the same treatment. The window and `pair` open
+    /// `Pairable` themselves, only for as long as they need.
     fn secure_adapter(&self) {
-        let adapters = {
+        let (fresh, why) = {
             let mut st = self.lock();
-            if st.secured || st.window.is_some() || st.starting || st.manual_pairs > 0 {
+            let present: HashSet<String> = st.adapters.iter().map(|a| a.path.clone()).collect();
+            st.secured.retain(|p| present.contains(p));
+            if st.window.is_some() || st.starting || st.manual_pairs > 0 {
                 return;
             }
-            if st.adapters.is_empty() {
+            let fresh: Vec<AdapterInfo> = st
+                .adapters
+                .iter()
+                .filter(|a| !st.secured.contains(&a.path))
+                .cloned()
+                .collect();
+            if fresh.is_empty() {
                 return;
             }
-            st.secured = true;
-            st.adapters.clone()
+            for a in &fresh {
+                st.secured.insert(a.path.clone());
+            }
+            let why = if st.secured_before {
+                "adapter appeared"
+            } else {
+                "startup"
+            };
+            st.secured_before = true;
+            (fresh, why)
         };
-        for a in adapters {
+        for a in fresh {
             let name = adapter_name(&a.path);
             if a.state.pairable {
-                if let Err(e) = self.set_pairable(&a.path, false, "startup") {
-                    eprintln!("ruya-devices: {name} Pairable off failed: {}", e.0);
+                if let Err(e) = self.set_pairable(&a.path, false, why) {
+                    log::info(&format!("{name} Pairable off failed: {}", e.0));
                 }
             }
             if a.state.discoverable {
-                if let Err(e) = self.bluez.set_discoverable(&a.path, false) {
-                    eprintln!("ruya-devices: {name} Discoverable off failed: {}", e.0);
+                match self.bluez.set_discoverable(&a.path, false) {
+                    Ok(()) => log::info(&format!("{name} Discoverable off: {why}")),
+                    Err(e) => log::info(&format!("{name} Discoverable off failed: {}", e.0)),
                 }
             }
         }
@@ -628,6 +692,27 @@ impl<B: Bluez> Bluetooth<B> {
             } = &mut *st;
             link_changes(before, &raw_devices, on, intents)
         };
+        let radio = adapter_changes(&st.adapters, &adapters, st.power_intent);
+        // Pairable came on without us (someone else, or BlueZ started over from its defaults): say
+        // so. It is left as it is: what another program set is its own (the window gives back
+        // what it found), and an adapter that BlueZ lost and found again is secured anew.
+        let ours = st.window.is_some() || st.starting || st.manual_pairs > 0;
+        let opened: Vec<String> = if ours {
+            Vec::new()
+        } else {
+            adapters
+                .iter()
+                .filter(|a| {
+                    a.state.pairable
+                        && st
+                            .adapters
+                            .iter()
+                            .any(|b| b.path == a.path && !b.state.pairable)
+                })
+                .map(|a| a.path.clone())
+                .collect()
+        };
+
         let off = RawAdapter {
             powered: false,
             discovering: false,
@@ -658,8 +743,11 @@ impl<B: Bluez> Bluetooth<B> {
             st.scan_until = None;
         }
         drop(st);
-        for line in links {
+        for line in links.into_iter().chain(radio) {
             log::info(&line);
+        }
+        for path in opened {
+            log::info(&format!("{} Pairable on: not us", adapter_name(&path)));
         }
         Ok(())
     }
@@ -756,21 +844,45 @@ impl<B: Bluez> Bluetooth<B> {
         }
     }
 
+    /// `ready`, and the primary adapter is on too: the scan, new pairings and the pairing window
+    /// belong to it, so another adapter being on does not make them available (T-359).
+    fn ready_primary(&self) -> Result<(), Status> {
+        self.ready()?;
+        let st = self.lock();
+        let on = st
+            .primary
+            .as_ref()
+            .and_then(|p| st.adapters.iter().find(|a| &a.path == p))
+            .is_some_and(|a| a.state.powered);
+        if on {
+            Ok(())
+        } else {
+            Err(Status::Unavailable)
+        }
+    }
+
     /// Powers the adapter. `Err` when BlueZ refused (no adapter, rfkill blocked): the service
     /// answers a D-Bus error.
     pub fn set_powered(&self, on: bool) -> Result<Changes, BtError> {
         // Know the adapter first: BlueZ may have just come up.
         self.read()?;
-        self.bluez.set_powered(on)?;
-        log::info(&format!(
-            "adapters powered {} (user)",
-            if on { "on" } else { "off" }
-        ));
-        self.refresh()
+        self.lock().power_intent = Some(on);
+        let result = match self.bluez.set_powered(on) {
+            Ok(()) => {
+                log::info(&format!(
+                    "adapters powered {} (user)",
+                    if on { "on" } else { "off" }
+                ));
+                self.refresh()
+            }
+            Err(e) => Err(e),
+        };
+        self.lock().power_intent = None;
+        result
     }
 
     pub fn start_scan(&self, now: Instant) -> Status {
-        if let Err(status) = self.ready() {
+        if let Err(status) = self.ready_primary() {
             return status;
         }
         let Some(path) = self.lock().primary.clone() else {
@@ -831,7 +943,7 @@ impl<B: Bluez> Bluetooth<B> {
                     st.scan_adapter.clone().or_else(|| st.primary.clone())
                 };
                 if let Some(Err(e)) = path.map(|p| self.bluez.stop_discovery(&p)) {
-                    eprintln!("ruya-devices: ending the scan failed: {}", e.0);
+                    log::info(&format!("ending the scan failed: {}", e.0));
                 }
             }
             self.lock().scan_until = None;
@@ -895,7 +1007,13 @@ impl<B: Bluez> Bluetooth<B> {
     }
 
     fn pair_one(&self, id: &str, clock: impl Fn() -> Instant) -> Status {
-        let dev = match self.ready_device(id) {
+        if id.is_empty() {
+            return Status::Invalid;
+        }
+        if let Err(s) = self.ready_primary() {
+            return s;
+        }
+        let dev = match self.find(id) {
             Ok(d) => d,
             Err(s) => return s,
         };
@@ -929,7 +1047,7 @@ impl<B: Bluez> Bluetooth<B> {
             let paired = self.bluez.pair(&adapter, &dev.id, left());
             if !window {
                 if let Err(e) = self.set_pairable(&adapter, false, "manual pairing done") {
-                    eprintln!("ruya-devices: Pairable off again failed: {}", e.0);
+                    log::info(&format!("Pairable off again failed: {}", e.0));
                 }
             }
             if let Err(e) = paired {
@@ -1097,7 +1215,7 @@ impl<B: Bluez> Bluetooth<B> {
         if length > MAX_WINDOW {
             return Status::Invalid;
         }
-        if let Err(status) = self.ready() {
+        if let Err(status) = self.ready_primary() {
             return status;
         }
         let (path, adapter) = {
@@ -1133,14 +1251,11 @@ impl<B: Bluez> Bluetooth<B> {
     ) -> Status {
         // Agent first: if BlueZ refuses it nothing else has been touched.
         if let Err(e) = self.bluez.register_agent() {
-            eprintln!(
-                "ruya-devices: registering the pairing agent failed: {}",
-                e.0
-            );
+            log::info(&format!("registering the pairing agent failed: {}", e.0));
             return Status::Failed;
         }
         if let Err(e) = self.set_pairable(path, true, "window") {
-            eprintln!("ruya-devices: Pairable on failed: {}", e.0);
+            log::info(&format!("Pairable on failed: {}", e.0));
             self.drop_agent();
             return Status::Failed;
         }
@@ -1149,7 +1264,7 @@ impl<B: Bluez> Bluetooth<B> {
             && match self.bluez.start_discovery(path) {
                 Ok(()) => true,
                 Err(e) => {
-                    eprintln!("ruya-devices: the window's scan failed: {}", e.0);
+                    log::info(&format!("the window's scan failed: {}", e.0));
                     false
                 }
             };
@@ -1200,10 +1315,7 @@ impl<B: Bluez> Bluetooth<B> {
 
     fn drop_agent(&self) {
         if let Err(e) = self.bluez.unregister_agent() {
-            eprintln!(
-                "ruya-devices: unregistering the pairing agent failed: {}",
-                e.0
-            );
+            log::info(&format!("unregistering the pairing agent failed: {}", e.0));
         }
     }
 
@@ -1223,15 +1335,21 @@ impl<B: Bluez> Bluetooth<B> {
             "pairing window on {} closed: {how}",
             adapter_name(&window.adapter)
         ));
-        let user_scan = self.lock().scan_until.is_some();
-        if window.scan_ours && !user_scan {
+        // The user's scan keeps running only when it runs on the window's own adapter: one that
+        // took over on another adapter (the primary one flipped in between) is not this scan, and
+        // the window's own is still its to stop.
+        let user_scan_here = {
+            let st = self.lock();
+            st.scan_until.is_some() && st.scan_adapter.as_deref() == Some(window.adapter.as_str())
+        };
+        if window.scan_ours && !user_scan_here {
             if let Err(e) = self.bluez.stop_discovery(&window.adapter) {
-                eprintln!("ruya-devices: ending the window's scan failed: {}", e.0);
+                log::info(&format!("ending the window's scan failed: {}", e.0));
             }
         }
         if window.restore_pairable {
             if let Err(e) = self.set_pairable(&window.adapter, false, "window closed") {
-                eprintln!("ruya-devices: Pairable off again failed: {}", e.0);
+                log::info(&format!("Pairable off again failed: {}", e.0));
             }
         }
         self.drop_agent();
@@ -1367,7 +1485,7 @@ impl<B: Bluez> Bluetooth<B> {
                     self.label(address)
                 ));
             }
-            Err(e) => eprintln!("ruya-devices: pairing {address} failed: {}", e.0),
+            Err(e) => log::info(&format!("pairing {address} failed: {}", e.0)),
         }
     }
 
@@ -1555,11 +1673,13 @@ impl FakeBluez {
                 AdapterInfo {
                     path: hci0.to_owned(),
                     usb: false,
+                    address: "00:11:22:33:44:00".to_owned(),
                     state: on,
                 },
                 AdapterInfo {
                     path: hci1.to_owned(),
                     usb: true,
+                    address: "00:11:22:33:44:01".to_owned(),
                     state: on,
                 },
             ],
@@ -3435,6 +3555,7 @@ mod tests {
         AdapterInfo {
             path: path.to_owned(),
             usb,
+            address: String::new(),
             state: RawAdapter {
                 powered: true,
                 discovering: false,
@@ -3815,6 +3936,202 @@ mod tests {
             assert!(!a.pairable && !a.discoverable, "{path}");
         }
         assert_eq!(bt.bluez.calls().len(), 4);
+    }
+
+    // ---- T-359: late adapters, scan ownership, one primary ----
+
+    /// hci0 alone first; hci1 (USB, with its pads) joins later, as a dongle plugged in would.
+    fn with_late_second_adapter(second_is_open: bool) -> Bluetooth<FakeBluez> {
+        let fake = FakeBluez::with_two_adapters();
+        let full = fake.snapshot().expect("fake");
+        let mut first = full.clone();
+        first.adapters.truncate(1);
+        first.devices.retain(|d| d.adapter == HCI0);
+        fake.set_raw(first);
+        let bt = Bluetooth::new(fake);
+        bt.refresh().expect("reads");
+        let mut raw = full;
+        for a in raw.adapters.iter_mut().skip(1) {
+            a.state.pairable = second_is_open;
+            a.state.discoverable = second_is_open;
+        }
+        bt.bluez.set_raw(raw);
+        bt
+    }
+
+    #[test]
+    fn a_late_adapter_gets_the_secure_pairable_setup() {
+        let bt = with_late_second_adapter(true);
+        log::take();
+        bt.refresh().expect("reads");
+        let late = bt.bluez.adapter_state(HCI1).expect("hci1");
+        assert!(
+            !late.pairable && !late.discoverable,
+            "the adapter that came later is closed too: {late:?}"
+        );
+        let lines = log::take();
+        assert!(
+            has(&lines, &["hci1 Pairable off", "adapter appeared"]),
+            "{lines:?}"
+        );
+        // and it is done once: nothing more to close on the next look
+        let calls = bt.bluez.calls().len();
+        bt.refresh().expect("reads");
+        assert_eq!(bt.bluez.calls().len(), calls);
+    }
+
+    #[test]
+    fn an_adapter_that_left_and_came_back_is_secured_again() {
+        let bt = two();
+        let mut raw = bt.bluez.snapshot().expect("fake");
+        let mut back = raw.clone();
+        raw.adapters.clear();
+        raw.devices.clear();
+        bt.bluez.set_raw(raw);
+        bt.refresh().expect("reads");
+        // BlueZ came back with its defaults: pairable
+        for a in back.adapters.iter_mut() {
+            a.state.pairable = true;
+        }
+        bt.bluez.set_raw(back);
+        bt.refresh().expect("reads");
+        for path in [HCI0, HCI1] {
+            assert!(!bt.bluez.adapter_state(path).expect("adapter").pairable);
+        }
+    }
+
+    #[test]
+    fn the_window_scan_stops_on_its_own_adapter_after_a_primary_flip() {
+        let bt = two();
+        // the user's scan runs on hci1, then hci0 becomes the primary adapter and the window
+        // opens there with a scan of its own
+        assert_eq!(bt.start_scan(Instant::now()), Status::Ok);
+        assert!(bt.bluez.adapter_state(HCI1).expect("hci1").discovering);
+        flip_primary_to_hci0(&bt);
+        assert_eq!(
+            bt.start_controller_pairing(Instant::now(), 0, true),
+            Status::Ok
+        );
+        assert!(
+            bt.bluez.adapter_state(HCI0).expect("hci0").discovering,
+            "the window scans on its own adapter"
+        );
+        assert_eq!(bt.stop_controller_pairing(true), Status::Ok);
+        assert!(
+            !bt.bluez.adapter_state(HCI0).expect("hci0").discovering,
+            "the window's scan is stopped on hci0 although a scan of the user's runs"
+        );
+        assert!(
+            bt.bluez.adapter_state(HCI1).expect("hci1").discovering,
+            "the user's scan on hci1 goes on"
+        );
+        assert!(bt.scan_deadline().is_some());
+    }
+
+    #[test]
+    fn a_users_scan_on_the_windows_adapter_outlives_the_window() {
+        let bt = two();
+        assert_eq!(
+            bt.start_controller_pairing(Instant::now(), 0, true),
+            Status::Ok
+        );
+        assert_eq!(bt.start_scan(Instant::now()), Status::Ok);
+        assert_eq!(bt.stop_controller_pairing(true), Status::Ok);
+        assert!(
+            bt.bluez.adapter_state(HCI1).expect("hci1").discovering,
+            "the user asked for this scan on the same adapter"
+        );
+    }
+
+    /// hci1 (the primary: it holds the most pads) is off, hci0 is on.
+    fn primary_off_other_on() -> Bluetooth<FakeBluez> {
+        let fake = FakeBluez::with_two_adapters();
+        let mut raw = fake.snapshot().expect("fake");
+        raw.adapters[1].state.powered = false;
+        fake.set_raw(raw);
+        let bt = Bluetooth::new(fake);
+        bt.refresh().expect("reads");
+        assert!(bt.powered(), "hci0 is on");
+        bt
+    }
+
+    #[test]
+    fn start_scan_is_unavailable_when_only_a_non_primary_adapter_is_on() {
+        let bt = primary_off_other_on();
+        assert_eq!(bt.start_scan(Instant::now()), Status::Unavailable);
+        assert!(!bt.bluez.calls().iter().any(|c| c.starts_with("start")));
+        assert_eq!(bt.scan_deadline(), None);
+        // the others that start something on the primary adapter say the same
+        assert_eq!(
+            bt.start_controller_pairing(Instant::now(), 0, true),
+            Status::Unavailable
+        );
+        assert_eq!(
+            bt.pair("AA:00:00:00:00:02", Instant::now),
+            Status::Unavailable
+        );
+        assert!(!bt.bluez.calls().iter().any(|c| c.starts_with("pairable")));
+        // a pad that is paired on the adapter that is on still connects
+        assert_eq!(bt.connect("AA:00:00:00:00:01"), Status::Ok);
+    }
+
+    // ---- what the journal says (T-335, T-359) ----
+
+    #[test]
+    fn journal_label_strips_quotes_and_format_chars() {
+        let mut d = raw_dev("AA:00:00:00:00:77", "Pad", "input-gaming", true);
+        d.alias = "Pa\"d\u{202E}\u{200B}x\n".to_owned();
+        d.adapter = HCI0.to_owned();
+        assert_eq!(label_of(&d), "AA:00:00:00:00:77 \"Padx?\" (hci0)");
+        // and in a real line
+        let bt = Bluetooth::new(FakeBluez::with_devices());
+        let mut raw = bt.bluez.snapshot().expect("fake");
+        raw.devices[0].alias = "Evil\" (hci9)\u{202E}".to_owned();
+        bt.bluez.set_raw(raw);
+        bt.refresh().expect("reads");
+        log::take();
+        assert_eq!(bt.disconnect("AA:00:00:00:00:01"), Status::Ok);
+        let lines = log::take();
+        assert!(
+            has(&lines, &["\"Evil (hci9)\" (hci0)"]),
+            "one pair of quotes around the alias: {lines:?}"
+        );
+        assert!(!lines.iter().any(|l| l.contains('\u{202E}')), "{lines:?}");
+    }
+
+    #[test]
+    fn a_radio_change_we_did_not_cause_is_logged_and_ours_is_not() {
+        let bt = Bluetooth::new(FakeBluez::with_devices());
+        bt.refresh().expect("reads");
+        log::take();
+        // rfkill (or a bluetoothctl): not us
+        let mut raw = bt.bluez.snapshot().expect("fake");
+        raw.adapters[0].state.powered = false;
+        bt.bluez.set_raw(raw);
+        bt.refresh().expect("reads");
+        let lines = log::take();
+        assert!(has(&lines, &["hci0 powered off", "radio"]), "{lines:?}");
+        // the user switches it on: the line is "(user)", not a radio change
+        bt.set_powered(true).expect("on");
+        let lines = log::take();
+        assert!(has(&lines, &["adapters powered on (user)"]), "{lines:?}");
+        assert!(!has(&lines, &["radio"]), "{lines:?}");
+    }
+
+    #[test]
+    fn pairable_that_comes_on_by_itself_is_logged() {
+        let bt = Bluetooth::new(FakeBluez::with_devices());
+        bt.refresh().expect("reads");
+        log::take();
+        // someone (or a BlueZ that started over) switched Pairable on
+        let mut raw = bt.bluez.snapshot().expect("fake");
+        raw.adapters[0].state.pairable = true;
+        bt.bluez.set_raw(raw);
+        bt.refresh().expect("reads");
+        let lines = log::take();
+        assert!(has(&lines, &["hci0 Pairable on: not us"]), "{lines:?}");
+        bt.refresh().expect("reads");
+        assert!(log::take().is_empty(), "said once, not at every read");
     }
 
     // ---- what the journal says (T-335) ----

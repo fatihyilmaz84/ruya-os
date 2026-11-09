@@ -65,10 +65,20 @@ pub fn parse_bluetoothctl_address(output: &str) -> Option<String> {
 }
 
 fn bluetooth(src: &dyn Source, info: &mut Info) {
-    let Some(adapter) = src
+    let adapters: Vec<String> = src
         .list("/sys/class/bluetooth")
         .into_iter()
-        .find(|n| n.starts_with("hci") && !n.contains(':'))
+        .filter(|n| n.starts_with("hci") && !n.contains(':'))
+        .collect();
+    // The adapter the service picked as the primary one (the one with the paired devices); the first
+    // in sysfs only when the service says nothing or names one that is not there.
+    let primary = src.primary_bluetooth();
+    let Some(adapter) = primary
+        .as_ref()
+        .map(|(name, _)| name)
+        .filter(|name| adapters.contains(name))
+        .or_else(|| adapters.first())
+        .cloned()
     else {
         return;
     };
@@ -114,10 +124,13 @@ fn bluetooth(src: &dyn Source, info: &mut Info) {
             }
         }
     }
-    if let Some(address) = src
-        .run("bluetoothctl", &["show"])
-        .and_then(|o| parse_bluetoothctl_address(&o))
-    {
+    let known = primary
+        .map(|(_, address)| address)
+        .filter(|address| !address.is_empty());
+    if let Some(address) = known.or_else(|| {
+        src.run("bluetoothctl", &["show"])
+            .and_then(|o| parse_bluetoothctl_address(&o))
+    }) {
         info.text("bluetooth.address", address);
     }
 }

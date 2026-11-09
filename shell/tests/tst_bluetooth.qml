@@ -313,6 +313,7 @@ Item {
             keyClick(Qt.Key_Return)
             tryVerify(() => find("btRenameEntry").shown, 2000)
             compare(find("btRenameEntry").text, "Retro Pad", "pre-filled with the current name")
+            compare(find("btRenameEntry").title, "Retro Pad", "titled with the name the row shows, not 'Controller name'")
             keyboardGoTo(find("btRenameEntry"), "x")
             keyClick(Qt.Key_Return)
             keyboardGoTo(find("btRenameEntry"), "done")
@@ -557,6 +558,7 @@ Item {
             keyClick(Qt.Key_Return)
             tryVerify(() => find("btRenameEntry").shown, 2000)
             compare(find("btRenameEntry").text, "Wireless Controller", "pre-filled with the alias")
+            compare(find("btRenameEntry").title, "Wireless Controller (00:05)", "titled with the shown name: which pad is being renamed")
             for (let i = 0; i < 25 && find("btRenameEntry").shown; ++i)
                 keyClick(Qt.Key_Escape)                  // Back deletes a letter; on an empty field it cancels
             tryVerify(() => !find("btRenameEntry").shown, 2000)

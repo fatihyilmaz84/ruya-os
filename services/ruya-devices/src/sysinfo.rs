@@ -22,6 +22,51 @@ struct Cache {
     stamp: Option<Instant>,
 }
 
+/// Which Bluetooth adapter is the primary one, and its address: asked of the Bluetooth core at
+/// every read (`Bluetooth::primary_adapter`).
+pub type PrimaryAdapter = Box<dyn Fn() -> Option<(String, String)> + Send + Sync>;
+
+/// A source that adds one answer to another's: the Bluetooth adapter the service itself treats as
+/// the primary one, so the System information describes the adapter the pads are paired on and not
+/// whichever `hciN` sysfs lists first (T-359).
+pub struct WithPrimaryAdapter {
+    inner: DynInfoSource,
+    primary: PrimaryAdapter,
+}
+
+impl WithPrimaryAdapter {
+    pub fn new(inner: DynInfoSource, primary: PrimaryAdapter) -> Self {
+        WithPrimaryAdapter { inner, primary }
+    }
+}
+
+impl Source for WithPrimaryAdapter {
+    fn read(&self, p: &str) -> Option<String> {
+        self.inner.read(p)
+    }
+    fn read_bytes(&self, p: &str) -> Option<Vec<u8>> {
+        self.inner.read_bytes(p)
+    }
+    fn list(&self, p: &str) -> Vec<String> {
+        self.inner.list(p)
+    }
+    fn exists(&self, p: &str) -> bool {
+        self.inner.exists(p)
+    }
+    fn resolve(&self, p: &str) -> Option<String> {
+        self.inner.resolve(p)
+    }
+    fn modified(&self, p: &str) -> Option<u64> {
+        self.inner.modified(p)
+    }
+    fn run(&self, p: &str, a: &[&str]) -> Option<String> {
+        self.inner.run(p, a)
+    }
+    fn primary_bluetooth(&self) -> Option<(String, String)> {
+        (self.primary)()
+    }
+}
+
 pub struct SystemInfo {
     source: DynInfoSource,
     cache: Mutex<Cache>,
@@ -139,6 +184,82 @@ mod tests {
     fn rig(first: FakeSource) -> (SystemInfo, Arc<StdMutex<FakeSource>>) {
         let files = Arc::new(StdMutex::new(first));
         (SystemInfo::new(Box::new(Shared(files.clone()))), files)
+    }
+
+    /// Two dongles in sysfs, `hci0` first; the service's primary adapter is the second.
+    fn two_dongles() -> FakeSource {
+        let dev0 = "/sys/devices/pci0000:00/0000:00:14.0/usb1/1-3";
+        let dev1 = "/sys/devices/pci0000:00/0000:00:14.0/usb1/1-10";
+        FakeSource::new()
+            .link(
+                "/sys/class/bluetooth/hci0",
+                &format!("{dev0}/1-3:1.0/bluetooth/hci0"),
+            )
+            .file(
+                &format!("{dev0}/idVendor"),
+                "0a12
+",
+            )
+            .file(
+                &format!("{dev0}/idProduct"),
+                "0001
+",
+            )
+            .file(
+                &format!("{dev0}/product"),
+                "CSR8510 A10
+",
+            )
+            .dir(&format!("{dev0}/1-3:1.0/bluetooth/hci0"))
+            .link(
+                "/sys/class/bluetooth/hci1",
+                &format!("{dev1}/1-10:1.0/bluetooth/hci1"),
+            )
+            .file(
+                &format!("{dev1}/idVendor"),
+                "8087
+",
+            )
+            .file(
+                &format!("{dev1}/idProduct"),
+                "0a2b
+",
+            )
+            .file(
+                &format!("{dev1}/product"),
+                "Intel Wireless
+",
+            )
+            .dir(&format!("{dev1}/1-10:1.0/bluetooth/hci1"))
+            .command(
+                "bluetoothctl show",
+                "Controller 00:11:22:33:44:00 (public)
+",
+            )
+    }
+
+    #[test]
+    fn sysinfo_reports_the_primary_adapter() {
+        use crate::bluetooth::{Bluetooth, FakeBluez};
+        // The Dell's two adapters: `hci1` holds the paired pads, so it is the primary one.
+        let bt = Arc::new(Bluetooth::new(FakeBluez::with_two_adapters()));
+        bt.refresh().expect("fake reads");
+        let ask = bt.clone();
+        let source = WithPrimaryAdapter::new(
+            Box::new(two_dongles()),
+            Box::new(move || ask.primary_adapter()),
+        );
+        let info = SystemInfo::new(Box::new(source)).current(Instant::now());
+        assert_eq!(info.get_text("bluetooth.usb_id"), Some("8087:0a2b"));
+        assert_eq!(info.get_text("bluetooth.chipset"), Some("Intel Wireless"));
+        assert_eq!(
+            info.get_text("bluetooth.address"),
+            Some("00:11:22:33:44:01"),
+            "the primary adapter's own address, not bluetoothctl's default controller"
+        );
+        // Without the service's answer the first adapter in sysfs is taken, as before.
+        let info = SystemInfo::new(Box::new(two_dongles())).current(Instant::now());
+        assert_eq!(info.get_text("bluetooth.usb_id"), Some("0a12:0001"));
     }
 
     #[test]

@@ -84,6 +84,24 @@ QtObject {
         return plain(name)
     }
 
+    // What to call a device in the battery chips and in "More devices" (T-359): the alias of the Bluetooth
+    // device with the address the service gave (the name the user chose, with the end of its address
+    // when another device has the same name, like the Bluetooth pane), else the name UPower gave, with
+    // the end of its address when another battery of the same name has one. A battery without an address
+    // (a wired pad) keeps its name.
+    function batteryName(d) {
+        const address = String(d.address ?? "")
+        if (address === "")
+            return plain(d.name)
+        const wanted = address.toLowerCase()
+        const paired = Bluetooth.devices.find(x => x.id.toLowerCase() === wanted)
+        if (paired)
+            return shownName(Bluetooth.devices, paired)
+        const withAddress = Batteries.devices.filter(x => String(x.address ?? "") !== "")
+                                    .map(x => ({ id: x.address, name: x.name }))
+        return shownName(withAddress, { id: address, name: d.name })
+    }
+
     // The kind in words, for a screen reader and for text ("PlayStation controller", "Headset").
     function kindText(kind, family) {
         switch (kind) {

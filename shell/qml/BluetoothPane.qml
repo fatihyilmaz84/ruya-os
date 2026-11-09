@@ -97,10 +97,12 @@ SettingsPane {
         forgetConfirm.open("custom")
     }
 
-    function askRename(id, name) {
+    // `shown`: the name the row shows (two like pads are told apart by the end of the address), the
+    // keyboard's title; `name` is the pad's alias, what the field starts with.
+    function askRename(id, name, shown) {
         pane.renameId = id
         renameSlot.active = true
-        renameEntry.open(qsTr("Controller name"), name, { maxLength: 48, layout: "text" })
+        renameEntry.open(shown, name, { maxLength: 48, layout: "text" })
     }
 
     // The words for a failed operation: the one mapping the pairing screen shares (T-301).
@@ -370,7 +372,7 @@ SettingsPane {
             visible: paired && kind === "controller" && Bluetooth.powered
             u: pane.u
             label: qsTr("Rename %1").arg(shown)
-            onActivated: pane.askRename(devId, name)
+            onActivated: pane.askRename(devId, name, shown)
         }
     }
 

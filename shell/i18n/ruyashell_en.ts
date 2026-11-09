@@ -676,13 +676,13 @@ This can&apos;t be undone.</translation>
     <name>BatteryListModal</name>
     <message>
         <location filename="../qml/BatteryListModal.qml" line="+20"/>
-        <location line="+110"/>
+        <location line="+111"/>
         <location line="+10"/>
         <source>Close</source>
         <translation>Close</translation>
     </message>
     <message>
-        <location line="-120"/>
+        <location line="-121"/>
         <source>Back</source>
         <translation>Back</translation>
     </message>
@@ -729,12 +729,7 @@ This can&apos;t be undone.</translation>
         <translation>It will have to be paired again to be used.</translation>
     </message>
     <message>
-        <location line="+9"/>
-        <source>Controller name</source>
-        <translation>Controller name</translation>
-    </message>
-    <message>
-        <location line="+102"/>
+        <location line="+113"/>
         <source>Bluetooth is off.</source>
         <translation>Bluetooth is off.</translation>
     </message>
@@ -839,8 +834,8 @@ This can&apos;t be undone.</translation>
         <translation>Scanning…</translation>
     </message>
     <message>
-        <location line="-159"/>
-        <location line="+291"/>
+        <location line="-161"/>
+        <location line="+293"/>
         <source>Forget %1</source>
         <translation>Forget %1</translation>
     </message>
@@ -1002,7 +997,7 @@ This can&apos;t be undone.</translation>
         <translation>Select</translation>
     </message>
     <message>
-        <location line="+157"/>
+        <location line="+158"/>
         <location line="+54"/>
         <source>Try your controller</source>
         <translation>Try your controller</translation>
@@ -1184,7 +1179,7 @@ This can&apos;t be undone.</translation>
         <translation>%1 (%2)</translation>
     </message>
     <message>
-        <location line="+21"/>
+        <location line="+39"/>
         <source>PlayStation controller</source>
         <translation>PlayStation controller</translation>
     </message>
@@ -2576,12 +2571,12 @@ This can&apos;t be undone.</translation>
         <translation>power off</translation>
     </message>
     <message>
-        <location line="+981"/>
+        <location line="+985"/>
         <source>Power</source>
         <translation>Power</translation>
     </message>
     <message>
-        <location line="-964"/>
+        <location line="-968"/>
         <source>Update ready. Restart to finish.</source>
         <translation>Update ready. Restart to finish.</translation>
     </message>
@@ -2606,12 +2601,12 @@ This can&apos;t be undone.</translation>
         <translation>The screen did not answer, so the previous resolution is back.</translation>
     </message>
     <message>
-        <location line="+48"/>
+        <location line="+49"/>
         <source>Wallpaper could not be loaded</source>
         <translation>Wallpaper could not be loaded</translation>
     </message>
     <message>
-        <location line="+309"/>
+        <location line="+312"/>
         <source>Continue playing</source>
         <translation>Continue playing</translation>
     </message>
