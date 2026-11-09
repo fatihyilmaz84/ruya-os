@@ -67,6 +67,8 @@ Image builds and VM disks are big (an image is ~4.7 GB, a qcow2 ~2.6 GB), and th
 
 In the VM, the shell's own log is `journalctl -b _UID=$(id -u ruya-shell)`. pam_systemd moves the compositor into `session-N.scope`, so `journalctl -u ruya-compositor@tty1` shows only the unit's start.
 
+**Page-open timings (T-349).** Every page open writes `ruya-shell: page-open <key> create=<ms> firstSwap=<ms> afterAnim=<ms> frames=<n> maxFrame=<ms>` to that log (always on; `PageProbe`, meaning in [02 §1](specs/02-shell.md)); `journalctl -b -o cat _UID=$(id -u ruya-shell) | grep page-open` lists them. `scripts/page-open-bench.py` (root, on the console: the Dell; copy it with scp) presses the keys itself through a throw-away uinput keyboard and prints, per scenario (Home to Settings, Store to Settings, Store to Games), the first run and the median, 90th percentile and maximum of the others: `python3 page-open-bench.py --runs 10 --label "<version> <tier>"`, with the shell signed in on Home. The effects tier is switched by hand in Settings between two runs. For Qt's own per-frame render times add `Environment=QSG_RENDER_TIMING=1` in a drop-in (`systemctl edit ruya-compositor@tty1`), restart the unit, and pass `--raw`; remove the drop-in afterwards.
+
 The history of a Bluetooth pad (window, pairing, trust, removal with its reason, connect and disconnect with who asked, `link` drops, idle disconnects) is in the Devices service's journal: `journalctl -b -t ruya-devices | grep -E 'window|paired|remove|connect|link|idle'` as root, or `journalctl --user-unit ruya-devices` as `ruya-shell` (T-335, [03 §2.1](specs/03-services-and-apps.md)).
 
 ### Adding an icon (T-157)

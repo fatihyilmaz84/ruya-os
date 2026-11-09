@@ -21,7 +21,10 @@ SettingsPane {
     readonly property string myRole: me.role ?? ""
     readonly property bool isAdmin: myRole === "admin"
 
-    readonly property PinPad pad: padItem
+    // The modals (PIN pad, delete confirmation, name keyboard) are built on the first modal this
+    // pane opens (beginModal, T-349), all three at once: the flows use them together.
+    property bool modalsBuilt: false
+    readonly property PinPad pad: padSlot.item as PinPad
     readonly property ProfileManageFlow manageFlow: flow
 
     property string message: ""
@@ -47,6 +50,7 @@ SettingsPane {
 
     function beginModal() {
         returnTo = Window.activeFocusItem
+        modalsBuilt = true
     }
     function restoreFocus() {
         const target = returnTo
@@ -72,40 +76,56 @@ SettingsPane {
         flow.startRename(Profiles.activeProfile, me.hasPin ?? false, id, name)
     }
 
-    PinPad {
-        id: padItem
-        objectName: pane.namePrefix + "PinPad"
+    // Each modal sits in a Loader on the overlay, which sizes it (T-349, shell/PATTERNS.md).
+    Loader {
+        id: padSlot
         parent: pane.overlay
         width: parent ? parent.width : 0
         height: parent ? parent.height : 0
-        u: pane.u
-        onClosed: pane.restoreFocus()
+        active: pane.modalsBuilt
+        sourceComponent: Component {
+            PinPad {
+                objectName: pane.namePrefix + "PinPad"
+                u: pane.u
+                onClosed: pane.restoreFocus()
+            }
+        }
     }
 
-    PowerConfirm {
-        id: deleteConfirm
-        objectName: pane.namePrefix + "DeleteConfirm"
+    Loader {
+        id: confirmSlot
         parent: pane.overlay
         width: parent ? parent.width : 0
         height: parent ? parent.height : 0
-        u: pane.u
-        onClosed: pane.restoreFocus()
+        active: pane.modalsBuilt
+        sourceComponent: Component {
+            PowerConfirm {
+                objectName: pane.namePrefix + "DeleteConfirm"
+                u: pane.u
+                onClosed: pane.restoreFocus()
+            }
+        }
     }
 
-    TextEntry {
-        id: renameEntry
-        objectName: pane.namePrefix + "RenameEntry"
+    Loader {
+        id: entrySlot
         parent: pane.overlay
         width: parent ? parent.width : 0
         height: parent ? parent.height : 0
-        u: pane.u
+        active: pane.modalsBuilt
+        sourceComponent: Component {
+            TextEntry {
+                objectName: pane.namePrefix + "RenameEntry"
+                u: pane.u
+            }
+        }
     }
 
     ProfileManageFlow {
         id: flow
-        pad: padItem
-        entry: renameEntry
-        confirm: deleteConfirm
+        pad: pane.pad
+        entry: entrySlot.item as TextEntry
+        confirm: confirmSlot.item as PowerConfirm
         onAborted: pane.restoreFocus()
     }
 }

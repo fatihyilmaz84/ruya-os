@@ -441,7 +441,7 @@ Item {
             openAddForm()
             goToRow("rowCreate")
             keyClick(Qt.Key_Return)
-            verify(!find("profilesPinPad").shown, "no PIN is asked without a name")
+            compare(find("profilesPinPad"), null, "no PIN is asked without a name (the pad is not even built, T-349)")
             compare(find("profilesMessage").text, "Enter a name first.")
         }
 
@@ -489,7 +489,7 @@ Item {
             compare(findChild(find("rowChangePin"), "label").text, "Change my PIN")
             verify(!find("rowRemovePin").visible, "an admin keeps a PIN")
             verify(find("category_profiles") !== null, "an admin sees Manage profiles")
-            verify(!find("paneProfiles").visible, "and it is another category")
+            compare(find("paneProfiles"), null, "and it is another category (not built until it is selected, T-349)")
             verify(find("rowAdd") === null || !find("rowAdd").visible, "Add profile is not in My profile")
         }
 
@@ -717,6 +717,9 @@ Item {
             keyClick(Qt.Key_Down)
             // Manage profiles: the list, Add profile; Rename / Delete only for a selected other profile.
             compare(rowNames(find("paneProfiles")), ["profileRow_p1", "profileRow_p2", "profileRow_p3", "rowAdd"])
+            compare(find("paneMyProfile").pad, null, "the modals are built on the first one opened (T-349)")
+            find("paneMyProfile").modalsBuilt = true
+            find("paneProfiles").modalsBuilt = true
             compare(find("paneMyProfile").pad.objectName, "myProfilePinPad")
             compare(find("paneProfiles").pad.objectName, "profilesPinPad")
         }
@@ -747,8 +750,7 @@ Item {
             openSettingsList()
             const list = find("categoryList")
             for (let i = 0; i < list.count; ++i) {      // the last Down is clamped
-                verify(!find("paneProfiles").visible, "Manage profiles never shows (index " + list.currentIndex + ")")
-                verify(!find("paneProfiles").activeFocus)
+                compare(find("paneProfiles"), null, "Manage profiles is never built (index " + list.currentIndex + ")")
                 verify(list.currentItem.objectName !== "category_profiles")
                 keyClick(Qt.Key_Down)
             }
@@ -757,7 +759,7 @@ Item {
                 keyClick(Qt.Key_Up)
             compare(list.currentIndex, 0)
             keyClick(Qt.Key_Right)
-            verify(!find("paneProfiles").activeFocus)
+            compare(find("paneProfiles"), null)
             tryVerify(() => find("paneMyProfile").activeFocus, 2000, "Right enters My profile")
             keyClick(Qt.Key_Escape)
             tryVerify(() => list.activeFocus)

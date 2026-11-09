@@ -418,6 +418,9 @@ Item {
         function test_status_text_single_mapping() {
             openBluetoothPane()
             const pane = find("paneBluetooth")
+            goTo("rowBtPairController")                  // the pairing screen is built when it first opens (T-349)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("controllerOnboarding") !== null && find("controllerOnboarding").shown, 2000)
             const onb = find("controllerOnboarding")
             verify(pane !== null && onb !== null)
             const words = {

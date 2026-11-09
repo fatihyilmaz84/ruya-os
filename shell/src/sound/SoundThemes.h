@@ -141,6 +141,8 @@ public:
     // import take this long (ms) on its worker. mockReset deletes the copies.
     Q_INVOKABLE QString mockPrepareDrive();
     Q_INVOKABLE void mockSetCopyDelay(int ms);
+    // How many times refresh() was called (T-349); 0 off the mock.
+    Q_INVOKABLE int mockRefreshCalls() const { return m_mock ? m_refreshCalls : 0; }
     // Adds a usable theme folder to the mock stick (after mockPrepareDrive) with exactly `files` files and
     // `bytes` bytes in all, to try the copy limits; false when it cannot be made that way.
     Q_INVOKABLE bool mockAddDriveTheme(const QString &folder, int files, qint64 bytes);
@@ -184,6 +186,7 @@ private:
     bool m_importing = false;
     quint64 m_scanSerial = 0;
     int m_copyDelayMs = 0;
+    int m_refreshCalls = 0;
     std::unique_ptr<QTemporaryDir> m_mockDrive;
     std::unique_ptr<QTemporaryDir> m_fixtures;
 };

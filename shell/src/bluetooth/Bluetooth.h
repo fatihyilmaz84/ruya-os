@@ -90,6 +90,8 @@ public:
     // since the last reset.
     Q_INVOKABLE void mockHoldPairing(bool hold);
     Q_INVOKABLE int mockPairCalls() const;
+    // How many times the backend was asked for the state and the devices (T-349).
+    Q_INVOKABLE int mockRefreshCalls() const;
     // How the window ends ("wait", "success", "timeout", "rejected"); whether an input device is
     // present; how many times the window was started.
     Q_INVOKABLE void mockPairingScript(const QString &outcome);

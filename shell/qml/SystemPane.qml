@@ -165,6 +165,7 @@ SettingsPane {
         message = ""
         if (updateState === "staged") {
             beginModal()
+            restartSlot.active = true
             restartConfirm.open("restart")
         } else if (updateState === "idle" && Update.available.length > 0) {
             Update.download()
@@ -200,6 +201,7 @@ SettingsPane {
         report("", false)
         beginModal()
         rollbackStep = "pin"
+        padSlot.active = true
         pad.collect(qsTr("Enter your PIN"), false)
     }
 
@@ -208,56 +210,75 @@ SettingsPane {
         restoreFocus()
     }
 
-    PinPad {
-        id: pad
-        objectName: "updatePinPad"
+    // The PIN pad, the confirmations and the time zone picker are built when each first opens (T-349).
+    Loader {
+        id: padSlot
         parent: pane.overlay
         width: parent ? parent.width : 0
         height: parent ? parent.height : 0
-        u: pane.u
-        onCollected: pin => {
-            if (pane.rollbackStep === "pin") {
-                pane.rollbackStep = "working"
-                Profiles.verifyAdmin(Profiles.activeProfile, pin)
+        active: false
+        sourceComponent: Component {
+            PinPad {
+                objectName: "updatePinPad"
+                u: pane.u
+                onCollected: pin => {
+                    if (pane.rollbackStep === "pin") {
+                        pane.rollbackStep = "working"
+                        Profiles.verifyAdmin(Profiles.activeProfile, pin)
+                    }
+                }
+                onCancelled: if (pane.rollbackStep === "pin") pane.abortRollback()
+                onClosed: if (pane.rollbackStep === "idle") pane.restoreFocus()
             }
         }
-        onCancelled: if (pane.rollbackStep === "pin") pane.abortRollback()
-        onClosed: if (pane.rollbackStep === "idle") pane.restoreFocus()
     }
+    readonly property PinPad pad: padSlot.item as PinPad
 
-    PowerConfirm {
-        id: restartConfirm
-        objectName: "updateRestartConfirm"
+    Loader {
+        id: restartSlot
         parent: pane.overlay
         width: parent ? parent.width : 0
         height: parent ? parent.height : 0
-        u: pane.u
-        onClosed: pane.restoreFocus()
-    }
-
-    PowerConfirm {
-        id: rollbackConfirm
-        objectName: "updateRollbackConfirm"
-        parent: pane.overlay
-        width: parent ? parent.width : 0
-        height: parent ? parent.height : 0
-        u: pane.u
-        onConfirmed: {
-            if (pane.rollbackStep === "confirm") {
-                pane.rollbackStep = "working"
-                Update.rollback()
+        active: false
+        sourceComponent: Component {
+            PowerConfirm {
+                objectName: "updateRestartConfirm"
+                u: pane.u
+                onClosed: pane.restoreFocus()
             }
         }
-        onClosed: {
-            // Cancel and Back close without confirmed(); Confirm emits it after closed().
-            Qt.callLater(() => {
-                if (pane.rollbackStep === "confirm")
-                    pane.abortRollback()
-                else
-                    pane.restoreFocus()
-            })
+    }
+    readonly property PowerConfirm restartConfirm: restartSlot.item as PowerConfirm
+
+    Loader {
+        id: rollbackSlot
+        parent: pane.overlay
+        width: parent ? parent.width : 0
+        height: parent ? parent.height : 0
+        active: false
+        sourceComponent: Component {
+            PowerConfirm {
+                objectName: "updateRollbackConfirm"
+                u: pane.u
+                onConfirmed: {
+                    if (pane.rollbackStep === "confirm") {
+                        pane.rollbackStep = "working"
+                        Update.rollback()
+                    }
+                }
+                onClosed: {
+                    // Cancel and Back close without confirmed(); Confirm emits it after closed().
+                    Qt.callLater(() => {
+                        if (pane.rollbackStep === "confirm")
+                            pane.abortRollback()
+                        else
+                            pane.restoreFocus()
+                    })
+                }
+            }
         }
     }
+    readonly property PowerConfirm rollbackConfirm: rollbackSlot.item as PowerConfirm
 
     Connections {
         target: Profiles
@@ -267,10 +288,11 @@ SettingsPane {
                 return
             if (status === "ok") {
                 pane.rollbackStep = "confirm"
-                rollbackConfirm.customTitle = qsTr("Roll back to the previous version?")
-                rollbackConfirm.detail = qsTr("The console starts the previous version the next time it restarts.")
-                rollbackConfirm.customConfirmName = qsTr("Roll back now")
-                rollbackConfirm.open("custom")
+                rollbackSlot.active = true
+                pane.rollbackConfirm.customTitle = qsTr("Roll back to the previous version?")
+                pane.rollbackConfirm.detail = qsTr("The console starts the previous version the next time it restarts.")
+                pane.rollbackConfirm.customConfirmName = qsTr("Roll back now")
+                pane.rollbackConfirm.open("custom")
             } else {
                 Sfx.error()
                 pane.rollbackStep = "idle"
@@ -334,7 +356,10 @@ SettingsPane {
         visible: pane.isAdmin
         label: qsTr("Time zone")
         value: TimeZone.timezone.replace(/_/g, " ")
-        onActivated: zonePicker.open()
+        onActivated: {
+            zoneSlot.active = true
+            pane.zonePicker.open()
+        }
     }
 
     Text {
@@ -347,18 +372,24 @@ SettingsPane {
         wrapMode: Text.Wrap
     }
 
-    ZonePicker {
-        id: zonePicker
-        objectName: "zonePicker"
+    Loader {
+        id: zoneSlot
         parent: pane.overlay
         width: parent ? parent.width : 0
         height: parent ? parent.height : 0
-        u: pane.u
-        onRequested: zone => {
-            pane.zoneAsked = true
-            TimeZone.setTimezone(zone)
+        active: false
+        sourceComponent: Component {
+            ZonePicker {
+                objectName: "zonePicker"
+                u: pane.u
+                onRequested: zone => {
+                    pane.zoneAsked = true
+                    TimeZone.setTimezone(zone)
+                }
+            }
         }
     }
+    readonly property ZonePicker zonePicker: zoneSlot.item as ZonePicker
 
     Connections {
         target: TimeZone

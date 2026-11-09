@@ -38,6 +38,17 @@ Item {
     readonly property alias shadow: glassShadow
     // How many times the backdrop was captured (a test checks it is once per opening).
     property int bakeCount: 0
+    // The crop and the mask hold a texture only from an opening until the sheet is hidden again
+    // (its modal has faded out), so a closed or never opened modal keeps no FBO and L0 is not
+    // rendered into a layer for it (T-349). Set on the rising edge of `shown`; cleared once the
+    // sheet is closed and no longer visible (the blur stays during the fade-out).
+    property bool engaged: false
+    readonly property alias backdropCrop: crop
+
+    function release() {
+        if (!sheet.shown && !sheet.visible)
+            sheet.engaged = false
+    }
 
     // The nearest ancestor that offers an L0 layer (the Shell's modal layer).
     function lookupSource() {
@@ -62,7 +73,15 @@ Item {
         sheet.bakeCount += 1
     }
 
-    onShownChanged: if (shown) Qt.callLater(bake)           // after the owner has sized the sheet for this opening
+    onShownChanged: {
+        if (shown) {
+            engaged = true
+            Qt.callLater(bake)                              // after the owner has sized the sheet for this opening
+        } else {
+            release()
+        }
+    }
+    onVisibleChanged: release()
     onWidthChanged: if (shown) Qt.callLater(bake)
     onHeightChanged: if (shown) Qt.callLater(bake)
     Component.onCompleted: if (!source) source = lookupSource()
@@ -80,15 +99,16 @@ Item {
         id: crop
         visible: false
         live: false
-        sourceItem: sheet.blurred ? sheet.source : null
+        sourceItem: sheet.engaged && sheet.blurred ? sheet.source : null
         textureSize: Qt.size(Math.max(1, sheet.width / 4), Math.max(1, sheet.height / 4))
     }
     Rectangle {
         id: mask
+        objectName: "glassSheetMask"
         anchors.fill: parent
         radius: sheet.radius
         visible: false
-        layer.enabled: sheet.blurred
+        layer.enabled: sheet.engaged && sheet.blurred
         layer.smooth: true
     }
     SmoothMask {

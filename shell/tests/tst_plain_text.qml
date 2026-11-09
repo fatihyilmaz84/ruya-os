@@ -146,6 +146,14 @@ Item {
             tryVerify(() => find("categoryList") !== null && find("categoryList").activeFocus, 2000, "category list has focus")
         }
 
+        // Down the category list to `key`: a pane is built when its category is first selected (T-349).
+        function selectCategory(key) {
+            const list = find("categoryList")
+            for (let i = 0; i < 12 && list.currentItem.objectName !== "category_" + key; ++i)
+                keyClick(Qt.Key_Down)
+            compare(list.currentItem.objectName, "category_" + key)
+        }
+
         function renameBoth() {
             Profiles.renameProfile("p1", "1234", "p1", tc.hostileProfile)
             Profiles.renameProfile("p1", "1234", "p2", tc.hostileProfile + "!")
@@ -215,6 +223,7 @@ Item {
             tryVerify(() => find("toastText") !== null && textsWith(find("toastText"), tc.hostile).length > 0, 4000, "the pad's toast")
             expectPlain(tc.shell, tc.hostile, 1, "pad toast", ["toastText"])
             openSettings()
+            selectCategory("bluetooth")
             tryVerify(() => find("btDev_bt-pad-old") !== null, 3000, "the device row")
             expectPlain(find("btDev_bt-pad-old"), tc.hostile, 1, "Bluetooth device row", ["label"])
         }
@@ -241,6 +250,7 @@ Item {
             Storage.mockPlugStick()
             tryVerify(() => Storage.volumes.some(v => v.id === "vol-stick"), 3000)
             openSettings()
+            selectCategory("storage")
             tryVerify(() => find("paneStorage") !== null)
             expectPlain(find("paneStorage"), tc.hostile, 2, "Settings -> Storage", ["label"])
             tryVerify(() => Notifications.model.count > 0, 4000, "a toast announces the stick")
@@ -265,6 +275,7 @@ Item {
             Network.mockSetCable(false)                  // Wi-Fi is now the primary connection
             tryCompare(Network.primary, "name", tc.hostile)
             openSettings()
+            selectCategory("network")
             tryVerify(() => find("paneNetwork") !== null)
             expectPlain(find("paneNetwork"), tc.hostile, 3, "Settings -> Network", ["label"])
         }

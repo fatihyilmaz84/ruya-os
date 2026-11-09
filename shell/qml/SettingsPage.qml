@@ -5,7 +5,8 @@ import RuyaShell
 // Two panes: categories on the left, the selected category's options on the right.
 // Up/Down choose a category, Right/Accept enters its pane, Left/Back returns to the list,
 // and Back on the list closes the page (Page.qml). Categories without content show
-// "Coming soon". Panes stay alive (shown/hidden), so each remembers its last focused row.
+// "Coming soon". A pane is built the first time its category is selected (T-349: Settings opens
+// with one pane, not ten) and then stays alive (shown/hidden), so it remembers its last focused row.
 Page {
     id: page
 
@@ -59,16 +60,19 @@ Page {
         return key
     }
     readonly property var current: categories[categoryList.currentIndex] ?? categories[0]
-    readonly property SettingsPane currentPane: current.key === "myprofile" ? myProfilePane
-                                              : current.key === "profiles" ? manageProfilesPane
-                                              : current.key === "display" ? displayPane
-                                              : current.key === "network" ? networkPane
-                                              : current.key === "bluetooth" ? bluetoothPane
-                                              : current.key === "audio" ? audioPane
-                                              : current.key === "storage" ? storagePane
-                                              : current.key === "power" ? powerPane
-                                              : current.key === "system" ? systemPane
-                                              : current.key === "about" ? aboutPane : null
+    // The panes are built only once the opening category is known (Component.onCompleted), so
+    // `params.category` builds that pane and not My profile first.
+    property bool ready: false
+    readonly property SettingsPane currentPane: (current.key === "myprofile" ? myProfileSlot.item
+                                               : current.key === "profiles" ? manageProfilesSlot.item
+                                               : current.key === "display" ? displaySlot.item
+                                               : current.key === "network" ? networkSlot.item
+                                               : current.key === "bluetooth" ? bluetoothSlot.item
+                                               : current.key === "audio" ? audioSlot.item
+                                               : current.key === "storage" ? storageSlot.item
+                                               : current.key === "power" ? powerSlot.item
+                                               : current.key === "system" ? systemSlot.item
+                                               : current.key === "about" ? aboutSlot.item : null) as SettingsPane
 
     // The focused pane says which hints it shows (SettingsPane.hints); the category list and a
     // category without a pane yet (A does nothing there) have their own.
@@ -86,6 +90,7 @@ Page {
             if (categories[i].key === wanted)
                 categoryList.currentIndex = i
         }
+        ready = true
     }
 
     function enterPane() {
@@ -96,6 +101,27 @@ Page {
     }
     function leavePane() {
         categoryList.forceActiveFocus()
+    }
+
+    // One slot per pane (T-349): the pane is built when its category is first selected and is then
+    // kept (latched), hidden while another category is selected. The slot fills the pane area and the
+    // pane fills the slot (by anchors, as before: a test squeezes a pane through them); the pane
+    // reads as visible and enabled only while it is selected. A pane built after the page opened
+    // lays its rows out at once (SettingsPane.reflow: a Column filled late was seen unlaid in a
+    // real window until the next repaint, T-226).
+    component PaneSlot: Loader {
+        property bool selected: false
+        property bool built: false
+        anchors.fill: parent
+        active: selected || built
+        visible: selected
+        enabled: selected
+        onLoaded: {
+            built = true
+            const pane = item as SettingsPane
+            if (pane)
+                pane.reflow()
+        }
     }
 
     ListView {
@@ -186,105 +212,135 @@ Page {
         id: paneArea
         anchors { left: categoryList.right; leftMargin: Theme.spaceXxl * page.u; right: parent.right; top: parent.top; bottom: parent.bottom }
 
-        MyProfilePane {
-            id: myProfilePane
-            objectName: "paneMyProfile"
-            anchors.fill: parent
-            u: page.u
-            overlay: page.overlay
-            visible: page.current.key === "myprofile"
-            enabled: visible
-            onExitRequested: page.leavePane()
-            onActivityRequested: page.openRequested("activity", ({}))
+        PaneSlot {
+            id: myProfileSlot
+            selected: page.ready && page.current.key === "myprofile"
+            sourceComponent: Component {
+                MyProfilePane {
+                    objectName: "paneMyProfile"
+                    anchors.fill: parent
+                    u: page.u
+                    overlay: page.overlay
+                    onExitRequested: page.leavePane()
+                    onActivityRequested: page.openRequested("activity", ({}))
+                }
+            }
         }
-        ManageProfilesPane {
-            id: manageProfilesPane
-            objectName: "paneProfiles"
-            anchors.fill: parent
-            u: page.u
-            overlay: page.overlay
-            visible: page.current.key === "profiles"
-            enabled: visible
-            onExitRequested: page.leavePane()
+        PaneSlot {
+            id: manageProfilesSlot
+            selected: page.ready && page.current.key === "profiles"
+            sourceComponent: Component {
+                ManageProfilesPane {
+                    objectName: "paneProfiles"
+                    anchors.fill: parent
+                    u: page.u
+                    overlay: page.overlay
+                    onExitRequested: page.leavePane()
+                }
+            }
         }
-        DisplayPane {
-            id: displayPane
-            objectName: "paneDisplay"
-            anchors.fill: parent
-            u: page.u
-            overlay: page.overlay
-            visible: page.current.key === "display"
-            enabled: visible
-            onExitRequested: page.leavePane()
+        PaneSlot {
+            id: displaySlot
+            selected: page.ready && page.current.key === "display"
+            sourceComponent: Component {
+                DisplayPane {
+                    objectName: "paneDisplay"
+                    anchors.fill: parent
+                    u: page.u
+                    overlay: page.overlay
+                    onExitRequested: page.leavePane()
+                }
+            }
         }
-        NetworkPane {
-            id: networkPane
-            objectName: "paneNetwork"
-            anchors.fill: parent
-            u: page.u
-            overlay: page.overlay
-            visible: page.current.key === "network"
-            enabled: visible
-            onExitRequested: page.leavePane()
+        PaneSlot {
+            id: networkSlot
+            selected: page.ready && page.current.key === "network"
+            sourceComponent: Component {
+                NetworkPane {
+                    objectName: "paneNetwork"
+                    anchors.fill: parent
+                    u: page.u
+                    overlay: page.overlay
+                    onExitRequested: page.leavePane()
+                }
+            }
         }
-        BluetoothPane {
-            id: bluetoothPane
-            objectName: "paneBluetooth"
-            anchors.fill: parent
-            u: page.u
-            overlay: page.overlay
-            visible: page.current.key === "bluetooth"
-            enabled: visible
-            onExitRequested: page.leavePane()
+        PaneSlot {
+            id: bluetoothSlot
+            selected: page.ready && page.current.key === "bluetooth"
+            sourceComponent: Component {
+                BluetoothPane {
+                    objectName: "paneBluetooth"
+                    anchors.fill: parent
+                    u: page.u
+                    overlay: page.overlay
+                    onExitRequested: page.leavePane()
+                }
+            }
         }
-        AudioPane {
-            id: audioPane
-            objectName: "paneAudio"
-            anchors.fill: parent
-            u: page.u
-            overlay: page.overlay
-            visible: page.current.key === "audio"
-            enabled: visible
-            onExitRequested: page.leavePane()
+        PaneSlot {
+            id: audioSlot
+            selected: page.ready && page.current.key === "audio"
+            sourceComponent: Component {
+                AudioPane {
+                    objectName: "paneAudio"
+                    anchors.fill: parent
+                    u: page.u
+                    overlay: page.overlay
+                    onExitRequested: page.leavePane()
+                }
+            }
         }
-        StoragePane {
-            id: storagePane
-            objectName: "paneStorage"
-            anchors.fill: parent
-            u: page.u
-            visible: page.current.key === "storage"
-            enabled: visible
-            onExitRequested: page.leavePane()
+        PaneSlot {
+            id: storageSlot
+            selected: page.ready && page.current.key === "storage"
+            sourceComponent: Component {
+                StoragePane {
+                    objectName: "paneStorage"
+                    anchors.fill: parent
+                    u: page.u
+                    onExitRequested: page.leavePane()
+                }
+            }
         }
-        PowerSavingPane {
-            id: powerPane
-            objectName: "panePower"
-            anchors.fill: parent
-            u: page.u
-            visible: page.current.key === "power"
-            enabled: visible
-            onExitRequested: page.leavePane()
+        PaneSlot {
+            id: powerSlot
+            selected: page.ready && page.current.key === "power"
+            sourceComponent: Component {
+                PowerSavingPane {
+                    objectName: "panePower"
+                    anchors.fill: parent
+                    u: page.u
+                    onExitRequested: page.leavePane()
+                }
+            }
         }
-        SystemPane {
-            id: systemPane
-            objectName: "paneSystem"
-            anchors.fill: parent
-            u: page.u
-            overlay: page.overlay
-            visible: page.current.key === "system"
-            enabled: visible
-            onExitRequested: page.leavePane()
+        PaneSlot {
+            id: systemSlot
+            selected: page.ready && page.current.key === "system"
+            sourceComponent: Component {
+                SystemPane {
+                    objectName: "paneSystem"
+                    anchors.fill: parent
+                    u: page.u
+                    overlay: page.overlay
+                    onExitRequested: page.leavePane()
+                }
+            }
         }
-        AboutPane {
-            id: aboutPane
-            objectName: "paneAbout"
-            anchors.fill: parent
-            u: page.u
-            version: page.version
-            visible: page.current.key === "about"
-            enabled: visible
-            onExitRequested: page.leavePane()
-            onSystemInfoRequested: page.openRequested("systemInfo", ({}))
+        PaneSlot {
+            id: aboutSlot
+            selected: page.ready && page.current.key === "about"
+            sourceComponent: Component {
+                AboutPane {
+                    objectName: "paneAbout"
+                    anchors.fill: parent
+                    u: page.u
+                    version: page.version
+                    onExitRequested: page.leavePane()
+                    onSystemInfoRequested: page.openRequested("systemInfo", ({}))
+                }
+            }
         }
         Column {
             objectName: "paneComingSoon"

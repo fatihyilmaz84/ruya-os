@@ -125,7 +125,7 @@ Item {
             selectCategory(tc.displayIndex)
             verify(find("paneDisplay").visible)
             verify(!find("paneComingSoon").visible)
-            verify(!find("paneAbout").visible)
+            compare(find("paneAbout"), null, "About is not built before it is selected (T-349)")
 
             keyClick(Qt.Key_Right)                       // enter the pane
             tryVerify(() => find("rowQuality").activeFocus, 2000, "first row takes focus")

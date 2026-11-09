@@ -51,7 +51,7 @@ SettingsPane {
         const first = sinkRepeater.itemAt(0)
         if (first)
             first.focus = true
-        pane.refreshThemes()
+        Qt.callLater(pane.refreshThemes)     // off the frame that builds the pane (T-349)
     }
 
     // The sound themes on USB drives follow the drives in place, like the outputs, so focus stays on a
@@ -282,29 +282,37 @@ SettingsPane {
         const t = pane.savedTheme
         if (!t)
             return
-        deleteConfirm.pendingId = t.id
+        pane.deletingId = t.id
+        deleteSlot.active = true
         deleteConfirm.customTitle = qsTr("Delete “%1”?").arg(t.name)
         deleteConfirm.detail = qsTr("You can copy it again from a USB drive.")
         deleteConfirm.customConfirmName = qsTr("Delete “%1”").arg(t.name)
         deleteConfirm.open("custom")
     }
-    PowerConfirm {
-        id: deleteConfirm
-        objectName: "soundDeleteConfirm"
+    // The theme the confirmation is for; the confirmation is built when it first opens (T-349).
+    property string deletingId: ""
+    Loader {
+        id: deleteSlot
         parent: pane.overlay
         width: parent ? parent.width : 0
         height: parent ? parent.height : 0
-        u: pane.u
-        property string pendingId: ""
-        onConfirmed: {
-            // The setting first (so nothing holds on to the folder), then the folder; the bundled theme plays,
-            // quietly: no cue and no toast. Focus goes to the Sound theme row, the nearest row that is left.
-            if (DeviceSettings.soundTheme === deleteConfirm.pendingId)
-                DeviceSettings.soundTheme = SoundThemes.bundledId
-            SoundThemes.removeTheme(deleteConfirm.pendingId)
-            themeRow.forceActiveFocus()
+        active: false
+        sourceComponent: Component {
+            PowerConfirm {
+                objectName: "soundDeleteConfirm"
+                u: pane.u
+                onConfirmed: {
+                    // The setting first (so nothing holds on to the folder), then the folder; the bundled theme plays,
+                    // quietly: no cue and no toast. Focus goes to the Sound theme row, the nearest row that is left.
+                    if (DeviceSettings.soundTheme === pane.deletingId)
+                        DeviceSettings.soundTheme = SoundThemes.bundledId
+                    SoundThemes.removeTheme(pane.deletingId)
+                    themeRow.forceActiveFocus()
+                }
+            }
         }
     }
+    readonly property PowerConfirm deleteConfirm: deleteSlot.item as PowerConfirm
 
     Repeater {
         id: driveRepeater

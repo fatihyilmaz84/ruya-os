@@ -423,7 +423,7 @@ This can&apos;t be undone.</translation>
         <translation>Enter an admin&apos;s PIN</translation>
     </message>
     <message>
-        <location line="+169"/>
+        <location line="+177"/>
         <source>Install</source>
         <translation>Install</translation>
     </message>
@@ -581,7 +581,7 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+14"/>
-        <location line="+10"/>
+        <location line="+11"/>
         <source>Delete “%1”</source>
         <translation>Delete “%1”</translation>
     </message>
@@ -596,7 +596,7 @@ This can&apos;t be undone.</translation>
         <translation>You can copy it again from a USB drive.</translation>
     </message>
     <message>
-        <location line="+31"/>
+        <location line="+38"/>
         <source>Use “%1” from the USB drive</source>
         <translation>Use “%1” from the USB drive</translation>
     </message>
@@ -681,7 +681,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>BluetoothPane</name>
     <message>
-        <location filename="../qml/BluetoothPane.qml" line="+88"/>
+        <location filename="../qml/BluetoothPane.qml" line="+93"/>
         <source>Forget %1?</source>
         <translation>Forget %1?</translation>
     </message>
@@ -691,7 +691,7 @@ This can&apos;t be undone.</translation>
         <translation>It will have to be paired again to be used.</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+9"/>
         <source>Controller name</source>
         <translation>Controller name</translation>
     </message>
@@ -726,7 +726,7 @@ This can&apos;t be undone.</translation>
         <translation>Pair a new controller</translation>
     </message>
     <message>
-        <location line="+75"/>
+        <location line="+93"/>
         <source>Pair again %1</source>
         <translation>Pair again %1</translation>
     </message>
@@ -741,7 +741,7 @@ This can&apos;t be undone.</translation>
         <translation>Rename %1</translation>
     </message>
     <message>
-        <location line="-193"/>
+        <location line="-211"/>
         <source>Paired</source>
         <translation>Paired</translation>
     </message>
@@ -801,8 +801,8 @@ This can&apos;t be undone.</translation>
         <translation>Scanning…</translation>
     </message>
     <message>
-        <location line="-158"/>
-        <location line="+272"/>
+        <location line="-159"/>
+        <location line="+291"/>
         <source>Forget %1</source>
         <translation>Forget %1</translation>
     </message>
@@ -1141,7 +1141,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>DeviceIcons</name>
     <message>
-        <location filename="../qml/DeviceIcons.qml" line="+66"/>
+        <location filename="../qml/DeviceIcons.qml" line="+71"/>
         <source>%1 (%2)</source>
         <translation>%1 (%2)</translation>
     </message>
@@ -1204,7 +1204,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>DisplayPane</name>
     <message>
-        <location filename="../qml/DisplayPane.qml" line="+21"/>
+        <location filename="../qml/DisplayPane.qml" line="+38"/>
         <source>Effects quality</source>
         <translation>Effects quality</translation>
     </message>
@@ -1244,7 +1244,7 @@ This can&apos;t be undone.</translation>
         <translation>Wallpaper</translation>
     </message>
     <message>
-        <location line="+22"/>
+        <location line="+25"/>
         <source>Dim wallpaper</source>
         <translation>Dim wallpaper</translation>
     </message>
@@ -1267,18 +1267,18 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+11"/>
-        <location line="+66"/>
+        <location line="+75"/>
         <source>Resolution</source>
         <translation>Resolution</translation>
     </message>
     <message>
-        <location line="-56"/>
-        <location line="+72"/>
+        <location line="-62"/>
+        <location line="+84"/>
         <source>Refresh rate</source>
         <translation>Refresh rate</translation>
     </message>
     <message>
-        <location line="-62"/>
+        <location line="-71"/>
         <source>UI size</source>
         <translation>UI size</translation>
     </message>
@@ -1293,7 +1293,7 @@ This can&apos;t be undone.</translation>
         <translation>Close running games and apps first: changing the screen mode restarts the console.</translation>
     </message>
     <message>
-        <location line="+40"/>
+        <location line="+52"/>
         <location line="+6"/>
         <source>Try again in a minute: the console has just restarted several times.</source>
         <translation>Try again in a minute: the console has just restarted several times.</translation>
@@ -1317,7 +1317,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>DisplayText</name>
     <message>
-        <location filename="../qml/DisplayText.qml" line="+9"/>
+        <location filename="../qml/DisplayText.qml" line="+12"/>
         <source>%1 × %2</source>
         <translation>%1 × %2</translation>
     </message>
@@ -1340,6 +1340,41 @@ This can&apos;t be undone.</translation>
         <location line="+0"/>
         <source>%1 %</source>
         <translation>%1 %</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Default (animated blobs)</source>
+        <translation>Default (animated blobs)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Dusk</source>
+        <translation>Dusk</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Aurora</source>
+        <translation>Aurora</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Ember</source>
+        <translation>Ember</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Lagoon</source>
+        <translation>Lagoon</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Orchid</source>
+        <translation>Orchid</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Daybreak</source>
+        <translation>Daybreak</translation>
     </message>
 </context>
 <context>
@@ -1450,7 +1485,7 @@ This can&apos;t be undone.</translation>
         <translation>Enter a name first.</translation>
     </message>
     <message>
-        <location line="+31"/>
+        <location line="+38"/>
         <source>Profile “%1” created.</source>
         <translation>Profile “%1” created.</translation>
     </message>
@@ -1520,7 +1555,7 @@ This can&apos;t be undone.</translation>
         <translation>Not set</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+4"/>
         <source>Profile name</source>
         <translation>Profile name</translation>
     </message>
@@ -1748,7 +1783,7 @@ This can&apos;t be undone.</translation>
         <translation>%1%</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+9"/>
         <source>Password for %1</source>
         <translation>Password for %1</translation>
     </message>
@@ -2099,7 +2134,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>ProfilePaneBase</name>
     <message>
-        <location filename="../qml/ProfilePaneBase.qml" line="+36"/>
+        <location filename="../qml/ProfilePaneBase.qml" line="+39"/>
         <source>Admin</source>
         <translation>Admin</translation>
     </message>
@@ -2222,13 +2257,13 @@ This can&apos;t be undone.</translation>
 <context>
     <name>SettingsPage</name>
     <message>
-        <location filename="../qml/SettingsPage.qml" line="+12"/>
-        <location line="+93"/>
+        <location filename="../qml/SettingsPage.qml" line="+13"/>
+        <location line="+118"/>
         <source>Settings</source>
         <translation>Settings</translation>
     </message>
     <message>
-        <location line="-58"/>
+        <location line="-83"/>
         <source>My profile</source>
         <translation>My profile</translation>
     </message>
@@ -2283,7 +2318,7 @@ This can&apos;t be undone.</translation>
         <translation>About</translation>
     </message>
     <message>
-        <location line="+18"/>
+        <location line="+21"/>
         <source>Select</source>
         <translation>Select</translation>
     </message>
@@ -2293,7 +2328,7 @@ This can&apos;t be undone.</translation>
         <translation>Back</translation>
     </message>
     <message>
-        <location line="+225"/>
+        <location line="+277"/>
         <source>Coming soon</source>
         <translation>Coming soon</translation>
     </message>
@@ -2477,7 +2512,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+346"/>
+        <location filename="../qml/Shell.qml" line="+415"/>
         <source>Could not %1.</source>
         <translation>Could not %1.</translation>
     </message>
@@ -2502,12 +2537,12 @@ This can&apos;t be undone.</translation>
         <translation>Audio output: %1</translation>
     </message>
     <message>
-        <location line="+921"/>
+        <location line="+972"/>
         <source>Power</source>
         <translation>Power</translation>
     </message>
     <message>
-        <location line="-913"/>
+        <location line="-964"/>
         <source>Update ready. Restart to finish.</source>
         <translation>Update ready. Restart to finish.</translation>
     </message>
@@ -2573,7 +2608,7 @@ This can&apos;t be undone.</translation>
         <translation>Starting %1…</translation>
     </message>
     <message>
-        <location line="+294"/>
+        <location line="+345"/>
         <location line="+12"/>
         <location line="+3"/>
         <source>Select</source>
@@ -3367,18 +3402,18 @@ This can&apos;t be undone.</translation>
     <name>SystemPane</name>
     <message>
         <location filename="../qml/SystemPane.qml" line="+133"/>
-        <location line="+269"/>
+        <location line="+300"/>
         <source>Beta</source>
         <translation>Beta</translation>
     </message>
     <message>
-        <location line="-269"/>
-        <location line="+268"/>
+        <location line="-300"/>
+        <location line="+299"/>
         <source>Stable</source>
         <translation>Stable</translation>
     </message>
     <message>
-        <location line="-263"/>
+        <location line="-294"/>
         <source>Last checked %1</source>
         <translation>Last checked %1</translation>
     </message>
@@ -3438,12 +3473,12 @@ This can&apos;t be undone.</translation>
         <translation>Update found</translation>
     </message>
     <message>
-        <location line="+43"/>
+        <location line="+45"/>
         <source>Enter your PIN</source>
         <translation>Enter your PIN</translation>
     </message>
     <message>
-        <location line="+67"/>
+        <location line="+87"/>
         <source>Roll back to the previous version?</source>
         <translation>Roll back to the previous version?</translation>
     </message>
@@ -3483,12 +3518,12 @@ This can&apos;t be undone.</translation>
         <translation>Time zone</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+12"/>
         <source>The clock has not been set from the internet yet, so the time may be wrong.</source>
         <translation>The clock has not been set from the internet yet, so the time may be wrong.</translation>
     </message>
     <message>
-        <location line="+26"/>
+        <location line="+32"/>
         <source>Time zone set to %1</source>
         <translation>Time zone set to %1</translation>
     </message>
@@ -3508,14 +3543,14 @@ This can&apos;t be undone.</translation>
         <translation>No temperature sensors were found on this device.</translation>
     </message>
     <message>
-        <location line="-182"/>
+        <location line="-191"/>
         <location line="+8"/>
-        <location line="+69"/>
+        <location line="+78"/>
         <source>Only an admin can do this.</source>
         <translation>Only an admin can do this.</translation>
     </message>
     <message>
-        <location line="-253"/>
+        <location line="-284"/>
         <source>The console is warm. Nothing needs to be done.</source>
         <translation>The console is warm. Nothing needs to be done.</translation>
     </message>
@@ -3530,12 +3565,12 @@ This can&apos;t be undone.</translation>
         <translation>The console is too hot. Apps are closed and it powers off if it does not cool down.</translation>
     </message>
     <message>
-        <location line="+196"/>
+        <location line="+218"/>
         <source>Language</source>
         <translation>Language</translation>
     </message>
     <message>
-        <location line="+65"/>
+        <location line="+74"/>
         <source>Updates</source>
         <translation>Updates</translation>
     </message>
@@ -3791,42 +3826,35 @@ This can&apos;t be undone.</translation>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location line="+28"/>
         <source>Default (animated blobs)</source>
-        <translation>Default (animated blobs)</translation>
+        <translation type="vanished">Default (animated blobs)</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Dusk</source>
-        <translation>Dusk</translation>
+        <translation type="vanished">Dusk</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Aurora</source>
-        <translation>Aurora</translation>
+        <translation type="vanished">Aurora</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Ember</source>
-        <translation>Ember</translation>
+        <translation type="vanished">Ember</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Lagoon</source>
-        <translation>Lagoon</translation>
+        <translation type="vanished">Lagoon</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Orchid</source>
-        <translation>Orchid</translation>
+        <translation type="vanished">Orchid</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Daybreak</source>
-        <translation>Daybreak</translation>
+        <translation type="vanished">Daybreak</translation>
     </message>
     <message>
-        <location line="+85"/>
+        <location line="+101"/>
         <source>Wallpaper deleted</source>
         <translation>Wallpaper deleted</translation>
     </message>
@@ -3861,7 +3889,7 @@ This can&apos;t be undone.</translation>
         <translation>Could not add the wallpaper</translation>
     </message>
     <message>
-        <location line="+28"/>
+        <location line="+27"/>
         <source>Pictures on the USB drive</source>
         <translation>Pictures on the USB drive</translation>
     </message>
@@ -3960,7 +3988,7 @@ This can&apos;t be undone.</translation>
         <translation>Other</translation>
     </message>
     <message>
-        <location line="+118"/>
+        <location line="+123"/>
         <source>Loading time zones…</source>
         <translation>Loading time zones…</translation>
     </message>

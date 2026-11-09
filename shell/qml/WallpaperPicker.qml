@@ -45,24 +45,6 @@ FocusScope {
     onCanAddChanged: if (!canAdd && addButton.activeFocus) grid.forceActiveFocus()
     onCanDeleteChanged: if (!canDelete && deleteButton.activeFocus) grid.forceActiveFocus()
 
-    // The display name of a wallpaper id ("" is the default look); a copy keeps its file's name.
-    function nameOf(id) {
-        switch (id) {
-        case "": return qsTr("Default (animated blobs)")
-        case "dusk": return qsTr("Dusk")
-        case "aurora": return qsTr("Aurora")
-        case "ember": return qsTr("Ember")
-        case "lagoon": return qsTr("Lagoon")
-        case "orchid": return qsTr("Orchid")
-        case "daybreak": return qsTr("Daybreak")
-        }
-        for (const w of Wallpapers.user) {
-            if (w.id === id)
-                return w.name
-        }
-        return id
-    }
-
     function usbMounts() {
         return Storage.volumes.filter(v => v.mounted && v.removable && v.mountPoint.length > 0).map(v => v.mountPoint)
     }
@@ -226,7 +208,6 @@ FocusScope {
             }
         }
     }
-    Component.onCompleted: rescan()
 
     Rectangle {
         anchors.fill: parent
@@ -288,7 +269,7 @@ FocusScope {
             model: picker.entries
             focus: true
             Accessible.role: Accessible.List
-            Accessible.name: picker.currentEntry ? (picker.usbMode ? picker.currentEntry.name : picker.nameOf(picker.currentEntry.id)) : qsTr("Wallpaper")
+            Accessible.name: picker.currentEntry ? (picker.usbMode ? picker.currentEntry.name : DisplayText.wallpaperName(picker.currentEntry.id)) : qsTr("Wallpaper")
             onCurrentIndexChanged: positionViewAtIndex(currentIndex, GridView.Contain)
 
             delegate: Item {
@@ -298,7 +279,7 @@ FocusScope {
                 readonly property bool isCurrent: GridView.isCurrentItem
                 readonly property bool focused: isCurrent && grid.activeFocus
                 readonly property bool chosen: !picker.usbMode && modelData.id === DeviceSettings.wallpaper
-                readonly property string label: picker.usbMode ? modelData.name : picker.nameOf(modelData.id)
+                readonly property string label: picker.usbMode ? modelData.name : DisplayText.wallpaperName(modelData.id)
 
                 width: grid.cellWidth
                 height: grid.cellHeight

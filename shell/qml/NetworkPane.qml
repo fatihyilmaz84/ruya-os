@@ -97,6 +97,7 @@ SettingsPane {
         if (security === "wpa-psk" && !known) {
             pendingId = id
             pendingName = ssid
+            passwordSlot.active = true
             passwordEntry.open(qsTr("Password for %1").arg(ssid), "", { mask: true, layout: "text" })
             return
         }
@@ -165,13 +166,20 @@ SettingsPane {
         }
     }
 
-    TextEntry {
-        id: passwordEntry
-        objectName: "wifiPasswordEntry"
+    // The password keyboard, built when it first opens (T-349).
+    Loader {
+        id: passwordSlot
         parent: pane.overlay
         width: parent ? parent.width : 0
         height: parent ? parent.height : 0
-        u: pane.u
-        onAccepted: text => Network.connectWifi(pane.pendingId, text)
+        active: false
+        sourceComponent: Component {
+            TextEntry {
+                objectName: "wifiPasswordEntry"
+                u: pane.u
+                onAccepted: text => Network.connectWifi(pane.pendingId, text)
+            }
+        }
     }
+    readonly property TextEntry passwordEntry: passwordSlot.item as TextEntry
 }
