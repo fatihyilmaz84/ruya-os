@@ -31,7 +31,6 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | [T-332](tasks/T-332-format-removable-drive-service.md) | Format a removable drive: the service (udisks2, polkit, refusals, identity re-check) | todo | T-196, T-194 |
 | [T-333](tasks/T-333-format-drive-settings-flow.md) | Settings > Storage > Format drive...: choose, confirm, PIN, progress, result | todo | T-331, T-332 |
 | [T-339](tasks/T-339-vm-check-script-follow-ups.md) | VM check scripts: power-saving wake, sounds probe and jq | todo | — |
-| [T-340](tasks/T-340-session-adopted-units-follow-ups.md) | ruya-session: follow adopted apps cheaply, never relaunch into a taken unit name | in-progress | — |
 | [T-341](tasks/T-341-lint-icon-and-docs-follow-ups.md) | Lint and docs follow-ups: sample metainfo check, icon spike contour, member-lint note, vm-goto | todo | — |
 | [T-342](tasks/T-342-store-age-rating-and-sync-follow-ups.md) | Store follow-ups: every OARS attribute, the long Turkish badge, installed-list reads in order | todo | — |
 | [T-344](tasks/T-344-audio-pane-delete-and-confirm-detail-follow-ups.md) | Sound theme delete and confirm dialogs: refused delete, guard test, wrapped details | todo | — |

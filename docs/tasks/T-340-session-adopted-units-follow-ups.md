@@ -1,6 +1,6 @@
 # T-340 - ruya-session: follow adopted apps cheaply and never relaunch into a taken unit name
 
-Status: in-progress · Phase: 2 · Depends: — · Area: services (ruya-session), scripts · Size: M · Owner: builder
+Status: done · Phase: 2 · Depends: — · Area: services (ruya-session), scripts · Size: M · Owner: builder
 
 ## Goal
 Since T-290 `ruya-session` adopts running `ruya-app-*` units after a restart, but it follows them by running `systemctl -M <user>@ --user show` for each unit every 2 s (a transient unit per call, and the real exit status is lost), and an adopted unit dropped after 5 failed polls can still hold the unit name when a relaunch is attempted. After this task the adopted apps are followed through one long-lived connection per profile manager, the exit status is the real one, and a relaunch right after a Stop or a lost poll never fails with `already-running` or a taken name for longer than the old unit's wait.
