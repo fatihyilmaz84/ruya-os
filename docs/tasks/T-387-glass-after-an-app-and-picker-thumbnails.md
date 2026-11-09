@@ -1,6 +1,6 @@
 # T-387 - Glass sheets lose their blur after an app was in front; wallpaper picker tiles stay blank
 
-Status: in-progress · Phase: 2 · Depends: — · Area: shell (Shell.qml L0, GlassSheet, WallpaperPicker) · Size: S · Owner: builder · Complexity: complex · Developer surface: none
+Status: done · Phase: 2 · Depends: — · Area: shell (Shell.qml L0, GlassSheet, WallpaperPicker) · Size: S · Owner: builder · Complexity: complex · Developer surface: none
 
 ## Goal
 After a game has been in front, Settings' glass sheets are blurred again (not flat grain), and every wallpaper tile shows its picture. Owner report 2026-11-09 (Dell 0.0.60); diagnosed by lead-8 on the Dell with KMS captures and an A/B against 0.0.59.
