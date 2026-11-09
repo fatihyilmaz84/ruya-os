@@ -1,6 +1,6 @@
 # T-285 — Hint bar and focus follow-ups: Accept hints, keyboard hints, Tab, missing tests
 
-Status: todo · Phase: 2 · Depends: — · Area: shell (Shell.hintList, Setup, pickers, tests) · Size: S · Owner: builder
+Status: in-progress · Phase: 2 · Depends: — · Area: shell (Shell.hintList, Setup, pickers, tests) · Size: S · Owner: builder
 
 ## Goal
 The hint bar tells the truth in every state review rounds found wrong or silent, and three tests that could not fail now can.
