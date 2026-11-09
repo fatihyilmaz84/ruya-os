@@ -167,6 +167,36 @@ pub fn flatpak_app_version(root: &Path, app_id: &str) -> String {
     String::new()
 }
 
+/// Where the compositor (`ruya-shell`) keeps one Wayland socket per profile user (ADR-023):
+/// `/run/ruya-wayland/<user>`, owned by `ruya-shell`, mode 0600 plus one ACL entry that lets only
+/// that user connect. The directory is the compositor unit's `RuntimeDirectory` (0711).
+pub const WAYLAND_DIR: &str = "/run/ruya-wayland";
+
+/// The `WAYLAND_DISPLAY` an app of `user` gets: the absolute path of that user's socket in `dir`.
+/// `flatpak run` binds exactly this socket into the sandbox (as `wayland-0`), never the directory,
+/// so a sandboxed app never learns where the sockets of other profiles are. `None` for anything
+/// that is not a profile user.
+pub fn wayland_display(dir: &str, user: &str) -> Option<String> {
+    user.strip_prefix("ruya-")
+        .is_some_and(valid_profile_id)
+        .then(|| format!("{dir}/{user}"))
+}
+
+/// The environment of one app of `user`: `base`, with `WAYLAND_DISPLAY` set to the user's own
+/// socket when there is a socket directory (one in `base` is replaced).
+pub fn app_env(
+    base: &[(String, String)],
+    wayland_dir: Option<&str>,
+    user: &str,
+) -> Vec<(String, String)> {
+    let mut env = base.to_vec();
+    if let Some(display) = wayland_dir.and_then(|dir| wayland_display(dir, user)) {
+        env.retain(|(key, _)| key != "WAYLAND_DISPLAY");
+        env.push(("WAYLAND_DISPLAY".to_owned(), display));
+    }
+    env
+}
+
 /// The argument list that starts `flatpak run <app_id>` as `user` in that user's systemd manager
 /// and waits for it (`--wait`: the process lives as long as the app does, and prints the
 /// start and the end on stderr, see `parse_run_line`). `Type=exec` makes the start line mean
@@ -521,6 +551,7 @@ struct FakeState {
     fail_start: bool,
     calls: Vec<String>,
     running: Vec<RunningUnit>,
+    last_env: Vec<(String, String)>,
 }
 
 impl FakeSpawner {
@@ -559,6 +590,11 @@ impl FakeSpawner {
         self.lock().calls.clone()
     }
 
+    /// The environment the last `start` was given.
+    pub fn last_env(&self) -> Vec<(String, String)> {
+        self.lock().last_env.clone()
+    }
+
     fn lock(&self) -> std::sync::MutexGuard<'_, FakeState> {
         // A poisoned lock only means another thread panicked; the data is still usable.
         self.state.lock().unwrap_or_else(|e| e.into_inner())
@@ -576,9 +612,10 @@ impl Spawner for FakeSpawner {
         self.lock().installed.contains(app_id)
     }
 
-    fn start(&self, user: &str, app_id: &str, _env: &[(String, String)]) -> Result<String, String> {
+    fn start(&self, user: &str, app_id: &str, env: &[(String, String)]) -> Result<String, String> {
         let mut state = self.lock();
         state.calls.push(format!("start {user} {app_id}"));
+        state.last_env = env.to_vec();
         if state.fail_start {
             return Err("fake start failure".to_owned());
         }
@@ -704,6 +741,41 @@ mod tests {
                 "org.ruyaos.Racer",
             ]
         );
+    }
+
+    #[test]
+    fn each_profile_user_gets_its_own_wayland_socket() {
+        assert_eq!(
+            wayland_display(WAYLAND_DIR, "ruya-p1").as_deref(),
+            Some("/run/ruya-wayland/ruya-p1")
+        );
+        for bad in ["ruya-shell;x", "root", "ruya-", "ruya-../p1", "p1", ""] {
+            assert_eq!(wayland_display(WAYLAND_DIR, bad), None, "{bad:?}");
+        }
+        let base = vec![
+            ("SDL_VIDEODRIVER".to_owned(), "wayland".to_owned()),
+            ("WAYLAND_DISPLAY".to_owned(), "wayland-0".to_owned()),
+        ];
+        let p1 = app_env(&base, Some(WAYLAND_DIR), "ruya-p1");
+        assert_eq!(
+            p1,
+            [
+                ("SDL_VIDEODRIVER".to_owned(), "wayland".to_owned()),
+                (
+                    "WAYLAND_DISPLAY".to_owned(),
+                    "/run/ruya-wayland/ruya-p1".to_owned()
+                ),
+            ]
+        );
+        assert!(app_env(&base, Some(WAYLAND_DIR), "ruya-p2").contains(&(
+            "WAYLAND_DISPLAY".to_owned(),
+            "/run/ruya-wayland/ruya-p2".to_owned()
+        )));
+        // No socket directory (the development mode): the base is used as it is.
+        assert_eq!(app_env(&base, None, "ruya-p1"), base);
+        // The absolute path passes the argument check of the launch command.
+        let args = launch_command("ruya-p1", "org.ruyaos.Racer", &p1).expect("valid");
+        assert!(args.contains(&"--setenv=WAYLAND_DISPLAY=/run/ruya-wayland/ruya-p1".to_owned()));
     }
 
     #[test]

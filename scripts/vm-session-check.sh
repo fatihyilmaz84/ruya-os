@@ -5,7 +5,9 @@
 # creates a profile through Profiles1 if there is none, and drives Launch / Stop over the system
 # bus as ruya-shell. Copy and run (boot with plain smoke-test.ps1 -Keep):
 #   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-session-check.sh scripts/vm-session-probe.qml root@127.0.0.1:/root/
-#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-session-check.sh [check|restart|security|clean]
+#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-session-check.sh [check|restart|security|display|display-clean|clean]
+# `display` (T-164) checks the per-profile Wayland sockets and a profile's window in the app layer;
+# it also needs vm-key-client.qml and vm-inject-key.py in /root (see the `display)` case).
 # `restart` (T-290) needs a profile (run `check` once on an empty store, or create one) and
 # installs the test apps itself when they are missing.
 # On an empty profile store the check creates the admin "Check Admin" (PIN 1234) and a standard
@@ -21,6 +23,7 @@ ppath=/org/ruyaos/Profiles1
 rt=org.ruyaos.TestRuntime
 sleeper=org.ruyaos.TestSleeper
 crasher=org.ruyaos.TestCrasher
+wclient=org.ruyaos.TestWaylandClient
 remote=ruyaos-session-test
 work=/var/lib/ruya-session-test
 uid="$(id -u ruya-shell)"
@@ -71,6 +74,49 @@ build_repo() {
         flatpak build-finish --command=run "$work/$id" >/dev/null 2>&1 || return 1
         flatpak build-export "$work/repo" "$work/$id" stable >/dev/null 2>&1 || return 1
     done
+    # The Wayland test app (T-164): the key-logging test client (vm-key-client.qml, next to this
+    # script) run by the image's own Qt, reached through --filesystem=host-os (no Qt in the test
+    # runtime). --socket=wayland is what forwards the profile's socket into the sandbox. It prints
+    # what it sees of the display first: the socket must be there, the directory of all sockets not.
+    if [ -f /root/vm-key-client.qml ]; then
+        id="$wclient"
+        mkdir -p "$work/$id/files/bin" "$work/$id/files/share" "$work/$id/var"
+        cp /root/vm-key-client.qml "$work/$id/files/share/key-client.qml" || return 1
+        cat > "$work/$id/files/bin/run" <<'EOF'
+#!/bin/sh
+sock=no; [ -S "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY" ] && sock=yes
+dir=no; [ -e /run/ruya-wayland ] && dir=yes
+echo "test-wayland-client: uid=$UID WAYLAND_DISPLAY=$WAYLAND_DISPLAY socket=$sock socket-dir-visible=$dir"
+export QT_QPA_PLATFORM=wayland QT_QUICK_BACKEND=software QT_FORCE_STDERR_LOGGING=1
+export QT_PLUGIN_PATH=/run/host/usr/lib64/qt6/plugins QML_IMPORT_PATH=/run/host/usr/lib64/qt6/qml
+exec /run/host/usr/lib64/ld-linux-x86-64.so.2 --library-path /run/host/usr/lib64 /run/host/usr/bin/ruya-shell --load /app/share/key-client.qml
+EOF
+        chmod 755 "$work/$id/files/bin/run"
+        printf '[Application]\nname=%s\nruntime=%s/x86_64/stable\nsdk=%s/x86_64/stable\ncommand=run\n' "$id" "$rt" "$rt" > "$work/$id/metadata"
+        flatpak build-finish --command=run --socket=wayland --filesystem=host-os:ro "$work/$id" >/dev/null 2>&1 || return 1
+        flatpak build-export "$work/repo" "$work/$id" stable >/dev/null 2>&1 || return 1
+    fi
+}
+
+# Can `$1` (a user) connect to the socket `$2`? Prints "connected" or the error.
+probe_connect() {
+    runuser -u "$1" -- python3 -I -c 'import socket, sys
+s = socket.socket(socket.AF_UNIX)
+try:
+    s.connect(sys.argv[1]); print("connected")
+except OSError as e:
+    print(type(e).__name__, e)' "$2" 2>&1 | tail -1
+}
+# The shell's journal since the unix second $1.
+shell_log_since() { journalctl -b _UID="$uid" --since "@$1" --no-pager -o cat 2>/dev/null; }
+# Waits for an extended-regex line $1 in the shell's journal since $2, up to $3 seconds.
+wait_shell() {
+    n=0
+    while [ "$n" -lt "$3" ]; do
+        shell_log_since "$2" | grep -a -E -q "$1" && return 0
+        sleep 1; n=$((n + 1))
+    done
+    return 1
 }
 
 case "${1:-check}" in
@@ -160,7 +206,122 @@ restart)
     rm -rf "$work"
     journalctl -u ruya-session -b --no-pager -p warning | tail -5
     ;;
+display)
+    # T-164 (ADR-023): per-profile Wayland sockets. Needs a profile with no PIN or PIN 1234 (the
+    # first one listed signs in; vm-goto.ps1 makes "Player One", admin, PIN 1234) and leaves the
+    # profile's test window open for a VM screenshot; `display-clean` ends it.
+    # Also copy vm-key-client.qml and vm-inject-key.py next to this script.
+    for f in /root/vm-key-client.qml /root/vm-inject-key.py; do
+        [ -f "$f" ] || { bad "$f is missing: copy it next to this script"; exit 1; }
+    done
+    dir=/run/ruya-wayland
+    ids="$(busctl --system call "$psvc" "$ppath" "$psvc" ListProfiles | grep -o '"p[0-9]*"' | tr -d '"')"
+    me="$(echo "$ids" | head -1)"
+    [ -n "$me" ] && ok "profile $me signs in" || { bad "no profile: make one with vm-goto.ps1 home"; exit 1; }
+    other="$(echo "$ids" | grep -v "^$me\$" | head -1)"
+    created_other=0
+    if [ -z "$other" ]; then
+        busctl --system call "$psvc" "$ppath" "$psvc" CreateProfile sssss "$me" 1234 "Check Other" standard "" >/dev/null
+        other="$(busctl --system call "$psvc" "$ppath" "$psvc" ListProfiles | grep -o '"p[0-9]*"' | tr -d '"' | grep -v "^$me\$" | head -1)"
+        created_other=1
+    fi
+    [ -n "$other" ] && ok "second profile $other (created by the check: $created_other)" || { bad "no second profile"; exit 1; }
+    echo "$other $created_other" > /root/vm-display-other
+    user="ruya-$me"; ouser="ruya-$other"
+    muid="$(id -u "$user")"; ouid="$(id -u "$ouser")"
+    sock="$dir/$user"; osock="$dir/$ouser"
+
+    echo "--- the sockets"
+    n=0; until [ -S "$sock" ] && [ -S "$osock" ] || [ "$n" -ge 30 ]; do sleep 1; n=$((n + 1)); done
+    stat -c '%A %U:%G %n' "$dir" "$sock" "$osock" 2>&1
+    getfacl -p "$sock" 2>&1 | grep -v '^#'
+    [ "$(stat -c '%a %U' "$dir")" = "711 ruya-shell" ] && ok "$dir: 0711, owned by ruya-shell" || bad "$dir mode/owner: $(stat -c '%a %U' "$dir")"
+    [ -S "$sock" ] && [ "$(stat -c %U "$sock")" = ruya-shell ] && ok "$sock is a socket of ruya-shell" || bad "no socket $sock"
+    [ -S "$osock" ] && ok "$osock exists too (a socket per profile)" || bad "no socket $osock"
+    acl="$(getfacl -p "$sock" 2>/dev/null | grep -v '^#' | grep -v '^$' | tr '\n' ' ')"
+    [ "$acl" = "user::rw- user:$user:rw- group::--- mask::rw- other::--- " ] && ok "ACL: only $user (and the owner) may write it" || bad "ACL of $sock: $acl"
+    if runuser -u "$ouser" -- ls "$dir" >/dev/null 2>&1; then bad "$ouser can list $dir"; else ok "$ouser cannot list $dir"; fi
+    out="$(probe_connect "$user" "$sock")"; [ "$out" = connected ] && ok "$user connects to its own socket" || bad "$user -> own socket: $out"
+    out="$(probe_connect "$ouser" "$sock")"; echo "$ouser -> $sock: $out"
+    case "$out" in PermissionError*) ok "$ouser cannot connect to $user's socket (permission denied)";; *) bad "$ouser -> $sock: $out";; esac
+    out="$(probe_connect nobody "$sock")"; case "$out" in PermissionError*) ok "nobody cannot connect either";; *) bad "nobody -> $sock: $out";; esac
+    out="$(probe_connect "$user" "/run/user/$uid/ruya-0")"; case "$out" in PermissionError*) ok "$user cannot reach the shell's own socket ruya-0";; *) bad "$user -> ruya-0: $out";; esac
+
+    echo "--- the Wayland test app"
+    flatpak uninstall --system -y "$wclient" "$sleeper" "$crasher" "$rt" >/dev/null 2>&1
+    build_repo && ok "repository built" || { bad "cannot build the test repository"; exit 1; }
+    flatpak remote-add --system --if-not-exists --no-gpg-verify "$remote" "file://$work/repo" || { bad "remote-add"; exit 1; }
+    flatpak install --system -y --noninteractive "$remote" "$rt" "$wclient" >/dev/null 2>&1 \
+        && ok "test app $wclient installed" || { bad "flatpak install of $wclient failed"; exit 1; }
+    for u in "$user" "$ouser"; do systemctl --user -M "$u@.host" stop 'ruya-app-*.service' </dev/null 2>&1 | cat >/dev/null; done
+    : > "$work/signals.log"
+    busctl --system --json=short monitor "$svc" >> "$work/signals.log" 2>&1 &
+    mon=$!
+    sleep 2
+
+    echo "--- nobody signed in: the profile's own client is refused"
+    busctl --system call "$psvc" "$ppath" "$psvc" Lock >/dev/null
+    sleep 2
+    t0="$(date +%s)"
+    out="$(launch "$wclient" "$me")"; inst0="$(echo "$out" | unit_of)"
+    [ -n "$inst0" ] && ok "Launch as $me while locked: $inst0" || bad "Launch while locked: $out"
+    wait_shell "refused (surface|window) of uid $muid .*nobody-signed-in" "$t0" 40 && ok "the compositor refused it (nobody signed in)" || bad "no refusal while nobody is signed in"
+    shell_log_since "$t0" | grep -a "ruya-compositor: refused" | head -2
+    shell_log_since "$t0" | grep -a -q "ruya-compositor: app .* uid $muid " && bad "a window of $user was shown while nobody was signed in" || ok "no window was shown"
+    wait_sig "\"member\":\"AppExited\".*$wclient" 30 && ok "the refused client ended (AppExited)" || { bad "the refused client is still running"; stop_app "$inst0" >/dev/null; }
+    journalctl -b _UID="$muid" --since "@$t0" --no-pager -o cat | grep -a "test-wayland-client:" | head -1
+
+    echo "--- $me signed in: its window is in the app layer"
+    out="$(busctl --system call "$psvc" "$ppath" "$psvc" SwitchTo ss "$me" "")"
+    case "$out" in 'suu "ok"'*) ;; *) out="$(busctl --system call "$psvc" "$ppath" "$psvc" SwitchTo ss "$me" 1234)";; esac
+    case "$out" in 'suu "ok"'*) ok "$me signed in";; *) bad "SwitchTo $me: $out"; exit 1;; esac
+    sleep 3
+    : > "$work/signals.log"
+    t1="$(date +%s)"
+    out="$(launch "$wclient" "$me")"; inst="$(echo "$out" | unit_of)"; echo "$inst" > /root/vm-display-instance
+    [ -n "$inst" ] && ok "Launch as $me: $inst" || { bad "Launch: $out"; exit 1; }
+    wait_shell "ruya-compositor: app .* uid $muid profile $me" "$t1" 60 && ok "the window of $user is in the app layer" || bad "no window of $user within 60 s"
+    shell_log_since "$t1" | grep -a -E "ruya-compositor: (app|refused|socket)" | head -3
+    line="$(journalctl -b _UID="$muid" --since "@$t1" --no-pager -o cat | grep -a "test-wayland-client:" | head -1)"; echo "$line"
+    echo "$line" | grep -q "WAYLAND_DISPLAY=wayland-0 socket=yes" && ok "inside the sandbox: WAYLAND_DISPLAY=wayland-0, the socket is there" || bad "sandbox display: $line"
+    echo "$line" | grep -q "socket-dir-visible=no" && ok "the sandbox does not see $dir (no path to the other profiles' sockets)" || bad "the sandbox sees $dir"
+    echo "$line" | grep -q "uid=$muid " && ok "the app runs as $user" || bad "app uid: $line"
+    systemctl --user -M "$user@.host" show -p Environment "$inst" </dev/null 2>&1 | cat | tr ' ' '\n' | grep -E "WAYLAND_DISPLAY|SDL_VIDEODRIVER"
+
+    echo "--- Guide over the app"
+    t2="$(date +%s)"
+    python3 /root/vm-inject-key.py guide >/dev/null 2>&1
+    wait_shell "ruya-compositor: focus systemActions" "$t2" 15 && ok "Guide opened the overlay over the app" || bad "Guide did not open the overlay"
+    t3="$(date +%s)"
+    python3 /root/vm-inject-key.py guide >/dev/null 2>&1
+    wait_shell "ruya-compositor: app focus app:.* true" "$t3" 15 && ok "closing the overlay gave the focus back to the app" || bad "the app did not get the focus back"
+
+    echo "--- the other profile's client (not signed in) is refused"
+    t4="$(date +%s)"
+    out="$(launch "$wclient" "$other")"; inst2="$(echo "$out" | unit_of)"
+    [ -n "$inst2" ] && ok "Launch as $other: $inst2" || bad "Launch as $other: $out"
+    wait_shell "refused (surface|window) of uid $ouid .*other-user" "$t4" 60 && ok "the compositor refused $ouser's client (not the signed-in profile)" || bad "no refusal for $ouser"
+    shell_log_since "$t4" | grep -a -q "ruya-compositor: app .* uid $ouid " && bad "a window of $ouser was shown" || ok "no window of $ouser was shown"
+    wait_sig "\"member\":\"AppExited\".*$wclient" 30 && ok "the refused client ended (AppExited)" || { bad "$ouser's client still runs"; stop_app "$inst2" >/dev/null; }
+    kill "$mon" 2>/dev/null
+    echo "The window of $user stays open: take the VM screenshot now (vm-screenshot.ps1 profile-app), then run '$0 display-clean'."
+    ;;
+display-clean)
+    inst="$(cat /root/vm-display-instance 2>/dev/null)"
+    [ -n "$inst" ] && { t0="$(date +%s)"; stop_app "$inst"; wait_shell "ruya-compositor: app gone" "$t0" 20 && ok "Stop closed the window (app gone)" || bad "no 'app gone' after Stop"; }
+    read -r other created_other < /root/vm-display-other 2>/dev/null
+    me="$(busctl --system get-property "$psvc" "$ppath" "$psvc" ActiveProfile | sed -n 's/^s "\(.*\)"$/\1/p')"
+    if [ "${created_other:-0}" = 1 ] && [ -n "$other" ]; then
+        busctl --system call "$psvc" "$ppath" "$psvc" DeleteProfile sss "$me" 1234 "$other"
+        sleep 3
+        [ -e "/run/ruya-wayland/ruya-$other" ] && bad "the socket of the deleted profile is still there" || ok "the deleted profile's socket is gone"
+    fi
+    flatpak uninstall --system -y "$wclient" "$rt" >/dev/null 2>&1
+    flatpak remote-delete --system --force "$remote" >/dev/null 2>&1
+    rm -rf "$work" /root/vm-display-instance /root/vm-display-other
+    ;;
 clean)
+    flatpak uninstall --system -y "$wclient" >/dev/null 2>&1
     flatpak uninstall --system -y "$sleeper" "$crasher" "$rt" >/dev/null 2>&1
     flatpak remote-delete --system --force "$remote" >/dev/null 2>&1
     rm -rf "$work"

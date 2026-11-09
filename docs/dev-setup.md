@@ -237,6 +237,17 @@ ssh ... root@127.0.0.1 bash /root/vm-app-check.sh kill      # the client exits; 
 
 The client renders in software (`QT_QUICK_BACKEND=software`): llvmpipe has no `EGL_WL_bind_wayland_display`, so a GL client cannot hand its buffers to the compositor in the VM. `compositor/` is not in the `RuyaShell` module, so `lupdate`, `qmllint` and the Qt Quick tests never see it (the Windows Qt kit has no QtWaylandCompositor); the image build compiles it. A fresh disk copy has new SSH host keys: use `-o StrictHostKeyChecking=no -o UserKnownHostsFile=NUL -o BatchMode=yes`, or `ssh` waits for a host-key prompt that never shows.
 
+**A profile's app (T-164, ADR-023).** `vm-session-check.sh display` checks the per-profile sockets: the mode and ACL of `/run/ruya-wayland/ruya-<id>`, that another profile's user and `nobody` get "permission denied", then installs a Flatpak test app (`org.ruyaos.TestWaylandClient`: the key client run by the image's own Qt through `--filesystem=host-os`) and launches it with `Session1.Launch`: refused while nobody is signed in, shown in the app layer for the signed-in profile (the sandbox sees only `wayland-0`), Guide over it, refused for a second profile. It needs a profile with no PIN or PIN 1234 (`vm-goto.ps1 home` makes one) and leaves the window open for a screenshot:
+
+```powershell
+scp ... scripts/vm-session-check.sh scripts/vm-key-client.qml scripts/vm-inject-key.py root@127.0.0.1:/root/
+ssh ... root@127.0.0.1 bash /root/vm-session-check.sh display
+.\scripts\vm-screenshot.ps1 profile-app                       # the profile's test window in the app layer
+ssh ... root@127.0.0.1 bash /root/vm-session-check.sh display-clean
+```
+
+A compile check of `compositor/` without an image build, in WSL (Qt devel packages are installed there): `cmake -S /mnt/d/dev/RuyaOS/shell -B /root/shell-build -G Ninja -DCMAKE_BUILD_TYPE=Release -DRUYA_BUILD_TESTS=OFF -DRUYA_COMPOSITOR=ON && cmake --build /root/shell-build`; delete `/root/shell-build` afterwards (it is on C:).
+
 ## Power-policy check (T-107)
 
 After any change to the polkit rule or to how `image/rootfs` is installed, boot the disk (`.\scripts\smoke-test.ps1 -Keep`) and run, from the repo root:

@@ -12,7 +12,7 @@ use ruya_session::dbus::{
 };
 use ruya_session::directory::ProfileSnapshot;
 use ruya_session::session::Session;
-use ruya_session::spawner::{FakeSpawner, UnitEvent};
+use ruya_session::spawner::{FakeSpawner, UnitEvent, WAYLAND_DIR};
 use ruya_session::usage::SystemZone;
 use ruya_session::usage_store::FileStore;
 use ruya_session::usage_tracker::Tracker;
@@ -37,7 +37,13 @@ fn system_spawner(_events: Sender<UnitEvent>) -> Result<DynSpawner, Box<dyn Erro
 fn run() -> Result<(), Box<dyn Error>> {
     let dev = std::env::args().any(|a| a == "--session");
     let (tx, rx): (Sender<UnitEvent>, Receiver<UnitEvent>) = async_channel::unbounded();
-    let (spawner, profiles, env): (DynSpawner, ProfileSnapshot, Vec<(String, String)>) = if dev {
+    type Setup = (
+        DynSpawner,
+        ProfileSnapshot,
+        Vec<(String, String)>,
+        Option<&'static str>,
+    );
+    let (spawner, profiles, env, wayland_dir): Setup = if dev {
         let fake = FakeSpawner::new()
             .with_app("org.ruyaos.Racer")
             .with_app("org.ruyaos.Puzzle")
@@ -47,12 +53,24 @@ fn run() -> Result<(), Box<dyn Error>> {
             Box::new(fake),
             ProfileSnapshot::new(["p1", "p2", "guest"].map(str::to_owned)),
             vec![("WAYLAND_DISPLAY".to_owned(), "wayland-0".to_owned())],
+            None,
         )
     } else {
-        // No display for the app yet: the profile's own Wayland socket is T-164's.
-        (system_spawner(tx)?, ProfileSnapshot::default(), Vec::new())
+        // Each app gets its profile's own Wayland socket (ADR-023, T-164). The console has no X
+        // server, so SDL is told to use Wayland: SDL 2 otherwise tries X11 first and, without
+        // the xdg-decoration protocol, may never try Wayland ("No available video device").
+        (
+            system_spawner(tx)?,
+            ProfileSnapshot::default(),
+            vec![("SDL_VIDEODRIVER".to_owned(), "wayland".to_owned())],
+            Some(WAYLAND_DIR),
+        )
     };
-    let session = Arc::new(Mutex::new(Session::new(spawner, profiles, env)));
+    let mut session = Session::new(spawner, profiles, env);
+    if let Some(dir) = wayland_dir {
+        session = session.with_wayland_dir(dir);
+    }
+    let session = Arc::new(Mutex::new(session));
     // The play ledger (T-247): root-only files under /var/lib/ruya-session/usage (the unit's
     // StateDirectory); `--session` keeps them in the temporary directory.
     let usage_dir = std::env::var_os("RUYA_USAGE_DIR").map_or_else(

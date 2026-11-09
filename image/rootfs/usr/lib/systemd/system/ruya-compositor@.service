@@ -1,6 +1,7 @@
 # The console session: ruya-shell is the Wayland compositor itself, directly on KMS (Qt eglfs,
 # ADR-002 option A, T-130), started on a VT without a display manager or greeter; profile
-# selection happens in the shell. Apps connect to /run/user/<ruya-shell uid>/ruya-0.
+# selection happens in the shell. The shell's own clients connect to /run/user/<ruya-shell uid>/ruya-0,
+# a profile's apps to /run/ruya-wayland/ruya-<id> (ADR-023, T-164; see RuntimeDirectory below).
 # eglfs opens /dev/input/event* itself (no logind TakeDevice): 70-ruya-input.rules lets logind
 # give the active seat session (this one) access to them, as it does for the DRM card.
 [Unit]
@@ -40,6 +41,12 @@ StandardOutput=journal
 StandardError=journal
 UtmpIdentifier=%I
 UtmpMode=user
+# The per-profile Wayland sockets (ADR-023, T-164): /run/ruya-wayland, owned by ruya-shell, 0711 (a
+# profile user can reach its own socket by name but cannot list the others). The shell makes one
+# socket per profile in it, mode 0600 plus an ACL entry for that profile's user only. Emptied at
+# every start and stop of the shell, so no socket outlives the compositor that listens on it.
+RuntimeDirectory=ruya-wayland
+RuntimeDirectoryMode=0711
 Environment=XDG_SESSION_TYPE=wayland
 Environment=QT_QPA_PLATFORM=eglfs
 Environment=QT_QPA_EGLFS_INTEGRATION=eglfs_kms
