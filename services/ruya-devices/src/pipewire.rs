@@ -6,6 +6,7 @@
 use serde_json::Value;
 
 use crate::audio::{Kind, Sink};
+use crate::output_policy::{Avail, OutKind, Output};
 
 /// The outputs and the default node name from a `pw-dump` document. `node.name` is the id (it
 /// survives reboots), `node.description` the display name.
@@ -53,6 +54,114 @@ pub fn parse_dump(json: &str) -> Result<(Vec<Sink>, Option<String>), String> {
         }
     }
     Ok((sinks, default.or(configured)))
+}
+
+/// Every output of the sound cards (T-322). PipeWire shows only the sinks of a card's active
+/// profile, but each Device object lists all its routes (`EnumRoute`); an output with a route
+/// that is in use (`Route`) is matched to its sink by `device.id` and `card.profile.device`.
+/// A sink that belongs to no listed route (a device without routes) becomes an output of its own.
+pub fn parse_outputs(json: &str, sinks: &[Sink]) -> Vec<Output> {
+    let Ok(doc) = serde_json::from_str::<Value>(json) else {
+        return Vec::new();
+    };
+    let objects: Vec<&Value> = doc.as_array().into_iter().flatten().collect();
+    let is = |o: &Value, ty: &str| o.get("type").and_then(Value::as_str) == Some(ty);
+    let node_of = |device_id: u64, route_device: u64| -> Option<String> {
+        objects
+            .iter()
+            .filter(|o| is(o, "PipeWire:Interface:Node"))
+            .map(|o| &o["info"]["props"])
+            .find(|p| {
+                p["media.class"].as_str() == Some("Audio/Sink")
+                    && p["device.id"].as_u64() == Some(device_id)
+                    && p["card.profile.device"].as_u64() == Some(route_device)
+            })
+            .and_then(|p| p["node.name"].as_str())
+            .filter(|n| sinks.iter().any(|s| s.id == *n))
+            .map(str::to_owned)
+    };
+
+    let mut outputs: Vec<Output> = Vec::new();
+    for dev in objects
+        .iter()
+        .filter(|o| is(o, "PipeWire:Interface:Device"))
+    {
+        let props = &dev["info"]["props"];
+        let (Some(card), Some(device_id)) = (props["device.name"].as_str(), dev["id"].as_u64())
+        else {
+            continue;
+        };
+        let bus = props["device.bus"].as_str().unwrap_or("");
+        let api = props["device.api"].as_str().unwrap_or("");
+        let params = &dev["info"]["params"];
+        let in_use: Vec<&Value> = params["Route"].as_array().into_iter().flatten().collect();
+        for route in params["EnumRoute"].as_array().into_iter().flatten() {
+            if !route["direction"]
+                .as_str()
+                .is_some_and(|d| d.eq_ignore_ascii_case("output"))
+            {
+                continue;
+            }
+            let Some(port) = route["name"].as_str() else {
+                continue;
+            };
+            let node = in_use
+                .iter()
+                .find(|r| r["name"].as_str() == Some(port))
+                .and_then(|r| r["device"].as_u64())
+                .and_then(|d| node_of(device_id, d));
+            outputs.push(Output {
+                id: format!("{card}:{port}"),
+                name: route["description"].as_str().unwrap_or(port).to_owned(),
+                kind: route_kind(port, bus, api),
+                card: card.to_owned(),
+                port: port.to_owned(),
+                available: match route["available"].as_str() {
+                    Some("yes") => Avail::Yes,
+                    Some("no") => Avail::No,
+                    _ => Avail::Unknown,
+                },
+                node,
+            });
+        }
+    }
+    for sink in sinks {
+        if outputs.iter().any(|o| o.node.as_deref() == Some(&sink.id)) {
+            continue;
+        }
+        let (kind, available) = match sink.kind {
+            Kind::Hdmi => (OutKind::Hdmi, Avail::Unknown),
+            Kind::Analog => (OutKind::Speaker, Avail::Unknown),
+            Kind::Usb => (OutKind::Usb, Avail::Yes),
+            Kind::Bluetooth => (OutKind::Bluetooth, Avail::Yes),
+        };
+        outputs.push(Output {
+            id: sink.id.clone(),
+            name: sink.name.clone(),
+            kind,
+            card: String::new(),
+            port: String::new(),
+            available,
+            node: Some(sink.id.clone()),
+        });
+    }
+    outputs
+}
+
+/// The kind of a route from its name and its card's bus and API.
+fn route_kind(port: &str, bus: &str, api: &str) -> OutKind {
+    let port = port.to_ascii_lowercase();
+    if api == "bluez5" {
+        OutKind::Bluetooth
+    } else if bus == "usb" {
+        OutKind::Usb
+    } else if port.contains("hdmi") || port.contains("displayport") {
+        OutKind::Hdmi
+    } else if port.contains("headphone") || port.contains("headset") {
+        OutKind::Headphones
+    } else {
+        OutKind::Speaker
+    }
 }
 
 /// Whether something plays: an output stream (`Stream/Output/Audio`) is running (PipeWire's
@@ -134,8 +243,9 @@ pub use linux::WpCtl;
 mod linux {
     use std::process::Command;
 
-    use super::{parse_dump, parse_playing, parse_volume};
+    use super::{parse_dump, parse_outputs, parse_playing, parse_volume};
     use crate::audio::{PipeWire, Snapshot};
+    use crate::output_policy::tone_wav;
 
     const DEFAULT_SINK: &str = "@DEFAULT_AUDIO_SINK@";
 
@@ -172,6 +282,7 @@ mod linux {
         fn snapshot(&mut self) -> Result<Snapshot, String> {
             let dump = run("pw-dump", &[])?;
             let (sinks, default) = parse_dump(&dump)?;
+            let outputs = parse_outputs(&dump, &sinks);
             let playing = parse_playing(&dump);
             // No default output (none connected) means no volume to read.
             let (volume, muted) = if default.is_some() {
@@ -181,6 +292,7 @@ mod linux {
             };
             Ok(Snapshot {
                 sinks,
+                outputs,
                 default,
                 volume,
                 muted,
@@ -191,6 +303,22 @@ mod linux {
         fn set_default(&mut self, id: &str) -> Result<(), String> {
             let object = object_id(id)?;
             run("wpctl", &["set-default", &object.to_string()]).map(drop)
+        }
+
+        fn play_tone(&mut self, node: &str) -> Result<(), String> {
+            // pw-play with a target plays on that sink and leaves the default alone.
+            let file = std::env::temp_dir().join("ruya-test-tone.wav");
+            std::fs::write(&file, tone_wav()).map_err(|e| format!("tone: {e}"))?;
+            let mut child = Command::new("pw-play")
+                .arg(format!("--target={node}"))
+                .arg(&file)
+                .spawn()
+                .map_err(|e| format!("pw-play: {e}"))?;
+            // Reaped off the caller's thread; the tone lasts under half a second.
+            std::thread::spawn(move || {
+                let _ = child.wait();
+            });
+            Ok(())
         }
 
         fn set_volume(&mut self, volume: u32) -> Result<(), String> {
@@ -245,6 +373,81 @@ mod tests {
             default.as_deref(),
             Some("alsa_output.pci-0000_00_1b.0.analog-stereo")
         );
+    }
+
+    /// A Dell-like card: the internal speaker is the active route, the headphones jack is
+    /// unplugged, the HDMI port has a valid ELD but sits on an inactive profile (no sink).
+    const CARD: &str = r#"[
+      {"id":50,"type":"PipeWire:Interface:Device","info":{"props":{
+         "device.name":"alsa_card.pci-0000_00_1f.3","device.description":"Built-in Audio"},
+       "params":{
+         "EnumRoute":[
+           {"index":0,"direction":"Output","name":"analog-output-speaker","description":"Speakers","available":"unknown"},
+           {"index":1,"direction":"Output","name":"analog-output-headphones","description":"Headphones","available":"no"},
+           {"index":2,"direction":"Output","name":"hdmi-output-0","description":"HDMI / DisplayPort","available":"yes"},
+           {"index":3,"direction":"Input","name":"analog-input-mic","description":"Microphone","available":"no"}],
+         "Route":[
+           {"index":0,"direction":"Output","name":"analog-output-speaker","device":2,"available":"unknown"}]}}},
+      {"id":60,"type":"PipeWire:Interface:Node","info":{"props":{
+         "media.class":"Audio/Sink","node.name":"alsa_output.pci-0000_00_1f.3.analog-stereo",
+         "node.description":"Built-in Audio Analog Stereo","device.id":50,"card.profile.device":2}}}
+    ]"#;
+
+    #[test]
+    fn a_card_lists_all_its_outputs_and_matches_the_active_one_to_its_sink() {
+        let (sinks, _) = parse_dump(CARD).unwrap();
+        let outputs = parse_outputs(CARD, &sinks);
+        let view: Vec<_> = outputs
+            .iter()
+            .map(|o| {
+                (
+                    o.id.as_str(),
+                    o.kind.as_str(),
+                    o.available.as_str(),
+                    o.node.as_deref(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            view,
+            [
+                (
+                    "alsa_card.pci-0000_00_1f.3:analog-output-speaker",
+                    "speaker",
+                    "unknown",
+                    Some("alsa_output.pci-0000_00_1f.3.analog-stereo")
+                ),
+                (
+                    "alsa_card.pci-0000_00_1f.3:analog-output-headphones",
+                    "headphones",
+                    "no",
+                    None
+                ),
+                (
+                    "alsa_card.pci-0000_00_1f.3:hdmi-output-0",
+                    "hdmi",
+                    "yes",
+                    None
+                ),
+            ]
+        );
+        assert_eq!(outputs[2].name, "HDMI / DisplayPort");
+        assert_eq!(outputs[2].card, "alsa_card.pci-0000_00_1f.3");
+        assert_eq!(outputs[2].port, "hdmi-output-0");
+    }
+
+    #[test]
+    fn a_sink_without_routes_is_an_output_of_its_own() {
+        let (sinks, _) = parse_dump(DUMP).unwrap();
+        let outputs = parse_outputs(DUMP, &sinks);
+        assert_eq!(outputs.len(), 4);
+        assert_eq!(outputs[2].kind.as_str(), "usb");
+        assert_eq!(outputs[2].id, "alsa_output.usb-Logi.analog-stereo");
+        assert_eq!(
+            outputs[2].node.as_deref(),
+            Some("alsa_output.usb-Logi.analog-stereo")
+        );
+        assert!(parse_outputs("not json", &sinks).is_empty());
     }
 
     #[test]

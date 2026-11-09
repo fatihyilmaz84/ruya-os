@@ -132,6 +132,48 @@ Item {
             compare(Audio.defaultSink, "hdmi-0")
         }
 
+        // T-322: the outputs of the cards, the player's choice and the test sound, over the same
+        // contract the service speaks (ListOutputs, SetOutput, TestOutput).
+        function test_outputs_list_choose_and_test() {
+            tryVerify(() => Audio.outputs.length === 3)
+            compare(Audio.outputs[0].id, "hdmi-0")
+            compare(Audio.outputs[0].kind, "hdmi")
+            verify(Audio.outputs[0].isDefault)
+            verify(Audio.outputs[0].active)
+            compare(Audio.outputs[1].kind, "speaker")
+            compare(Audio.outputs[2].id, "headphones-0")
+            compare(Audio.outputs[2].available, "no")
+            verify(!Audio.outputs[2].active)
+            verify(Audio.outputs.every(o => !o.isSaved), "nothing chosen yet")
+
+            const choose = createTemporaryObject(spyComponent, host, { target: Audio, signalName: "setOutputFinished" })
+            Audio.setOutput("analog-0")
+            tryCompare(choose, "count", 1)
+            compare(choose.signalArguments[0][1], "ok")
+            tryCompare(Audio, "defaultSink", "analog-0")
+            tryVerify(() => Audio.outputs.find(o => o.id === "analog-0").isSaved)
+            verify(Audio.outputs.find(o => o.id === "analog-0").isDefault)
+
+            // A tone does not move the default or the choice.
+            const test = createTemporaryObject(spyComponent, host, { target: Audio, signalName: "testOutputFinished" })
+            Audio.testOutput("hdmi-0")
+            tryCompare(test, "count", 1)
+            compare(test.signalArguments[0][1], "ok")
+            compare(Audio.defaultSink, "analog-0")
+            verify(!Audio.outputs.find(o => o.id === "hdmi-0").isSaved)
+
+            // The empty jack has no sink yet; an unknown id is refused.
+            Audio.testOutput("headphones-0")
+            tryCompare(test, "count", 2)
+            compare(test.signalArguments[1][1], "inactive")
+            Audio.setOutput("nope")
+            tryCompare(choose, "count", 2)
+            compare(choose.signalArguments[1][1], "unknown-output")
+
+            Audio.resetOutputChoice()
+            tryVerify(() => Audio.outputs.every(o => !o.isSaved))
+        }
+
         Component { id: spyComponent; SignalSpy {} }
 
         function test_select_output() {
@@ -312,9 +354,9 @@ Item {
         function test_an_older_reply_arriving_late_is_dropped() {
             // Volume 50 on the TV. Ask again (the replies, a snapshot of that, are held back), then
             // the volume is raised and a headset plugged in: the late replies must not put 50 and
-            // the TV back. The state and the output list are two kinds of reply.
+            // the TV back. The state, the sink list and the output list are three kinds of reply.
             Audio.mockRefreshDelayed(150)
-            compare(Audio.mockPendingReplies(), 2)
+            compare(Audio.mockPendingReplies(), 3)
             Audio.setVolume(70)
             verify(Audio.mockPlug("usb-headset"))
             tryCompare(Audio, "volume", 70)
@@ -323,6 +365,7 @@ Item {
             compare(Audio.volume, 70, "the late state was dropped")
             compare(Audio.defaultSink, "usb-headset", "the late output list was dropped")
             compare(Audio.sinks.length, 3)
+            compare(Audio.outputs.length, 4, "the late output list was dropped too")
         }
 
         function test_zz_screenshots() {

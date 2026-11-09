@@ -2,8 +2,9 @@
 //! hot-plug policy, master volume and mute, the three channel levels. No I/O except through
 //! the `PipeWire` trait and the channel `Store`.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
+use crate::output_policy::{rank, Avail, Choice, ChoiceStore, OutKind, Output};
 use crate::store::{Channels, Store};
 
 /// Channel names of the contract, in order.
@@ -26,11 +27,6 @@ impl Kind {
             Kind::Bluetooth => "bluetooth",
         }
     }
-
-    /// Outputs a user plugs in on purpose: they take over when they appear.
-    fn is_headset(self) -> bool {
-        matches!(self, Kind::Usb | Kind::Bluetooth)
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -45,6 +41,9 @@ pub struct Sink {
 pub enum Status {
     Ok,
     UnknownSink,
+    UnknownOutput,
+    /// The output exists but has no sink yet (its card profile is not active).
+    Inactive,
     Invalid,
     Failed,
 }
@@ -54,6 +53,8 @@ impl Status {
         match self {
             Status::Ok => "ok",
             Status::UnknownSink => "unknown-sink",
+            Status::UnknownOutput => "unknown-output",
+            Status::Inactive => "inactive",
             Status::Invalid => "invalid",
             Status::Failed => "failed",
         }
@@ -64,6 +65,8 @@ impl Status {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Snapshot {
     pub sinks: Vec<Sink>,
+    /// Every output of the cards, also those without a sink (T-322).
+    pub outputs: Vec<Output>,
     pub default: Option<String>,
     pub volume: u32,
     pub muted: bool,
@@ -76,6 +79,16 @@ pub struct Snapshot {
 pub trait PipeWire: Send {
     fn snapshot(&mut self) -> Result<Snapshot, String>;
     fn set_default(&mut self, id: &str) -> Result<(), String>;
+    /// Makes the output the default: its sink when it has one. Switching a card profile so an
+    /// output without a sink gets one is T-347; until then that is an error.
+    fn activate(&mut self, output: &Output) -> Result<(), String> {
+        match &output.node {
+            Some(node) => self.set_default(node),
+            None => Err(format!("{}: its card profile is not active", output.id)),
+        }
+    }
+    /// Plays a short tone on the output's sink without changing the default.
+    fn play_tone(&mut self, node: &str) -> Result<(), String>;
     /// 0-100 of the default output.
     fn set_volume(&mut self, volume: u32) -> Result<(), String>;
     fn set_muted(&mut self, muted: bool) -> Result<(), String>;
@@ -85,6 +98,8 @@ pub trait PipeWire: Send {
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct Changes {
     pub sinks: bool,
+    /// The outputs, the saved choice or the default changed (`OutputsChanged`).
+    pub outputs: bool,
     /// The new default's id ("" when there is no output).
     pub default: Option<String>,
     /// Volume or mute.
@@ -93,7 +108,7 @@ pub struct Changes {
 
 impl Changes {
     pub fn any(&self) -> bool {
-        self.sinks || self.default.is_some() || self.props
+        self.sinks || self.outputs || self.default.is_some() || self.props
     }
 }
 
@@ -102,6 +117,11 @@ pub struct Audio<P: PipeWire> {
     store: Store,
     loaded: bool,
     sinks: Vec<Sink>,
+    outputs: Vec<Output>,
+    /// The ids of the headsets that were plugged at the last read.
+    plugged: BTreeSet<String>,
+    choice: Choice,
+    choice_store: ChoiceStore,
     default: Option<String>,
     /// Earlier defaults, most recent last; only used when the default goes away.
     previous: Vec<String>,
@@ -119,6 +139,10 @@ impl<P: PipeWire> Audio<P> {
             store,
             loaded: false,
             sinks: Vec::new(),
+            outputs: Vec::new(),
+            plugged: BTreeSet::new(),
+            choice: Choice::default(),
+            choice_store: ChoiceStore::in_memory(),
             default: None,
             previous: Vec::new(),
             volume: 0,
@@ -126,6 +150,13 @@ impl<P: PipeWire> Audio<P> {
             playing: false,
             channels,
         })
+    }
+
+    /// Keeps the saved choice in `store` (loaded now; a corrupt file is an error).
+    pub fn with_choice_store(mut self, store: ChoiceStore) -> std::io::Result<Self> {
+        self.choice = store.load()?;
+        self.choice_store = store;
+        Ok(self)
     }
 
     /// Reads PipeWire and applies the hot-plug policy. The first call only takes over the
@@ -141,33 +172,50 @@ impl<P: PipeWire> Audio<P> {
         self.loaded = true;
 
         let old_default = self.default.clone();
-        let added: Vec<&Sink> = snap
-            .sinks
-            .iter()
-            .filter(|s| !self.sinks.iter().any(|o| o.id == s.id))
-            .collect();
         let connected = |id: &str| snap.sinks.iter().any(|s| s.id == id);
         let default_gone = !first && old_default.as_deref().is_some_and(|d| !connected(d));
-        let headset = added.iter().rev().find(|s| s.kind.is_headset());
+        let plugged: BTreeSet<String> = snap
+            .outputs
+            .iter()
+            .filter(|o| o.is_plugged_headset())
+            .map(|o| o.id.clone())
+            .collect();
+        let headset = snap
+            .outputs
+            .iter()
+            .rev()
+            .find(|o| o.is_plugged_headset() && !self.plugged.contains(&o.id));
+        // The saved output is usable now and was not before: back from a reboot, a TV switched on late.
+        let usable = |outputs: &[Output]| {
+            self.choice.saved.as_deref().is_some_and(|saved| {
+                outputs
+                    .iter()
+                    .any(|o| o.id == saved && o.available != Avail::No)
+            })
+        };
+        let saved_returned = !first && usable(&snap.outputs) && !usable(&self.outputs);
 
         let mut default = snap.default.clone().filter(|d| connected(d));
         self.previous.retain(|p| connected(p));
 
         // Where the policy wants the default, if not where PipeWire has it.
-        let target = if first {
-            None
+        if first || saved_returned {
+            // A default WirePlumber remembered (even one that does not exist this boot) never decides.
+            self.follow_policy(&snap.outputs, &mut default);
         } else if let Some(h) = headset {
-            Some(h.id.clone())
+            if (h.node.is_none() || h.node != default) && self.pw.activate(h).is_ok() {
+                if let Some(n) = &h.node {
+                    default = Some(n.clone());
+                }
+            }
         } else if default_gone {
-            self.previous
-                .pop()
-                .or_else(|| snap.sinks.first().map(|s| s.id.clone()))
-        } else {
-            None
-        };
-        if let Some(target) = target {
-            if default.as_deref() != Some(target.as_str()) && self.pw.set_default(&target).is_ok() {
-                default = Some(target);
+            match self.previous.pop() {
+                Some(target) => {
+                    if self.pw.set_default(&target).is_ok() {
+                        default = Some(target);
+                    }
+                }
+                None => self.follow_policy(&snap.outputs, &mut default),
             }
         }
 
@@ -185,10 +233,15 @@ impl<P: PipeWire> Audio<P> {
         if self.sinks != snap.sinks {
             changes.sinks = true;
         }
+        if self.outputs != snap.outputs || changes.default.is_some() || saved_returned {
+            changes.outputs = true;
+        }
         if self.volume != snap.volume || self.muted != snap.muted || self.playing != snap.playing {
             changes.props = true;
         }
         self.sinks = snap.sinks;
+        self.outputs = snap.outputs;
+        self.plugged = plugged;
         self.default = default;
         self.volume = snap.volume.min(100);
         self.muted = snap.muted;
@@ -197,6 +250,112 @@ impl<P: PipeWire> Audio<P> {
             changes = Changes::default();
         }
         changes
+    }
+
+    /// Puts the default where the policy table says (the first output that can be activated).
+    fn follow_policy(&mut self, outputs: &[Output], default: &mut Option<String>) {
+        for o in rank(outputs, self.choice.saved.as_deref(), &self.choice.rejected) {
+            if o.node.is_some() && o.node == *default {
+                return;
+            }
+            if self.pw.activate(o).is_ok() {
+                if let Some(n) = &o.node {
+                    *default = Some(n.clone());
+                }
+                return;
+            }
+        }
+    }
+
+    /// Every output, with whether it is the default and whether it is the saved choice.
+    pub fn list_outputs(&self) -> Vec<(&Output, bool, bool)> {
+        self.outputs
+            .iter()
+            .map(|o| {
+                (
+                    o,
+                    o.node.is_some() && o.node == self.default,
+                    self.choice.saved.as_deref() == Some(o.id.as_str()),
+                )
+            })
+            .collect()
+    }
+
+    /// The player's choice: switch to it, remember it, and remember a valid-ELD HDMI output the
+    /// policy would have picked instead as rejected.
+    pub fn set_output(&mut self, id: &str) -> Status {
+        let Some(out) = self.outputs.iter().find(|o| o.id == id).cloned() else {
+            return Status::UnknownOutput;
+        };
+        let mut next = self.choice.clone();
+        let auto = rank(&self.outputs, None, &self.choice.rejected)
+            .first()
+            .filter(|o| o.has_eld() && o.id != id)
+            .map(|o| o.id.clone());
+        next.rejected.remove(id);
+        next.rejected.extend(auto);
+        next.saved = Some(id.to_owned());
+        let on_it = out.node.is_some() && out.node == self.default;
+        if !on_it && self.pw.activate(&out).is_err() {
+            return if out.node.is_none() {
+                Status::Inactive
+            } else {
+                Status::Failed
+            };
+        }
+        if self.choice_store.save(&next).is_err() {
+            return Status::Failed;
+        }
+        self.choice = next;
+        if !on_it {
+            if let Some(old) = self.default.take() {
+                self.previous.retain(|p| *p != old);
+                self.previous.push(old);
+            }
+            if let Some(node) = &out.node {
+                self.previous.retain(|p| p != node);
+                self.default = Some(node.clone());
+            }
+        }
+        Status::Ok
+    }
+
+    /// A short tone on the output, without touching the default.
+    pub fn test_output(&mut self, id: &str) -> Status {
+        let Some(node) = self
+            .outputs
+            .iter()
+            .find(|o| o.id == id)
+            .map(|o| o.node.clone())
+        else {
+            return Status::UnknownOutput;
+        };
+        match node {
+            None => Status::Inactive,
+            Some(node) => match self.pw.play_tone(&node) {
+                Ok(()) => Status::Ok,
+                Err(_) => Status::Failed,
+            },
+        }
+    }
+
+    /// Forgets the saved choice and the rejected outputs and applies the policy table now.
+    pub fn reset_choice(&mut self) -> Status {
+        if self.choice_store.save(&Choice::default()).is_err() {
+            return Status::Failed;
+        }
+        self.choice = Choice::default();
+        let outputs = self.outputs.clone();
+        let mut default = self.default.clone();
+        self.follow_policy(&outputs, &mut default);
+        if default != self.default {
+            if let Some(old) = self.default.take() {
+                self.previous.retain(|p| *p != old);
+                self.previous.push(old);
+            }
+            self.default = default;
+        }
+        Status::Ok
     }
 
     /// The outputs in a stable order, with whether each is the default.
@@ -291,8 +450,13 @@ impl<P: PipeWire> Audio<P> {
 }
 
 /// An in-memory PipeWire for tests and `--session` development: an HDMI and an analog output.
+#[derive(Clone)]
 pub struct FakePipeWire {
     pub sinks: Vec<Sink>,
+    /// The card's outputs; `None` derives one per sink (an HDMI sink has a valid ELD).
+    pub outputs: Option<Vec<Output>>,
+    /// The nodes a tone was played on.
+    pub tones: Vec<String>,
     pub default: Option<String>,
     pub volume: u32,
     pub muted: bool,
@@ -313,6 +477,8 @@ impl FakePipeWire {
                 sink("hdmi-0", "TV (HDMI)", Kind::Hdmi),
                 sink("analog-0", "Analog output", Kind::Analog),
             ],
+            outputs: None,
+            tones: Vec::new(),
             default: Some("hdmi-0".to_owned()),
             volume: 50,
             muted: false,
@@ -330,8 +496,31 @@ impl Default for FakePipeWire {
 
 impl PipeWire for FakePipeWire {
     fn snapshot(&mut self) -> Result<Snapshot, String> {
+        let outputs = self.outputs.clone().unwrap_or_else(|| {
+            self.sinks
+                .iter()
+                .map(|s| {
+                    let (kind, available) = match s.kind {
+                        Kind::Hdmi => (OutKind::Hdmi, Avail::Yes),
+                        Kind::Analog => (OutKind::Speaker, Avail::Unknown),
+                        Kind::Usb => (OutKind::Usb, Avail::Yes),
+                        Kind::Bluetooth => (OutKind::Bluetooth, Avail::Yes),
+                    };
+                    Output {
+                        id: s.id.clone(),
+                        name: s.name.clone(),
+                        kind,
+                        card: String::new(),
+                        port: String::new(),
+                        available,
+                        node: Some(s.id.clone()),
+                    }
+                })
+                .collect()
+        });
         Ok(Snapshot {
             sinks: self.sinks.clone(),
+            outputs,
             default: self.default.clone(),
             volume: self.volume,
             muted: self.muted,
@@ -344,6 +533,14 @@ impl PipeWire for FakePipeWire {
             return Err("refused".to_owned());
         }
         self.default = Some(id.to_owned());
+        Ok(())
+    }
+
+    fn play_tone(&mut self, node: &str) -> Result<(), String> {
+        if self.broken {
+            return Err("refused".to_owned());
+        }
+        self.tones.push(node.to_owned());
         Ok(())
     }
 
@@ -575,5 +772,217 @@ mod tests {
         a.store = Store::at(dir.path());
         assert_eq!(a.set_channel("ui", 10), Status::Failed);
         assert_eq!(a.channels()["ui"], 100);
+    }
+
+    /// Outputs of a card are tied to a sink only while their profile is active.
+    fn out(id: &str, kind: OutKind, available: Avail, node: Option<&str>) -> Output {
+        Output {
+            id: id.to_owned(),
+            name: id.to_owned(),
+            kind,
+            card: "card".to_owned(),
+            port: id.to_owned(),
+            available,
+            node: node.map(str::to_owned),
+        }
+    }
+
+    /// The Dell: the speaker's sink is the only one (the active profile); the headphones jack is
+    /// empty; the monitor's HDMI port is on an inactive profile, so no sink (T-347 activates it).
+    fn dell_pw(default: Option<&str>) -> FakePipeWire {
+        let mut pw = FakePipeWire::new();
+        pw.sinks = vec![headset("spk-node", Kind::Analog)];
+        pw.outputs = Some(vec![
+            out("spk", OutKind::Speaker, Avail::Unknown, Some("spk-node")),
+            out("hp", OutKind::Headphones, Avail::No, None),
+            out("tv", OutKind::Hdmi, Avail::Yes, None),
+        ]);
+        pw.default = default.map(str::to_owned);
+        pw
+    }
+
+    /// A TV whose profile is active: both a sink and an output.
+    fn tv_on(pw: &mut FakePipeWire) {
+        pw.sinks.push(headset("tv-node", Kind::Hdmi));
+        if let Some(outs) = &mut pw.outputs {
+            outs.retain(|o| o.id != "tv");
+            outs.push(out("tv", OutKind::Hdmi, Avail::Yes, Some("tv-node")));
+        }
+    }
+
+    fn with_choice(pw: FakePipeWire, dir: &std::path::Path) -> Audio<FakePipeWire> {
+        Audio::new(pw, Store::in_memory())
+            .unwrap()
+            .with_choice_store(ChoiceStore::at(&dir.join("outputs.toml")))
+            .unwrap()
+    }
+
+    fn saved_file(dir: &std::path::Path) -> Choice {
+        ChoiceStore::at(&dir.join("outputs.toml")).load().unwrap()
+    }
+
+    #[test]
+    fn nothing_plugged_the_speaker_is_the_default_at_start() {
+        let mut a = Audio::new(dell_pw(None), Store::in_memory()).unwrap();
+        a.refresh().unwrap();
+        assert_eq!(a.default_sink(), Some("spk-node"));
+        assert_eq!(a.pw.default.as_deref(), Some("spk-node"));
+    }
+
+    #[test]
+    fn a_stale_remembered_default_is_overridden_at_start() {
+        // default.configured.audio.sink names a node that does not exist this boot.
+        let mut a = Audio::new(dell_pw(Some("alsa_output.gone")), Store::in_memory()).unwrap();
+        a.refresh().unwrap();
+        assert_eq!(a.pw.default.as_deref(), Some("spk-node"));
+    }
+
+    #[test]
+    fn the_saved_output_present_at_start_is_the_default_whatever_wireplumber_kept() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut pw = dell_pw(Some("spk-node"));
+        tv_on(&mut pw);
+        let mut first = with_choice(pw.clone(), dir.path());
+        first.refresh().unwrap();
+        assert_eq!(first.set_output("tv"), Status::Ok);
+        // Reboot: a new service; WirePlumber remembered the speaker.
+        let mut a = with_choice(pw, dir.path());
+        a.refresh().unwrap();
+        assert_eq!(a.pw.default.as_deref(), Some("tv-node"));
+        assert_eq!(a.default_sink(), Some("tv-node"));
+        assert!(a
+            .list_outputs()
+            .iter()
+            .any(|(o, d, s)| o.id == "tv" && *d && *s));
+    }
+
+    #[test]
+    fn a_saved_output_that_is_absent_gives_the_fallback_keeps_the_choice_and_returns() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut pw = dell_pw(Some("spk-node"));
+        tv_on(&mut pw);
+        let mut first = with_choice(pw, dir.path());
+        first.refresh().unwrap();
+        first.set_output("tv");
+        // Reboot with the TV off: its sink and output are gone, the default is stale.
+        let mut off = dell_pw(Some("tv-node"));
+        off.outputs = Some(vec![out(
+            "spk",
+            OutKind::Speaker,
+            Avail::Unknown,
+            Some("spk-node"),
+        )]);
+        let mut a = with_choice(off, dir.path());
+        a.refresh().unwrap();
+        assert_eq!(a.pw.default.as_deref(), Some("spk-node"), "fallback");
+        assert_eq!(
+            saved_file(dir.path()).saved.as_deref(),
+            Some("tv"),
+            "choice kept"
+        );
+        // The TV is switched on late: it becomes the default again at once.
+        tv_on(&mut a.pw);
+        let c = a.refresh().unwrap();
+        assert_eq!(c.default.as_deref(), Some("tv-node"));
+        assert!(c.outputs);
+        assert_eq!(a.pw.default.as_deref(), Some("tv-node"));
+    }
+
+    #[test]
+    fn plugging_hdmi_audio_does_not_steal_the_default_unless_chosen() {
+        let mut a = Audio::new(dell_pw(Some("spk-node")), Store::in_memory()).unwrap();
+        a.refresh().unwrap();
+        // The monitor is unplugged at first (the policy chose the speaker), then plugged.
+        let mut off = a.pw.outputs.clone().unwrap();
+        off[2].available = Avail::No;
+        a.pw.outputs = Some(off);
+        a.refresh().unwrap();
+        tv_on(&mut a.pw);
+        let c = a.refresh().unwrap();
+        assert!(c.outputs && c.default.is_none());
+        assert_eq!(a.pw.default.as_deref(), Some("spk-node"));
+        assert_eq!(a.set_output("tv"), Status::Ok);
+        assert_eq!(a.pw.default.as_deref(), Some("tv-node"));
+    }
+
+    #[test]
+    fn headphones_in_the_jack_take_over_and_the_speaker_returns_when_unplugged() {
+        let mut pw = dell_pw(Some("spk-node"));
+        pw.sinks.push(headset("hp-node", Kind::Analog));
+        let mut a = Audio::new(pw, Store::in_memory()).unwrap();
+        a.refresh().unwrap();
+        let mut outs = a.pw.outputs.clone().unwrap();
+        outs[1] = out("hp", OutKind::Headphones, Avail::Yes, Some("hp-node"));
+        a.pw.outputs = Some(outs);
+        let c = a.refresh().unwrap();
+        assert_eq!(c.default.as_deref(), Some("hp-node"));
+        // Unplugged: the sink goes with the route.
+        a.pw.sinks.retain(|s| s.id != "hp-node");
+        let mut outs = a.pw.outputs.clone().unwrap();
+        outs[1] = out("hp", OutKind::Headphones, Avail::No, None);
+        a.pw.outputs = Some(outs);
+        a.pw.default = None;
+        let c = a.refresh().unwrap();
+        assert_eq!(c.default.as_deref(), Some("spk-node"));
+    }
+
+    #[test]
+    fn choosing_the_speaker_over_a_monitor_rejects_the_monitor_and_reset_forgets_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut pw = dell_pw(Some("spk-node"));
+        tv_on(&mut pw);
+        let mut a = with_choice(pw, dir.path());
+        a.refresh().unwrap();
+        assert_eq!(
+            a.default_sink(),
+            Some("tv-node"),
+            "an ELD wins without a choice"
+        );
+        assert_eq!(a.set_output("spk"), Status::Ok);
+        let c = saved_file(dir.path());
+        assert_eq!(c.saved.as_deref(), Some("spk"));
+        assert!(c.rejected.contains("tv"));
+        assert_eq!(a.reset_choice(), Status::Ok);
+        assert_eq!(a.default_sink(), Some("tv-node"));
+        assert_eq!(saved_file(dir.path()), Choice::default());
+    }
+
+    #[test]
+    fn set_output_and_test_output_statuses() {
+        let mut a = Audio::new(dell_pw(Some("spk-node")), Store::in_memory()).unwrap();
+        a.refresh().unwrap();
+        assert_eq!(a.set_output("nope"), Status::UnknownOutput);
+        assert_eq!(a.test_output("nope"), Status::UnknownOutput);
+        // The monitor's profile is not active yet: no sink, nothing saved.
+        assert_eq!(a.set_output("tv"), Status::Inactive);
+        assert_eq!(a.test_output("tv"), Status::Inactive);
+        assert!(a.list_outputs().iter().all(|(_, _, saved)| !saved));
+        // A tone leaves the default and the saved choice alone.
+        assert_eq!(a.test_output("spk"), Status::Ok);
+        assert_eq!(a.pw.tones, ["spk-node"]);
+        assert_eq!(a.default_sink(), Some("spk-node"));
+        assert!(a.list_outputs().iter().all(|(_, _, saved)| !saved));
+        a.pw.broken = true;
+        assert_eq!(a.test_output("spk"), Status::Failed);
+    }
+
+    #[test]
+    fn list_outputs_marks_default_and_saved() {
+        let mut a = Audio::new(dell_pw(None), Store::in_memory()).unwrap();
+        a.refresh().unwrap();
+        assert_eq!(a.set_output("spk"), Status::Ok);
+        let rows: Vec<_> = a
+            .list_outputs()
+            .iter()
+            .map(|(o, d, s)| (o.id.clone(), *d, *s))
+            .collect();
+        assert_eq!(
+            rows,
+            [
+                ("spk".into(), true, true),
+                ("hp".into(), false, false),
+                ("tv".into(), false, false)
+            ]
+        );
     }
 }

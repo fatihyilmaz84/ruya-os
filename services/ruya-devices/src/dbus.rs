@@ -44,6 +44,12 @@ impl crate::audio::PipeWire for DynPipeWire {
     fn set_default(&mut self, id: &str) -> Result<(), String> {
         (**self).set_default(id)
     }
+    fn activate(&mut self, output: &crate::output_policy::Output) -> Result<(), String> {
+        (**self).activate(output)
+    }
+    fn play_tone(&mut self, node: &str) -> Result<(), String> {
+        (**self).play_tone(node)
+    }
     fn set_volume(&mut self, volume: u32) -> Result<(), String> {
         (**self).set_volume(volume)
     }
@@ -90,6 +96,75 @@ impl AudioIface {
                 .collect()
             })
             .collect()
+    }
+
+    fn list_outputs(&self) -> Vec<HashMap<String, OwnedValue>> {
+        lock(&self.audio)
+            .list_outputs()
+            .into_iter()
+            .map(|(o, is_default, is_saved)| {
+                let own = |v: Value<'_>| OwnedValue::try_from(v).ok();
+                [
+                    ("id", own(Value::from(o.id.clone()))),
+                    ("name", own(Value::from(o.name.clone()))),
+                    ("kind", own(Value::from(o.kind.as_str()))),
+                    ("card", own(Value::from(o.card.clone()))),
+                    ("port", own(Value::from(o.port.clone()))),
+                    ("available", own(Value::from(o.available.as_str()))),
+                    ("active", own(Value::from(o.node.is_some()))),
+                    ("is_default", own(Value::from(is_default))),
+                    ("is_saved", own(Value::from(is_saved))),
+                ]
+                .into_iter()
+                .filter_map(|(k, v)| v.map(|v| (k.to_owned(), v)))
+                .collect()
+            })
+            .collect()
+    }
+
+    async fn set_output(
+        &self,
+        id: &str,
+        #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
+    ) -> String {
+        let (status, before, after) = {
+            let mut audio = lock(&self.audio);
+            let before = audio.default_sink().map(str::to_owned);
+            let status = audio.set_output(id);
+            (status, before, audio.default_sink().map(str::to_owned))
+        };
+        if status == crate::Status::Ok {
+            let _ = Self::outputs_changed(&emitter).await;
+            if before != after {
+                let _ = Self::sinks_changed(&emitter).await;
+                let _ = Self::default_sink_changed(&emitter, after.unwrap_or_default()).await;
+            }
+        }
+        status.as_str().to_owned()
+    }
+
+    fn test_output(&self, id: &str) -> String {
+        lock(&self.audio).test_output(id).as_str().to_owned()
+    }
+
+    async fn reset_output_choice(
+        &self,
+        #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
+    ) -> String {
+        let (status, before, after) = {
+            let mut audio = lock(&self.audio);
+            let before = audio.default_sink().map(str::to_owned);
+            let status = audio.reset_choice();
+            (status, before, audio.default_sink().map(str::to_owned))
+        };
+        if status == crate::Status::Ok {
+            let _ = Self::outputs_changed(&emitter).await;
+            if before != after {
+                let _ = Self::sinks_changed(&emitter).await;
+                let _ = Self::default_sink_changed(&emitter, after.unwrap_or_default()).await;
+            }
+        }
+        status.as_str().to_owned()
     }
 
     async fn set_default_sink(
@@ -160,6 +235,9 @@ impl AudioIface {
     }
 
     #[zbus(signal)]
+    async fn outputs_changed(emitter: &SignalEmitter<'_>) -> zbus::Result<()>;
+
+    #[zbus(signal)]
     async fn sinks_changed(emitter: &SignalEmitter<'_>) -> zbus::Result<()>;
 
     #[zbus(signal)]
@@ -208,6 +286,9 @@ async fn announce(connection: &Connection, changes: &Changes) -> zbus::Result<()
     let emitter = iface.signal_emitter();
     if changes.sinks {
         AudioIface::sinks_changed(emitter).await?;
+    }
+    if changes.outputs {
+        AudioIface::outputs_changed(emitter).await?;
     }
     if let Some(id) = &changes.default {
         AudioIface::default_sink_changed(emitter, id.clone()).await?;

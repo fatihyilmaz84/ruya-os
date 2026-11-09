@@ -27,6 +27,7 @@ use ruya_devices::drive_scan::FsSource;
 use ruya_devices::drive_scan::{FakeTree, Scans};
 use ruya_devices::input::{DynInputSource, FakeInput, InputDevice, InputPresence};
 use ruya_devices::network::{FakeNetworkManager, Network};
+use ruya_devices::output_policy::ChoiceStore;
 use ruya_devices::storage::{FakeUdisks, RawVolume, Storage};
 use ruya_devices::store::Store;
 use ruya_devices::sysinfo::{DynInfoSource, SystemInfo};
@@ -389,7 +390,10 @@ async fn follow_system(
 fn run() -> Result<(), Box<dyn Error>> {
     let session = std::env::args().any(|a| a == "--session");
     let store = state_file().map_or_else(Store::in_memory, |p| Store::at(&p));
-    let mut audio = Audio::new(pipewire(session), store)?;
+    let choice_store = state_file().map_or_else(ChoiceStore::in_memory, |p| {
+        ChoiceStore::at(&p.with_file_name("outputs.toml"))
+    });
+    let mut audio = Audio::new(pipewire(session), store)?.with_choice_store(choice_store)?;
     // The first read only takes over the state; a failure here (PipeWire not up yet) is retried
     // by the watcher, so it must not stop the service.
     if let Err(err) = audio.refresh() {

@@ -21,11 +21,16 @@ public:
     void setMuted(bool muted) override;
     void setChannelVolume(const QString &channel, int value) override;
     void setDefaultSink(const QString &id) override;
+    void setOutput(const QString &id) override;
+    void testOutput(const QString &id) override;
+    void resetOutputChoice() override;
 
     // Tests only: "usb-headset" ("USB headset") and "bt-headphones" ("BT headphones").
     // Returns false for an unknown id; plugging a connected device in again does nothing.
     bool plug(const QString &id);
     void unplug(const QString &id);
+    // The outputs a test sound was asked for, in order (tests).
+    QStringList testedOutputs() const { return m_tested; }
     void reset();
     void setPlaying(bool playing)
     {
@@ -42,6 +47,8 @@ private:
     void initState();
     void publishState(int delayMs = 0);
     void publishSinks(int delayMs = 0);
+    void publishOutputs(int delayMs = 0);
+    QList<OutputInfo> outputs() const;
     int indexOf(const QString &id) const;
     void makeDefault(const QString &id);
 
@@ -50,6 +57,8 @@ private:
     bool m_playing = false;
     QVariantMap m_channels;
     QList<SinkInfo> m_sinks;
+    QString m_saved; // the player's choice (an output id)
+    QStringList m_tested;
     QStringList m_previous; // earlier defaults, most recent last
     int m_delay = 0;
     int m_pending = 0;

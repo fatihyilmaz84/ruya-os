@@ -21,6 +21,9 @@ public:
     void setMuted(bool muted) override;
     void setChannelVolume(const QString &channel, int value) override;
     void setDefaultSink(const QString &id) override;
+    void setOutput(const QString &id) override;
+    void testOutput(const QString &id) override;
+    void resetOutputChoice() override;
 
 private slots:
     void onSinksChanged();
@@ -29,6 +32,8 @@ private slots:
 private:
     void refreshState();
     void refreshSinks();
+    void refreshOutputs();
+    void callOutput(const QString &method, const QString &id);
     void setProperty(const QString &name, const QVariant &value);
 
     QDBusConnection m_bus;

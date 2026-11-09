@@ -27,6 +27,7 @@ pub mod input;
 pub mod log;
 pub mod network;
 pub mod networkmanager;
+pub mod output_policy;
 pub mod pairing;
 pub mod pipewire;
 pub mod report;
