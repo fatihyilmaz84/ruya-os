@@ -1,6 +1,6 @@
 # T-348 - Settings > Audio > Output: choose where the sound plays, with a test sound
 
-Status: todo · Phase: 2 · Depends: T-322 · Area: shell (AudioPane, mock, D-Bus client) · Size: M · Owner: builder
+Status: in-progress · Phase: 2 · Depends: T-322 · Area: shell (AudioPane, mock, D-Bus client) · Size: M · Owner: builder
 
 ## Goal
 Silent sound is the first thing a player needs to fix. Settings > Audio gets an **Output** list built on the contract of T-322 (`ListOutputs`, `SetOutput`, `TestOutput`): the current output marked, unavailable ones greyed with the reason, a **Test sound** row that plays the tone on the focused output, A to choose. Outputs on other card profiles appear once T-347 lands; the pane does not care.
