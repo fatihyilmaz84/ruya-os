@@ -86,7 +86,7 @@ Areas: `shell`, `services`, `image`, `api`, `docs`, `scripts`, `ci`. Add the att
 ## Environment pitfalls (learned the hard way)
 
 - **Shells.** The PowerShell tool is **5.1** (no `&&`, no ternary); Git Bash is also available. `scripts\dev.ps1` already works around the quirks: use it. Commit messages: write a file, `git commit -F <file>` (5.1 can't pipe a here-string into `-F -`).
-- **Host tools corrupt files** (reached `main` twice). Backslashes sent through Bash heredocs, `sed` or Python literals become control characters: **write text with backslashes (Windows paths, regex) with Write/Edit.** Python defaults to **cp1252**: pass `encoding="utf-8"`. `scripts/lint-text.ps1` (in `test` and CI) fails on invalid UTF-8, control characters and tabs in tracked files.
+- **Host tools corrupt files** (reached `main` four times). Backslashes sent through Bash heredocs, `sed` or Python literals become control characters: **write text with backslashes (Windows paths, regex) with Write/Edit.** Python defaults to **cp1252**: pass `encoding="utf-8"`. `scripts/lint-text.ps1` (in `test`, CI and the `.githooks/pre-commit` hook) fails on invalid UTF-8, control characters and tabs in tracked files; run it before every commit.
 - **Qt** 6.10.3 (MSVC) at `D:\dev\Qt\6.10.3\msvc2022_64`; the image uses Fedora's Qt (≥ 6.8), so use no newer APIs. MSVC compiles C++17 (no `[=, this]`).
 - **Rendering.** Offscreen (tests, CI) is the software renderer, where `MultiEffect` draws nothing: assert properties (`visible`, `blurMax`, focus), never pixels. Only `shots` renders on the GPU.
 - **qmllint** needs the module response file and `--max-warnings 0`; `dev.ps1` does that.
