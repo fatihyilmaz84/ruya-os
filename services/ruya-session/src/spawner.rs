@@ -128,6 +128,51 @@ pub fn scope_pattern(app_id: &str) -> Result<String, String> {
     Ok(format!("app-flatpak-{app_id}-*.scope"))
 }
 
+/// Is `name` a scope `flatpak run <app_id>` makes (`app-flatpak-<app_id>-<number>.scope`)? The
+/// part after the id must be digits only, so `org.x.App-Extra` is not taken for `org.x.App`.
+pub fn is_app_scope(app_id: &str, name: &str) -> bool {
+    valid_app_id(app_id)
+        && name
+            .strip_prefix("app-flatpak-")
+            .and_then(|rest| rest.strip_prefix(app_id))
+            .and_then(|rest| rest.strip_prefix('-'))
+            .and_then(|rest| rest.strip_suffix(".scope"))
+            .is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
+}
+
+/// What `systemctl stop|kill` gets next to the unit to reach the app's scope (T-363): the exact
+/// name of the scope the run has attached (`scope::RunScopes::scope_of`), or, while none is
+/// attached yet, the pattern of every scope of the app.
+pub fn scope_target(app_id: &str, attached: Option<&str>) -> Result<String, String> {
+    match attached {
+        Some(name) if is_app_scope(app_id, name) => Ok(name.to_owned()),
+        Some(name) => Err(format!("not a scope of {app_id}: {name:?}")),
+        None => scope_pattern(app_id),
+    }
+}
+
+/// The `systemctl` argument list that applies `verb` (`stop --no-block`, `kill ...`) to the unit
+/// and to the scope target in `user`'s manager. Pure; the user is validated again.
+pub fn control_command(
+    user: &str,
+    verb: &[&str],
+    unit: &str,
+    scope: &str,
+) -> Result<Vec<String>, String> {
+    if !user.strip_prefix("ruya-").is_some_and(valid_profile_id) {
+        return Err(format!("not a profile user: {user:?}"));
+    }
+    let mut args: Vec<String> = ["systemctl", "--user", "--no-pager"]
+        .into_iter()
+        .map(str::to_owned)
+        .collect();
+    args.push(format!("--machine={user}@.host"));
+    args.extend(verb.iter().map(|v| (*v).to_owned()));
+    args.push(unit.to_owned());
+    args.push(scope.to_owned());
+    Ok(args)
+}
+
 /// Is the application in the system Flatpak installation under `root` (`/var/lib/flatpak`)?
 /// Flatpak keeps `app/<id>/current` (a link to `<arch>/<branch>`) for an installed app and
 /// removes the directory on uninstall. A file check, so no process is started per launch.
@@ -479,6 +524,9 @@ pub struct ShowUnit {
     pub exec_main_status: i32,
     /// `ExecMainCode`: 1 exited, 2 killed, 3 dumped (the `CLD_*` codes), 0 not ended yet.
     pub exec_main_code: i32,
+    /// `CPUUsageNSec`: CPU time used so far, in nanoseconds; `None` for `[not set]` (accounting
+    /// off) or a unit that was not asked.
+    pub cpu_nsec: Option<u64>,
 }
 
 impl ShowUnit {
@@ -490,13 +538,14 @@ impl ShowUnit {
 }
 
 /// The `-p` arguments of the `systemctl show` call that `parse_show` reads.
-pub const SHOW_PROPERTIES: [&str; 6] = [
+pub const SHOW_PROPERTIES: [&str; 7] = [
     "Id",
     "LoadState",
     "ActiveState",
     "ActiveEnterTimestamp",
     "ExecMainStatus",
     "ExecMainCode",
+    "CPUUsageNSec",
 ];
 
 /// The units of a `systemctl show` output: `Key=Value` lines, a blank line between units.
@@ -530,6 +579,11 @@ pub fn parse_show(output: &str) -> Vec<ShowUnit> {
             }
             "ExecMainStatus" => cur.exec_main_status = value.trim().parse().unwrap_or(0),
             "ExecMainCode" => cur.exec_main_code = value.trim().parse().unwrap_or(0),
+            // "[not set]" (accounting off) and "18446744073709551615" (systemd's "unknown") are
+            // no reading.
+            "CPUUsageNSec" => {
+                cur.cpu_nsec = value.trim().parse().ok().filter(|n| *n != u64::MAX);
+            }
             _ => {}
         }
     }
@@ -1191,6 +1245,7 @@ ActiveState=failed
             entered: 0,
             exec_main_status: status,
             exec_main_code: code,
+            cpu_nsec: None,
         }
     }
 

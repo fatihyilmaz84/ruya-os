@@ -22,6 +22,11 @@
 //! a `unixexec:` address) and talks over its pipes; `Subscribe` and the `PropertiesChanged` /
 //! `UnitRemoved` signals give the real exit status. Only while the bridge is dead are the units
 //! looked at with `systemctl show` every two seconds; the bridge is restarted with a growing pause.
+//!
+//! `flatpak run` puts the game in its own `app-flatpak-<id>-<n>.scope`, outside the unit (T-363).
+//! Every event goes through `Gate`: `scope::RunScopes` attaches the scope to its run, reads its
+//! CPU, and holds the unit's end until the scope is gone (a watcher thread asks each manager
+//! with one `systemctl show` per second at most); `Stop` and the kill name the attached scope.
 
 use std::collections::HashMap;
 use std::fs::File;
@@ -40,10 +45,11 @@ use zbus::{Connection, MatchRule, MessageStream};
 use crate::follow::{
     bridge_args, parse_signal, Backoff, Follower, ManagerLink, Probe, Wake, BRIDGE_PROGRAM,
 };
+use crate::scope::RunScopes;
 use crate::spawner::{
-    flatpak_app_installed, launch_command, parse_profile_users, parse_show, pulse_start_command,
-    scope_pattern, unit_app_id, unit_name, LineTail, RunFollower, RunningUnit, ShowUnit,
-    SHOW_PROPERTIES,
+    control_command, flatpak_app_installed, launch_command, parse_profile_users, parse_show,
+    pulse_start_command, scope_target, unit_app_id, unit_name, LineTail, RunFollower, RunningUnit,
+    ShowUnit, SHOW_PROPERTIES,
 };
 use crate::spawner::{Spawner, UnitEvent};
 use std::ffi::OsString;
@@ -56,27 +62,100 @@ const LOG_DIR: &str = "/run/ruya-session";
 /// How often the status file of a running `systemd-run` is read.
 const POLL: Duration = Duration::from_millis(100);
 
-pub struct SystemdSpawner {
-    flatpak_root: PathBuf,
-    log_dir: PathBuf,
+/// How often the scope watcher wakes (what is due is decided by `RunScopes::plan`).
+const SCOPE_TICK: Duration = Duration::from_secs(1);
+
+type Registry = Arc<Mutex<HashMap<String, (String, String)>>>;
+
+/// The way every unit event takes to the core (T-363): the end of a unit whose Flatpak scope still
+/// lives is held back by `RunScopes` until the scope is gone, and a unit leaves the registry (so
+/// `Stop` and the kill stop reaching it) only when its end is handed on.
+#[derive(Clone)]
+struct Gate {
     events: Sender<UnitEvent>,
     /// unit -> (Unix user, app id), for the units that run: `Stop` and the kill need the user's
     /// manager and the app's scope.
-    units: Arc<Mutex<HashMap<String, (String, String)>>>,
+    units: Registry,
+    scopes: Arc<Mutex<RunScopes>>,
+}
+
+impl Gate {
+    fn deliver(&self, event: UnitEvent) {
+        let passed = self
+            .scopes
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .on_unit_event(event);
+        if let Some(event) = passed {
+            self.send(event);
+        }
+    }
+
+    fn send(&self, event: UnitEvent) {
+        if let UnitEvent::Exited { unit, .. } | UnitEvent::ExecFailed { unit } = &event {
+            self.units
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .remove(unit);
+        }
+        let _ = self.events.send_blocking(event);
+    }
+}
+
+/// Looks at the Flatpak scopes of the runs, one `systemctl show` per profile manager and round
+/// (`RunScopes::plan` / `apply`), and hands on the unit ends that waited for a scope.
+fn watch_scopes(gate: Gate) {
+    loop {
+        std::thread::sleep(SCOPE_TICK);
+        let queries = gate
+            .scopes
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .plan(Instant::now());
+        for query in queries {
+            let shows = show_many(&query.user, &query.names).map(|text| parse_show(&text));
+            let ended = gate.scopes.lock().unwrap_or_else(|e| e.into_inner()).apply(
+                &query.user,
+                shows.as_deref(),
+                Instant::now(),
+            );
+            for event in ended {
+                gate.send(event);
+            }
+        }
+    }
+}
+
+pub struct SystemdSpawner {
+    flatpak_root: PathBuf,
+    log_dir: PathBuf,
+    gate: Gate,
 }
 
 impl SystemdSpawner {
     pub fn new(events: Sender<UnitEvent>) -> Self {
+        let gate = Gate {
+            events,
+            units: Arc::new(Mutex::new(HashMap::new())),
+            scopes: Arc::new(Mutex::new(RunScopes::new())),
+        };
+        let watcher = gate.clone();
+        if let Err(err) = std::thread::Builder::new()
+            .name("scopes".to_owned())
+            .spawn(move || watch_scopes(watcher))
+        {
+            eprintln!("ruya-session: cannot watch the Flatpak scopes: {err}");
+        }
         SystemdSpawner {
             flatpak_root: PathBuf::from(FLATPAK_ROOT),
             log_dir: PathBuf::from(LOG_DIR),
-            events,
-            units: Arc::new(Mutex::new(HashMap::new())),
+            gate,
         }
     }
 
     fn owner_of(&self, unit: &str) -> Result<(String, String), String> {
-        self.units
+        self.gate
+            .units
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .get(unit)
@@ -84,19 +163,23 @@ impl SystemdSpawner {
             .ok_or_else(|| format!("no running unit {unit}"))
     }
 
-    /// `systemctl --user --machine=<user>@.host <verb>... <unit> <scope pattern>` on its own
-    /// thread: it talks to the bus and must not hold up a D-Bus call. Its failure is logged; the
-    /// unit's end (or the kill after the grace time) is what the core acts on. The scope is the
-    /// app itself (see `scope_pattern`); the unit is its `flatpak run` front end.
+    /// `systemctl --user --machine=<user>@.host <verb>... <unit> <scope>` on its own thread: it
+    /// talks to the bus and must not hold up a D-Bus call. Its failure is logged; the run's end
+    /// (or the kill after the grace time) is what the core acts on. The scope is the app itself
+    /// (`scope_target`: the one the run has attached, else the pattern of the app's scopes); the
+    /// unit is its `flatpak run` front end.
     fn systemctl(&self, unit: &str, verb: &[&str]) -> Result<(), String> {
         let (user, app_id) = self.owner_of(unit)?;
-        let scope = scope_pattern(&app_id)?;
-        let mut cmd = Command::new("systemctl");
-        cmd.args(["--user", "--no-pager"])
-            .arg(format!("--machine={user}@.host"))
-            .args(verb)
-            .arg(unit)
-            .arg(&scope)
+        let attached = self
+            .gate
+            .scopes
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .scope_of(unit);
+        let scope = scope_target(&app_id, attached.as_deref())?;
+        let args = control_command(&user, verb, unit, &scope)?;
+        let mut cmd = Command::new(&args[0]);
+        cmd.args(&args[1..])
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::inherit());
@@ -154,26 +237,37 @@ impl Spawner for SystemdSpawner {
     fn start(&self, user: &str, app_id: &str, env: &[(String, String)]) -> Result<String, String> {
         let args = launch_command(user, app_id, env)?;
         let unit = unit_name(user, app_id);
-        self.units
+        self.gate
+            .units
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .insert(unit.clone(), (user.to_owned(), app_id.to_owned()));
+        self.gate
+            .scopes
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .begin(&unit, user, app_id, Instant::now());
         let job = Job {
             args,
             user: user.to_owned(),
             unit: unit.clone(),
             log_dir: self.log_dir.clone(),
-            events: self.events.clone(),
-            units: self.units.clone(),
+            gate: self.gate.clone(),
         };
         std::thread::Builder::new()
             .name("systemd-run".to_owned())
             .spawn(move || job.run())
             .map_err(|err| {
-                self.units
+                self.gate
+                    .units
                     .lock()
                     .unwrap_or_else(|e| e.into_inner())
                     .remove(&unit);
+                self.gate
+                    .scopes
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .forget(&unit);
                 format!("cannot start a thread: {err}")
             })?;
         Ok(unit)
@@ -211,10 +305,16 @@ impl Spawner for SystemdSpawner {
                 let Some(app_id) = unit_app_id(&user, &show.id) else {
                     continue;
                 };
-                self.units
+                self.gate
+                    .units
                     .lock()
                     .unwrap_or_else(|e| e.into_inner())
                     .insert(show.id.clone(), (user.clone(), app_id.clone()));
+                self.gate
+                    .scopes
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .begin(&show.id, &user, &app_id, Instant::now());
                 mine.push(RunningUnit {
                     unit: show.id,
                     user: user.clone(),
@@ -227,17 +327,18 @@ impl Spawner for SystemdSpawner {
             }
             // One thread and one connection per manager, however many apps it runs.
             let names: Vec<String> = mine.iter().map(|u| u.unit.clone()).collect();
-            let events = self.events.clone();
-            let registry = self.units.clone();
+            let gate = self.gate.clone();
             let who = user.clone();
             let spawned = std::thread::Builder::new()
                 .name("watch".to_owned())
-                .spawn(move || follow_user(&who, &names, &events, &registry));
+                .spawn(move || follow_user(&who, &names, &gate));
             if let Err(err) = spawned {
                 eprintln!("ruya-session: cannot watch the apps of {user}: {err}");
-                let mut registry = self.units.lock().unwrap_or_else(|e| e.into_inner());
+                let mut registry = self.gate.units.lock().unwrap_or_else(|e| e.into_inner());
+                let mut scopes = self.gate.scopes.lock().unwrap_or_else(|e| e.into_inner());
                 for u in &mine {
                     registry.remove(&u.unit);
+                    scopes.forget(&u.unit);
                 }
                 continue;
             }
@@ -253,6 +354,11 @@ impl Spawner for SystemdSpawner {
 /// `systemctl --user -M <user>@.host show` of the units matching `pattern`, or `None` when the
 /// call failed. Times come as `@<unix seconds>`.
 fn show_units(user: &str, pattern: &str) -> Option<String> {
+    show_many(user, &[pattern.to_owned()])
+}
+
+/// The same for several names or patterns in one call.
+fn show_many(user: &str, names: &[String]) -> Option<String> {
     let mut cmd = Command::new("systemctl");
     cmd.args(["--user", "--no-pager", "--timestamp=unix"])
         .arg(format!("--machine={user}@.host"))
@@ -261,7 +367,7 @@ fn show_units(user: &str, pattern: &str) -> Option<String> {
         cmd.arg(format!("--property={property}"));
     }
     let out = cmd
-        .arg(pattern)
+        .args(names)
         .stdin(Stdio::null())
         .stderr(Stdio::inherit())
         .output()
@@ -271,23 +377,12 @@ fn show_units(user: &str, pattern: &str) -> Option<String> {
 }
 
 /// Follows the adopted units of one profile user until the last one has ended.
-fn follow_user(
-    user: &str,
-    units: &[String],
-    events: &Sender<UnitEvent>,
-    registry: &Arc<Mutex<HashMap<String, (String, String)>>>,
-) {
+fn follow_user(user: &str, units: &[String], gate: &Gate) {
     let mut link = UserLink::new(user);
     let mut follower = Follower::new(units);
     while !follower.is_done() {
         for event in follower.step(&mut link) {
-            if let UnitEvent::Exited { unit, .. } = &event {
-                registry
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .remove(unit);
-            }
-            let _ = events.send_blocking(event);
+            gate.deliver(event);
         }
     }
 }
@@ -418,6 +513,7 @@ impl UserLink {
             entered,
             exec_main_status: int("ExecMainStatus"),
             exec_main_code: int("ExecMainCode"),
+            cpu_nsec: None,
         };
         Ok(if show.alive() {
             Probe::Alive(show)
@@ -539,8 +635,7 @@ struct Job {
     user: String,
     unit: String,
     log_dir: PathBuf,
-    events: Sender<UnitEvent>,
-    units: Arc<Mutex<HashMap<String, (String, String)>>>,
+    gate: Gate,
 }
 
 impl Job {
@@ -548,12 +643,8 @@ impl Job {
         ensure_manager(&self.user);
         let (code, signaled, follower) = self.follow();
         let event = follower.finish(code, signaled);
-        // The unit is gone for the registry too: forget its user before the core hears of it.
-        self.units
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .remove(&self.unit);
-        let _ = self.events.send_blocking(event);
+        // The gate forgets the unit's user when it hands the end on (after the scope is gone).
+        self.gate.deliver(event);
     }
 
     /// Runs `systemd-run`, forwards the events its lines make, returns how it ended.
@@ -606,7 +697,7 @@ impl Job {
             for line in tail.poll() {
                 eprintln!("ruya-session: {}: {line}", self.unit);
                 if let Some(event) = follower.line(&line) {
-                    let _ = self.events.send_blocking(event);
+                    self.gate.deliver(event);
                 }
             }
             if done.is_some() {

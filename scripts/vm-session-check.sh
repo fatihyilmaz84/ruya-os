@@ -477,6 +477,10 @@ check)
     grep -a -q "session-probe: mock=false running=.*$sleeper/$pid/running" "$work/probe.log" \
         && ok "the shell's Session.running follows the Launch (after about $n s)" || bad "the shell's Session did not show the running app"
 
+    # T-363: the run follows the app's own Flatpak scope (the service logs the attach and the end).
+    n=0; while ! journalctl -u ruya-session -b --no-pager -o cat 2>/dev/null | grep -a -q "$inst: attached app-flatpak-$sleeper-[0-9]*[.]scope" && [ "$n" -lt 20 ]; do sleep 1; n=$((n + 1)); done
+    [ "$n" -lt 20 ] && ok "the run attached the app's Flatpak scope (after about $n s)" || bad "no 'attached app-flatpak-$sleeper-N.scope' line for $inst in the journal"
+
     echo "--- Launch refusals"
     case "$(launch "$sleeper" "$pid")" in 'ss "already-running" ""') ok "a second Launch: already-running";; *) bad "second Launch";; esac
     case "$(launch org.ruyaos.NotInstalled "$pid")" in 'ss "unknown-app" ""') ok "unknown-app";; *) bad "unknown app";; esac
@@ -491,6 +495,10 @@ check)
     case "$(stop_app "$inst")" in 's "ok"') ok "Stop answered ok";; *) bad "Stop";; esac
     wait_sig "\"member\":\"AppExited\".*$sleeper.*\"quit\"" 20 && ok "AppExited with reason quit after $(( $(date +%s) - t0 )) s" || bad "no AppExited quit within 20 s"
     gone "sleep 3000" && ok "Stop ended the app itself, not only the unit (its scope is gone)" || bad "the app's process is still there after Stop"
+    journalctl -u ruya-session -b --no-pager -o cat 2>/dev/null | grep -a -q "$inst: scope gone" \
+        && ok "the run ended with its scope (journal: scope gone)" || bad "no 'scope gone' line for $inst in the journal"
+    systemctl --user -M "$user@.host" list-units --no-legend --state=active "app-flatpak-$sleeper-*.scope" </dev/null 2>&1 | grep -q scope \
+        && bad "an app-flatpak-$sleeper scope is still active after Stop" || ok "no app-flatpak-$sleeper scope is left after Stop"
     running | grep -q "$inst" && bad "ListRunning still lists it" || ok "ListRunning is empty again"
     grep -a -q "session-probe: appExited $sleeper 0 quit\|session-probe: appExited $sleeper -\?[0-9]* quit" "$work/probe.log" && ok "the shell saw appExited quit" || bad "the shell did not see appExited quit"
 
