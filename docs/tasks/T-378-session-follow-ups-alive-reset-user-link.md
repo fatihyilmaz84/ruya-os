@@ -14,6 +14,8 @@ The adopted-app follower never drops a running game because of one logind hiccup
 1. A unit test: Unknown, Unknown, Alive, Unknown, Unknown probes never reach the drop threshold (one Alive between Unknowns resets the count). Red when the reset is removed.
 2. `UserLink::exists` returns three states (exists, user unknown, could not ask) and a unit is dropped only on "user unknown"; "could not ask" counts as Unknown. Tests for each.
 3. `vm-session-check.sh restart`: a killed adopted app that reads `quit` is a FAIL, not a NOTE; replace the 0.3 s `pgrep` loop for a short `systemctl` with a check that cannot miss it (for example the journal of the session manager, or `systemd-run --wait` accounting): say which in the Outcome.
+4. (T-363 review) While a unit's end is held for its scope, look at the scope every 1 s (`next_at = now + ATTACH_EVERY`, `scope.rs` `on_unit_event`), so a Stop that needs the kill still ends inside `LAUNCH_WAIT` (8 s); a test: Stop with the kill, then Launch, answers the new run.
+5. (T-363 review) `vm-session-check.sh check`: assert `scope gone, cpu N ms` is above 0 for a busy sample (proves `CPUUsageNSec` on a user scope); the `list-units ... | grep -q scope` step fails when `systemctl` errors.
 
 ## Out of scope
 - Flatpak scope following (T-363), anything in the shell.

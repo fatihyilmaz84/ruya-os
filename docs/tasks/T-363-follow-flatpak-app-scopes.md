@@ -1,6 +1,6 @@
 # T-363 - ruya-session follows a Flatpak game's own scope (usage, limits, stop)
 
-Status: in-progress · Phase: 2 · Depends: T-340 · Area: services (ruya-session), scripts · Size: M · Owner: builder · Developer surface: none
+Status: done · Phase: 2 · Depends: T-340 · Area: services (ruya-session), scripts · Size: M · Owner: builder · Developer surface: none
 
 ## Goal
 A Flatpak game runs in its own `app-flatpak-<id>-<n>.scope`, outside our `ruya-app-*` unit: on the Dell a 45-minute SuperTuxKart run was accounted as 28 ms of CPU. After this task usage, limits, the stop/kill path and (later) freezing follow the process where it really runs.
