@@ -1,6 +1,6 @@
 # T-377 - The Store page opens with one 275 ms frame: find it and remove it
 
-Status: todo · Phase: 2 · Depends: — · Area: shell (StorePage, store cards, AppArt) · Size: M · Owner: builder · Complexity: complex · Developer surface: none
+Status: in-progress · Phase: 2 · Depends: — · Area: shell (StorePage, store cards, AppArt) · Size: M · Owner: builder · Complexity: complex · Developer surface: none
 
 ## Goal
 Opening the Store feels as quick as Settings and Games. The page-open probe (T-349, `ruya-shell: page-open` lines) on the Dell (0.0.59, Intel UHD 630, 1080p, owner report 2026-11-09 "same slowness as Settings had"):

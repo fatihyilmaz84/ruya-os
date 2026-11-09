@@ -1,6 +1,6 @@
 # T-360 - Audio service follow-ups: no executor blocking, the boot race, a fresh-install check that holds
 
-Status: in-progress · Phase: 2 · Depends: — · Area: services (ruya-devices audio, output policy), scripts · Size: M · Owner: builder · Developer surface: none
+Status: done · Phase: 2 · Depends: — · Area: services (ruya-devices audio, output policy), scripts · Size: M · Owner: builder · Developer surface: none
 
 ## Goal
 The audio service never stalls other D-Bus calls during a card switch, picks the saved output even when WirePlumber is late at boot, and the "first start at 100 %" rule fires only on a really fresh console.
