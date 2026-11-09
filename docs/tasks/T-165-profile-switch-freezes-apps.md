@@ -34,6 +34,7 @@ Then the image recipe in `docs/dev-setup.md` and `vm-session-check.sh` over SSH.
 - `03-services-and-apps.md` §1.1, §4.1; `02-shell.md` §1.5; the Session1 XML header.
 
 ## Hints
+- (T-363, lead-8) Freeze the run's Flatpak scope (`RunScopes::scope_of(unit)`), not `ruya-app-*.service`; an adopted run is attached within about 1 s of the service start (`03`).
 - `FreezeUnit` is a method on `org.freedesktop.systemd1.Manager` of the user's manager; T-162 found how the service reaches that manager.
 
 - (T-164 reviews, lead-6; added lead-7) Decide a hidden profile's running app: suspend or stop it, tell the new profile (Home hint or toast) and give a way to close it. A locked profile's client is closed on its next surface (whole-client verdict). A Flatpak game lives in its own scope: freeze that (T-363).
