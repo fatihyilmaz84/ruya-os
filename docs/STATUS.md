@@ -15,7 +15,7 @@ Verification legend: **host** = built and tested on Windows · **host (vm pendin
 
 ## Board
 
-**NEXT → T-355** ([lead], second pass on the Dell: STK now renders on the GPU (T-358); frame times, pads, split screen, suspend, saves), then profile-app sound (B-007). **Builder lanes**: the first rows of `STATUS-backlog.md` in order (T-348, ...); one "VM (this task)" at a time. T-283, T-284, T-287, T-288 wait for the lead's design pass T-282.
+**NEXT → T-355** ([lead], second pass on the Dell: STK now renders on the GPU (T-358); frame times, pads, split screen, suspend, saves), then profile-app sound (T-365, B-007, lead, after T-340 merges). **Builder lanes**: the first rows of `STATUS-backlog.md` in order (T-348, ...); one "VM (this task)" at a time. T-283, T-284, T-287, T-288 wait for the lead's design pass T-282.
 
 **How work runs (owner, 2026-11-04):** the lead dispatches `ruya-builder` agents (at most two at a time, own worktrees, different areas), has each branch reviewed by `ruya-reviewer` and merges it (`docs/LEAD.md`). Dispatched builders never edit this file; one "VM (this task)" runs at a time. A builder the owner starts directly takes NEXT alone in the main checkout and does the bookkeeping (`CLAUDE.md`).
 
@@ -23,6 +23,7 @@ Open work only (the front of the board; the rest is in `STATUS-backlog.md`), in 
 
 | ID | Title | Status | Depends |
 |---|---|---|---|
+| [T-365](tasks/T-365-sound-for-profile-apps-pulse-socket.md) | **[lead]** Sound for profile apps: a pulse socket per profile (B-007) | in-progress | T-340 |
 | [T-197](tasks/T-197-shell-crash-on-bluetooth-audio-disconnect.md) | **[lead]** Shell crash when a Bluetooth headset disconnects | in-progress | — |
 | [T-282](tasks/T-282-design-decisions-contrast-themes-dialogs.md) | **[lead]** Design decisions queue: glass text contrast, theme looks, dialogs, Tab, display recovery | todo | — |
 | [T-261](tasks/T-261-controller-families-and-drivers-audit.md) | **[lead]** Controller families and drivers audit (DualSense, Xbox, 8BitDo, Switch), detection table, hardware checklist | todo | — |
