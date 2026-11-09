@@ -33,4 +33,12 @@ Owner OK (2026-11-08): install a real game on the Dell over SSH and run it THROU
 Over SSH on the Dell; no repository change except this task file and the follow-ups.
 
 ## Outcome
-_Filled in by the implementer._
+Verified: hw (first pass, lead-6, 2026-11-09, Dell on 0.0.57 with T-164; the owner at the TV). Items 3 (frame times), 4 (hotplug, split screen, rumble), 7 (suspend) and 8 (save isolation) are **not done yet**: the task stays open for a second pass.
+
+- *Item 1:* STK 1.5 was already in the system installation (earlier session); `/var` 442 GB free. Store path not tried.
+- *Item 2 (launch):* `runuser -u ruya-shell -- busctl --system call org.ruyaos.Session1 /org/ruyaos/Session1 org.ruyaos.Session1 Launch ss net.supertuxkart.SuperTuxKart p1` (the shell's path) -> `ok`. Native Wayland (SDL 2.32, no X11 needed); the compositor mapped it (`app ... uid 1000 profile p1`, `focus app:supertuxkart true`). Its log: `wayland: Display scaling requires the missing 'zxdg_output_manager_v1' protocol`.
+- *GPU:* **software rendering**: `MESA-EGL: failed to get driver name for fd -1`, renderer `llvmpipe (LLVM 22.1.8)`, OpenGL 4.6 Mesa 26.2.5. The sandbox has `/dev/dri/renderD128` (`devices=all`): the compositor advertises no GPU device to clients (no `linux-dmabuf-v1`/`wl_drm`; Fedora's Qt has no compositor dmabuf plugin, B-003). STK used 560 % CPU (of 6 cores), the shell 28 %. Owner: "I can play the game smoothly (but at a low resolution)".
+- *Item 4 (first look):* DualSense menu navigation works (owner).
+- *Item 5 (audio):* no sound: `MusicManager: Could not open the default sound device`, OpenAL `AL_INVALID_OPERATION`; the profile user has no sound server (`/run/user/1000/pulse` missing, B-007). Separately the system sink was at volume 0.00 (the owner had turned it down).
+- *Item 6 (Guide, stop):* Guide opens the System panel over the game and Close returns to it (owner). `Session1.Stop` ended STK in 1 s (SIGTERM, `Finished with result: success`, `app gone`). The unit's accounting shows 28 ms CPU and 3.8 MB: the game runs in Flatpak's own `app-flatpak-net.supertuxkart.SuperTuxKart-*.scope`, not in `ruya-app-*`.
+- Follow-ups are Inbox lines in STATUS (lead-6): compositor GPU buffers, profile audio, xdg-output, the scope.
