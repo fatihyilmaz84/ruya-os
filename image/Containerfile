@@ -29,6 +29,35 @@ RUN cd /src/services \
     && install -Dm755 target/release/ruya-store /out/usr/bin/ruya-store \
     && install -Dm755 target/release/ruya-update /out/usr/bin/ruya-update
 
+# ---- Qt Wayland compositor: linux-dmabuf v4 (T-358) ---------------------------------
+# Apps get GPU buffers only through zwp_linux_dmabuf_v1 v4 feedback (Mesa 26 has no wl_drm).
+# Fedora's qt6-qtwayland lacks the plugin (an upstream configure bug never finds EGL for the
+# dmabuf test) and upstream's plugin speaks only v3. Build just that plugin from the source RPM of
+# the same qt6-qtwayland the image installs, with our v4 feedback patch. It uses private Qt API:
+# the OS stage below refuses the image when the versions differ.
+FROM registry.fedoraproject.org/fedora:${FEDORA_VERSION} AS qt-dmabuf
+COPY image/qt /src/qt
+RUN set -eux; \
+    dnf -y install --setopt=install_weak_deps=False cpio patch wayland-protocols-devel qt6-qtwayland; \
+    ver="$(rpm -q --qf '%{VERSION}-%{RELEASE}' qt6-qtwayland)"; \
+    mkdir /w && cd /w; \
+    dnf -y --enablerepo=fedora-source --enablerepo=updates-source download --source "qt6-qtwayland-$ver"; \
+    rpm2cpio qt6-qtwayland-*.src.rpm | cpio -idm --quiet; \
+    dnf -y builddep --setopt=install_weak_deps=False ./qt6-qtwayland.spec; \
+    qtver="$(rpm -q --qf '%{VERSION}' qt6-qtwayland)"; \
+    tar xf "qtwayland-everywhere-src-$qtver.tar.xz"; \
+    cd "qtwayland-everywhere-src-$qtver"; \
+    patch -p1 < /src/qt/0001-linux-dmabuf-v4-feedback.patch; \
+    cmake -S . -B /b -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DQT_BUILD_EXAMPLES=OFF -DQT_BUILD_TESTS=OFF \
+        -DTEST_dmabuf_client_buffer=ON -DCMAKE_SKIP_RPATH=ON > /tmp/configure.log; \
+    ninja -C /b QWaylandDmabufClientBufferIntegrationPlugin > /tmp/build.log; \
+    plugin=lib64/qt6/plugins/wayland-graphics-integration-server/libqt-wayland-compositor-linux-dmabuf-unstable-v1.so; \
+    install -d "/out/usr/$(dirname "$plugin")" /out/usr/share/ruyaos; \
+    strip --strip-debug -o "/out/usr/$plugin" "/b/$plugin"; \
+    printf 'qt6-qtwayland-%s\nqt6-qtbase-%s\n' "$ver" "$(rpm -q --qf '%{VERSION}-%{RELEASE}' qt6-qtbase)" \
+        > /out/usr/share/ruyaos/qt-dmabuf-built-against; \
+    dnf clean all
+
 # ---- OS image -----------------------------------------------------------------------
 FROM quay.io/fedora/fedora-bootc:${FEDORA_VERSION}
 ARG RUYA_VERSION=0.0.0-dev
@@ -48,6 +77,11 @@ RUN --mount=type=bind,source=image/build,target=/ctx/build \
 
 COPY --from=shell-build /out/ /
 COPY --from=services-build /out/ /
+COPY --from=qt-dmabuf /out/ /
+# The dmabuf plugin (T-358) uses private Qt API: it must match the image's Qt exactly.
+RUN want="$(printf 'qt6-qtwayland-%s\nqt6-qtbase-%s' "$(rpm -q --qf '%{VERSION}-%{RELEASE}' qt6-qtwayland)" "$(rpm -q --qf '%{VERSION}-%{RELEASE}' qt6-qtbase)")" \
+    && have="$(cat /usr/share/ruyaos/qt-dmabuf-built-against)" \
+    && if [ "$want" != "$have" ]; then echo "qt-dmabuf plugin built against: $have; image has: $want" >&2; exit 1; fi
 
 # image/rootfs is installed with cp, not COPY: a checkout on Windows has every file and directory
 # at mode 0777, COPY keeps that, and for a directory that a layer introduces (/usr/libexec/ruyaos)

@@ -215,6 +215,10 @@ display)
         [ -f "$f" ] || { bad "$f is missing: copy it next to this script"; exit 1; }
     done
     dir=/run/ruya-wayland
+    # T-358: the patched linux-dmabuf plugin is loaded (v4 with a GPU render node, v3 without one,
+    # as in a VM on llvmpipe); the line is logged once when the compositor starts.
+    dmabuf="$(journalctl -b --no-pager -o cat | grep -a -m1 "linux-dmabuf: zwp_linux_dmabuf_v1 version")"
+    [ -n "$dmabuf" ] && ok "the compositor serves linux-dmabuf: $dmabuf" || bad "no linux-dmabuf line from the compositor (T-358 plugin not loaded)"
     ids="$(busctl --system call "$psvc" "$ppath" "$psvc" ListProfiles | grep -o '"p[0-9]*"' | tr -d '"')"
     me="$(echo "$ids" | head -1)"
     [ -n "$me" ] && ok "profile $me signs in" || { bad "no profile: make one with vm-goto.ps1 home"; exit 1; }

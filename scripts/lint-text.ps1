@@ -13,6 +13,10 @@ $Repo = Split-Path -Parent $PSScriptRoot
 $strict = New-Object System.Text.UTF8Encoding($false, $true)
 $bad = '[\x00-\x09\x0B\x0C\x0E-\x1F\x7F]|\r(?!\n)'
 $names = @{ 9 = 'tab'; 11 = '\v'; 12 = '\f'; 13 = 'lone \r'; 127 = 'DEL' }
+# Patches against upstream sources (image/qt/*.patch, T-358) carry the upstream's tabs (diff
+# headers, Makefile-style lines): tabs are allowed there, every other control character is not.
+$badNoTab = '[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]|\r(?!\n)'
+$tabsAllowed = '^image/qt/[^/]+\.patch$'
 
 # Binary = a NUL byte in the file. Not git's "-text": git also calls a file with a lone CR
 # binary, which is exactly the corruption this lint exists to catch (d09da99).
@@ -31,7 +35,8 @@ foreach ($f in $files) {
     }
     $line = 1
     $last = 0
-    foreach ($m in [regex]::Matches($text, $bad)) {
+    $pattern = if ($f -match $tabsAllowed) { $badNoTab } else { $bad }
+    foreach ($m in [regex]::Matches($text, $pattern)) {
         $line += ([regex]::Matches($text.Substring($last, $m.Index - $last), "`n")).Count
         $last = $m.Index
         $code = [int][char]$m.Value

@@ -1,0 +1,306 @@
+--- a/src/hardwareintegration/compositor/linux-dmabuf-unstable-v1/linuxdmabufclientbufferintegration.cpp	2026-08-12 03:33:58.000000000 +0200
++++ b/src/hardwareintegration/compositor/linux-dmabuf-unstable-v1/linuxdmabufclientbufferintegration.cpp	2026-11-09 14:27:03.436550193 +0100
+@@ -18,6 +18,20 @@
+ #include <EGL/eglext.h>
+ #include <unistd.h>
+ #include <drm_fourcc.h>
++#include <xf86drm.h>
++#include <fcntl.h>
++#include <stdlib.h>
++#include <sys/stat.h>
++
++#ifndef EGL_DEVICE_EXT
++#define EGL_DEVICE_EXT 0x322C
++#endif
++#ifndef EGL_DRM_DEVICE_FILE_EXT
++#define EGL_DRM_DEVICE_FILE_EXT 0x3233
++#endif
++#ifndef EGL_DRM_RENDER_NODE_FILE_EXT
++#define EGL_DRM_RENDER_NODE_FILE_EXT 0x3377
++#endif
+ 
+ QT_BEGIN_NAMESPACE
+ 
+@@ -253,7 +267,8 @@
+ 
+ void LinuxDmabufClientBufferIntegration::initializeHardware(struct ::wl_display *display)
+ {
+-    m_linuxDmabuf.reset(new LinuxDmabuf(display, this));
++    // the global is only advertised once EGL import works (see the end of this function)
++    m_linuxDmabuf.reset(new LinuxDmabuf(this));
+ 
+     const bool ignoreBindDisplay = !qgetenv("QT_WAYLAND_IGNORE_BIND_DISPLAY").isEmpty() && qgetenv("QT_WAYLAND_IGNORE_BIND_DISPLAY").toInt() != 0;
+ 
+@@ -313,6 +328,64 @@
+         modifiers[format] = supportedDrmModifiers(format);
+     }
+     m_linuxDmabuf->setSupportedModifiers(modifiers);
++
++    // protocol version 4: tell clients which DRM device to render on (Mesa's EGL needs it
++    // since it dropped wl_drm); fall back to version 3 if the device is unknown
++    dev_t mainDevice = 0;
++    int version = 3;
++    if (findMainDevice(&mainDevice) && m_linuxDmabuf->setMainDevice(mainDevice))
++        version = 4;
++    m_linuxDmabuf->init(display, version);
++    qCInfo(qLcWaylandCompositorHardwareIntegration).nospace()
++            << "linux-dmabuf: zwp_linux_dmabuf_v1 version " << version
++            << (version >= 4 ? " with feedback, main device " : "")
++            << (version >= 4 ? QByteArray::number(qulonglong(mainDevice), 16) : QByteArray());
++}
++
++bool LinuxDmabufClientBufferIntegration::findMainDevice(dev_t *device)
++{
++    auto queryDisplayAttrib = reinterpret_cast<PFNEGLQUERYDISPLAYATTRIBEXTPROC>(eglGetProcAddress("eglQueryDisplayAttribEXT"));
++    auto queryDeviceString = reinterpret_cast<PFNEGLQUERYDEVICESTRINGEXTPROC>(eglGetProcAddress("eglQueryDeviceStringEXT"));
++    if (!queryDisplayAttrib || !queryDeviceString) {
++        qCWarning(qLcWaylandCompositorHardwareIntegration) << "linux-dmabuf: no EGL_EXT_device_query, no feedback";
++        return false;
++    }
++
++    EGLAttrib eglDevice = 0;
++    if (!queryDisplayAttrib(m_eglDisplay, EGL_DEVICE_EXT, &eglDevice) || !eglDevice) {
++        qCWarning(qLcWaylandCompositorHardwareIntegration) << "linux-dmabuf: no EGL device for the display, no feedback";
++        return false;
++    }
++
++    QByteArray node;
++    if (const char *renderNode = queryDeviceString(reinterpret_cast<EGLDeviceEXT>(eglDevice), EGL_DRM_RENDER_NODE_FILE_EXT))
++        node = renderNode;
++    if (node.isEmpty()) {
++        // fall back to the primary node and ask libdrm for its render node
++        if (const char *primaryNode = queryDeviceString(reinterpret_cast<EGLDeviceEXT>(eglDevice), EGL_DRM_DEVICE_FILE_EXT)) {
++            int fd = open(primaryNode, O_RDWR | O_CLOEXEC);
++            if (fd >= 0) {
++                if (char *name = drmGetRenderDeviceNameFromFd(fd)) {
++                    node = name;
++                    free(name);
++                }
++                close(fd);
++            }
++        }
++    }
++    if (node.isEmpty()) {
++        qCWarning(qLcWaylandCompositorHardwareIntegration) << "linux-dmabuf: no DRM render node for the EGL device, no feedback";
++        return false;
++    }
++
++    struct stat st;
++    if (stat(node.constData(), &st) != 0 || !S_ISCHR(st.st_mode)) {
++        qCWarning(qLcWaylandCompositorHardwareIntegration) << "linux-dmabuf: cannot stat" << node << ", no feedback";
++        return false;
++    }
++    qCInfo(qLcWaylandCompositorHardwareIntegration) << "linux-dmabuf: main device" << node;
++    *device = st.st_rdev;
++    return true;
+ }
+ 
+ QList<uint32_t> LinuxDmabufClientBufferIntegration::supportedDrmFormats()
+--- a/src/hardwareintegration/compositor/linux-dmabuf-unstable-v1/linuxdmabufclientbufferintegration.h	2026-08-12 03:33:58.000000000 +0200
++++ b/src/hardwareintegration/compositor/linux-dmabuf-unstable-v1/linuxdmabufclientbufferintegration.h	2026-11-09 14:27:03.434173745 +0100
+@@ -64,6 +64,7 @@
+     bool initYuvTexture(LinuxDmabufWlBuffer *dmabufBuffer);
+     QList<uint32_t> supportedDrmFormats();
+     QList<uint64_t> supportedDrmModifiers(uint32_t format);
++    bool findMainDevice(dev_t *device);
+ 
+     EGLDisplay m_eglDisplay = EGL_NO_DISPLAY;
+     ::wl_display *m_wlDisplay = nullptr;
+--- a/src/hardwareintegration/compositor/linux-dmabuf-unstable-v1/linuxdmabuf.cpp	2026-08-12 03:33:58.000000000 +0200
++++ b/src/hardwareintegration/compositor/linux-dmabuf-unstable-v1/linuxdmabuf.cpp	2026-11-09 14:27:03.430216223 +0100
+@@ -11,13 +11,25 @@
+ #include <drm_fourcc.h>
+ #include <drm_mode.h>
+ #include <unistd.h>
++#include <fcntl.h>
++#include <sys/mman.h>
+ 
+ QT_BEGIN_NAMESPACE
+ 
+-LinuxDmabuf::LinuxDmabuf(wl_display *display, LinuxDmabufClientBufferIntegration *clientBufferIntegration)
+-    : zwp_linux_dmabuf_v1(display, 3 /*version*/)
+-    , m_clientBufferIntegration(clientBufferIntegration)
++void LinuxDmabufFeedback::zwp_linux_dmabuf_feedback_v1_destroy(Resource *resource)
+ {
++    wl_resource_destroy(resource->handle);
++}
++
++LinuxDmabuf::LinuxDmabuf(LinuxDmabufClientBufferIntegration *clientBufferIntegration)
++    : m_clientBufferIntegration(clientBufferIntegration)
++{
++}
++
++LinuxDmabuf::~LinuxDmabuf()
++{
++    if (m_formatTableFd >= 0)
++        close(m_formatTableFd);
+ }
+ 
+ void LinuxDmabuf::setSupportedModifiers(const QHash<uint32_t, QList<uint64_t>> &modifiers)
+@@ -26,8 +38,86 @@
+     m_modifiers = modifiers;
+ }
+ 
++bool LinuxDmabuf::setMainDevice(dev_t device)
++{
++    Q_ASSERT(resourceMap().isEmpty());
++    struct Entry {
++        uint32_t format;
++        uint32_t pad;
++        uint64_t modifier;
++    };
++    static_assert(sizeof(Entry) == 16, "format table entries are 16 bytes");
++
++    QList<Entry> entries;
++    for (auto it = m_modifiers.constBegin(); it != m_modifiers.constEnd(); ++it) {
++        QList<uint64_t> modifiers = it.value();
++        if (modifiers.isEmpty())
++            modifiers << DRM_FORMAT_MOD_INVALID;
++        for (const auto &modifier : std::as_const(modifiers))
++            entries.append(Entry{ it.key(), 0, modifier });
++    }
++    if (entries.isEmpty() || entries.size() > 0xFFFF)
++        return false;
++
++    const size_t size = size_t(entries.size()) * sizeof(Entry);
++    int fd = memfd_create("linux-dmabuf-feedback-format-table", MFD_CLOEXEC | MFD_ALLOW_SEALING);
++    if (fd < 0)
++        return false;
++    if (ftruncate(fd, off_t(size)) != 0 || pwrite(fd, entries.constData(), size, 0) != ssize_t(size)) {
++        close(fd);
++        return false;
++    }
++    // clients map the table read-only; seal it so it can be shared by all of them
++    fcntl(fd, F_ADD_SEALS, F_SEAL_SHRINK | F_SEAL_GROW | F_SEAL_WRITE | F_SEAL_SEAL);
++
++    if (m_formatTableFd >= 0)
++        close(m_formatTableFd);
++    m_formatTableFd = fd;
++    m_formatTableSize = uint32_t(size);
++    m_formatTableEntries = uint32_t(entries.size());
++    m_mainDevice = device;
++    return true;
++}
++
++void LinuxDmabuf::sendFeedback(Resource *resource, uint32_t id)
++{
++    LinuxDmabufFeedback::Resource *feedback = m_feedback.add(resource->client(), int(id), resource->version());
++    if (!feedback)
++        return;
++
++    const QByteArray device(reinterpret_cast<const char *>(&m_mainDevice), sizeof(m_mainDevice));
++    QByteArray indices(int(m_formatTableEntries * sizeof(uint16_t)), Qt::Uninitialized);
++    uint16_t *index = reinterpret_cast<uint16_t *>(indices.data());
++    for (uint32_t i = 0; i < m_formatTableEntries; ++i)
++        index[i] = uint16_t(i);
++
++    m_feedback.send_format_table(feedback->handle, m_formatTableFd, m_formatTableSize);
++    m_feedback.send_main_device(feedback->handle, device);
++    m_feedback.send_tranche_target_device(feedback->handle, device);
++    m_feedback.send_tranche_formats(feedback->handle, indices);
++    m_feedback.send_tranche_flags(feedback->handle, 0);
++    m_feedback.send_tranche_done(feedback->handle);
++    m_feedback.send_done(feedback->handle);
++}
++
++void LinuxDmabuf::zwp_linux_dmabuf_v1_get_default_feedback(Resource *resource, uint32_t id)
++{
++    sendFeedback(resource, id);
++}
++
++void LinuxDmabuf::zwp_linux_dmabuf_v1_get_surface_feedback(Resource *resource, uint32_t id, struct ::wl_resource *surface)
++{
++    Q_UNUSED(surface);
++    // single GPU, no scanout tranche: the surface feedback is the default feedback
++    sendFeedback(resource, id);
++}
++
+ void LinuxDmabuf::zwp_linux_dmabuf_v1_bind_resource(Resource *resource)
+ {
++    // version 4 clients get formats and modifiers only from the feedback format table
++    if (resource->version() >= ZWP_LINUX_DMABUF_V1_GET_DEFAULT_FEEDBACK_SINCE_VERSION)
++        return;
++
+     for (auto it = m_modifiers.constBegin(); it != m_modifiers.constEnd(); ++it) {
+         auto format = it.key();
+         auto modifiers = it.value();
+--- a/src/hardwareintegration/compositor/linux-dmabuf-unstable-v1/linuxdmabuf.h	2026-08-12 03:33:58.000000000 +0200
++++ b/src/hardwareintegration/compositor/linux-dmabuf-unstable-v1/linuxdmabuf.h	2026-11-09 14:27:03.427287749 +0100
+@@ -23,6 +23,8 @@
+ #include <EGL/egl.h>
+ #include <EGL/eglext.h>
+ 
++#include <sys/types.h>
++
+ // compatibility with libdrm <= 2.4.74
+ #ifndef DRM_FORMAT_RESERVED
+ #define DRM_FORMAT_RESERVED           ((1ULL << 56) - 1)
+@@ -57,20 +59,41 @@
+     uint64_t modifiers = 0;
+ };
+ 
++// zwp_linux_dmabuf_feedback_v1 (protocol version 4): one object serves every feedback resource
++class LinuxDmabufFeedback : public QtWaylandServer::zwp_linux_dmabuf_feedback_v1
++{
++protected:
++    void zwp_linux_dmabuf_feedback_v1_destroy(Resource *resource) override;
++};
++
+ class LinuxDmabuf : public QtWaylandServer::zwp_linux_dmabuf_v1
+ {
+ public:
+-    explicit LinuxDmabuf(wl_display *display, LinuxDmabufClientBufferIntegration *clientBufferIntegration);
++    // The global is created by init(display, version) once formats and the main device are known.
++    explicit LinuxDmabuf(LinuxDmabufClientBufferIntegration *clientBufferIntegration);
++    ~LinuxDmabuf() override;
+ 
+     void setSupportedModifiers(const QHash<uint32_t, QList<uint64_t>> &modifiers);
++    // Enables protocol version 4 (feedback). Returns false if the format table cannot be built.
++    bool setMainDevice(dev_t device);
++    bool hasFeedback() const { return m_formatTableFd >= 0; }
+ 
+ protected:
+     void zwp_linux_dmabuf_v1_bind_resource(Resource *resource) override;
+     void zwp_linux_dmabuf_v1_create_params(Resource *resource, uint32_t params_id) override;
++    void zwp_linux_dmabuf_v1_get_default_feedback(Resource *resource, uint32_t id) override;
++    void zwp_linux_dmabuf_v1_get_surface_feedback(Resource *resource, uint32_t id, struct ::wl_resource *surface) override;
+ 
+ private:
++    void sendFeedback(Resource *resource, uint32_t id);
++
+     QHash<uint32_t, QList<uint64_t>> m_modifiers; // key=DRM format, value=supported DRM modifiers for format
+     LinuxDmabufClientBufferIntegration *m_clientBufferIntegration;
++    LinuxDmabufFeedback m_feedback;
++    dev_t m_mainDevice = 0;
++    int m_formatTableFd = -1;
++    uint32_t m_formatTableSize = 0;
++    uint32_t m_formatTableEntries = 0;
+ };
+ 
+ class LinuxDmabufParams : public QtWaylandServer::zwp_linux_buffer_params_v1
+--- a/src/plugins/hardwareintegration/compositor/linux-dmabuf-unstable-v1/CMakeLists.txt	2026-08-12 03:33:58.000000000 +0200
++++ b/src/plugins/hardwareintegration/compositor/linux-dmabuf-unstable-v1/CMakeLists.txt	2026-11-09 14:27:03.440696298 +0100
+@@ -33,10 +33,22 @@
+         ${protocols_dir}/linux-dmabuf
+ )
+ 
++# Protocol version 4 (feedback) needs a newer XML than the bundled one (version 3): take the
++# stable linux-dmabuf-v1.xml from wayland-protocols (same interface names, version 5) and keep
++# the generated file names.
++find_package(PkgConfig REQUIRED)
++pkg_get_variable(WAYLAND_PROTOCOLS_DIR wayland-protocols pkgdatadir)
++set(linux_dmabuf_xml "${WAYLAND_PROTOCOLS_DIR}/stable/linux-dmabuf/linux-dmabuf-v1.xml")
++if(NOT EXISTS "${linux_dmabuf_xml}")
++    message(FATAL_ERROR "linux-dmabuf: ${linux_dmabuf_xml} not found (install wayland-protocols)")
++endif()
++configure_file("${linux_dmabuf_xml}"
++    "${CMAKE_CURRENT_BINARY_DIR}/protocol/linux-dmabuf-unstable-v1.xml" COPYONLY)
++
+ qt6_generate_wayland_protocol_server_sources(QWaylandDmabufClientBufferIntegrationPlugin
+     PRIVATE_CODE
+     FILES
+-        ${protocols_dir}/linux-dmabuf/linux-dmabuf-unstable-v1.xml
++        ${CMAKE_CURRENT_BINARY_DIR}/protocol/linux-dmabuf-unstable-v1.xml
+ )
+ 
+ #### Keys ignored in scope 1:.:.:linux-dmabuf-unstable-v1.pro:<TRUE>:
