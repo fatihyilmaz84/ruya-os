@@ -57,6 +57,8 @@ Verified: host (hw pending: Dell)
 - The `restoreFocus` `.visible` check removed: the hidden-button test.
 - `relayout()` settling instead of only `ensureFocusedVisible()` was checked before the `focusedChild` handler existed (bare-pane test red). The two now overlap.
 
+Checks: `dev.ps1 test` ALL GREEN (959 QML passed, 73 skipped; 749 Rust); `dev.ps1 shots` ALL GREEN (152). I looked at `90-activity-game-en.png` and `90-activity-app-page-en.png`: no visual change, and the focus ring is on the expected row and button.
+
 `tst_battery_cluster::test_the_chip_shrinks_to_plus_n_in_a_narrow_room` failed in one run with main's QML files too (measured on this branch with the three changed QML files restored to main), and it passed in the next full run. It is the known load flake and was not touched.
 
 UX notes: states reached: Store -> card -> app page -> "Your activity" (no stats, loading, failed read, data), Activity page after a failed read, every page from Home and over the app page, every Settings pane. Back leaves each one (the Settings pane hands Back to its list first). Focus lands as follows: in the activity page with no rows, on the pane itself (B and Esc leave); after Back, on "Your activity", or on the primary button if "Your activity" hid meanwhile; on the Store, back on the card. What I doubted: the order "row before, else next" (chosen to keep the profile panes' behaviour). Pad B and Esc on the Dell are still unverified (hw).
