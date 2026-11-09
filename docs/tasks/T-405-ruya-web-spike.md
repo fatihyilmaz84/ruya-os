@@ -1,6 +1,6 @@
 # T-405 - Spike: Ruya Web stack, TLS certificate, TV pairing, LAN-only enforcement, design tokens as CSS
 
-Status: todo · Phase: 6 · Depends: T-404 · Area: services (new ruya-web), image, shell (tokens export), docs · Size: M · Owner: lead · Complexity: hard · Developer surface: internal
+Status: todo · Phase: 6 · Depends: T-404, T-411 · Area: services (new ruya-web), image, shell (tokens export), docs · Size: M · Owner: lead · Complexity: hard · Developer surface: internal
 
 ## Goal
 A prototype on the Dell: `ruya-web` serves one page over HTTPS on the LAN only, a phone pairs with a code confirmed on the TV, and the page uses the console's colours and type from `Theme.qml`.

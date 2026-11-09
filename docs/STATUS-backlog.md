@@ -139,9 +139,14 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | [T-353](tasks/T-353-developer-mock-and-sample-harness.md) | Developer harness: a Platform mock, a sample app and a conformance runner in CI | todo | T-352, T-350 |
 | [T-354](tasks/T-354-research-xbox-wireless-adapter-support.md) | **[lead]** Research: Xbox Wireless Adapter support (driver, user-downloaded firmware, legal risk) and a recommended task list; builds nothing | todo | — |
 | [T-404](tasks/T-404-ruya-web-threat-model-and-allow-list.md) | **[lead]** Ruya Web: threat model, the bus allow-list per service, pairing and session design | blocked | owner |
-| [T-405](tasks/T-405-ruya-web-spike.md) | **[lead]** Spike: Ruya Web stack, TLS certificate, TV pairing, LAN-only enforcement, design tokens as CSS | todo | T-404 |
+| [T-411](tasks/T-411-gateway-protocol-for-web-and-companion.md) | **[lead]** The `ruya-link` gateway protocol for Ruya Web and Companion: identities, pairing, permissions, events, capabilities | todo | T-404 |
+| [T-405](tasks/T-405-ruya-web-spike.md) | **[lead]** Spike: Ruya Web stack, TLS certificate, TV pairing, LAN-only enforcement, design tokens as CSS | todo | T-404, T-411 |
 | [T-406](tasks/T-406-ruya-web-foundation-and-dashboard.md) | Ruya Web foundation: the service, Settings > Web management, pairing, sessions, a read-only dashboard | todo | T-405 |
 | [T-407](tasks/T-407-ruya-web-library-and-artwork.md) | Ruya Web: library and game details, custom artwork and metadata (stored by the Library) | todo | T-406, T-401 |
 | [T-408](tasks/T-408-ruya-web-rom-upload-and-import.md) | Ruya Web: ROM and BIOS upload, then import through the hub (identify, duplicates, archives) | todo | T-406, T-304 |
 | [T-409](tasks/T-409-ruya-web-system-pages.md) | Ruya Web: downloads, apps, storage and saves pages over their own services | todo | T-406, T-391, T-403, T-310 |
 | [T-410](tasks/T-410-ruya-web-diagnostics.md) | Ruya Web: logs and a diagnostic report, redacted | todo | T-406, T-225 |
+| [T-412](tasks/T-412-phone-as-a-controller.md) | The phone as a controller: D-pad, confirm, back, home, menu, pointer and the phone's keyboard, as a profile's controller | todo | T-411, T-397, T-367 |
+| [T-413](tasks/T-413-power-and-wake-over-the-network.md) | Power over the network: sleep, restart, shut down from a paired client; Wake-on-LAN where the hardware does it | todo | T-411, T-262 |
+| [T-414](tasks/T-414-companion-app-android-first.md) | Ruya Companion app v1 (Flutter, Android first): discovery, pairing, Home, Library, Downloads, System, Remote | todo | T-411, T-406, T-412, T-413 |
+| [T-415](tasks/T-415-remote-access-outside-home.md) | **[lead]** Companion outside the home: the player's own VPN first, a Ruya relay only if the owner decides to run one | blocked | owner |
