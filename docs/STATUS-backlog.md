@@ -12,6 +12,10 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | [T-362](tasks/T-362-compositor-xdg-output-and-socket-follow-ups.md) | Compositor: xdg-output for games, profile-socket and log follow-ups | todo | — |
 | [T-359](tasks/T-359-bluetooth-follow-ups-adapters-names.md) | Bluetooth follow-ups: late adapters, scan ownership, telling like pads apart | todo | — |
 | [T-364](tasks/T-364-storage-scan-follow-ups.md) | Storage scan follow-ups: a real-directory test, a Rescan row, a calmer busy retry | todo | — |
+| [T-381](tasks/T-381-ge-proton-spike.md) | **[lead]** Spike: GE-Proton outside Steam (umu, runtime, display, size, licences, codecs) | todo | — |
+| [T-382](tasks/T-382-ge-proton-preinstalled-and-updated.md) | GE-Proton preinstalled in the image, updated through the Store, named in About | todo | T-381 |
+| [T-383](tasks/T-383-steam-uses-ge-proton-by-default.md) | Steam uses GE-Proton by default once installed | todo | T-381, T-382 |
+| [T-384](tasks/T-384-ge-proton-for-developers.md) | Developers: run a Windows game on the console's GE-Proton (tier-C format, chapter, sample) | todo | T-382 |
 | [T-368](tasks/T-368-controllers-pane-capabilities-button-test.md) | Settings > Controllers: connected pads, capabilities and a live button test | todo | T-367 |
 | [T-369](tasks/T-369-input-mapping-v1-profiles.md) | Mapping v1: button layout, remapping, dead zones, curves; global profiles with import and export | todo | T-368 |
 | [T-370](tasks/T-370-game-and-platform-input-profiles.md) | Game and platform controller profiles: inheritance, applied on focus, a Controller entry on the game page | todo | T-369 |
