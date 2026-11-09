@@ -15,6 +15,11 @@ Item {
         id: shellComponent
         Shell { anchors.fill: parent; version: "test-1.2.3"; focus: true }
     }
+    // A stand-in for a game in front of the shell (T-387).
+    Component {
+        id: appComponent
+        Item { objectName: "standInApp"; Keys.onPressed: event => { event.accepted = true } }
+    }
     // A throw-away Image to ask "is this file a picture the shell can load".
     Component { id: probeComponent; Image { asynchronous: true; cache: false } }
 
@@ -425,6 +430,51 @@ Item {
             compare(ring.visible, false)
         }
 
+        // T-387: a tile's picture is not hidden while it loads. An Image that is not ready draws nothing,
+        // and one turned visible only after the first frame inside the hidden layer source of the tile's
+        // mask never showed on a GPU (every tile blank in `shots`).
+        function test_a_tile_picture_is_not_hidden_while_it_loads() {
+            openPicker()
+            // `visible` is the effective one: wait for the picker's fade-in before reading the pictures'.
+            tryVerify(() => find("wallpaperTile_").visible, 2000, "the tiles are shown")
+            for (const id of ["", "dusk", "aurora", "daybreak"]) {
+                const img = find("wallpaperTileImage_" + id)
+                verify(img, "the tile's picture: " + id)
+                verify(img.visible, "visible whatever its status (" + img.status + "): " + id)
+            }
+            compare(find("wallpaperTileImage_").status, Image.Null, "the default look has no picture")
+            tryCompare(find("wallpaperTileImage_dusk"), "status", Image.Ready, 5000)
+            verify(find("wallpaperTileImage_dusk").visible)
+        }
+
+        // T-387: behind an app L0 is at opacity 0 but stays `visible` (an L0 hidden with `visible` and shown
+        // again baked an empty crop into the sheet on a GPU), the sheet does not capture it then, and an
+        // open sheet captures again once the app has gone.
+        function test_the_sheet_captures_again_after_an_app() {
+            openPicker()
+            const sheet = find("wallpaperPanel")
+            const l0 = find("l0")
+            sheet.gpu = true                              // the blurred branch, reached offscreen
+            verify(sheet.blurred)
+            verify(sheet.sourceDrawn, "L0 is drawn under the picker")
+            sheet.bake()                                  // the opening's capture was skipped on the software renderer
+            tc.lastBakes = -1
+            tryVerify(() => tc.bakesSettled(sheet), 3000, "the captures settle")
+            const before = sheet.bakeCount
+            const app = createTemporaryObject(appComponent, host)
+            tc.shell.addApp(app)
+            tryVerify(() => app.activeFocus, 2000, "the app takes focus")
+            compare(l0.opacity, 0, "L0 is not drawn behind the app")
+            compare(l0.visible, true, "L0 keeps its place in the scene graph (no visible toggle)")
+            compare(sheet.sourceDrawn, false)
+            sheet.bake()
+            compare(sheet.bakeCount, before, "no capture of L0 while it is not drawn")
+            tc.shell.removeApp(app)
+            tryVerify(() => sheet.bakeCount === before + 1, 2000, "the open sheet captures L0 again once it is drawn: "
+                      + sheet.bakeCount + " vs " + before)
+            verify(sheet.sourceDrawn)
+        }
+
         // T-272: the panel is the glass sheet (not a flat `panel` card) and the picture is cut to the radius
         // of the hairline and the ring around it.
         function test_the_panel_is_glass_and_the_thumbnails_are_rounded() {
@@ -457,7 +507,10 @@ Item {
             }
             const ring = find("wallpaperRing_")
             compare(ring.radius, find("wallpaperTile_").radius + Theme.focusRingOffset * u, "the ring follows the picture's shape")
+            // The blur's mask is handed over only while its layer is on, which is on the blurred branch (T-387).
+            panel.gpu = true
             checkSmoothCut(findChild(panel, "glassSheetBlur"), "the sheet's blur")
+            panel.gpu = host.GraphicsInfo.api !== GraphicsInfo.Software
             // The Current badge sits inside the tile's corner.
             const badge = find("wallpaperCurrent_dusk")
             verify(badge.visible)
@@ -837,6 +890,73 @@ Item {
             compare(find("heroArt").visible, true, "the legibility scrims stay")
             DeviceSettings.wallpaper = ""
             tryCompare(artA, "bare", false)
+        }
+
+        // Samples of the sheet's glass in its left margin (no content there), as [r, g, b] in 0..255.
+        function sheetSamples(sheet) {
+            const img = grabImage(tc.shell)
+            const scale = img.width / tc.shell.width
+            const at = sheet.mapToItem(tc.shell, 0, 0)
+            const x = Math.round((at.x + Theme.spaceXl * sheet.u / 2) * scale)
+            const out = []
+            for (let i = 1; i < 12; ++i) {
+                const y = Math.round((at.y + sheet.height * i / 12) * scale)
+                out.push([img.red(x, y), img.green(x, y), img.blue(x, y)])
+            }
+            return out
+        }
+
+        // The largest per-channel difference between two sample sets.
+        function sampleDistance(a, b) {
+            let d = 0
+            for (let i = 0; i < a.length; ++i)
+                for (let c = 0; c < 3; ++c)
+                    d = Math.max(d, Math.abs(a[i][c] - b[i][c]))
+            return d
+        }
+
+        // T-387: after a game was in front, the picker's glass sheet is the blurred wallpaper again, the
+        // same as a fresh opening (the baked crop of L0 came out empty: flat grey with grain).
+        function test_zz_sheet_after_an_app_data() {
+            return [{ tag: "reopened", app: false }, { tag: "app", app: true }]
+        }
+
+        function test_zz_sheet_after_an_app(data) {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            setWallpaper("daybreak")
+            openPicker()
+            const sheet = find("wallpaperPanel")
+            compare(sheet.blurred, true, "the sheet draws the blur")
+            tc.lastBakes = -1
+            tryVerify(() => tc.bakesSettled(sheet), 3000, "the captures settle")
+            wait(900)
+            const fresh = sheetSamples(sheet)
+            grabImage(tc.shell).save(shotsDir + "/70-wallpaper-picker-fresh-" + data.tag + ".png")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !find("wallpaperPicker").shown)
+            tryVerify(() => !sheet.engaged, 3000, "the sheet let its crop go")
+            tryVerify(() => find("rowWallpaper").activeFocus, 2000)
+
+            if (data.app) {
+                const app = createTemporaryObject(appComponent, host)
+                tc.shell.addApp(app)
+                tryVerify(() => app.activeFocus, 2000, "the app takes focus")
+                wait(1500)
+                tc.shell.removeApp(app)
+                tryVerify(() => find("rowWallpaper").activeFocus, 2000, "the page has the focus back")
+            }
+            wait(600)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("wallpaperPicker").shown)
+            tc.lastBakes = -1
+            tryVerify(() => tc.bakesSettled(sheet), 3000, "the captures settle")
+            wait(900)
+            grabImage(tc.shell).save(shotsDir + "/70-wallpaper-picker-again-" + data.tag + ".png")
+            const after = sheetSamples(sheet)
+            const d = sampleDistance(fresh, after)
+            verify(d <= 12, data.tag + ": the sheet matches a fresh opening (max channel difference " + d
+                   + "): " + JSON.stringify(fresh) + " vs " + JSON.stringify(after))
         }
 
         function test_zz_screenshots() {

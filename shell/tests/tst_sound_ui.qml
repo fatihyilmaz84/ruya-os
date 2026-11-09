@@ -214,26 +214,38 @@ Item {
             tryCompare(bed, "fade", 1, 3000)
         }
 
+        // Drawn by the scene graph: the item and every ancestor up to the shell are visible and not at
+        // opacity 0 (the renderer skips a subtree under an opacity of 0, its layers included). L0 is
+        // hidden by its opacity since T-387, so `visible` alone of its children no longer says it.
+        function drawn(item) {
+            for (let p = item; p && p !== tc.shell.parent; p = p.parent) {
+                if (!p.visible || p.opacity <= 0)
+                    return false
+            }
+            return true
+        }
+
         function test_l0_is_hidden_behind_a_focused_app() {
             const names = ["backdrop", "wallpaperLayer", "heroArt"]
             for (const n of names)
-                verify(find(n).visible, n + " is drawn on Home")
+                verify(drawn(find(n)), n + " is drawn on Home")
             const app = createTemporaryObject(appComponent, host)
             tc.shell.addApp(app)
             tryVerify(() => app.activeFocus, 2000, "the app takes focus")
             for (const n of names)
-                compare(find(n).visible, false, n + " is not drawn behind an app")
+                compare(drawn(find(n)), false, n + " is not drawn behind an app")
+            compare(find("l0").opacity, 0, "L0 is at opacity 0 behind an app, at once (no fade)")
             keyClick(Qt.Key_HomePage)
             tryVerify(() => find("systemPanel").open, 2000, "the Guide overlay opens over the app")
             for (const n of names)
-                compare(find(n).visible, false, n + " stays hidden under the Guide overlay")
+                compare(drawn(find(n)), false, n + " stays hidden under the Guide overlay")
             keyClick(Qt.Key_Escape)
             tryVerify(() => !find("systemPanel").open, 2000)
             tc.shell.removeApp(app)
             tryVerify(() => find("homePlay").activeFocus, 2000)
             for (const n of ["backdrop", "wallpaperLayer"])
-                verify(find(n).visible, n + " is back on Home")
-            tryVerify(() => find("heroArt").visible, 2000, "the hero art is back")
+                verify(drawn(find(n)), n + " is back on Home")
+            tryVerify(() => drawn(find("heroArt")), 2000, "the hero art is back")
         }
 
         function test_no_effect_samples_a_hidden_layer() {
@@ -244,7 +256,7 @@ Item {
             const app = createTemporaryObject(appComponent, host)
             tc.shell.addApp(app)
             tryVerify(() => app.activeFocus, 2000, "the app takes focus")
-            compare(l0.visible, false)
+            compare(drawn(l0), false, "L0 is not drawn")
             tryVerify(() => !pill.visible, 2000, "the glass pill that blurs L0 is not drawn once it has faded, while L0 is hidden")
             tryVerify(() => !find("sectionNav").visible, 2000, "nor the nav glass, once it has faded")
             tc.shell.removeApp(app)

@@ -32,6 +32,9 @@ Item {
                        && GraphicsInfo.api !== GraphicsInfo.Unknown
     // Blur is drawn: a tier with blur, a layer to sample and a GPU scene graph.
     readonly property bool blurred: Theme.blurMax > 0 && source !== null && gpu
+    // L0 is drawn now (the Shell sets its opacity to 0 while an app is in front, T-376). A capture is
+    // only taken while it is drawn; an open sheet captures again when L0 comes back (T-387).
+    readonly property bool sourceDrawn: source !== null && source.visible && source.opacity > 0
     // What the fill is now (tests and the screenshots read these).
     readonly property color fillColor: blurred ? Theme.glassStrong : Theme.glassOpaque
     readonly property alias layers: glassLayers
@@ -65,7 +68,7 @@ Item {
             return
         if (!sheet.source)
             sheet.source = sheet.lookupSource()
-        if (!sheet.source || !sheet.blurred)
+        if (!sheet.source || !sheet.blurred || !sheet.sourceDrawn)
             return
         const at = sheet.mapToItem(sheet.source, 0, 0)
         crop.sourceRect = Qt.rect(at.x, at.y, sheet.width, sheet.height)
@@ -82,6 +85,7 @@ Item {
         }
     }
     onVisibleChanged: release()
+    onSourceDrawnChanged: if (shown && sourceDrawn) Qt.callLater(bake)
     onWidthChanged: if (shown) Qt.callLater(bake)
     onHeightChanged: if (shown) Qt.callLater(bake)
     Component.onCompleted: if (!source) source = lookupSource()
@@ -116,7 +120,10 @@ Item {
         anchors.fill: parent
         visible: sheet.blurred
         source: crop
-        maskSource: mask
+        // Given only while the mask's layer is on, so each opening hands MultiEffect the new layer: a mask
+        // whose layer was turned off and on again under the same `maskSource` masked everything away, and
+        // every opening after the first showed a flat sheet (T-387, reproduced on a GPU in `shots`).
+        maskSource: mask.layer.enabled ? mask : null
         blurEnabled: true
         blur: 1.0
         blurMax: Theme.blurMax

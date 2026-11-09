@@ -543,7 +543,11 @@ FocusScope {
         id: l0
         objectName: "l0"
         anchors.fill: parent
-        visible: !root.appOpen       // an app in front covers it all: nothing is drawn or sampled behind it (T-376)
+        // An app in front covers it all: nothing is drawn or sampled behind it (T-376). Opacity 0, not
+        // `visible: false`: the renderer draws nothing of a subtree at opacity 0
+        // and L0 keeps its place in the scene graph. On the Dell the flat glass sheet after an app came
+        // with the `visible` toggle (A/B 0.0.59 vs 0.0.60, T-387); the sheet's own cause is in GlassSheet.
+        opacity: root.appOpen ? 0 : 1
 
         Backdrop {
             id: backdrop
