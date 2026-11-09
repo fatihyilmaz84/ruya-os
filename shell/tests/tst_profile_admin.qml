@@ -718,8 +718,8 @@ Item {
             // Manage profiles: the list, Add profile; Rename / Delete only for a selected other profile.
             compare(rowNames(find("paneProfiles")), ["profileRow_p1", "profileRow_p2", "profileRow_p3", "rowAdd"])
             compare(find("paneMyProfile").pad, null, "the modals are built on the first one opened (T-349)")
-            find("paneMyProfile").modalsBuilt = true
-            find("paneProfiles").modalsBuilt = true
+            find("paneMyProfile").beginModal()           // what the first modal a pane opens does
+            find("paneProfiles").beginModal()
             compare(find("paneMyProfile").pad.objectName, "myProfilePinPad")
             compare(find("paneProfiles").pad.objectName, "profilesPinPad")
         }

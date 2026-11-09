@@ -421,11 +421,14 @@ Item {
             verify(pane)
             const r = n => findChild(pane, "r" + n)
             const holder = () => pane.Window.window.activeFocusItem
+            // activeFocus is false everywhere while the window is not the active one (the desktop took
+            // it: the one way this test was seen to fail): take it back first, or say so plainly.
+            verify(windowGuard.ensureActive() === "", windowGuard.ensureActive())
             pane.forceActiveFocus()
-            tryVerify(() => r(0).activeFocus, 2000)
+            tryVerify(() => r(0).activeFocus, 5000)
             keyClick(Qt.Key_Down)
             keyClick(Qt.Key_Down)
-            verify(r(2).activeFocus)
+            tryVerify(() => r(2).activeFocus, 5000, "two Downs reach the third row")
             r(2).visible = false
             tryCompare(r(1), "activeFocus", true)        // the row before
             r(1).visible = false
