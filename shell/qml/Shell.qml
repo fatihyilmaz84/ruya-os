@@ -82,6 +82,8 @@ FocusScope {
     function closePage() {
         if (!pageOpen)
             return
+        if (pageProbe.pendingKey !== "")
+            pageProbe.cancel()          // closed before it settled: stop measuring (and counting frames)
         const gone = slots[slots.length - 1]
         slots = slots.slice(0, -1)
         pageStack = pageStack.slice(0, -1)

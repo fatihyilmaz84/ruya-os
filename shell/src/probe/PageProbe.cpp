@@ -10,16 +10,29 @@ void PageProbe::setWindow(QQuickWindow *window)
 {
     if (m_window == window)
         return;
-    if (m_swapConnection)
-        disconnect(m_swapConnection);
+    disconnectSwap();
     m_window = window;
-    if (m_window) {
-        // frameSwapped comes from the render thread in the threaded render loop: queued, so the
-        // probe only ever runs on the GUI thread.
+    if (!m_key.isEmpty())
+        connectSwap();
+    emit windowChanged();
+}
+
+// frameSwapped comes from the render thread in the threaded render loop: queued, so the probe only
+// ever runs on the GUI thread. It is connected only while a page open is being measured, so an idle
+// shell posts no call per frame.
+void PageProbe::connectSwap()
+{
+    if (m_window && !m_swapConnection)
         m_swapConnection = connect(m_window, &QQuickWindow::frameSwapped, this, &PageProbe::onFrameSwapped,
                                    Qt::QueuedConnection);
+}
+
+void PageProbe::disconnectSwap()
+{
+    if (m_swapConnection) {
+        disconnect(m_swapConnection);
+        m_swapConnection = QMetaObject::Connection();
     }
-    emit windowChanged();
 }
 
 void PageProbe::begin(const QString &key)
@@ -32,6 +45,7 @@ void PageProbe::begin(const QString &key)
     m_maxFrame = 0;
     m_clock.restart();
     m_lastFrame = 0;
+    connectSwap();
     emit stateChanged();
 }
 
@@ -56,6 +70,7 @@ void PageProbe::cancel()
     if (m_key.isEmpty())
         return;
     m_key.clear();
+    disconnectSwap();
     emit stateChanged();
 }
 
@@ -88,5 +103,6 @@ void PageProbe::finishIfDone()
     qInfo("ruya-shell: %s", qPrintable(m_lastLine));
     ++m_lineCount;
     m_key.clear();
+    disconnectSwap();
     emit stateChanged();
 }

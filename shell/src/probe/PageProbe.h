@@ -55,6 +55,8 @@ signals:
 private:
     void onFrameSwapped();
     void finishIfDone();
+    void connectSwap();
+    void disconnectSwap();
     qint64 now() const { return m_clock.elapsed(); }
 
     QPointer<QQuickWindow> m_window;

@@ -355,5 +355,16 @@ Item {
             tryVerify(() => find("sectionNav").activeFocus, 2000, "focus is back on the nav")
             compare(probe.lineCount, lines + 1)
         }
+        // A page closed before it settled stops the measurement: nothing keeps counting frames.
+        function test_a_page_closed_before_it_settles_cancels_the_probe() {
+            const probe = find("pageProbe")
+            const lines = probe.lineCount
+            tc.shell.openPage("settings", {})
+            verify(probe.pendingKey !== "", "the open is being measured")
+            tc.shell.closePage()
+            compare(probe.pendingKey, "", "closing cancelled it")
+            wait(400)
+            compare(probe.lineCount, lines, "and no line was written for it")
+        }
     }
 }
