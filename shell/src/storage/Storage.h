@@ -28,6 +28,14 @@ class Storage : public QObject
     // the service starts). dataBytes is -1 today (the profile homes are 0700 and owned by the
     // profile users); systemBytes is then everything used that is not apps.
     Q_PROPERTY(QVariantMap internal READ internal NOTIFY internalChanged)
+    // What RuyaOS found on each mounted removable volume (T-331), by volume id:
+    // { valid, state, partial, usedBytes, otherBytes, categories: [{ key, bytes, files }], status }.
+    // A volume has an entry once its first reply arrived (`valid` is then true; `state` "running"
+    // until the scan ended, then "done", "cancelled" or "failed"); `status` is "" or the refusal of
+    // the last scan() ("busy", "unsupported", ...), in which case the entry is otherwise empty. The
+    // entry of a volume that left or changed (free space, mount) is removed: ask again. `partial`
+    // means the numbers are "at least". Names and sizes only; nothing on the drive is opened.
+    Q_PROPERTY(QVariantMap scans READ scans NOTIFY scansChanged)
     Q_PROPERTY(bool mock READ isMock CONSTANT)
     // How long the volumes of one drive are waited for (tests wait this long to see "no second toast").
     Q_PROPERTY(int groupWindowMs READ groupWindowMs CONSTANT)
@@ -43,6 +51,7 @@ public:
 
     QVariantList volumes() const { return m_volumes; }
     QVariantMap internal() const { return m_internal; }
+    QVariantMap scans() const { return m_scans; }
     bool isMock() const { return m_backend->isMock(); }
     int groupWindowMs() const { return GroupWindowMs; }
 
@@ -58,6 +67,11 @@ public:
     // Reads the internal storage numbers again (free space changes without a signal: ask when
     // showing it).
     Q_INVOKABLE void refreshInternal();
+    // Starts (or joins, or reads from the cache) the scan of a mounted removable volume; the
+    // answer is the volume's entry in `scans`. One scan runs at a time ("busy" status otherwise).
+    Q_INVOKABLE void scan(const QString &id);
+    // Stops the scan of a volume; its entry then says "cancelled".
+    Q_INVOKABLE void cancelScan(const QString &id);
 
     // Tests only, and only with the mock backend (otherwise no-ops). mockReset puts the volumes
     // back with the USB stick not plugged in (plugStick starts the delayed insert, as a fresh
@@ -69,6 +83,7 @@ public:
     Q_INVOKABLE void mockPlug(const QStringList &ids);
     Q_INVOKABLE void mockSetBusy(const QString &id, bool busy);
     Q_INVOKABLE void mockSetLabel(const QString &id, const QString &label);   // any text, as a drive could carry it
+    Q_INVOKABLE void mockSetFree(const QString &id, double freeBytes);        // the free space of a volume, in bytes
     // mockHoldEject: eject() stays unanswered until released (false); mockEjectCalls counts the
     // eject() calls since the last reset; mockRepublish publishes the unchanged list again.
     Q_INVOKABLE void mockHoldEject(bool hold);
@@ -92,10 +107,21 @@ public:
     // Asks for the internal storage numbers; the reply arrives after `ms` showing them as they are
     // now (counted in mockPendingReplies).
     Q_INVOKABLE void mockRefreshInternalDelayed(int ms);
+    // scan() with the mock: mockHoldScan keeps the scan running until released (false);
+    // mockScanCalls / mockCancelCalls: the volume ids of the scan() and cancelScan() calls since the
+    // last reset; mockSetScanPartial makes later results "at least" numbers; mockRefreshScanDelayed
+    // asks for a volume's scan state and the snapshot arrives after `ms` (counted in mockPendingReplies).
+    Q_INVOKABLE void mockHoldScan(bool hold);
+    Q_INVOKABLE QStringList mockScanCalls() const;
+    Q_INVOKABLE QStringList mockCancelCalls() const;
+    Q_INVOKABLE void mockSetScanPartial(bool partial);
+    Q_INVOKABLE void mockSetScanFailed(bool failed);   // later scans end "failed" (the drive cannot be read)
+    Q_INVOKABLE void mockRefreshScanDelayed(const QString &id, int ms);
 
 signals:
     void volumesChanged();
     void internalChanged();
+    void scansChanged();
     // A drive was plugged in and its volumes are in the list; once per drive and insert. `label`
     // names the first volume with a supported filesystem, `volumeCount` counts those volumes
     // (partitions with a filesystem we do not mount stay listed but are not counted; a drive that
@@ -116,10 +142,13 @@ private:
     };
     void flushArrivals();
     static QVariantMap unknownInternal();
+    QVariantList fingerprintOf(const QString &id) const; // see m_scanned; empty for an unknown volume
 
     std::unique_ptr<StorageBackend> m_backend;
     QVariantList m_volumes;
     QVariantMap m_internal;
+    QVariantMap m_scans;
+    QHash<QString, QVariantList> m_scanned; // per volume: [mountPoint, sizeBytes, freeBytes, readOnly] when scanned
     QSet<QString> m_pendingAdded; // announced, waiting for the list that holds them
     QList<Arrival> m_arrivals;    // by drive, in the order they came
     QTimer m_groupTimer;

@@ -13,6 +13,10 @@
 #   plugged    after the host re-attached the formatted stick: VolumeAdded then VolumesChanged,
 #              the volume is listed and mounted nosuid,nodev,noexec, writing works, a program on it
 #              does not run, free_bytes is the real free space
+#   scan       (T-331) the service's scan of the stick: ROMs and a backup folder, a stray file and a
+#              script that must not run; used_bytes within 5 % of du, the categories add up, a tree
+#              10 levels deep ends partial, nothing ran, VolumeScanChanged was sent, a second call
+#              answers from the cache
 #   busy       a process with its working directory on the stick makes Eject answer busy, the stick
 #              stays mounted and listed
 #   eject      Eject answers ok, the volume leaves the list, nothing stays mounted, no VolumeAdded
@@ -214,6 +218,72 @@ busy() {
     kill "$holder" 2>/dev/null; wait "$holder" 2>/dev/null
 }
 
+# T-331: what RuyaOS recognises on the stick. Files are made as root, the walk is the service's (ruya-shell,
+# readdir and lstat only): the numbers must match du, nothing on the stick may have run, a tree deeper than
+# the bound is partial. GetVolumeScan is read as JSON (busctl --json=short).
+scan_py='
+import json, sys
+d = json.load(sys.stdin)["data"][0]
+def g(k, default=""):
+    return d.get(k, {}).get("data", default)
+cats = g("categories", [])
+if cats and isinstance(cats[0], list):
+    cats = cats[0]
+out = {"state": g("state"), "partial": g("partial", False), "used": g("used_bytes", 0), "other": g("other_bytes", 0)}
+for c in cats:
+    out["cat_" + c["key"]["data"]] = c["bytes"]["data"]
+for k, v in sorted(out.items()):
+    print(k + "=" + str(v).lower() if isinstance(v, bool) else k + "=" + str(v))
+'
+scan_of() { busctl --system --json=short call "$svc" "$path" "$st" GetVolumeScan s "$1" 2>/dev/null | python3 -c "$scan_py" 2>/dev/null; }
+scan_get() { scan_of "$1" | sed -n "s/^$2=//p"; }
+
+scan() {
+    echo "--- scan: what RuyaOS finds on the stick"
+    id="$(stick_id)"; mp="$(field mount_point)"
+    [ -n "$id" ] && [ -n "$mp" ] || { bad "no stick listed"; return; }
+    rm -f /tmp/scan-ran
+    mkdir -p "$mp/RuyaOS/ROMs/snes" "$mp/RuyaOS-Backups/p"
+    dd if=/dev/zero of="$mp/RuyaOS/ROMs/snes/a.bin" bs=1M count=3 status=none
+    dd if=/dev/zero of="$mp/RuyaOS-Backups/p/b.tar.zst" bs=1M count=1 status=none
+    dd if=/dev/zero of="$mp/stray.bin" bs=1M count=1 status=none
+    printf '#!/bin/sh\ntouch /tmp/scan-ran\n' > "$mp/run.sh"; chmod +x "$mp/run.sh"
+    # 10 levels deep: the bound is 6.
+    deep="$mp/deep/1/2/3/4/5/6/7/8/9/10"
+    mkdir -p "$deep"; echo x > "$deep/f.bin"
+    sync
+    r="$(busctl --system call "$svc" "$path" "$st" ScanVolume s "$id")"
+    [ "$r" = 's "ok"' ] && ok "ScanVolume answers ok" || bad "ScanVolume answered $r"
+    n=0; while [ "$(scan_get "$id" state)" != done ] && [ "$n" -lt 30 ]; do sleep 1; n=$((n + 1)); done
+    [ "$(scan_get "$id" state)" = done ] && ok "the scan is done after ~$n s" || { bad "scan state '$(scan_get "$id" state)'"; scan_of "$id"; return; }
+    scan_of "$id"
+    # Sizes: allocated bytes, within 5 % of du (the tree below level 6 is a few kB).
+    used="$(scan_get "$id" used)"; dub="$(du -sB1 "$mp" | cut -f1)"
+    echo "used_bytes=$used du=$dub"
+    if [ -n "$used" ] && [ "$dub" -gt 0 ] && [ $(( (used - dub) * 100 )) -lt $(( dub * 5 )) ] && [ $(( (dub - used) * 100 )) -lt $(( dub * 5 )) ]; then ok "used_bytes is within 5 % of du"; else bad "used_bytes $used vs du $dub"; fi
+    games="$(scan_get "$id" cat_games)"; backups="$(scan_get "$id" cat_backups)"
+    [ -n "$games" ] && [ "$games" -ge 3145728 ] && [ "$games" -lt 3500000 ] && ok "games: $games bytes" || bad "games '$games'"
+    [ -n "$backups" ] && [ "$backups" -ge 1048576 ] && [ "$backups" -lt 1300000 ] && ok "backups: $backups bytes" || bad "backups '$backups'"
+    other="$(scan_get "$id" other)"
+    [ -n "$other" ] && [ "$other" -ge 1048576 ] && ok "other: $other bytes (the stray file and the rest)" || bad "other '$other'"
+    [ $(( games + backups + other )) -eq "$used" ] && ok "the parts add up to used_bytes" || bad "parts $(( games + backups + other )) vs used $used"
+    # Nothing on the stick was run or opened for its content.
+    [ ! -e /tmp/scan-ran ] && ok "run.sh did not run" || bad "/tmp/scan-ran exists: something on the stick ran"
+    # The deep tree is cut at the bound.
+    [ "$(scan_get "$id" partial)" = true ] && ok "a tree 10 levels deep ends partial" || bad "partial '$(scan_get "$id" partial)'"
+    sleep 1
+    [ "$(grep -ic "member=VolumeScanChanged" "$log")" -ge 1 ] && ok "VolumeScanChanged was sent" || bad "no VolumeScanChanged"
+    # A fresh result is kept: the same call answers ok at once, the numbers are the same.
+    r="$(busctl --system call "$svc" "$path" "$st" ScanVolume s "$id")"
+    [ "$r" = 's "ok"' ] && [ "$(scan_get "$id" used)" = "$used" ] && ok "a second call answers from the cache" || bad "second ScanVolume answered $r"
+    for a in "" "/org/freedesktop/UDisks2/block_devices/nope"; do
+        r="$(busctl --system call "$svc" "$path" "$st" ScanVolume s "$a")"
+        want='s "unknown-volume"'; [ -z "$a" ] && want='s "invalid"'
+        [ "$r" = "$want" ] && ok "ScanVolume '$a' answers $want" || bad "ScanVolume '$a' answered $r"
+    done
+    [ "$(scan_get "no-such-volume" state)" = idle ] && ok "an unknown volume is idle" || bad "unknown volume state '$(scan_get "no-such-volume" state)'"
+}
+
 eject() {
     echo "--- eject"
     id="$(stick_id)"; mp="$(field mount_point)"
@@ -328,10 +398,11 @@ format) format ;;
 gone) gone ;;
 watch) watch ;;
 plugged) plugged ;;
+scan) scan ;;
 busy) busy ;;
 eject) eject ;;
 security) as_shell systemd-analyze --user security ruya-devices --no-pager | tail -15 ;;
-*) echo "usage: $0 baseline|format|gone|watch|plugged|busy|eject|mformat|mplugged|meject|security" >&2; exit 2 ;;
+*) echo "usage: $0 baseline|format|gone|watch|plugged|scan|busy|eject|mformat|mplugged|meject|security" >&2; exit 2 ;;
 esac
 [ "$fail" = 0 ] && echo "STEP OK: ${1:-}" || echo "STEP FAILED: ${1:-}"
 exit "$fail"

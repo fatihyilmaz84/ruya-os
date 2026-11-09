@@ -18,6 +18,7 @@ pub mod bluez;
 pub mod dbus;
 pub mod debounce;
 pub mod display;
+pub mod drive_scan;
 pub mod edid;
 pub mod events;
 pub mod families;

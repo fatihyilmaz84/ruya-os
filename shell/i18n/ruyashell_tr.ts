@@ -2747,7 +2747,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>StoragePane</name>
     <message>
-        <location filename="../qml/StoragePane.qml" line="+168"/>
+        <location filename="../qml/StoragePane.qml" line="+309"/>
         <source>%1 is still in use. Close what uses it and try again.</source>
         <translation>%1 hâlâ kullanımda. Kullanan uygulamayı kapatıp tekrar deneyin.</translation>
     </message>
@@ -2772,53 +2772,125 @@ Bu geri alınamaz.</translation>
         <translation>Desteklenmiyor</translation>
     </message>
     <message>
-        <location line="-138"/>
-        <location line="+139"/>
+        <location line="-263"/>
+        <location line="+264"/>
         <source>%1 free of %2</source>
         <translation>%2 içinde %1 boş</translation>
     </message>
     <message>
+        <location line="-290"/>
+        <source>Select</source>
+        <translation>Seç</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <location line="+1"/>
+        <source>Back</source>
+        <translation>Geri</translation>
+    </message>
+    <message>
+        <location line="+82"/>
+        <source>Games</source>
+        <translation>Oyunlar</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Backups</source>
+        <translation>Yedekler</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Captures</source>
+        <translation>Ekran kayıtları</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Packages</source>
+        <translation>Paketler</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Pictures</source>
+        <translation>Resimler</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>System reports</source>
+        <translation>Sistem raporları</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>at least %1</source>
+        <translation>en az %1</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Scanning…</source>
+        <translation>Taranıyor…</translation>
+    </message>
+    <message>
         <location line="+2"/>
+        <source>Could not read this drive</source>
+        <translation>Bu sürücü okunamadı</translation>
+    </message>
+    <message>
+        <location line="+183"/>
         <source>Read-only</source>
         <translation>Salt okunur</translation>
     </message>
     <message>
-        <location line="+43"/>
+        <location line="+60"/>
         <source>This console</source>
         <translation>Bu konsol</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+9"/>
         <source>Free space</source>
         <translation>Boş alan</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+11"/>
         <source>Apps and games</source>
         <translation>Uygulamalar ve oyunlar</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+10"/>
         <source>Profile data</source>
         <translation>Profil verileri</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+9"/>
         <source>System</source>
         <translation>Sistem</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="-271"/>
+        <location line="+271"/>
         <source>Other</source>
         <translation>Diğer</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="-282"/>
+        <source>Plug it in again</source>
+        <translation>Yeniden takın</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Nothing found so far</source>
+        <translation>Şimdilik bir şey bulunamadı</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Nothing found here</source>
+        <translation>Burada bir şey bulunamadı</translation>
+    </message>
+    <message>
+        <location line="+277"/>
         <source>Drives</source>
         <translation>Sürücüler</translation>
     </message>
     <message>
-        <location line="+34"/>
+        <location line="-264"/>
         <source>Eject %1</source>
         <translation>%1 sürücüsünü çıkar</translation>
     </message>
