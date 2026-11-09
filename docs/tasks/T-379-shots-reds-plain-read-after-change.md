@@ -36,4 +36,22 @@ Status: in-progress · Phase: 2 · Depends: T-377 · Area: shell (tests) · Size
 - After T-377, which touches the Store page that `tst_store_ui` drives.
 
 ## Outcome
-_Filled in by the implementer._
+Verified: host. **No code or test change: the four reds did not reproduce on main (3662050) in any of five attempts.** Builder Sonnet 5.5 (high effort), round 1.
+
+**Reproduction attempts** (this worktree, built fresh, real GPU windows, `QSG_RENDER_LOOP=basic` as `shots` sets it):
+1. `dev.ps1 shots`, full: 158 passed, 0 failed, 249 s.
+2. `dev.ps1 shots`, full, again: 158 passed, 0 failed, 249 s.
+3. The four named functions alone (`StoreUi`, `SystemInfo`, `Wallpaper`, `Display` `::test_zz_screenshots`, run straight from `tst_ruyashell.exe` with `RUYA_SHOTS_DIR`) with 16 busy threads on the 16-core machine: 12 passed.
+4. The same four with a borderless top-most black window over the whole screen (no activation): 12 passed.
+5. The same four while a full `dev.ps1 test` (offscreen, all cores) ran in this worktree: 12 passed.
+`dev.ps1 test`: ALL GREEN (1018 Qt Quick tests, 79 skips, Rust green).
+
+**Cause.** The four assertions are not plain reads: all of them are already `tryVerify` (2 s) or `tryCompare` on the observable state (`tst_store_ui.qml:82` and `:56`, `tst_system_info.qml:502`, `tst_wallpaper.qml:898`, `tst_display.qml:101`), so the T-361 class (plain read right after a change) does not apply, and a longer wait or a retry would be exactly what the task forbids. No recent merge is implicated either: the same sources are green twice in a row here, and the T-377 builder saw `tst_display:101` red on main's own older build too. What is left is the environment of those runs. All four wait for a deferred focus (`activeFocus` after a page opens) or for a popped page to be reaped (`Shell.qml` `reap()` waits for a `frameSwapped`), and both stop when the test window is not active or draws no frame: `activeFocus` is false in an inactive window. The runner already says so when it happens: `WindowGuard` prints `TEST WINDOW LOST ACTIVATION` per test function and re-requests activation (it appeared 1-2 times in each of my full runs, always recovered). It checks activation only in `init()`, so a loss in the middle of a function that Windows then refuses to give back (foreground lock while another process holds the desktop, as with several lanes working at once) fails the next `activeFocus` check with no hint. The T-377 Outcome also notes a real-window probe on this desktop that "swapped no frame" in a scratch window, the same kind of disturbance. I could not prove this for the reviewers' runs (their logs are gone), so it is the most likely cause, not a verified one. Nothing in the product is wrong that these runs could show.
+
+**What I did not do.** No assertion weakened, no sleep, no retry, no code change. A speculative edit to a test I could not see failing would not satisfy the revert-check criterion (no changed test, nothing to revert), so none was made.
+
+**Acceptance.** `shots` ALL GREEN twice in a row on main's tree plus this branch (docs only): met. `dev.ps1 test` ALL GREEN: met. Revert check: not applicable, no assertion changed.
+
+**If a red appears again:** read the `QWARN` lines in the `shots` output first. A `TEST WINDOW LOST ACTIVATION` on the failing function means the desktop, not the shell: re-run. A red without it, twice, is a real finding and needs the failing log kept (`shell\build-win\ruya-qmltest.txt`) in the report.
+
+**Files.** This task file only. Scratch under `output\` (`hog.ps1`, `cover.ps1`, `run4.ps1`, logs), not committed.
