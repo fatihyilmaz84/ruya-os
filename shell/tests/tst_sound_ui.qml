@@ -245,7 +245,7 @@ Item {
             tc.shell.addApp(app)
             tryVerify(() => app.activeFocus, 2000, "the app takes focus")
             compare(l0.visible, false)
-            compare(pill.visible, false, "the glass pill that blurs L0 is not drawn while L0 is hidden")
+            tryVerify(() => !pill.visible, 2000, "the glass pill that blurs L0 is not drawn once it has faded, while L0 is hidden")
             tryVerify(() => !find("sectionNav").visible, 2000, "nor the nav glass, once it has faded")
             tc.shell.removeApp(app)
             tryVerify(() => find("homePlay").activeFocus, 2000)

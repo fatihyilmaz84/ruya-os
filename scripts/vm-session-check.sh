@@ -329,12 +329,22 @@ display)
     # The ambient bed fades out over 800 ms and then stops its players, so the PipeWire output closes; a
     # paused player left a silent stream open. A cue is a stream for at most 1.5 s, hence the wait.
     sleep 4
-    if ! command -v jq >/dev/null 2>&1; then
-        echo "SKIP: jq is not installed (needed to read pw-dump)"
-    else
-        sid="$(id -u ruya-shell)"
-        streams="$(runuser -u ruya-shell -- env XDG_RUNTIME_DIR="/run/user/$sid" pw-dump 2>/dev/null | jq -r '.[] | select(.type == "PipeWire:Interface:Node" and .info.props["media.class"] == "Stream/Output/Audio" and .info.props["application.process.binary"] == "ruya-shell") | "\(.id) \(.info.state)"')"
+    sid="$(id -u ruya-shell)"
+    dump="$work/pw-dump.json"
+    if ! runuser -u ruya-shell -- env XDG_RUNTIME_DIR="/run/user/$sid" pw-dump > "$dump" 2>/dev/null; then
+        bad "pw-dump failed as ruya-shell (is PipeWire running?)"
+    elif streams="$(python3 -I -c '
+import json, sys
+nodes = json.load(open(sys.argv[1], encoding="utf-8"))
+for n in nodes:
+    p = (n.get("info") or {}).get("props") or {}
+    if (n.get("type") == "PipeWire:Interface:Node" and p.get("media.class") == "Stream/Output/Audio"
+            and (p.get("application.process.binary") == "ruya-shell" or p.get("application.process.user") == "ruya-shell")):
+        print(n.get("id"), (n.get("info") or {}).get("state"))
+' "$dump")"; then
         [ -z "$streams" ] && ok "no ruya-shell output stream exists with the app in front" || { echo "$streams" | sed 's/^/    /'; bad "a ruya-shell output stream still exists with the app in front"; }
+    else
+        bad "could not parse the pw-dump output"
     fi
 
     echo "--- Guide over the app"
