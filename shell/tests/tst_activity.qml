@@ -18,6 +18,12 @@ Item {
 
     SignalSpy { id: clearSpy; target: Usage; signalName: "clearFinished" }
 
+    // An item in the shell's modal layer, as a PIN pad or the keyboard puts there.
+    Component {
+        id: modalStandIn
+        Item { width: 10; height: 10 }
+    }
+
     TestCase {
         id: tc
         name: "Activity"
@@ -451,11 +457,15 @@ Item {
             return s || "nothing"
         }
 
+        function slotFaded(key) {
+            const s = find("pageSlot_" + key)
+            return s !== null && !s.visible
+        }
+
         // Once the page below has faded out (its items hide then, T-356): the active focus is a
         // visible item of the page on top.
         function verifyFocusOnTop(below, what) {
-            tryVerify(() => { const s = find("pageSlot_" + below); return s !== null && !s.visible }, 2000,
-                      below + " has faded out")
+            tryVerify(() => slotFaded(below), 2000, below + " has faded out")
             const top = tc.shell.slots[tc.shell.slots.length - 1]
             const f = tc.shell.Window.window.activeFocusItem
             let inside = false
@@ -624,22 +634,22 @@ Item {
             compare(tc.shell.focusRepairs, 0, "the pages kept the focus themselves")
         }
 
-        // The focus can fall out of a page (seen on the Dell): a Back that then reaches the shell
-        // itself still leaves the page, and the focus is given back to it.
-        function test_a_back_that_reaches_the_shell_leaves_the_page_when_the_focus_is_lost() {
+        // The safety net stays out while anything in the modal layer shows (a PIN pad, the keyboard,
+        // a dialog: the focus is that modal's business, even between two steps of a flow).
+        function test_the_safety_net_stays_out_while_a_modal_shows() {
             openActivity(sessions())
             tc.shell.openPage("activityGame", { appId: chess })
             tryCompare(tc.shell, "currentPage", "activityGame")
-            tryVerify(() => find("gameBody").activeFocus, 2000)
-            verify(!tc.shell.orphanKey(Qt.Key_Escape, false), "with the focus in the page the shell does not act")
-            compare(tc.shell.currentPage, "activityGame")
-            tc.shell.focusLostTest = true
-            verify(!tc.shell.orphanKey(Qt.Key_Escape, true), "a held key does not pop pages")
-            verify(!tc.shell.orphanKey(Qt.Key_Down, false), "only Back is taken")
-            compare(tc.shell.currentPage, "activityGame")
-            verify(tc.shell.orphanKey(Qt.Key_Escape, false))
-            tryCompare(tc.shell, "currentPage", "activity")
-            tc.shell.focusLostTest = false
+            verifyFocusOnTop("activity", "the game page")
+            const modal = createTemporaryObject(modalStandIn, find("modalLayer"))
+            verify(modal && modal.visible)
+            find("activityBody").forceActiveFocus()      // the covered page takes it (as between two modal steps)
+            verify(!tc.shell.focusIsLost(), "a modal shows: not lost")
+            modal.visible = false
+            verify(tc.shell.focusIsLost(), "no modal: lost")
+            find("activityWeek").forceActiveFocus()      // a focus change runs the check
+            tryVerify(() => find("gameBody").activeFocus, 2000, "repaired once no modal shows")
+            compare(tc.shell.focusRepairs, 1)
         }
 
         function test_a_game_never_played_says_so() {

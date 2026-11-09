@@ -153,6 +153,22 @@ FocusScope {
     }
     onActiveFocusChanged: if (activeFocus) Qt.callLater(settleFocus)
 
+    // The pane's focused row: when it hides or is disabled, settle at once. relayout() also settles,
+    // but it waits for the column's height to change, which needs a polish (a frame) first.
+    readonly property Item focusedChild: {
+        for (let i = 0; i < column.children.length; ++i) {
+            if (column.children[i].focus)
+                return column.children[i]
+        }
+        return null
+    }
+    Connections {
+        target: pane.focusedChild
+        // `pane &&`: the rows outlive the pane's id while the page is torn down.
+        function onVisibleChanged() { if (pane && pane.activeFocus) Qt.callLater(pane.settleFocus) }
+        function onEnabledChanged() { if (pane && pane.activeFocus) Qt.callLater(pane.settleFocus) }
+    }
+
     // The row that is the pane's focused item although it cannot hold the focus (hidden or
     // disabled), or null.
     function staleRow() {
@@ -164,22 +180,24 @@ FocusScope {
         return null
     }
 
-    // Of `list` (focusable rows), the first one after `from` in the column, else the last one before
-    // it; the first of the list without `from`.
+    // Of `list` (focusable rows), the last one before `from` in the column (as the profile panes
+    // always did), else the first one after it; the first of the list without `from`.
     function nearestRow(list, from) {
         let before = null
         let passed = false
         for (let i = 0; i < column.children.length; ++i) {
             const c = column.children[i]
-            if (c === from)
+            if (c === from) {
+                if (before)
+                    return before
                 passed = true
-            else if (list.indexOf(c) >= 0) {
+            } else if (list.indexOf(c) >= 0) {
                 if (passed)
                     return c
                 before = c
             }
         }
-        return passed ? before : list[0]
+        return list[0]
     }
 
     function focusableRows() {

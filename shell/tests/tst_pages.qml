@@ -344,6 +344,53 @@ Item {
             tryCompare(nav, "enabled", true)
         }
 
+        // T-356 helpers (top-level functions: a local inside a nested function blinds the member lint).
+        function describeFocus(f) {
+            let s = ""
+            for (let p = f; p; p = p.parent)
+                s += (p.objectName || String(p)) + (p.visible ? "" : "[hidden]") + (p.enabled ? "" : "[disabled]") + " < "
+            return s || "nothing"
+        }
+        // The page on top has faded in, the pages below have faded out, and the active focus is a
+        // visible, enabled item of the page on top.
+        function checkFocusOnTop(what) {
+            const top = tc.shell.slots[tc.shell.slots.length - 1]
+            tryCompare(top, "opacity", 1)
+            tryVerify(() => tc.shell.slots.slice(0, -1).every(s => !s.visible), 2000, what + ": the page below faded out")
+            const f = tc.shell.Window.window.activeFocusItem
+            let inside = false
+            for (let p = f; p; p = p.parent)
+                inside = inside || p === top.page
+            verify(inside && f.visible && f.enabled, what + ": " + describeFocus(f))
+        }
+        // With bad services, also while replies are on their way and once they are in.
+        function settleAndCheck(what, bad) {
+            checkFocusOnTop(what)
+            if (!bad)
+                return
+            Bluetooth.mockRefreshDelayed(100)
+            Network.mockRefreshDelayed(100)
+            Library.mockListDelayed(100)
+            checkFocusOnTop(what + " (replies due)")
+            tryVerify(() => Bluetooth.mockPendingReplies() === 0 && Network.mockPendingReplies() === 0
+                      && Library.mockPendingReplies() === 0, 3000)
+            checkFocusOnTop(what + " (replies in)")
+        }
+        function openForFocus(key, extra, bad) {
+            const chess = "org.example.Chess"
+            const params = { appDetail: { appId: chess }, activityGame: { appId: chess },
+                             details: { id: Library.games[0].id } }
+            if (bad)
+                Usage.mockFailNextRefresh("failed")
+            tc.shell.openPage(key, Object.assign({}, params[key] ?? {}, extra))
+            tryCompare(tc.shell, "currentPage", key)
+        }
+        function backTo(key, what) {
+            for (let i = 0; i < 2 && tc.shell.currentPage !== key; ++i)
+                keyClick(Qt.Key_Escape)                  // a Settings pane hands Back to its list first
+            compare(tc.shell.currentPage, key, what + ": Back leaves")
+        }
+
         // T-356: every page owns the focus once it is open and the page below has faded out (a covered
         // page hides its items then), opened from Home and over the app page (whose hidden buttons
         // once pulled the focus out of the page on top), with every Settings pane entered; with
@@ -354,66 +401,23 @@ Item {
         }
         function test_every_page_owns_the_focus(data) {
             tryVerify(() => Store.catalogue.length > 0 && Library.games.length > 0)
-            const chess = "org.example.Chess"
-            const params = { appDetail: { appId: chess }, activityGame: { appId: chess },
-                             details: { id: Library.games[0].id } }
-            const describe = f => {
-                let s = ""
-                for (let p = f; p; p = p.parent)
-                    s += (p.objectName || String(p)) + (p.visible ? "" : "[hidden]") + (p.enabled ? "" : "[disabled]") + " < "
-                return s || "nothing"
-            }
-            const checkFocus = what => {
-                const top = tc.shell.slots[tc.shell.slots.length - 1]
-                tryCompare(top, "opacity", 1)
-                tryVerify(() => tc.shell.slots.slice(0, -1).every(s => !s.visible), 2000, what + ": the page below faded out")
-                const f = tc.shell.Window.window.activeFocusItem
-                let inside = false
-                for (let p = f; p; p = p.parent)
-                    inside = inside || p === top.page
-                verify(inside && f.visible && f.enabled, what + ": " + describe(f))
-            }
-            const settle = what => {
-                checkFocus(what)
-                if (!data.bad)
-                    return
-                Bluetooth.mockRefreshDelayed(100)        // replies still on their way, then arriving
-                Network.mockRefreshDelayed(100)
-                Library.mockListDelayed(100)
-                checkFocus(what + " (replies due)")
-                tryVerify(() => Bluetooth.mockPendingReplies() === 0 && Network.mockPendingReplies() === 0
-                          && Library.mockPendingReplies() === 0, 3000)
-                checkFocus(what + " (replies in)")
-            }
-            const backTo = (key, what) => {
-                for (let i = 0; i < 2 && tc.shell.currentPage !== key; ++i)
-                    keyClick(Qt.Key_Escape)                  // a Settings pane hands Back to its list first
-                compare(tc.shell.currentPage, key, what + ": Back leaves")
-            }
-            const open = (key, extra) => {
-                if (data.bad)
-                    Usage.mockFailNextRefresh("failed")
-                tc.shell.openPage(key, Object.assign({}, params[key] ?? {}, extra ?? {}))
-                tryCompare(tc.shell, "currentPage", key)
-            }
-
             for (const key of Object.keys(tc.shell.builtinPages)) {
-                open(key)
-                settle(key + " from Home")
+                openForFocus(key, {}, data.bad)
+                settleAndCheck(key + " from Home", data.bad)
                 backTo("", key)
-                open("appDetail")
-                settle("appDetail")
-                open(key)
-                settle(key + " over the app page")
+                openForFocus("appDetail", {}, data.bad)
+                settleAndCheck("appDetail", data.bad)
+                openForFocus(key, {}, data.bad)
+                settleAndCheck(key + " over the app page", data.bad)
                 backTo("appDetail", key + " over the app page")
                 backTo("", "appDetail")
             }
             for (const category of ["myprofile", "network", "bluetooth", "display", "audio", "storage",
                                     "accessibility", "power", "system", "about"]) {
-                open("settings", { category: category })
+                openForFocus("settings", { category: category }, data.bad)
                 tryVerify(() => find("categoryList").activeFocus)
                 keyClick(Qt.Key_Right)                   // into the pane (nothing for a category without one)
-                settle("settings: " + category)
+                settleAndCheck("settings: " + category, data.bad)
                 backTo("", "settings: " + category)
             }
             compare(tc.shell.focusRepairs, 0, "every page kept the focus itself")

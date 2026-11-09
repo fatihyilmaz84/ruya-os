@@ -323,14 +323,19 @@ FocusScope {
     // item holds it, or an item of a page below the top one does (a covered page that took the focus
     // back: the page's keys, Back above all, then go nowhere). Seen on the Dell (2026-11-09): the app
     // page, covered by "Your activity", gave the focus to its own button when its fade-out hid it.
-    // Modals live outside the pages (the modal layer), so a modal with the focus is never "lost".
-    property bool focusLostTest: false      // tests: pretend the focus is lost
+    // While anything in the modal layer shows (a PIN pad, the keyboard, a dialog, between two steps
+    // of a flow), the focus is that modal's business: the net stays out. It never acts on keys.
     property int focusRepairs: 0            // how often refocusIfLost() acted (tests: a page's own focus never needs it)
+    function modalShown() {
+        for (let i = 0; i < modalLayer.children.length; ++i) {
+            if (modalLayer.children[i].visible)
+                return true
+        }
+        return false
+    }
     function focusIsLost() {
-        if (focusLostTest)
-            return true
         const w = root.Window.window
-        if (!w || !w.active || !signedIn || !pageOpen || focusedApp || systemPanel.open || setupActive)
+        if (!w || !w.active || !signedIn || !pageOpen || focusedApp || systemPanel.open || setupActive || modalShown())
             return false
         const f = w.activeFocusItem
         if (f === null || f === root || f === w.contentItem)
@@ -344,14 +349,21 @@ FocusScope {
 
     // Repaired once the current event is over (a page change moves the focus in several steps, the
     // last one in the page on top), and logged: `journalctl -b _UID=<ruya-shell> | grep "fell out"`.
+    // A Timer, not Qt.callLater: queueing a call on every focus change reordered the pages' own
+    // deferred focus calls (the Store's focusContent after a search took the wrong row).
     Connections {
         target: root.Window.window
         ignoreUnknownSignals: true
-        function onActiveFocusItemChanged() { Qt.callLater(root.refocusIfLost) }
-        function onActiveChanged() { Qt.callLater(root.refocusIfLost) }
+        function onActiveFocusItemChanged() { focusCheck.restart() }
+        function onActiveChanged() { focusCheck.restart() }
+    }
+    Timer {
+        id: focusCheck
+        interval: 0
+        onTriggered: root.refocusIfLost()
     }
     function refocusIfLost() {
-        if (focusLostTest || !focusIsLost())
+        if (!focusIsLost())
             return
         const f = root.Window.window.activeFocusItem
         console.warn("ruya-shell: the focus fell out of page", currentPage, "(on",
@@ -360,25 +372,9 @@ FocusScope {
         focusCurrent()
     }
 
-    // A Back key that nothing below the shell took while the focus is lost leaves the page (not on
-    // auto-repeat). Returns true when it was used.
-    function orphanKey(key, isAutoRepeat) {
-        if (!BackKey.isBackOrBackspace(key) || isAutoRepeat || !pageOpen || !focusIsLost())
-            return false
-        const f = root.Window.window ? root.Window.window.activeFocusItem : null
-        console.warn("ruya-shell: Back reached the shell; focus on", f ? (f.objectName || String(f)) : "nothing",
-                     "page", currentPage)
-        focusCurrent()
-        Sfx.back()
-        closePage()
-        return true
-    }
-
     Keys.onPressed: event => {
         if (signedIn && !systemPanel.open && isGuideKey(event.key)) {
             guideDown(event.isAutoRepeat)
-            event.accepted = true
-        } else if (orphanKey(event.key, event.isAutoRepeat)) {
             event.accepted = true
         }
     }

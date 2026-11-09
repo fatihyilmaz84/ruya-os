@@ -413,8 +413,8 @@ Item {
             return y >= -0.5 && y + row.height <= pane.viewport.height + 0.5
         }
 
-        // T-356: a focused row that hides hands the focus to the nearest visible row (the next one,
-        // else the one before); with no row left the pane holds it itself, Back still leaves, and the
+        // T-356: a focused row that hides hands the focus to the nearest visible row (the one before,
+        // else the next one); with no row left the pane holds it itself, Back still leaves, and the
         // first row that appears takes it.
         function test_a_hidden_focused_row_hands_the_focus_on() {
             const pane = createTemporaryObject(barePaneComponent, host)
@@ -427,11 +427,12 @@ Item {
             keyClick(Qt.Key_Down)
             verify(r(2).activeFocus)
             r(2).visible = false
-            tryCompare(r(3), "activeFocus", true)        // the next row
-            r(3).visible = false
-            tryCompare(r(1), "activeFocus", true)        // no next one (r4, r5 hidden): the one before
-            r(0).visible = false
+            tryCompare(r(1), "activeFocus", true)        // the row before
             r(1).visible = false
+            tryCompare(r(0), "activeFocus", true)
+            r(0).visible = false
+            tryCompare(r(3), "activeFocus", true)        // none before: the next one
+            r(3).visible = false                         // r4, r5 are hidden too
             tryVerify(() => holder() === pane, 2000, "no row left: the pane, not a hidden row")
             spy.target = pane
             spy.signalName = "exitRequested"
