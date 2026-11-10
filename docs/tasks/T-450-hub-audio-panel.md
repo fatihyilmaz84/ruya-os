@@ -1,6 +1,6 @@
 # T-450 — Hub Audio panel and the microphone tile
 
-Status: todo · Phase: 2 · Depends: — · Area: shell · Size: S · Owner: builder · Complexity: normal · Developer surface: none
+Status: in-progress · Phase: 2 · Depends: — · Area: shell · Size: S · Owner: builder · Complexity: normal · Developer surface: none
 
 ## Goal
 From the Hub over a game the player sets the volume, mutes, picks the output (TV, headset, speaker) and mutes the microphone without leaving the game.
