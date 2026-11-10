@@ -37,6 +37,38 @@ Each surface is a separate QML module loaded with `Loader { asynchronous: true }
 - While an app (or the splash) is in front only the quick menu, the volume OSD and toasts of kind `error` and `warning` are drawn; every other toast waits in the queue (one that was already on screen goes back to its head) until the shell is in front again (`Notifications.appInFront`). Apps left behind Home count as running: `appRunning` stays true, so the nightly update restart (T-154) still waits (`Update.noteActivity`). One app is in front; others keep running until closed (memory limits: later).
 - **Reduced motion:** `launchMs` is 0, so the splash appears and goes as a cut, the dots stand still, and the quick menu's slide is a cut too.
 
+### 1.6 Ruya Hub (target; ADR-033, designed T-447, lead 2026-11-10; built: the quick menu of §1.4/§1.5 only)
+
+Ruya Hub is the quick menu grown into the in-game control centre. It has three levels: the **Quick Hub** (what Guide opens), **panels** (one level deeper, still over the game) and the **full Ruya interface** (Settings, Library: choosing one leaves the Hub). It never becomes a second desktop: anything that needs more than one panel's worth of rows lives in Settings and the Hub links to it.
+
+**Layout.** The Hub stays the 640 u panel on the left over `scrimOverlay` (04 §5, Quick menu), so the game stays visible on the right two thirds. A panel **replaces the Quick Hub's content in the same panel** (no second column): one column keeps focus simple (Up/Down, Left/Right only inside a tile row) and keeps the game in view. The panel slides in over `overlayMs`; content changes cross-fade over `focusMs` with a `pageSlide`-sized shift; reduced motion: cuts. Readable at 10 ft on a 720p TV (sizes in `u`).
+
+**The Quick Hub, top to bottom (over an app):**
+1. **Status row** (not focusable): the clock, the network chip and the battery cluster of the top-right status cluster (T-223), reused as they are.
+2. **App header:** art, title, "Running for 12 min" (§1.5, built).
+3. **Resume** (focus on every open), **Home**, **Close game**, one **Switch to <app>** per other running app (built).
+4. **Recent:** up to 4 recent games that are not running (`Library.recent`), one row each (title, `AppArt` thumbnail as the row icon); Accept launches through `Shell.launchApp` and closes the Hub. The row of the running app is never repeated here.
+5. **Volume** row (built: Left/Right by 5, Accept mutes).
+6. **Tiles row:** the quick toggles (below), three per line, wrapping.
+7. **Panel entries**, one row each, in this order: **Audio**, **Controllers**, **Performance**, **Notifications**, **Power** (built), then **Display** (a row showing the current mode, opening the mode list). An entry appears only when its panel is built; nothing is shown disabled.
+8. **Switch profile** (built).
+
+Without an app: the status row, the "System" heading with the image version, then 4 to 8 as above (Recent included), Switch profile and Close; focus starts on the first Recent row, or on Switch profile when there is none (Volume is an adjustment, not an action).
+
+**Tiles** (component "Quick tile", 04 §5). A tile is a toggle and nothing else: Accept flips it, the backend's answer is shown (never an optimistic state), and a tile never opens a screen; detail lives in the matching panel or in Settings. Tiles: **Wi-Fi** (on/off, the network name as its second line), **Bluetooth** (on/off), **Mute** (the master mute), **Microphone** (mute; only when a microphone exists, T-449), **Quiet** (notifications' quiet mode, T-245). A tile whose backend is missing or reports `unsupported` is **absent**, not greyed (07 §5.2: no fake controls). A tile whose backend fails shows a `warning` toast with the reason and keeps its old state. Brightness is not a tile: it is a slider row in the Display panel, present only where the screen has a backlight (T-454).
+
+**Panels.** Each has a title row (`typeTitle`, not focusable) and its rows; focus lands on the first actionable row.
+- **Audio** (T-450): Volume, Mute, Output (a choice row listing `ListOutputs`, the current one first), Microphone (choice and mute, only when one exists).
+- **Controllers** (T-453): one read-only row per connected pad (name, family icon, battery level and charging, USB or Bluetooth), then **Controller settings** (opens Settings, leaving the Hub). No mapping, profile or player controls until Ruya Input (T-366..T-374). None connected: one line "No controllers connected."
+- **Performance** (T-452): read-only rows FPS and frame time ("58 FPS · 17 ms, slowest 24 ms"), CPU, GPU, RAM, VRAM, CPU and GPU temperature, power. A metric the console cannot measure says "Not available on this console" in `textDim`; a temporary gap says "Measuring..."; nothing is estimated (ADR-033 point 4). Sampling runs only while this panel is open; the interval is a choice row at the end (1 s default; 0.5, 1, 2, 5 s).
+- **Notifications** (T-245): the history, newest first, and Clear; quiet mode is the tile.
+- **Power** (built): the power choices of §1.4.
+- **Display** (T-454): the current mode as a choice row (the mode list and the keep-or-revert dialog of Settings, `ModePicker`, `ModeConfirm`), Brightness where supported.
+
+**Focus and Back.** Guide toggles the Hub from anywhere, also from inside a panel (it closes the whole Hub and resumes). B in a panel returns to the Quick Hub with the focus on that panel's entry; B in the Quick Hub closes it (Resume over an app). Every open starts at Resume (over an app) or as above: the last panel is not remembered, so Guide then A always resumes the game, which is what a player in the middle of a game expects. The hint bar shows `A` Select, `B` Back in a panel and `B` Resume in the Quick Hub. No key reaches the app while the Hub is open (built).
+
+**Budgets** (T-455 measures them on the Dell): Guide to the Hub's first frame under 100 ms; hidden, the Hub draws no frame; the game's FPS drops less than 10 % while the Hub is open.
+
 ### 1.2 Settings page (as built, T-103)
 - Two panes. Left: the category list (My profile, Manage profiles for an admin only, Network, Bluetooth & controllers, Display & motion, Audio, Storage, Accessibility, System, About). Right: the selected category's pane. Up/Down choose a category and swap the pane at once; Right or Accept enters the pane (only if it has content); Left or Back returns to the list; Back on the list closes the page. A pane is built the first time its category is selected (T-349: opening Settings builds only the pane it opens on, My profile or the `params.category` one) and then stays alive, hidden while another category is selected, so each remembers its last focused row. Its modals (PIN pad, keyboard, confirmations, the Resolution / Refresh rate / Wallpaper / Time zone pickers, the pairing screen) are built the first time they open and then kept; a pane's service refreshes wait until it is first shown (the sound themes one frame later). The Network singleton is created when the shell starts, so its list is there when the pane is first shown.
 - Inside a pane, Up/Down move between rows (clamped, no wrap); a pane with more rows than fit scrolls to keep the focused row visible, and if the focused row disappears focus moves to a nearby row. A row keeps the keys it uses: a ChoiceRow or SliderRow consumes Left/Right, so those never leave the pane (leave with Back); ToggleRow and SettingRow leave Left to the pane, which returns to the list.

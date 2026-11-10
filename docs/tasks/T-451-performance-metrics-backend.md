@@ -31,7 +31,7 @@ The shell can show honest performance numbers for the game in front: FPS and fra
 ```
 
 ## Docs to update
-- `03` (Devices1.System), `02` §1.4 (where the numbers come from).
+- `03` (Devices1.System), `02` §1.6 (where the numbers come from).
 
 ## Hints
 - Planned by lead-10 (ADR-033). The UHD 630 shows GPU busy in fdinfo per client; system-wide busy may need the i915 PMU (perf, root): use what the service (root) can read and say which in the Outcome.

@@ -1,6 +1,6 @@
 # T-447 — Ruya Hub design: the Quick Hub, the panels, focus and motion
 
-Status: in-progress · Phase: 2 · Depends: — · Area: docs · Size: S · Owner: lead · Developer surface: none
+Status: done · Phase: 2 · Depends: — · Area: docs · Size: S · Owner: lead · Developer surface: none
 
 ## Goal
 One written design for Ruya Hub (ADR-033) that the builder tasks T-448..T-454 follow: what the Quick Hub shows, which panels exist, how focus moves between them, and how it looks over a running game.
@@ -11,7 +11,7 @@ One written design for Ruya Hub (ADR-033) that the builder tasks T-448..T-454 fo
 - `shell/qml/QuickMenu.qml`; T-393 (Options menu design) so the two menus do not overlap
 
 ## Scope
-1. Write `02` §1.4 "Ruya Hub" as the target: the Quick Hub (status row: time, network, battery cluster; the running app's header with Resume first; other running and recent games; a row of quick tiles; entries to panels: Audio, Controllers, Performance, Notifications, Power) and each panel's contents, states and empty states. Mark built vs planned.
+1. Write `02` §1.6 "Ruya Hub" as the target: the Quick Hub (status row: time, network, battery cluster; the running app's header with Resume first; other running and recent games; a row of quick tiles; entries to panels: Audio, Controllers, Performance, Notifications, Power) and each panel's contents, states and empty states. Mark built vs planned.
 2. Focus and Back: Guide toggles; B leaves a panel to the Quick Hub, then closes; Resume is first on every open over an app; decide whether the last panel is remembered across opens, and say why.
 3. Layout and motion in `04`: the 640 px panel grows a second column or a panel replaces it (decide); reduced motion; readable at 10 ft on 720p.
 4. Tiles: which quick settings are tiles (Wi-Fi, Bluetooth, mute, output, microphone, brightness), the toggle-vs-open rule, and what "unsupported" means (07 §5.2: no fake controls; a tile is absent rather than disabled).
@@ -21,7 +21,7 @@ One written design for Ruya Hub (ADR-033) that the builder tasks T-448..T-454 fo
 - Code; new typefaces or colours (owner-level).
 
 ## Acceptance criteria
-- [ ] `02` §1.4 and `04` describe the Hub; every T-448..T-454 criterion traces to a paragraph; `.\scripts\dev.ps1 docs` green.
+- [ ] `02` §1.6 and `04` describe the Hub; every T-448..T-454 criterion traces to a paragraph; `.\scripts\dev.ps1 docs` green.
 
 ## Verification
 ```powershell
@@ -35,4 +35,6 @@ One written design for Ruya Hub (ADR-033) that the builder tasks T-448..T-454 fo
 - Planned by lead-10 on 2026-11-10 from ADR-033. Status, battery and network chips already exist (T-223 status cluster): reuse, do not redraw.
 
 ## Outcome
-_Filled in by the implementer._
+Verified: host (docs only; `dev.ps1 docs` ALL GREEN). Lead-10, Opus 5.5, 2026-11-10.
+
+Written: `02` §1.6 "Ruya Hub" (target): three levels; the 640 u left panel stays and a panel replaces its content in place (no second column: simple focus, the game stays in view); the Quick Hub order (status row, app header, Resume/Home/Close/Switch to, up to 4 Recent rows, Volume, tiles, panel entries Audio, Controllers, Performance, Notifications, Power, Display, Switch profile) and the order without an app; tiles are pure toggles showing the backend's answer, absent when unsupported, brightness is a slider row not a tile; each panel's rows and empty states; focus and Back (Guide closes from anywhere; B returns to the entry; the last panel is not remembered so Guide then A always resumes); budgets for T-455. `04` §5: the Quick menu row gains the Hub's panel rules; a proposed "Quick tile" component (T-448 builds it). Task references moved from `02` §1.4 to §1.6 in T-448..T-456 and T-245. No change of scope for T-448..T-454 beyond T-448 building the Quick tile and T-452's interval row living in the panel.

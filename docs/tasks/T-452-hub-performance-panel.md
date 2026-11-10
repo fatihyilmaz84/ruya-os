@@ -6,10 +6,10 @@ Status: todo · Phase: 2 · Depends: T-448, T-451 · Area: shell · Size: S · O
 From the Hub over a game the player opens Performance and reads FPS, frame time, CPU, GPU, RAM, VRAM, temperatures and power, with each unsupported value said plainly.
 
 ## Read first
-- ADR-033; `02` §1.4 (T-447's Performance panel); `04` §3, §4, §8; T-451's Outcome
+- ADR-033; `02` §1.6 (T-447's Performance panel); `04` §3, §4, §8; T-451's Outcome
 
 ## Scope
-1. The Performance panel of `02` §1.4 over the T-451 client; numbers update at the chosen interval only while the panel is open.
+1. The Performance panel of `02` §1.6 over the T-451 client; numbers update at the chosen interval only while the panel is open.
 2. States: unsupported shows "Not available on this console", unavailable and stale say so; no dashes that look like zero.
 3. The interval as a row in the panel or in Settings (as T-447 decides).
 
@@ -29,7 +29,7 @@ From the Hub over a game the player opens Performance and reads FPS, frame time,
 ```
 
 ## Docs to update
-- `02` §1.4 built marks.
+- `02` §1.6 built marks.
 
 ## Hints
 - Planned by lead-10 (ADR-033).

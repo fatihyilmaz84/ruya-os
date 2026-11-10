@@ -6,7 +6,7 @@ Status: todo · Phase: 2 · Depends: T-448 · Area: shell · Size: S · Owner: b
 From the Hub over a game the player sees every connected controller, its battery and how it is connected, and can jump to the controller settings.
 
 ## Read first
-- ADR-033; `02` §1.4 (T-447's Controllers panel); `04` §3, §4, §8
+- ADR-033; `02` §1.6 (T-447's Controllers panel); `04` §3, §4, §8
 - `Devices1.Bluetooth`, `Devices1.Batteries`, `InputPresent` in `api/dbus/org.ruyaos.Devices1.xml`; the status cluster (T-223) and the Settings controllers pane
 
 ## Scope
@@ -27,7 +27,7 @@ From the Hub over a game the player sees every connected controller, its battery
 ```
 
 ## Docs to update
-- `02` §1.4 built marks.
+- `02` §1.6 built marks.
 
 ## Hints
 - Planned by lead-10 (ADR-033).

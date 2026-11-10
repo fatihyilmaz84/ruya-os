@@ -10,7 +10,7 @@ We know, with numbers from the Dell, how fast Guide opens the Hub over a game, w
 
 ## Scope
 1. `scripts/dell-hub-check.sh`: with STK in front, press Guide through uinput and measure the time to the Hub's first frame (compositor log line with a timestamp, added if missing), the shell's GPU and CPU while the Hub is hidden and open, and the game's FPS before and during.
-2. Write the budgets into `02` §1.4 (proposal: open under 100 ms, hidden cost zero frames, game FPS drop under 10 % on the Dell) and the measured numbers into the Outcome.
+2. Write the budgets into `02` §1.6 (proposal: open under 100 ms, hidden cost zero frames, game FPS drop under 10 % on the Dell) and the measured numbers into the Outcome.
 3. Fix what the numbers show if the fix is small; otherwise an Inbox line.
 
 ## Acceptance criteria
@@ -24,7 +24,7 @@ We know, with numbers from the Dell, how fast Guide opens the Hub over a game, w
 ```
 
 ## Docs to update
-- `02` §1.4 (budgets), `docs/dev-setup.md` (the script).
+- `02` §1.6 (budgets), `docs/dev-setup.md` (the script).
 
 ## Hints
 - Planned by lead-10 (ADR-033). The builder may use the Dell (CLAUDE.md, Dell rule).

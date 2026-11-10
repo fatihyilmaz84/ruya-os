@@ -2,7 +2,7 @@
 
 Status: todo · Phase: 2 · Depends: — · Area: api, services, shell · Size: M · Owner: lead · Developer surface: public-API
 
-**Ruya Hub (ADR-033, lead-10, 2026-11-10):** the notification history and quiet mode are also reached from the Hub: a Notifications entry in the Quick Hub (`02` section 1.4, T-447) opens this task's history as a Hub panel over the game; quiet mode is a Hub tile.
+**Ruya Hub (ADR-033, lead-10, 2026-11-10):** the notification history and quiet mode are also reached from the Hub: a Notifications entry in the Quick Hub (`02` section 1.6, T-447) opens this task's history as a Hub panel over the game; quiet mode is a Hub tile.
 
 **Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** First decision of this task, written into the spec: notifications from apps arrive through the freedesktop notification interface (works for unmodified Flathub apps) or through `Platform1`; not both designs. Scope 5 and the Hint disagree today.
 

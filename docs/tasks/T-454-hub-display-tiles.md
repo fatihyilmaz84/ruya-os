@@ -6,7 +6,7 @@ Status: todo · Phase: 2 · Depends: T-448 · Area: shell, services (ruya-device
 From the Hub the player sees the display's mode and can change resolution and refresh rate with the same keep-or-revert safety as Settings, and gets a brightness control only where the screen really has one.
 
 ## Read first
-- ADR-033; `02` §1.4 (T-447's display part); `04` §8; `Devices1.Display` (`ListOutputs`, `SetMode`, `GetPending`, `Keep`, `Revert`) and the Settings display pane
+- ADR-033; `02` §1.6 (T-447's display part); `04` §8; `Devices1.Display` (`ListOutputs`, `SetMode`, `GetPending`, `Keep`, `Revert`) and the Settings display pane
 
 ## Scope
 1. A display row or tile in the Quick Hub showing the current mode; Accept opens a small mode list; a change uses the existing pending/keep/revert flow over the game.
@@ -27,7 +27,7 @@ From the Hub the player sees the display's mode and can change resolution and re
 ```
 
 ## Docs to update
-- `02` §1.4, `03` (Devices1.Display).
+- `02` §1.6, `03` (Devices1.Display).
 
 ## Hints
 - Planned by lead-10 (ADR-033).

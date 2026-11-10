@@ -26,7 +26,7 @@ Any connected pad's Guide/Home button opens and closes the Hub, a long press ope
 ```
 
 ## Docs to update
-- `02` §1.4, `06-input.md`.
+- `02` §1.6, `06-input.md`.
 
 ## Hints
 - Planned by lead-10 (ADR-033). Re-read against T-366's design before the claim: the action names and the long-press rule come from there.
