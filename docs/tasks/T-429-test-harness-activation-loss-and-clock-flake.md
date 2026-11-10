@@ -1,6 +1,6 @@
 # T-429 - Test harness: say when the window lost activation; the status-clock test near midnight
 
-Status: in-progress · Phase: 2 · Depends: — · Area: shell (tests, WindowGuard), scripts · Size: S · Owner: builder · Complexity: simple · Developer surface: none
+Status: done · Phase: 2 · Depends: — · Area: shell (tests, WindowGuard), scripts · Size: S · Owner: builder · Complexity: simple · Developer surface: none
 
 ## Goal
 A red `shots` run caused by the desktop says so in its own words, and `tst_timezone` does not fail because of the time of day.

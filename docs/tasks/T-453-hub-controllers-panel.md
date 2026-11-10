@@ -1,6 +1,6 @@
 # T-453 — Hub Controllers panel
 
-Status: todo · Phase: 2 · Depends: T-448 · Area: shell · Size: S · Owner: builder · Complexity: normal · Developer surface: none
+Status: todo · Phase: 2 · Depends: — · Area: shell · Size: S · Owner: builder · Complexity: normal · Developer surface: none
 
 ## Goal
 From the Hub over a game the player sees every connected controller, its battery and how it is connected, and can jump to the controller settings.

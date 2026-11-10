@@ -1,6 +1,6 @@
 # T-448 — The Quick Hub: status row, quick tiles, running and recent games
 
-Status: in-progress · Phase: 2 · Depends: — · Area: shell · Size: M · Owner: builder · Complexity: normal · Developer surface: none
+Status: done · Phase: 2 · Depends: — · Area: shell · Size: M · Owner: builder · Complexity: normal · Developer surface: none
 
 ## Goal
 Guide opens Ruya Hub's first level: the time, network and battery at the top, the running game and Resume, the other running and recent games, a row of quick tiles and the entries to the panels, all with a controller.
@@ -40,6 +40,7 @@ Guide opens Ruya Hub's first level: the time, network and battery at the top, th
 
 ## Outcome
 Verified: host (vm pending: `scripts/vm-devices-check.sh` (the network part: `WifiEnabled` get/set read-back, polkit `enable-disable-wifi` allowed). `dev.ps1 test` ALL GREEN (QML counts in the HANDOFF; Rust ok), `shots` reviewed (`hub-1..4`, `appflow-3..5`; four unrelated Settings, Store, System information and Wallpaper screenshot tests time out in 3 of 4 runs while another builder runs tests on this machine, one earlier run was fully green; they do not touch the Hub). The Linux-only NetworkManager client code (`NmClient::set_wifi_enabled_async`, `flag`) is compiled and clippy-checked (Windows and Linux targets) but not run.
+Lead, 2026-11-10, image 0.0.63 (VM this task): `vm-devices-check.sh check` network part PASS: WifiEnabled reads false without an adapter and a write is a bus error, a write from nobody is refused, polkit allows ruya-devices `enable-disable-wifi` and still refuses the wifi.share actions; `vm-devices-check.sh security` PASS. Now Verified: vm. (The same run's one idle pw-dump FAIL is investigated separately.)
 
 **Built (round 1).** The quick menu is now the Quick Hub of `02` §1.6: status row (clock, network icon and name, up to two `BatteryChip`s and "+N"; not focusable), the app header, Resume, Home, Close game, Switch to <app>, the recent games that are not running (`Shell.quickMenuRecent`: `Library.recent` with a Session1 launch path; Accept closes the Hub, then `Library.launch`), Volume, the quick tiles, Power, Switch profile (Close without an app). `QuickTile.qml` is new (04 §5 built). Tiles Wi-Fi, Bluetooth, Mute: one list row per line of three, Left/Right stop at the ends, the column is kept; Accept flips the backend and the tile shows the backend's answer; a refused switch toasts a `warning` and keeps the state. Focus opens on Resume, else the first Recent row, else Switch profile. A panel entry exists only for Power. The list scrolls and the panel leaves room for the hint bar (`bottomReserve`).
 
