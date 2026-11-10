@@ -21,6 +21,8 @@ Page {
     // Neither the rows nor the cards search the catalogue themselves: with a real remote's thousands
     // of apps a scan per card made the Store's first frames take hundreds of milliseconds (T-377).
     property var rowIds: ({ all: [], featured: [], games: [], apps: [], installed: [] })
+    // How many times a row's place (slotY) was set: updateSlots touches only the rows whose place moved (T-428).
+    property int slotUpdates: 0
     // Counts the catalogue's changes: a card looks its record up again when it moves (Store.app).
     property int catalogueRevision: 0
 
@@ -57,6 +59,7 @@ Page {
     function rebuildRows() {
         const rows = Store.rowIds(Store.controllerFilter === "gamepad")
         page.rowIds = rows
+        page.updateSlots()
         if (rows.all.join("|") !== page.resultIds.join("|"))
             page.resultIds = rows.all
         for (let r = 0; r < rowRepeater.count; ++r) {
@@ -65,6 +68,28 @@ Page {
                 row.refresh()
         }
     }
+
+    // The place each row has in the Column (the rows above it that have apps, times their height),
+    // set on the rows whose place moved and on no other (a row's `onScreen` follows it).
+    function updateSlots() {
+        let above = 0
+        for (let r = 0; r < rowRepeater.count; ++r) {
+            const row = rowRepeater.itemAt(r) as StoreRow
+            if (!row)
+                continue
+            const y = above * page.rowHeight
+            if (row.slotY !== y) {
+                row.slotY = y
+                page.slotUpdates += 1
+            }
+            if ((page.rowIds[row.modelData] ?? []).length > 0)
+                above += 1
+        }
+    }
+
+    // The places are multiples of the row height, which follows the UI size `u` (the window's height,
+    // Theme.uiScale; the shell binds `u` after the page is made, and the page lives on behind other pages).
+    onRowHeightChanged: page.updateSlots()
 
     function sourceKind(source) {
         return source === "official" ? "success" : source === "developer" ? "warning" : "info"
@@ -269,8 +294,12 @@ Page {
         // A row below the fold has no cards until it scrolls into view or takes focus (then keeps
         // them): opening the Store builds the cards of the rows on screen only (T-377). Its height
         // and visibility follow `ids`, so the layout does not wait for the cards.
-        // Where the Column puts it (the rows above it that have apps), known before the Column lays out.
-        readonly property real slotY: page.rowKeys.slice(0, index).filter(k => (page.rowIds[k] ?? []).length > 0).length * page.rowHeight
+        // Where the Column puts it (the rows above it that have apps), known before the Column lays out;
+        // set by the page's updateSlots, only when it moved.
+        property real slotY: 0
+        // The card the player left this row on, kept while the row has no cards to hold it (not built
+        // yet, or emptied for a moment); applied when its model fills.
+        property int pendingIndex: -1
         readonly property bool onScreen: page.glowPadV + slotY < flick.contentY + flick.height
         property bool cardsBuilt: false
         readonly property bool wantsCards: onScreen || activeFocus
@@ -280,9 +309,21 @@ Page {
             const next = page.rowIds[modelData] ?? []
             if (next.join("|") === ids.join("|"))
                 return
-            const keep = Math.max(0, cards.currentIndex)
+            const keep = cards.count > 0 ? Math.max(0, cards.currentIndex) : Math.max(0, pendingIndex)
             ids = next
-            cards.currentIndex = Math.min(keep, next.length - 1)
+            pendingIndex = keep
+            row.applyPendingIndex()
+        }
+
+        // The remembered card goes to the list as soon as it has cards (they may come later: a row
+        // below the fold builds them when it shows). A list that fills puts its current card on the
+        // first one when it lays out, so it is laid out first.
+        function applyPendingIndex() {
+            if (pendingIndex < 0 || cards.count === 0)
+                return
+            cards.forceLayout()
+            cards.currentIndex = Math.min(pendingIndex, cards.count - 1)
+            pendingIndex = -1
         }
 
         objectName: "storeRow_" + modelData
@@ -323,6 +364,7 @@ Page {
             highlightMoveDuration: 0
             model: row.cardsBuilt || row.wantsCards ? row.ids : []
             onCurrentIndexChanged: if (activeFocus) Sfx.navigate()
+            onCountChanged: Qt.callLater(row.applyPendingIndex)
 
             delegate: AppCard { u: page.u }
 

@@ -1,3 +1,4 @@
+pragma ComponentBehavior: Bound
 import QtQuick
 import RuyaShell
 
@@ -93,21 +94,27 @@ Item {
     // The halo of the art glow: wider and softer than the lift shadow, behind it, centred on the card.
     // Both effects cut the surface out through SmoothMask (T-314): the shadow reaches under the
     // surface's antialiased edge instead of stopping a pixel short of it (a light seam at the corners).
-    SmoothMask {
-        objectName: "haloEffect"
-        visible: shadow.haloShown
-        x: box.x
-        y: box.y
-        width: box.width
-        height: box.height
-        source: box
-        maskInverted: true
-        maskSource: cutout
-        blurMax: shadow.haloBlurMax
-        shadowEnabled: true
-        shadowColor: shadow.tint
-        shadowOpacity: shadow.haloAlpha
-        shadowBlur: Math.min(1, shadow.haloBlurPx / shadow.haloBlurMax)
+    // Made only while it is wanted: a card whose halo is off (not focused, a lower tier) holds no
+    // effect, so the Store's forty cards carry one halo, on the focused card (T-428). It stays
+    // through the fade-out (until the opacity is 0).
+    Loader {
+        objectName: "haloLoader"
+        active: shadow.haloShown && (shadow.shown || shadow.opacity > 0)
+        sourceComponent: SmoothMask {
+            objectName: "haloEffect"
+            x: box.x
+            y: box.y
+            width: box.width
+            height: box.height
+            source: box
+            maskInverted: true
+            maskSource: cutout
+            blurMax: shadow.haloBlurMax
+            shadowEnabled: true
+            shadowColor: shadow.tint
+            shadowOpacity: shadow.haloAlpha
+            shadowBlur: Math.min(1, shadow.haloBlurPx / shadow.haloBlurMax)
+        }
     }
 
     SmoothMask {
