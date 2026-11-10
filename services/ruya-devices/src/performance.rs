@@ -566,16 +566,25 @@ impl Performance {
                     (Some(old), Some(new), Some(elapsed))
                         if old.len() == new.len() && new.len() == layout.rapl.len() =>
                     {
-                        let joules: f64 = old
+                        // A counter that wrapped adds range - old + new; a reading above
+                        // the counter's own range is nonsense and gives no value (T-451 review).
+                        let joules: Option<f64> = old
                             .iter()
                             .zip(new)
                             .zip(&layout.rapl)
                             .map(|((a, b), r)| {
-                                let delta = if b >= a { b - a } else { r.range - a + b };
-                                delta as f64 / 1e6
+                                let delta = if b >= a {
+                                    Some(b - a)
+                                } else {
+                                    r.range.checked_sub(*a).and_then(|d| d.checked_add(*b))
+                                };
+                                delta.map(|d| d as f64 / 1e6)
                             })
                             .sum();
-                        Raw::Value(joules / elapsed.as_secs_f64())
+                        match joules {
+                            Some(j) => Raw::Value(j / elapsed.as_secs_f64()),
+                            None => Raw::Gap,
+                        }
                     }
                     _ => Raw::Gap,
                 }
@@ -1063,6 +1072,24 @@ mod tests {
             "{}",
             value(&report, "power_w")
         );
+    }
+
+    #[test]
+    fn a_reading_above_the_counters_range_gives_no_power() {
+        let (live, perf) = sampler(FakeSource::from_dump(AMD), true);
+        let t0 = Instant::now();
+        // Above the range of 65532610987 uJ: a later, lower reading is not a wrap
+        // (unwrapping would underflow, T-451 review), so no value is reported.
+        live.change(|s| {
+            s.file(
+                "/sys/class/powercap/intel-rapl:0/energy_uj",
+                "70000000000\n",
+            )
+        });
+        perf.sample(t0);
+        live.change(|s| s.file("/sys/class/powercap/intel-rapl:0/energy_uj", "1000\n"));
+        let report = perf.sample(t0 + Duration::from_secs(1));
+        assert_ne!(state(&report, "power_w"), State::Supported);
     }
 
     #[test]
