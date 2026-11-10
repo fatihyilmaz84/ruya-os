@@ -55,7 +55,7 @@ if [ "${1:-check}" = settings ]; then
 fi
 
 if [ "${1:-check}" = security ]; then
-    systemd-analyze security ruya-update
+    echo "unit hardening: scripts/vm-security-check.sh (one place, with a baseline)"
     exit 0
 fi
 

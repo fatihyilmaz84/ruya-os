@@ -122,7 +122,7 @@ wait_shell() {
 
 case "${1:-check}" in
 security)
-    systemd-analyze security ruya-session --no-pager | tail -14
+    echo "unit hardening: scripts/vm-security-check.sh (one place, with a baseline)"
     ls -Zd /var/lib/ruya-session /var/lib/ruya-session/usage 2>&1
     ;;
 restart)
@@ -231,7 +231,7 @@ restart)
     running | grep -q "$inst3" && bad "ListRunning still lists the killed app" || ok "the killed app is no longer listed"
 
     echo "--- unit security and the label of the state directory"
-    systemd-analyze security ruya-session --no-pager | tail -14
+    echo "unit hardening: scripts/vm-security-check.sh (one place, with a baseline)"
     ls -Zd /var/lib/ruya-session /var/lib/ruya-session/usage 2>&1
     kill "$mon" 2>/dev/null
     flatpak uninstall --system -y "$sleeper" "$crasher" "$rt" >/dev/null 2>&1

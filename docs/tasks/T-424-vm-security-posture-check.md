@@ -45,4 +45,14 @@ The invariant "services keep their systemd hardening" and the spec lines "SELinu
 - `systemd-analyze security` exposure is a number from 0 to 10; compare with a small tolerance of 0.
 
 ## Outcome
-_Filled in by the implementer. First line: `Verified: host (vm pending: vm-security-check.sh)`._
+Verified: host (vm pending: vm-security-check.sh)
+
+Built `scripts/vm-security-check.sh` (modes `check`, `measure`), `image/security-baseline.json`, a queue entry (and the queue copies the baseline next to the script), and the per-service checks (library, profiles, session x2, store, update, usage x2) now print a pointer instead of `systemd-analyze security | tail`. Docs: `dev-setup.md`, `01-platform.md` section 3 item 8.
+
+**The baseline is PROVISIONAL.** No VM was available to this builder. Only `ruya-profiles` 1.6 and `ruya-session` 1.1 (from the spec), the setuid list (Fedora defaults), the ports (sshd, resolved stub, DHCP) and `root` as the only login account are educated guesses; the other eight units carry `max_exposure: 10.0` with reason "provisional: not measured yet", i.e. they do not guard anything yet. The lead run must do `vm-security-check.sh measure` on 0.0.61, review, and replace the file (still in this task's acceptance: "VM (lead run) every step PASS, numbers in the Outcome"); then fill "what should not ship" below. Expected, from known facts: sshd and root login (dev channel only), ports on a dev image.
+
+Deviations: exposure is parsed from the text line "Overall exposure level for <unit>: N" of `systemd-analyze security --no-pager`, not `--json=short` (I could not confirm where the overall figure sits in the JSON on this systemd; the text line is stable). A template unit (`ruya-compositor@.service`) is analysed as instance `ruya-compositor@check.service`. Ports compare as `proto:port` (addresses vary with DHCP).
+
+Tests (`scripts/test-vm-checks.sh`, section "vm-security-check.sh: each step fails on a worse fixture", run by `lint-vm-checks.ps1`): fixture with exposure 1.2 vs 1.1, an extra port, Permissive, an unnamed unconfined `ruya-*` process, an extra setuid file, a world-writable file, an extra login shell, a usable password on a nologin account, a failing `ss`, a failing `systemd-analyze` (FAIL, never SKIP), a unit not in the baseline, and `measure` output. Revert checks (undone one at a time in the script, tests went red each time): the exposure comparison, the SELinux test, the world-writable test, the account comparison, and the `systemd-analyze` failure handling.
+
+What the first baseline shows that should not ship: not measured yet (see above); to be filled from the VM run.
