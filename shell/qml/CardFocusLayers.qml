@@ -1,3 +1,4 @@
+pragma ComponentBehavior: Bound
 import QtQuick
 import RuyaShell
 
@@ -41,53 +42,65 @@ Item {
         }
     }
 
+    // Where the band is (its x); the animation moves it from the left of the card to the right.
+    property real glareX: -fx.width * 0.4
+
+    NumberAnimation {
+        id: glareAnim
+        objectName: "glareAnimation"
+        target: fx
+        property: "glareX"
+        from: -fx.width * 0.4
+        to: fx.width
+        duration: Math.max(1, Theme.glareMs)
+        easing.type: Easing.InOutQuad
+    }
+
     // The band is drawn into a hidden layer and masked by the card's rounded shape while it runs
     // (a plain `clip` is rectangular and would light the corners). One transient texture, one glare at a time.
-    Item {
-        id: glareLayer
+    // The layers and the effect are made only for the focused card (the Store has forty cards and one
+    // focus, T-428); the animation and its counter above are always there.
+    Loader {
+        objectName: "glareLoader"
         anchors.fill: parent
-        visible: false
-        layer.enabled: glareAnim.running
+        active: fx.focused
+        sourceComponent: Item {
+            Item {
+                id: glareLayer
+                anchors.fill: parent
+                visible: false
+                layer.enabled: glareAnim.running
 
-        Rectangle {
-            id: band
-            objectName: "cardGlare"
-            width: fx.width * 0.4
-            height: fx.height * 2
-            y: -fx.height / 2
-            rotation: 20
-            gradient: Gradient {
-                orientation: Gradient.Horizontal
-                GradientStop { position: 0.0; color: Theme.glassSheenEnd }
-                GradientStop { position: 0.5; color: Theme.glarePeak }
-                GradientStop { position: 1.0; color: Theme.glassSheenEnd }
+                Rectangle {
+                    objectName: "cardGlare"
+                    x: fx.glareX
+                    width: fx.width * 0.4
+                    height: fx.height * 2
+                    y: -fx.height / 2
+                    rotation: 20
+                    gradient: Gradient {
+                        orientation: Gradient.Horizontal
+                        GradientStop { position: 0.0; color: Theme.glassSheenEnd }
+                        GradientStop { position: 0.5; color: Theme.glarePeak }
+                        GradientStop { position: 1.0; color: Theme.glassSheenEnd }
+                    }
+                }
+            }
+            Rectangle {
+                id: glareMask
+                anchors.fill: parent
+                radius: fx.radius
+                visible: false
+                layer.enabled: glareAnim.running
+                layer.smooth: true
+            }
+            SmoothMask {
+                objectName: "glareEffect"
+                anchors.fill: parent
+                visible: glareAnim.running
+                source: glareLayer
+                maskSource: glareMask
             }
         }
-
-        NumberAnimation {
-            id: glareAnim
-            objectName: "glareAnimation"
-            target: band
-            property: "x"
-            from: -band.width
-            to: fx.width
-            duration: Math.max(1, Theme.glareMs)
-            easing.type: Easing.InOutQuad
-        }
-    }
-    Rectangle {
-        id: glareMask
-        anchors.fill: parent
-        radius: fx.radius
-        visible: false
-        layer.enabled: glareAnim.running
-        layer.smooth: true
-    }
-    SmoothMask {
-        objectName: "glareEffect"
-        anchors.fill: parent
-        visible: glareAnim.running
-        source: glareLayer
-        maskSource: glareMask
     }
 }

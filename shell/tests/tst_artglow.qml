@@ -277,11 +277,11 @@ Item {
             DeviceSettings.effectsQuality = "balanced"
             compare(shadow.shown, true, "Balanced keeps the tinted lift shadow")
             compare(shadow.haloShown, false, "but not the halo")
-            compare(halo.visible, false)
+            tryVerify(() => findChild(card, "haloEffect") === null, 2000, "no halo effect is made")
             DeviceSettings.effectsQuality = "performance"
             compare(shadow.shown, false, "Performance has no shadow ...")
             compare(shadow.haloShown, false, "... and no halo")
-            compare(halo.visible, false)
+            tryVerify(() => findChild(card, "haloEffect") === null)
         }
 
         function test_a_plain_shadow_has_no_halo() {
@@ -402,6 +402,7 @@ Item {
             fx.destroy()
             compare(image.layer.smooth, true, "the picture's layer is filtered (the focused card is scaled)")
             compare(art.maskItem.layer.smooth, true, "so is the mask's")
+            card.focused = true         // the glare and the halo exist on the focused card only (T-428)
             smoothEdge(findChild(card, "glareEffect"), "the glare")
             const shadow = findChild(card, "cardLiftShadow")
             for (const name of ["shadowEffect", "haloEffect"]) {

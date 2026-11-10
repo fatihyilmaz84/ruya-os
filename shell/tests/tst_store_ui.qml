@@ -571,6 +571,25 @@ Item {
             grabImage(tc.shell).save(shotsDir + "/19-store-installing.png")
         }
 
+        // T-428: the Store scrolled to "Apps & media" (its cards are built when the row takes focus).
+        function test_zz_screenshots_scrolled() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            openStore()
+            waitForRendering(tc.shell)
+            // The Column of the rows can stay unlaid in a real test window until its next polish (as in
+            // tst_long_names): lay it out so the scroll below has places to go to.
+            find("storeRow_apps").parent.forceLayout()
+            tryVerify(() => find("storeRow_apps").y > 0, 2000, "the rows are laid out")
+            keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Down)
+            verify(find("storeCards_apps").activeFocus, "Apps & media has focus")
+            tryVerify(() => find("storeCards_apps").currentItem !== null && find("storeCards_apps").currentItem.focused, 2000)
+            tryVerify(() => find("storeRows").contentY > 0, 2000, "the page scrolled down to the row")
+            wait(800)
+            grabImage(tc.shell).save(shotsDir + "/17-store-apps-and-media.png")
+        }
+
         function test_zz_screenshots_unrated() {
             if (!shotsDir)
                 skip("set RUYA_SHOTS_DIR to save screenshots")
