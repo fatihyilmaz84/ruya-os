@@ -15,7 +15,7 @@ Verification legend: **host** = built and tested on Windows · **host (vm pendin
 
 ## Board
 
-**NEXT → T-451** (owner, 2026-11-10: Ruya Hub first, then Ruya Input; builders: T-451, T-448 (in progress), then T-450, T-452..T-455; then T-429, T-427, T-428, T-431, T-433); lead: T-366 ([lead] Ruya Input spike, ADR-024; then T-367, T-456, T-381 GE-Proton, T-380), and the Dell second pass T-355 once Play works (T-386, image 0.0.61). **Builder lanes**: T-147, then the first rows of `STATUS-backlog.md` in order (T-362, T-423, T-424, T-422, T-378, T-299, T-364, T-339); one "VM (this task)" at a time. T-283, T-284, T-287, T-288 wait for the lead's design pass T-282; T-397..T-399 wait for T-366 and T-396. **Plan audit 2026-11-10:** 76 task files carry a ruling under their header (overlaps cut, dependencies fixed); the Depends column now lists only dependencies that are not `done`.
+**NEXT → T-451** (owner, 2026-11-10: Ruya Hub first, then Ruya Input; builders: T-451, T-448 (in progress), T-457 (the Hub pauses the game), then T-450, T-452..T-455; then T-429, T-427, T-428, T-431, T-433); lead: T-366 ([lead] Ruya Input spike, ADR-024; then T-367, T-456, T-381 GE-Proton, T-380), and the Dell second pass T-355 once Play works (T-386, image 0.0.61). **Builder lanes**: T-147, then the first rows of `STATUS-backlog.md` in order (T-362, T-423, T-424, T-422, T-378, T-299, T-364, T-339); one "VM (this task)" at a time. T-283, T-284, T-287, T-288 wait for the lead's design pass T-282; T-397..T-399 wait for T-366 and T-396. **Plan audit 2026-11-10:** 76 task files carry a ruling under their header (overlaps cut, dependencies fixed); the Depends column now lists only dependencies that are not `done`.
 
 **How work runs (owner, 2026-11-04):** the lead dispatches `ruya-builder` agents (at most two at a time, own worktrees, different areas), has each branch reviewed by `ruya-reviewer` and merges it (`docs/LEAD.md`). Dispatched builders never edit this file; one "VM (this task)" runs at a time. A builder the owner starts directly takes NEXT alone in the main checkout and does the bookkeeping (`CLAUDE.md`).
 
@@ -25,6 +25,7 @@ Open work only (the front of the board; the rest is in `STATUS-backlog.md`), in 
 |---|---|---|---|
 | [T-451](tasks/T-451-performance-metrics-backend.md) | Performance metrics: FPS and frame time from the compositor, CPU, RAM, temperatures, GPU from `Devices1` | in-progress | — |
 | [T-448](tasks/T-448-quick-hub.md) | The Quick Hub: status row, quick tiles, running and recent games | in-progress | — |
+| [T-457](tasks/T-457-hub-pauses-the-game.md) | Ruya Hub pauses the game: freeze on open, thaw on close (owner, 2026-11-10) | todo | T-448 |
 | [T-366](tasks/T-366-ruya-input-spike-engine-and-design.md) | **[lead]** Ruya Input: spike, engine decision and the design (06-input.md, Input1 draft) | todo | — |
 | [T-367](tasks/T-367-a-game-sees-the-pad.md) | **[lead]** A game sees the pad: a virtual pad per controller, for the signed-in profile only, routed by focus | todo | T-366 |
 | [T-393](tasks/T-393-options-menu-design.md) | **[lead]** Design: the Options (context) menu: component, contents per surface, motion, focus | todo | — |
