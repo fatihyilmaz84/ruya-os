@@ -27,6 +27,7 @@ use crate::idle_pads::IdleReport;
 use crate::input::GamepadEvent;
 use crate::input::InputPresence;
 use crate::network::{self, Network, NetworkManager};
+use crate::performance::Performance;
 use crate::report;
 use crate::storage::{self, Storage, Udisks};
 use crate::sysinfo::SystemInfo;
@@ -2102,15 +2103,28 @@ impl DisplayIface {
 }
 
 pub type SharedSystem = Arc<SystemInfo>;
+pub type SharedPerformance = Arc<Performance>;
 
 pub struct SystemIface {
     system: SharedSystem,
+    performance: SharedPerformance,
 }
 
 impl SystemIface {
-    pub fn new(system: SharedSystem) -> Self {
-        SystemIface { system }
+    pub fn new(system: SharedSystem, performance: SharedPerformance) -> Self {
+        SystemIface {
+            system,
+            performance,
+        }
     }
+}
+
+/// The contract's `a{s(sd)}`: metric -> (state, value).
+pub fn performance_dict(report: &crate::performance::Report) -> BTreeMap<String, (String, f64)> {
+    report
+        .iter()
+        .map(|(name, m)| ((*name).to_owned(), (m.state.as_str().to_owned(), m.value)))
+        .collect()
 }
 
 /// One value of the collector as D-Bus knows it: text `s`, numbers `t`, flags `b`, a table `aa{sv}`.
@@ -2168,6 +2182,13 @@ impl SystemIface {
                 .detach();
         }
         system_dict(&info)
+    }
+
+    /// Read on the blocking pool (a few small files; the fdinfo walk only as root).
+    async fn get_performance(&self) -> BTreeMap<String, (String, f64)> {
+        let performance = self.performance.clone();
+        let report = unblock(move || performance.sample(Instant::now())).await;
+        performance_dict(&report)
     }
 
     #[zbus(signal)]
@@ -2279,6 +2300,34 @@ mod tests {
             })
             .collect();
         assert_eq!(addresses, ["AA:00:00:00:00:04", "AA:00:00:00:00:05"]);
+    }
+
+    #[test]
+    fn get_performance_answers_every_metric_with_a_contract_state() {
+        let performance = crate::performance::Performance::new(
+            Box::new(FakeSource::from_dump(include_str!(
+                "../tests/fixtures/performance-dell.dump"
+            ))),
+            false,
+        );
+        let dict = performance_dict(&performance.sample(Instant::now()));
+        let names: Vec<&str> = dict.keys().map(String::as_str).collect();
+        let mut want = crate::performance::METRICS.to_vec();
+        want.sort_unstable();
+        assert_eq!(names, want);
+        for (name, (state, _)) in &dict {
+            assert!(
+                ["supported", "unsupported", "unavailable", "stale"].contains(&state.as_str()),
+                "{name}: {state}"
+            );
+        }
+        assert_eq!(dict["ram_total"].0, "supported");
+        assert_eq!(dict["power_w"], ("unsupported".to_owned(), 0.0));
+        // The signature the XML names.
+        assert_eq!(
+            <BTreeMap<String, (String, f64)> as zbus::zvariant::Type>::SIGNATURE.to_string(),
+            "a{s(sd)}"
+        );
     }
 
     #[test]

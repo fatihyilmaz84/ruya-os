@@ -10,7 +10,7 @@ From the Hub over a game the player opens Performance and reads FPS, frame time,
 
 ## Scope
 1. The Performance panel of `02` §1.6 over the T-451 client; numbers update at the chosen interval only while the panel is open.
-2. States: unsupported shows "Not available on this console", unavailable and stale say so; no dashes that look like zero.
+2. Never show held numbers as live (T-451 review): on a failed GetPerformance and on the first open after idle, mark the held metrics unavailable until a fresh answer arrives (fix in `Performance.cpp` with a test). States: unsupported shows "Not available on this console", unavailable and stale say so; no dashes that look like zero.
 3. The interval as a row in the panel or in Settings (as T-447 decides).
 
 ## Out of scope

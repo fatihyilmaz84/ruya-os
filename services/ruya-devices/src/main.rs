@@ -17,9 +17,9 @@ use ruya_devices::dbus::{
 use ruya_devices::dbus::{
     AudioIface, BatteriesIface, BluetoothIface, DisplayIface, DynBluez, DynNm, DynPipeWire,
     DynScanSource, DynSource, DynThermal, DynTimedate, DynUPower, DynUdisks, NetworkIface, Shared,
-    SharedBatteries, SharedBluetooth, SharedDisplay, SharedInput, SharedNet, SharedScans,
-    SharedStorage, SharedSystem, SharedThermal, SharedTime, SharedUsage, StorageIface, SystemIface,
-    ThermalIface, TimeIface, BUS_NAME, OBJECT_PATH,
+    SharedBatteries, SharedBluetooth, SharedDisplay, SharedInput, SharedNet, SharedPerformance,
+    SharedScans, SharedStorage, SharedSystem, SharedThermal, SharedTime, SharedUsage, StorageIface,
+    SystemIface, ThermalIface, TimeIface, BUS_NAME, OBJECT_PATH,
 };
 use ruya_devices::display::{self, Display, DynDrm, FakeDrm, Mode, Output, SysfsDrm};
 #[cfg(target_os = "linux")]
@@ -28,6 +28,7 @@ use ruya_devices::drive_scan::{FakeTree, Scans};
 use ruya_devices::input::{DynInputSource, FakeInput, InputDevice, InputPresence};
 use ruya_devices::network::{FakeNetworkManager, Network};
 use ruya_devices::output_policy::ChoiceStore;
+use ruya_devices::performance::Performance;
 use ruya_devices::storage::{FakeUdisks, RawVolume, Storage};
 use ruya_devices::store::Store;
 use ruya_devices::sysinfo::{DynInfoSource, SystemInfo, WithPrimaryAdapter};
@@ -211,6 +212,17 @@ fn info_source(session: bool) -> DynInfoSource {
         return Box::new(ruya_sysinfo::FakeSource::from_dump(
             ruya_sysinfo::SAMPLE_MACHINE,
         ));
+    }
+    Box::new(ruya_sysinfo::RootSource::system())
+}
+
+/// What the performance numbers are read from: the running system, or in `--session` the Dell as
+/// it was captured for T-451 (fixed counters, so the rates read 0).
+fn performance_source(session: bool) -> DynInfoSource {
+    if session {
+        return Box::new(ruya_sysinfo::FakeSource::from_dump(include_str!(
+            "../tests/fixtures/performance-dell.dump"
+        )));
     }
     Box::new(ruya_sysinfo::RootSource::system())
 }
@@ -482,6 +494,11 @@ fn run() -> Result<(), Box<dyn Error>> {
         info_source(session),
         Box::new(move || primary_bt.primary_adapter()),
     ))));
+    // Read only when the shell asks (its Performance view is open); no timer of its own.
+    let performance: SharedPerformance = Arc::new(Performance::new(
+        performance_source(session),
+        !session && ruya_devices::performance::reads_all_processes(),
+    ));
     {
         let warm = system.clone();
         std::thread::spawn(move || {
@@ -514,7 +531,10 @@ fn run() -> Result<(), Box<dyn Error>> {
             .serve_at(OBJECT_PATH, ThermalIface::new(monitor.clone()))?
             .serve_at(OBJECT_PATH, TimeIface::new(time.clone(), session))?
             .serve_at(OBJECT_PATH, DisplayIface::new(display.clone()))?
-            .serve_at(OBJECT_PATH, SystemIface::new(system.clone()))?
+            .serve_at(
+                OBJECT_PATH,
+                SystemIface::new(system.clone(), performance.clone()),
+            )?
             .build()
             .await?;
         // The fakes have nothing to follow (they change only through calls): just stay up.

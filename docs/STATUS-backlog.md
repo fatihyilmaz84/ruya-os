@@ -19,7 +19,7 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | [T-431](tasks/T-431-image-hardening-llmnr-setuid-bus-denies-units.md) | Image hardening from the baseline: LLMNR off, no setuid helpers, explicit bus denies, three loose units | todo | — |
 | [T-433](tasks/T-433-dependency-upgrades-quick-xml-zbus-6-ci-actions.md) | Dependency upgrades: quick-xml, zbus 6, actions/checkout v5, a checked cargo-deny download | todo | — |
 | [T-432](tasks/T-432-selinux-confine-ruya-services.md) | SELinux: confine the ruya services (today every one runs unconfined_service_t) | todo | T-431 |
-| [T-429](tasks/T-429-test-harness-activation-loss-and-clock-flake.md) | Test harness: say when the window lost activation; the status-clock test near midnight | todo | — |
+| [T-429](tasks/T-429-test-harness-activation-loss-and-clock-flake.md) | Test harness: say when the window lost activation; the status-clock test near midnight | in-progress | — |
 | [T-427](tasks/T-427-bluetooth-leftovers-scan-alias-logging.md) | Bluetooth leftovers: scan after a primary flip, toast names, logging, address tails | todo | — |
 | [T-428](tasks/T-428-store-follow-ups-row-index-and-effects.md) | Store follow-ups: a row remembers its card, a scrolled shot, card effects only where needed | todo | — |
 | [T-430](tasks/T-430-glass-shadow-and-art-masks.md) | GlassShadow and AppArt masks (T-387 class); L0 memory behind an app | todo | T-421 |

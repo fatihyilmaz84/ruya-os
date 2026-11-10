@@ -115,6 +115,11 @@ qt_add_qml_module(ruyashell
         src/art/ArtPalette.h src/art/ArtPalette.cpp src/art/MockArt.h
         src/sound/SoundThemeCheck.h src/sound/SoundThemeCheck.cpp
         src/sound/SoundThemes.h src/sound/SoundThemes.cpp
+        src/performance/FrameMeter.h src/performance/FrameMeter.cpp
+        src/performance/PerformanceBackend.h
+        src/performance/MockPerformanceBackend.h src/performance/MockPerformanceBackend.cpp
+        src/performance/DBusPerformanceBackend.h src/performance/DBusPerformanceBackend.cpp
+        src/performance/Performance.h src/performance/Performance.cpp
     QML_FILES
         qml/Main.qml
         qml/Shell.qml
@@ -277,6 +282,7 @@ endif()
 # qmltyperegistrar includes the QML_ELEMENT headers by file name.
 target_include_directories(ruyashell PUBLIC src/backend src/profiles src/settings src/audio src/network src/bluetooth src/battery src/time src/display src/thermal src/storage src/system src/power src/store src/library src/update src/session src/usage src/input src/probe src/wallpaper src/sound src/art)
 # Qt6::GuiPrivate: ScreenPower calls QPlatformScreen::setPowerState (DPMS under eglfs_kms, T-202).
+target_include_directories(ruyashell PUBLIC src/performance)   # T-451
 target_link_libraries(ruyashell PRIVATE Qt6::Network Qt6::Quick Qt6::Multimedia Qt6::DBus Qt6::GuiPrivate)
 
 # Translations: the .ts files in i18n/ are compiled to .qm and embedded as :/i18n/ruyashell_<lang>.qm.
