@@ -80,10 +80,30 @@ WaylandCompositor {
         item.destroy()
     }
 
+    // The FPS and frame time of the app in front (T-451, Performance): the meter counts the front
+    // app surface's commits and this window's presented frames, and is connected to them only
+    // while a Performance view is open.
+    Binding {
+        target: Performance
+        property: "frameWindow"
+        value: win
+    }
+    function frontChanged(item) {
+        if (item.inFront)
+            Performance.frameSource = item.surface
+        else if (Performance.frameSource === item.surface)
+            Performance.frameSource = null
+    }
+
     Component {
         id: surfaceComponent
         ShellSurfaceItem {
+            id: appSurface
             property XdgToplevel toplevel: null
+            // The app the shell shows in front (Shell.focusedApp while an app is open, also under
+            // the quick menu): the one the Performance meter counts.
+            readonly property bool inFront: win.shell.appOpen && win.shell.focusedApp === appSurface
+            onInFrontChanged: compositor.frontChanged(appSurface)
             // The Flatpak application id the window belongs to; the shell ends a launch when the window
             // of the app it started appears, and "Switch to" names windows by it (T-147).
             readonly property string appId: toplevel ? toplevel.appId : ""

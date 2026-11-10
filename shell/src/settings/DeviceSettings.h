@@ -55,6 +55,9 @@ class DeviceSettings : public QObject
     Q_PROPERTY(int screenOffMinutes READ screenOffMinutes WRITE setScreenOffMinutes NOTIFY screenOffMinutesChanged)
     Q_PROPERTY(int sleepMinutes READ sleepMinutes WRITE setSleepMinutes NOTIFY sleepMinutesChanged)
     Q_PROPERTY(int padIdleMinutes READ padIdleMinutes WRITE setPadIdleMinutes NOTIFY padIdleMinutesChanged)
+    // How often the Ruya Hub's Performance view asks for new numbers (T-451), ms, 500-5000 (the
+    // panel offers 0.5, 1, 2 and 5 s); 1000 by default. Stored per device.
+    Q_PROPERTY(int performanceIntervalMs READ performanceIntervalMs WRITE setPerformanceIntervalMs NOTIFY performanceIntervalMsChanged)
     // Sound (T-227): the sound theme ("dreamglass" or "user:<folder>", see SoundThemes; whether it is
     // usable is the checker's business, the bundled one plays instead) and the Ambient on/off switch
     // (Settings -> Audio; the level is the Ambient channel of the Audio service). Stored per device.
@@ -84,6 +87,7 @@ public:
     int screenOffMinutes() const { return m_screenOffMinutes; }
     int sleepMinutes() const { return m_sleepMinutes; }
     int padIdleMinutes() const { return m_padIdleMinutes; }
+    int performanceIntervalMs() const { return m_performanceIntervalMs; }
     QString soundTheme() const { return m_soundTheme; }
     bool ambientSound() const { return m_ambientSound; }
 
@@ -100,6 +104,7 @@ public:
     void setScreenOffMinutes(int value);
     void setSleepMinutes(int value);
     void setPadIdleMinutes(int value);
+    void setPerformanceIntervalMs(int value);
     void setSoundTheme(const QString &value);
     void setAmbientSound(bool value);
 
@@ -115,6 +120,9 @@ public:
     static bool isValidSoundTheme(const QString &value);
     // 0 (never) to a day.
     static bool isValidMinutes(int value);
+    static constexpr int MinPerformanceIntervalMs = 500;
+    static constexpr int MaxPerformanceIntervalMs = 5000;
+    static bool isValidPerformanceInterval(int ms);
 
 signals:
     void reducedMotionChanged();
@@ -129,6 +137,7 @@ signals:
     void screenOffMinutesChanged();
     void sleepMinutesChanged();
     void padIdleMinutesChanged();
+    void performanceIntervalMsChanged();
     void soundThemeChanged();
     void ambientSoundChanged();
 
@@ -148,6 +157,7 @@ private:
     int m_screenOffMinutes = 30;
     int m_sleepMinutes = 60;
     int m_padIdleMinutes = 15;
+    int m_performanceIntervalMs = 1000;
     QString m_soundTheme = QStringLiteral("dreamglass");
     bool m_ambientSound = true;
     std::optional<bool> m_forcedMotion;

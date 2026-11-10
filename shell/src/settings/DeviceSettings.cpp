@@ -58,6 +58,9 @@ void DeviceSettings::init()
         m_screenOffMinutes = minutes("power/screenOffMinutes", m_screenOffMinutes);
         m_sleepMinutes = minutes("power/sleepMinutes", m_sleepMinutes);
         m_padIdleMinutes = minutes("power/padIdleMinutes", m_padIdleMinutes);
+        const int interval = m_store->value(QStringLiteral("hub/performanceIntervalMs"), m_performanceIntervalMs).toInt();
+        if (isValidPerformanceInterval(interval))
+            m_performanceIntervalMs = interval;
         const QString language = m_store->value(QStringLiteral("general/language")).toString();
         if (isValidLanguage(language)) {
             m_language = language;
@@ -206,6 +209,25 @@ void DeviceSettings::setPadIdleMinutes(int value)
     if (m_store)
         m_store->setValue(QStringLiteral("power/padIdleMinutes"), value);
     emit padIdleMinutesChanged();
+}
+
+bool DeviceSettings::isValidPerformanceInterval(int ms)
+{
+    return ms >= MinPerformanceIntervalMs && ms <= MaxPerformanceIntervalMs;
+}
+
+void DeviceSettings::setPerformanceIntervalMs(int value)
+{
+    if (!isValidPerformanceInterval(value)) {
+        qWarning("ruya-shell: rejecting invalid performance interval %d ms", value);
+        return;
+    }
+    if (value == m_performanceIntervalMs)
+        return;
+    m_performanceIntervalMs = value;
+    if (m_store)
+        m_store->setValue(QStringLiteral("hub/performanceIntervalMs"), value);
+    emit performanceIntervalMsChanged();
 }
 
 void DeviceSettings::setTheme(const QString &value)

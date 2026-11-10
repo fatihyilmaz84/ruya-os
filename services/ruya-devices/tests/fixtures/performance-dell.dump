@@ -1,0 +1,229 @@
+# The Dell (OptiPlex, Core i5-10500T, UHD 630, 8 GB) running image 0.0.62, captured over SSH on
+# 2026-11-10 for T-451 with Home on screen (no app in front): the files GetPerformance reads.
+# Edited: only two of ruya-shell's DRM file descriptors (6 and 10, the same client) are kept, the
+# fdinfo tabs are spaces (the text lint), and the RAPL counters, which ruya-shell may not read, are
+# `noread` (they exist; the kernel lets only root read them).
+== file /proc/stat
+cpu  124442 4269 66875 10254164 137739 31387 25417 0 0 0
+== file /proc/meminfo
+MemTotal:        7820536 kB
+MemFree:         4811980 kB
+MemAvailable:    6452428 kB
+Buffers:             132 kB
+Cached:          2008004 kB
+SwapCached:            0 kB
+Active:           737200 kB
+Inactive:        1416232 kB
+Active(anon):     208624 kB
+Inactive(anon):   183272 kB
+Active(file):     528576 kB
+Inactive(file):  1232960 kB
+Unevictable:      234592 kB
+Mlocked:             136 kB
+SwapTotal:             0 kB
+SwapFree:              0 kB
+Zswap:                 0 kB
+Zswapped:              0 kB
+Dirty:              7480 kB
+Writeback:            32 kB
+AnonPages:        380080 kB
+Mapped:           246224 kB
+Shmem:            246768 kB
+KReclaimable:     188204 kB
+Slab:             380904 kB
+SReclaimable:     188204 kB
+SUnreclaim:       192700 kB
+KernelStack:        6220 kB
+PageTables:         8668 kB
+SecPageTables:      2056 kB
+NFS_Unstable:          0 kB
+Bounce:                0 kB
+WritebackTmp:          0 kB
+CommitLimit:     3910268 kB
+Committed_AS:    1563520 kB
+VmallocTotal:   34359738367 kB
+VmallocUsed:       46760 kB
+VmallocChunk:          0 kB
+Percpu:             8592 kB
+HardwareCorrupted:     0 kB
+AnonHugePages:         0 kB
+ShmemHugePages:        0 kB
+ShmemPmdMapped:        0 kB
+FileHugePages:    225280 kB
+FilePmdMapped:         0 kB
+CmaTotal:              0 kB
+CmaFree:               0 kB
+Unaccepted:            0 kB
+Balloon:               0 kB
+GPUActive:             0 kB
+GPUReclaim:            0 kB
+HugePages_Total:       0
+HugePages_Free:        0
+HugePages_Rsvd:        0
+HugePages_Surp:        0
+Hugepagesize:       2048 kB
+Hugetlb:               0 kB
+DirectMap4k:      275944 kB
+DirectMap2M:     6772736 kB
+DirectMap1G:     1048576 kB
+== file /sys/class/hwmon/hwmon0/name
+acpitz
+== file /sys/class/hwmon/hwmon0/temp1_input
+27800
+== file /sys/class/hwmon/hwmon1/name
+pch_cometlake
+== file /sys/class/hwmon/hwmon1/temp1_input
+26000
+== file /sys/class/hwmon/hwmon2/name
+dell_smm
+== file /sys/class/hwmon/hwmon2/temp1_input
+25000
+== file /sys/class/hwmon/hwmon2/temp2_input
+26000
+== file /sys/class/hwmon/hwmon2/temp4_input
+25000
+== file /sys/class/hwmon/hwmon2/temp5_input
+25000
+== file /sys/class/hwmon/hwmon2/temp6_input
+21000
+== file /sys/class/hwmon/hwmon2/temp7_input
+15000
+== file /sys/class/hwmon/hwmon2/temp8_input
+126000
+== file /sys/class/hwmon/hwmon3/name
+coretemp
+== file /sys/class/hwmon/hwmon3/temp1_label
+Package id 0
+== file /sys/class/hwmon/hwmon3/temp2_label
+Core 0
+== file /sys/class/hwmon/hwmon3/temp3_label
+Core 1
+== file /sys/class/hwmon/hwmon3/temp4_label
+Core 2
+== file /sys/class/hwmon/hwmon3/temp5_label
+Core 3
+== file /sys/class/hwmon/hwmon3/temp6_label
+Core 4
+== file /sys/class/hwmon/hwmon3/temp7_label
+Core 5
+== file /sys/class/hwmon/hwmon3/temp1_input
+29000
+== file /sys/class/hwmon/hwmon3/temp2_input
+26000
+== file /sys/class/hwmon/hwmon3/temp3_input
+24000
+== file /sys/class/hwmon/hwmon3/temp4_input
+26000
+== file /sys/class/hwmon/hwmon3/temp5_input
+24000
+== file /sys/class/hwmon/hwmon3/temp6_input
+26000
+== file /sys/class/hwmon/hwmon3/temp7_input
+25000
+== file /sys/class/hwmon/hwmon4/name
+iwlwifi_1
+== file /sys/class/hwmon/hwmon4/temp1_input
+29000
+== file /sys/class/thermal/thermal_zone0/type
+acpitz
+== file /sys/class/thermal/thermal_zone0/temp
+27800
+== file /sys/class/thermal/thermal_zone1/type
+pch_cometlake
+== file /sys/class/thermal/thermal_zone1/temp
+26000
+== file /sys/class/thermal/thermal_zone2/type
+x86_pkg_temp
+== file /sys/class/thermal/thermal_zone2/temp
+26000
+== file /sys/class/thermal/thermal_zone3/type
+iwlwifi_1
+== file /sys/class/thermal/thermal_zone3/temp
+26000
+== link /sys/class/drm/card1/device /sys/devices/pci0000:00/0000:00:02.0
+== file /sys/devices/pci0000:00/0000:00:02.0/vendor
+0x8086
+== file /sys/devices/pci0000:00/0000:00:02.0/boot_vga
+1
+== link /sys/devices/pci0000:00/0000:00:02.0/driver /sys/bus/pci/drivers/i915
+== dir /sys/bus/pci/drivers/i915
+== dir /sys/class/drm/card1-DP-1
+== dir /sys/class/drm/card1-DP-2
+== dir /sys/class/drm/card1-DP-3
+== dir /sys/class/drm/card1-HDMI-A-1
+== dir /sys/class/drm/card1-HDMI-A-2
+== dir /sys/class/drm/card1-HDMI-A-3
+== dir /sys/class/drm/renderD128
+== dir /sys/class/drm/version
+== file /sys/class/powercap/intel-rapl:0/name
+package-0
+== file /sys/class/powercap/intel-rapl:0/max_energy_range_uj
+262143328850
+== noread /sys/class/powercap/intel-rapl:0/energy_uj
+== file /sys/class/powercap/intel-rapl:0:0/name
+core
+== file /sys/class/powercap/intel-rapl:0:0/max_energy_range_uj
+262143328850
+== noread /sys/class/powercap/intel-rapl:0:0/energy_uj
+== file /sys/class/powercap/intel-rapl:0:1/name
+uncore
+== file /sys/class/powercap/intel-rapl:0:1/max_energy_range_uj
+262143328850
+== noread /sys/class/powercap/intel-rapl:0:1/energy_uj
+== file /sys/class/powercap/intel-rapl:0:2/name
+dram
+== file /sys/class/powercap/intel-rapl:0:2/max_energy_range_uj
+262143328850
+== noread /sys/class/powercap/intel-rapl:0:2/energy_uj
+== file /sys/class/powercap/intel-rapl:1/name
+psys
+== file /sys/class/powercap/intel-rapl:1/max_energy_range_uj
+262143328850
+== noread /sys/class/powercap/intel-rapl:1/energy_uj
+== link /proc/2133/fd/10 /dev/dri/card1
+== dir /dev/dri/card1
+== file /proc/2133/fdinfo/10
+pos: 0
+flags: 02100002
+mnt_id: 42
+ino: 477
+drm-driver: i915
+drm-client-id: 5
+drm-pdev: 0000:00:02.0
+drm-total-system0: 234888 KiB
+drm-shared-system0: 48 MiB
+drm-active-system0: 0
+drm-resident-system0: 234840 KiB
+drm-purgeable-system0: 636 KiB
+drm-total-stolen-system0: 0
+drm-shared-stolen-system0: 0
+drm-active-stolen-system0: 0
+drm-resident-stolen-system0: 0
+drm-purgeable-stolen-system0: 0
+drm-engine-render: 855231470045 ns
+drm-engine-copy: 0 ns
+drm-engine-video: 0 ns
+drm-engine-video-enhance: 0 ns
+== link /proc/2133/fd/6 /dev/dri/card1
+== file /proc/2133/fdinfo/6
+pos: 0
+flags: 02100002
+mnt_id: 42
+ino: 477
+drm-driver: i915
+drm-client-id: 5
+drm-pdev: 0000:00:02.0
+drm-total-system0: 234888 KiB
+drm-shared-system0: 48 MiB
+drm-active-system0: 0
+drm-resident-system0: 234840 KiB
+drm-purgeable-system0: 636 KiB
+drm-total-stolen-system0: 0
+drm-shared-stolen-system0: 0
+drm-active-stolen-system0: 0
+drm-resident-stolen-system0: 0
+drm-purgeable-stolen-system0: 0
+drm-engine-render: 855231470045 ns
+drm-engine-copy: 0 ns
+drm-engine-video: 0 ns
+drm-engine-video-enhance: 0 ns

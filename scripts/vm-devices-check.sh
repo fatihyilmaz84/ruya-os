@@ -38,7 +38,12 @@
 # every internal disk of lsblk is in storage.drives, the default route's interface and MAC match, no Bluetooth adapter: no chipset;
 # another user is refused. Then Storage.SaveReport: an unknown volume, unsafe file names and no files are refused, another user is
 # refused, and with a mounted removable volume (attach one to QEMU: -drive if=none,id=u,file=stick.img,format=raw -device usb-storage,drive=u)
-# the two report files are written there and read back. `system` runs only these parts. The hardware part (the Dell: compare the
+# the two report files are written there and read back. Then the performance part (T-451): Devices1.System.GetPerformance
+# answers all nine metrics with a contract state, the rates are "unavailable" at a first reading and cpu_percent is a
+# 0-100 "supported" share at the next, ram_total is MemTotal and ram_used within 5 % of MemTotal - MemAvailable, two
+# calls inside 250 ms answer the same, cpu_temp follows whether /sys has a processor sensor, the GPU load, VRAM, the
+# GPU temperature and power are "unsupported" as the service runs as ruya-shell on virtio-gpu (no amdgpu sysfs, RAPL
+# root-only or absent), another user is refused. `system` runs only these parts. The hardware part (the Dell: compare the
 # page with `lscpu`, `free`, `lspci`) is done by eye on the machine, see the T-226 Outcome.
 # inputd (T-337, not part of check): virtual gamepads from /dev/uinput; a pad destroyed while holding Down and A leaves KEY_DOWN and KEY_ENTER up on
 # "RuyaOS Navigation" (read with EVIOCGKEY); two pads hold Down, one lets go, Down stays down, the other lets go, Down is up; the journal line
@@ -722,6 +727,56 @@ sysinfo_check() {
     fi
 }
 
+# T-451: Devices1.System.GetPerformance. perf_get <json> <metric> state|value reads one entry of a
+# `busctl --json=short` reply ({"data":[{"cpu_percent":["supported",12.5],...}]}).
+perf_call() { busctl --system --json=short call "$svc" "$path" "$sysi" GetPerformance; }
+perf_get() {
+    python3 -c 'import json,sys; d=json.loads(sys.argv[1])["data"][0]; e=d.get(sys.argv[2]); print("" if e is None else (e[0] if sys.argv[3]=="state" else e[1]))' "$1" "$2" "$3" 2>/dev/null
+}
+performance_check() {
+    echo "--- performance (T-451): Devices1.System.GetPerformance"
+    local first second a b m v st want total avail sensor
+    # The service keeps the reading before for 10 s: wait that out, so this call is a first reading.
+    sleep 11
+    if ! first="$(perf_call)"; then bad "GetPerformance failed: $first"; return; fi
+    echo "first: $first"
+    case "$first" in *'"type":"a{s(sd)}"'*) ok "GetPerformance answers a{s(sd)}";; *) bad "GetPerformance's type is not a{s(sd)}";; esac
+    for m in cpu_percent ram_used ram_total gpu_percent vram_used vram_total cpu_temp gpu_temp power_w; do
+        st="$(perf_get "$first" "$m" state)"
+        case "$st" in supported|unsupported|unavailable|stale) ok "$m has the state $st";; *) bad "$m: state '$st'";; esac
+    done
+    st="$(perf_get "$first" cpu_percent state)"
+    [ "$st" = unavailable ] && ok "cpu_percent is unavailable at a first reading (a rate)" || bad "cpu_percent at a first reading: $st"
+    sleep 1
+    second="$(perf_call)"
+    st="$(perf_get "$second" cpu_percent state)"; v="$(perf_get "$second" cpu_percent value)"
+    if [ "$st" = supported ] && awk -v v="$v" 'BEGIN { exit !(v >= 0 && v <= 100) }'; then ok "cpu_percent is supported at the next reading ($v %)"; else bad "cpu_percent at the next reading: $st $v"; fi
+    total=$(( $(awk '/^MemTotal:/ {print $2}' /proc/meminfo) * 1024 ))
+    avail=$(( $(awk '/^MemAvailable:/ {print $2}' /proc/meminfo) * 1024 ))
+    v="$(perf_get "$second" ram_total value)"
+    awk -v v="$v" -v t="$total" 'BEGIN { exit !(v == t) }' && ok "ram_total is MemTotal ($total)" || bad "ram_total $v vs $total"
+    v="$(perf_get "$second" ram_used value)"
+    # Doubles may come as 1.39e+09: whole bytes through awk.
+    if near "$(awk -v v="$v" 'BEGIN { printf "%.0f", v }')" "$((total - avail))" 5; then ok "ram_used ($v) is within 5 % of MemTotal - MemAvailable"; else bad "ram_used $v vs $((total - avail))"; fi
+    a="$(perf_call)"; b="$(perf_call)"
+    [ "$a" = "$b" ] && ok "two calls inside 250 ms answer the same" || bad "two quick calls differ: $a / $b"
+    sensor=0
+    grep -qsxE 'coretemp|k10temp|zenpower' /sys/class/hwmon/hwmon*/name && sensor=1
+    grep -qsx x86_pkg_temp /sys/class/thermal/thermal_zone*/type && sensor=1
+    st="$(perf_get "$second" cpu_temp state)"
+    if [ "$sensor" = 1 ]; then want=supported; else want=unsupported; fi
+    [ "$st" = "$want" ] && ok "cpu_temp is $st (processor sensor in /sys: $sensor)" || bad "cpu_temp is $st, want $want"
+    for m in gpu_percent vram_used vram_total gpu_temp power_w; do
+        st="$(perf_get "$second" "$m" state)"
+        [ "$st" = unsupported ] && ok "$m is unsupported here (virtio-gpu, the service is not root)" || bad "$m is $st, want unsupported in QEMU"
+    done
+    if out="$(runuser -u nobody -- busctl --system call "$svc" "$path" "$sysi" GetPerformance 2>&1)"; then
+        bad "nobody could call GetPerformance: $out"
+    else
+        echo "$out"; ok "GetPerformance from nobody refused"
+    fi
+}
+
 # T-296: the first removable, mounted, writable volume of a `busctl --json=short call ... ListVolumes`
 # reply on stdin, printed as two lines (the id, then the mount point); nothing when there is none, exit 1
 # when the input is not that JSON. {"type":"aa{sv}","data":[[{"id":{"type":"s","data":".."}, ...}, ...]]}
@@ -1156,6 +1211,7 @@ check)
     time_check
 
     sysinfo_check
+    performance_check
 
     events_check "${IDLE:-60}"
     ;;
@@ -1182,6 +1238,7 @@ time)
     ;;
 system)
     sysinfo_check
+    performance_check
     ;;
 events)
     events_check "${IDLE:-0}"
