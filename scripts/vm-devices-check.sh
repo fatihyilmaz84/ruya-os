@@ -5,8 +5,8 @@
 # check (default): unit active, name owned by ruya-shell, ListSinks, a MasterVolume write reaches
 # PipeWire, a call from another user is refused; then the network part: State is connected, Primary is
 # the ethernet link with an IPv4 address, ListWifi and Scan answer, unknown ids are refused, another
-# user is refused, pkcheck as the service's process allows the four NetworkManager actions it needs and
-# refuses twelve others (T-180); then the batteries part: upower is installed and answers on the bus, ListBatteries answers an
+# user is refused, pkcheck as the service's process allows the five NetworkManager actions it needs and
+# refuses eleven others (T-180, T-448); then the batteries part: upower is installed and answers on the bus, ListBatteries answers an
 # empty list (no controller in the VM; a real controller's battery is NOT checked here), another user is
 # refused; then the Bluetooth part: bluetooth.service is active and org.bluez is on the bus, Powered is false,
 # ListDevices answers an empty list, StartScan/Pair/Connect answer unavailable (no adapter in the VM; a real
@@ -1115,16 +1115,40 @@ check)
     else
         echo "$out"; ok "network call from nobody refused"
     fi
+    # T-448: the Wi-Fi radio switch (the Quick Hub's Wi-Fi tile). The VM has no Wi-Fi adapter, so WifiEnabled
+    # reads false and writing it is an error on the bus (never a silent success), and it stays false. On a
+    # machine with an adapter (the Dell) it must flip, read back and flip again: set-property, get-property.
+    wf="$(busctl --system get-property "$svc" "$path" "$net" WifiEnabled 2>&1)"
+    echo "WifiEnabled: $wf"
+    case "$wf" in
+        'b true')
+            if busctl --system set-property "$svc" "$path" "$net" WifiEnabled b false                && [ "$(busctl --system get-property "$svc" "$path" "$net" WifiEnabled)" = "b false" ]; then ok "WifiEnabled: off reads back"; else bad "WifiEnabled did not switch off"; fi
+            if busctl --system set-property "$svc" "$path" "$net" WifiEnabled b true                && [ "$(busctl --system get-property "$svc" "$path" "$net" WifiEnabled)" = "b true" ]; then ok "WifiEnabled: on reads back"; else bad "WifiEnabled did not switch on"; fi ;;
+        'b false')
+            if nmcli -t -f TYPE device | grep -q '^wifi'; then
+                bad "a Wi-Fi adapter exists but WifiEnabled reads false (radio off?): switch it on and run again"
+            elif out="$(busctl --system set-property "$svc" "$path" "$net" WifiEnabled b true 2>&1)"; then
+                bad "writing WifiEnabled without an adapter was accepted: $out"
+            else
+                echo "$out"; ok "no Wi-Fi adapter: WifiEnabled reads false and a write is a bus error"
+            fi ;;
+        *) bad "WifiEnabled is not a boolean: $wf" ;;
+    esac
+    if out="$(runuser -u nobody -- busctl --system set-property "$svc" "$path" "$net" WifiEnabled b false 2>&1)"; then
+        bad "nobody could write WifiEnabled: $out"
+    else
+        echo "$out"; ok "WifiEnabled write from nobody refused"
+    fi
     # T-180: polkit as the service's own process. pkcheck exit 0 = authorized without a prompt,
     # 1 = not authorized, 2 = would ask for a password. The allowed four are what network.rs
     # calls; everything else in the NetworkManager namespace is refused outright (exit 1), which
     # also overrides NetworkManager's own default for an active session.
     pid="$(pgrep -u ruya-shell -x ruya-devices | head -1)"
     if [ -z "$pid" ]; then bad "no ruya-devices process"; else
-        for a in wifi.scan network-control settings.modify.system settings.modify.own; do
+        for a in wifi.scan network-control settings.modify.system settings.modify.own enable-disable-wifi; do
             polkit_expect "org.freedesktop.NetworkManager.$a" "$pid" 0 "polkit allows ruya-devices: NetworkManager $a"
         done
-        for a in enable-disable-network enable-disable-wifi enable-disable-wwan enable-disable-connectivity-check enable-disable-statistics sleep-wake reload settings.modify.hostname settings.modify.global-dns checkpoint-rollback wifi.share.open wifi.share.protected; do
+        for a in enable-disable-network enable-disable-wwan enable-disable-connectivity-check enable-disable-statistics sleep-wake reload settings.modify.hostname settings.modify.global-dns checkpoint-rollback wifi.share.open wifi.share.protected; do
             polkit_expect "org.freedesktop.NetworkManager.$a" "$pid" 1 "polkit refuses ruya-devices: NetworkManager $a"
         done
     fi

@@ -677,10 +677,11 @@ FocusScope {
     readonly property var quickMenuOthers: shownApps.filter(r => r.item !== focusedApp && r.appId !== "")
                                                     .map(r => ({ appId: r.appId, title: titleOfApp(r.appId) }))
     // The Hub's Recent rows (T-448, 02 §1.6): up to four of `Library.recent` that Session1 can start and
-    // that are not running (the running ones are the app header and the Switch to rows).
+    // that are not running (the running ones are the app header and the Switch to rows); over an app
+    // only two, so the tiles stay near the top.
     readonly property var quickMenuRecent: Library.recent
         .filter(i => Library.sessionAppId(i.id) !== "" && !runningAppIds.includes(Library.sessionAppId(i.id)))
-        .slice(0, 4)
+        .slice(0, quickMenuApp ? 2 : 4)
         .map(i => ({ id: i.id, title: i.title ?? i.id, picture: i.art ? (i.art.tile ?? i.art.hero ?? "") : "" }))
 
     // Home from the quick menu: the apps keep running behind it and lose the focus; Home shows the
@@ -1581,7 +1582,9 @@ FocusScope {
         if (modeConfirm.shown)
             return modeConfirm.modalHints
         if (systemPanel.open)
-            return [{ button: "A", text: qsTr("Select") },
+            return [{ button: "A", text: systemPanel.powerMode ? qsTr("Select")
+                                         : systemPanel.currentKey.startsWith("recent:") ? qsTr("Start")
+                                         : systemPanel.currentKey.startsWith("tiles:") ? qsTr("Toggle") : qsTr("Select") },
                     { button: "B", text: systemPanel.powerMode ? qsTr("Back") : (systemPanel.hasApp ? qsTr("Resume") : qsTr("Close")) }]
         if (launching)
             return launchSplash.hints

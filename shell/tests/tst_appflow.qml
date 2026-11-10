@@ -210,7 +210,7 @@ Item {
             verify(find("quickMenuItem_volume"), "the volume row is there")
             // T-448: the first Recent row has the focus (Switch profile only when there is no recent game).
             verify(find("quickMenuItem_recent:flatpak:org.example.Racer").focused, "the first action has the focus, not the volume row")
-            compare(hintVerbs(), "A Select|B Close")
+            compare(hintVerbs(), "A Start|B Close", "T-448: a Recent row says what A does")
             keyClick(Qt.Key_Escape)
             tryVerify(() => !find("systemPanel").open)
             tryVerify(() => find("homePlay").activeFocus, 2000, "Back returns to Play")

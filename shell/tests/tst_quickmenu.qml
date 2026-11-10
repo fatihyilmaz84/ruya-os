@@ -132,11 +132,11 @@ Item {
             compare(focusedKey(), "resume")
             verify(find("quickMenuItem_resume").focused, "Resume has the focus on every open")
             compare(find("systemPanel").itemKeys, ["resume", "home", "closeGame",
-                "recent:flatpak:org.example.Player", "recent:flatpak:org.example.Puzzle", "recent:flatpak:org.example.Platformer",
-                "volume", "tiles:0", "power", "switch"], "the Hub's order; the running game is not repeated under Recent")
+                "recent:flatpak:org.example.Player", "recent:flatpak:org.example.Puzzle",
+                "volume", "tiles:0", "power", "switch"], "the Hub's order; the running game is not repeated under Recent, and over an app there are two")
             // Down reaches every row in that order, one key press each.
             for (const key of ["home", "closeGame", "recent:flatpak:org.example.Player", "recent:flatpak:org.example.Puzzle",
-                               "recent:flatpak:org.example.Platformer", "volume", "tiles:0", "power", "switch"]) {
+                               "volume", "tiles:0", "power", "switch"]) {
                 keyClick(Qt.Key_Down)
                 compare(focusedKey(), key)
                 verify(find("systemActions").activeFocus)
@@ -392,6 +392,45 @@ Item {
             keyClick(Qt.Key_Escape)
         }
 
+        function hintVerbs() {
+            const bar = find("hintBar")
+            const parts = []
+            for (const b of ["A", "B"]) {
+                const h = findChild(bar, "hint_" + b)
+                if (h)
+                    parts.push(b + " " + h.verb)
+            }
+            return parts.join("|")
+        }
+
+        function test_the_a_hint_says_what_the_row_does() {
+            start()
+            const app = playRacer()
+            openHub()
+            compare(hintVerbs(), "A Select|B Resume")
+            goTo("recent:flatpak:org.example.Player")
+            compare(hintVerbs(), "A Start|B Resume")
+            goTo("tiles:0")
+            compare(hintVerbs(), "A Toggle|B Resume")
+            goTo("power")
+            compare(hintVerbs(), "A Select|B Resume")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => app.activeFocus, 2000)
+        }
+
+        function test_a_cue_says_there_are_more_rows_in_the_direction_the_list_scrolls() {
+            start()
+            openHub()
+            const below = find("hubMoreBelow")
+            const above = find("hubMoreAbove")
+            verify(!above.needed, "at the top nothing is hidden above")
+            verify(below.needed, "the list is longer than the panel: rows are hidden below")
+            goTo("close")
+            tryVerify(() => above.needed, 2000, "scrolled down: rows are hidden above")
+            verify(!below.needed, "at the end nothing is hidden below")
+            keyClick(Qt.Key_Escape)
+        }
+
         // ---- Screenshots (dev.ps1 shots) ------------------------------------------------------------------
 
         function test_zz_screenshots_hub_over_the_app() {
@@ -413,6 +452,11 @@ Item {
             keyClick(Qt.Key_Right)
             wait(300)
             grabImage(tc.shell).save(shotsDir + "/hub-2-tiles.png")
+            keyClick(Qt.Key_Left)                    // Wi-Fi: on, then switched off, and focused
+            keyClick(Qt.Key_Return)
+            tryCompare(Network, "wifi", "off")
+            wait(300)
+            grabImage(tc.shell).save(shotsDir + "/hub-4-tiles-wifi-off.png")
         }
 
         function test_zz_screenshots_hub_without_an_app() {

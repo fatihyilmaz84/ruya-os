@@ -162,6 +162,9 @@ pub struct Raw {
     pub primary: Option<Primary>,
     pub access_points: Vec<AccessPoint>,
     pub saved: Vec<Saved>,
+    /// The Wi-Fi radio is on: NetworkManager's `WirelessEnabled`, and there is a Wi-Fi adapter
+    /// (without one there is nothing to switch, so it reads `false`).
+    pub wifi_enabled: bool,
 }
 
 /// One entry of `ListWifi`. The id is the SSID: entries are unique by SSID.
@@ -202,6 +205,9 @@ pub trait NetworkManager: Send + Sync {
     fn connect(&self, ssid: &str, password: Option<&str>) -> Result<(), ConnectError>;
     /// Deletes every saved connection of that SSID (which disconnects it when active).
     fn forget(&self, ssid: &str) -> Result<(), String>;
+    /// Switches the Wi-Fi radio (`WirelessEnabled`). An error when there is no adapter or
+    /// NetworkManager refuses.
+    fn set_wifi_enabled(&self, on: bool) -> Result<(), String>;
 }
 
 /// What a `refresh` changed, so the adapter knows which signals to emit.
@@ -210,11 +216,13 @@ pub struct Changes {
     /// `State` or `Primary`.
     pub state: bool,
     pub networks: bool,
+    /// `WifiEnabled`.
+    pub wifi: bool,
 }
 
 impl Changes {
     pub fn any(&self) -> bool {
-        self.state || self.networks
+        self.state || self.networks || self.wifi
     }
 }
 
@@ -224,6 +232,7 @@ struct View {
     state: Option<State>,
     primary: Option<Primary>,
     wifi: Vec<Wifi>,
+    wifi_enabled: bool,
 }
 
 pub struct Network<N: NetworkManager> {
@@ -300,7 +309,9 @@ impl<N: NetworkManager> Network<N> {
         let changes = Changes {
             state: view.state != Some(state) || view.primary != primary,
             networks: view.wifi != wifi,
+            wifi: view.wifi_enabled != raw.wifi_enabled,
         };
+        view.wifi_enabled = raw.wifi_enabled;
         view.loaded = true;
         view.state = Some(state);
         view.primary = primary;
@@ -318,6 +329,18 @@ impl<N: NetworkManager> Network<N> {
 
     pub fn list_wifi(&self) -> Vec<Wifi> {
         self.view().wifi.clone()
+    }
+
+    /// The Wi-Fi radio as last read.
+    pub fn wifi_enabled(&self) -> bool {
+        self.view().wifi_enabled
+    }
+
+    /// Switches the radio and reads NetworkManager again; the changes (the radio, and with it
+    /// the connection and the list) are for the adapter to announce.
+    pub fn set_wifi_enabled(&self, on: bool) -> Result<Changes, String> {
+        self.nm.set_wifi_enabled(on)?;
+        self.refresh()
     }
 
     pub fn scan(&self) -> Status {
@@ -375,6 +398,7 @@ struct FakeInner {
     /// only given when it should be).
     last_password: Option<Option<String>>,
     fail_scan: bool,
+    fail_wifi: bool,
 }
 
 impl FakeNetworkManager {
@@ -407,10 +431,12 @@ impl FakeNetworkManager {
                         ssid: "Livingroom".to_owned(),
                         security: Security::WpaPsk,
                     }],
+                    wifi_enabled: true,
                 },
                 password: password.to_owned(),
                 last_password: None,
                 fail_scan: false,
+                fail_wifi: false,
             }),
         }
     }
@@ -428,6 +454,11 @@ impl FakeNetworkManager {
         self.inner().fail_scan = fail;
     }
 
+    /// Makes the radio switch fail (no adapter, rfkill).
+    pub fn set_wifi_fails(&self, fail: bool) {
+        self.inner().fail_wifi = fail;
+    }
+
     pub fn last_password(&self) -> Option<Option<String>> {
         self.inner().last_password.clone()
     }
@@ -435,7 +466,11 @@ impl FakeNetworkManager {
 
 impl NetworkManager for FakeNetworkManager {
     fn snapshot(&self) -> Result<Raw, String> {
-        Ok(self.inner().raw.clone())
+        let mut raw = self.inner().raw.clone();
+        if !raw.wifi_enabled {
+            raw.access_points.clear();
+        }
+        Ok(raw)
     }
 
     fn scan(&self) -> Result<(), String> {
@@ -508,6 +543,30 @@ impl NetworkManager for FakeNetworkManager {
             }
             inner.raw.primary = None;
             inner.raw.nm_state = 20;
+        }
+        Ok(())
+    }
+
+    fn set_wifi_enabled(&self, on: bool) -> Result<(), String> {
+        let mut inner = self.inner();
+        if inner.fail_wifi {
+            return Err("no Wi-Fi adapter".to_owned());
+        }
+        inner.raw.wifi_enabled = on;
+        if !on {
+            // The radio off drops the Wi-Fi link (and `snapshot` shows no access points).
+            for ap in &mut inner.raw.access_points {
+                ap.active = false;
+            }
+            if inner
+                .raw
+                .primary
+                .as_ref()
+                .is_some_and(|p| p.kind == Link::Wifi)
+            {
+                inner.raw.primary = None;
+                inner.raw.nm_state = 20;
+            }
         }
         Ok(())
     }
@@ -657,7 +716,8 @@ mod tests {
             n.refresh(),
             Ok(Changes {
                 state: true,
-                networks: false
+                networks: false,
+                wifi: false
             })
         );
         assert_eq!(n.state(), State::Limited);
@@ -667,7 +727,8 @@ mod tests {
             n.refresh(),
             Ok(Changes {
                 state: false,
-                networks: true
+                networks: true,
+                wifi: false
             })
         );
     }
@@ -753,6 +814,7 @@ mod tests {
                         ssid: "Home".to_owned(),
                         security: Security::WpaPsk,
                     }],
+                    wifi_enabled: true,
                 })
             }
             fn scan(&self) -> Result<(), String> {
@@ -763,6 +825,9 @@ mod tests {
             }
             fn forget(&self, _: &str) -> Result<(), String> {
                 Err("boom".to_owned())
+            }
+            fn set_wifi_enabled(&self, _: bool) -> Result<(), String> {
+                Ok(())
             }
         }
         let n = Network::new(Rejecting);
@@ -785,6 +850,9 @@ mod tests {
                 Err(self.0.clone())
             }
             fn forget(&self, _: &str) -> Result<(), String> {
+                Ok(())
+            }
+            fn set_wifi_enabled(&self, _: bool) -> Result<(), String> {
                 Ok(())
             }
         }
@@ -822,6 +890,52 @@ mod tests {
         let changes = n.refresh().expect("fake never fails");
         assert!(changes.state && changes.networks);
         assert_eq!(n.state(), State::Disconnected);
+    }
+
+    #[test]
+    fn the_wifi_radio_switch_reads_back_and_reports_what_changed() {
+        let n = net();
+        assert!(n.wifi_enabled(), "on to begin with");
+        let off = n.set_wifi_enabled(false).expect("the fake switches");
+        assert!(off.wifi, "WifiEnabled changed");
+        assert!(off.networks, "the access points went with the radio");
+        assert!(!n.wifi_enabled());
+        assert!(n.list_wifi().iter().all(|w| w.signal == 0 && !w.active));
+        // Switching to what it is already changes nothing.
+        let again = n.set_wifi_enabled(false).expect("the fake switches");
+        assert!(!again.any());
+        let on = n.set_wifi_enabled(true).expect("the fake switches");
+        assert!(on.wifi);
+        assert!(n.wifi_enabled());
+    }
+
+    #[test]
+    fn the_radio_off_drops_a_wifi_connection() {
+        let n = net();
+        assert_eq!(n.connect("Livingroom", ""), Status::Ok);
+        n.refresh().expect("fake never fails");
+        assert_eq!(n.state(), State::Connected);
+        let off = n.set_wifi_enabled(false).expect("the fake switches");
+        assert!(off.state && off.wifi);
+        assert_eq!(n.state(), State::Disconnected);
+        assert!(n.primary().is_none());
+    }
+
+    #[test]
+    fn a_refused_radio_switch_is_an_error_and_keeps_the_state() {
+        let n = net();
+        n.nm.set_wifi_fails(true);
+        assert!(n.set_wifi_enabled(false).is_err());
+        assert!(n.wifi_enabled(), "unchanged");
+    }
+
+    #[test]
+    fn a_radio_switched_from_outside_is_noticed_by_the_next_refresh() {
+        let n = net();
+        n.nm.set_raw(|r| r.wifi_enabled = false);
+        let changes = n.refresh().expect("fake never fails");
+        assert!(changes.wifi && changes.any());
+        assert!(!n.wifi_enabled());
     }
 
     #[test]

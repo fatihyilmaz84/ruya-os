@@ -33,7 +33,7 @@ Item {
     property var app: null
     // Other running apps with a window: [{ appId, title }].
     property var others: []
-    // Recent games that can be started and are not running, newest first, at most four:
+    // Recent games that can be started and are not running, newest first, at most four (two over an app):
     // [{ id, title, picture }] (the shell filters them, T-448).
     property var recent: []
     // Keys the shell keeps for itself (Guide): a function key -> bool.
@@ -121,6 +121,8 @@ Item {
 
     // The keys of the list now (see rebuild()).
     property var itemKeys: []
+    // The row that has the focus ("" while the list is empty): the shell words the A hint after it.
+    readonly property string currentKey: itemKeys[actions.currentIndex] ?? ""
     function keysNow() {
         if (powerMode) {
             return [...(Power.canSuspend ? ["suspend"] : []),
@@ -447,175 +449,204 @@ Item {
                     FpsMeter { font.pixelSize: Theme.typeBody * menu.u; visible: menu.visible; color: Theme.text }
                 }
 
-                ListView {
-                    id: actions
-                    objectName: "systemActions"
-                    Accessible.role: Accessible.List
-                    Accessible.name: currentItem ? currentItem.Accessible.name : qsTr("System")
-
+                // The list and its scroll cues. What is left under the status row and the header (two gaps of
+                // the column); a longer list scrolls so the current row stays in view, and a fade at the edge
+                // that hides rows says there are more.
+                Item {
+                    id: listBox
                     width: parent.width
-                    // What is left under the status row and the header (two gaps of the column); a longer
-                    // list scrolls so the current row stays in view.
-                    height: Math.min(contentHeight, menu.height - 2 * menu.marginY - menu.bottomReserve - 2 * panel.pad - status.height
-                                     - (header.visible ? header.height : systemHeader.height) - 2 * Theme.spaceM * menu.u)
-                    spacing: Theme.spaceS * menu.u
-                    interactive: false
-                    keyNavigationEnabled: true
-                    clip: true
-                    model: menu.itemKeys
+                    height: Math.min(actions.contentHeight, menu.height - 2 * menu.marginY - menu.bottomReserve - 2 * panel.pad
+                                     - status.height - (header.visible ? header.height : systemHeader.height) - 2 * Theme.spaceM * menu.u)
 
-                    onCurrentIndexChanged: {
-                        if (currentIndex >= 0)
-                            positionViewAtIndex(currentIndex, ListView.Contain)
-                        if (menu.open)
-                            Sfx.navigate()
-                    }
-                    Keys.onReturnPressed: menu.activate(menu.itemKeys[currentIndex])
-                    Keys.onEnterPressed: menu.activate(menu.itemKeys[currentIndex])
-                    Keys.onPressed: event => {
-                        // Accepting every key (below) also skips the list's own key navigation, so
-                        // Up/Down are handled here.
-                        const key = menu.itemKeys[currentIndex]
-                        const sideways = event.key === Qt.Key_Left || event.key === Qt.Key_Right
-                        const toRight = event.key === (actions.LayoutMirroring.enabled ? Qt.Key_Left : Qt.Key_Right)
-                        if (event.key === Qt.Key_Down) {
-                            incrementCurrentIndex()
-                        } else if (event.key === Qt.Key_Up) {
-                            decrementCurrentIndex()
-                        } else if (key === "volume" && sideways) {
-                            Audio.stepVolume(toRight ? 5 : -5)
-                        } else if (key && key.startsWith("tiles:") && sideways) {
-                            const line = parseInt(key.substring(6))
-                            const at = menu.tileColIn(line)
-                            const next = Math.max(0, Math.min(menu.tileLine(line).length - 1, at + (toRight ? 1 : -1)))
-                            if (next !== at) {
-                                menu.tileCol = next
+                    ListView {
+                        id: actions
+                        objectName: "systemActions"
+                        Accessible.role: Accessible.List
+                        Accessible.name: currentItem ? currentItem.Accessible.name : qsTr("System")
+
+                        anchors.fill: parent
+                        spacing: Theme.spaceS * menu.u
+                        interactive: false
+                        keyNavigationEnabled: true
+                        clip: true
+                        model: menu.itemKeys
+
+                        onCurrentIndexChanged: {
+                            if (currentIndex >= 0)
+                                positionViewAtIndex(currentIndex, ListView.Contain)
+                            if (menu.open)
                                 Sfx.navigate()
+                        }
+                        Keys.onReturnPressed: menu.activate(menu.itemKeys[currentIndex])
+                        Keys.onEnterPressed: menu.activate(menu.itemKeys[currentIndex])
+                        Keys.onPressed: event => {
+                            // Accepting every key (below) also skips the list's own key navigation, so
+                            // Up/Down are handled here.
+                            const key = menu.itemKeys[currentIndex]
+                            const sideways = event.key === Qt.Key_Left || event.key === Qt.Key_Right
+                            const toRight = event.key === (actions.LayoutMirroring.enabled ? Qt.Key_Left : Qt.Key_Right)
+                            if (event.key === Qt.Key_Down) {
+                                incrementCurrentIndex()
+                            } else if (event.key === Qt.Key_Up) {
+                                decrementCurrentIndex()
+                            } else if (key === "volume" && sideways) {
+                                Audio.stepVolume(toRight ? 5 : -5)
+                            } else if (key && key.startsWith("tiles:") && sideways) {
+                                const line = parseInt(key.substring(6))
+                                const at = menu.tileColIn(line)
+                                const next = Math.max(0, Math.min(menu.tileLine(line).length - 1, at + (toRight ? 1 : -1)))
+                                if (next !== at) {
+                                    menu.tileCol = next
+                                    Sfx.navigate()
+                                }
+                            } else if (event.isAutoRepeat) {
+                                // Holding Guide repeats the key: not a second press that would close us.
+                            } else if (menu.powerMode && BackKey.isBackOrBackspace(event.key)) {
+                                Sfx.back()
+                                menu.activate("back")
+                            } else if (BackKey.isBackOrBackspace(event.key) || menu.guideKey(event.key)) {
+                                menu.closeRequested()
                             }
-                        } else if (event.isAutoRepeat) {
-                            // Holding Guide repeats the key: not a second press that would close us.
-                        } else if (menu.powerMode && BackKey.isBackOrBackspace(event.key)) {
-                            Sfx.back()
-                            menu.activate("back")
-                        } else if (BackKey.isBackOrBackspace(event.key) || menu.guideKey(event.key)) {
-                            menu.closeRequested()
+                            event.accepted = true      // modal: nothing leaks to what lies underneath
                         }
-                        event.accepted = true      // modal: nothing leaks to what lies underneath
-                    }
 
-                    delegate: Rectangle {
-                        id: action
-                        required property int index
-                        required property string modelData
-                        readonly property bool focused: ListView.isCurrentItem && actions.activeFocus
-                        readonly property bool isVolume: modelData === "volume"
-                        readonly property bool isRecent: modelData.startsWith("recent:")
-                        readonly property bool isTiles: modelData.startsWith("tiles:")
-                        readonly property int line: isTiles ? parseInt(modelData.substring(6)) : 0
-                        readonly property string label: menu.labelOf(modelData)
-                        readonly property var game: isRecent ? menu.recent.find(r => r.id === modelData.substring(7)) : undefined
+                        delegate: Rectangle {
+                            id: action
+                            required property int index
+                            required property string modelData
+                            readonly property bool focused: ListView.isCurrentItem && actions.activeFocus
+                            readonly property bool isVolume: modelData === "volume"
+                            readonly property bool isRecent: modelData.startsWith("recent:")
+                            readonly property bool isTiles: modelData.startsWith("tiles:")
+                            readonly property int line: isTiles ? parseInt(modelData.substring(6)) : 0
+                            readonly property string label: menu.labelOf(modelData)
+                            readonly property var game: isRecent ? menu.recent.find(r => r.id === modelData.substring(7)) : undefined
 
-                        objectName: "quickMenuItem_" + modelData
-                        Accessible.role: Accessible.MenuItem
-                        Accessible.name: isVolume ? (Audio.muted ? qsTr("Volume, muted") : qsTr("Volume %1").arg(Audio.volume))
-                                         : isTiles ? tilesRow.focusedName : label
-                        width: actions.width
-                        height: isTiles ? tilesRow.height : Theme.buttonHeight * menu.u
-                        radius: height / 2
-                        color: isTiles ? "transparent" : (focused ? Theme.focusFill : Theme.glass)
-                        border.width: isTiles ? 0 : (focused ? Theme.focusRingWidth * menu.u : 1)
-                        border.color: focused ? Theme.focusRing : Theme.glassBorder
-
-                        // A Recent row's picture (`iconL` square, `radiusS`).
-                        AppArt {
-                            id: thumb
-                            objectName: "quickMenuThumb"
-                            visible: action.isRecent
-                            x: Theme.spaceS * menu.u
-                            anchors.verticalCenter: parent.verticalCenter
-                            u: menu.u
-                            width: Theme.iconL * menu.u
-                            height: width
-                            radius: Theme.radiusS * menu.u
-                            appId: action.game ? action.game.id : ""
-                            appName: action.game ? action.game.title : ""
-                            picture: action.game ? action.game.picture : ""
-                            monogram: false
-                            shimmer: false
-                        }
-                        Text {
-                            id: itemLabel
-                            visible: !action.isTiles
-                            // Volume and Recent rows start at the left edge; the others are centred.
-                            readonly property real leftEdge: action.isRecent ? thumb.x + thumb.width + Theme.spaceS * menu.u
-                                                                              : Theme.spaceL * menu.u
-                            x: action.isVolume || action.isRecent ? leftEdge : (action.width - width) / 2
-                            anchors.verticalCenter: parent.verticalCenter
-                            width: Math.min(implicitWidth, action.width - leftEdge - Theme.spaceL * menu.u)
-                            textFormat: Text.PlainText
-                            text: action.label
-                            color: Theme.text
-                            font.pixelSize: Theme.typeHeadline * menu.u
-                            font.weight: Theme.weightDemiBold
-                            elide: Text.ElideRight
-                        }
-                        // The volume row: a bar and the number (the same as the volume OSD).
-                        Rectangle {
-                            id: track
-                            objectName: "quickMenuVolumeTrack"
-                            visible: action.isVolume
-                            anchors { left: itemLabel.right; leftMargin: Theme.spaceM * menu.u; right: valueText.left; rightMargin: Theme.spaceM * menu.u; verticalCenter: parent.verticalCenter }
-                            height: 12 * menu.u
+                            objectName: "quickMenuItem_" + modelData
+                            Accessible.role: Accessible.MenuItem
+                            Accessible.name: isVolume ? (Audio.muted ? qsTr("Volume, muted") : qsTr("Volume %1").arg(Audio.volume))
+                                             : isTiles ? tilesRow.focusedName : label
+                            width: actions.width
+                            height: isTiles ? tilesRow.height : Theme.buttonHeight * menu.u
                             radius: height / 2
-                            color: Theme.glass
-                            Rectangle {
-                                width: parent.width * (Audio.muted ? 0 : Audio.volume) / 100
-                                height: parent.height
-                                radius: parent.radius
+                            color: isTiles ? "transparent" : (focused ? Theme.focusFill : Theme.glass)
+                            border.width: isTiles ? 0 : (focused ? Theme.focusRingWidth * menu.u : 1)
+                            border.color: focused ? Theme.focusRing : Theme.glassBorder
+
+                            // A Recent row's picture (`iconL` square, `radiusS`).
+                            AppArt {
+                                id: thumb
+                                objectName: "quickMenuThumb"
+                                visible: action.isRecent
+                                x: Theme.spaceS * menu.u
+                                anchors.verticalCenter: parent.verticalCenter
+                                u: menu.u
+                                width: Theme.iconL * menu.u
+                                height: width
+                                radius: Theme.radiusS * menu.u
+                                appId: action.game ? action.game.id : ""
+                                appName: action.game ? action.game.title : ""
+                                picture: action.game ? action.game.picture : ""
+                                monogram: false
+                                shimmer: false
+                            }
+                            Text {
+                                id: itemLabel
+                                visible: !action.isTiles
+                                // Volume and Recent rows start at the left edge; the others are centred.
+                                readonly property real leftEdge: action.isRecent ? thumb.x + thumb.width + Theme.spaceS * menu.u
+                                                                                  : Theme.spaceL * menu.u
+                                x: action.isVolume || action.isRecent ? leftEdge : (action.width - width) / 2
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: Math.min(implicitWidth, action.width - leftEdge - Theme.spaceL * menu.u)
+                                textFormat: Text.PlainText
+                                text: action.label
                                 color: Theme.text
+                                font.pixelSize: Theme.typeHeadline * menu.u
+                                font.weight: Theme.weightDemiBold
+                                elide: Text.ElideRight
                             }
-                        }
-                        Text {
-                            id: valueText
-                            objectName: "quickMenuVolumeValue"
-                            visible: action.isVolume
-                            anchors { right: parent.right; rightMargin: Theme.spaceL * menu.u; verticalCenter: parent.verticalCenter }
-                            width: 70 * menu.u
-                            horizontalAlignment: Text.AlignRight
-                            text: Audio.muted ? qsTr("Muted") : String(Audio.volume)
-                            color: Theme.text
-                            font.pixelSize: Theme.typeBody * menu.u
-                        }
-                        // A line of quick tiles: three across the panel, `spaceS` apart.
-                        Row {
-                            id: tilesRow
-                            objectName: "quickTiles_" + action.line
-                            visible: action.isTiles
-                            spacing: Theme.spaceS * menu.u
-                            readonly property real tileWidth: (action.width - (menu.tilesPerLine - 1) * spacing) / menu.tilesPerLine
-                            readonly property string focusedName: {
-                                const ids = action.isTiles ? menu.tileLine(action.line) : []
-                                const id = ids[menu.tileColIn(action.line)]
-                                return id ? (menu.tileOn(id) ? qsTr("%1, on").arg(menu.tileLabel(id)) : qsTr("%1, off").arg(menu.tileLabel(id))) : ""
-                            }
-                            Repeater {
-                                model: action.isTiles ? menu.tileLine(action.line) : []
-                                QuickTile {
-                                    id: quickTile
-                                    required property int index
-                                    required property string modelData
-                                    objectName: "quickTile_" + modelData
-                                    u: menu.u
-                                    width: tilesRow.tileWidth
-                                    height: implicitHeight
-                                    iconOn: modelData === "wifi" ? "wifi" : modelData === "bluetooth" ? "bluetooth" : "volume_off"
-                                    iconOff: modelData === "wifi" ? "wifi_off" : modelData === "bluetooth" ? "bluetooth_disabled" : "volume_up"
-                                    label: menu.tileLabel(modelData)
-                                    detail: menu.tileDetail(modelData)
-                                    on: menu.tileOn(modelData)
-                                    focused: action.focused && index === menu.tileColIn(action.line)
+                            // The volume row: a bar and the number (the same as the volume OSD).
+                            Rectangle {
+                                id: track
+                                objectName: "quickMenuVolumeTrack"
+                                visible: action.isVolume
+                                anchors { left: itemLabel.right; leftMargin: Theme.spaceM * menu.u; right: valueText.left; rightMargin: Theme.spaceM * menu.u; verticalCenter: parent.verticalCenter }
+                                height: 12 * menu.u
+                                radius: height / 2
+                                color: Theme.glass
+                                Rectangle {
+                                    width: parent.width * (Audio.muted ? 0 : Audio.volume) / 100
+                                    height: parent.height
+                                    radius: parent.radius
+                                    color: Theme.text
                                 }
                             }
+                            Text {
+                                id: valueText
+                                objectName: "quickMenuVolumeValue"
+                                visible: action.isVolume
+                                anchors { right: parent.right; rightMargin: Theme.spaceL * menu.u; verticalCenter: parent.verticalCenter }
+                                width: 70 * menu.u
+                                horizontalAlignment: Text.AlignRight
+                                text: Audio.muted ? qsTr("Muted") : String(Audio.volume)
+                                color: Theme.text
+                                font.pixelSize: Theme.typeBody * menu.u
+                            }
+                            // A line of quick tiles: three across the panel, `spaceS` apart.
+                            Row {
+                                id: tilesRow
+                                objectName: "quickTiles_" + action.line
+                                visible: action.isTiles
+                                spacing: Theme.spaceS * menu.u
+                                readonly property real tileWidth: (action.width - (menu.tilesPerLine - 1) * spacing) / menu.tilesPerLine
+                                readonly property string focusedName: {
+                                    const ids = action.isTiles ? menu.tileLine(action.line) : []
+                                    const id = ids[menu.tileColIn(action.line)]
+                                    return id ? (menu.tileOn(id) ? qsTr("%1, on").arg(menu.tileLabel(id)) : qsTr("%1, off").arg(menu.tileLabel(id))) : ""
+                                }
+                                Repeater {
+                                    model: action.isTiles ? menu.tileLine(action.line) : []
+                                    QuickTile {
+                                        id: quickTile
+                                        required property int index
+                                        required property string modelData
+                                        objectName: "quickTile_" + modelData
+                                        u: menu.u
+                                        width: tilesRow.tileWidth
+                                        height: implicitHeight
+                                        iconOn: modelData === "wifi" ? "wifi" : modelData === "bluetooth" ? "bluetooth" : "volume_off"
+                                        iconOff: modelData === "wifi" ? "wifi_off" : modelData === "bluetooth" ? "bluetooth_disabled" : "volume_up"
+                                        label: menu.tileLabel(modelData)
+                                        detail: menu.tileDetail(modelData)
+                                        on: menu.tileOn(modelData)
+                                        focused: action.focused && index === menu.tileColIn(action.line)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Rectangle {
+                        objectName: "hubMoreAbove"
+                        readonly property bool needed: actions.contentY > 1
+                        visible: needed
+                        anchors { left: parent.left; right: parent.right; top: parent.top }
+                        height: Theme.spaceL * menu.u
+                        gradient: Gradient {
+                            GradientStop { position: 0.0; color: Theme.glassOpaque }
+                            GradientStop { position: 1.0; color: Qt.alpha(Theme.glassOpaque, 0) }
+                        }
+                    }
+                    Rectangle {
+                        objectName: "hubMoreBelow"
+                        readonly property bool needed: actions.contentY + actions.height < actions.contentHeight - 1
+                        visible: needed
+                        anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
+                        height: Theme.spaceL * menu.u
+                        gradient: Gradient {
+                            GradientStop { position: 0.0; color: Qt.alpha(Theme.glassOpaque, 0) }
+                            GradientStop { position: 1.0; color: Theme.glassOpaque }
                         }
                     }
                 }

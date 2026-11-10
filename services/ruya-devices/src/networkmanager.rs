@@ -113,6 +113,10 @@ mod linux {
         }
     }
 
+    fn flag(d: &Dict, key: &str) -> bool {
+        matches!(d.get(key).map(|v| &**v), Some(Value::Bool(true)))
+    }
+
     fn path(d: &Dict, key: &str) -> String {
         match d.get(key).map(|v| &**v) {
             Some(Value::ObjectPath(p)) => p.as_str().to_owned(),
@@ -296,8 +300,9 @@ mod linux {
         async fn snapshot_async(&self) -> Result<Raw, String> {
             let nm = self.all(NM_PATH, NM_IFACE).await?;
             let mut access_points = Vec::new();
-            for device in self.wifi_devices().await? {
-                let Ok(wifi) = self.all(&device, WIRELESS).await else {
+            let wifi_devices = self.wifi_devices().await?;
+            for device in &wifi_devices {
+                let Ok(wifi) = self.all(device, WIRELESS).await else {
                     continue;
                 };
                 let active_ap = path(&wifi, "ActiveAccessPoint");
@@ -318,7 +323,21 @@ mod linux {
                 primary: self.primary(&path(&nm, "PrimaryConnection")).await,
                 access_points,
                 saved,
+                wifi_enabled: flag(&nm, "WirelessEnabled") && !wifi_devices.is_empty(),
             })
+        }
+
+        async fn set_wifi_enabled_async(&self, on: bool) -> Result<(), String> {
+            if self.wifi_devices().await?.is_empty() {
+                return Err("no Wi-Fi adapter".to_owned());
+            }
+            self.call::<_, ()>(
+                NM_PATH,
+                PROPERTIES,
+                "Set",
+                &(NM_IFACE, "WirelessEnabled", Value::from(on)),
+            )
+            .await
         }
 
         async fn scan_async(&self) -> Result<(), String> {
@@ -540,6 +559,10 @@ mod linux {
 
         fn forget(&self, ssid: &str) -> Result<(), String> {
             future::block_on(self.forget_async(ssid))
+        }
+
+        fn set_wifi_enabled(&self, on: bool) -> Result<(), String> {
+            future::block_on(self.set_wifi_enabled_async(on))
         }
     }
 }

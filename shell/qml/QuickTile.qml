@@ -3,7 +3,7 @@ import RuyaShell
 
 // A quick tile of the Ruya Hub (04 §5, 02-shell §1.6, T-448): a toggle in the Quick Hub's tiles row.
 // An icon over a one-line label, and under it one small line of state (the Wi-Fi network's name,
-// "On", "Off"). Off: `selectedFill`; on: `primaryFill` with the filled icon; focused: `focusFill`
+// "On", "Off"; in the label's colour, since `textDim` fails 4.5:1 on these fills). Off: `selectedFill`; on: `primaryFill` with the filled icon; focused: `focusFill`
 // under the ring, like a row. It is a picture: the Hub's list holds the focus and sets `focused`;
 // `on` is always the backend's answer, never an optimistic guess. A tile whose backend is missing
 // is not created at all (07 §5.2: no fake controls), so there is no disabled look.
@@ -62,7 +62,7 @@ Rectangle {
             horizontalAlignment: Text.AlignHCenter
             textFormat: Text.PlainText      // a network's name comes from outside
             text: tile.detail
-            color: tile.on && !tile.focused ? Theme.onPrimary : Theme.textDim
+            color: tile.ink     // not textDim: it is under 4.5:1 on the tile fills (gate, tst_theme_contrast)
             font.pixelSize: Theme.typeMicro * tile.u
             font.weight: Theme.weightDemiBold
             elide: Text.ElideRight

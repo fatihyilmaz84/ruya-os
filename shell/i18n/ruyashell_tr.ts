@@ -2275,7 +2275,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>QuickMenu</name>
     <message>
-        <location filename="../qml/QuickMenu.qml" line="+63"/>
+        <location filename="../qml/QuickMenu.qml" line="+65"/>
         <source>Wi-Fi</source>
         <translation>Wi-Fi</translation>
     </message>
@@ -2298,12 +2298,12 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="-3"/>
-        <location line="+280"/>
+        <location line="+282"/>
         <source>Not connected</source>
         <translation>Bağlı değil</translation>
     </message>
     <message>
-        <location line="-278"/>
+        <location line="-280"/>
         <source>On</source>
         <translation>Açık</translation>
     </message>
@@ -2318,7 +2318,7 @@ Bu geri alınamaz.</translation>
         <translation>Bluetooth değiştirilemedi.</translation>
     </message>
     <message>
-        <location line="+53"/>
+        <location line="+55"/>
         <source>Resume</source>
         <translation>Devam et</translation>
     </message>
@@ -2394,17 +2394,17 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+18"/>
-        <location line="+19"/>
+        <location line="+28"/>
         <source>System</source>
         <translation>Sistem</translation>
     </message>
     <message>
-        <location line="-12"/>
+        <location line="-21"/>
         <source>Image version %1</source>
         <translation>Sistem sürümü %1</translation>
     </message>
     <message>
-        <location line="+78"/>
+        <location line="+83"/>
         <source>Volume, muted</source>
         <translation>Ses, sessiz</translation>
     </message>
@@ -2424,8 +2424,8 @@ Bu geri alınamaz.</translation>
         <translation>%1, kapalı</translation>
     </message>
     <message>
-        <location line="-510"/>
-        <location line="+496"/>
+        <location line="-517"/>
+        <location line="+503"/>
         <source>Muted</source>
         <translation>Sessiz</translation>
     </message>
@@ -2772,7 +2772,7 @@ Bu geri alınamaz.</translation>
         <translation>Güncellemeyi bitirmek için 2 dakika içinde yeniden başlatılıyor. Beklemek için herhangi bir düğmeye bas.</translation>
     </message>
     <message>
-        <location line="+223"/>
+        <location line="+224"/>
         <source>The screen did not answer, so the previous resolution is back.</source>
         <translation>Ekran yanıt vermedi, bu yüzden önceki çözünürlük geri geldi.</translation>
     </message>
@@ -2809,12 +2809,12 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+462"/>
+        <location line="+464"/>
         <source>Resume</source>
         <translation>Devam et</translation>
     </message>
     <message>
-        <location line="-460"/>
+        <location line="-462"/>
         <source>Details</source>
         <translation>Ayrıntılar</translation>
     </message>
@@ -2825,24 +2825,35 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+445"/>
+        <location line="+2"/>
         <location line="+14"/>
         <location line="+3"/>
         <source>Select</source>
         <translation>Seç</translation>
     </message>
     <message>
-        <location line="+139"/>
+        <location line="-18"/>
+        <source>Start</source>
+        <translation>Başlat</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Toggle</source>
+        <translation>Aç/Kapat</translation>
+    </message>
+    <message>
+        <location line="+157"/>
         <source>The chosen sound theme can&apos;t be used. The standard one plays instead.</source>
         <translation>Seçilen ses teması kullanılamıyor. Bunun yerine standart tema çalıyor.</translation>
     </message>
     <message>
-        <location line="-162"/>
-        <location line="+18"/>
+        <location line="-165"/>
+        <location line="+20"/>
         <source>Cancel</source>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="-973"/>
+        <location line="-976"/>
         <source>%1 is already running</source>
         <translation>%1 zaten çalışıyor</translation>
     </message>
@@ -2868,7 +2879,7 @@ Bu geri alınamaz.</translation>
         <translation>Çalışan uygulama</translation>
     </message>
     <message>
-        <location line="+930"/>
+        <location line="+933"/>
         <source>Sections</source>
         <translation>Bölümler</translation>
     </message>
@@ -2883,7 +2894,7 @@ Bu geri alınamaz.</translation>
         <translation>Geri</translation>
     </message>
     <message>
-        <location line="+139"/>
+        <location line="+140"/>
         <source>mock services</source>
         <translation>sahte hizmetler</translation>
     </message>

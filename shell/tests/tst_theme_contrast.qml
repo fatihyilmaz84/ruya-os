@@ -95,6 +95,12 @@ Item {
                 const opaque = ThemeMath.over(t.glassOpaque, e)
                 row(rows, "text on glassOpaque over " + name, t.text, opaque, 4.5)
                 row(rows, "textDim on glassOpaque over " + name, t.textDim, opaque, 4.5)
+                // A quick tile (T-448, 04 section 5) lies on the Hub's glassOpaque panel: its label and its state
+                // line (both `text`, typeMicro for the line) on the off fill and on the focus fill; on is
+                // onPrimary on primaryFill (below). textDim does NOT hold there (3.4 to 4.2:1 on the off fill,
+                // 2.8 to 4.2:1 on the focus fill, in every dark theme), which is why the tile never uses it.
+                for (const [name2, fill] of [["selectedFill", t.selectedFill], ["focusFill", t.focusFill]])
+                    row(rows, "text on a quick tile (" + name2 + ") over " + name, t.text, ThemeMath.over(fill, opaque), 4.5)
                 row(rows, "text on scrim over " + name, t.text, ThemeMath.over(t.scrim, e), 4.5)
                 row(rows, "ring on scrim over " + name, t.focusRing, ThemeMath.over(t.scrim, e), 3)
                 row(rows, "text on scrimOverlay over " + name, t.text, ThemeMath.over(t.scrimOverlay, e), 4.5)

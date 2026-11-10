@@ -52,8 +52,7 @@ protected:
     // if no newer one of the same kind has been reported already (the state and the network list
     // are two kinds). RequestSequence.h.
     quint64 beginStateRequest() { return m_stateSeq.begin(); }
-    void deliverState(quint64 request, const QString &state, const QVariantMap &primary,
-                      const QString &wifi = QStringLiteral("unsupported"))
+    void deliverState(quint64 request, const QString &state, const QVariantMap &primary, const QString &wifi)
     {
         if (m_stateSeq.accept(request))
             emit stateChanged(state, primary, wifi);
