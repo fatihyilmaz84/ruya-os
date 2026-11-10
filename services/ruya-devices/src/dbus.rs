@@ -62,6 +62,12 @@ impl crate::audio::PipeWire for DynPipeWire {
     fn set_muted(&mut self, muted: bool) -> Result<(), String> {
         (**self).set_muted(muted)
     }
+    fn set_default_source(&mut self, id: &str) -> Result<(), String> {
+        (**self).set_default_source(id)
+    }
+    fn set_source_muted(&mut self, muted: bool) -> Result<(), String> {
+        (**self).set_source_muted(muted)
+    }
 }
 
 pub const BUS_NAME: &str = "org.ruyaos.Devices1";
@@ -144,6 +150,44 @@ impl AudioIface {
                 .collect()
             })
             .collect()
+    }
+
+    fn list_inputs(&self) -> Vec<HashMap<String, OwnedValue>> {
+        self.view()
+            .sources
+            .into_iter()
+            .map(|(s, is_default)| {
+                let own = |v: Value<'_>| OwnedValue::try_from(v).ok();
+                [
+                    ("id", own(Value::from(s.id.clone()))),
+                    ("name", own(Value::from(s.name.clone()))),
+                    ("kind", own(Value::from(s.kind.as_str()))),
+                    ("available", own(Value::from(s.available.as_str()))),
+                    ("is_default", own(Value::from(is_default))),
+                ]
+                .into_iter()
+                .filter_map(|(k, v)| v.map(|v| (k.to_owned(), v)))
+                .collect()
+            })
+            .collect()
+    }
+
+    async fn set_input(
+        &self,
+        id: &str,
+        #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
+    ) -> String {
+        let id = id.to_owned();
+        let (status, before, after) = with_audio(&self.audio, move |audio| {
+            let before = audio.default_source().map(str::to_owned);
+            let status = audio.set_input(&id);
+            (status, before, audio.default_source().map(str::to_owned))
+        })
+        .await;
+        if before != after {
+            let _ = Self::inputs_changed(&emitter).await;
+        }
+        status.as_str().to_owned()
     }
 
     async fn set_output(
@@ -261,9 +305,25 @@ impl AudioIface {
     }
 
     #[zbus(property)]
+    fn input_muted(&self) -> bool {
+        self.view().input_muted
+    }
+
+    #[zbus(property)]
+    async fn set_input_muted(&mut self, value: bool) {
+        let status = with_audio(&self.audio, move |audio| audio.set_input_muted(value)).await;
+        if status != crate::Status::Ok {
+            eprintln!("ruya-devices: setting the microphone mute failed");
+        }
+    }
+
+    #[zbus(property)]
     fn channel_volumes(&self) -> HashMap<String, u32> {
         self.view().channels.into_iter().collect()
     }
+
+    #[zbus(signal)]
+    async fn inputs_changed(emitter: &SignalEmitter<'_>) -> zbus::Result<()>;
 
     #[zbus(signal)]
     async fn outputs_changed(emitter: &SignalEmitter<'_>) -> zbus::Result<()>;
@@ -323,6 +383,13 @@ async fn announce(connection: &Connection, changes: &Changes) -> zbus::Result<()
     }
     if let Some(id) = &changes.default {
         AudioIface::default_sink_changed(emitter, id.clone()).await?;
+    }
+    if changes.inputs {
+        AudioIface::inputs_changed(emitter).await?;
+    }
+    if changes.input_props {
+        let this = iface.get().await;
+        this.input_muted_changed(emitter).await?;
     }
     if changes.props {
         let this = iface.get().await;

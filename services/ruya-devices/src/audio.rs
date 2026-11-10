@@ -38,12 +38,43 @@ pub struct Sink {
     pub kind: Kind,
 }
 
+/// A microphone (T-449). `kind` is "analog" | "usb" | "bluetooth".
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SourceKind {
+    Analog,
+    Usb,
+    Bluetooth,
+}
+
+impl SourceKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            SourceKind::Analog => "analog",
+            SourceKind::Usb => "usb",
+            SourceKind::Bluetooth => "bluetooth",
+        }
+    }
+}
+
+/// A capture device (PipeWire `Audio/Source`): `id` is its `node.name`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Source {
+    pub id: String,
+    pub name: String,
+    pub kind: SourceKind,
+    /// Jack detection of its port: yes / no / unknown (a USB or Bluetooth device is "unknown"
+    /// unless its card says more).
+    pub available: Avail,
+}
+
 /// Status strings of the contract (stable API).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Status {
     Ok,
     UnknownSink,
     UnknownOutput,
+    /// No microphone with that id (`SetInput`, T-449).
+    UnknownInput,
     /// The output exists but has no sink yet (its card profile is not active).
     Inactive,
     Invalid,
@@ -56,6 +87,7 @@ impl Status {
             Status::Ok => "ok",
             Status::UnknownSink => "unknown-sink",
             Status::UnknownOutput => "unknown-output",
+            Status::UnknownInput => "unknown-input",
             Status::Inactive => "inactive",
             Status::Invalid => "invalid",
             Status::Failed => "failed",
@@ -74,6 +106,12 @@ pub struct Snapshot {
     pub muted: bool,
     /// Some output is running, i.e. something plays (T-202, `Playing`).
     pub playing: bool,
+    /// The microphones (T-449), sorted by id.
+    pub sources: Vec<Source>,
+    /// The node name of the default microphone, if PipeWire names one.
+    pub default_source: Option<String>,
+    /// Mute of the default microphone (false when there is none).
+    pub input_muted: bool,
 }
 
 /// The side effects: PipeWire itself. A fake serves tests and `--session`; on Linux
@@ -101,6 +139,10 @@ pub trait PipeWire: Send {
     /// 0-100 of the default output.
     fn set_volume(&mut self, volume: u32) -> Result<(), String>;
     fn set_muted(&mut self, muted: bool) -> Result<(), String>;
+    /// Makes the microphone with this node name the default one (T-449).
+    fn set_default_source(&mut self, id: &str) -> Result<(), String>;
+    /// Mutes or unmutes the default microphone.
+    fn set_source_muted(&mut self, muted: bool) -> Result<(), String>;
 }
 
 /// What a `refresh` changed, so the adapter knows which signals to emit.
@@ -113,11 +155,20 @@ pub struct Changes {
     pub default: Option<String>,
     /// Volume or mute.
     pub props: bool,
+    /// The microphones or the default microphone changed (`InputsChanged`).
+    pub inputs: bool,
+    /// The default microphone's mute changed (`InputMuted`).
+    pub input_props: bool,
 }
 
 impl Changes {
     pub fn any(&self) -> bool {
-        self.sinks || self.outputs || self.default.is_some() || self.props
+        self.sinks
+            || self.outputs
+            || self.default.is_some()
+            || self.props
+            || self.inputs
+            || self.input_props
     }
 }
 
@@ -133,6 +184,9 @@ pub struct View {
     pub muted: bool,
     pub playing: bool,
     pub channels: BTreeMap<String, u32>,
+    /// The microphones, with whether each is the default (T-449).
+    pub sources: Vec<(Source, bool)>,
+    pub input_muted: bool,
 }
 
 pub type SharedView = Arc<Mutex<View>>;
@@ -172,6 +226,9 @@ pub struct Audio<P: PipeWire> {
     volume: u32,
     muted: bool,
     playing: bool,
+    sources: Vec<Source>,
+    default_source: Option<String>,
+    input_muted: bool,
     channels: Channels,
     /// The marker file of the one-time first-start volume; `None` = never apply it.
     first_start_marker: Option<PathBuf>,
@@ -198,6 +255,9 @@ impl<P: PipeWire> Audio<P> {
             volume: 0,
             muted: false,
             playing: false,
+            sources: Vec::new(),
+            default_source: None,
+            input_muted: false,
             channels,
             first_start_marker: None,
             first_start_done: true,
@@ -228,6 +288,12 @@ impl<P: PipeWire> Audio<P> {
             muted: self.muted,
             playing: self.playing,
             channels: self.channels(),
+            sources: self
+                .list_inputs()
+                .into_iter()
+                .map(|(s, d)| (s.clone(), d))
+                .collect(),
+            input_muted: self.input_muted,
         };
         *self.view.lock().unwrap_or_else(|e| e.into_inner()) = view;
     }
@@ -397,6 +463,19 @@ impl<P: PipeWire> Audio<P> {
         if self.volume != snap.volume || self.muted != snap.muted || self.playing != snap.playing {
             changes.props = true;
         }
+        let default_source = snap
+            .default_source
+            .filter(|d| snap.sources.iter().any(|s| s.id == *d));
+        if self.sources != snap.sources || self.default_source != default_source {
+            changes.inputs = true;
+        }
+        let input_muted = default_source.is_some() && snap.input_muted;
+        if self.input_muted != input_muted {
+            changes.input_props = true;
+        }
+        self.sources = snap.sources;
+        self.default_source = default_source;
+        self.input_muted = input_muted;
         self.sinks = snap.sinks;
         self.outputs = snap.outputs;
         self.plugged = plugged;
@@ -647,6 +726,55 @@ impl<P: PipeWire> Audio<P> {
         }
     }
 
+    /// The microphones in a stable order, with whether each is the default (T-449). Empty on a
+    /// console without one.
+    pub fn list_inputs(&self) -> Vec<(&Source, bool)> {
+        self.sources
+            .iter()
+            .map(|s| (s, self.default_source.as_deref() == Some(s.id.as_str())))
+            .collect()
+    }
+
+    /// Makes a listed microphone the default. An id that is not in the list is refused before
+    /// anything reaches PipeWire.
+    pub fn set_input(&mut self, id: &str) -> Status {
+        if !self.sources.iter().any(|s| s.id == id) {
+            return Status::UnknownInput;
+        }
+        if self.default_source.as_deref() == Some(id) {
+            return Status::Ok;
+        }
+        if self.pw.set_default_source(id).is_err() {
+            return Status::Failed;
+        }
+        self.default_source = Some(id.to_owned());
+        self.publish();
+        Status::Ok
+    }
+
+    pub fn default_source(&self) -> Option<&str> {
+        self.default_source.as_deref()
+    }
+
+    pub fn input_muted(&self) -> bool {
+        self.input_muted
+    }
+
+    /// Mutes or unmutes the default microphone; with none, `Failed` and nothing is written.
+    pub fn set_input_muted(&mut self, muted: bool) -> Status {
+        if self.default_source.is_none() {
+            return Status::Failed;
+        }
+        match self.pw.set_source_muted(muted) {
+            Ok(()) => {
+                self.input_muted = muted;
+                self.publish();
+                Status::Ok
+            }
+            Err(_) => Status::Failed,
+        }
+    }
+
     /// All three channels, always present.
     pub fn channels(&self) -> BTreeMap<String, u32> {
         BTreeMap::from([
@@ -772,6 +900,12 @@ pub struct FakePipeWire {
     pub volume: u32,
     pub muted: bool,
     pub playing: bool,
+    /// The microphones, the default one and its mute (T-449).
+    pub sources: Vec<Source>,
+    pub default_source: Option<String>,
+    pub input_muted: bool,
+    /// How often a microphone write reached the fake (a refused id must write nothing).
+    pub source_writes: u32,
     /// Make every write fail (to test the "failed" status).
     pub broken: bool,
     /// Make every read fail (PipeWire not up yet at boot).
@@ -802,6 +936,15 @@ impl FakePipeWire {
             volume: 50,
             muted: false,
             playing: false,
+            sources: vec![Source {
+                id: "mic-0".to_owned(),
+                name: "Built-in microphone".to_owned(),
+                kind: SourceKind::Analog,
+                available: Avail::Unknown,
+            }],
+            default_source: Some("mic-0".to_owned()),
+            input_muted: false,
+            source_writes: 0,
             broken: false,
             read_fails: false,
             card: None,
@@ -916,6 +1059,9 @@ impl PipeWire for FakePipeWire {
             volume: self.volume,
             muted: self.muted,
             playing: self.playing,
+            sources: self.sources.clone(),
+            default_source: self.default_source.clone(),
+            input_muted: self.input_muted,
         })
     }
 
@@ -988,6 +1134,24 @@ impl PipeWire for FakePipeWire {
             return Err("refused".to_owned());
         }
         self.muted = muted;
+        Ok(())
+    }
+
+    fn set_default_source(&mut self, id: &str) -> Result<(), String> {
+        if self.broken || !self.sources.iter().any(|s| s.id == id) {
+            return Err("refused".to_owned());
+        }
+        self.source_writes += 1;
+        self.default_source = Some(id.to_owned());
+        Ok(())
+    }
+
+    fn set_source_muted(&mut self, muted: bool) -> Result<(), String> {
+        if self.broken || self.default_source.is_none() {
+            return Err("refused".to_owned());
+        }
+        self.source_writes += 1;
+        self.input_muted = muted;
         Ok(())
     }
 }
@@ -1792,5 +1956,137 @@ mod tests {
         a.refresh().unwrap();
         assert_eq!(a.pw.volume, SAFE_NEW_VOLUME);
         assert!(dir.path().join(MARKER).exists());
+    }
+
+    fn usb_mic() -> Source {
+        Source {
+            id: "usb-mic".to_owned(),
+            name: "USB headset".to_owned(),
+            kind: SourceKind::Usb,
+            available: Avail::Yes,
+        }
+    }
+
+    fn ids(a: &Audio<FakePipeWire>) -> Vec<(&str, bool)> {
+        a.list_inputs()
+            .into_iter()
+            .map(|(s, d)| (s.id.as_str(), d))
+            .collect()
+    }
+
+    #[test]
+    fn inputs_list_the_microphones_and_mark_the_default() {
+        let mut pw = FakePipeWire::new();
+        pw.sources.push(usb_mic());
+        let mut a = Audio::new(pw, Store::in_memory()).unwrap();
+        a.refresh().unwrap();
+        assert_eq!(ids(&a), [("mic-0", true), ("usb-mic", false)]);
+        let view = a.view();
+        let view = view.lock().unwrap();
+        assert_eq!(view.sources.len(), 2);
+        assert_eq!(view.sources[1].0.kind.as_str(), "usb");
+    }
+
+    #[test]
+    fn a_console_without_a_microphone_lists_nothing_and_has_no_error() {
+        let mut pw = FakePipeWire::new();
+        pw.sources.clear();
+        pw.default_source = None;
+        let mut a = Audio::new(pw, Store::in_memory()).unwrap();
+        assert!(a.refresh().is_ok());
+        assert!(a.list_inputs().is_empty());
+        assert!(!a.input_muted());
+        assert_eq!(a.set_input("mic-0"), Status::UnknownInput);
+        // Muting a microphone that is not there is a failure, and writes nothing.
+        assert_eq!(a.set_input_muted(true), Status::Failed);
+        assert_eq!(a.pw.source_writes, 0);
+        assert!(!a.input_muted());
+    }
+
+    #[test]
+    fn set_input_moves_the_default_microphone_and_is_idempotent() {
+        let mut pw = FakePipeWire::new();
+        pw.sources.push(usb_mic());
+        let mut a = Audio::new(pw, Store::in_memory()).unwrap();
+        a.refresh().unwrap();
+        assert_eq!(a.set_input("usb-mic"), Status::Ok);
+        assert_eq!(a.pw.default_source.as_deref(), Some("usb-mic"));
+        assert_eq!(ids(&a), [("mic-0", false), ("usb-mic", true)]);
+        assert_eq!(a.pw.source_writes, 1);
+        assert_eq!(a.set_input("usb-mic"), Status::Ok);
+        assert_eq!(
+            a.pw.source_writes, 1,
+            "choosing the default again writes nothing"
+        );
+        // The bus getters see it at once.
+        assert!(a.view().lock().unwrap().sources[1].1);
+    }
+
+    #[test]
+    fn an_id_that_is_not_a_listed_microphone_is_refused_before_pipewire() {
+        let mut a = started();
+        // An unknown id, a sink's id, an empty id and a wpctl alias: none is a listed source.
+        for id in ["nope", "hdmi-0", "", "@DEFAULT_AUDIO_SOURCE@"] {
+            assert_eq!(a.set_input(id), Status::UnknownInput, "{id:?}");
+        }
+        assert_eq!(a.pw.source_writes, 0);
+        assert_eq!(a.pw.default_source.as_deref(), Some("mic-0"));
+    }
+
+    #[test]
+    fn a_failing_pipewire_changes_no_microphone_state() {
+        let mut pw = FakePipeWire::new();
+        pw.sources.push(usb_mic());
+        let mut a = Audio::new(pw, Store::in_memory()).unwrap();
+        a.refresh().unwrap();
+        a.pw.broken = true;
+        assert_eq!(a.set_input("usb-mic"), Status::Failed);
+        assert_eq!(a.default_source(), Some("mic-0"));
+        assert_eq!(a.set_input_muted(true), Status::Failed);
+        assert!(!a.input_muted());
+    }
+
+    #[test]
+    fn input_mute_reaches_pipewire_and_the_view() {
+        let mut a = started();
+        assert_eq!(a.set_input_muted(true), Status::Ok);
+        assert!(a.input_muted() && a.pw.input_muted);
+        assert!(a.view().lock().unwrap().input_muted);
+        // The output's mute is a different thing.
+        assert!(!a.muted() && !a.pw.muted);
+        assert_eq!(a.set_input_muted(false), Status::Ok);
+        assert!(!a.input_muted() && !a.pw.input_muted);
+    }
+
+    #[test]
+    fn microphone_changes_from_outside_are_reported_once() {
+        let mut a = started();
+        assert!(!a.refresh().unwrap().any());
+        a.pw.sources.push(usb_mic());
+        let c = a.refresh().unwrap();
+        assert!(c.inputs && !c.input_props && !c.props && !c.outputs);
+        a.pw.input_muted = true;
+        let c = a.refresh().unwrap();
+        assert!(c.input_props && !c.inputs);
+        assert!(a.input_muted());
+        a.pw.sources.clear();
+        a.pw.default_source = None;
+        let c = a.refresh().unwrap();
+        assert!(
+            c.inputs && c.input_props,
+            "the mute of a gone microphone is forgotten"
+        );
+        assert!(!a.input_muted());
+        assert!(!a.refresh().unwrap().any());
+    }
+
+    #[test]
+    fn a_default_that_names_no_listed_microphone_is_not_a_default() {
+        let mut pw = FakePipeWire::new();
+        pw.default_source = Some("gone".to_owned());
+        let mut a = Audio::new(pw, Store::in_memory()).unwrap();
+        a.refresh().unwrap();
+        assert_eq!(ids(&a), [("mic-0", false)]);
+        assert_eq!(a.set_input_muted(true), Status::Failed);
     }
 }

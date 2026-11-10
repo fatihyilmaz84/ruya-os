@@ -24,15 +24,19 @@ public:
     void setOutput(const QString &id) override;
     void testOutput(const QString &id) override;
     void resetOutputChoice() override;
+    void setInput(const QString &id) override;
+    void setInputMuted(bool muted) override;
 
 private slots:
     void onSinksChanged();
+    void onInputsChanged();
     void onPropertiesChanged(const QString &interface, const QVariantMap &changed, const QStringList &invalidated);
 
 private:
     void refreshState();
     void refreshSinks();
     void refreshOutputs();
+    void refreshInputs();
     void callOutput(const QString &method, const QString &id);
     void setProperty(const QString &name, const QVariant &value);
 
