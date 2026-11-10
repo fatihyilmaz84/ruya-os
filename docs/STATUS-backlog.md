@@ -20,7 +20,7 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | [T-433](tasks/T-433-dependency-upgrades-quick-xml-zbus-6-ci-actions.md) | Dependency upgrades: quick-xml, zbus 6, actions/checkout v5, a checked cargo-deny download | todo | — |
 | [T-432](tasks/T-432-selinux-confine-ruya-services.md) | SELinux: confine the ruya services (today every one runs unconfined_service_t) | todo | T-431 |
 | [T-427](tasks/T-427-bluetooth-leftovers-scan-alias-logging.md) | Bluetooth leftovers: scan after a primary flip, toast names, logging, address tails | todo | — |
-| [T-428](tasks/T-428-store-follow-ups-row-index-and-effects.md) | Store follow-ups: a row remembers its card, a scrolled shot, card effects only where needed | todo | — |
+| [T-428](tasks/T-428-store-follow-ups-row-index-and-effects.md) | Store follow-ups: a row remembers its card, a scrolled shot, card effects only where needed | in-progress | — |
 | [T-430](tasks/T-430-glass-shadow-and-art-masks.md) | GlassShadow and AppArt masks (T-387 class); L0 memory behind an app | todo | T-421 |
 | [T-378](tasks/T-378-session-follow-ups-alive-reset-user-link.md) | ruya-session follow-ups: Alive resets the miss count, user unknown vs a logind error, a strict restart check | todo | — |
 | [T-299](tasks/T-299-image-follow-ups-secure-boot-bluez-grub-menu.md) | Image follow-ups (VM this task): quiet bootloader-update on Secure Boot, BlueZ pairable timeout, grub-menu ordering, webp | todo | — |
