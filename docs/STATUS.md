@@ -15,7 +15,7 @@ Verification legend: **host** = built and tested on Windows · **host (vm pendin
 
 ## Board
 
-**NEXT → T-366** ([lead] Ruya Input spike, ADR-024; then T-367, T-381 GE-Proton, T-380), and the Dell second pass T-355 once Play works (T-386, image 0.0.61). **Builder lanes**: the first rows of `STATUS-backlog.md` in order (T-386, T-387 in flight; then T-147, T-362, T-378, T-299, T-364, T-339); one "VM (this task)" at a time. T-283, T-284, T-287, T-288 wait for the lead's design pass T-282. Ruya Hub (`07-hub-requirements.md`) waits for the owner's answers (STATUS, open owner decisions).
+**NEXT → T-421** (builders: the glass on the Dell, owner 2026-11-10: dispatch to Opus high in the next session); lead: T-366 ([lead] Ruya Input spike, ADR-024; then T-367, T-381 GE-Proton, T-380), and the Dell second pass T-355 once Play works (T-386, image 0.0.61). **Builder lanes**: the first rows of `STATUS-backlog.md` in order (T-386, T-387 in flight; then T-147, T-362, T-378, T-299, T-364, T-339); one "VM (this task)" at a time. T-283, T-284, T-287, T-288 wait for the lead's design pass T-282. Ruya Hub (`07-hub-requirements.md`) waits for the owner's answers (STATUS, open owner decisions).
 
 **How work runs (owner, 2026-11-04):** the lead dispatches `ruya-builder` agents (at most two at a time, own worktrees, different areas), has each branch reviewed by `ruya-reviewer` and merges it (`docs/LEAD.md`). Dispatched builders never edit this file; one "VM (this task)" runs at a time. A builder the owner starts directly takes NEXT alone in the main checkout and does the bookkeeping (`CLAUDE.md`).
 
@@ -23,6 +23,7 @@ Open work only (the front of the board; the rest is in `STATUS-backlog.md`), in 
 
 | ID | Title | Status | Depends |
 |---|---|---|---|
+| [T-421](tasks/T-421-glass-has-no-blur-on-the-dell.md) | Glass on the Dell has no Gaussian blur and no transparency (0.0.61); the shell uses about 40 % of the GPU at Home | todo | — |
 | [T-147](tasks/T-147-fullscreen-app-flow.md) | Full-screen apps: launch, quick menu, return, close | todo | T-164, T-386 |
 | [T-393](tasks/T-393-options-menu-design.md) | **[lead]** Design: the Options (context) menu: component, contents per surface, motion, focus | todo | — |
 | [T-396](tasks/T-396-controller-ownership-and-layout-spec.md) | **[lead]** Spec: who owns the UI, the family's confirm button, action glyphs (ADR-027) | todo | — |
