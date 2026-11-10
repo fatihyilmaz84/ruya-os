@@ -112,3 +112,46 @@ case "$after_vol" in
     0.3|0.30|0.29) echo "AUDIO_VOLUME_KEPT_OK" ;;
     *) echo "AUDIO_VOLUME_KEPT_FAIL (set 0.30, now $after_vol)" ;;
 esac
+
+# --- T-449: microphones (Devices1.Audio ListInputs / SetInput / InputMuted). Needs a capture device in the VM
+# (QEMU with -Audio gives it one); without one the list is empty and this part says so.
+echo "--- microphones (T-449)"
+dev_prop() { busctl --system "$1" org.ruyaos.Devices1 /org/ruyaos/Devices1 org.ruyaos.Devices1.Audio InputMuted "${@:2}" 2>&1; }
+src_mute_of() { as_shell wpctl get-volume @DEFAULT_AUDIO_SOURCE@ 2>&1 | grep -q MUTED && echo true || echo false; }
+echo "wpctl sources:"; as_shell wpctl status 2>&1 | sed -n '/Sources:/,/Filters:\|Streams:/p' | head -12
+dev_call ListInputs
+# "<id> <is_default>" of the default microphone from ListInputs.
+default_input="$(busctl --system --json=short call org.ruyaos.Devices1 /org/ruyaos/Devices1 org.ruyaos.Devices1.Audio ListInputs 2>/dev/null         | python3 -c '
+import json, sys
+for o in json.load(sys.stdin)["data"][0]:
+    o = {k: v["data"] for k, v in o.items()}
+    if o.get("is_default"):
+        print(o["id"])
+        break
+')"
+if [ -z "$default_input" ]; then
+    echo "AUDIO_INPUT_FAIL (ListInputs lists no default microphone; is the VM booted with -Audio? wpctl status above shows the sources)"
+else
+    echo "default microphone: $default_input"
+    unknown="$(dev_call SetInput s "no-such-microphone")"
+    sink_name="$(default_node)"
+    refused_sink="$(dev_call SetInput s "$sink_name")"
+    same="$(dev_call SetInput s "$default_input")"
+    echo "SetInput unknown -> $unknown; SetInput <the default sink's name> -> $refused_sink; SetInput <the default> -> $same"
+    before="$(dev_prop get-property)"
+    dev_prop set-property b true >/dev/null
+    sleep 1
+    muted_pw="$(src_mute_of)"
+    muted_bus="$(dev_prop get-property)"
+    dev_prop set-property b false >/dev/null
+    sleep 1
+    unmuted_pw="$(src_mute_of)"
+    unmuted_bus="$(dev_prop get-property)"
+    echo "InputMuted before=$before; after set true: bus=$muted_bus wpctl-muted=$muted_pw; after set false: bus=$unmuted_bus wpctl-muted=$unmuted_pw"
+    if [ "$unknown" = 's "unknown-input"' ] && [ "$refused_sink" = 's "unknown-input"' ] && [ "$same" = 's "ok"' ] \
+        && [ "$muted_bus" = "b true" ] && [ "$muted_pw" = true ] && [ "$unmuted_bus" = "b false" ] && [ "$unmuted_pw" = false ]; then
+        echo "AUDIO_INPUT_OK"
+    else
+        echo "AUDIO_INPUT_FAIL"
+    fi
+fi

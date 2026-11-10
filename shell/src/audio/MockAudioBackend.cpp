@@ -26,6 +26,22 @@ bool pluggable(const QString &id, SinkInfo *out)
     }
     return false;
 }
+bool pluggableInput(const QString &id, InputInfo *out)
+{
+    if (id == QLatin1String("mic-0")) {
+        *out = {id, QStringLiteral("Built-in microphone"), QStringLiteral("analog"), QStringLiteral("unknown"), false};
+        return true;
+    }
+    if (id == QLatin1String("usb-mic")) {
+        *out = {id, QStringLiteral("USB headset microphone"), QStringLiteral("usb"), QStringLiteral("unknown"), false};
+        return true;
+    }
+    if (id == QLatin1String("bt-mic")) {
+        *out = {id, QStringLiteral("BT headset microphone"), QStringLiteral("bluetooth"), QStringLiteral("unknown"), false};
+        return true;
+    }
+    return false;
+}
 } // namespace
 
 MockAudioBackend::MockAudioBackend(QObject *parent)
@@ -39,6 +55,7 @@ void MockAudioBackend::refresh()
     publishState(m_delay);
     publishSinks(m_delay);
     publishOutputs(m_delay);
+    publishInputs(m_delay);
 }
 
 void MockAudioBackend::setVolume(int volume)
@@ -139,6 +156,73 @@ void MockAudioBackend::resetOutputChoice()
     publishOutputs();
 }
 
+QString MockAudioBackend::defaultInput() const
+{
+    for (const InputInfo &i : m_inputs) {
+        if (i.isDefault)
+            return i.id;
+    }
+    return {};
+}
+
+void MockAudioBackend::setInput(const QString &id)
+{
+    bool known = false;
+    for (const InputInfo &i : std::as_const(m_inputs))
+        known = known || i.id == id;
+    if (known) {
+        for (InputInfo &i : m_inputs)
+            i.isDefault = i.id == id;
+    }
+    QTimer::singleShot(0, this, [this, id, known] {
+        emit setInputFinished(id, known ? QStringLiteral("ok") : QStringLiteral("unknown-input"));
+    });
+    if (known) {
+        publishInputs();
+        publishState(); // the mute is the new default's
+    }
+}
+
+void MockAudioBackend::setInputMuted(bool muted)
+{
+    const QString current = defaultInput();
+    if (!current.isEmpty())
+        m_inputMuted[current] = muted; // with no microphone a write changes nothing, like the service
+    publishState();
+}
+
+bool MockAudioBackend::plugInput(const QString &id)
+{
+    InputInfo input;
+    if (!pluggableInput(id, &input))
+        return false;
+    for (const InputInfo &i : std::as_const(m_inputs)) {
+        if (i.id == id)
+            return true;
+    }
+    input.isDefault = m_inputs.isEmpty();
+    m_inputs.append(input);
+    publishInputs();
+    publishState();
+    return true;
+}
+
+void MockAudioBackend::unplugInput(const QString &id)
+{
+    for (int at = 0; at < m_inputs.size(); ++at) {
+        if (m_inputs.at(at).id != id)
+            continue;
+        const bool wasDefault = m_inputs.at(at).isDefault;
+        m_inputs.removeAt(at);
+        m_inputMuted.remove(id);
+        if (wasDefault && !m_inputs.isEmpty())
+            m_inputs.first().isDefault = true;
+        publishInputs();
+        publishState();
+        return;
+    }
+}
+
 bool MockAudioBackend::plug(const QString &id)
 {
     SinkInfo sink;
@@ -184,6 +268,7 @@ void MockAudioBackend::reset()
     publishState();
     publishSinks();
     publishOutputs();
+    publishInputs();
 }
 
 // No publishing here: the constructor runs before anybody listens.
@@ -200,6 +285,12 @@ void MockAudioBackend::initState()
     m_saved.clear();
     m_tested.clear();
     m_jackPlugged = false;
+    m_inputs.clear();
+    m_inputMuted.clear();
+    InputInfo mic;
+    pluggableInput(QStringLiteral("mic-0"), &mic);
+    mic.isDefault = true;
+    m_inputs.append(mic);
 }
 
 int MockAudioBackend::indexOf(const QString &id) const
@@ -232,14 +323,30 @@ void MockAudioBackend::publishState(int delayMs)
     const bool muted = m_muted;
     const bool playing = m_playing;
     const QVariantMap channels = m_channels;
+    const bool inputMuted = m_inputMuted.value(defaultInput(), false);
     const quint64 request = beginStateRequest();
     if (delayMs > 0)
         ++m_pending;
-    QTimer::singleShot(delayMs, this, [this, request, volume, muted, playing, channels, delayMs] {
+    QTimer::singleShot(delayMs, this, [this, request, volume, muted, playing, channels, inputMuted, delayMs] {
         if (delayMs > 0)
             --m_pending;
-        if (deliverState(request, volume, muted, channels))
+        if (deliverState(request, volume, muted, channels)) {
             emit playingReported(playing);
+            emit inputMutedReported(inputMuted);
+        }
+    });
+}
+
+void MockAudioBackend::publishInputs(int delayMs)
+{
+    const QList<InputInfo> list = m_inputs;
+    const quint64 request = beginInputsRequest();
+    if (delayMs > 0)
+        ++m_pending;
+    QTimer::singleShot(delayMs, this, [this, request, list, delayMs] {
+        if (delayMs > 0)
+            --m_pending;
+        deliverInputs(request, list);
     });
 }
 

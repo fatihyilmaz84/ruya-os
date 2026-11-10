@@ -29,6 +29,16 @@ struct OutputInfo
     bool isSaved = false; // the player's choice (SetOutput)
 };
 
+// One microphone (Devices1.Audio ListInputs, T-449).
+struct InputInfo
+{
+    QString id;
+    QString name;
+    QString kind;      // "analog" | "usb" | "bluetooth"
+    QString available; // "yes" | "no" | "unknown"
+    bool isDefault = false;
+};
+
 // Transport behind the Audio QML singleton: org.ruyaos.Devices1.Audio over D-Bus
 // (api/dbus/org.ruyaos.Devices1.xml), or an in-memory mock. Results arrive asynchronously
 // through signals. stateChanged is emitted after every command, even when the state did not
@@ -55,6 +65,10 @@ public:
     virtual void setOutput(const QString &id) = 0;
     virtual void testOutput(const QString &id) = 0;
     virtual void resetOutputChoice() = 0;
+    // Microphones (T-449): make a listed one the default; mute the default one. Results:
+    // setInputFinished, a new inputsListed, and inputMutedReported with the next state report.
+    virtual void setInput(const QString &id) = 0;
+    virtual void setInputMuted(bool muted) = 0;
 
 signals:
     // channels: channel name -> 0-100, all channels of channelNames().
@@ -69,6 +83,11 @@ signals:
     // status: "ok", "unknown-output", "inactive", "failed" (see the XML).
     void setOutputFinished(const QString &id, const QString &status);
     void testOutputFinished(const QString &id, const QString &status);
+    void inputsListed(const QList<InputInfo> &inputs);
+    // Mute of the default microphone (Devices1.Audio InputMuted); sent with every accepted state report.
+    void inputMutedReported(bool muted);
+    // status: "ok", "unknown-input", "failed" (see the XML).
+    void setInputFinished(const QString &id, const QString &status);
 
 protected:
     // Replies can arrive out of order: number each request when it is sent and report a reply only
@@ -96,7 +115,15 @@ protected:
             emit outputsListed(outputs);
     }
 
+    quint64 beginInputsRequest() { return m_inputsSeq.begin(); }
+    void deliverInputs(quint64 request, const QList<InputInfo> &inputs)
+    {
+        if (m_inputsSeq.accept(request))
+            emit inputsListed(inputs);
+    }
+
 private:
+    RequestSequence m_inputsSeq;
     RequestSequence m_outputsSeq;
     RequestSequence m_stateSeq;
     RequestSequence m_sinksSeq;

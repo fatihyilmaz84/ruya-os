@@ -5,7 +5,7 @@
 
 use serde_json::Value;
 
-use crate::audio::{Kind, Sink};
+use crate::audio::{Kind, Sink, Source, SourceKind};
 use crate::output_policy::{Avail, OutKind, Output};
 
 /// The outputs and the default node name from a `pw-dump` document. `node.name` is the id (it
@@ -54,6 +54,102 @@ pub fn parse_dump(json: &str) -> Result<(Vec<Sink>, Option<String>), String> {
         }
     }
     Ok((sinks, default.or(configured)))
+}
+
+/// The microphones and the default one from a `pw-dump` document (T-449). Only real capture
+/// devices (`media.class` exactly `Audio/Source`) count: a sink's monitor, a virtual source and a
+/// stream are not microphones. Sorted by `node.name`. `available` comes from the in-use input
+/// route of the node's card when there is one, else "unknown".
+pub fn parse_sources(json: &str) -> Result<(Vec<Source>, Option<String>), String> {
+    let doc: Value = serde_json::from_str(json).map_err(|e| format!("pw-dump: {e}"))?;
+    let objects = doc.as_array().ok_or("pw-dump: not an array")?;
+    let mut sources = Vec::new();
+    let mut default = None;
+    let mut configured = None;
+    for obj in objects {
+        match obj.get("type").and_then(Value::as_str) {
+            Some("PipeWire:Interface:Node") => {
+                let props = &obj["info"]["props"];
+                if props["media.class"].as_str() != Some("Audio/Source") {
+                    continue;
+                }
+                let Some(id) = props["node.name"].as_str() else {
+                    continue;
+                };
+                let name = props["node.description"]
+                    .as_str()
+                    .or_else(|| props["node.nick"].as_str())
+                    .unwrap_or(id);
+                sources.push(Source {
+                    id: id.to_owned(),
+                    name: name.to_owned(),
+                    kind: classify_source(props),
+                    available: source_availability(objects, props),
+                });
+            }
+            Some("PipeWire:Interface:Metadata") => {
+                if obj["props"]["metadata.name"].as_str() != Some("default") {
+                    continue;
+                }
+                for entry in obj["metadata"].as_array().into_iter().flatten() {
+                    let name = entry["value"]["name"].as_str().map(str::to_owned);
+                    match entry["key"].as_str() {
+                        Some("default.audio.source") => default = name,
+                        Some("default.configured.audio.source") => configured = name,
+                        _ => {}
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    sources.sort_by(|a, b| a.id.cmp(&b.id));
+    Ok((sources, default.or(configured)))
+}
+
+/// analog / usb / bluetooth from the node's properties; analog when unsure.
+fn classify_source(props: &Value) -> SourceKind {
+    let text = |key: &str| props[key].as_str().unwrap_or("").to_ascii_lowercase();
+    if text("device.api") == "bluez5" || text("node.name").starts_with("bluez_") {
+        SourceKind::Bluetooth
+    } else if text("device.bus") == "usb" {
+        SourceKind::Usb
+    } else {
+        SourceKind::Analog
+    }
+}
+
+/// The `available` of the input route in use on the node's card device, "unknown" if none says.
+fn source_availability(objects: &[Value], props: &Value) -> Avail {
+    let (Some(device_id), Some(route_device)) = (
+        props["device.id"].as_u64(),
+        props["card.profile.device"].as_u64(),
+    ) else {
+        return Avail::Unknown;
+    };
+    let route = objects
+        .iter()
+        .filter(|o| {
+            o.get("type").and_then(Value::as_str) == Some("PipeWire:Interface:Device")
+                && o["id"].as_u64() == Some(device_id)
+        })
+        .flat_map(|d| {
+            d["info"]["params"]["Route"]
+                .as_array()
+                .into_iter()
+                .flatten()
+        })
+        .find(|r| {
+            r["direction"]
+                .as_str()
+                .is_some_and(|d| d.eq_ignore_ascii_case("input"))
+                && r["device"].as_u64() == Some(route_device)
+        });
+    match route.and_then(|r| r["available"].as_str()) {
+        Some("yes") => Avail::Yes,
+        Some("no") => Avail::No,
+        _ => Avail::Unknown,
+    }
 }
 
 /// Every output of the sound cards (T-322). PipeWire shows only the sinks of a card's active
@@ -435,13 +531,14 @@ mod linux {
     use std::time::{Duration, Instant};
 
     use super::{
-        card_state, find_sink, parse_dump, parse_outputs, parse_playing, parse_state, parse_volume,
-        plan_switch,
+        card_state, find_sink, parse_dump, parse_outputs, parse_playing, parse_sources,
+        parse_state, parse_volume, plan_switch,
     };
     use crate::audio::{PipeWire, Snapshot};
     use crate::output_policy::{tone_wav, Output};
 
     const DEFAULT_SINK: &str = "@DEFAULT_AUDIO_SINK@";
+    const DEFAULT_SOURCE: &str = "@DEFAULT_AUDIO_SOURCE@";
     /// A profile switch or a route change takes a moment to show up as a sink.
     const SETTLE: Duration = Duration::from_secs(4);
 
@@ -510,19 +607,45 @@ mod linux {
             .ok_or_else(|| format!("no node named {name}"))
     }
 
+    /// The object id of the capture device with this `node.name`: a sink or a stream of the same
+    /// name is not one (T-449).
+    fn source_object_id(name: &str) -> Result<u64, String> {
+        let dump = run("pw-dump", &[])?;
+        let doc: serde_json::Value = serde_json::from_str(&dump).map_err(|e| e.to_string())?;
+        doc.as_array()
+            .into_iter()
+            .flatten()
+            .find(|o| {
+                o["info"]["props"]["node.name"].as_str() == Some(name)
+                    && o["info"]["props"]["media.class"].as_str() == Some("Audio/Source")
+            })
+            .and_then(|o| o["id"].as_u64())
+            .ok_or_else(|| format!("no microphone named {name}"))
+    }
+
     impl PipeWire for WpCtl {
         fn snapshot(&mut self) -> Result<Snapshot, String> {
             let dump = run("pw-dump", &[])?;
             let (sinks, default) = parse_dump(&dump)?;
             let outputs = parse_outputs(&dump, &sinks);
             let playing = parse_playing(&dump);
+            let (sources, default_source) = parse_sources(&dump)?;
             // No default output (none connected) means no volume to read.
             let (volume, muted) = if default.is_some() {
                 parse_volume(&run("wpctl", &["get-volume", DEFAULT_SINK])?)?
             } else {
                 (0, false)
             };
+            // No microphone (or none the default) means no mute to read.
+            let input_muted = if default_source.is_some() && !sources.is_empty() {
+                parse_volume(&run("wpctl", &["get-volume", DEFAULT_SOURCE])?)?.1
+            } else {
+                false
+            };
             Ok(Snapshot {
+                sources,
+                default_source,
+                input_muted,
                 sinks,
                 outputs,
                 default,
@@ -617,6 +740,19 @@ mod linux {
             run(
                 "wpctl",
                 &["set-mute", DEFAULT_SINK, if muted { "1" } else { "0" }],
+            )
+            .map(drop)
+        }
+
+        fn set_default_source(&mut self, id: &str) -> Result<(), String> {
+            let object = source_object_id(id)?;
+            run("wpctl", &["set-default", &object.to_string()]).map(drop)
+        }
+
+        fn set_source_muted(&mut self, muted: bool) -> Result<(), String> {
+            run(
+                "wpctl",
+                &["set-mute", DEFAULT_SOURCE, if muted { "1" } else { "0" }],
             )
             .map(drop)
         }
@@ -919,5 +1055,62 @@ mod tests {
         assert_eq!(parse_volume("Volume: 1.20").unwrap(), (100, false));
         assert!(parse_volume("oops").is_err());
         assert!(parse_volume("Volume: x").is_err());
+    }
+
+    const MICS: &str = r#"[
+      {"id":31,"type":"PipeWire:Interface:Metadata","props":{"metadata.name":"default"},
+       "metadata":[
+         {"subject":0,"key":"default.audio.source","type":"Spa:String:JSON","value":{"name":"alsa_input.usb-Logi.mono-fallback"}}
+       ]},
+      {"id":50,"type":"PipeWire:Interface:Device","info":{"props":{"device.name":"alsa_card.pci"},
+       "params":{"Route":[
+         {"index":3,"direction":"Input","name":"analog-input-mic","device":4,"available":"no"},
+         {"index":0,"direction":"Output","name":"analog-output-speaker","device":2,"available":"yes"}]}}},
+      {"id":60,"type":"PipeWire:Interface:Node","info":{"props":{
+         "media.class":"Audio/Source","node.name":"alsa_input.pci.analog-stereo",
+         "node.description":"Built-in Audio Analog Stereo","device.id":50,"card.profile.device":4}}},
+      {"id":61,"type":"PipeWire:Interface:Node","info":{"props":{
+         "media.class":"Audio/Source","node.name":"alsa_input.usb-Logi.mono-fallback",
+         "node.description":"Headset Mono","device.bus":"usb"}}},
+      {"id":62,"type":"PipeWire:Interface:Node","info":{"props":{
+         "media.class":"Audio/Source","node.name":"bluez_input.AA_BB.0","device.api":"bluez5"}}},
+      {"id":63,"type":"PipeWire:Interface:Node","info":{"props":{
+         "media.class":"Audio/Sink","node.name":"alsa_output.pci.analog-stereo"}}},
+      {"id":64,"type":"PipeWire:Interface:Node","info":{"props":{
+         "media.class":"Stream/Input/Audio","node.name":"recorder"}}},
+      {"id":65,"type":"PipeWire:Interface:Node","info":{"props":{
+         "media.class":"Audio/Source/Virtual","node.name":"virtual-mic"}}}
+    ]"#;
+
+    #[test]
+    fn a_dump_lists_only_real_microphones_with_kind_availability_and_default() {
+        let (sources, default) = parse_sources(MICS).unwrap();
+        let view: Vec<_> = sources
+            .iter()
+            .map(|s| (s.id.as_str(), s.kind.as_str(), s.available.as_str()))
+            .collect();
+        assert_eq!(
+            view,
+            [
+                ("alsa_input.pci.analog-stereo", "analog", "no"),
+                ("alsa_input.usb-Logi.mono-fallback", "usb", "unknown"),
+                ("bluez_input.AA_BB.0", "bluetooth", "unknown"),
+            ]
+        );
+        assert_eq!(sources[1].name, "Headset Mono");
+        assert_eq!(sources[2].name, "bluez_input.AA_BB.0"); // no description: the id
+        assert_eq!(
+            default.as_deref(),
+            Some("alsa_input.usb-Logi.mono-fallback")
+        );
+    }
+
+    #[test]
+    fn a_dump_without_microphones_is_an_empty_list_not_an_error() {
+        assert_eq!(parse_sources("[]").unwrap(), (vec![], None));
+        // The sinks-only dump of the other tests has no microphone.
+        let (sources, default) = parse_sources(CARD).unwrap();
+        assert!(sources.is_empty() && default.is_none());
+        assert!(parse_sources("not json").is_err());
     }
 }

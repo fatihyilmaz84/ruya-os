@@ -65,6 +65,8 @@ Without an app: the status row, the "System" heading with the image version, the
 - **Power** (built): the power choices of §1.4.
 - **Display** (T-454): the current mode as a choice row (the mode list and the keep-or-revert dialog of Settings, `ModePicker`, `ModeConfirm`), Brightness where supported.
 
+**The game pauses (owner, 2026-11-10; T-457).** Opening the Hub over an app freezes it (its picture stays under the Hub, its sound stops); Resume, B or Guide thaws it and gives it the focus back in the same frame the Hub starts to slide out. Home leaves it frozen behind Home (ADR-019); Close game thaws it first, then stops it; Switch to thaws the chosen app and leaves the old one frozen. The app header says "Paused" under the running time while frozen. Settings -> System has "Pause games when Ruya Hub opens" (on by default; off for online games). When freezing fails (the service refuses or times out) the Hub opens anyway and the game keeps running; nothing is shown as paused.
+
 **Focus and Back.** Guide toggles the Hub from anywhere, also from inside a panel (it closes the whole Hub and resumes). B in a panel returns to the Quick Hub with the focus on that panel's entry; B in the Quick Hub closes it (Resume over an app). Every open starts at Resume (over an app) or as above: the last panel is not remembered, so Guide then A always resumes the game, which is what a player in the middle of a game expects. The hint bar shows `A` Select, `B` Back in a panel and `B` Resume in the Quick Hub. No key reaches the app while the Hub is open (built).
 
 **Budgets** (T-455 measures them on the Dell): Guide to the Hub's first frame under 100 ms; hidden, the Hub draws no frame; the game's FPS drops less than 10 % while the Hub is open.

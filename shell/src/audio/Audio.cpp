@@ -90,6 +90,32 @@ Audio::Audio(std::unique_ptr<AudioBackend> backend, QObject *parent)
         m_outputs = out;
         emit outputsChanged();
     });
+    connect(m_backend.get(), &AudioBackend::inputsListed, this, [this](const QList<InputInfo> &list) {
+        QVariantList out;
+        QString defaultId;
+        for (const InputInfo &i : list) {
+            out.append(QVariantMap{
+                {QStringLiteral("id"), i.id},
+                {QStringLiteral("name"), i.name},
+                {QStringLiteral("kind"), i.kind},
+                {QStringLiteral("available"), i.available},
+                {QStringLiteral("isDefault"), i.isDefault},
+            });
+            if (i.isDefault)
+                defaultId = i.id;
+        }
+        m_inputs = out;
+        m_defaultInput = defaultId;
+        emit inputsChanged();
+    });
+    connect(m_backend.get(), &AudioBackend::inputMutedReported, this, [this](bool muted) {
+        m_wantedInputMuted = muted;
+        if (muted != m_inputMuted) {
+            m_inputMuted = muted;
+            emit inputMutedChanged();
+        }
+    });
+    connect(m_backend.get(), &AudioBackend::setInputFinished, this, &Audio::setInputFinished);
     connect(m_backend.get(), &AudioBackend::setOutputFinished, this, &Audio::setOutputFinished);
     connect(m_backend.get(), &AudioBackend::testOutputFinished, this, &Audio::testOutputFinished);
     m_backend->refresh();
@@ -172,6 +198,34 @@ void Audio::testOutput(const QString &id)
 void Audio::resetOutputChoice()
 {
     m_backend->resetOutputChoice();
+}
+
+void Audio::setInput(const QString &id)
+{
+    m_backend->setInput(id);
+}
+
+void Audio::setInputMuted(bool muted)
+{
+    m_wantedInputMuted = muted;
+    m_backend->setInputMuted(muted);
+}
+
+void Audio::toggleInputMute()
+{
+    setInputMuted(!m_wantedInputMuted);
+}
+
+bool Audio::mockPlugInput(const QString &id)
+{
+    auto *mock = qobject_cast<MockAudioBackend *>(m_backend.get());
+    return mock && mock->plugInput(id);
+}
+
+void Audio::mockUnplugInput(const QString &id)
+{
+    if (auto *mock = qobject_cast<MockAudioBackend *>(m_backend.get()))
+        mock->unplugInput(id);
 }
 
 bool Audio::mockPlug(const QString &id)

@@ -2,6 +2,7 @@
 
 Status: todo · Phase: 3 · Depends: T-273, T-274, T-165 · Area: api, services, shell · Size: M · Owner: builder · Developer surface: internal
 
+**Ruya Hub (lead-10, 2026-11-10):** T-457 builds `Session1.Freeze`/`Thaw` (all scopes of an app, thaw before stop) for the Hub's pause; build `Switch` and the background policy on that primitive instead of a second one.
 ## Goal
 The session service knows which app is in front and which are in the background, can freeze and thaw one app, and switches the foreground in one call so the shell never shows two apps running or a frozen app in front. Part of epic T-273.
 
