@@ -5,6 +5,8 @@
 settings e8b8
 volume_up e050
 volume_off e04f
+mic e31d
+mic_off e02b
 battery_full e1a5
 battery_alert e19c
 battery_charging_full e1a3

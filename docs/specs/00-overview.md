@@ -436,3 +436,18 @@ Shell icons come from Google's **Material Symbols Rounded** (Apache-2.0), bundle
 **Rejected:** a `ruya-hub` service between the shell and the services (a second owner of the same state, more bus surface, no gain while the shell is the only client); a separate overlay process or a layer-shell client (only needed under gamescope, which we do not run); a performance daemon that samples all the time (cost while nobody looks).
 
 **Consequences.** T-447 (lead: the Hub's design, `02` §1.6 and `04`), T-448 (the Quick Hub: status row, tiles, running and recent games), T-449 (microphone in `Devices1.Audio`), T-450 (Audio panel), T-451 (performance metrics in `Devices1` and the compositor), T-452 (Performance panel), T-453 (Controllers panel), T-454 (display and brightness tiles), T-455 (activation latency and idle cost measured on the Dell), T-456 (Guide on every pad: long press, never reaching the game, after T-367). Notifications in the Hub are T-245's (its ruling); captures are T-305's. `07-hub-requirements.md` stays the owner's input; where it differs, this ADR wins.
+
+### ADR-034 — XWayland as a compatibility layer for X11-only apps, never a display path of its own — *Accepted (owner, 2026-11-10: "treat it as a compatibility layer rather than a primary display technology"); details lead, 2026-11-10; mechanism decided by the spike T-461*
+
+**Context.** ADR-004/ADR-023 run every app on the profile's Wayland socket with no X server. The Dell launch test (lead-10, 0.0.63) found X11-only Flatpaks that cannot start: AAAAXY (ebiten/GLFW: no X) and Alien Arena (sockets `x11` only). Many older and Windows-adjacent games are X11-only.
+
+**Decision.**
+1. **Wayland stays the only display path.** The shell, the compositor and every app that offers Wayland use it; `SDL_VIDEODRIVER=wayland` and `XDG_SESSION_TYPE=wayland` stay. X11 exists only to run apps that cannot do Wayland.
+2. **On demand, per profile, rootless.** An X server is started only when an app that needs it is launched (its Flatpak metadata has `x11` but not `wayland`, or a per-app override says so), one per profile (X11 has no isolation between clients, so never shared across profiles), as a Wayland client of that profile's socket, and stopped when the profile's last X11 app ends. No X server at boot, none for the shell.
+3. **X11 windows are ordinary app windows:** they reach the shell's app layer as xdg toplevels, so focus, the Hub, the pause, Close and the window ↔ instance match (T-459, by pid) work unchanged.
+4. **Mechanism (spike T-461 decides):** prefer a rootless XWayland bridge that runs as a normal Wayland client and acts as the X window manager (for example `xwayland-satellite`, if Fedora ships it), over building an X window manager into our Qt compositor.
+5. **Security:** the X server runs as the profile user in that profile's session, reachable only from that profile's sandboxes (`DISPLAY` set only for the app that needs it); the security baseline (T-424) and bus policies are unchanged.
+
+**Rejected:** a permanent X server (cost and attack surface for every profile); X11 for the shell; one X server shared by all profiles (X11 lets clients read each other's input).
+
+**Consequences.** T-461 (spike: mechanism, package, per-profile start/stop, AAAAXY and Alien Arena on the Dell), then a build task from its result; ADR-023 point "otherwise Xwayland becomes its own task" is this ADR.

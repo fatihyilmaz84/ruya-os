@@ -2292,7 +2292,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>QuickMenu</name>
     <message>
-        <location filename="../qml/QuickMenu.qml" line="+66"/>
+        <location filename="../qml/QuickMenu.qml" line="+85"/>
         <source>Wi-Fi</source>
         <translation>Wi-Fi</translation>
     </message>
@@ -2303,31 +2303,53 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+1"/>
+        <location line="+200"/>
+        <location line="+26"/>
         <source>Mute</source>
         <translation>Mute</translation>
     </message>
     <message>
-        <location line="+17"/>
+        <location line="-225"/>
+        <source>Mute mic</source>
+        <translation>Mute mic</translation>
+    </message>
+    <message>
+        <location line="+18"/>
         <location line="+4"/>
         <location line="+1"/>
+        <location line="+1"/>
+        <location line="+123"/>
+        <location line="+2"/>
         <source>Off</source>
         <translation>Off</translation>
     </message>
     <message>
-        <location line="-3"/>
-        <location line="+282"/>
+        <location line="-129"/>
+        <location line="+404"/>
         <source>Not connected</source>
         <translation>Not connected</translation>
     </message>
     <message>
-        <location line="-280"/>
+        <location line="-402"/>
+        <location line="+125"/>
+        <location line="+2"/>
         <source>On</source>
         <translation>On</translation>
     </message>
     <message>
-        <location line="+18"/>
+        <location line="-106"/>
         <source>Could not change Wi-Fi.</source>
         <translation>Could not change Wi-Fi.</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Could not switch the audio output.</source>
+        <translation>Could not switch the audio output.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Could not switch the microphone.</source>
+        <translation>Could not switch the microphone.</translation>
     </message>
     <message>
         <location line="+7"/>
@@ -2335,12 +2357,50 @@ This can&apos;t be undone.</translation>
         <translation>Could not change Bluetooth.</translation>
     </message>
     <message>
-        <location line="+55"/>
+        <location line="+69"/>
+        <location line="+93"/>
+        <source>Audio</source>
+        <translation>Audio</translation>
+    </message>
+    <message>
+        <location line="-29"/>
+        <location line="+18"/>
         <source>Resume</source>
         <translation>Resume</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-16"/>
+        <location line="+11"/>
+        <source>Select</source>
+        <translation>Select</translation>
+    </message>
+    <message>
+        <location line="-9"/>
+        <source>Adjust</source>
+        <translation>Adjust</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Next</source>
+        <translation>Next</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Change</source>
+        <translation>Change</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Toggle</source>
+        <translation>Toggle</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Start</source>
+        <translation>Start</translation>
+    </message>
+    <message>
+        <location line="+7"/>
         <source>Home</source>
         <translation>Home</translation>
     </message>
@@ -2365,7 +2425,8 @@ This can&apos;t be undone.</translation>
         <translation>Power</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-23"/>
+        <location line="+24"/>
         <source>Close</source>
         <translation>Close</translation>
     </message>
@@ -2385,9 +2446,25 @@ This can&apos;t be undone.</translation>
         <translation>Power off</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-27"/>
+        <location line="+28"/>
         <source>Back</source>
         <translation>Back</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Output</source>
+        <translation>Output</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Microphone</source>
+        <translation>Microphone</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Mute microphone</source>
+        <translation>Mute microphone</translation>
     </message>
     <message>
         <location line="+4"/>
@@ -2395,12 +2472,13 @@ This can&apos;t be undone.</translation>
         <translation>Switch to %1</translation>
     </message>
     <message>
-        <location line="+133"/>
+        <location line="+139"/>
+        <location line="+276"/>
         <source>%1, %2</source>
         <translation>%1, %2</translation>
     </message>
     <message>
-        <location line="+107"/>
+        <location line="-169"/>
         <source>Just started</source>
         <translation>Just started</translation>
     </message>
@@ -2416,17 +2494,17 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+19"/>
-        <location line="+28"/>
+        <location line="+51"/>
         <source>System</source>
         <translation>System</translation>
     </message>
     <message>
-        <location line="-21"/>
+        <location line="-44"/>
         <source>Image version %1</source>
         <translation>Image version %1</translation>
     </message>
     <message>
-        <location line="+83"/>
+        <location line="+128"/>
         <source>Volume, muted</source>
         <translation>Volume, muted</translation>
     </message>
@@ -2436,7 +2514,7 @@ This can&apos;t be undone.</translation>
         <translation>Volume %1</translation>
     </message>
     <message>
-        <location line="+79"/>
+        <location line="+97"/>
         <source>%1, on</source>
         <translation>%1, on</translation>
     </message>
@@ -2446,8 +2524,9 @@ This can&apos;t be undone.</translation>
         <translation>%1, off</translation>
     </message>
     <message>
-        <location line="-534"/>
-        <location line="+520"/>
+        <location line="-719"/>
+        <location line="+1"/>
+        <location line="+688"/>
         <source>Muted</source>
         <translation>Muted</translation>
     </message>
@@ -2759,7 +2838,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+523"/>
+        <location filename="../qml/Shell.qml" line="+493"/>
         <source>Could not %1.</source>
         <translation>Could not %1.</translation>
     </message>
@@ -2794,12 +2873,7 @@ This can&apos;t be undone.</translation>
         <translation>Restarting to finish the update in 2 minutes. Press any button to wait.</translation>
     </message>
     <message>
-        <location line="+217"/>
-        <source>Could not close %1.</source>
-        <translation>Could not close %1.</translation>
-    </message>
-    <message>
-        <location line="+47"/>
+        <location line="+234"/>
         <source>The screen did not answer, so the previous resolution is back.</source>
         <translation>The screen did not answer, so the previous resolution is back.</translation>
     </message>
@@ -2836,12 +2910,11 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+464"/>
         <source>Resume</source>
         <translation>Resume</translation>
     </message>
     <message>
-        <location line="-462"/>
+        <location line="+2"/>
         <source>Details</source>
         <translation>Details</translation>
     </message>
@@ -2851,42 +2924,30 @@ This can&apos;t be undone.</translation>
         <translation>Recent</translation>
     </message>
     <message>
-        <location line="+445"/>
-        <location line="+2"/>
-        <location line="+14"/>
+        <location line="+458"/>
         <location line="+3"/>
         <source>Select</source>
         <translation>Select</translation>
     </message>
     <message>
-        <location line="-18"/>
-        <source>Start</source>
-        <translation>Start</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Toggle</source>
-        <translation>Toggle</translation>
-    </message>
-    <message>
-        <location line="+157"/>
+        <location line="+140"/>
         <source>The chosen sound theme can&apos;t be used. The standard one plays instead.</source>
         <translation>The chosen sound theme can&apos;t be used. The standard one plays instead.</translation>
     </message>
     <message>
-        <location line="-165"/>
-        <location line="+20"/>
+        <location line="-162"/>
+        <location line="+17"/>
         <source>Cancel</source>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location line="-1016"/>
+        <location line="-983"/>
         <source>%1 is already running</source>
         <translation>%1 is already running</translation>
     </message>
     <message>
         <location line="+3"/>
-        <location line="+22"/>
+        <location line="+18"/>
         <source>%1 could not be started. Try again.</source>
         <translation>%1 could not be started. Try again.</translation>
     </message>
@@ -2901,28 +2962,17 @@ This can&apos;t be undone.</translation>
         <translation>%1 stopped unexpectedly. Try again.</translation>
     </message>
     <message>
-        <location line="+38"/>
-        <location line="+53"/>
+        <location line="+29"/>
         <source>Running app</source>
         <translation>Running app</translation>
     </message>
     <message>
-        <location line="+907"/>
+        <location line="+940"/>
         <source>Sections</source>
         <translation>Sections</translation>
     </message>
     <message>
-        <location line="-17"/>
-        <source>Close</source>
-        <translation>Close</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Back</source>
-        <translation>Back</translation>
-    </message>
-    <message>
-        <location line="+140"/>
+        <location line="+123"/>
         <source>mock services</source>
         <translation>mock services</translation>
     </message>
