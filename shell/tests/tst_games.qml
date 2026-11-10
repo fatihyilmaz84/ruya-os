@@ -68,7 +68,7 @@ Item {
             const grid = find("gamesGrid")
             tryVerify(() => grid.activeFocus, 2000, "the grid has focus")
             compare(grid.count, 8)
-            verify(find("gameCard_steam:620"), "a Steam game is shown")
+            tryVerify(() => find("gameCard_steam:620"), 2000, "a Steam game is shown")
             verify(!find("gameCard_flatpak:org.example.Player"), "an app is not")
             keyClick(Qt.Key_Up)
             verify(find("gamesFilter").activeFocus, "Up from the first row reaches the filter")
@@ -87,8 +87,8 @@ Item {
             tryVerify(() => find("gamesGrid").activeFocus, 2000)
             keyClick(Qt.Key_Return)
             tryCompare(launchSpy, "count", 1)
-            compare(launchSpy.signalArguments[0][0], "steam:620")
-            compare(launchSpy.signalArguments[0][1], "steam://rungameid/620")
+            compare(launchSpy.signalArguments[0][0], "flatpak:org.example.Racer")
+            compare(launchSpy.signalArguments[0][1], "flatpak:org.example.Racer")
         }
 
         // T-386: Play reaches Session1.Launch with the app id and the signed-in profile.
@@ -110,23 +110,47 @@ Item {
             compare(sessionSpy.signalArguments[0][1], "p2")
             compare(sessionSpy.signalArguments[0][2], "ok")
             tryVerify(() => Session.instanceOf("org.example.Racer", "p2").appId === "org.example.Racer")
+            tryVerify(() => find("launchSplash").shown, 2000, "the launch splash is the feedback")
             wait(50)
-            compare(Notifications.shownCount, shown + 1, "only the Starting toast, no error")
+            compare(Notifications.shownCount, shown, "no toast: not Starting, not an error")
         }
 
-        // The service refuses (the mock does not know Steam ids): the toast says so.
+        // Which library items Session1 can start: Flatpak ids, not Steam (T-147).
+        function test_session_app_ids() {
+            compare(Library.sessionAppId("flatpak:org.example.Racer"), "org.example.Racer")
+            compare(Library.sessionAppId("steam:620"), "")
+            compare(Library.sessionAppId("nope"), "")
+        }
+
+        // A Steam game has no Session1 launch path: Accept opens its details, with no launch and no
+        // error toast per press (T-147).
+        function test_a_steam_card_opens_details_and_launches_nothing() {
+            start("")
+            tryVerify(() => find("gamesGrid").activeFocus, 2000)
+            const shown = Notifications.shownCount
+            keyClick(Qt.Key_Right)                           // Counter Strike (Turbo Racer is first)
+            keyClick(Qt.Key_Return)
+            tryCompare(tc.shell, "currentPage", "details")
+            wait(50)
+            compare(sessionSpy.count, 0)
+            compare(launchSpy.count, 0)
+            compare(Notifications.shownCount, shown)
+            compare(Session.running.length, 0)
+        }
+
+        // The service refuses (an id it does not know): the error toast names the game, not the spec.
         function test_refused_launch_shows_an_error_toast() {
             start("")
             tryVerify(() => find("gamesGrid").activeFocus, 2000)
             const shown = Notifications.shownCount
-            keyClick(Qt.Key_Return)
+            tc.shell.launchApp("org.nope.Missing", "Portal 2", "")
             tryCompare(sessionSpy, "count", 1)
-            compare(sessionSpy.signalArguments[0][0], "steam://rungameid/620")
+            compare(sessionSpy.signalArguments[0][0], "org.nope.Missing")
             compare(sessionSpy.signalArguments[0][1], "p2")
             compare(sessionSpy.signalArguments[0][2], "unknown-app")
-            tryCompare(Notifications, "shownCount", shown + 2)
+            tryCompare(Notifications, "shownCount", shown + 1)
             const toast = Notifications.model.get(Notifications.model.count - 1)
-            compare(toast.text, "Portal 2 could not be started")
+            compare(toast.text, "Portal 2 could not be started. Try again.")
             compare(toast.kind, "error")
             compare(Session.running.length, 0)
         }
@@ -172,15 +196,15 @@ Item {
             grabImage(tc.shell).save(shotsDir + "/21-games-grid.png")
         }
 
-        // T-386: Play on a game the service refuses (Steam has no Session1 path yet).
+        // T-386: Play on a game the service refuses.
         function test_zz_screenshots_launch_failed() {
             if (!shotsDir)
                 skip("set RUYA_SHOTS_DIR to save screenshots")
             start("")
             tryVerify(() => find("gamesGrid").activeFocus, 2000)
-            keyClick(Qt.Key_Return)
+            tc.shell.launchApp("org.nope.Missing", "Portal 2", "")
             tryCompare(sessionSpy, "count", 1)
-            tryVerify(() => Notifications.model.count >= 2, 2000, "both toasts are up")
+            tryVerify(() => Notifications.model.count >= 1, 2000, "the error toast is up")
             wait(800)
             grabImage(tc.shell).save(shotsDir + "/21b-games-launch-failed.png")
         }

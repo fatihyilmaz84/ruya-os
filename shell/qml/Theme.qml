@@ -215,6 +215,7 @@ QtObject {
     readonly property int pageMs: Math.round(300 * motionScale)
     readonly property int tintMs: Math.round(700 * motionScale)
     readonly property int overlayMs: Math.round(200 * motionScale)   // Guide overlay fade
+    readonly property int launchMs: Math.round(400 * motionScale)    // launch splash: art zoom and blur in, hand-over to the app (T-147)
 
     // Gliding highlight (04 §3.8, T-205): one highlight glides between the rows of a single-row
     // selector in `glideMs` with `easeGlide` and stretches with speed.

@@ -1453,17 +1453,12 @@ Bu geri alınamaz.</translation>
     <name>GamesPage</name>
     <message>
         <location filename="../qml/GamesPage.qml" line="+13"/>
-        <location line="+80"/>
+        <location line="+83"/>
         <source>Games</source>
         <translation>Oyunlar</translation>
     </message>
     <message>
-        <location line="-57"/>
-        <source>Starting %1…</source>
-        <translation>%1 başlatılıyor…</translation>
-    </message>
-    <message>
-        <location line="+42"/>
+        <location line="-15"/>
         <source>Show</source>
         <translation>Göster</translation>
     </message>
@@ -1491,6 +1486,35 @@ Bu geri alınamaz.</translation>
         <location line="+10"/>
         <source>Open the Store</source>
         <translation>Mağaza&apos;yı aç</translation>
+    </message>
+</context>
+<context>
+    <name>LaunchSplash</name>
+    <message>
+        <location filename="../qml/LaunchSplash.qml" line="+27"/>
+        <location line="+165"/>
+        <source>Close</source>
+        <translation>Kapat</translation>
+    </message>
+    <message>
+        <location line="-135"/>
+        <source>Still starting %1</source>
+        <translation>%1 hâlâ başlıyor</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Starting %1</source>
+        <translation>%1 başlıyor</translation>
+    </message>
+    <message>
+        <location line="+101"/>
+        <source>Still starting…</source>
+        <translation>Hâlâ başlıyor…</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Starting…</source>
+        <translation>Başlıyor…</translation>
     </message>
 </context>
 <context>
@@ -2249,6 +2273,105 @@ Bu geri alınamaz.</translation>
     </message>
 </context>
 <context>
+    <name>QuickMenu</name>
+    <message>
+        <location filename="../qml/QuickMenu.qml" line="+82"/>
+        <source>Resume</source>
+        <translation>Devam et</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Home</source>
+        <translation>Ana sayfa</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Close game</source>
+        <translation>Oyunu kapat</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Volume</source>
+        <translation>Ses</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Switch profile</source>
+        <translation>Profil değiştir</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Power</source>
+        <translation>Güç</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Close</source>
+        <translation>Kapat</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Suspend</source>
+        <translation>Askıya al</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Restart</source>
+        <translation>Yeniden başlat</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Power off</source>
+        <translation>Kapat</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Back</source>
+        <translation>Geri</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Switch to %1</source>
+        <translation>%1 uygulamasına geç</translation>
+    </message>
+    <message>
+        <location line="+152"/>
+        <source>Just started</source>
+        <translation>Yeni başladı</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Running for %1</source>
+        <translation>%1 süredir çalışıyor</translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <location line="+19"/>
+        <source>System</source>
+        <translation>Sistem</translation>
+    </message>
+    <message>
+        <location line="-12"/>
+        <source>Image version %1</source>
+        <translation>Sistem sürümü %1</translation>
+    </message>
+    <message>
+        <location line="+58"/>
+        <source>Volume, muted</source>
+        <translation>Ses, sessiz</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Volume %1</source>
+        <translation>Ses %1</translation>
+    </message>
+    <message>
+        <location line="+43"/>
+        <source>Muted</source>
+        <translation>Sessiz</translation>
+    </message>
+</context>
+<context>
     <name>ScreenSaver</name>
     <message>
         <location filename="../qml/ScreenSaver.qml" line="+56"/>
@@ -2542,7 +2665,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+452"/>
+        <location filename="../qml/Shell.qml" line="+476"/>
         <source>Could not %1.</source>
         <translation>%1 işlemi yapılamadı.</translation>
     </message>
@@ -2562,12 +2685,7 @@ Bu geri alınamaz.</translation>
         <translation>kapatma</translation>
     </message>
     <message>
-        <location line="+1011"/>
-        <source>Power</source>
-        <translation>Güç</translation>
-    </message>
-    <message>
-        <location line="-994"/>
+        <location line="+17"/>
         <source>Update ready. Restart to finish.</source>
         <translation>Güncelleme hazır. Bitirmek için yeniden başlat.</translation>
     </message>
@@ -2582,38 +2700,28 @@ Bu geri alınamaz.</translation>
         <translation>Güncellemeyi bitirmek için 2 dakika içinde yeniden başlatılıyor. Beklemek için herhangi bir düğmeye bas.</translation>
     </message>
     <message>
-        <location line="+40"/>
-        <source>%1 stopped unexpectedly</source>
-        <translation>%1 beklenmedik şekilde durdu</translation>
-    </message>
-    <message>
-        <location line="-12"/>
-        <source>%1 could not be started</source>
-        <translation>%1 başlatılamadı</translation>
-    </message>
-    <message>
-        <location line="+33"/>
+        <location line="+217"/>
         <source>The screen did not answer, so the previous resolution is back.</source>
         <translation>Ekran yanıt vermedi, bu yüzden önceki çözünürlük geri geldi.</translation>
     </message>
     <message>
-        <location line="+49"/>
+        <location line="+57"/>
         <source>Wallpaper could not be loaded</source>
         <translation>Duvar kağıdı yüklenemedi</translation>
     </message>
     <message>
-        <location line="+312"/>
+        <location line="+318"/>
         <source>Continue playing</source>
         <translation>Oynamaya devam et</translation>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+18"/>
+        <location line="+19"/>
         <source>Installed</source>
         <translation>Kurulu</translation>
     </message>
     <message>
-        <location line="-17"/>
+        <location line="-18"/>
         <source>Your library is empty</source>
         <translation>Kitaplığın boş</translation>
     </message>
@@ -2628,7 +2736,13 @@ Bu geri alınamaz.</translation>
         <translation>Oyna</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+0"/>
+        <location line="+462"/>
+        <source>Resume</source>
+        <translation>Devam et</translation>
+    </message>
+    <message>
+        <location line="-460"/>
         <source>Details</source>
         <translation>Ayrıntılar</translation>
     </message>
@@ -2638,78 +2752,66 @@ Bu geri alınamaz.</translation>
         <translation>Son oynananlar</translation>
     </message>
     <message>
-        <location line="+81"/>
-        <source>Starting %1…</source>
-        <translation>%1 başlatılıyor…</translation>
-    </message>
-    <message>
-        <location line="+345"/>
-        <location line="+12"/>
+        <location line="+445"/>
+        <location line="+14"/>
         <location line="+3"/>
         <source>Select</source>
         <translation>Seç</translation>
     </message>
     <message>
-        <location line="+236"/>
+        <location line="+132"/>
         <source>The chosen sound theme can&apos;t be used. The standard one plays instead.</source>
         <translation>Seçilen ses teması kullanılamıyor. Bunun yerine standart tema çalıyor.</translation>
     </message>
     <message>
-        <location line="-257"/>
-        <location line="+16"/>
+        <location line="-155"/>
+        <location line="+18"/>
         <source>Cancel</source>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="-967"/>
+        <source>%1 is already running</source>
+        <translation>%1 zaten çalışıyor</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <location line="+18"/>
+        <source>%1 could not be started. Try again.</source>
+        <translation>%1 başlatılamadı. Tekrar dene.</translation>
+    </message>
+    <message>
+        <location line="-14"/>
+        <source>The game could not be closed. Try again.</source>
+        <translation>Oyun kapatılamadı. Tekrar dene.</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>%1 stopped unexpectedly. Try again.</source>
+        <translation>%1 beklenmedik şekilde durdu. Tekrar dene.</translation>
+    </message>
+    <message>
+        <location line="+29"/>
+        <source>Running app</source>
+        <translation>Çalışan uygulama</translation>
+    </message>
+    <message>
+        <location line="+924"/>
         <source>Sections</source>
         <translation>Bölümler</translation>
     </message>
     <message>
-        <location line="+83"/>
-        <location line="+8"/>
-        <source>System</source>
-        <translation>Sistem</translation>
-    </message>
-    <message>
-        <location line="-7"/>
-        <source>Image version %1</source>
-        <translation>Sistem sürümü %1</translation>
-    </message>
-    <message>
-        <location line="+16"/>
-        <source>Switch profile</source>
-        <translation>Profil değiştir</translation>
-    </message>
-    <message>
-        <location line="-115"/>
-        <location line="+117"/>
+        <location line="-17"/>
         <source>Close</source>
         <translation>Kapat</translation>
     </message>
     <message>
-        <location line="+4"/>
-        <source>Suspend</source>
-        <translation>Askıya al</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Restart</source>
-        <translation>Yeniden başlat</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Power off</source>
-        <translation>Kapat</translation>
-    </message>
-    <message>
-        <location line="-123"/>
-        <location line="+124"/>
+        <location line="+0"/>
         <source>Back</source>
         <translation>Geri</translation>
     </message>
     <message>
-        <location line="+110"/>
+        <location line="+132"/>
         <source>mock services</source>
         <translation>sahte hizmetler</translation>
     </message>
@@ -3922,7 +4024,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>VolumeOsd</name>
     <message>
-        <location filename="../qml/VolumeOsd.qml" line="+58"/>
+        <location filename="../qml/VolumeOsd.qml" line="+60"/>
         <source>Muted</source>
         <translation>Sessiz</translation>
     </message>
@@ -3991,7 +4093,7 @@ Bu geri alınamaz.</translation>
         <translation>%1, geçerli</translation>
     </message>
     <message>
-        <location line="+83"/>
+        <location line="+85"/>
         <source>Current</source>
         <translation>Geçerli</translation>
     </message>

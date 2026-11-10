@@ -102,6 +102,7 @@ Item {
             anchors { right: parent.right; top: parent.top; margins: Theme.spaceXs * card.u }
             u: card.u
             visible: card.stateText.length > 0
+            solid: true             // its own opaque fill: readable over any art tint (04 §5)
             text: card.stateText
             kind: card.running ? "success" : "info"
         }

@@ -13,6 +13,7 @@ FocusScope {
     property string meta
     property string primaryText
     property string secondaryText      // empty: no secondary button
+    property bool primaryShown: true   // false: no Play (an item with no launch path, T-147); Details takes the focus
     readonly property alias playButton: play
 
     signal primaryAccepted()
@@ -70,7 +71,8 @@ FocusScope {
             PrimaryButton {
                 id: play
                 objectName: "homePlay"
-                focus: true
+                visible: hero.primaryShown
+                focus: hero.primaryShown
                 u: hero.u
                 text: hero.primaryText
                 onAccepted: hero.primaryAccepted()
@@ -79,11 +81,19 @@ FocusScope {
                 id: details
                 objectName: "homeDetails"
                 visible: hero.secondaryText.length > 0
+                focus: !hero.primaryShown
                 u: hero.u
                 text: hero.secondaryText
                 onAccepted: hero.secondaryAccepted()
             }
         }
+    }
+
+    onPrimaryShownChanged: {
+        if (!primaryShown && hero.activeFocus && details.visible)
+            details.forceActiveFocus()
+        else if (primaryShown && hero.activeFocus)
+            play.forceActiveFocus()
     }
 
     Keys.onPressed: event => {
@@ -94,7 +104,7 @@ FocusScope {
             Sfx.navigate()
             details.forceActiveFocus()
             event.accepted = true
-        } else if (event.key === toPlay && details.activeFocus) {
+        } else if (event.key === toPlay && details.activeFocus && play.visible) {
             Sfx.navigate()
             play.forceActiveFocus()
             event.accepted = true

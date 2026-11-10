@@ -74,6 +74,13 @@ void Library::launch(const QString &id)
     emit launchRequested(id, found.value(QStringLiteral("launch")).toString());
 }
 
+QString Library::sessionAppId(const QString &id) const
+{
+    const QString prefix = QStringLiteral("flatpak:");
+    const QString spec = item(id).value(QStringLiteral("launch")).toString();
+    return spec.startsWith(prefix) ? spec.mid(prefix.size()) : QString();
+}
+
 QVariantMap Library::item(const QString &id) const
 {
     for (const QVariant &v : m_items) {

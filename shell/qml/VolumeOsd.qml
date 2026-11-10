@@ -10,12 +10,14 @@ Item {
     property real marginY: 0
 
     property bool shown: false
+    // The quick menu has its own volume row, so the OSD stays away while it is open (T-147).
+    property bool quiet: false
 
     width: 520 * u
     height: 96 * u
     anchors.horizontalCenter: parent.horizontalCenter
     y: parent.height - marginY - height - 30 * u
-    opacity: shown ? 1 : 0
+    opacity: shown && !quiet ? 1 : 0
     visible: opacity > 0
     Behavior on opacity { NumberAnimation { duration: Theme.focusMs; easing.type: Easing.OutCubic } }
 

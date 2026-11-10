@@ -45,12 +45,13 @@ Item {
             else if (scenario === "unplayed")
                 tryVerify(() => find("heroTitle").text === "Block Puzzle")
             else
-                tryVerify(() => find("heroTitle").text === "Portal 2")
+                tryVerify(() => find("heroTitle").text === "Turbo Racer")
         }
 
         function init() {
             verify(windowGuard.ensureActive() === "", windowGuard.ensureActive())
             launchSpy.clear()
+            Session.mockReset()                         // apps started by an earlier test are not running now
         }
 
         function cleanup() {
@@ -62,7 +63,7 @@ Item {
             start("")
             verify(find("homePlay").activeFocus)
             compare(find("homePlay").Accessible.name, "Play")
-            compare(find("heroTitle").text, "Portal 2")
+            compare(find("heroTitle").text, "Turbo Racer")
             verify(find("homeDetails").visible)
             compare(find("recentRow").count, 8)
         }
@@ -95,12 +96,12 @@ Item {
             start("")
             keyClick(Qt.Key_Down)
             tryVerify(() => find("recentRow").activeFocus)
-            compare(find("heroTitle").text, "Portal 2")
+            compare(find("heroTitle").text, "Turbo Racer")
             keyClick(Qt.Key_Right)
             tryCompare(find("heroTitle"), "text", "Counter Strike")
             verify(find("recentRow").activeFocus)
             keyClick(Qt.Key_Left)
-            tryCompare(find("heroTitle"), "text", "Portal 2")
+            tryCompare(find("heroTitle"), "text", "Turbo Racer")
             keyClick(Qt.Key_Left)
             compare(find("recentRow").currentIndex, 0, "clamped at the first card")
         }
@@ -120,22 +121,57 @@ Item {
             }
         }
 
+        // Play on the hero, Accept on a card and Play following the card all ask the library to launch.
+        // The launch splash (T-147) holds the input while an app starts, so each launch is ended
+        // (endLaunch) before the next key. The newest item is the Flatpak game Turbo Racer; a Steam
+        // card has no launch path and opens Details instead (test_a_steam_game_has_no_play).
         function test_play_launches_the_hero_item() {
             start("")
             keyClick(Qt.Key_Return)
             tryCompare(launchSpy, "count", 1)
-            compare(launchSpy.signalArguments[0][0], "steam:620")
+            compare(launchSpy.signalArguments[0][0], "flatpak:org.example.Racer")
+            tryVerify(() => tc.shell.launching)
+            tc.shell.endLaunch(true)
+            tryVerify(() => find("homePlay").activeFocus, 2000, "the focus is back on Play")
             keyClick(Qt.Key_Down)
-            keyClick(Qt.Key_Right)
-            tryCompare(find("heroTitle"), "text", "Counter Strike")
+            for (let i = 0; i < 5; ++i)
+                keyClick(Qt.Key_Right)
+            tryCompare(find("heroTitle"), "text", "Block Puzzle")
             keyClick(Qt.Key_Return)                     // Accept on a card
             tryCompare(launchSpy, "count", 2)
-            compare(launchSpy.signalArguments[1][0], "steam:730")
+            compare(launchSpy.signalArguments[1][0], "flatpak:org.example.Puzzle")
+            tryVerify(() => tc.shell.launching)
+            tc.shell.endLaunch(true)
+            tryVerify(() => find("recentRow").activeFocus, 2000, "the focus is back on the card")
             keyClick(Qt.Key_Up)
             tryVerify(() => find("homePlay").activeFocus)
             keyClick(Qt.Key_Return)                     // and Play follows the card
             tryCompare(launchSpy, "count", 3)
-            compare(launchSpy.signalArguments[2][0], "steam:730")
+            compare(launchSpy.signalArguments[2][0], "flatpak:org.example.Puzzle")
+        }
+
+        // A Steam game has no Session1 launch path: no Play on the hero (Details has the focus), and
+        // Accept on its card opens Details instead of launching (T-147).
+        function test_a_steam_game_has_no_play() {
+            start("")
+            keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Right)
+            tryCompare(find("heroTitle"), "text", "Counter Strike")
+            verify(!find("homePlay").visible, "no Play button")
+            keyClick(Qt.Key_Return)                     // Accept on the card
+            tryCompare(tc.shell, "currentPage", "details")
+            compare(launchSpy.count, 0, "nothing was launched")
+            keyClick(Qt.Key_Escape)
+            tryCompare(tc.shell, "currentPage", "")
+            keyClick(Qt.Key_Up)
+            tryVerify(() => find("homeDetails").activeFocus, 2000, "Details has the focus")
+            keyClick(Qt.Key_Left)
+            verify(find("homeDetails").activeFocus, "there is no Play to move to")
+            keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Left)
+            tryCompare(find("heroTitle"), "text", "Turbo Racer")
+            keyClick(Qt.Key_Up)
+            tryVerify(() => find("homePlay").activeFocus, 2000, "Play comes back with a game that can start")
         }
 
         function test_rb_opens_games_and_back_restores_play() {
@@ -273,15 +309,17 @@ Item {
             verify(find("recentCard_flatpak:org.example.Puzzle").focused, "the first card is focused")
             keyClick(Qt.Key_Right)
             tryCompare(find("heroTitle"), "text", "Counter Strike")
-            keyClick(Qt.Key_Return)
+            keyClick(Qt.Key_Left)
+            tryCompare(find("heroTitle"), "text", "Block Puzzle")
+            keyClick(Qt.Key_Return)                     // a Flatpak card starts (a Steam card opens Details)
             tryCompare(launchSpy, "count", 1)
-            compare(launchSpy.signalArguments[0][0], "steam:730")
+            compare(launchSpy.signalArguments[0][0], "flatpak:org.example.Puzzle")
         }
 
         function test_played_items_still_win_over_the_installed_fallback() {
             start("")
             compare(find("heroEyebrow").text, "CONTINUE PLAYING")
-            compare(find("heroTitle").text, "Portal 2", "the played order, not the title order")
+            compare(find("heroTitle").text, "Turbo Racer", "the played order, not the title order")
         }
 
         function test_performance_tier_keeps_the_layout() {
