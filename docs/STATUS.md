@@ -45,6 +45,10 @@ One line each: `- (source) what, and why it matters`. Dispatched builders put th
 
 Triaged 2026-11-10 (lead-9): the lines before are verbatim in [`STATUS-parked.md`](STATUS-parked.md), "Inbox triage 2026-11-10 (lead-9)"; they became T-427 (Bluetooth leftovers), T-428 (Store follow-ups), T-429 (test harness), T-430 (GlassShadow/AppArt masks, L0 memory), T-147 item 6 (launch follow-ups), T-282 item 12 (keyboard over glass), or owner questions (CPU per game, `core.hooksPath`).
 
+- (T-423) ruya-store: quick-xml 0.37 to >= 0.41, then drop the RUSTSEC-2026-0194/0195 ignores in `services/deny.toml`.
+- (T-423) Services to zbus 6 (zvariant, zbus_names, zvariant_derive merged into it), then drop the RUSTSEC-2026-0370..0372 ignores.
+- (T-423 review) The six image bus policies: explicit default-context `deny own`/send rules (image change, VM run), then make `lint-bus-policies.ps1` require them; add a `ruya-link` policy file when ADR-029's service lands (fixtures only today).
+- (T-423 review) `supply-chain.yml`: check the cargo-deny tarball against its published `.sha256` (or fold into T-425).
 - (lead-9) CI warns that `actions/checkout@v4` runs on the deprecated Node.js 20: move every workflow to `actions/checkout@v5` (after T-423 merges, which edits `ci.yml`).
 ## Blocked (need something this host doesn't have)
 
