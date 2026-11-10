@@ -52,6 +52,7 @@ Pressing Play starts the game full screen with a short art-led launch; Guide bri
 
 ## Outcome
 Verified: host (vm pending: `scripts/vm-app-check.sh flow` after driving Guide / Resume / Guide / Home on the T-123 test client; the Home-card part needs the Flatpak test app of `vm-session-check.sh display`, see Notes)
+Lead, 2026-11-10, image 0.0.62: `vm-session-check.sh display` PASS; `vm-app-check.sh flow` driven by hand in the VM: the menu took the focus 3 times, the client lost and regained it 3 times (behaviour PASS); the check counted a stale name (`focus systemActions`) and was fixed in ec989d8 to count `quickMenuItem_resume`. Now Verified: vm.
 
 Model: Sonnet 5.5, effort normal, round 1.
 

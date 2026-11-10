@@ -46,6 +46,7 @@ The invariant "services keep their systemd hardening" and the spec lines "SELinu
 
 ## Outcome
 Verified: vm (script and baseline against image 0.0.61 over SSH; the queue run on the next image stays the lead's)
+Lead, 2026-11-10: `vm-security-check.sh` PASS in the 0.0.62 queue.
 
 Built `scripts/vm-security-check.sh` (modes `check`, `measure`), `image/security-baseline.json`, a queue entry (and the queue copies the baseline next to the script), and the per-service checks (library, profiles, session x2, store, update, usage x2) now print a pointer instead of `systemd-analyze security | tail`. Docs: `dev-setup.md`, `01-platform.md` section 3 item 8.
 
