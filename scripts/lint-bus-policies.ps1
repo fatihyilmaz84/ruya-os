@@ -48,6 +48,10 @@ function Test-BusPolicyFile([string]$Path) {
             if ($user -eq "ruya-link") {
                 if ($r.HasAttribute("own")) { $errs.Add("ruya-link may not own a name ($($r.OuterXml))") }
                 if (-not ($r.HasAttribute("send_destination") -and $r.HasAttribute("send_member"))) { $errs.Add("ruya-link allow needs send_destination and send_member ($($r.OuterXml))") }
+                foreach ($a in "send_destination", "send_member") {
+                    $v = $r.GetAttribute($a)
+                    if ($r.HasAttribute($a) -and ([string]::IsNullOrWhiteSpace($v) -or $v.Contains("*"))) { $errs.Add("ruya-link $a must be an exact name, not empty or a wildcard ($($r.OuterXml))") }
+                }
             } elseif ($user -in $ownerOnlyUsers) {
                 if (-not $r.HasAttribute("own") -or $r.Attributes.Count -ne 1) { $errs.Add("$user may only allow own ($($r.OuterXml))") }
             }
@@ -91,6 +95,9 @@ if ($SelfTest) {
         @{ Name = "an allow for another user"; From = '<policy user="ruya-shell">'; To = '<policy user="nobody">'; Expect = 1 },
         @{ Name = "a group policy"; From = '<policy user="ruya-shell">'; To = '<policy group="wheel">'; Expect = 1 },
         @{ Name = "ruya-link allowing a whole destination"; From = ' send_member="Ping"'; To = ""; Expect = 1 },
+        @{ Name = "ruya-link with a wildcard send_member"; From = 'send_member="Ping"'; To = 'send_member="*"'; Expect = 1 },
+        @{ Name = "ruya-link with a wildcard send_destination"; From = '<allow send_destination="org.x.A1" send_member'; To = '<allow send_destination="*" send_member'; Expect = 1 },
+        @{ Name = "ruya-link with an empty send_member"; From = 'send_member="Ping"'; To = 'send_member=""'; Expect = 1 },
         @{ Name = "ruya-link owning a name"; From = '<allow send_destination="org.x.A1" send_member="Ping"/>'; To = '<allow own="org.x.A1"/>'; Expect = 1 }
     )
     foreach ($c in $cases) {

@@ -6,8 +6,10 @@
 $ErrorActionPreference = "Stop"
 Set-Location (Split-Path -Parent $PSScriptRoot)
 # An MSYS2 git earlier on PATH (devkitPro) brace-expands the patterns' {n} quantifiers: prefer Git for Windows.
-$gitCmd = Join-Path $env:ProgramFiles "Git\cmd"
-if (Test-Path (Join-Path $gitCmd "git.exe")) { $env:PATH = "$gitCmd;$env:PATH" }
+if ($env:ProgramFiles) {   # unset on Linux pwsh (CI)
+    $gitCmd = Join-Path $env:ProgramFiles "Git\cmd"
+    if (Test-Path (Join-Path $gitCmd "git.exe")) { $env:PATH = "$gitCmd;$env:PATH" }
+}
 
 $patterns = [ordered]@{
     "private key"          = "-----BEGIN [A-Z ]*PRIVATE KEY-----"
