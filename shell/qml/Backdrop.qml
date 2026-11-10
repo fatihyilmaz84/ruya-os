@@ -113,12 +113,21 @@ Item {
         anchors.fill: parent
         active: backdrop.shown && Theme.blurMax > 0
         sourceComponent: Item {
+            id: blurHost
+            // The blur works at a quarter of the screen size and is drawn scaled up (T-434): its passes
+            // ran at full size before, about 12 % of the Dell's GPU while the blobs drift on a page.
+            readonly property int reducedWidth: Math.max(1, Math.round(backdrop.width / 4))
+            readonly property int reducedHeight: Math.max(1, Math.round(backdrop.height / 4))
+
             ShaderEffectSource {
                 id: reduced
                 objectName: "backdropReduced"
                 visible: false
                 sourceItem: fields
-                textureSize: Qt.size(Math.max(1, backdrop.width / 4), Math.max(1, backdrop.height / 4))
+                textureSize: Qt.size(blurHost.reducedWidth, blurHost.reducedHeight)
+                // Re-rendered only while the copy is shown or fading (T-434): off pages (Home, the profile
+                // picker) the drifting blobs would redraw this texture every frame for nothing.
+                live: backdrop.blurActive || pageBlur.opacity > 0
                 // Once the opaque blurred copy covers them, the sharp fields are not drawn on screen as
                 // well (still into this texture): about 8 % of the Dell's GPU while they drift (T-421).
                 hideSource: pageBlur.opacity >= 1
@@ -126,7 +135,12 @@ Item {
             MultiEffect {
                 id: pageBlur
                 objectName: "backdropBlur"
-                anchors.fill: parent
+                width: blurHost.reducedWidth
+                height: blurHost.reducedHeight
+                transform: Scale {
+                    xScale: backdrop.width / pageBlur.width
+                    yScale: backdrop.height / pageBlur.height
+                }
                 source: reduced
                 visible: opacity > 0
                 opacity: backdrop.blurActive ? 1 : 0
@@ -134,7 +148,10 @@ Item {
                 autoPaddingEnabled: false
                 blurEnabled: true
                 blur: 1.0
-                blurMax: Theme.blurMax
+                // blurMax is in the effect's own pixels. At a quarter size a third of the tier's value
+                // matched the old full-size blur best in the shots (T-434: a mean difference under one
+                // level of 255 over the screen; a quarter was visibly tighter, a half far softer).
+                blurMax: Math.round(Theme.blurMax / 3)
             }
         }
     }

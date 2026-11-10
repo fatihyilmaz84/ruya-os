@@ -138,6 +138,29 @@ Item {
             compare(find("detailError").visible, false)
         }
 
+        // T-434: the detail page's buttons lie straight on L0: translucent glass with blur, opaque
+        // without it (the Performance tier, 04 §3.6). The focused one keeps the focus fill.
+        function test_detail_buttons_are_opaque_glass_without_blur() {
+            openStore()
+            openApp("org.example.Racer")
+            const uninstall = find("detailUninstall")
+            const primary = find("detailPrimary")
+            keyClick(Qt.Key_Return)                         // Install
+            tryVerify(() => Store.app("org.example.Racer").installed === true)
+            tryVerify(() => !find("page_appDetail").working && uninstall.visible, 2000, "installed")
+            tryVerify(() => primary.activeFocus, 2000, "focus stays on the primary button")
+            compare(uninstall.color, Theme.glass, "translucent over the blurred L0 on High")
+            compare(find("detailProgress").color, Theme.glass)
+            DeviceSettings.effectsQuality = "performance"
+            compare(uninstall.color, Theme.glassOpaque, "opaque glass on Performance")
+            compare(find("detailProgress").color, Theme.glassOpaque, "and the progress track")
+            compare(primary.color, Theme.focusFill, "the focused button keeps the focus fill")
+        }
+
+        function cleanup() {
+            DeviceSettings.effectsQuality = "high"
+        }
+
         // T-171: the service vanishes mid-install; the page must not wait for a job that is gone.
         function test_service_loss_ends_the_job() {
             openStore()

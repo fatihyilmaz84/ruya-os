@@ -47,9 +47,12 @@ FocusScope {
 
     Rectangle {
         id: background
+        objectName: "rowFill"
         anchors.fill: parent
         radius: control.cornerRadius
-        color: control.activeFocus ? Theme.focusFill : Theme.glass
+        // A row lies straight on L0, which is blurred on pages (04 §3.6); with no blur (the Performance
+        // tier) translucent glass would show the sharp blobs or picture through, so it is opaque (T-434).
+        color: control.activeFocus ? Theme.focusFill : (Theme.blurMax > 0 ? Theme.glass : Theme.glassOpaque)
         border.width: control.activeFocus ? Theme.focusRingWidth * control.u : 0     // unfocused: the lit rim below
         border.color: Theme.focusRing
         Behavior on color { ColorAnimation { duration: Theme.focusMs } }

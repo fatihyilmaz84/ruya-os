@@ -1,19 +1,27 @@
 #!/usr/bin/env bash
-# The glass and the idle GPU load on the Dell (T-421). Run from Git Bash or WSL on the host:
-#   scripts/dell-glass-check.sh [host] [out-dir]
+# The glass and the GPU load on the Dell (T-421, T-434). Run from Git Bash or WSL on the host:
+#   [RUYA_PIN=<digits>] scripts/dell-glass-check.sh [host] [out-dir]
 # Needs the key ~/.ssh/ruyaos_dev, the shell running with a profile signed in and Home on screen,
 # no app in front and the default look (no wallpaper). It changes no setting. Keys are typed through
 # a throw-away uinput keyboard on the Dell (no controller needed); the screen is captured with
-# ffmpeg kmsgrab through VA-API, so the captures are what the TV is sent.
-#   1. Home, 40 s without input: the shell's render time over 10 s (drm fdinfo, once per client
-#      id). PASS under 3 %: a still Home draws nothing (the blobs rest under the hero's opaque
-#      field, the liquid pill's clock rests after 30 s). 0.0.61: about 30 % (T-421).
-#   2. Settings (RB four times): six captures 3 s apart. In the left margin (x 2..88 at 1080p, only
+# ffmpeg kmsgrab through VA-API, so the captures are what the TV is sent. "Render time" is the
+# shell's over 10 s (drm fdinfo, once per client id); 1000 ms in 10 s is 10 % of the GPU.
+#   1. Home, 40 s without input. PASS under 3 %: a still Home draws nothing (the blobs rest under
+#      the hero's opaque field, the liquid pill's clock rests after 30 s). 0.0.61: about 30 %.
+#   2. Home, a key 3 s before (informational): what the liquid pills cost while their clock runs
+#      (30 s after each input, LiquidGate). T-421: about 25 %.
+#   3. Settings (RB four times): six captures 3 s apart. In the left margin (x 2..88 at 1080p, only
 #      L0 is drawn there) the largest luma step between neighbouring pixels. PASS under 6: on a page
 #      the backdrop is blurred, so no sharp blob edge crosses it (0.0.61: about 20 when an edge
 #      crossed, none when it did not, so only a FAIL proves anything; the captures are kept).
-#   3. Settings after 40 s without input: the render time (informational: the blobs drift there).
-#   4. Back to Home. The captures are copied to [out-dir] (default output/dell-glass) for review.
+#   4. Settings, a key 2 s before (informational): the blobs drift, the page blur and the pills
+#      redraw. T-421: about 40 %.
+#   5. Settings, 40 s without input. PASS under 3 %: the blobs rest after 30 s too (LiquidGate).
+#   6. The profile picker (Guide, then Accept on "Switch profile"), a key 2 s before
+#      (informational: the blobs drift, the page blur's texture is idle off pages, T-434), then
+#      40 s without input, PASS under 3 %. Accept signs the focused profile in again; with RUYA_PIN
+#      set its digits are typed into the PIN pad. The captures are copied to [out-dir] (default
+#      output/dell-glass) for review.
 set -u
 HOST="${1:-192.168.178.109}"
 OUT="${2:-output/dell-glass}"
@@ -26,7 +34,9 @@ bad() { echo "FAIL: $*"; fails=$((fails + 1)); }
 
 r 'mkdir -p /var/tmp/dell-glass && cat > /var/tmp/dell-glass/keys.py' <<'EOF'
 import fcntl, os, struct, sys, time
-KEYS = {"pgup": 104, "pgdn": 109, "esc": 1}
+KEYS = {"pgup": 104, "pgdn": 109, "esc": 1, "up": 103, "down": 108, "left": 105, "right": 106,
+        "enter": 28, "guide": 172, "0": 11, "1": 2, "2": 3, "3": 4, "4": 5, "5": 6, "6": 7, "7": 8,
+        "8": 9, "9": 10}
 def emit(fd, t, c, v):
     os.write(fd, struct.pack("llHHi", 0, 0, t, c, v))
 fd = os.open("/dev/uinput", os.O_WRONLY | os.O_NONBLOCK)
@@ -81,15 +91,25 @@ keys() { r "python3 /var/tmp/dell-glass/keys.py $*"; }
 r 'pgrep -x ruya-shell >/dev/null' || { echo "FAIL: ruya-shell is not running"; exit 1; }
 [ -z "$(r 'grep -s "^wallpaper=." /var/lib/ruya-shell/.config/ruyaos/shell.conf')" ] || echo "note: a wallpaper is set; step 2 then measures the picture's blur, not the backdrop's"
 
+still() {   # still <where>: 40 s without input, then PASS under 3 %
+    sleep 40
+    local ms
+    ms=$(gpu)
+    echo "$1 after 40 s still: $ms ms render in 10 s"
+    [ "$ms" -lt 300 ] && ok "a still $1 draws (almost) nothing ($ms ms in 10 s)" || bad "a still $1 keeps the GPU busy: $ms ms in 10 s"
+}
+
 echo "== 1. Home, still"
 keys pgup pgup pgup pgup
-sleep 40
-ms=$(gpu)
-echo "Home after 40 s still: $ms ms render in 10 s"
-[ "$ms" -lt 300 ] && ok "a still Home draws (almost) nothing ($ms ms in 10 s)" || bad "a still Home keeps the GPU busy: $ms ms in 10 s"
+still Home
 cap home
 
-echo "== 2. Settings"
+echo "== 2. Home, in use"
+keys right left
+sleep 3
+echo "Home, a key 3 s before: $(gpu) ms render in 10 s (informational: the liquid pills' clock)"
+
+echo "== 3. Settings"
 keys pgdn pgdn pgdn pgdn
 sleep 2
 worst=0
@@ -102,13 +122,34 @@ for i in 1 2 3 4 5 6; do
 done
 [ "$worst" -lt 6 ] && ok "no sharp edge in the page's L0 (largest step $worst)" || bad "a sharp edge in the page's L0 (step $worst): the backdrop is not blurred on pages"
 
-echo "== 3. Settings, still"
-sleep 40
-echo "Settings after 40 s still: $(gpu) ms render in 10 s (informational)"
+echo "== 4. Settings, in use"
+keys down up
+sleep 2
+echo "Settings, a key 2 s before: $(gpu) ms render in 10 s (informational: drift, page blur, pills)"
 
-echo "== 4. Home"
-keys esc
-for f in home settings-1 settings-2 settings-3 settings-4 settings-5 settings-6; do
+echo "== 5. Settings, still"
+still Settings
+
+echo "== 6. The profile picker"
+keys esc esc
+sleep 2
+keys guide
+sleep 1
+keys enter
+sleep 2
+cap picker
+keys right left
+sleep 2
+echo "Picker, a key 2 s before: $(gpu) ms render in 10 s (informational: the blobs drift)"
+still "profile picker"
+keys enter
+pin="${RUYA_PIN:-}"
+if [ -n "$pin" ]; then
+    sleep 2
+    keys $(echo "$pin" | sed 's/./& /g') enter
+fi
+echo "note: the focused profile was signed in again; check that Home is on screen"
+for f in home settings-1 settings-2 settings-3 settings-4 settings-5 settings-6 picker; do
     scp -q $SSHO "root@$HOST:/var/tmp/dell-glass/$f.png" "$OUT/" || true
 done
 r 'rm -rf /var/tmp/dell-glass'

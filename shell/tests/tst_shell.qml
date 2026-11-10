@@ -244,6 +244,28 @@ Item {
             tryCompare(backdrop, "drifting", false, 2000, "and rest again on Home")
         }
 
+        // T-434: the page blur's texture is re-rendered only while the blurred copy shows: on the profile
+        // picker and on Home the drifting blobs do not redraw it every frame.
+        function test_page_blur_texture_is_idle_off_pages() {
+            DeviceSettings.reducedMotion = false
+            DeviceSettings.effectsQuality = "high"
+            const backdrop = find("backdrop")
+            tryVerify(() => backdrop.drifting, 2000, "the blobs drift on the profile picker")
+            verify(find("profileList").activeFocus, "the picker has focus")
+            const reduced = find("backdropReduced")
+            verify(reduced !== null, "the blurred copy is ready")
+            compare(reduced.live, false, "its texture is idle on the picker")
+            compare(find("backdropBlur").visible, false)
+            signInAsAda()
+            openSettings()
+            tryVerify(() => reduced.live, 2000, "live on a page")
+            tryCompare(find("backdropBlur"), "opacity", 1)
+            keyClick(Qt.Key_Escape)                    // list -> Home
+            tryVerify(() => find("sectionNav").activeFocus, 2000, "focus back on the section nav")
+            tryVerify(() => find("backdropBlur").opacity === 0, 2000, "the copy fades out")
+            tryCompare(reduced, "live", false, 2000, "and its texture is idle again on Home")
+        }
+
         // T-421: where the blobs are seen they still rest once nobody has touched anything for the idle
         // period (LiquidGate, as the liquid pill's specular): a still page drew 60 frames a second for
         // them. The next key brings the drift back.

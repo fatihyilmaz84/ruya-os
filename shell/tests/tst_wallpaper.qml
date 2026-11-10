@@ -693,6 +693,7 @@ Item {
             compare(idle.opacity, 0)
             compare(idle.visible, false)
             compare(find("backdropReduced").hideSource, false, "the sharp fields are drawn on Home")
+            compare(find("backdropReduced").live, false, "the texture is not re-rendered on Home (T-434)")
 
             keyClick(Qt.Key_Up)                          // the section nav
             for (let i = 0; i < 4; ++i)
@@ -704,7 +705,13 @@ Item {
             const blur = find("backdropBlur")
             compare(blur.blurEnabled, true)
             compare(blur.blur, 1)
-            compare(blur.blurMax, 64)
+            // T-434: the blur's passes run at a quarter of the screen and are drawn scaled up; blurMax is
+            // in the effect's own pixels, a third of the tier's (matched to the old look in the shots).
+            compare(blur.width, Math.round(tc.shell.width / 4))
+            compare(blur.height, Math.round(tc.shell.height / 4))
+            compare(blur.blurMax, Math.round(64 / 3))
+            compare(blur.mapToItem(tc.shell, blur.width, blur.height), Qt.point(tc.shell.width, tc.shell.height), "it covers the screen")
+            verify(find("backdropReduced").live, "the texture follows the drifting blobs on a page")
             tryCompare(blur, "opacity", 1)
             verify(blur.visible, "drawn on the page")
             verify(blur.source.sourceItem === find("backdropFields"), "it blurs the backdrop's own fields")
@@ -713,7 +720,7 @@ Item {
             compare(find("wallpaperBlur"), null, "no second full-screen blur")
 
             DeviceSettings.effectsQuality = "balanced"
-            compare(find("backdropBlur").blurMax, 32)
+            compare(find("backdropBlur").blurMax, Math.round(32 / 3))
             DeviceSettings.effectsQuality = "performance"
             tryVerify(() => find("backdropBlur") === null, 2000, "no blur item on the Performance tier")
             DeviceSettings.effectsQuality = "high"
@@ -1045,6 +1052,25 @@ Item {
                                 Math.abs(img.blue(x + 1, py) - img.blue(x, py)))
             }
             verify(step < 6, "no sharp blob edge on the page (largest step " + step + " on row " + py + ")")
+            keyClick(Qt.Key_Escape)                      // pane -> list
+            tryVerify(() => find("categoryList").activeFocus)
+        }
+
+        // T-434 (GPU): on the Performance tier nothing is blurred, so the Settings rows are opaque glass
+        // (glassOpaque) over the sharp blobs, never translucent (04 §3.6). The shot is for review.
+        function test_zz_performance_page_rows_are_opaque() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            compare(DeviceSettings.wallpaper, "")
+            DeviceSettings.effectsQuality = "performance"
+            openSettingsDisplay()
+            tryVerify(() => find("backdropBlur") === null, 2000, "no blur on Performance")
+            const fill = findChild(find("rowWallpaper"), "rowFill")
+            tryCompare(fill, "color", Theme.glassOpaque, 2000, "an unfocused row is opaque glass")
+            verify(find("rowQuality").activeFocus, "the first row keeps focus")
+            waitForRendering(tc.shell)
+            wait(300)
+            grabImage(tc.shell).save(shotsDir + "/70-wallpaper-page-default-performance.png")
             keyClick(Qt.Key_Escape)                      // pane -> list
             tryVerify(() => find("categoryList").activeFocus)
         }

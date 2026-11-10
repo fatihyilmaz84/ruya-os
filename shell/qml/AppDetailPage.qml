@@ -245,7 +245,8 @@ Page {
         height: Theme.buttonHeight * page.u
         radius: height / 2
         opacity: active ? 1 : Theme.disabledOpacity
-        color: danger ? Theme.dangerFill : (activeFocus ? Theme.focusFill : Theme.glass)
+        // On L0: opaque without blur (the Performance tier, 04 §3.6, T-434).
+        color: danger ? Theme.dangerFill : (activeFocus ? Theme.focusFill : (Theme.blurMax > 0 ? Theme.glass : Theme.glassOpaque))
         border.width: activeFocus ? Theme.focusRingWidth * page.u : Theme.hairlineAt(page.u)
         border.color: activeFocus ? Theme.focusRing : Theme.glassBorder
         Accessible.role: Accessible.Button
@@ -343,7 +344,7 @@ Page {
                     width: parent.width
                     height: Theme.spaceS * page.u
                     radius: height / 2
-                    color: Theme.glass
+                    color: Theme.blurMax > 0 ? Theme.glass : Theme.glassOpaque
                     border.width: Theme.hairlineAt(page.u)
                     border.color: Theme.glassBorder
 
