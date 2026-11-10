@@ -1,6 +1,6 @@
 # T-447 — Ruya Hub design: the Quick Hub, the panels, focus and motion
 
-Status: todo · Phase: 2 · Depends: — · Area: docs · Size: S · Owner: lead · Developer surface: none
+Status: in-progress · Phase: 2 · Depends: — · Area: docs · Size: S · Owner: lead · Developer surface: none
 
 ## Goal
 One written design for Ruya Hub (ADR-033) that the builder tasks T-448..T-454 follow: what the Quick Hub shows, which panels exist, how focus moves between them, and how it looks over a running game.
