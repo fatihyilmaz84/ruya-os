@@ -2,6 +2,26 @@
 
 Moved out of `docs/STATUS.md` by the lead on 2026-11-06 to keep STATUS under its budget. The planner (`docs/tasks/PLANNING.md`) reads the Inbox lines here when planning; nobody else needs this file. Items that became tasks are in their task file; pick the rest up when a task touches the area.
 
+## Inbox triage 2026-11-10 (lead-9, second)
+
+- (T-423) ruya-store: quick-xml 0.37 to >= 0.41, then drop the RUSTSEC-2026-0194/0195 ignores in `services/deny.toml`.
+- (T-423) Services to zbus 6 (zvariant, zbus_names, zvariant_derive merged into it), then drop the RUSTSEC-2026-0370..0372 ignores.
+- (T-423 review) The six image bus policies: explicit default-context `deny own`/send rules (image change, VM run), then make `lint-bus-policies.ps1` require them; add a `ruya-link` policy file when ADR-029's service lands (fixtures only today).
+- (T-423 review) `supply-chain.yml`: check the cargo-deny tarball against its published `.sha256` (or fold into T-425).
+- (T-421, lead-9) Next image: run `scripts/dell-glass-check.sh` on the Dell (FAIL on 0.0.61, PASS with the branch's shell); also watch the page-open fade from sharp to blurred for a hitch (UX review) and the picker's GPU (the blurred copy's live texture stays active off pages: gate it on `blurred || pageBlur.opacity > 0`; the step 3 comment in the script is stale).
+- (T-421) GPU on the Dell: liquid pills about 25 % for 30 s after every input at Home (each pill re-renders crop, blur and shader every frame; the 04 §3.8 "decide on the Dell" number); Settings in active use about 40 % (was 30 %) from the new page blur: a cheaper page blur (smaller texture, or bake it while the blobs rest).
+- (T-421 design, lead decision) Performance tier: Settings rows (`controls/SettingControl.qml:52`, `Theme.glass` on every tier) sit translucent over sharp blobs, against 04 §3.6 "glass without blur turns opaque": decided (lead, 2026-11-10) `glassOpaque` on Performance, like GlassPill and GlassSheet; check the other translucent cards; then fix the new §3.6 sentence "never sits over a sharp blob edge".
+- (T-421) Midnight with the default look: sheet and pills blur a dark low-contrast L0 and read as flat grey: a design pass on blob strength or tint (T-282).
+- (T-421) The Dell logs "ShaderEffect: Texture t7 is not assigned a valid texture provider" on every app focus change: GlassShadow's `layer.enabled: shadow.visible` toggle (evidence for T-430).
+- (T-421) ACBR (Electron) starts on the Dell but never shows a window, and two orphaned ACBR scopes were running (one from before the session): Play looks dead to the owner.
+- (T-424) Every ruya-* process (inputd, library, profiles, session, shell, store, update) runs as `unconfined_service_t`: "SELinux enforcing" protects none of our services until a policy module confines them (security, high).
+- (T-424) Exposure is high for ruya-boot-marker (9.6), ruya-compositor@ (9.2) and ruya-flathub-remote (8.7): harden them, then lower the baseline (`image/security-baseline.json`).
+- (T-424) systemd-resolved listens on tcp/udp 5355 (LLMNR) on every interface: switch LLMNR off.
+- (T-424) sudo, pkexec and pam_timestamp_check are setuid; a console OS needs none of them (polkitd is used over D-Bus): remove them from the image or drop their setuid bit.
+- (T-424, T-424 review, for T-425) The release profile drops sshd (on 0.0.0.0 and [::]), root as a login account and `PasswordAuthentication yes`, and its baseline says so.
+- (T-424 review) `vm-security-check.sh` compares ports as proto:port: compare proto:scope:port (loopback vs any), so a loopback service that starts listening on every address fails.
+- (lead-9) CI warns that `actions/checkout@v4` runs on the deprecated Node.js 20: move every workflow to `actions/checkout@v5` (after T-423 merges, which edits `ci.yml`).
+
 ## Decided records moved 2026-11-10 (lead-9)
 
 - **Decided 2026-11-10 (owner, asked in lead-8):** Ruya Web allowed (ADR-029 Accepted: allow-list gateway, Settings-level actions minus profiles/PINs/update, Avahi and nftables); Companion later, remote only through your own VPN (ADR-030 parked); GE-Proton ships its codecs as other gaming distributions do, sources mirrored (ADR-025); a content-provider API (T-420), Verified levels internal only (ADR-031); the overlay keeps "Ruya Hub", the data service becomes `ruya-gamedata`; the Xbox adapter may download Microsoft's firmware on the player's request (T-354).

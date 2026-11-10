@@ -10,6 +10,11 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | [T-426](tasks/T-426-epic-release-security.md) | **[lead]** EPIC release security (Phase 6): signing, update authenticity, data at rest, factory reset, ceilings: spec and tasks | todo | T-424, T-425 |
 | [T-394](tasks/T-394-options-menu-on-game-cards.md) | Options menu on game and app cards: Details, Activity, Uninstall and the rest of T-393's list | todo | T-393 |
 | [T-395](tasks/T-395-options-menu-on-other-surfaces.md) | Options menu on the other surfaces: Store cards, Downloads rows, device rows | todo | T-394 |
+| [T-434](tasks/T-434-glass-cost-and-performance-tier-rows.md) | Glass follow-ups: Performance-tier rows opaque, the picker's idle blur texture, the page blur's GPU cost | todo | — |
+| [T-435](tasks/T-435-acbr-shows-no-window-on-the-dell.md) | ACBR (Electron) starts on the Dell but never shows a window; orphaned app scopes | todo | — |
+| [T-431](tasks/T-431-image-hardening-llmnr-setuid-bus-denies-units.md) | Image hardening from the baseline: LLMNR off, no setuid helpers, explicit bus denies, three loose units | todo | — |
+| [T-433](tasks/T-433-dependency-upgrades-quick-xml-zbus-6-ci-actions.md) | Dependency upgrades: quick-xml, zbus 6, actions/checkout v5, a checked cargo-deny download | todo | — |
+| [T-432](tasks/T-432-selinux-confine-ruya-services.md) | SELinux: confine the ruya services (today every one runs unconfined_service_t) | todo | T-431 |
 | [T-429](tasks/T-429-test-harness-activation-loss-and-clock-flake.md) | Test harness: say when the window lost activation; the status-clock test near midnight | todo | — |
 | [T-427](tasks/T-427-bluetooth-leftovers-scan-alias-logging.md) | Bluetooth leftovers: scan after a primary flip, toast names, logging, address tails | todo | — |
 | [T-428](tasks/T-428-store-follow-ups-row-index-and-effects.md) | Store follow-ups: a row remembers its card, a scrolled shot, card effects only where needed | todo | — |

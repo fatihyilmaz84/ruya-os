@@ -33,6 +33,7 @@ No other mask in the shell can go blank the way GlassSheet's did (T-387), and ke
 - `docs/specs/04-design-system.md` §3.6 if L0's hold changes.
 
 ## Hints
+- Evidence from T-421 (lead-9): the Dell logs "ShaderEffect: Texture t7 is not assigned a valid texture provider" on every app focus change, from GlassShadow's `layer.enabled: shadow.visible` on `box`/`cutout` with an unchanged `maskSource`.
 - From the STATUS Inbox (T-387 reviews, lead-8), triaged by lead-9 on 2026-11-10. The Dell is a pure test machine (root `CLAUDE.md`).
 
 ## Outcome

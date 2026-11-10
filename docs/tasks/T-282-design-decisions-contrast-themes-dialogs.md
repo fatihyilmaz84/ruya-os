@@ -24,6 +24,7 @@ Decide each of these, write the decision (with the measured figure or screenshot
 10. **Copy rule for percentages**: "5%" vs "150 %" (en `150%`, tr `%150`); one rule in 04 §5.
 11. **04 §7 wording**: the general 4.5:1 bullet contradicts the large-text exceptions; peek rows over a wallpaper are unmeasured; `tst_theme_contrast`'s peek model assumes group opacity (Daylight slightly optimistic); Store/Games peek still open. Reword and state which rows the gate must have (T-283).
 12. **TextEntry keyboard over glass** (T-387 reviews): its keys are translucent `Theme.glass` with no card, so two `shots` frames saw it see-through. Keep it, or give the keyboard a card / `glassOpaque` keys. Recommendation: a glass card behind the keys.
+13. **Midnight with the default look** (T-421): the sheet and pills blur a dark, low-contrast L0 and read as flat grey even when blurred. Options: stronger blobs or a lighter tint on Midnight. Decide with Dell captures.
 
 ## Out of scope
 - Any change to QML or C++ (the builder tasks do that). Brand art and logos (owner decisions). A new theme's palette beyond what item 5 needs.

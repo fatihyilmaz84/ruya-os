@@ -13,6 +13,8 @@ A red `shots` run caused by the desktop says so in its own words, and `tst_timez
 2. `dev.ps1 shots` keeps the `build-win` `ruya-qmltest.txt` log of a red run under `output/` (one file per run, the last 5 kept).
 3. Find why `tst_timezone`'s status-clock test failed once near 23:00 (day rollover, a 12/24 h edge, a timezone offset crossing midnight) and fix the test or the code, with a test that pins the edge time (an injected clock, never the wall clock).
 
+4. `tst_settings::test_a_hidden_focused_row_hands_the_focus_on` failed once in a full `test` on a loaded host (lead-9, 2026-11-10: line 448, `tryCompare(r(4), "activeFocus", true)` after `r(4).visible = true`; 3 of 3 green alone): find the race (the hand-on runs on a timer or a `callLater`?) and fix the cause, not the timeout.
+
 ## Out of scope
 - Rewriting the screenshot harness.
 

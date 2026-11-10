@@ -18,6 +18,9 @@ Status: todo · Phase: 2 · Depends: T-424 · Area: image, scripts, docs · Size
 5. `check-image-manifest.sh` and `98-guard.sh` refuse a `release` build that contains a development-only package or unit (one list, in one file).
 6. How a `release` image is tested without SSH: the checks that need a shell run on `dev`; `release` is checked from outside (boot marker on the serial log, ports probed from the host) and by mounting the disk image. Write the recipe; do not weaken any existing check.
 
+## From T-424 (lead-9)
+- The release profile's baseline drops sshd (listening on 0.0.0.0 and [::] on the dev image), root as a login account and `PasswordAuthentication yes`; `image/security-baseline.json` gets a release variant (or a profile key) that `vm-security-check.sh` reads.
+
 ## Out of scope
 - Signing, update channels, full-disk encryption, factory reset (T-426).
 - The installer ISO that erases every disk: only record what the release installer must ask (an Inbox line or T-426).
