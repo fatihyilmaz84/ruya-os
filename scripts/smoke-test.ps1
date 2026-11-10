@@ -71,7 +71,7 @@ $qemuArgs = @(
 )
 if ($Audio) {
     $audiodev = if ($AudioBackend -eq "wav") { "wav,id=snd0,path=$(Join-Path $Repo 'output\vm-audio.wav')" } else { "dsound,id=snd0" }
-    $qemuArgs += @("-audiodev", $audiodev, "-device", "intel-hda", "-device", "hda-output,audiodev=snd0")
+    $qemuArgs += @("-audiodev", $audiodev, "-device", "intel-hda", "-device", "hda-duplex,audiodev=snd0")
 }
 # PS 5.1 Start-Process does not quote array elements: wrap any with spaces ("C:\Program Files").
 $qemuArgs = $qemuArgs | ForEach-Object { if ($_ -match ' ') { '"' + $_ + '"' } else { $_ } }

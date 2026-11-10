@@ -36,6 +36,7 @@ Play on an Electron app (ACBR on the Dell) shows its window through the shell, a
 
 ## Outcome
 Verified: hw (vm pending: vm-session-check)
+Lead, 2026-11-10, image 0.0.63: `vm-session-check.sh check`, `display` and `restart` PASS (XDG_SESSION_TYPE, the second scope after Stop, the sweep after SIGKILL). Resume from Home for ACBR on the Dell stays pending (hw).
 UX notes: on the Dell (0.0.62 shell, this branch's `ruya-session`) ACBR's window came up full screen with the focus (compositor log `app focus app: true`); Guide opened the quick menu with ACBR's app part, Home put Home in front with the focus on ACBR's Running card; Close game from the quick menu over the app stopped it and Home came back. **Resume from the Running card did not work on the Dell** ("ACBR is already running" toast): the 0.0.62 shell has no fix for the late app id; the fix (below) is host-tested only, as no shell was built for the Dell.
 
 **Causes, with evidence (Dell, journal of uid 1000):**

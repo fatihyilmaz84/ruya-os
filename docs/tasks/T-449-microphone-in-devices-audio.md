@@ -36,6 +36,7 @@ The shell can list the console's microphones (USB headset, Bluetooth headset, a 
 
 ## Outcome
 Verified: host (vm pending: vm-audio-check)
+Lead, 2026-11-10, image 0.0.63: `vm-audio-check.sh` AUDIO_INPUT_OK once the VM had a capture source (smoke-test.ps1 now uses `hda-duplex`): ListInputs gives the analog input as default, an unknown id and a sink name answer unknown-input, SetInput of the default ok. Now Verified: vm.
 
 `dev.ps1 test` ALL GREEN (1079 QML passed, 90 skipped; Rust: 478 ruya-devices tests, 12 of them new).
 
