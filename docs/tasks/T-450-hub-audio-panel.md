@@ -12,6 +12,8 @@ From the Hub over a game the player sets the volume, mutes, picks the output (TV
 ## Scope
 1. The Audio panel of `02` §1.6: master volume, mute, the current output and output selection (`ListOutputs`/`SetOutput`), the microphone list and mute (T-449).
 2. The microphone tile on the Quick Hub, present only when `ListInputs` is not empty.
+3. Keep the focused row clear of the Hub list's edge fade (T-448 review: list top and bottom margins equal to the fade height; hub-4 shows a faded tile).
+4. "Adjust" with Left/Right as the Volume row's hint (T-448 left it out).
 
 ## Out of scope
 - Media controls (07 §5.4 needs the app's media info: T-306).
