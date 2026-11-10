@@ -178,9 +178,9 @@ FocusScope {
         item.anchors.fill = appLayer
         // The application id the window gives itself, when the compositor knows it (Compositor.qml),
         // and the running instance its client's process belongs to, asked of Session1 by the pid
-        // (T-459; "" until the answer, and for a process of no instance).
+        // (T-459; "" until the answer, and for a process of no instance; `pending` until it comes).
         const record = { item: item, id: ++appSerial, profile: profile ?? "", appId: item.appId ?? "",
-                         pid: item.pid ?? 0, instance: "" }
+                         pid: item.pid ?? 0, instance: "", pending: (item.pid ?? 0) > 0 }
         item.visible = appShownTo(record.profile)
         appGuard.createObject(item, { recordId: record.id, appItem: item })
         apps = apps.concat([record])
@@ -193,13 +193,29 @@ FocusScope {
             Session.instanceOfPid(record.pid)
     }
 
-    // Session1 named the instance of a window's process (T-459): the record takes it, and a window
-    // that is the app being launched after all (its own app id did not say so) ends the splash.
-    function instanceArrived(pid, instance) {
-        const record = apps.find(r => r.pid === pid && r.instance === "")
-        if (!record || instance === "")
+    // Session1 answered for a window's process (T-459): on "ok" the record takes the instance (unless
+    // the instance is known to run as another profile than the window's), and a window that is the
+    // app being launched after all (its own app id did not say so) ends the splash. A Close game that
+    // waited for this answer goes on.
+    function instanceArrived(pid, status, instance) {
+        const record = apps.find(r => r.pid === pid && r.pending)
+        if (!record)
             return
-        apps = apps.map(r => r.id === record.id ? Object.assign({}, r, { instance: instance }) : r)
+        const run = Session.running.find(r => r.instance === instance)
+        const ok = status === "ok" && instance !== "" && !(run && record.profile !== "" && run.profile !== record.profile)
+        if (status !== "ok")
+            console.warn("ruya-shell: InstanceOfPid", pid, "answered", status, "(the window goes by its app id)")
+        else if (!ok)
+            console.warn("ruya-shell: InstanceOfPid", pid, "named", instance, "of another profile: ignored")
+        apps = apps.map(r => r.id === record.id ? Object.assign({}, r, { instance: ok ? instance : "", pending: false }) : r)
+        if (closeWaitsFor === record.id) {
+            closeWaitsFor = -1
+            closeWaitTimer.stop()
+            if (systemPanel.open && focusedApp === record.item)
+                closeFrontGame(true)
+        }
+        if (!ok)
+            return
         const st = launchState
         if (st && appShownTo(record.profile) && (st.instance === instance || appIdOf(recordOf(record.item)) === st.appId)) {
             endLaunch(false)
@@ -656,8 +672,7 @@ FocusScope {
             Notifications.show(qsTr("%1 could not be started. Try again.").arg(name), "error")
         }
         function onInstanceOfPidFinished(pid, status, instance) {
-            if (status === "ok")
-                root.instanceArrived(pid, instance)
+            root.instanceArrived(pid, status, instance)
         }
         function onStopFinished(instance, status) {
             if (status !== "ok" && status !== "unknown-instance")
@@ -748,29 +763,72 @@ FocusScope {
     }
 
     // Close game: ask the service to stop the app in front and go Home; the card's pill goes when the
-    // service reports AppExited. The instance is the window's (runningFor: its process's, else its app
-    // id's; one already stopping is asked again, the service says "ok"); when neither names a running
-    // app (T-459: Session1 could not tell, and the window's own id is not its Flatpak id), the
-    // profile's newest app. With no instance at all nothing can be stopped: a warning says so and the
-    // Hub stays, never a silent Home with the game still running.
-    function closeFrontGame() {
-        const record = focusedApp ? recordOf(focusedApp) : undefined
-        let instance = (quickMenuApp ? quickMenuApp.instance : "") || (record ? record.instance : "")
-        const own = record && record.appId !== ""
-                    ? Session.running.find(r => r.profile === Profiles.activeProfile && r.appId === record.appId) : undefined
-        if (instance === "" && own)
-            instance = own.instance     // stopping already: asked again
-        if (instance === "" && !own) {
-            const newest = newestRunning()
-            instance = newest ? newest.instance : ""
+    // service reports AppExited. The instance is the window's own (its process's, T-459), else that of
+    // the app id it gives itself (one already stopping is asked again, the service says "ok"). A window
+    // that names no running app (Session1 could not tell and its own id is not its Flatpak id, or it
+    // names none) closes the profile's one running app that no other window claims, and only when that
+    // is unambiguous (`unclaimedInstance`); while Session1's answer for the window is on its way, Close
+    // waits for it (at most `closeWaitMs`). With no instance nothing is stopped: a warning says so and
+    // the Hub stays, never a silent Home with the game still running, and never the wrong game.
+    property int closeWaitsFor: -1
+    property int closeWaitMs: 2000
+    Timer {
+        id: closeWaitTimer
+        interval: root.closeWaitMs
+        onTriggered: {
+            const id = root.closeWaitsFor
+            root.closeWaitsFor = -1
+            const record = root.apps.find(r => r.id === id)
+            if (record && systemPanel.open && root.focusedApp === record.item)
+                root.closeFrontGame(true)
         }
+    }
+
+    function closeFrontGame(answerLate) {
+        const record = focusedApp ? recordOf(focusedApp) : undefined
+        let instance = record ? record.instance : ""
+        if (instance === "" && record && record.appId !== "") {
+            const mine = Session.running.filter(r => r.profile === Profiles.activeProfile && r.appId === record.appId)
+            const own = mine.find(r => r.state !== "stopping") ?? mine[0]
+            instance = own ? own.instance : ""
+        }
+        if (instance === "" && record && record.pending && !answerLate) {
+            closeWaitsFor = record.id       // instanceArrived goes on
+            closeWaitTimer.restart()
+            return
+        }
+        if (instance === "" && record)
+            instance = unclaimedInstance(record)
         if (instance === "") {
-            const title = quickMenuApp ? quickMenuApp.title : qsTr("Running app")
-            Notifications.show(qsTr("Could not close %1.").arg(Notifications.named(title)), "warning")
+            const title = quickMenuApp ? quickMenuApp.title : ""
+            Notifications.show(title !== "" && title !== qsTr("Running app")
+                               ? qsTr("Could not close %1.").arg(Notifications.named(title))
+                               : qsTr("Could not close the running app."), "warning")
             return
         }
         Session.stop(instance)          // a frozen game: the service thaws it first, so it can quit (T-457)
         sendAppsHome()
+    }
+
+    // The running app of the signed-in profile a window that names none could be (T-459): the only one
+    // (not stopping) that no other window shown to the profile claims, by its instance or its app id;
+    // "" when there is none, more than one, or another window names none either.
+    function unclaimedInstance(record) {
+        const active = Profiles.activeProfile
+        const others = apps.filter(r => r.id !== record.id && appShownTo(r.profile))
+        const claimed = []
+        for (const r of others) {
+            if (r.instance !== "") {
+                claimed.push(r.instance)
+                continue
+            }
+            const run = r.appId !== "" ? Session.running.find(x => x.profile === active && x.appId === r.appId) : undefined
+            if (!run)
+                return ""                   // another window that names no running app: ambiguous
+            claimed.push(run.instance)
+        }
+        const free = Session.running.filter(x => x.profile === active && x.state !== "stopping" && !claimed.includes(x.instance))
+        return free.length === 1 ? free[0].instance : ""
     }
 
     // Opening the Hub over an app freezes it, returning to it thaws it (T-457, 02 §1.6).
@@ -1735,7 +1793,7 @@ FocusScope {
         }
         onCloseRequested: open = false
         onHomeRequested: root.sendAppsHome()
-        onCloseGameRequested: root.closeFrontGame()
+        onCloseGameRequested: root.closeFrontGame(false)
         onSwitchToRequested: appId => root.switchToApp(appId)
         // A Recent row: close the Hub first (focus goes to the app or the page), then start the game
         // as Home's Play does (Library.launch -> launchApp: the splash).

@@ -51,6 +51,8 @@ public:
     Q_INVOKABLE void mockFailFreeze(bool fail);
     // Thaw answers "failed" from now on and changes nothing (T-457).
     Q_INVOKABLE void mockFailThaw(bool fail);
+    // InstanceOfPid answers after `ms` from now on (0 again after mockReset), T-459.
+    Q_INVOKABLE void mockDelayPidAnswers(int ms);
     // The process id the mock gives a launched instance's window client (0 when unknown), T-459.
     Q_INVOKABLE int mockPidOf(const QString &instance) const;
     // "freeze <instance>", "thaw <instance>", "stop <instance>" in the order they were asked.

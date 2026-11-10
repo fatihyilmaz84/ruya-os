@@ -238,20 +238,139 @@ Item {
             compare(Session.mockCalls().filter(c => c.startsWith("stop")), [])
         }
 
-        // A window that names no running app and whose process is of no instance closes the profile's
-        // newest app (the fallback when Session1 cannot tell); the Hub's title stays the window's own.
-        function test_close_falls_back_to_the_newest_app() {
-            start()
+        // Starts `appId` for p2 without a window and returns its instance once it runs.
+        function launchBare(appId) {
             const n = launchedSpy.count
-            Session.launch("org.example.Racer", "p2")
+            Session.launch(appId, "p2")
             tryCompare(launchedSpy, "count", n + 1)
             const instance = launchedSpy.signalArguments[n][3]
+            verify(instance !== "")
             tryVerify(() => recordOf(instance) !== undefined && recordOf(instance).state === "running")
+            return instance
+        }
+
+        // A window Session1 cannot map (its pid is of no instance), focused; waits for the answer.
+        function unmappedWindow(props) {
+            const n = pidSpy.count
+            const app = createTemporaryObject(appComponent, host, Object.assign({ pid: 99999 }, props ?? {}))
+            tc.shell.addApp(app, "p2")
+            tryVerify(() => app.activeFocus, 2000)
+            tryCompare(pidSpy, "count", n + 1)
+            compare(pidSpy.signalArguments[n][1], "not-found")
+            compare(windowRecord(app).instance, "")
+            verify(!windowRecord(app).pending)
+            return app
+        }
+
+        // Two games run and the window in front cannot be mapped: either could be it, so nothing is
+        // stopped (round 2: the newest app may be the one in the background).
+        function test_close_never_guesses_between_two_games() {
+            start()
+            const racer = launchBare("org.example.Racer")
+            const puzzle = launchBare("org.example.Puzzle")
+            unmappedWindow()
+            openHub()
+            goTo("closeGame")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => toastTexts().includes("Could not close python3.12."), 2000, "a warning says so")
+            verify(find("systemPanel").open, "the Hub stays open")
+            verify(find("quickMenuItem_closeGame").focused, "the focus stays on Close game")
+            compare(Session.mockCalls().filter(c => c.startsWith("stop")), [], "no game was stopped")
+            verify(recordOf(racer) !== undefined && recordOf(puzzle) !== undefined)
+        }
+
+        // One game, two windows Session1 cannot map: either could be the game's, so nothing is stopped.
+        function test_close_never_guesses_with_two_unmapped_windows() {
+            start()
+            const lone = launchBare("org.example.Puzzle")
+            unmappedWindow({ pid: 99998, appId: "superfluous-returnz" })
+            unmappedWindow()
+            openHub()
+            goTo("closeGame")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => toastTexts().includes("Could not close python3.12."), 2000)
+            compare(Session.mockCalls().filter(c => c.startsWith("stop")), [])
+            verify(recordOf(lone) !== undefined)
+        }
+
+        // Two games, the other one's window is mapped: the window in front can only be the other game.
+        function test_close_takes_the_one_game_no_other_window_claims() {
+            start()
+            const racer = launchBare("org.example.Racer")
+            const puzzle = launchBare("org.example.Puzzle")
+            const other = createTemporaryObject(appComponent, host, { appId: "org.example.Puzzle", pid: Session.mockPidOf(puzzle) })
+            tc.shell.addApp(other, "p2")
+            tryVerify(() => windowRecord(other).instance === puzzle)
+            unmappedWindow()
+            openHub()
+            goTo("closeGame")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => !tc.shell.appOpen, 2000, "Home is in front")
+            compare(Session.mockCalls().filter(c => c.startsWith("stop")), ["stop " + racer])
+        }
+
+        // Close while Session1's answer for the window is on its way: it waits, then stops the game the
+        // answer names (not the newest one).
+        function test_close_waits_for_the_answer() {
+            start()
+            const racer = launchBare("org.example.Racer")
+            launchBare("org.example.Puzzle")
+            Session.mockDelayPidAnswers(400)
+            const app = createTemporaryObject(appComponent, host, { pid: Session.mockPidOf(racer) })
+            tc.shell.addApp(app, "p2")
+            tryVerify(() => app.activeFocus, 2000)
+            verify(windowRecord(app).pending, "the answer is on its way")
+            openHub()
+            goTo("closeGame")
+            keyClick(Qt.Key_Return)
+            verify(find("systemPanel").open, "nothing happens before the answer")
+            compare(Session.mockCalls().filter(c => c.startsWith("stop")), [])
+            tryVerify(() => !tc.shell.appOpen, 2000, "the answer came: Home is in front")
+            compare(Session.mockCalls().filter(c => c.startsWith("stop")), ["stop " + racer])
+            compare(toastTexts().filter(t => t.startsWith("Could not close")), [])
+        }
+
+        // Session1 names an instance of another profile for a window shown to p2: the window does not
+        // take it.
+        function test_an_instance_of_another_profile_is_not_taken() {
+            start()
+            const n = launchedSpy.count
+            Session.launch("org.example.Racer", "p1")
+            tryCompare(launchedSpy, "count", n + 1)
+            const theirs = launchedSpy.signalArguments[n][3]
+            tryVerify(() => recordOf(theirs) !== undefined && recordOf(theirs).state === "running")
+            const app = createTemporaryObject(appComponent, host, { pid: Session.mockPidOf(theirs) })
+            tc.shell.addApp(app, "p2")
+            tryCompare(pidSpy, "count", 1)
+            compare(pidSpy.signalArguments[0][1], "ok")
+            tryVerify(() => !windowRecord(app).pending)
+            compare(windowRecord(app).instance, "", "p1's instance is not this window's")
+        }
+
+        // A window that names nothing, with nothing running: the generic wording.
+        function test_close_of_an_unnamed_window_says_the_running_app() {
+            start()
+            const app = createTemporaryObject(appComponent, host, { appId: "" })
+            tc.shell.addApp(app, "p2")
+            tryVerify(() => app.activeFocus, 2000)
+            openHub()
+            goTo("closeGame")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => toastTexts().includes("Could not close the running app."), 2000)
+            verify(find("systemPanel").open)
+        }
+
+        // A window that names no running app and whose process is of no instance closes the profile's
+        // one running app (the fallback when Session1 cannot tell); the Hub's title stays the window's own.
+        function test_close_falls_back_to_the_only_app() {
+            start()
+            const instance = launchBare("org.example.Racer")
+            const n = pidSpy.count
             const app = createTemporaryObject(appComponent, host, { pid: 99999 })
             tc.shell.addApp(app, "p2")
             tryVerify(() => app.activeFocus, 2000)
-            tryCompare(pidSpy, "count", 1)
-            compare(pidSpy.signalArguments[0][1], "not-found")
+            tryCompare(pidSpy, "count", n + 1)
+            compare(pidSpy.signalArguments[n][1], "not-found")
             compare(windowRecord(app).instance, "")
             openHub()
             compare(tc.shell.quickMenuApp.instance, "", "the window names no running app")

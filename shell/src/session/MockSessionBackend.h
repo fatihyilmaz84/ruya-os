@@ -42,6 +42,8 @@ public:
     void reset();
     void setFailFreeze(bool fail) { m_failFreeze = fail; }
     void setFailThaw(bool fail) { m_failThaw = fail; }
+    // InstanceOfPid answers after `ms` instead of at once (T-459).
+    void setPidAnswerDelay(int ms) { m_pidDelayMs = ms; }
     QStringList calls() const { return m_calls; }
     // The pid of a launched instance's process (from 4001 up), 0 for an unknown instance.
     int pidOf(const QString &instance) const;
@@ -62,4 +64,5 @@ private:
     QList<RunningApp> m_running;
     int m_next = 1;
     int m_startMs = 300;
+    int m_pidDelayMs = 0;
 };

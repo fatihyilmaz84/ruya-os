@@ -37,6 +37,7 @@ void MockSessionBackend::reset()
     m_calls.clear();
     m_failFreeze = false;
     m_failThaw = false;
+    m_pidDelayMs = 0;
     emit runningListed(m_running);
 }
 
@@ -196,5 +197,5 @@ void MockSessionBackend::instanceOfPid(int pid)
             instance = r.instance;
         }
     }
-    QTimer::singleShot(0, this, [this, pid, status, instance] { emit instanceOfPidFinished(pid, status, instance); });
+    QTimer::singleShot(m_pidDelayMs, this, [this, pid, status, instance] { emit instanceOfPidFinished(pid, status, instance); });
 }

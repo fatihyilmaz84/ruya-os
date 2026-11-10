@@ -114,6 +114,12 @@ void Session::instanceOfPid(int pid)
     m_backend->instanceOfPid(pid);
 }
 
+void Session::mockDelayPidAnswers(int ms)
+{
+    if (auto *mock = qobject_cast<MockSessionBackend *>(m_backend.get()))
+        mock->setPidAnswerDelay(ms);
+}
+
 int Session::mockPidOf(const QString &instance) const
 {
     if (auto *mock = qobject_cast<MockSessionBackend *>(m_backend.get()))
