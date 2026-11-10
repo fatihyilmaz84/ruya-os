@@ -5,7 +5,7 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | ID | Title | Status | Depends |
 |---|---|---|---|
 | [T-362](tasks/T-362-compositor-xdg-output-and-socket-follow-ups.md) | Compositor: xdg-output for games, profile-socket and log follow-ups | todo | — |
-| [T-423](tasks/T-423-ci-supply-chain-and-secret-scan.md) | CI gates: cargo-deny (advisories, licences), secret scan in CI and the hook, a bus-policy lint | todo | — |
+| [T-423](tasks/T-423-ci-supply-chain-and-secret-scan.md) | CI gates: cargo-deny (advisories, licences), secret scan in CI and the hook, a bus-policy lint | in-progress | — |
 | [T-424](tasks/T-424-vm-security-posture-check.md) | `vm-security-check.sh`: hardening scores, listening ports, SELinux, setuid files against a baseline | todo | — |
 | [T-422](tasks/T-422-plan-lint-deps-owners-stale-claims.md) | Plan lint: board and headers agree on dependencies, [lead], parked and stale claims, budgets | todo | — |
 | [T-425](tasks/T-425-image-variants-dev-and-release.md) | **[lead]** Two image variants (VM this task): `dev` with SSH, `release` without, base images by digest, a check | todo | T-424 |

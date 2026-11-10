@@ -1,6 +1,6 @@
 # T-423 - CI gates: dependency advisories and licences, secret scan, bus-policy lint
 
-Status: todo · Phase: 2 · Depends: — · Area: ci, scripts, services · Size: S · Owner: builder · Complexity: normal · Developer surface: none
+Status: in-progress · Phase: 2 · Depends: — · Area: ci, scripts, services · Size: S · Owner: builder · Complexity: normal · Developer surface: none
 
 ## Goal
 A vulnerable or wrongly licensed crate, a committed secret, or a D-Bus policy that is no longer deny-by-default fails on every push, not only when the lead remembers to run a script. Today `scan-secrets.ps1` runs only inside `push-main.ps1`, CI has no advisory or licence check, and nothing reads the bus policies (plan audit 2026-11-10).

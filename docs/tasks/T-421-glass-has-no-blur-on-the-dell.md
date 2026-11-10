@@ -1,6 +1,6 @@
 # T-421 - Glass on the Dell has no Gaussian blur and no transparency (0.0.61), and the shell uses about 40 % of the GPU at Home
 
-Status: todo · Phase: 2 · Depends: — · Area: shell (glass: GlassSheet, SectionNav glass, status glass, SmoothMask, Theme effects), image (Qt/Mesa on the Dell) · Size: M · Owner: builder · Complexity: hard · Developer surface: none
+Status: in-progress · Phase: 2 · Depends: — · Area: shell (glass: GlassSheet, SectionNav glass, status glass, SmoothMask, Theme effects), image (Qt/Mesa on the Dell) · Size: M · Owner: builder · Complexity: hard · Developer surface: none
 
 ## Goal
 On the Dell (Intel UHD 630, Mesa, the shell as the compositor) every glass surface looks like 04 §3.6 says: the wallpaper behind it blurred (Gaussian) and tinted, partly transparent, with the sheen and rim. Owner report 2026-11-10 on 0.0.61: "the wallpapers are visible, but there is no gaussian blur/transparency effect". **Dispatch to Opus at high effort** (owner: "send a capable model"); reproduce on the Dell first, then fix.
