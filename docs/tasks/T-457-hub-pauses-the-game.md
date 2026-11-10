@@ -1,6 +1,6 @@
 # T-457 — Ruya Hub pauses the game: freeze on open, thaw on close
 
-Status: todo · Phase: 2 · Depends: T-448 · Area: api, services (ruya-session), shell · Size: M · Owner: builder · Complexity: complex · Developer surface: internal
+Status: in-progress · Phase: 2 · Depends: — · Area: api, services (ruya-session), shell · Size: M · Owner: builder · Complexity: complex · Developer surface: internal
 
 ## Goal
 Opening Ruya Hub over a game pauses it (no CPU, no sound, its last frame under the Hub) and closing the Hub returns to gameplay at once; online players can turn it off.

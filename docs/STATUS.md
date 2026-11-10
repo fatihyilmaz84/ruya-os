@@ -24,7 +24,7 @@ Open work only (the front of the board; the rest is in `STATUS-backlog.md`), in 
 | ID | Title | Status | Depends |
 |---|---|---|---|
 | [T-448](tasks/T-448-quick-hub.md) | The Quick Hub: status row, quick tiles, running and recent games | in-progress | — |
-| [T-457](tasks/T-457-hub-pauses-the-game.md) | Ruya Hub pauses the game: freeze on open, thaw on close (owner, 2026-11-10) | todo | T-448 |
+| [T-457](tasks/T-457-hub-pauses-the-game.md) | Ruya Hub pauses the game: freeze on open, thaw on close (owner, 2026-11-10) | in-progress | — |
 | [T-366](tasks/T-366-ruya-input-spike-engine-and-design.md) | **[lead]** Ruya Input: spike, engine decision and the design (06-input.md, Input1 draft) | todo | — |
 | [T-367](tasks/T-367-a-game-sees-the-pad.md) | **[lead]** A game sees the pad: a virtual pad per controller, for the signed-in profile only, routed by focus | todo | T-366 |
 | [T-393](tasks/T-393-options-menu-design.md) | **[lead]** Design: the Options (context) menu: component, contents per surface, motion, focus | todo | — |
