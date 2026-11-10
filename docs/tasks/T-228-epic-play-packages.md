@@ -6,6 +6,8 @@ Status: blocked · Phase: 7 · Depends: — · Area: docs, api, services, shell,
 
 **Parked by the owner (2026-11-06).** ADR-014 is accepted (conditional on the T-229 spike), D2 and D3 are decided (RuyaOS ships no emulators, Proton, firmware or discs; Wine is the one system runner and the image preinstalls it), but the owner wants the current visual-polish lanes and T-164 first. No child task starts and no `.play` code is written until the owner says to start; then the lead sets this task `done` ("epic released") and the children become eligible by their own dependencies.
 
+**Stores and review (2026-11-10, ADR-032):** read `docs/specs/05-play-packages.md` section 18 before any child task starts: it corrects the draft (stores carry `.play` files and the console imports them, T-446; one Flatpak transaction queue; sideloading needs an admin; prefix templates, link chains and discs do not fit the format yet; kept saves and a different key). T-230 fixes section 18 C in the schema, T-231 items 16 to 19, T-229 items 5 and 20.
+
 ## Goal
 A developer can build one folder or one `.play.zip` that holds a game (native, Windows under Wine or Proton, or an emulated title), the runner it needs or a pointer to the OS's, art, video, metadata, links, a permission request and update information. A player puts it on a USB stick or downloads it, sees it on the console with its art and permissions, installs it by controller, plays it in a Flatpak sandbox, and it updates safely. Owner request, 2026-11-06.
 

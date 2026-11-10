@@ -137,6 +137,8 @@ Most PC GPUs don't expose CEC. Supported only with a USB-CEC adapter (Pulse-Eigh
 
 Every app page shows its source badge. Unsigned remotes are refused.
 
+**More than one store (ADR-032, owner 2026-11-10; planned, T-440..T-445):** the last row becomes "any other store, added by an admin" with trust `third-party`; the target (adding, what such a store may do, removal, states) is `10-stores.md`. Until T-440 the code says `developer` and has `AddRemote` with no screen.
+
 **As shipped (T-140):** the image has `flathub` as a system remote, signed, and no `fedora` remote (Fedora's OCI remote has no AppStream names). `fedora-flathub-remote` supplies the `.flatpakrepo` with Flathub's key (its filter file is empty, i.e. unfiltered); `ruya-flathub-remote.service` (oneshot, once, marker `/var/lib/flatpak/.ruya-flathub-initialized`, no network needed) adds it and removes `fedora`/`fedora-testing` from systems that had them, and `flatpak-add-fedora-repos.service` is masked. The `ruyaos` remote does not exist yet.
 
 ### 4.3 Store service (`ruya-store`)
