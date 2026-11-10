@@ -17,6 +17,8 @@ Item {
         "settings": 0xe8b8,
         "volume_up": 0xe050,
         "volume_off": 0xe04f,
+        "mic": 0xe31d,
+        "mic_off": 0xe02b,
         "battery_full": 0xe1a5,
         "battery_alert": 0xe19c,
         "battery_charging_full": 0xe1a3,

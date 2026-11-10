@@ -2283,7 +2283,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>QuickMenu</name>
     <message>
-        <location filename="../qml/QuickMenu.qml" line="+66"/>
+        <location filename="../qml/QuickMenu.qml" line="+85"/>
         <source>Wi-Fi</source>
         <translation>Wi-Fi</translation>
     </message>
@@ -2294,31 +2294,53 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+1"/>
+        <location line="+200"/>
+        <location line="+26"/>
         <source>Mute</source>
         <translation>Sessiz</translation>
     </message>
     <message>
-        <location line="+17"/>
+        <location line="-225"/>
+        <source>Mute mic</source>
+        <translation>Mikrofonu sustur</translation>
+    </message>
+    <message>
+        <location line="+18"/>
         <location line="+4"/>
         <location line="+1"/>
+        <location line="+1"/>
+        <location line="+123"/>
+        <location line="+2"/>
         <source>Off</source>
         <translation>Kapalı</translation>
     </message>
     <message>
-        <location line="-3"/>
-        <location line="+282"/>
+        <location line="-129"/>
+        <location line="+404"/>
         <source>Not connected</source>
         <translation>Bağlı değil</translation>
     </message>
     <message>
-        <location line="-280"/>
+        <location line="-402"/>
+        <location line="+125"/>
+        <location line="+2"/>
         <source>On</source>
         <translation>Açık</translation>
     </message>
     <message>
-        <location line="+18"/>
+        <location line="-106"/>
         <source>Could not change Wi-Fi.</source>
         <translation>Wi-Fi değiştirilemedi.</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Could not switch the audio output.</source>
+        <translation>Ses çıkışı değiştirilemedi.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Could not switch the microphone.</source>
+        <translation>Mikrofon değiştirilemedi.</translation>
     </message>
     <message>
         <location line="+7"/>
@@ -2326,12 +2348,50 @@ Bu geri alınamaz.</translation>
         <translation>Bluetooth değiştirilemedi.</translation>
     </message>
     <message>
-        <location line="+55"/>
+        <location line="+69"/>
+        <location line="+93"/>
+        <source>Audio</source>
+        <translation>Ses</translation>
+    </message>
+    <message>
+        <location line="-29"/>
+        <location line="+18"/>
         <source>Resume</source>
         <translation>Devam et</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-16"/>
+        <location line="+11"/>
+        <source>Select</source>
+        <translation>Seç</translation>
+    </message>
+    <message>
+        <location line="-9"/>
+        <source>Adjust</source>
+        <translation>Ayarla</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Next</source>
+        <translation>İleri</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Change</source>
+        <translation>Değiştir</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Toggle</source>
+        <translation>Aç/Kapat</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Start</source>
+        <translation>Başlat</translation>
+    </message>
+    <message>
+        <location line="+7"/>
         <source>Home</source>
         <translation>Ana sayfa</translation>
     </message>
@@ -2356,7 +2416,8 @@ Bu geri alınamaz.</translation>
         <translation>Güç</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-23"/>
+        <location line="+24"/>
         <source>Close</source>
         <translation>Kapat</translation>
     </message>
@@ -2376,9 +2437,25 @@ Bu geri alınamaz.</translation>
         <translation>Kapat</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-27"/>
+        <location line="+28"/>
         <source>Back</source>
         <translation>Geri</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Output</source>
+        <translation>Çıkış</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Microphone</source>
+        <translation>Mikrofon</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Mute microphone</source>
+        <translation>Mikrofonu sustur</translation>
     </message>
     <message>
         <location line="+4"/>
@@ -2386,12 +2463,13 @@ Bu geri alınamaz.</translation>
         <translation>%1 uygulamasına geç</translation>
     </message>
     <message>
-        <location line="+133"/>
+        <location line="+139"/>
+        <location line="+276"/>
         <source>%1, %2</source>
         <translation>%1, %2</translation>
     </message>
     <message>
-        <location line="+107"/>
+        <location line="-169"/>
         <source>Just started</source>
         <translation>Yeni başladı</translation>
     </message>
@@ -2407,17 +2485,17 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+19"/>
-        <location line="+28"/>
+        <location line="+51"/>
         <source>System</source>
         <translation>Sistem</translation>
     </message>
     <message>
-        <location line="-21"/>
+        <location line="-44"/>
         <source>Image version %1</source>
         <translation>Sistem sürümü %1</translation>
     </message>
     <message>
-        <location line="+83"/>
+        <location line="+128"/>
         <source>Volume, muted</source>
         <translation>Ses, sessiz</translation>
     </message>
@@ -2427,7 +2505,7 @@ Bu geri alınamaz.</translation>
         <translation>Ses %1</translation>
     </message>
     <message>
-        <location line="+79"/>
+        <location line="+97"/>
         <source>%1, on</source>
         <translation>%1, açık</translation>
     </message>
@@ -2437,8 +2515,9 @@ Bu geri alınamaz.</translation>
         <translation>%1, kapalı</translation>
     </message>
     <message>
-        <location line="-534"/>
-        <location line="+520"/>
+        <location line="-719"/>
+        <location line="+1"/>
+        <location line="+688"/>
         <source>Muted</source>
         <translation>Sessiz</translation>
     </message>
@@ -2822,12 +2901,11 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+464"/>
         <source>Resume</source>
         <translation>Devam et</translation>
     </message>
     <message>
-        <location line="-462"/>
+        <location line="+2"/>
         <source>Details</source>
         <translation>Ayrıntılar</translation>
     </message>
@@ -2837,36 +2915,24 @@ Bu geri alınamaz.</translation>
         <translation>Son oynananlar</translation>
     </message>
     <message>
-        <location line="+445"/>
-        <location line="+2"/>
-        <location line="+14"/>
+        <location line="+458"/>
         <location line="+3"/>
         <source>Select</source>
         <translation>Seç</translation>
     </message>
     <message>
-        <location line="-18"/>
-        <source>Start</source>
-        <translation>Başlat</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Toggle</source>
-        <translation>Aç/Kapat</translation>
-    </message>
-    <message>
-        <location line="+157"/>
+        <location line="+140"/>
         <source>The chosen sound theme can&apos;t be used. The standard one plays instead.</source>
         <translation>Seçilen ses teması kullanılamıyor. Bunun yerine standart tema çalıyor.</translation>
     </message>
     <message>
-        <location line="-165"/>
-        <location line="+20"/>
+        <location line="-162"/>
+        <location line="+17"/>
         <source>Cancel</source>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="-986"/>
+        <location line="-983"/>
         <source>%1 is already running</source>
         <translation>%1 zaten çalışıyor</translation>
     </message>
@@ -2892,22 +2958,12 @@ Bu geri alınamaz.</translation>
         <translation>Çalışan uygulama</translation>
     </message>
     <message>
-        <location line="+943"/>
+        <location line="+940"/>
         <source>Sections</source>
         <translation>Bölümler</translation>
     </message>
     <message>
-        <location line="-17"/>
-        <source>Close</source>
-        <translation>Kapat</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Back</source>
-        <translation>Geri</translation>
-    </message>
-    <message>
-        <location line="+140"/>
+        <location line="+123"/>
         <source>mock services</source>
         <translation>sahte hizmetler</translation>
     </message>

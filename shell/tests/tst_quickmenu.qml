@@ -133,10 +133,10 @@ Item {
             verify(find("quickMenuItem_resume").focused, "Resume has the focus on every open")
             compare(find("systemPanel").itemKeys, ["resume", "home", "closeGame",
                 "recent:flatpak:org.example.Player", "recent:flatpak:org.example.Puzzle",
-                "volume", "tiles:0", "power", "switch"], "the Hub's order; the running game is not repeated under Recent, and over an app there are two")
+                "volume", "tiles:0", "tiles:1", "panel:audio", "power", "switch"], "the Hub's order; the running game is not repeated under Recent, and over an app there are two; the microphone tile wraps to a second line")
             // Down reaches every row in that order, one key press each.
             for (const key of ["home", "closeGame", "recent:flatpak:org.example.Player", "recent:flatpak:org.example.Puzzle",
-                               "volume", "tiles:0", "power", "switch"]) {
+                               "volume", "tiles:0", "tiles:1", "panel:audio", "power", "switch"]) {
                 keyClick(Qt.Key_Down)
                 compare(focusedKey(), key)
                 verify(find("systemActions").activeFocus)
@@ -163,7 +163,7 @@ Item {
             compare(find("systemPanel").itemKeys, [
                 "recent:flatpak:org.example.Racer", "recent:flatpak:org.example.Player",
                 "recent:flatpak:org.example.Puzzle", "recent:flatpak:org.example.Platformer",
-                "volume", "tiles:0", "power", "switch", "close"])
+                "volume", "tiles:0", "tiles:1", "panel:audio", "power", "switch", "close"])
             verify(!find("quickMenuItem_resume") && !find("quickMenuItem_home") && !find("quickMenuItem_closeGame"))
             compare(focusedKey(), "recent:flatpak:org.example.Racer", "focus starts on the first Recent row")
             verify(find("quickMenuItem_recent:flatpak:org.example.Racer").focused)
@@ -383,9 +383,7 @@ Item {
             start()
             openHub()
             const list = find("systemActions")
-            for (let i = 0; i < 12; ++i)
-                keyClick(Qt.Key_Down)
-            compare(focusedKey(), "close")
+            goTo("close")
             const row = find("quickMenuItem_close")
             const top = row.mapToItem(list, 0, 0).y
             verify(top >= -1 && top + row.height <= list.height + 1, "the row lies inside the list's window")

@@ -1592,10 +1592,7 @@ FocusScope {
         if (modeConfirm.shown)
             return modeConfirm.modalHints
         if (systemPanel.open)
-            return [{ button: "A", text: systemPanel.powerMode ? qsTr("Select")
-                                         : systemPanel.currentKey.startsWith("recent:") ? qsTr("Start")
-                                         : systemPanel.currentKey.startsWith("tiles:") ? qsTr("Toggle") : qsTr("Select") },
-                    { button: "B", text: systemPanel.powerMode ? qsTr("Back") : (systemPanel.hasApp ? qsTr("Resume") : qsTr("Close")) }]
+            return systemPanel.hints
         if (launching)
             return launchSplash.hints
         if (appOpen)
