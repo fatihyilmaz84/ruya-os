@@ -194,6 +194,16 @@ function Run-QmlTests([string]$ShotsDir, [string]$InputFile) {
     Remove-Item Env:\QSG_RENDER_LOOP -ErrorAction SilentlyContinue
     Remove-Item Env:\QT_QPA_PLATFORM -ErrorAction SilentlyContinue
     Get-Content $log | Where-Object { $_ -match '^(FAIL|XPASS|SKIP|Totals)|failure location|QWARN|QCRITICAL' } | ForEach-Object { Write-Host "    $_" }
+    # A red `shots` run keeps its full log (build-win is rebuilt and overwritten): one file per run,
+    # the last 5 kept (T-429).
+    if ($ShotsDir -and $code -ne 0 -and (Test-Path $log)) {
+        $keep = Join-Path $Repo "output\shots-logs"
+        New-Item -ItemType Directory -Force $keep | Out-Null
+        $saved = Join-Path $keep ("ruya-qmltest-{0}.txt" -f (Get-Date -Format "yyyyMMdd-HHmmss"))
+        Copy-Item -LiteralPath $log -Destination $saved
+        Get-ChildItem $keep -Filter "ruya-qmltest-*.txt" | Sort-Object Name -Descending | Select-Object -Skip 5 | Remove-Item
+        Write-Host "    red run: full log kept in $saved"
+    }
     # A run that failed while the desktop is locked says so too; the failures above stay visible,
     # since LogonUI can also belong to another session or a lock that came after a real failure.
     if ($ShotsDir -and $code -ne 0 -and (Test-SessionLocked)) { Stop-SessionLocked; return }
