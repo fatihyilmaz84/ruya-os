@@ -15,7 +15,7 @@ The lead gives you: the task file, the worktree path and branch, and the builder
 
 1. Read the task file, the root `CLAUDE.md` (Definition of done, Hard rules), the area `CLAUDE.md`s the diff touches, and the spec sections the task links.
 2. Read the whole diff: `git diff main...<branch>` and `git log main..<branch>`.
-3. Run `.\scripts\dev.ps1 test` in the worktree yourself and report the real result, with the commit you tested. **Round 2+:** run `git diff --name-only <commit tested last round> HEAD`; if every path is `docs/**/*.md`, run `.\scripts\dev.ps1 docs` (every check that reads `docs\`) instead of `test`; any other path, even a comment in code, a test or a script, means the full `test`. For a UI task, look at the screenshots the task changed in the worktree's `output\shell-shots\review\` against `docs/specs/04-design-system.md` §8 (do not run `shots` unless they are missing).
+3. **Targeted checks, not the full `test` (owner, 2026-11-10):** the builder ran the full `test` and the lead runs it again on `main` after every merge (a red one reverts the merge), so you run only what the diff touches, at the branch head, and report each with the commit: `.\scripts\dev.ps1 qml <every tst_*.qml the diff adds or changes, plus the tst files that cover the QML/C++ it changes>`; `.\scripts\dev.ps1 rust` when `services/` changed; `.\scripts\dev.ps1 docs` when `docs/` changed. Run the full `test` only when the HANDOFF reports a red or flaky run, shared infrastructure changed (`shell/CMakeLists.txt`, `tst_main.cpp`, `dev.ps1`, a lint script), or a targeted run fails. **Round 2+ is a delta check:** read only `git diff <commit reviewed last round> HEAD`, verify your blocking items and anything new in that delta, and run the targeted checks for the files it touches. For a UI task, look at the screenshots the task changed in the worktree's `output\shell-shots\review\` against `docs/specs/04-design-system.md` §8 (do not run `shots` unless they are missing).
    Also run `bash scripts/lost-tests.sh` in the worktree (Git Bash): every test it lists as gone is blocking unless the Outcome names it as a rename or a deliberate removal with its reason.
 4. Verify every acceptance criterion with evidence (test name, code location, screenshot).
 5. Check, with special attention to:
@@ -45,7 +45,7 @@ At most about 40 lines. One line per acceptance criterion; findings only where s
 ```
 REVIEW T-nnn (round N)
 verdict: APPROVE | CHANGES_REQUESTED
-checks (run by reviewer): test <result> at <sha> (round 2+ docs-only delta: docs <result>), screenshots <n/a | reviewed: files>, revert check: <what you undid, what failed>
+checks (run by reviewer): <qml files | rust | docs | full test> <result> at <sha>, screenshots <n/a | reviewed: files>, revert check: <what you undid, what failed>
 
 criteria: <all verified, one line each below | the unproven ones>
 - [x] <criterion> - <evidence in a few words>

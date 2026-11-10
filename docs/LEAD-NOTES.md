@@ -11,7 +11,7 @@ The procedure is in [`LEAD.md`](LEAD.md) (**Budgets and "Lead efficiency": hand 
 ## Next, in this order
 1. **T-460 is merged:** shots failed because the display slept (no frames); a sleeping display now reaps pages at once. The remaining shots red is the old `test_zz_sheet_after_an_app` flake (T-430 item 5).
 2. Finish T-459 and T-428 (review, merge). Then **build 0.0.64** (`scripts/image-chain.sh 0.0.64 oci`), `vm-queue.ps1` (default list + `vm-devices-check.sh check`/`security`; `vm-session-check.sh check` now has Freeze/Thaw), `dell-update.sh 0.0.64`, then on the Dell: the Hub over a frozen STK (**does the sound stop, and come back after thaw?** the stream stayed `running` in a manual test), Close of Asteroid Shooter (T-459), the FrameMeter vs top with STK (T-451), Resume from Home for ACBR (T-435), `dell-glass-check.sh` (T-434; needs a signed-in profile; `RUYA_PIN`). Then `free-space.ps1`.
-3. Builder lane order: T-460, T-458 (Closing screen), T-452 (starts with the QuickMenu row-descriptor refactor), T-453, T-454, T-455 — all edit QuickMenu.qml or Shell.qml: **one at a time**; a second lane takes T-427 / T-431 / T-433.
+3. Builder lane order: T-462 (shots you can run once), T-458 (Closing screen), T-452 (starts with the QuickMenu row-descriptor refactor), T-453, T-454, T-455 — all edit QuickMenu.qml or Shell.qml: **one at a time**; a second lane takes T-427 / T-431 / T-433.
 4. Lead: T-366 (Ruya Input spike) when the Hub lane is moving.
 
 ## Concerns (ranked)
