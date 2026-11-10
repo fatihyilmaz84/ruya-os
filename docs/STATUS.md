@@ -25,7 +25,7 @@ Open work only (the front of the board; the rest is in `STATUS-backlog.md`), in 
 |---|---|---|---|
 | [T-449](tasks/T-449-microphone-in-devices-audio.md) | Microphone in `Devices1.Audio`: list inputs, default input, mute | in-progress | — |
 | [T-451](tasks/T-451-performance-metrics-backend.md) | Performance metrics: FPS and frame time from the compositor, CPU, RAM, temperatures, GPU from `Devices1` | todo | — |
-| [T-448](tasks/T-448-quick-hub.md) | The Quick Hub: status row, quick tiles, running and recent games | todo | T-447 |
+| [T-448](tasks/T-448-quick-hub.md) | The Quick Hub: status row, quick tiles, running and recent games | in-progress | — |
 | [T-366](tasks/T-366-ruya-input-spike-engine-and-design.md) | **[lead]** Ruya Input: spike, engine decision and the design (06-input.md, Input1 draft) | todo | — |
 | [T-367](tasks/T-367-a-game-sees-the-pad.md) | **[lead]** A game sees the pad: a virtual pad per controller, for the signed-in profile only, routed by focus | todo | T-366 |
 | [T-393](tasks/T-393-options-menu-design.md) | **[lead]** Design: the Options (context) menu: component, contents per surface, motion, focus | todo | — |

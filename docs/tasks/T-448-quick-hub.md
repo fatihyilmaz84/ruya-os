@@ -1,6 +1,6 @@
 # T-448 — The Quick Hub: status row, quick tiles, running and recent games
 
-Status: todo · Phase: 2 · Depends: — · Area: shell · Size: M · Owner: builder · Complexity: normal · Developer surface: none
+Status: in-progress · Phase: 2 · Depends: — · Area: shell · Size: M · Owner: builder · Complexity: normal · Developer surface: none
 
 ## Goal
 Guide opens Ruya Hub's first level: the time, network and battery at the top, the running game and Resume, the other running and recent games, a row of quick tiles and the entries to the panels, all with a controller.
