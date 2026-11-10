@@ -34,7 +34,7 @@ Open work only (the front of the board; the rest is in `STATUS-backlog.md`), in 
 
 Later (ordered): [`STATUS-backlog.md`](STATUS-backlog.md) holds the rest of the open board, same columns; `lint-board.ps1` reads both. A planner or the lead moves rows up when they become ready.
 
-**VM queue** (one image build runs them all; `scripts/vm-queue.ps1`; history in `STATUS-parked.md`): **0.0.61 passed on 2026-11-10** (lead-8: session check/display/restart with T-363's scope lines, devices bluetooth/twopads/inputd, audio, sounds, reboot saved output: 10 of 10). Left for the next image: `subset-icons.sh` (T-297), the sample re-run, the greenboot drill, `vm-storage-check.ps1`, `vm-devices-check.sh system`.
+**VM queue** (one image build runs them all; `scripts/vm-queue.ps1`; history in `STATUS-parked.md`): **0.0.61 passed on 2026-11-10** (lead-8: session check/display/restart with T-363's scope lines, devices bluetooth/twopads/inputd, audio, sounds, reboot saved output: 10 of 10). Left for the next image: `vm-security-check.sh check` (T-424, PASS on 0.0.61 by the builder and the reviewer), `subset-icons.sh` (T-297), the sample re-run, the greenboot drill, `vm-storage-check.ps1`, `vm-devices-check.sh system`.
 
 **Dell look-at list:** the long list with task ids is in `STATUS-parked.md`, "Dell look-at list (moved 2026-11-10, lead-8)"; the next Dell pass also checks 0.0.61: STK from Games with A (T-386), the picker after an app (T-387), the T-376 hw items.
 
@@ -54,6 +54,12 @@ Triaged 2026-11-10 (lead-9): the lines before are verbatim in [`STATUS-parked.md
 - (T-421) Midnight with the default look: sheet and pills blur a dark low-contrast L0 and read as flat grey: a design pass on blob strength or tint (T-282).
 - (T-421) The Dell logs "ShaderEffect: Texture t7 is not assigned a valid texture provider" on every app focus change: GlassShadow's `layer.enabled: shadow.visible` toggle (evidence for T-430).
 - (T-421) ACBR (Electron) starts on the Dell but never shows a window, and two orphaned ACBR scopes were running (one from before the session): Play looks dead to the owner.
+- (T-424) Every ruya-* process (inputd, library, profiles, session, shell, store, update) runs as `unconfined_service_t`: "SELinux enforcing" protects none of our services until a policy module confines them (security, high).
+- (T-424) Exposure is high for ruya-boot-marker (9.6), ruya-compositor@ (9.2) and ruya-flathub-remote (8.7): harden them, then lower the baseline (`image/security-baseline.json`).
+- (T-424) systemd-resolved listens on tcp/udp 5355 (LLMNR) on every interface: switch LLMNR off.
+- (T-424) sudo, pkexec and pam_timestamp_check are setuid; a console OS needs none of them (polkitd is used over D-Bus): remove them from the image or drop their setuid bit.
+- (T-424, T-424 review, for T-425) The release profile drops sshd (on 0.0.0.0 and [::]), root as a login account and `PasswordAuthentication yes`, and its baseline says so.
+- (T-424 review) `vm-security-check.sh` compares ports as proto:port: compare proto:scope:port (loopback vs any), so a loopback service that starts listening on every address fails.
 - (lead-9) CI warns that `actions/checkout@v4` runs on the deprecated Node.js 20: move every workflow to `actions/checkout@v5` (after T-423 merges, which edits `ci.yml`).
 ## Blocked (need something this host doesn't have)
 

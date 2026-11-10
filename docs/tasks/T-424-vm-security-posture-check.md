@@ -1,6 +1,6 @@
 # T-424 - `vm-security-check.sh`: hardening scores, listening ports, SELinux and setuid files have a baseline
 
-Status: in-progress · Phase: 2 · Depends: — · Area: scripts, image (baseline files only), docs · Size: M · Owner: builder · Complexity: normal · Developer surface: none
+Status: done · Phase: 2 · Depends: — · Area: scripts, image (baseline files only), docs · Size: M · Owner: builder · Complexity: normal · Developer surface: none
 
 ## Goal
 The invariant "services keep their systemd hardening" and the spec lines "SELinux enforcing" and "nothing listens unless asked" are checked by a script on every booted image, against a checked-in baseline. Today each `vm-*-check.sh` prints `systemd-analyze security` for a person to read, and nothing checks ports, SELinux or setuid files (plan audit 2026-11-10).

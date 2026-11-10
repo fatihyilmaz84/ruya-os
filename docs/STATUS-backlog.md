@@ -5,7 +5,6 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | ID | Title | Status | Depends |
 |---|---|---|---|
 | [T-362](tasks/T-362-compositor-xdg-output-and-socket-follow-ups.md) | Compositor: xdg-output for games, profile-socket and log follow-ups | todo | — |
-| [T-424](tasks/T-424-vm-security-posture-check.md) | `vm-security-check.sh`: hardening scores, listening ports, SELinux, setuid files against a baseline | in-progress | — |
 | [T-422](tasks/T-422-plan-lint-deps-owners-stale-claims.md) | Plan lint: board and headers agree on dependencies, [lead], parked and stale claims, budgets | todo | — |
 | [T-425](tasks/T-425-image-variants-dev-and-release.md) | **[lead]** Two image variants (VM this task): `dev` with SSH, `release` without, base images by digest, a check | todo | T-424 |
 | [T-426](tasks/T-426-epic-release-security.md) | **[lead]** EPIC release security (Phase 6): signing, update authenticity, data at rest, factory reset, ceilings: spec and tasks | todo | T-424, T-425 |
