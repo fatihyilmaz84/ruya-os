@@ -15,7 +15,7 @@ Verification legend: **host** = built and tested on Windows · **host (vm pendin
 
 ## Board
 
-**NEXT → T-462** (shots reliability, owner 2026-11-10: review cost; then T-458; T-460 found shots red because the display slept, fixed; T-459 merged (Close by process; vm and Dell pending); then owner, 2026-11-10: Ruya Hub first, then Ruya Input; builders: T-458 (Closing screen), T-452, T-453, T-454, T-455 (each edits QuickMenu.qml or Shell.qml: one at a time), then T-450, T-452..T-455; then T-429, T-427, T-428, T-431, T-433); lead: T-366 ([lead] Ruya Input spike, ADR-024; then T-367, T-456, T-381 GE-Proton, T-380), and the Dell second pass T-355 once Play works (T-386, image 0.0.61). **Builder lanes**: T-147, then the first rows of `STATUS-backlog.md` in order (T-362, T-423, T-424, T-422, T-378, T-299, T-364, T-339); one "VM (this task)" at a time. T-283, T-284, T-287, T-288 wait for the lead's design pass T-282; T-397..T-399 wait for T-366 and T-396. **Plan audit 2026-11-10:** 76 task files carry a ruling under their header (overlaps cut, dependencies fixed); the Depends column now lists only dependencies that are not `done`.
+**NEXT → T-462** (shots reliability; a partial patch from a stopped lead-11 builder is in `output/T-462-partial.patch`, not tracked), then T-458 (Closing screen). Owner, 2026-11-10: Ruya Hub first, then Ruya Input. Builders, in order: T-458, T-452, T-453, T-454, T-455 (each edits QuickMenu.qml or Shell.qml: **one at a time**); a second lane takes T-427, T-431, T-433, then the first rows of `STATUS-backlog.md`. Lead: T-461 (XWayland spike), T-366 (Ruya Input spike; then T-367, T-456, T-381, T-380), the Dell pass T-355. T-283, T-284, T-287, T-288 wait for T-282; T-397..T-399 wait for T-366 and T-396. The Depends column lists only dependencies that are not `done`.
 
 **How work runs (owner, 2026-11-04):** the lead dispatches `ruya-builder` agents (at most two at a time, own worktrees, different areas), has each branch reviewed by `ruya-reviewer` and merges it (`docs/LEAD.md`). Dispatched builders never edit this file; one "VM (this task)" runs at a time. A builder the owner starts directly takes NEXT alone in the main checkout and does the bookkeeping (`CLAUDE.md`).
 
@@ -60,21 +60,15 @@ Triaged 2026-11-10 (lead-9): the lines before are verbatim in [`STATUS-parked.md
 
 ## Open owner decisions
 
-Long forms and decided records: `STATUS-parked.md` ("Decided", and "Decided records moved 2026-11-10 (lead-9)").
+The long form of each, with options and recommendations: `STATUS-parked.md`, "Open owner decisions before the 2026-11-11 trim".
 
-- **From the plan audit (2026-11-10), yours to decide:**
-  - **Backups on USB hold account tokens (T-215):** leave credential files out by a list (recommended), or encrypt the archive with the PIN.
-  - **The admin PIN typed in a browser (ADR-029):** admin actions on Ruya Web ask for it, so it travels over the LAN (TLS) and a LAN device can try PINs. Accept with a lockout that cannot lock the TV out (recommended, T-404 designs it), or confirm admin actions on the TV instead.
-  - **Another pad taking over an idle session (T-396/T-397):** removed from the plan (ADR-027 allows takeover only when the owner's pads are gone). Say if you want the idle takeover.
-  - **Release security (T-426, later):** who holds the image signing key, disk encryption, and whether some Flathub permissions are refused for every Store app.
-- **Save locations list (ADR-028, T-400):** Ludusavi's manifest licence (PCGamingWiki data); use, ask, or our own.
-- **Telemetry (T-224/T-225).** The consent flow is decided; the backend, retention, privacy notice and a data-processing agreement are yours, later.
-- **Parked by you, nothing built:** `.play` packages (T-228, ADR-014 accepted, questions in `05-play-packages.md` §16) and the Epic Games Store (T-270, Proposed ADR-018: first-party Store app on Legendary, the Heroic Flatpak, or nothing).
-- **Pad pictures and glyph licence (T-199).** Sony/Microsoft/Nintendo pad art needs a legal decision (we draw our own); ControllerCons (SIL OFL) says "cannot be redistributed or sold": ask the author. Recommended: our glyphs Apache-2.0, a notice in About.
-- **Brand (T-269).** The splash shows "RuyaOS" in Inter; a logo is yours; recommended: keep the wordmark until one exists.
-- **Drive formats (T-332; the feature is approved).** Proposed: add `dosfstools` and `ntfsprogs` only if missing (GPL, small); offer exFAT (default), ext4, FAT32, NTFS. Say if you object.
-- **Small ones:** whether "CPU per game" is wanted in the ledger or `ListSessions` (today only the journal has it; a format change, T-363); Dolby/DTS names need a licence (T-219); update size vs rechunking (T-195); HDR and VRR after the spikes (T-218/T-222); Flatpak runtime in a dev image (T-214); the dev ISO erases every disk and carries the SSH key (B-002); whether any first-party app is preinstalled (T-248).
-- **Also:** a spare low-tier PC for KPIs (ADR-002); one admin or several (recommended: one); Turkish wording review; WSL `ext4` errors: move the VHD off C:.
+- **Backups on USB hold account tokens (T-215):** leave credential files out (recommended) or encrypt with the PIN.
+- **Admin PIN typed in Ruya Web (ADR-029):** accept with a lockout that cannot lock the TV out (recommended, T-404) or confirm on the TV.
+- **Idle-session takeover by another pad (T-396/T-397):** removed from the plan; say if you want it.
+- **Release security (T-426, later):** signing key holder, disk encryption, refused Flathub permissions.
+- **Ludusavi manifest licence (ADR-028, T-400)**; **telemetry backend and notice (T-224/T-225)**; **parked:** `.play` (T-228), Epic (T-270, ADR-018).
+- **Pad art and glyph licence (T-199)**; **brand/logo (T-269)**; **drive formats (T-332)**.
+- **Small ones:** CPU per game (T-363), Dolby/DTS names (T-219), update size (T-195), HDR/VRR (T-218/T-222), Flatpak runtime in a dev image (T-214), dev ISO erases disks (B-002), preinstalled apps (T-248), a spare low-tier PC, one admin, Turkish review, WSL VHD off C:.
 
 ## Session log (newest first, the latest five; older entries in `STATUS-log.md`)
 

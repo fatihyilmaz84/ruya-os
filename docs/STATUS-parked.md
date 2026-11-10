@@ -2,6 +2,24 @@
 
 Moved out of `docs/STATUS.md` by the lead on 2026-11-06 to keep STATUS under its budget. The planner (`docs/tasks/PLANNING.md`) reads the Inbox lines here when planning; nobody else needs this file. Items that became tasks are in their task file; pick the rest up when a task touches the area.
 
+## Open owner decisions before the 2026-11-11 trim (lead-11, verbatim)
+
+Long forms and decided records: `STATUS-parked.md` ("Decided", and "Decided records moved 2026-11-10 (lead-9)").
+
+- **From the plan audit (2026-11-10), yours to decide:**
+  - **Backups on USB hold account tokens (T-215):** leave credential files out by a list (recommended), or encrypt the archive with the PIN.
+  - **The admin PIN typed in a browser (ADR-029):** admin actions on Ruya Web ask for it, so it travels over the LAN (TLS) and a LAN device can try PINs. Accept with a lockout that cannot lock the TV out (recommended, T-404 designs it), or confirm admin actions on the TV instead.
+  - **Another pad taking over an idle session (T-396/T-397):** removed from the plan (ADR-027 allows takeover only when the owner's pads are gone). Say if you want the idle takeover.
+  - **Release security (T-426, later):** who holds the image signing key, disk encryption, and whether some Flathub permissions are refused for every Store app.
+- **Save locations list (ADR-028, T-400):** Ludusavi's manifest licence (PCGamingWiki data); use, ask, or our own.
+- **Telemetry (T-224/T-225).** The consent flow is decided; the backend, retention, privacy notice and a data-processing agreement are yours, later.
+- **Parked by you, nothing built:** `.play` packages (T-228, ADR-014 accepted, questions in `05-play-packages.md` §16) and the Epic Games Store (T-270, Proposed ADR-018: first-party Store app on Legendary, the Heroic Flatpak, or nothing).
+- **Pad pictures and glyph licence (T-199).** Sony/Microsoft/Nintendo pad art needs a legal decision (we draw our own); ControllerCons (SIL OFL) says "cannot be redistributed or sold": ask the author. Recommended: our glyphs Apache-2.0, a notice in About.
+- **Brand (T-269).** The splash shows "RuyaOS" in Inter; a logo is yours; recommended: keep the wordmark until one exists.
+- **Drive formats (T-332; the feature is approved).** Proposed: add `dosfstools` and `ntfsprogs` only if missing (GPL, small); offer exFAT (default), ext4, FAT32, NTFS. Say if you object.
+- **Small ones:** whether "CPU per game" is wanted in the ledger or `ListSessions` (today only the journal has it; a format change, T-363); Dolby/DTS names need a licence (T-219); update size vs rechunking (T-195); HDR and VRR after the spikes (T-218/T-222); Flatpak runtime in a dev image (T-214); the dev ISO erases every disk and carries the SSH key (B-002); whether any first-party app is preinstalled (T-248).
+- **Also:** a spare low-tier PC for KPIs (ADR-002); one admin or several (recommended: one); Turkish wording review; WSL `ext4` errors: move the VHD off C:.
+
 ## Inbox lines lead-10 (untriaged)
 
 - (T-434 reviews) Glass follow-ups: WallpaperLayer's page blur still runs a full-size MultiEffect (give it the quarter-size treatment once the Dell confirms the saving); PIN pad and TextEntry keys use see-through `glass` over a scrim on every tier, and the Home hero's SecondaryButton sits over sharp art: confirm none lies directly on L0 on a page; the `Theme.blurMax > 0 ? glass : glassOpaque` ternary is in three files (a `glassOnL0` token needs a 04 §2 entry); the 1/3 blurMax and the pill number await the Dell run.
