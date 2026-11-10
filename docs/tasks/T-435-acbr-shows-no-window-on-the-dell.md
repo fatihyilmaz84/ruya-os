@@ -1,6 +1,6 @@
 # T-435 - ACBR (Electron) starts on the Dell but never shows a window; orphaned app scopes
 
-Status: in-progress · Phase: 2 · Depends: — · Area: shell (compositor), services (ruya-session) · Size: S · Owner: builder · Complexity: complex · Developer surface: none
+Status: done · Phase: 2 · Depends: — · Area: shell (compositor), services (ruya-session) · Size: S · Owner: builder · Complexity: complex · Developer surface: none
 
 ## Goal
 Play on an Electron app (ACBR on the Dell) shows its window through the shell, and an app that exits or is stopped leaves no scope running, so Play never looks dead.
