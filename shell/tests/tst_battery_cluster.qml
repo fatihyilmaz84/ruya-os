@@ -386,9 +386,10 @@ Item {
         function test_the_chip_shrinks_to_plus_n_in_a_narrow_room() {
             Batteries.mockPopulate()
             const compact = []
-            for (const width of [1290, 1320, 1400, 1920]) {
+            for (const width of [narrowestRoom(), 1320, 1400, 1920]) {
                 openShell(width, 1080)
                 tryVerify(() => find("batteryMore").visible, 2000, "the chip at " + width)
+                find("statusClock").text = "88:88"   // the widest time of day, not the minute the test runs in
                 checkCluster([width, 1080], "a " + width + " px wide window", ["WH-1000XM4", "Ruya Keyboard"])
                 const more = find("batteryMore")
                 const label = findChild(more, "batteryMoreLabel")
@@ -400,6 +401,26 @@ Item {
             }
             compare(compact[0], true, "narrow: +N")
             compare(compact[compact.length - 1], false, "wide: the words")
+        }
+
+        // The narrowest 1080p window (from 1290 px, in 2 px steps) where the "+N" chip alone fits beside the
+        // shortest name with the widest clock. Below it the pill may reach into the nav's gap by design
+        // (Shell.qml, fitChips' last case), and where that starts depends on the host's font rendering: a
+        // fixed 1290 fitted on Windows but not on Fedora (CI red whenever the clock read wide, lead-9).
+        function narrowestRoom() {
+            for (let width = 1290; width <= 1320; width += 2) {
+                openShell(width, 1080)
+                tryVerify(() => find("batteryMore").visible, 2000, "the chip at " + width)
+                find("statusClock").text = "88:88"
+                waitForRendering(tc.shell)
+                const fits = find("statusGlass").fitsRoom
+                tc.shell.destroy()
+                wait(50)
+                if (fits)
+                    return width
+            }
+            fail("the cluster fits in no 1080p window up to 1320 px")
+            return 0
         }
 
         function openMore() {

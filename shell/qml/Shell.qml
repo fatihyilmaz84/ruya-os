@@ -692,6 +692,9 @@ FocusScope {
         // The pill stops growing here however much room there is (T-312): the name elides.
         readonly property real nameCap: 220 * root.u
         readonly property real nameWidth: Math.max(nameMin, Math.min(nameFull, nameCap, room - fixedWidth - batteryWidth(chipCount, moreCompact)))
+        // False when not even the "+N" chip alone fits beside the shortest name (fitChips' last case): the
+        // pill then reaches into the nav's gap. Where that starts depends on the fonts (tests, lead-9).
+        readonly property bool fitsRoom: batteryWidth(chipCount, moreCompact) + fixedWidth + nameMin <= room
 
         // Probes of the real fonts, never shown: a chip is budgeted with its percentage in the widest
         // digit (8) for its number of digits, the "+N" the same, and the name's minimum is six wide
