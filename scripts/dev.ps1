@@ -405,6 +405,13 @@ function Test-Boot {
     }
 }
 
+# The rules live in scripts\lint-bus-policies.ps1 (shared with CI); -SelfTest proves each rule refuses its fixture (T-423).
+function Test-BusPolicies {
+    Step "bus policy lint (deny-by-default, allow only root/ruya-shell/ruya-link per method)"
+    & (Join-Path $PSScriptRoot "lint-bus-policies.ps1") -SelfTest
+    Record "bus policy lint" ($LASTEXITCODE -eq 0)
+}
+
 # The rules live in scripts\lint-vm-checks.ps1 (shared with CI): the lead-run VM check scripts (T-296).
 function Test-VmChecks {
     Step "VM check lint (vm-*.sh syntax and exec bit, host tests on canned data, ISO check refusals)"
@@ -682,7 +689,7 @@ switch ($Command) {
         # A stale marker must never outlive a run that did not finish green.
         Remove-Item $GreenMarker -ErrorAction SilentlyContinue
         $treeBefore = Get-TreeState
-        Test-Text; Test-Board; Test-Boot; Test-DevDocs; Test-VmChecks; Do-Rust; Do-Shell
+        Test-Text; Test-Board; Test-Boot; Test-BusPolicies; Test-DevDocs; Test-VmChecks; Do-Rust; Do-Shell
         if ($script:Failures.Count -eq 0) { Write-GreenMarker $treeBefore (Get-TreeState) }
     }
     "shots" {

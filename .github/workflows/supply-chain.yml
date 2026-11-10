@@ -1,0 +1,29 @@
+name: supply-chain
+
+# Dependency advisories, licences, sources (services/deny.toml). Also weekly, so a new advisory is seen without a push (T-423).
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 5 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  deny:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install cargo-deny (pinned)
+        env:
+          DENY_VERSION: "0.20.2"
+        run: |
+          curl --proto '=https' --tlsv1.2 -fsSL "https://github.com/EmbarkStudios/cargo-deny/releases/download/${DENY_VERSION}/cargo-deny-${DENY_VERSION}-x86_64-unknown-linux-musl.tar.gz" | sudo tar -xz --strip-components=1 -C /usr/local/bin "cargo-deny-${DENY_VERSION}-x86_64-unknown-linux-musl/cargo-deny"
+          cargo-deny --version
+      - name: cargo deny
+        working-directory: services
+        run: cargo-deny --locked check advisories licenses sources bans

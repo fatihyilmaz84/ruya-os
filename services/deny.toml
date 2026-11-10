@@ -1,0 +1,46 @@
+# cargo-deny policy (T-423). CI: cargo deny --locked check advisories licenses sources bans
+# Licences compatible with ADR-008 (the project is MIT OR Apache-2.0): permissive ones only.
+# A licence exception is a named entry in [[licenses.exceptions]] with a reason.
+
+[graph]
+all-features = true
+
+[advisories]
+version = 2
+yanked = "deny"
+# Each ignore is dated and has a reason; the follow-up is an Inbox line in the T-423 HANDOFF.
+ignore = [
+    # quick-xml 0.37 -> >=0.41 is a breaking API upgrade of ruya-store's AppStream parser.
+    { id = "RUSTSEC-2026-0194", reason = "2026-11-10: quick-xml DoS (quadratic attribute check); input is the Flathub AppStream catalogue, parsed by a root-less service; needs the 0.41 upgrade" },
+    { id = "RUSTSEC-2026-0195", reason = "2026-11-10: quick-xml NsReader namespace allocation DoS; ruya-store uses plain Reader, not NsReader, so the path is not reached; needs the 0.41 upgrade" },
+    # zbus 5 stack: the crates are folded into zbus 6; moving to it is a service-wide change.
+    { id = "RUSTSEC-2026-0370", reason = "2026-11-10: zvariant unmaintained, merged into zbus 6; no safe upgrade within zbus 5" },
+    { id = "RUSTSEC-2026-0371", reason = "2026-11-10: zbus_names unmaintained, merged into zbus 6; no safe upgrade within zbus 5" },
+    { id = "RUSTSEC-2026-0372", reason = "2026-11-10: zvariant_derive unmaintained, merged into zbus 6; no safe upgrade within zbus 5" },
+]
+
+[licenses]
+version = 2
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-3.0",
+    "Zlib",
+    "MPL-2.0",
+    "CC0-1.0",
+]
+confidence-threshold = 0.9
+
+[bans]
+multiple-versions = "allow"
+wildcards = "allow"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []
