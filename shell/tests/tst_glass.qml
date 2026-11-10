@@ -25,6 +25,8 @@ Item {
         }
     }
     Component { id: sheetComponent; GlassSheet { width: 400; height: 240; shown: true } }
+    Component { id: rowComponent; SettingControl { width: 600; label: "Row" } }
+    Component { id: placeholderComponent; Item { width: 800; height: 400; ComingSoon {} } }
     // A modal layer as the Shell has it: it offers the L0 layer to the sheets below it.
     Component {
         id: layerComponent
@@ -207,6 +209,34 @@ Item {
             verify(layerState(layers).sheen && layerState(layers).rim, "opaque glass keeps sheen and rim")
             compare(layerState(layers).grain, false, "and drops the grain")
             compare(shadow.shown, false, "and the shadow")
+        }
+
+        // T-434: a Settings row lies straight on L0. With blur (High, Balanced) L0 is blurred on pages
+        // and the row is translucent glass; with none (Performance) it is opaque, like the pill and the
+        // sheet, so the sharp blobs or picture never show through it (04 §3.6). Focused it is focusFill.
+        function test_row_is_opaque_glass_without_blur() {
+            const row = createTemporaryObject(rowComponent, host)
+            verify(row)
+            const fill = findChild(row, "rowFill")
+            verify(fill)
+            compare(fill.color, Theme.glass, "translucent over the blurred L0 on High")
+            DeviceSettings.effectsQuality = "balanced"
+            tryCompare(fill, "color", Theme.glass)
+            DeviceSettings.effectsQuality = "performance"
+            tryCompare(fill, "color", Theme.glassOpaque, 2000, "opaque glass on Performance")
+            row.forceActiveFocus()
+            tryCompare(fill, "color", Theme.focusFill, 2000, "focused: the focus fill on every tier")
+            verify(row.activeFocus)
+        }
+
+        // The other translucent surface that lies straight on L0 on a page: the placeholder's button.
+        function test_page_placeholder_is_opaque_glass_without_blur() {
+            const page = createTemporaryObject(placeholderComponent, host)
+            const button = findChild(page, "pagePlaceholder")
+            verify(button)
+            compare(button.color, Theme.glass)
+            DeviceSettings.effectsQuality = "performance"
+            compare(button.color, Theme.glassOpaque, "opaque glass on Performance")
         }
 
         // --- the glass sheet of the picker modals (T-272) ---------------------------------------

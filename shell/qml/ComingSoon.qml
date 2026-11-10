@@ -29,7 +29,7 @@ FocusScope {
         height: Theme.buttonHeight * root.u
         radius: height / 2
         focus: true
-        color: Theme.glass
+        color: Theme.blurMax > 0 ? Theme.glass : Theme.glassOpaque   // on L0: opaque without blur (04 §3.6, T-434)
         border.width: activeFocus ? Theme.focusRingWidth * root.u : 1
         border.color: activeFocus ? Theme.focusRing : Theme.glassBorder
         Text {
