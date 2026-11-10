@@ -3,15 +3,15 @@
   "units": {
     "ruya-boot-marker.service": {
       "max_exposure": 9.6,
-      "reason": "oneshot that writes the boot marker as root; measured 0.0.61"
+      "reason": "root oneshot, measured 0.0.61 - barely hardened, should not ship, to be tightened (Inbox, T-425)"
     },
     "ruya-compositor@.service": {
       "max_exposure": 9.2,
-      "reason": "needs DRM, input and the GPU, loose by nature; measured 0.0.61"
+      "reason": "needs DRM, input and the GPU, measured 0.0.61 - barely hardened, should not ship, to be tightened (Inbox, T-425)"
     },
     "ruya-flathub-remote.service": {
       "max_exposure": 8.7,
-      "reason": "oneshot root, needs network to add the Flathub remote; measured 0.0.61"
+      "reason": "root oneshot with network, measured 0.0.61 - barely hardened, should not ship, to be tightened (Inbox, T-425)"
     },
     "ruya-grub-menu.service": {
       "max_exposure": 3.8,
@@ -137,7 +137,7 @@
     },
     {
       "path": "/usr/bin/pam_timestamp_check",
-      "reason": "pam, Fedora default (sudo timestamps)"
+      "reason": "not needed on a console OS (services use polkitd over D-Bus, not the binary), should go (Inbox)"
     },
     {
       "path": "/usr/bin/passwd",
@@ -145,7 +145,7 @@
     },
     {
       "path": "/usr/bin/pkexec",
-      "reason": "polkit, Fedora default; polkit is used by ruya services"
+      "reason": "not needed on a console OS (services use polkitd over D-Bus, not the binary), should go (Inbox)"
     },
     {
       "path": "/usr/bin/su",

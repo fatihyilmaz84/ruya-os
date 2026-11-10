@@ -24,6 +24,9 @@ unitdirs="${SEC_UNITDIRS:-/usr/lib/systemd/system /etc/systemd/system}"
 passwd="${SEC_PASSWD:-/etc/passwd}"
 shadow="${SEC_SHADOW:-/etc/shadow}"
 
+mode="${1:-check}"
+case "$mode" in check|measure) ;; *) echo "usage: $0 [check|measure]"; exit 2 ;; esac
+
 t="$(mktemp -d)"
 trap 'rm -rf "$t"' EXIT
 
@@ -60,9 +63,6 @@ find "$usr" "$etc" -xdev ! -type l -perm -0002 2> "$t/find2.err" | sort > "$t/ww
 [ -s "$t/find2.err" ] && echo "find world-writable: $(head -1 "$t/find2.err")" >> "$t/gather-errors.txt"
 cp "$passwd" "$t/passwd.txt" 2>> "$t/gather-errors.txt" || echo "cannot read $passwd" >> "$t/gather-errors.txt"
 cp "$shadow" "$t/shadow.txt" 2>> "$t/gather-errors.txt" || echo "cannot read $shadow" >> "$t/gather-errors.txt"
-
-mode="${1:-check}"
-case "$mode" in check|measure) ;; *) echo "usage: $0 [check|measure]"; exit 2 ;; esac
 
 python3 -I - "$mode" "$baseline" "$t" <<'PYEOF'
 import json, os, re, sys
