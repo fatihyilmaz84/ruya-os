@@ -2,6 +2,7 @@
 
 #include "AudioBackend.h"
 
+#include <QHash>
 #include <QStringList>
 
 // In-memory audio: master volume 50, unmuted, every channel at 100; outputs "TV (HDMI)"
@@ -24,6 +25,16 @@ public:
     void setOutput(const QString &id) override;
     void testOutput(const QString &id) override;
     void resetOutputChoice() override;
+    void setInput(const QString &id) override;
+    void setInputMuted(bool muted) override;
+
+    // Tests only: the microphones. The mock starts with "mic-0" ("Built-in microphone", the
+    // default); plugInput accepts "mic-0", "usb-mic" ("USB headset microphone") and "bt-mic"
+    // ("BT headset microphone") and returns false for another id. A plugged microphone does not
+    // take the default; unplugging the default hands it to the first one left (none: no default).
+    // The mute belongs to the microphone, as in PipeWire.
+    bool plugInput(const QString &id);
+    void unplugInput(const QString &id);
 
     // Tests only: "usb-headset" ("USB headset") and "bt-headphones" ("BT headphones").
     // Returns false for an unknown id; plugging a connected device in again does nothing.
@@ -55,6 +66,8 @@ private:
     void publishState(int delayMs = 0);
     void publishSinks(int delayMs = 0);
     void publishOutputs(int delayMs = 0);
+    void publishInputs(int delayMs = 0);
+    QString defaultInput() const;
     QList<OutputInfo> outputs() const;
     int indexOf(const QString &id) const;
     void makeDefault(const QString &id);
@@ -66,6 +79,8 @@ private:
     QList<SinkInfo> m_sinks;
     QString m_saved; // the player's choice (an output id)
     QStringList m_tested;
+    QList<InputInfo> m_inputs; // isDefault marks the default; kept in plug order
+    QHash<QString, bool> m_inputMuted; // per microphone id
     bool m_jackPlugged = false;
     QStringList m_previous; // earlier defaults, most recent last
     int m_delay = 0;

@@ -93,6 +93,25 @@ QList<OutputInfo> parseOutputs(const QDBusArgument &arg)
     return out;
 }
 
+// aa{sv}
+QList<InputInfo> parseInputs(const QDBusArgument &arg)
+{
+    QList<InputInfo> out;
+    arg.beginArray();
+    while (!arg.atEnd()) {
+        const QVariantMap dict = parseDict(arg);
+        InputInfo i;
+        i.id = dict.value(QStringLiteral("id")).toString();
+        i.name = dict.value(QStringLiteral("name")).toString();
+        i.kind = dict.value(QStringLiteral("kind")).toString();
+        i.available = dict.value(QStringLiteral("available")).toString();
+        i.isDefault = dict.value(QStringLiteral("is_default")).toBool();
+        out.append(i);
+    }
+    arg.endArray();
+    return out;
+}
+
 // The properties of the Audio interface as the shell wants them. Missing or malformed values
 // fall back to silence-safe defaults (channels full, master 0, unmuted).
 void parseState(const QVariantMap &props, int *volume, bool *muted, QVariantMap *channels)
@@ -119,6 +138,7 @@ DBusAudioBackend::DBusAudioBackend(QObject *parent)
     m_bus.connect(Service, Path, Interface, QStringLiteral("SinksChanged"), this, SLOT(onSinksChanged()));
     m_bus.connect(Service, Path, Interface, QStringLiteral("DefaultSinkChanged"), this, SLOT(onSinksChanged()));
     m_bus.connect(Service, Path, Interface, QStringLiteral("OutputsChanged"), this, SLOT(onSinksChanged()));
+    m_bus.connect(Service, Path, Interface, QStringLiteral("InputsChanged"), this, SLOT(onInputsChanged()));
     m_bus.connect(Service, Path, PropertiesInterface, QStringLiteral("PropertiesChanged"), this,
                   SLOT(onPropertiesChanged(QString, QVariantMap, QStringList)));
 }
@@ -128,6 +148,7 @@ void DBusAudioBackend::refresh()
     refreshState();
     refreshSinks();
     refreshOutputs();
+    refreshInputs();
 }
 
 void DBusAudioBackend::refreshState()
@@ -148,8 +169,10 @@ void DBusAudioBackend::refreshState()
         QVariantMap channels;
         const QVariantMap props = parseDict(reply.arguments().constFirst().value<QDBusArgument>());
         parseState(props, &volume, &muted, &channels);
-        if (deliverState(request, volume, muted, channels))
+        if (deliverState(request, volume, muted, channels)) {
             emit playingReported(props.value(QStringLiteral("Playing")).toBool());
+            emit inputMutedReported(props.value(QStringLiteral("InputMuted")).toBool());
+        }
     });
 }
 
@@ -182,6 +205,22 @@ void DBusAudioBackend::refreshOutputs()
             return;
         }
         deliverOutputs(request, parseOutputs(reply.arguments().constFirst().value<QDBusArgument>()));
+    });
+}
+
+void DBusAudioBackend::refreshInputs()
+{
+    auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("ListInputs"));
+    const quint64 request = beginInputsRequest();
+    auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, request](QDBusPendingCallWatcher *w) {
+        w->deleteLater();
+        const QDBusMessage reply = w->reply();
+        if (reply.type() != QDBusMessage::ReplyMessage || reply.arguments().isEmpty()) {
+            qWarning("ruya-shell: Devices1.Audio ListInputs failed: %s", qPrintable(reply.errorMessage()));
+            return;
+        }
+        deliverInputs(request, parseInputs(reply.arguments().constFirst().value<QDBusArgument>()));
     });
 }
 
@@ -281,10 +320,35 @@ void DBusAudioBackend::resetOutputChoice()
     });
 }
 
+void DBusAudioBackend::setInput(const QString &id)
+{
+    auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("SetInput"));
+    msg << id;
+    auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, id](QDBusPendingCallWatcher *w) {
+        w->deleteLater();
+        QDBusPendingReply<QString> reply = *w;
+        emit setInputFinished(id, reply.isValid() ? reply.value() : QStringLiteral("failed"));
+        refreshInputs(); // the list shows the new default; the signal may have been missed
+        refreshState();  // the mute is the new default microphone's
+    });
+}
+
+void DBusAudioBackend::setInputMuted(bool muted)
+{
+    setProperty(QStringLiteral("InputMuted"), muted);
+}
+
 void DBusAudioBackend::onSinksChanged()
 {
     refreshSinks();
     refreshOutputs();
+}
+
+void DBusAudioBackend::onInputsChanged()
+{
+    refreshInputs();
+    refreshState();
 }
 
 void DBusAudioBackend::onPropertiesChanged(const QString &interface, const QVariantMap &, const QStringList &)

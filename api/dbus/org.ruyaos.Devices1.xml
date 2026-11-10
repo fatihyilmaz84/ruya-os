@@ -18,10 +18,11 @@
     "ok"            success
     "unknown-sink"  no output with that id (SetDefaultSink)
     "unknown-output" no output with that id (SetOutput, TestOutput)
+    "unknown-input" no microphone with that id (SetInput; only an id ListInputs lists is accepted)
     "inactive"      the output exists but its card profile is not the active one, so there is no sink
                     to play on yet (TestOutput and SetOutput until profile switching, T-347; SetOutput saves nothing then)
     "invalid"       malformed argument (unknown channel name)
-    "failed"        internal error (e.g. PipeWire refused)
+    "failed"        internal error (e.g. PipeWire refused; writing InputMuted when there is no microphone)
 
   org.ruyaos.Devices1.Network status strings (NetworkManager behind it; WPA2/3-Personal only):
     "ok"               success (Connect: the network is active, State follows by PropertiesChanged)
@@ -150,6 +151,44 @@
       <arg name="id" type="s" direction="in"/>
       <arg name="status" type="s" direction="out"/>
     </method>
+
+    <!--
+      The microphones (PipeWire capture devices: a USB or Bluetooth headset, the analog jack, a pad's
+      microphone where PipeWire shows one), sorted by id (T-449). Empty on a console without any;
+      never an error. A sink's monitor, a virtual source and a stream are not listed. One dictionary
+      per microphone:
+        id          s   the PipeWire node name, stable across boots
+        name        s   display name, readable ("Headset Mono")
+        kind        s   "analog" | "usb" | "bluetooth"
+        available   s   "yes" | "no" | "unknown" (jack detection of its port; usb and bluetooth are usually "unknown")
+        is_default  b   true for the microphone PipeWire's default source is on; at most one
+      The choice is WirePlumber's to remember (it keeps the default source); the service saves nothing.
+    -->
+    <method name="ListInputs">
+      <arg name="inputs" type="aa{sv}" direction="out"/>
+    </method>
+
+    <!--
+      Makes a listed microphone the default one; running recordings move to it. Only an id that
+      ListInputs returns is accepted ("unknown-input" otherwise, and nothing reaches PipeWire).
+      Choosing the current default is "ok" and changes nothing.
+    -->
+    <method name="SetInput">
+      <arg name="id" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <!-- A microphone appeared or disappeared, or the default one changed; call ListInputs again. -->
+    <signal name="InputsChanged"/>
+
+    <!--
+      Mute of the default microphone (T-449). False while there is none; writing it then is refused
+      (the write fails, nothing changes). The mute belongs to the microphone: after SetInput the value
+      is the new default's. Changes from outside (a headset's own button) are announced too.
+    -->
+    <property name="InputMuted" type="b" access="readwrite">
+      <annotation name="org.freedesktop.DBus.Property.EmitsChangedSignal" value="true"/>
+    </property>
 
     <!-- Plays a short tone on that output without changing the default or the saved choice. -->
     <method name="TestOutput">
