@@ -240,6 +240,20 @@
     </property>
 
     <!--
+      The Wi-Fi radio switch (T-448, the Quick Hub's Wi-Fi tile). Writable
+      (org.freedesktop.DBus.Properties.Set). Switching off disconnects the Wi-Fi network and
+      empties the in-range part of ListWifi; switching on brings it back. A failed Set (no
+      adapter, rfkill hard-blocked) answers a D-Bus error. A service that has no Wi-Fi radio, or
+      is older than this property, does not offer it at all: the shell then shows no Wi-Fi switch
+      (no fake controls). Not served yet: the Rust service answers it with the NetworkManager
+      WirelessEnabled property in a follow-up task; until then the shell finds the property
+      missing and shows no tile.
+    -->
+    <property name="WifiEnabled" type="b" access="readwrite">
+      <annotation name="org.freedesktop.DBus.Property.EmitsChangedSignal" value="true"/>
+    </property>
+
+    <!--
       Wi-Fi networks in range plus saved ones, strongest first. One dictionary per network:
         id        s   stable id, opaque to the shell
         ssid      s   display name

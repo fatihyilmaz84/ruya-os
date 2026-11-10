@@ -433,7 +433,7 @@ Bu geri alınamaz.</translation>
         <translation>Bir yöneticinin PIN&apos;ini girin</translation>
     </message>
     <message>
-        <location line="+177"/>
+        <location line="+178"/>
         <source>Install</source>
         <translation>Kur</translation>
     </message>
@@ -1452,7 +1452,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>GamesPage</name>
     <message>
-        <location filename="../qml/GamesPage.qml" line="+13"/>
+        <location filename="../qml/GamesPage.qml" line="+14"/>
         <location line="+83"/>
         <source>Games</source>
         <translation>Oyunlar</translation>
@@ -2275,7 +2275,50 @@ Bu geri alınamaz.</translation>
 <context>
     <name>QuickMenu</name>
     <message>
-        <location filename="../qml/QuickMenu.qml" line="+82"/>
+        <location filename="../qml/QuickMenu.qml" line="+63"/>
+        <source>Wi-Fi</source>
+        <translation>Wi-Fi</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Bluetooth</source>
+        <translation>Bluetooth</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Mute</source>
+        <translation>Sessiz</translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <location line="+4"/>
+        <location line="+1"/>
+        <source>Off</source>
+        <translation>Kapalı</translation>
+    </message>
+    <message>
+        <location line="-3"/>
+        <location line="+280"/>
+        <source>Not connected</source>
+        <translation>Bağlı değil</translation>
+    </message>
+    <message>
+        <location line="-278"/>
+        <source>On</source>
+        <translation>Açık</translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <source>Could not change Wi-Fi.</source>
+        <translation>Wi-Fi değiştirilemedi.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Could not change Bluetooth.</source>
+        <translation>Bluetooth değiştirilemedi.</translation>
+    </message>
+    <message>
+        <location line="+53"/>
         <source>Resume</source>
         <translation>Devam et</translation>
     </message>
@@ -2335,7 +2378,12 @@ Bu geri alınamaz.</translation>
         <translation>%1 uygulamasına geç</translation>
     </message>
     <message>
-        <location line="+152"/>
+        <location line="+133"/>
+        <source>%1, %2</source>
+        <translation>%1, %2</translation>
+    </message>
+    <message>
+        <location line="+103"/>
         <source>Just started</source>
         <translation>Yeni başladı</translation>
     </message>
@@ -2356,7 +2404,7 @@ Bu geri alınamaz.</translation>
         <translation>Sistem sürümü %1</translation>
     </message>
     <message>
-        <location line="+58"/>
+        <location line="+78"/>
         <source>Volume, muted</source>
         <translation>Ses, sessiz</translation>
     </message>
@@ -2366,9 +2414,33 @@ Bu geri alınamaz.</translation>
         <translation>Ses %1</translation>
     </message>
     <message>
-        <location line="+43"/>
+        <location line="+79"/>
+        <source>%1, on</source>
+        <translation>%1, açık</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>%1, off</source>
+        <translation>%1, kapalı</translation>
+    </message>
+    <message>
+        <location line="-510"/>
+        <location line="+496"/>
         <source>Muted</source>
         <translation>Sessiz</translation>
+    </message>
+</context>
+<context>
+    <name>QuickTile</name>
+    <message>
+        <location filename="../qml/QuickTile.qml" line="+24"/>
+        <source>%1, on</source>
+        <translation>%1, açık</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>%1, off</source>
+        <translation>%1, kapalı</translation>
     </message>
 </context>
 <context>
@@ -2665,7 +2737,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+476"/>
+        <location filename="../qml/Shell.qml" line="+493"/>
         <source>Could not %1.</source>
         <translation>%1 işlemi yapılamadı.</translation>
     </message>
@@ -2700,7 +2772,7 @@ Bu geri alınamaz.</translation>
         <translation>Güncellemeyi bitirmek için 2 dakika içinde yeniden başlatılıyor. Beklemek için herhangi bir düğmeye bas.</translation>
     </message>
     <message>
-        <location line="+217"/>
+        <location line="+223"/>
         <source>The screen did not answer, so the previous resolution is back.</source>
         <translation>Ekran yanıt vermedi, bu yüzden önceki çözünürlük geri geldi.</translation>
     </message>
@@ -2759,18 +2831,18 @@ Bu geri alınamaz.</translation>
         <translation>Seç</translation>
     </message>
     <message>
-        <location line="+132"/>
+        <location line="+139"/>
         <source>The chosen sound theme can&apos;t be used. The standard one plays instead.</source>
         <translation>Seçilen ses teması kullanılamıyor. Bunun yerine standart tema çalıyor.</translation>
     </message>
     <message>
-        <location line="-155"/>
+        <location line="-162"/>
         <location line="+18"/>
         <source>Cancel</source>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="-967"/>
+        <location line="-973"/>
         <source>%1 is already running</source>
         <translation>%1 zaten çalışıyor</translation>
     </message>
@@ -2796,7 +2868,7 @@ Bu geri alınamaz.</translation>
         <translation>Çalışan uygulama</translation>
     </message>
     <message>
-        <location line="+924"/>
+        <location line="+930"/>
         <source>Sections</source>
         <translation>Bölümler</translation>
     </message>
@@ -2811,7 +2883,7 @@ Bu geri alınamaz.</translation>
         <translation>Geri</translation>
     </message>
     <message>
-        <location line="+132"/>
+        <location line="+139"/>
         <source>mock services</source>
         <translation>sahte hizmetler</translation>
     </message>

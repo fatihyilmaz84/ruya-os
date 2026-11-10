@@ -58,6 +58,15 @@ Item {
 
         function find(name) { return findChild(tc.shell, name) }
 
+        // Down until the Quick Hub's row `key` has the focus (T-448: the rows above it depend on the
+        // library, the tiles and the recent games).
+        function hubGoTo(key) {
+            const list = find("systemActions")
+            for (let i = 0; i < 20 && list.model[list.currentIndex] !== key; ++i)
+                keyClick(Qt.Key_Down)
+            compare(list.model[list.currentIndex], key)
+        }
+
         function start() {
             Profiles.lock()
             tryCompare(Profiles, "activeProfile", "")
@@ -199,7 +208,8 @@ Item {
             verify(!find("quickMenuItem_resume"))
             verify(!find("quickMenuItem_home"))
             verify(find("quickMenuItem_volume"), "the volume row is there")
-            verify(find("quickMenuItem_switch").focused, "the first action has the focus, not the volume row")
+            // T-448: the first Recent row has the focus (Switch profile only when there is no recent game).
+            verify(find("quickMenuItem_recent:flatpak:org.example.Racer").focused, "the first action has the focus, not the volume row")
             compare(hintVerbs(), "A Select|B Close")
             keyClick(Qt.Key_Escape)
             tryVerify(() => !find("systemPanel").open)
@@ -214,7 +224,7 @@ Item {
             tryCompare(Audio, "volume", 40)
             keyClick(Qt.Key_HomePage)
             tryVerify(() => find("systemActions").activeFocus)
-            keyClick(Qt.Key_Up)                              // from Switch profile to Volume
+            hubGoTo("volume")                                // T-448: the Recent rows come first
             verify(find("quickMenuItem_volume").focused)
             keyClick(Qt.Key_Right)
             tryCompare(Audio, "volume", 45)
@@ -615,7 +625,7 @@ Item {
                 skip("set RUYA_SHOTS_DIR to save screenshots")
             start()
             keyClick(Qt.Key_HomePage)
-            tryVerify(() => find("quickMenuItem_switch").focused, 2000)
+            tryVerify(() => find("quickMenuItem_recent:flatpak:org.example.Racer").focused, 2000)
             wait(800)
             grabImage(tc.shell).save(shotsDir + "/appflow-5-quick-menu-no-app.png")
         }

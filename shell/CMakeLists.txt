@@ -189,6 +189,7 @@ qt_add_qml_module(ruyashell
         qml/PowerPage.qml
         qml/PowerConfirm.qml
         qml/QuickMenu.qml
+        qml/QuickTile.qml
         qml/LaunchSplash.qml
         qml/ThermalNotice.qml
         qml/ThermalPolicy.qml

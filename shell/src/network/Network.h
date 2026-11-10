@@ -22,6 +22,8 @@ class Network : public QObject
     Q_PROPERTY(QString state READ state NOTIFY stateChanged)
     // { kind, name, ip, signal? }; empty when disconnected
     Q_PROPERTY(QVariantMap primary READ primary NOTIFY stateChanged)
+    // The Wi-Fi radio as the service reports it: "unsupported" (no switch offered: show none) | "off" | "on".
+    Q_PROPERTY(QString wifi READ wifi NOTIFY stateChanged)
     // [{ id, ssid, signal, security, known, active }]
     Q_PROPERTY(QVariantList networks READ networks NOTIFY networksChanged)
     Q_PROPERTY(bool mock READ isMock CONSTANT)
@@ -34,6 +36,7 @@ public:
 
     QString state() const { return m_state; }
     QVariantMap primary() const { return m_primary; }
+    QString wifi() const { return m_wifi; }
     QVariantList networks() const { return m_networks; }
     bool isMock() const { return m_backend->isMock(); }
 
@@ -41,11 +44,16 @@ public:
     // password: for a secured network that is not saved; "" otherwise. Never logged.
     Q_INVOKABLE void connectWifi(const QString &id, const QString &password);
     Q_INVOKABLE void forget(const QString &id);
+    // Switches the Wi-Fi radio (T-448); `wifi` shows the service's answer, never the request.
+    Q_INVOKABLE void setWifiEnabled(bool on);
 
     // Tests only, and only with the mock backend (otherwise no-ops): the password the mock
     // accepts, the cable, and the initial state.
     Q_INVOKABLE QString mockPassword() const;
     Q_INVOKABLE void mockSetCable(bool plugged);
+    // The radio switch's next answer ("ok" | "failed"), and whether the service offers one (T-448).
+    Q_INVOKABLE void mockWifiScript(const QString &status);
+    Q_INVOKABLE void mockWifiSupported(bool supported);
     Q_INVOKABLE void mockReset();
     Q_INVOKABLE void mockSetSsid(const QString &id, const QString &ssid);   // any text, as an access point could send it
     // Asks the backend for the state and the networks; the replies arrive after `ms` and show them
@@ -61,10 +69,13 @@ signals:
     // status: see api/dbus/org.ruyaos.Devices1.xml
     void connectFinished(const QString &id, const QString &status);
     void forgetFinished(const QString &id, const QString &status);
+    // status: "ok" | "failed"
+    void wifiFinished(const QString &status);
 
 private:
     std::unique_ptr<NetworkBackend> m_backend;
     QString m_state = QStringLiteral("disconnected");
     QVariantMap m_primary;
+    QString m_wifi = QStringLiteral("unsupported");
     QVariantList m_networks;
 };

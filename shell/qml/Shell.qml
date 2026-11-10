@@ -676,6 +676,12 @@ FocusScope {
     }
     readonly property var quickMenuOthers: shownApps.filter(r => r.item !== focusedApp && r.appId !== "")
                                                     .map(r => ({ appId: r.appId, title: titleOfApp(r.appId) }))
+    // The Hub's Recent rows (T-448, 02 §1.6): up to four of `Library.recent` that Session1 can start and
+    // that are not running (the running ones are the app header and the Switch to rows).
+    readonly property var quickMenuRecent: Library.recent
+        .filter(i => Library.sessionAppId(i.id) !== "" && !runningAppIds.includes(Library.sessionAppId(i.id)))
+        .slice(0, 4)
+        .map(i => ({ id: i.id, title: i.title ?? i.id, picture: i.art ? (i.art.tile ?? i.art.hero ?? "") : "" }))
 
     // Home from the quick menu: the apps keep running behind it and lose the focus; Home shows the
     // card of the one that was in front, with its Running pill, and the focus is on it.
@@ -1639,9 +1645,11 @@ FocusScope {
         u: root.u
         marginX: root.marginX
         marginY: root.marginY
+        bottomReserve: hintBar.height + Theme.spaceM * root.u
         version: root.version
         app: root.quickMenuApp
         others: root.quickMenuOthers
+        recent: root.quickMenuRecent
         guideKey: key => root.isGuideKey(key)
 
         onOpenChanged: {
@@ -1659,6 +1667,12 @@ FocusScope {
         onHomeRequested: root.sendAppsHome()
         onCloseGameRequested: root.closeFrontGame()
         onSwitchToRequested: appId => root.switchToApp(appId)
+        // A Recent row: close the Hub first (focus goes to the app or the page), then start the game
+        // as Home's Play does (Library.launch -> launchApp: the splash).
+        onLaunchRequested: id => {
+            open = false
+            Library.launch(id)
+        }
         onSwitchProfileRequested: {
             Profiles.lock()                  // signedIn -> false; routeFocus() shows the picker
             open = false
