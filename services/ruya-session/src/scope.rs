@@ -15,7 +15,14 @@
 //!     after the scope has gone);
 //!   - holds the unit's end (`on_unit_event`) while the scope lives, and hands it on when the
 //!     scope is gone, so a run ends when **both** are gone;
-//!   - names the scope for `Stop` and the kill (`scope_of`).
+//!   - names the attached scope (`scope_of`, for a freeze, T-165);
+//!   - asks for the app's leftover scopes to be cleared when the run's end is handed on
+//!     (`take_sweeps`, T-435). A run can have more than one scope: an Electron app's sandboxed
+//!     zygote is started through the Flatpak portal (zypak, `flatpak-spawn --sandbox`), which
+//!     makes a second `app-flatpak-<app>-<n>.scope` in the same second, and the run attaches
+//!     either of the two. `Stop` and the kill therefore name every scope of the app
+//!     (`spawner::control_command`), and the end of a run stops what is left and clears the
+//!     `failed` state of a scope systemd had to kill, so nothing stays listed.
 //!
 //! One round is `plan` (what to ask each manager), the caller's `systemctl show`, and `apply`
 //! (the answer). Nothing here starts a process or waits.
@@ -68,9 +75,20 @@ impl Run {
     }
 }
 
+/// A run has ended: every scope of `app_id` left in `user`'s manager is to be stopped and its
+/// `failed` state cleared (`spawner::sweep_commands`) before the end reaches the core, so a
+/// relaunch can never be caught by it. One app runs once per profile user, so the app's scopes
+/// in that manager all belong to the run that ended.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Sweep {
+    pub user: String,
+    pub app_id: String,
+}
+
 #[derive(Debug, Default)]
 pub struct RunScopes {
     runs: HashMap<String, Run>,
+    sweeps: Vec<Sweep>,
 }
 
 impl RunScopes {
@@ -98,13 +116,29 @@ impl RunScopes {
         );
     }
 
+    /// The sweeps of the runs whose end was handed on since the last call (`on_unit_event`,
+    /// `apply`), in that order. The caller runs them before it hands the ends on.
+    pub fn take_sweeps(&mut self) -> Vec<Sweep> {
+        std::mem::take(&mut self.sweeps)
+    }
+
+    /// A run's end is handed on: it is forgotten, and its app's leftover scopes are to go.
+    fn end_run(&mut self, unit: &str) {
+        if let Some(run) = self.runs.remove(unit) {
+            self.sweeps.push(Sweep {
+                user: run.user,
+                app_id: run.app_id,
+            });
+        }
+    }
+
     /// The run is not followed any more (its start failed before anything ran).
     pub fn forget(&mut self, unit: &str) {
         self.runs.remove(unit);
     }
 
-    /// The scope `Stop` and the kill must reach next to the unit: `None` before one is attached
-    /// and after it has gone.
+    /// The scope the run follows: `None` before one is attached and after it has gone. `Stop`
+    /// and the kill do not use it (they name every scope of the app, T-435).
     pub fn scope_of(&self, unit: &str) -> Option<String> {
         self.runs
             .get(unit)
@@ -137,7 +171,7 @@ impl RunScopes {
             run.held.get_or_insert(event);
             return None;
         }
-        self.runs.remove(&unit);
+        self.end_run(&unit);
         Some(event)
     }
 
@@ -216,7 +250,7 @@ impl RunScopes {
                 if run.done {
                     if let Some(event) = run.held.take() {
                         released.push(event);
-                        self.runs.remove(&unit);
+                        self.end_run(&unit);
                     }
                 }
                 continue;
@@ -272,7 +306,7 @@ impl RunScopes {
             if run.done {
                 if let Some(event) = run.held.take() {
                     released.push(event);
-                    self.runs.remove(&unit);
+                    self.end_run(&unit);
                 }
             }
         }
@@ -546,15 +580,94 @@ mod tests {
         assert_eq!(scopes.on_unit_event(other.clone()), Some(other));
     }
 
+    fn sweep() -> Sweep {
+        Sweep {
+            user: USER.to_owned(),
+            app_id: APP.to_owned(),
+        }
+    }
+
     #[test]
-    fn stop_also_stops_the_scope() {
-        use crate::spawner::{control_command, scope_target};
+    fn the_end_of_a_run_sweeps_the_other_scopes_of_its_app() {
+        // T-435, ACBR on the Dell: an Electron app's sandboxed zygote runs in a second scope the
+        // Flatpak portal made. The run follows the first; when it ends the second must go too.
+        const ZYGOTE: &str = "app-flatpak-net.supertuxkart.SuperTuxKart-17.scope";
         let now = t0();
         let mut scopes = RunScopes::new();
         scopes.begin(UNIT, USER, APP, now);
-        // Before the scope is attached the pattern of the app's scopes goes along.
-        let target = scope_target(APP, scopes.scope_of(UNIT).as_deref()).expect("pattern");
-        let stop = control_command(USER, &["stop", "--no-block"], UNIT, &target).expect("stop");
+        let mut mgr = FakeManager::new(vec![
+            unit_show(1000, None),
+            scope_show(SCOPE, 1000, None),
+            scope_show(ZYGOTE, 1001, None),
+        ]);
+        round(&mut scopes, &mut mgr, now);
+        assert_eq!(scopes.scope_of(UNIT).as_deref(), Some(SCOPE));
+        assert_eq!(scopes.on_unit_event(exited(139)), None);
+        assert!(
+            scopes.take_sweeps().is_empty(),
+            "nothing while the run lives"
+        );
+        // The browser's scope is gone, the zygote's still lives: the end is handed on with a
+        // sweep of the app's scopes, once.
+        mgr.set(gone_scope(SCOPE));
+        assert_eq!(
+            round(&mut scopes, &mut mgr, now + WATCH_EVERY),
+            [exited(139)]
+        );
+        assert_eq!(scopes.take_sweeps(), [sweep()]);
+        assert!(scopes.take_sweeps().is_empty());
+        round(&mut scopes, &mut mgr, now + WATCH_EVERY * 2);
+        assert!(scopes.take_sweeps().is_empty());
+    }
+
+    #[test]
+    fn every_way_a_run_ends_sweeps_once() {
+        let now = t0();
+        // The unit ends with no scope attached (not held): swept as it passes.
+        let mut scopes = RunScopes::new();
+        scopes.begin(UNIT, USER, APP, now);
+        assert_eq!(scopes.on_unit_event(exited(0)), Some(exited(0)));
+        assert_eq!(scopes.take_sweeps(), [sweep()]);
+        // The scope went first; the unit's end then passes and sweeps.
+        let mut scopes = RunScopes::new();
+        scopes.begin(UNIT, USER, APP, now);
+        let mut mgr = FakeManager::new(vec![scope_show(SCOPE, 1001, None)]);
+        round(&mut scopes, &mut mgr, now);
+        mgr.set(gone_scope(SCOPE));
+        round(&mut scopes, &mut mgr, now + WATCH_EVERY);
+        assert!(scopes.take_sweeps().is_empty(), "the unit still runs");
+        assert_eq!(scopes.on_unit_event(exited(0)), Some(exited(0)));
+        assert_eq!(scopes.take_sweeps(), [sweep()]);
+        // The manager stops answering: the held end is given up with a sweep.
+        let mut scopes = RunScopes::new();
+        scopes.begin(UNIT, USER, APP, now);
+        let mut mgr = FakeManager::new(vec![scope_show(SCOPE, 1001, None)]);
+        round(&mut scopes, &mut mgr, now);
+        assert_eq!(scopes.on_unit_event(exited(0)), None);
+        mgr.down = true;
+        let mut at = now;
+        for _ in 0..MAX_MISSES {
+            at += WATCH_EVERY;
+            round(&mut scopes, &mut mgr, at);
+        }
+        assert_eq!(scopes.take_sweeps(), [sweep()]);
+        // A start that failed before anything ran, and units it does not know: no sweep.
+        let mut scopes = RunScopes::new();
+        scopes.begin(UNIT, USER, APP, now);
+        scopes.forget(UNIT);
+        let other = UnitEvent::Exited {
+            unit: "ruya-app-ruya-p1-org.x.Y.service".to_owned(),
+            code: 0,
+            signaled: false,
+        };
+        assert_eq!(scopes.on_unit_event(other.clone()), Some(other));
+        assert!(scopes.take_sweeps().is_empty());
+    }
+
+    #[test]
+    fn stop_also_stops_the_scope() {
+        use crate::spawner::control_command;
+        let stop = control_command(USER, &["stop", "--no-block"], UNIT, APP).expect("stop");
         assert_eq!(
             stop,
             [
@@ -568,24 +681,23 @@ mod tests {
                 "app-flatpak-net.supertuxkart.SuperTuxKart-*.scope",
             ]
         );
-        // Attached: the exact scope, and it is still named after the unit has ended, so the
-        // kill of an overdue Stop reaches the game too.
-        let mut mgr = FakeManager::new(vec![scope_show(SCOPE, 1001, None)]);
-        round(&mut scopes, &mut mgr, now);
-        assert_eq!(scopes.on_unit_event(exited(0)), None);
-        let target = scope_target(APP, scopes.scope_of(UNIT).as_deref()).expect("scope");
+        // The kill of an overdue Stop reaches every scope of the app too, not only the attached
+        // one (T-435: an Electron app's second scope, its zygote, may be the attached one).
         let kill = control_command(
             USER,
             &["kill", "--signal=SIGKILL", "--kill-whom=all"],
             UNIT,
-            &target,
+            APP,
         )
         .expect("kill");
-        assert_eq!(&kill[kill.len() - 2..], [UNIT, SCOPE]);
+        assert_eq!(
+            &kill[kill.len() - 2..],
+            [UNIT, "app-flatpak-net.supertuxkart.SuperTuxKart-*.scope"]
+        );
         // Nothing foreign gets through.
-        assert!(scope_target(APP, Some("app-flatpak-org.other.Game-1.scope")).is_err());
-        assert!(scope_target(APP, Some("../x")).is_err());
-        assert!(control_command("root", &["stop"], UNIT, SCOPE).is_err());
+        assert!(control_command(USER, &["stop"], UNIT, "../x").is_err());
+        assert!(control_command(USER, &["stop"], UNIT, "org.x.*").is_err());
+        assert!(control_command("root", &["stop"], UNIT, APP).is_err());
     }
 
     #[test]

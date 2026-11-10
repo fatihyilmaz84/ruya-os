@@ -140,28 +140,23 @@ pub fn is_app_scope(app_id: &str, name: &str) -> bool {
             .is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
 }
 
-/// What `systemctl stop|kill` gets next to the unit to reach the app's scope (T-363): the exact
-/// name of the scope the run has attached (`scope::RunScopes::scope_of`), or, while none is
-/// attached yet, the pattern of every scope of the app.
-pub fn scope_target(app_id: &str, attached: Option<&str>) -> Result<String, String> {
-    match attached {
-        Some(name) if is_app_scope(app_id, name) => Ok(name.to_owned()),
-        Some(name) => Err(format!("not a scope of {app_id}: {name:?}")),
-        None => scope_pattern(app_id),
-    }
-}
-
 /// The `systemctl` argument list that applies `verb` (`stop --no-block`, `kill ...`) to the unit
-/// and to the scope target in `user`'s manager. Pure; the user is validated again.
+/// and to every scope of `app_id` in `user`'s manager (`scope_pattern`). Not only the scope the
+/// run has attached (T-435): an Electron app has two (the browser's from `flatpak run`, its
+/// sandboxed zygote's from the Flatpak portal), entered in the same second, and the run may have
+/// attached either; naming one let the other run on after `Stop`. One app runs once per profile
+/// user, so the app's scopes in that manager are all this run's. Pure; user and app are
+/// validated again.
 pub fn control_command(
     user: &str,
     verb: &[&str],
     unit: &str,
-    scope: &str,
+    app_id: &str,
 ) -> Result<Vec<String>, String> {
     if !user.strip_prefix("ruya-").is_some_and(valid_profile_id) {
         return Err(format!("not a profile user: {user:?}"));
     }
+    let pattern = scope_pattern(app_id)?;
     let mut args: Vec<String> = ["systemctl", "--user", "--no-pager"]
         .into_iter()
         .map(str::to_owned)
@@ -169,8 +164,51 @@ pub fn control_command(
     args.push(format!("--machine={user}@.host"));
     args.extend(verb.iter().map(|v| (*v).to_owned()));
     args.push(unit.to_owned());
-    args.push(scope.to_owned());
+    args.push(pattern);
     Ok(args)
+}
+
+/// The `systemctl` argument lists that clear what is left of a run of `app_id` in `user`'s
+/// manager once its end is handed on (`scope::Sweep`, T-435): stop every scope of the app that
+/// still runs (a second scope the Flatpak portal made, such as an Electron app's sandboxed
+/// zygote), then clear the `failed` state of the ones systemd had to kill, so no
+/// `app-flatpak-<app>-*.scope` stays listed. `--no-block`: the stop is queued and the glob is
+/// matched now, before the end reaches the core. Pure; user and app are validated again.
+pub fn sweep_commands(user: &str, app_id: &str) -> Result<Vec<Vec<String>>, String> {
+    if !user.strip_prefix("ruya-").is_some_and(valid_profile_id) {
+        return Err(format!("not a profile user: {user:?}"));
+    }
+    let pattern = scope_pattern(app_id)?;
+    let command = |verb: &[&str]| {
+        let mut args: Vec<String> = ["systemctl", "--user", "--no-pager"]
+            .into_iter()
+            .map(str::to_owned)
+            .collect();
+        args.push(format!("--machine={user}@.host"));
+        args.extend(verb.iter().map(|v| (*v).to_owned()));
+        args.push(pattern.clone());
+        args
+    };
+    Ok(vec![
+        command(&["stop", "--no-block"]),
+        command(&["reset-failed"]),
+    ])
+}
+
+/// The environment every app on the console gets (`app_env` then adds its Wayland socket and
+/// `with_pulse_server` its sound server). The console has no X server (no XWayland), so the
+/// toolkits that would try X11 first are told this is a Wayland session:
+///   - `SDL_VIDEODRIVER=wayland`: SDL 2 otherwise tries X11 first and, without the
+///     xdg-decoration protocol, may never try Wayland ("No available video device").
+///   - `XDG_SESSION_TYPE=wayland` (T-435): Chromium and Electron choose their Ozone platform by
+///     it (`--ozone-platform-hint=auto`); without it they take X11, find no `$DISPLAY` and exit
+///     ("Missing X server or $DISPLAY"). ACBR (Electron 42) on the Dell showed no window for
+///     that reason. `flatpak run` passes the variable into the sandbox.
+pub fn console_env() -> Vec<(String, String)> {
+    vec![
+        ("SDL_VIDEODRIVER".to_owned(), "wayland".to_owned()),
+        ("XDG_SESSION_TYPE".to_owned(), "wayland".to_owned()),
+    ]
 }
 
 /// Is the application in the system Flatpak installation under `root` (`/var/lib/flatpak`)?
@@ -1312,6 +1350,43 @@ ActiveState=failed
         ] {
             assert!(scope_pattern(bad).is_err(), "{bad:?}");
         }
+    }
+
+    #[test]
+    fn sweep_stops_every_scope_of_the_app_and_clears_failed_ones() {
+        let base = [
+            "systemctl",
+            "--user",
+            "--no-pager",
+            "--machine=ruya-p1@.host",
+        ];
+        let pattern = "app-flatpak-com.binarynonsense.acbr-*.scope";
+        let commands = sweep_commands("ruya-p1", "com.binarynonsense.acbr").expect("sweep");
+        let mut stop: Vec<&str> = base.to_vec();
+        stop.extend(["stop", "--no-block", pattern]);
+        let mut reset: Vec<&str> = base.to_vec();
+        reset.extend(["reset-failed", pattern]);
+        assert_eq!(commands, [stop, reset]);
+        assert!(sweep_commands("root", "com.binarynonsense.acbr").is_err());
+        assert!(sweep_commands("ruya-p1", "org.ruyaos.*").is_err());
+    }
+
+    #[test]
+    fn console_apps_are_told_it_is_a_wayland_session() {
+        // T-435: Electron (ACBR) picks X11 without XDG_SESSION_TYPE and exits ("Missing X
+        // server or $DISPLAY"); there is no X server on the console.
+        let env = console_env();
+        for (key, value) in [
+            ("SDL_VIDEODRIVER", "wayland"),
+            ("XDG_SESSION_TYPE", "wayland"),
+        ] {
+            assert!(
+                env.contains(&(key.to_owned(), value.to_owned())),
+                "{key}={value} missing"
+            );
+        }
+        let args = launch_command("ruya-p1", "com.binarynonsense.acbr", &env).expect("launch");
+        assert!(args.contains(&"--setenv=XDG_SESSION_TYPE=wayland".to_owned()));
     }
 
     #[test]

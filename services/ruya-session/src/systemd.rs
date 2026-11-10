@@ -26,7 +26,9 @@
 //! `flatpak run` puts the game in its own `app-flatpak-<id>-<n>.scope`, outside the unit (T-363).
 //! Every event goes through `Gate`: `scope::RunScopes` attaches the scope to its run, reads its
 //! CPU, and holds the unit's end until the scope is gone (a watcher thread asks each manager
-//! with one `systemctl show` per second at most); `Stop` and the kill name the attached scope.
+//! with one `systemctl show` per second at most); `Stop` and the kill name every scope of the app.
+//! When a run's end is handed on, the app's leftover scopes are stopped and their `failed` state
+//! cleared first (`RunScopes::take_sweeps`, `spawner::sweep_commands`, T-435).
 
 use std::collections::HashMap;
 use std::fs::File;
@@ -45,11 +47,11 @@ use zbus::{Connection, MatchRule, MessageStream};
 use crate::follow::{
     bridge_args, parse_signal, Backoff, Follower, ManagerLink, Probe, Wake, BRIDGE_PROGRAM,
 };
-use crate::scope::RunScopes;
+use crate::scope::{RunScopes, Sweep};
 use crate::spawner::{
     control_command, flatpak_app_installed, launch_command, parse_profile_users, parse_show,
-    pulse_start_command, scope_target, unit_app_id, unit_name, LineTail, RunFollower, RunningUnit,
-    ShowUnit, SHOW_PROPERTIES,
+    pulse_start_command, sweep_commands, unit_app_id, unit_name, LineTail, RunFollower,
+    RunningUnit, ShowUnit, SHOW_PROPERTIES,
 };
 use crate::spawner::{Spawner, UnitEvent};
 use std::ffi::OsString;
@@ -81,11 +83,12 @@ struct Gate {
 
 impl Gate {
     fn deliver(&self, event: UnitEvent) {
-        let passed = self
-            .scopes
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .on_unit_event(event);
+        let (passed, sweeps) = {
+            let mut scopes = self.scopes.lock().unwrap_or_else(|e| e.into_inner());
+            let passed = scopes.on_unit_event(event);
+            (passed, scopes.take_sweeps())
+        };
+        sweep(sweeps);
         if let Some(event) = passed {
             self.send(event);
         }
@@ -114,14 +117,31 @@ fn watch_scopes(gate: Gate) {
             .plan(Instant::now());
         for query in queries {
             let shows = show_many(&query.user, &query.names).map(|text| parse_show(&text));
-            let ended = gate.scopes.lock().unwrap_or_else(|e| e.into_inner()).apply(
-                &query.user,
-                shows.as_deref(),
-                Instant::now(),
-            );
+            let (ended, sweeps) = {
+                let mut scopes = gate.scopes.lock().unwrap_or_else(|e| e.into_inner());
+                let ended = scopes.apply(&query.user, shows.as_deref(), Instant::now());
+                (ended, scopes.take_sweeps())
+            };
+            sweep(sweeps);
             for event in ended {
                 gate.send(event);
             }
+        }
+    }
+}
+
+/// Clears what is left of the runs that ended (`spawner::sweep_commands`): waits for each
+/// `systemctl` (the stop is `--no-block`, so this is quick), before their ends are handed on.
+fn sweep(sweeps: Vec<Sweep>) {
+    for Sweep { user, app_id } in sweeps {
+        match sweep_commands(&user, &app_id) {
+            Ok(commands) => {
+                for args in commands {
+                    let rest: Vec<&str> = args[1..].iter().map(String::as_str).collect();
+                    run_quiet(&args[0], &rest);
+                }
+            }
+            Err(err) => eprintln!("ruya-session: no sweep for {app_id} of {user}: {err}"),
         }
     }
 }
@@ -163,21 +183,14 @@ impl SystemdSpawner {
             .ok_or_else(|| format!("no running unit {unit}"))
     }
 
-    /// `systemctl --user --machine=<user>@.host <verb>... <unit> <scope>` on its own thread: it
-    /// talks to the bus and must not hold up a D-Bus call. Its failure is logged; the run's end
-    /// (or the kill after the grace time) is what the core acts on. The scope is the app itself
-    /// (`scope_target`: the one the run has attached, else the pattern of the app's scopes); the
-    /// unit is its `flatpak run` front end.
+    /// `systemctl --user --machine=<user>@.host <verb>... <unit> app-flatpak-<app>-*.scope` on
+    /// its own thread: it talks to the bus and must not hold up a D-Bus call. Its failure is
+    /// logged; the run's end (or the kill after the grace time) is what the core acts on. The
+    /// scopes are the app itself (every one of them, `control_command`, T-435); the unit is its
+    /// `flatpak run` front end.
     fn systemctl(&self, unit: &str, verb: &[&str]) -> Result<(), String> {
         let (user, app_id) = self.owner_of(unit)?;
-        let attached = self
-            .gate
-            .scopes
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .scope_of(unit);
-        let scope = scope_target(&app_id, attached.as_deref())?;
-        let args = control_command(&user, verb, unit, &scope)?;
+        let args = control_command(&user, verb, unit, &app_id)?;
         let mut cmd = Command::new(&args[0]);
         cmd.args(&args[1..])
             .stdin(Stdio::null())

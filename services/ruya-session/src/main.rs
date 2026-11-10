@@ -12,7 +12,7 @@ use ruya_session::dbus::{
 };
 use ruya_session::directory::ProfileSnapshot;
 use ruya_session::session::Session;
-use ruya_session::spawner::{FakeSpawner, UnitEvent, PULSE_DIR, WAYLAND_DIR};
+use ruya_session::spawner::{console_env, FakeSpawner, UnitEvent, PULSE_DIR, WAYLAND_DIR};
 use ruya_session::usage::SystemZone;
 use ruya_session::usage_store::FileStore;
 use ruya_session::usage_tracker::Tracker;
@@ -57,12 +57,11 @@ fn run() -> Result<(), Box<dyn Error>> {
         )
     } else {
         // Each app gets its profile's own Wayland socket (ADR-023, T-164). The console has no X
-        // server, so SDL is told to use Wayland: SDL 2 otherwise tries X11 first and, without
-        // the xdg-decoration protocol, may never try Wayland ("No available video device").
+        // server, so SDL, Electron and the rest are told to use Wayland (`console_env`, T-435).
         (
             system_spawner(tx)?,
             ProfileSnapshot::default(),
-            vec![("SDL_VIDEODRIVER".to_owned(), "wayland".to_owned())],
+            console_env(),
             Some(WAYLAND_DIR),
         )
     };
