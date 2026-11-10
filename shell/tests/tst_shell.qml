@@ -196,18 +196,77 @@ Item {
             tryVerify(() => find("profileList").activeFocus, 2000, "picker regains focus after lock")
         }
 
+        // Home -> Settings with the controller keys.
+        function openSettings() {
+            keyClick(Qt.Key_Up)                        // the section nav
+            tryVerify(() => find("sectionNav").activeFocus, 2000, "the section nav has focus")
+            for (let i = 0; i < 4; ++i)
+                keyClick(Qt.Key_Right)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("page_settings") !== null && find("page_settings").activeFocus, 2000, "Settings has focus")
+        }
+
         // T-293: the drift of the animated backdrop costs frames; with an app in front nobody sees it.
+        // Checked on a page, where the blobs are seen (on Home the hero covers them, T-421).
         function test_backdrop_stops_while_app_focused() {
             DeviceSettings.reducedMotion = false
             DeviceSettings.effectsQuality = "high"
             signInAsAda()
+            openSettings()
             const backdrop = find("backdrop")
-            tryVerify(() => backdrop.drifting, 2000, "the blobs drift on Home")
+            tryVerify(() => backdrop.drifting, 2000, "the blobs drift on a page")
             const app = createTemporaryObject(appComponent, host)
             tc.shell.addApp(app)
             tryCompare(backdrop, "drifting", false)
             tc.shell.removeApp(app)
+            tryVerify(() => find("page_settings").activeFocus, 2000, "the page has focus again")
             tryCompare(backdrop, "drifting", true)
+        }
+
+        // T-421: on Home the hero's art or colour field is opaque and covers the backdrop: the blobs rest
+        // there (a still Home drew 60 frames a second for them on the Dell, about 30 % of its GPU). They
+        // drift where they are seen: the profile picker and the pages.
+        function test_backdrop_rests_under_the_home_hero() {
+            DeviceSettings.reducedMotion = false
+            DeviceSettings.effectsQuality = "high"
+            const backdrop = find("backdrop")
+            tryVerify(() => backdrop.drifting, 2000, "the blobs drift on the profile picker")
+            signInAsAda()
+            const hero = find("heroArt")
+            tryCompare(hero, "opacity", 1)
+            verify(hero.covers, "the hero covers the backdrop")
+            tryCompare(backdrop, "paused", true)
+            tryCompare(backdrop, "drifting", false, 2000, "the blobs rest under the hero")
+            openSettings()
+            tryCompare(backdrop, "drifting", true, 2000, "they drift again on a page")
+            keyClick(Qt.Key_Escape)                    // list -> Home
+            tryVerify(() => find("sectionNav").activeFocus, 2000, "focus back on the section nav")
+            tryCompare(backdrop, "drifting", false, 2000, "and rest again on Home")
+        }
+
+        // T-421: where the blobs are seen they still rest once nobody has touched anything for the idle
+        // period (LiquidGate, as the liquid pill's specular): a still page drew 60 frames a second for
+        // them. The next key brings the drift back.
+        function test_backdrop_rests_when_idle_and_drifts_on_input() {
+            DeviceSettings.reducedMotion = false
+            DeviceSettings.effectsQuality = "high"
+            signInAsAda()
+            openSettings()
+            const backdrop = find("backdrop")
+            tryVerify(() => backdrop.drifting, 2000, "the blobs drift on a page")
+            LiquidGate.idleMs = 150
+            LiquidGate.noteInput()
+            tryCompare(LiquidGate, "idle", true, 2000, "no input for the idle period")
+            tryCompare(backdrop, "drifting", false, 2000, "the blobs rest")
+            keyClick(Qt.Key_Down)                      // the next category
+            compare(LiquidGate.idle, false, "a key is input")
+            tryCompare(backdrop, "drifting", true, 2000, "the blobs drift again")
+            verify(find("categoryList").activeFocus, "the key moved within the category list")
+            LiquidGate.reset()
+        }
+
+        function cleanup() {
+            LiquidGate.reset()
         }
 
         function test_zz_screenshots() {

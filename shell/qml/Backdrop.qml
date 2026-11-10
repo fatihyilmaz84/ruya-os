@@ -1,8 +1,11 @@
 pragma ComponentBehavior: Bound
 import QtQuick
+import QtQuick.Effects
 
 // Stand-in for hero artwork: slow-drifting soft colour fields tinted by the focused tile.
-// Cheap to render (a few rectangles), and the frosted shelf blurs it into something cinematic.
+// Cheap to render (a few rectangles). On a page (`blurred`) the fields are shown through one
+// blurred copy, as a wallpaper is (WallpaperLayer, T-208): glass on a page never sits over the
+// blobs' sharp edges (04 §3.6, T-421).
 Item {
     id: backdrop
 
@@ -18,19 +21,59 @@ Item {
     property bool shown: true
     visible: shown
 
-    // True while an app is in front and covers all of this (set by Shell, T-293): the blobs rest
-    // and cost no frames; they carry on from where they stopped when the app closes.
+    // True while something opaque covers all of this (set by Shell): an app in front (T-293) or the
+    // Home hero's art or colour field (T-421). The blobs rest and cost no frames; they carry on from
+    // where they stopped when they are seen again.
     property bool paused: false
+
+    // True while a page (not Home) is on top (set by Shell): the blurred copy fades in over the sharp
+    // fields. Not on the Performance tier (no blur there, 04 §3.6).
+    property bool blurred: false
+    readonly property bool blurActive: blurred && Theme.blurMax > 0
 
     // True while any blob is drifting; stops with reduced motion or the performance tier.
     readonly property bool drifting: blobA.drifting || blobB.drifting || blobC.drifting
 
-    Rectangle {
-        objectName: "backdropGradient"
+    // The sharp fields: the gradient and the blobs. The blurred copy below is made from this item.
+    Item {
+        id: fields
+        objectName: "backdropFields"
         anchors.fill: parent
-        gradient: Gradient {
-            GradientStop { position: 0.0; color: Theme.backdropTop(backdrop.tintA) }
-            GradientStop { position: 1.0; color: Theme.background }
+
+        Rectangle {
+            objectName: "backdropGradient"
+            anchors.fill: parent
+            gradient: Gradient {
+                GradientStop { position: 0.0; color: Theme.backdropTop(backdrop.tintA) }
+                GradientStop { position: 1.0; color: Theme.background }
+            }
+        }
+
+        Blob {
+            id: blobA
+            objectName: "blobA"
+            color: backdrop.tintA
+            x: backdrop.width * (-0.1 + 0.25 * driftX)
+            y: backdrop.height * (-0.3 + 0.2 * driftY)
+        }
+        Blob {
+            id: blobB
+            objectName: "blobB"
+            color: Qt.lighter(backdrop.tintB, 1.4)
+            period: 23000
+            opacity: Theme.blobOpacityB
+            x: backdrop.width * (0.55 - 0.2 * driftX)
+            y: backdrop.height * (0.1 + 0.25 * driftY)
+        }
+        Blob {
+            id: blobC
+            objectName: "blobC"
+            color: Theme.blobHighlight
+            period: 29000
+            opacity: Theme.blobOpacityC
+            width: backdrop.width * 0.35
+            x: backdrop.width * (0.3 + 0.3 * driftX)
+            y: backdrop.height * (0.5 - 0.3 * driftY)
         }
     }
 
@@ -61,30 +104,38 @@ Item {
         }
     }
 
-    Blob {
-        id: blobA
-        objectName: "blobA"
-        color: backdrop.tintA
-        x: backdrop.width * (-0.1 + 0.25 * driftX)
-        y: backdrop.height * (-0.3 + 0.2 * driftY)
-    }
-    Blob {
-        id: blobB
-        objectName: "blobB"
-        color: Qt.lighter(backdrop.tintB, 1.4)
-        period: 23000
-        opacity: Theme.blobOpacityB
-        x: backdrop.width * (0.55 - 0.2 * driftX)
-        y: backdrop.height * (0.1 + 0.25 * driftY)
-    }
-    Blob {
-        id: blobC
-        objectName: "blobC"
-        color: Theme.blobHighlight
-        period: 29000
-        opacity: Theme.blobOpacityC
-        width: backdrop.width * 0.35
-        x: backdrop.width * (0.3 + 0.3 * driftX)
-        y: backdrop.height * (0.5 - 0.3 * driftY)
+    // The blurred copy (04 §3.6): a quarter-size texture of the fields, blurred, faded in over the
+    // sharp fields while a page is open. It replaces them as the L0 that the page's glass and the
+    // glass pills see; one full-screen blur, as with a wallpaper (which hides this backdrop).
+    Loader {
+        id: blurLoader
+        objectName: "backdropBlurLoader"
+        anchors.fill: parent
+        active: backdrop.shown && Theme.blurMax > 0
+        sourceComponent: Item {
+            ShaderEffectSource {
+                id: reduced
+                objectName: "backdropReduced"
+                visible: false
+                sourceItem: fields
+                textureSize: Qt.size(Math.max(1, backdrop.width / 4), Math.max(1, backdrop.height / 4))
+                // Once the opaque blurred copy covers them, the sharp fields are not drawn on screen as
+                // well (still into this texture): about 8 % of the Dell's GPU while they drift (T-421).
+                hideSource: pageBlur.opacity >= 1
+            }
+            MultiEffect {
+                id: pageBlur
+                objectName: "backdropBlur"
+                anchors.fill: parent
+                source: reduced
+                visible: opacity > 0
+                opacity: backdrop.blurActive ? 1 : 0
+                Behavior on opacity { NumberAnimation { duration: Theme.pageMs; easing.type: Easing.Bezier; easing.bezierCurve: Theme.easeSnap } }
+                autoPaddingEnabled: false
+                blurEnabled: true
+                blur: 1.0
+                blurMax: Theme.blurMax
+            }
+        }
     }
 }

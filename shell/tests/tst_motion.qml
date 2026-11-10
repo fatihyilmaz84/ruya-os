@@ -58,11 +58,26 @@ Item {
             compare(Theme.pageMs, 300)
             compare(Theme.tintMs, 700)
             compare(Theme.blurMax, 64)
-            verify(find("backdrop").drifting, "ambient drift runs by default")
             verify(find("glassBlur").visible)
+            openSettings()
+            tryVerify(() => find("backdrop").drifting, 2000, "ambient drift runs by default where the blobs are seen")
+        }
+
+        // Settings from Home or the section nav with the controller keys. The drift is checked on a page:
+        // on Home the hero's opaque field covers the blobs and they rest (T-421).
+        function openSettings() {
+            if (!find("sectionNav").activeFocus)
+                keyClick(Qt.Key_Up)                    // the section nav
+            tryVerify(() => find("sectionNav").activeFocus, 2000, "the section nav has focus")
+            for (let i = 0; i < 4; ++i)
+                keyClick(Qt.Key_Right)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("page_settings") !== null && find("page_settings").activeFocus, 2000, "Settings has focus")
         }
 
         function test_reduced_motion() {
+            openSettings()
+            tryVerify(() => find("backdrop").drifting, 2000, "the blobs drift on a page")
             DeviceSettings.reducedMotion = true
             compare(Theme.focusMs, 0)
             compare(Theme.pageMs, 0)
@@ -70,16 +85,15 @@ Item {
             tryVerify(() => !find("backdrop").drifting, 2000, "backdrop animations stop")
 
             // Navigation still works and is not left half-way.
-            keyClick(Qt.Key_Up)                        // the section nav
-            for (let i = 0; i < 4; ++i)
-                keyClick(Qt.Key_Right)
-            keyClick(Qt.Key_Return)
-            tryVerify(() => find("page_settings") !== null && find("page_settings").activeFocus, 2000)
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => find("sectionNav").activeFocus, 2000)
+            openSettings()
             keyClick(Qt.Key_Escape)
             tryVerify(() => find("sectionNav").activeFocus, 2000)
 
             DeviceSettings.reducedMotion = false
             compare(Theme.focusMs, 140)
+            openSettings()
             tryVerify(() => find("backdrop").drifting, 2000, "drift resumes")
         }
 
@@ -163,10 +177,11 @@ Item {
         }
 
         function test_quality_tiers() {
+            openSettings()                             // where the blobs are seen (T-421)
             DeviceSettings.effectsQuality = "balanced"
             compare(Theme.blurMax, 32)
             verify(find("glassBlur").visible)
-            verify(find("backdrop").drifting, "balanced keeps ambient drift")
+            tryVerify(() => find("backdrop").drifting, 2000, "balanced keeps ambient drift")
 
             DeviceSettings.effectsQuality = "performance"
             compare(Theme.blurMax, 0)
