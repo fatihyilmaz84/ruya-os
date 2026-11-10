@@ -8,7 +8,7 @@
 #   vm-app-check.sh kill     # end the client (the shell takes the screen back)
 #   vm-app-check.sh log [n]  # what the compositor and the client saw
 #   vm-app-check.sh state    # the session: no cage, the socket, the input ACLs
-#   vm-app-check.sh flow     # after Guide / Resume / Guide / Home / resume was driven: did the quick menu take the focus and give it back (T-147)
+#   vm-app-check.sh flow     # after Guide, Back, Guide, Resume, Guide, Home was driven: did the quick menu take the focus and give it back (T-147)
 #
 # Drive it from the host with vm-keys.ps1 (letters reach the client; meta_l is Guide) and
 # vm-inject-key.py guide (the controller's Guide); see docs/dev-setup.md, "Test app in the VM".
@@ -36,18 +36,21 @@ log)
   journalctl -b -o short-precise _UID=$U --no-pager | grep -E "ruya-compositor|test-client|qml:.*Error" | tail -n "${2:-40}"
   ;;
 flow)
-  # The quick menu over the client (T-147). Drive first (sign in; start the client; then Guide, Back
-  # (Resume), Guide, Home; Accept on the Running card to resume), then run this: it counts what the
-  # compositor logged. Focus on the menu list: once per Guide; the client gaining/losing focus.
+  # The quick menu over the client (T-147). Drive first: sign in, `client`, then Guide, Back, Guide,
+  # Resume (Return on the first row), Guide, Home (Down, Return). The client has no Library card, so
+  # it cannot be resumed from Home (the menu has no app part behind Home): `kill` it afterwards.
+  # Then run this: it counts what the compositor logged. The menu list takes the focus once per
+  # Guide (3); the client gains the focus at its start and at each close of the menu over it (3: start,
+  # Back, Resume) and loses it at each Guide (3).
   log=$(journalctl -b -o short-precise _UID=$U --no-pager | grep -E "ruya-compositor: (app focus|focus systemActions)")
   menu=$(grep -c "focus systemActions" <<<"$log")
   gained=$(grep -c "app focus .* true" <<<"$log")
   lost=$(grep -c "app focus .* false" <<<"$log")
   echo "menu focused: $menu, client focus gained: $gained, lost: $lost"
-  if [ "$menu" -ge 2 ] && [ "$gained" -ge 3 ] && [ "$lost" -ge 2 ]; then
+  if [ "$menu" -ge 3 ] && [ "$gained" -ge 3 ] && [ "$lost" -ge 3 ]; then
     echo "quick menu flow: ok"
   else
-    echo "quick menu flow: FAILED (expected menu >= 2, gained >= 3, lost >= 2)"
+    echo "quick menu flow: FAILED (expected menu >= 3, gained >= 3, lost >= 3)"
     exit 1
   fi
   ;;

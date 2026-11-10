@@ -427,7 +427,7 @@ Item {
             tryVerify(() => splash.slow, 3000, "20 s (shortened here) without a window")
             compare(find("launchStatus").text, "Still starting…")
             tryVerify(() => find("launchClose").activeFocus, 2000, "Close has the focus")
-            compare(hintVerbs(), "A Close")
+            compare(hintVerbs(), "A Close|B Close")
             const instance = Session.running[0].instance
             keyClick(Qt.Key_Return)
             tryCompare(stoppedSpy, "count", 1)
@@ -436,6 +436,21 @@ Item {
             tryVerify(() => find("homePlay").activeFocus, 2000, "focus is back on Play")
             tryCompare(Session.running, "length", 0)
             compare(Notifications.model.count, 0, "closing it is not an error")
+        }
+
+        // Once "Still starting" shows, Back closes it as well (the hint bar says so).
+        function test_back_closes_a_launch_that_is_still_starting() {
+            start()
+            tc.shell.launchStillMs = 150
+            keyClick(Qt.Key_Return)
+            const splash = find("launchSplash")
+            tryCompare(launchedSpy, "count", 1)
+            tryVerify(() => splash.slow, 3000)
+            keyClick(Qt.Key_Escape)
+            tryCompare(stoppedSpy, "count", 1)
+            tryCompare(splash, "shown", false)
+            tryVerify(() => find("homePlay").activeFocus, 2000, "focus is back on Play")
+            compare(Notifications.model.count, 0)
         }
 
         // ---- Play only where Session1 can start it ------------------------------------------------

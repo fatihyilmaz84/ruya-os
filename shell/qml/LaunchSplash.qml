@@ -8,7 +8,7 @@ import RuyaShell
 // Performance tier draws no blur), the title and a status line sit bottom left, three dots show
 // that something is happening. It is modal: it takes the focus and every key except the Guide keys
 // (the shell decides those, `guideKey`). After the shell's 20 s without a window it says
-// "Still starting" and offers Close, which has the focus.
+// "Still starting" and offers Close, which has the focus (A on it, or B anywhere).
 // Reduced motion: `launchMs` is 0, so it appears and goes as a cut, and the dots stand still.
 FocusScope {
     id: splash
@@ -24,7 +24,7 @@ FocusScope {
     property var guideKey: function (key) { return false }
 
     // What the hint bar says while the splash is up: nothing to press until it offers Close.
-    readonly property var hints: slow ? [{ button: "A", text: qsTr("Close") }] : []
+    readonly property var hints: slow ? [{ button: "A", text: qsTr("Close") }, { button: "B", text: qsTr("Close") }] : []
     // Any of its animations is running (tests: none under reduced motion).
     readonly property bool animating: dotsAnimation.running || zoomAnimation.running
                                       || fadeAnimation.running || blurAnimation.running
@@ -210,6 +210,8 @@ FocusScope {
             event.accepted = false          // the shell opens the quick menu
             return
         }
+        if (splash.slow && !event.isAutoRepeat && BackKey.isBackOrBackspace(event.key))
+            splash.closeRequested()         // once it offers Close, Back closes too (the hint bar says so)
         event.accepted = true               // locked: nothing reaches the shell underneath
     }
 }
