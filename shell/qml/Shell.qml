@@ -581,7 +581,11 @@ FocusScope {
             anchors.fill: parent
             tint: Profiles.active.avatar ?? Theme.defaultTint
             shown: !wallpaperLayer.covering && !IdleClock.covered   // a wallpaper covers it (T-208); the saver covers all (T-202)
-            paused: root.focusedApp !== null                         // an app in front covers it: no frames for the drift (T-293)
+            // An app in front (T-293) or the Home hero covers it: no frames for a drift nobody sees. And,
+            // like the liquid pill's specular, it rests 30 s after the last input (LiquidGate): a still
+            // page does not redraw 60 times a second for it (T-421).
+            paused: root.focusedApp !== null || heroArt.covers || !LiquidGate.running
+            blurred: root.pageOpen                                   // on pages the blobs are blurred like a wallpaper (T-421)
         }
 
         // The wallpaper (Settings -> Display & motion): the picture under the hero art, blurred on pages.
@@ -605,6 +609,9 @@ FocusScope {
             opacity: home.opacity
             visible: opacity > 0
             property bool showB: false
+            // Settled on Home over no wallpaper: an art layer's fill is opaque (not `bare`), so nothing
+            // of the backdrop under it can be seen (T-421).
+            readonly property bool covers: opacity >= 1 && !wallpaperLayer.has
 
             component ArtLayer: AppArt {
                 anchors.fill: parent

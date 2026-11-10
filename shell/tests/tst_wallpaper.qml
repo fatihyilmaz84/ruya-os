@@ -679,6 +679,56 @@ Item {
             tryCompare(layer, "effectiveDim", 0.2)
         }
 
+        // T-421: the default look (the blobs, no wallpaper) is blurred on pages as a picture is, so the
+        // page's glass never sits over the blobs' sharp edges (04 §3.6; on the Dell the Settings rows
+        // showed them). One blurred L0 copy at a time: a wallpaper hides the backdrop and its blur.
+        function test_the_default_look_is_blurred_on_pages() {
+            const backdrop = find("backdrop")
+            compare(DeviceSettings.wallpaper, "")
+            verify(backdrop.shown, "the default look")
+            // Home: the blurred copy is not drawn.
+            compare(backdrop.blurred, false)
+            const idle = find("backdropBlur")
+            verify(idle !== null, "the blurred copy is ready")
+            compare(idle.opacity, 0)
+            compare(idle.visible, false)
+            compare(find("backdropReduced").hideSource, false, "the sharp fields are drawn on Home")
+
+            keyClick(Qt.Key_Up)                          // the section nav
+            for (let i = 0; i < 4; ++i)
+                keyClick(Qt.Key_Right)
+            keyClick(Qt.Key_Return)                      // Settings
+            tryCompare(tc.shell, "currentPage", "settings")
+            tryVerify(() => find("categoryList") !== null && find("categoryList").activeFocus, 2000, "the category list has focus")
+            compare(backdrop.blurActive, true)
+            const blur = find("backdropBlur")
+            compare(blur.blurEnabled, true)
+            compare(blur.blur, 1)
+            compare(blur.blurMax, 64)
+            tryCompare(blur, "opacity", 1)
+            verify(blur.visible, "drawn on the page")
+            verify(blur.source.sourceItem === find("backdropFields"), "it blurs the backdrop's own fields")
+            verify(find("backdropReduced").hideSource, "the sharp fields are not drawn under the opaque copy")
+            compare(find("wallpaperBlur"), null, "no second full-screen blur")
+
+            DeviceSettings.effectsQuality = "balanced"
+            compare(find("backdropBlur").blurMax, 32)
+            DeviceSettings.effectsQuality = "performance"
+            tryVerify(() => find("backdropBlur") === null, 2000, "no blur item on the Performance tier")
+            DeviceSettings.effectsQuality = "high"
+            tryVerify(() => find("backdropBlur") !== null && find("backdropBlur").opacity === 1, 2000, "back with High")
+
+            // A wallpaper covers the backdrop: its blur goes, the picture's blurred copy is the one.
+            setWallpaper("dusk")
+            verify(!backdrop.shown)
+            tryVerify(() => find("backdropBlur") === null, 2000, "the backdrop's blur goes with it")
+            tryCompare(find("wallpaperBlur"), "opacity", 1)
+
+            keyClick(Qt.Key_Escape)                      // list -> Home
+            tryCompare(tc.shell, "currentPage", "")
+            tryVerify(() => find("sectionNav").activeFocus, 2000, "focus back on the section nav")
+        }
+
         function test_one_decoded_wallpaper_and_the_old_one_is_released_after_the_fade() {
             setWallpaper("dusk")
             const layer = find("wallpaperLayer")
@@ -957,6 +1007,45 @@ Item {
             const d = sampleDistance(fresh, after)
             verify(d <= 12, data.tag + ": the sheet matches a fresh opening (max channel difference " + d
                    + "): " + JSON.stringify(fresh) + " vs " + JSON.stringify(after))
+        }
+
+        // T-421 (GPU): on a page the default look is blurred, so no blob edge is sharp behind the page's
+        // glass. The blobs are held still (reduced motion) with the first blob's edge crossing the
+        // left margin, where only L0 is drawn; along that row the largest step between neighbouring
+        // pixels is a sharp edge's height without the blur and a few levels with it.
+        function test_zz_default_look_page_is_blurred() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            compare(DeviceSettings.wallpaper, "")
+            DeviceSettings.reducedMotion = true          // the blobs stand still
+            const blob = find("blobA")
+            tryVerify(() => !find("backdrop").drifting, 2000, "the blobs rest")
+            blob.driftX = 0
+            blob.driftY = 0
+            openSettingsDisplay()
+            tryCompare(find("backdrop"), "blurred", true)      // instant under reduced motion (pageMs 0)
+            const r = blob.width / 2
+            const cx = blob.x + r
+            const cy = blob.y + r
+            const xt = tc.shell.marginX / 2
+            verify(Math.abs(cx - xt) < r, "the blob's edge crosses the margin")
+            const y = cy + Math.sqrt(r * r - (cx - xt) * (cx - xt))
+            verify(y > tc.shell.height * 0.2 && y < tc.shell.height * 0.85, "below the header and above the hint bar: " + y)
+            waitForRendering(tc.shell)
+            wait(300)
+            const img = grabImage(tc.shell)
+            img.save(shotsDir + "/70-wallpaper-page-default-blurred.png")
+            const scale = img.width / tc.shell.width
+            const py = Math.round(y * scale)
+            let step = 0
+            for (let x = 2; x < Math.round((tc.shell.marginX - 4) * scale); ++x) {
+                step = Math.max(step, Math.abs(img.red(x + 1, py) - img.red(x, py)),
+                                Math.abs(img.green(x + 1, py) - img.green(x, py)),
+                                Math.abs(img.blue(x + 1, py) - img.blue(x, py)))
+            }
+            verify(step < 6, "no sharp blob edge on the page (largest step " + step + " on row " + py + ")")
+            keyClick(Qt.Key_Escape)                      // pane -> list
+            tryVerify(() => find("categoryList").activeFocus)
         }
 
         function test_zz_screenshots() {
