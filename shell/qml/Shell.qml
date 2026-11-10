@@ -1554,7 +1554,7 @@ FocusScope {
     // One per stack entry. The top slot is shown and enabled (it fades and slides in while
     // the shelf slides out); lower ones stay alive but hidden and disabled, so their state is
     // kept. A popped slot fades out, waits until the page on top has settled and one more frame
-    // is on screen, then is destroyed.
+    // is on screen, then is destroyed (at once if the window showed no frame while it closed).
     Component {
         id: pageSlot
         FocusScope {
@@ -1567,6 +1567,8 @@ FocusScope {
             property bool closing: false
             property bool reaped: false
             property bool reapPending: false
+            // The window has shown a frame since `closing` was set (T-460).
+            property bool framesWhileClosing: false
             property Item savedFocus: null
             // Shown and at rest: the fade-in and the slide have ended.
             readonly property bool settled: shown && opacity === 1 && slide.x === 0
@@ -1591,11 +1593,15 @@ FocusScope {
             }
 
             // A page popped before its fade-in has progressed is already at opacity 0.
+            // The wait for one more frame keeps the teardown out of a glide that is on screen. A
+            // window that has shown no frame since this slot began to close is not presenting (the
+            // display is asleep: not one frameSwapped in a whole `shots` test, T-460) and update()
+            // brings none either: there is nothing to protect, so the slot goes at once.
             function reapIfDone() {
                 if (!closing || opacity !== 0 || reaped || reapPending || !root.topSettled())
                     return
                 const win = slot.Window.window
-                if (!win) {
+                if (!win || !framesWhileClosing) {
                     reap()
                     return
                 }
@@ -1610,10 +1616,15 @@ FocusScope {
                 root.closingSlots = root.closingSlots.filter(s => s !== slot)
                 destroy()
             }
-            // The frame with the settled page on top is on screen: now the popped page goes.
+            // Frames shown while closing tell that the window presents. Once the reap is pending, the
+            // frame with the settled page on top is on screen: now the popped page goes.
             Connections {
-                target: slot.reapPending ? slot.Window.window : null
-                function onFrameSwapped() { slot.reap() }
+                target: slot.closing && !slot.reaped ? slot.Window.window : null
+                function onFrameSwapped() {
+                    slot.framesWhileClosing = true
+                    if (slot.reapPending)
+                        slot.reap()
+                }
             }
 
             // Disabling a slot drops its focus, so the focused item is noted when a page
