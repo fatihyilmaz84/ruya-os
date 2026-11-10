@@ -193,6 +193,7 @@ qt_add_qml_module(ruyashell
         qml/SettingsPage.qml
         qml/PowerPage.qml
         qml/PowerConfirm.qml
+        qml/HubPause.qml
         qml/QuickMenu.qml
         qml/QuickTile.qml
         qml/LaunchSplash.qml

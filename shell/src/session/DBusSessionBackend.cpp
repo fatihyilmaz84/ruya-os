@@ -47,6 +47,7 @@ QList<RunningApp> parseRunning(const QDBusArgument &arg)
         r.profile = d.value(QStringLiteral("profile")).toString();
         r.started = d.value(QStringLiteral("started")).toLongLong();
         r.state = d.value(QStringLiteral("state"), r.state).toString();
+        r.frozen = d.value(QStringLiteral("frozen"), false).toBool();
         out.append(r);
     }
     arg.endArray();
@@ -63,6 +64,7 @@ DBusSessionBackend::DBusSessionBackend(QObject *parent)
     m_bus.connect(Service, Path, Interface, QStringLiteral("AppStarted"), this, SIGNAL(appStarted(QString, QString)));
     m_bus.connect(Service, Path, Interface, QStringLiteral("AppExited"), this,
                   SIGNAL(appExited(QString, QString, int, QString)));
+    m_bus.connect(Service, Path, Interface, QStringLiteral("FrozenChanged"), this, SIGNAL(frozenChanged(QString, bool)));
 }
 
 void DBusSessionBackend::refresh()
@@ -111,5 +113,39 @@ void DBusSessionBackend::stop(const QString &instance)
             return;
         }
         emit stopFinished(instance, reply.argumentAt<0>());
+    });
+}
+
+void DBusSessionBackend::freeze(const QString &instance)
+{
+    freezer(QStringLiteral("Freeze"), instance);
+}
+
+void DBusSessionBackend::thaw(const QString &instance)
+{
+    freezer(QStringLiteral("Thaw"), instance);
+}
+
+void DBusSessionBackend::freezer(const QString &method, const QString &instance)
+{
+    auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, method);
+    msg << instance;
+    auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
+    const bool freezing = method == QLatin1String("Freeze");
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, method, instance, freezing](QDBusPendingCallWatcher *w) {
+        w->deleteLater();
+        QDBusPendingReply<QString> reply = *w;
+        QString status;
+        if (reply.isValid()) {
+            status = reply.argumentAt<0>();
+        } else {
+            qWarning("ruya-shell: Session1 %s %s failed: %s", qPrintable(method), qPrintable(instance),
+                     qPrintable(reply.error().message()));
+            status = QStringLiteral("failed");
+        }
+        if (freezing)
+            emit freezeFinished(instance, status);
+        else
+            emit thawFinished(instance, status);
     });
 }

@@ -406,6 +406,25 @@ SettingsPane {
         }
     }
 
+    // The Ruya Hub pauses the game (T-457, 02 §1.6). For every profile: a device setting.
+    ToggleRow {
+        id: pauseRow
+        objectName: "rowPauseGames"
+        u: pane.u
+        label: qsTr("Pause games when Ruya Hub opens")
+        onToggled: checked => DeviceSettings.pauseGamesInHub = checked
+    }
+    Binding { target: pauseRow; property: "checked"; value: DeviceSettings.pauseGamesInHub }
+
+    Text {
+        objectName: "pauseGamesNote"
+        width: parent ? parent.width : 0
+        text: qsTr("Online games can lose their connection while paused.")
+        color: Theme.textDim
+        font.pixelSize: Theme.typeCaption * pane.u
+        wrapMode: Text.Wrap
+    }
+
     Text {
         objectName: "updatesHeading"
         width: parent ? parent.width : 0

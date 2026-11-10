@@ -12,7 +12,7 @@ use zbus::zvariant::{OwnedValue, Value};
 use zbus::{interface, Connection};
 
 use crate::directory::{profile_ids, ProfileDirectory, ProfileRow, ProfileSnapshot};
-use crate::session::{ExitReason, Notice, RunningApp, Session};
+use crate::session::{ExitReason, FrozenChange, Notice, RunningApp, Session, Status};
 use crate::spawner::{flatpak_app_version, valid_profile_id, Spawner, UnitEvent};
 use crate::usage::{DayRow, EndReason, SessionRecord, SystemZone, MAX_LIST};
 use crate::usage_store::FileStore;
@@ -74,6 +74,7 @@ fn running_dict(app: RunningApp) -> Dict {
         ("profile", Value::from(app.profile)),
         ("started", Value::from(app.started)),
         ("state", Value::from(app.state.as_str())),
+        ("frozen", Value::from(app.frozen)),
     ]
     .into_iter()
     .filter_map(|(k, v)| OwnedValue::try_from(v).ok().map(|v| (k.to_owned(), v)))
@@ -217,6 +218,10 @@ pub struct SessionIface {
     /// System mode: ask `Profiles1` before each launch and who is active before a read or a
     /// clear; `--session` keeps its fixed list and trusts the caller.
     system: bool,
+    /// Freeze and Thaw take turns in the order they arrive (T-457): each call awaits
+    /// `Profiles1` before it acts, so without this a quick Thaw could be served before the
+    /// Freeze sent ahead of it and leave the game frozen.
+    freezer_turn: async_lock::Mutex<()>,
 }
 
 impl SessionIface {
@@ -225,6 +230,7 @@ impl SessionIface {
             session,
             usage,
             system,
+            freezer_turn: async_lock::Mutex::new(()),
         }
     }
 
@@ -240,6 +246,33 @@ impl SessionIface {
                 Err(())
             }
         }
+    }
+
+    /// Freeze or Thaw (T-457): the signed-in profile is asked of `Profiles1` (system mode), then the
+    /// core decides, and the `frozen` changes are announced.
+    async fn freezer(
+        &self,
+        instance: &str,
+        freeze: bool,
+        connection: &Connection,
+        emitter: &SignalEmitter<'_>,
+    ) -> String {
+        // Taken before the first await: a call that arrived first gets its turn first.
+        let _turn = self.freezer_turn.lock().await;
+        let Ok(active) = self.active(connection).await else {
+            return "failed".to_owned();
+        };
+        let (status, changes) = {
+            let mut session = lock(&self.session);
+            let status = if freeze {
+                session.freeze(instance, active.as_deref())
+            } else {
+                session.thaw(instance, active.as_deref())
+            };
+            (status, session.take_frozen_changes())
+        };
+        emit_frozen(emitter, changes).await;
+        status.as_str().to_owned()
     }
 
     /// The status for a read of `profile`'s history, or `None` when it is allowed.
@@ -278,11 +311,36 @@ impl SessionIface {
         (status.as_str().to_owned(), instance)
     }
 
-    fn stop(&self, instance: &str) -> String {
-        lock(&self.session)
-            .stop(instance, Instant::now())
-            .as_str()
-            .to_owned()
+    async fn stop(
+        &self,
+        instance: &str,
+        #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
+    ) -> String {
+        let (status, changes): (Status, Vec<FrozenChange>) = {
+            let mut session = lock(&self.session);
+            let status = session.stop(instance, Instant::now());
+            (status, session.take_frozen_changes())
+        };
+        emit_frozen(&emitter, changes).await;
+        status.as_str().to_owned()
+    }
+
+    async fn freeze(
+        &self,
+        instance: &str,
+        #[zbus(connection)] connection: &Connection,
+        #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
+    ) -> String {
+        self.freezer(instance, true, connection, &emitter).await
+    }
+
+    async fn thaw(
+        &self,
+        instance: &str,
+        #[zbus(connection)] connection: &Connection,
+        #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
+    ) -> String {
+        self.freezer(instance, false, connection, &emitter).await
     }
 
     fn list_running(&self) -> Vec<Dict> {
@@ -418,6 +476,13 @@ impl SessionIface {
     }
 
     #[zbus(signal)]
+    async fn frozen_changed(
+        emitter: &SignalEmitter<'_>,
+        instance: String,
+        frozen: bool,
+    ) -> zbus::Result<()>;
+
+    #[zbus(signal)]
     async fn usage_changed(emitter: &SignalEmitter<'_>, profile: String) -> zbus::Result<()>;
 
     #[zbus(signal)]
@@ -435,6 +500,15 @@ impl SessionIface {
         exit_code: i32,
         reason: String,
     ) -> zbus::Result<()>;
+}
+
+/// Sends `FrozenChanged` for each change, in order.
+async fn emit_frozen(emitter: &SignalEmitter<'_>, changes: Vec<FrozenChange>) {
+    for c in changes {
+        if let Err(err) = SessionIface::frozen_changed(emitter, c.instance, c.frozen).await {
+            eprintln!("ruya-session: emitting FrozenChanged failed: {err}");
+        }
+    }
 }
 
 fn end_reason_of(reason: ExitReason) -> Option<EndReason> {

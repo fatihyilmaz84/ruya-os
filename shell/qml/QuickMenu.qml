@@ -29,7 +29,8 @@ Item {
     // The power choices instead of the actions.
     property bool powerMode: false
 
-    // The app in front, or null: { appId, title, picture, started } (started: unix seconds).
+    // The app in front, or null: { appId, title, picture, started, frozen } (started: unix seconds;
+    // frozen: Session1 froze it, T-457, so the header says "Paused").
     property var app: null
     // Other running apps with a window: [{ appId, title }].
     property var others: []
@@ -376,16 +377,18 @@ Item {
                     }
                 }
 
-                // The app part: art, title, running time.
+                // The app part: art, title, running time and "Paused". As tall as the taller of the art and
+                // the text (a two-line title over "Paused" is taller than the art, T-457).
                 Row {
                     id: header
                     objectName: "quickMenuApp"
                     visible: menu.hasApp
                     spacing: Theme.spaceM * menu.u
-                    height: visible ? art.height : 0
+                    height: visible ? Math.max(art.height, appInfo.height) : 0
                     AppArt {
                         id: art
                         objectName: "quickMenuArt"
+                        anchors.verticalCenter: parent.verticalCenter
                         u: menu.u
                         width: 200 * menu.u
                         height: Theme.cardArtHeight(width)
@@ -395,6 +398,8 @@ Item {
                         shimmer: false
                     }
                     Column {
+                        id: appInfo
+                        objectName: "quickMenuAppInfo"
                         anchors.verticalCenter: parent.verticalCenter
                         width: content.width - art.width - Theme.spaceM * menu.u
                         spacing: Theme.spaceXs * menu.u
@@ -419,6 +424,19 @@ Item {
                                                                       : qsTr("Running for %1").arg(DurationText.plain(menu.now - menu.app.started)))
                             color: Theme.text
                             font.pixelSize: Theme.typeBody * menu.u
+                            elide: Text.ElideRight
+                        }
+                        // The game is frozen while the Hub is open (T-457): only once the service
+                        // says so, so a failed freeze never shows it.
+                        Text {
+                            objectName: "quickMenuPaused"
+                            visible: menu.app !== null && (menu.app.frozen ?? false)
+                            width: parent.width
+                            textFormat: Text.PlainText
+                            text: qsTr("Paused")
+                            color: Theme.text
+                            font.pixelSize: Theme.typeBody * menu.u
+                            font.weight: Theme.weightDemiBold
                             elide: Text.ElideRight
                         }
                     }
