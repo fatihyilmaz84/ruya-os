@@ -26,10 +26,13 @@
 //! `flatpak run` puts the game in its own `app-flatpak-<id>-<n>.scope`, outside the unit (T-363).
 //! Every event goes through `Gate`: `scope::RunScopes` attaches the scope to its run, reads its
 //! CPU, and holds the unit's end until the scope is gone (a watcher thread asks each manager
-//! with one `systemctl show` per second at most); `Stop` and the kill name the attached scope.
+//! with one `systemctl show` per second at most); `Stop` and the kill name every scope of the app.
+//! When a run's end is handed on, the app's leftover scopes are stopped and their `failed` state
+//! cleared first (`RunScopes::take_sweeps`, `spawner::sweep_commands`, T-435).
 
 use std::collections::HashMap;
 use std::fs::File;
+use std::io::Read;
 use std::os::unix::process::ExitStatusExt;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
@@ -45,11 +48,11 @@ use zbus::{Connection, MatchRule, MessageStream};
 use crate::follow::{
     bridge_args, parse_signal, Backoff, Follower, ManagerLink, Probe, Wake, BRIDGE_PROGRAM,
 };
-use crate::scope::RunScopes;
+use crate::scope::{RunScopes, Sweep};
 use crate::spawner::{
-    control_command, flatpak_app_installed, launch_command, parse_profile_users, parse_show,
-    pulse_start_command, scope_target, unit_app_id, unit_name, LineTail, RunFollower, RunningUnit,
-    ShowUnit, SHOW_PROPERTIES,
+    app_scopes, control_command, flatpak_app_installed, launch_command, list_scopes_command,
+    parse_profile_users, parse_show, pulse_start_command, sweep_commands, unit_app_id, unit_name,
+    LineTail, RunFollower, RunningUnit, ShowUnit, SHOW_PROPERTIES,
 };
 use crate::spawner::{Spawner, UnitEvent};
 use std::ffi::OsString;
@@ -81,11 +84,12 @@ struct Gate {
 
 impl Gate {
     fn deliver(&self, event: UnitEvent) {
-        let passed = self
-            .scopes
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .on_unit_event(event);
+        let (passed, sweeps) = {
+            let mut scopes = self.scopes.lock().unwrap_or_else(|e| e.into_inner());
+            let passed = scopes.on_unit_event(event);
+            (passed, scopes.take_sweeps())
+        };
+        sweep(sweeps);
         if let Some(event) = passed {
             self.send(event);
         }
@@ -114,14 +118,94 @@ fn watch_scopes(gate: Gate) {
             .plan(Instant::now());
         for query in queries {
             let shows = show_many(&query.user, &query.names).map(|text| parse_show(&text));
-            let ended = gate.scopes.lock().unwrap_or_else(|e| e.into_inner()).apply(
-                &query.user,
-                shows.as_deref(),
-                Instant::now(),
-            );
+            let (ended, sweeps) = {
+                let mut scopes = gate.scopes.lock().unwrap_or_else(|e| e.into_inner());
+                let ended = scopes.apply(&query.user, shows.as_deref(), Instant::now());
+                (ended, scopes.take_sweeps())
+            };
+            sweep(sweeps);
             for event in ended {
                 gate.send(event);
             }
+        }
+    }
+}
+
+/// How long one `systemctl` of `Stop`, the kill or a sweep may take: a manager that does not
+/// answer must not hold up the scope watcher (every profile's runs) or a `Stop` for long.
+const SYSTEMCTL_LIMIT: Duration = Duration::from_secs(5);
+
+/// Runs `args` with its stdout captured, for at most `limit` (then it is killed). The output on
+/// success; `None` (logged) on a failure or a timeout. Only for short answers (a unit list).
+fn run_bounded(args: &[String], limit: Duration) -> Option<String> {
+    let what = args.join(" ");
+    let mut child = match Command::new(&args[0])
+        .args(&args[1..])
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit())
+        .spawn()
+    {
+        Ok(child) => child,
+        Err(err) => {
+            eprintln!("ruya-session: {what}: {err}");
+            return None;
+        }
+    };
+    let deadline = Instant::now() + limit;
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                let mut out = String::new();
+                if let Some(mut stdout) = child.stdout.take() {
+                    let _ = stdout.read_to_string(&mut out);
+                }
+                if status.success() {
+                    return Some(out);
+                }
+                eprintln!("ruya-session: {what} failed: {status}");
+                return None;
+            }
+            Ok(None) if Instant::now() >= deadline => {
+                let _ = child.kill();
+                let _ = child.wait();
+                eprintln!("ruya-session: {what}: no answer in {} s", limit.as_secs());
+                return None;
+            }
+            Ok(None) => std::thread::sleep(Duration::from_millis(20)),
+            Err(err) => {
+                eprintln!("ruya-session: {what}: {err}");
+                return None;
+            }
+        }
+    }
+}
+
+/// The scopes of `app_id` loaded in `user`'s manager (any state), by exact name: the glob
+/// listing filtered by `app_scopes`, so a sibling app whose id starts with `<app_id>-` is never
+/// among them (T-435). `None` when the manager could not be asked.
+fn app_scopes_of(user: &str, app_id: &str) -> Option<Vec<String>> {
+    let args = list_scopes_command(user, app_id)
+        .map_err(|err| eprintln!("ruya-session: {err}"))
+        .ok()?;
+    run_bounded(&args, SYSTEMCTL_LIMIT).map(|out| app_scopes(app_id, &out))
+}
+
+/// Clears what is left of the runs that ended (`spawner::sweep_commands`, on the app's own
+/// scopes as listed now): each `systemctl` is bounded (the stop is `--no-block`, so this is
+/// quick), and all of it is over before their ends are handed on.
+fn sweep(sweeps: Vec<Sweep>) {
+    for Sweep { user, app_id } in sweeps {
+        let Some(scopes) = app_scopes_of(&user, &app_id) else {
+            continue;
+        };
+        match sweep_commands(&user, &app_id, &scopes) {
+            Ok(commands) => {
+                for args in commands {
+                    run_bounded(&args, SYSTEMCTL_LIMIT);
+                }
+            }
+            Err(err) => eprintln!("ruya-session: no sweep for {app_id} of {user}: {err}"),
         }
     }
 }
@@ -163,37 +247,32 @@ impl SystemdSpawner {
             .ok_or_else(|| format!("no running unit {unit}"))
     }
 
-    /// `systemctl --user --machine=<user>@.host <verb>... <unit> <scope>` on its own thread: it
-    /// talks to the bus and must not hold up a D-Bus call. Its failure is logged; the run's end
-    /// (or the kill after the grace time) is what the core acts on. The scope is the app itself
-    /// (`scope_target`: the one the run has attached, else the pattern of the app's scopes); the
-    /// unit is its `flatpak run` front end.
-    fn systemctl(&self, unit: &str, verb: &[&str]) -> Result<(), String> {
+    /// `systemctl --user --machine=<user>@.host <verb>... <unit> <scope>...` on its own thread:
+    /// it talks to the bus and must not hold up a D-Bus call. Its failure is logged; the run's end
+    /// (or the kill after the grace time) is what the core acts on. The scopes are the app itself
+    /// (every one of the app's, listed first and named exactly, `app_scopes_of`,
+    /// `control_command`, T-435); the unit is its `flatpak run` front end.
+    fn systemctl(&self, unit: &str, verb: &'static [&'static str]) -> Result<(), String> {
         let (user, app_id) = self.owner_of(unit)?;
-        let attached = self
-            .gate
-            .scopes
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .scope_of(unit);
-        let scope = scope_target(&app_id, attached.as_deref())?;
-        let args = control_command(&user, verb, unit, &scope)?;
-        let mut cmd = Command::new(&args[0]);
-        cmd.args(&args[1..])
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::inherit());
+        // Checked here, so a bad name is the caller's error, not only a log line.
+        control_command(&user, verb, unit, &app_id, &[])?;
         let what = format!("systemctl {} {unit}", verb.join(" "));
+        let failed = format!("cannot start a thread for {unit}");
+        let unit = unit.to_owned();
         let spawned = std::thread::Builder::new()
             .name("systemctl".to_owned())
-            .spawn(move || match cmd.status() {
-                Ok(status) if status.success() => {}
-                Ok(status) => eprintln!("ruya-session: {what} failed: {status}"),
-                Err(err) => eprintln!("ruya-session: {what}: {err}"),
+            .spawn(move || {
+                let scopes = app_scopes_of(&user, &app_id).unwrap_or_default();
+                match control_command(&user, verb, &unit, &app_id, &scopes) {
+                    Ok(args) => {
+                        run_bounded(&args, SYSTEMCTL_LIMIT);
+                    }
+                    Err(err) => eprintln!("ruya-session: {what}: {err}"),
+                }
             });
         spawned
             .map(|_| ())
-            .map_err(|err| format!("cannot start a thread for {unit}: {err}"))
+            .map_err(|err| format!("{failed}: {err}"))
     }
 }
 

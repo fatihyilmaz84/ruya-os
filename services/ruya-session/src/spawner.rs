@@ -140,25 +140,8 @@ pub fn is_app_scope(app_id: &str, name: &str) -> bool {
             .is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
 }
 
-/// What `systemctl stop|kill` gets next to the unit to reach the app's scope (T-363): the exact
-/// name of the scope the run has attached (`scope::RunScopes::scope_of`), or, while none is
-/// attached yet, the pattern of every scope of the app.
-pub fn scope_target(app_id: &str, attached: Option<&str>) -> Result<String, String> {
-    match attached {
-        Some(name) if is_app_scope(app_id, name) => Ok(name.to_owned()),
-        Some(name) => Err(format!("not a scope of {app_id}: {name:?}")),
-        None => scope_pattern(app_id),
-    }
-}
-
-/// The `systemctl` argument list that applies `verb` (`stop --no-block`, `kill ...`) to the unit
-/// and to the scope target in `user`'s manager. Pure; the user is validated again.
-pub fn control_command(
-    user: &str,
-    verb: &[&str],
-    unit: &str,
-    scope: &str,
-) -> Result<Vec<String>, String> {
+/// `systemctl` in `user`'s manager, the start of every list below. The user is validated again.
+fn user_systemctl(user: &str) -> Result<Vec<String>, String> {
     if !user.strip_prefix("ruya-").is_some_and(valid_profile_id) {
         return Err(format!("not a profile user: {user:?}"));
     }
@@ -167,10 +150,119 @@ pub fn control_command(
         .map(str::to_owned)
         .collect();
     args.push(format!("--machine={user}@.host"));
+    Ok(args)
+}
+
+/// The `systemctl` argument list that lists the loaded scopes that may be `app_id`'s in
+/// `user`'s manager (any state, so a `failed` one too): `list-units --all --plain --no-legend`
+/// with `scope_pattern`. The glob also matches a sibling app whose id starts with `<app_id>-`
+/// (`io.github.Foo-bar.App` for `io.github.Foo`), so the answer goes through `app_scopes`
+/// before any name reaches `stop`, `kill` or `reset-failed` (T-435). Pure.
+pub fn list_scopes_command(user: &str, app_id: &str) -> Result<Vec<String>, String> {
+    let mut args = user_systemctl(user)?;
+    args.extend(
+        ["list-units", "--all", "--plain", "--no-legend"]
+            .into_iter()
+            .map(str::to_owned),
+    );
+    args.push(scope_pattern(app_id)?);
+    Ok(args)
+}
+
+/// The scopes of `app_id` in what `list_scopes_command` printed: the first word of each line
+/// (a leading status mark is skipped), kept only when `is_app_scope` takes it, so a sibling
+/// app's `app-flatpak-<app_id>-Extra-1.scope` is never named. Sorted, no duplicates.
+pub fn app_scopes(app_id: &str, listing: &str) -> Vec<String> {
+    let mut names: Vec<String> = listing
+        .lines()
+        .filter_map(|line| {
+            line.split_whitespace()
+                .find(|word| word.starts_with("app-flatpak-"))
+        })
+        .filter(|name| is_app_scope(app_id, name))
+        .map(str::to_owned)
+        .collect();
+    names.sort();
+    names.dedup();
+    names
+}
+
+/// The `systemctl` argument list that applies `verb` (`stop --no-block`, `kill ...`) to the unit
+/// and to `scopes`, the app's own scopes in `user`'s manager as `app_scopes` found them. Every
+/// one of them, not only the scope the run has attached (T-435): an Electron app has two (the
+/// browser's from `flatpak run`, its sandboxed zygote's from the Flatpak portal), entered in the
+/// same second, and the run may have attached either; naming one let the other run on after
+/// `Stop`. One app runs once per profile user, so the app's scopes in that manager are all this
+/// run's. Exact names only, never the glob (it would reach a sibling app, see
+/// `list_scopes_command`). Pure; user, app and every scope are validated again.
+pub fn control_command(
+    user: &str,
+    verb: &[&str],
+    unit: &str,
+    app_id: &str,
+    scopes: &[String],
+) -> Result<Vec<String>, String> {
+    let mut args = user_systemctl(user)?;
+    if !valid_app_id(app_id) {
+        return Err(format!("not an application id: {app_id:?}"));
+    }
+    if let Some(bad) = scopes.iter().find(|s| !is_app_scope(app_id, s)) {
+        return Err(format!("not a scope of {app_id}: {bad:?}"));
+    }
     args.extend(verb.iter().map(|v| (*v).to_owned()));
     args.push(unit.to_owned());
-    args.push(scope.to_owned());
+    args.extend(scopes.iter().cloned());
     Ok(args)
+}
+
+/// The `systemctl` argument lists that clear what is left of a run of `app_id` in `user`'s
+/// manager once its end is handed on (`scope::Sweep`, T-435): stop the app's scopes that are
+/// still loaded (a second scope the Flatpak portal made, such as an Electron app's sandboxed
+/// zygote), then clear the `failed` state of the ones systemd had to kill, so no scope of the
+/// app stays listed. `scopes` is what `app_scopes` found (exact names; none: nothing to do).
+/// `--no-block`: the stop is queued, so the sweep is quick and over before the end reaches the
+/// core. Pure; user, app and every scope are validated again.
+pub fn sweep_commands(
+    user: &str,
+    app_id: &str,
+    scopes: &[String],
+) -> Result<Vec<Vec<String>>, String> {
+    let base = user_systemctl(user)?;
+    if !valid_app_id(app_id) {
+        return Err(format!("not an application id: {app_id:?}"));
+    }
+    if let Some(bad) = scopes.iter().find(|s| !is_app_scope(app_id, s)) {
+        return Err(format!("not a scope of {app_id}: {bad:?}"));
+    }
+    if scopes.is_empty() {
+        return Ok(Vec::new());
+    }
+    let command = |verb: &[&str]| {
+        let mut args = base.clone();
+        args.extend(verb.iter().map(|v| (*v).to_owned()));
+        args.extend(scopes.iter().cloned());
+        args
+    };
+    Ok(vec![
+        command(&["stop", "--no-block"]),
+        command(&["reset-failed"]),
+    ])
+}
+
+/// The environment every app on the console gets (`app_env` then adds its Wayland socket and
+/// `with_pulse_server` its sound server). The console has no X server (no XWayland), so the
+/// toolkits that would try X11 first are told this is a Wayland session:
+///   - `SDL_VIDEODRIVER=wayland`: SDL 2 otherwise tries X11 first and, without the
+///     xdg-decoration protocol, may never try Wayland ("No available video device").
+///   - `XDG_SESSION_TYPE=wayland` (T-435): Chromium and Electron choose their Ozone platform by
+///     it (`--ozone-platform-hint=auto`); without it they take X11, find no `$DISPLAY` and exit
+///     ("Missing X server or $DISPLAY"). ACBR (Electron 42) on the Dell showed no window for
+///     that reason. `flatpak run` passes the variable into the sandbox.
+pub fn console_env() -> Vec<(String, String)> {
+    vec![
+        ("SDL_VIDEODRIVER".to_owned(), "wayland".to_owned()),
+        ("XDG_SESSION_TYPE".to_owned(), "wayland".to_owned()),
+    ]
 }
 
 /// Is the application in the system Flatpak installation under `root` (`/var/lib/flatpak`)?
@@ -1312,6 +1404,106 @@ ActiveState=failed
         ] {
             assert!(scope_pattern(bad).is_err(), "{bad:?}");
         }
+    }
+
+    #[test]
+    fn sweep_stops_every_scope_of_the_app_and_clears_failed_ones() {
+        let base = [
+            "systemctl",
+            "--user",
+            "--no-pager",
+            "--machine=ruya-p1@.host",
+        ];
+        let app = "com.binarynonsense.acbr";
+        let scopes = [
+            "app-flatpak-com.binarynonsense.acbr-1808253546.scope".to_owned(),
+            "app-flatpak-com.binarynonsense.acbr-2927365367.scope".to_owned(),
+        ];
+        let commands = sweep_commands("ruya-p1", app, &scopes).expect("sweep");
+        let mut stop: Vec<&str> = base.to_vec();
+        stop.extend(["stop", "--no-block", &scopes[0], &scopes[1]]);
+        let mut reset: Vec<&str> = base.to_vec();
+        reset.extend(["reset-failed", &scopes[0], &scopes[1]]);
+        assert_eq!(commands, [stop, reset]);
+        // Nothing left: nothing to run.
+        assert!(sweep_commands("ruya-p1", app, &[])
+            .expect("empty")
+            .is_empty());
+        assert!(sweep_commands("root", app, &scopes).is_err());
+        assert!(sweep_commands("ruya-p1", "org.ruyaos.*", &[]).is_err());
+        // Never a glob or another app's scope.
+        let glob = ["app-flatpak-com.binarynonsense.acbr-*.scope".to_owned()];
+        assert!(sweep_commands("ruya-p1", app, &glob).is_err());
+    }
+
+    #[test]
+    fn a_sibling_app_whose_id_extends_ours_is_never_named() {
+        // T-435 review: the glob app-flatpak-io.github.Foo-*.scope also matches the scopes of
+        // io.github.Foo-bar.App; Stop, the kill and the sweep of io.github.Foo must not reach it.
+        let app = "io.github.Foo";
+        let listing = "app-flatpak-io.github.Foo-12.scope loaded active running app-flatpak-io.github.Foo-12.scope
+app-flatpak-io.github.Foo-bar.App-34.scope loaded active running app-flatpak-io.github.Foo-bar.App-34.scope
+app-flatpak-io.github.Foo-Extra-56.scope loaded failed failed app-flatpak-io.github.Foo-Extra-56.scope
+* app-flatpak-io.github.Foo-78.scope loaded failed failed app-flatpak-io.github.Foo-78.scope
+";
+        let list = list_scopes_command("ruya-p1", app).expect("list");
+        assert_eq!(
+            list,
+            [
+                "systemctl",
+                "--user",
+                "--no-pager",
+                "--machine=ruya-p1@.host",
+                "list-units",
+                "--all",
+                "--plain",
+                "--no-legend",
+                "app-flatpak-io.github.Foo-*.scope",
+            ]
+        );
+        let ours = app_scopes(app, listing);
+        assert_eq!(
+            ours,
+            [
+                "app-flatpak-io.github.Foo-12.scope",
+                "app-flatpak-io.github.Foo-78.scope"
+            ]
+        );
+        let unit = unit_name("ruya-p1", app);
+        let stop =
+            control_command("ruya-p1", &["stop", "--no-block"], &unit, app, &ours).expect("stop");
+        let sweep = sweep_commands("ruya-p1", app, &ours).expect("sweep");
+        for args in std::iter::once(&stop).chain(sweep.iter()) {
+            assert!(
+                !args
+                    .iter()
+                    .any(|a| a.contains("Foo-bar") || a.contains("Foo-Extra") || a.contains('*')),
+                "{args:?}"
+            );
+        }
+        assert_eq!(&stop[stop.len() - 3..], [unit.as_str(), &ours[0], &ours[1]]);
+        // The sibling's scope is refused if it is handed in anyway.
+        let sibling = ["app-flatpak-io.github.Foo-bar.App-34.scope".to_owned()];
+        assert!(control_command("ruya-p1", &["stop"], &unit, app, &sibling).is_err());
+        assert!(sweep_commands("ruya-p1", app, &sibling).is_err());
+    }
+
+    #[test]
+    fn console_apps_are_told_it_is_a_wayland_session() {
+        // T-435: Electron (ACBR) picks X11 without XDG_SESSION_TYPE and exits ("Missing X
+        // server or $DISPLAY"); there is no X server on the console.
+        let env = console_env();
+        for (key, value) in [
+            ("SDL_VIDEODRIVER", "wayland"),
+            ("XDG_SESSION_TYPE", "wayland"),
+        ] {
+            assert!(
+                env.contains(&(key.to_owned(), value.to_owned())),
+                "{key}={value} missing"
+            );
+        }
+        let args = launch_command("ruya-p1", "com.binarynonsense.acbr", &env).expect("launch");
+        assert!(args.contains(&"--setenv=XDG_SESSION_TYPE=wayland".to_owned()));
     }
 
     #[test]

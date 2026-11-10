@@ -33,6 +33,15 @@ ok() { echo "PASS: $*"; }
 bad() { echo "FAIL: $*"; fail=1; }
 
 as_shell() { runuser -u ruya-shell -- "$@"; }
+# extra_scope <user> <unit> <seconds>: a `sleep <seconds>` in a scope of that user's manager, in the
+# background (T-435: a second app-flatpak-<app>-<n>.scope, as the Flatpak portal makes for an
+# Electron app's zygote). `systemd-run --scope` does not work with --machine, so it runs as the user.
+extra_scope() {
+    xuid="$(id -u "$1")"
+    runuser -u "$1" -- env XDG_RUNTIME_DIR="/run/user/$xuid" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$xuid/bus" \
+        systemd-run --user --scope --quiet --unit="$2" sleep "$3" </dev/null >/dev/null 2>&1 &
+    n=0; until pgrep -u "$1" -f "sleep $3" >/dev/null 2>&1 || [ "$n" -ge 10 ]; do sleep 1; n=$((n + 1)); done
+}
 launch() { as_shell busctl --system call "$svc" "$path" "$ifc" Launch ss "$1" "$2"; }
 stop_app() { as_shell busctl --system call "$svc" "$path" "$ifc" Stop s "$1"; }
 running() { as_shell busctl --system --json=short call "$svc" "$path" "$ifc" ListRunning; }
@@ -483,6 +492,13 @@ check)
     # T-363: the run follows the app's own Flatpak scope (the service logs the attach and the end).
     n=0; while ! journalctl -u ruya-session -b --no-pager -o cat 2>/dev/null | grep -a -q "$inst: attached app-flatpak-$sleeper-[0-9]*[.]scope" && [ "$n" -lt 20 ]; do sleep 1; n=$((n + 1)); done
     [ "$n" -lt 20 ] && ok "the run attached the app's Flatpak scope (after about $n s)" || bad "no 'attached app-flatpak-$sleeper-N.scope' line for $inst in the journal"
+    # T-435: no X server on the console, so Electron/Chromium must be told it is a Wayland session.
+    systemctl --user -M "$user@.host" show -p Environment "$inst" </dev/null 2>&1 | cat | tr ' ' '\n' | grep -q "^XDG_SESSION_TYPE=wayland$" \
+        && ok "the app got XDG_SESSION_TYPE=wayland (Electron picks Wayland)" || bad "the app has no XDG_SESSION_TYPE=wayland"
+    # T-435: a second scope of the same app (as the Flatpak portal makes for an Electron zygote),
+    # entered after the run attached its own; Stop must reach it too.
+    extra_scope "$user" "app-flatpak-$sleeper-4242.scope" 3001
+    pgrep -u "$user" -f "sleep 3001" >/dev/null 2>&1 && ok "a second scope of the app runs (app-flatpak-$sleeper-4242)" || bad "could not start a second app scope"
 
     echo "--- Launch refusals"
     case "$(launch "$sleeper" "$pid")" in 'ss "already-running" ""') ok "a second Launch: already-running";; *) bad "second Launch";; esac
@@ -500,8 +516,9 @@ check)
     gone "sleep 3000" && ok "Stop ended the app itself, not only the unit (its scope is gone)" || bad "the app's process is still there after Stop"
     journalctl -u ruya-session -b --no-pager -o cat 2>/dev/null | grep -a -q "$inst: scope gone" \
         && ok "the run ended with its scope (journal: scope gone)" || bad "no 'scope gone' line for $inst in the journal"
-    systemctl --user -M "$user@.host" list-units --no-legend --state=active "app-flatpak-$sleeper-*.scope" </dev/null 2>&1 | grep -q scope \
-        && bad "an app-flatpak-$sleeper scope is still active after Stop" || ok "no app-flatpak-$sleeper scope is left after Stop"
+    gone "sleep 3001" && ok "Stop ended the app's second scope too (T-435)" || bad "the second app-flatpak-$sleeper scope survived Stop"
+    systemctl --user -M "$user@.host" list-units --all --no-legend "app-flatpak-$sleeper-*.scope" </dev/null 2>&1 | grep -q scope \
+        && bad "an app-flatpak-$sleeper scope is still listed after Stop (active or failed)" || ok "no app-flatpak-$sleeper scope is left after Stop, not even a failed one"
     running | grep -q "$inst" && bad "ListRunning still lists it" || ok "ListRunning is empty again"
     grep -a -q "session-probe: appExited $sleeper 0 quit\|session-probe: appExited $sleeper -\?[0-9]* quit" "$work/probe.log" && ok "the shell saw appExited quit" || bad "the shell did not see appExited quit"
 
@@ -512,16 +529,28 @@ check)
     line="$(grep -E "\"member\":\"AppExited\".*$crasher" "$work/signals.log" | head -1)"
     echo "$line" | grep -q '"crashed"' && echo "$line" | grep -q ',3,' && ok "reason crashed, exit code 3" || bad "crasher exit: $line"
 
-    echo "--- an app killed from outside (SIGKILL to its scope)"
+    echo "--- an app killed from outside (SIGKILL to its own scope; a second scope of it is left over)"
+    attached() { journalctl -u ruya-session -b --no-pager -o cat 2>/dev/null | grep -a "$1: attached app-flatpak-$sleeper-"; }
+    a0="$(attached "ruya-app-$user-$sleeper.service" | wc -l)"
     out="$(launch "$sleeper" "$pid")"; inst3="$(echo "$out" | unit_of)"
     [ -n "$inst3" ] && ok "Launch: $inst3" || bad "Launch for the kill: $out"
     n0="$(grep -c "\"member\":\"AppStarted\"" "$work/signals.log")"
     n=0; while [ "$(grep -c "\"member\":\"AppStarted\"" "$work/signals.log")" -le "$n0" ] && [ "$n" -lt 30 ]; do sleep 1; n=$((n + 1)); done
-    systemctl --user -M "$user@.host" kill --signal=SIGKILL --kill-whom=all "app-flatpak-$sleeper-*.scope" </dev/null 2>&1 | cat
+    # The run attaches its scope (a new "attached" line for this unit name).
+    n=0; until [ "$(attached "$inst3" | wc -l)" -gt "$a0" ] || [ "$n" -ge 20 ]; do sleep 1; n=$((n + 1)); done
+    own="$(attached "$inst3" | tail -1 | sed 's/.*attached //')"
+    echo "attached: $own"
+    case "$own" in "app-flatpak-$sleeper-"*.scope) ok "the run attached $own";; *) bad "no new attached scope for $inst3";; esac
+    extra_scope "$user" "app-flatpak-$sleeper-4343.scope" 3002
+    pgrep -u "$user" -f "sleep 3002" >/dev/null 2>&1 && ok "a second scope of the app runs (app-flatpak-$sleeper-4343)" || bad "could not start a second app scope"
+    systemctl --user -M "$user@.host" kill --signal=SIGKILL --kill-whom=all "$own" </dev/null 2>&1 | cat
     n=0; while [ "$(grep -c "\"member\":\"AppExited\".*$sleeper" "$work/signals.log")" -lt 2 ] && [ "$n" -lt 20 ]; do sleep 1; n=$((n + 1)); done
     line="$(grep -E "\"member\":\"AppExited\".*$sleeper" "$work/signals.log" | tail -1)"
     echo "$line" | grep -q '"killed"' && ok "a SIGKILL from the system: reason killed" || bad "killed exit: $line"
     gone "sleep 3000" && ok "its process is gone" || bad "the process survived"
+    gone "sleep 3002" && ok "the end of the run stopped the app's left-over scope (T-435 sweep)" || bad "the left-over app-flatpak-$sleeper-4343 scope survived the run's end"
+    systemctl --user -M "$user@.host" list-units --all --no-legend "app-flatpak-$sleeper-*.scope" </dev/null 2>&1 | grep -q scope \
+        && bad "an app-flatpak-$sleeper scope is still listed after the run ended" || ok "no app-flatpak-$sleeper scope is listed after the run ended, not even a failed one"
 
     echo "--- Launch while the unit of an earlier run is gone: a fresh launch works again"
     out="$(launch "$sleeper" "$pid")"; inst4="$(echo "$out" | unit_of)"

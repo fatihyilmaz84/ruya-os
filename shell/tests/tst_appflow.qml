@@ -262,6 +262,44 @@ Item {
             compare(Session.running.length, 1)
         }
 
+        function test_a_window_that_names_its_app_late_resumes_from_its_card() {
+            // T-435, ACBR (Electron) on the Dell: the compositor hands the window over before the
+            // client sets its app_id. Accept on the Running card launched again ("ACBR is already
+            // running") instead of bringing the window back.
+            start()
+            keyClick(Qt.Key_Return)                          // Play on Turbo Racer
+            tryCompare(launchedSpy, "count", 1)
+            tryVerify(() => Session.running.length === 1)
+            const app = createTemporaryObject(appComponent, host, { appId: "" })
+            verify(app)
+            tc.shell.addApp(app, "p2")
+            tryVerify(() => app.activeFocus, 2000, "the window without an id ends the splash and takes the focus")
+            app.appId = "org.example.Racer"                  // the client names its app now
+            tryVerify(() => tc.shell.windowOf("org.example.Racer") !== undefined, 2000, "the record takes the id")
+            compare(tc.shell.windowOf("org.example.Racer").item, app)
+            keyClick(Qt.Key_HomePage)
+            tryVerify(() => find("quickMenuItem_resume").focused)
+            keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Return)                          // Home
+            tryVerify(() => find("recentRow").activeFocus, 2000)
+            const card = find(tc.racerCard)
+            verify(card && card.focused && card.running, "the Running card has the focus")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => app.activeFocus, 2000, "Accept on the Running card resumes the window")
+            compare(launchedSpy.count, 1, "no new launch")
+            compare(toastTexts().length, 0, "no 'already running' toast")
+            // The quick menu over it closes that instance.
+            const instance = Session.running[0].instance
+            keyClick(Qt.Key_HomePage)
+            tryVerify(() => find("quickMenuItem_resume").focused)
+            keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Down)
+            verify(find("quickMenuItem_closeGame").focused)
+            keyClick(Qt.Key_Return)
+            tryCompare(stoppedSpy, "count", 1)
+            compare(stoppedSpy.signalArguments[0][0], instance)
+        }
+
         function test_hero_play_says_resume_while_the_game_runs_behind_home() {
             start()
             const app = playRacer()

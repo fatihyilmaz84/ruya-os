@@ -168,7 +168,7 @@ FocusScope {
         // The Flatpak application id of the window, when the compositor knows it (Compositor.qml).
         const record = { item: item, id: ++appSerial, profile: profile ?? "", appId: item.appId ?? "" }
         item.visible = appShownTo(record.profile)
-        appGuard.createObject(item, { recordId: record.id })
+        appGuard.createObject(item, { recordId: record.id, appItem: item })
         apps = apps.concat([record])
         // The window of the app being launched ends the splash (T-147); any other window is added
         // behind it and takes the screen when the splash is gone.
@@ -208,10 +208,27 @@ FocusScope {
             focusCurrent()              // the next app, else the page or Home
     }
 
+    // The window named its application id after it was added (T-435): Electron sets the xdg
+    // toplevel's app_id right after the toplevel exists, so the compositor hands the window over
+    // with an empty one. The record takes the id, so Resume, "Switch to" and the quick menu find it.
+    function appIdArrived(id, appId) {
+        const record = apps.find(r => r.id === id)
+        if (!record || appId === "" || record.appId === appId)
+            return
+        apps = apps.map(r => r.id === id ? Object.assign({}, r, { appId: appId }) : r)
+    }
+
     Component {
         id: appGuard
         QtObject {
+            id: guard
             property int recordId
+            property var appItem: null
+            property Connections follow: Connections {
+                target: guard.appItem
+                ignoreUnknownSignals: true          // a test stand-in may have no appId
+                function onAppIdChanged() { root.appIdArrived(guard.recordId, guard.appItem.appId ?? "") }
+            }
             Component.onDestruction: root.dropRecord(recordId)
         }
     }
