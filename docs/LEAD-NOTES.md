@@ -2,41 +2,36 @@
 
 The procedure is in [`LEAD.md`](LEAD.md) (**Budgets and "Lead efficiency": hand off at 50-60 % context; no no-op turns**). **Rewrite this file at the end of every lead session**; keep it under about 6 KB. History lives in the STATUS session log and git.
 
-## State at the end of lead-8 (Opus, 2026-11-09/10, handoff at about 60 % context)
+## State at the end of lead-9 (Opus, 2026-11-10, handoff at the weekly plan limit, 70 %, context 35 %)
 
-- **Merged and reviewed:** T-363 (ruya-session follows a Flatpak game's own scope), T-377 (Store opens without its 275 ms frame: index, one row-id pass, lazy rows), T-359 (Bluetooth follow-ups; `TailText` keeps the address tail), T-386 (**Play starts the game**: `Library.launchRequested` was never wired), T-387 (**glass sheets keep their blur**: GlassSheet's mask layer toggle; picker tiles' `visible` race; L0 hidden by opacity 0), T-379 closed (shots reds not reproducible). `main` 66d6f25 tested: 1029 QML + 84 skips ALL GREEN; docs commits after it.
-- **Images:** 0.0.60 (main 36a14eb) VM queue PASS after three check fixes (`system` one GetInfo snapshot, `display` counts running streams as T-376's criterion says, reboot relaunch with `-Audio`); the Dell runs **0.0.60** (rollback 0.0.59). **0.0.61** (main 66d6f25, with T-363/T-377/T-359/T-386/T-387): build PASS; `make-disk` failed with "Cannot allocate memory" while `dev.ps1 test` ran beside it; re-run started with `SKIP_BUILD=1 scripts/image-chain.sh 0.0.61 oci` (see below whether it finished).
-- **Dell findings (owner reports, diagnosed on the Dell):** see T-386/T-387 Outcomes; `bootloader-update.service` fails every boot (Secure Boot, missing MS UEFI CA 2023 in the firmware db: T-299, moved up). The Dell's SSH host key differs from `known_hosts` line 26 (reinstall?).
-- **Planning from owner documents** (kept in `docs/archive/research/`): ADR-025 GE-Proton and a runner catalogue (T-381..T-385), ADR-026 downloads (T-388..T-392), ADR-027 controller ownership, family buttons, action glyphs (T-396..T-399), Options menu (T-393..T-395), ADR-028 games and saves (T-400..T-403), **Proposed** ADR-029 Ruya Web (T-404 blocked, T-405..T-410), **Proposed** ADR-030 Companion (T-411..T-415), ADR-031 AI-first developer platform (T-416..T-419); T-378, T-380 from the Inbox. Parental controls stay later (owner).
-
-## Plan audit 2026-11-10 (after lead-8; planning only, commit `docs: plan audit`)
-- 76 open task files carry a **"Plan audit 2026-11-10"** ruling under the header (it wins over the older text); when a task comes up, fold the ruling into its Scope and delete the line. Tasks marked "split before dispatch": T-215, T-221, T-224, T-265, T-305, T-309, T-316, T-372, T-374, T-385, T-408.
-- New: T-423 (CI gates), T-424 (security baseline), T-422 (plan lint) are ready builder tasks; T-425 (dev/release image) and T-426 (release-security epic) are yours. Five owner questions are in STATUS.
-- Not done, for 3b: root `CLAUDE.md` is 11.5 KB (budget 10), `shell/CLAUDE.md` 11.1 KB (7), `STATUS.md` about 17 KB (10; the Inbox has 8 lines to triage); the host pitfalls are written in both root `CLAUDE.md` and `ruya-builder.md` (a builder reads both: keep them in one). 60 of 164 open tasks are `Owner: lead`: the lead is the critical path; give spikes and specs to an Opus builder (`Complexity: hard`) where no owner contact is needed.
-- This section was written while the "Proposed ADR-029/030" lines above were already stale (ADR-029 is Accepted, ADR-030 parked).
+- **Merged and reviewed:** T-423 (CI gates: cargo-deny, secret scan in CI and the hook, bus-policy lint), T-421 (glass on the Dell: default-look blobs blurred on pages; the drift rests under the hero and 30 s after input, owner-confirmed), T-424 (`vm-security-check.sh`, baseline measured on 0.0.61), T-147 (launch splash, quick menu, Home with the app running, Close; Running pill opaque). No worktrees left; no VM running.
+- **CI on GitHub is now visible:** `gh` is signed in (the owner did `gh auth login`); `push-main.ps1` says how to watch a run. The owner had red CI for three pushes: a host-dependent battery-cluster test (fixed: it finds its narrowest room per host), then two T-421 test races (fixed). **The `image` job runs only by hand now** (owner: runner time costs money). The commit hook is active (`core.hooksPath` set by the owner).
+- **Not image-verified:** T-421, T-147 and T-424 are in no image yet; the Dell runs 0.0.61. The next image's queue is in STATUS (VM queue line): `dell-glass-check.sh` on the Dell, `vm-app-check.sh flow`, `vm-security-check.sh check`, plus the older items.
 
 ## Next, in this order
-0. **T-421 first** (owner, 2026-11-10: glass on the Dell still has no blur or transparency on 0.0.61): claim it, make the worktree and dispatch `ruya-builder` with `model: opus`, `effort: high` ("send a capable model"); the builder may use the Dell. Do not start it before the new session (owner).
-1. **0.0.61 is done:** VM queue 10 of 10 PASS, the Dell runs 0.0.61 (rollback 0.0.60; `bootloader-update` still fails, T-299; the shell at about 40 % GPU at Home, T-421). The owner checks STK from Games. (The old recipe, for the next image:) `scripts\vm-queue.ps1` with the 0.0.61 queue in STATUS (`check` first: it makes the profile `display` needs), then `scripts/dell-update.sh 0.0.61` (Git Bash), then the owner checks STK from Games, the picker after an app, the T-376 hw items. If `make-disk` failed again: run it alone with nothing beside it.
-2. **Owner answers came in at the end of lead-8** and are recorded (commit 1b99152: ADR-029 Accepted and the CLAUDE.md invariant updated, ADR-030 parked, codecs shipped, content provider T-420, `ruya-gamedata`, Xbox firmware download allowed). Still open: Ludusavi licence (after T-400), iOS/Mac and store publishing (Companion is later). The 0.0.61 summary says "at ebd05f3" because of `SKIP_BUILD=1`: the image content is main 66d6f25.
-3. **Lead tasks:** T-393 (Options menu design) and T-396 (ADR-027 spec) first: they unblock T-394, T-397, T-398, T-399; then T-366/T-367 (Ruya Input), T-381 (GE-Proton spike), T-380.
-4. **Builder lanes:** T-147, T-362, T-378, T-299, T-364, T-339 (backlog order).
-5. Triage the Inbox (STATUS is 15 KB, budget 10 KB).
+1. **Weekly plan at 70 % (3 days to reset):** one builder lane at a time, no spikes (LEAD.md budgets); ask the owner before a second lane.
+2. **Build image 0.0.62** from main (`scripts/image-chain.sh`, then `vm-queue.ps1` with the queue line in STATUS, then `dell-update.sh`), and run `dell-glass-check.sh` on the Dell: T-421 and T-147 reach the owner's TV only with it. The owner checks the quick menu over STK and the blur.
+3. **Builder lane:** NEXT T-434 (glass cost, Performance-tier rows: lead decision recorded in it), then T-435 (ACBR shows no window, orphaned scopes), T-429, T-427, T-428, T-431 (image hardening, VM this task), T-433 (zbus 6), T-432 (SELinux, Opus, after T-431).
+4. **Lead tasks:** T-393 (Options menu design) and T-396 (ADR-027 spec), then T-366/T-367 (Ruya Input), T-381, T-380.
+5. The Inbox holds the T-147 review follow-ups (one line) and the second-triage pointer; plan them when it reaches 5 lines.
 
 ## Concerns (ranked)
-1. Games see no pad (T-366/T-367) and launch has no splash or quick menu yet (T-147): the console plays, but not like a console. 2. Profiles share full rights in PipeWire (T-380). 3. Control characters keep reaching main through Bash heredocs (twice by the lead in lead-8): the hook `.githooks/pre-commit` exists but needs `git config core.hooksPath .githooks` (the harness refused it: owner). 4. Two `shots` frames saw the TextEntry keyboard see-through (by design: translucent keys; a T-282 call). 5. CI unverified (gh not installed).
+1. Games see no pad (T-366/T-367): the console plays, but not like a console. 2. SELinux protects none of our services (T-424: every ruya-* runs `unconfined_service_t`; T-432). 3. `shots` has a flaky pixel test at its threshold on this GPU (`test_zz_sheet_after_an_app`, main red 3 of 8; T-430 item 5): a red `shots` there is not proof of a branch fault. 4. Builders' "fails on main too" claims need a measured comparison (T-147 was right, the lead's first green run was luck). 5. Profiles share full rights in PipeWire (T-380).
 
 ## Host facts learned
 - Never put backslashes in a Bash heredoc or a `python -c` string, even inside quotes: use Write/Edit or `chr()`.
-- `powershell -File` from Bash joins array arguments into one string: use `-Command "& script -Arg 'a','b'"`.
+- `powershell -File` from Bash joins array arguments into one string: use `-Command "& script -Arg 'a','b'"`. `wsl.exe` from Git Bash needs `MSYS_NO_PATHCONV=1` for `/mnt/...` paths.
 - PowerShell `-match` is case-insensitive: `-cmatch` when "FAIL" must not match "Failed".
 - `make-disk` and `dev.ps1 test` together can exhaust WSL memory ("Cannot allocate memory" on the copy to `/output`).
 - `vm-session-check.sh display` needs the profile that `check` creates.
+- CI's shell job reproduces in WSL: Fedora 44 with the `ci.yml` dnf packages, build `tst_ruyashell`, run it offscreen with `-input <file>` (lead-9 scratch script; Inter renders differently from Windows).
+- One `shots` function alone: `tst_ruyashell.exe -o log,txt "Case::test_zz_name"` with `QSG_RENDER_LOOP=basic` and `RUYA_SHOTS_DIR` set, no `QT_QPA_PLATFORM` (no `-input`).
+- `tryCompare(x, "opacity", 1)` is fuzzy: wait on a derived exact property with `tryVerify` (shell/CLAUDE.md).
 
 ## Quality signals (one row per lead session)
 
 | Date | Range reviewed | Tasks | Findings (fixed / filed) | `dev.ps1 test` | VM |
 |---|---|---|---|---|---|
-| 2026-11-09 (lead-6) | c5e2d67..d4157dd | T-164, T-322, T-347, T-285, T-358 (lead) | T-164 hidden app vs updates; T-322 silent-pass VM check; T-347 executor blocking; T-285 untested hint | 1001 QML + 77 skips | `0.0.57`, `0.0.58` PASS; Dell STK on GPU |
 | 2026-11-09 (lead-7) | d4157dd..36a14eb | T-340, T-348, T-365, T-375, T-376, T-361, T-360 | 5 of 6 needed a round 2 | 1012 QML + 79 skips | `0.0.59` restart FAIL (fixed); Dell 0.0.59 |
-| 2026-11-09/10 (lead-8) | 36a14eb..main | T-363, T-377, T-359, T-386, T-387, T-379 | T-359 one design round 2 (tail elision); T-387 lead hypothesis rejected by the builder's GPU repro; two owner-visible bugs found on the Dell (launch never wired, glass); VM checks with wrong criteria (3 fixed); lead put control chars on main twice | 1029 QML + 84 skips | `0.0.60` PASS; `0.0.61` disk re-run |
+| 2026-11-09/10 (lead-8) | 36a14eb..66d6f25 | T-363, T-377, T-359, T-386, T-387, T-379 | T-387 lead hypothesis rejected by the builder's GPU repro; two owner-visible bugs on the Dell; VM checks with wrong criteria (3 fixed) | 1029 QML + 84 skips | `0.0.60` PASS; `0.0.61` |
+| 2026-11-10 (lead-9) | 66d6f25..main | T-423, T-421, T-424, T-147 | T-423 CI step red on Linux pwsh + wildcard bypass (round 2); T-424 baseline hid weaknesses (round 3); T-147 deleted 9 tests silently (round 2; `lost-tests.sh` added); CI red from a host-dependent test and two T-421 races (fixed); a yanked crate caught by the new gate | 1063 QML + 89 skips | none built; 0.0.61 VM for T-424 (security check PASS) |

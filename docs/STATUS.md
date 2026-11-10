@@ -2,7 +2,7 @@
 
 **Read this first in every session; update it last.** Rules: root `CLAUDE.md`. Roles (Opus lead, Sonnet builders): `docs/LEAD.md`. Task format: `docs/tasks/README.md`. Finished work: each task's own file (`Status: done`, Outcome starting with `Verified:`); history before T-132 in [`STATUS-done.md`](STATUS-done.md), old sessions in [`STATUS-log.md`](STATUS-log.md), parked Inbox lines, the long form of owner decisions and decided records in [`STATUS-parked.md`](STATUS-parked.md). `scripts/lint-board.ps1` (part of `dev.ps1 test`) keeps this board and the task files in step.
 
-Last updated: 2026-11-10 (lead-9)
+Last updated: 2026-11-10 (lead-9 handoff)
 
 ## Where we are
 
@@ -79,6 +79,8 @@ Long forms and decided records: `STATUS-parked.md` ("Decided", and "Decided reco
 
 One entry per session, at most 700 characters (`lint-board.ps1`): date · model · tasks · what happened · numbers · follow-ups. Detail belongs in the task Outcome.
 
+- 2026-11-10 · Opus 5.5 · Lead (lead-9: T-423 CI gates, T-421 Dell glass, T-424 security baseline, T-147 launch and quick menu merged; T-427..T-435 planned from the Inbox) · test 1063 QML + 89 skips ALL GREEN; no image; 0.0.61 VM: vm-security-check PASS. CI red fixed (host-dependent battery test, two T-421 races, a yanked crate); CI image job manual-only (owner); gh signed in. Review: T-147 deleted 9 tests silently, T-424 baseline hid weaknesses. Owner: drift rests after 30 s. Process: lost-tests.sh in review and self-check; fuzzy tryCompare rule; builder file prune.
+
 - 2026-11-10 · Fable 5 · Planning (plan audit: rules, board, 159 open tasks; no code) · 76 task files got a ruling under the header (overlaps in input, saves, runners, permissions, Web cut to one owner each; about 60 dependency fixes); T-315 stale claim reset; T-258, T-403, T-413 blocked; new T-422 plan lint, T-423 CI gates, T-424 security baseline, T-425 dev/release image, T-426 release-security epic; 5 owner questions. Process: Depends column = open dependencies; sizes, hand-off threshold and roles made consistent; template has Complexity and a security line; planning horizon rule. `dev.ps1 docs` green.
 
 - 2026-11-10 · Opus 5.5 · Lead (lead-8: T-363, T-377, T-359, T-386 Play starts games, T-387 glass after an app merged; T-379 not reproducible; planned ADR-025..ADR-031 (GE-Proton, downloads, controller ownership, games and saves, Web, Companion, developer platform) and T-378..T-419) · test 1029 QML + 84 skips ALL GREEN; VM 0.0.60 queue PASS after three check fixes; Dell 0.0.60 (glass and launch bugs found there). Process: vm-queue.ps1, dell-update.sh, image-chain SKIP_BUILD, a pre-commit lint hook (needs core.hooksPath).
@@ -86,7 +88,5 @@ One entry per session, at most 700 characters (`lint-board.ps1`): date · model 
 - 2026-11-09 · Opus 5.5 · Lead (lead-7: T-340, T-348, T-376, T-361, T-360 merged; lead T-365 profile sound, T-375 BlueZ kernel HID; plans ADR-024 Ruya Input T-366..T-374, T-359..T-364, T-376, T-377; Hub analysis) · test 1012 QML ALL GREEN; VM 0.0.59 check/display PASS, restart FAIL then fixed (zbus unixexec); Dell 0.0.59: STK sound as ruya-p1, bluetoothd 10-12 % to 0. Process: lints refuse conflict markers and jq; stalled-builder rule.
 
 - 2026-11-09 · Opus 5.5 · Lead (lead-6: T-164 per-profile Wayland sockets, T-322 output policy, T-347 card profiles, T-285 hint bar merged; T-358 GPU buffers by the lead; T-355 first pass; T-357 written) · `test` 1001 QML + 77 skips ALL GREEN; VM 0.0.57/0.0.58 PASS; Dell 0.0.58: STK through the shell on the UHD 630 at 15 % CPU (was llvmpipe 563 %) via our patched Qt linux-dmabuf v4 plugin. Process: `image-chain.sh`; builders run `test` in the foreground (two stalled).
-
-- 2026-11-09 · Sonnet 5.5 · Lead (lead-5 part 2: T-356 focus-loss dead end, T-349 lazy Settings, T-331 drive scan merged after a checkpoint; T-164 open) · `test` 987 QML + 77 skips ALL GREEN; ISO built only when needed (owner rule), lead efficiency rules in LEAD.md. Found with the owner: covered pages stole the window focus (T-356). Process: reviewers must run the revert check; waits stay inside one turn.
 
 
