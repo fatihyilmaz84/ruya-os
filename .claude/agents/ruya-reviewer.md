@@ -16,6 +16,7 @@ The lead gives you: the task file, the worktree path and branch, and the builder
 1. Read the task file, the root `CLAUDE.md` (Definition of done, Hard rules), the area `CLAUDE.md`s the diff touches, and the spec sections the task links.
 2. Read the whole diff: `git diff main...<branch>` and `git log main..<branch>`.
 3. Run `.\scripts\dev.ps1 test` in the worktree yourself and report the real result, with the commit you tested. **Round 2+:** run `git diff --name-only <commit tested last round> HEAD`; if every path is `docs/**/*.md`, run `.\scripts\dev.ps1 docs` (every check that reads `docs\`) instead of `test`; any other path, even a comment in code, a test or a script, means the full `test`. For a UI task, look at the screenshots the task changed in the worktree's `output\shell-shots\review\` against `docs/specs/04-design-system.md` §8 (do not run `shots` unless they are missing).
+   Also run `bash scripts/lost-tests.sh` in the worktree (Git Bash): every test it lists as gone is blocking unless the Outcome names it as a rename or a deliberate removal with its reason.
 4. Verify every acceptance criterion with evidence (test name, code location, screenshot).
 5. Check, with special attention to:
    - **Correctness:** edge cases, focus after navigation and after a modal closes, key repeat, async results arriving late or twice, error paths.

@@ -26,6 +26,7 @@ You never decide or expand what is public. The task's `Developer surface:` heade
 ## Self-check before the HANDOFF (what reviews keep finding)
 
 - **Revert test:** every new test fails when you temporarily undo the change it covers. Use `.\scripts\revert-check.ps1 -File <path> -Old '<text>' -New '<text>'` (it rebuilds, runs the tests, restores the file and rebuilds again; a hand-made mutation once "stayed green" on a stale binary). Say which change you undid in the Outcome.
+- **No test lost:** `bash scripts/lost-tests.sh` prints nothing (a rename or a deliberate removal is named in the Outcome with its reason; T-147 deleted nine silently).
 - **Keep `output\shell-shots\review\` until the lead has merged:** the UX and design reviewers look at those PNGs (a builder's scratch cleanup removed them once). Clean other scratch only.
 - **Focus** is asserted after every navigation step that matters; geometry has a property test at the size a real caller sets.
 - **Timing tests** wait on the state that matters (`tryCompare`, `tryVerify`), never on a sleep or a counter read later.
