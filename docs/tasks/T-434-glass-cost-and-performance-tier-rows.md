@@ -1,6 +1,6 @@
 # T-434 - Glass follow-ups: Performance-tier rows opaque, the picker's idle blur texture, the page blur's GPU cost
 
-Status: todo · Phase: 2 · Depends: — · Area: shell (SettingControl, Backdrop, liquid pills), scripts (dell-glass-check) · Size: S · Owner: builder · Complexity: complex · Developer surface: none
+Status: in-progress · Phase: 2 · Depends: — · Area: shell (SettingControl, Backdrop, liquid pills), scripts (dell-glass-check) · Size: S · Owner: builder · Complexity: complex · Developer surface: none
 
 ## Goal
 T-421's glass fix keeps its look at a lower GPU cost on the Dell, and the Performance tier follows 04 §3.6 ("glass without blur turns opaque") for the Settings rows too.

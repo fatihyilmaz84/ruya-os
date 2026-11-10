@@ -23,7 +23,7 @@ Open work only (the front of the board; the rest is in `STATUS-backlog.md`), in 
 
 | ID | Title | Status | Depends |
 |---|---|---|---|
-| [T-434](tasks/T-434-glass-cost-and-performance-tier-rows.md) | Glass follow-ups: Performance-tier rows opaque, the picker's idle blur texture, the page blur's GPU cost | todo | — |
+| [T-434](tasks/T-434-glass-cost-and-performance-tier-rows.md) | Glass follow-ups: Performance-tier rows opaque, the picker's idle blur texture, the page blur's GPU cost | in-progress | — |
 | [T-435](tasks/T-435-acbr-shows-no-window-on-the-dell.md) | ACBR (Electron) starts on the Dell but never shows a window; orphaned app scopes | todo | — |
 | [T-393](tasks/T-393-options-menu-design.md) | **[lead]** Design: the Options (context) menu: component, contents per surface, motion, focus | todo | — |
 | [T-396](tasks/T-396-controller-ownership-and-layout-spec.md) | **[lead]** Spec: who owns the UI, the family's confirm button, action glyphs (ADR-027) | todo | T-366 |
