@@ -509,6 +509,18 @@ check)
     extra_scope "$user" "app-flatpak-$sleeper-4242.scope" 3001
     pgrep -u "$user" -f "sleep 3001" >/dev/null 2>&1 && ok "a second scope of the app runs (app-flatpak-$sleeper-4242)" || bad "could not start a second app scope"
 
+    # T-459: the compositor asks which instance a window's client process belongs to (a pygame game's
+    # window calls itself "python3.12"): the app's own process, in the run's scope and in the second
+    # scope, answers the instance; a process of no app and pid 0 do not.
+    echo "--- InstanceOfPid (T-459)"
+    of_pid() { as_shell busctl --system call "$svc" "$path" "$ifc" InstanceOfPid u "$1"; }
+    apid="$(pgrep -u "$user" -f "sleep 3000" | head -1)"
+    case "$(of_pid "${apid:-0}")" in "ss \"ok\" \"$inst\"") ok "InstanceOfPid of the app's process ($apid): $inst";; *) bad "InstanceOfPid $apid: $(of_pid "${apid:-0}")";; esac
+    xpid="$(pgrep -u "$user" -f "sleep 3001" | head -1)"
+    case "$(of_pid "${xpid:-0}")" in "ss \"ok\" \"$inst\"") ok "InstanceOfPid in the second scope ($xpid): $inst";; *) bad "InstanceOfPid $xpid: $(of_pid "${xpid:-0}")";; esac
+    case "$(of_pid 1)" in 'ss "not-found" ""') ok "InstanceOfPid 1: not-found";; *) bad "InstanceOfPid 1: $(of_pid 1)";; esac
+    case "$(of_pid 0)" in 'ss "invalid" ""') ok "InstanceOfPid 0: invalid";; *) bad "InstanceOfPid 0: $(of_pid 0)";; esac
+
     echo "--- Launch refusals"
     case "$(launch "$sleeper" "$pid")" in 'ss "already-running" ""') ok "a second Launch: already-running";; *) bad "second Launch";; esac
     case "$(launch org.ruyaos.NotInstalled "$pid")" in 'ss "unknown-app" ""') ok "unknown-app";; *) bad "unknown app";; esac

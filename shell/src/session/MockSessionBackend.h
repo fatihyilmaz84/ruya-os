@@ -18,6 +18,9 @@
 // ActiveProfile; without one there is no check), a second freeze is "ok" and changes nothing, a stop
 // thaws a frozen app first. setFailFreeze / setFailThaw make Freeze / Thaw answer "failed". Every freeze, thaw and stop
 // that reaches an app is logged in calls().
+//
+// InstanceOfPid (T-459): every launched instance has a made-up process id (pidOf, 4001 up), and
+// only those name an instance; any other pid is "not-found", 0 or less "invalid".
 class MockSessionBackend final : public SessionBackend
 {
     Q_OBJECT
@@ -34,11 +37,14 @@ public:
     void stop(const QString &instance) override;
     void freeze(const QString &instance) override;
     void thaw(const QString &instance) override;
+    void instanceOfPid(int pid) override;
 
     void reset();
     void setFailFreeze(bool fail) { m_failFreeze = fail; }
     void setFailThaw(bool fail) { m_failThaw = fail; }
     QStringList calls() const { return m_calls; }
+    // The pid of a launched instance's process (from 4001 up), 0 for an unknown instance.
+    int pidOf(const QString &instance) const;
 
 private:
     int indexOf(const QString &instance) const;

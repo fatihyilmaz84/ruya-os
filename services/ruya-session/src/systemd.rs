@@ -386,6 +386,16 @@ impl Spawner for SystemdSpawner {
         self.freezer(unit, "thaw")
     }
 
+    /// `/proc/<pid>/cgroup` (T-459). Root reads it for every user's process under this unit's
+    /// `ProtectProc=invisible` (checked on the Dell, 2026-11-10).
+    fn process_cgroup(&self, pid: u32) -> Option<String> {
+        std::fs::read_to_string(format!("/proc/{pid}/cgroup")).ok()
+    }
+
+    fn user_name(&self, uid: u32) -> Option<String> {
+        user_name_of(uid)
+    }
+
     fn adopt_running(&self) -> Vec<RunningUnit> {
         let users = Command::new("loginctl")
             .args(["list-users", "--no-legend", "--no-pager"])
@@ -869,4 +879,20 @@ fn ensure_manager(user: &str) {
         }
         None => eprintln!("ruya-session: no uid for {user}"),
     }
+}
+
+/// The name of the Unix user `uid` (`getpwuid_r`, the system's user database), T-459.
+fn user_name_of(uid: u32) -> Option<String> {
+    let mut buf = vec![0 as libc::c_char; 4096];
+    // SAFETY: an all-zero `passwd` is a valid value for getpwuid_r to fill in.
+    let mut pwd: libc::passwd = unsafe { std::mem::zeroed() };
+    let mut result: *mut libc::passwd = std::ptr::null_mut();
+    // SAFETY: every pointer is valid for the call and `buf.len()` is the buffer's real size.
+    let rc = unsafe { libc::getpwuid_r(uid, &mut pwd, buf.as_mut_ptr(), buf.len(), &mut result) };
+    if rc != 0 || result.is_null() || pwd.pw_name.is_null() {
+        return None;
+    }
+    // SAFETY: on success `pw_name` points to a NUL-terminated string inside `buf`, alive here.
+    let name = unsafe { std::ffi::CStr::from_ptr(pwd.pw_name) };
+    name.to_str().ok().map(str::to_owned)
 }

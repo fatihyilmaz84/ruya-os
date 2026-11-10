@@ -155,9 +155,20 @@ FocusScope {
     function recordOf(item) {
         return apps.find(r => r.item === item)
     }
-    // The window of a running app of the signed-in profile, by its application id, or undefined.
+    // The window of a running app of the signed-in profile, by its application id (appIdOf: the
+    // instance's first), or undefined.
     function windowOf(appId) {
-        return appId === "" ? undefined : apps.find(r => r.appId === appId && appShownTo(r.profile))
+        return appId === "" ? undefined : apps.find(r => appIdOf(r) === appId && appShownTo(r.profile))
+    }
+
+    // The application id of a window's app (T-459): that of the running instance its process belongs
+    // to (Session1.InstanceOfPid), else the one the window gives itself, which is not always its
+    // Flatpak id ("python3.12" for a pygame game).
+    function appIdOf(record) {
+        if (!record)
+            return ""
+        const run = record.instance !== "" ? Session.running.find(r => r.instance === record.instance) : undefined
+        return run ? run.appId : record.appId
     }
 
     function addApp(item, profile) {
@@ -165,8 +176,11 @@ FocusScope {
             return
         item.parent = appLayer
         item.anchors.fill = appLayer
-        // The Flatpak application id of the window, when the compositor knows it (Compositor.qml).
-        const record = { item: item, id: ++appSerial, profile: profile ?? "", appId: item.appId ?? "" }
+        // The application id the window gives itself, when the compositor knows it (Compositor.qml),
+        // and the running instance its client's process belongs to, asked of Session1 by the pid
+        // (T-459; "" until the answer, and for a process of no instance).
+        const record = { item: item, id: ++appSerial, profile: profile ?? "", appId: item.appId ?? "",
+                         pid: item.pid ?? 0, instance: "" }
         item.visible = appShownTo(record.profile)
         appGuard.createObject(item, { recordId: record.id, appItem: item })
         apps = apps.concat([record])
@@ -175,6 +189,22 @@ FocusScope {
         if (launchState && appShownTo(record.profile) && (record.appId === "" || record.appId === launchState.appId))
             endLaunch(false)
         focusApp(item)
+        if (record.pid > 0)
+            Session.instanceOfPid(record.pid)
+    }
+
+    // Session1 named the instance of a window's process (T-459): the record takes it, and a window
+    // that is the app being launched after all (its own app id did not say so) ends the splash.
+    function instanceArrived(pid, instance) {
+        const record = apps.find(r => r.pid === pid && r.instance === "")
+        if (!record || instance === "")
+            return
+        apps = apps.map(r => r.id === record.id ? Object.assign({}, r, { instance: instance }) : r)
+        const st = launchState
+        if (st && appShownTo(record.profile) && (st.instance === instance || appIdOf(recordOf(record.item)) === st.appId)) {
+            endLaunch(false)
+            focusApp(record.item)
+        }
     }
 
     function focusApp(item) {
@@ -625,6 +655,10 @@ FocusScope {
             }
             Notifications.show(qsTr("%1 could not be started. Try again.").arg(name), "error")
         }
+        function onInstanceOfPidFinished(pid, status, instance) {
+            if (status === "ok")
+                root.instanceArrived(pid, instance)
+        }
         function onStopFinished(instance, status) {
             if (status !== "ok" && status !== "unknown-instance")
                 Notifications.show(qsTr("The game could not be closed. Try again."), "error")
@@ -645,12 +679,21 @@ FocusScope {
         }
     }
 
-    // The running record (Session1) of the app a window belongs to: by application id when the window
-    // names its app, else the newest of the profile's apps (a client that does not, as in tests).
+    // The running record (Session1) of the app a window belongs to: by the instance of the window's
+    // process (T-459), else by the application id the window gives itself, else (a client that names
+    // none, as in tests) the newest of the profile's apps.
     function runningFor(record) {
         const mine = Session.running.filter(r => r.profile === Profiles.activeProfile && r.state !== "stopping")
+        if (record && record.instance !== "")
+            return mine.find(r => r.instance === record.instance)
         if (record && record.appId !== "")
             return mine.find(r => r.appId === record.appId)
+        return newestRunning()
+    }
+
+    // The newest running app of the signed-in profile (not one that is stopping), or undefined.
+    function newestRunning() {
+        const mine = Session.running.filter(r => r.profile === Profiles.activeProfile && r.state !== "stopping")
         let best
         for (const r of mine) {
             if (!best || r.started >= best.started)
@@ -666,7 +709,7 @@ FocusScope {
             return null
         const record = recordOf(focusedApp)
         const run = runningFor(record)
-        const appId = (record ? record.appId : "") || (run ? run.appId : "")
+        const appId = (run ? run.appId : "") || (record ? record.appId : "")
         const found = Library.items.find(i => appId !== "" && Library.sessionAppId(i.id) === appId)
         return { appId: appId,
                  title: appId !== "" ? titleOfApp(appId) : qsTr("Running app"),
@@ -675,8 +718,8 @@ FocusScope {
                  instance: run ? run.instance : "",
                  frozen: run ? (run.frozen ?? false) : false }
     }
-    readonly property var quickMenuOthers: shownApps.filter(r => r.item !== focusedApp && r.appId !== "")
-                                                    .map(r => ({ appId: r.appId, title: titleOfApp(r.appId) }))
+    readonly property var quickMenuOthers: shownApps.filter(r => r.item !== focusedApp && appIdOf(r) !== "")
+                                                    .map(r => ({ appId: appIdOf(r), title: titleOfApp(appIdOf(r)) }))
     // The Hub's Recent rows (T-448, 02 §1.6): up to four of `Library.recent` that Session1 can start and
     // that are not running (the running ones are the app header and the Switch to rows); over an app
     // only two, so the tiles stay near the top.
@@ -705,11 +748,28 @@ FocusScope {
     }
 
     // Close game: ask the service to stop the app in front and go Home; the card's pill goes when the
-    // service reports AppExited.
+    // service reports AppExited. The instance is the window's (runningFor: its process's, else its app
+    // id's; one already stopping is asked again, the service says "ok"); when neither names a running
+    // app (T-459: Session1 could not tell, and the window's own id is not its Flatpak id), the
+    // profile's newest app. With no instance at all nothing can be stopped: a warning says so and the
+    // Hub stays, never a silent Home with the game still running.
     function closeFrontGame() {
-        const instance = quickMenuApp ? quickMenuApp.instance : ""
-        if (instance !== "")
-            Session.stop(instance)      // a frozen game: the service thaws it first, so it can quit (T-457)
+        const record = focusedApp ? recordOf(focusedApp) : undefined
+        let instance = (quickMenuApp ? quickMenuApp.instance : "") || (record ? record.instance : "")
+        const own = record && record.appId !== ""
+                    ? Session.running.find(r => r.profile === Profiles.activeProfile && r.appId === record.appId) : undefined
+        if (instance === "" && own)
+            instance = own.instance     // stopping already: asked again
+        if (instance === "" && !own) {
+            const newest = newestRunning()
+            instance = newest ? newest.instance : ""
+        }
+        if (instance === "") {
+            const title = quickMenuApp ? quickMenuApp.title : qsTr("Running app")
+            Notifications.show(qsTr("Could not close %1.").arg(Notifications.named(title)), "warning")
+            return
+        }
+        Session.stop(instance)          // a frozen game: the service thaws it first, so it can quit (T-457)
         sendAppsHome()
     }
 

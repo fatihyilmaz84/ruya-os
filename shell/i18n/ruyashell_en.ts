@@ -2759,7 +2759,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+493"/>
+        <location filename="../qml/Shell.qml" line="+523"/>
         <source>Could not %1.</source>
         <translation>Could not %1.</translation>
     </message>
@@ -2794,7 +2794,12 @@ This can&apos;t be undone.</translation>
         <translation>Restarting to finish the update in 2 minutes. Press any button to wait.</translation>
     </message>
     <message>
-        <location line="+234"/>
+        <location line="+217"/>
+        <source>Could not close %1.</source>
+        <translation>Could not close %1.</translation>
+    </message>
+    <message>
+        <location line="+47"/>
         <source>The screen did not answer, so the previous resolution is back.</source>
         <translation>The screen did not answer, so the previous resolution is back.</translation>
     </message>
@@ -2875,13 +2880,13 @@ This can&apos;t be undone.</translation>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location line="-986"/>
+        <location line="-1016"/>
         <source>%1 is already running</source>
         <translation>%1 is already running</translation>
     </message>
     <message>
         <location line="+3"/>
-        <location line="+18"/>
+        <location line="+22"/>
         <source>%1 could not be started. Try again.</source>
         <translation>%1 could not be started. Try again.</translation>
     </message>
@@ -2896,12 +2901,13 @@ This can&apos;t be undone.</translation>
         <translation>%1 stopped unexpectedly. Try again.</translation>
     </message>
     <message>
-        <location line="+29"/>
+        <location line="+38"/>
+        <location line="+53"/>
         <source>Running app</source>
         <translation>Running app</translation>
     </message>
     <message>
-        <location line="+943"/>
+        <location line="+907"/>
         <source>Sections</source>
         <translation>Sections</translation>
     </message>

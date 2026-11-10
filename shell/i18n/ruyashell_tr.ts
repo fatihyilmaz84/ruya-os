@@ -2750,7 +2750,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+493"/>
+        <location filename="../qml/Shell.qml" line="+523"/>
         <source>Could not %1.</source>
         <translation>%1 işlemi yapılamadı.</translation>
     </message>
@@ -2785,7 +2785,12 @@ Bu geri alınamaz.</translation>
         <translation>Güncellemeyi bitirmek için 2 dakika içinde yeniden başlatılıyor. Beklemek için herhangi bir düğmeye bas.</translation>
     </message>
     <message>
-        <location line="+234"/>
+        <location line="+217"/>
+        <source>Could not close %1.</source>
+        <translation>%1 kapatılamadı.</translation>
+    </message>
+    <message>
+        <location line="+47"/>
         <source>The screen did not answer, so the previous resolution is back.</source>
         <translation>Ekran yanıt vermedi, bu yüzden önceki çözünürlük geri geldi.</translation>
     </message>
@@ -2866,13 +2871,13 @@ Bu geri alınamaz.</translation>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="-986"/>
+        <location line="-1016"/>
         <source>%1 is already running</source>
         <translation>%1 zaten çalışıyor</translation>
     </message>
     <message>
         <location line="+3"/>
-        <location line="+18"/>
+        <location line="+22"/>
         <source>%1 could not be started. Try again.</source>
         <translation>%1 başlatılamadı. Tekrar dene.</translation>
     </message>
@@ -2887,12 +2892,13 @@ Bu geri alınamaz.</translation>
         <translation>%1 beklenmedik şekilde durdu. Tekrar dene.</translation>
     </message>
     <message>
-        <location line="+29"/>
+        <location line="+38"/>
+        <location line="+53"/>
         <source>Running app</source>
         <translation>Çalışan uygulama</translation>
     </message>
     <message>
-        <location line="+943"/>
+        <location line="+907"/>
         <source>Sections</source>
         <translation>Bölümler</translation>
     </message>

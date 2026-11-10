@@ -24,6 +24,7 @@ Session::Session(std::unique_ptr<SessionBackend> backend, QObject *parent)
     connect(m_backend.get(), &SessionBackend::stopFinished, this, &Session::stopFinished);
     connect(m_backend.get(), &SessionBackend::freezeFinished, this, &Session::freezeFinished);
     connect(m_backend.get(), &SessionBackend::thawFinished, this, &Session::thawFinished);
+    connect(m_backend.get(), &SessionBackend::instanceOfPidFinished, this, &Session::instanceOfPidFinished);
     // The record changes in place, so a binding on `running` sees the new `frozen` at once.
     connect(m_backend.get(), &SessionBackend::frozenChanged, this, [this](const QString &instance, bool frozen) {
         for (QVariant &v : m_running) {
@@ -106,6 +107,18 @@ void Session::freeze(const QString &instance)
 void Session::thaw(const QString &instance)
 {
     m_backend->thaw(instance);
+}
+
+void Session::instanceOfPid(int pid)
+{
+    m_backend->instanceOfPid(pid);
+}
+
+int Session::mockPidOf(const QString &instance) const
+{
+    if (auto *mock = qobject_cast<MockSessionBackend *>(m_backend.get()))
+        return mock->pidOf(instance);
+    return 0;
 }
 
 QVariantMap Session::instanceOf(const QString &appId, const QString &profile) const
