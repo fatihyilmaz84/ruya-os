@@ -102,6 +102,7 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | [T-241](tasks/T-241-play-updates.md) | **[lead]** `.play` updates: signed feeds, same-key rule, rollback | todo | T-231, T-238, T-240 |
 | [T-242](tasks/T-242-play-library-home-and-preview.md) | `.play` in Library and Home: art, preview loop, save paths | todo | T-232, T-238 |
 | [T-243](tasks/T-243-play-developer-guide-and-samples.md) | `.play` developer guide and two samples | todo | T-233 |
+| [T-446](tasks/T-446-play-packages-in-stores.md) | `.play` packages in a store: the signed index, one catalogue, install and update through the importer | todo | T-441, T-231, T-234, T-238, T-388 |
 | [T-248](tasks/T-248-epic-first-party-apps.md) | **[lead]** EPIC: first-party apps (picture viewer, weather, media player, files, Jellyfin, then the emulator frontend; no browser first) and the platform they need | todo | — |
 | [T-249](tasks/T-249-hig-human-interface-guidelines.md) | **[lead]** Human Interface Guidelines for app authors (`docs/specs/06-hig.md`) | todo | — |
 | [T-250](tasks/T-250-app-platform-spike-and-adr.md) | **[lead]** Spike for ADR-015 (Accepted): the `org.ruyaos.Platform` runtime extension with RuyaKit | todo | — |

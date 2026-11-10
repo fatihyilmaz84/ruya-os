@@ -3,7 +3,7 @@
 Status: todo · Phase: 3 · Depends: T-441 · Area: docs, samples, scripts · Size: S · Owner: builder · Complexity: normal · Developer surface: public-format
 
 ## Goal
-A developer can read one chapter, run one script and have a store a RuyaOS console accepts: a signed Flatpak repository with the sample game, a `.flatpakrepo`, the well-known address. The chapter also says what the console will refuse, so nobody learns it from a failed add. ADR-032 point 6, `docs/specs/10-stores.md` §9.
+A developer can read one chapter, run one script and have a store a RuyaOS console accepts: a signed Flatpak repository with the sample game, a store file, the well-known address (`/.well-known/ruyaos-store`). The chapter also says what the console will refuse, so nobody learns it from a failed add. ADR-032 point 7, `docs/specs/10-stores.md` §9.
 
 ## Read first
 - `docs/specs/10-stores.md` (all), `docs/developers/api-surface.md` (tier C and the extra Definition of done), `docs/developers/publishing.md`, `README.md` of that folder (chapter list, Sources footer rule)
@@ -17,6 +17,7 @@ A developer can read one chapter, run one script and have a store a RuyaOS conso
 4. `lint-dev-docs.ps1` covers the new chapter (links, shell blocks parse, the script blocks quote the sample script).
 
 ## Out of scope
+- The `.play` shelf of a store (T-446 adds it to this chapter and to the sample).
 - `ruya store check` in the CLI (`10-stores.md` §10). Hosting advice for a named provider. Anything about the official store (T-444).
 
 ## Acceptance criteria

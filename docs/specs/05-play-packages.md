@@ -1,6 +1,6 @@
 # RuyaOS — `.play` Packages (self-contained games and apps)
 
-Status: **Draft v1, design only, nothing is built** · Parent: [00-overview](00-overview.md) · Decision: ADR-014 (*Accepted 2026-11-06, conditional on the T-229 spike*; work parked by the owner) · Epic: [T-228](../tasks/T-228-epic-play-packages.md)
+Status: **Draft v1, design only, nothing is built; reviewed 2026-11-10: read §18 first, it corrects §6, §7, §9 and §11** · Parent: [00-overview](00-overview.md) · Decision: ADR-014 (*Accepted 2026-11-06, conditional on the T-229 spike*; work parked by the owner) · Epic: [T-228](../tasks/T-228-epic-play-packages.md)
 
 A `.play` package is one folder or one `.play.zip` file that holds a game or app **and everything it needs to run on RuyaOS**: the program, a Wine or Proton build or an emulator (or a pointer to the one the OS provides), artwork and video for the shell, metadata, a permission request and a signature. A developer builds it once; a player copies it to a USB stick or downloads it, and it appears in the library with its art. Think of a macOS `.app` in a `.dmg`, with a signature and a sandbox.
 
@@ -333,7 +333,7 @@ Follows 03 §4.5a without change: per-profile `~/.var/app/play.<id>/{data,config
 
 Principle: **updates are signed, ordered by `build`, run by the OS and never by the game.** There are three ways, in priority order.
 
-1. **From a remote (the Store).** If the package was installed from the `ruyaos` or a developer remote, `ruya-store` updates it like any other app (OSTree deltas, `Rollback(id, commit)`, the permission-diff flow). The manifest's `update` block is ignored. This is the recommended path for anything distributed publicly: one trusted place, one update mechanism, no per-game servers contacted. *Yes: the Store should be the update channel for Store packages.*
+1. **From a store (replaced by §18 item 1 and `10-stores.md` §11: the store's signed index, the same importer; the text of this item is the old design).** If the package was installed from the `ruyaos` or a developer remote, `ruya-store` updates it like any other app (OSTree deltas, `Rollback(id, commit)`, the permission-diff flow). The manifest's `update` block is ignored. This is the recommended path for anything distributed publicly: one trusted place, one update mechanism, no per-game servers contacted. *Yes: the Store should be the update channel for Store packages.*
 2. **Self-hosted feed (sideloaded packages).** `update.feed` is an https URL of a signed JSON feed:
    ```json
    { "format": 1, "id": "com.example.starhopper", "channel": "stable", "expires": "2026-12-31T00:00:00Z",
@@ -407,4 +407,43 @@ A developer guide chapter and two sample packages (a native Linux one, a Windows
 
 ## 17. Tasks
 
-Epic **T-228** and tasks T-229 to T-244 (the list is in the epic file); the verification split follows the root `CLAUDE.md` (host-verifiable core first, image and VM work after the spike).
+Epic **T-228** and tasks T-229 to T-243 (the list is in the epic file; T-244 was dropped into T-385); `.play` in stores is T-446; the verification split follows the root `CLAUDE.md` (host-verifiable core first, image and VM work after the spike).
+
+## 18. Review of this draft (lead, 2026-11-10): what to fix before T-230 starts
+
+Found while planning stores (ADR-032, `10-stores.md`). Nothing here is built, so nothing is broken yet; each item names where it gets fixed. **A to D change the design and win over the sections above; the rest are corrections for the first task that touches the section.**
+
+**A. Decided here (the text above is stale where it differs)**
+1. **Stores carry `.play` files, never ready-made `play.<id>` Flatpaks** (`10-stores.md` §11). §11 way 1 ("OSTree deltas, like any other app") is replaced: every install and update, from any store, a feed or a USB drive, goes through the one importer. Reason: a store-built Flatpak would bring its own Flatpak metadata and art, the two things §7.1 and §5 say a package never supplies.
+2. **One Flatpak transaction queue.** `ruya-play` builds and signs the commit; installing it into `/var/lib/flatpak` is a job of `ruya-store`'s queue (ADR-011, ADR-026). §7.3 step 5 read as if two root services ran Flatpak transactions side by side. The device-local origin is a built-in, hidden store that nothing can remove or shadow (`10-stores.md` §3.1).
+3. **The per-game runner choice is not stored in the app's own `config/`** (§6.2): the game can write there, so "the player decides" would not hold. It is kept by `ruya-library` (T-385, one mechanism for every Windows game, ADR-025).
+4. **Sideloading needs an admin.** §7.2 let a Standard profile install any signed low or medium package from a USB stick, system-wide, for every profile; a signature proves nothing about a stranger's key (§0.7). Store and USB installs follow `10-stores.md` §4: an admin, or an admin's PIN.
+
+**B. Contradictions with later decisions**
+5. **Runners (ADR-025, 2026-11-09).** §6.4, §14, Q3 and D3 still say Wine is the only system runner and Proton is never shipped; GE-Proton is now preinstalled and the default. So Q3 (does Proton's container nest inside the sandbox) is no longer optional: it decides whether the default runner works for `.play` at all, and is the first question of T-229.
+6. **Words.** The tier `developer` and "developer remote" collide with the store trust `third-party` and with "developer mode". Keep the tier names, write "third-party store" for the place.
+7. **Revocation (§9.2, Q6)** assumed the `ruyaos` remote; with D2 there is none in v1. It is one file with the store blocklist, shipped in the image and changed by OS updates (`10-stores.md` §6); a fresher copy from the official store is later. T-241 owns what an installed, revoked package does.
+
+**C. Things the format cannot express today (T-230 must settle them in the schema)**
+8. **Wine prefix templates do not fit the path rules.** A prefix has `dosdevices/c:` and `z:` (a colon in a name, forbidden by §4.2) and `z:` points at `/` (an absolute link, forbidden). Rule: a template never contains `dosdevices`; the launcher creates it.
+9. **Real runner trees do not fit the link rule.** "A link must not point at another link" refuses the usual `libx.so -> libx.so.1 -> libx.so.1.2` chains of a bundled Wine or emulator. Allow chains up to 8 hops that stay inside the same top-level directory; `ruya-pack build` flattens what it can.
+10. **Emulated games have no manifest fields.** `${disc}` exists (§6.3) but nothing declares discs, their order, or a multi-disc set. Add `run.discs[]`.
+11. **"Timestamps from the manifest's build time"** (§4.2): the manifest has no such field. Use `play.sig`'s `signed_at`, or a fixed epoch for unsigned packages.
+12. **`permissions` that have no mapping yet:** `microphone`, `camera`, `bluetooth` are "as the platform provides", and there is no portal backend (03 §4.4). Until one exists they are not in the vocabulary (an unknown key is an error, §4.1), and raw `bluetooth` is high risk, not medium.
+13. **Combinations.** `network` with `removable_media`, `microphone` or `camera` is a way out for the player's files or voice: the pair counts as high risk even though each alone is medium.
+14. **`multiarch`** needs 32-bit runtime extensions that the console may not have offline; say where they come from (the official store) and that the install fetches them or refuses, like `source: system`.
+15. **Flatpak id grammar.** `play.<id>` must be a valid Flatpak id: check the `-` rule and the length for the prefixed form, not only for `id`.
+
+**D. Security and data gaps**
+16. **Kept saves and a different key.** After an uninstall with "Keep saves", a package with the same `id` signed by another key may be installed (the `id -> key` record: is it kept after uninstall? unspecified) and would inherit `~/.var/app/play.<id>`. Rule: the record survives uninstall while any profile keeps data for the id; a different key is then refused, and an admin can "Forget this game's data and key" to free the id.
+17. **Squatting an id.** The first package to claim an id on a console owns it (trust on first use); the genuine game is then refused as "not the same developer". The same admin action as item 16 is the way out; the message must say so.
+18. **A developer who loses the key** has no rotation path (rotation needs the old key). Say it plainly in the guide: players must remove and reinstall (item 16), or the official store's countersignature decides.
+19. **Feeds (§11 way 2).** "Redirects must stay on the registrable domain" needs a public-suffix list on the console: use the exact host. `expires` needs a correct clock, and a console can boot offline with a wrong one: a feed is also refused when its newest release is older than the installed build's `signed_at`. A feed signed with the package key keeps that key on a web server: allow a feed key delegated by the package key (one statement, like rotation).
+20. **Disk space.** A downloaded 30 GB package needs the archive, the staging copy and the OSTree objects unless staging and repository share extents; §11 only says "old + new". T-229 measures the peak and the importer checks that number before the download.
+21. **`run.env` is a deny-list, called an allow-list** (§6.3): `WINEPREFIX`, `WINESERVER`, `VK_ICD_FILENAMES`, `VK_LAYER_PATH`, `GST_PLUGIN_PATH`, `QT_PLUGIN_PATH` pass it and break what the platform sets. Not an escape (the package runs its own code in its own sandbox either way), but make it a real allow-list of prefixes.
+22. **Threats missing from §9.1:** a hostile store index (answered in `10-stores.md` §11.1), a hostile `runner.json` in a bundled component (it is parsed by the launcher inside the sandbox: fine, but say so), and a child profile seeing a system-wide package whose rating is the developer's own claim (T-211: treated as not rated).
+23. **USB limits.** A `.play.zip` over 4 GiB does not fit on FAT32, the commonest stick format; the folder form does unless one file is over 4 GiB. `ruya-pack build` warns; the guide recommends exFAT. A stick pulled during import is a clean failure (staging removed): add it to the hostile-case fixtures.
+
+**E. Small**
+24. §12 "Options menu (T-221)" is T-393/T-394; "Library1 ... T-163" is as built. §13 `ruya-pack` gains `index` (`10-stores.md` §11). `requirements.installed_mb` duplicates the file table: compute it, do not declare it.
+25. Runner extensions pile up (one branch per major): who removes a major no package uses, and what a package pinned by `max_major` does when that major is gone, is not said (T-239).
