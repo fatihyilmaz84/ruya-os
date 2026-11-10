@@ -708,7 +708,8 @@ Item {
             tryCompare(blur, "opacity", 1)
             verify(blur.visible, "drawn on the page")
             verify(blur.source.sourceItem === find("backdropFields"), "it blurs the backdrop's own fields")
-            verify(find("backdropReduced").hideSource, "the sharp fields are not drawn under the opaque copy")
+            // tryCompare(opacity, 1) above is fuzzy; hideSource waits for the fade's exact end (CI red once, lead-9).
+            tryVerify(() => find("backdropReduced").hideSource, 2000, "the sharp fields are not drawn under the opaque copy")
             compare(find("wallpaperBlur"), null, "no second full-screen blur")
 
             DeviceSettings.effectsQuality = "balanced"

@@ -10,7 +10,7 @@
 #   seed      leaves the test game and app installed, for a screenshot of the shell (clean removes;
 #             a seed that failed cleans up itself)
 #   clean     removes the test remote, apps and repository
-#   security  prints systemd-analyze security ruya-library
+#   security  see vm-security-check.sh (unit hardening)
 # Boot the VM with plain smoke-test.ps1 -Keep (or -Work -Keep for the screenshot).
 set -u
 svc=org.ruyaos.Library1
@@ -142,7 +142,7 @@ trap 'fail=1; exit 1' INT TERM HUP
 
 case "${1:-check}" in
 security)
-    systemd-analyze security ruya-library --no-pager | tail -14
+    echo "unit hardening: scripts/vm-security-check.sh (one place, with a baseline)"
     ;;
 clean)
     clean_all

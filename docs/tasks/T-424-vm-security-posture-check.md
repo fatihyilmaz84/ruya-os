@@ -1,6 +1,6 @@
 # T-424 - `vm-security-check.sh`: hardening scores, listening ports, SELinux and setuid files have a baseline
 
-Status: in-progress · Phase: 2 · Depends: — · Area: scripts, image (baseline files only), docs · Size: M · Owner: builder · Complexity: normal · Developer surface: none
+Status: done · Phase: 2 · Depends: — · Area: scripts, image (baseline files only), docs · Size: M · Owner: builder · Complexity: normal · Developer surface: none
 
 ## Goal
 The invariant "services keep their systemd hardening" and the spec lines "SELinux enforcing" and "nothing listens unless asked" are checked by a script on every booted image, against a checked-in baseline. Today each `vm-*-check.sh` prints `systemd-analyze security` for a person to read, and nothing checks ports, SELinux or setuid files (plan audit 2026-11-10).
@@ -45,4 +45,19 @@ The invariant "services keep their systemd hardening" and the spec lines "SELinu
 - `systemd-analyze security` exposure is a number from 0 to 10; compare with a small tolerance of 0.
 
 ## Outcome
-_Filled in by the implementer. First line: `Verified: host (vm pending: vm-security-check.sh)`._
+Verified: vm (script and baseline against image 0.0.61 over SSH; the queue run on the next image stays the lead's)
+
+Built `scripts/vm-security-check.sh` (modes `check`, `measure`), `image/security-baseline.json`, a queue entry (and the queue copies the baseline next to the script), and the per-service checks (library, profiles, session x2, store, update, usage x2) now print a pointer instead of `systemd-analyze security | tail`. Docs: `dev-setup.md`, `01-platform.md` section 3 item 8.
+
+**VM run on 0.0.61 (round 2).** `measure` then `check`: every step PASS, `ALL CHECKS PASSED`, exit 0. Real output confirmed the parsing (text line "Overall exposure level for ...", `ss -H -tuln` columns incl. `127.0.0.53%lo:53`, `ps -e -o label= -o comm=`). The baseline was replaced by the measured values, each with a reason. Exposure: boot-marker 9.6, compositor@ 9.2, flathub-remote 8.7, update 4.8, grub-menu 3.8, inputd 3.5, store 3.3, profiles 1.6, session 1.1, library 0.8. Ports: tcp 22, tcp 53, tcp 5355, udp 53, udp 5355, udp 323. 17 setuid/setgid files under /usr. Nothing world-writable. Login accounts: root only. SELinux Enforcing.
+
+Deviations: exposure is parsed from the text line "Overall exposure level for <unit>: N" of `systemd-analyze security --no-pager`, not `--json=short` (I could not confirm where the overall figure sits in the JSON on this systemd; the text line is stable). A template unit (`ruya-compositor@.service`) is analysed as instance `ruya-compositor@check.service`. Ports compare as `proto:port` (addresses vary with DHCP).
+
+Tests (`scripts/test-vm-checks.sh`, section "vm-security-check.sh: each step fails on a worse fixture", run by `lint-vm-checks.ps1`): fixture with exposure 1.2 vs 1.1, an extra port, Permissive, an unnamed unconfined `ruya-*` process, an extra setuid file, a world-writable file, an extra login shell, a usable password on a nologin account, a failing `ss`, a failing `systemd-analyze` (FAIL, never SKIP), a unit not in the baseline, and `measure` output. Revert checks (undone one at a time in the script, tests went red each time): the exposure comparison, the SELinux test, the world-writable test, the account comparison, and the `systemd-analyze` failure handling.
+
+What the first baseline shows that should not ship (each is an Inbox line in the HANDOFF):
+- sshd listens on all interfaces and root is a login account (dev channel only; T-425).
+- Every ruya-* process (inputd, library, profiles, session, shell, store, update) runs `unconfined_service_t`: there is no SELinux policy for our services, so "SELinux enforcing" protects nothing of ours.
+- systemd-resolved listens on tcp/udp 5355 (LLMNR) on all interfaces.
+- `ruya-boot-marker` 9.6, `ruya-compositor@` 9.2 and `ruya-flathub-remote` 8.7 are barely hardened.
+- sudo, pkexec and pam_timestamp_check are setuid on a console OS with no interactive user.

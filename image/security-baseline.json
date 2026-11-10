@@ -1,0 +1,177 @@
+{
+  "_comment": "Security baseline of the development image 0.0.61, checked by scripts/vm-security-check.sh (T-424). Measured with 'vm-security-check.sh measure' on a booted image. A looser value needs a reason in the same commit.",
+  "units": {
+    "ruya-boot-marker.service": {
+      "max_exposure": 9.6,
+      "reason": "root oneshot, measured 0.0.61 - barely hardened, should not ship, to be tightened (Inbox, T-425)"
+    },
+    "ruya-compositor@.service": {
+      "max_exposure": 9.2,
+      "reason": "needs DRM, input and the GPU, measured 0.0.61 - barely hardened, should not ship, to be tightened (Inbox, T-425)"
+    },
+    "ruya-flathub-remote.service": {
+      "max_exposure": 8.7,
+      "reason": "root oneshot with network, measured 0.0.61 - barely hardened, should not ship, to be tightened (Inbox, T-425)"
+    },
+    "ruya-grub-menu.service": {
+      "max_exposure": 3.8,
+      "reason": "root oneshot that writes the GRUB custom.cfg on /boot; measured 0.0.61"
+    },
+    "ruya-inputd.service": {
+      "max_exposure": 3.5,
+      "reason": "reads /dev/input, uinput; measured 0.0.61"
+    },
+    "ruya-library.service": {
+      "max_exposure": 0.8,
+      "reason": "own user, no caps, no network; measured 0.0.61"
+    },
+    "ruya-profiles.service": {
+      "max_exposure": 1.6,
+      "reason": "root for useradd, 01-platform.md section 3 (T-126); measured 0.0.61"
+    },
+    "ruya-session.service": {
+      "max_exposure": 1.1,
+      "reason": "root, empty capability set, no network, 01-platform.md section 3 (T-162); measured 0.0.61"
+    },
+    "ruya-store.service": {
+      "max_exposure": 3.3,
+      "reason": "needs network for Flathub; measured 0.0.61"
+    },
+    "ruya-update.service": {
+      "max_exposure": 4.8,
+      "reason": "root, drives bootc; measured 0.0.61"
+    }
+  },
+  "ports": [
+    {
+      "port": "tcp:22",
+      "reason": "sshd, development image only (LISTEN on 0.0.0.0 and [::]); not for release (T-425)"
+    },
+    {
+      "port": "tcp:53",
+      "reason": "systemd-resolved stub on 127.0.0.53/127.0.0.54, loopback only"
+    },
+    {
+      "port": "tcp:5355",
+      "reason": "systemd-resolved LLMNR responder, all interfaces; should be off (Inbox)"
+    },
+    {
+      "port": "udp:323",
+      "reason": "chronyd command port (time sync), loopback; measured 0.0.61"
+    },
+    {
+      "port": "udp:53",
+      "reason": "systemd-resolved stub on 127.0.0.53/127.0.0.54, loopback only"
+    },
+    {
+      "port": "udp:5355",
+      "reason": "systemd-resolved LLMNR responder, all interfaces; should be off (Inbox)"
+    }
+  ],
+  "unconfined": [
+    {
+      "process": "ruya-inputd",
+      "reason": "measured 0.0.61: no SELinux policy module for ruya-* yet, every service and the shell run unconfined_service_t; a custom policy is the fix (Inbox)"
+    },
+    {
+      "process": "ruya-library",
+      "reason": "measured 0.0.61: no SELinux policy module for ruya-* yet, every service and the shell run unconfined_service_t; a custom policy is the fix (Inbox)"
+    },
+    {
+      "process": "ruya-profiles",
+      "reason": "measured 0.0.61: no SELinux policy module for ruya-* yet, every service and the shell run unconfined_service_t; a custom policy is the fix (Inbox)"
+    },
+    {
+      "process": "ruya-session",
+      "reason": "measured 0.0.61: no SELinux policy module for ruya-* yet, every service and the shell run unconfined_service_t; a custom policy is the fix (Inbox)"
+    },
+    {
+      "process": "ruya-shell",
+      "reason": "measured 0.0.61: no SELinux policy module for ruya-* yet, every service and the shell run unconfined_service_t; a custom policy is the fix (Inbox)"
+    },
+    {
+      "process": "ruya-store",
+      "reason": "measured 0.0.61: no SELinux policy module for ruya-* yet, every service and the shell run unconfined_service_t; a custom policy is the fix (Inbox)"
+    },
+    {
+      "process": "ruya-update",
+      "reason": "measured 0.0.61: no SELinux policy module for ruya-* yet, every service and the shell run unconfined_service_t; a custom policy is the fix (Inbox)"
+    }
+  ],
+  "setid": [
+    {
+      "path": "/usr/bin/chage",
+      "reason": "Fedora default (shadow-utils / util-linux)"
+    },
+    {
+      "path": "/usr/bin/chfn",
+      "reason": "Fedora default (shadow-utils / util-linux)"
+    },
+    {
+      "path": "/usr/bin/chsh",
+      "reason": "Fedora default (shadow-utils / util-linux)"
+    },
+    {
+      "path": "/usr/bin/fusermount3",
+      "reason": "fuse3, needed by Flatpak/xdg-document-portal"
+    },
+    {
+      "path": "/usr/bin/gpasswd",
+      "reason": "Fedora default (shadow-utils / util-linux)"
+    },
+    {
+      "path": "/usr/bin/grub2-set-bootflag",
+      "reason": "grub2-tools, Fedora default (boot_success flag)"
+    },
+    {
+      "path": "/usr/bin/mount",
+      "reason": "Fedora default (shadow-utils / util-linux)"
+    },
+    {
+      "path": "/usr/bin/newgrp",
+      "reason": "Fedora default (shadow-utils / util-linux)"
+    },
+    {
+      "path": "/usr/bin/nvidia-modprobe",
+      "reason": "NVIDIA driver (ADR-009), loads nvidia-uvm/device nodes for non-root users"
+    },
+    {
+      "path": "/usr/bin/pam_timestamp_check",
+      "reason": "not needed on a console OS (services use polkitd over D-Bus, not the binary), should go (Inbox)"
+    },
+    {
+      "path": "/usr/bin/passwd",
+      "reason": "Fedora default (shadow-utils / util-linux)"
+    },
+    {
+      "path": "/usr/bin/pkexec",
+      "reason": "not needed on a console OS (services use polkitd over D-Bus, not the binary), should go (Inbox)"
+    },
+    {
+      "path": "/usr/bin/su",
+      "reason": "Fedora default (shadow-utils / util-linux)"
+    },
+    {
+      "path": "/usr/bin/sudo",
+      "reason": "sudo, Fedora default; not needed on a console OS (Inbox)"
+    },
+    {
+      "path": "/usr/bin/umount",
+      "reason": "Fedora default (shadow-utils / util-linux)"
+    },
+    {
+      "path": "/usr/bin/unix_chkpwd",
+      "reason": "pam, Fedora default (password check)"
+    },
+    {
+      "path": "/usr/lib/polkit-1/polkit-agent-helper-1",
+      "reason": "polkit, Fedora default"
+    }
+  ],
+  "accounts": [
+    {
+      "name": "root",
+      "reason": "development image: root logs in over SSH with a key (key only, locked password); removed in the release profile (T-425)"
+    }
+  ]
+}

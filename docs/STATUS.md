@@ -34,7 +34,7 @@ Open work only (the front of the board; the rest is in `STATUS-backlog.md`), in 
 
 Later (ordered): [`STATUS-backlog.md`](STATUS-backlog.md) holds the rest of the open board, same columns; `lint-board.ps1` reads both. A planner or the lead moves rows up when they become ready.
 
-**VM queue** (one image build runs them all; `scripts/vm-queue.ps1`; history in `STATUS-parked.md`): **0.0.61 passed on 2026-11-10** (lead-8: session check/display/restart with T-363's scope lines, devices bluetooth/twopads/inputd, audio, sounds, reboot saved output: 10 of 10). Left for the next image: `subset-icons.sh` (T-297), the sample re-run, the greenboot drill, `vm-storage-check.ps1`, `vm-devices-check.sh system`.
+**VM queue** (one image build runs them all; `scripts/vm-queue.ps1`; history in `STATUS-parked.md`): **0.0.61 passed on 2026-11-10** (lead-8: session check/display/restart with T-363's scope lines, devices bluetooth/twopads/inputd, audio, sounds, reboot saved output: 10 of 10). Left for the next image: `scripts/dell-glass-check.sh` on the Dell (T-421: FAIL on 0.0.61, PASS with its shell), `vm-security-check.sh check` (T-424, PASS on 0.0.61 by the builder and the reviewer), `subset-icons.sh` (T-297), the sample re-run, the greenboot drill, `vm-storage-check.ps1`, `vm-devices-check.sh system`.
 
 **Dell look-at list:** the long list with task ids is in `STATUS-parked.md`, "Dell look-at list (moved 2026-11-10, lead-8)"; the next Dell pass also checks 0.0.61: STK from Games with A (T-386), the picker after an app (T-387), the T-376 hw items.
 
@@ -44,17 +44,8 @@ One line each: `- (source) what, and why it matters`. Dispatched builders put th
 
 Triaged 2026-11-10 (lead-9): the lines before are verbatim in [`STATUS-parked.md`](STATUS-parked.md), "Inbox triage 2026-11-10 (lead-9)"; they became T-427 (Bluetooth leftovers), T-428 (Store follow-ups), T-429 (test harness), T-430 (GlassShadow/AppArt masks, L0 memory), T-147 item 6 (launch follow-ups), T-282 item 12 (keyboard over glass), or owner questions (CPU per game, `core.hooksPath`).
 
-- (T-423) ruya-store: quick-xml 0.37 to >= 0.41, then drop the RUSTSEC-2026-0194/0195 ignores in `services/deny.toml`.
-- (T-423) Services to zbus 6 (zvariant, zbus_names, zvariant_derive merged into it), then drop the RUSTSEC-2026-0370..0372 ignores.
-- (T-423 review) The six image bus policies: explicit default-context `deny own`/send rules (image change, VM run), then make `lint-bus-policies.ps1` require them; add a `ruya-link` policy file when ADR-029's service lands (fixtures only today).
-- (T-423 review) `supply-chain.yml`: check the cargo-deny tarball against its published `.sha256` (or fold into T-425).
-- (T-421, lead-9) Next image: run `scripts/dell-glass-check.sh` on the Dell (FAIL on 0.0.61, PASS with the branch's shell); also watch the page-open fade from sharp to blurred for a hitch (UX review) and the picker's GPU (the blurred copy's live texture stays active off pages: gate it on `blurred || pageBlur.opacity > 0`; the step 3 comment in the script is stale).
-- (T-421) GPU on the Dell: liquid pills about 25 % for 30 s after every input at Home (each pill re-renders crop, blur and shader every frame; the 04 §3.8 "decide on the Dell" number); Settings in active use about 40 % (was 30 %) from the new page blur: a cheaper page blur (smaller texture, or bake it while the blobs rest).
-- (T-421 design, lead decision) Performance tier: Settings rows (`controls/SettingControl.qml:52`, `Theme.glass` on every tier) sit translucent over sharp blobs, against 04 §3.6 "glass without blur turns opaque": decided (lead, 2026-11-10) `glassOpaque` on Performance, like GlassPill and GlassSheet; check the other translucent cards; then fix the new §3.6 sentence "never sits over a sharp blob edge".
-- (T-421) Midnight with the default look: sheet and pills blur a dark low-contrast L0 and read as flat grey: a design pass on blob strength or tint (T-282).
-- (T-421) The Dell logs "ShaderEffect: Texture t7 is not assigned a valid texture provider" on every app focus change: GlassShadow's `layer.enabled: shadow.visible` toggle (evidence for T-430).
-- (T-421) ACBR (Electron) starts on the Dell but never shows a window, and two orphaned ACBR scopes were running (one from before the session): Play looks dead to the owner.
-- (lead-9) CI warns that `actions/checkout@v4` runs on the deprecated Node.js 20: move every workflow to `actions/checkout@v5` (after T-423 merges, which edits `ci.yml`).
+- (lead-9, second triage) The lines from T-423, T-421 and T-424 are verbatim in `STATUS-parked.md`, "Inbox triage 2026-11-10 (lead-9, second)"; they became T-431 (image hardening), T-432 (SELinux domains), T-433 (quick-xml, zbus 6, CI actions), T-434 (glass cost, Performance rows), T-435 (ACBR window, orphaned scopes), T-430 and T-282 additions, T-425 (release profile) and the next-image list.
+
 ## Blocked (need something this host doesn't have)
 
 | ID | What | Needs | Notes |

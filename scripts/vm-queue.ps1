@@ -10,6 +10,7 @@ param(
     [string[]]$Checks = @(
         "vm-session-check.sh check", "vm-session-check.sh display", "vm-session-check.sh restart",
         "vm-sounds-check.sh",
+        "vm-security-check.sh",
         "vm-devices-check.sh bluetooth", "vm-devices-check.sh twopads", "vm-devices-check.sh inputd", "vm-devices-check.sh system",
         "vm-audio-check.sh",
         "vm-storage-check.ps1 scan",
@@ -69,6 +70,7 @@ $lines.Add("PASS boot ($secs s): $bootRes")
 # ---- copy the helper files once (the checks expect them in /root)
 $scp = @($o + @("-P", "2222"))
 $files = Get-ChildItem $PSScriptRoot -Include "vm-*.sh", "vm-*.qml", "vm-*.py" -Recurse | ForEach-Object { $_.FullName }
+$files += (Join-Path $Repo "image\security-baseline.json")   # vm-security-check.sh reads it next to itself
 & scp @scp @files "root@127.0.0.1:/root/" 2>&1 | Out-Null
 if ($LASTEXITCODE -ne 0) { $lines.Add("FAIL copy helper files to the guest (scp exit $LASTEXITCODE)"); $failed++ }
 

@@ -16,7 +16,7 @@ introspect)
     ;;
 security)
     systemctl is-active ruya-profiles
-    systemd-analyze security ruya-profiles --no-pager | tail -12
+    echo "unit hardening: scripts/vm-security-check.sh (one place, with a baseline)"
     ;;
 create)
     echo "--- CreateProfile: first admin (empty store, no admin credentials needed)"
