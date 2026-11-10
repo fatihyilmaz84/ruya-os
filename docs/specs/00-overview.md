@@ -402,7 +402,7 @@ Shell icons come from Google's **Material Symbols Rounded** (Apache-2.0), bundle
 
 **Consequences.** T-416 (the `ruya` CLI and validators), T-417 (`llms.txt`, generated catalogues, `AGENTS.md`), T-418 (dev-image UI inspector and input), T-419 (MCP server); notes in T-233, T-252, T-350, T-353, T-248.
 
-### ADR-032 — Stores: one default store, and anyone can run their own as a signed Flatpak repository that an admin adds — *Accepted (owner, 2026-11-10: "the OS will ship with a default store, but developers could create their own stores and users can use them"); details lead, 2026-11-10; three points open for the owner*
+### ADR-032 — Stores: one default store, and anyone can run their own as a signed Flatpak repository that an admin adds — *Accepted (owner, 2026-11-10: "the OS will ship with a default store, but developers could create their own stores and users can use them"); details lead, 2026-11-10; owner answers 2026-11-10, hosting of the default store still open*
 
 **Context.** `03` §4.2 already had three kinds of Flatpak remote (official, Flathub, "developer remotes" an admin enables) and `ruya-store` has `AddRemote`, but there was no screen, no removal, no rule for what a foreign remote may do, and "developer remote" read as a test feature. The owner wants other stores to be a normal thing a player can use.
 
@@ -417,6 +417,6 @@ Shell icons come from Google's **Material Symbols Rounded** (Apache-2.0), bundle
 
 **Rejected:** a RuyaOS-specific store protocol or catalogue server (a second format to secure, nothing gained over Flatpak); adding a store without an admin; letting stores carry runtimes (a hijack path for every app); a store reputation service (needs a server and a policy we do not have).
 
-**Open for the owner:** (1) the default store's hosting, signing-key custody and who may submit (T-444; also T-381, T-426); (2) the blocklist: do we keep one at all, and who decides an entry; (3) the wording of the warning (`10-stores.md` §8) is a liability statement.
+**Owner answers (2026-11-10):** (1) the signing key of the default store, and by the same rule the OS image key, is held by the owner, offline (a hardware token or an offline machine; releases are signed by hand; no key in CI); only first-party content goes into the default store at the start (our apps, runners, curated entries for Flathub apps; everyone else uses Flathub or their own store); **hosting is not decided yet**. (2) Yes, a blocklist, empty at first; only the owner adds an entry (malware, a stolen key), each with a written reason an admin can read on the console. (3) The warning text of `10-stores.md` section 8 is approved as written. **The questions were:** (1) the default store's hosting, signing-key custody and who may submit (T-444; also T-381, T-426); (2) the blocklist: do we keep one at all, and who decides an entry; (3) the wording of the warning (`10-stores.md` §8) is a liability statement.
 
 **Consequences.** T-440 (contract and service: preview, add, remove, states), T-441 (isolation rules, blocklist, hostile fixture store), T-442 (Settings > Stores), T-443 (badges, the install gate and store states in the Store), T-445 (the "your own store" chapter and sample), T-444 (the default store, waits for the owner), T-446 (`.play` in stores, after the `.play` epic). `03` §4.2's "developer remotes" row is replaced by this ADR.

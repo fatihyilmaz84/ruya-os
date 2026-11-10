@@ -79,7 +79,7 @@ A store is somebody else's server. These hold for every third-party store, are e
 
 ## 6. The blocklist (planned: T-441)
 
-A file in the image, `/usr/share/ruyaos/store-blocklist` (key fingerprints and URL hosts, one per line, with a reason), updated only with OS updates and therefore signed with them. The service reads it at start and after an OS update. Empty at first. What goes on it is the owner's call (ADR-032, open point 2).
+A file in the image, `/usr/share/ruyaos/store-blocklist` (key fingerprints and URL hosts, one per line, with a reason), updated only with OS updates and therefore signed with them. The service reads it at start and after an OS update. Empty at first. Only the owner adds an entry (malware, a stolen key), each with a reason an admin can read on the console (owner, 2026-11-10).
 
 ## 7. Contract (`org.ruyaos.Store1`, draft until the first release; planned: T-440)
 
@@ -90,7 +90,7 @@ A file in the image, `/usr/share/ruyaos/store-blocklist` (key fingerprints and U
 - The app record gains `kind` (`flatpak` | `play`), `store` (the store id) and `store_title`; `source` carries the trust value (`third-party` replaces `developer`). `Install` and `GetApp` take the app as `(store, id)` so that the same id in two stores is unambiguous; an empty store means "the best trusted one".
 - Admin calls are verified by the service through `Profiles1.VerifyAdmin` (PIN hashes never leave `ruya-profiles`), as `Session1.ClearHistory` does. The bus policy stays shell and root only. Stores are not part of the public developer surface as an API (tier A, shell-private); the **format** a store author follows is public (§9).
 
-## 8. Words the player sees (04 §3 copy rules apply)
+## 8. Words the player sees (04 §3 copy rules apply; the confirm text approved by the owner, 2026-11-10)
 
 - Confirm sheet: "<Title> (<host>) is not run or checked by RuyaOS. Its apps can only do what their permissions allow, but nobody has reviewed them. Add this store only if you trust who runs it."
 - Badge on cards and the app page: "<Title>" with the host on the app page.

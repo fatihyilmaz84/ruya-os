@@ -2,6 +2,8 @@
 
 Status: todo · Phase: 6 · Depends: T-424, T-425 · Area: docs · Size: epic (a spec and a child list; nobody implements it directly) · Owner: lead · Developer surface: none
 
+**Owner answer (2026-11-10, asked for the default store, ADR-032):** signing keys are held by the owner, offline, and releases are signed by hand; no signing key in CI. Item 1 starts from that.
+
 ## Goal
 The roadmap's Phase 6 "Release" has no security task: signing, update authenticity, data at rest and factory reset exist only as sentences in `01-platform.md` (plan audit 2026-11-10). This epic turns them into a short spec section with decisions and into child tasks, and puts the owner-level questions in STATUS. It builds nothing.
 

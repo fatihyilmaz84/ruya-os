@@ -1,6 +1,8 @@
 # T-444 - The default store (`ruyaos`): hosting, key, submissions, curated entries: decisions, then the tasks
 
-Status: blocked (owner: hosting, signing-key custody, who may submit; ADR-032 open point 1) · Phase: 7 · Depends: owner, T-381 · Area: docs · Size: S · Owner: lead · Developer surface: public-format
+Status: blocked (owner: hosting of the default store; key custody and submissions were answered 2026-11-10) · Phase: 7 · Depends: owner, T-381 · Area: docs · Size: S · Owner: lead · Developer surface: public-format
+
+**Owner answers (2026-11-10):** the key is held by the owner, offline, and releases are signed by hand (so scope 2's "how a build is produced and signed" ends in a hand-signing step, never a CI secret); first-party content only at the start (no outside submissions, no review process; scope 1's review bar is not needed yet); the blocklist exists and only the owner adds entries. **Still open: hosting** (recommended: a static object store or pages host behind a CDN), and with it T-382.
 
 ## Goal
 The store the console ships with exists on paper precisely enough to build: where it is hosted, who holds its key, how an app gets in, how our curated entries for Flathub apps work, and what the image carries. Today `03` §4.2 names it and nothing exists. This task writes the decisions into `docs/specs/10-stores.md` and the build tasks; it builds nothing.
