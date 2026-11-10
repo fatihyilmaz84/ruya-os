@@ -3,6 +3,8 @@
 Older entries of the `docs/STATUS.md` session log, newest first. STATUS keeps only the latest five; the lead moves the rest here at each review. Nobody needs to read this file to start a task.
 
 
+- 2026-11-09 · Opus 5.5 · Lead (lead-6: T-164 per-profile Wayland sockets, T-322 output policy, T-347 card profiles, T-285 hint bar merged; T-358 GPU buffers by the lead; T-355 first pass; T-357 written) · `test` 1001 QML + 77 skips ALL GREEN; VM 0.0.57/0.0.58 PASS; Dell 0.0.58: STK through the shell on the UHD 630 at 15 % CPU (was llvmpipe 563 %) via our patched Qt linux-dmabuf v4 plugin. Process: `image-chain.sh`; builders run `test` in the foreground (two stalled).
+
 - 2026-11-09 · Sonnet 5.5 · Lead (lead-5 part 2: T-356 focus-loss dead end, T-349 lazy Settings, T-331 drive scan merged after a checkpoint; T-164 open) · `test` 987 QML + 77 skips ALL GREEN; ISO built only when needed (owner rule), lead efficiency rules in LEAD.md. Found with the owner: covered pages stole the window focus (T-356). Process: reviewers must run the revert check; waits stay inside one turn.
 
 - 2026-11-09 · Sonnet 5.5 · Lead (lead-5: T-330, T-336, T-335, T-337, T-334 merged, T-166 suspend verified, T-262 wake mechanism; planning batches T-331..T-356, ADR-015/016/019/020/022 accepted; checkpoint with T-356, T-349, T-331, T-164 on WIP branches) · `test` ALL GREEN; VM `0.0.55`/`0.0.56` queues PASS, both ISO checks PASSED; Dell on 0.0.56 (oci-archive route). Found with the owner: the dead-end focus bug (T-356; inputd innocent). Process: Dell upgrades need no owner; builders asked to kill processes are refused.
