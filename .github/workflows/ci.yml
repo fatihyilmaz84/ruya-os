@@ -92,7 +92,10 @@ jobs:
   # A full bootc build, a qcow2 and a boot under KVM: 16-22 minutes in the first runs. It runs on
   # every push and pull request: it is free on a public repository, the concurrency group cancels
   # superseded runs, and it is the only check that the image still boots with RUYA_BOOT_OK.
+  # The image build and boot test cost runner time the owner pays for: only when started by hand
+  # (Actions -> ci -> Run workflow), never on a push or a pull request (owner, 2026-11-10).
   image:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     needs: [lint, services, shell]
     timeout-minutes: 90

@@ -300,7 +300,7 @@ It prints `pkcheck` verdicts for the six `login1` actions for the `ruya-shell` p
 | `lint` | `pwsh scripts/lint-text.ps1`, `lint-board.ps1`, `lint-tokens.ps1`, `lint-icons.ps1`, `lint-translations.ps1`, `lint-tests.ps1`, and `python -I scripts/check-font-coverage.py .` | the "text lint" and "board lint" steps of `dev.ps1 test` and the token, icon, font coverage, translation and test lint steps of `dev.ps1 shell` |
 | `services` | `cargo fmt --check`, `clippy -D warnings`, `cargo test` (Ubuntu, Rust **1.92.0**, the host's version: when you update the host's Rust, bump `ci.yml` in the same commit) | `dev.ps1 rust` |
 | `shell` | build with Fedora's Qt (Fedora 44 container), `qmllint --max-warnings 0`, Qt Quick tests offscreen | `dev.ps1 shell` (Qt 6.10.3 on MSVC here; CI also proves that no API newer than Qt 6.8 crept in) |
-| `image` | needs the three jobs above; `scripts/build.sh`, `RUYA_NO_DEV_KEY=1 make-disk.sh qcow2`, `smoke-test.sh` under KVM (about 20 minutes); uploads `serial.log` | the WSL build and `smoke-test.ps1` (image section above) |
+| `image` | **only when started by hand** (Actions, ci, Run workflow; never on push or PR: it costs runner time, owner 2026-11-10); needs the three jobs above; `scripts/build.sh`, `RUYA_NO_DEV_KEY=1 make-disk.sh qcow2`, `smoke-test.sh` under KVM (about 20 minutes); uploads `serial.log` | the WSL build and `smoke-test.ps1` (image section above) |
 
 The `image` job has no local equivalent in `dev.ps1 test`; run the WSL recipe for image changes.
 
