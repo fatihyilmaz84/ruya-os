@@ -5,7 +5,6 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | ID | Title | Status | Depends |
 |---|---|---|---|
 | [T-460](tasks/T-460-closed-pages-not-reaped-on-gpu.md) | Closed pages never destroyed in a real GPU window since T-448 (4 shots tests red on main) | todo | — |
-| [T-459](tasks/T-459-windows-match-their-instance.md) | A window finds its running game by process, not by its own name; Close is never dropped (owner report: Asteroid Shooter kept running) | in-progress | — |
 | [T-458](tasks/T-458-closing-screen.md) | "Closing" screen: closing a game shows that it is closing, not Running (owner, 2026-11-10) | todo | — |
 | [T-452](tasks/T-452-hub-performance-panel.md) | Hub Performance panel | todo | — |
 | [T-453](tasks/T-453-hub-controllers-panel.md) | Hub Controllers panel | todo | — |
