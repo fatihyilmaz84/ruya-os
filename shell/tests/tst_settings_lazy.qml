@@ -51,6 +51,7 @@ Item {
         property int framesAtSettle: -1
         property int framesAtReap: -1
         property var settingsSlot: null
+        property var hiddenWindow: null            // shown again by cleanup() if a test failed while it was hidden
 
         // Every pane of Settings, in the admin's category order.
         readonly property var paneNames: ["paneMyProfile", "paneProfiles", "paneNetwork", "paneBluetooth", "paneDisplay",
@@ -78,6 +79,11 @@ Item {
         }
 
         function cleanup() {
+            if (tc.hiddenWindow) {
+                tc.hiddenWindow.visible = true
+                tc.hiddenWindow = null
+                windowGuard.ensureActive()
+            }
             frameCounter.target = null
             settleWatch.target = null
             reapWatch.target = null
@@ -424,6 +430,27 @@ Item {
             compare(popped.reaped, false)
             tryVerify(() => find("pageSlot_settings") === null, 8000, "destroyed after the Store settled")
             verify(find("pageSlot_store").settled, "which it had")
+        }
+
+        // T-460: a window that presents no frames (the display asleep: a whole `shots` test saw not one
+        // frameSwapped, and update() brought none) still destroys a closed page. A hidden window draws
+        // no frames either, so it stands in for the sleeping display here.
+        function test_a_window_that_shows_no_frames_still_destroys_a_closed_page() {
+            tc.shell.openPage("store")
+            tryVerify(() => find("pageSlot_store") !== null && find("pageSlot_store").settled, 3000, "the Store has settled")
+            const win = tc.shell.Window.window
+            frameCounter.target = win
+            tc.hiddenWindow = win
+            win.visible = false
+            tc.frames = 0
+            tc.shell.closePage()
+            compare(tc.shell.currentPage, "")
+            tryVerify(() => find("pageSlot_store") === null, 3000, "the closed page is destroyed")
+            compare(tc.frames, 0, "while the window showed no frame")
+            compare(tc.shell.closingSlots.length, 0)
+            win.visible = true
+            tc.hiddenWindow = null
+            verify(windowGuard.ensureActive() === "", "the window is back")
         }
     }
 }

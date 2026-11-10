@@ -76,6 +76,7 @@ cmake --build shell\build-win --config Release --target update_translations
 - Assert focus explicitly (`find("x").activeFocus`) after every navigation step that matters. A missing focus assertion let a real bug through once.
 - State that would leak between tests (lockouts, created profiles) gets its own `tst_*.qml` file.
 - UI tasks: extend `test_zz_screenshots` (or add a similar test) so `dev.ps1 shots` captures the new screens, then review the PNGs. `shots` runs only functions that save to `shotsDir`, so a screenshot must not rely on an earlier test function.
+- **A `shots` window may present no frames at all (T-460):** with the display asleep (an idle desktop past its screen timeout) `frameSwapped` never fires, `update()` brings no frame, yet animations, timers and `grabImage` still work. Product code that waits for a presented frame needs a path for that case (the page slots go at once when no frame came while closing), and a test that must see a frame proves it offscreen, where frames are drawn.
 
 ## C++ rules
 
