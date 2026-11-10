@@ -1,6 +1,6 @@
 # T-459 — A window finds its running game by process, not by the name it gives itself; Close is never dropped
 
-Status: todo · Phase: 2 · Depends: — · Area: api, services (ruya-session), shell (compositor, Shell.qml) · Size: M · Owner: builder · Complexity: complex · Developer surface: internal
+Status: in-progress · Phase: 2 · Depends: — · Area: api, services (ruya-session), shell (compositor, Shell.qml) · Size: M · Owner: builder · Complexity: complex · Developer surface: internal
 
 ## Goal
 Close game, the Hub's title, the Running pill, Switch to and the pause work for every game, also when its window calls itself something else than its Flatpak id ("python3.12" for pygame games), and a Close never silently does nothing.
