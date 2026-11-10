@@ -158,6 +158,7 @@ impl Source for RootSource {
 /// == link /sys/class/drm/card0/device /sys/devices/pci0000:00/0000:00:02.0
 /// == mtime /etc/machine-id 1730000000
 /// == dir /sys/class/nvme         an existing, empty directory
+/// == noread /sys/class/powercap/intel-rapl:0/energy_uj   a file that exists but may not be read
 /// == cmd uname -r               the output of the command
 /// ```
 #[derive(Debug, Clone, Default)]
@@ -166,6 +167,8 @@ pub struct FakeSource {
     links: BTreeMap<String, String>,
     mtimes: BTreeMap<String, u64>,
     dirs: BTreeSet<String>,
+    /// Files that exist (listed, `exists`) but whose reading fails, like a root-only file.
+    unreadable: BTreeSet<String>,
     commands: BTreeMap<String, String>,
 }
 
@@ -186,6 +189,13 @@ impl FakeSource {
 
     pub fn dir(mut self, path: &str) -> Self {
         self.dirs.insert(path.to_owned());
+        self
+    }
+
+    /// A file that exists but may not be read (`read` answers `None`).
+    pub fn unreadable(mut self, path: &str) -> Self {
+        self.files.remove(path);
+        self.unreadable.insert(path.to_owned());
         self
     }
 
@@ -277,6 +287,9 @@ impl FakeSource {
                     "dir" => {
                         out.dirs.insert(rest.trim().to_owned());
                     }
+                    "noread" => {
+                        out.unreadable.insert(rest.trim().to_owned());
+                    }
                     _ => {}
                 }
             } else if !matches!(kind, Kind::None) {
@@ -356,7 +369,8 @@ impl Source for FakeSource {
             .files
             .keys()
             .chain(self.links.keys())
-            .chain(self.dirs.iter());
+            .chain(self.dirs.iter())
+            .chain(self.unreadable.iter());
         for path in paths {
             if let Some(rest) = path.strip_prefix(&prefix) {
                 if let Some(first) = rest.split('/').next() {
@@ -374,6 +388,7 @@ impl Source for FakeSource {
         let prefix = format!("{}/", path.trim_end_matches('/'));
         self.files.contains_key(&path)
             || self.dirs.contains(&path)
+            || self.unreadable.contains(&path)
             || self.files.keys().any(|k| k.starts_with(&prefix))
             || self.dirs.iter().any(|k| k.starts_with(&prefix))
             || self.links.keys().any(|k| k.starts_with(&prefix))
@@ -422,6 +437,21 @@ mod tests {
         assert!(src.exists("/sys/class/nvme"));
         assert!(src.list("/sys/class/nvme").is_empty());
         assert!(!src.exists("/sys/class/missing"));
+    }
+
+    #[test]
+    fn an_unreadable_file_exists_and_is_listed_but_reads_nothing() {
+        let src = FakeSource::from_dump(
+            "== noread /sys/rapl/energy_uj\n== file /sys/rapl/name\npackage-0\n",
+        );
+        assert!(src.exists("/sys/rapl/energy_uj"));
+        assert_eq!(
+            src.list("/sys/rapl"),
+            vec!["energy_uj".to_owned(), "name".to_owned()]
+        );
+        assert!(src.read("/sys/rapl/energy_uj").is_none());
+        let built = FakeSource::new().file("/x", "1").unreadable("/x");
+        assert!(built.exists("/x") && built.read("/x").is_none());
     }
 
     #[test]

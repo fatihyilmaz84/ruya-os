@@ -640,7 +640,7 @@ impl SysfsSource {
 
 /// `(total, busy)` jiffies from the first line of `/proc/stat` (`cpu  user nice system idle
 /// iowait irq softirq steal ...`); idle and iowait are not busy.
-fn parse_cpu_jiffies(text: &str) -> Option<(u64, u64)> {
+pub(crate) fn parse_cpu_jiffies(text: &str) -> Option<(u64, u64)> {
     let line = text.lines().next()?;
     let mut fields = line.split_whitespace();
     if fields.next()? != "cpu" {
@@ -694,7 +694,7 @@ fn numbered(dir: &Path, prefix: &str, suffix: &str) -> Vec<u32> {
 
 /// The temperature inputs of one hwmon that stand for the sensor of its class: the processor's
 /// "Package id N" (or `Tctl`/`Tdie`), a GPU's "edge", an NVMe's "Composite"; else the first one.
-fn pick<'a>(class: Class, temps: &'a [(u32, String)]) -> Vec<&'a (u32, String)> {
+pub(crate) fn pick<'a>(class: Class, temps: &'a [(u32, String)]) -> Vec<&'a (u32, String)> {
     let starting = |prefix: &str| -> Vec<&'a (u32, String)> {
         temps
             .iter()

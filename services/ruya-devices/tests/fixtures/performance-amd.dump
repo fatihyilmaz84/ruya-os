@@ -1,0 +1,65 @@
+# A desktop with a Ryzen APU and a discrete Radeon card, as T-451 needs it: written by hand in the
+# shape the kernel uses (amdgpu sysfs and hwmon, k10temp, RAPL through the intel-rapl driver, which
+# AMD processors share), NOT captured from a machine. card0 is the APU's own graphics, card1 the
+# card the firmware boots with. The RAPL counters are readable here, as for a root reader.
+== file /proc/stat
+cpu  50000 100 20000 900000 3000 1000 500 0 0 0
+== file /proc/meminfo
+MemTotal:       32780000 kB
+MemFree:        20000000 kB
+MemAvailable:   25000000 kB
+== file /sys/class/hwmon/hwmon0/name
+k10temp
+== file /sys/class/hwmon/hwmon0/temp1_label
+Tctl
+== file /sys/class/hwmon/hwmon0/temp1_input
+61500
+== file /sys/class/hwmon/hwmon0/temp3_label
+Tccd1
+== file /sys/class/hwmon/hwmon0/temp3_input
+55000
+== link /sys/class/hwmon/hwmon2 /sys/devices/pci0000:00/0000:00:01.1/0000:03:00.0/hwmon/hwmon2
+== link /sys/class/drm/card0/device /sys/devices/pci0000:00/0000:00:08.1/0000:0c:00.0
+== file /sys/devices/pci0000:00/0000:00:08.1/0000:0c:00.0/vendor
+0x1002
+== file /sys/devices/pci0000:00/0000:00:08.1/0000:0c:00.0/boot_vga
+0
+== file /sys/devices/pci0000:00/0000:00:08.1/0000:0c:00.0/gpu_busy_percent
+3
+== link /sys/class/drm/card1/device /sys/devices/pci0000:00/0000:00:01.1/0000:03:00.0
+== dir /sys/class/drm/card1-DP-1
+== dir /sys/class/drm/renderD128
+== file /sys/devices/pci0000:00/0000:00:01.1/0000:03:00.0/vendor
+0x1002
+== file /sys/devices/pci0000:00/0000:00:01.1/0000:03:00.0/boot_vga
+1
+== file /sys/devices/pci0000:00/0000:00:01.1/0000:03:00.0/gpu_busy_percent
+37
+== file /sys/devices/pci0000:00/0000:00:01.1/0000:03:00.0/mem_info_vram_used
+1073741824
+== file /sys/devices/pci0000:00/0000:00:01.1/0000:03:00.0/mem_info_vram_total
+8573157376
+== file /sys/devices/pci0000:00/0000:00:01.1/0000:03:00.0/hwmon/hwmon2/name
+amdgpu
+== file /sys/devices/pci0000:00/0000:00:01.1/0000:03:00.0/hwmon/hwmon2/temp1_label
+edge
+== file /sys/devices/pci0000:00/0000:00:01.1/0000:03:00.0/hwmon/hwmon2/temp1_input
+48000
+== file /sys/devices/pci0000:00/0000:00:01.1/0000:03:00.0/hwmon/hwmon2/temp2_label
+junction
+== file /sys/devices/pci0000:00/0000:00:01.1/0000:03:00.0/hwmon/hwmon2/temp2_input
+55000
+== file /sys/devices/pci0000:00/0000:00:01.1/0000:03:00.0/hwmon/hwmon2/power1_average
+95000000
+== file /sys/class/powercap/intel-rapl:0/name
+package-0
+== file /sys/class/powercap/intel-rapl:0/max_energy_range_uj
+65532610987
+== file /sys/class/powercap/intel-rapl:0/energy_uj
+1000000000
+== file /sys/class/powercap/intel-rapl:0:0/name
+core
+== file /sys/class/powercap/intel-rapl:0:0/max_energy_range_uj
+65532610987
+== file /sys/class/powercap/intel-rapl:0:0/energy_uj
+400000000

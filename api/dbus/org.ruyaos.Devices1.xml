@@ -1055,6 +1055,57 @@
     -->
     <signal name="SystemInfoChanged"/>
 
+    <!--
+      How hard the console works right now (T-451, ADR-033 point 4), for the Ruya Hub's Performance
+      panel. One entry per metric, name -> (state, value). Every name below is always present;
+      clients ignore names they do not know.
+
+      States (strings, stable):
+        "supported"    value was measured now
+        "unsupported"  this console offers no source for it, or the service may not read the one
+                       it has (value 0)
+        "unavailable"  there is a source but no number at this moment (value 0): a rate needs two
+                       readings and this is the first (or the one before is more than 10 s old),
+                       or the reading failed and no good value is less than 10 s old
+        "stale"        the reading failed now; value is the last good one, less than 10 s old
+      Nothing is estimated: a metric the kernel does not give is "unsupported", never guessed from
+      another one (an integrated GPU's temperature is not the processor's).
+
+      Metrics (value units):
+        cpu_percent  d  share of all processors' time that was busy since the previous reading,
+                        0-100 (/proc/stat; idle and iowait are not busy). A rate
+        ram_used     d  bytes in use: MemTotal - MemAvailable (/proc/meminfo)
+        ram_total    d  bytes, MemTotal
+        gpu_percent  d  the busiest engine of the GPU the display runs on, 0-100, since the previous
+                        reading. A rate. From gpu_busy_percent (amdgpu), else the DRM clients'
+                        engine times in /proc/*/fdinfo (i915, xe and other drivers with
+                        drm-engine-* keys), which count only when the service may read every
+                        process: "unsupported" while it runs as ruya-shell (a profile's game runs as
+                        that profile's user)
+        vram_used    d  bytes of the GPU's own memory in use (mem_info_vram_used, amdgpu);
+                        "unsupported" for an integrated GPU, which has none, and for drivers
+                        without the numbers
+        vram_total   d  bytes, mem_info_vram_total
+        cpu_temp     d  degrees Celsius, the hottest processor package (hwmon coretemp
+                        "Package id N", k10temp/zenpower Tctl or Tdie, else the x86_pkg_temp
+                        thermal zone)
+        gpu_temp     d  degrees Celsius, the GPU's own hwmon ("edge", else its first temperature);
+                        "unsupported" without one (an integrated Intel GPU has none)
+        power_w      d  watts the processor packages draw (the RAPL "package-N" energy counters in
+                        /sys/class/powercap, which include an integrated GPU; not a discrete GPU,
+                        not the whole console). A rate. The kernel lets only root read the counters,
+                        so "unsupported" while the service runs as ruya-shell
+      Temperatures outside -20..125 degrees count as a failed reading.
+
+      The GPU is the one the firmware boots with (boot_vga), else the first card with a PCI device.
+      The service has no timer: it reads only when asked (a few small files; the fdinfo walk only
+      where it counts). Calls less than 250 ms apart get the same answer. The shell calls this
+      only while a Performance view is open, at the interval the player chose (0.5-5 s).
+    -->
+    <method name="GetPerformance">
+      <arg name="metrics" type="a{s(sd)}" direction="out"/>
+    </method>
+
   </interface>
 
 </node>
