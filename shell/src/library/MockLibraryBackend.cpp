@@ -43,9 +43,11 @@ void MockLibraryBackend::reset(const QString &scenario)
     const bool withArt = scenario.startsWith(QLatin1String("art:"));
     if (scenario != QLatin1String("empty")) {
         m_items = {
-            item("steam:620", "game", "Portal 2", 1761800000),
+            // The newest is a Flatpak game: the Home hero offers Play only for items Session1 can
+            // start (T-147), and most tests begin with Play focused.
+            item("flatpak:org.example.Racer", "game", "Turbo Racer", 1761800000),
             item("steam:730", "game", "Counter Strike", 1761000000),
-            item("flatpak:org.example.Racer", "game", "Turbo Racer", 1760500000),
+            item("steam:620", "game", "Portal 2", 1760500000),
             item("steam:440", "game", "Team Fortress", 1759000000),
             item("flatpak:org.example.Puzzle", "game", "Block Puzzle", 1758000000),
             item("steam:105600", "game", "Terraria", 1757000000),

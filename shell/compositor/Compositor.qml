@@ -84,6 +84,9 @@ WaylandCompositor {
         id: surfaceComponent
         ShellSurfaceItem {
             property XdgToplevel toplevel: null
+            // The Flatpak application id the window belongs to; the shell ends a launch when the window
+            // of the app it started appears, and "Switch to" names windows by it (T-147).
+            readonly property string appId: toplevel ? toplevel.appId : ""
             objectName: "app:" + (toplevel ? toplevel.appId : "")
             onActiveFocusChanged: console.info("ruya-compositor: app focus", objectName, activeFocus)
         }

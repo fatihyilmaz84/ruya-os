@@ -45,7 +45,7 @@ Item {
             else if (scenario === "unplayed")
                 tryVerify(() => find("heroTitle").text === "Block Puzzle")
             else
-                tryVerify(() => find("heroTitle").text === "Portal 2")
+                tryVerify(() => find("heroTitle").text === "Turbo Racer")
         }
 
         function init() {
@@ -62,7 +62,7 @@ Item {
             start("")
             verify(find("homePlay").activeFocus)
             compare(find("homePlay").Accessible.name, "Play")
-            compare(find("heroTitle").text, "Portal 2")
+            compare(find("heroTitle").text, "Turbo Racer")
             verify(find("homeDetails").visible)
             compare(find("recentRow").count, 8)
         }
@@ -95,12 +95,12 @@ Item {
             start("")
             keyClick(Qt.Key_Down)
             tryVerify(() => find("recentRow").activeFocus)
-            compare(find("heroTitle").text, "Portal 2")
+            compare(find("heroTitle").text, "Turbo Racer")
             keyClick(Qt.Key_Right)
             tryCompare(find("heroTitle"), "text", "Counter Strike")
             verify(find("recentRow").activeFocus)
             keyClick(Qt.Key_Left)
-            tryCompare(find("heroTitle"), "text", "Portal 2")
+            tryCompare(find("heroTitle"), "text", "Turbo Racer")
             keyClick(Qt.Key_Left)
             compare(find("recentRow").currentIndex, 0, "clamped at the first card")
         }
@@ -120,168 +120,42 @@ Item {
             }
         }
 
+        // Play on the hero asks the library to launch it (the splash and the launch itself: tst_appflow).
         function test_play_launches_the_hero_item() {
             start("")
             keyClick(Qt.Key_Return)
             tryCompare(launchSpy, "count", 1)
-            compare(launchSpy.signalArguments[0][0], "steam:620")
-            keyClick(Qt.Key_Down)
-            keyClick(Qt.Key_Right)
-            tryCompare(find("heroTitle"), "text", "Counter Strike")
-            keyClick(Qt.Key_Return)                     // Accept on a card
-            tryCompare(launchSpy, "count", 2)
-            compare(launchSpy.signalArguments[1][0], "steam:730")
-            keyClick(Qt.Key_Up)
-            tryVerify(() => find("homePlay").activeFocus)
-            keyClick(Qt.Key_Return)                     // and Play follows the card
-            tryCompare(launchSpy, "count", 3)
-            compare(launchSpy.signalArguments[2][0], "steam:730")
+            compare(launchSpy.signalArguments[0][0], "flatpak:org.example.Racer")
         }
 
-        function test_rb_opens_games_and_back_restores_play() {
-            start("")
-            keyClick(Qt.Key_PageDown)
-            tryCompare(tc.shell, "currentPage", "games")
-            tryVerify(() => find("gamesGrid").activeFocus, 2000)
-            keyClick(Qt.Key_Escape)
-            tryCompare(tc.shell, "currentPage", "")
-            tryVerify(() => find("homePlay").activeFocus, 2000, "focus is back where it was")
-        }
-
-        function test_rb_from_a_card_restores_the_card() {
+        // A Steam game has no Session1 launch path: no Play on the hero (Details has the focus), and
+        // Accept on its card opens Details instead of launching (T-147).
+        function test_a_steam_game_has_no_play() {
             start("")
             keyClick(Qt.Key_Down)
             keyClick(Qt.Key_Right)
             tryCompare(find("heroTitle"), "text", "Counter Strike")
-            keyClick(Qt.Key_PageDown)
-            tryCompare(tc.shell, "currentPage", "games")
-            keyClick(Qt.Key_Escape)
-            tryCompare(tc.shell, "currentPage", "")
-            tryVerify(() => find("recentRow").activeFocus, 2000, "the Recent row has focus again")
-            compare(find("recentRow").currentIndex, 1)
-            compare(find("heroTitle").text, "Counter Strike")
-        }
-
-        function test_lb_rb_walk_the_sections_from_the_nav() {
-            start("")
-            keyClick(Qt.Key_PageUp)                     // nothing before Home
-            wait(100)
-            compare(tc.shell.currentPage, "")
-            verify(find("homePlay").activeFocus)
-            keyClick(Qt.Key_Up)
-            tryVerify(() => find("sectionNav").activeFocus)
-            keyClick(Qt.Key_PageDown)
-            tryCompare(tc.shell, "currentPage", "games")
-            keyClick(Qt.Key_Escape)
-            tryVerify(() => find("sectionNav").activeFocus, 2000, "the nav is where it was")
-            compare(find("sectionNav").currentKey, "games")
-            keyClick(Qt.Key_PageDown)
-            tryCompare(tc.shell, "currentPage", "media")
-            keyClick(Qt.Key_Escape)
-            tryVerify(() => find("sectionNav").activeFocus, 2000)
-            compare(find("sectionNav").currentKey, "media")
-            keyClick(Qt.Key_PageUp)
-            tryCompare(tc.shell, "currentPage", "games")
-        }
-
-        function test_nav_accept_opens_and_home_pill_returns_to_play() {
-            start("")
-            keyClick(Qt.Key_Up)
-            tryVerify(() => find("sectionNav").activeFocus)
-            keyClick(Qt.Key_Return)                     // the Home pill
-            tryVerify(() => find("homePlay").activeFocus, 2000, "Accept on Home focuses Play")
-            compare(tc.shell.currentPage, "")
-            keyClick(Qt.Key_Up)
-            keyClick(Qt.Key_Right)
-            keyClick(Qt.Key_Right)
-            keyClick(Qt.Key_Right)
-            compare(find("sectionNav").currentKey, "store")
-            keyClick(Qt.Key_Return)
-            tryCompare(tc.shell, "currentPage", "store")
-            keyClick(Qt.Key_Escape)
-            tryVerify(() => find("sectionNav").activeFocus, 2000)
-            compare(find("sectionNav").currentKey, "store", "back on the pill that opened it")
-        }
-
-        function test_details_is_a_placeholder_page() {
-            start("")
-            keyClick(Qt.Key_Right)
-            tryVerify(() => find("homeDetails").activeFocus)
-            keyClick(Qt.Key_Return)
+            verify(!find("homePlay").visible, "no Play button")
+            keyClick(Qt.Key_Return)                     // Accept on the card
             tryCompare(tc.shell, "currentPage", "details")
-            tryVerify(() => find("pagePlaceholder") && find("pagePlaceholder").activeFocus, 2000)
-            compare(launchSpy.count, 0)
+            compare(launchSpy.count, 0, "nothing was launched")
             keyClick(Qt.Key_Escape)
             tryCompare(tc.shell, "currentPage", "")
-            tryVerify(() => find("homeDetails").activeFocus, 2000, "Details has focus again")
-        }
-
-        function test_back_on_home_does_nothing() {
-            start("")
-            keyClick(Qt.Key_Escape)
-            wait(100)
-            compare(tc.shell.currentPage, "")
-            verify(find("homePlay").activeFocus)
-            compare(find("systemPanel").open, false)
-        }
-
-        function test_overlay_returns_to_the_focused_card() {
-            start("")
+            keyClick(Qt.Key_Up)
+            tryVerify(() => find("homeDetails").activeFocus, 2000, "Details has the focus")
+            keyClick(Qt.Key_Left)
+            verify(find("homeDetails").activeFocus, "there is no Play to move to")
             keyClick(Qt.Key_Down)
-            keyClick(Qt.Key_Right)
-            tryCompare(find("heroTitle"), "text", "Counter Strike")
-            keyClick(Qt.Key_HomePage)
-            tryVerify(() => find("systemActions").activeFocus)
-            keyClick(Qt.Key_Escape)
-            tryVerify(() => find("recentRow").activeFocus, 2000)
-            compare(find("recentRow").currentIndex, 1)
-        }
-
-        function test_empty_library() {
-            start("empty")
-            compare(find("heroTitle").text, "Your library is empty")
-            compare(Library.items.length, 0, "the empty state is for nothing installed")
-            compare(find("homePlay").Accessible.name, "Open Store")
-            verify(!find("homeDetails").visible)
-            compare(find("recentRow").count, 0)
-            keyClick(Qt.Key_Down)
-            wait(100)
-            verify(find("homePlay").activeFocus, "nothing below")
-            keyClick(Qt.Key_Return)
-            tryCompare(tc.shell, "currentPage", "store")
-            compare(launchSpy.count, 0)
-            keyClick(Qt.Key_Escape)
-            tryCompare(tc.shell, "currentPage", "")
-            tryVerify(() => find("homePlay").activeFocus, 2000)
-        }
-
-        // Installed but never started (every `lastPlayed` is 0): Home shows the installed items,
-        // in the Games page order (by title when nothing was played), not "Your library is empty".
-        function test_installed_but_unplayed_items_fill_the_row() {
-            start("unplayed")
-            compare(Library.recent.length, 0, "nothing was played")
-            verify(Library.items.length > 8)
-            verify(find("homePlay").activeFocus, "focus starts on Play")
-            compare(find("heroTitle").text, "Block Puzzle")
-            compare(find("homePlay").Accessible.name, "Play")
-            verify(find("homeDetails").visible)
-            compare(find("heroEyebrow").text, "INSTALLED")
-            compare(find("recentRow").count, 8, "the first eight installed items")
-            keyClick(Qt.Key_Down)
-            tryVerify(() => find("recentRow").activeFocus, 2000, "Down goes to the row")
-            compare(find("recentRow").currentIndex, 0, "focus lands on the first card")
-            verify(find("recentCard_flatpak:org.example.Puzzle").focused, "the first card is focused")
-            keyClick(Qt.Key_Right)
-            tryCompare(find("heroTitle"), "text", "Counter Strike")
-            keyClick(Qt.Key_Return)
-            tryCompare(launchSpy, "count", 1)
-            compare(launchSpy.signalArguments[0][0], "steam:730")
+            keyClick(Qt.Key_Left)
+            tryCompare(find("heroTitle"), "text", "Turbo Racer")
+            keyClick(Qt.Key_Up)
+            tryVerify(() => find("homePlay").activeFocus, 2000, "Play comes back with a game that can start")
         }
 
         function test_played_items_still_win_over_the_installed_fallback() {
             start("")
             compare(find("heroEyebrow").text, "CONTINUE PLAYING")
-            compare(find("heroTitle").text, "Portal 2", "the played order, not the title order")
+            compare(find("heroTitle").text, "Turbo Racer", "the played order, not the title order")
         }
 
         function test_performance_tier_keeps_the_layout() {

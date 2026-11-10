@@ -233,8 +233,9 @@ Item {
             tryVerify(() => backdrop.drifting, 2000, "the blobs drift on the profile picker")
             signInAsAda()
             const hero = find("heroArt")
-            tryCompare(hero, "opacity", 1)
-            verify(hero.covers, "the hero covers the backdrop")
+            // `covers` needs the fade to have ended (opacity >= 1): tryCompare accepts 0.999997, which is
+            // not enough (a frame short of the end: 3 failures in 40 runs, T-147), so wait for `covers` itself.
+            tryVerify(() => hero.covers, 2000, "the hero covers the backdrop")
             tryCompare(backdrop, "paused", true)
             tryCompare(backdrop, "drifting", false, 2000, "the blobs rest under the hero")
             openSettings()

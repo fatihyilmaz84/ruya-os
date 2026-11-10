@@ -116,8 +116,12 @@ FocusScope {
     // profile; the others wait hidden, without focus (T-165 decides what a switch does to them).
     property var apps: []
     property Item focusedApp: null
+    // The user sent the running apps behind Home (quick menu -> Home, T-147): they keep running and
+    // keep their records (so `appRunning` stays true), but Home is in front until one is resumed
+    // (Accept on its Running card) or a new window appears.
+    property bool appsBehindHome: false
     readonly property var shownApps: apps.filter(r => appShownTo(r.profile))
-    readonly property bool appOpen: shownApps.length > 0
+    readonly property bool appOpen: shownApps.length > 0 && !appsBehindHome
 
     function appShownTo(profile) {
         return signedIn && (profile === "" || profile === Profiles.activeProfile)
@@ -128,9 +132,11 @@ FocusScope {
     onShownAppsChanged: {
         for (const r of apps)
             r.item.visible = appShownTo(r.profile)
+        if (shownApps.length === 0)
+            appsBehindHome = false
         if (shownApps.some(r => r.item === focusedApp))
             return
-        const next = shownApps.length > 0 ? shownApps[shownApps.length - 1].item : null
+        const next = shownApps.length > 0 && !appsBehindHome ? shownApps[shownApps.length - 1].item : null
         if (next !== focusedApp) {
             focusedApp = next
             if (!systemPanel.open)
@@ -144,9 +150,14 @@ FocusScope {
     onAppRunningChanged: Update.noteActivity(appRunning)
 
     property int appSerial: 0
+    property int appRaise: 0
 
     function recordOf(item) {
         return apps.find(r => r.item === item)
+    }
+    // The window of a running app of the signed-in profile, by its application id, or undefined.
+    function windowOf(appId) {
+        return appId === "" ? undefined : apps.find(r => r.appId === appId && appShownTo(r.profile))
     }
 
     function addApp(item, profile) {
@@ -154,10 +165,15 @@ FocusScope {
             return
         item.parent = appLayer
         item.anchors.fill = appLayer
-        const record = { item: item, id: ++appSerial, profile: profile ?? "" }
+        // The Flatpak application id of the window, when the compositor knows it (Compositor.qml).
+        const record = { item: item, id: ++appSerial, profile: profile ?? "", appId: item.appId ?? "" }
         item.visible = appShownTo(record.profile)
         appGuard.createObject(item, { recordId: record.id })
         apps = apps.concat([record])
+        // The window of the app being launched ends the splash (T-147); any other window is added
+        // behind it and takes the screen when the splash is gone.
+        if (launchState && appShownTo(record.profile) && (record.appId === "" || record.appId === launchState.appId))
+            endLaunch(false)
         focusApp(item)
     }
 
@@ -165,6 +181,8 @@ FocusScope {
         const record = recordOf(item)
         if (!record || !appShownTo(record.profile))
             return
+        appsBehindHome = false
+        item.z = ++appRaise             // the newest on top: "Switch to" and Resume bring one to the front
         focusedApp = item
         if (!systemPanel.open)          // the overlay keeps the focus until it closes
             focusCurrent()
@@ -180,10 +198,13 @@ FocusScope {
         const record = apps.find(r => r.id === id)
         if (!record)
             return
+        // (A destroyed item has already cleared focusedApp; null means "none" unless the apps are behind Home.)
+        const wasFront = focusedApp === record.item || (!focusedApp && !appsBehindHome)
         apps = apps.filter(r => r.id !== id)
-        if (!focusedApp || focusedApp === record.item)
-            focusedApp = shownApps.length > 0 ? shownApps[shownApps.length - 1].item : null
-        if (!systemPanel.open)
+        if (!focusedApp || wasFront)
+            focusedApp = shownApps.length > 0 && !appsBehindHome ? shownApps[shownApps.length - 1].item : null
+        // An app that was behind Home going away leaves the focus where the user put it.
+        if (!systemPanel.open && (wasFront || focusedApp !== null))
             focusCurrent()              // the next app, else the page or Home
     }
 
@@ -199,7 +220,9 @@ FocusScope {
     function focusCurrent() {
         if (!signedIn)
             return
-        if (focusedApp)
+        if (launchState)
+            launchSplash.forceActiveFocus()         // input to the shell is locked while an app starts
+        else if (focusedApp)
             focusedApp.forceActiveFocus()
         else if (pageOpen)
             slots[slots.length - 1].restoreFocus()
@@ -245,6 +268,7 @@ FocusScope {
     }
     onSignedInChanged: {
         if (!signedIn) {
+            endLaunch(false)     // nobody to start it for; the app, if it starts, waits hidden (T-164)
             dropAllPages()       // the next sign-in starts at home
             homeSavedFocus = null
         }
@@ -484,42 +508,198 @@ FocusScope {
         }
     }
 
-    // Play on a game (Home, Games): the Library says what to start, Session1.Launch starts it as the
-    // signed-in profile (T-386). Session1 takes Flatpak application ids, so "flatpak:<id>" goes as
-    // <id>; any other launch spec (Steam) goes as it is and ruya-session answers "invalid" (valid_app_id; the mock says "unknown-app").
-    // The window itself comes with AppStarted (appOpen); only a refusal is heard here.
-    property var launchTitles: ({})
+    // ---- Launching, running and leaving apps (the call: T-386; the flow: T-147) ----
+    // Play on a game (Home hero, a Recent card, the Games grid): the Library says what to start and
+    // `launchApp` runs the launch: the splash comes up and takes the input (Guide still works),
+    // Session1.Launch starts the app as the signed-in profile, and the splash goes when the app's
+    // first window arrives (`addApp`). A failure answers with an error toast and the focus back
+    // where Play was; after `launchStillMs` (20 s) without a window the splash says "Still starting"
+    // and offers Close. One launch at a time: a second Accept while one is pending is ignored. An item
+    // with no Session1 path (a Steam game: `Library.sessionAppId` is "") is never offered Play, so
+    // nothing asks for it. The pending launch is { appId, title, picture, profile, ok, instance,
+    // slow, restore }; its toasts name `title`, the request's own, never the raw launch spec.
+    property var launchState: null
+    property int launchStillMs: 20000
+    readonly property bool launching: launchState !== null
+
     Connections {
         target: Library
         function onLaunchRequested(id, launchSpec) {
-            const prefix = "flatpak:"
-            const appId = launchSpec.startsWith(prefix) ? launchSpec.substring(prefix.length) : launchSpec
-            root.launchTitles[appId] = Library.item(id).title ?? id
-            Session.launch(appId, Profiles.activeProfile)
-        }
-    }
-    Connections {
-        target: Session
-        function onLaunchFinished(appId, profile, status, instance) {
-            const title = root.launchTitles[appId] ?? (Store.app(appId).name || appId)
-            delete root.launchTitles[appId]
-            // "already-running": the game is there already, nothing went wrong.
-            if (status === "ok" || status === "already-running")
+            const appId = Library.sessionAppId(id)
+            if (appId === "") {
+                console.warn("ruya-shell: no Session1 launch path for", id, "(" + launchSpec + ")")
                 return
-            Notifications.show(qsTr("%1 could not be started").arg(title), "error")
+            }
+            const item = Library.item(id)
+            root.launchApp(appId, item.title ?? id, item.art ? (item.art.hero ?? item.art.tile ?? "") : "")
         }
     }
 
-    // An app that crashed or never got to run is the only exit the user hears about; a normal
-    // quit (including a Stop from the shell) is silent.
+    function launchApp(appId, title, picture) {
+        if (!signedIn || launchState)
+            return
+        const open = windowOf(appId)
+        if (open) {                     // already on screen behind Home or the menu: bring it back
+            focusApp(open.item)
+            return
+        }
+        launchState = { appId: appId, title: title, picture: picture ?? "", profile: Profiles.activeProfile,
+                        ok: false, instance: "", slow: false, restore: Window.activeFocusItem }
+        launchStillTimer.restart()
+        Session.launch(appId, Profiles.activeProfile)
+        if (!systemPanel.open)
+            focusCurrent()
+    }
+
+    // Ends the splash. `restoreFocus`: it failed, so the focus goes back to where Play was.
+    function endLaunch(restoreFocus) {
+        launchStillTimer.stop()
+        const st = launchState
+        launchState = null
+        if (!restoreFocus || !st || systemPanel.open)
+            return
+        const target = st.restore
+        if (target && target.visible && target.enabled)
+            target.forceActiveFocus()
+        else
+            focusCurrent()
+    }
+
+    Timer {
+        id: launchStillTimer
+        interval: root.launchStillMs
+        onTriggered: {
+            if (!root.launchState)
+                return
+            root.launchState = Object.assign({}, root.launchState, { slow: true })
+            if (!systemPanel.open)
+                launchSplash.focusClose()
+        }
+    }
+
+    function titleOfApp(appId) {
+        for (const it of Library.items) {
+            if (Library.sessionAppId(it.id) === appId)
+                return it.title
+        }
+        return Store.app(appId).name || appId
+    }
+
     Connections {
         target: Session
+        function onLaunchFinished(appId, profile, status, instance) {
+            const st = root.launchState
+            if (!st || st.appId !== appId || st.profile !== profile)
+                return                      // not the launch the splash is for
+            if (status === "ok") {
+                root.launchState = Object.assign({}, st, { ok: true, instance: instance })
+                return
+            }
+            const name = Notifications.named(st.title)
+            const open = root.windowOf(appId)
+            root.endLaunch(true)
+            if (status === "already-running") {
+                // Already there: bring it to the front, or, with no window yet, say so.
+                if (open)
+                    root.focusApp(open.item)
+                else
+                    Notifications.show(qsTr("%1 is already running").arg(name), "info")
+                return
+            }
+            Notifications.show(qsTr("%1 could not be started. Try again.").arg(name), "error")
+        }
+        function onStopFinished(instance, status) {
+            if (status !== "ok" && status !== "unknown-instance")
+                Notifications.show(qsTr("The game could not be closed. Try again."), "error")
+        }
+        // An app that crashed or never got to run is the only exit the user hears about; a normal
+        // quit (including a Stop from the shell) is silent. A launch that was waiting for it ends.
         function onAppExited(instance, appId, exitCode, reason) {
+            const st = root.launchState
+            const waiting = st !== null && st.appId === appId && (st.instance === "" || st.instance === instance)
+            const title = waiting ? st.title : root.titleOfApp(appId)
+            if (waiting)
+                root.endLaunch(true)
             if (reason !== "crashed" && reason !== "launch-failed")
                 return
-            const name = Store.app(appId).name || appId
-            Notifications.show(qsTr("%1 stopped unexpectedly").arg(name), "error")
+            const name = Notifications.named(title)
+            Notifications.show(reason === "crashed" ? qsTr("%1 stopped unexpectedly. Try again.").arg(name)
+                                                    : qsTr("%1 could not be started. Try again.").arg(name), "error")
         }
+    }
+
+    // The running record (Session1) of the app a window belongs to: by application id when the window
+    // names its app, else the newest of the profile's apps (a client that does not, as in tests).
+    function runningFor(record) {
+        const mine = Session.running.filter(r => r.profile === Profiles.activeProfile && r.state !== "stopping")
+        if (record && record.appId !== "")
+            return mine.find(r => r.appId === record.appId)
+        let best
+        for (const r of mine) {
+            if (!best || r.started >= best.started)
+                best = r
+        }
+        return best
+    }
+
+    // What the quick menu shows of the app in front (null: none, so the panel has no app part), and
+    // the other apps it can switch to.
+    readonly property var quickMenuApp: {
+        if (!focusedApp)
+            return null
+        const record = recordOf(focusedApp)
+        const run = runningFor(record)
+        const appId = (record ? record.appId : "") || (run ? run.appId : "")
+        const found = Library.items.find(i => appId !== "" && Library.sessionAppId(i.id) === appId)
+        return { appId: appId,
+                 title: appId !== "" ? titleOfApp(appId) : qsTr("Running app"),
+                 picture: found && found.art ? (found.art.hero ?? found.art.tile ?? "") : "",
+                 started: run ? run.started : Date.now() / 1000,
+                 instance: run ? run.instance : "" }
+    }
+    readonly property var quickMenuOthers: shownApps.filter(r => r.item !== focusedApp && r.appId !== "")
+                                                    .map(r => ({ appId: r.appId, title: titleOfApp(r.appId) }))
+
+    // Home from the quick menu: the apps keep running behind it and lose the focus; Home shows the
+    // card of the one that was in front, with its Running pill, and the focus is on it.
+    function sendAppsHome() {
+        const appId = quickMenuApp ? quickMenuApp.appId : ""
+        while (pageOpen)
+            closePage()
+        const found = Library.items.find(i => appId !== "" && Library.sessionAppId(i.id) === appId)
+        const at = found ? recentIds.indexOf(found.id) : -1
+        appsBehindHome = true
+        focusedApp = null
+        if (at >= 0) {
+            recentRow.currentIndex = at
+            homeSavedFocus = recentRow
+        } else {
+            homeSavedFocus = null
+        }
+        systemPanel.open = false        // -> focusCurrent(): Home
+    }
+
+    // Close game: ask the service to stop the app in front and go Home; the card's pill goes when the
+    // service reports AppExited.
+    function closeFrontGame() {
+        const instance = quickMenuApp ? quickMenuApp.instance : ""
+        if (instance !== "")
+            Session.stop(instance)
+        sendAppsHome()
+    }
+
+    function switchToApp(appId) {
+        const record = windowOf(appId)
+        if (record)
+            focusApp(record.item)       // the menu is open: the focus moves when it closes
+        systemPanel.open = false
+    }
+
+    // While an app (or the launch splash) has the screen only errors and warnings are drawn.
+    Binding {
+        target: Notifications
+        property: "appInFront"
+        value: root.appOpen || root.launching
     }
 
     // A screen mode waiting for the owner (T-198): after the restart on a new mode the shell finds
@@ -917,7 +1097,8 @@ FocusScope {
             eyebrow: root.libraryEmpty ? "" : (root.recentIsFallback ? qsTr("Installed") : qsTr("Continue playing"))
             title: root.libraryEmpty ? qsTr("Your library is empty") : (root.heroItem.title ?? "")
             meta: root.libraryEmpty ? "" : root.sourceLabel(root.heroItem.source ?? "")
-            primaryText: root.libraryEmpty ? qsTr("Open Store") : qsTr("Play")
+            primaryText: root.libraryEmpty ? qsTr("Open Store") : (root.heroRunning ? qsTr("Resume") : qsTr("Play"))
+            primaryShown: root.libraryEmpty || Library.sessionAppId(root.heroItem.id ?? "") !== ""
             secondaryText: root.libraryEmpty ? "" : qsTr("Details")
 
             onPrimaryAccepted: root.playHero()
@@ -966,6 +1147,7 @@ FocusScope {
                 title: entry.title ?? ""
                 picture: entry.art ? (entry.art.tile ?? "") : ""
                 focused: ListView.isCurrentItem && ListView.view.activeFocus
+                running: root.runningAppIds.includes(Library.sessionAppId(modelData))
             }
 
             onCurrentIndexChanged: if (activeFocus) Sfx.navigate()
@@ -980,7 +1162,18 @@ FocusScope {
     // items, in the order the Games page uses (the library's: played first, then by title). The
     // empty state is for a library with nothing installed (T-183).
     readonly property bool recentIsFallback: Library.recent.length === 0 && Library.items.length > 0
-    readonly property var recentIds: (recentIsFallback ? Library.items.slice(0, 8) : Library.recent).map(r => r.id)
+    // Running apps of the signed-in profile (T-147): their application ids, and the library items they
+    // are (a string, so that the row is rebuilt only when this set changes, not on every Session1
+    // state change). An app that is running but not among the recent ones comes first in the row.
+    readonly property var runningAppIds: Session.running.filter(r => r.profile === Profiles.activeProfile).map(r => r.appId)
+    readonly property string runningItemKey: Library.items.filter(i => runningAppIds.includes(Library.sessionAppId(i.id)))
+                                                          .map(i => i.id).join("|")
+    readonly property var recentIds: {
+        const base = (recentIsFallback ? Library.items.slice(0, 8) : Library.recent).map(r => r.id)
+        const extra = runningItemKey === "" ? [] : runningItemKey.split("|").filter(id => !base.includes(id))
+        return extra.concat(base).slice(0, 8)
+    }
+    readonly property bool heroRunning: !libraryEmpty && runningAppIds.includes(Library.sessionAppId(heroItem.id ?? ""))
     readonly property bool libraryEmpty: recentIds.length === 0
     readonly property var heroItem: libraryEmpty ? ({}) : Library.item(recentIds[Math.max(0, Math.min(recentRow.currentIndex, recentIds.length - 1))])
     onHeroItemChanged: heroArt.show(libraryEmpty ? null : heroItem)
@@ -1011,13 +1204,20 @@ FocusScope {
             return
         }
         const id = heroItem.id
+        if (Library.sessionAppId(id) === "")
+            return                      // no Play for it (the button is not drawn); see playRecent
         Sfx.select()
-        Library.launch(id)
-        Notifications.show(qsTr("Starting %1…").arg(heroItem.title ?? id), "info")
+        Library.launch(id)              // the splash is the feedback (launchApp); a running app comes back
     }
 
-    // Accept on a Recent card: the card pulses, then the game starts (the hero follows the row).
+    // Accept on a Recent card: the card pulses, then the game starts (the hero follows the row). A
+    // card with no launch path opens its details instead.
     function playRecent() {
+        if (!libraryEmpty && Library.sessionAppId(heroItem.id) === "") {
+            Sfx.select()
+            openDetails()
+            return
+        }
         (recentRow.currentItem as ArtCard)?.pulse()
         playHero()
     }
@@ -1359,7 +1559,9 @@ FocusScope {
             return modeConfirm.modalHints
         if (systemPanel.open)
             return [{ button: "A", text: qsTr("Select") },
-                    { button: "B", text: systemPanel.powerMode ? qsTr("Back") : qsTr("Close") }]
+                    { button: "B", text: systemPanel.powerMode ? qsTr("Back") : (systemPanel.hasApp ? qsTr("Resume") : qsTr("Close")) }]
+        if (launching)
+            return launchSplash.hints
         if (appOpen)
             return []
         const keyboard = activeItem as TextEntry     // Back deletes a letter or cancels: the keyboard says which
@@ -1389,166 +1591,62 @@ FocusScope {
         enabled: false
     }
 
-    // Placeholder for the Guide overlay; also shows build info used by the update tests.
-    Rectangle {
+    // The launch splash (T-147): over home, pages and the app layer until the app's first window.
+    LaunchSplash {
+        id: launchSplash
+        objectName: "launchSplash"
+        anchors.fill: parent
+        z: 6
+        u: root.u
+        shown: root.launching
+        appId: root.launchState ? root.launchState.appId : ""
+        title: root.launchState ? root.launchState.title : ""
+        picture: root.launchState ? root.launchState.picture : ""
+        started: root.launchState ? root.launchState.ok : false
+        slow: root.launchState ? root.launchState.slow : false
+        guideKey: key => root.isGuideKey(key)
+        onCloseRequested: {
+            const instance = root.launchState ? root.launchState.instance : ""
+            if (instance !== "")
+                Session.stop(instance)
+            root.endLaunch(true)
+        }
+    }
+
+    // The quick menu (T-147; Guide opens it from Home, a page, a launch or over a running app; it
+    // replaced the centred Guide card). Also shows the image version, which the update tests read.
+    QuickMenu {
         id: systemPanel
         objectName: "systemPanel"
         z: 20
+        u: root.u
+        marginX: root.marginX
+        marginY: root.marginY
+        version: root.version
+        app: root.quickMenuApp
+        others: root.quickMenuOthers
+        guideKey: key => root.isGuideKey(key)
 
-        property bool open: false
-        // The overlay shows the power choices instead of the system actions.
-        property bool powerMode: false
-
-        function showPower() {
-            powerMode = true
-            actions.currentIndex = 0
-            Sfx.navigate()
-        }
-
-        anchors.fill: parent
-        color: Theme.scrimOverlay
-        opacity: open ? 1 : 0
-        visible: opacity > 0
-        Behavior on opacity { NumberAnimation { duration: Theme.overlayMs; easing.type: Easing.Bezier; easing.bezierCurve: Theme.easeSnap } }
         onOpenChanged: {
-            powerMode = false
-            if (open)
-                Sfx.open()
-            else
-                Sfx.close()
             if (open) {
                 if (home.shown)
                     root.rememberHomeFocus()
                 Power.refresh()
-                actions.currentIndex = 0
-                actions.forceActiveFocus()
+                present()
             } else {
                 guideHoldTimer.stop()
-                root.focusCurrent()      // the page if one is open, else Home
+                root.focusCurrent()      // the app, else the page if one is open, else Home
             }
         }
-
-        GlassShadow {
-            objectName: "guideShadow"
-            anchors.fill: guidePanel
-            u: root.u
-            radius: Theme.radiusL * root.u
-            kind: "panel"
+        onCloseRequested: open = false
+        onHomeRequested: root.sendAppsHome()
+        onCloseGameRequested: root.closeFrontGame()
+        onSwitchToRequested: appId => root.switchToApp(appId)
+        onSwitchProfileRequested: {
+            Profiles.lock()                  // signedIn -> false; routeFocus() shows the picker
+            open = false
         }
-        Rectangle {
-            id: guidePanel
-            objectName: "guidePanel"
-            anchors.centerIn: parent
-            width: panelColumn.width + 96 * root.u
-            height: panelColumn.height + 96 * root.u
-            radius: Theme.radiusL * root.u
-            color: Theme.panel
-
-            GlassLayers {
-                objectName: "guideLayers"
-                anchors.fill: parent
-                u: root.u
-                radius: parent.radius
-                grain: false            // the panel is opaque, nothing is blurred behind it
-            }
-        }
-
-        Column {
-            id: panelColumn
-            anchors.centerIn: parent
-            spacing: Theme.spaceS * root.u
-            Text { text: qsTr("System"); color: Theme.text; font.pixelSize: Theme.typeTitle * root.u; font.weight: Theme.weightDemiBold; anchors.horizontalCenter: parent.horizontalCenter }
-            Text { text: qsTr("Image version %1").arg(root.version); color: Theme.textDim; font.pixelSize: Theme.typeBody * root.u; anchors.horizontalCenter: parent.horizontalCenter }
-            FpsMeter { font.pixelSize: Theme.typeBody * root.u; anchors.horizontalCenter: parent.horizontalCenter; visible: systemPanel.visible }
-
-            ListView {
-                id: actions
-                objectName: "systemActions"
-                Accessible.role: Accessible.List
-                Accessible.name: currentItem ? currentItem.Accessible.name : qsTr("System")
-
-                anchors.horizontalCenter: parent.horizontalCenter
-                width: 520 * root.u
-                height: contentHeight
-                spacing: Theme.spaceS * root.u
-                interactive: false
-                keyNavigationEnabled: true
-                readonly property var systemItems: [
-                    { key: "switch", label: qsTr("Switch profile") },
-                    { key: "power", label: qsTr("Power") },
-                    { key: "close", label: qsTr("Close") },
-                ]
-                // Only what logind allows; "Back" returns to the system actions.
-                readonly property var powerItems: [
-                    ...(Power.canSuspend ? [{ key: "suspend", label: qsTr("Suspend") }] : []),
-                    ...(Power.canRestart ? [{ key: "restart", label: qsTr("Restart") }] : []),
-                    ...(Power.canPowerOff ? [{ key: "poweroff", label: qsTr("Power off") }] : []),
-                    { key: "back", label: qsTr("Back") },
-                ]
-                model: systemPanel.powerMode ? powerItems : systemItems
-
-                function activate(key) {
-                    Sfx.select()
-                    if (key === "power") {
-                        systemPanel.showPower()
-                    } else if (key === "back") {
-                        systemPanel.powerMode = false
-                        currentIndex = 1                       // on "Power"
-                    } else if (key === "suspend" || key === "restart" || key === "poweroff") {
-                        powerConfirm.open(key)                 // focus returns here if cancelled
-                    } else {
-                        if (key === "switch")
-                            Profiles.lock()    // signedIn -> false; routeFocus() shows the picker
-                        systemPanel.open = false
-                    }
-                }
-
-                onCurrentIndexChanged: if (systemPanel.open) Sfx.navigate()
-                Keys.onReturnPressed: activate(model[currentIndex].key)
-                Keys.onEnterPressed: activate(model[currentIndex].key)
-                Keys.onPressed: event => {
-                    // Accepting every key (below) also skips the list's own key navigation, so
-                    // Up/Down are handled here.
-                    if (event.key === Qt.Key_Down) {
-                        incrementCurrentIndex()
-                    } else if (event.key === Qt.Key_Up) {
-                        decrementCurrentIndex()
-                    } else if (event.isAutoRepeat) {
-                        // Holding Guide repeats the key: not a second press that would close us.
-                    } else if (systemPanel.powerMode && BackKey.isBackOrBackspace(event.key)) {
-                        Sfx.back()
-                        activate("back")
-                    } else if (BackKey.isBackOrBackspace(event.key) || root.isGuideKey(event.key)) {
-                        systemPanel.open = false
-                    }
-                    event.accepted = true      // modal: nothing leaks to the shelf underneath
-                }
-
-                delegate: Rectangle {
-                    id: action
-                    required property int index
-                    required property var modelData
-                    readonly property bool focused: ListView.isCurrentItem && actions.activeFocus
-
-                    Accessible.role: Accessible.MenuItem
-                    Accessible.name: modelData.label
-                    width: actions.width
-                    height: Theme.buttonHeight * root.u
-                    radius: height / 2
-                    color: focused ? Theme.focusFill : Theme.glass
-                    border.width: focused ? Theme.focusRingWidth * root.u : 1
-                    border.color: focused ? Theme.focusRing : Theme.glassBorder
-                    Text {
-                        anchors.centerIn: parent
-                        textFormat: Text.PlainText
-                        text: action.modelData.label
-                        color: Theme.text
-                        font.pixelSize: Theme.typeHeadline * root.u
-                        font.weight: Theme.weightDemiBold
-                    }
-                }
-            }
-        }
+        onPowerRequested: action => powerConfirm.open(action)    // focus returns here if cancelled
     }
 
     // Confirmation for the overlay's power choices (the Power page has its own instance in
@@ -1562,7 +1660,7 @@ FocusScope {
         onConfirmed: systemPanel.open = false
         // Cancelled: back to the choices. (The dialog's own restore would land on a list
         // delegate that may be gone, so name the list.)
-        onClosed: if (systemPanel.open) actions.forceActiveFocus()
+        onClosed: if (systemPanel.open) systemPanel.actions.forceActiveFocus()
     }
 
     // What the console does about heat: a toast and fewer effects when hot, a notice, stopping the
@@ -1623,6 +1721,7 @@ FocusScope {
 
     VolumeOsd {
         objectName: "volumeOsd"
+        quiet: systemPanel.open
         z: 30
         u: root.u
         marginY: root.marginY

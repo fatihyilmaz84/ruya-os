@@ -126,6 +126,9 @@ Item {
             wait(150)
             compare(pulseSpy.count, 0, "no pulse under reduced motion")
 
+            // The launch splash holds the keys while the app starts: end it, so the card gets Accept again.
+            tc.shell.endLaunch(true)
+            tryVerify(() => find("recentRow").activeFocus, 2000, "the focus is back on the card")
             DeviceSettings.reducedMotion = false
             keyClick(Qt.Key_Return)
             tryCompare(launchSpy, "count", 2)

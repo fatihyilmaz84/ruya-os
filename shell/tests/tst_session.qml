@@ -123,7 +123,7 @@ Item {
             tryCompare(Notifications, "shownCount", shown + 1)
             wait(50)
             compare(Notifications.shownCount, shown + 1)
-            compare(Notifications.model.get(Notifications.model.count - 1).text, "crashy stopped unexpectedly")
+            compare(Notifications.model.get(Notifications.model.count - 1).text, "crashy stopped unexpectedly. Try again.")
             tryVerify(() => Session.running.length === 0)
 
             // Never reached running: one toast, reason "launch-failed", no AppStarted.
@@ -136,7 +136,7 @@ Item {
             tryCompare(Notifications, "shownCount", shown + 2)
             wait(50)
             compare(Notifications.shownCount, shown + 2)
-            compare(Notifications.model.get(Notifications.model.count - 1).text, "nolaunch stopped unexpectedly")
+            compare(Notifications.model.get(Notifications.model.count - 1).text, "nolaunch could not be started. Try again.")
             tryVerify(() => Session.running.length === started)
         }
     }

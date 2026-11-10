@@ -46,6 +46,9 @@ public:
     // Asks for the item to be started. Only emits launchRequested; Shell.qml answers it with
     // Session.launch for the signed-in profile (T-386).
     Q_INVOKABLE void launch(const QString &id);
+    // The Flatpak application id Session1.Launch takes for an item, or "" when the item has no
+    // launch path through Session1 yet (a Steam game): the shell offers no Play for those (T-147).
+    Q_INVOKABLE QString sessionAppId(const QString &id) const;
     // The record of an item, or an empty object.
     Q_INVOKABLE QVariantMap item(const QString &id) const;
 

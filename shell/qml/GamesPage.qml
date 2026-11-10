@@ -5,8 +5,9 @@ import "controls"
 
 // Games (spec 02 §1): the installed games as hero-size art cards (04 §5: 400 design px wide,
 // as many columns as fit, 4 at 1080p), with a source filter. Accept asks the library to launch the
-// game (Library.launch); the session service does the rest later. An empty library shows an empty
-// state with a button to the Store.
+// game (Library.launch; the shell shows the launch splash and starts it, T-147); a game with no
+// launch path through Session1 opens its details. An empty library shows an empty state with a
+// button to the Store.
 Page {
     id: page
 
@@ -29,11 +30,14 @@ Page {
         .filter(g => page.sourceFilter === "all" || g.source === page.sourceFilter)
         .map(g => g.id)
 
+    // Accept on a game: it starts (the launch splash is the feedback, T-147). One with no launch path
+    // through Session1 (a Steam game) has no Play, so Accept opens its details instead.
     function launch(id) {
-        const g = Library.item(id)
         Sfx.select()
-        Library.launch(id)
-        Notifications.show(qsTr("Starting %1…").arg(g.title ?? id), "info")
+        if (Library.sessionAppId(id) === "")
+            page.openRequested("details", { id: id })
+        else
+            Library.launch(id)
     }
 
     function acceptCurrent() {

@@ -1457,17 +1457,12 @@ This can&apos;t be undone.</translation>
     <name>GamesPage</name>
     <message>
         <location filename="../qml/GamesPage.qml" line="+13"/>
-        <location line="+80"/>
+        <location line="+83"/>
         <source>Games</source>
         <translation>Games</translation>
     </message>
     <message>
-        <location line="-57"/>
-        <source>Starting %1…</source>
-        <translation>Starting %1…</translation>
-    </message>
-    <message>
-        <location line="+42"/>
+        <location line="-15"/>
         <source>Show</source>
         <translation>Show</translation>
     </message>
@@ -1495,6 +1490,35 @@ This can&apos;t be undone.</translation>
         <location line="+10"/>
         <source>Open the Store</source>
         <translation>Open the Store</translation>
+    </message>
+</context>
+<context>
+    <name>LaunchSplash</name>
+    <message>
+        <location filename="../qml/LaunchSplash.qml" line="+27"/>
+        <location line="+165"/>
+        <source>Close</source>
+        <translation>Close</translation>
+    </message>
+    <message>
+        <location line="-135"/>
+        <source>Still starting %1</source>
+        <translation>Still starting %1</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Starting %1</source>
+        <translation>Starting %1</translation>
+    </message>
+    <message>
+        <location line="+101"/>
+        <source>Still starting…</source>
+        <translation>Still starting…</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Starting…</source>
+        <translation>Starting…</translation>
     </message>
 </context>
 <context>
@@ -2258,6 +2282,105 @@ This can&apos;t be undone.</translation>
     </message>
 </context>
 <context>
+    <name>QuickMenu</name>
+    <message>
+        <location filename="../qml/QuickMenu.qml" line="+82"/>
+        <source>Resume</source>
+        <translation>Resume</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Home</source>
+        <translation>Home</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Close game</source>
+        <translation>Close game</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Volume</source>
+        <translation>Volume</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Switch profile</source>
+        <translation>Switch profile</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Power</source>
+        <translation>Power</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Close</source>
+        <translation>Close</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Suspend</source>
+        <translation>Suspend</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Restart</source>
+        <translation>Restart</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Power off</source>
+        <translation>Power off</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Back</source>
+        <translation>Back</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Switch to %1</source>
+        <translation>Switch to %1</translation>
+    </message>
+    <message>
+        <location line="+152"/>
+        <source>Just started</source>
+        <translation>Just started</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Running for %1</source>
+        <translation>Running for %1</translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <location line="+19"/>
+        <source>System</source>
+        <translation>System</translation>
+    </message>
+    <message>
+        <location line="-12"/>
+        <source>Image version %1</source>
+        <translation>Image version %1</translation>
+    </message>
+    <message>
+        <location line="+58"/>
+        <source>Volume, muted</source>
+        <translation>Volume, muted</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Volume %1</source>
+        <translation>Volume %1</translation>
+    </message>
+    <message>
+        <location line="+43"/>
+        <source>Muted</source>
+        <translation>Muted</translation>
+    </message>
+</context>
+<context>
     <name>ScreenSaver</name>
     <message>
         <location filename="../qml/ScreenSaver.qml" line="+56"/>
@@ -2551,7 +2674,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+452"/>
+        <location filename="../qml/Shell.qml" line="+476"/>
         <source>Could not %1.</source>
         <translation>Could not %1.</translation>
     </message>
@@ -2571,12 +2694,7 @@ This can&apos;t be undone.</translation>
         <translation>power off</translation>
     </message>
     <message>
-        <location line="+1011"/>
-        <source>Power</source>
-        <translation>Power</translation>
-    </message>
-    <message>
-        <location line="-994"/>
+        <location line="+17"/>
         <source>Update ready. Restart to finish.</source>
         <translation>Update ready. Restart to finish.</translation>
     </message>
@@ -2591,38 +2709,28 @@ This can&apos;t be undone.</translation>
         <translation>Restarting to finish the update in 2 minutes. Press any button to wait.</translation>
     </message>
     <message>
-        <location line="+40"/>
-        <source>%1 stopped unexpectedly</source>
-        <translation>%1 stopped unexpectedly</translation>
-    </message>
-    <message>
-        <location line="-12"/>
-        <source>%1 could not be started</source>
-        <translation>%1 could not be started</translation>
-    </message>
-    <message>
-        <location line="+33"/>
+        <location line="+217"/>
         <source>The screen did not answer, so the previous resolution is back.</source>
         <translation>The screen did not answer, so the previous resolution is back.</translation>
     </message>
     <message>
-        <location line="+49"/>
+        <location line="+57"/>
         <source>Wallpaper could not be loaded</source>
         <translation>Wallpaper could not be loaded</translation>
     </message>
     <message>
-        <location line="+312"/>
+        <location line="+318"/>
         <source>Continue playing</source>
         <translation>Continue playing</translation>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+18"/>
+        <location line="+19"/>
         <source>Installed</source>
         <translation>Installed</translation>
     </message>
     <message>
-        <location line="-17"/>
+        <location line="-18"/>
         <source>Your library is empty</source>
         <translation>Your library is empty</translation>
     </message>
@@ -2637,7 +2745,13 @@ This can&apos;t be undone.</translation>
         <translation>Play</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+0"/>
+        <location line="+462"/>
+        <source>Resume</source>
+        <translation>Resume</translation>
+    </message>
+    <message>
+        <location line="-460"/>
         <source>Details</source>
         <translation>Details</translation>
     </message>
@@ -2647,78 +2761,66 @@ This can&apos;t be undone.</translation>
         <translation>Recent</translation>
     </message>
     <message>
-        <location line="+81"/>
-        <source>Starting %1…</source>
-        <translation>Starting %1…</translation>
-    </message>
-    <message>
-        <location line="+345"/>
-        <location line="+12"/>
+        <location line="+445"/>
+        <location line="+14"/>
         <location line="+3"/>
         <source>Select</source>
         <translation>Select</translation>
     </message>
     <message>
-        <location line="+236"/>
+        <location line="+132"/>
         <source>The chosen sound theme can&apos;t be used. The standard one plays instead.</source>
         <translation>The chosen sound theme can&apos;t be used. The standard one plays instead.</translation>
     </message>
     <message>
-        <location line="-257"/>
-        <location line="+16"/>
+        <location line="-155"/>
+        <location line="+18"/>
         <source>Cancel</source>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="-967"/>
+        <source>%1 is already running</source>
+        <translation>%1 is already running</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <location line="+18"/>
+        <source>%1 could not be started. Try again.</source>
+        <translation>%1 could not be started. Try again.</translation>
+    </message>
+    <message>
+        <location line="-14"/>
+        <source>The game could not be closed. Try again.</source>
+        <translation>The game could not be closed. Try again.</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>%1 stopped unexpectedly. Try again.</source>
+        <translation>%1 stopped unexpectedly. Try again.</translation>
+    </message>
+    <message>
+        <location line="+29"/>
+        <source>Running app</source>
+        <translation>Running app</translation>
+    </message>
+    <message>
+        <location line="+924"/>
         <source>Sections</source>
         <translation>Sections</translation>
     </message>
     <message>
-        <location line="+83"/>
-        <location line="+8"/>
-        <source>System</source>
-        <translation>System</translation>
-    </message>
-    <message>
-        <location line="-7"/>
-        <source>Image version %1</source>
-        <translation>Image version %1</translation>
-    </message>
-    <message>
-        <location line="+16"/>
-        <source>Switch profile</source>
-        <translation>Switch profile</translation>
-    </message>
-    <message>
-        <location line="-115"/>
-        <location line="+117"/>
+        <location line="-17"/>
         <source>Close</source>
         <translation>Close</translation>
     </message>
     <message>
-        <location line="+4"/>
-        <source>Suspend</source>
-        <translation>Suspend</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Restart</source>
-        <translation>Restart</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Power off</source>
-        <translation>Power off</translation>
-    </message>
-    <message>
-        <location line="-123"/>
-        <location line="+124"/>
+        <location line="+0"/>
         <source>Back</source>
         <translation>Back</translation>
     </message>
     <message>
-        <location line="+110"/>
+        <location line="+132"/>
         <source>mock services</source>
         <translation>mock services</translation>
     </message>
@@ -3933,7 +4035,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>VolumeOsd</name>
     <message>
-        <location filename="../qml/VolumeOsd.qml" line="+58"/>
+        <location filename="../qml/VolumeOsd.qml" line="+60"/>
         <source>Muted</source>
         <translation>Muted</translation>
     </message>
@@ -4002,7 +4104,7 @@ This can&apos;t be undone.</translation>
         <translation>%1, current</translation>
     </message>
     <message>
-        <location line="+83"/>
+        <location line="+85"/>
         <source>Current</source>
         <translation>Current</translation>
     </message>

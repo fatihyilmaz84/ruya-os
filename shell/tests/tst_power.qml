@@ -337,7 +337,7 @@ Item {
         function test_overlay_power_choices_by_menu() {
             keyClick(Qt.Key_HomePage)
             tryVerify(() => find("systemActions").activeFocus)
-            compare(find("systemActions").count, 3)    // Switch profile, Power, Close
+            compare(find("systemActions").count, 4)    // Volume, Switch profile, Power, Close
             keyClick(Qt.Key_Down)
             keyClick(Qt.Key_Return)                    // Power
             tryCompare(find("systemPanel"), "powerMode", true)
@@ -351,7 +351,7 @@ Item {
             compare(Power.actionCount, 0)
             keyClick(Qt.Key_Escape)                    // Back: the system actions again, on "Power"
             tryCompare(find("systemPanel"), "powerMode", false)
-            compare(find("systemActions").currentIndex, 1)
+            compare(find("systemActions").currentIndex, 2)
             keyClick(Qt.Key_Escape)                    // closes the overlay
             tryVerify(() => !find("systemPanel").open)
             tryVerify(() => find("homePlay").activeFocus)
@@ -369,7 +369,7 @@ Item {
             keyClick(Qt.Key_Backspace)                 // Back: the system actions again, on "Power"
             tryCompare(find("systemPanel"), "powerMode", false)
             compare(find("systemPanel").open, true, "the first Backspace only leaves the power choices")
-            compare(find("systemActions").currentIndex, 1)
+            compare(find("systemActions").currentIndex, 2)
             verify(find("systemActions").activeFocus)
             keyClick(Qt.Key_Backspace)                 // closes the overlay
             tryVerify(() => !find("systemPanel").open)

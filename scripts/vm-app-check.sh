@@ -8,6 +8,7 @@
 #   vm-app-check.sh kill     # end the client (the shell takes the screen back)
 #   vm-app-check.sh log [n]  # what the compositor and the client saw
 #   vm-app-check.sh state    # the session: no cage, the socket, the input ACLs
+#   vm-app-check.sh flow     # after Guide / Resume / Guide / Home / resume was driven: did the quick menu take the focus and give it back (T-147)
 #
 # Drive it from the host with vm-keys.ps1 (letters reach the client; meta_l is Guide) and
 # vm-inject-key.py guide (the controller's Guide); see docs/dev-setup.md, "Test app in the VM".
@@ -34,6 +35,22 @@ kill)
 log)
   journalctl -b -o short-precise _UID=$U --no-pager | grep -E "ruya-compositor|test-client|qml:.*Error" | tail -n "${2:-40}"
   ;;
+flow)
+  # The quick menu over the client (T-147). Drive first (sign in; start the client; then Guide, Back
+  # (Resume), Guide, Home; Accept on the Running card to resume), then run this: it counts what the
+  # compositor logged. Focus on the menu list: once per Guide; the client gaining/losing focus.
+  log=$(journalctl -b -o short-precise _UID=$U --no-pager | grep -E "ruya-compositor: (app focus|focus systemActions)")
+  menu=$(grep -c "focus systemActions" <<<"$log")
+  gained=$(grep -c "app focus .* true" <<<"$log")
+  lost=$(grep -c "app focus .* false" <<<"$log")
+  echo "menu focused: $menu, client focus gained: $gained, lost: $lost"
+  if [ "$menu" -ge 2 ] && [ "$gained" -ge 3 ] && [ "$lost" -ge 2 ]; then
+    echo "quick menu flow: ok"
+  else
+    echo "quick menu flow: FAILED (expected menu >= 2, gained >= 3, lost >= 2)"
+    exit 1
+  fi
+  ;;
 state)
   echo "cage processes: $(pgrep -c cage)"
   echo "ruya-shell processes: $(pgrep -u ruya-shell -c -x ruya-shell)"
@@ -43,7 +60,7 @@ state)
   loginctl list-sessions --no-legend
   ;;
 *)
-  sed -n '2,13p' "$0"
+  sed -n '2,14p' "$0"
   exit 2
   ;;
 esac
