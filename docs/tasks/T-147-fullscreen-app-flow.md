@@ -17,6 +17,7 @@ Pressing Play starts the game full screen with a short art-led launch; Guide bri
 3. **Home** from the quick menu: app stays running and loses focus; Home shows its card with a Running pill (from `Session.running`); Accept on it resumes the app. **Close game:** `Session.stop(instance)`; the card's pill goes away on `AppExited`.
 4. While an app has focus, only the quick menu, volume OSD and toasts of kind `error`/`warning` are drawn; other toasts queue until the shell is in front (02-shell §1.5).
 5. Tokens `launchMs` (0 under reduced motion; reduced motion makes each step a cut).
+6. **Launch follow-ups from the T-386 reviews (lead-9 fold-in):** `already-running` brings the app to the front (or, with no window yet, says "<title> is already running"); "Starting" shows only after an ok answer; a second A while a launch is pending is ignored, and error toasts are keyed per request so they never name the raw spec; a Steam game with no Session1 path shows no Play button (not an error toast per press); outside names in toasts are capped (add the line to 04 §3) and the launch-failure and crash toasts end with "Try again." Each with a test.
 
 ## Out of scope
 - Blur over the app surface (B-003), screenshots of apps, suspending background apps, memory limits, unsaved-state confirm (needs an app protocol), gamescope.

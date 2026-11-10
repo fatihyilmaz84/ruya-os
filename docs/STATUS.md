@@ -2,7 +2,7 @@
 
 **Read this first in every session; update it last.** Rules: root `CLAUDE.md`. Roles (Opus lead, Sonnet builders): `docs/LEAD.md`. Task format: `docs/tasks/README.md`. Finished work: each task's own file (`Status: done`, Outcome starting with `Verified:`); history before T-132 in [`STATUS-done.md`](STATUS-done.md), old sessions in [`STATUS-log.md`](STATUS-log.md), parked Inbox lines, the long form of owner decisions and decided records in [`STATUS-parked.md`](STATUS-parked.md). `scripts/lint-board.ps1` (part of `dev.ps1 test`) keeps this board and the task files in step.
 
-Last updated: 2026-11-10 (plan audit; before it lead-8)
+Last updated: 2026-11-10 (lead-9)
 
 ## Where we are
 
@@ -43,16 +43,7 @@ Later (ordered): [`STATUS-backlog.md`](STATUS-backlog.md) holds the rest of the 
 
 One line each: `- (source) what, and why it matters`. Dispatched builders put them in their HANDOFF; the lead copies them here. Plan at 5+ items.
 
-Triaged 2026-11-09 (lead-8): the lines before are verbatim in [`STATUS-parked.md`](STATUS-parked.md), "Inbox triage 2026-11-09 (lead-8)"; they became T-378 (session follow-ups), T-379 (`shots` reds), T-380 (profile audio isolation), the Dell look-at list (T-376 hw checks), or stay parked there (T-348 pane notes, T-361 test notes, lead-7 Dell probes).
-
-- (T-377, lead-8) Dell: `page-open-bench.py` Store, 5 opens, maxFrame under 50 ms (host offscreen: 243-287 ms before, 31-49 after; GPU side unmeasured); then decide whether each Store card's 3 MultiEffects (lift shadow, halo, glare) are made only for the focused card, keeping the shadow fade-in.
-- (T-377 reviews) A Store row not yet built forgets its remembered card index (a `pendingIndex` applied when the model fills); a `shots` frame of the Store scrolled to Apps & media; `slotY` recomputes for every row on each `rowIds` change (cheap with 4 rows).
-- (T-363, lead-8) CPU per game is only in the journal (`scope gone, cpu N ms`): putting it in the ledger or `ListSessions` changes a format; ask the owner whether "CPU per game" is wanted.
-- (lead-8) The `.githooks/pre-commit` text lint needs `git config core.hooksPath .githooks` once per clone (the owner; the lead's harness refused to set it).
-- (T-379, lead-8) The four `shots` reds did not reproduce (158 passed twice; all are already `tryVerify`/`tryCompare`); closed as not reproducible. Make `WindowGuard` fail a test with its own message when the window lost activation mid-test and did not regain it (today it checks only in `init()`, so a desktop loss shows as a random `activeFocus` line); keep the `build-win` `ruya-qmltest.txt` log with any new red.
-- (T-359 reviews, lead-8) Bluetooth leftovers: a user scan on a non-window adapter keeps running after a primary flip (`stop_scan`/`tick`); the low-battery toast names a pad by its UPower id, not the paired alias; `dbus.rs` `eprintln!` lines bypass `log::info`; `SettingRow` labels still elide the address tail (needs `TailText`); a translator comment on `qsTr("%1 (%2)")` in `DeviceIcons.shownParts` (the name must stay first); "primary adapter off, another on" should say which adapter is off. T-289 item 1 is half done (primary address); only the `bluetoothctl` fallback remains.
-- (T-386 reviews, lead-8) Launch follow-ups (fold into T-147): `already-running` should bring the app to the front or say "<title> is already running" (today a windowless or still-starting app gives "Starting X..." then silence); show "Starting" only after an ok answer; a second A while a launch is pending can name the raw spec in the error toast (key the titles per request); Steam games have no Session1 path (every press is an error toast: a path or no Play button); cap outside names in toasts (04 §3, new line) and add "Try again." to the launch-failure and crash toasts.
-- (T-387 reviews, lead-8) The same mask-layer toggle class may hide masks in GlassShadow (`box`/`cutout`) and AppArt (`imageMask`): a `shots` pixel case like `test_zz_sheet_after_an_app`; measure the VRAM of L0 layers kept behind an app (opacity 0, not visible false) on the Dell; the TextEntry keyboard is see-through by design (translucent `Theme.glass` keys, no card): a design call (T-282); a very light thumbnail weakens the white focus ring; `tst_timezone` status-clock test failed once near 23:00 (time of day?).
+Triaged 2026-11-10 (lead-9): the lines before are verbatim in [`STATUS-parked.md`](STATUS-parked.md), "Inbox triage 2026-11-10 (lead-9)"; they became T-427 (Bluetooth leftovers), T-428 (Store follow-ups), T-429 (test harness), T-430 (GlassShadow/AppArt masks, L0 memory), T-147 item 6 (launch follow-ups), T-282 item 12 (keyboard over glass), or owner questions (CPU per game, `core.hooksPath`).
 
 ## Blocked (need something this host doesn't have)
 
@@ -65,11 +56,9 @@ Triaged 2026-11-09 (lead-8): the lines before are verbatim in [`STATUS-parked.md
 
 ## Open owner decisions
 
-Long forms: `STATUS-parked.md`.
-- **Decided 2026-11-10 (owner, asked in lead-8):** Ruya Web allowed (ADR-029 Accepted: allow-list gateway, Settings-level actions minus profiles/PINs/update, Avahi and nftables); Companion later, remote only through your own VPN (ADR-030 parked); GE-Proton ships its codecs as other gaming distributions do, sources mirrored (ADR-025); a content-provider API (T-420), Verified levels internal only (ADR-031); the overlay keeps "Ruya Hub", the data service becomes `ruya-gamedata`; the Xbox adapter may download Microsoft's firmware on the player's request (T-354).
+Long forms and decided records: `STATUS-parked.md` ("Decided", and "Decided records moved 2026-11-10 (lead-9)").
 
 - **From the plan audit (2026-11-10), yours to decide:**
-  - **Decided 2026-11-10: games on a removable drive are allowed (T-403, unblocked).** With verification (owner, confirmed the same day): an admin adopts the drive, only adopted drives are executable, each game is re-verified before its first start after the drive returns.
   - **Backups on USB hold account tokens (T-215):** leave credential files out by a list (recommended), or encrypt the archive with the PIN.
   - **The admin PIN typed in a browser (ADR-029):** admin actions on Ruya Web ask for it, so it travels over the LAN (TLS) and a LAN device can try PINs. Accept with a lockout that cannot lock the TV out (recommended, T-404 designs it), or confirm admin actions on the TV instead.
   - **Another pad taking over an idle session (T-396/T-397):** removed from the plan (ADR-027 allows takeover only when the owner's pads are gone). Say if you want the idle takeover.
@@ -80,9 +69,8 @@ Long forms: `STATUS-parked.md`.
 - **Pad pictures and glyph licence (T-199).** Sony/Microsoft/Nintendo pad art needs a legal decision (we draw our own); ControllerCons (SIL OFL) says "cannot be redistributed or sold": ask the author. Recommended: our glyphs Apache-2.0, a notice in About.
 - **Brand (T-269).** The splash shows "RuyaOS" in Inter; a logo is yours; recommended: keep the wordmark until one exists.
 - **Drive formats (T-332; the feature is approved).** Proposed: add `dosfstools` and `ntfsprogs` only if missing (GPL, small); offer exFAT (default), ext4, FAT32, NTFS. Say if you object.
-- **Small ones:** Dolby/DTS names need a licence (T-219); update size vs rechunking (T-195); HDR and VRR after the spikes (T-218/T-222); Flatpak runtime in a dev image (T-214); the dev ISO erases every disk and carries the SSH key (B-002); whether any first-party app is preinstalled (T-248).
+- **Small ones:** whether "CPU per game" is wanted in the ledger or `ListSessions` (today only the journal has it; a format change, T-363); please run `git config core.hooksPath .githooks` once in your clone (the pre-commit text lint; the lead's harness may not set it); Dolby/DTS names need a licence (T-219); update size vs rechunking (T-195); HDR and VRR after the spikes (T-218/T-222); Flatpak runtime in a dev image (T-214); the dev ISO erases every disk and carries the SSH key (B-002); whether any first-party app is preinstalled (T-248).
 - **Also:** a spare low-tier PC for KPIs (ADR-002); one admin or several (recommended: one); Turkish wording review; WSL `ext4` errors: move the VHD off C:.
-- **Decided 2026-11-08 (owner; text in `STATUS-parked.md`):** ADR-022 public surface, ADR-015 runtime extension, ADR-016 no browser first (T-258 parked), ADR-019 multitasking, ADR-020 game data hub, telemetry consent, high first-start volume once (T-347). Earlier decisions: `STATUS-parked.md`, "Decided".
 
 ## Session log (newest first, the latest five; older entries in `STATUS-log.md`)
 

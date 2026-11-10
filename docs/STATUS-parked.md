@@ -2,6 +2,25 @@
 
 Moved out of `docs/STATUS.md` by the lead on 2026-11-06 to keep STATUS under its budget. The planner (`docs/tasks/PLANNING.md`) reads the Inbox lines here when planning; nobody else needs this file. Items that became tasks are in their task file; pick the rest up when a task touches the area.
 
+## Decided records moved 2026-11-10 (lead-9)
+
+- **Decided 2026-11-10 (owner, asked in lead-8):** Ruya Web allowed (ADR-029 Accepted: allow-list gateway, Settings-level actions minus profiles/PINs/update, Avahi and nftables); Companion later, remote only through your own VPN (ADR-030 parked); GE-Proton ships its codecs as other gaming distributions do, sources mirrored (ADR-025); a content-provider API (T-420), Verified levels internal only (ADR-031); the overlay keeps "Ruya Hub", the data service becomes `ruya-gamedata`; the Xbox adapter may download Microsoft's firmware on the player's request (T-354).
+- **Decided 2026-11-10: games on a removable drive are allowed (T-403, unblocked).** With verification (owner, confirmed the same day): an admin adopts the drive, only adopted drives are executable, each game is re-verified before its first start after the drive returns.
+- **Decided 2026-11-08 (owner; text in `STATUS-parked.md`):** ADR-022 public surface, ADR-015 runtime extension, ADR-016 no browser first (T-258 parked), ADR-019 multitasking, ADR-020 game data hub, telemetry consent, high first-start volume once (T-347). Earlier decisions: `STATUS-parked.md`, "Decided".
+
+## Inbox triage 2026-11-10 (lead-9)
+
+Triaged 2026-11-09 (lead-8): the lines before are verbatim in [`STATUS-parked.md`](STATUS-parked.md), "Inbox triage 2026-11-09 (lead-8)"; they became T-378 (session follow-ups), T-379 (`shots` reds), T-380 (profile audio isolation), the Dell look-at list (T-376 hw checks), or stay parked there (T-348 pane notes, T-361 test notes, lead-7 Dell probes).
+
+- (T-377, lead-8) Dell: `page-open-bench.py` Store, 5 opens, maxFrame under 50 ms (host offscreen: 243-287 ms before, 31-49 after; GPU side unmeasured); then decide whether each Store card's 3 MultiEffects (lift shadow, halo, glare) are made only for the focused card, keeping the shadow fade-in.
+- (T-377 reviews) A Store row not yet built forgets its remembered card index (a `pendingIndex` applied when the model fills); a `shots` frame of the Store scrolled to Apps & media; `slotY` recomputes for every row on each `rowIds` change (cheap with 4 rows).
+- (T-363, lead-8) CPU per game is only in the journal (`scope gone, cpu N ms`): putting it in the ledger or `ListSessions` changes a format; ask the owner whether "CPU per game" is wanted.
+- (lead-8) The `.githooks/pre-commit` text lint needs `git config core.hooksPath .githooks` once per clone (the owner; the lead's harness refused to set it).
+- (T-379, lead-8) The four `shots` reds did not reproduce (158 passed twice; all are already `tryVerify`/`tryCompare`); closed as not reproducible. Make `WindowGuard` fail a test with its own message when the window lost activation mid-test and did not regain it (today it checks only in `init()`, so a desktop loss shows as a random `activeFocus` line); keep the `build-win` `ruya-qmltest.txt` log with any new red.
+- (T-359 reviews, lead-8) Bluetooth leftovers: a user scan on a non-window adapter keeps running after a primary flip (`stop_scan`/`tick`); the low-battery toast names a pad by its UPower id, not the paired alias; `dbus.rs` `eprintln!` lines bypass `log::info`; `SettingRow` labels still elide the address tail (needs `TailText`); a translator comment on `qsTr("%1 (%2)")` in `DeviceIcons.shownParts` (the name must stay first); "primary adapter off, another on" should say which adapter is off. T-289 item 1 is half done (primary address); only the `bluetoothctl` fallback remains.
+- (T-386 reviews, lead-8) Launch follow-ups (fold into T-147): `already-running` should bring the app to the front or say "<title> is already running" (today a windowless or still-starting app gives "Starting X..." then silence); show "Starting" only after an ok answer; a second A while a launch is pending can name the raw spec in the error toast (key the titles per request); Steam games have no Session1 path (every press is an error toast: a path or no Play button); cap outside names in toasts (04 §3, new line) and add "Try again." to the launch-failure and crash toasts.
+- (T-387 reviews, lead-8) The same mask-layer toggle class may hide masks in GlassShadow (`box`/`cutout`) and AppArt (`imageMask`): a `shots` pixel case like `test_zz_sheet_after_an_app`; measure the VRAM of L0 layers kept behind an app (opacity 0, not visible false) on the Dell; the TextEntry keyboard is see-through by design (translucent `Theme.glass` keys, no card): a design call (T-282); a very light thumbnail weakens the white focus ring; `tst_timezone` status-clock test failed once near 23:00 (time of day?).
+
 ## Dell look-at list (moved 2026-11-10, lead-8)
 
 **Dell look-at list** (one pass with the next ISO; the long text with task ids is in `STATUS-parked.md`, "Moved from STATUS 2026-11-08"):
