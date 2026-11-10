@@ -2,6 +2,8 @@
 
 Status: todo · Phase: 3 · Depends: T-388 · Area: api, services (ruya-update), shell (Update client, mock) · Size: S · Owner: builder · Developer surface: internal
 
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** Add the criterion from T-388: a resumed OS download is verified before it is staged, tested.
+
 ## Goal
 The OS image download shows bytes, rate and ETA like a Store job, and can be cancelled, paused and resumed without breaking staging, greenboot or rollback.
 

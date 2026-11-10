@@ -1,6 +1,6 @@
 # T-258 — First-party app: Web browser (parked by the owner 2026-11-08)
 
-Status: todo · Phase: 7 · Depends: owner, T-250, T-252 · Area: docs, apps · Size: L (split after the ADR) · Owner: lead · Developer surface: none · **parked by the owner 2026-11-08**
+Status: blocked (parked by the owner 2026-11-08, ADR-016) · Phase: 7 · Depends: owner, T-250, T-252 · Area: docs, apps · Size: L (split after the ADR) · Owner: lead · Developer surface: none · **parked by the owner 2026-11-08**
 
 **Parked (owner, 2026-11-08, ADR-016 Accepted): no browser first.** The first-party apps ship without one (picture viewer, weather, media player, files, Jellyfin, then the emulator frontend); the browser gets its own decision later. Do not plan, spike, split or dispatch this task until the owner reopens it; the text below is kept for that day. Like T-270, it stays on the board as a parked row.
 

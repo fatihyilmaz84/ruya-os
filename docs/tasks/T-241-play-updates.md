@@ -2,6 +2,8 @@
 
 Status: todo · Phase: 7 · Depends: T-231, T-238, T-240 · Area: services, shell · Size: M · Owner: lead
 
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** Also owns what T-231 left open: fetching the revocation list and what happens to an installed package that is revoked later (refuse to launch, say why), with tests. Downloads are ADR-026 jobs in the one job record (T-388), not a private fetcher.
+
 ## Goal
 An installed `.play` can be updated safely: from a remote through the Store, from its developer's signed feed (opt-in), or by installing a newer package by hand. All three obey the same rules: same signing key (or rotation), `build` only increases, permissions that grow need confirmation, data is kept, and the player can roll back.
 

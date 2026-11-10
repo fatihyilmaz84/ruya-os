@@ -1,6 +1,8 @@
 # T-416 - The `ruya` developer CLI: SDK discovery and app validation with JSON output and an error catalogue
 
-Status: todo · Phase: 7 · Depends: T-351, T-350 · Area: new `tools/ruya` (Rust), docs/developers, scripts (lint-dev-docs uses it) · Size: M · Owner: builder · Complexity: complex · Developer surface: public-format
+Status: todo · Phase: 7 · Depends: T-351, T-350, T-352, T-353 · Area: new `tools/ruya` (Rust), docs/developers, scripts (lint-dev-docs uses it) · Size: M · Owner: builder · Complexity: complex · Developer surface: public-format
+
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** Reads T-350's `apis.json` and wraps T-353's conformance runner. ADR-031 also lists `ruya app create|build|package`, which no task owns: an Out of scope line here and an Inbox line. Add criteria for scope 4 and the error catalogue.
 
 ## Goal
 A developer or an AI agent runs `ruya sdk inspect <module> --format json` and `ruya app validate --format json` and gets exact, stable answers: which APIs exist at which level and stability, which permissions they need, and what is wrong with their app and how to fix it.

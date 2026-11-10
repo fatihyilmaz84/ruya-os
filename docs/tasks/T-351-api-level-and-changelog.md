@@ -2,6 +2,8 @@
 
 Status: todo · Phase: 7 · Depends: — · Area: image, services, scripts, docs · Size: S · Owner: builder · Developer surface: public-format
 
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** Reads T-350's generated `apis.json`; no second annotation parser.
+
 ## Goal
 An app can say "I need API level N", the console knows its level, the Store hides apps it cannot serve, and the release notes list which public elements changed (ADR-022, `docs/developers/api-surface.md` "Versioning"). Everything stays experimental until the first release: this builds the mechanism, not a promise.
 

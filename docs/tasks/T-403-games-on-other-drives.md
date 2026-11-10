@@ -1,6 +1,8 @@
 # T-403 - Games on other drives: install to a drive, move between drives, a missing drive leaves its games "unavailable"
 
-Status: todo · Phase: 5 · Depends: T-389, T-401 · Area: services (ruya-store, ruya-library, ruya-devices storage), shell (Storage, game page) · Size: M · Owner: builder · Complexity: complex · Developer surface: internal
+Status: blocked (owner decision: programs on a removable games drive, see STATUS open decisions) · Phase: 5 · Depends: T-389, T-401, owner · Area: services (ruya-store, ruya-library, ruya-devices storage), shell (Storage, game page) · Size: M · Owner: builder · Complexity: complex · Developer surface: internal
+
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** Blocked on an owner-level conflict: installing games on a removable drive needs executable mounts and trusts whatever is on the drive when it returns, against `01` 3.6 (`nosuid,nodev,noexec`) and the invariant "nothing auto-runs from removable media". Options are in STATUS. When unblocked: the known-volumes registry is `Devices1.Storage`'s (T-302), moves are jobs in T-388's record, and the task is split per service.
 
 ## Goal
 The player can install a game to a second internal or USB drive and move it back and forth; drives are known by their volume id, so a drive mounted elsewhere keeps its games, and an unplugged drive greys its games out instead of losing them. Saves stay on the console (owner, ADR-020).

@@ -2,6 +2,8 @@
 
 Status: todo · Phase: 5 · Depends: T-302 · Area: services, docs, image · Size: M · Owner: lead · Developer surface: internal
 
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** The sample sandboxed app cannot call `GameData1` over the bus (ADR-020: no sandbox reaches it directly): the criterion checks what the sandbox can see on disk; the call path is tested in T-308 through `Platform1`.
+
 ## Goal
 Decide, with a working prototype, the three things the rest of epic T-302 stands on: the standard system list and folder layout, how a Flatpak app gets read/write access to those folders, and how it talks to the hub. Part of T-302.
 

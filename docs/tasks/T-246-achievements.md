@@ -1,6 +1,8 @@
 # T-246 — Achievements: a console API for games, a per-profile service, and the unlock moment
 
-Status: todo · Phase: 2 · Depends: T-245, T-164 · Area: api, services, shell, docs · Size: M · Owner: lead · Developer surface: public-API
+Status: todo · Phase: 2 · Depends: T-245, T-164, T-352 · Area: api, services, shell, docs · Size: M · Owner: lead · Developer surface: public-API
+
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** Apps reach achievements through `Platform1` (ADR-022), not a separate portal on the session bus: scope 3's `org.ruyaos.portal.Achievements` is replaced by a Platform1 seat (dependency T-352). A new unit and bus policy means "VM (this task)". ADR-017's attribution per slot profile comes from T-263.
 
 ## Goal
 Games can award achievements; players see them per profile, with progress and a score; the console shows a clear "Achievement unlocked" moment (owner request, 2026-11-07). Today apps have no console API and Steam's achievements live inside Steam only. New service, app-facing API and design: owner: lead. Dependencies: T-245 (the profile-bus bridge and the notification kind: **one bridge for both**) and T-164 (apps must run for the real end-to-end test; the code and mock tests do not need it).

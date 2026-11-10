@@ -1,6 +1,8 @@
 # T-265 — Players UI: "Who's playing?" dialog, player chips, Settings > Players
 
-Status: todo · Phase: 2 · Depends: T-264, T-223 · Area: shell · Size: M · Owner: builder · Developer surface: none
+Status: todo · Phase: 2 · Depends: T-264, T-223, T-368 · Area: shell · Size: M · Owner: builder · Developer surface: none
+
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** The Players section lives in T-368's `Settings > Controllers` pane. "Who's playing?" names only the slot dialog here; the login screen is "the profile picker" (T-267, T-397 use that name). Add a test for "a pad outside the owner set never reaches an admin page". Split before dispatch if dialog, chips and the Settings section exceed size M.
 
 ## Goal
 A second person can pick up a pad and join: a non-blocking "Who's playing?" dialog on that pad (profile list, Guest, Skip), player chips (P1/P2 + avatar) in the top-right cluster, a disconnect toast, and a Settings page to manage slots. Part of epic ADR-017 (T-263).

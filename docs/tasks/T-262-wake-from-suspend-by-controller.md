@@ -2,6 +2,8 @@
 
 Status: todo · Phase: 3 · Depends: T-166, T-202, T-203 · Area: services, shell (the mechanism is done, see below) · Size: M · Owner: builder · Developer surface: internal
 
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** Only the part under "Left for a builder" is the task; the older Scope 2 and criterion 1 (enable wake-up just before suspend, restore after) are superseded by the always-on udev rule that shipped. Wake-on-LAN stays out of scope here.
+
 ## Goal
 When the console is asleep, pressing the PS or Xbox button of a paired controller (or a key on a USB pad or keyboard) wakes it, where the hardware allows, and the UI is honest where it does not. Owner request, 2026-11-07 (controller onboarding, "ideally"). It needs suspend itself (T-166: under eglfs, in the VM and on the Dell), the sleep timeout (T-202) and the pairing/reconnect work (T-203). Real hardware only for the final check: mark `hw`.
 

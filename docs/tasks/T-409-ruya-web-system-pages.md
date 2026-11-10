@@ -2,6 +2,8 @@
 
 Status: todo · Phase: 6 · Depends: T-406, T-391, T-403, T-310 · Area: services (ruya-web allow-list), web front end · Size: M · Owner: builder · Developer surface: internal
 
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** Needs more than one criterion line. Installs from the web respect `require_admin_to_install` (T-211) when it exists.
+
 ## Goal
 The same downloads, installed apps, storage devices and saves the TV shows, managed from the browser with the same actions and the same admin-PIN rules.
 

@@ -1,6 +1,8 @@
 # T-400 - Spike: where saves are, found as the profile user (agent, Ludusavi manifest, runner and Steam prefixes)
 
-Status: todo · Phase: 5 · Depends: T-302 · Area: services, docs · Size: M · Owner: lead · Complexity: hard · Developer surface: internal
+Status: todo · Phase: 5 · Depends: T-302, T-381 · Area: services, docs · Size: M · Owner: lead · Complexity: hard · Developer surface: internal
+
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** The "rewrite" list also names T-215, T-310 and T-311. Symlinks inside Wine prefixes (`dosdevices`, user folders) are part of the result: say what a snapshot follows and what it refuses.
 
 ## Goal
 The facts ADR-028 rests on: a working prototype that finds the saves of a Flatpak game, a game in our GE-Proton prefix and a Steam Proton game on the Dell, as the profile user, and hands a list (not a path into the home) to the root side.

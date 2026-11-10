@@ -1,6 +1,8 @@
 # T-308 — Hub developer guide, sample app, and per-app permissions for reading hub data
 
-Status: todo · Phase: 5 · Depends: T-302, T-304, T-306, T-220 · Area: docs, services, shell · Size: M · Owner: builder · Developer surface: public-API
+Status: todo · Phase: 5 · Depends: T-302, T-304, T-306, T-220, T-352, T-353 · Area: docs, services, shell · Size: M · Owner: builder · Developer surface: public-API
+
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** No enforcement of its own: the `hub-read-*` capabilities are rows in ruya-platform's permission table (T-352), asked and stored there.
 
 ## Goal
 App and emulator authors can use the hub from a guide and a working sample, and the player decides which apps may read what other apps are playing and the Captures library. Part of epic T-302.

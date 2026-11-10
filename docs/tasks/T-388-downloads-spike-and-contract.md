@@ -2,6 +2,8 @@
 
 Status: todo · Phase: 3 · Depends: — · Area: api, services (ruya-store, ruya-update), docs · Size: M · Owner: lead · Complexity: complex · Developer surface: internal
 
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** The job record must cover what ADR-028 and the `.play` tasks send to it: drive moves (T-403), save operations (T-309, T-402), `.play` imports and updates (T-237, T-241), ROM uploads (T-408). Decide `kind`, `source` and which service owns each, or amend ADR-026/ADR-028 where they disagree ("no new service" against jobs in Saves1 and the hub). T-389/T-390 get a criterion that a resumed or partial download is verified before use.
+
 ## Goal
 The facts and the contract drafts for ADR-026: where bytes, rate and ETA come from for a Flatpak transaction and for a bootc image pull, what Pause and Cancel really do, and the XML both services and the shell will build on.
 

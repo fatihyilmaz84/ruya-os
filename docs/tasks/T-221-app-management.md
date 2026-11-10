@@ -1,6 +1,8 @@
 # T-221 — App management: see what is installed, free space, remove games and apps
 
-Status: todo · Phase: 3 · Depends: — · Area: shell, services · Size: M · Owner: builder
+Status: todo · Phase: 3 · Depends: T-394, T-215 · Area: shell, services · Size: M · Owner: builder
+
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** Item 2 (the Options menu on cards) is T-393/T-394's and is removed here, with its tests and screenshots; the uninstall confirm is T-393's component with T-215's semantics, and the "keep data, reinstall finds it" VM criterion stays in T-215 only. Split the rest if pane, bulk remove and update management exceed size M.
 
 ## Goal
 A player can find an installed game or app, see what it costs, update it and remove it, from the controller, in two places: Settings -> Apps (the full list) and the Options menu on any game or app card. Owner question, 2026-11-06: "how does the user remove installed games and apps?" Today the Store has `Uninstall(id, delete_data)` and an uninstall action on the app page; there is no overview of installed apps, no sizes, and no context menu on cards (the context-menu key is part of B-006).

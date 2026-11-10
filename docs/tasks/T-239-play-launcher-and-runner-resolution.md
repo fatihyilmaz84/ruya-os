@@ -2,6 +2,8 @@
 
 Status: todo · Phase: 7 · Depends: T-229, T-238 · Area: services, shell, image · Size: M · Owner: lead
 
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** T-385 owns the per-game runner choice (screen, storage in `ruya-library`, ADR-025: one mechanism for every Windows game); this task keeps only the pure resolve function for `.play` and reads T-385's choice. "Back up saves, recreate the prefix, restore" calls T-402's engine. Stale: "T-244 provides the first" and "the system Wine" (T-244 was dropped into T-385; GE-Proton is the default, ADR-025).
+
 ## Goal
 An installed `.play` starts: the launcher reads the manifest, picks the Wine (or native, or engine) it should use by the package's `source` rule and the player's override, prepares the per-profile Wine prefix, runs first-run setup once, and execs the program inside the sandbox. The player can see and change which runner is used.
 

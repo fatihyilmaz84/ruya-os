@@ -1,6 +1,8 @@
 # T-402 - Windows game saves: snapshot and restore the saves inside our runner prefixes and Steam's Proton prefixes
 
-Status: todo · Phase: 5 · Depends: T-400, T-382, T-215 · Area: services (the save agent of T-400, the hub), shell (game page Saves) · Size: M · Owner: builder · Complexity: complex · Developer surface: internal
+Status: todo · Phase: 5 · Depends: T-400, T-382, T-215, T-310 · Area: services (the save agent of T-400, the hub), shell (game page Saves) · Size: M · Owner: builder · Complexity: complex · Developer surface: internal
+
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** Uses T-302's snapshot format and store and adds Windows rows to T-310's Saves row; it has no store or row of its own. Prefix symlinks follow T-400's rule, with tests. Its "VM (this task)" needs the run path that T-381 turns into a task: do not dispatch before that task exists.
 
 ## Goal
 A Windows game's progress survives a broken or recreated prefix, a runner change (GE-Proton to Wine, T-385) and an uninstall: the OS snapshots the prefix's user folders after each session and puts them back into a new prefix on request.

@@ -2,6 +2,8 @@
 
 Status: todo · Phase: 3 · Depends: T-369 · Area: services (input), shell (Controllers pane, shortcuts) · Size: M · Owner: builder · Complexity: complex · Developer surface: public-format
 
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** Split in three before dispatch (keyboard and mouse output; layers, chords, turbo, macros; shortcuts and the conflict UI), each with an Out of scope. Keyboard and mouse reach a Wayland game through the compositor's seat (ADR-024), not through a per-profile uinput device the shell would read too: the first part states the path and tests that the shell does not see the injected keys twice and that the Guide chord survives.
+
 ## Goal
 Games without controller support are playable with the pad (WASD, mouse camera, clicks), a modifier can switch to another layer, and Guide chords (Guide + X screenshot, Guide + B back to the shell) are configurable without breaking games. Requirements §5.1 (keyboard/mouse targets, long/double press, toggle, hold, turbo), §5.3-5.4, §7.2, §11.4.
 

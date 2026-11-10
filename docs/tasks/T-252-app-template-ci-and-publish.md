@@ -1,6 +1,8 @@
 # T-252 — App template, CI recipe and publishing to the Store
 
-Status: todo · Phase: 7 · Depends: T-250, T-251, T-214 · Area: samples, ci, docs · Size: M · Owner: builder · Developer surface: public-format
+Status: todo · Phase: 7 · Depends: T-250, T-251, T-214, T-416, T-351 · Area: samples, ci, docs · Size: M · Owner: builder · Developer surface: public-format
+
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** The CI recipe calls `ruya app validate` (T-416); it builds no validator of its own. The signing key of the `ruyaos` remote is never in the repository or the image; who holds it is decided in T-381/T-426.
 
 ## Goal
 Anyone, and every first-party app of T-248, starts from one template that builds, themes itself like the shell, follows the HIG and ends as a signed Flatpak on a Store remote. Base: `samples/hello-game` and the guide's `publishing.md`. Part of T-248.

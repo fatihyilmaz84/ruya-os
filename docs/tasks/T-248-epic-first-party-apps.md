@@ -2,6 +2,8 @@
 
 Status: todo · Phase: 7 · Depends: — · Area: docs, shell, services, samples · Size: epic (not a build task; nobody implements it directly) · Owner: lead · Developer surface: none
 
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** Tier-B capabilities that are approved in `api-surface.md` but have no task: text input, display information, theme accent, the age-rating flag, the storage picker. The media player, the file manager and Jellyfin need text input and the storage picker under the dogfooding rule: write those two tasks (after T-352) before the app tasks are dispatched.
+
 **Owner decisions of 2026-11-08 (no longer blocked):** ADR-015 is Accepted (a runtime extension `org.ruyaos.Platform` with the RuyaKit module, versioned separately from the shell; T-250 is now its implementation spike); ADR-016 is Accepted as "no browser first" (T-258 is parked); the first apps are **picture viewer, weather, media player, files, Jellyfin** (the emulator frontend after them). Still open: whether any app is installed by default (an image-size and product-scope call) and the emulator legal note (see "Owner-level decisions"). The foundations (the HIG, the spike) can start now.
 
 ## Goal

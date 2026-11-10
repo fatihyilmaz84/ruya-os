@@ -2,6 +2,8 @@
 
 Status: todo · Phase: 2 · Depends: — · Area: api, services, shell · Size: M · Owner: lead · Developer surface: public-API
 
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** First decision of this task, written into the spec: notifications from apps arrive through the freedesktop notification interface (works for unmodified Flathub apps) or through `Platform1`; not both designs. Scope 5 and the Hint disagree today.
+
 ## Goal
 Every notification the console shows is kept, can be read later and can be controlled (owner request, 2026-11-07; Xbox, PlayStation, Steam TV mode and Android TV all have one). Today toasts are ephemeral (`Notifications` singleton: drive inserted, controller battery low, the sticky update restart notice, the heat notice, app crashed...): look away and it is gone, and apps cannot notify at all. Owner: lead because it adds a service and a bus bridge.
 

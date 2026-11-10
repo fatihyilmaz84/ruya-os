@@ -1,6 +1,8 @@
 # T-417 - AI entry points: `llms.txt`, a generated `llms-full.txt`, component and API catalogues, `AGENTS.md` for apps
 
-Status: todo · Phase: 7 · Depends: T-416, T-251 · Area: docs/developers, scripts (generators and a sync lint), the app template · Size: S · Owner: builder · Developer surface: public-format
+Status: todo · Phase: 7 · Depends: T-416, T-251, T-252 · Area: docs/developers, scripts (generators and a sync lint), the app template · Size: S · Owner: builder · Developer surface: public-format
+
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** The API catalogue is T-350's `apis.json`, not a new extraction. Needs more than one criterion line.
 
 ## Goal
 An AI agent pointed at the console's developer docs finds one short entry file, a single generated file with all stable docs, machine-readable catalogues of APIs and RuyaKit components, and an `AGENTS.md` in every new app that tells it how to build, run and validate.

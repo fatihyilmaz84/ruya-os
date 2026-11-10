@@ -2,6 +2,8 @@
 
 Status: todo · Phase: 2 · Depends: — · Area: docs, image, services (spike) · Size: M · Owner: lead · Complexity: hard · Developer surface: internal
 
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** The design file is `docs/specs/06-input.md`; `06-input-requirements.md` becomes its appendix or moves to `docs/archive/` in the same commit (two files numbered 06 otherwise). The design must also answer, with a named owner task each: how the service learns sign-in, switch and lock (which service calls which, the bus policy line); how an app's already open descriptor loses the pad at lock, profile switch and run end (revoke or re-create the node, not only "cannot open"); the udev rules for virtual nodes, hidraw and `/dev/uinput` under a non-root service; the Bluetooth pairing window as an attack surface (who may become a controller, and what such a pad may do before a profile owns it). T-396, T-397 and T-398 wait for this task.
+
 ## Goal
 Phase 0 of the owner's input requirements (`docs/specs/06-input-requirements.md` §16): we know, with evidence from the Dell and the VM, which engine owns the pads, how a virtual pad reaches only the signed-in profile's game, and the design every later input task builds from.
 

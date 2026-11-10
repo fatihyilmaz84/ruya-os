@@ -1,6 +1,8 @@
 # T-224 — Telemetry: hardware information, consent, settings and a service that sends it
 
-Status: todo · Phase: 3 · Depends: — · Area: api, services, shell, docs · Size: M · Owner: lead
+Status: todo · Phase: 3 · Depends: T-220 · Area: api, services, shell, docs · Size: M · Owner: lead
+
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** Follows T-220 (it adds rows to that pane and changes its "no telemetry" text). Split in three before dispatch (contract and service; wizard step and pane rows; reference receiver and protocol document).
 
 ## Goal
 The project learns what hardware its users have, so it knows what to support and optimise, and the user is in charge: nothing is sent until they have chosen, every category can be turned off at any time, they can see exactly what would be sent, and turning it off deletes what is queued. Owner request, 2026-11-06: "add telemetry support: I want to know what the specs of the users are, which crashes occur, and report them; the user can turn them all off." Crash reporting is T-225 and uses this task's service, consent and settings.

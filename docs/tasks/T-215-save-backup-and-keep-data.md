@@ -1,6 +1,8 @@
 # T-215 — Saves: back up and restore to USB, "Keep saves?" on uninstall, per-app data usage
 
-Status: todo · Phase: 3 · Depends: — · Area: api, services, shell · Size: M · Owner: lead
+Status: todo · Phase: 3 · Depends: T-302, T-400 · Area: api, services, shell · Size: M · Owner: lead
+
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** Rewrite before dispatch (T-400 names it). Three corrections: (1) no root service walks or writes a profile's home (`03` "a root or system service never gets a path into a profile's home", ADR-028): the work runs as the profile user through the agent T-400 prototypes, not in `ruya-store` over `/var/home`. (2) One snapshot format and one store, defined in T-302's spec; this task keeps keep-on-uninstall, per-app usage and the USB flow and is split in three (engine; uninstall semantics and usage; USB backup and restore flow). (3) The game page's Saves row is T-310's, the uninstall dialog (component and copy) is T-393's; item 7 goes. Archives on a removable drive hold launcher and account tokens: exclude credential files by a list in the spec or encrypt (owner question in STATUS).
 
 ## Goal
 Players can protect and move their game progress: back up a profile's saves to a USB drive, restore them, keep saves when they uninstall a game, and see how much space each app's data takes. Implements the defaults of `docs/specs/03-services-and-apps.md` §4.5a (owner, 2026-11-06: "think of the file system: where do we save the save games, save states..."; the developer-facing rules are in `docs/developers/saves-and-data.md`).

@@ -2,6 +2,8 @@
 
 Status: todo · Phase: 7 · Depends: T-352, T-350 · Area: samples, scripts, ci, docs · Size: M · Owner: builder · Developer surface: public-API
 
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** Reads T-350's `apis.json`. The conformance runner must be callable from the `ruya` CLI (T-416 wraps it); it does not add its own sample-in-CI step.
+
 **Waits for** T-352 (ADR-022 is Accepted since 2026-11-08, so only the code dependency remains). Planned now so the Definition of done of a public API has somewhere to land.
 
 ## Goal

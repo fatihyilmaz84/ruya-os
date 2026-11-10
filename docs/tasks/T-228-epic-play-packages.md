@@ -2,6 +2,8 @@
 
 Status: blocked · Phase: 7 · Depends: — · Area: docs, api, services, shell, image · Size: epic (not a build task; nobody implements it directly) · Owner: lead · Developer surface: public-format
 
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** Stale since ADR-025: "Wine is the one system runner and the image preinstalls it". GE-Proton is preinstalled and the default; the runner set is T-382/T-385.
+
 **Parked by the owner (2026-11-06).** ADR-014 is accepted (conditional on the T-229 spike), D2 and D3 are decided (RuyaOS ships no emulators, Proton, firmware or discs; Wine is the one system runner and the image preinstalls it), but the owner wants the current visual-polish lanes and T-164 first. No child task starts and no `.play` code is written until the owner says to start; then the lead sets this task `done` ("epic released") and the children become eligible by their own dependencies.
 
 ## Goal

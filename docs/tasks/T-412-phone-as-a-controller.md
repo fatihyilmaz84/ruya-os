@@ -2,6 +2,8 @@
 
 Status: blocked (owner 2026-11-10: Companion is for later, not built now) · Phase: 6 · Depends: T-411, T-397, T-367 · Area: services (ruya-link, the input service), shell (text input) · Size: M · Owner: builder · Complexity: complex · Developer surface: internal
 
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** When unparked: remote input must not be able to confirm a pairing or enter the admin PIN on the TV (ADR-029 uses both as proof of presence); T-404's threat model lists the remote-input attacker.
+
 ## Goal
 A paired phone works as a remote: its D-pad and buttons move the shell's focus like a pad of the profile it belongs to, its keyboard types into the focused text field, and its touchpad moves a pointer where a pointer exists.
 

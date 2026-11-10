@@ -2,6 +2,8 @@
 
 Status: todo · Phase: 2 · Depends: — · Area: image, services, docs · Size: M · Owner: lead
 
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** This task owns the **one** controller family table: scope 3 moves `services/ruya-devices/src/families.rs` into a crate that `ruya-devices` and the input service both use; T-319, T-368, T-398, T-399 and T-374 read it and add rows, none makes a second table. The Xbox One/Series cells (cable, Bluetooth, adapter) belong to T-354: link them, do not re-verify. "Feeds T-260, T-199, T-217" is stale (all done; T-217 became T-366..T-374).
+
 ## Goal
 Know, per controller family, what works on RuyaOS today over USB, Bluetooth and a vendor dongle, and close the gaps that are feasible. Today only a DualSense over Bluetooth is verified (Dell, 0.0.44). Owner request, 2026-11-07 (controller onboarding): DualSense, Xbox and 8BitDo must be detected and usable. Feeds T-260 (the guidance text), T-199 (family detection) and T-217 (mapping). Owner-level parts (firmware and driver licensing, brand names) become Proposed ADR text, not decisions.
 

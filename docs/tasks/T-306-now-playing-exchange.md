@@ -1,6 +1,6 @@
 # T-306 — Now playing: apps report what is being played; the OS shows and shares it
 
-Status: todo · Phase: 5 · Depends: T-302, T-304, T-247 · Area: api, services, shell · Size: M · Owner: builder · Developer surface: public-API
+Status: todo · Phase: 5 · Depends: T-302, T-304, T-247, T-352 · Area: api, services, shell · Size: M · Owner: builder · Developer surface: public-API
 
 ## Goal
 An emulator (or any game) tells the OS, in one small call, what is running: which game, system, emulator and core, a summary of the settings, and a state ("playing", "menu", "paused"). The shell shows it on the Library game page and in the Activity page, the play ledger (T-247) keys time to the game id, and permitted apps can read it. Part of epic T-302.

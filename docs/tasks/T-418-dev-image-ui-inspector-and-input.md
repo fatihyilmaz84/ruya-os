@@ -1,6 +1,8 @@
 # T-418 - Development images: inspect a running app's UI as data, drive it with a virtual pad, collect its logs
 
-Status: todo · Phase: 7 · Depends: T-416, T-367 · Area: image (dev variant only), services (input service virtual pads), tools/ruya (`app run|logs|inspect-ui|input`) · Size: M · Owner: builder · Complexity: complex · Developer surface: public-API
+Status: todo · Phase: 7 · Depends: T-416, T-367, T-396, T-425 · Area: image (dev variant only), services (input service virtual pads), tools/ruya (`app run|logs|inspect-ui|input`) · Size: M · Owner: builder · Complexity: complex · Developer surface: public-API
+
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** Needs the development image variant that T-425 defines (today there is one image) and ADR-027's action names from T-396. Add a criterion: on a release image the inspector socket and the input-injection method do not exist (a runtime refusal test, not only a manifest check).
 
 ## Goal
 In the VM or a development image, `ruya app run`, `ruya app inspect-ui --format json` (screen, elements with role, name, focus, enabled), `ruya app input down,down,confirm` and `ruya app logs` let an agent check focus and navigation without a TV or a pad. Production images contain none of it.

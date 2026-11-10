@@ -1,6 +1,8 @@
 # T-397 - One controller drives the UI: owner pads per signed-in profile, takeover when they are gone, Guide on a foreign pad
 
-Status: todo · Phase: 2 · Depends: T-396 · Area: services (ruya-inputd), shell (input, picker, prompts) · Size: M · Owner: builder · Complexity: complex · Developer surface: none
+Status: todo · Phase: 2 · Depends: T-396, T-367 · Area: services (ruya-inputd), shell (input, picker, prompts) · Size: M · Owner: builder · Complexity: complex · Developer surface: none
+
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** Needs the Input1 channel (pad identity per event), so it follows T-366/T-367 and its Area includes `api`. This task owns the navigation-ownership rule, enforced in the input service (T-264 no longer has it). Scope 3's takeover "or none sent input for the timeout" is removed (see T-396): takeover only when every owner pad is gone, never into a PIN-protected profile without the PIN, tested. The "Switch to <profile>" prompt needs the registry and moves to T-265.
 
 ## Goal
 After sign-in only the profile's own controller(s) move the focus, as on a PlayStation 5: a second person's pad cannot steer the menus by accident. Guide on that pad offers to switch to its profile; when the owner's pad is gone, the next pad can take over after one A press. The console can never be left with no way to navigate.

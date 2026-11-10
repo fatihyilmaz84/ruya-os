@@ -1,6 +1,6 @@
 # T-270 — Epic Games Store integration (Heroic-style, Legendary backend)
 
-Status: blocked · Phase: 5 · Depends: owner (ADR-018), T-229, T-244, T-251 · Area: docs, services, shell · Size: M · Owner: lead
+Status: blocked · Phase: 5 · Depends: owner (ADR-018), T-229, T-251, T-382, T-385 · Area: docs, services, shell · Size: M · Owner: lead
 
 ## Goal
 A player signs in to their Epic Games account on the TV, sees their Epic library with art, installs and launches Windows games through the system Wine runner, with cloud saves, like Heroic Games Launcher does on Linux. Owner request, 2026-11-07: "integration with Epic store just like how Heroic does it". Parked until the owner answers ADR-018 (legal and product scope). Owner, 2026-11-07: "we will talk about 270 later, park it for now": do not plan, spike or dispatch it.

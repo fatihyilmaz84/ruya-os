@@ -2,6 +2,8 @@
 
 Status: todo · Phase: 6 · Depends: T-405 · Area: services (ruya-web), image, shell (Settings pane, pairing prompt) · Size: M · Owner: builder · Complexity: complex · Developer surface: internal
 
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** Service name `ruya-link`. Changes the image guards that forbid Avahi (`image/build/98-guard.sh`, `50-slim.sh`). `vm-web-check.sh` also tests: session expiry, the rate limit, PIN attempts over the network, the TLS protocol floor, and that the listening ports are exactly the expected set with Web on and off (T-424's list).
+
 ## Goal
 An admin turns on Web management on the TV, opens the shown address on a phone, confirms the code on the TV with the admin PIN, and sees a dashboard: version, uptime, CPU, memory, storage, network, library counts and recent events, all read from the existing services.
 

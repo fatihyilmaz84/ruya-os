@@ -2,6 +2,8 @@
 
 Status: todo · Phase: 6 · Depends: T-406, T-304 · Area: services (the hub ruya-gamedata: import pipeline), services (ruya-web: uploads), web front end · Size: M · Owner: builder · Complexity: complex · Developer surface: internal
 
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** The import pipeline (identify, duplicates, archives as hostile input) belongs to the hub so the USB path uses it too: split it out as a hub task before dispatch; this task only uploads into the staging area.
+
 ## Goal
 The player drags ROMs (or a zip of them) and the BIOS files they own onto the page, sees each file go through upload, validation, identification and registration, and finds the games in the Library on the TV; duplicates and unknown files are shown, never silently added.
 

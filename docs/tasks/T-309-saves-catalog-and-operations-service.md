@@ -2,6 +2,8 @@
 
 Status: todo · Phase: 5 · Depends: T-215, T-302, T-304 · Area: api, services · Size: M · Owner: lead · Developer surface: internal
 
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** Owns the save catalogue. Runs as the profile user or through the agent of T-400, never as root over a home (the "Read first" line saying otherwise is stale). Uses T-302's snapshot format. `Move` to a drive contradicts ADR-020 (4) "saves and states stay on the console": export and import only, unless the spec changes it. Add a Rust test that profile A cannot list or read profile B's saves, and say how the PIN is verified (a call to `ruya-profiles`; hashes never leave it). New unit and bus policy: "VM (this task)", files named. Split the seven operations and the trash if over size M.
+
 ## Goal
 The OS knows, per profile, which save files, save states and configs belong to which game and app (kind, size, time, optional thumbnail and label), and can copy, move, delete, export and import them safely: never while the app runs, never losing data on a power cut, with undo for deletes. Backup of whole apps is T-215; this is the item-level layer (a single slot, a single game) that both the shell and external emulators use. Owner request, 2026-11-08: "a saves management tool, for managing save games (copy, delete, move, etc...), also for those external emulators since they can integrate those".
 

@@ -2,6 +2,8 @@
 
 Status: todo · Phase: 2 · Depends: T-368 · Area: api, services (input), shell (Controllers pane) · Size: M · Owner: builder · Complexity: complex · Developer surface: public-format
 
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** Import is hostile input: the parser runs without privilege on size-capped data, export to removable media never follows a symlink and never writes as root into a user-controlled directory; the hostile-file tests are re-run whenever T-372/T-373 extend the schema (macros, key targets).
+
 ## Goal
 The player can swap to a Nintendo layout, remap any button, set stick dead zones and a response curve per controller, and the settings survive reboots and can be exported and imported. Requirements §5.1-5.2, §9 (global level), Phase 2.
 

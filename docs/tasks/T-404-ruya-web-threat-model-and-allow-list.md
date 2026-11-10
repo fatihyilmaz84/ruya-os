@@ -2,6 +2,8 @@
 
 Status: todo · Phase: 6 · Depends: — · Area: docs, api (bus policies) · Size: M · Owner: lead · Complexity: hard · Developer surface: internal
 
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** Output: the threat model, the allow-list and the test list only (the wire protocol, pairing messages and sessions are T-411's). One name: the service, unit, user and bus-policy subject are `ruya-link` (root `CLAUDE.md`); "ruya-web" is the page. Must state explicitly: how an admin action in the browser proves the PIN although `Profiles1` and PINs stay shell-only (which single verify method is on the allow-list, PIN in transit and in memory, never in logs, attempts counted with the TV's lockout but without letting the network lock the admin out); the attackers "remote input" (T-412) and "another device on the LAN"; where the console key and TLS key live (runtime state under `/var`, never in the image), backup and rotation; how `require_admin_to_install` (T-211) applies to web installs. The reviewable bar: every allow-listed method is listed with the id of its refusal test.
+
 ## Goal
 For both remote clients of the one gateway (`ruya-link`: Ruya Web and the Companion app, ADR-029/ADR-030), before any code: a written threat model and the exact list of methods `ruya-web` may call on each service, so the invariant change the owner approves is as small as possible and testable.
 

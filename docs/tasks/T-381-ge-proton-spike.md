@@ -2,6 +2,8 @@
 
 Status: todo · Phase: 5 · Depends: — · Area: image, services (ruya-session launch), docs · Size: M · Owner: lead · Complexity: hard · Developer surface: internal
 
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** The spike's output also names, as tasks: the run path for a Windows game outside `.play` (the prefix per game and profile, how such a game becomes a Library entry), which T-385 and T-402 assume and nobody owns; who hosts the `ruyaos` Flatpak remote and holds its signing key; the source mirror the owner asked for on 2026-11-10.
+
 ## Goal
 Facts for ADR-025: a Windows test program and one real free Windows game run through GE-Proton on the Dell, from the shell, on a profile's Wayland socket, with sound and a pad; and the numbers and lists the owner needs (size, licences, codecs).
 

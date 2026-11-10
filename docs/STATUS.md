@@ -2,7 +2,7 @@
 
 **Read this first in every session; update it last.** Rules: root `CLAUDE.md`. Roles (Opus lead, Sonnet builders): `docs/LEAD.md`. Task format: `docs/tasks/README.md`. Finished work: each task's own file (`Status: done`, Outcome starting with `Verified:`); history before T-132 in [`STATUS-done.md`](STATUS-done.md), old sessions in [`STATUS-log.md`](STATUS-log.md), parked Inbox lines, the long form of owner decisions and decided records in [`STATUS-parked.md`](STATUS-parked.md). `scripts/lint-board.ps1` (part of `dev.ps1 test`) keeps this board and the task files in step.
 
-Last updated: 2026-11-09 (Opus 5.5, lead-7)
+Last updated: 2026-11-10 (plan audit; before it lead-8)
 
 ## Where we are
 
@@ -15,7 +15,7 @@ Verification legend: **host** = built and tested on Windows · **host (vm pendin
 
 ## Board
 
-**NEXT → T-421** (builders: the glass on the Dell, owner 2026-11-10: dispatch to Opus high in the next session); lead: T-366 ([lead] Ruya Input spike, ADR-024; then T-367, T-381 GE-Proton, T-380), and the Dell second pass T-355 once Play works (T-386, image 0.0.61). **Builder lanes**: the first rows of `STATUS-backlog.md` in order (T-386, T-387 in flight; then T-147, T-362, T-378, T-299, T-364, T-339); one "VM (this task)" at a time. T-283, T-284, T-287, T-288 wait for the lead's design pass T-282. Ruya Hub (`07-hub-requirements.md`) waits for the owner's answers (STATUS, open owner decisions).
+**NEXT → T-421** (builders: the glass on the Dell, owner 2026-11-10: dispatch to Opus high in the next session); lead: T-366 ([lead] Ruya Input spike, ADR-024; then T-367, T-381 GE-Proton, T-380), and the Dell second pass T-355 once Play works (T-386, image 0.0.61). **Builder lanes**: T-147, then the first rows of `STATUS-backlog.md` in order (T-362, T-423, T-424, T-422, T-378, T-299, T-364, T-339); one "VM (this task)" at a time. T-283, T-284, T-287, T-288 wait for the lead's design pass T-282; T-397..T-399 wait for T-366 and T-396. **Plan audit 2026-11-10:** 76 task files carry a ruling under their header (overlaps cut, dependencies fixed); the Depends column now lists only dependencies that are not `done`.
 
 **How work runs (owner, 2026-11-04):** the lead dispatches `ruya-builder` agents (at most two at a time, own worktrees, different areas), has each branch reviewed by `ruya-reviewer` and merges it (`docs/LEAD.md`). Dispatched builders never edit this file; one "VM (this task)" runs at a time. A builder the owner starts directly takes NEXT alone in the main checkout and does the bookkeeping (`CLAUDE.md`).
 
@@ -24,9 +24,9 @@ Open work only (the front of the board; the rest is in `STATUS-backlog.md`), in 
 | ID | Title | Status | Depends |
 |---|---|---|---|
 | [T-421](tasks/T-421-glass-has-no-blur-on-the-dell.md) | Glass on the Dell has no Gaussian blur and no transparency (0.0.61); the shell uses about 40 % of the GPU at Home | todo | — |
-| [T-147](tasks/T-147-fullscreen-app-flow.md) | Full-screen apps: launch, quick menu, return, close | todo | T-164, T-386 |
+| [T-147](tasks/T-147-fullscreen-app-flow.md) | Full-screen apps: launch, quick menu, return, close | todo | — |
 | [T-393](tasks/T-393-options-menu-design.md) | **[lead]** Design: the Options (context) menu: component, contents per surface, motion, focus | todo | — |
-| [T-396](tasks/T-396-controller-ownership-and-layout-spec.md) | **[lead]** Spec: who owns the UI, the family's confirm button, action glyphs (ADR-027) | todo | — |
+| [T-396](tasks/T-396-controller-ownership-and-layout-spec.md) | **[lead]** Spec: who owns the UI, the family's confirm button, action glyphs (ADR-027) | todo | T-366 |
 | [T-366](tasks/T-366-ruya-input-spike-engine-and-design.md) | **[lead]** Ruya Input: spike, engine decision and the design (06-input.md, Input1 draft) | todo | — |
 | [T-367](tasks/T-367-a-game-sees-the-pad.md) | **[lead]** A game sees the pad: a virtual pad per controller, for the signed-in profile only, routed by focus | todo | T-366 |
 | [T-197](tasks/T-197-shell-crash-on-bluetooth-audio-disconnect.md) | **[lead]** Shell crash when a Bluetooth headset disconnects | blocked | — |
@@ -49,8 +49,7 @@ Triaged 2026-11-09 (lead-8): the lines before are verbatim in [`STATUS-parked.md
 - (T-377 reviews) A Store row not yet built forgets its remembered card index (a `pendingIndex` applied when the model fills); a `shots` frame of the Store scrolled to Apps & media; `slotY` recomputes for every row on each `rowIds` change (cheap with 4 rows).
 - (T-363, lead-8) CPU per game is only in the journal (`scope gone, cpu N ms`): putting it in the ledger or `ListSessions` changes a format; ask the owner whether "CPU per game" is wanted.
 - (lead-8) The `.githooks/pre-commit` text lint needs `git config core.hooksPath .githooks` once per clone (the owner; the lead's harness refused to set it).
-- (T-379, lead-8) The four `shots` reds did not reproduce (158 passed twice; all are already `tryVerify`/`tryCompare`); closed as not reproducible. Make `WindowGuard` fail a test with its own message when the window lost activation mid-test and did not regain it (today it checks only in `init()`, so a desktop loss shows as a random `activeFocus` line); keep the build-win ruya-qmltest.txt log with any new red.
-uya-qmltest.txt` with any new red.
+- (T-379, lead-8) The four `shots` reds did not reproduce (158 passed twice; all are already `tryVerify`/`tryCompare`); closed as not reproducible. Make `WindowGuard` fail a test with its own message when the window lost activation mid-test and did not regain it (today it checks only in `init()`, so a desktop loss shows as a random `activeFocus` line); keep the `build-win` `ruya-qmltest.txt` log with any new red.
 - (T-359 reviews, lead-8) Bluetooth leftovers: a user scan on a non-window adapter keeps running after a primary flip (`stop_scan`/`tick`); the low-battery toast names a pad by its UPower id, not the paired alias; `dbus.rs` `eprintln!` lines bypass `log::info`; `SettingRow` labels still elide the address tail (needs `TailText`); a translator comment on `qsTr("%1 (%2)")` in `DeviceIcons.shownParts` (the name must stay first); "primary adapter off, another on" should say which adapter is off. T-289 item 1 is half done (primary address); only the `bluetoothctl` fallback remains.
 - (T-386 reviews, lead-8) Launch follow-ups (fold into T-147): `already-running` should bring the app to the front or say "<title> is already running" (today a windowless or still-starting app gives "Starting X..." then silence); show "Starting" only after an ok answer; a second A while a launch is pending can name the raw spec in the error toast (key the titles per request); Steam games have no Session1 path (every press is an error toast: a path or no Play button); cap outside names in toasts (04 §3, new line) and add "Try again." to the launch-failure and crash toasts.
 - (T-387 reviews, lead-8) The same mask-layer toggle class may hide masks in GlassShadow (`box`/`cutout`) and AppArt (`imageMask`): a `shots` pixel case like `test_zz_sheet_after_an_app`; measure the VRAM of L0 layers kept behind an app (opacity 0, not visible false) on the Dell; the TextEntry keyboard is see-through by design (translucent `Theme.glass` keys, no card): a design call (T-282); a very light thumbnail weakens the white focus ring; `tst_timezone` status-clock test failed once near 23:00 (time of day?).
@@ -69,6 +68,12 @@ uya-qmltest.txt` with any new red.
 Long forms: `STATUS-parked.md`.
 - **Decided 2026-11-10 (owner, asked in lead-8):** Ruya Web allowed (ADR-029 Accepted: allow-list gateway, Settings-level actions minus profiles/PINs/update, Avahi and nftables); Companion later, remote only through your own VPN (ADR-030 parked); GE-Proton ships its codecs as other gaming distributions do, sources mirrored (ADR-025); a content-provider API (T-420), Verified levels internal only (ADR-031); the overlay keeps "Ruya Hub", the data service becomes `ruya-gamedata`; the Xbox adapter may download Microsoft's firmware on the player's request (T-354).
 
+- **From the plan audit (2026-11-10), yours to decide:**
+  - **Games on a removable drive (T-403, blocked):** it needs programs to run from the drive and trusts the drive when it comes back, against "nothing auto-runs from removable media" and `noexec` mounts. Options: internal disks only for now (recommended); or allowed, with the drive's games re-verified before the first start; or allowed as it is.
+  - **Backups on USB hold account tokens (T-215):** leave credential files out by a list (recommended), or encrypt the archive with the PIN.
+  - **The admin PIN typed in a browser (ADR-029):** admin actions on Ruya Web ask for it, so it travels over the LAN (TLS) and a LAN device can try PINs. Accept with a lockout that cannot lock the TV out (recommended, T-404 designs it), or confirm admin actions on the TV instead.
+  - **Another pad taking over an idle session (T-396/T-397):** removed from the plan (ADR-027 allows takeover only when the owner's pads are gone). Say if you want the idle takeover.
+  - **Release security (T-426, later):** who holds the image signing key, disk encryption, and whether some Flathub permissions are refused for every Store app.
 - **Save locations list (ADR-028, T-400):** Ludusavi's manifest licence (PCGamingWiki data); use, ask, or our own.
 - **Telemetry (T-224/T-225).** The consent flow is decided; the backend, retention, privacy notice and a data-processing agreement are yours, later.
 - **Parked by you, nothing built:** `.play` packages (T-228, ADR-014 accepted, questions in `05-play-packages.md` §16) and the Epic Games Store (T-270, Proposed ADR-018: first-party Store app on Legendary, the Heroic Flatpak, or nothing).
@@ -82,6 +87,8 @@ Long forms: `STATUS-parked.md`.
 ## Session log (newest first, the latest five; older entries in `STATUS-log.md`)
 
 One entry per session, at most 700 characters (`lint-board.ps1`): date · model · tasks · what happened · numbers · follow-ups. Detail belongs in the task Outcome.
+
+- 2026-11-10 · Fable 5 · Planning (plan audit: rules, board, 159 open tasks; no code) · 76 task files got a ruling under the header (overlaps in input, saves, runners, permissions, Web cut to one owner each; about 60 dependency fixes); T-315 stale claim reset; T-258, T-403, T-413 blocked; new T-422 plan lint, T-423 CI gates, T-424 security baseline, T-425 dev/release image, T-426 release-security epic; 5 owner questions. Process: Depends column = open dependencies; sizes, hand-off threshold and roles made consistent; template has Complexity and a security line; planning horizon rule. `dev.ps1 docs` green.
 
 - 2026-11-10 · Opus 5.5 · Lead (lead-8: T-363, T-377, T-359, T-386 Play starts games, T-387 glass after an app merged; T-379 not reproducible; planned ADR-025..ADR-031 (GE-Proton, downloads, controller ownership, games and saves, Web, Companion, developer platform) and T-378..T-419) · test 1029 QML + 84 skips ALL GREEN; VM 0.0.60 queue PASS after three check fixes; Dell 0.0.60 (glass and launch bugs found there). Process: vm-queue.ps1, dell-update.sh, image-chain SKIP_BUILD, a pre-commit lint hook (needs core.hooksPath).
 

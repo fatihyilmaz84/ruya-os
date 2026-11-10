@@ -2,6 +2,8 @@
 
 Status: todo · Phase: 3 · Depends: T-367 · Area: services (input, session), shell (app settings) · Size: M · Owner: lead · Complexity: complex · Developer surface: internal
 
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** Add criteria: with passthrough active, opening the PIN pad or an overlay takes the physical node away from the app (or passthrough refuses PIN-protected flows), tested; Guide still reaches the shell while Steam holds the pad, tested. The shell part needs a QML test and a screenshot criterion.
+
 ## Goal
 Steam Input (and any app that needs the real controller) works without fighting Ruya: for such an app the profile's user gets the physical pad's nodes for that run and Ruya creates no virtual pad; afterwards everything is as before. Requirements §6.1, §6.3.
 

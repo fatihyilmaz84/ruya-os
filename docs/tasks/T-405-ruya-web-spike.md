@@ -2,6 +2,8 @@
 
 Status: todo · Phase: 6 · Depends: T-404, T-411 · Area: services (new ruya-web), image, shell (tokens export), docs · Size: M · Owner: lead · Complexity: hard · Developer surface: internal
 
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** A prototype with measurements; it writes no design text (T-404 and T-411 do). The rewrite of T-406..T-410 happens once, at the end of this task.
+
 ## Goal
 A prototype on the Dell: `ruya-web` serves one page over HTTPS on the LAN only, a phone pairs with a code confirmed on the TV, and the page uses the console's colours and type from `Theme.qml`.
 

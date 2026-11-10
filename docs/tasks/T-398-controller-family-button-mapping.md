@@ -1,6 +1,8 @@
 # T-398 - The family's own confirm button: Nintendo A on the right, PlayStation Cross (or Circle), a Confirm-button setting
 
-Status: todo · Phase: 2 · Depends: T-396 · Area: services (ruya-inputd), shell (Settings > Controllers row), api if the setting crosses the bus · Size: S · Owner: builder · Developer surface: none
+Status: todo · Phase: 2 · Depends: T-396, T-366, T-368 · Area: services (ruya-inputd), shell (Settings > Controllers row), api if the setting crosses the bus · Size: S · Owner: builder · Developer surface: none
+
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** Family per event is decided here, once, in the input service from the shared family table (T-261); T-399 reads it. The Confirm-button row goes into T-368's pane.
 
 ## Goal
 A Switch Pro controller confirms with A (the right button) and goes back with B, as the player expects; PlayStation pads confirm with Cross (or Circle with the JP option); the player can override it in Settings. Today `ruya-inputd` maps by position (south = Accept), so a Nintendo pad confirms with B.

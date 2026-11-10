@@ -1,6 +1,8 @@
 # T-307 — Library and the emulator frontend use the hub (ROM roots, game identity, art matching)
 
-Status: todo · Phase: 5 · Depends: T-302, T-304, T-259 · Area: services, shell · Size: M · Owner: builder · Developer surface: none
+Status: todo · Phase: 5 · Depends: T-302, T-304 · Area: services, shell · Size: M · Owner: builder · Developer surface: none
+
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** T-259 is not a dependency (scope 4 already covers its absence); T-259 now follows this task. Run after T-401 where both redefine the Library's game record. Archives from USB or a local folder are hostile input (caps, no path traversal), tested here unless T-304 owns the import pipeline.
 
 ## Goal
 The Library lists the player's retro games from the hub's ROM roots (profile, shared console folder, and USB drives the player explicitly added), identified by a stable game id and matched to art, and launching one starts the right installed emulator with the ROM, using the paths the hub names. Part of epic T-302 and the first-party emulator frontend (T-259).

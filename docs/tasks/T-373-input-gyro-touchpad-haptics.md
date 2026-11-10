@@ -2,6 +2,8 @@
 
 Status: todo · Phase: 3 · Depends: T-369 · Area: services (input), shell (Controllers pane) · Size: M · Owner: builder · Complexity: complex · Developer surface: public-format
 
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** Add a "VM (lead run)" criterion naming the check (the static hidraw rule it needs is decided in T-366).
+
 ## Goal
 A DualSense (or Switch Pro) can aim with gyro and use its touchpad as a mouse, and the player controls vibration strength. Requirements §7.3, §8.
 

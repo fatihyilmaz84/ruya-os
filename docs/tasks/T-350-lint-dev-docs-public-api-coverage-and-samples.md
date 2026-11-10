@@ -2,6 +2,8 @@
 
 Status: todo · Phase: 7 · Depends: — · Area: scripts, ci, docs · Size: S · Owner: builder · Developer surface: internal
 
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** One parser of the `org.ruyaos.Stability`/`Since` annotations: this task writes it and emits a generated `apis.json`; T-351 (changelog), T-353 (mock), T-416 (`ruya sdk`) and T-417 (catalogue) read that file. One "samples build and run in CI" step, here; the others only add a sample.
+
 ## Goal
 A public D-Bus method, signal or property cannot reach `main` undocumented, and a sample the guide points to cannot rot. Today `scripts/lint-dev-docs.ps1` checks links, code blocks, the `sample:` C blocks and the Sources footer, but knows nothing about `api/dbus/*.xml` and never builds a sample (ADR-022, `docs/developers/api-surface.md`).
 

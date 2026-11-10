@@ -2,6 +2,8 @@
 
 Status: todo · Phase: 7 · Depends: — · Area: docs, shell, services · Size: M · Owner: lead · Developer surface: public-API
 
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** The audit tables go into an appendix of ADR-015, not into the HIG file (T-249 is not a dependency). The Platform1 client bindings inside the extension are built by T-251.
+
 ## Goal
 Implement the owner's decision on how apps use the OS's own components: **ADR-015, Accepted (owner, 2026-11-08): a Flatpak runtime extension `org.ruyaos.Platform` carrying the RuyaKit QML module, versioned separately from the shell; not a module per app.** This task proves it works with numbers (extraction audit, API audit, a spike in the VM) and answers the open questions listed in ADR-015, so that T-251 (RuyaKit) and T-252 (template) can be written against facts. Owner request 2026-11-07; decision 2026-11-08; part of T-248.
 

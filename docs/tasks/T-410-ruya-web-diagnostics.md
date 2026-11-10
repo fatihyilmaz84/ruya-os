@@ -1,6 +1,8 @@
 # T-410 - Ruya Web: logs and a diagnostic report, redacted
 
-Status: todo · Phase: 6 · Depends: T-406, T-225 · Area: services (a diagnostics reader, ruya-web), web front end · Size: S · Owner: builder · Developer surface: internal
+Status: todo · Phase: 6 · Depends: T-406 · Area: services (a diagnostics reader, ruya-web), web front end · Size: S · Owner: builder · Developer surface: internal
+
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** The redaction is a small shared crate built here (T-225 reuses it); T-225 and the telemetry chain are not dependencies.
 
 ## Goal
 An admin can read recent errors of the console's services and download a diagnostic report to attach to a bug, with secrets, tokens, addresses and profile names removed.

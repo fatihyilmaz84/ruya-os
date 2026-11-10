@@ -2,6 +2,8 @@
 
 Status: todo · Phase: 2 · Depends: T-396, T-398 · Area: shell (ButtonGlyph, HintBar, every glyph site), services (ruya-inputd: device family per event) · Size: M · Owner: builder · Complexity: normal · Developer surface: none
 
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** Builds the one action-to-glyph table (T-396); T-374 exposes the same table to apps. Family per event comes from T-398.
+
 ## Goal
 The hint bar and every on-screen button hint show the buttons of the controller the player is holding: Cross/Circle shapes on a PlayStation pad, A/B in Nintendo positions on a Switch pad, letters on Xbox, key caps on the keyboard. Today every glyph is an Xbox letter.
 

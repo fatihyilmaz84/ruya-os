@@ -1,6 +1,6 @@
 # T-nnn — <title>
 
-Status: todo · Phase: n · Depends: T-xxx, … · Area: shell | services | api | image | docs · Size: S | M · Owner: builder | lead · Developer surface: none | internal | public-API | public-format
+Status: todo · Phase: n · Depends: T-xxx, … · Area: shell | services | api | image | docs · Size: S | M · Owner: builder | lead · Complexity: simple | normal | complex | hard · Developer surface: none | internal | public-API | public-format
 
 ## Goal
 <One or two sentences: the user-visible result.>
@@ -22,6 +22,7 @@ Status: todo · Phase: n · Depends: T-xxx, … · Area: shell | services | api 
 - [ ] … (screenshot: `output/shell-shots/n-name.png` shows …)
 - [ ] UI tasks - UX: from every new state Back leaves; focus lands sensibly after open/close/error; readable at 10 ft; Outcome has a `UX notes:` line
 - [ ] public-API / public-format tasks only (`docs/developers/api-surface.md`): XML with `org.ruyaos.Stability` tag; a paragraph in `docs/developers/`; a minimal sample (`lint-dev-docs.ps1` compiles or runs it against the mock); mock support so a developer can test off the console; a conformance test incl. abuse cases (test: `...`)
+- [ ] Trust-boundary tasks only (a new unit or bus policy, a listener, a parser of outside data, a privileged service touching profile files; PLANNING.md): one abuse test per boundary, named (test: `...`); a new unit is in `image/security-baseline.json`
 - [ ] VM (this task | lead run): `scripts/vm-…-check.sh` … (service-facing tasks only, PLANNING.md Lessons)
 
 ## Verification

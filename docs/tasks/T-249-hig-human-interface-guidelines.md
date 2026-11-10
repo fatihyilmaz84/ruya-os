@@ -2,6 +2,8 @@
 
 Status: todo · Phase: 7 · Depends: — · Area: docs · Size: M · Owner: lead · Developer surface: none
 
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** The file is `docs/developers/hig.md` (its readers are app authors; `docs/specs/06-*` is taken by input). Update the references in T-248 and T-250..T-259 in the same commit. Header: `Developer surface: public-format`. Mark which checklist items `ruya app validate` checks (T-416).
+
 ## Goal
 One document that tells the author of an app (first-party or third-party) how an app must look and behave on RuyaOS: the rules the shell already follows, written for people who do not read our source. Part of the first-party apps epic (T-248). It reuses spec 04 rather than copying it, and is linked from the developer guide (T-214).
 

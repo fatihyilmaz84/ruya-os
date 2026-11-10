@@ -1,6 +1,8 @@
 # T-305 — Captures: screenshots, recordings and "clip the last seconds" by the OS, for any app
 
-Status: todo · Phase: 5 · Depends: T-302, T-304, T-164 · Area: shell, services · Size: M · Owner: lead · Developer surface: public-API
+Status: todo · Phase: 5 · Depends: T-302, T-304, T-164, T-352 · Area: shell, services · Size: M · Owner: lead · Developer surface: public-API
+
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** Split: screenshots; the recording spike; the Captures page and drive storage. Captures are written as the profile user. App-facing calls are `Platform1` seats.
 
 ## Goal
 The player presses a button (or picks it in the Guide menu) and gets a screenshot or a recording of whatever is in front, with the game name, time and profile attached, in one Captures library. No app needs code for this: the shell is the compositor. Part of epic T-302.

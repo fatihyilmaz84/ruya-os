@@ -1,6 +1,8 @@
 # T-263 — EPIC: multiple controllers and local players: spec for the registry and the player model
 
-Status: todo · Phase: 2 · Depends: T-260, T-366 · Area: docs · Size: S · Owner: lead · Developer surface: internal
+Status: todo · Phase: 2 · Depends: T-260, T-366, T-396 · Area: docs · Size: S · Owner: lead · Developer surface: internal
+
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** T-396 decides who drives the UI and how a pad belongs to a profile (ADR-027, one owner pad set); this spec only adds the player slots on top and does not reopen that model. ADR-017's "slot 1 pad" wording is read as "the owner pad set". Also write down, because no task owns them yet: play-time and achievement attribution per slot profile and the "strictest age limit" rule (ADR-017 decision 2), what "the app supports several players" means (a manifest key, named here), and one home for the pane (`Settings > Controllers`; Players is a section of it).
 
 ## Goal
 The design of ADR-017 (accepted by the owner, 2026-11-07) is written down as a spec section that the child tasks build from: the data model, the D-Bus surface (draft), the flows and the states. Epic children: T-264 services, T-265 shell UX, T-266 virtual pads for apps, T-267 default owner at login, T-268 guest player. The owner's question: "when we add a second controller how do we use it; which controller is used by who; on PS it asks which user; what about guests".

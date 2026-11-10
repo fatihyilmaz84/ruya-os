@@ -1,6 +1,8 @@
 # T-259 — First-party app: Emulator frontend
 
-Status: todo · Phase: 7 · Depends: T-251, T-252, T-256 · Area: apps · Size: M · Owner: builder · Developer surface: none
+Status: todo · Phase: 7 · Depends: T-251, T-252, T-256, T-307 · Area: apps · Size: M · Owner: builder · Developer surface: none
+
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** A thin client of the hub: ROM scanning, the emulator registry and the retro library view are the hub's and the Library's (T-303, T-304, T-307); this app adds none of its own.
 
 ## Goal
 A launcher for retro games that the player owns: it finds game files on storage and USB drives, matches them to an installed emulator, shows them with art, and starts them. **RuyaOS and this app ship no emulators, no ROMs, no BIOS or firmware, and link to none** (owner, 2026-11-06; `05-play-packages.md`): emulators are separate Flatpaks (or `.play` packages) that the user installs. Part of T-248; its own Flatpak (`org.ruyaos.Retro`).

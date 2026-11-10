@@ -2,6 +2,8 @@
 
 Status: todo · Phase: 5 · Depends: T-381, T-382 · Area: services (ruya-store install hook), docs · Size: S · Owner: builder · Developer surface: internal
 
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** No root hook writes into a profile's Steam configuration (see T-215's ruling): the change is made as the profile user.
+
 ## Goal
 A player who installs Steam from the Store finds GE-Proton as Steam's default compatibility tool, without opening Steam's settings; the player can still pick another one in Steam.
 

@@ -1,6 +1,8 @@
 # T-268 — Guest as a temporary player
 
-Status: todo · Phase: 2 · Depends: T-264, T-265, T-211 · Area: services, shell · Size: S · Owner: builder · Developer surface: internal
+Status: todo · Phase: 2 · Depends: T-264, T-265 · Area: services, shell · Size: S · Owner: builder · Developer surface: internal
+
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** T-211 is not a dependency: scope 3 already reads the policy through a stub.
 
 ## Goal
 Someone without a profile can play in a running session as "Guest player": nothing is persisted for them, a banner says so, and the assignment ends by itself. Part of epic ADR-017 (T-263).

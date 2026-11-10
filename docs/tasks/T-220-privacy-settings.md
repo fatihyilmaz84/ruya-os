@@ -2,6 +2,8 @@
 
 Status: todo · Phase: 3 · Depends: — · Area: shell, services · Size: M · Owner: builder · Developer surface: internal
 
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** Two permission layers, each with one owner: Flatpak overrides (sandbox level, per console) in `ruya-store`, built here and reused by T-240; capability grants (per profile) in ruya-platform's table (T-352), shown in this pane by a later step that depends on T-352. Scope 2b's "mDNS/avahi is removed" is stale: ADR-029 brings Avahi back for Ruya Web, and the network-visibility text must name Ruya Web when it is on.
+
 ## Goal
 Settings -> Privacy tells the player plainly what the console shares and lets them control what apps can reach. Owner request, 2026-11-06: "privacy settings". A console is a shared family device, so privacy has three parts: what the console itself sends out, what is visible to others on the network or to other profiles, and what each app may access.
 

@@ -1,6 +1,8 @@
 # T-279 — App cooperation: save state before close/freeze, audio and downloads in the background, developer guide
 
-Status: todo · Phase: 3 · Depends: T-273, T-275 · Area: services, docs · Size: M · Owner: builder · Developer surface: public-API
+Status: todo · Phase: 3 · Depends: T-273, T-275, T-352 · Area: services, docs · Size: M · Owner: builder · Developer surface: public-API
+
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** Scope 2's "an active transfer reported through the portal" contradicts ADR-026 (apps do not report transfers): removed. The app-facing calls are `Platform1` seats.
 
 ## Goal
 Apps (first-party and third-party) know what happens to them in the background and can behave: they get told they will be frozen or closed, a music or download app may declare a reason to keep running, and a frozen app never makes noise. Part of epic T-273.

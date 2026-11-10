@@ -1,6 +1,8 @@
 # T-396 - Spec: who owns the UI, the family's confirm button, action glyphs (ADR-027 into 02, 04, 06 and T-263)
 
-Status: todo · Phase: 2 · Depends: — · Area: docs (02, 04, 06-input, T-263) · Size: S · Owner: lead · Developer surface: none
+Status: todo · Phase: 2 · Depends: T-366 · Area: docs (02, 04, 06-input, T-263) · Size: S · Owner: lead · Developer surface: none
+
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** Runs after T-366 (it edits `06-input.md`, which T-366 creates, and needs the engine decision). It fixes for every later task: one owner pad set (not "slot 1"), the action vocabulary (one list of names for the shell, T-374 and T-418), the action-to-glyph table, where family is decided (the shared table of T-261, per event in the input service, built by T-398), and one Settings home (`Settings > Controllers`). Takeover: ADR-027 allows it only when every owner pad is gone (disconnected, battery dead); an idle timeout is not in the ADR and would let any pad take a signed-in profile, so it is out unless the owner asks, and a takeover never enters a PIN-protected profile without the PIN. Replace the criterion "T-397..T-399 and T-263 rewritten" with the list of sections each of them reads.
 
 ## Goal
 ADR-027 is written into the specs the builders read, so T-397..T-399 can be built without new decisions, and it fits ADR-017 (players and slots) and ADR-024 (Ruya Input owns the pads).

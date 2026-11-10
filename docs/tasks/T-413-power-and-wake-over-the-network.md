@@ -1,6 +1,8 @@
 # T-413 - Power over the network: sleep, restart, shut down from a paired client; Wake-on-LAN where the hardware does it
 
-Status: todo · Phase: 6 · Depends: T-411, T-262 · Area: services (ruya-link, Devices1 power, image: WoL), docs · Size: S · Owner: builder · Developer surface: internal
+Status: blocked (ADR-030 parked by the owner 2026-11-10; reopen as a web-only task under ADR-029 or with the Companion) · Phase: 6 · Depends: T-411, T-406 · Area: services (ruya-link, Devices1 power, image: WoL), docs · Size: S · Owner: builder · Developer surface: internal
+
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** Blocked with the Companion (ADR-030 is parked; T-412, T-414, T-415 are blocked the same way). T-262 has no Wake-on-LAN and is not a dependency; a gateway must exist first (T-406). Turning Wake-on-LAN on is an image change: "VM (this task)".
 
 ## Goal
 From the phone or the web page an admin puts the console to sleep, restarts or shuts it down; a sleeping console that supports it wakes from the phone; the app says plainly when wake is not possible (powered off, no WoL support).

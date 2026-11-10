@@ -2,6 +2,8 @@
 
 Status: todo · Phase: 2 · Depends: — · Area: docs, image · Size: M · Owner: lead · Developer surface: none
 
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** The owner decided on 2026-11-10 (firmware may be downloaded on the player's request): scope 4 and criterion 4 that call it undecided are stale; the output is the build task. This task owns every Xbox One/Series row of the family table (T-261 links to it).
+
 ## Goal
 A written recommendation, **without building anything**, for how RuyaOS could support the Xbox Wireless Adapter (the USB dongle for Xbox One/Series pads) and Xbox pads in general, ending in a ready list of follow-up tasks the lead can plan. Owner decision, 2026-11-08: RuyaOS does **not** ship "no support" for the adapter; it is **investigated**. The owner's idea to evaluate: a **"Download firmware" button** in Settings where the *user* (not RuyaOS) fetches the dongle firmware from Microsoft's own source at run time, as `xone`'s firmware script does; RuyaOS redistributes nothing; the file lands under `/var` and the driver loads it. Part of T-261 (controller families audit); T-261's own scope no longer adds or rules out the driver, it links to this task's result.
 

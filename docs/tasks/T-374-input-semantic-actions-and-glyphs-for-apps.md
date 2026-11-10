@@ -1,6 +1,8 @@
 # T-374 - Semantic actions and controller glyphs for native apps (Platform1)
 
-Status: todo · Phase: 3 · Depends: T-369 · Area: api, services (input, platform), docs/developers, samples · Size: M · Owner: builder · Complexity: complex · Developer surface: public-API
+Status: todo · Phase: 3 · Depends: T-369, T-352, T-399 · Area: api, services (input, platform), docs/developers, samples · Size: M · Owner: builder · Complexity: complex · Developer surface: public-API
+
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** One glyph source: the action-to-glyph table T-396 specifies and T-399 builds; this task exposes it through `Platform1` (T-352) and adds no second table. Glyphs are our own drawings (ADR-027; T-199's question is closed). Action names are ADR-027's (`accept`, `back`, ...), the same in T-418. Split: semantic actions and glyphs; haptics; the rebinding UI (with QML and screenshot criteria).
 
 ## Goal
 A native RuyaOS app registers actions (navigate, select, back, its own), receives them as press/release/repeat events while it has the focus, and asks which glyph to show for an action on the player's controller; the player can rebind the app's actions. Requirements §10.

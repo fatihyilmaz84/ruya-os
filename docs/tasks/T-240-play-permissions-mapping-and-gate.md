@@ -2,6 +2,8 @@
 
 Status: todo · Phase: 7 · Depends: T-231, T-238 · Area: services, shell · Size: M · Owner: builder
 
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** Overrides go through `ruya-store`'s override mechanism from T-220, not a second one in `ruya-play`.
+
 ## Goal
 What a package asks for is shown in plain words, capped by how far it is trusted, mapped to exactly the Flatpak permission set it gets, and gated by the admin PIN when high-risk, reusing the Store's flow. A package can never obtain a permission the vocabulary does not name.
 

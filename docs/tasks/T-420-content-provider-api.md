@@ -1,6 +1,8 @@
 # T-420 - Content provider API: apps put their items into Continue watching and the console search
 
-Status: todo · Phase: 7 · Depends: T-352, T-351 · Area: api (a `Platform1` interface), services (ruya-platform, ruya-library), shell (Home row, search), docs/developers, samples · Size: M · Owner: builder · Complexity: complex · Developer surface: public-API
+Status: todo · Phase: 7 · Depends: T-352, T-351, T-353 · Area: api (a `Platform1` interface), services (ruya-platform, ruya-library), shell (Home row, search), docs/developers, samples · Size: M · Owner: builder · Complexity: complex · Developer surface: public-API
+
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** Add: items follow the profile's age limit once T-211 exists (a named hook now), artwork from apps is vetted like other outside images (size, decode limits), nothing crosses profiles. Add Out of scope and Docs to update.
 
 ## Goal
 A media or game app registers its own items (an episode with its progress, an album, a save slot) and the console shows them in Home's "Continue watching" and in search; choosing one opens the app at that item. Owner decision 2026-11-10 (ADR-031): a new line on ADR-022's tier-B list.

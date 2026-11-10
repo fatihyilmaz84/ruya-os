@@ -1,6 +1,8 @@
 # T-251 — RuyaKit: the shared components as a module apps can use
 
-Status: todo · Phase: 7 · Depends: T-250 · Area: shell, docs · Size: M · Owner: builder · Developer surface: public-API
+Status: todo · Phase: 7 · Depends: T-250, T-352 · Area: shell, docs · Size: M · Owner: builder · Developer surface: public-API
+
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** Also builds the `Platform1` client bindings the extension carries (ADR-015; no other task owns them). The component list in the developer chapter is generated from T-417's catalogue when that exists.
 
 ## Goal
 The design tokens and the building blocks that apps need move into a QML module (working name **RuyaKit**) that both the shell and first-party apps use, so an app looks and behaves like the shell without copying it. The shape is decided: **ADR-015, Accepted (owner, 2026-11-08), a Flatpak runtime extension `org.ruyaos.Platform` that carries RuyaKit and is versioned separately from the shell** (not a module per app); the spike T-250 supplies the details (base runtime, Qt version, theme delivery) as amendments to the ADR; this task builds what the ADR says. Part of T-248.

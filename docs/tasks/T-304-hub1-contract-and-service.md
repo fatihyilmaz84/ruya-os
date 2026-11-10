@@ -2,6 +2,8 @@
 
 Status: todo · Phase: 5 · Depends: T-302, T-303 · Area: api, services, shell · Size: M · Owner: builder · Developer surface: public-API
 
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** Internal only (header `Developer surface: internal` in effect): the VM check runs as the shell, not "as the sample app user"; the app-facing seat is T-308 behind T-352. The service does not create or own directories inside a profile's home as a system user (see T-215's ruling; T-400 decides the per-profile half). A new unit and bus policy: the VM criterion is "VM (this task)". Hostile input: `Identify` and any archive reading are size- and depth-capped, with tests.
+
 ## Goal
 An **internal** system service (ADR-020 Accepted, ADR-022: shell and root only; sandboxed apps reach it through `Platform1`, T-352) answers, per profile, where ROMs live, where saves/states/config/captures go, what a file is (stable game id), and who is playing. Part of epic T-302.
 

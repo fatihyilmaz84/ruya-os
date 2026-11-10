@@ -1,6 +1,6 @@
 # T-311 — External emulators and apps integrate with the saves manager (register their save locations, open the manager, react to changes)
 
-Status: todo · Phase: 5 · Depends: T-309, T-304, T-306 · Area: api, services, docs · Size: M · Owner: builder · Developer surface: public-API
+Status: todo · Phase: 5 · Depends: T-309, T-304, T-306, T-352 · Area: api, services, docs · Size: M · Owner: builder · Developer surface: public-API
 
 ## Goal
 Any emulator or game, not only first-party ones, can tell the OS where its saves, states and configs are and how to label them, can open the saves manager at the right game from its own menu, and learns when the OS changed its files (a slot copied in, a delete, an import), so it can reload. Part of the saves manager (T-309) and the game data hub (T-302).

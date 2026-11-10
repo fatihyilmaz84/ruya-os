@@ -2,6 +2,8 @@
 
 Status: todo · Phase: 5 · Depends: T-382 · Area: services (ruya-store, ruya-library), shell (Store, game page), image (extension builds) · Size: M · Owner: builder · Complexity: complex · Developer surface: internal
 
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** Owns the per-game runner choice for every Windows game (T-239 reads it). Its own note says "Large: split": split before dispatch.
+
 ## Goal
 Besides the preinstalled GE-Proton, the player can install other Windows runners from the Store (Wine stable and staging, Wine-GE, UMU-Proton, other open builds of ADR-025) and choose per game which runner and version it uses; a runner in use is never removed under a game.
 

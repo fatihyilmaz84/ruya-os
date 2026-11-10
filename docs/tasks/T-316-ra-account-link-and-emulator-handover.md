@@ -1,6 +1,8 @@
 # T-316 — RetroAchievements account link in Settings and the credential hand-over to emulators
 
-Status: todo · Phase: 5 · Depends: T-315, T-304, T-220, T-211 · Area: services, shell · Size: M · Owner: builder · Developer surface: public-API
+Status: todo · Phase: 5 · Depends: T-315, T-304, T-220, T-211, T-352 · Area: services, shell · Size: M · Owner: builder · Developer surface: public-API
+
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** Split: the service with its unit and policy ("VM (this task)"); the Settings pane; the hand-over to emulators. The token is a credential: it is not written where T-215's backup or T-309's export picks it up unless the player ticks it (ADR-021 (3)), tested.
 
 ## Goal
 A player links a RetroAchievements account to their profile from the couch (no password typed more than once), and an emulator that is allowed to gets logged in at start without the player touching the emulator's own menus. Part of epic T-314.

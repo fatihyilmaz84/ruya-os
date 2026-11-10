@@ -2,6 +2,8 @@
 
 Status: todo · Phase: 7 · Depends: T-230, T-231, T-232 · Area: services · Size: M · Owner: builder
 
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** Imports are ADR-026 jobs in the one job record (T-388 names the kind), visible on the Downloads page; no private job table.
+
 ## Goal
 The whole of `ruya-play`'s install pipeline (05 §7.3) as pure logic behind traits, tested on Windows with fakes: it inspects, unpacks into staging with every check, and hands a verified tree to a `Commit` trait. The real Flatpak commit and the systemd sandboxing come in T-238.
 

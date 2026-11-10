@@ -5,12 +5,14 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | ID | Title | Status | Depends |
 |---|---|---|---|
 | [T-362](tasks/T-362-compositor-xdg-output-and-socket-follow-ups.md) | Compositor: xdg-output for games, profile-socket and log follow-ups | todo | — |
-| [T-394](tasks/T-394-options-menu-on-game-cards.md) | Options menu on game and app cards: Details, Activity, Uninstall and the rest of T-393's list | todo | T-393, T-386 |
-| [T-398](tasks/T-398-controller-family-button-mapping.md) | The family's own confirm button: Nintendo A on the right, PlayStation Cross (or Circle), a Confirm-button setting | todo | T-396 |
-| [T-397](tasks/T-397-one-controller-drives-the-ui.md) | One controller drives the UI: owner pads per signed-in profile, takeover when they are gone, Guide on a foreign pad | todo | T-396 |
-| [T-399](tasks/T-399-action-glyphs-follow-the-active-controller.md) | Glyphs follow the active controller: action glyphs for Xbox, PlayStation, Nintendo, keyboard and a generic pad | todo | T-396, T-398 |
+| [T-423](tasks/T-423-ci-supply-chain-and-secret-scan.md) | CI gates: cargo-deny (advisories, licences), secret scan in CI and the hook, a bus-policy lint | todo | — |
+| [T-424](tasks/T-424-vm-security-posture-check.md) | `vm-security-check.sh`: hardening scores, listening ports, SELinux, setuid files against a baseline | todo | — |
+| [T-422](tasks/T-422-plan-lint-deps-owners-stale-claims.md) | Plan lint: board and headers agree on dependencies, [lead], parked and stale claims, budgets | todo | — |
+| [T-425](tasks/T-425-image-variants-dev-and-release.md) | **[lead]** Two image variants (VM this task): `dev` with SSH, `release` without, base images by digest, a check | todo | T-424 |
+| [T-426](tasks/T-426-epic-release-security.md) | **[lead]** EPIC release security (Phase 6): signing, update authenticity, data at rest, factory reset, ceilings: spec and tasks | todo | T-424, T-425 |
+| [T-394](tasks/T-394-options-menu-on-game-cards.md) | Options menu on game and app cards: Details, Activity, Uninstall and the rest of T-393's list | todo | T-393 |
 | [T-395](tasks/T-395-options-menu-on-other-surfaces.md) | Options menu on the other surfaces: Store cards, Downloads rows, device rows | todo | T-394 |
-| [T-378](tasks/T-378-session-follow-ups-alive-reset-user-link.md) | ruya-session follow-ups: Alive resets the miss count, user unknown vs a logind error, a strict restart check | todo | T-363 |
+| [T-378](tasks/T-378-session-follow-ups-alive-reset-user-link.md) | ruya-session follow-ups: Alive resets the miss count, user unknown vs a logind error, a strict restart check | todo | — |
 | [T-299](tasks/T-299-image-follow-ups-secure-boot-bluez-grub-menu.md) | Image follow-ups (VM this task): quiet bootloader-update on Secure Boot, BlueZ pairable timeout, grub-menu ordering, webp | todo | — |
 | [T-364](tasks/T-364-storage-scan-follow-ups.md) | Storage scan follow-ups: a real-directory test, a Rescan row, a calmer busy retry | todo | — |
 | [T-339](tasks/T-339-vm-check-script-follow-ups.md) | VM check scripts: power-saving wake, sounds probe and jq | todo | — |
@@ -25,51 +27,54 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | [T-383](tasks/T-383-steam-uses-ge-proton-by-default.md) | Steam uses GE-Proton by default once installed | todo | T-381, T-382 |
 | [T-384](tasks/T-384-ge-proton-for-developers.md) | Developers: run a Windows game on the console's GE-Proton (tier-C format, chapter, sample) | todo | T-382 |
 | [T-385](tasks/T-385-runner-catalogue-and-per-game-choice.md) | Windows runner catalogue (Wine, Wine-GE, UMU-Proton, ...) in the Store and a per-game runner choice | todo | T-382 |
+| [T-397](tasks/T-397-one-controller-drives-the-ui.md) | One controller drives the UI: owner pads per signed-in profile, takeover when they are gone, Guide on a foreign pad | todo | T-396, T-367 |
 | [T-368](tasks/T-368-controllers-pane-capabilities-button-test.md) | Settings > Controllers: connected pads, capabilities and a live button test | todo | T-367 |
+| [T-398](tasks/T-398-controller-family-button-mapping.md) | The family's own confirm button: Nintendo A on the right, PlayStation Cross (or Circle), a Confirm-button setting | todo | T-396, T-366, T-368 |
+| [T-399](tasks/T-399-action-glyphs-follow-the-active-controller.md) | Glyphs follow the active controller: action glyphs for Xbox, PlayStation, Nintendo, keyboard and a generic pad | todo | T-396, T-398 |
 | [T-369](tasks/T-369-input-mapping-v1-profiles.md) | Mapping v1: button layout, remapping, dead zones, curves; global profiles with import and export | todo | T-368 |
 | [T-370](tasks/T-370-game-and-platform-input-profiles.md) | Game and platform controller profiles: inheritance, applied on focus, a Controller entry on the game page | todo | T-369 |
 | [T-371](tasks/T-371-input-ownership-passthrough-and-steam.md) | **[lead]** Ownership modes: direct passthrough and Steam-managed controllers | todo | T-367 |
 | [T-372](tasks/T-372-input-keyboard-mouse-layers-chords.md) | Keyboard and mouse output, action layers, chords and controller shortcuts | todo | T-369 |
 | [T-373](tasks/T-373-input-gyro-touchpad-haptics.md) | Gyro, touchpad and haptics | todo | T-369 |
-| [T-374](tasks/T-374-input-semantic-actions-and-glyphs-for-apps.md) | Semantic actions and controller glyphs for native apps (Platform1) | todo | T-369 |
+| [T-374](tasks/T-374-input-semantic-actions-and-glyphs-for-apps.md) | Semantic actions and controller glyphs for native apps (Platform1) | todo | T-369, T-352, T-399 |
 | [T-292](tasks/T-292-activity-page-follow-ups.md) | Activity page follow-ups: refresh only when visible, paging, retry, icons, focus order | todo | — |
 | [T-295](tasks/T-295-time-zone-follow-ups.md) | Time zone follow-ups: say it when Setup cannot set the zone, type to filter the chooser | todo | — |
 | [T-287](tasks/T-287-display-hotplug-and-mode-check.md) | Display service follow-ups: hot-plug signal, check the real mode after the restart, recovery argument | todo | T-282 |
 | [T-288](tasks/T-288-display-pane-layout-and-ui-size-reflow.md) | Display pane order, layout at large UI size, a Screen row, and the late-filled Column reflow | todo | T-282 |
 | [T-343](tasks/T-343-settings-first-focus-and-manage-profiles-follow-ups.md) | Settings follow-ups: first focus skips disabled rows, read-only rows in the spec, Manage profiles result and Guest | todo | — |
 | [T-289](tasks/T-289-system-information-follow-ups.md) | System information follow-ups: Bluetooth address from BlueZ, image from a root source, one info row, drive chooser | todo | — |
-| [T-338](tasks/T-338-dell-second-pad-drop-repro.md) | **[lead]** Dell: why did the second DualSense drop after 21 s? (live repro and report) | todo | T-335 |
-| [T-355](tasks/T-355-dell-real-game-smoke-test-supertuxkart.md) | **[lead]** Dell smoke test with a real game: SuperTuxKart through the shell | todo | T-386 |
-| [T-332](tasks/T-332-format-removable-drive-service.md) | Format a removable drive: the service (udisks2, polkit, refusals, identity re-check) | todo | T-196, T-194 |
-| [T-333](tasks/T-333-format-drive-settings-flow.md) | Settings > Storage > Format drive...: choose, confirm, PIN, progress, result | todo | T-331, T-332 |
+| [T-338](tasks/T-338-dell-second-pad-drop-repro.md) | **[lead]** Dell: why did the second DualSense drop after 21 s? (live repro and report) | todo | — |
+| [T-355](tasks/T-355-dell-real-game-smoke-test-supertuxkart.md) | **[lead]** Dell smoke test with a real game: SuperTuxKart through the shell | todo | — |
+| [T-332](tasks/T-332-format-removable-drive-service.md) | Format a removable drive: the service (udisks2, polkit, refusals, identity re-check) | todo | — |
+| [T-333](tasks/T-333-format-drive-settings-flow.md) | Settings > Storage > Format drive...: choose, confirm, PIN, progress, result | todo | T-332 |
 | [T-341](tasks/T-341-lint-icon-and-docs-follow-ups.md) | Lint and docs follow-ups: sample metainfo check, icon spike contour, member-lint note, vm-goto | todo | — |
 | [T-342](tasks/T-342-store-age-rating-and-sync-follow-ups.md) | Store follow-ups: every OARS attribute, the long Turkish badge, installed-list reads in order | todo | — |
 | [T-344](tasks/T-344-audio-pane-delete-and-confirm-detail-follow-ups.md) | Sound theme delete and confirm dialogs: refused delete, guard test, wrapped details | todo | — |
 | [T-345](tasks/T-345-appart-gpu-check-masked-tint-and-shots.md) | AppArt and rounded corners: one GPU check, tint under masked pictures, shots at 4K and DPR 1 | todo | — |
-| [T-346](tasks/T-346-sound-theme-checker-work-cap-and-flac-fixtures.md) | Sound theme checker: cap the decode work, fuzz the decoder, FLAC fixtures from real encoders | todo | T-330 |
+| [T-346](tasks/T-346-sound-theme-checker-work-cap-and-flac-fixtures.md) | Sound theme checker: cap the decode work, fuzz the decoder, FLAC fixtures from real encoders | todo | — |
 | [T-283](tasks/T-283-contrast-gate-rows-and-chart-bar-marker.md) | Contrast gate rows: glass sheet, chart bars, saver, bare backdrop, avatars; the chart's read-bar marker | todo | T-282 |
 | [T-284](tasks/T-284-glass-sheet-and-dialog-card-follow-ups.md) | Glass sheet follow-ups and one dialog card for the confirm dialogs | todo | T-282 |
 | [T-298](tasks/T-298-ci-qt-floor-and-linux-clippy-gate.md) | **[lead]** CI: decide the Qt floor and add a Linux-native clippy gate at Rust 1.92 | todo | — |
 | [T-201](tasks/T-201-recover-from-stuck-processes.md) | **[lead]** Recover from stuck processes (watchdogs, OOM) | todo | — |
 | [T-207](tasks/T-207-faster-bluetooth-controller-reconnect.md) | **[lead]** Faster Bluetooth controller reconnect | todo | — |
 | [T-210](tasks/T-210-profile-customisation.md) | Profile customisation: avatar, colour, name | todo | — |
-| [T-215](tasks/T-215-save-backup-and-keep-data.md) | **[lead]** Saves: back up/restore, keep on uninstall | todo | — |
+| [T-215](tasks/T-215-save-backup-and-keep-data.md) | **[lead]** Saves: back up/restore, keep on uninstall | todo | T-302, T-400 |
 | [T-216](tasks/T-216-network-connection-options.md) | **[lead]** Network options: IP, DNS, proxy, hidden Wi-Fi | todo | — |
 | [T-218](tasks/T-218-hdr-feasibility-spike.md) | **[lead]** HDR feasibility spike | todo | — |
 | [T-219](tasks/T-219-audio-formats-and-surround.md) | **[lead]** Audio formats and surround, passthrough | todo | — |
-| [T-357](tasks/T-357-headphone-virtual-surround-hrtf.md) | **[lead]** Headphone virtual surround: a licence-clean HRTF through PipeWire (owner pointer: HRTF Database) | todo | T-322 |
+| [T-357](tasks/T-357-headphone-virtual-surround-hrtf.md) | **[lead]** Headphone virtual surround: a licence-clean HRTF through PipeWire (owner pointer: HRTF Database) | todo | — |
 | [T-220](tasks/T-220-privacy-settings.md) | Privacy settings and per-app permissions | todo | — |
-| [T-221](tasks/T-221-app-management.md) | App management: sizes, update, remove, bulk | todo | — |
-| [T-222](tasks/T-222-refresh-rate-matching-and-vrr.md) | **[lead]** Refresh-rate matching and VRR | todo | T-198 |
-| [T-224](tasks/T-224-telemetry-service-and-consent.md) | **[lead]** Telemetry service and consent | todo | — |
+| [T-221](tasks/T-221-app-management.md) | App management: sizes, update, remove, bulk | todo | T-394, T-215 |
+| [T-222](tasks/T-222-refresh-rate-matching-and-vrr.md) | **[lead]** Refresh-rate matching and VRR | todo | — |
+| [T-224](tasks/T-224-telemetry-service-and-consent.md) | **[lead]** Telemetry service and consent | todo | T-220 |
 | [T-225](tasks/T-225-crash-reporting.md) | **[lead]** Crash reporting | todo | T-224 |
-| [T-211](tasks/T-211-parental-controls-service.md) | **[lead]** Parental controls, service side | todo | T-210, T-213, T-247 |
+| [T-211](tasks/T-211-parental-controls-service.md) | **[lead]** Parental controls, service side | todo | T-210 |
 | [T-212](tasks/T-212-parental-controls-screens.md) | Parental controls screens | todo | T-211 |
-| [T-165](tasks/T-165-profile-switch-freezes-apps.md) | Profile switch and sign-out freeze the profile's apps | todo | T-164 |
+| [T-165](tasks/T-165-profile-switch-freezes-apps.md) | Profile switch and sign-out freeze the profile's apps | todo | — |
 | [T-245](tasks/T-245-notification-centre.md) | **[lead]** Notification centre: history, quiet mode, notifications from apps (bridge) | todo | — |
-| [T-246](tasks/T-246-achievements.md) | **[lead]** Achievements: portal for games, per-profile service, unlock moment | todo | T-245, T-164 |
-| [T-228](tasks/T-228-epic-play-packages.md) | **[lead]** EPIC: `.play` packages (ADR-014 accepted; parked by the owner until visual polish and T-164) | blocked | owner |
-| [T-229](tasks/T-229-play-feasibility-spike.md) | **[lead]** Spike: `.play` as a generated Flatpak, Wine display, Proton nesting | todo | T-228, T-164 |
+| [T-246](tasks/T-246-achievements.md) | **[lead]** Achievements: portal for games, per-profile service, unlock moment | todo | T-245, T-352 |
+| [T-228](tasks/T-228-epic-play-packages.md) | **[lead]** EPIC: `.play` packages (ADR-014 accepted; parked by the owner until visual polish and T-164) | blocked | — |
+| [T-229](tasks/T-229-play-feasibility-spike.md) | **[lead]** Spike: `.play` as a generated Flatpak, Wine display, Proton nesting | todo | T-228 |
 | [T-230](tasks/T-230-play-format-crate.md) | `.play` format: schema, parser, hostile-package tests | todo | T-228 |
 | [T-231](tasks/T-231-play-signing-and-trust.md) | **[lead]** `.play` signing, trust tiers, key continuity, revocation | todo | T-230 |
 | [T-232](tasks/T-232-play-art-and-video-vetting.md) | `.play` art and video vetting (decode, check, re-encode) | todo | T-230 |
@@ -87,60 +92,59 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | [T-248](tasks/T-248-epic-first-party-apps.md) | **[lead]** EPIC: first-party apps (picture viewer, weather, media player, files, Jellyfin, then the emulator frontend; no browser first) and the platform they need | todo | — |
 | [T-249](tasks/T-249-hig-human-interface-guidelines.md) | **[lead]** Human Interface Guidelines for app authors (`docs/specs/06-hig.md`) | todo | — |
 | [T-250](tasks/T-250-app-platform-spike-and-adr.md) | **[lead]** Spike for ADR-015 (Accepted): the `org.ruyaos.Platform` runtime extension with RuyaKit | todo | — |
-| [T-251](tasks/T-251-ruyakit-shared-components.md) | RuyaKit: shared components as a module apps can use | todo | T-250 |
-| [T-252](tasks/T-252-app-template-ci-and-publish.md) | App template, CI recipe, publish to the Store | todo | T-250, T-251, T-214 |
+| [T-251](tasks/T-251-ruyakit-shared-components.md) | RuyaKit: shared components as a module apps can use | todo | T-250, T-352 |
+| [T-252](tasks/T-252-app-template-ci-and-publish.md) | App template, CI recipe, publish to the Store | todo | T-250, T-251, T-416, T-351 |
 | [T-253](tasks/T-253-app-picture-viewer.md) | App: Picture viewer | todo | T-251, T-252 |
 | [T-254](tasks/T-254-app-weather.md) | App: Weather | todo | T-251, T-252 |
 | [T-255](tasks/T-255-app-media-player.md) | App: Media player (local files; codec situation) | todo | T-251, T-252, T-256 |
 | [T-256](tasks/T-256-app-file-manager.md) | App: File manager (and the shared folder browser) | todo | T-251, T-252 |
 | [T-257](tasks/T-257-app-jellyfin-client.md) | App: Jellyfin client | todo | T-251, T-252, T-255 |
-| [T-258](tasks/T-258-app-browser.md) | **[lead]** App: Browser (parked by the owner 2026-11-08, ADR-016: no browser first) | todo | owner, T-250, T-252 |
-| [T-259](tasks/T-259-app-emulator-frontend.md) | App: Emulator frontend (no emulators, ROMs or BIOS shipped) | todo | T-251, T-252, T-256 |
-| [T-262](tasks/T-262-wake-from-suspend-by-controller.md) | Wake from suspend with a controller (hardware-dependent; honest UI) | todo | T-166, T-202, T-203 |
-| [T-263](tasks/T-263-controller-registry-and-player-model-spec.md) | **[lead]** EPIC multiple controllers (ADR-017): spec of the registry and the player model | todo | T-260, T-366 |
-| [T-264](tasks/T-264-controller-registry-and-slots-service.md) | Controller registry and player slots: contract, `ruya-inputd`, mock, client | todo | T-263 |
-| [T-265](tasks/T-265-players-ui-whos-playing-and-chips.md) | Players UI: "Who's playing?" dialog, player chips, Settings > Players | todo | T-264, T-223 |
+| [T-258](tasks/T-258-app-browser.md) | **[lead]** App: Browser (parked by the owner 2026-11-08, ADR-016: no browser first) | blocked | owner, T-250, T-252 |
+| [T-259](tasks/T-259-app-emulator-frontend.md) | App: Emulator frontend (no emulators, ROMs or BIOS shipped) | todo | T-251, T-252, T-256, T-307 |
+| [T-262](tasks/T-262-wake-from-suspend-by-controller.md) | Wake from suspend with a controller (hardware-dependent; honest UI) | todo | — |
+| [T-263](tasks/T-263-controller-registry-and-player-model-spec.md) | **[lead]** EPIC multiple controllers (ADR-017): spec of the registry and the player model | todo | T-366, T-396 |
+| [T-264](tasks/T-264-controller-registry-and-slots-service.md) | Controller registry and player slots: contract, `ruya-inputd`, mock, client | todo | T-263, T-367 |
+| [T-265](tasks/T-265-players-ui-whos-playing-and-chips.md) | Players UI: "Who's playing?" dialog, player chips, Settings > Players | todo | T-264, T-368 |
 | [T-266](tasks/T-266-virtual-gamepads-per-slot-for-apps.md) | **[lead]** Ordered virtual gamepads per slot for apps (physical pads hidden) | todo | T-264, T-367 |
 | [T-267](tasks/T-267-pad-default-owner-at-login.md) | A pad remembers its owner: Guide on the picker highlights that profile | todo | T-264, T-265 |
-| [T-268](tasks/T-268-guest-player.md) | Guest as a temporary player | todo | T-264, T-265, T-211 |
-| [T-270](tasks/T-270-epic-games-store-integration.md) | **[lead]** Epic Games Store integration (Legendary, Heroic-style): Proposed ADR-018 first | blocked | owner |
-| [T-273](tasks/T-273-epic-multitasking-and-task-switching.md) | **[lead]** EPIC multitasking and task switching (ADR-019 Accepted): spec | todo | T-164 |
-| [T-274](tasks/T-274-spike-freezing-real-games.md) | **[lead]** Spike: freeze and thaw real apps and games on the Dell | todo | T-164, T-162 |
+| [T-268](tasks/T-268-guest-player.md) | Guest as a temporary player | todo | T-264, T-265 |
+| [T-270](tasks/T-270-epic-games-store-integration.md) | **[lead]** Epic Games Store integration (Legendary, Heroic-style): Proposed ADR-018 first | blocked | owner, T-229, T-251, T-382, T-385 |
+| [T-273](tasks/T-273-epic-multitasking-and-task-switching.md) | **[lead]** EPIC multitasking and task switching (ADR-019 Accepted): spec | todo | — |
+| [T-274](tasks/T-274-spike-freezing-real-games.md) | **[lead]** Spike: freeze and thaw real apps and games on the Dell | todo | — |
 | [T-275](tasks/T-275-session-per-app-freeze-and-switch.md) | `ruya-session`: per-app freeze/thaw and an atomic `Switch` | todo | T-273, T-274, T-165 |
-| [T-276](tasks/T-276-compositor-snapshots-visibility-smooth-switch.md) | **[lead]** Compositor: last-frame snapshots, visibility events, smooth switch | todo | T-273, T-164, T-147 |
+| [T-276](tasks/T-276-compositor-snapshots-visibility-smooth-switch.md) | **[lead]** Compositor: last-frame snapshots, visibility events, smooth switch | todo | T-273, T-147 |
 | [T-277](tasks/T-277-task-switcher-ui-and-quick-switch.md) | Task switcher UI and the quick-switch gesture | todo | T-273, T-147, T-275, T-276 |
 | [T-278](tasks/T-278-background-and-memory-policy-game-mode.md) | **[lead]** Background and memory policy ("game mode") | todo | T-273, T-274, T-275, T-201 |
-| [T-279](tasks/T-279-app-cooperation-save-state-and-background-audio.md) | App cooperation: save state, background audio, developer guide | todo | T-273, T-275 |
-| [T-280](tasks/T-280-gap-free-boot-handover.md) | **[lead]** Close the dark gap between the boot splash and the shell's first frame | todo | T-269 |
+| [T-279](tasks/T-279-app-cooperation-save-state-and-background-audio.md) | App cooperation: save state, background audio, developer guide | todo | T-273, T-275, T-352 |
+| [T-280](tasks/T-280-gap-free-boot-handover.md) | **[lead]** Close the dark gap between the boot splash and the shell's first frame | todo | — |
 | [T-302](tasks/T-302-epic-game-data-hub-api.md) | **[lead]** EPIC game data hub (ADR-020 Accepted): ROM folders, save and capture paths, now-playing: spec | todo | — |
-| [T-400](tasks/T-400-save-discovery-spike.md) | **[lead]** Spike: where saves are, found as the profile user (agent, Ludusavi manifest, runner and Steam prefixes) | todo | T-302 |
+| [T-400](tasks/T-400-save-discovery-spike.md) | **[lead]** Spike: where saves are, found as the profile user (agent, Ludusavi manifest, runner and Steam prefixes) | todo | T-302, T-381 |
 | [T-401](tasks/T-401-library-installations-of-one-game.md) | Library: one game, several installations (Flatpak, Steam, .play, ROM), a preferred one, no merging by title | todo | T-302, T-400 |
-| [T-402](tasks/T-402-windows-saves-in-prefixes.md) | Windows game saves: snapshot and restore the saves inside our runner prefixes and Steam's Proton prefixes | todo | T-400, T-382, T-215 |
-| [T-403](tasks/T-403-games-on-other-drives.md) | Games on other drives: install to a drive, move between drives, a missing drive leaves its games unavailable | todo | T-389, T-401 |
+| [T-402](tasks/T-402-windows-saves-in-prefixes.md) | Windows game saves: snapshot and restore the saves inside our runner prefixes and Steam's Proton prefixes | todo | T-400, T-382, T-215, T-310 |
+| [T-403](tasks/T-403-games-on-other-drives.md) | Games on other drives: install to a drive, move between drives, a missing drive leaves its games unavailable | blocked | owner, T-389, T-401 |
 | [T-303](tasks/T-303-spike-hub-systems-layout-sandbox.md) | **[lead]** Spike and spec: system ids, ROM and capture layout, sandbox reach | todo | T-302 |
 | [T-304](tasks/T-304-hub1-contract-and-service.md) | `GameData1`: contract, `ruya-gamedata` service, mock and client | todo | T-302, T-303 |
-| [T-305](tasks/T-305-captures-screenshot-recording-clip.md) | **[lead]** Captures: screenshots, recordings and clip-the-last-seconds by the OS | todo | T-302, T-304, T-164 |
-| [T-306](tasks/T-306-now-playing-exchange.md) | Now playing: apps report, the OS shows and shares it | todo | T-302, T-304, T-247 |
-| [T-307](tasks/T-307-library-and-emulator-frontend-use-the-hub.md) | Library and the emulator frontend use the hub | todo | T-302, T-304, T-259 |
-| [T-308](tasks/T-308-hub-developer-guide-sample-and-permissions.md) | Hub developer guide, sample app and per-app permissions | todo | T-302, T-304, T-306, T-220 |
+| [T-305](tasks/T-305-captures-screenshot-recording-clip.md) | **[lead]** Captures: screenshots, recordings and clip-the-last-seconds by the OS | todo | T-302, T-304, T-352 |
+| [T-306](tasks/T-306-now-playing-exchange.md) | Now playing: apps report, the OS shows and shares it | todo | T-302, T-304, T-352 |
+| [T-307](tasks/T-307-library-and-emulator-frontend-use-the-hub.md) | Library and the emulator frontend use the hub | todo | T-302, T-304 |
+| [T-308](tasks/T-308-hub-developer-guide-sample-and-permissions.md) | Hub developer guide, sample app and per-app permissions | todo | T-302, T-304, T-306, T-220, T-352, T-353 |
 | [T-309](tasks/T-309-saves-catalog-and-operations-service.md) | **[lead]** Saves manager, service: catalog of saves per game and safe operations (copy, move, delete, export, import) | todo | T-215, T-302, T-304 |
 | [T-310](tasks/T-310-saves-manager-ui.md) | Saves manager UI: browse, copy, move, delete, export and import saves | todo | T-309 |
-| [T-311](tasks/T-311-saves-manager-for-external-emulators.md) | External emulators and apps integrate with the saves manager (declare, register, open, notify) | todo | T-309, T-304, T-306 |
-
+| [T-311](tasks/T-311-saves-manager-for-external-emulators.md) | External emulators and apps integrate with the saves manager (declare, register, open, notify) | todo | T-309, T-304, T-306, T-352 |
 | [T-314](tasks/T-314-epic-retro-achievements.md) | **[lead]** EPIC: retro achievements (RetroAchievements) for emulated games | todo | — |
-| [T-315](tasks/T-315-spike-ra-terms-hashes-and-contract.md) | **[lead]** Spike: RetroAchievements terms, ROM hash rules, supported systems, service contract | in-progress | T-314, T-302 |
-| [T-316](tasks/T-316-ra-account-link-and-emulator-handover.md) | RetroAchievements account link in Settings and credential hand-over to emulators | todo | T-315, T-304, T-220, T-211 |
+| [T-315](tasks/T-315-spike-ra-terms-hashes-and-contract.md) | **[lead]** Spike: RetroAchievements terms, ROM hash rules, supported systems, service contract | todo | T-314, T-302, T-303 |
+| [T-316](tasks/T-316-ra-account-link-and-emulator-handover.md) | RetroAchievements account link in Settings and credential hand-over to emulators | todo | T-315, T-304, T-220, T-211, T-352 |
 | [T-317](tasks/T-317-ra-data-in-the-shell.md) | RetroAchievements data in the shell: cache, Library rings, profile tab, game page | todo | T-316, T-307, T-246 |
 | [T-318](tasks/T-318-ra-unlock-moment-and-presence.md) | **[lead]** Retro unlock moment and presence: toast, report event, polling fallback | todo | T-317, T-246, T-245, T-306 |
 | [T-319](tasks/T-319-xbox-360-wireless-receiver.md) | Xbox 360 wireless receiver ("360 dongle"): in-kernel `xpad`, classification, battery, sync guidance | todo | — |
 | [T-350](tasks/T-350-lint-dev-docs-public-api-coverage-and-samples.md) | lint-dev-docs: every public API element is documented, every sample builds | todo | — |
 | [T-351](tasks/T-351-api-level-and-changelog.md) | API level: RUYA_API_LEVEL, the AppStream minimum, the Store filter, an XML-diff changelog | todo | — |
-| [T-352](tasks/T-352-ruya-platform-service-skeleton.md) | ruya-platform: the one door for sandboxed apps (ADR-022 Accepted; step one: the caller-identity spike) | todo | T-351 |
+| [T-352](tasks/T-352-ruya-platform-service-skeleton.md) | **[lead]** ruya-platform: the one door for sandboxed apps (ADR-022 Accepted; step one: the caller-identity spike) | todo | T-351 |
 | [T-353](tasks/T-353-developer-mock-and-sample-harness.md) | Developer harness: a Platform mock, a sample app and a conformance runner in CI | todo | T-352, T-350 |
-| [T-420](tasks/T-420-content-provider-api.md) | Content provider API: apps put their items into Continue watching and the console search | todo | T-352, T-351 |
-| [T-416](tasks/T-416-ruya-cli-and-validators.md) | The `ruya` developer CLI: SDK discovery and app validation with JSON output and an error catalogue | todo | T-351, T-350 |
-| [T-417](tasks/T-417-llms-txt-and-catalogues.md) | AI entry points: `llms.txt`, a generated `llms-full.txt`, component and API catalogues, `AGENTS.md` for apps | todo | T-416, T-251 |
-| [T-418](tasks/T-418-dev-image-ui-inspector-and-input.md) | Development images: inspect a running app's UI as data, drive it with a virtual pad, collect its logs | todo | T-416, T-367 |
+| [T-420](tasks/T-420-content-provider-api.md) | Content provider API: apps put their items into Continue watching and the console search | todo | T-352, T-351, T-353 |
+| [T-416](tasks/T-416-ruya-cli-and-validators.md) | The `ruya` developer CLI: SDK discovery and app validation with JSON output and an error catalogue | todo | T-351, T-350, T-352, T-353 |
+| [T-417](tasks/T-417-llms-txt-and-catalogues.md) | AI entry points: `llms.txt`, a generated `llms-full.txt`, component and API catalogues, `AGENTS.md` for apps | todo | T-416, T-251, T-252 |
+| [T-418](tasks/T-418-dev-image-ui-inspector-and-input.md) | Development images: inspect a running app's UI as data, drive it with a virtual pad, collect its logs | todo | T-416, T-367, T-396, T-425 |
 | [T-419](tasks/T-419-developer-mcp-server.md) | Ruya Developer MCP server (optional, host-side): the CLI's commands as typed tools for AI agents | todo | T-416, T-417, T-418 |
 | [T-354](tasks/T-354-research-xbox-wireless-adapter-support.md) | **[lead]** Research: Xbox Wireless Adapter support (driver, user-downloaded firmware, legal risk) and a recommended task list; builds nothing | todo | — |
 | [T-404](tasks/T-404-ruya-web-threat-model-and-allow-list.md) | **[lead]** Ruya Web: threat model, the bus allow-list per service, pairing and session design | todo | — |
@@ -150,8 +154,8 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | [T-407](tasks/T-407-ruya-web-library-and-artwork.md) | Ruya Web: library and game details, custom artwork and metadata (stored by the Library) | todo | T-406, T-401 |
 | [T-408](tasks/T-408-ruya-web-rom-upload-and-import.md) | Ruya Web: ROM and BIOS upload, then import through the hub (identify, duplicates, archives) | todo | T-406, T-304 |
 | [T-409](tasks/T-409-ruya-web-system-pages.md) | Ruya Web: downloads, apps, storage and saves pages over their own services | todo | T-406, T-391, T-403, T-310 |
-| [T-410](tasks/T-410-ruya-web-diagnostics.md) | Ruya Web: logs and a diagnostic report, redacted | todo | T-406, T-225 |
+| [T-410](tasks/T-410-ruya-web-diagnostics.md) | Ruya Web: logs and a diagnostic report, redacted | todo | T-406 |
 | [T-412](tasks/T-412-phone-as-a-controller.md) | The phone as a controller: D-pad, confirm, back, home, menu, pointer and the phone's keyboard, as a profile's controller | blocked | T-411, T-397, T-367 |
-| [T-413](tasks/T-413-power-and-wake-over-the-network.md) | Power over the network: sleep, restart, shut down from a paired client; Wake-on-LAN where the hardware does it | todo | T-411, T-262 |
+| [T-413](tasks/T-413-power-and-wake-over-the-network.md) | Power over the network: sleep, restart, shut down from a paired client; Wake-on-LAN where the hardware does it | blocked | T-411, T-406 |
 | [T-414](tasks/T-414-companion-app-android-first.md) | Ruya Companion app v1 (Flutter, Android first): discovery, pairing, Home, Library, Downloads, System, Remote | blocked | T-411, T-406, T-412, T-413 |
-| [T-415](tasks/T-415-remote-access-outside-home.md) | **[lead]** Companion outside the home: the player's own VPN first, a Ruya relay only if the owner decides to run one | blocked | owner |
+| [T-415](tasks/T-415-remote-access-outside-home.md) | **[lead]** Companion outside the home: the player's own VPN first, a Ruya relay only if the owner decides to run one | blocked | owner, T-414 |

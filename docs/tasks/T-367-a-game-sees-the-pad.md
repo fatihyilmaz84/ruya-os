@@ -2,6 +2,8 @@
 
 Status: todo · Phase: 2 · Depends: T-366 · Area: services (input), image (udev, unit), shell (compositor focus) · Size: M · Owner: lead · Complexity: hard · Developer surface: public-API
 
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** Security criteria to add before dispatch (from T-366's design): a test that a descriptor opened by profile A's app delivers nothing after lock, profile switch and run end; a test that no app of any profile receives events while the PIN pad or an overlay has focus; the Guide path test stays.
+
 ## Goal
 SuperTuxKart's Controls list shows a gamepad, the race is driven with the DualSense, menus never move twice, and Guide still opens the shell's overlay. First slice of ADR-024.
 

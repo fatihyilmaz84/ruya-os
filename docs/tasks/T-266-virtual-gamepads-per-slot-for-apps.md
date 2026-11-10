@@ -2,6 +2,8 @@
 
 Status: todo · Phase: 2 · Depends: T-264, T-367 · Area: services, image · Size: M · Owner: lead · Developer surface: public-API
 
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** Shrunk to size S: T-367 already builds the virtual pad per controller, the grab, the ACL, the developer chapter, the sample and the conformance test, and T-366 the sandbox check. What is left here is only the slot order of the virtual pads. Stale lines: "if `ruya-inputd` dies the pads must come back to the apps" contradicts ADR-024 (physical nodes stay shell-only; the service restarts instead), ADR-022 is Accepted, and T-217 is done.
+
 ## Goal
 A game sees player 1, 2, ... in exactly the order the owner assigned: `ruya-inputd` creates one virtual gamepad (uinput) per slot and hides the physical pads from apps (Steam-Input style), so slot order, remapping and per-profile mapping work. Part of epic ADR-017 (T-263).
 

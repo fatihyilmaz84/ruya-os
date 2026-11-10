@@ -2,6 +2,8 @@
 
 Status: todo · Phase: 3 · Depends: T-388 · Area: api, services (ruya-store), shell (Store client, mock) · Size: M · Owner: builder · Complexity: complex · Developer surface: internal
 
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** Add the criterion from T-388: a resumed download is verified (size and checksum or the transport's own check) before it is used, tested with a corrupted partial file.
+
 ## Goal
 Every Store job reports real bytes, a smoothed rate and an ETA (or says they are unknown), and the shell can cancel, pause, resume and reorder queued and running jobs.
 

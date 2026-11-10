@@ -2,6 +2,8 @@
 
 Status: todo · Phase: 6 · Depends: T-404 · Area: api, docs · Size: M · Owner: lead · Complexity: hard · Developer surface: internal
 
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** The wire protocol for the Web half only (the Companion half waits for ADR-030): pairing, sessions, events. One pairing model for a browser, which has no client key store: the browser shows a code confirmed on the TV (ADR-029); QR with mutual verification is the Companion's. The file is `docs/specs/09-ruya-web.md` (a section), no `10-ruya-link.md`.
+
 ## Goal
 One written protocol that both remote clients use: console and client identities, QR pairing with mutual verification, per-device permissions, the event stream with cursors and a full-state call, capability negotiation, and the mapping from D-Bus contracts to the gateway's HTTPS/WebSocket API.
 

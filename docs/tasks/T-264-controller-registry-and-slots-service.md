@@ -1,6 +1,8 @@
 # T-264 — Controller registry and player slots: contract, `ruya-inputd` service, mock, client
 
-Status: todo · Phase: 2 · Depends: T-263 · Area: api, services, shell · Size: M · Owner: builder · Developer surface: internal
+Status: todo · Phase: 2 · Depends: T-263, T-367 · Area: api, services, shell · Size: M · Owner: builder · Developer surface: internal
+
+**Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** No second pad list. The registry and the slots are methods on `org.ruyaos.Input1` in the input service T-366/T-367 build (not a separate `ruya-inputd` contract); the pad list and its signal are T-368's `ListControllers`/`ControllersChanged`, extended. Scope 4 (which pads may navigate) is dropped: T-397 owns that rule. One `default owner` field, shared with T-267 and T-397. The VM check extends T-367's script, no new `vm-inputd-check.sh`.
 
 ## Goal
 The system knows which pad is which player: a registry of known pads and the slot assignment (slot → profile or Guest) for the active session, exposed over D-Bus with the shell client and a mock. Part of epic ADR-017 (T-263).
