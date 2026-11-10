@@ -42,6 +42,8 @@ TimeZone::TimeZone(std::unique_ptr<TimeBackend> backend, QObject *parent)
                 emit setTimezoneFinished(name, status);
             });
     m_tick.setSingleShot(true);
+    // A coarse timer may fire up to 5 % (3 s) late at a minute; one wake-up a minute is cheap.
+    m_tick.setTimerType(Qt::PreciseTimer);
     connect(&m_tick, &QTimer::timeout, this, &TimeZone::updateClock);
     updateClock();      // shows the time and arms the tick for the next minute change
     m_backend->refresh();

@@ -284,6 +284,8 @@ FocusScope {
     onHeightChanged: Qt.callLater(relayout)
 
     Component.onCompleted: {
+        // Start from the rows the pane was built with, so only a real 0 -> more settles (T-429 review).
+        countBefore = focusableCount
         // Where focus lands the first time the pane is entered. The pane is usually still
         // hidden here, so don't filter on visibility.
         for (let i = 0; i < column.children.length; ++i) {
