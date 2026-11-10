@@ -16,6 +16,7 @@ DisplayPane.qml
 DisplayText.qml
 FpsMeter.qml
 GamesPage.qml
+HubPause.qml # non-visual helper (T-457): freezes and thaws the app under the Ruya Hub, draws nothing
 IdleClock.qml
 LibraryDetailsPage.qml
 MediaPage.qml

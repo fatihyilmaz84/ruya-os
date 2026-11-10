@@ -50,9 +50,9 @@ use crate::follow::{
 };
 use crate::scope::{RunScopes, Sweep};
 use crate::spawner::{
-    app_scopes, control_command, flatpak_app_installed, launch_command, list_scopes_command,
-    parse_profile_users, parse_show, pulse_start_command, sweep_commands, unit_app_id, unit_name,
-    LineTail, RunFollower, RunningUnit, ShowUnit, SHOW_PROPERTIES,
+    active_app_scopes, app_scopes, control_command, flatpak_app_installed, launch_command,
+    list_scopes_command, parse_profile_users, parse_show, pulse_start_command, sweep_commands,
+    unit_app_id, unit_name, LineTail, RunFollower, RunningUnit, ShowUnit, SHOW_PROPERTIES,
 };
 use crate::spawner::{Spawner, UnitEvent};
 use std::ffi::OsString;
@@ -274,6 +274,24 @@ impl SystemdSpawner {
             .map(|_| ())
             .map_err(|err| format!("{failed}: {err}"))
     }
+
+    /// `systemctl --user --machine=<user>@.host freeze|thaw <unit> <scope>...` (T-457), on the
+    /// caller's thread and waited for: the answer says whether it worked. The scopes are the app's
+    /// active ones, listed first and named exactly (`active_app_scopes`, `control_command`), so
+    /// both scopes of an Electron app are reached and a sibling app never is. Each `systemctl` is
+    /// bounded (`SYSTEMCTL_LIMIT`); a listing that fails is an error (freezing the front end alone
+    /// would leave the game running).
+    fn freezer(&self, unit: &str, verb: &'static str) -> Result<(), String> {
+        let (user, app_id) = self.owner_of(unit)?;
+        let list = list_scopes_command(&user, &app_id)?;
+        let listing = run_bounded(&list, SYSTEMCTL_LIMIT)
+            .ok_or_else(|| format!("cannot list the scopes of {app_id} of {user}"))?;
+        let scopes = active_app_scopes(&app_id, &listing);
+        let args = control_command(&user, &[verb], unit, &app_id, &scopes)?;
+        run_bounded(&args, SYSTEMCTL_LIMIT)
+            .map(|_| ())
+            .ok_or_else(|| format!("systemctl {verb} {unit} failed"))
+    }
 }
 
 impl Spawner for SystemdSpawner {
@@ -358,6 +376,14 @@ impl Spawner for SystemdSpawner {
 
     fn kill(&self, unit: &str) -> Result<(), String> {
         self.systemctl(unit, &["kill", "--signal=SIGKILL", "--kill-whom=all"])
+    }
+
+    fn freeze(&self, unit: &str) -> Result<(), String> {
+        self.freezer(unit, "freeze")
+    }
+
+    fn thaw(&self, unit: &str) -> Result<(), String> {
+        self.freezer(unit, "thaw")
     }
 
     fn adopt_running(&self) -> Vec<RunningUnit> {

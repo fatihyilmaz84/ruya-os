@@ -45,6 +45,15 @@ extra_scope() {
 launch() { as_shell busctl --system call "$svc" "$path" "$ifc" Launch ss "$1" "$2"; }
 stop_app() { as_shell busctl --system call "$svc" "$path" "$ifc" Stop s "$1"; }
 running() { as_shell busctl --system --json=short call "$svc" "$path" "$ifc" ListRunning; }
+freeze_app() { as_shell busctl --system call "$svc" "$path" "$ifc" Freeze s "$1"; }
+thaw_app() { as_shell busctl --system call "$svc" "$path" "$ifc" Thaw s "$1"; }
+# The cgroup freezer state of unit $2 in user $1's manager: running | freezing | frozen | thawing.
+fstate() { systemctl --user -M "$1@.host" show -p FreezerState --value "$2" </dev/null 2>&1 | cat; }
+# The app's loaded, active Flatpak scopes in user $1's manager (exact names).
+app_scope_names() {
+    systemctl --user -M "$1@.host" list-units --plain --no-legend "app-flatpak-$sleeper-*.scope" </dev/null 2>&1 | cat \
+        | awk '$3 == "active" { print $1 }' | grep -E "^app-flatpak-$sleeper-[0-9]+[.]scope$"
+}
 # The unit name out of 'ss "ok" "ruya-app-..."'.
 unit_of() { sed -n 's/^ss "ok" "\(.*\)"$/\1/p'; }
 # Waits for a line of the signal log (an extended-regex pattern), up to $2 seconds.
@@ -508,6 +517,40 @@ check)
     case "$(launch "$sleeper" ruya-shell)" in 'ss "unknown-profile" ""') ok "ruya-shell is not a profile: unknown-profile";; *) bad "profile ruya-shell";; esac
     case "$(launch "x;y" "$pid")" in 'ss "invalid" ""') ok "a bad app id: invalid";; *) bad "invalid app id";; esac
     case "$(stop_app nope.service)" in 's "unknown-instance"') ok "Stop of an unknown instance: unknown-instance";; *) bad "unknown instance";; esac
+
+    # T-457: the Ruya Hub pauses the game. Freeze/Thaw of a running app of the signed-in profile:
+    # the cgroup freezer of its unit and of both of its scopes (the run's and the second one above).
+    echo "--- Freeze / Thaw (T-457)"
+    out="$(busctl --system call "$psvc" "$ppath" "$psvc" SwitchTo ss "$pid" "")"
+    case "$out" in 'suu "ok"'*) ;; *) out="$(busctl --system call "$psvc" "$ppath" "$psvc" SwitchTo ss "$pid" 1234)";; esac
+    case "$out" in 'suu "ok"'*) ok "$pid signed in (Freeze is for the signed-in profile)";; *) bad "SwitchTo $pid: $out";; esac
+    scopes="$(app_scope_names "$user")"
+    [ "$(echo "$scopes" | grep -c .)" -ge 2 ] && ok "the app has two active scopes: $(echo $scopes)" || bad "expected two active scopes, found: $scopes"
+    case "$(freeze_app nope.service)" in 's "not-running"') ok "Freeze of an unknown instance: not-running";; *) bad "Freeze of an unknown instance";; esac
+    case "$(freeze_app "$inst")" in 's "ok"') ok "Freeze answered ok";; *) bad "Freeze";; esac
+    for u in "$inst" $scopes; do
+        [ "$(fstate "$user" "$u")" = frozen ] && ok "$u is frozen" || bad "$u: FreezerState $(fstate "$user" "$u") after Freeze"
+    done
+    wait_sig "\"member\":\"FrozenChanged\".*$inst.*true" 10 && ok "FrozenChanged(true) arrived" || bad "no FrozenChanged(true)"
+    running | grep -q '"frozen":{"type":"b","data":true}' && ok "ListRunning says frozen" || bad "ListRunning does not say frozen: $(running)"
+    # The kernel's own word: the cgroup of the app's process reports itself frozen.
+    spid="$(pgrep -u "$user" -f "sleep 3000" | head -1)"
+    [ -n "$spid" ] && grep -q '^frozen 1$' "/sys/fs/cgroup$(cut -d: -f3 "/proc/$spid/cgroup")/cgroup.events" 2>/dev/null \
+        && ok "the app's process is in a frozen cgroup (cgroup.events: frozen 1)" || bad "the app's process is not in a frozen cgroup"
+    case "$(freeze_app "$inst")" in 's "ok"') ok "a second Freeze is ok";; *) bad "second Freeze";; esac
+    case "$(thaw_app "$inst")" in 's "ok"') ok "Thaw answered ok";; *) bad "Thaw";; esac
+    for u in "$inst" $scopes; do
+        [ "$(fstate "$user" "$u")" = running ] && ok "$u runs again" || bad "$u: FreezerState $(fstate "$user" "$u") after Thaw"
+    done
+    wait_sig "\"member\":\"FrozenChanged\".*$inst.*false" 10 && ok "FrozenChanged(false) arrived" || bad "no FrozenChanged(false)"
+    busctl --system call "$psvc" "$ppath" "$psvc" Lock >/dev/null
+    case "$(freeze_app "$inst")" in 's "not-allowed"') ok "Freeze with nobody signed in: not-allowed";; *) bad "Freeze while locked";; esac
+    [ "$(fstate "$user" "$inst")" = running ] && ok "and nothing was frozen" || bad "frozen while locked"
+    busctl --system call "$psvc" "$ppath" "$psvc" SwitchTo ss "$pid" "" >/dev/null 2>&1 \
+        || busctl --system call "$psvc" "$ppath" "$psvc" SwitchTo ss "$pid" 1234 >/dev/null 2>&1
+    # Frozen again for the Stop below: it must thaw first, so the app quits on its SIGTERM ("quit",
+    # not "killed" after the grace time).
+    case "$(freeze_app "$inst")" in 's "ok"') ok "frozen again before Stop";; *) bad "Freeze before Stop";; esac
 
     echo "--- Stop"
     t0="$(date +%s)"

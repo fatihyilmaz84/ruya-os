@@ -13,9 +13,10 @@ bool installed(const QString &appId)
 }
 } // namespace
 
-MockSessionBackend::MockSessionBackend(ProfileCheck knownProfile, QObject *parent)
+MockSessionBackend::MockSessionBackend(ProfileCheck knownProfile, ActiveProfile activeProfile, QObject *parent)
     : SessionBackend(parent)
     , m_knownProfile(std::move(knownProfile))
+    , m_activeProfile(std::move(activeProfile))
 {
     if (qEnvironmentVariable("RUYA_MOCK_FAST") == QLatin1String("1"))
         m_startMs = 10;
@@ -33,6 +34,8 @@ int MockSessionBackend::indexOf(const QString &instance) const
 void MockSessionBackend::reset()
 {
     m_running.clear();
+    m_calls.clear();
+    m_failFreeze = false;
     emit runningListed(m_running);
 }
 
@@ -110,6 +113,64 @@ void MockSessionBackend::stop(const QString &instance)
     QTimer::singleShot(0, this, [this, instance, status] { emit stopFinished(instance, status); });
     if (status != QLatin1String("ok") || m_running.at(i).state == QLatin1String("stopping"))
         return;
+    if (m_running.at(i).frozen) {
+        // Like ruya-session: a frozen app is thawed before it is asked to quit.
+        m_calls.append(QStringLiteral("thaw ") + instance);
+        setFrozen(i, false);
+    }
+    m_calls.append(QStringLiteral("stop ") + instance);
     m_running[i].state = QStringLiteral("stopping");
     QTimer::singleShot(m_startMs / 3, this, [this, instance] { exitApp(instance, 0, QStringLiteral("quit")); });
+}
+
+QString MockSessionBackend::freezable(const QString &instance) const
+{
+    if (instance.isEmpty())
+        return QStringLiteral("invalid");
+    const int i = indexOf(instance);
+    if (i < 0)
+        return QStringLiteral("not-running");
+    if (m_activeProfile) {
+        const std::optional<QString> active = m_activeProfile();
+        if (active && (active->isEmpty() || *active != m_running.at(i).profile))
+            return QStringLiteral("not-allowed");
+    }
+    if (m_running.at(i).state != QLatin1String("running"))
+        return QStringLiteral("not-running");
+    return QStringLiteral("ok");
+}
+
+void MockSessionBackend::setFrozen(int index, bool frozen)
+{
+    if (m_running.at(index).frozen == frozen)
+        return;
+    m_running[index].frozen = frozen;
+    const QString instance = m_running.at(index).instance;
+    QTimer::singleShot(0, this, [this, instance, frozen] { emit frozenChanged(instance, frozen); });
+}
+
+void MockSessionBackend::freeze(const QString &instance)
+{
+    QString status = freezable(instance);
+    if (status == QLatin1String("ok")) {
+        const int i = indexOf(instance);
+        if (!m_running.at(i).frozen) {
+            m_calls.append(QStringLiteral("freeze ") + instance);
+            if (m_failFreeze)
+                status = QStringLiteral("failed");     // undone at once: the app keeps running
+            else
+                setFrozen(i, true);
+        }
+    }
+    QTimer::singleShot(0, this, [this, instance, status] { emit freezeFinished(instance, status); });
+}
+
+void MockSessionBackend::thaw(const QString &instance)
+{
+    const QString status = freezable(instance);
+    if (status == QLatin1String("ok")) {
+        m_calls.append(QStringLiteral("thaw ") + instance);
+        setFrozen(indexOf(instance), false);
+    }
+    QTimer::singleShot(0, this, [this, instance, status] { emit thawFinished(instance, status); });
 }

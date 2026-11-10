@@ -25,6 +25,10 @@
     "invalid"           malformed argument (empty id, bad characters)
     "failed"            internal error
 
+  Freeze and Thaw (T-457, ADR-033 point 3) have these extra statuses:
+    "not-running"       no instance with that name is running (unknown, still starting or stopping)
+    "not-allowed"       the app is not the signed-in profile's (or nobody is signed in)
+
   Usage ledger (T-247; ReportPresence, ListSessions, GetTotals, ClearHistory, UsageChanged) has
   these extra statuses:
     "not-allowed"       the profile is not the active one (reads), or the actor may not clear it
@@ -41,6 +45,9 @@
     profile    s    profile id the app runs as
     started    x    unix seconds
     state      s    "starting" | "running" | "stopping"
+    frozen     b    true while the app is frozen by Freeze (T-457); FrozenChanged follows each change
+               (an app taken over after a restart of the service reads false, even if it was left
+               frozen; Thaw still thaws it)
 
   Usage ledger (T-247). ruya-session keeps, per profile, a ledger of play sessions under
   /var/lib/ruya-session/usage/<profile>/ (root only, 0600). A session is one run of one app; only
@@ -92,6 +99,29 @@
     <!-- Asks the app to quit, and kills it if it does not. AppExited (reason "quit", or "killed"
          after the kill) follows. Stopping an instance that is already stopping is "ok". -->
     <method name="Stop">
+      <arg name="instance" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <!-- Freezes a running app of the signed-in profile (T-457, the Ruya Hub pauses the game): the
+         cgroup freezer (`systemctl --user freeze`) of the app's unit and of every active Flatpak
+         scope of the app, named exactly (never a sibling app whose id starts with this one's). Its
+         processes stop where they are (no CPU; their sound streams run dry); the last frame stays
+         with the compositor. A frozen app is frozen already: "ok", nothing is done. When the
+         freezer fails or does not answer in time, what was frozen is thawed again and the status is
+         "failed": the app keeps running. Synchronous: the answer comes when the freeze is done (each
+         systemctl is bounded to 5 s). FrozenChanged(instance, true) follows a change. Statuses: ok,
+         invalid, not-running, not-allowed, failed. -->
+    <method name="Freeze">
+      <arg name="instance" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <!-- Thaws the app again (the same unit and scopes as Freeze); "ok" also when it was not frozen
+         (the freezer is asked anyway, so a state the service lost, e.g. across its restart, is
+         repaired). Stop thaws a frozen app before it asks it to quit, so it can handle the SIGTERM.
+         FrozenChanged(instance, false) follows a change. Statuses as Freeze. -->
+    <method name="Thaw">
       <arg name="instance" type="s" direction="in"/>
       <arg name="status" type="s" direction="out"/>
     </method>
@@ -157,6 +187,12 @@
          cleared. -->
     <signal name="UsageChanged">
       <arg name="profile" type="s"/>
+    </signal>
+
+    <!-- The `frozen` of a running app changed (Freeze, Thaw, or the thaw before a Stop). -->
+    <signal name="FrozenChanged">
+      <arg name="instance" type="s"/>
+      <arg name="frozen" type="b"/>
     </signal>
 
     <signal name="AppStarted">

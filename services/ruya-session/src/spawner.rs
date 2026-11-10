@@ -59,6 +59,15 @@ pub trait Spawner {
     fn start_sound(&self, _user: &str) -> Result<(), String> {
         Ok(())
     }
+    /// Freezes the unit and every active scope of its app with the cgroup freezer (T-457) and
+    /// returns once it is done. Bounded: a manager that does not answer is an error.
+    fn freeze(&self, unit: &str) -> Result<(), String> {
+        Err(format!("cannot freeze {unit} here"))
+    }
+    /// Thaws what `freeze` froze; thawing a unit that is not frozen is a no-op. Bounded.
+    fn thaw(&self, unit: &str) -> Result<(), String> {
+        Err(format!("cannot thaw {unit} here"))
+    }
 }
 
 impl<T: Spawner + ?Sized> Spawner for Box<T> {
@@ -79,6 +88,12 @@ impl<T: Spawner + ?Sized> Spawner for Box<T> {
     }
     fn adopt_running(&self) -> Vec<RunningUnit> {
         (**self).adopt_running()
+    }
+    fn freeze(&self, unit: &str) -> Result<(), String> {
+        (**self).freeze(unit)
+    }
+    fn thaw(&self, unit: &str) -> Result<(), String> {
+        (**self).thaw(unit)
     }
 }
 
@@ -185,6 +200,25 @@ pub fn app_scopes(app_id: &str, listing: &str) -> Vec<String> {
     names.sort();
     names.dedup();
     names
+}
+
+/// The scopes of `app_id` in what `list_scopes_command` printed that are active (ACTIVE column
+/// "active"): the ones `freeze` and `thaw` may name, since systemd refuses to freeze or thaw a unit
+/// that is not active (a `failed` scope the sweep has not cleared yet). Exact names as `app_scopes`
+/// takes them, so never a sibling app's. Sorted, no duplicates. Pure (T-457).
+pub fn active_app_scopes(app_id: &str, listing: &str) -> Vec<String> {
+    let active: String = listing
+        .lines()
+        .filter(|line| {
+            let mut words = line
+                .split_whitespace()
+                .skip_while(|w| !w.starts_with("app-flatpak-"));
+            // UNIT LOAD ACTIVE SUB DESCRIPTION
+            words.next().is_some() && words.nth(1) == Some("active")
+        })
+        .map(|line| format!("{line}\n"))
+        .collect();
+    app_scopes(app_id, &active)
 }
 
 /// The `systemctl` argument list that applies `verb` (`stop --no-block`, `kill ...`) to the unit
@@ -768,6 +802,7 @@ struct FakeState {
     installed: HashSet<String>,
     fail_start: bool,
     fail_sound: bool,
+    fail_freeze: bool,
     calls: Vec<String>,
     running: Vec<RunningUnit>,
     last_env: Vec<(String, String)>,
@@ -810,7 +845,14 @@ impl FakeSpawner {
         self
     }
 
-    /// "sound user", "start user app", "stop unit", "kill unit", in order.
+    /// `freeze` fails (and the thaw that undoes it works), T-457.
+    pub fn failing_freeze(self) -> Self {
+        self.lock().fail_freeze = true;
+        self
+    }
+
+    /// "sound user", "start user app", "stop unit", "kill unit", "freeze unit", "thaw unit", in
+    /// order.
     pub fn calls(&self) -> Vec<String> {
         self.lock().calls.clone()
     }
@@ -883,6 +925,20 @@ impl Spawner for FakeSpawner {
         let mut state = self.lock();
         state.calls.push("adopt".to_owned());
         state.running.clone()
+    }
+
+    fn freeze(&self, unit: &str) -> Result<(), String> {
+        let mut state = self.lock();
+        state.calls.push(format!("freeze {unit}"));
+        if state.fail_freeze {
+            return Err("fake freeze failure".to_owned());
+        }
+        Ok(())
+    }
+
+    fn thaw(&self, unit: &str) -> Result<(), String> {
+        self.lock().calls.push(format!("thaw {unit}"));
+        Ok(())
     }
 }
 
@@ -1486,6 +1542,55 @@ app-flatpak-io.github.Foo-Extra-56.scope loaded failed failed app-flatpak-io.git
         let sibling = ["app-flatpak-io.github.Foo-bar.App-34.scope".to_owned()];
         assert!(control_command("ruya-p1", &["stop"], &unit, app, &sibling).is_err());
         assert!(sweep_commands("ruya-p1", app, &sibling).is_err());
+    }
+
+    #[test]
+    fn freeze_and_thaw_name_every_active_scope_of_the_app_and_no_sibling() {
+        // T-457: an Electron app has two scopes (T-435), both are frozen; a sibling app whose id
+        // extends ours, and a failed scope of ours (systemd refuses to freeze an inactive unit),
+        // are never named.
+        let app = "io.github.Foo";
+        let listing = "app-flatpak-io.github.Foo-12.scope loaded active running app-flatpak-io.github.Foo-12.scope
+app-flatpak-io.github.Foo-bar.App-34.scope loaded active running app-flatpak-io.github.Foo-bar.App-34.scope
+app-flatpak-io.github.Foo-56.scope loaded active running app-flatpak-io.github.Foo-56.scope
+* app-flatpak-io.github.Foo-78.scope loaded failed failed app-flatpak-io.github.Foo-78.scope
+\u{25cf} app-flatpak-io.github.Foo-90.scope loaded active running app-flatpak-io.github.Foo-90.scope
+";
+        let ours = active_app_scopes(app, listing);
+        assert_eq!(
+            ours,
+            [
+                "app-flatpak-io.github.Foo-12.scope",
+                "app-flatpak-io.github.Foo-56.scope",
+                "app-flatpak-io.github.Foo-90.scope"
+            ]
+        );
+        let unit = unit_name("ruya-p1", app);
+        for verb in ["freeze", "thaw"] {
+            let args = control_command("ruya-p1", &[verb], &unit, app, &ours).expect(verb);
+            assert_eq!(
+                args,
+                [
+                    "systemctl",
+                    "--user",
+                    "--no-pager",
+                    "--machine=ruya-p1@.host",
+                    verb,
+                    unit.as_str(),
+                    &ours[0],
+                    &ours[1],
+                    &ours[2],
+                ]
+            );
+            assert!(
+                !args
+                    .iter()
+                    .any(|a| a.contains("Foo-bar") || a.contains("Foo-78") || a.contains('*')),
+                "{args:?}"
+            );
+        }
+        // Nothing active: only the unit itself.
+        assert!(active_app_scopes(app, "").is_empty());
     }
 
     #[test]

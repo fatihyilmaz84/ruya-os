@@ -17,6 +17,8 @@ Item {
     SignalSpy { id: launched; target: Session; signalName: "launchFinished" }
     SignalSpy { id: stopped; target: Session; signalName: "stopFinished" }
     SignalSpy { id: exited; target: Session; signalName: "appExited" }
+    SignalSpy { id: freezeSpy; target: Session; signalName: "freezeFinished" }
+    SignalSpy { id: thawSpy; target: Session; signalName: "thawFinished" }
 
     TestCase {
         id: tc
@@ -31,6 +33,8 @@ Item {
             launched.clear()
             stopped.clear()
             exited.clear()
+            freezeSpy.clear()
+            thawSpy.clear()
         }
 
         // Launches and returns the instance of an "ok" launch.
@@ -99,6 +103,49 @@ Item {
             tryVerify(() => Session.running.length === 0)
             // A normal quit says nothing (checked with Shell hosted in test_crash_toast).
             compare(Notifications.shownCount, shown)
+        }
+
+        // Freeze and Thaw (T-457), as ruya-session answers them: a running app of the signed-in
+        // profile only, a second freeze changes nothing, a stop thaws a frozen app first.
+        function freezeStatus(instance) {
+            const n = freezeSpy.count
+            Session.freeze(instance)
+            tryCompare(freezeSpy, "count", n + 1)
+            compare(freezeSpy.signalArguments[n][0], instance)
+            return freezeSpy.signalArguments[n][1]
+        }
+
+        function test_freeze_and_thaw() {
+            Profiles.switchTo("p2", "")
+            tryCompare(Profiles, "activeProfile", "p2")
+            const mine = launchOk("org.example.Racer", "p2")
+            const theirs = launchOk("org.example.Racer", "p1")
+            compare(freezeStatus(mine), "not-running", "still starting")
+            tryVerify(() => Session.instanceOf("org.example.Racer", "p2").state === "running")
+            tryVerify(() => Session.instanceOf("org.example.Racer", "p1").state === "running")
+            compare(freezeStatus(""), "invalid")
+            compare(freezeStatus("no-such-instance"), "not-running")
+            compare(freezeStatus(theirs), "not-allowed", "another profile's app")
+            compare(freezeStatus(mine), "ok")
+            tryVerify(() => Session.instanceOf("org.example.Racer", "p2").frozen === true)
+            compare(freezeStatus(mine), "ok", "a second freeze is ok")
+            compare(Session.mockCalls(), ["freeze " + mine], "and does nothing")
+            verify(!Session.instanceOf("org.example.Racer", "p1").frozen)
+
+            Session.thaw(mine)
+            tryCompare(thawSpy, "count", 1)
+            compare(thawSpy.signalArguments[0][1], "ok")
+            tryVerify(() => Session.instanceOf("org.example.Racer", "p2").frozen === false)
+
+            compare(freezeStatus(mine), "ok")
+            tryVerify(() => Session.instanceOf("org.example.Racer", "p2").frozen === true)
+            Session.stop(mine)
+            tryCompare(exited, "count", 1)
+            compare(exited.signalArguments[0][3], "quit")
+            compare(Session.mockCalls(), ["freeze " + mine, "thaw " + mine, "freeze " + mine,
+                                          "thaw " + mine, "stop " + mine], "a stop thaws first")
+            Profiles.lock()
+            tryCompare(Profiles, "activeProfile", "")
         }
 
         function test_crash_toast() {

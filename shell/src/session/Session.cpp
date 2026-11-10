@@ -22,6 +22,23 @@ Session::Session(std::unique_ptr<SessionBackend> backend, QObject *parent)
                 emit launchFinished(appId, profile, status, instance);
             });
     connect(m_backend.get(), &SessionBackend::stopFinished, this, &Session::stopFinished);
+    connect(m_backend.get(), &SessionBackend::freezeFinished, this, &Session::freezeFinished);
+    connect(m_backend.get(), &SessionBackend::thawFinished, this, &Session::thawFinished);
+    // The record changes in place, so a binding on `running` sees the new `frozen` at once.
+    connect(m_backend.get(), &SessionBackend::frozenChanged, this, [this](const QString &instance, bool frozen) {
+        for (QVariant &v : m_running) {
+            QVariantMap m = v.toMap();
+            if (m.value(QStringLiteral("instance")).toString() != instance)
+                continue;
+            if (m.value(QStringLiteral("frozen")).toBool() != frozen) {
+                m.insert(QStringLiteral("frozen"), frozen);
+                v = m;
+                emit runningChanged();
+            }
+            break;
+        }
+        emit frozenChanged(instance, frozen);
+    });
     connect(m_backend.get(), &SessionBackend::appStarted, this, [this](const QString &instance, const QString &appId) {
         m_backend->refresh();
         emit appStarted(instance, appId);
@@ -47,17 +64,24 @@ Session *Session::create(QQmlEngine *qmlEngine, QJSEngine *)
     const bool mock = choice != QLatin1String("dbus");
 #endif
     if (mock) {
-        // The mock knows the profiles of the mock Profiles service.
-        backend = std::make_unique<MockSessionBackend>([qmlEngine](const QString &id) {
-            auto *profiles = qmlEngine ? qmlEngine->singletonInstance<Profiles *>("RuyaShell", "Profiles") : nullptr;
-            if (!profiles)
-                return true;
-            for (const QVariant &v : profiles->profiles()) {
-                if (v.toMap().value(QStringLiteral("id")).toString() == id)
+        // The mock knows the profiles of the mock Profiles service, and who is signed in (Freeze).
+        backend = std::make_unique<MockSessionBackend>(
+            [qmlEngine](const QString &id) {
+                auto *profiles = qmlEngine ? qmlEngine->singletonInstance<Profiles *>("RuyaShell", "Profiles") : nullptr;
+                if (!profiles)
                     return true;
-            }
-            return false;
-        });
+                for (const QVariant &v : profiles->profiles()) {
+                    if (v.toMap().value(QStringLiteral("id")).toString() == id)
+                        return true;
+                }
+                return false;
+            },
+            [qmlEngine]() -> std::optional<QString> {
+                auto *profiles = qmlEngine ? qmlEngine->singletonInstance<Profiles *>("RuyaShell", "Profiles") : nullptr;
+                if (!profiles)
+                    return std::nullopt;
+                return profiles->activeProfile();
+            });
     } else {
         backend = std::make_unique<DBusSessionBackend>();
     }
@@ -74,6 +98,16 @@ void Session::stop(const QString &instance)
     m_backend->stop(instance);
 }
 
+void Session::freeze(const QString &instance)
+{
+    m_backend->freeze(instance);
+}
+
+void Session::thaw(const QString &instance)
+{
+    m_backend->thaw(instance);
+}
+
 QVariantMap Session::instanceOf(const QString &appId, const QString &profile) const
 {
     for (const QVariant &v : m_running) {
@@ -88,4 +122,17 @@ void Session::mockReset()
 {
     if (auto *mock = qobject_cast<MockSessionBackend *>(m_backend.get()))
         mock->reset();
+}
+
+void Session::mockFailFreeze(bool fail)
+{
+    if (auto *mock = qobject_cast<MockSessionBackend *>(m_backend.get()))
+        mock->setFailFreeze(fail);
+}
+
+QStringList Session::mockCalls() const
+{
+    if (auto *mock = qobject_cast<MockSessionBackend *>(m_backend.get()))
+        return mock->calls();
+    return {};
 }
