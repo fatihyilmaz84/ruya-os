@@ -211,9 +211,11 @@ restart)
     sleep 2
     # While the adopted app runs, the service follows it over its connection to the user manager:
     # no `systemctl` process may be started for it (T-340; before it was one per unit every 2 s).
+    # The Flatpak scope watcher's `show` of the unit and its app-flatpak-*.scope every 5 s (T-363,
+    # scope.rs WATCH_EVERY) is a different poll and is not counted here.
     n=0; spawned=0
     while [ "$n" -lt 20 ]; do
-        pgrep -f "systemctl.*ruya-app" >/dev/null && spawned=$((spawned + 1))
+        pgrep -af "systemctl.*ruya-app" | grep -v "app-flatpak-" | grep -q systemctl && spawned=$((spawned + 1))
         sleep 0.3; n=$((n + 1))
     done
     pgrep -u "$user" -f systemd-stdio-bridge >/dev/null && ok "the bridge to the manager of $user is running" || bad "no systemd-stdio-bridge of $user: the service has no connection to the manager"

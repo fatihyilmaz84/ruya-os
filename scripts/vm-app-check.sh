@@ -42,8 +42,10 @@ flow)
   # Then run this: it counts what the compositor logged. The menu list takes the focus once per
   # Guide (3); the client gains the focus at its start and at each close of the menu over it (3: start,
   # Back, Resume) and loses it at each Guide (3).
-  log=$(journalctl -b -o short-precise _UID=$U --no-pager | grep -E "ruya-compositor: (app focus|focus systemActions)")
-  menu=$(grep -c "focus systemActions" <<<"$log")
+  # The compositor logs the focused item's objectName: each Guide focuses the menu's first row
+  # (quickMenuItem_resume, QuickMenu.qml); the list `systemActions` itself never takes the focus.
+  log=$(journalctl -b -o short-precise _UID=$U --no-pager | grep -E "ruya-compositor: (app focus|focus quickMenuItem_resume)")
+  menu=$(grep -c "focus quickMenuItem_resume" <<<"$log")
   gained=$(grep -c "app focus .* true" <<<"$log")
   lost=$(grep -c "app focus .* false" <<<"$log")
   echo "menu focused: $menu, client focus gained: $gained, lost: $lost"
