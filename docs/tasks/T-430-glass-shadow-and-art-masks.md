@@ -15,6 +15,8 @@ No other mask in the shell can go blank the way GlassSheet's did (T-387), and ke
 3. Measure on the Dell the VRAM that L0's layers hold behind an app (opacity 0, not `visible: false`), with and without a game; if it is above about 64 MB on the UHD 630, propose and build a cheaper hold (release the layers after N seconds behind an app, keep the first frame on return).
 4. A light thumbnail weakens the white focus ring: measure the ring's contrast over the lightest picker art; if under 3:1, file a `design:` Inbox line for the lead (T-282), do not change tokens.
 
+5. **`tst_wallpaper::test_zz_sheet_after_an_app` is flaky at its threshold** (lead-9, 2026-11-10, on this desktop's GPU, `QSG_RENDER_LOOP=basic`, the function alone: main red in 3 of 8 runs, T-147's branch 3 of 8; a red run reads a max channel difference of 13-16 against the limit 12, both tags). Find what differs between the fresh and the reopened sheet (a frame before the blur settles, the L0 layer re-captured, sampling positions) and fix the cause. Do not raise the limit without a measured reason in the Outcome.
+
 ## Out of scope
 - Blur over a client surface (B-003).
 

@@ -15,6 +15,8 @@ A red `shots` run caused by the desktop says so in its own words, and `tst_timez
 
 4. `tst_settings::test_a_hidden_focused_row_hands_the_focus_on` failed once in a full `test` on a loaded host (lead-9, 2026-11-10: line 448, `tryCompare(r(4), "activeFocus", true)` after `r(4).visible = true`; 3 of 3 green alone): find the race (the hand-on runs on a timer or a `callLater`?) and fix the cause, not the timeout.
 
+5. `tst_timezone::test_the_status_clock_follows_a_zone_change_at_once` (line 154, a 2 s `tryVerify`) flaked once in a full run right after `shots` (T-147 review, 2026-11-10); probably the same cause as item 3.
+
 ## Out of scope
 - Rewriting the screenshot harness.
 

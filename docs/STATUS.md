@@ -15,7 +15,7 @@ Verification legend: **host** = built and tested on Windows · **host (vm pendin
 
 ## Board
 
-**NEXT → T-147** (builders); lead: T-366 ([lead] Ruya Input spike, ADR-024; then T-367, T-381 GE-Proton, T-380), and the Dell second pass T-355 once Play works (T-386, image 0.0.61). **Builder lanes**: T-147, then the first rows of `STATUS-backlog.md` in order (T-362, T-423, T-424, T-422, T-378, T-299, T-364, T-339); one "VM (this task)" at a time. T-283, T-284, T-287, T-288 wait for the lead's design pass T-282; T-397..T-399 wait for T-366 and T-396. **Plan audit 2026-11-10:** 76 task files carry a ruling under their header (overlaps cut, dependencies fixed); the Depends column now lists only dependencies that are not `done`.
+**NEXT → T-434** (builders: glass cost and Performance rows; then T-435, T-429, T-427, T-428); lead: T-366 ([lead] Ruya Input spike, ADR-024; then T-367, T-381 GE-Proton, T-380), and the Dell second pass T-355 once Play works (T-386, image 0.0.61). **Builder lanes**: T-147, then the first rows of `STATUS-backlog.md` in order (T-362, T-423, T-424, T-422, T-378, T-299, T-364, T-339); one "VM (this task)" at a time. T-283, T-284, T-287, T-288 wait for the lead's design pass T-282; T-397..T-399 wait for T-366 and T-396. **Plan audit 2026-11-10:** 76 task files carry a ruling under their header (overlaps cut, dependencies fixed); the Depends column now lists only dependencies that are not `done`.
 
 **How work runs (owner, 2026-11-04):** the lead dispatches `ruya-builder` agents (at most two at a time, own worktrees, different areas), has each branch reviewed by `ruya-reviewer` and merges it (`docs/LEAD.md`). Dispatched builders never edit this file; one "VM (this task)" runs at a time. A builder the owner starts directly takes NEXT alone in the main checkout and does the bookkeeping (`CLAUDE.md`).
 
@@ -23,7 +23,8 @@ Open work only (the front of the board; the rest is in `STATUS-backlog.md`), in 
 
 | ID | Title | Status | Depends |
 |---|---|---|---|
-| [T-147](tasks/T-147-fullscreen-app-flow.md) | Full-screen apps: launch, quick menu, return, close | in-progress | — |
+| [T-434](tasks/T-434-glass-cost-and-performance-tier-rows.md) | Glass follow-ups: Performance-tier rows opaque, the picker's idle blur texture, the page blur's GPU cost | todo | — |
+| [T-435](tasks/T-435-acbr-shows-no-window-on-the-dell.md) | ACBR (Electron) starts on the Dell but never shows a window; orphaned app scopes | todo | — |
 | [T-393](tasks/T-393-options-menu-design.md) | **[lead]** Design: the Options (context) menu: component, contents per surface, motion, focus | todo | — |
 | [T-396](tasks/T-396-controller-ownership-and-layout-spec.md) | **[lead]** Spec: who owns the UI, the family's confirm button, action glyphs (ADR-027) | todo | T-366 |
 | [T-366](tasks/T-366-ruya-input-spike-engine-and-design.md) | **[lead]** Ruya Input: spike, engine decision and the design (06-input.md, Input1 draft) | todo | — |
@@ -34,7 +35,7 @@ Open work only (the front of the board; the rest is in `STATUS-backlog.md`), in 
 
 Later (ordered): [`STATUS-backlog.md`](STATUS-backlog.md) holds the rest of the open board, same columns; `lint-board.ps1` reads both. A planner or the lead moves rows up when they become ready.
 
-**VM queue** (one image build runs them all; `scripts/vm-queue.ps1`; history in `STATUS-parked.md`): **0.0.61 passed on 2026-11-10** (lead-8: session check/display/restart with T-363's scope lines, devices bluetooth/twopads/inputd, audio, sounds, reboot saved output: 10 of 10). Left for the next image: `scripts/dell-glass-check.sh` on the Dell (T-421: FAIL on 0.0.61, PASS with its shell), `vm-security-check.sh check` (T-424, PASS on 0.0.61 by the builder and the reviewer), `subset-icons.sh` (T-297), the sample re-run, the greenboot drill, `vm-storage-check.ps1`, `vm-devices-check.sh system`.
+**VM queue** (one image build runs them all; `scripts/vm-queue.ps1`; history in `STATUS-parked.md`): **0.0.61 passed on 2026-11-10** (lead-8: session check/display/restart with T-363's scope lines, devices bluetooth/twopads/inputd, audio, sounds, reboot saved output: 10 of 10). Left for the next image: `vm-app-check.sh flow` and the Home-card part with `vm-session-check.sh display` (T-147), `scripts/dell-glass-check.sh` on the Dell (T-421: FAIL on 0.0.61, PASS with its shell), `vm-security-check.sh check` (T-424, PASS on 0.0.61 by the builder and the reviewer), `subset-icons.sh` (T-297), the sample re-run, the greenboot drill, `vm-storage-check.ps1`, `vm-devices-check.sh system`.
 
 **Dell look-at list:** the long list with task ids is in `STATUS-parked.md`, "Dell look-at list (moved 2026-11-10, lead-8)"; the next Dell pass also checks 0.0.61: STK from Games with A (T-386), the picker after an app (T-387), the T-376 hw items.
 
@@ -44,6 +45,7 @@ One line each: `- (source) what, and why it matters`. Dispatched builders put th
 
 Triaged 2026-11-10 (lead-9): the lines before are verbatim in [`STATUS-parked.md`](STATUS-parked.md), "Inbox triage 2026-11-10 (lead-9)"; they became T-427 (Bluetooth leftovers), T-428 (Store follow-ups), T-429 (test harness), T-430 (GlassShadow/AppArt masks, L0 memory), T-147 item 6 (launch follow-ups), T-282 item 12 (keyboard over glass), or owner questions (CPU per game, `core.hooksPath`).
 
+- (T-147 reviews) Launch and quick-menu follow-ups: a running app with no Library card behind Home cannot be resumed (offer Resume or Switch to in the quick menu while apps are behind Home); `Notifications.requeue` counts `shownCount` twice; an `AppExited` before the ok answer can end a launch on an older instance's exit, and Close before ok has no instance to stop; the Running pill on the Games grid (Home only today); the Home shrink-into-card transition (04 §5.1, a `pageMs` fade today); older device toasts are not capped at 30 characters; a Steam launch path in Session1, and one line in Details saying why a Steam game has no Play; consider showing Close on the splash before 20 s; add the state pill over a saturated tint to the contrast gate.
 - (lead-9, second triage) The lines from T-423, T-421 and T-424 are verbatim in `STATUS-parked.md`, "Inbox triage 2026-11-10 (lead-9, second)"; they became T-431 (image hardening), T-432 (SELinux domains), T-433 (quick-xml, zbus 6, CI actions), T-434 (glass cost, Performance rows), T-435 (ACBR window, orphaned scopes), T-430 and T-282 additions, T-425 (release profile) and the next-image list.
 
 ## Blocked (need something this host doesn't have)
