@@ -6,6 +6,7 @@
 #   - vm-devices-check.sh  picks the volume by its keys, whatever the order of the keys
 #   - vm-storage-check.sh  a refused action is pkcheck exit 1 (not any non-zero); an error reply from
 #                          ListVolumes is not "the volume left the list"
+#   - vm-security-check.sh each step (exposure, port, SELinux, setuid, world-writable, account) can FAIL
 #   - vm-sample-check.sh   an early failure still cleans up (trap on EXIT)
 # Needs bash and python3 (python on Windows). Exit 0 = all pass.
 set -u
@@ -160,6 +161,101 @@ for step in eject meject; do
     esac
     expect_lacks "$step: an empty list is not 'ListVolumes failed'" "$out" "ListVolumes failed"
 done
+
+# --- vm-security-check.sh: every step can fail (T-424) ----------------------------------------------
+echo "vm-security-check.sh: each step fails on a worse fixture"
+sec="$tmp/sec"; mkdir -p "$sec/bin" "$sec/units"
+touch "$sec/units/ruya-aaa.service" "$sec/units/ruya-bbb@.service"
+cat > "$sec/baseline.json" <<'JSONEOF'
+{"units": {"ruya-aaa.service": {"max_exposure": 1.1, "reason": "t"}, "ruya-bbb@.service": {"max_exposure": 2.0, "reason": "t"}},
+ "ports": [{"port": "tcp:22", "reason": "sshd"}, {"port": "udp:68", "reason": "dhcp"}],
+ "unconfined": [{"process": "ruya-odd", "reason": "t"}],
+ "setid": [{"path": "/usr/bin/passwd", "reason": "t"}],
+ "accounts": [{"name": "root", "reason": "t"}]}
+JSONEOF
+cat > "$sec/bin/systemd-analyze" <<'SHIMEOF'
+#!/bin/sh
+for a in "$@"; do u="$a"; done
+case "$u" in
+ruya-aaa.service) v="${FAKE_EXP_AAA:-1.1}" ;;
+*) v=1.5 ;;
+esac
+echo "  NAME  DESCRIPTION  EXPOSURE"
+echo "-> Overall exposure level for $u: $v OK"
+SHIMEOF
+cat > "$sec/bin/ss" <<'SHIMEOF'
+#!/bin/sh
+echo "tcp LISTEN 0 128 0.0.0.0:22 0.0.0.0:*"
+echo "tcp LISTEN 0 128 [::]:22 [::]:*"
+echo "udp UNCONN 0 0 192.168.1.5:68 0.0.0.0:*"
+[ -n "${FAKE_EXTRA_PORT:-}" ] && echo "tcp LISTEN 0 5 0.0.0.0:$FAKE_EXTRA_PORT 0.0.0.0:*"
+exit 0
+SHIMEOF
+printf '#!/bin/sh\necho "${FAKE_ENFORCE:-Enforcing}"\n' > "$sec/bin/getenforce"
+cat > "$sec/bin/ps" <<'SHIMEOF'
+#!/bin/sh
+echo "system_u:system_r:init_t:s0 systemd"
+echo "system_u:system_r:ruya_t:s0 ruya-aaa"
+[ -n "${FAKE_UNCONFINED:-}" ] && echo "system_u:system_r:unconfined_service_t:s0 $FAKE_UNCONFINED"
+exit 0
+SHIMEOF
+cat > "$sec/bin/find" <<'SHIMEOF'
+#!/bin/sh
+case "$*" in
+*-4000*) echo /usr/bin/passwd; [ -n "${FAKE_SETUID:-}" ] && echo "$FAKE_SETUID" ;;
+*-0002*) [ -n "${FAKE_WW:-}" ] && echo "$FAKE_WW" ;;
+esac
+exit 0
+SHIMEOF
+chmod +x "$sec"/bin/*
+printf 'root:x:0:0:root:/root:/bin/bash\nruya-shell:x:990:990::/var/lib/ruya-shell:/usr/sbin/nologin\n' > "$sec/passwd"
+printf 'root:!locked:19000::::::\nruya-shell:!*:19000::::::\n' > "$sec/shadow"
+runsec() { # env assignments are inherited from the caller's prefix
+    SEC_BASELINE="$sec/baseline.json" SEC_UNITDIRS="$sec/units" SEC_PASSWD="${PW:-$sec/passwd}" SEC_SHADOW="${SH:-$sec/shadow}" \
+        PATH="${EXTRA_BIN:+$EXTRA_BIN:}$sec/bin:$PATH" bash "$here/vm-security-check.sh" "$@" 2>&1
+}
+out="$(runsec)"; rc=$?
+expect_contains "a matching fixture: all pass" "$out" "ALL CHECKS PASSED"
+expect_lacks "a matching fixture: no FAIL" "$out" "FAIL"
+[ "$rc" = 0 ] && pass "exit 0 when all pass" || fail "exit $rc on a matching fixture"
+out="$(FAKE_EXP_AAA=1.2 runsec)"; rc=$?
+expect_contains "a higher exposure: FAIL" "$out" "FAIL: unit ruya-aaa.service: exposure 1.2 is above the baseline 1.1"
+[ "$rc" = 1 ] && pass "a higher exposure: exit 1" || fail "a higher exposure: exit $rc"
+out="$(FAKE_EXTRA_PORT=8080 runsec)"
+expect_contains "an extra port: FAIL" "$out" "FAIL: unexpected listening sockets: tcp:8080"
+out="$(FAKE_ENFORCE=Permissive runsec)"
+expect_contains "Permissive: FAIL" "$out" "FAIL: SELinux is 'Permissive'"
+out="$(FAKE_UNCONFINED=ruya-evil runsec)"
+expect_contains "an unconfined ruya process: FAIL" "$out" "ruya-evil"
+out="$(FAKE_UNCONFINED=ruya-odd runsec)"
+expect_lacks "a named unconfined process passes" "$out" "FAIL"
+out="$(FAKE_SETUID=/usr/bin/evil runsec)"
+expect_contains "an extra setuid file: FAIL" "$out" "FAIL: setuid/setgid files not in the baseline: /usr/bin/evil"
+out="$(FAKE_WW=/etc/evil.conf runsec)"
+expect_contains "a world-writable file: FAIL" "$out" "FAIL: world-writable under /usr or /etc: /etc/evil.conf"
+printf 'root:x:0:0:root:/root:/bin/bash\nmallory:x:1001:1001::/home/m:/bin/bash\n' > "$sec/passwd2"
+out="$(PW="$sec/passwd2" runsec)"
+expect_contains "an extra login shell: FAIL" "$out" "FAIL: accounts with a login shell or usable password not in the baseline: mallory"
+printf 'root:!locked:19000::::::\nruya-shell:$6$abc:19000::::::\n' > "$sec/shadow2"
+out="$(SH="$sec/shadow2" runsec)"
+expect_contains "a usable password on a nologin account: FAIL" "$out" "ruya-shell"
+mkdir -p "$sec/bin2"; printf '#!/bin/sh
+exit 127
+' > "$sec/bin2/ss"; chmod +x "$sec/bin2/ss"
+out="$(EXTRA_BIN="$sec/bin2" runsec)"
+expect_contains "a failing tool is a FAIL, not a skip" "$out" "FAIL: measuring: ss -H -tuln failed"
+mkdir -p "$sec/bin3"; printf '#!/bin/sh
+echo "Failed to connect"
+exit 1
+' > "$sec/bin3/systemd-analyze"; chmod +x "$sec/bin3/systemd-analyze"
+out="$(EXTRA_BIN="$sec/bin3" runsec)"
+expect_contains "systemd-analyze failing: FAIL, not a skip" "$out" "FAIL: measuring: systemd-analyze security ruya-aaa.service failed"
+touch "$sec/units/ruya-new.service"
+out="$(runsec)"
+expect_contains "a unit missing from the baseline: FAIL" "$out" "FAIL: unit ruya-new.service is not in the baseline"
+rm -f "$sec/units/ruya-new.service"
+out="$(runsec measure)"
+expect_contains "measure prints a draft baseline" "$out" '"max_exposure": 1.1'
 
 # --- vm-sample-check.sh: an early failure still cleans -----------------------------------------------
 echo "vm-sample-check.sh: cleanup runs when a step fails early"

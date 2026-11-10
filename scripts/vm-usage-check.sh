@@ -62,7 +62,7 @@ present_loop() {
 
 case "${1:-check}" in
 security)
-    systemd-analyze security ruya-session --no-pager | tail -14
+    echo "unit hardening: scripts/vm-security-check.sh (one place, with a baseline)"
     ;;
 clean)
     flatpak uninstall --system -y "$sleeper" "$rt" >/dev/null 2>&1
@@ -193,7 +193,7 @@ check)
     echo "--- journal of the service (warnings)"
     journalctl -u ruya-session -b --no-pager -p warning | tail -5
     echo "--- security exposure"
-    systemd-analyze security ruya-session --no-pager | tail -2
+    echo "unit hardening: scripts/vm-security-check.sh (one place, with a baseline)"
     ;;
 esac
 [ "$fail" = 0 ] && echo "ALL CHECKS PASSED" || echo "SOME CHECKS FAILED"

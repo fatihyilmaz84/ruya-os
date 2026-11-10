@@ -74,7 +74,7 @@ wait_job() { # job-id, seconds -> prints the JobFinished status or nothing
 
 case "${1:-check}" in
 security)
-    systemd-analyze security ruya-store --no-pager | tail -12
+    echo "unit hardening: scripts/vm-security-check.sh (one place, with a baseline)"
     ;;
 clean)
     flatpak uninstall --system -y "$app" "$rt" >/dev/null 2>&1
