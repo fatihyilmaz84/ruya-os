@@ -218,6 +218,25 @@ Item {
             compare(page.slotUpdates, before + 4, "and only they moved back")
         }
 
+        // T-428 round 2: the places follow the UI size; a row that the new size brings into view builds its cards.
+        function test_row_places_follow_the_ui_size() {
+            openStore()
+            const page = find("page_store")
+            const apps = find("storeRow_apps")
+            const flick = find("storeRows")
+            const places = () => ["featured", "games", "apps", "installed"].map(k => Math.round(find("storeRow_" + k).slotY))
+            const expected = () => [0, 1, 2, 3].map(n => Math.round(n * page.rowHeight))
+            compare(places().join(), expected().join(), "the places fit the size the page opened at")
+            verify(apps.slotY >= flick.height, "Apps & media starts below the fold")
+            compare(find("storeCards_apps").count, 0)
+            page.u = page.u * 0.5
+            compare(places().join(), expected().join(), "smaller: the places follow")
+            verify(apps.slotY < flick.height, "Apps & media is in view now")
+            tryVerify(() => find("storeCards_apps").count > 0, 2000, "and builds its cards")
+            page.u = page.u * 4
+            compare(places().join(), expected().join(), "larger: the places follow")
+        }
+
         // T-428: a row remembers its card while it has no cards to hold it.
         function test_a_row_that_was_emptied_returns_on_the_card_it_left() {
             addManyApps()

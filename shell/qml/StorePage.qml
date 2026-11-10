@@ -87,6 +87,10 @@ Page {
         }
     }
 
+    // The places are multiples of the row height, which follows the UI size `u` (the window's height,
+    // Theme.uiScale; the shell binds `u` after the page is made, and the page lives on behind other pages).
+    onRowHeightChanged: page.updateSlots()
+
     function sourceKind(source) {
         return source === "official" ? "success" : source === "developer" ? "warning" : "info"
     }

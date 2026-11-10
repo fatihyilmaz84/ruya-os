@@ -56,4 +56,6 @@ UX notes: nothing looks different at rest; the rows, cards, ring and glow are as
 
 **Files.** `shell/qml/StorePage.qml`, `shell/qml/GlassShadow.qml`, `shell/qml/CardFocusLayers.qml`, `shell/tests/tst_store_open.qml`, `shell/tests/tst_store_ui.qml`, `shell/tests/tst_artglow.qml`, `docs/specs/02-shell.md` (Store row), `docs/specs/04-design-system.md` (Glass shadow, Card focus layers).
 
-Builder: Claude Sonnet 5.5, high effort, round 1.
+**Round 2 (review).** `slotY` no longer followed the UI size `u` (it was a binding on `rowHeight`; the first `updateSlots` also ran before the shell bound `page.u`). Fixed with `onRowHeightChanged: page.updateSlots()` in `StorePage.qml` (the first slots use the bound `u` once it arrives). New `test_row_places_follow_the_ui_size` (u halved: the places follow and Apps & media, now in view, builds its cards; u grown again: the places follow); revert check: the `onRowHeightChanged` line removed -> red ("smaller: the places follow"). `04` section 3.8 Card focus row now says the glare band, mask and effect exist only while the card has focus. Merged main (T-457, T-448) first; no conflicts. Not done (Inbox, pre-existing): the scrolled view clips row tops and the hint bar covers labels.
+
+Builder: Claude Sonnet 5.5, high effort, rounds 1-2.
