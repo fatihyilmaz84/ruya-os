@@ -401,3 +401,21 @@ Shell icons come from Google's **Material Symbols Rounded** (Apache-2.0), bundle
 **Owner answers (2026-11-10):** (1) yes, a content provider joins the tier-B list (T-420); (2) Basic / Compatible / Verified stay internal for developers, no badge for players yet. **The questions were:** (1) New capabilities the document lists that are not on ADR-022's tier-B list: a content provider (an app registers movies, episodes, music for "Continue watching" and search) and media sessions; they need a new tier-B line. (2) Showing "Ruya Verified" to players (a Store badge) is branding and publishing.
 
 **Consequences.** T-416 (the `ruya` CLI and validators), T-417 (`llms.txt`, generated catalogues, `AGENTS.md`), T-418 (dev-image UI inspector and input), T-419 (MCP server); notes in T-233, T-252, T-350, T-353, T-248.
+
+### ADR-032 — Stores: one default store, and anyone can run their own as a signed Flatpak repository that an admin adds — *Accepted (owner, 2026-11-10: "the OS will ship with a default store, but developers could create their own stores and users can use them"); details lead, 2026-11-10; three points open for the owner*
+
+**Context.** `03` §4.2 already had three kinds of Flatpak remote (official, Flathub, "developer remotes" an admin enables) and `ruya-store` has `AddRemote`, but there was no screen, no removal, no rule for what a foreign remote may do, and "developer remote" read as a test feature. The owner wants other stores to be a normal thing a player can use.
+
+**Decision** (the whole design is `docs/specs/10-stores.md`):
+1. **A store is a signed Flatpak repository and its `.flatpakrepo` file.** No RuyaOS store format, no account, no server of ours in the path; inside ADR-005 (Flatpak only) and ADR-011.
+2. **Three trust levels:** `official` (the `ruyaos` remote, in the image, not removable), `community` (Flathub, in the image, can be turned off), `third-party` (added by an admin with the PIN after a preview that shows host and key fingerprint; removable; at most 16).
+3. **A third-party store cannot replace anything:** never an app, runtime or id that a trusted store offers or that is installed from another store; no reserved names; runtimes come from trusted stores; its metadata is hostile input; a broken store breaks only itself. Its apps run in the Flatpak sandbox like every other app, so the invariant "third-party apps run only in Flatpak sandboxes" is unchanged, and so is the bus policy (stores are shell-private, tier A).
+4. **Who installs:** admins directly; a Standard profile needs an admin's PIN for a third-party store unless the admin opened that store to everyone; hidden for child profiles unless allowed (T-211).
+5. **A key that changes is never accepted silently; removing a store keeps its apps by default; a blocklist ships in the image** and changes only with OS updates.
+6. **What is public:** the format a store author follows (repository, `.flatpakrepo`, the well-known address, the AppStream keys) joins `docs/developers/api-surface.md` as tier C (`public-format`); the D-Bus calls stay private.
+
+**Rejected:** a RuyaOS-specific store protocol or catalogue server (a second format to secure, nothing gained over Flatpak); adding a store without an admin; letting stores carry runtimes (a hijack path for every app); a store reputation service (needs a server and a policy we do not have).
+
+**Open for the owner:** (1) the default store's hosting, signing-key custody and who may submit (T-444; also T-381, T-426); (2) the blocklist: do we keep one at all, and who decides an entry; (3) the wording of the warning (`10-stores.md` §8) is a liability statement.
+
+**Consequences.** T-440 (contract and service: preview, add, remove, states), T-441 (isolation rules, blocklist, hostile fixture store), T-442 (Settings > Stores), T-443 (badges, the install gate and store states in the Store), T-445 (the "your own store" chapter and sample), T-444 (the default store, waits for the owner). `03` §4.2's "developer remotes" row is replaced by this ADR.

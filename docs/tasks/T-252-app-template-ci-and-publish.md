@@ -2,6 +2,8 @@
 
 Status: todo · Phase: 7 · Depends: T-250, T-251, T-214, T-416, T-351 · Area: samples, ci, docs · Size: M · Owner: builder · Developer surface: public-format
 
+**ADR-032 (stores, 2026-11-10):** "a developer remote" is now a third-party store (`docs/specs/10-stores.md`, guide chapter T-445); the template's publish step for third parties points there. The official store's pipeline is T-444.
+
 **Plan audit 2026-11-10 (lead; where this differs from the text below, this wins):** The CI recipe calls `ruya app validate` (T-416); it builds no validator of its own. The signing key of the `ruyaos` remote is never in the repository or the image; who holds it is decided in T-381/T-426.
 
 ## Goal

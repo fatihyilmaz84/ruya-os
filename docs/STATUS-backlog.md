@@ -56,6 +56,12 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | [T-333](tasks/T-333-format-drive-settings-flow.md) | Settings > Storage > Format drive...: choose, confirm, PIN, progress, result | todo | T-332 |
 | [T-341](tasks/T-341-lint-icon-and-docs-follow-ups.md) | Lint and docs follow-ups: sample metainfo check, icon spike contour, member-lint note, vm-goto | todo | — |
 | [T-342](tasks/T-342-store-age-rating-and-sync-follow-ups.md) | Store follow-ups: every OARS attribute, the long Turkish badge, installed-list reads in order | todo | — |
+| [T-440](tasks/T-440-stores-contract-and-service.md) | Stores in `Store1` (ADR-032): preview, add, remove, turn off, states; contract, service, mock, client | todo | — |
+| [T-441](tasks/T-441-third-party-store-isolation-and-blocklist.md) | A third-party store cannot replace anything: priority, reserved names, runtimes, caps, the blocklist | todo | T-440 |
+| [T-442](tasks/T-442-settings-stores-pane.md) | Settings > Stores: the list, Add a store (address, preview, PIN), turn off, remove | todo | T-440 |
+| [T-443](tasks/T-443-store-badges-install-gate-and-states.md) | In the Store: third-party badge, the admin gate for Standard profiles, removed and blocked stores | todo | T-441, T-442 |
+| [T-445](tasks/T-445-your-own-store-guide-and-sample.md) | Developer guide "Your own store" and a sample that builds one | todo | T-441 |
+| [T-444](tasks/T-444-the-default-store.md) | **[lead]** The default store (`ruyaos`): hosting, key, submissions, curated entries: decisions, then tasks | blocked | owner, T-381 |
 | [T-344](tasks/T-344-audio-pane-delete-and-confirm-detail-follow-ups.md) | Sound theme delete and confirm dialogs: refused delete, guard test, wrapped details | todo | — |
 | [T-345](tasks/T-345-appart-gpu-check-masked-tint-and-shots.md) | AppArt and rounded corners: one GPU check, tint under masked pictures, shots at 4K and DPR 1 | todo | — |
 | [T-346](tasks/T-346-sound-theme-checker-work-cap-and-flac-fixtures.md) | Sound theme checker: cap the decode work, fuzz the decoder, FLAC fixtures from real encoders | todo | — |

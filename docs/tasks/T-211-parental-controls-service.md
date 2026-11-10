@@ -2,6 +2,8 @@
 
 Status: todo · Phase: 3 · Depends: T-210, T-213, T-247 · Area: api, services · Size: M · Owner: lead · Developer surface: internal
 
+**ADR-032 (stores, 2026-11-10):** third-party stores are hidden for a child profile unless the parent allows that store (`docs/specs/10-stores.md` section 4); the allow list is part of this task's policy record. Ratings in such a store are the store's own claim.
+
 ## Goal
 A parent can restrict a child's profile and the console enforces it where it cannot be talked around: apps above the profile's age limit do not launch, a restricted profile cannot install without a parent, play time per day and a bedtime window end a session politely and on time. Owner request, 2026-11-06. Spec 03 §1.3 already says "per-profile age limit for store and launch, plus a 'requires admin to install' toggle"; this task builds the services; T-212 builds the screens.
 

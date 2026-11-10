@@ -2,6 +2,8 @@
 
 Status: todo · Phase: 5 · Depends: T-381 · Area: image, services (ruya-store), shell (About) · Size: M · Owner: builder · Complexity: complex · Developer surface: internal
 
+**ADR-032 (stores, 2026-11-10):** the `ruyaos` remote this task needs is the official store (`docs/specs/10-stores.md`); its hosting and key are T-444's decisions.
+
 ## Goal
 A fresh install has GE-Proton ready offline from the first boot; the Store updates it to newer pinned releases without an OS update; Settings > About lists it with its licences.
 
