@@ -4,6 +4,12 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 
 | ID | Title | Status | Depends |
 |---|---|---|---|
+| [T-450](tasks/T-450-hub-audio-panel.md) | Hub Audio panel and the microphone tile | todo | T-448, T-449 |
+| [T-452](tasks/T-452-hub-performance-panel.md) | Hub Performance panel | todo | T-448, T-451 |
+| [T-453](tasks/T-453-hub-controllers-panel.md) | Hub Controllers panel | todo | T-448 |
+| [T-454](tasks/T-454-hub-display-tiles.md) | Hub display: mode, resolution and refresh rate, brightness where supported | todo | T-448 |
+| [T-455](tasks/T-455-hub-latency-and-idle-cost.md) | Hub budgets: activation latency, idle cost, game FPS with the Hub open (Dell) | todo | T-448 |
+| [T-456](tasks/T-456-guide-on-every-pad.md) | Guide on every pad: long press for Power, never reaching the game, a keyboard shortcut | todo | T-367, T-396 |
 | [T-362](tasks/T-362-compositor-xdg-output-and-socket-follow-ups.md) | Compositor: xdg-output for games, profile-socket and log follow-ups | todo | — |
 | [T-422](tasks/T-422-plan-lint-deps-owners-stale-claims.md) | Plan lint: board and headers agree on dependencies, [lead], parked and stale claims, budgets | todo | — |
 | [T-425](tasks/T-425-image-variants-dev-and-release.md) | **[lead]** Two image variants (VM this task): `dev` with SSH, `release` without, base images by digest, a check | todo | T-424 |
