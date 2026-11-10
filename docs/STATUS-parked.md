@@ -2,6 +2,10 @@
 
 Moved out of `docs/STATUS.md` by the lead on 2026-11-06 to keep STATUS under its budget. The planner (`docs/tasks/PLANNING.md`) reads the Inbox lines here when planning; nobody else needs this file. Items that became tasks are in their task file; pick the rest up when a task touches the area.
 
+## Parked by the owner 2026-11-10 (lead-10)
+
+- **SteamGridDB for missing artwork (owner: "not now").** The API needs a per-account key (Bearer); assets are grids, heroes, logos and icons (no screenshots); lookup by Steam, Origin, EGS, Battle.net, Uplay, Flashpoint, eShop ids or name. Its terms allow personal, non-commercial, non-automated use only, and uploaders keep the rights to their art, so a shared OS key is unclear. Lead recommendation if picked up: opt-in with the player's own key entered via Ruya Web, fetch only missing art, cache locally, vet the images, store as T-407 overrides; the owner asks SteamGridDB about a project key. Screenshots need another source (Steam store data; IGDB needs Twitch credentials).
+
 ## Inbox triage 2026-11-10 (lead-9, second)
 
 - (T-423) ruya-store: quick-xml 0.37 to >= 0.41, then drop the RUSTSEC-2026-0194/0195 ignores in `services/deny.toml`.
