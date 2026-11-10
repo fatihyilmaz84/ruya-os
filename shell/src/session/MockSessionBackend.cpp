@@ -36,6 +36,7 @@ void MockSessionBackend::reset()
     m_running.clear();
     m_calls.clear();
     m_failFreeze = false;
+    m_failThaw = false;
     emit runningListed(m_running);
 }
 
@@ -167,10 +168,13 @@ void MockSessionBackend::freeze(const QString &instance)
 
 void MockSessionBackend::thaw(const QString &instance)
 {
-    const QString status = freezable(instance);
+    QString status = freezable(instance);
     if (status == QLatin1String("ok")) {
         m_calls.append(QStringLiteral("thaw ") + instance);
-        setFrozen(indexOf(instance), false);
+        if (m_failThaw)
+            status = QStringLiteral("failed");     // still frozen
+        else
+            setFrozen(indexOf(instance), false);
     }
     QTimer::singleShot(0, this, [this, instance, status] { emit thawFinished(instance, status); });
 }

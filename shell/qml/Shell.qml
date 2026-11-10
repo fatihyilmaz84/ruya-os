@@ -719,6 +719,7 @@ FocusScope {
         hubOpen: systemPanel.open
         front: root.appOpen && root.quickMenuApp ? root.quickMenuApp.instance : ""
         pauseOn: DeviceSettings.pauseGamesInHub
+        profile: root.signedIn ? Profiles.activeProfile : ""
     }
 
     function switchToApp(appId) {
@@ -1686,8 +1687,8 @@ FocusScope {
             Library.launch(id)
         }
         onSwitchProfileRequested: {
+            open = false                     // first, so the game's Thaw goes out while the profile is signed in (T-457)
             Profiles.lock()                  // signedIn -> false; routeFocus() shows the picker
-            open = false
         }
         onPowerRequested: action => powerConfirm.open(action)    // focus returns here if cancelled
     }

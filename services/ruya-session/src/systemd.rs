@@ -425,6 +425,7 @@ impl Spawner for SystemdSpawner {
                     user: user.clone(),
                     app_id,
                     started: show.entered,
+                    frozen: matches!(show.freezer_state.as_str(), "frozen" | "freezing"),
                 });
             }
             if mine.is_empty() {
@@ -619,6 +620,7 @@ impl UserLink {
             exec_main_status: int("ExecMainStatus"),
             exec_main_code: int("ExecMainCode"),
             cpu_nsec: None,
+            freezer_state: text("FreezerState"),
         };
         Ok(if show.alive() {
             Probe::Alive(show)

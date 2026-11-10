@@ -223,6 +223,35 @@ static QString checkWallpaperPersistence()
     return problem.trimmed();
 }
 
+// DeviceSettings.pauseGamesInHub survives a restart (T-457): on by default, off stays off. Same hermetic
+// store as above. Returns "" or what went wrong; tst_hub_pause.qml asserts it (`pausePersistence`).
+static QString checkPausePersistence()
+{
+    QTemporaryDir dir;
+    if (!dir.isValid())
+        return QStringLiteral("no temporary directory");
+    const QString path = dir.filePath(QStringLiteral("shell.ini"));
+    QString problem;
+    {
+        DeviceSettings first(path);
+        if (!first.pauseGamesInHub())
+            problem = QStringLiteral("the pause is not on by default");
+        first.setPauseGamesInHub(false);
+    }
+    {
+        DeviceSettings second(path);
+        if (second.pauseGamesInHub())
+            problem += QStringLiteral(" a restart lost the switched-off pause");
+        second.setPauseGamesInHub(true);
+    }
+    {
+        DeviceSettings third(path);
+        if (!third.pauseGamesInHub())
+            problem += QStringLiteral(" a restart lost the switched-on pause");
+    }
+    return problem.trimmed();
+}
+
 class Setup : public QObject
 {
     Q_OBJECT
@@ -270,6 +299,8 @@ public slots:
         engine->rootContext()->setContextProperty(QStringLiteral("themePersistence"), persistence);
         static const QString wallpaperCheck = checkWallpaperPersistence();
         engine->rootContext()->setContextProperty(QStringLiteral("wallpaperPersistence"), wallpaperCheck);
+        static const QString pauseCheck = checkPausePersistence();
+        engine->rootContext()->setContextProperty(QStringLiteral("pausePersistence"), pauseCheck);
         static QTemporaryDir artDir;
         static const QString artPath = writeArtFixtures(artDir);
         engine->rootContext()->setContextProperty(QStringLiteral("artFixtures"), artPath);

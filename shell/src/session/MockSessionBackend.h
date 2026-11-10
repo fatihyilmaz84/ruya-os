@@ -16,7 +16,7 @@
 //
 // Freeze/Thaw (T-457) follow ruya-session: only a running app of the signed-in profile (the injected
 // ActiveProfile; without one there is no check), a second freeze is "ok" and changes nothing, a stop
-// thaws a frozen app first. setFailFreeze makes Freeze answer "failed". Every freeze, thaw and stop
+// thaws a frozen app first. setFailFreeze / setFailThaw make Freeze / Thaw answer "failed". Every freeze, thaw and stop
 // that reaches an app is logged in calls().
 class MockSessionBackend final : public SessionBackend
 {
@@ -37,6 +37,7 @@ public:
 
     void reset();
     void setFailFreeze(bool fail) { m_failFreeze = fail; }
+    void setFailThaw(bool fail) { m_failThaw = fail; }
     QStringList calls() const { return m_calls; }
 
 private:
@@ -51,6 +52,7 @@ private:
     ActiveProfile m_activeProfile;
     QStringList m_calls;
     bool m_failFreeze = false;
+    bool m_failThaw = false;
     QList<RunningApp> m_running;
     int m_next = 1;
     int m_startMs = 300;

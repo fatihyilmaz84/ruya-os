@@ -46,6 +46,8 @@ public:
     Q_INVOKABLE void mockReset();
     // Freeze answers "failed" from now on (T-457).
     Q_INVOKABLE void mockFailFreeze(bool fail);
+    // Thaw answers "failed" from now on and changes nothing (T-457).
+    Q_INVOKABLE void mockFailThaw(bool fail);
     // "freeze <instance>", "thaw <instance>", "stop <instance>" in the order they were asked.
     Q_INVOKABLE QStringList mockCalls() const;
 

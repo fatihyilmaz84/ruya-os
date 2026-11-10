@@ -91,6 +91,9 @@ Item {
             Library.resetMockForTests("")
             Session.mockReset()
             launchedSpy.clear()
+            while (Notifications.model.count > 0)
+                Notifications.dismiss(Notifications.model.get(0).toastId)
+            Notifications.pending = []
             freezeSpy.clear()
             frozenSpy.clear()
         }
@@ -98,6 +101,24 @@ Item {
         function cleanup() {
             DeviceSettings.pauseGamesInHub = true
             Session.mockFailFreeze(false)
+            Session.mockFailThaw(false)
+        }
+
+        function toastTexts() {
+            const out = []
+            for (let i = 0; i < Notifications.model.count; ++i)
+                out.push(Notifications.model.get(i).text)
+            return out
+        }
+
+        // From the picker (the focus on the profile list), Ada (p2, no PIN) signs in.
+        function signInAda() {
+            tryVerify(() => find("profileList").activeFocus, 2000, "the picker has the focus")
+            for (let i = 0; i < 3; ++i)
+                keyClick(Qt.Key_Left)                    // to the first profile, whichever the picker kept
+            keyClick(Qt.Key_Right)
+            keyClick(Qt.Key_Return)
+            tryCompare(Profiles, "activeProfile", "p2")
         }
 
         // The running record of `instance`, or undefined.
@@ -323,6 +344,64 @@ Item {
             verify(pausedBottom <= listTop, "Paused ends above the first row (" + pausedBottom + " > " + listTop + ")")
         }
 
+        // Review (T-457 round 2): Switch profile from the Hub over a frozen game, then the same profile
+        // signs in again: the game is in front and runs (a Thaw was seen), not frozen without "Paused".
+        function test_switch_profile_from_the_hub_then_signing_back_in_thaws_the_game() {
+            start()
+            const run = playRacer()
+            openHubAndPause(run.instance)
+            goTo("switch")
+            keyClick(Qt.Key_Return)
+            tryCompare(Profiles, "activeProfile", "")
+            signInAda()
+            tryVerify(() => run.app.activeFocus, 2000, "the game is in front again")
+            tryVerify(() => recordOf(run.instance).frozen === false, 2000, "and runs")
+            verify(Session.mockCalls().includes("thaw " + run.instance), "a Thaw was sent")
+        }
+
+        // Review (T-457 round 2): a game left frozen when the shell restarted (nobody in the new shell
+        // asked for it) is thawed as soon as its profile signs in, so it can end or be resumed.
+        function test_a_game_left_frozen_before_a_shell_restart_is_thawed_at_sign_in() {
+            Profiles.switchTo("p2", "")
+            tryCompare(Profiles, "activeProfile", "p2")
+            const n = launchedSpy.count
+            Session.launch("org.example.Racer", "p2")
+            tryCompare(launchedSpy, "count", n + 1)
+            const instance = launchedSpy.signalArguments[n][3]
+            tryVerify(() => recordOf(instance) !== undefined && recordOf(instance).state === "running")
+            Session.freeze(instance)                         // the old shell's Hub
+            tryVerify(() => recordOf(instance).frozen === true)
+            start()                                          // a new shell: locks, then Ada signs in
+            tryVerify(() => recordOf(instance).frozen === false, 2000, "thawed after the sign-in")
+            compare(Session.mockCalls(), ["freeze " + instance, "thaw " + instance])
+        }
+
+        // Review (T-457 round 2): a refused Thaw says so, the game stays frozen, and the next Hub over it
+        // thaws it when it closes.
+        function test_a_failed_thaw_toasts_and_the_next_close_tries_again() {
+            start()
+            const run = playRacer()
+            openHubAndPause(run.instance)
+            Session.mockFailThaw(true)
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => run.app.activeFocus, 2000)
+            tryVerify(() => toastTexts().includes("Could not resume the game. Open Ruya Hub and choose Resume."), 2000,
+                      "a warning toast")
+            verify(recordOf(run.instance).frozen, "still frozen")
+            Session.mockFailThaw(false)
+            openHub()
+            verify(find("quickMenuPaused").visible)
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => recordOf(run.instance).frozen === false, 2000, "the second close thaws it")
+            compare(Session.mockCalls(), ["freeze " + run.instance, "thaw " + run.instance, "thaw " + run.instance],
+                    "the second Freeze is a no-op (the game is frozen already), two Thaws")
+        }
+
+        // The setting survives a restart (tst_main.cpp, an ini file in a temporary directory).
+        function test_the_setting_survives_a_restart() {
+            compare(pausePersistence, "")
+        }
+
         // ---- Screenshots (dev.ps1 shots) ------------------------------------------------------------
 
         function test_zz_screenshots_hub_over_a_paused_game() {
@@ -333,6 +412,29 @@ Item {
             openHubAndPause(run.instance)
             wait(800)
             grabImage(tc.shell).save(shotsDir + "/hub-5-paused.png")
+        }
+
+        function test_zz_screenshots_settings_pause_row() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            start()
+            keyClick(Qt.Key_Up)                              // the section nav
+            for (let i = 0; i < 4; ++i)
+                keyClick(Qt.Key_Right)
+            keyClick(Qt.Key_Return)                          // Settings
+            tryCompare(tc.shell, "currentPage", "settings")
+            const list = find("categoryList")
+            tryVerify(() => list.activeFocus, 2000)
+            for (let i = 0; i < 20 && list.currentItem.objectName !== "category_system"; ++i)
+                keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Right)
+            tryVerify(() => find("paneSystem").activeFocus, 2000)
+            const row = find("rowPauseGames")
+            for (let i = 0; i < 20 && !row.activeFocus; ++i)
+                keyClick(Qt.Key_Down)
+            verify(row.activeFocus)
+            wait(800)
+            grabImage(tc.shell).save(shotsDir + "/hub-6-settings-pause-row.png")
         }
     }
 }

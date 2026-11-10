@@ -218,6 +218,10 @@ pub struct SessionIface {
     /// System mode: ask `Profiles1` before each launch and who is active before a read or a
     /// clear; `--session` keeps its fixed list and trusts the caller.
     system: bool,
+    /// Freeze and Thaw take turns in the order they arrive (T-457): each call awaits
+    /// `Profiles1` before it acts, so without this a quick Thaw could be served before the
+    /// Freeze sent ahead of it and leave the game frozen.
+    freezer_turn: async_lock::Mutex<()>,
 }
 
 impl SessionIface {
@@ -226,6 +230,7 @@ impl SessionIface {
             session,
             usage,
             system,
+            freezer_turn: async_lock::Mutex::new(()),
         }
     }
 
@@ -252,6 +257,8 @@ impl SessionIface {
         connection: &Connection,
         emitter: &SignalEmitter<'_>,
     ) -> String {
+        // Taken before the first await: a call that arrived first gets its turn first.
+        let _turn = self.freezer_turn.lock().await;
         let Ok(active) = self.active(connection).await else {
             return "failed".to_owned();
         };

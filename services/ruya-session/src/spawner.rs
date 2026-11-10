@@ -37,6 +37,9 @@ pub struct RunningUnit {
     pub app_id: String,
     /// When the unit became active, in unix seconds (0 when unknown).
     pub started: i64,
+    /// The unit is frozen (`FreezerState` frozen or freezing): a Freeze of the service before its
+    /// restart (T-457).
+    pub frozen: bool,
 }
 
 pub trait Spawner {
@@ -653,6 +656,8 @@ pub struct ShowUnit {
     /// `CPUUsageNSec`: CPU time used so far, in nanoseconds; `None` for `[not set]` (accounting
     /// off) or a unit that was not asked.
     pub cpu_nsec: Option<u64>,
+    /// `FreezerState`: "running", "freezing", "frozen", "thawing" ("" when not asked), T-457.
+    pub freezer_state: String,
 }
 
 impl ShowUnit {
@@ -664,7 +669,7 @@ impl ShowUnit {
 }
 
 /// The `-p` arguments of the `systemctl show` call that `parse_show` reads.
-pub const SHOW_PROPERTIES: [&str; 7] = [
+pub const SHOW_PROPERTIES: [&str; 8] = [
     "Id",
     "LoadState",
     "ActiveState",
@@ -672,6 +677,7 @@ pub const SHOW_PROPERTIES: [&str; 7] = [
     "ExecMainStatus",
     "ExecMainCode",
     "CPUUsageNSec",
+    "FreezerState",
 ];
 
 /// The units of a `systemctl show` output: `Key=Value` lines, a blank line between units.
@@ -710,6 +716,7 @@ pub fn parse_show(output: &str) -> Vec<ShowUnit> {
             "CPUUsageNSec" => {
                 cur.cpu_nsec = value.trim().parse().ok().filter(|n| *n != u64::MAX);
             }
+            "FreezerState" => cur.freezer_state = value.trim().to_owned(),
             _ => {}
         }
     }
@@ -830,6 +837,19 @@ impl FakeSpawner {
             user: user.to_owned(),
             app_id: app_id.to_owned(),
             started,
+            frozen: false,
+        });
+        self
+    }
+
+    /// Like `with_running`, but the unit was left frozen (T-457).
+    pub fn with_frozen_running(self, user: &str, app_id: &str, started: i64) -> Self {
+        self.lock().running.push(RunningUnit {
+            unit: unit_name(user, app_id),
+            user: user.to_owned(),
+            app_id: app_id.to_owned(),
+            started,
+            frozen: true,
         });
         self
     }
@@ -1337,6 +1357,7 @@ ActiveState=active
 ActiveEnterTimestamp=@1731000000
 ExecMainStatus=0
 ExecMainCode=0
+FreezerState=frozen
 
 Id=ruya-app-ruya-p1-org.ruyaos.Puzzle.service
 LoadState=loaded
@@ -1352,6 +1373,8 @@ ExecMainCode=2
         assert_eq!(units.len(), 2);
         assert_eq!(units[0].id, "ruya-app-ruya-p1-org.ruyaos.Racer.service");
         assert_eq!(units[0].entered, 1_731_000_000);
+        assert_eq!(units[0].freezer_state, "frozen");
+        assert_eq!(units[1].freezer_state, "");
         assert!(units[0].alive());
         assert_eq!(
             (
@@ -1394,6 +1417,7 @@ ActiveState=failed
             exec_main_status: status,
             exec_main_code: code,
             cpu_nsec: None,
+            freezer_state: String::new(),
         }
     }
 

@@ -130,6 +130,12 @@ void Session::mockFailFreeze(bool fail)
         mock->setFailFreeze(fail);
 }
 
+void Session::mockFailThaw(bool fail)
+{
+    if (auto *mock = qobject_cast<MockSessionBackend *>(m_backend.get()))
+        mock->setFailThaw(fail);
+}
+
 QStringList Session::mockCalls() const
 {
     if (auto *mock = qobject_cast<MockSessionBackend *>(m_backend.get()))

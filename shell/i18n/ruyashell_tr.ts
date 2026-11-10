@@ -1489,6 +1489,14 @@ Bu geri alınamaz.</translation>
     </message>
 </context>
 <context>
+    <name>HubPause</name>
+    <message>
+        <location filename="../qml/HubPause.qml" line="+98"/>
+        <source>Could not resume the game. Open Ruya Hub and choose Resume.</source>
+        <translation>Oyun sürdürülemedi. Ruya Hub&apos;ı açıp Devam et&apos;i seçin.</translation>
+    </message>
+</context>
+<context>
     <name>LaunchSplash</name>
     <message>
         <location filename="../qml/LaunchSplash.qml" line="+27"/>
@@ -2777,7 +2785,7 @@ Bu geri alınamaz.</translation>
         <translation>Güncellemeyi bitirmek için 2 dakika içinde yeniden başlatılıyor. Beklemek için herhangi bir düğmeye bas.</translation>
     </message>
     <message>
-        <location line="+233"/>
+        <location line="+234"/>
         <source>The screen did not answer, so the previous resolution is back.</source>
         <translation>Ekran yanıt vermedi, bu yüzden önceki çözünürlük geri geldi.</translation>
     </message>
@@ -2858,7 +2866,7 @@ Bu geri alınamaz.</translation>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="-985"/>
+        <location line="-986"/>
         <source>%1 is already running</source>
         <translation>%1 zaten çalışıyor</translation>
     </message>
@@ -2884,7 +2892,7 @@ Bu geri alınamaz.</translation>
         <translation>Çalışan uygulama</translation>
     </message>
     <message>
-        <location line="+942"/>
+        <location line="+943"/>
         <source>Sections</source>
         <translation>Bölümler</translation>
     </message>

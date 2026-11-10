@@ -402,7 +402,9 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
                 stop_asked: None,
                 kill_sent: false,
                 hidden: orphan,
-                frozen: false,
+                // Left frozen by a Freeze before the restart: listed as frozen, so a Stop thaws it
+                // first and a Thaw announces the change (T-457).
+                frozen: found.frozen,
             };
             if orphan {
                 match self.spawner.stop(&inst.unit) {
@@ -1070,6 +1072,23 @@ mod tests {
             .with_running("ruya-p2", PUZZLE, 2_000);
         let dir = ProfileSnapshot::new(["p1".to_owned(), "p2".to_owned()]);
         Session::new(spawner, dir, vec![])
+    }
+
+    #[test]
+    fn an_adopted_frozen_unit_is_listed_frozen_and_thawed_before_its_stop() {
+        let spawner = FakeSpawner::new()
+            .with_app(APP)
+            .with_frozen_running("ruya-p1", APP, 1_000);
+        let dir = ProfileSnapshot::new(["p1".to_owned()]);
+        let mut s = Session::new(spawner, dir, vec![]);
+        s.adopt(5_000, Instant::now(), true);
+        let unit = unit_name("ruya-p1", APP);
+        assert!(s.list()[0].frozen, "frozen after the restart");
+        assert_eq!(s.stop(&unit, Instant::now()), Status::Ok);
+        assert_eq!(
+            s.spawner.calls()[1..],
+            [format!("thaw {unit}"), format!("stop {unit}")]
+        );
     }
 
     #[test]
