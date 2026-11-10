@@ -37,7 +37,7 @@ The shell can list the console's microphones (USB headset, Bluetooth headset, a 
 ## Outcome
 Verified: host (vm pending: vm-audio-check)
 
-`dev.ps1 test` ALL GREEN (1078 QML passed, 90 skipped; Rust 485 in ruya-devices incl. 10 new).
+`dev.ps1 test` ALL GREEN (1078 QML passed, 90 skipped; Rust: 476 ruya-devices tests, 10 of them new).
 
 Built the microphone half of `Devices1.Audio`; no UI (T-450).
 
