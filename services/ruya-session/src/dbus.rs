@@ -343,6 +343,11 @@ impl SessionIface {
         self.freezer(instance, false, connection, &emitter).await
     }
 
+    fn instance_of_pid(&self, pid: u32) -> (String, String) {
+        let (status, instance) = lock(&self.session).instance_of_pid(pid);
+        (status.as_str().to_owned(), instance)
+    }
+
     fn list_running(&self) -> Vec<Dict> {
         lock(&self.session)
             .list()

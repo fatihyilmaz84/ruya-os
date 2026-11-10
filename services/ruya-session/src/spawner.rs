@@ -4,7 +4,7 @@
 //! (`launch_command`), the reading of its output (`parse_run_line`) and the unit events made from
 //! it (`RunFollower`).
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
@@ -71,6 +71,15 @@ pub trait Spawner {
     fn thaw(&self, unit: &str) -> Result<(), String> {
         Err(format!("cannot thaw {unit} here"))
     }
+    /// The cgroup file of a process (`/proc/<pid>/cgroup`, T-459); `None` when there is no such
+    /// process or it cannot be read.
+    fn process_cgroup(&self, _pid: u32) -> Option<String> {
+        None
+    }
+    /// The name of the Unix user with this uid.
+    fn user_name(&self, _uid: u32) -> Option<String> {
+        None
+    }
 }
 
 impl<T: Spawner + ?Sized> Spawner for Box<T> {
@@ -97,6 +106,12 @@ impl<T: Spawner + ?Sized> Spawner for Box<T> {
     }
     fn thaw(&self, unit: &str) -> Result<(), String> {
         (**self).thaw(unit)
+    }
+    fn process_cgroup(&self, pid: u32) -> Option<String> {
+        (**self).process_cgroup(pid)
+    }
+    fn user_name(&self, uid: u32) -> Option<String> {
+        (**self).user_name(uid)
     }
 }
 
@@ -629,6 +644,37 @@ pub fn unit_app_id(user: &str, unit: &str) -> Option<String> {
     valid_app_id(app).then(|| app.to_owned())
 }
 
+/// Where a process is, read from its `/proc/<pid>/cgroup` (T-459): the uid of the user manager
+/// whose tree holds it and the units between that manager and the process, the deepest first.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProcessPlace {
+    pub uid: u32,
+    pub units: Vec<String>,
+}
+
+/// The place of a process out of its cgroup file: the cgroup v2 line (`0::<path>`) whose path
+/// goes through a user manager (`.../user@<uid>.service/app.slice/<unit>`). `None` for a process
+/// outside every user manager (a system service, the kernel) or a file of another shape.
+pub fn parse_cgroup(text: &str) -> Option<ProcessPlace> {
+    let path = text.lines().find_map(|l| l.strip_prefix("0::"))?;
+    let parts: Vec<&str> = path.trim().split('/').filter(|p| !p.is_empty()).collect();
+    let at = parts.iter().position(|p| {
+        p.strip_prefix("user@")
+            .and_then(|r| r.strip_suffix(".service"))
+            .is_some_and(|uid| !uid.is_empty() && uid.bytes().all(|b| b.is_ascii_digit()))
+    })?;
+    let uid = parts[at]
+        .strip_prefix("user@")
+        .and_then(|r| r.strip_suffix(".service"))
+        .and_then(|uid| uid.parse().ok())?;
+    let units = parts[at + 1..]
+        .iter()
+        .rev()
+        .map(|p| (*p).to_owned())
+        .collect();
+    Some(ProcessPlace { uid, units })
+}
+
 /// The profile users out of `loginctl list-users --no-legend` (`UID USER LINGER STATE` per
 /// line): the names `ruya-<id>`. `ruya-shell` is a name of that shape too; whether it is a
 /// profile is for the directory to say, not for this parser.
@@ -813,6 +859,10 @@ struct FakeState {
     calls: Vec<String>,
     running: Vec<RunningUnit>,
     last_env: Vec<(String, String)>,
+    /// pid -> cgroup file (`process_cgroup`, T-459).
+    processes: HashMap<u32, String>,
+    /// uid -> user name (`user_name`).
+    users: HashMap<u32, String>,
 }
 
 impl FakeSpawner {
@@ -851,6 +901,18 @@ impl FakeSpawner {
             started,
             frozen: true,
         });
+        self
+    }
+
+    /// A process whose `/proc/<pid>/cgroup` reads `cgroup` (T-459).
+    pub fn with_process(self, pid: u32, cgroup: &str) -> Self {
+        self.lock().processes.insert(pid, cgroup.to_owned());
+        self
+    }
+
+    /// A Unix user `name` with this uid.
+    pub fn with_user(self, uid: u32, name: &str) -> Self {
+        self.lock().users.insert(uid, name.to_owned());
         self
     }
 
@@ -960,10 +1022,48 @@ impl Spawner for FakeSpawner {
         self.lock().calls.push(format!("thaw {unit}"));
         Ok(())
     }
+
+    fn process_cgroup(&self, pid: u32) -> Option<String> {
+        self.lock().processes.get(&pid).cloned()
+    }
+
+    fn user_name(&self, uid: u32) -> Option<String> {
+        self.lock().users.get(&uid).cloned()
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_cgroup_file_names_the_user_manager_and_the_units_deepest_first() {
+        use super::{parse_cgroup, ProcessPlace};
+        let flatpak = "0::/user.slice/user-1000.slice/user@1000.service/app.slice/app-flatpak-io.github.x.Game-12345.scope\n";
+        assert_eq!(
+            parse_cgroup(flatpak),
+            Some(ProcessPlace {
+                uid: 1000,
+                units: vec![
+                    "app-flatpak-io.github.x.Game-12345.scope".to_owned(),
+                    "app.slice".to_owned()
+                ],
+            })
+        );
+        // A hybrid hierarchy has other lines first; only the v2 line counts.
+        let hybrid = "12:pids:/user.slice\n0::/user.slice/user-1001.slice/user@1001.service/app.slice/ruya-app-ruya-p2-org.x.App.service";
+        assert_eq!(parse_cgroup(hybrid).map(|p| p.uid), Some(1001));
+        // Outside every user manager, or not a cgroup file at all.
+        assert_eq!(
+            parse_cgroup("0::/system.slice/ruya-session.service\n"),
+            None
+        );
+        assert_eq!(
+            parse_cgroup("0::/user.slice/user-1000.slice/user@.service/x.scope"),
+            None
+        );
+        assert_eq!(parse_cgroup("garbage"), None);
+        assert_eq!(parse_cgroup(""), None);
+    }
+
     #[test]
     fn the_version_comes_from_the_first_release_of_the_appstream_file() {
         let root = std::env::temp_dir().join(format!("ruya-ver-{}", std::process::id()));

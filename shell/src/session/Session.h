@@ -39,6 +39,9 @@ public:
     // `frozen` follows frozenChanged.
     Q_INVOKABLE void freeze(const QString &instance);
     Q_INVOKABLE void thaw(const QString &instance);
+    // The running instance the process `pid` belongs to (T-459, the client of a window): the answer
+    // comes with instanceOfPidFinished.
+    Q_INVOKABLE void instanceOfPid(int pid);
     // The running record of an app for a profile, or an empty object.
     Q_INVOKABLE QVariantMap instanceOf(const QString &appId, const QString &profile) const;
 
@@ -48,6 +51,10 @@ public:
     Q_INVOKABLE void mockFailFreeze(bool fail);
     // Thaw answers "failed" from now on and changes nothing (T-457).
     Q_INVOKABLE void mockFailThaw(bool fail);
+    // InstanceOfPid answers after `ms` from now on (0 again after mockReset), T-459.
+    Q_INVOKABLE void mockDelayPidAnswers(int ms);
+    // The process id the mock gives a launched instance's window client (0 when unknown), T-459.
+    Q_INVOKABLE int mockPidOf(const QString &instance) const;
     // "freeze <instance>", "thaw <instance>", "stop <instance>" in the order they were asked.
     Q_INVOKABLE QStringList mockCalls() const;
 
@@ -59,6 +66,8 @@ signals:
     void freezeFinished(const QString &instance, const QString &status);
     void thawFinished(const QString &instance, const QString &status);
     void frozenChanged(const QString &instance, bool frozen);
+    // status: "ok" | "invalid" | "not-found" | "failed"; `instance` is set on "ok" only.
+    void instanceOfPidFinished(int pid, const QString &status, const QString &instance);
     void appStarted(const QString &instance, const QString &appId);
     // reason: "quit" | "crashed" | "killed" | "launch-failed"
     void appExited(const QString &instance, const QString &appId, int exitCode, const QString &reason);

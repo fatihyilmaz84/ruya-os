@@ -37,6 +37,7 @@ void MockSessionBackend::reset()
     m_calls.clear();
     m_failFreeze = false;
     m_failThaw = false;
+    m_pidDelayMs = 0;
     emit runningListed(m_running);
 }
 
@@ -70,6 +71,7 @@ void MockSessionBackend::launch(const QString &appId, const QString &profile)
     r.appId = appId;
     r.profile = profile;
     r.started = QDateTime::currentSecsSinceEpoch();
+    r.pid = 4000 + m_next - 1;
     m_running.append(r);
     const QString instance = r.instance;
     QTimer::singleShot(0, this, [this, appId, profile, instance] {
@@ -177,4 +179,23 @@ void MockSessionBackend::thaw(const QString &instance)
             setFrozen(indexOf(instance), false);
     }
     QTimer::singleShot(0, this, [this, instance, status] { emit thawFinished(instance, status); });
+}
+
+int MockSessionBackend::pidOf(const QString &instance) const
+{
+    const int i = indexOf(instance);
+    return i < 0 ? 0 : m_running.at(i).pid;
+}
+
+void MockSessionBackend::instanceOfPid(int pid)
+{
+    QString status = pid <= 0 ? QStringLiteral("invalid") : QStringLiteral("not-found");
+    QString instance;
+    for (const RunningApp &r : std::as_const(m_running)) {
+        if (pid > 0 && r.pid == pid) {
+            status = QStringLiteral("ok");
+            instance = r.instance;
+        }
+    }
+    QTimer::singleShot(m_pidDelayMs, this, [this, pid, status, instance] { emit instanceOfPidFinished(pid, status, instance); });
 }

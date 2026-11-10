@@ -22,6 +22,7 @@ public:
     void stop(const QString &instance) override;
     void freeze(const QString &instance) override;
     void thaw(const QString &instance) override;
+    void instanceOfPid(int pid) override;
 
 private:
     // Freeze or Thaw: one string in, the status out (T-457).

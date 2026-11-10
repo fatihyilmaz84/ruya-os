@@ -14,6 +14,7 @@ struct RunningApp
     qint64 started = 0; // unix seconds
     QString state = QStringLiteral("starting"); // "starting" | "running" | "stopping"
     bool frozen = false; // frozen by Freeze (T-457)
+    int pid = 0; // the mock only: the process id its window's client has (T-459)
 
     // The record as QML sees it (camelCase keys).
     QVariantMap toVariant() const
@@ -45,6 +46,8 @@ public:
     // The Ruya Hub pauses the game (T-457): the cgroup freezer of the app's units.
     virtual void freeze(const QString &instance) = 0;
     virtual void thaw(const QString &instance) = 0;
+    // The running instance a process (a window's client) belongs to (T-459).
+    virtual void instanceOfPid(int pid) = 0;
 
 signals:
     void runningListed(const QList<RunningApp> &apps);
@@ -55,6 +58,8 @@ signals:
     void freezeFinished(const QString &instance, const QString &status);
     void thawFinished(const QString &instance, const QString &status);
     void frozenChanged(const QString &instance, bool frozen);
+    // status: "ok" | "invalid" | "not-found" (or "failed" when the call failed); `instance` on "ok".
+    void instanceOfPidFinished(int pid, const QString &status, const QString &instance);
     void appStarted(const QString &instance, const QString &appId);
     // reason: "quit" | "crashed" | "killed" | "launch-failed"
     void appExited(const QString &instance, const QString &appId, int exitCode, const QString &reason);

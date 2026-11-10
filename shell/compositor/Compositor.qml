@@ -100,12 +100,16 @@ WaylandCompositor {
         ShellSurfaceItem {
             id: appSurface
             property XdgToplevel toplevel: null
+            // The client's process id from its Wayland credentials (T-459): the shell asks
+            // Session1.InstanceOfPid which running app the window belongs to, since the app id a
+            // window gives itself is not always its Flatpak id ("python3.12" for a pygame game).
+            property int pid: 0
             // The app the shell shows in front (Shell.focusedApp while an app is open, also under
             // the quick menu): the one the Performance meter counts.
             readonly property bool inFront: win.shell.appOpen && win.shell.focusedApp === appSurface
             onInFrontChanged: compositor.frontChanged(appSurface)
-            // The Flatpak application id the window belongs to; the shell ends a launch when the window
-            // of the app it started appears, and "Switch to" names windows by it (T-147).
+            // The application id the window gives itself: usually its Flatpak id, but only a fallback
+            // for the shell, which goes by the instance of `pid` first (T-147, T-459).
             readonly property string appId: toplevel ? toplevel.appId : ""
             objectName: "app:" + (toplevel ? toplevel.appId : "")
             onActiveFocusChanged: console.info("ruya-compositor: app focus", objectName, activeFocus)
@@ -137,12 +141,14 @@ WaylandCompositor {
                 return
             }
             // Parented to the shell so it is never garbage-collected; addApp moves it into the app layer.
-            const item = surfaceComponent.createObject(win.shell, { shellSurface: xdgSurface, toplevel: toplevel })
+            const item = surfaceComponent.createObject(win.shell, { shellSurface: xdgSurface, toplevel: toplevel,
+                                                                        pid: client.processId })
             item.surfaceDestroyed.connect(() => compositor.appClosed(item))
             toplevel.sendFullscreen(Qt.size(win.width, win.height))
             // The app is shown only to its profile ("" = the shell's own: to whoever is signed in).
             win.shell.addApp(item, verdict.profile)
             console.info("ruya-compositor: app", toplevel.appId, toplevel.title, "uid", client.userId,
+                         "pid", client.processId,
                          "profile", verdict.profile !== "" ? verdict.profile : "(shell)")
         }
     }

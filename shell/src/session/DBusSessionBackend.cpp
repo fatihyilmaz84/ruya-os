@@ -149,3 +149,20 @@ void DBusSessionBackend::freezer(const QString &method, const QString &instance)
             emit thawFinished(instance, status);
     });
 }
+
+void DBusSessionBackend::instanceOfPid(int pid)
+{
+    auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("InstanceOfPid"));
+    msg << static_cast<uint>(pid > 0 ? pid : 0);
+    auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, pid](QDBusPendingCallWatcher *w) {
+        w->deleteLater();
+        QDBusPendingReply<QString, QString> reply = *w;
+        if (!reply.isValid()) {
+            qWarning("ruya-shell: Session1 InstanceOfPid %d failed: %s", pid, qPrintable(reply.error().message()));
+            emit instanceOfPidFinished(pid, QStringLiteral("failed"), {});
+            return;
+        }
+        emit instanceOfPidFinished(pid, reply.argumentAt<0>(), reply.argumentAt<1>());
+    });
+}

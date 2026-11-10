@@ -2473,12 +2473,12 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+139"/>
-        <location line="+276"/>
+        <location line="+280"/>
         <source>%1, %2</source>
         <translation>%1, %2</translation>
     </message>
     <message>
-        <location line="-169"/>
+        <location line="-173"/>
         <source>Just started</source>
         <translation>Just started</translation>
     </message>
@@ -2504,7 +2504,7 @@ This can&apos;t be undone.</translation>
         <translation>Image version %1</translation>
     </message>
     <message>
-        <location line="+128"/>
+        <location line="+132"/>
         <source>Volume, muted</source>
         <translation>Volume, muted</translation>
     </message>
@@ -2514,7 +2514,7 @@ This can&apos;t be undone.</translation>
         <translation>Volume %1</translation>
     </message>
     <message>
-        <location line="+97"/>
+        <location line="+116"/>
         <source>%1, on</source>
         <translation>%1, on</translation>
     </message>
@@ -2524,9 +2524,9 @@ This can&apos;t be undone.</translation>
         <translation>%1, off</translation>
     </message>
     <message>
-        <location line="-719"/>
+        <location line="-742"/>
         <location line="+1"/>
-        <location line="+688"/>
+        <location line="+692"/>
         <source>Muted</source>
         <translation>Muted</translation>
     </message>
@@ -2838,7 +2838,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+493"/>
+        <location filename="../qml/Shell.qml" line="+539"/>
         <source>Could not %1.</source>
         <translation>Could not %1.</translation>
     </message>
@@ -2873,7 +2873,17 @@ This can&apos;t be undone.</translation>
         <translation>Restarting to finish the update in 2 minutes. Press any button to wait.</translation>
     </message>
     <message>
-        <location line="+234"/>
+        <location line="+237"/>
+        <source>Could not close %1.</source>
+        <translation>Could not close %1.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Could not close the running app.</source>
+        <translation>Could not close the running app.</translation>
+    </message>
+    <message>
+        <location line="+68"/>
         <source>The screen did not answer, so the previous resolution is back.</source>
         <translation>The screen did not answer, so the previous resolution is back.</translation>
     </message>
@@ -2941,13 +2951,13 @@ This can&apos;t be undone.</translation>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location line="-983"/>
+        <location line="-1055"/>
         <source>%1 is already running</source>
         <translation>%1 is already running</translation>
     </message>
     <message>
         <location line="+3"/>
-        <location line="+18"/>
+        <location line="+21"/>
         <source>%1 could not be started. Try again.</source>
         <translation>%1 could not be started. Try again.</translation>
     </message>
@@ -2962,12 +2972,13 @@ This can&apos;t be undone.</translation>
         <translation>%1 stopped unexpectedly. Try again.</translation>
     </message>
     <message>
-        <location line="+29"/>
+        <location line="+38"/>
+        <location line="+74"/>
         <source>Running app</source>
         <translation>Running app</translation>
     </message>
     <message>
-        <location line="+940"/>
+        <location line="+926"/>
         <source>Sections</source>
         <translation>Sections</translation>
     </message>

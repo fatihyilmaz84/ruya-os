@@ -9,7 +9,8 @@ use std::time::{Duration, Instant};
 
 use crate::directory::ProfileDirectory;
 use crate::spawner::{
-    app_env, valid_app_id, valid_profile_id, with_pulse_server, Spawner, UnitEvent,
+    app_env, is_app_scope, parse_cgroup, unit_app_id, valid_app_id, valid_profile_id,
+    with_pulse_server, Spawner, UnitEvent,
 };
 
 /// After `Stop`, the app has this long to quit before it is killed.
@@ -29,6 +30,8 @@ pub enum Status {
     NotRunning,
     /// Freeze/Thaw: the app is not the signed-in profile's (T-457).
     NotAllowed,
+    /// InstanceOfPid: the process is in no running instance (T-459).
+    NotFound,
 }
 
 impl Status {
@@ -43,6 +46,7 @@ impl Status {
             Status::Failed => "failed",
             Status::NotRunning => "not-running",
             Status::NotAllowed => "not-allowed",
+            Status::NotFound => "not-found",
         }
     }
 }
@@ -423,6 +427,35 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
         self.list()
     }
 
+    /// The instance a process belongs to (T-459): its cgroup is read, and the instance whose unit,
+    /// or one of whose app's Flatpak scopes (`is_app_scope`, any of an Electron app's two), holds
+    /// it in the manager of that instance's own user is the answer. The deepest unit on the
+    /// process's path decides. A hidden instance (of a removed profile) is never named.
+    pub fn instance_of_pid(&self, pid: u32) -> (Status, String) {
+        if pid == 0 {
+            return (Status::Invalid, String::new());
+        }
+        let found = self
+            .spawner
+            .process_cgroup(pid)
+            .and_then(|text| parse_cgroup(&text))
+            .and_then(|place| {
+                let user = self.spawner.user_name(place.uid)?;
+                place.units.iter().find_map(|unit| {
+                    self.instances
+                        .iter()
+                        .filter(|i| !i.hidden)
+                        .filter(|i| unit_app_id(&user, &i.unit).as_deref() == Some(&i.app_id))
+                        .find(|i| i.unit == *unit || is_app_scope(&i.app_id, unit))
+                        .map(|i| i.unit.clone())
+                })
+            });
+        match found {
+            Some(instance) => (Status::Ok, instance),
+            None => (Status::NotFound, String::new()),
+        }
+    }
+
     pub fn list(&self) -> Vec<RunningApp> {
         self.instances
             .iter()
@@ -598,10 +631,91 @@ mod tests {
             (Status::Failed, "failed"),
             (Status::NotRunning, "not-running"),
             (Status::NotAllowed, "not-allowed"),
+            (Status::NotFound, "not-found"),
         ];
         for (s, text) in all {
             assert_eq!(s.as_str(), text);
         }
+    }
+
+    // ---- InstanceOfPid (T-459) ---------------------------------------------------------------
+
+    fn cgroup(uid: u32, unit: &str) -> String {
+        format!("0::/user.slice/user-{uid}.slice/user@{uid}.service/app.slice/{unit}\n")
+    }
+
+    /// p1 (ruya-p1, uid 1001) runs Racer, p2 (ruya-p2, uid 1002) runs Racer and Puzzle; the
+    /// processes: 10 in p1's unit, 11 and 12 in p1's two Flatpak scopes (Electron, T-435), 20 in
+    /// p2's Racer scope, 30 in p2's Puzzle scope, 40 in a sibling app's scope, 50 in a system
+    /// service, 60 in p1's manager outside any app.
+    fn pid_session() -> (Session<FakeSpawner, ProfileSnapshot>, [String; 3]) {
+        let spawner = FakeSpawner::new()
+            .with_app(APP)
+            .with_app("org.ruyaos.Puzzle")
+            .with_user(1001, "ruya-p1")
+            .with_user(1002, "ruya-p2")
+            .with_process(10, &cgroup(1001, &unit_name("ruya-p1", APP)))
+            .with_process(11, &cgroup(1001, "app-flatpak-org.ruyaos.Racer-4711.scope"))
+            .with_process(12, &cgroup(1001, "app-flatpak-org.ruyaos.Racer-4712.scope"))
+            .with_process(20, &cgroup(1002, "app-flatpak-org.ruyaos.Racer-5000.scope"))
+            .with_process(
+                30,
+                &cgroup(1002, "app-flatpak-org.ruyaos.Puzzle-5001.scope"),
+            )
+            .with_process(
+                40,
+                &cgroup(1001, "app-flatpak-org.ruyaos.Racer-Extra-1.scope"),
+            )
+            .with_process(50, "0::/system.slice/ruya-session.service\n")
+            .with_process(60, &cgroup(1001, "app-org.gnome.Terminal@1.service"));
+        let dir = ProfileSnapshot::new(["p1".to_owned(), "p2".to_owned()]);
+        let mut s = Session::new(spawner, dir, Vec::new());
+        let p1 = s.launch(APP, "p1", 100).1;
+        let p2 = s.launch(APP, "p2", 100).1;
+        let puzzle = s.launch("org.ruyaos.Puzzle", "p2", 100).1;
+        (s, [p1, p2, puzzle])
+    }
+
+    #[test]
+    fn a_pid_in_the_unit_or_any_app_scope_names_its_instance() {
+        let (s, [p1, p2, puzzle]) = pid_session();
+        assert_eq!(s.instance_of_pid(10), (Status::Ok, p1.clone()));
+        // Both scopes of an Electron app (its zygote's second scope, T-435).
+        assert_eq!(s.instance_of_pid(11), (Status::Ok, p1.clone()));
+        assert_eq!(s.instance_of_pid(12), (Status::Ok, p1));
+        // The same app of another profile: that profile's instance, found by its manager's user.
+        assert_eq!(s.instance_of_pid(20), (Status::Ok, p2));
+        assert_eq!(s.instance_of_pid(30), (Status::Ok, puzzle));
+    }
+
+    #[test]
+    fn a_pid_outside_every_instance_is_not_found() {
+        let (mut s, [p1, ..]) = pid_session();
+        // A sibling app whose id starts with Racer's, a system service, the manager's own
+        // processes, an unknown pid, and an unknown user.
+        for pid in [40, 50, 60, 99] {
+            assert_eq!(
+                s.instance_of_pid(pid),
+                (Status::NotFound, String::new()),
+                "pid {pid}"
+            );
+        }
+        assert_eq!(s.instance_of_pid(0), (Status::Invalid, String::new()));
+        // An instance that has ended is not named any more.
+        assert!(s.on_event(exited(&p1, 0, false)).is_some());
+        assert_eq!(s.instance_of_pid(10), (Status::NotFound, String::new()));
+        assert_eq!(s.instance_of_pid(11), (Status::NotFound, String::new()));
+    }
+
+    #[test]
+    fn a_pid_of_an_unknown_user_is_not_found() {
+        let spawner = FakeSpawner::new()
+            .with_app(APP)
+            .with_process(10, &cgroup(1001, &unit_name("ruya-p1", APP)));
+        let dir = ProfileSnapshot::new(["p1".to_owned()]);
+        let mut s = Session::new(spawner, dir, Vec::new());
+        assert_eq!(s.launch(APP, "p1", 100).0, Status::Ok);
+        assert_eq!(s.instance_of_pid(10), (Status::NotFound, String::new()));
     }
 
     // ---- Freeze and Thaw (T-457) -----------------------------------------------------------

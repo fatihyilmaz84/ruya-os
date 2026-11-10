@@ -29,6 +29,9 @@
     "not-running"       no instance with that name is running (unknown, still starting or stopping)
     "not-allowed"       the app is not the signed-in profile's (or nobody is signed in)
 
+  InstanceOfPid (T-459) has this extra status:
+    "not-found"         the process is in no running instance (no such process, or not an app's)
+
   Usage ledger (T-247; ReportPresence, ListSessions, GetTotals, ClearHistory, UsageChanged) has
   these extra statuses:
     "not-allowed"       the profile is not the active one (reads), or the actor may not clear it
@@ -123,6 +126,20 @@
     <method name="Thaw">
       <arg name="instance" type="s" direction="in"/>
       <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <!-- The running instance a process belongs to (T-459): the compositor asks it for the client
+         pid of each new window, because the app id a window gives itself is not always its
+         Flatpak id (a pygame game calls itself "python3.12"). The service reads the process's
+         cgroup (/proc/<pid>/cgroup) and answers the instance whose unit, or one of whose app's
+         Flatpak scopes (`app-flatpak-<app_id>-<n>.scope`, also an Electron app's second one,
+         T-435), contains it, in the manager of that instance's profile user. A starting or
+         stopping instance counts too. `instance` is "" unless the status is "ok". Statuses: ok,
+         invalid (pid 0), not-found. -->
+    <method name="InstanceOfPid">
+      <arg name="pid" type="u" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+      <arg name="instance" type="s" direction="out"/>
     </method>
 
     <!-- Apps that keep running when ruya-session restarts are still listed (state "running",
