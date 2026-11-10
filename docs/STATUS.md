@@ -15,7 +15,7 @@ Verification legend: **host** = built and tested on Windows · **host (vm pendin
 
 ## Board
 
-**NEXT → T-434** (builders: glass cost and Performance rows; then T-435, T-429, T-427, T-428); lead: T-366 ([lead] Ruya Input spike, ADR-024; then T-367, T-381 GE-Proton, T-380), and the Dell second pass T-355 once Play works (T-386, image 0.0.61). **Builder lanes**: T-147, then the first rows of `STATUS-backlog.md` in order (T-362, T-423, T-424, T-422, T-378, T-299, T-364, T-339); one "VM (this task)" at a time. T-283, T-284, T-287, T-288 wait for the lead's design pass T-282; T-397..T-399 wait for T-366 and T-396. **Plan audit 2026-11-10:** 76 task files carry a ruling under their header (overlaps cut, dependencies fixed); the Depends column now lists only dependencies that are not `done`.
+**NEXT → T-435** (builders: ACBR window and orphaned scopes; then T-429, T-427, T-428, T-431); lead: T-366 ([lead] Ruya Input spike, ADR-024; then T-367, T-381 GE-Proton, T-380), and the Dell second pass T-355 once Play works (T-386, image 0.0.61). **Builder lanes**: T-147, then the first rows of `STATUS-backlog.md` in order (T-362, T-423, T-424, T-422, T-378, T-299, T-364, T-339); one "VM (this task)" at a time. T-283, T-284, T-287, T-288 wait for the lead's design pass T-282; T-397..T-399 wait for T-366 and T-396. **Plan audit 2026-11-10:** 76 task files carry a ruling under their header (overlaps cut, dependencies fixed); the Depends column now lists only dependencies that are not `done`.
 
 **How work runs (owner, 2026-11-04):** the lead dispatches `ruya-builder` agents (at most two at a time, own worktrees, different areas), has each branch reviewed by `ruya-reviewer` and merges it (`docs/LEAD.md`). Dispatched builders never edit this file; one "VM (this task)" runs at a time. A builder the owner starts directly takes NEXT alone in the main checkout and does the bookkeeping (`CLAUDE.md`).
 
@@ -23,7 +23,6 @@ Open work only (the front of the board; the rest is in `STATUS-backlog.md`), in 
 
 | ID | Title | Status | Depends |
 |---|---|---|---|
-| [T-434](tasks/T-434-glass-cost-and-performance-tier-rows.md) | Glass follow-ups: Performance-tier rows opaque, the picker's idle blur texture, the page blur's GPU cost | in-progress | — |
 | [T-435](tasks/T-435-acbr-shows-no-window-on-the-dell.md) | ACBR (Electron) starts on the Dell but never shows a window; orphaned app scopes | todo | — |
 | [T-393](tasks/T-393-options-menu-design.md) | **[lead]** Design: the Options (context) menu: component, contents per surface, motion, focus | todo | — |
 | [T-396](tasks/T-396-controller-ownership-and-layout-spec.md) | **[lead]** Spec: who owns the UI, the family's confirm button, action glyphs (ADR-027) | todo | T-366 |
@@ -46,6 +45,7 @@ One line each: `- (source) what, and why it matters`. Dispatched builders put th
 Triaged 2026-11-10 (lead-9): the lines before are verbatim in [`STATUS-parked.md`](STATUS-parked.md), "Inbox triage 2026-11-10 (lead-9)"; they became T-427 (Bluetooth leftovers), T-428 (Store follow-ups), T-429 (test harness), T-430 (GlassShadow/AppArt masks, L0 memory), T-147 item 6 (launch follow-ups), T-282 item 12 (keyboard over glass), or owner questions (CPU per game, `core.hooksPath`).
 
 - (T-147 reviews) Launch and quick-menu follow-ups: a running app with no Library card behind Home cannot be resumed (offer Resume or Switch to in the quick menu while apps are behind Home); `Notifications.requeue` counts `shownCount` twice; an `AppExited` before the ok answer can end a launch on an older instance's exit, and Close before ok has no instance to stop; the Running pill on the Games grid (Home only today); the Home shrink-into-card transition (04 §5.1, a `pageMs` fade today); older device toasts are not capped at 30 characters; a Steam launch path in Session1, and one line in Details saying why a Steam game has no Play; consider showing Close on the splash before 20 s; add the state pill over a saturated tint to the contrast gate.
+- (T-434 reviews) Glass follow-ups: WallpaperLayer's page blur still runs a full-size MultiEffect (give it the quarter-size treatment once the Dell confirms the saving); PIN pad and TextEntry keys use see-through `glass` over a scrim on every tier, and the Home hero's SecondaryButton sits over sharp art: confirm none lies directly on L0 on a page; the `Theme.blurMax > 0 ? glass : glassOpaque` ternary is in three files (a `glassOnL0` token needs a 04 §2 entry); the 1/3 blurMax and the pill number await the Dell run.
 - (lead-9, second triage) The lines from T-423, T-421 and T-424 are verbatim in `STATUS-parked.md`, "Inbox triage 2026-11-10 (lead-9, second)"; they became T-431 (image hardening), T-432 (SELinux domains), T-433 (quick-xml, zbus 6, CI actions), T-434 (glass cost, Performance rows), T-435 (ACBR window, orphaned scopes), T-430 and T-282 additions, T-425 (release profile) and the next-image list.
 
 ## Blocked (need something this host doesn't have)
