@@ -179,13 +179,23 @@ impl AudioIface {
     ) -> String {
         let id = id.to_owned();
         let (status, before, after) = with_audio(&self.audio, move |audio| {
-            let before = audio.default_source().map(str::to_owned);
+            let before = (
+                audio.default_source().map(str::to_owned),
+                audio.input_muted(),
+            );
             let status = audio.set_input(&id);
-            (status, before, audio.default_source().map(str::to_owned))
+            let after = (
+                audio.default_source().map(str::to_owned),
+                audio.input_muted(),
+            );
+            (status, before, after)
         })
         .await;
-        if before != after {
+        if before.0 != after.0 {
             let _ = Self::inputs_changed(&emitter).await;
+        }
+        if before.1 != after.1 {
+            let _ = self.input_muted_changed(&emitter).await;
         }
         status.as_str().to_owned()
     }
@@ -310,10 +320,15 @@ impl AudioIface {
     }
 
     #[zbus(property)]
-    async fn set_input_muted(&mut self, value: bool) {
+    async fn set_input_muted(&mut self, value: bool) -> zbus::fdo::Result<()> {
         let status = with_audio(&self.audio, move |audio| audio.set_input_muted(value)).await;
-        if status != crate::Status::Ok {
+        if status == crate::Status::Ok {
+            Ok(())
+        } else {
             eprintln!("ruya-devices: setting the microphone mute failed");
+            Err(zbus::fdo::Error::Failed(
+                "no microphone, or PipeWire refused".to_owned(),
+            ))
         }
     }
 
@@ -2308,6 +2323,38 @@ mod tests {
         assert_eq!(worker.join().unwrap(), crate::Status::Ok);
         // The switch is done: the copy shows it.
         assert_eq!(iface.master_volume(), 100);
+    }
+
+    /// Writing `InputMuted` with no microphone is an error on the bus, not a silent success.
+    #[test]
+    fn writing_input_muted_without_a_microphone_is_a_bus_error() {
+        use crate::audio::FakePipeWire;
+        let make = |mic: bool| {
+            let mut pw = FakePipeWire::new();
+            if !mic {
+                pw.sources.clear();
+                pw.default_source = None;
+            }
+            let audio: Shared = Arc::new(Mutex::new(
+                Audio::new(
+                    Box::new(pw) as DynPipeWire,
+                    crate::store::Store::in_memory(),
+                )
+                .unwrap(),
+            ));
+            lock(&audio).refresh().unwrap();
+            AudioIface::new(audio)
+        };
+        let mut without = make(false);
+        let refused = futures_lite::future::block_on(without.set_input_muted(true));
+        assert!(
+            matches!(refused, Err(zbus::fdo::Error::Failed(_))),
+            "{refused:?}"
+        );
+        assert!(!without.input_muted());
+        let mut with = make(true);
+        futures_lite::future::block_on(with.set_input_muted(true)).unwrap();
+        assert!(with.input_muted());
     }
 
     #[test]

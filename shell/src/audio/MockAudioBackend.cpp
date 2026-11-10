@@ -341,7 +341,13 @@ void MockAudioBackend::publishInputs(int delayMs)
 {
     const QList<InputInfo> list = m_inputs;
     const quint64 request = beginInputsRequest();
-    QTimer::singleShot(delayMs, this, [this, request, list] { deliverInputs(request, list); });
+    if (delayMs > 0)
+        ++m_pending;
+    QTimer::singleShot(delayMs, this, [this, request, list, delayMs] {
+        if (delayMs > 0)
+            --m_pending;
+        deliverInputs(request, list);
+    });
 }
 
 void MockAudioBackend::publishSinks(int delayMs)

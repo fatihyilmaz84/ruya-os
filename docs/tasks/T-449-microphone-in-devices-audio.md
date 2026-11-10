@@ -37,7 +37,7 @@ The shell can list the console's microphones (USB headset, Bluetooth headset, a 
 ## Outcome
 Verified: host (vm pending: vm-audio-check)
 
-`dev.ps1 test` ALL GREEN (1078 QML passed, 90 skipped; Rust: 476 ruya-devices tests, 10 of them new).
+`dev.ps1 test` ALL GREEN (1079 QML passed, 90 skipped; Rust: 478 ruya-devices tests, 12 of them new).
 
 Built the microphone half of `Devices1.Audio`; no UI (T-450).
 
@@ -50,4 +50,6 @@ Tests (Rust, `ruya-devices`): `audio::tests::inputs_list_the_microphones_and_mar
 
 Revert checks: removing the list check in `Audio::set_input` fails `an_id_that_is_not_a_listed_microphone_is_refused_before_pipewire` and `a_console_without_a_microphone_...`; widening the `Audio/Source` match in `parse_sources` fails the dump test; deleting the `input_props` detection in `apply` fails `microphone_changes_from_outside_are_reported_once`; muting every mock microphone instead of the default (`revert-check.ps1`, `-Test tst_audio_input`) fails `test_the_mute_belongs_to_the_microphone`.
 
-Deviations / notes: `MockAudioBackend::publishInputs` is delayed with the others but not counted in `pendingReplies()`, because `tst_audio.qml` asserts that `mockRefreshDelayed` leaves 3 pending replies. The D-Bus client (`DBusAudioBackend`) cannot run on this host; it follows the existing output code and is covered only by compilation until the VM run. `available` is a string (yes/no/unknown) to match `ListOutputs`, not a bool.
+Round 2 (review): `tst_audio_input.qml` waits on `tryVerify(() => Audio.inputs.length === N)` (a QVariantList copy cannot be polled with `tryCompare`). `AudioIface::set_input_muted` now returns `fdo::Result<()>` and answers `Failed` when the write is refused (no microphone, PipeWire refused), so Properties.Set fails as the XML says (test `dbus::tests::writing_input_muted_without_a_microphone_is_a_bus_error`). `Audio::set_input` reads the new default's mute from PipeWire at once and `SetInput` announces `InputMuted` when it changed (test `audio::tests::set_input_reads_the_new_defaults_mute`; the fake now keeps a mute per microphone). `MockAudioBackend::publishInputs` is counted in `pendingReplies()`, so `tst_audio.qml` `test_an_older_reply_arriving_late_is_dropped` now expects 4 pending replies instead of 3: the input list is a fourth kind of reply, not a weakened assertion; new `test_a_late_input_list_is_dropped` in `tst_audio_input.qml`. Revert checks: not forwarding the new default's mute (`audio.rs`) fails the first new Rust test; returning `Ok(())` from the setter (`dbus.rs`) fails the second.
+
+Deviations / notes: `available` is a string (yes/no/unknown) to match `ListOutputs`, not a bool. The D-Bus client (`DBusAudioBackend`) cannot run on this host; it follows the existing output code and is covered only by compilation until the VM run.

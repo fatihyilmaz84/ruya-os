@@ -35,7 +35,7 @@ Item {
 
         function test_a_plugged_microphone_is_listed_without_taking_the_default() {
             verify(Audio.mockPlugInput("usb-mic"))
-            tryCompare(Audio.inputs, "length", 2)
+            tryVerify(() => Audio.inputs.length === 2)
             compare(ids().join(), "mic-0,usb-mic")
             compare(Audio.inputs[1].kind, "usb")
             compare(Audio.defaultInput, "mic-0")
@@ -44,7 +44,7 @@ Item {
 
         function test_set_input_makes_a_listed_microphone_the_default() {
             Audio.mockPlugInput("usb-mic")
-            tryCompare(Audio.inputs, "length", 2)
+            tryVerify(() => Audio.inputs.length === 2)
             const spy = createTemporaryObject(spyComponent, host)
             Audio.setInput("usb-mic")
             tryCompare(Audio, "defaultInput", "usb-mic")
@@ -77,7 +77,7 @@ Item {
 
         function test_the_mute_belongs_to_the_microphone() {
             Audio.mockPlugInput("usb-mic")
-            tryCompare(Audio.inputs, "length", 2)
+            tryVerify(() => Audio.inputs.length === 2)
             Audio.setInputMuted(true)
             tryCompare(Audio, "inputMuted", true)
             Audio.setInput("usb-mic")
@@ -89,7 +89,7 @@ Item {
 
         function test_a_console_without_a_microphone_has_an_empty_list_and_no_mute() {
             Audio.mockUnplugInput("mic-0")
-            tryCompare(Audio.inputs, "length", 0)
+            tryVerify(() => Audio.inputs.length === 0)
             compare(Audio.defaultInput, "")
             compare(Audio.inputMuted, false)
             Audio.setInputMuted(true)                      // nothing to mute: nothing changes
@@ -103,10 +103,21 @@ Item {
 
         function test_unplugging_the_default_hands_it_to_the_next_one() {
             Audio.mockPlugInput("usb-mic")
-            tryCompare(Audio.inputs, "length", 2)
+            tryVerify(() => Audio.inputs.length === 2)
             Audio.mockUnplugInput("mic-0")
             tryCompare(Audio, "defaultInput", "usb-mic")
             compare(Audio.inputs.length, 1)
+        }
+
+        // The inputs list is a fourth kind of reply, like the state, the sinks and the outputs: a
+        // late reply with the list of before must not put it back.
+        function test_a_late_input_list_is_dropped() {
+            Audio.mockRefreshDelayed(150)
+            compare(Audio.mockPendingReplies(), 4)
+            Audio.mockPlugInput("usb-mic")
+            tryVerify(() => Audio.inputs.length === 2)
+            tryVerify(() => Audio.mockPendingReplies() === 0)
+            compare(Audio.inputs.length, 2, "the late list was dropped")
         }
 
         Component {

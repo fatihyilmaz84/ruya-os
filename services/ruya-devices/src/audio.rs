@@ -748,6 +748,10 @@ impl<P: PipeWire> Audio<P> {
             return Status::Failed;
         }
         self.default_source = Some(id.to_owned());
+        // The mute belongs to the microphone: read the new default's.
+        if let Ok(snap) = self.pw.snapshot() {
+            self.input_muted = snap.input_muted;
+        }
         self.publish();
         Status::Ok
     }
@@ -904,6 +908,8 @@ pub struct FakePipeWire {
     pub sources: Vec<Source>,
     pub default_source: Option<String>,
     pub input_muted: bool,
+    /// The mute of the microphones that are not the default (the default's is `input_muted`).
+    pub source_mutes: BTreeMap<String, bool>,
     /// How often a microphone write reached the fake (a refused id must write nothing).
     pub source_writes: u32,
     /// Make every write fail (to test the "failed" status).
@@ -944,6 +950,7 @@ impl FakePipeWire {
             }],
             default_source: Some("mic-0".to_owned()),
             input_muted: false,
+            source_mutes: BTreeMap::new(),
             source_writes: 0,
             broken: false,
             read_fails: false,
@@ -1142,6 +1149,10 @@ impl PipeWire for FakePipeWire {
             return Err("refused".to_owned());
         }
         self.source_writes += 1;
+        if let Some(old) = self.default_source.take() {
+            self.source_mutes.insert(old, self.input_muted);
+        }
+        self.input_muted = self.source_mutes.get(id).copied().unwrap_or(false);
         self.default_source = Some(id.to_owned());
         Ok(())
     }
@@ -2088,5 +2099,20 @@ mod tests {
         a.refresh().unwrap();
         assert_eq!(ids(&a), [("mic-0", false)]);
         assert_eq!(a.set_input_muted(true), Status::Failed);
+    }
+
+    #[test]
+    fn set_input_reads_the_new_defaults_mute() {
+        let mut pw = FakePipeWire::new();
+        pw.sources.push(usb_mic());
+        let mut a = Audio::new(pw, Store::in_memory()).unwrap();
+        a.refresh().unwrap();
+        assert_eq!(a.set_input_muted(true), Status::Ok);
+        assert_eq!(a.set_input("usb-mic"), Status::Ok);
+        assert!(!a.input_muted(), "the USB microphone was never muted");
+        assert!(!a.view().lock().unwrap().input_muted);
+        assert_eq!(a.set_input("mic-0"), Status::Ok);
+        assert!(a.input_muted() && a.view().lock().unwrap().input_muted);
+        assert!(!a.refresh().unwrap().any(), "nothing left to announce");
     }
 }

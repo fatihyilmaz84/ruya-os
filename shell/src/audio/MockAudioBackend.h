@@ -66,8 +66,6 @@ private:
     void publishState(int delayMs = 0);
     void publishSinks(int delayMs = 0);
     void publishOutputs(int delayMs = 0);
-    // Delayed like the others, but not counted in pendingReplies() (the tests that count them
-    // predate the microphones).
     void publishInputs(int delayMs = 0);
     QString defaultInput() const;
     QList<OutputInfo> outputs() const;

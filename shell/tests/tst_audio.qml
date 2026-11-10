@@ -444,9 +444,9 @@ Item {
         function test_an_older_reply_arriving_late_is_dropped() {
             // Volume 50 on the TV. Ask again (the replies, a snapshot of that, are held back), then
             // the volume is raised and a headset plugged in: the late replies must not put 50 and
-            // the TV back. The state, the sink list and the output list are three kinds of reply.
+            // the TV back. The state, the sink list, the output list and the input list are four kinds of reply.
             Audio.mockRefreshDelayed(150)
-            compare(Audio.mockPendingReplies(), 3)
+            compare(Audio.mockPendingReplies(), 4)
             Audio.setVolume(70)
             verify(Audio.mockPlug("usb-headset"))
             tryCompare(Audio, "volume", 70)
