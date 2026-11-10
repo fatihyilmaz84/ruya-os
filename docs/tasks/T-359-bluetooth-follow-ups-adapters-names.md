@@ -42,7 +42,7 @@ Bluetooth behaves on consoles with more than one adapter or a late adapter, and 
 - Inbox lines (T-336, T-335, T-334 reviews) are verbatim in `STATUS-parked.md`, "Inbox triage 2026-11-09 (lead-7)".
 
 ## Outcome
-Verified: host (vm pending: `scripts/vm-devices-check.sh bluetooth`)
+Verified: vm (0.0.61, lead-8: `vm-devices-check.sh bluetooth` ALL CHECKS PASSED) + hw pending (Dell)
 
 Builder: Sonnet 5.5, effort high, rounds 2 (round 2 = review: names from outside in the rename title and rows; tokens not measurable from inside the session; about 170 tool turns).
 

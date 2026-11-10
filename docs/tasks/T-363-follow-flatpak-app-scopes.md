@@ -34,7 +34,7 @@ A Flatpak game runs in its own `app-flatpak-<id>-<n>.scope`, outside our `ruya-a
 - Inbox line T-355 item 4 is verbatim in `STATUS-parked.md`, "Inbox triage 2026-11-09 (lead-7)".
 
 ## Outcome
-Verified: host (vm pending: `scripts/vm-session-check.sh check`)
+Verified: vm (0.0.61, lead-8: `vm-session-check.sh check` ALL CHECKS PASSED with the scope attach and gone lines; `restart` passed) + hw pending (Dell STK repeat: journal `scope gone, cpu N ms`)
 
 Builder: Sonnet 5.5, effort high, round 1, tokens not measurable from inside the session (about 150 tool turns).
 

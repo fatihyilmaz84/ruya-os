@@ -34,7 +34,7 @@ Open work only (the front of the board; the rest is in `STATUS-backlog.md`), in 
 
 Later (ordered): [`STATUS-backlog.md`](STATUS-backlog.md) holds the rest of the open board, same columns; `lint-board.ps1` reads both. A planner or the lead moves rows up when they become ready.
 
-**VM queue** (one image build runs them all; `scripts/vm-queue.ps1`; history in `STATUS-parked.md`): **0.0.60 passed on 2026-11-09** (lead-8: session check/display/restart, sounds, devices bluetooth/twopads/inputd/system, audio, storage, reboot saved output; check's scope lines wait for T-363's image). For 0.0.61: the Dell runs STK from Games with A (T-386) and the picker steps of T-387 (sheet blurred after an app, every tile drawn), `vm-devices-check.sh bluetooth` (T-359), `vm-session-check.sh check` scope lines (T-363) and the Dell STK repeat (journal `scope gone, cpu N ms`, about 45 min x 15 %), `subset-icons.sh` (T-297), the sample re-run, the greenboot drill.
+**VM queue** (one image build runs them all; `scripts/vm-queue.ps1`; history in `STATUS-parked.md`): **0.0.61 passed on 2026-11-10** (lead-8: session check/display/restart with T-363's scope lines, devices bluetooth/twopads/inputd, audio, sounds, reboot saved output: 10 of 10). Left for the next image: `subset-icons.sh` (T-297), the sample re-run, the greenboot drill, `vm-storage-check.ps1`, `vm-devices-check.sh system`.
 
 **Dell look-at list:** the long list with task ids is in `STATUS-parked.md`, "Dell look-at list (moved 2026-11-10, lead-8)"; the next Dell pass also checks 0.0.61: STK from Games with A (T-386), the picker after an app (T-387), the T-376 hw items.
 
