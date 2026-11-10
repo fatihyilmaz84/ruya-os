@@ -24,7 +24,7 @@ Open work only (the front of the board; the rest is in `STATUS-backlog.md`), in 
 | ID | Title | Status | Depends |
 |---|---|---|---|
 | [T-447](tasks/T-447-ruya-hub-design.md) | **[lead]** Ruya Hub design (ADR-033): the Quick Hub, the panels, focus and motion | todo | — |
-| [T-449](tasks/T-449-microphone-in-devices-audio.md) | Microphone in `Devices1.Audio`: list inputs, default input, mute | todo | — |
+| [T-449](tasks/T-449-microphone-in-devices-audio.md) | Microphone in `Devices1.Audio`: list inputs, default input, mute | in-progress | — |
 | [T-451](tasks/T-451-performance-metrics-backend.md) | Performance metrics: FPS and frame time from the compositor, CPU, RAM, temperatures, GPU from `Devices1` | todo | — |
 | [T-448](tasks/T-448-quick-hub.md) | The Quick Hub: status row, quick tiles, running and recent games | todo | T-447 |
 | [T-366](tasks/T-366-ruya-input-spike-engine-and-design.md) | **[lead]** Ruya Input: spike, engine decision and the design (06-input.md, Input1 draft) | todo | — |

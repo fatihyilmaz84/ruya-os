@@ -1,6 +1,6 @@
 # T-449 — Microphone in `Devices1.Audio`: list inputs, default input, mute
 
-Status: todo · Phase: 2 · Depends: — · Area: api, services (ruya-devices), shell (client and mock) · Size: S · Owner: builder · Complexity: normal · Developer surface: internal
+Status: in-progress · Phase: 2 · Depends: — · Area: api, services (ruya-devices), shell (client and mock) · Size: S · Owner: builder · Complexity: normal · Developer surface: internal
 
 ## Goal
 The shell can list the console's microphones (USB headset, Bluetooth headset, a pad's mic where PipeWire shows one), pick the default one and mute it, so the Hub's Audio panel and its microphone tile have a real backend.
