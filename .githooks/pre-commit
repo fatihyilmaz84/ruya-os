@@ -4,6 +4,13 @@
 # reached main as control characters again on 2026-11-09 (lead-8), after dev.ps1 test only.
 # Enabled per clone with: git config core.hooksPath .githooks
 # Linux (WSL) commits without PowerShell skip it; CI and dev.ps1 test still run the lint.
+# Secret scan on the staged additions only (private keys, token formats; the full-history scan is scripts/scan-secrets.ps1).
+staged="$(git diff --cached -U0 --no-color | grep '^+[^+]' | grep -E -e '-----BEGIN [A-Z ]*PRIVATE KEY-----' -e '(ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{36}' -e 'github_pat_[A-Za-z0-9_]{40,}' -e 'AKIA[0-9A-Z]{16}' -e 'sk-ant-[A-Za-z0-9_-]{20,}' -e 'sk-[A-Za-z0-9]{40,}' -e 'xox[abprs]-[A-Za-z0-9-]{10,}' | cut -c1-40)"
+if [ -n "$staged" ] || git diff --cached --name-only | grep -qx 'image/bib/config.toml'; then
+    echo "pre-commit: a staged change looks like a secret (pattern list: scripts/scan-secrets.ps1). Unstage it." >&2
+    [ -n "$staged" ] && echo "$staged" >&2
+    exit 1
+fi
 root="$(git rev-parse --show-toplevel)"
 if command -v powershell.exe >/dev/null 2>&1; then
     ps=powershell.exe

@@ -22,8 +22,14 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # the secret scan reads the whole history
       - name: Text lint
         run: pwsh -NoProfile -File scripts/lint-text.ps1
+      - name: Secret scan (tracked files and history)
+        run: pwsh -NoProfile -File scripts/scan-secrets.ps1
+      - name: Bus policy lint
+        run: pwsh -NoProfile -File scripts/lint-bus-policies.ps1 -SelfTest
       - name: Token lint
         run: pwsh -NoProfile -File scripts/lint-tokens.ps1
       - name: QML member lint
