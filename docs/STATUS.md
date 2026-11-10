@@ -23,7 +23,7 @@ Open work only (the front of the board; the rest is in `STATUS-backlog.md`), in 
 
 | ID | Title | Status | Depends |
 |---|---|---|---|
-| [T-435](tasks/T-435-acbr-shows-no-window-on-the-dell.md) | ACBR (Electron) starts on the Dell but never shows a window; orphaned app scopes | todo | — |
+| [T-435](tasks/T-435-acbr-shows-no-window-on-the-dell.md) | ACBR (Electron) starts on the Dell but never shows a window; orphaned app scopes | in-progress | — |
 | [T-393](tasks/T-393-options-menu-design.md) | **[lead]** Design: the Options (context) menu: component, contents per surface, motion, focus | todo | — |
 | [T-396](tasks/T-396-controller-ownership-and-layout-spec.md) | **[lead]** Spec: who owns the UI, the family's confirm button, action glyphs (ADR-027) | todo | T-366 |
 | [T-366](tasks/T-366-ruya-input-spike-engine-and-design.md) | **[lead]** Ruya Input: spike, engine decision and the design (06-input.md, Input1 draft) | todo | — |
