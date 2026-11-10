@@ -23,7 +23,6 @@ Open work only (the front of the board; the rest is in `STATUS-backlog.md`), in 
 
 | ID | Title | Status | Depends |
 |---|---|---|---|
-| [T-448](tasks/T-448-quick-hub.md) | The Quick Hub: status row, quick tiles, running and recent games | in-progress | — |
 | [T-457](tasks/T-457-hub-pauses-the-game.md) | Ruya Hub pauses the game: freeze on open, thaw on close (owner, 2026-11-10) | in-progress | — |
 | [T-366](tasks/T-366-ruya-input-spike-engine-and-design.md) | **[lead]** Ruya Input: spike, engine decision and the design (06-input.md, Input1 draft) | todo | — |
 | [T-367](tasks/T-367-a-game-sees-the-pad.md) | **[lead]** A game sees the pad: a virtual pad per controller, for the signed-in profile only, routed by focus | todo | T-366 |
@@ -51,6 +50,7 @@ Triaged 2026-11-10 (lead-9): the lines before are verbatim in [`STATUS-parked.md
 - (T-449 reviews) The `Muted` and `MasterVolume` setters in `dbus.rs` swallow failures (D-Bus Set returns success): align them with `fdo::Result` like `InputMuted`; a headset's microphone following the output headset automatically is a policy task (WirePlumber picks the default source today).
 - (T-451 reviews) GPU load and package power need a root-side reader (RAPL energy_uj, Intel fdinfo or the i915 PMU; a udev rule giving ruya-shell energy_uj is a security call: Platypus side channel): until then the Dell shows them as not available; add `gpu_power_w` for discrete GPUs (amdgpu hwmon); xe reports drm-cycles, not ns; NVIDIA needs NVML; without `boot_vga` the "first card" sorts card10 before card2; the vm check's 250 ms double call may flake.
 - (T-448 reviews) Quick Hub: the Wi-Fi and Bluetooth tiles show without an adapter (no adapter-presence property; the press toasts a failure): expose presence and hide them; the status row drops the network name next to battery chips; the list scroll jumps (animate); 4 settings shots tests (Display, StoreUi, SystemInfo, Wallpaper) time out under CPU load (longer tryVerify in Settings navigation?).
+- (T-429 reviews) `tst_appflow::test_switch_to_another_running_app` failed once in a full run (line 354, `verify(item)` right after the focus wait: make it a tryVerify); pin the TimeZone tick cadence in a test (the armed interval); a WindowGuard timeout between two test functions blames the next test; the `ModalLayer.qml` unused-import qmllint Info.
 - (lead-9, second triage) The lines from T-423, T-421 and T-424 are verbatim in `STATUS-parked.md`, "Inbox triage 2026-11-10 (lead-9, second)"; they became T-431 (image hardening), T-432 (SELinux domains), T-433 (quick-xml, zbus 6, CI actions), T-434 (glass cost, Performance rows), T-435 (ACBR window, orphaned scopes), T-430 and T-282 additions, T-425 (release profile) and the next-image list.
 
 ## Blocked (need something this host doesn't have)

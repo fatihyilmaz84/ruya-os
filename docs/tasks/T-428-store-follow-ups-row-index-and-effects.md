@@ -1,6 +1,6 @@
 # T-428 - Store follow-ups: a row remembers its card, a scrolled shot, card effects only where needed
 
-Status: todo · Phase: 2 · Depends: — · Area: shell (Store page) · Size: S · Owner: builder · Complexity: normal · Developer surface: none
+Status: in-progress · Phase: 2 · Depends: — · Area: shell (Store page) · Size: S · Owner: builder · Complexity: normal · Developer surface: none
 
 ## Goal
 The Store keeps T-377's fast open and loses its rough edges: a row built late still lands on the card the player left, and each card draws only the effects it needs.

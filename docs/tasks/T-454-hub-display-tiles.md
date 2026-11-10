@@ -1,6 +1,6 @@
 # T-454 — Hub display: the current mode, resolution and refresh rate, brightness where the screen supports it
 
-Status: todo · Phase: 2 · Depends: T-448 · Area: shell, services (ruya-devices, only for brightness) · Size: S · Owner: builder · Complexity: normal · Developer surface: internal
+Status: todo · Phase: 2 · Depends: — · Area: shell, services (ruya-devices, only for brightness) · Size: S · Owner: builder · Complexity: normal · Developer surface: internal
 
 ## Goal
 From the Hub the player sees the display's mode and can change resolution and refresh rate with the same keep-or-revert safety as Settings, and gets a brightness control only where the screen really has one.

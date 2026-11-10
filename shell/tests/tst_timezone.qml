@@ -147,18 +147,34 @@ Item {
         }
 
         function test_the_status_clock_follows_a_zone_change_at_once() {
+            // A pinned instant (T-429): the real minute change used to fail this when it fell
+            // inside the old 10 s tick.
+            TimeZone.mockSetNow(tc.instant)
             startShell()
             const clock = find("statusClock")
             verify(clock)
-            // Compared with the same instant's text, so a minute rollover cannot fail it.
-            tryVerify(() => clock.text === TimeZone.formatClock(Date.now()), 2000, "shows the zone's time")
-            const utc = clock.text
+            tryCompare(clock, "text", "08:00", 2000, "shows the zone's time")
             TimeZone.mockSetOutside("Pacific/Honolulu")     // 10 hours earlier than UTC
-            tryVerify(() => clock.text === TimeZone.formatClock(Date.now()), 2000, "follows without waiting for the next tick")
-            verify(clock.text !== utc, "the text changed with the zone: " + clock.text + " vs " + utc)
+            tryCompare(clock, "text", "22:00", 2000, "follows without waiting for the next tick")
             TimeZone.mockSetOutside("Asia/Tokyo")
-            tryVerify(() => clock.text === TimeZone.formatClock(Date.now()), 2000)
-            verify(TimeZone.formatClock(Date.now()) !== TimeZone.formatClock(Date.now() + 3 * 3600 * 1000), "three hours is a visible difference")
+            tryCompare(clock, "text", "17:00", 2000)
+        }
+
+        // The edge times (T-429), on an injected clock: midnight, and a zone whose midnight is not UTC's.
+        function test_the_clock_crosses_midnight() {
+            const beforeMidnight = tc.instant + 15 * 3600000 + 59 * 60000 + 59900    // 23:59:59.900 UTC
+            TimeZone.mockSetNow(beforeMidnight)
+            compare(TimeZone.clockText, "23:59")
+            compare(TimeZone.msToNextTick(beforeMidnight) < 200, true, "the tick is due at the minute change, not up to 10 s later")
+            TimeZone.mockSetNow(beforeMidnight + 200)
+            compare(TimeZone.clockText, "00:00", "the new day")
+            TimeZone.mockSetOutside("Pacific/Honolulu")     // UTC 10:00 is Honolulu midnight
+            tryCompare(TimeZone, "timezone", "Pacific/Honolulu")
+            TimeZone.mockSetNow(tc.instant + 2 * 3600000 - 1000)                      // 09:59:59 UTC
+            compare(TimeZone.clockText, "23:59", "Honolulu, the evening before")
+            TimeZone.mockSetNow(tc.instant + 2 * 3600000)                             // 10:00:00 UTC
+            compare(TimeZone.clockText, "00:00", "Honolulu, midnight")
+            compare(TimeZone.msToNextTick(tc.instant), 60020,"a whole minute from a minute start")
         }
 
         // ---- Settings -> System ----

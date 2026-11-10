@@ -31,21 +31,47 @@ public:
     {
         // Name the cause at the moment it happens, so an activeFocus failure that follows is
         // not mistaken for a product bug, and take the activation back right away.
+        // A window that is not back within a second and a half fails the test that is running
+        // (T-429), in these words, instead of a random activeFocus line later.
+        m_lostTimer.setSingleShot(true);
+        m_lostTimer.setInterval(1500);
+        connect(&m_lostTimer, &QTimer::timeout, this, [this] {
+            if (!m_last || !m_last->isVisible())
+                return;                 // the window itself went away: not the desktop
+            if (!m_simulated && QGuiApplication::focusWindow())
+                return;
+            QTest::qFail("TEST WINDOW LOST ACTIVATION: the desktop took focus mid-test and the "
+                         "window did not get it back (lock screen or another window); this is "
+                         "not a product bug, re-run `shots`",
+                         __FILE__, __LINE__);
+        });
         connect(qGuiApp, &QGuiApplication::focusWindowChanged, this, [this](QWindow *now) {
             if (now) {
                 m_last = qobject_cast<QQuickWindow *>(now);
+                if (!m_simulated)
+                    m_lostTimer.stop();
                 return;
             }
-            if (!m_last || !m_last->isVisible())
-                return;
-            qWarning("ruya-shell test: TEST WINDOW LOST ACTIVATION (the desktop took focus); "
-                     "a focus failure right after this is not a product bug, re-run `shots`");
-            QPointer<QQuickWindow> w = m_last;
-            QTimer::singleShot(0, this, [w] {
-                if (w)
-                    w->requestActivate();
-            });
+            handleLoss(true);
         });
+    }
+
+    Q_PROPERTY(bool fixtureEnabled READ fixtureEnabled CONSTANT)
+public:
+    bool fixtureEnabled() const { return qEnvironmentVariableIntValue("RUYA_ACTIVATION_FIXTURE") != 0; }
+
+    // For the fixture (tst_window_lost_fixture.qml): behave as if the desktop took the focus and
+    // never gave it back, without needing a real desktop.
+    Q_INVOKABLE void simulateLoss()
+    {
+        if (m_last)
+            m_simulated = true;
+        handleLoss(false);
+    }
+    Q_INVOKABLE void endSimulation()
+    {
+        m_simulated = false;
+        m_lostTimer.stop();
     }
 
     // Returns "" when the test window is active, else the failure message.
@@ -71,7 +97,25 @@ public:
     }
 
 private:
+    void handleLoss(bool reactivate)
+    {
+        if (!m_last || !m_last->isVisible())
+            return;
+        qWarning("ruya-shell test: TEST WINDOW LOST ACTIVATION (the desktop took focus); "
+                 "a focus failure right after this is not a product bug, re-run `shots`");
+        m_lostTimer.start();
+        if (!reactivate)
+            return;
+        QPointer<QQuickWindow> w = m_last;
+        QTimer::singleShot(0, this, [w] {
+            if (w)
+                w->requestActivate();
+        });
+    }
+
     QPointer<QQuickWindow> m_last;
+    QTimer m_lostTimer;
+    bool m_simulated = false;
 };
 
 // Pictures for the art glow (T-281): solid-ish 160 x 90 pictures in a temporary directory, so no

@@ -4,11 +4,11 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 
 | ID | Title | Status | Depends |
 |---|---|---|---|
-| [T-450](tasks/T-450-hub-audio-panel.md) | Hub Audio panel and the microphone tile | todo | T-448, T-449 |
-| [T-452](tasks/T-452-hub-performance-panel.md) | Hub Performance panel | todo | T-448, T-451 |
-| [T-453](tasks/T-453-hub-controllers-panel.md) | Hub Controllers panel | todo | T-448 |
-| [T-454](tasks/T-454-hub-display-tiles.md) | Hub display: mode, resolution and refresh rate, brightness where supported | todo | T-448 |
-| [T-455](tasks/T-455-hub-latency-and-idle-cost.md) | Hub budgets: activation latency, idle cost, game FPS with the Hub open (Dell) | todo | T-448 |
+| [T-450](tasks/T-450-hub-audio-panel.md) | Hub Audio panel and the microphone tile | todo | — |
+| [T-452](tasks/T-452-hub-performance-panel.md) | Hub Performance panel | todo | — |
+| [T-453](tasks/T-453-hub-controllers-panel.md) | Hub Controllers panel | todo | — |
+| [T-454](tasks/T-454-hub-display-tiles.md) | Hub display: mode, resolution and refresh rate, brightness where supported | todo | — |
+| [T-455](tasks/T-455-hub-latency-and-idle-cost.md) | Hub budgets: activation latency, idle cost, game FPS with the Hub open (Dell) | todo | — |
 | [T-456](tasks/T-456-guide-on-every-pad.md) | Guide on every pad: long press for Power, never reaching the game, a keyboard shortcut | todo | T-367, T-396 |
 | [T-362](tasks/T-362-compositor-xdg-output-and-socket-follow-ups.md) | Compositor: xdg-output for games, profile-socket and log follow-ups | todo | — |
 | [T-422](tasks/T-422-plan-lint-deps-owners-stale-claims.md) | Plan lint: board and headers agree on dependencies, [lead], parked and stale claims, budgets | todo | — |
@@ -19,9 +19,8 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 | [T-431](tasks/T-431-image-hardening-llmnr-setuid-bus-denies-units.md) | Image hardening from the baseline: LLMNR off, no setuid helpers, explicit bus denies, three loose units | todo | — |
 | [T-433](tasks/T-433-dependency-upgrades-quick-xml-zbus-6-ci-actions.md) | Dependency upgrades: quick-xml, zbus 6, actions/checkout v5, a checked cargo-deny download | todo | — |
 | [T-432](tasks/T-432-selinux-confine-ruya-services.md) | SELinux: confine the ruya services (today every one runs unconfined_service_t) | todo | T-431 |
-| [T-429](tasks/T-429-test-harness-activation-loss-and-clock-flake.md) | Test harness: say when the window lost activation; the status-clock test near midnight | in-progress | — |
 | [T-427](tasks/T-427-bluetooth-leftovers-scan-alias-logging.md) | Bluetooth leftovers: scan after a primary flip, toast names, logging, address tails | todo | — |
-| [T-428](tasks/T-428-store-follow-ups-row-index-and-effects.md) | Store follow-ups: a row remembers its card, a scrolled shot, card effects only where needed | todo | — |
+| [T-428](tasks/T-428-store-follow-ups-row-index-and-effects.md) | Store follow-ups: a row remembers its card, a scrolled shot, card effects only where needed | in-progress | — |
 | [T-430](tasks/T-430-glass-shadow-and-art-masks.md) | GlassShadow and AppArt masks (T-387 class); L0 memory behind an app | todo | T-421 |
 | [T-378](tasks/T-378-session-follow-ups-alive-reset-user-link.md) | ruya-session follow-ups: Alive resets the miss count, user unknown vs a logind error, a strict restart check | todo | — |
 | [T-299](tasks/T-299-image-follow-ups-secure-boot-bluez-grub-menu.md) | Image follow-ups (VM this task): quiet bootloader-update on Secure Boot, BlueZ pairable timeout, grub-menu ordering, webp | todo | — |

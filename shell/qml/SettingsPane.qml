@@ -169,6 +169,28 @@ FocusScope {
         function onEnabledChanged() { if (pane && pane.activeFocus) Qt.callLater(pane.settleFocus) }
     }
 
+    // How many rows can hold the focus now. When the first one appears while the pane has the focus
+    // (it held it itself because no row could), settle at once: waiting for the column's height to
+    // change needs a frame, and a hidden row swapped for a shown one of the same height never
+    // changes it (T-429). Only 0 -> more: while rows come and go otherwise, settling early would
+    // pick the first row instead of the neighbour of the one that went.
+    readonly property int focusableCount: {
+        let n = 0
+        for (let i = 0; i < column.children.length; ++i) {
+            const row = column.children[i] as SettingControl
+            if (row && row.visible && row.enabled)
+                ++n
+        }
+        return n
+    }
+    property int countBefore: 0
+    onFocusableCountChanged: {
+        const was = countBefore
+        countBefore = focusableCount
+        if (was === 0 && focusableCount > 0 && activeFocus)
+            Qt.callLater(settleFocus)
+    }
+
     // The row that is the pane's focused item although it cannot hold the focus (hidden or
     // disabled), or null.
     function staleRow() {
@@ -262,6 +284,8 @@ FocusScope {
     onHeightChanged: Qt.callLater(relayout)
 
     Component.onCompleted: {
+        // Start from the rows the pane was built with, so only a real 0 -> more settles (T-429 review).
+        countBefore = focusableCount
         // Where focus lands the first time the pane is entered. The pane is usually still
         // hidden here, so don't filter on visibility.
         for (let i = 0; i < column.children.length; ++i) {

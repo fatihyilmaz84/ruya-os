@@ -34,7 +34,7 @@ class TimeZone : public QObject
     // The part before the first "/" of each name, sorted, with "Other" (names without one: "UTC")
     // last. The words are IANA's; the pickers translate them.
     Q_PROPERTY(QStringList regions READ regions NOTIFY timezonesChanged)
-    // "HH:mm" now, in the zone; refreshed every ten seconds and at once on a zone change.
+    // "HH:mm" now, in the zone; refreshed at every minute change and at once on a zone change.
     Q_PROPERTY(QString clockText READ clockText NOTIFY clockTextChanged)
     Q_PROPERTY(bool mock READ isMock CONSTANT)
 
@@ -63,11 +63,17 @@ public:
     Q_INVOKABLE QString formatClock(qint64 msSinceEpoch) const;
     // The date "YYYY-MM-DD" of an instant in the current zone (the Activity pages, T-247).
     Q_INVOKABLE QString formatIsoDate(qint64 msSinceEpoch) const;
+    // Milliseconds from an instant to the next tick of the clock: the start of the next minute plus
+    // a few ms, so the text never lags a minute change (T-429: the old 10 s tick could).
+    Q_INVOKABLE int msToNextTick(qint64 msSinceEpoch) const;
     // Asks the service to set the zone; the answer comes as setTimezoneFinished.
     Q_INVOKABLE void setTimezone(const QString &name);
 
     // Tests only, and only with the mock backend (otherwise no-ops).
-    Q_INVOKABLE void mockReset();
+    Q_INVOKABLE void mockReset();                           // also back to the real clock
+    // Pins "now" to an instant (ms since the epoch), the clock text follows at once and the tick
+    // stops; a negative value gives the real clock back. Works with any backend.
+    Q_INVOKABLE void mockSetNow(qint64 msSinceEpoch);
     Q_INVOKABLE void mockSetOutside(const QString &name);   // timedatectl changed the zone
     Q_INVOKABLE void mockSetNtp(bool synchronised);
     Q_INVOKABLE void mockSetCallerAllowed(bool allowed);    // false: SetTimezone answers "forbidden"
@@ -90,7 +96,9 @@ private:
     void applyState(const QString &timezone, bool ntp);
     void applyZones(const QStringList &names);
     void updateClock();
+    qint64 nowMs() const;
 
+    qint64 m_nowOverride = -1;
     std::unique_ptr<TimeBackend> m_backend;
     QString m_timezone = QStringLiteral("UTC");
     bool m_ntp = false;

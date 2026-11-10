@@ -41,10 +41,11 @@ TimeZone::TimeZone(std::unique_ptr<TimeBackend> backend, QObject *parent)
                 // The backend has already reported the new zone (through its request sequence).
                 emit setTimezoneFinished(name, status);
             });
-    m_tick.setInterval(10000);
+    m_tick.setSingleShot(true);
+    // A coarse timer may fire up to 5 % (3 s) late at a minute; one wake-up a minute is cheap.
+    m_tick.setTimerType(Qt::PreciseTimer);
     connect(&m_tick, &QTimer::timeout, this, &TimeZone::updateClock);
-    m_tick.start();
-    updateClock();
+    updateClock();      // shows the time and arms the tick for the next minute change
     m_backend->refresh();
     m_backend->loadZones();
 }
@@ -128,9 +129,32 @@ QString TimeZone::formatIsoDate(qint64 msSinceEpoch) const
     return shown.toString(QStringLiteral("yyyy-MM-dd"));
 }
 
+qint64 TimeZone::nowMs() const
+{
+    return m_nowOverride >= 0 ? m_nowOverride : QDateTime::currentMSecsSinceEpoch();
+}
+
+int TimeZone::msToNextTick(qint64 msSinceEpoch) const
+{
+    // Zone offsets are whole minutes, so the minute starts are the same in every zone.
+    constexpr qint64 minute = 60000;
+    const qint64 into = ((msSinceEpoch % minute) + minute) % minute;
+    return int(minute - into) + 20;
+}
+
+void TimeZone::mockSetNow(qint64 msSinceEpoch)
+{
+    m_nowOverride = msSinceEpoch;
+    updateClock();
+}
+
 void TimeZone::updateClock()
 {
-    const QString text = formatClock(QDateTime::currentMSecsSinceEpoch());
+    if (m_nowOverride >= 0)
+        m_tick.stop();
+    else
+        m_tick.start(msToNextTick(nowMs()));
+    const QString text = formatClock(nowMs());
     if (text == m_clockText)
         return;
     m_clockText = text;
@@ -167,6 +191,8 @@ void TimeZone::setTimezone(const QString &name)
 
 void TimeZone::mockReset()
 {
+    if (m_nowOverride >= 0)
+        mockSetNow(-1);
     if (auto *mock = qobject_cast<MockTimeBackend *>(m_backend.get()))
         mock->reset();
 }
