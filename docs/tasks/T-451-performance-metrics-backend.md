@@ -1,6 +1,6 @@
 # T-451 — Performance metrics: FPS and frame time from the compositor, CPU, RAM, temperatures, GPU from `Devices1`
 
-Status: todo · Phase: 2 · Depends: — · Area: api, services (ruya-devices), shell (compositor, client, mock) · Size: M · Owner: builder · Complexity: complex · Developer surface: internal
+Status: in-progress · Phase: 2 · Depends: — · Area: api, services (ruya-devices), shell (compositor, client, mock) · Size: M · Owner: builder · Complexity: complex · Developer surface: internal
 
 ## Goal
 The shell can show honest performance numbers for the game in front: FPS and frame time, CPU and GPU load, RAM and VRAM, CPU and GPU temperature and power, each with a state that says whether it is supported, and no cost while nobody looks.
