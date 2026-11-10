@@ -1493,6 +1493,14 @@ This can&apos;t be undone.</translation>
     </message>
 </context>
 <context>
+    <name>HubPause</name>
+    <message>
+        <location filename="../qml/HubPause.qml" line="+98"/>
+        <source>Could not resume the game. Open Ruya Hub and choose Resume.</source>
+        <translation>Could not resume the game. Open Ruya Hub and choose Resume.</translation>
+    </message>
+</context>
+<context>
     <name>LaunchSplash</name>
     <message>
         <location filename="../qml/LaunchSplash.qml" line="+27"/>
@@ -2284,7 +2292,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>QuickMenu</name>
     <message>
-        <location filename="../qml/QuickMenu.qml" line="+65"/>
+        <location filename="../qml/QuickMenu.qml" line="+66"/>
         <source>Wi-Fi</source>
         <translation>Wi-Fi</translation>
     </message>
@@ -2392,7 +2400,7 @@ This can&apos;t be undone.</translation>
         <translation>%1, %2</translation>
     </message>
     <message>
-        <location line="+103"/>
+        <location line="+107"/>
         <source>Just started</source>
         <translation>Just started</translation>
     </message>
@@ -2402,7 +2410,12 @@ This can&apos;t be undone.</translation>
         <translation>Running for %1</translation>
     </message>
     <message>
-        <location line="+18"/>
+        <location line="+12"/>
+        <source>Paused</source>
+        <translation>Paused</translation>
+    </message>
+    <message>
+        <location line="+19"/>
         <location line="+28"/>
         <source>System</source>
         <translation>System</translation>
@@ -2433,8 +2446,8 @@ This can&apos;t be undone.</translation>
         <translation>%1, off</translation>
     </message>
     <message>
-        <location line="-517"/>
-        <location line="+503"/>
+        <location line="-534"/>
+        <location line="+520"/>
         <source>Muted</source>
         <translation>Muted</translation>
     </message>
@@ -2781,7 +2794,7 @@ This can&apos;t be undone.</translation>
         <translation>Restarting to finish the update in 2 minutes. Press any button to wait.</translation>
     </message>
     <message>
-        <location line="+224"/>
+        <location line="+234"/>
         <source>The screen did not answer, so the previous resolution is back.</source>
         <translation>The screen did not answer, so the previous resolution is back.</translation>
     </message>
@@ -2862,7 +2875,7 @@ This can&apos;t be undone.</translation>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location line="-976"/>
+        <location line="-986"/>
         <source>%1 is already running</source>
         <translation>%1 is already running</translation>
     </message>
@@ -2888,7 +2901,7 @@ This can&apos;t be undone.</translation>
         <translation>Running app</translation>
     </message>
     <message>
-        <location line="+933"/>
+        <location line="+943"/>
         <source>Sections</source>
         <translation>Sections</translation>
     </message>
@@ -3703,18 +3716,18 @@ This can&apos;t be undone.</translation>
     <name>SystemPane</name>
     <message>
         <location filename="../qml/SystemPane.qml" line="+133"/>
-        <location line="+300"/>
+        <location line="+319"/>
         <source>Beta</source>
         <translation>Beta</translation>
     </message>
     <message>
-        <location line="-300"/>
-        <location line="+299"/>
+        <location line="-319"/>
+        <location line="+318"/>
         <source>Stable</source>
         <translation>Stable</translation>
     </message>
     <message>
-        <location line="-294"/>
+        <location line="-313"/>
         <source>Last checked %1</source>
         <translation>Last checked %1</translation>
     </message>
@@ -3834,7 +3847,17 @@ This can&apos;t be undone.</translation>
         <translation>Could not change the time zone.</translation>
     </message>
     <message>
-        <location line="+84"/>
+        <location line="+10"/>
+        <source>Pause games when Ruya Hub opens</source>
+        <translation>Pause games when Ruya Hub opens</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Online games can lose their connection while paused.</source>
+        <translation>Online games can lose their connection while paused.</translation>
+    </message>
+    <message>
+        <location line="+85"/>
         <source>Device health</source>
         <translation>Device health</translation>
     </message>
@@ -3844,7 +3867,7 @@ This can&apos;t be undone.</translation>
         <translation>No temperature sensors were found on this device.</translation>
     </message>
     <message>
-        <location line="-191"/>
+        <location line="-210"/>
         <location line="+8"/>
         <location line="+78"/>
         <source>Only an admin can do this.</source>
@@ -3871,7 +3894,7 @@ This can&apos;t be undone.</translation>
         <translation>Language</translation>
     </message>
     <message>
-        <location line="+74"/>
+        <location line="+93"/>
         <source>Updates</source>
         <translation>Updates</translation>
     </message>

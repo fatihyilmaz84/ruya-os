@@ -20,8 +20,13 @@ public:
     void refresh() override;
     void launch(const QString &appId, const QString &profile) override;
     void stop(const QString &instance) override;
+    void freeze(const QString &instance) override;
+    void thaw(const QString &instance) override;
 
 private:
+    // Freeze or Thaw: one string in, the status out (T-457).
+    void freezer(const QString &method, const QString &instance);
+
     QDBusConnection m_bus;
     QDBusServiceWatcher m_watcher;
 };

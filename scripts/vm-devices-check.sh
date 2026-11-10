@@ -100,6 +100,9 @@ events_check() {
     set_outside 0.20
     if took="$(wait_volume 20 10)"; then ok "a wpctl change from outside shows in MasterVolume after ~$took/10 s"; else bad "MasterVolume did not follow wpctl within 1 s"; fi
     if [ "$idle" -gt 0 ]; then
+        # The outside change makes the service re-read PipeWire once or twice within ~0.5 s (debounced
+        # events, T-133); let that settle before counting (0.0.63: a trailing pw-dump landed in the window).
+        sleep 2
         # Idle: sample the process list ten times a second; the 1 s poll started a pw-dump and a
         # wpctl every second (each lives some tens of ms), so it would be caught many times.
         monitor="$(pgrep -x pw-dump | head -1)"

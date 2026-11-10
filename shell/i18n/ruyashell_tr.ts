@@ -1489,6 +1489,14 @@ Bu geri alınamaz.</translation>
     </message>
 </context>
 <context>
+    <name>HubPause</name>
+    <message>
+        <location filename="../qml/HubPause.qml" line="+98"/>
+        <source>Could not resume the game. Open Ruya Hub and choose Resume.</source>
+        <translation>Oyun sürdürülemedi. Ruya Hub&apos;ı açıp Devam et&apos;i seçin.</translation>
+    </message>
+</context>
+<context>
     <name>LaunchSplash</name>
     <message>
         <location filename="../qml/LaunchSplash.qml" line="+27"/>
@@ -2275,7 +2283,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>QuickMenu</name>
     <message>
-        <location filename="../qml/QuickMenu.qml" line="+65"/>
+        <location filename="../qml/QuickMenu.qml" line="+66"/>
         <source>Wi-Fi</source>
         <translation>Wi-Fi</translation>
     </message>
@@ -2383,7 +2391,7 @@ Bu geri alınamaz.</translation>
         <translation>%1, %2</translation>
     </message>
     <message>
-        <location line="+103"/>
+        <location line="+107"/>
         <source>Just started</source>
         <translation>Yeni başladı</translation>
     </message>
@@ -2393,7 +2401,12 @@ Bu geri alınamaz.</translation>
         <translation>%1 süredir çalışıyor</translation>
     </message>
     <message>
-        <location line="+18"/>
+        <location line="+12"/>
+        <source>Paused</source>
+        <translation>Duraklatıldı</translation>
+    </message>
+    <message>
+        <location line="+19"/>
         <location line="+28"/>
         <source>System</source>
         <translation>Sistem</translation>
@@ -2424,8 +2437,8 @@ Bu geri alınamaz.</translation>
         <translation>%1, kapalı</translation>
     </message>
     <message>
-        <location line="-517"/>
-        <location line="+503"/>
+        <location line="-534"/>
+        <location line="+520"/>
         <source>Muted</source>
         <translation>Sessiz</translation>
     </message>
@@ -2772,7 +2785,7 @@ Bu geri alınamaz.</translation>
         <translation>Güncellemeyi bitirmek için 2 dakika içinde yeniden başlatılıyor. Beklemek için herhangi bir düğmeye bas.</translation>
     </message>
     <message>
-        <location line="+224"/>
+        <location line="+234"/>
         <source>The screen did not answer, so the previous resolution is back.</source>
         <translation>Ekran yanıt vermedi, bu yüzden önceki çözünürlük geri geldi.</translation>
     </message>
@@ -2853,7 +2866,7 @@ Bu geri alınamaz.</translation>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="-976"/>
+        <location line="-986"/>
         <source>%1 is already running</source>
         <translation>%1 zaten çalışıyor</translation>
     </message>
@@ -2879,7 +2892,7 @@ Bu geri alınamaz.</translation>
         <translation>Çalışan uygulama</translation>
     </message>
     <message>
-        <location line="+933"/>
+        <location line="+943"/>
         <source>Sections</source>
         <translation>Bölümler</translation>
     </message>
@@ -3694,18 +3707,18 @@ Bu geri alınamaz.</translation>
     <name>SystemPane</name>
     <message>
         <location filename="../qml/SystemPane.qml" line="+133"/>
-        <location line="+300"/>
+        <location line="+319"/>
         <source>Beta</source>
         <translation>Beta</translation>
     </message>
     <message>
-        <location line="-300"/>
-        <location line="+299"/>
+        <location line="-319"/>
+        <location line="+318"/>
         <source>Stable</source>
         <translation>Kararlı</translation>
     </message>
     <message>
-        <location line="-294"/>
+        <location line="-313"/>
         <source>Last checked %1</source>
         <translation>Son kontrol: %1</translation>
     </message>
@@ -3825,7 +3838,17 @@ Bu geri alınamaz.</translation>
         <translation>Saat dilimi değiştirilemedi.</translation>
     </message>
     <message>
-        <location line="+84"/>
+        <location line="+10"/>
+        <source>Pause games when Ruya Hub opens</source>
+        <translation>Ruya Hub açılınca oyunları duraklat</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Online games can lose their connection while paused.</source>
+        <translation>Çevrimiçi oyunların bağlantısı duraklatılmışken kopabilir.</translation>
+    </message>
+    <message>
+        <location line="+85"/>
         <source>Device health</source>
         <translation>Cihaz sağlığı</translation>
     </message>
@@ -3835,7 +3858,7 @@ Bu geri alınamaz.</translation>
         <translation>Bu cihazda sıcaklık sensörü bulunamadı.</translation>
     </message>
     <message>
-        <location line="-191"/>
+        <location line="-210"/>
         <location line="+8"/>
         <location line="+78"/>
         <source>Only an admin can do this.</source>
@@ -3862,7 +3885,7 @@ Bu geri alınamaz.</translation>
         <translation>Dil</translation>
     </message>
     <message>
-        <location line="+74"/>
+        <location line="+93"/>
         <source>Updates</source>
         <translation>Güncellemeler</translation>
     </message>

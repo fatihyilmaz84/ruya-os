@@ -13,6 +13,7 @@ struct RunningApp
     QString profile;
     qint64 started = 0; // unix seconds
     QString state = QStringLiteral("starting"); // "starting" | "running" | "stopping"
+    bool frozen = false; // frozen by Freeze (T-457)
 
     // The record as QML sees it (camelCase keys).
     QVariantMap toVariant() const
@@ -23,6 +24,7 @@ struct RunningApp
             {QStringLiteral("profile"), profile},
             {QStringLiteral("started"), started},
             {QStringLiteral("state"), state},
+            {QStringLiteral("frozen"), frozen},
         };
     }
 };
@@ -40,12 +42,19 @@ public:
     virtual void refresh() = 0; // reports the running list
     virtual void launch(const QString &appId, const QString &profile) = 0;
     virtual void stop(const QString &instance) = 0;
+    // The Ruya Hub pauses the game (T-457): the cgroup freezer of the app's units.
+    virtual void freeze(const QString &instance) = 0;
+    virtual void thaw(const QString &instance) = 0;
 
 signals:
     void runningListed(const QList<RunningApp> &apps);
     // status: see the XML; `instance` is set on "ok" only.
     void launchFinished(const QString &appId, const QString &profile, const QString &status, const QString &instance);
     void stopFinished(const QString &instance, const QString &status);
+    // status: "ok" | "invalid" | "not-running" | "not-allowed" | "failed"
+    void freezeFinished(const QString &instance, const QString &status);
+    void thawFinished(const QString &instance, const QString &status);
+    void frozenChanged(const QString &instance, bool frozen);
     void appStarted(const QString &instance, const QString &appId);
     // reason: "quit" | "crashed" | "killed" | "launch-failed"
     void appExited(const QString &instance, const QString &appId, int exitCode, const QString &reason);

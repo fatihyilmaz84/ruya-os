@@ -58,6 +58,9 @@ class DeviceSettings : public QObject
     // How often the Ruya Hub's Performance view asks for new numbers (T-451), ms, 500-5000 (the
     // panel offers 0.5, 1, 2 and 5 s); 1000 by default. Stored per device.
     Q_PROPERTY(int performanceIntervalMs READ performanceIntervalMs WRITE setPerformanceIntervalMs NOTIFY performanceIntervalMsChanged)
+    // Opening the Ruya Hub over a game freezes it, closing it thaws it (T-457, 02 §1.6): Settings ->
+    // System, "Pause games when Ruya Hub opens". On by default; stored per device.
+    Q_PROPERTY(bool pauseGamesInHub READ pauseGamesInHub WRITE setPauseGamesInHub NOTIFY pauseGamesInHubChanged)
     // Sound (T-227): the sound theme ("dreamglass" or "user:<folder>", see SoundThemes; whether it is
     // usable is the checker's business, the bundled one plays instead) and the Ambient on/off switch
     // (Settings -> Audio; the level is the Ambient channel of the Audio service). Stored per device.
@@ -88,6 +91,7 @@ public:
     int sleepMinutes() const { return m_sleepMinutes; }
     int padIdleMinutes() const { return m_padIdleMinutes; }
     int performanceIntervalMs() const { return m_performanceIntervalMs; }
+    bool pauseGamesInHub() const { return m_pauseGamesInHub; }
     QString soundTheme() const { return m_soundTheme; }
     bool ambientSound() const { return m_ambientSound; }
 
@@ -105,6 +109,7 @@ public:
     void setSleepMinutes(int value);
     void setPadIdleMinutes(int value);
     void setPerformanceIntervalMs(int value);
+    void setPauseGamesInHub(bool value);
     void setSoundTheme(const QString &value);
     void setAmbientSound(bool value);
 
@@ -138,6 +143,7 @@ signals:
     void sleepMinutesChanged();
     void padIdleMinutesChanged();
     void performanceIntervalMsChanged();
+    void pauseGamesInHubChanged();
     void soundThemeChanged();
     void ambientSoundChanged();
 
@@ -158,6 +164,7 @@ private:
     int m_sleepMinutes = 60;
     int m_padIdleMinutes = 15;
     int m_performanceIntervalMs = 1000;
+    bool m_pauseGamesInHub = true;
     QString m_soundTheme = QStringLiteral("dreamglass");
     bool m_ambientSound = true;
     std::optional<bool> m_forcedMotion;

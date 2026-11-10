@@ -672,7 +672,8 @@ FocusScope {
                  title: appId !== "" ? titleOfApp(appId) : qsTr("Running app"),
                  picture: found && found.art ? (found.art.hero ?? found.art.tile ?? "") : "",
                  started: run ? run.started : Date.now() / 1000,
-                 instance: run ? run.instance : "" }
+                 instance: run ? run.instance : "",
+                 frozen: run ? (run.frozen ?? false) : false }
     }
     readonly property var quickMenuOthers: shownApps.filter(r => r.item !== focusedApp && r.appId !== "")
                                                     .map(r => ({ appId: r.appId, title: titleOfApp(r.appId) }))
@@ -708,8 +709,17 @@ FocusScope {
     function closeFrontGame() {
         const instance = quickMenuApp ? quickMenuApp.instance : ""
         if (instance !== "")
-            Session.stop(instance)
+            Session.stop(instance)      // a frozen game: the service thaws it first, so it can quit (T-457)
         sendAppsHome()
+    }
+
+    // Opening the Hub over an app freezes it, returning to it thaws it (T-457, 02 §1.6).
+    HubPause {
+        id: hubPause
+        hubOpen: systemPanel.open
+        front: root.appOpen && root.quickMenuApp ? root.quickMenuApp.instance : ""
+        pauseOn: DeviceSettings.pauseGamesInHub
+        profile: root.signedIn ? Profiles.activeProfile : ""
     }
 
     function switchToApp(appId) {
@@ -1677,8 +1687,8 @@ FocusScope {
             Library.launch(id)
         }
         onSwitchProfileRequested: {
+            open = false                     // first, so the game's Thaw goes out while the profile is signed in (T-457)
             Profiles.lock()                  // signedIn -> false; routeFocus() shows the picker
-            open = false
         }
         onPowerRequested: action => powerConfirm.open(action)    // focus returns here if cancelled
     }

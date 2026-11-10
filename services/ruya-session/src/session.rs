@@ -25,6 +25,10 @@ pub enum Status {
     UnknownInstance,
     Invalid,
     Failed,
+    /// Freeze/Thaw: no running instance with that name (T-457).
+    NotRunning,
+    /// Freeze/Thaw: the app is not the signed-in profile's (T-457).
+    NotAllowed,
 }
 
 impl Status {
@@ -37,6 +41,8 @@ impl Status {
             Status::UnknownInstance => "unknown-instance",
             Status::Invalid => "invalid",
             Status::Failed => "failed",
+            Status::NotRunning => "not-running",
+            Status::NotAllowed => "not-allowed",
         }
     }
 }
@@ -101,6 +107,15 @@ pub struct RunningApp {
     pub profile: String,
     pub started: i64,
     pub state: State,
+    /// Frozen by `freeze` (T-457).
+    pub frozen: bool,
+}
+
+/// A change of an app's `frozen` for the adapter to announce (`FrozenChanged`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FrozenChange {
+    pub instance: String,
+    pub frozen: bool,
 }
 
 #[derive(Debug)]
@@ -117,6 +132,8 @@ struct Instance {
     /// An adopted unit of a profile that no longer exists: being stopped, never listed or
     /// reported (the shell never heard of it).
     hidden: bool,
+    /// Frozen by `freeze` and not thawed since (T-457).
+    frozen: bool,
 }
 
 pub struct Session<S, D> {
@@ -126,6 +143,8 @@ pub struct Session<S, D> {
     wayland_dir: Option<String>,
     pulse_dir: Option<String>,
     instances: Vec<Instance>,
+    /// `frozen` changes not yet taken by the adapter (`take_frozen_changes`).
+    frozen_changes: Vec<FrozenChange>,
 }
 
 impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
@@ -138,6 +157,7 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
             wayland_dir: None,
             pulse_dir: None,
             instances: Vec::new(),
+            frozen_changes: Vec::new(),
         }
     }
 
@@ -208,6 +228,7 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
                     stop_asked: None,
                     kill_sent: false,
                     hidden: false,
+                    frozen: false,
                 });
                 (Status::Ok, unit)
             }
@@ -234,6 +255,21 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
         if inst.state == State::Stopping {
             return Status::Ok;
         }
+        if inst.frozen {
+            // A frozen app cannot handle the SIGTERM of the stop: thaw it first (T-457). A failed
+            // thaw still stops it; the kill after the grace time ends even a frozen process.
+            if let Err(err) = self.spawner.thaw(&inst.unit) {
+                eprintln!(
+                    "ruya-session: thawing {} before its stop failed: {err}",
+                    inst.unit
+                );
+            }
+            inst.frozen = false;
+            self.frozen_changes.push(FrozenChange {
+                instance: inst.unit.clone(),
+                frozen: false,
+            });
+        }
         match self.spawner.stop(&inst.unit) {
             Ok(()) => {
                 inst.state = State::Stopping;
@@ -245,6 +281,94 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
                 Status::Failed
             }
         }
+    }
+
+    /// The running, listed instance named `instance`, checked for Freeze and Thaw: it must be
+    /// running and, when `active` is known (system mode), the signed-in profile's.
+    fn freezable(&self, instance: &str, active: Option<&str>) -> Result<usize, Status> {
+        if instance.is_empty() {
+            return Err(Status::Invalid);
+        }
+        let at = self
+            .instances
+            .iter()
+            .position(|i| i.unit == instance && !i.hidden)
+            .ok_or(Status::NotRunning)?;
+        let inst = &self.instances[at];
+        if active.is_some_and(|a| a.is_empty() || a != inst.profile) {
+            return Err(Status::NotAllowed);
+        }
+        if inst.state != State::Running {
+            return Err(Status::NotRunning);
+        }
+        Ok(at)
+    }
+
+    /// Freezes a running app of the signed-in profile (`active`; `None` in development mode, no
+    /// check), T-457. A frozen app is left as it is (`Ok`, the OS is not asked again). A failed
+    /// freeze is undone (a thaw of the same units) so the app keeps running: `Failed`.
+    pub fn freeze(&mut self, instance: &str, active: Option<&str>) -> Status {
+        let at = match self.freezable(instance, active) {
+            Ok(at) => at,
+            Err(status) => return status,
+        };
+        let inst = &mut self.instances[at];
+        if inst.frozen {
+            return Status::Ok;
+        }
+        match self.spawner.freeze(&inst.unit) {
+            Ok(()) => {
+                inst.frozen = true;
+                self.frozen_changes.push(FrozenChange {
+                    instance: inst.unit.clone(),
+                    frozen: true,
+                });
+                Status::Ok
+            }
+            Err(err) => {
+                eprintln!("ruya-session: freezing {} failed: {err}", inst.unit);
+                // A part may be frozen (the unit but not a scope): it must not stay so.
+                if let Err(err) = self.spawner.thaw(&inst.unit) {
+                    eprintln!(
+                        "ruya-session: thawing {} after the failed freeze failed: {err}",
+                        inst.unit
+                    );
+                }
+                Status::Failed
+            }
+        }
+    }
+
+    /// Thaws a running app of the signed-in profile (T-457). The OS is asked even when the app is
+    /// not known to be frozen (a restart of this service forgets it); thawing a running app is a
+    /// no-op there. A failed thaw keeps `frozen`, so a later Thaw or Stop tries again.
+    pub fn thaw(&mut self, instance: &str, active: Option<&str>) -> Status {
+        let at = match self.freezable(instance, active) {
+            Ok(at) => at,
+            Err(status) => return status,
+        };
+        let inst = &mut self.instances[at];
+        match self.spawner.thaw(&inst.unit) {
+            Ok(()) => {
+                if inst.frozen {
+                    inst.frozen = false;
+                    self.frozen_changes.push(FrozenChange {
+                        instance: inst.unit.clone(),
+                        frozen: false,
+                    });
+                }
+                Status::Ok
+            }
+            Err(err) => {
+                eprintln!("ruya-session: thawing {} failed: {err}", inst.unit);
+                Status::Failed
+            }
+        }
+    }
+
+    /// The `frozen` changes since the last call, in order, for `FrozenChanged`.
+    pub fn take_frozen_changes(&mut self) -> Vec<FrozenChange> {
+        std::mem::take(&mut self.frozen_changes)
     }
 
     /// Start-up: takes over the app units that run already (a restart of this service does not
@@ -278,6 +402,9 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
                 stop_asked: None,
                 kill_sent: false,
                 hidden: orphan,
+                // Left frozen by a Freeze before the restart: listed as frozen, so a Stop thaws it
+                // first and a Thaw announces the change (T-457).
+                frozen: found.frozen,
             };
             if orphan {
                 match self.spawner.stop(&inst.unit) {
@@ -306,6 +433,7 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
                 profile: i.profile.clone(),
                 started: i.started,
                 state: i.state,
+                frozen: i.frozen,
             })
             .collect()
     }
@@ -468,10 +596,138 @@ mod tests {
             (Status::UnknownInstance, "unknown-instance"),
             (Status::Invalid, "invalid"),
             (Status::Failed, "failed"),
+            (Status::NotRunning, "not-running"),
+            (Status::NotAllowed, "not-allowed"),
         ];
         for (s, text) in all {
             assert_eq!(s.as_str(), text);
         }
+    }
+
+    // ---- Freeze and Thaw (T-457) -----------------------------------------------------------
+
+    fn frozen_of(s: &Session<FakeSpawner, ProfileSnapshot>, unit: &str) -> bool {
+        s.list()
+            .into_iter()
+            .find(|a| a.instance == unit)
+            .is_some_and(|a| a.frozen)
+    }
+
+    #[test]
+    fn freeze_and_thaw_go_to_the_os_and_are_announced() {
+        let mut s = session();
+        let unit = running(&mut s);
+        assert!(!frozen_of(&s, &unit));
+        assert_eq!(s.freeze(&unit, Some("p1")), Status::Ok);
+        assert!(frozen_of(&s, &unit));
+        assert_eq!(
+            s.take_frozen_changes(),
+            [FrozenChange {
+                instance: unit.clone(),
+                frozen: true
+            }]
+        );
+        // A second freeze is a no-op: the OS is not asked again, nothing is announced.
+        assert_eq!(s.freeze(&unit, Some("p1")), Status::Ok);
+        assert!(s.take_frozen_changes().is_empty());
+        assert_eq!(s.thaw(&unit, Some("p1")), Status::Ok);
+        assert!(!frozen_of(&s, &unit));
+        assert_eq!(
+            s.take_frozen_changes(),
+            [FrozenChange {
+                instance: unit.clone(),
+                frozen: false
+            }]
+        );
+        assert_eq!(
+            s.spawner.calls(),
+            [
+                format!("start ruya-p1 {APP}"),
+                format!("freeze {unit}"),
+                format!("thaw {unit}")
+            ]
+        );
+        // A thaw of an app that is not frozen still asks the OS (a restart of the service forgets
+        // the state), announces nothing and is ok.
+        assert_eq!(s.thaw(&unit, Some("p1")), Status::Ok);
+        assert!(s.take_frozen_changes().is_empty());
+        assert_eq!(s.spawner.calls().last(), Some(&format!("thaw {unit}")));
+    }
+
+    #[test]
+    fn another_profiles_app_is_never_frozen() {
+        let mut s = session();
+        let unit = running(&mut s); // p1's
+        for active in [Some("p2"), Some("")] {
+            assert_eq!(s.freeze(&unit, active), Status::NotAllowed, "{active:?}");
+            assert_eq!(s.thaw(&unit, active), Status::NotAllowed, "{active:?}");
+        }
+        assert!(!frozen_of(&s, &unit));
+        assert_eq!(s.spawner.calls(), [format!("start ruya-p1 {APP}")]);
+        // Development mode (no active profile known) does not check.
+        assert_eq!(s.freeze(&unit, None), Status::Ok);
+    }
+
+    #[test]
+    fn only_a_running_app_is_frozen() {
+        let mut s = session();
+        assert_eq!(s.freeze("", Some("p1")), Status::Invalid);
+        assert_eq!(s.freeze("nope.service", Some("p1")), Status::NotRunning);
+        assert_eq!(s.thaw("nope.service", Some("p1")), Status::NotRunning);
+        let (_, unit) = s.launch(APP, "p1", 0); // still starting
+        assert_eq!(s.freeze(&unit, Some("p1")), Status::NotRunning);
+        s.on_event(UnitEvent::Started { unit: unit.clone() });
+        assert_eq!(s.stop(&unit, Instant::now()), Status::Ok); // stopping
+        assert_eq!(s.freeze(&unit, Some("p1")), Status::NotRunning);
+        assert!(!s.spawner.calls().iter().any(|c| c.starts_with("freeze")));
+    }
+
+    #[test]
+    fn a_failed_freeze_is_undone_and_the_app_keeps_running() {
+        let spawner = FakeSpawner::new().with_app(APP).failing_freeze();
+        let dir = ProfileSnapshot::new(["p1".to_owned()]);
+        let mut s = Session::new(spawner, dir, Vec::new());
+        let unit = running(&mut s);
+        assert_eq!(s.freeze(&unit, Some("p1")), Status::Failed);
+        assert!(!frozen_of(&s, &unit));
+        assert!(s.take_frozen_changes().is_empty());
+        assert_eq!(
+            s.spawner.calls()[1..],
+            [format!("freeze {unit}"), format!("thaw {unit}")]
+        );
+    }
+
+    #[test]
+    fn a_frozen_app_is_thawed_before_its_stop() {
+        let mut s = session();
+        let unit = running(&mut s);
+        assert_eq!(s.freeze(&unit, Some("p1")), Status::Ok);
+        s.take_frozen_changes();
+        assert_eq!(s.stop(&unit, Instant::now()), Status::Ok);
+        assert_eq!(
+            s.spawner.calls()[1..],
+            [
+                format!("freeze {unit}"),
+                format!("thaw {unit}"),
+                format!("stop {unit}")
+            ]
+        );
+        assert!(!frozen_of(&s, &unit));
+        assert_eq!(
+            s.take_frozen_changes(),
+            [FrozenChange {
+                instance: unit.clone(),
+                frozen: false
+            }]
+        );
+        // An app that is not frozen is stopped without a thaw.
+        let (_, other) = s.launch("org.ruyaos.Puzzle", "p1", 0);
+        s.on_event(UnitEvent::Started {
+            unit: other.clone(),
+        });
+        assert_eq!(s.stop(&other, Instant::now()), Status::Ok);
+        assert_eq!(s.spawner.calls().last(), Some(&format!("stop {other}")));
+        assert!(!s.spawner.calls().contains(&format!("thaw {other}")));
     }
 
     #[test]
@@ -816,6 +1072,23 @@ mod tests {
             .with_running("ruya-p2", PUZZLE, 2_000);
         let dir = ProfileSnapshot::new(["p1".to_owned(), "p2".to_owned()]);
         Session::new(spawner, dir, vec![])
+    }
+
+    #[test]
+    fn an_adopted_frozen_unit_is_listed_frozen_and_thawed_before_its_stop() {
+        let spawner = FakeSpawner::new()
+            .with_app(APP)
+            .with_frozen_running("ruya-p1", APP, 1_000);
+        let dir = ProfileSnapshot::new(["p1".to_owned()]);
+        let mut s = Session::new(spawner, dir, vec![]);
+        s.adopt(5_000, Instant::now(), true);
+        let unit = unit_name("ruya-p1", APP);
+        assert!(s.list()[0].frozen, "frozen after the restart");
+        assert_eq!(s.stop(&unit, Instant::now()), Status::Ok);
+        assert_eq!(
+            s.spawner.calls()[1..],
+            [format!("thaw {unit}"), format!("stop {unit}")]
+        );
     }
 
     #[test]

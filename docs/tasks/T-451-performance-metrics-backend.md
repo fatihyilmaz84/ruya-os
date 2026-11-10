@@ -38,6 +38,7 @@ The shell can show honest performance numbers for the game in front: FPS and fra
 
 ## Outcome
 Verified: host (vm pending: vm-devices-check system)
+Lead, 2026-11-10, image 0.0.63: `vm-devices-check.sh system` and `check` PASS (GetPerformance answers a{s(sd)}, a call from nobody is refused). The FrameMeter with a real Wayland client and the numbers against top on the Dell stay pending (hw).
 
 `dev.ps1 test` ALL GREEN (1095 QML passed, 90 skipped; Rust: 503 ruya-devices tests, 26 of them new, and 1 new in ruya-sysinfo). hw: partly done on the Dell (below); STK in front with the FPS counter needs an image with this shell (lead run; T-455 measures there too).
 

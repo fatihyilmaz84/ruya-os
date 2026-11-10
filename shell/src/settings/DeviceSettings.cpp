@@ -61,6 +61,7 @@ void DeviceSettings::init()
         const int interval = m_store->value(QStringLiteral("hub/performanceIntervalMs"), m_performanceIntervalMs).toInt();
         if (isValidPerformanceInterval(interval))
             m_performanceIntervalMs = interval;
+        m_pauseGamesInHub = m_store->value(QStringLiteral("hub/pauseGames"), m_pauseGamesInHub).toBool();
         const QString language = m_store->value(QStringLiteral("general/language")).toString();
         if (isValidLanguage(language)) {
             m_language = language;
@@ -336,6 +337,16 @@ void DeviceSettings::setSoundTheme(const QString &value)
     if (m_store)
         m_store->setValue(QStringLiteral("sound/theme"), value);
     emit soundThemeChanged();
+}
+
+void DeviceSettings::setPauseGamesInHub(bool value)
+{
+    if (value == m_pauseGamesInHub)
+        return;
+    m_pauseGamesInHub = value;
+    if (m_store)
+        m_store->setValue(QStringLiteral("hub/pauseGames"), value);
+    emit pauseGamesInHubChanged();
 }
 
 void DeviceSettings::setAmbientSound(bool value)
