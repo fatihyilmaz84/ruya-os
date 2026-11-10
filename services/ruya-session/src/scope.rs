@@ -20,9 +20,10 @@
 //!     (`take_sweeps`, T-435). A run can have more than one scope: an Electron app's sandboxed
 //!     zygote is started through the Flatpak portal (zypak, `flatpak-spawn --sandbox`), which
 //!     makes a second `app-flatpak-<app>-<n>.scope` in the same second, and the run attaches
-//!     either of the two. `Stop` and the kill therefore name every scope of the app
-//!     (`spawner::control_command`), and the end of a run stops what is left and clears the
-//!     `failed` state of a scope systemd had to kill, so nothing stays listed.
+//!     either of the two. `Stop` and the kill therefore name every scope of the app, listed
+//!     first and kept by exact name (`spawner::app_scopes`, `control_command`), and the end of
+//!     a run stops what is left and clears the `failed` state of a scope systemd had to kill,
+//!     so nothing stays listed.
 //!
 //! One round is `plan` (what to ask each manager), the caller's `systemctl show`, and `apply`
 //! (the answer). Nothing here starts a process or waits.
@@ -667,7 +668,12 @@ mod tests {
     #[test]
     fn stop_also_stops_the_scope() {
         use crate::spawner::control_command;
-        let stop = control_command(USER, &["stop", "--no-block"], UNIT, APP).expect("stop");
+        // Every scope of the app the manager lists, by exact name (`app_scopes`), next to the
+        // unit, not only the one the run attached (T-435: an Electron app's zygote may be it).
+        const ZYGOTE: &str = "app-flatpak-net.supertuxkart.SuperTuxKart-17.scope";
+        let scopes = [ZYGOTE.to_owned(), SCOPE.to_owned()];
+        let stop =
+            control_command(USER, &["stop", "--no-block"], UNIT, APP, &scopes).expect("stop");
         assert_eq!(
             stop,
             [
@@ -678,26 +684,28 @@ mod tests {
                 "stop",
                 "--no-block",
                 UNIT,
-                "app-flatpak-net.supertuxkart.SuperTuxKart-*.scope",
+                ZYGOTE,
+                SCOPE,
             ]
         );
-        // The kill of an overdue Stop reaches every scope of the app too, not only the attached
-        // one (T-435: an Electron app's second scope, its zygote, may be the attached one).
+        // The kill of an overdue Stop reaches them too; with none listed, the unit alone.
         let kill = control_command(
             USER,
             &["kill", "--signal=SIGKILL", "--kill-whom=all"],
             UNIT,
             APP,
+            &scopes,
         )
         .expect("kill");
-        assert_eq!(
-            &kill[kill.len() - 2..],
-            [UNIT, "app-flatpak-net.supertuxkart.SuperTuxKart-*.scope"]
-        );
+        assert_eq!(&kill[kill.len() - 3..], [UNIT, ZYGOTE, SCOPE]);
+        let bare = control_command(USER, &["stop"], UNIT, APP, &[]).expect("unit only");
+        assert_eq!(bare.last().map(String::as_str), Some(UNIT));
         // Nothing foreign gets through.
-        assert!(control_command(USER, &["stop"], UNIT, "../x").is_err());
-        assert!(control_command(USER, &["stop"], UNIT, "org.x.*").is_err());
-        assert!(control_command("root", &["stop"], UNIT, APP).is_err());
+        assert!(control_command(USER, &["stop"], UNIT, "../x", &[]).is_err());
+        assert!(control_command(USER, &["stop"], UNIT, "org.x.*", &[]).is_err());
+        assert!(control_command("root", &["stop"], UNIT, APP, &[]).is_err());
+        let other = ["app-flatpak-org.other.Game-1.scope".to_owned()];
+        assert!(control_command(USER, &["stop"], UNIT, APP, &other).is_err());
     }
 
     #[test]
