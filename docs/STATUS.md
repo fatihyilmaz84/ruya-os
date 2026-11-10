@@ -15,7 +15,7 @@ Verification legend: **host** = built and tested on Windows · **host (vm pendin
 
 ## Board
 
-**NEXT → T-421** (builders: the glass on the Dell, owner 2026-11-10: dispatch to Opus high in the next session); lead: T-366 ([lead] Ruya Input spike, ADR-024; then T-367, T-381 GE-Proton, T-380), and the Dell second pass T-355 once Play works (T-386, image 0.0.61). **Builder lanes**: T-147, then the first rows of `STATUS-backlog.md` in order (T-362, T-423, T-424, T-422, T-378, T-299, T-364, T-339); one "VM (this task)" at a time. T-283, T-284, T-287, T-288 wait for the lead's design pass T-282; T-397..T-399 wait for T-366 and T-396. **Plan audit 2026-11-10:** 76 task files carry a ruling under their header (overlaps cut, dependencies fixed); the Depends column now lists only dependencies that are not `done`.
+**NEXT → T-147** (builders); lead: T-366 ([lead] Ruya Input spike, ADR-024; then T-367, T-381 GE-Proton, T-380), and the Dell second pass T-355 once Play works (T-386, image 0.0.61). **Builder lanes**: T-147, then the first rows of `STATUS-backlog.md` in order (T-362, T-423, T-424, T-422, T-378, T-299, T-364, T-339); one "VM (this task)" at a time. T-283, T-284, T-287, T-288 wait for the lead's design pass T-282; T-397..T-399 wait for T-366 and T-396. **Plan audit 2026-11-10:** 76 task files carry a ruling under their header (overlaps cut, dependencies fixed); the Depends column now lists only dependencies that are not `done`.
 
 **How work runs (owner, 2026-11-04):** the lead dispatches `ruya-builder` agents (at most two at a time, own worktrees, different areas), has each branch reviewed by `ruya-reviewer` and merges it (`docs/LEAD.md`). Dispatched builders never edit this file; one "VM (this task)" runs at a time. A builder the owner starts directly takes NEXT alone in the main checkout and does the bookkeeping (`CLAUDE.md`).
 
@@ -23,7 +23,6 @@ Open work only (the front of the board; the rest is in `STATUS-backlog.md`), in 
 
 | ID | Title | Status | Depends |
 |---|---|---|---|
-| [T-421](tasks/T-421-glass-has-no-blur-on-the-dell.md) | Glass on the Dell has no Gaussian blur and no transparency (0.0.61); the shell uses about 40 % of the GPU at Home | in-progress | — |
 | [T-147](tasks/T-147-fullscreen-app-flow.md) | Full-screen apps: launch, quick menu, return, close | todo | — |
 | [T-393](tasks/T-393-options-menu-design.md) | **[lead]** Design: the Options (context) menu: component, contents per surface, motion, focus | todo | — |
 | [T-396](tasks/T-396-controller-ownership-and-layout-spec.md) | **[lead]** Spec: who owns the UI, the family's confirm button, action glyphs (ADR-027) | todo | T-366 |
@@ -49,6 +48,12 @@ Triaged 2026-11-10 (lead-9): the lines before are verbatim in [`STATUS-parked.md
 - (T-423) Services to zbus 6 (zvariant, zbus_names, zvariant_derive merged into it), then drop the RUSTSEC-2026-0370..0372 ignores.
 - (T-423 review) The six image bus policies: explicit default-context `deny own`/send rules (image change, VM run), then make `lint-bus-policies.ps1` require them; add a `ruya-link` policy file when ADR-029's service lands (fixtures only today).
 - (T-423 review) `supply-chain.yml`: check the cargo-deny tarball against its published `.sha256` (or fold into T-425).
+- (T-421, lead-9) Next image: run `scripts/dell-glass-check.sh` on the Dell (FAIL on 0.0.61, PASS with the branch's shell); also watch the page-open fade from sharp to blurred for a hitch (UX review) and the picker's GPU (the blurred copy's live texture stays active off pages: gate it on `blurred || pageBlur.opacity > 0`; the step 3 comment in the script is stale).
+- (T-421) GPU on the Dell: liquid pills about 25 % for 30 s after every input at Home (each pill re-renders crop, blur and shader every frame; the 04 §3.8 "decide on the Dell" number); Settings in active use about 40 % (was 30 %) from the new page blur: a cheaper page blur (smaller texture, or bake it while the blobs rest).
+- (T-421 design, lead decision) Performance tier: Settings rows (`controls/SettingControl.qml:52`, `Theme.glass` on every tier) sit translucent over sharp blobs, against 04 §3.6 "glass without blur turns opaque": decided (lead, 2026-11-10) `glassOpaque` on Performance, like GlassPill and GlassSheet; check the other translucent cards; then fix the new §3.6 sentence "never sits over a sharp blob edge".
+- (T-421) Midnight with the default look: sheet and pills blur a dark low-contrast L0 and read as flat grey: a design pass on blob strength or tint (T-282).
+- (T-421) The Dell logs "ShaderEffect: Texture t7 is not assigned a valid texture provider" on every app focus change: GlassShadow's `layer.enabled: shadow.visible` toggle (evidence for T-430).
+- (T-421) ACBR (Electron) starts on the Dell but never shows a window, and two orphaned ACBR scopes were running (one from before the session): Play looks dead to the owner.
 - (lead-9) CI warns that `actions/checkout@v4` runs on the deprecated Node.js 20: move every workflow to `actions/checkout@v5` (after T-423 merges, which edits `ci.yml`).
 ## Blocked (need something this host doesn't have)
 
