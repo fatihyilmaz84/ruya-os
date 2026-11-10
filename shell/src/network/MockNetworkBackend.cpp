@@ -58,6 +58,27 @@ void MockNetworkBackend::forget(const QString &id)
     QTimer::singleShot(0, this, [this, id, status] { emit forgetFinished(id, status); });
 }
 
+void MockNetworkBackend::setWifiEnabled(bool on)
+{
+    const QString status = m_wifiSupported ? m_wifiStatus : QStringLiteral("failed");
+    if (status == QLatin1String("ok") && on != m_wifiOn) {
+        m_wifiOn = on;
+        if (!on) {              // the radio off drops the Wi-Fi connection
+            for (WifiInfo &n : m_networks)
+                n.active = false;
+        }
+        publishState();
+        publishNetworks();
+    }
+    QTimer::singleShot(0, this, [this, status] { emit wifiFinished(status); });
+}
+
+void MockNetworkBackend::setWifiSupported(bool supported)
+{
+    m_wifiSupported = supported;
+    publishState();
+}
+
 void MockNetworkBackend::setCable(bool plugged)
 {
     m_cable = plugged;
@@ -85,6 +106,9 @@ void MockNetworkBackend::reset()
 void MockNetworkBackend::initState()
 {
     m_cable = true;
+    m_wifiOn = true;
+    m_wifiSupported = true;
+    m_wifiStatus = QStringLiteral("ok");
     m_networks = {
         {QStringLiteral("wifi-lounge"), QStringLiteral("Lounge 5G"), 82, QStringLiteral("wpa-psk"), true, false},
         {QStringLiteral("wifi-home"), QStringLiteral("HomeNet"), 64, QStringLiteral("wpa-psk"), false, false},
@@ -108,6 +132,8 @@ void MockNetworkBackend::publishState(int delayMs)
 {
     QString state = QStringLiteral("disconnected");
     QVariantMap primary;
+    const QString wifi = !m_wifiSupported ? QStringLiteral("unsupported")
+                                          : (m_wifiOn ? QStringLiteral("on") : QStringLiteral("off"));
     if (m_cable) {
         state = QStringLiteral("connected");
         primary = {{QStringLiteral("kind"), QStringLiteral("ethernet")},
@@ -127,10 +153,10 @@ void MockNetworkBackend::publishState(int delayMs)
     const quint64 request = beginStateRequest();
     if (delayMs > 0)
         ++m_pending;
-    QTimer::singleShot(delayMs, this, [this, request, state, primary, delayMs] {
+    QTimer::singleShot(delayMs, this, [this, request, state, primary, wifi, delayMs] {
         if (delayMs > 0)
             --m_pending;
-        deliverState(request, state, primary);
+        deliverState(request, state, primary, wifi);
     });
 }
 

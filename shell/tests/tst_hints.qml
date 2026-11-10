@@ -196,7 +196,7 @@ Item {
             signInAsAda()
             keyClick(Qt.Key_HomePage)
             tryCompare(find("systemPanel"), "open", true)
-            compare(tc.shown(), "A Select|B Close")
+            compare(tc.shown(), "A Start|B Close", "T-448: the focus opens on a Recent row, whose A starts the game")
             verify(!find("hintBar").activeFocus)
             keyClick(Qt.Key_Escape)
             tryCompare(find("systemPanel"), "open", false)

@@ -432,6 +432,9 @@ impl NetworkManager for DynNm {
     fn forget(&self, ssid: &str) -> Result<(), String> {
         (**self).forget(ssid)
     }
+    fn set_wifi_enabled(&self, on: bool) -> Result<(), String> {
+        (**self).set_wifi_enabled(on)
+    }
 }
 
 pub type SharedNet = Arc<Network<DynNm>>;
@@ -455,6 +458,9 @@ impl NetworkIface {
             if changes.state {
                 self.state_changed(emitter).await?;
                 self.primary_changed(emitter).await?;
+            }
+            if changes.wifi {
+                self.wifi_enabled_changed(emitter).await?;
             }
             Ok::<(), zbus::Error>(())
         }
@@ -496,6 +502,39 @@ impl NetworkIface {
         .into_iter()
         .filter_map(|(k, v)| v.map(|v| (k.to_owned(), v)))
         .collect()
+    }
+
+    /// The Wi-Fi radio switch (NetworkManager's `WirelessEnabled`). Writing it with no Wi-Fi
+    /// adapter, or when NetworkManager refuses, is an error on the bus.
+    #[zbus(property)]
+    fn wifi_enabled(&self) -> bool {
+        self.net.wifi_enabled()
+    }
+
+    #[zbus(property)]
+    async fn set_wifi_enabled(
+        &mut self,
+        on: bool,
+        #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
+    ) -> zbus::fdo::Result<()> {
+        let net = self.net.clone();
+        match unblock(move || net.set_wifi_enabled(on)).await {
+            Ok(changes) => {
+                // `WifiEnabled` itself is announced by zbus after a successful Set.
+                let rest = network::Changes {
+                    wifi: false,
+                    ..changes
+                };
+                self.emit(&emitter, &rest).await;
+                Ok(())
+            }
+            Err(err) => {
+                eprintln!("ruya-devices: switching the Wi-Fi radio failed: {err}");
+                Err(zbus::fdo::Error::Failed(
+                    "no Wi-Fi adapter, or NetworkManager refused".to_owned(),
+                ))
+            }
+        }
     }
 
     fn list_wifi(&self) -> Vec<HashMap<String, OwnedValue>> {

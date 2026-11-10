@@ -279,6 +279,18 @@
     </property>
 
     <!--
+      The Wi-Fi radio switch (T-448, the Quick Hub's Wi-Fi tile): NetworkManager's
+      WirelessEnabled. Writable (org.freedesktop.DBus.Properties.Set). Reads false when there is
+      no Wi-Fi adapter. Switching off disconnects the Wi-Fi network (State, Primary and
+      NetworksChanged follow) and empties the in-range part of ListWifi; switching on brings it
+      back. Writing with no adapter, or when NetworkManager refuses, answers a D-Bus error;
+      PropertiesChanged follows a change made here or from outside.
+    -->
+    <property name="WifiEnabled" type="b" access="readwrite">
+      <annotation name="org.freedesktop.DBus.Property.EmitsChangedSignal" value="true"/>
+    </property>
+
+    <!--
       Wi-Fi networks in range plus saved ones, strongest first. One dictionary per network:
         id        s   stable id, opaque to the shell
         ssid      s   display name

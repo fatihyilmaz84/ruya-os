@@ -32,11 +32,16 @@ public:
     virtual void scan() = 0;
     virtual void connectWifi(const QString &id, const QString &password) = 0;
     virtual void forget(const QString &id) = 0;
+    // The Wi-Fi radio switch (XML WifiEnabled): the answer is wifiFinished, the new state follows
+    // by stateChanged.
+    virtual void setWifiEnabled(bool on) = 0;
 
 signals:
     // state: "disconnected" | "connecting" | "connected" | "limited"; primary: see the XML
-    // (empty when disconnected).
-    void stateChanged(const QString &state, const QVariantMap &primary);
+    // (empty when disconnected); wifi: "unsupported" (the service offers no radio switch) | "off" | "on".
+    void stateChanged(const QString &state, const QVariantMap &primary, const QString &wifi);
+    // status of setWifiEnabled: "ok" | "failed" (no adapter, rfkill, the service refused).
+    void wifiFinished(const QString &status);
     void networksListed(const QList<WifiInfo> &networks);
     // status: see the XML ("ok", "wrong-password", "unsupported", ...).
     void connectFinished(const QString &id, const QString &status);
@@ -47,10 +52,10 @@ protected:
     // if no newer one of the same kind has been reported already (the state and the network list
     // are two kinds). RequestSequence.h.
     quint64 beginStateRequest() { return m_stateSeq.begin(); }
-    void deliverState(quint64 request, const QString &state, const QVariantMap &primary)
+    void deliverState(quint64 request, const QString &state, const QVariantMap &primary, const QString &wifi)
     {
         if (m_stateSeq.accept(request))
-            emit stateChanged(state, primary);
+            emit stateChanged(state, primary, wifi);
     }
     quint64 beginNetworksRequest() { return m_networksSeq.begin(); }
     void deliverNetworks(quint64 request, const QList<WifiInfo> &networks)

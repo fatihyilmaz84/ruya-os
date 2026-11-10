@@ -7,11 +7,12 @@ Network::Network(std::unique_ptr<NetworkBackend> backend, QObject *parent)
     : QObject(parent)
     , m_backend(std::move(backend))
 {
-    connect(m_backend.get(), &NetworkBackend::stateChanged, this, [this](const QString &state, const QVariantMap &primary) {
-        if (state == m_state && primary == m_primary)
+    connect(m_backend.get(), &NetworkBackend::stateChanged, this, [this](const QString &state, const QVariantMap &primary, const QString &wifi) {
+        if (state == m_state && primary == m_primary && wifi == m_wifi)
             return;
         m_state = state;
         m_primary = primary;
+        m_wifi = wifi;
         emit stateChanged();
     });
     connect(m_backend.get(), &NetworkBackend::networksListed, this, [this](const QList<WifiInfo> &list) {
@@ -31,6 +32,7 @@ Network::Network(std::unique_ptr<NetworkBackend> backend, QObject *parent)
     });
     connect(m_backend.get(), &NetworkBackend::connectFinished, this, &Network::connectFinished);
     connect(m_backend.get(), &NetworkBackend::forgetFinished, this, &Network::forgetFinished);
+    connect(m_backend.get(), &NetworkBackend::wifiFinished, this, &Network::wifiFinished);
     m_backend->refresh();
 }
 
@@ -66,6 +68,23 @@ void Network::connectWifi(const QString &id, const QString &password)
 void Network::forget(const QString &id)
 {
     m_backend->forget(id);
+}
+
+void Network::setWifiEnabled(bool on)
+{
+    m_backend->setWifiEnabled(on);
+}
+
+void Network::mockWifiScript(const QString &status)
+{
+    if (auto *mock = qobject_cast<MockNetworkBackend *>(m_backend.get()))
+        mock->setWifiScript(status);
+}
+
+void Network::mockWifiSupported(bool supported)
+{
+    if (auto *mock = qobject_cast<MockNetworkBackend *>(m_backend.get()))
+        mock->setWifiSupported(supported);
 }
 
 QString Network::mockPassword() const

@@ -6,15 +6,16 @@
 //   network-control            ActivateConnection, AddAndActivateConnection
 //   settings.modify.system     AddAndActivateConnection (a saved network is system-wide), Delete
 //   settings.modify.own        the same for a connection owned by the user
+//   enable-disable-wifi        the Wi-Fi radio switch (WirelessEnabled; the Quick Hub's Wi-Fi tile, T-448)
 //
 // Nothing else: every other NetworkManager action is refused for this user (NO, which also
 // overrides NetworkManager's own default that an active session may do many of them without a
-// password): not hostname or global DNS changes, not enabling or disabling networking, Wi-Fi,
-// WWAN or the connectivity check, not Wi-Fi sharing, reloading, sleep/wake or checkpoints. polkit
+// password): not hostname or global DNS changes, not enabling or disabling networking, WWAN or
+// the connectivity check, not Wi-Fi sharing, reloading, sleep/wake or checkpoints. polkit
 // cannot tell connection types apart, so the service itself only ever touches Wi-Fi connections
 // (ruya-devices, network.rs). Other users (profile users, Flatpak apps) keep the default policy.
 // The list is what network.rs calls (RequestScan, ActivateConnection, AddAndActivateConnection,
-// Settings.Connection.Delete); scripts/vm-devices-check.sh asks pkcheck for the verdicts as the
+// Settings.Connection.Delete, the WirelessEnabled property); scripts/vm-devices-check.sh asks pkcheck for the verdicts as the
 // service's own process (the VM has no Wi-Fi adapter, so the calls themselves cannot be run).
 polkit.addRule(function(action, subject) {
     if (subject.user !== "ruya-shell")
@@ -24,7 +25,8 @@ polkit.addRule(function(action, subject) {
         "org.freedesktop.NetworkManager.wifi.scan",
         "org.freedesktop.NetworkManager.network-control",
         "org.freedesktop.NetworkManager.settings.modify.system",
-        "org.freedesktop.NetworkManager.settings.modify.own"
+        "org.freedesktop.NetworkManager.settings.modify.own",
+        "org.freedesktop.NetworkManager.enable-disable-wifi"
     ];
     if (allowed.indexOf(action.id) >= 0)
         return polkit.Result.YES;

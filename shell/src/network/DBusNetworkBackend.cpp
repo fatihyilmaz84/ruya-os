@@ -91,7 +91,11 @@ void DBusNetworkBackend::refreshState()
         const QVariant raw = props.value(QStringLiteral("Primary"));
         if (raw.canConvert<QDBusArgument>())
             primary = parseDict(raw.value<QDBusArgument>());
-        deliverState(request, props.value(QStringLiteral("State"), QStringLiteral("disconnected")).toString(), primary);
+        // A service without the radio switch does not offer the property: no switch (T-448).
+        const QVariant radio = props.value(QStringLiteral("WifiEnabled"));
+        const QString wifi = !radio.isValid() ? QStringLiteral("unsupported")
+                                              : (radio.toBool() ? QStringLiteral("on") : QStringLiteral("off"));
+        deliverState(request, props.value(QStringLiteral("State"), QStringLiteral("disconnected")).toString(), primary, wifi);
     });
 }
 
@@ -152,6 +156,22 @@ void DBusNetworkBackend::connectWifi(const QString &id, const QString &password)
 void DBusNetworkBackend::forget(const QString &id)
 {
     startCommand(QStringLiteral("Forget"), id, {id}, false);
+}
+
+void DBusNetworkBackend::setWifiEnabled(bool on)
+{
+    auto msg = QDBusMessage::createMethodCall(Service, Path, PropertiesInterface, QStringLiteral("Set"));
+    msg << Interface << QStringLiteral("WifiEnabled") << QVariant::fromValue(QDBusVariant(on));
+    auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this](QDBusPendingCallWatcher *w) {
+        w->deleteLater();
+        const QDBusMessage reply = w->reply();
+        const bool ok = reply.type() == QDBusMessage::ReplyMessage;
+        if (!ok)
+            qWarning("ruya-shell: Devices1.Network Set WifiEnabled failed: %s", qPrintable(reply.errorMessage()));
+        emit wifiFinished(ok ? QStringLiteral("ok") : QStringLiteral("failed"));
+        refresh();      // the list follows the radio
+    });
 }
 
 void DBusNetworkBackend::onNetworksChanged()

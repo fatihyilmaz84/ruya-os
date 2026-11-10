@@ -20,6 +20,10 @@ speaker e32d
 mouse e323
 keyboard e312
 bluetooth e1a7
+bluetooth_disabled e1a9
+wifi e63e
+wifi_off e648
+lan eb2f
 smartphone e7ba
 # Our own glyphs (T-199, scripts/add-pad-glyphs.py): the name, a private-use code point Material does
 # not use, and the word ruya. They are drawn, not downloaded.

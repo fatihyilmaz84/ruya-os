@@ -20,6 +20,7 @@ public:
     void scan() override;
     void connectWifi(const QString &id, const QString &password) override;
     void forget(const QString &id) override;
+    void setWifiEnabled(bool on) override;
 
 private slots:
     void onNetworksChanged();

@@ -29,6 +29,15 @@ Item {
 
         function find(name) { return findChild(tc.shell, name) }
 
+        // Down until the Quick Hub's row `key` has the focus (T-448: the rows above it depend on the
+        // library, the tiles and the recent games).
+        function hubGoTo(key) {
+            const list = find("systemActions")
+            for (let i = 0; i < 20 && list.model[list.currentIndex] !== key; ++i)
+                keyClick(Qt.Key_Down)
+            compare(list.model[list.currentIndex], key)
+        }
+
         function typePin(pin) {
             for (const digit of pin)
                 keyClick(digit)
@@ -191,6 +200,7 @@ Item {
 
             keyClick(Qt.Key_HomePage)
             tryVerify(() => find("systemActions").activeFocus)
+            hubGoTo("switch")
             keyClick(Qt.Key_Return)                    // "Switch profile"
             tryCompare(Profiles, "activeProfile", "")
             tryVerify(() => find("profileList").activeFocus, 2000, "picker regains focus after lock")

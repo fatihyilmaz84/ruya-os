@@ -435,7 +435,7 @@ This can&apos;t be undone.</translation>
         <translation>Enter an admin&apos;s PIN</translation>
     </message>
     <message>
-        <location line="+177"/>
+        <location line="+178"/>
         <source>Install</source>
         <translation>Install</translation>
     </message>
@@ -1456,7 +1456,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>GamesPage</name>
     <message>
-        <location filename="../qml/GamesPage.qml" line="+13"/>
+        <location filename="../qml/GamesPage.qml" line="+14"/>
         <location line="+83"/>
         <source>Games</source>
         <translation>Games</translation>
@@ -2284,7 +2284,50 @@ This can&apos;t be undone.</translation>
 <context>
     <name>QuickMenu</name>
     <message>
-        <location filename="../qml/QuickMenu.qml" line="+82"/>
+        <location filename="../qml/QuickMenu.qml" line="+65"/>
+        <source>Wi-Fi</source>
+        <translation>Wi-Fi</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Bluetooth</source>
+        <translation>Bluetooth</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Mute</source>
+        <translation>Mute</translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <location line="+4"/>
+        <location line="+1"/>
+        <source>Off</source>
+        <translation>Off</translation>
+    </message>
+    <message>
+        <location line="-3"/>
+        <location line="+282"/>
+        <source>Not connected</source>
+        <translation>Not connected</translation>
+    </message>
+    <message>
+        <location line="-280"/>
+        <source>On</source>
+        <translation>On</translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <source>Could not change Wi-Fi.</source>
+        <translation>Could not change Wi-Fi.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Could not change Bluetooth.</source>
+        <translation>Could not change Bluetooth.</translation>
+    </message>
+    <message>
+        <location line="+55"/>
         <source>Resume</source>
         <translation>Resume</translation>
     </message>
@@ -2344,7 +2387,12 @@ This can&apos;t be undone.</translation>
         <translation>Switch to %1</translation>
     </message>
     <message>
-        <location line="+152"/>
+        <location line="+133"/>
+        <source>%1, %2</source>
+        <translation>%1, %2</translation>
+    </message>
+    <message>
+        <location line="+103"/>
         <source>Just started</source>
         <translation>Just started</translation>
     </message>
@@ -2355,17 +2403,17 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+18"/>
-        <location line="+19"/>
+        <location line="+28"/>
         <source>System</source>
         <translation>System</translation>
     </message>
     <message>
-        <location line="-12"/>
+        <location line="-21"/>
         <source>Image version %1</source>
         <translation>Image version %1</translation>
     </message>
     <message>
-        <location line="+58"/>
+        <location line="+83"/>
         <source>Volume, muted</source>
         <translation>Volume, muted</translation>
     </message>
@@ -2375,9 +2423,33 @@ This can&apos;t be undone.</translation>
         <translation>Volume %1</translation>
     </message>
     <message>
-        <location line="+43"/>
+        <location line="+79"/>
+        <source>%1, on</source>
+        <translation>%1, on</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>%1, off</source>
+        <translation>%1, off</translation>
+    </message>
+    <message>
+        <location line="-517"/>
+        <location line="+503"/>
         <source>Muted</source>
         <translation>Muted</translation>
+    </message>
+</context>
+<context>
+    <name>QuickTile</name>
+    <message>
+        <location filename="../qml/QuickTile.qml" line="+24"/>
+        <source>%1, on</source>
+        <translation>%1, on</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>%1, off</source>
+        <translation>%1, off</translation>
     </message>
 </context>
 <context>
@@ -2674,7 +2746,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+476"/>
+        <location filename="../qml/Shell.qml" line="+493"/>
         <source>Could not %1.</source>
         <translation>Could not %1.</translation>
     </message>
@@ -2709,7 +2781,7 @@ This can&apos;t be undone.</translation>
         <translation>Restarting to finish the update in 2 minutes. Press any button to wait.</translation>
     </message>
     <message>
-        <location line="+217"/>
+        <location line="+224"/>
         <source>The screen did not answer, so the previous resolution is back.</source>
         <translation>The screen did not answer, so the previous resolution is back.</translation>
     </message>
@@ -2746,12 +2818,12 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+462"/>
+        <location line="+464"/>
         <source>Resume</source>
         <translation>Resume</translation>
     </message>
     <message>
-        <location line="-460"/>
+        <location line="-462"/>
         <source>Details</source>
         <translation>Details</translation>
     </message>
@@ -2762,24 +2834,35 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+445"/>
+        <location line="+2"/>
         <location line="+14"/>
         <location line="+3"/>
         <source>Select</source>
         <translation>Select</translation>
     </message>
     <message>
-        <location line="+132"/>
+        <location line="-18"/>
+        <source>Start</source>
+        <translation>Start</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Toggle</source>
+        <translation>Toggle</translation>
+    </message>
+    <message>
+        <location line="+157"/>
         <source>The chosen sound theme can&apos;t be used. The standard one plays instead.</source>
         <translation>The chosen sound theme can&apos;t be used. The standard one plays instead.</translation>
     </message>
     <message>
-        <location line="-155"/>
-        <location line="+18"/>
+        <location line="-165"/>
+        <location line="+20"/>
         <source>Cancel</source>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location line="-967"/>
+        <location line="-976"/>
         <source>%1 is already running</source>
         <translation>%1 is already running</translation>
     </message>
@@ -2805,7 +2888,7 @@ This can&apos;t be undone.</translation>
         <translation>Running app</translation>
     </message>
     <message>
-        <location line="+924"/>
+        <location line="+933"/>
         <source>Sections</source>
         <translation>Sections</translation>
     </message>
@@ -2820,7 +2903,7 @@ This can&apos;t be undone.</translation>
         <translation>Back</translation>
     </message>
     <message>
-        <location line="+132"/>
+        <location line="+140"/>
         <source>mock services</source>
         <translation>mock services</translation>
     </message>
