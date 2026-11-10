@@ -1,6 +1,6 @@
 # T-460 — Closed pages are never destroyed in a real GPU window since T-448 (4 `shots` tests red on main)
 
-Status: todo · Phase: 2 · Depends: — · Area: shell (Shell.qml page slots, QuickMenu.qml) · Size: S · Owner: builder · Complexity: complex · Developer surface: none
+Status: in-progress · Phase: 2 · Depends: — · Area: shell (Shell.qml page slots, QuickMenu.qml) · Size: S · Owner: builder · Complexity: complex · Developer surface: none
 
 ## Goal
 A closed page is destroyed in a real GPU window as it is offscreen, so `dev.ps1 shots` is green on main again and the console does not keep hidden pages alive.
