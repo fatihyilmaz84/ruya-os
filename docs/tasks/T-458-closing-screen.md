@@ -1,6 +1,6 @@
 # T-458 — "Closing" screen: closing a game shows that it is closing, not that it is running
 
-Status: in-progress · Phase: 2 · Depends: — · Area: shell · Size: S · Owner: builder · Complexity: normal · Developer surface: none
+Status: done · Phase: 2 · Depends: — · Area: shell · Size: S · Owner: builder · Complexity: normal · Developer surface: none
 
 ## Goal
 After Close game the player sees "Closing <game>…" until the game has really ended, and the game's card never says Running while it is closing (owner, 2026-11-10: "it takes some time to close but it shows it as running"; PlayStation shows a closing state).
