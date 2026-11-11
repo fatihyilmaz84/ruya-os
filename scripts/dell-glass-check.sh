@@ -22,6 +22,7 @@
 #      40 s without input, PASS under 3 %. Accept signs the focused profile in again; with RUYA_PIN
 #      set its digits are typed into the PIN pad. The captures are copied to [out-dir] (default
 #      output/dell-glass) for review.
+# Not on the High effects tier, or with a wallpaper set, it stops with NOT RUN (exit 2) before step 1.
 set -u
 HOST="${1:-192.168.178.109}"
 OUT="${2:-output/dell-glass}"
@@ -98,6 +99,18 @@ still() {   # still <where>: 40 s without input, then PASS under 3 %
     echo "$1 after 40 s still: $ms ms render in 10 s"
     [ "$ms" -lt 300 ] && ok "a still $1 draws (almost) nothing ($ms ms in 10 s)" || bad "a still $1 keeps the GPU busy: $ms ms in 10 s"
 }
+
+# The precondition "the default look": the High effects tier (the Performance tier draws no blur by
+# design, 04 §1.5, so step 3 would FAIL for no product reason; lead-11 found the Dell on it) and no
+# wallpaper. The step-3 threshold was tuned on the default theme: the theme is printed.
+conf="$(r 'cat /var/lib/ruya-shell/.config/ruyaos/shell.conf 2>/dev/null')"
+tier="$(echo "$conf" | sed -n 's/^effectsQuality=//p' | head -1)"
+wall="$(echo "$conf" | sed -n 's/^wallpaper=//p' | head -1)"
+echo "effects tier: ${tier:-high (default)}; theme: $(echo "$conf" | sed -n 's/^theme=//p' | head -1); wallpaper: ${wall:-none}"
+if { [ -n "$tier" ] && [ "$tier" != high ]; } || [ -n "$wall" ]; then
+    echo "DELL GLASS CHECK NOT RUN: set Display & motion to the High effects tier and no wallpaper first"
+    exit 2
+fi
 
 echo "== 1. Home, still"
 keys pgup pgup pgup pgup

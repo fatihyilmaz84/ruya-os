@@ -38,7 +38,7 @@ T-421's glass fix keeps its look at a lower GPU cost on the Dell, and the Perfor
 - From the STATUS Inbox (T-421 and its reviews), planned by lead-9 on 2026-11-10. The Dell is a pure test machine (root `CLAUDE.md`); run a branch shell as T-421 did (its Outcome).
 
 ## Outcome
-Verified: host (vm pending: dell-glass-check)
+Verified: hw (Dell 0.0.64, 2026-11-11, lead-11: `dell-glass-check.sh` PASS on the High tier: still Home 4 ms, Settings 0 ms, picker 0 ms in 10 s; no sharp edge on pages (step 2); in use Home 2047 ms, Settings 1559 ms (T-421: about 40 %), picker 1433 ms in 10 s. The Dell itself is set to the Performance tier: the check now stops with NOT RUN on any other tier or with a wallpaper)
 UX notes: states reached: Settings (Display & motion) on High and on Performance, the profile picker, Home, the Store's app page; nothing about focus or Back changed (asserted: Back from the category list lands on the section nav; the picker keeps `profileList` focus; on Performance the first row keeps focus and the focused row or button shows `focusFill`). Doubt: on Performance the rows are now near-opaque dark bars (`glassOpaque` 90 %), a visibly heavier look than the High tier's glass; that is what §3.6 asks. Seen in the Performance shot: the category list's selected and focused highlight (`selectedFill`/`focusFill`, the gliding highlight) stays translucent over the sharp blobs, as focus fills are on every tier (Inbox).
 
 Builder: Opus 5.5, effort medium, round 1. No Dell access in this round (the lead's 0.0.62 build was running and the Dell is not on it): the GPU numbers are for the lead's `dell-glass-check.sh` run.
