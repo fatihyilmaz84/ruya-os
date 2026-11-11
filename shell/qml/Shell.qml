@@ -163,25 +163,44 @@ FocusScope {
         return appId === "" ? undefined : apps.find(r => appIdOf(r) === appId && appShownTo(r.profile))
     }
 
-    // The application id of a window's app (T-459): that of the running instance its process belongs
-    // to (Session1.InstanceOfPid), else the one the window gives itself, which is not always its
-    // Flatpak id ("python3.12" for a pygame game).
+    // The running instance (Session1 record) a window belongs to, or undefined (T-467): the one its
+    // process belongs to (Session.instanceOfPid, T-459), else the one running the application id the
+    // window gives itself in the window's profile, else the only running app of the signed-in profile
+    // that no other window claims (`unclaimedInstance`: the Hub's pygame or SDL game whose window
+    // names neither its Flatpak id nor a process Session1 can map). Everything about "the game behind
+    // this window" (its app id, whether it is frozen, its Hub header, Resume, Play, Switch to) goes
+    // through it, so they cannot disagree.
+    function instanceOfWindow(record) {
+        if (!record)
+            return undefined
+        if (record.instance !== "")
+            return Session.running.find(r => r.instance === record.instance)
+        const profile = record.profile !== "" ? record.profile : Profiles.activeProfile
+        if (record.appId !== "") {
+            const mine = Session.running.filter(r => r.appId === record.appId && r.profile === profile)
+            const own = mine.find(r => r.state !== "stopping") ?? mine[0]
+            if (own)
+                return own
+        }
+        if (record.pending || !appShownTo(record.profile))
+            return undefined                // the answer may still come; a hidden window is not guessed at
+        const instance = unclaimedInstance(record)
+        return instance !== "" ? Session.running.find(r => r.instance === instance) : undefined
+    }
+
+    // The application id of a window's app (T-459): that of the running instance it belongs to, else
+    // the one the window gives itself, which is not always its Flatpak id ("python3.12" for a pygame game).
     function appIdOf(record) {
         if (!record)
             return ""
-        const run = record.instance !== "" ? Session.running.find(r => r.instance === record.instance) : undefined
+        const run = instanceOfWindow(record)
         return run ? run.appId : record.appId
     }
 
     // An app the Hub froze (or any frozen one) stays frozen until the player resumes it (T-464): it is
     // never the front app by itself, or HubPause would thaw it behind the window that took the screen.
     function appFrozen(record) {
-        if (!record)
-            return false
-        // The running instance of the window: by its process, else by the application id it gives itself.
-        const run = record.instance !== "" ? Session.running.find(r => r.instance === record.instance)
-                  : record.appId !== "" ? Session.running.find(r => r.appId === record.appId && (record.profile === "" || r.profile === record.profile))
-                  : undefined
+        const run = instanceOfWindow(record)
         return run ? (run.frozen === true || hubPause.asked.includes(run.instance)) : false
     }
 
@@ -738,10 +757,11 @@ FocusScope {
     // none, as in tests) the newest of the profile's apps.
     function runningFor(record) {
         const mine = Session.running.filter(r => r.profile === Profiles.activeProfile && r.state !== "stopping")
-        if (record && record.instance !== "")
-            return mine.find(r => r.instance === record.instance)
-        if (record && record.appId !== "")
-            return mine.find(r => r.appId === record.appId)
+        const run = instanceOfWindow(record)
+        if (run)
+            return mine.find(r => r.instance === run.instance)
+        if (record && (record.instance !== "" || record.appId !== ""))
+            return undefined
         return newestRunning()
     }
 
@@ -772,8 +792,27 @@ FocusScope {
                  instance: run ? run.instance : "",
                  frozen: run ? (run.frozen ?? false) : false }
     }
-    readonly property var quickMenuOthers: shownApps.filter(r => r.item !== focusedApp && appIdOf(r) !== "")
-                                                    .map(r => ({ appId: appIdOf(r), title: titleOfApp(appIdOf(r)) }))
+    // The Hub's Switch to rows (T-467): every running app of the signed-in profile except the one in
+    // front (frozen or not, with or without a window yet), then any other window whose app Session1 does
+    // not list (a client of a test). { appId, title, hasWindow }.
+    readonly property var quickMenuOthers: {
+        if (!signedIn)
+            return []
+        const frontRun = quickMenuApp ? quickMenuApp.instance : ""
+        const frontId = quickMenuApp ? quickMenuApp.appId : ""
+        const rows = []
+        for (const run of Session.running) {
+            if (run.profile !== Profiles.activeProfile || run.state === "stopping" || run.instance === frontRun)
+                continue
+            rows.push({ appId: run.appId, title: titleOfApp(run.appId), hasWindow: windowOf(run.appId) !== undefined })
+        }
+        for (const r of shownApps) {
+            const id = appIdOf(r)
+            if (r.item !== focusedApp && id !== "" && id !== frontId && !rows.some(x => x.appId === id))
+                rows.push({ appId: id, title: titleOfApp(id), hasWindow: true })
+        }
+        return rows
+    }
     // The Hub's Recent rows (T-448, 02 §1.6): up to four of `Library.recent` that Session1 can start and
     // that are not running (the running ones are the app header and the Switch to rows); over an app
     // only two, so the tiles stay near the top.
@@ -969,8 +1008,11 @@ FocusScope {
 
     function switchToApp(appId) {
         const record = windowOf(appId)
-        if (record)
-            focusApp(record.item)       // the menu is open: the focus moves when it closes
+        if (!record) {                  // running, but its window has not come (T-467): the Hub stays
+            Notifications.show(qsTr("%1 has no window yet.").arg(Notifications.named(titleOfApp(appId))), "info")
+            return
+        }
+        focusApp(record.item)           // the menu is open: the focus moves when it closes
         systemPanel.open = false
     }
 

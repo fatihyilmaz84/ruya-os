@@ -1496,7 +1496,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>HubPause</name>
     <message>
-        <location filename="../qml/HubPause.qml" line="+98"/>
+        <location filename="../qml/HubPause.qml" line="+123"/>
         <source>Could not resume the game. Open Ruya Hub and choose Resume.</source>
         <translation>Oyun sürdürülemedi. Ruya Hub&apos;ı açıp Devam et&apos;i seçin.</translation>
     </message>
@@ -2298,25 +2298,25 @@ Bu geri alınamaz.</translation>
 <context>
     <name>QuickMenu</name>
     <message>
-        <location filename="../qml/QuickMenu.qml" line="+83"/>
+        <location filename="../qml/QuickMenu.qml" line="+85"/>
         <source>Wi-Fi</source>
         <translation>Wi-Fi</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+258"/>
+        <location line="+268"/>
         <source>Bluetooth</source>
         <translation>Bluetooth</translation>
     </message>
     <message>
-        <location line="-257"/>
-        <location line="+157"/>
-        <location line="+210"/>
+        <location line="-267"/>
+        <location line="+153"/>
+        <location line="+224"/>
         <source>Mute</source>
         <translation>Sessiz</translation>
     </message>
     <message>
-        <location line="-366"/>
+        <location line="-376"/>
         <source>Mute mic</source>
         <translation>Mikrofonu sustur</translation>
     </message>
@@ -2325,31 +2325,31 @@ Bu geri alınamaz.</translation>
         <location line="+4"/>
         <location line="+1"/>
         <location line="+1"/>
-        <location line="+133"/>
+        <location line="+129"/>
         <location line="+13"/>
         <source>Off</source>
         <translation>Kapalı</translation>
     </message>
     <message>
-        <location line="-150"/>
-        <location line="+579"/>
+        <location line="-146"/>
+        <location line="+591"/>
         <source>Not connected</source>
         <translation>Bağlı değil</translation>
     </message>
     <message>
-        <location line="-577"/>
-        <location line="+135"/>
+        <location line="-589"/>
+        <location line="+131"/>
         <location line="+13"/>
         <source>On</source>
         <translation>Açık</translation>
     </message>
     <message>
-        <location line="-127"/>
+        <location line="-123"/>
         <source>Could not change Wi-Fi.</source>
         <translation>Wi-Fi değiştirilemedi.</translation>
     </message>
     <message>
-        <location line="+19"/>
+        <location line="+15"/>
         <source>Could not switch the audio output.</source>
         <translation>Ses çıkışı değiştirilemedi.</translation>
     </message>
@@ -2446,7 +2446,7 @@ Bu geri alınamaz.</translation>
         <translation>Yenileme aralığı</translation>
     </message>
     <message>
-        <location line="+54"/>
+        <location line="+66"/>
         <source>Battery not reported</source>
         <translation>Pil düzeyi bildirilmiyor</translation>
     </message>
@@ -2466,7 +2466,7 @@ Bu geri alınamaz.</translation>
         <translation>Pil %1 %</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+3"/>
         <source>%1 · %2</source>
         <translation>%1 · %2</translation>
     </message>
@@ -2576,18 +2576,18 @@ Bu geri alınamaz.</translation>
         <translation>Oyunu kapat</translation>
     </message>
     <message>
-        <location line="-180"/>
+        <location line="-194"/>
         <source>Volume</source>
         <translation>Ses</translation>
     </message>
     <message>
-        <location line="+181"/>
+        <location line="+195"/>
         <source>Switch profile</source>
         <translation>Profil değiştir</translation>
     </message>
     <message>
-        <location line="-192"/>
-        <location line="+193"/>
+        <location line="-206"/>
+        <location line="+207"/>
         <source>Power</source>
         <translation>Güç</translation>
     </message>
@@ -2619,7 +2619,7 @@ Bu geri alınamaz.</translation>
         <translation>Geri</translation>
     </message>
     <message>
-        <location line="-236"/>
+        <location line="-250"/>
         <source>Output</source>
         <translation>Çıkış</translation>
     </message>
@@ -2634,12 +2634,17 @@ Bu geri alınamaz.</translation>
         <translation>Mikrofonu sustur</translation>
     </message>
     <message>
-        <location line="+234"/>
+        <location line="+249"/>
         <source>Switch to %1</source>
         <translation>%1 uygulamasına geç</translation>
     </message>
     <message>
-        <location line="+143"/>
+        <location line="+0"/>
+        <source>Switch to %1 (no window yet)</source>
+        <translation>%1 uygulamasına geç (henüz pencere yok)</translation>
+    </message>
+    <message>
+        <location line="+144"/>
         <location line="+285"/>
         <source>%1, %2</source>
         <translation>%1, %2</translation>
@@ -2691,9 +2696,9 @@ Bu geri alınamaz.</translation>
         <translation>%1, kapalı</translation>
     </message>
     <message>
-        <location line="-964"/>
+        <location line="-976"/>
         <location line="+1"/>
-        <location line="+872"/>
+        <location line="+884"/>
         <source>Muted</source>
         <translation>Sessiz</translation>
     </message>
@@ -3005,7 +3010,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+540"/>
+        <location filename="../qml/Shell.qml" line="+583"/>
         <source>Could not %1.</source>
         <translation>%1 işlemi yapılamadı.</translation>
     </message>
@@ -3045,7 +3050,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 hâlâ kapanıyor.</translation>
     </message>
     <message>
-        <location line="+229"/>
+        <location line="+249"/>
         <source>Could not close %1.</source>
         <translation>%1 kapatılamadı.</translation>
     </message>
@@ -3060,7 +3065,12 @@ Bu geri alınamaz.</translation>
         <translation>%1 kapanmadı. Çalışmaya devam ederse konsolu yeniden başlatın.</translation>
     </message>
     <message>
-        <location line="+98"/>
+        <location line="+70"/>
+        <source>%1 has no window yet.</source>
+        <translation>%1 henüz bir pencere açmadı.</translation>
+    </message>
+    <message>
+        <location line="+31"/>
         <source>The screen did not answer, so the previous resolution is back.</source>
         <translation>Ekran yanıt vermedi, bu yüzden önceki çözünürlük geri geldi.</translation>
     </message>
@@ -3133,7 +3143,7 @@ Bu geri alınamaz.</translation>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="-1167"/>
+        <location line="-1190"/>
         <source>%1 is already running</source>
         <translation>%1 zaten çalışıyor</translation>
     </message>
@@ -3154,13 +3164,13 @@ Bu geri alınamaz.</translation>
         <translation>%1 beklenmedik şekilde durdu. Tekrar dene.</translation>
     </message>
     <message>
-        <location line="+38"/>
-        <location line="+89"/>
+        <location line="+39"/>
+        <location line="+108"/>
         <source>Running app</source>
         <translation>Çalışan uygulama</translation>
     </message>
     <message>
-        <location line="+1014"/>
+        <location line="+1017"/>
         <source>Sections</source>
         <translation>Bölümler</translation>
     </message>
