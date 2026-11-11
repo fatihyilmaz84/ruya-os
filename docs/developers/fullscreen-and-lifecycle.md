@@ -62,7 +62,7 @@ The freeze is the Linux cgroup freezer (`systemctl freeze` on the game's unit an
 
 *Measured:* a stand-in game (a Python 3 program in a transient systemd user service, fed by a TCP peer outside it) was frozen with `systemctl --user freeze` for 6 s and thawed, on Fedora 44 under WSL, systemd 259, on 2026-11-11. It is not a Flatpak and not a Wayland client, so the Wayland rows are not in it. The freeze call took 0.5 s that run (the machine was busy building an image); the thaw call took 7 ms.
 
-**How long the freeze and the thaw take.** The Hub opens at once and then asks the session service to freeze you: the freeze lands a moment later (in the test above 0.5 s, and the service gives up on each step after 5 s), so your game can run for a few frames under the open Hub before it stops. The thaw is quick (7 ms in the test above; about 200 ms for a large game on the test machine). A key the player presses in that moment waits in your Wayland connection until you run (expected from how sockets work; not checked on the console).
+**How long the freeze and the thaw take.** The Hub opens at once and then asks the session service to freeze you: the freeze lands a moment later (in the test above 0.5 s, and the service gives up on each step after 5 s, an internal limit that may change), so your game can run for a few frames under the open Hub before it stops. The thaw is quick (7 ms in the test above; about 200 ms for a large game on the test machine). A key the player presses in that moment waits in your Wayland connection until you run (expected from how sockets work; not checked on the console).
 
 ### What your game is told
 
@@ -84,7 +84,7 @@ import time
 MAX_STEP = 0.1       # the longest time step the simulation takes, in seconds
 PAUSED_GAP = 1.0     # a gap this long means the console had us frozen
 
-last = time.monotonic()
+last = time.monotonic()     # set this again just before your main loop, so loading is not taken for a pause
 
 def frame_step():
     global last
@@ -103,7 +103,7 @@ When the player chooses "Close game" in Ruya Hub, or the console must stop it, t
 
 1. if your game is frozen (the Hub froze it, or it sat frozen behind Home), **thaws it first**, so that it can handle the signal;
 2. stops the unit and the scope with `systemctl --user stop`: **SIGTERM** to every process of your app;
-3. waits **5 seconds** (`STOP_GRACE`, counted from the moment of the `Stop` call, so the thaw is part of it: about 0.2 s at most in our tests);
+3. waits **5 seconds** (`STOP_GRACE`, counted from the moment of the `Stop` call, so the thaw is part of it: usually well under a second, but a slow thaw of a large game shortens the time you get);
 4. if anything is still running, sends **SIGKILL** to the whole group.
 
 Then it announces `AppExited(instance, app_id, exit_code, reason)` and the shell updates. The `reason`:
