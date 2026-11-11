@@ -311,7 +311,7 @@ function Test-QmlShardRunner {
         Remove-Item Env:\RUYA_QML_TIMEOUT -ErrorAction SilentlyContinue
         $shOk = ($shExit -eq 1) -and ($out -match 'tst_fail: failed .*logs-sh/tst_fail\.txt') -and ($out -match 'tst_crash: crashed or hung .*logs-sh/tst_crash\.txt') `
             -and ($out -match 'tst_hang: crashed or hung .*logs-sh/tst_hang\.txt') -and ($out -notmatch 'tst_ok\d: ') `
-            -and ($out -match 'Totals: 8 passed, 1 failed, 2 skipped in 5 files')
+            -and ($out -match 'Totals: 8 passed, 1 failed, 2 skipped in 4 files')
         if (-not $shOk) { Write-Host "    exit $shExit, output:`n$out" -ForegroundColor Yellow }
         Record "shard runner (sh) self-check (CI's script names a failed, a crashed and a hung file by log; the totals add up)" $shOk
     }

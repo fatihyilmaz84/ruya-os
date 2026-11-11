@@ -40,7 +40,7 @@ bad=$(grep -c '^SHARD FAILED' "$logdir/shards.out")
 elapsed=$(( $(date +%s) - start ))
 
 done_files=$(ls "$logdir"/*.txt 2>/dev/null | wc -l)
-grep -ah '^Totals:' "$logdir"/*.txt | awk -v n="$count" -v s="$shards" -v t="$elapsed" '
+grep -ah '^Totals:' "$logdir"/*.txt | awk -v n="$done_files" -v s="$shards" -v t="$elapsed" '
   { p += $2; f += $4; k += $6 }
   END { printf "Totals: %d passed, %d failed, %d skipped in %d files, %d at a time, %d s\n", p, f, k, n, s, t }'
 if [ "$bad" -ne 0 ] || [ "$done_files" -ne "$count" ]; then
