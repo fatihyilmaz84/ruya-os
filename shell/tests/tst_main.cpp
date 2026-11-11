@@ -60,7 +60,19 @@ public:
     }
 
     Q_PROPERTY(bool fixtureEnabled READ fixtureEnabled CONSTANT)
+    // The motion factor each test starts with (T-463): 0.1, RUYA_TEST_MOTION when it is a number above 0,
+    // 1 under `shots`. tst_test_motion.qml asserts that Theme.motionFactor is this at the start of a test.
+    Q_PROPERTY(qreal testMotion READ testMotion CONSTANT)
 public:
+    qreal testMotion() const
+    {
+        if (!qEnvironmentVariableIsEmpty("RUYA_SHOTS_DIR"))
+            return 1.0;
+        bool ok = false;
+        const qreal factor = qEnvironmentVariable("RUYA_TEST_MOTION", QStringLiteral("0.1")).toDouble(&ok);
+        return (ok && factor > 0) ? factor : 0.1;
+    }
+
     bool fixtureEnabled() const { return qEnvironmentVariableIntValue("RUYA_ACTIVATION_FIXTURE") != 0; }
 
     // For the fixture (tst_window_lost_fixture.qml): behave as if the desktop took the focus and
@@ -114,13 +126,11 @@ private:
     {
         if (!qEnvironmentVariableIsEmpty("RUYA_SHOTS_DIR"))
             return;
-        bool ok = false;
-        const qreal factor = qEnvironmentVariable("RUYA_TEST_MOTION", QStringLiteral("0.1")).toDouble(&ok);
         auto *engine = qobject_cast<QQmlEngine *>(parent());
-        if (!ok || factor <= 0 || !engine)
+        if (!engine)
             return;
         if (QObject *theme = engine->singletonInstance<QObject *>("RuyaShell", "Theme"))
-            theme->setProperty("motionFactor", factor);
+            theme->setProperty("motionFactor", testMotion());
     }
 
     void handleLoss(bool reactivate)
