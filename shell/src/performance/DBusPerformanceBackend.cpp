@@ -55,7 +55,7 @@ void DBusPerformanceBackend::refresh()
         if (reply.type() != QDBusMessage::ReplyMessage || reply.arguments().isEmpty()
             || !reply.arguments().constFirst().canConvert<QDBusArgument>()) {
             qWarning("ruya-shell: Devices1.System GetPerformance failed: %s", qPrintable(reply.errorMessage()));
-            acceptFailure(request);
+            fail(request);
             return;
         }
         deliver(request, parseMetrics(reply.arguments().constFirst().value<QDBusArgument>()));

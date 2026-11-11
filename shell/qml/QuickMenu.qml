@@ -29,10 +29,7 @@ Item {
     // The power choices instead of the actions.
     property bool powerMode: false
     // The panel shown in place of the Quick Hub's content ("" = the Quick Hub itself; T-450, 02 §1.6).
-    // To add a panel: list it in `panelIds` (when it exists), give it keys in `panelKeys`, a title in
-    // `panelTitle`, its entry label in `labelOf` ("panel:<id>") and its rows in `labelOf`, `rowValue`,
-    // `rowChoices`, `rowStep`, `rowActivate`. Rows are keys "<id>:<row>" (the shared "volume" row may also
-    // sit in a panel); nothing else in this file changes.
+    // To add a panel: list it in `panelIds` and give it a table of row descriptors in `panelDef` (below).
     property string panelId: ""
     // 0 -> 1 while the rows change between the Hub and a panel (the cross-fade; a cut under reduced motion).
     property real swap: 1
@@ -133,12 +130,15 @@ Item {
     }
     Connections {
         target: Audio
-        function onInputsChanged() { menu.rebuild() }           // a microphone came or went: the tile and the panel's rows
+        function onInputsChanged() { menu.rebuild(); menu.settleChoices() }   // a microphone came or went: the tile and the panel's rows
+        function onOutputsChanged() { menu.settleChoices() }
         function onSetOutputFinished(id, status) {
+            menu.answerChoice("audio:output", id, status)
             if (menu.open && menu.panelId === "audio" && status !== "ok")
                 Notifications.show(qsTr("Could not switch the audio output."), "warning")
         }
         function onSetInputFinished(id, status) {
+            menu.answerChoice("audio:mic", id, status)
             if (menu.open && menu.panelId === "audio" && status !== "ok")
                 Notifications.show(qsTr("Could not switch the microphone."), "warning")
         }
@@ -203,70 +203,172 @@ Item {
     onRecentChanged: rebuild()
     onTileIdsChanged: rebuild()
     onPowerModeChanged: rebuild()
-    onPanelIdChanged: rebuild()
+    onPanelIdChanged: { pendingChoice = ({}); rebuild() }
 
-    // ---- panels (T-450): a panel replaces the Quick Hub's rows in this same list ---------------------------
+    // The Performance panel asks the service and counts frames only while it is open (T-452).
+    PerformanceConsumer { active: menu.open && menu.panelId === "performance" }
+
+    // ---- panels (T-450, T-452): a panel replaces the Quick Hub's rows in this same list ---------------------
     // The panels that exist, in the order of their entries (02 §1.6); an entry appears only when its panel is built.
-    readonly property var panelIds: ["audio"]
-    function panelKeys(id) {
+    readonly property var panelIds: ["audio", "performance"]
+
+    // A panel is a table of row descriptors (T-452), the one place a row's behaviour is written:
+    //   { key, label, kind: "toggle" | "choice" | "slider" | "info",
+    //     value(): the text at the right (toggle, choice, info),
+    //     dim(): true draws the value in textDim (info, optional),
+    //     activate(): Accept (toggle, slider),
+    //     adjust(delta): Left/Right, delta -1 or +1 (slider),
+    //     choices(): [{ id, name, current }] and select(id) (choice; `async` when the answer comes later) }
+    // The hint bar, the delegate, Accept and Left/Right all derive from `kind`. To add a panel: list it in
+    // `panelIds`, give it a table in `panelDef`; nothing else in this file changes. Keys are "<id>:<row>"
+    // (the shared "volume" row may also sit in a panel). Descriptors are built on demand, so a row that
+    // depends on the hardware (the microphone) is simply not in the table.
+    function panelDef(id) {
         if (id === "audio") {
-            return ["volume", "audio:mute", "audio:output",
-                    ...(Audio.inputs.length > 0 ? ["audio:mic", "audio:micmute"] : [])]
+            return { title: qsTr("Audio"), rows: [
+                volumeRow(),
+                { key: "audio:mute", label: qsTr("Mute"), kind: "toggle",
+                  value: () => Audio.muted ? qsTr("On") : qsTr("Off"),
+                  activate: () => Audio.toggleMute() },
+                { key: "audio:output", label: qsTr("Output"), kind: "choice", async: true,
+                  // an output whose route says "no" is not offered
+                  choices: () => Audio.outputs.filter(o => o.available !== "no").map(o => ({ id: o.id, name: o.name, current: o.isDefault })),
+                  value: () => (Audio.outputs.find(o => o.isDefault) ?? { name: "" }).name,
+                  select: id => Audio.setOutput(id) },
+                ...(Audio.inputs.length > 0 ? [
+                    { key: "audio:mic", label: qsTr("Microphone"), kind: "choice", async: true,
+                      choices: () => Audio.inputs.map(i => ({ id: i.id, name: i.name, current: i.isDefault })),
+                      value: () => (Audio.inputs.find(i => i.isDefault) ?? { name: "" }).name,
+                      select: id => Audio.setInput(id) },
+                    { key: "audio:micmute", label: qsTr("Mute microphone"), kind: "toggle",
+                      value: () => Audio.inputMuted ? qsTr("On") : qsTr("Off"),
+                      activate: () => Audio.toggleInputMute() }
+                ] : [])
+            ] }
         }
-        return []
-    }
-    function panelTitle(id) {
-        return id === "audio" ? qsTr("Audio") : ""
-    }
-    function isPanelRow(key) { return panelId !== "" && key.startsWith(panelId + ":") }
-    // The usable choices of a choice row: [{ id, name, current }], in the service's order (an output whose
-    // route says "no" is not offered). A row with fewer than two has nothing to step through.
-    function rowChoices(key) {
-        if (key === "audio:output")
-            return Audio.outputs.filter(o => o.available !== "no").map(o => ({ id: o.id, name: o.name, current: o.isDefault }))
-        if (key === "audio:mic")
-            return Audio.inputs.map(i => ({ id: i.id, name: i.name, current: i.isDefault }))
-        return []
-    }
-    function isChoiceRow(key) { return key === "audio:output" || key === "audio:mic" }
-    // The text at the right of a panel row.
-    function rowValue(key) {
-        if (key === "audio:mute")
-            return Audio.muted ? qsTr("On") : qsTr("Off")
-        if (key === "audio:micmute")
-            return Audio.inputMuted ? qsTr("On") : qsTr("Off")
-        if (isChoiceRow(key)) {
-            const all = key === "audio:output" ? Audio.outputs : Audio.inputs
-            const now = all.find(o => o.isDefault)
-            return now ? now.name : ""
+        if (id === "performance") {
+            return { title: qsTr("Performance"), rows: [
+                { key: "performance:frames", label: qsTr("Frames"), kind: "info",
+                  value: () => framesText(), dim: () => Performance.frameState === "unsupported" },
+                perfRow("cpu", qsTr("CPU"), ["cpu_percent"], v => percentText(v[0])),
+                perfRow("gpu", qsTr("GPU"), ["gpu_percent"], v => percentText(v[0])),
+                perfRow("ram", qsTr("RAM"), ["ram_used", "ram_total"], v => qsTr("%1 of %2").arg(Storage.formatBytes(v[0])).arg(Storage.formatBytes(v[1]))),
+                perfRow("vram", qsTr("VRAM"), ["vram_used", "vram_total"], v => qsTr("%1 of %2").arg(Storage.formatBytes(v[0])).arg(Storage.formatBytes(v[1]))),
+                perfRow("cputemp", qsTr("CPU temperature"), ["cpu_temp"], v => qsTr("%1 °C").arg(Math.round(v[0]))),
+                perfRow("gputemp", qsTr("GPU temperature"), ["gpu_temp"], v => qsTr("%1 °C").arg(Math.round(v[0]))),
+                perfRow("power", qsTr("Power"), ["power_w"], v => qsTr("%1 W").arg(v[0].toFixed(1))),
+                { key: "performance:interval", label: qsTr("Update every"), kind: "choice",
+                  choices: () => [500, 1000, 2000, 5000].map(ms => ({ id: ms, name: intervalText(ms), current: ms === DeviceSettings.performanceIntervalMs })),
+                  value: () => intervalText(DeviceSettings.performanceIntervalMs),
+                  select: ms => { DeviceSettings.performanceIntervalMs = ms } }
+            ] }
         }
-        return ""
+        return null
     }
-    // Left/Right on a choice row: the next or previous choice is asked to become the default; the row
-    // changes with the service's answer, not before.
-    function rowStep(key, delta) {
-        const options = rowChoices(key)
+    // The Hub's Volume row, also the first row of the Audio panel: Left/Right by 5, Accept mutes.
+    function volumeRow() {
+        return { key: "volume", label: qsTr("Volume"), kind: "slider",
+                 adjust: delta => Audio.stepVolume(5 * delta), activate: () => Audio.toggleMute() }
+    }
+    // The descriptor of a row of the panel now open (or the Volume row anywhere); null for the Hub's other rows.
+    function rowOf(key) {
+        if (key === "volume")
+            return volumeRow()
+        const def = panelId !== "" ? panelDef(panelId) : null
+        return def ? (def.rows.find(r => r.key === key) ?? null) : null
+    }
+    function panelKeys(id) {
+        const def = panelDef(id)
+        return def ? def.rows.map(r => r.key) : []
+    }
+
+    // ---- the Performance panel's texts (02 §1.6) -------------------------------------------------------
+    // One metric (or the pair RAM and VRAM are): the number when measured, else why there is none. "Worst"
+    // state of the names wins: unsupported, then unavailable, then stale. Reads `Performance.metrics`, so the
+    // row follows every answer.
+    function perfState(names) {
+        const all = Performance.metrics
+        let state = "supported"
+        for (const n of names) {
+            const s = all[n] ? all[n].state : "unavailable"
+            if (s === "unsupported")
+                return s
+            if (s === "unavailable")
+                state = s
+            else if (s === "stale" && state === "supported")
+                state = s
+        }
+        return state
+    }
+    function perfRow(name, label, names, format) {
+        return { key: "performance:" + name, label: label, kind: "info",
+                 value: () => {
+                     const state = perfState(names)
+                     if (state === "supported" || state === "stale") {
+                         const text = format(names.map(n => Performance.metrics[n].value))
+                         return state === "stale" ? qsTr("%1 (last reading)").arg(text) : text
+                     }
+                     return state === "unsupported" ? qsTr("Not available on this console") : qsTr("Measuring...")
+                 },
+                 dim: () => perfState(names) === "unsupported" }
+    }
+    function percentText(v) { return qsTr("%1 %").arg(Math.round(v)) }
+    function msText(ms) { return qsTr("%1 ms").arg(ms < 10 ? ms.toFixed(1) : Math.round(ms)) }
+    function intervalText(ms) { return ms === 500 ? qsTr("0.5 s") : qsTr("%1 s").arg(ms / 1000) }
+    function framesText() {
+        switch (Performance.frameState) {
+        case "supported": return qsTr("%1 FPS · %2, slowest %3").arg(Performance.fps).arg(msText(Performance.frameTimeMs)).arg(msText(Performance.frameTimeP99Ms))
+        case "unsupported": return qsTr("Not available on this console")
+        }
+        return qsTr("Measuring...")
+    }
+
+    // ---- choice rows -----------------------------------------------------------------------------------
+    // A choice that asks the service (`async`) changes the row only with the answer, so presses that come
+    // before it would all step from the old value. The target of the last press is kept until the answer
+    // lands (setOutputFinished / setInputFinished, then the list shows it): the next press steps from there.
+    // key -> { target, answered }
+    property var pendingChoice: ({})
+    function answerChoice(key, id, status) {
+        const pending = pendingChoice[key]
+        if (!pending || pending.target !== id)
+            return                       // an older press's answer: the newer one is still on its way
+        if (status !== "ok")
+            delete pendingChoice[key]    // refused: the row shows what the service has
+        else
+            pending.answered = true
+        settleChoices()
+    }
+    function settleChoices() {
+        for (const key of Object.keys(pendingChoice)) {
+            const pending = pendingChoice[key]
+            const row = rowOf(key)
+            const now = row ? row.choices().find(o => o.current) : undefined
+            if (!row || (pending.answered && now && now.id === pending.target))
+                delete pendingChoice[key]
+        }
+    }
+    // Left/Right on a choice row: the next or previous *usable* choice (in the service's order, wrapping).
+    function stepChoice(key, delta) {
+        const row = rowOf(key)
+        if (!row || row.kind !== "choice")
+            return
+        const options = row.choices()
         if (options.length < 2)
             return
-        const at = options.findIndex(o => o.current)
+        const pending = pendingChoice[key]
+        let at = pending ? options.findIndex(o => o.id === pending.target) : -1
+        if (at < 0)
+            at = options.findIndex(o => o.current)
         const next = options[at < 0 ? 0 : (at + delta + options.length) % options.length]
         Sfx.navigate()
-        if (key === "audio:output")
-            Audio.setOutput(next.id)
-        else
-            Audio.setInput(next.id)
-    }
-    function rowActivate(key) {
-        if (key === "audio:mute")
-            Audio.toggleMute()
-        else if (key === "audio:micmute")
-            Audio.toggleInputMute()
-        else if (isChoiceRow(key))
-            rowStep(key, 1)
+        if (row.async)
+            pendingChoice[key] = { target: next.id, answered: false }
+        row.select(next.id)
     }
     function openPanel(id) {
         panelId = id
-        actions.currentIndex = 0               // the panel's first actionable row
+        actions.currentIndex = 0               // the panel's first row
         actions.positionViewAtBeginning()
         swapAnimation.restart()
     }
@@ -277,19 +379,24 @@ Item {
         actions.currentIndex = Math.max(0, itemKeys.indexOf(entry))
         swapAnimation.restart()
     }
-    // What the buttons do on the focused row: the hint bar's list (02 §1.6). Left/Right is named where it works.
+    // What the buttons do on the focused row: the hint bar's list (02 §1.6), derived from the row's kind.
+    // Left/Right is named where it works.
     readonly property var hints: {
         const key = currentKey
         const back = { button: "B", text: powerMode || panelId !== "" ? qsTr("Back") : (hasApp ? qsTr("Resume") : qsTr("Close")) }
         if (powerMode)
             return [{ button: "A", text: qsTr("Select") }, back]
-        if (key === "volume")
-            return [{ button: "A", text: qsTr("Mute") }, { button: "Left/Right", text: qsTr("Adjust") }, back]
-        if (isChoiceRow(key)) {
-            return rowChoices(key).length < 2 ? [back]
-                   : [{ button: "A", text: qsTr("Next") }, { button: "Left/Right", text: qsTr("Change") }, back]
+        const row = rowOf(key)
+        if (row) {
+            switch (row.kind) {
+            case "slider": return [{ button: "A", text: qsTr("Mute") }, { button: "Left/Right", text: qsTr("Adjust") }, back]
+            case "choice": return row.choices().length < 2 ? [back]
+                                  : [{ button: "A", text: qsTr("Next") }, { button: "Left/Right", text: qsTr("Change") }, back]
+            case "toggle": return [{ button: "A", text: qsTr("Toggle") }, back]
+            }
+            return [back]               // info: nothing to press
         }
-        if (key === "audio:mute" || key === "audio:micmute" || key.startsWith("tiles:"))
+        if (key.startsWith("tiles:"))
             return [{ button: "A", text: qsTr("Toggle") }, back]
         if (key.startsWith("recent:"))
             return [{ button: "A", text: qsTr("Start") }, back]
@@ -297,11 +404,13 @@ Item {
     }
 
     function labelOf(key) {
+        const row = rowOf(key)
+        if (row)
+            return row.label
         switch (key) {
         case "resume": return qsTr("Resume")
         case "home": return qsTr("Home")
         case "closeGame": return qsTr("Close game")
-        case "volume": return qsTr("Volume")
         case "switch": return qsTr("Switch profile")
         case "power": return qsTr("Power")
         case "close": return qsTr("Close")
@@ -309,11 +418,10 @@ Item {
         case "restart": return qsTr("Restart")
         case "poweroff": return qsTr("Power off")
         case "back": return qsTr("Back")
-        case "panel:audio": return qsTr("Audio")
-        case "audio:mute": return qsTr("Mute")
-        case "audio:output": return qsTr("Output")
-        case "audio:mic": return qsTr("Microphone")
-        case "audio:micmute": return qsTr("Mute microphone")
+        }
+        if (key.startsWith("panel:")) {
+            const def = panelDef(key.substring(6))
+            return def ? def.title : key.substring(6)
         }
         if (key.startsWith("to:")) {
             const found = others.find(o => o.appId === key.substring(3))
@@ -348,6 +456,9 @@ Item {
     }
 
     function activate(key) {
+        const row = rowOf(key)
+        if (row && row.kind === "info")
+            return                          // read-only: Accept does nothing
         Sfx.select()
         if (key === "resume" || key === "close") {
             menu.closeRequested()
@@ -362,12 +473,13 @@ Item {
         } else if (key.startsWith("tiles:")) {
             const line = parseInt(key.substring(6))
             toggleTile(tileLine(line)[tileColIn(line)])
-        } else if (key === "volume") {
-            Audio.toggleMute()
+        } else if (row) {
+            if (row.kind === "choice")
+                stepChoice(key, 1)
+            else
+                row.activate()
         } else if (key.startsWith("panel:")) {
             openPanel(key.substring(6))
-        } else if (isPanelRow(key)) {
-            rowActivate(key)
         } else if (key === "switch") {
             menu.switchProfileRequested()
         } else if (key === "power") {
@@ -622,7 +734,7 @@ Item {
                         objectName: "hubPanelTitle"
                         width: parent.width
                         textFormat: Text.PlainText
-                        text: menu.panelTitle(menu.panelId)
+                        text: menu.panelId !== "" ? (menu.panelDef(menu.panelId)?.title ?? "") : ""
                         color: Theme.text
                         font.pixelSize: Theme.typeTitle * menu.u
                         font.weight: Theme.weightDemiBold
@@ -685,16 +797,17 @@ Item {
                             // Accepting every key (below) also skips the list's own key navigation, so
                             // Up/Down are handled here.
                             const key = menu.itemKeys[currentIndex]
+                            const row = menu.rowOf(key)
                             const sideways = event.key === Qt.Key_Left || event.key === Qt.Key_Right
                             const toRight = event.key === (actions.LayoutMirroring.enabled ? Qt.Key_Left : Qt.Key_Right)
                             if (event.key === Qt.Key_Down) {
                                 incrementCurrentIndex()
                             } else if (event.key === Qt.Key_Up) {
                                 decrementCurrentIndex()
-                            } else if (key === "volume" && sideways) {
-                                Audio.stepVolume(toRight ? 5 : -5)
-                            } else if (menu.isChoiceRow(key) && sideways) {
-                                menu.rowStep(key, toRight ? 1 : -1)
+                            } else if (row && row.kind === "slider" && sideways) {
+                                row.adjust(toRight ? 1 : -1)
+                            } else if (row && row.kind === "choice" && sideways) {
+                                menu.stepChoice(key, toRight ? 1 : -1)
                             } else if (key && key.startsWith("tiles:") && sideways) {
                                 const line = parseInt(key.substring(6))
                                 const at = menu.tileColIn(line)
@@ -725,9 +838,12 @@ Item {
                             readonly property bool isVolume: modelData === "volume"
                             readonly property bool isRecent: modelData.startsWith("recent:")
                             readonly property bool isTiles: modelData.startsWith("tiles:")
-                            readonly property bool isPanelRow: menu.isPanelRow(modelData)
-                            readonly property bool isChoice: menu.isChoiceRow(modelData)
-                            readonly property string rowText: isPanelRow ? menu.rowValue(modelData) : ""
+                            // The row's descriptor (a panel's rows and the Volume row; null for the Hub's other rows).
+                            readonly property var row: menu.rowOf(modelData)
+                            readonly property bool isPanelRow: row !== null && !isVolume
+                            readonly property bool isChoice: row !== null && row.kind === "choice"
+                            readonly property string rowText: isPanelRow && row.value ? row.value() : ""
+                            readonly property bool rowDim: isPanelRow && row.dim ? row.dim() : false
                             readonly property int line: isTiles ? parseInt(modelData.substring(6)) : 0
                             readonly property string label: menu.labelOf(modelData)
                             readonly property var game: isRecent ? menu.recent.find(r => r.id === modelData.substring(7)) : undefined
@@ -813,7 +929,7 @@ Item {
                                 visible: action.isPanelRow
                                 anchors { right: parent.right; rightMargin: Theme.spaceL * menu.u; verticalCenter: parent.verticalCenter }
                                 spacing: Theme.spaceXs * menu.u
-                                readonly property bool arrows: action.isChoice && menu.rowChoices(action.modelData).length > 1
+                                readonly property bool arrows: action.isChoice && action.row.choices().length > 1
                                 // What the label leaves, less a little slack (the two arrows differ in width by a pixel): a device's name
                                 // elides before the label does.
                                 readonly property real room: action.width - 2 * Theme.spaceL * menu.u - Theme.spaceM * menu.u - Theme.spaceXs * menu.u - itemLabel.implicitWidth
@@ -826,10 +942,11 @@ Item {
                                 }
                                 Text {
                                     id: valueName
+                                    objectName: "hubValueText"
                                     width: Math.min(implicitWidth, panelValue.room - (panelValue.arrows ? 2 * (leftArrow.implicitWidth + panelValue.spacing) : 0))
                                     textFormat: Text.PlainText      // a device's name comes from outside
                                     text: action.rowText
-                                    color: Theme.text
+                                    color: action.rowDim ? Theme.textDim : Theme.text
                                     font.pixelSize: Theme.typeBody * menu.u
                                     elide: Text.ElideRight
                                 }

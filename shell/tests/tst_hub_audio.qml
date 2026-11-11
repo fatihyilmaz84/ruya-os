@@ -263,6 +263,30 @@ Item {
             tryCompare(Audio, "defaultSink", "usb-headset")
         }
 
+        // Presses that come before the service has answered step on from the last target, not from the
+        // old default (T-450 review, T-452).
+        function test_presses_before_the_answer_step_from_the_pending_target() {
+            start()
+            openAudio()
+            goTo("audio:output")
+            verify(Audio.mockPlug("usb-headset"))
+            tryCompare(Audio, "defaultSink", "usb-headset")
+            tryVerify(() => rowValue("audio:output") === "Output, USB headset")
+            const menu = find("systemPanel")
+            const ids = Audio.outputs.filter(o => o.available !== "no").map(o => o.id)
+            compare(ids.length, 3)
+            const at = ids.indexOf("usb-headset")
+            // Two steps in one go (no turn of the event loop between them).
+            menu.stepChoice("audio:output", 1)
+            menu.stepChoice("audio:output", 1)
+            tryCompare(Audio, "defaultSink", ids[(at + 2) % 3], 2000, "the second press went on from the first target")
+            tryVerify(() => rowValue("audio:output") === "Output, " + Audio.outputs.find(o => o.id === ids[(at + 2) % 3]).name)
+            // The answers have landed: the next press steps from what the row shows.
+            tryVerify(() => Object.keys(menu.pendingChoice).length === 0, 2000, "nothing is pending any more")
+            menu.stepChoice("audio:output", -1)
+            tryCompare(Audio, "defaultSink", ids[(at + 1) % 3])
+        }
+
         function test_a_refused_output_change_toasts_and_keeps_the_row() {
             start()
             openAudio()

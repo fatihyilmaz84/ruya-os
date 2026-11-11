@@ -37,6 +37,7 @@ void MockPerformanceBackend::reset()
         { QStringLiteral("power_w"), metric(Stale, 18.4) },
     };
     m_first = true;
+    m_failing = false;
 }
 
 void MockPerformanceBackend::setMetric(const QString &name, const QString &state, double value)
@@ -58,10 +59,15 @@ void MockPerformanceBackend::refresh()
 {
     const quint64 request = beginRequest();
     const QVariantMap reply = current();
-    m_first = false;
+    const bool failing = m_failing;
+    if (!failing)
+        m_first = false;
     ++m_pending;
-    QTimer::singleShot(m_delay, this, [this, request, reply] {
+    QTimer::singleShot(m_delay, this, [this, request, reply, failing] {
         --m_pending;
-        deliver(request, reply);
+        if (failing)
+            fail(request);
+        else
+            deliver(request, reply);
     });
 }

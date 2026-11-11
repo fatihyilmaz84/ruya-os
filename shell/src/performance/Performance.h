@@ -36,6 +36,10 @@ class Performance : public QObject
     // XML); empty until the first reply. stateOf()/valueOf() answer for a name not (yet) there.
     Q_PROPERTY(QVariantMap metrics READ metrics NOTIFY metricsChanged)
     Q_PROPERTY(bool valid READ valid NOTIFY metricsChanged)
+    // The metrics are from the newest answer. False after a failed request and from the moment a
+    // consumer opens after idle until the first fresh answer: the held entries then say
+    // "unavailable" (value 0) instead of showing old numbers as live (T-452). "unsupported" stays.
+    Q_PROPERTY(bool fresh READ fresh NOTIFY metricsChanged)
     Q_PROPERTY(bool mock READ isMock CONSTANT)
     Q_PROPERTY(int consumers READ consumers NOTIFY consumersChanged)
     // The service is being asked (a consumer is open).
@@ -71,6 +75,7 @@ public:
 
     QVariantMap metrics() const { return m_metrics; }
     bool valid() const { return m_valid; }
+    bool fresh() const { return m_fresh; }
     bool isMock() const { return m_backend->isMock(); }
     int consumers() const { return m_consumers; }
     bool polling() const { return m_consumers > 0; }
@@ -107,6 +112,8 @@ public:
     Q_INVOKABLE void mockSet(const QString &name, const QString &state, double value);
     Q_INVOKABLE void mockReset();
     Q_INVOKABLE void mockReplyDelay(int ms);
+    // Every request fails until switched off (the service does not answer).
+    Q_INVOKABLE void mockFail(bool on);
     Q_INVOKABLE int mockPendingReplies() const;
     // The frame meter's clock in ms (a test clock); negative: the real clock again.
     Q_INVOKABLE void fakeFrameClockMs(double ms);
@@ -123,12 +130,14 @@ signals:
 
 private:
     void apply(const QVariantMap &metrics);
+    void markUnavailable();
     void poll();
     void setRunning();
 
     std::unique_ptr<PerformanceBackend> m_backend;
     QVariantMap m_metrics;
     bool m_valid = false;
+    bool m_fresh = false;
     int m_consumers = 0;
     int m_pollCount = 0;
     int m_intervalMs = 1000;

@@ -19,11 +19,18 @@ public:
 
 signals:
     void sampled(const QVariantMap &metrics);
+    // The newest request failed (the service did not answer or answered an error): the numbers
+    // held from earlier are no longer live (T-452).
+    void failed();
 
 protected:
-    // Replies can arrive out of order (RequestSequence.h); a failed request counts as an outcome.
+    // Replies can arrive out of order (RequestSequence.h); a failed request counts as an outcome (and says `failed`).
     quint64 beginRequest() { return m_seq.begin(); }
-    void acceptFailure(quint64 request) { m_seq.accept(request); }
+    void fail(quint64 request)
+    {
+        if (m_seq.accept(request))
+            emit failed();
+    }
     void deliver(quint64 request, const QVariantMap &metrics)
     {
         if (m_seq.accept(request))
