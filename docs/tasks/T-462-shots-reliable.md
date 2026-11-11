@@ -1,6 +1,6 @@
 # T-462 — `shots` you can run once: refuse a sleeping display, fix the two flaky screenshot tests
 
-Status: todo · Phase: 2 · Depends: — · Area: scripts (dev.ps1), shell (tests) · Size: S · Owner: builder · Complexity: normal · Developer surface: none
+Status: in-progress · Phase: 2 · Depends: — · Area: scripts (dev.ps1), shell (tests) · Size: S · Owner: builder · Complexity: normal · Developer surface: none
 
 ## Goal
 One `dev.ps1 shots` run is enough evidence (owner, 2026-11-10: the review process took too long; builders re-ran `shots` 3 to 9 times per task).
