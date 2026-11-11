@@ -412,6 +412,7 @@ Item {
             grabImage(tc.shell).save(shotsDir + "/hub-controllers-3-settings.png")
             // None connected.
             Batteries.mockClear()
+            Bluetooth.mockGamepad(false, "usb-1", "Xbox Controller", "xbox", "usb")
             Bluetooth.disconnectDevice("AA:00:00:00:00:04")
             Bluetooth.disconnectDevice("AA:00:00:00:00:05")
             tryVerify(() => find("systemPanel").itemKeys.indexOf("controllers:none") === 0, 2000)
