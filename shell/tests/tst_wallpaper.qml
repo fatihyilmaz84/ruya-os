@@ -97,12 +97,22 @@ Item {
             tryVerify(() => find("rowQuality").activeFocus, 2000, "first row takes focus")
         }
 
+        // The blurred copy of the wallpaper (if there is one) has finished fading to where the page wants it.
+        function blurSettled() {
+            const blur = find("wallpaperBlur")
+            return !blur || blur.opacity === (find("wallpaperLayer").blurred ? 1 : 0)
+        }
+
         // Settings -> Display & motion -> the Wallpaper row -> Accept: the picker, on the current tile.
         function openPicker() {
             openSettingsDisplay()
             for (let i = 0; i < 4; ++i)
                 keyClick(Qt.Key_Down)                    // Quality, Motion, Screen edge, Theme (T-209), Wallpaper
             verify(find("rowWallpaper").activeFocus, "the Wallpaper row")
+            // T-462: the sheet captures L0 once, when the picker opens. Opened while the page's blur is
+            // still fading in (pageMs), the capture holds a half-blurred L0 (a few levels off, a different
+            // amount each run) and a later opening, on a settled page, differs from it.
+            tryVerify(() => blurSettled(), 3000, "the page's blur of the wallpaper has settled")
             keyClick(Qt.Key_Return)
             tryVerify(() => find("wallpaperPicker").shown)
             verify(find("wallpaperGrid").activeFocus, "the grid takes focus")

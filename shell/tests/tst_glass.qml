@@ -341,6 +341,20 @@ Item {
         function glareOf(card) { return findChild(card, "cardFocusLayers") }
         function glareAnim(card) { return findChild(card, "glareAnimation") }
 
+        // T-462: the pulse dip lasts 70 ms, so polling for it (every 50 ms) missed it about one run in
+        // nine. Instead the art's own scale change is the sensor: the first value under 0.96 counts
+        // (`pulseDips`) and holds the animation there for the screenshot. A tick that jumps past the
+        // dip still writes the segment's end value (0.94) before the next segment starts.
+        property var pulseAnim: null
+        property int pulseDips: 0
+        function onPulseScale() {
+            if (pulseAnim && pulseDips === 0 && pulseAnim.running && pulseArtItem.scale < 0.96) {
+                pulseDips = 1
+                pulseAnim.pause()
+            }
+        }
+        property Item pulseArtItem: null
+
         function test_card_focus_shows_lift_sheen_and_glare() {
             const card = createTemporaryObject(cardComponent, host)
             const fx = glareOf(card)
@@ -514,11 +528,19 @@ Item {
             wait(200)
             grabImage(stage).save(shotsDir + "/glass-card-focus.png")
             // Mid-pulse: the art is smaller than the card; no black frame may show around it.
-            right.pulse()
             const rightArt = findChild(right, "artMonogram").parent
-            tryVerify(() => rightArt.scale < 0.96, 2000)
+            pulseArtItem = rightArt
+            pulseAnim = findChild(right, "pulseAnimation")
+            pulseDips = 0
+            rightArt.scaleChanged.connect(onPulseScale)
+            right.pulse()
+            tryCompare(this, "pulseDips", 1, 2000, "the art dipped under 0.96")
+            verify(pulseAnim.paused, "held at the dip for the picture")
             grabImage(stage).save(shotsDir + "/glass-card-pulse.png")
+            rightArt.scaleChanged.disconnect(onPulseScale)
+            pulseAnim.resume()
             tryCompare(rightArt, "scale", 1, 2000)
+            pulseAnim = null
             left.destroy()
             right.destroy()
 
