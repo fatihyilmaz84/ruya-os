@@ -9,7 +9,7 @@ For people who make games and apps for RuyaOS, a living-room console OS: control
 | [Getting started](getting-started.md): your first game as a Flatpak, built, installed on a RuyaOS dev machine and seen in the Games row | **written** (2026-11-06) | the Play button and the game window: T-147, T-164 |
 | [AppStream metadata](appstream-metadata.md): name, art, categories, content rating (age), controller support, the `x-ruya-*` keys | **written** (2026-11-06) | age limits: T-211; `x-ruya-launch-mode`, `x-ruya-save-paths`: not read yet |
 | [Controller input](controller-input.md): what your game receives, the Guide button, hot-plug, Steam Input | **written** (2026-11-06) | pad access for profile games, InputPlumber: B-006 |
-| [Full screen and lifecycle](fullscreen-and-lifecycle.md): how your game starts, loses focus and stops; screens for the sofa | **written** (2026-11-06) | display for profile apps: T-164; quick menu: T-147; profile switch: T-165 |
+| [Full screen and lifecycle](fullscreen-and-lifecycle.md): how your game starts, is paused by Ruya Hub (frozen), stops; screens for the sofa | **written** (2026-11-06) | display for profile apps: T-164; quick menu: T-147; profile switch: T-165 |
 | [Saves and data](saves-and-data.md): where to write saves, save states, settings and caches; atomic writes; what happens on SIGTERM; what the console backs up | **written** (2026-11-06) | backup and restore: T-215 |
 | [Permissions and sandbox rules](permissions-and-sandbox.md): what the Store shows to players, what is high risk, portals | **written** (2026-11-06) | portal backend for file dialogs: not started |
 | [What the console records about your game](play-time.md): the per-profile play history (times and the exit reason only), what counts as play time | **written** (2026-11-07) | parental limits: T-211; Steam's own play time: later |
@@ -29,5 +29,6 @@ Everything here is open source (docs: CC-BY-4.0). Found something wrong or missi
 - **Format:** Flatpak only. The console installs apps system-wide; the **data is per profile** (each profile is a Unix user).
 - **Run:** the shell starts your app as the profile's user in its own systemd unit, full screen (the window and Play are not built yet: see above). The Guide button is the player's way back; your app does not draw a home button.
 - **Stop:** the console sends `SIGTERM`, waits **5 seconds**, then `SIGKILL`. Save and exit within that time.
+- **Pause:** when the player opens Ruya Hub (the Guide button) your game is **frozen**, not asked to pause, and can stay frozen behind Home for a long time. No event is promised: detect the gap from the clock, clamp your time step and re-check your network ([Full screen and lifecycle](fullscreen-and-lifecycle.md)).
 - **Input:** controllers first; keyboard and mouse work too. Do not assume a keyboard.
 - **Data:** `~/.var/app/<your-app-id>/` as seen by your app through the XDG variables (`$XDG_DATA_HOME`, `$XDG_CONFIG_HOME`, `$XDG_CACHE_HOME`). See [Saves and data](saves-and-data.md).

@@ -76,6 +76,15 @@ Test these before you publish; each takes a minute. (The sample's `scripts/vm-sa
 5. **Uninstall and reinstall**: with "keep data" (the default) the save is still there; the Store does it with `Uninstall(id, false)`.
 6. **No audio device, no controller, no network** (when you do not ask for it): the game starts and plays.
 7. **A second profile**: it starts with an empty save of its own; the first profile's save is unchanged.
+8. **Freeze it, as Ruya Hub does.** Opening the Hub freezes your game; the same call is available from a root shell on a dev machine (only root and the shell may call it, and the profile must be the signed-in one; it is the console's own call, not something your game uses). Take the instance from `ListRunning`:
+
+```sh
+busctl --system call org.ruyaos.Session1 /org/ruyaos/Session1 org.ruyaos.Session1 Freeze s ruya-app-ruya-p1-org.example.Game.service
+sleep 600   # ten minutes; also try 10 seconds
+busctl --system call org.ruyaos.Session1 /org/ruyaos/Session1 org.ruyaos.Session1 Thaw s ruya-app-ruya-p1-org.example.Game.service
+```
+
+   Then check what [Full screen and lifecycle](fullscreen-and-lifecycle.md) asks: nothing teleports or fast-forwards, your pause menu or reconnect runs, the online session recovers, and `Stop` on a frozen game (the service thaws it first) still ends in a save and exit status 0 within 5 seconds.
 
 ## Headless testing
 
@@ -112,6 +121,7 @@ Engines have headless modes too (`--headless` in Godot). The sample game has `ma
 - [ ] The game runs from a clean install on a dev machine, for a profile, through `Session1`.
 - [ ] You sent it `SIGTERM` the way the console does and it saved and exited with status 0 in a second or two.
 - [ ] You killed it during a save and the next start loaded the previous save.
+- [ ] You froze it for 10 seconds and for 10 minutes and thawed it, and it resumed sanely (clamped time, network checked).
 - [ ] A damaged newest save falls back to the `.bak`.
 - [ ] It runs with no audio device and with no controller, and starts headless for your own tests.
 - [ ] You looked at the unit's log and it says nothing alarming.

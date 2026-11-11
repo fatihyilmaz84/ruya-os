@@ -155,7 +155,7 @@ The format the sample writes is a text file with a version line and a CRC-32 on 
 
 ## Stopping: you have five seconds
 
-When the player closes the game from the Guide overlay (planned: T-147), or the console has to stop it (time limits: planned, T-211), the console asks your app to stop:
+When the player chooses Close game in Ruya Hub, or the console has to stop it (time limits: planned, T-211), the console asks your app to stop:
 
 1. It sends `SIGTERM` to every process of your app (the unit and the sandbox's scope).
 2. It waits **5 seconds**.

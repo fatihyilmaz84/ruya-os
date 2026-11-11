@@ -30,7 +30,7 @@ Durations come from the monotonic clock, so a clock change (the console sets its
 - **Do not build your own play-time tracker for the console's sake.** The player already has one; yours would count differently and the two would disagree.
 - **A launcher counts as one game.** If your app starts other games (a Steam-style launcher), the time counts for your launcher; the console cannot see inside it (reading the launcher's own play time is planned).
 - **Exit cleanly.** A `SIGTERM` that you answer with exit status 0 within 5 seconds is a `quit`; a crash is a `crashed` and shows up in the player's history as such. See [Full screen and lifecycle](fullscreen-and-lifecycle.md).
-- **Pause when you lose focus.** Time stops counting when your game is no longer in front, so a game that keeps running in the background is not "played".
+- **Pause when you lose focus.** Time stops counting when your game is no longer in front, and while Ruya Hub is open over it, so a game that keeps running in the background is not "played". (By default the console also freezes a game under the Hub or behind Home: [Full screen and lifecycle](fullscreen-and-lifecycle.md).)
 
 ## Sources
 

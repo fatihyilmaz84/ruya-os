@@ -9,7 +9,7 @@ A console game is played with a controller from the sofa. This chapter says what
 1. **Use SDL's gamepad API** (or the engine's, which wraps it): it knows hundreds of controllers, gives you the same button names for all of them (`SOUTH` is A on an Xbox pad and Cross on a PlayStation pad) and tells you when a pad is plugged in or unplugged.
 2. **Support hot-plug.** The player turns a controller on after the game started, and a Bluetooth pad sleeps and reconnects. Open a pad when it is added, close it when it is removed, never assume pad 0 exists.
 3. **A controller must be enough.** Menus, dialogs and the first start included. Keyboard and mouse are a fallback; do not assume a keyboard is attached ([Full screen and lifecycle](fullscreen-and-lifecycle.md) has the menu rules).
-4. **Never use the Guide button** (the logo button in the middle: Xbox, PlayStation, Home). It belongs to the console: it opens the console's overlay. Do not bind it, do not show "press Guide" hints.
+4. **Never use the Guide button** (the logo button in the middle: Xbox, PlayStation, Home). It belongs to the console: it opens Ruya Hub, which freezes your game ([Full screen and lifecycle](fullscreen-and-lifecycle.md)). Do not bind it, do not show "press Guide" hints.
 5. **Use a dead zone** (about 20 %) on sticks, and let the D-pad do the same job as the left stick in menus.
 6. **When a controller is connected, ignore the keyboard for gameplay** (see "What is built" for why). Keep keyboard and mouse for when there is no pad.
 7. **Do not quit on Esc or Back.** On the console the B button also arrives as the Esc key. Leaving a game is the Guide's job; handle `SDL_EVENT_QUIT` and `SIGTERM` ([Full screen and lifecycle](fullscreen-and-lifecycle.md)).
@@ -74,7 +74,7 @@ What this means for a game, **until InputPlumber replaces the daemon (planned, B
 
 - **Every pad press can reach your window twice**: as the pad's own events and as a key press. If you read both, a held stick moves the player twice as fast and A fires twice. Read the pad when there is one (rule 6).
 - **B arrives as Esc** (rule 7).
-- **The Guide key never reaches you as a key.** The shell's `KeyRouter` takes it first while an app is in front (the shell's own overlay opens; the app gets nothing while the overlay is open and receives input again when it closes). The real pad still reports its Guide button through evdev, because nothing grabs it yet: ignore it.
+- **The Guide key never reaches you as a key.** The shell's `KeyRouter` takes it first while an app is in front (Ruya Hub opens and, by default, freezes the app; the app gets nothing while the Hub is open and receives input again when it closes). The real pad still reports its Guide button through evdev, because nothing grabs it yet: ignore it.
 
 ## What is built, and what is not
 
