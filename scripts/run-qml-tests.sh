@@ -34,7 +34,9 @@ export EXE="$exe" LOGDIR="$logdir"
 files=$(ls -S "$testdir"/tst_*.qml)
 count=$(echo "$files" | wc -l)
 start=$(date +%s)
-bad=$(echo "$files" | xargs -P "$shards" -I{} bash -c 'run_one {}' | tee /dev/stderr | grep -c '^SHARD FAILED')
+echo "$files" | xargs -P "$shards" -I{} bash -c 'run_one {}' > "$logdir/shards.out"
+cat "$logdir/shards.out"
+bad=$(grep -c '^SHARD FAILED' "$logdir/shards.out")
 elapsed=$(( $(date +%s) - start ))
 
 done_files=$(ls "$logdir"/*.txt 2>/dev/null | wc -l)
