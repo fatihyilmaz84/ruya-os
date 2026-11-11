@@ -1,5 +1,8 @@
 #include "DeviceSettings.h"
 
+#include <cstdlib>
+
+#include <QEventLoop>
 #include <QFontDatabase>
 #include <QImage>
 #include <QLinearGradient>
@@ -275,6 +278,29 @@ public:
     }
 
 public slots:
+    // `dev.ps1 shots` asks first whether a window presents frames at all (T-462): with the display
+    // asleep `frameSwapped` never fires and every test that waits on a frame fails for no code
+    // reason. RUYA_PROBE_FRAMES=1 shows one small window, waits up to 2 s for a swapped frame and
+    // exits 0 (frames) or 3 (none) without running a test. RUYA_PROBE_NO_FRAMES=1 never shows the
+    // window, which is how the script's "asleep" path is exercised on an awake desktop.
+    void applicationAvailable()
+    {
+        if (qEnvironmentVariable("RUYA_PROBE_FRAMES") != QLatin1String("1"))
+            return;
+        QQuickWindow window;
+        window.setColor(Qt::darkBlue);
+        window.resize(200, 200);
+        bool presented = false;
+        QEventLoop loop;
+        connect(&window, &QQuickWindow::frameSwapped, &loop, [&] { presented = true; loop.quit(); });
+        QTimer::singleShot(2000, &loop, &QEventLoop::quit);
+        if (qEnvironmentVariable("RUYA_PROBE_NO_FRAMES") != QLatin1String("1"))
+            window.show();
+        loop.exec();
+        window.hide();
+        std::exit(presented ? 0 : 3);
+    }
+
     void qmlEngineAvailable(QQmlEngine *engine)
     {
         // The icon fonts, as main.cpp loads them. Setup is constructed before the

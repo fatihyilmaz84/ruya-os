@@ -18,7 +18,10 @@ param(
     [string]$Command = "test",
     # qml only: test files of shell\tests by name (tst_themes, tst_themes.qml; several, or comma-separated).
     [Parameter(Position = 1, ValueFromRemainingArguments = $true)]
-    [string[]]$Tests = @()
+    [string[]]$Tests = @(),
+    # shots only, for the self-test of the sleeping-display stop: the probe window is never shown, as on
+    # a display that is asleep, so the probe must see no frames and `shots` must stop with exit 1.
+    [switch]$NoFramesProbe
 )
 
 # Native tools write progress to stderr; never let PowerShell turn that into errors.
@@ -66,6 +69,26 @@ function Test-SessionLocked {
 function Stop-SessionLocked {
     Write-Host "    The Windows session is locked: real windows can't render. Unlock it and re-run shots." -ForegroundColor Red
     Record "shots (session locked)" $false
+}
+
+# A sleeping display presents no frames (T-460/T-462): `frameSwapped` never fires and the tests that wait
+# on a frame fail for no code reason. The test runner shows one small window and waits 2 s for a frame
+# (RUYA_PROBE_FRAMES, tst_main.cpp). True when the window presented one.
+function Test-DisplayPresentsFrames([switch]$NoFrames, [switch]$Offscreen) {
+    $exe = Join-Path $ShellBuild "Release\tst_ruyashell.exe"
+    $env:RUYA_PROBE_FRAMES = "1"
+    if ($NoFrames) { $env:RUYA_PROBE_NO_FRAMES = "1" }
+    if ($Offscreen) { $env:QT_QPA_PLATFORM = "offscreen" } else { $env:QSG_RENDER_LOOP = "basic" }
+    try {
+        & $exe | Out-Null
+        return ($LASTEXITCODE -eq 0)
+    } finally {
+        Remove-Item Env:\RUYA_PROBE_FRAMES, Env:\RUYA_PROBE_NO_FRAMES, Env:\QSG_RENDER_LOOP, Env:\QT_QPA_PLATFORM -ErrorAction SilentlyContinue
+    }
+}
+function Stop-DisplayAsleep {
+    Write-Host "    The display is asleep: wake it and run shots again." -ForegroundColor Red
+    Record "shots (display asleep)" $false
 }
 
 function Invoke-Native([string]$Name, [scriptblock]$Block) {
@@ -624,6 +647,10 @@ function Do-Shell {
     Step "qmllint (module context)"
     # --max-warnings 0: without it qmllint exits 0 even when it reports warnings.
     Invoke-Native "qmllint" { qmllint --max-warnings 0 "@$ShellBuild\.rcc\qmllint\ruyashell.rsp" }
+    # T-462: the probe path of `shots` (a window that presents no frames stops it), without a display:
+    # the window is never shown, so the probe must report "no frames" even though offscreen draws.
+    Step "Display probe self-check (no frames -> asleep)"
+    Record "display probe self-check (a window that presents no frames is reported)" (-not (Test-DisplayPresentsFrames -NoFrames -Offscreen))
     Step "Qt Quick tests (offscreen)"
     Run-QmlTests $null
 }
@@ -719,12 +746,15 @@ switch ($Command) {
             } catch [System.Threading.AbandonedMutexException] { $got = $true }
             if (-not $got) { Stop-SessionLocked } else {
                 try {
-                    # Start empty: a screenshot no test writes any more must not be reviewed as current.
-                    Remove-Item (Join-Path $Repo "output\shell-shots\*.png") -ErrorAction SilentlyContinue
-                    Step "Qt Quick tests with screenshots"
-                    Run-QmlTests (Join-Path $Repo "output\shell-shots")
-                    Save-ReviewCopies (Join-Path $Repo "output\shell-shots")
-                    Write-Host "    screenshots: $(Join-Path $Repo 'output\shell-shots') (half size for review: review\)"
+                    Step "Display presents frames?"
+                    if (-not (Test-DisplayPresentsFrames -NoFrames:$NoFramesProbe)) { Stop-DisplayAsleep } else {
+                        # Start empty: a screenshot no test writes any more must not be reviewed as current.
+                        Remove-Item (Join-Path $Repo "output\shell-shots\*.png") -ErrorAction SilentlyContinue
+                        Step "Qt Quick tests with screenshots"
+                        Run-QmlTests (Join-Path $Repo "output\shell-shots")
+                        Save-ReviewCopies (Join-Path $Repo "output\shell-shots")
+                        Write-Host "    screenshots: $(Join-Path $Repo 'output\shell-shots') (half size for review: review\)"
+                    }
                 } finally {
                     $shotsLock.ReleaseMutex()
                 }
