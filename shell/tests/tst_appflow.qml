@@ -677,6 +677,7 @@ Item {
         // ---- reduced motion ---------------------------------------------------------------------
 
         function test_reduced_motion_makes_the_launch_a_cut() {
+            Theme.motionFactor = 1.0           // real time: the subject is the 400 ms launch token (T-463)
             start()
             compare(Theme.launchMs, 400)
             DeviceSettings.reducedMotion = true

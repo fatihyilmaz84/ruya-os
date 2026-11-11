@@ -8,6 +8,7 @@
 #   .\scripts\dev.ps1 shots     # run the screenshot tests on real windows, save to output\shell-shots
 #   .\scripts\dev.ps1 rust      # Rust checks only (fmt, clippy for Windows + Linux, tests)
 #   .\scripts\dev.ps1 shell     # shell checks only (build, token lint, qmllint, Qt Quick tests)
+#   .\scripts\dev.ps1 test -Shards 4    # the offscreen Qt Quick tests in 4 processes at a time (default 3)
 #   .\scripts\dev.ps1 qml tst_themes tst_glass   # PARTIAL: builds the test runner, runs only these files
 #   .\scripts\dev.ps1 docs      # the checks that read docs\ (text, board, developer guide, spec lint)
 #
@@ -21,7 +22,11 @@ param(
     [string[]]$Tests = @(),
     # shots only, for the self-test of the sleeping-display stop: the probe window is never shown, as on
     # a display that is asleep, so the probe must see no frames and `shots` must stop with exit 1.
-    [switch]$NoFramesProbe
+    [switch]$NoFramesProbe,
+    # test/shell only (T-463): how many Qt Quick test processes run at the same time (each runs one
+    # test file); 1 = one after the other. About 3 is the sweet spot: more only adds timing noise.
+    [ValidateRange(1, 16)]
+    [int]$Shards = 3
 )
 
 # Native tools write progress to stderr; never let PowerShell turn that into errors.
@@ -181,8 +186,141 @@ function Get-ScreenshotFunctions {
     return $fns
 }
 
+# T-463: the offscreen Qt Quick tests, one process per test file (the runner takes one -input), $Shards of
+# them at a time, biggest file first (a size heuristic: the long ones start early, so the last one does not
+# run alone), each with its own log in <LogDir>. A file whose process exits non-zero, crashes (no "Totals"
+# line) or runs longer than $TimeoutSec fails the run and its log is named. Returns the sums and the failures.
+# -MakeCommand { param($file, $log) } returns @{ Exe; Args } and exists for the self-check below.
+function Invoke-QmlShards([string[]]$Files, [string]$LogDir, [int]$Shards, [int]$TimeoutSec = 600, [scriptblock]$MakeCommand) {
+    New-Item -ItemType Directory -Force $LogDir | Out-Null
+    Get-ChildItem $LogDir -Filter "*.txt" -ErrorAction SilentlyContinue | Remove-Item -ErrorAction SilentlyContinue
+    if (-not $MakeCommand) {
+        $exe = Join-Path $ShellBuild "Release\tst_ruyashell.exe"
+        $MakeCommand = { param($file, $log) @{ Exe = $exe; Args = @("-o", "`"$log,txt`"", "-input", "`"$file`"") } }.GetNewClosure()
+    }
+    $queue = New-Object System.Collections.Queue
+    foreach ($f in ($Files | Sort-Object { (Get-Item -LiteralPath $_).Length } -Descending)) { $queue.Enqueue($f) }
+    $running = @()
+    $res = [pscustomobject]@{ Passed = 0; Failed = 0; Skipped = 0; Files = 0; Bad = @(); Lines = @() }
+    $clock = [Diagnostics.Stopwatch]::StartNew()
+    while ($queue.Count -gt 0 -or $running.Count -gt 0) {
+        while ($queue.Count -gt 0 -and $running.Count -lt $Shards) {
+            $f = $queue.Dequeue()
+            $base = [IO.Path]::GetFileNameWithoutExtension($f)
+            $log = Join-Path $LogDir "$base.txt"
+            $cmd = & $MakeCommand $f $log
+            $p = Start-Process -FilePath $cmd.Exe -ArgumentList $cmd.Args -PassThru -WindowStyle Hidden `
+                -RedirectStandardOutput "$log.out" -RedirectStandardError "$log.err"
+            $null = $p.Handle    # keeps the exit code readable after the process ended (Windows PowerShell 5.1)
+            $running += [pscustomobject]@{ Proc = $p; Base = $base; Log = $log; Start = $clock.Elapsed.TotalSeconds }
+        }
+        Start-Sleep -Milliseconds 100
+        $still = @()
+        foreach ($r in $running) {
+            $timedOut = (-not $r.Proc.HasExited) -and (($clock.Elapsed.TotalSeconds - $r.Start) -gt $TimeoutSec)
+            if (-not $r.Proc.HasExited -and -not $timedOut) { $still += $r; continue }
+            if ($timedOut) { try { $r.Proc.Kill() } catch { } ; $r.Proc.WaitForExit(5000) | Out-Null }
+            $res.Files++
+            $totals = $null
+            if (Test-Path -LiteralPath $r.Log) {
+                $totals = Select-String -LiteralPath $r.Log -Pattern '^Totals: (\d+) passed, (\d+) failed, (\d+) skipped' | Select-Object -Last 1
+            }
+            $code = if ($timedOut) { -1 } else { $r.Proc.ExitCode }
+            if ($totals) {
+                $res.Passed += [int]$totals.Matches[0].Groups[1].Value
+                $res.Failed += [int]$totals.Matches[0].Groups[2].Value
+                $res.Skipped += [int]$totals.Matches[0].Groups[3].Value
+            }
+            if ($timedOut -or $code -ne 0 -or -not $totals) {
+                $why = if ($timedOut) { "hung (killed after $TimeoutSec s)" } elseif (-not $totals) { "crashed (exit code $code, no Totals line)" } else { "failed (exit code $code)" }
+                $res.Bad += "$($r.Base): $why - log $($r.Log)"
+                if (Test-Path -LiteralPath $r.Log) {
+                    $res.Lines += Get-Content -LiteralPath $r.Log | Where-Object { $_ -match '^(FAIL|XPASS|Totals)|failure location' } | ForEach-Object { "$($r.Base): $_" }
+                }
+            }
+            if (Test-Path -LiteralPath $r.Log) {
+                # QWARN lines (font directory, expected rejections) stay in the log; a QCRITICAL is shown.
+                $res.Lines += Get-Content -LiteralPath $r.Log | Where-Object { $_ -match '^QCRITICAL' } | ForEach-Object { "$($r.Base): $_" }
+            }
+        }
+        $running = $still
+    }
+    $res | Add-Member -NotePropertyName Seconds -NotePropertyValue $clock.Elapsed.TotalSeconds
+    return $res
+}
+
+# The gate: every shell\tests\tst_*.qml offscreen, $Shards processes at a time, one combined verdict.
+function Run-QmlShards {
+    $files = @(Get-ChildItem (Join-Path $Repo "shell\tests") -Filter "tst_*.qml" | ForEach-Object { $_.FullName })
+    $logDir = Join-Path $ShellBuild "qmltest"
+    # The gate runs offscreen: immune to a locked screen, OS focus changes and other windows, same as CI.
+    $env:QT_QPA_PLATFORM = "offscreen"
+    $res = Invoke-QmlShards $files $logDir $Shards
+    Remove-Item Env:\QT_QPA_PLATFORM -ErrorAction SilentlyContinue
+    $res.Lines | ForEach-Object { Write-Host "    $_" }
+    foreach ($b in $res.Bad) { Write-Host "    SHARD FAILED: $b" -ForegroundColor Red }
+    Write-Host ("    Totals: {0} passed, {1} failed, {2} skipped in {3} files, {4} at a time, {5:N0} s (logs: {6})" -f $res.Passed, $res.Failed, $res.Skipped, $res.Files, $Shards, $res.Seconds, $logDir)
+    Record "Qt Quick tests" ($res.Bad.Count -eq 0 -and $res.Failed -eq 0 -and $res.Files -eq $files.Count)
+}
+
+# T-463: the shard runner's failure paths, on stand-in programs (a test file is a name here): a run with a
+# failed file, a crash (no Totals line), a hang and a pass must give the right verdict, name the log of each
+# bad file and add up the totals of the good ones.
+function Test-QmlShardRunner {
+    $fx = Join-Path ([IO.Path]::GetTempPath()) ("ruya-shards-" + [guid]::NewGuid().ToString("N"))
+    New-Item -ItemType Directory -Path $fx | Out-Null
+    $names = "tst_ok1", "tst_ok2", "tst_fail", "tst_crash", "tst_hang"
+    foreach ($n in $names) { Set-Content -LiteralPath (Join-Path $fx "$n.qml") -Value "x" }
+    $ps = (Get-Command powershell.exe).Source
+    $make = {
+        param($file, $log)
+        $base = [IO.Path]::GetFileNameWithoutExtension($file)
+        $line = "Totals: 3 passed, 0 failed, 1 skipped, 0 blacklisted, 5ms"
+        $body = switch ($base) {
+            "tst_fail"  { "Set-Content -LiteralPath '$log' 'FAIL!  : x::test_y() boom'; Add-Content -LiteralPath '$log' 'Totals: 2 passed, 1 failed, 0 skipped, 0 blacklisted, 5ms'; exit 1" }
+            "tst_crash" { "Set-Content -LiteralPath '$log' 'Start testing of x'; exit 3" }
+            "tst_hang"  { "Start-Sleep -Seconds 60" }
+            default     { "Set-Content -LiteralPath '$log' '$line'; exit 0" }
+        }
+        @{ Exe = $ps; Args = @("-NoProfile", "-Command", "`"$body`"") }
+    }.GetNewClosure()
+    $all = @($names | ForEach-Object { Join-Path $fx "$_.qml" })
+    $r = Invoke-QmlShards $all (Join-Path $fx "logs") 2 4 $make
+    $bad = $r.Bad -join "`n"
+    $ok = ($r.Files -eq 5) -and ($r.Bad.Count -eq 3) -and ($r.Passed -eq 8) -and ($r.Failed -eq 1) -and ($r.Skipped -eq 2) `
+        -and ($bad -match 'tst_fail: failed .*tst_fail\.txt') -and ($bad -match 'tst_crash: crashed .*tst_crash\.txt') -and ($bad -match 'tst_hang: hung .*tst_hang\.txt') `
+        -and ($bad -notmatch 'tst_ok')
+    if (-not $ok) { Write-Host "    got: files $($r.Files), passed $($r.Passed), failed $($r.Failed), skipped $($r.Skipped), bad:`n$bad" -ForegroundColor Yellow }
+    Record "shard runner self-check (a failed, a crashed and a hung file are named by log; the totals add up)" $ok
+
+    # The same for CI's twin, scripts/run-qml-tests.sh (Git's bash), with a stand-in test program.
+    $bash = "$env:ProgramFiles\Git\bin\bash.exe"
+    if (-not (Test-Path $bash)) {
+        Record "shard runner (sh) self-check: Git's bash.exe not found" $false
+    } else {
+        $fake = "#!/bin/bash`nlog=`"`${2%,txt}`"; base=`$(basename `"`$4`" .qml)`ncase `$base in`n" +
+            "  tst_fail) echo 'FAIL!  : x::test_y() boom' > `"`$log`"; echo 'Totals: 2 passed, 1 failed, 0 skipped, 0 blacklisted, 5ms' >> `"`$log`"; exit 1;;`n" +
+            "  tst_crash) echo Start > `"`$log`"; exit 3;;`n  tst_hang) sleep 30;;`n" +
+            "  *) echo 'Totals: 3 passed, 0 failed, 1 skipped, 0 blacklisted, 5ms' > `"`$log`";;`nesac`n"
+        $fakePath = Join-Path $fx "fake-tst.sh"
+        [IO.File]::WriteAllText($fakePath, $fake, (New-Object System.Text.UTF8Encoding($false)))
+        $env:RUYA_QML_TIMEOUT = "2"
+        $logsSh = (Join-Path $fx "logs-sh") -replace '\\', '/'
+        $out = (& $bash (Join-Path $PSScriptRoot "run-qml-tests.sh") ($fakePath -replace '\\', '/') 2 $logsSh ($fx -replace '\\', '/') 2>&1 | Out-String)
+        $shExit = $LASTEXITCODE
+        Remove-Item Env:\RUYA_QML_TIMEOUT -ErrorAction SilentlyContinue
+        $shOk = ($shExit -eq 1) -and ($out -match 'tst_fail: failed .*logs-sh/tst_fail\.txt') -and ($out -match 'tst_crash: crashed or hung .*logs-sh/tst_crash\.txt') `
+            -and ($out -match 'tst_hang: crashed or hung .*logs-sh/tst_hang\.txt') -and ($out -notmatch 'tst_ok\d: ') `
+            -and ($out -match 'Totals: 8 passed, 1 failed, 2 skipped in 5 files')
+        if (-not $shOk) { Write-Host "    exit $shExit, output:`n$out" -ForegroundColor Yellow }
+        Record "shard runner (sh) self-check (CI's script names a failed, a crashed and a hung file by log; the totals add up)" $shOk
+    }
+    Remove-Item -Recurse -Force $fx -ErrorAction SilentlyContinue
+}
+
 # -InputFile: one test file (the `qml` fast mode), through the runner's -input, offscreen, with its own log.
 function Run-QmlTests([string]$ShotsDir, [string]$InputFile) {
+    if (-not $ShotsDir -and -not $InputFile) { Run-QmlShards; return }
     # Per checkout: worktree lanes run `test` at the same time (a shared %TEMP% log collided, 2026-11-04).
     $log = Join-Path $ShellBuild "ruya-qmltest.txt"
     $only = @()
@@ -652,6 +790,8 @@ function Do-Shell {
     # the window is never shown, so the probe must report "no frames" even though offscreen draws.
     Step "Display probe self-check (no frames -> asleep)"
     Record "display probe self-check (a window that presents no frames is reported)" ((Test-DisplayPresentsFrames -NoFrames -Offscreen) -eq 3)
+    Step "Shard runner self-check (T-463)"
+    Test-QmlShardRunner
     Step "Qt Quick tests (offscreen)"
     Run-QmlTests $null
 }

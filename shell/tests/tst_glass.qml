@@ -395,6 +395,7 @@ Item {
         // The Accept pulse shrinks the art only; the lift shadow must shrink with it, or its
         // (cut-out) shape would not match the art (T-155 look).
         function test_lift_shadow_follows_the_pulse() {
+            Theme.motionFactor = 1.0           // real time: the pulse must be long enough to sample mid-way (T-463)
             const card = createTemporaryObject(cardComponent, host)
             const art = findChild(card, "artMonogram").parent
             const shadow = findChild(card, "cardLiftShadow")
@@ -463,6 +464,7 @@ Item {
         // --- shimmer ---------------------------------------------------------------------------
 
         function test_placeholder_shimmers_while_the_picture_loads() {
+            Theme.motionFactor = 1.0           // real time: the subject is the shimmer's duration (T-463)
             const art = createTemporaryObject(artComponent, host)
             art.imageStatus = Image.Loading
             const anim = findChild(art, "artShimmerAnimation")

@@ -95,6 +95,7 @@ Item {
 
         function init() {
             verify(windowGuard.ensureActive() === "", windowGuard.ensureActive())
+            Theme.motionFactor = 1.0           // real time for the whole file: glide timing is the subject (T-463)
         }
 
         function cleanup() {

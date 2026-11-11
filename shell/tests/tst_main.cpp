@@ -78,8 +78,10 @@ public:
     }
 
     // Returns "" when the test window is active, else the failure message.
+    // Every call also sets the test motion scale (T-463): see applyTestMotion().
     Q_INVOKABLE QString ensureActive()
     {
+        applyTestMotion();
         QQuickWindow *win = nullptr;
         const auto windows = QGuiApplication::topLevelWindows();
         for (QWindow *w : windows) {
@@ -100,6 +102,27 @@ public:
     }
 
 private:
+    // Offscreen tests do not look at the animation, only at its end: they would spend most of their
+    // time waiting for fades. Every test starts with a short motion scale (Theme.motionFactor 0.1
+    // instead of 1, so all duration tokens are a tenth): init() calls ensureActive(), so a test
+    // that changes the factor in its body (or a cleanup() that resets it) is put back for the next.
+    // A test whose subject is a duration sets Theme.motionFactor = 1.0 itself in init(), after the
+    // windowGuard line, with a comment saying so (tst_glide, tst_motion, tst_sound_ui, ...).
+    // `shots` (RUYA_SHOTS_DIR) renders the real thing and keeps motion at 1; RUYA_TEST_MOTION=<factor>
+    // overrides the scale (1 = as designed).
+    void applyTestMotion()
+    {
+        if (!qEnvironmentVariableIsEmpty("RUYA_SHOTS_DIR"))
+            return;
+        bool ok = false;
+        const qreal factor = qEnvironmentVariable("RUYA_TEST_MOTION", QStringLiteral("0.1")).toDouble(&ok);
+        auto *engine = qobject_cast<QQmlEngine *>(parent());
+        if (!ok || factor <= 0 || !engine)
+            return;
+        if (QObject *theme = engine->singletonInstance<QObject *>("RuyaShell", "Theme"))
+            theme->setProperty("motionFactor", factor);
+    }
+
     void handleLoss(bool reactivate)
     {
         if (!m_last || !m_last->isVisible())

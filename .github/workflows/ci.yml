@@ -79,7 +79,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install Qt
-        run: dnf -y install --setopt=install_weak_deps=False cmake ninja-build gcc-c++ qt6-qtbase-devel qt6-qtdeclarative-devel qt6-qtmultimedia-devel qt6-qttools-devel qt6-linguist qt6-qtshadertools-devel qt6-qtbase-private-devel
+        run: dnf -y install --setopt=install_weak_deps=False cmake ninja-build gcc-c++ qt6-qtbase-devel qt6-qtdeclarative-devel qt6-qtmultimedia-devel qt6-qttools-devel qt6-linguist qt6-qtshadertools-devel qt6-qtbase-private-devel findutils gawk
       - name: Build
         run: cmake -S shell -B shell/build -G Ninja -DCMAKE_BUILD_TYPE=Release && cmake --build shell/build
       - name: qmllint
@@ -93,7 +93,9 @@ jobs:
         # offscreen uses the software renderer: effects are skipped, focus/flow logic is tested.
         env:
           QT_QPA_PLATFORM: offscreen
-        run: ctest --test-dir shell/build --output-on-failure
+        # T-463: one process per test file, 3 at a time (scripts/run-qml-tests.sh; dev.ps1 does the same);
+        # a file that fails, crashes or hangs is named with its log (shell/build/qmltest/<file>.txt).
+        run: bash scripts/run-qml-tests.sh shell/build/tst_ruyashell 3 shell/build/qmltest
 
   # A full bootc build, a qcow2 and a boot under KVM: 16-22 minutes in the first runs. It runs on
   # every push and pull request: it is free on a public repository, the concurrency group cancels
