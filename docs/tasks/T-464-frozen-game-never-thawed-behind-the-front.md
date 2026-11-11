@@ -1,6 +1,6 @@
 # T-464 — A frozen game is never thawed behind another game
 
-Status: todo · Phase: 2 · Depends: — · Area: shell · Size: S · Owner: builder · Complexity: normal · Developer surface: none
+Status: in-progress · Phase: 2 · Depends: — · Area: shell · Size: S · Owner: builder · Complexity: normal · Developer surface: none
 
 ## Goal
 A game the Hub froze stays frozen until the player resumes it. Today a frozen game can be thawed by accident and then runs unseen behind the game in front, at full CPU and GPU.

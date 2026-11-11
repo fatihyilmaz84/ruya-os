@@ -4,9 +4,9 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 
 | ID | Title | Status | Depends |
 |---|---|---|---|
-| [T-464](tasks/T-464-frozen-game-never-thawed-behind-the-front.md) | A frozen game is never thawed behind another game (bug, Dell study) | todo | — |
+| [T-464](tasks/T-464-frozen-game-never-thawed-behind-the-front.md) | A frozen game is never thawed behind another game (bug, Dell study) | in-progress | — |
 | [T-463](tasks/T-463-faster-qml-test-run.md) | A faster Qt Quick test run: shards, a test motion scale, condition waits (owner: test time) | todo | — |
-| [T-465](tasks/T-465-zram-swap-in-the-image.md) | zram swap in the image, so frozen games can give memory back (VM this task) | todo | — |
+| [T-465](tasks/T-465-zram-swap-in-the-image.md) | zram swap in the image, so frozen games can give memory back (VM this task) | in-progress | — |
 | [T-466](tasks/T-466-frozen-apps-release-audio-and-memory.md) | Frozen apps release their audio stream and, after a while, their memory | todo | T-465 |
 | [T-454](tasks/T-454-hub-display-tiles.md) | Hub display: mode, resolution and refresh rate, brightness where supported | todo | — |
 | [T-455](tasks/T-455-hub-latency-and-idle-cost.md) | Hub budgets: activation latency, idle cost, game FPS with the Hub open (Dell) | todo | — |
