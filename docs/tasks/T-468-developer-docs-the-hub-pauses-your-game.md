@@ -1,6 +1,6 @@
 # T-468 — Developer docs: the Hub pauses (freezes) your game
 
-Status: todo · Phase: 2 · Depends: — · Area: docs (developers) · Size: S · Owner: builder · Complexity: normal · Developer surface: public-format
+Status: in-progress · Phase: 2 · Depends: — · Area: docs (developers) · Size: S · Owner: builder · Complexity: normal · Developer surface: public-format
 
 ## Goal
 A developer making a game for RuyaOS knows exactly what happens to it when the player opens the Ruya Hub, goes Home or switches to another game, and what to do about it. Today `docs/developers/fullscreen-and-lifecycle.md` (lines ~34-40) still describes the old overlay ("keep running behind the overlay, pause when you lose focus"; the quick menu "planned"), while since T-457 the Hub **freezes** the game's processes (cgroup freezer) and Home leaves it frozen (ADR-033, `02` §1.6).
