@@ -1,6 +1,6 @@
 # T-463 — A faster Qt Quick test run: shards, a test motion scale, condition waits
 
-Status: todo · Phase: 2 · Depends: — · Area: scripts (dev.ps1), shell (tests) · Size: M · Owner: builder · Complexity: normal · Developer surface: none
+Status: in-progress · Phase: 2 · Depends: — · Area: scripts (dev.ps1), shell (tests) · Size: M · Owner: builder · Complexity: normal · Developer surface: none
 
 ## Goal
 `dev.ps1 test` spends about 330 s in the offscreen Qt Quick tests (1198 tests). Every builder round, review and merge gate waits for it (owner, 2026-11-11: "do we lose time with unnecessary tests?"). Make the same tests, with the same assertions, finish in well under half the wall time.
