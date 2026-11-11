@@ -11,6 +11,7 @@ Performance::Performance(std::unique_ptr<PerformanceBackend> backend, QObject *p
     , m_backend(std::move(backend))
 {
     connect(m_backend.get(), &PerformanceBackend::sampled, this, &Performance::apply);
+    connect(m_backend.get(), &PerformanceBackend::failed, this, &Performance::markUnavailable);
     m_pollTimer.setInterval(m_intervalMs);
     connect(&m_pollTimer, &QTimer::timeout, this, &Performance::poll);
     m_frameTimer.setInterval(FrameUpdateMs);
@@ -90,6 +91,7 @@ void Performance::setRunning()
 {
     const bool on = m_consumers > 0;
     if (on) {
+        markUnavailable();   // what was held from before is not live now
         poll();   // the first numbers at once, then every interval
         m_pollTimer.start();
     } else {
@@ -114,10 +116,26 @@ void Performance::poll()
 void Performance::apply(const QVariantMap &metrics)
 {
     // A reply that lands after the last consumer closed is still the newest numbers: keep it.
-    if (m_valid && metrics == m_metrics)
+    if (m_valid && m_fresh && metrics == m_metrics)
         return;
     m_metrics = metrics;
     m_valid = true;
+    m_fresh = true;
+    emit metricsChanged();
+}
+
+void Performance::markUnavailable()
+{
+    if (!m_valid || !m_fresh)
+        return;
+    m_fresh = false;
+    for (auto it = m_metrics.begin(); it != m_metrics.end(); ++it) {
+        const QVariantMap entry = it.value().toMap();
+        if (entry.value(QStringLiteral("state")).toString() == QLatin1String("unsupported"))
+            continue;   // a console without a source stays without one
+        it.value() = QVariantMap { { QStringLiteral("state"), QStringLiteral("unavailable") },
+                                   { QStringLiteral("value"), 0.0 } };
+    }
     emit metricsChanged();
 }
 
@@ -174,6 +192,12 @@ void Performance::mockReset()
 {
     if (auto *mock = qobject_cast<MockPerformanceBackend *>(m_backend.get()))
         mock->reset();
+}
+
+void Performance::mockFail(bool on)
+{
+    if (auto *mock = qobject_cast<MockPerformanceBackend *>(m_backend.get()))
+        mock->setFailing(on);
 }
 
 void Performance::mockReplyDelay(int ms)

@@ -27,6 +27,8 @@ public:
     // Replies arrive after `ms` (0: on the next turn of the event loop), with the data as it was
     // when asked; the number still on their way.
     void setReplyDelay(int ms) { m_delay = ms; }
+    // From now on every request fails (the service does not answer) until it is switched off.
+    void setFailing(bool on) { m_failing = on; }
     int pendingReplies() const { return m_pending; }
 
 private:
@@ -35,4 +37,5 @@ private:
     bool m_first = true;
     int m_delay = 0;
     int m_pending = 0;
+    bool m_failing = false;
 };

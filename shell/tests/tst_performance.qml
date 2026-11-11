@@ -138,7 +138,7 @@ Item {
             DeviceSettings.performanceIntervalMs = 500
             const consumer = createTemporaryObject(consumerComponent, host)
             verify(consumer)
-            tryVerify(() => Performance.valid)
+            tryVerify(() => Performance.fresh)   // the first answer (what was held from before is marked unavailable until then, T-452)
             // The first reply, like the service's: a rate needs a reading before it.
             compare(Performance.stateOf("cpu_percent"), "unavailable")
             compare(Performance.valueOf("cpu_percent"), 0)
@@ -173,6 +173,48 @@ Item {
             tryVerify(() => Performance.mockPendingReplies() === 0, 2000)
             compare(Performance.stateOf("cpu_percent"), "supported", "poll 1's reply was dropped")
             compare(Performance.valueOf("cpu_percent"), 77)
+        }
+
+        // Never show held numbers as live (T-451 review, T-452).
+        function test_a_failed_request_marks_the_held_numbers_unavailable() {
+            DeviceSettings.performanceIntervalMs = 5000
+            const consumer = createTemporaryObject(consumerComponent, host)
+            verify(consumer)
+            tryVerify(() => Performance.fresh)
+            compare(Performance.stateOf("cpu_temp"), "supported")
+            compare(Performance.valueOf("cpu_temp"), 52)
+            Performance.mockFail(true)
+            Performance.refresh()
+            tryVerify(() => !Performance.fresh, 2000, "the failed request says the numbers are not live")
+            compare(Performance.stateOf("cpu_temp"), "unavailable")
+            compare(Performance.valueOf("cpu_temp"), 0, "no held number behind it")
+            compare(Performance.stateOf("ram_total"), "unavailable")
+            compare(Performance.stateOf("vram_used"), "unsupported", "a console without a source stays without one")
+            verify(Performance.valid, "an answer was had once")
+            Performance.mockFail(false)
+            Performance.refresh()
+            tryVerify(() => Performance.fresh, 2000)
+            compare(Performance.stateOf("cpu_temp"), "supported", "the next answer is live again")
+        }
+
+        function test_the_first_open_after_idle_does_not_hold_the_numbers_of_the_visit_before() {
+            DeviceSettings.performanceIntervalMs = 5000
+            const first = createTemporaryObject(consumerComponent, host)
+            tryVerify(() => Performance.fresh)
+            compare(Performance.stateOf("cpu_temp"), "supported")
+            first.active = false
+            verify(!Performance.polling)
+            compare(Performance.stateOf("cpu_temp"), "supported", "closing alone changes nothing: the last answer is still the newest")
+            Performance.mockSet("cpu_temp", "supported", 71)
+            Performance.mockReplyDelay(300)                         // the answer is not here when it opens
+            first.active = true
+            compare(Performance.stateOf("cpu_temp"), "unavailable", "not the 52 of the visit before")
+            compare(Performance.valueOf("cpu_temp"), 0)
+            verify(!Performance.fresh)
+            compare(Performance.stateOf("vram_used"), "unsupported")
+            tryVerify(() => Performance.fresh, 2000)
+            compare(Performance.stateOf("cpu_temp"), "supported")
+            compare(Performance.valueOf("cpu_temp"), 71)
         }
 
         // --- the compositor's frame meter
