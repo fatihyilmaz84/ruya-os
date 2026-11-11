@@ -49,6 +49,9 @@ fn main() {
     if let Some(at) = args.iter().position(|a| a == "--display-list") {
         return display_list(args.get(at + 1).map(PathBuf::from));
     }
+    if let Some(at) = args.iter().position(|a| a == "--park-audio") {
+        return park_audio(&args[at + 1..]);
+    }
     if let Err(err) = run() {
         eprintln!("ruya-devices: fatal: {err}");
         std::process::exit(1);
@@ -308,6 +311,36 @@ fn display_guard(args: &[String]) {
     match display::guard(&dir, drm_source(false).as_ref()) {
         Ok(outcome) => eprintln!("ruya-devices: display guard: {outcome:?}"),
         Err(err) => eprintln!("ruya-devices: display guard failed: {err}"),
+    }
+}
+
+/// `ruya-devices --park-audio ruya-<id> --frozen=<ids> --running=<ids>` (T-466): parks the streams
+/// of that profile's frozen games in a null sink and puts the others back (`park.rs`). Started by
+/// `ruya-session` in `ruya-shell`'s manager after every Freeze and Thaw; one run is a full
+/// reconcile. Exits non-zero when the request or PipeWire could not be read.
+fn park_audio(args: &[String]) {
+    let req = match ruya_devices::park::parse_args(args) {
+        Ok(req) => req,
+        Err(err) => {
+            eprintln!("ruya-devices: --park-audio: {err}");
+            std::process::exit(2);
+        }
+    };
+    #[cfg(target_os = "linux")]
+    match ruya_devices::park::apply(&req) {
+        Ok(line) => println!("{line}"),
+        Err(err) => {
+            eprintln!("ruya-devices: park-audio {}: {err}", req.user);
+            std::process::exit(1);
+        }
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        eprintln!(
+            "ruya-devices: --park-audio {}: PipeWire is Linux-only",
+            req.user
+        );
+        std::process::exit(1);
     }
 }
 

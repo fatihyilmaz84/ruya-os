@@ -9,6 +9,11 @@
 # `display` (T-164) checks the per-profile Wayland sockets and a profile's window in the app layer, and (T-376)
 # that no ruya-shell PipeWire output stream exists with that window in front;
 # it also needs vm-key-client.qml and vm-inject-key.py in /root (see the `display)` case).
+# `check` (T-466) also plays a silent PulseAudio stream from a third scope of the app (python3 and
+# libpulse-simple, through the profile's own sound server) and checks that the Freeze parks it (the
+# ruya-parked null sink; the card suspends when the VM has one: boot with -Audio), that the memory is
+# reclaimed 30 s after the Freeze when swap is active (T-465's zram), and that the Thaw puts the stream
+# back; this adds about 45 s.
 # `restart` (T-290) needs a profile (run `check` once on an empty store, or create one) and
 # installs the test apps itself when they are missing.
 # On an empty profile store the check creates the admin "Check Admin" (PIN 1234) and a standard
@@ -54,6 +59,72 @@ app_scope_names() {
     systemctl --user -M "$1@.host" list-units --plain --no-legend "app-flatpak-$sleeper-*.scope" </dev/null 2>&1 | cat \
         | awk '$3 == "active" { print $1 }' | grep -E "^app-flatpak-$sleeper-[0-9]+[.]scope$"
 }
+# T-466: a PulseAudio playback client (python3 + libpulse-simple, writing silence) for a frozen app's
+# stream. It runs in a scope of the app (tone_scope), so the Freeze freezes it with the app.
+tone_py='
+import ctypes, sys
+class Spec(ctypes.Structure):
+    _fields_ = [("format", ctypes.c_int), ("rate", ctypes.c_uint32), ("channels", ctypes.c_uint8)]
+pa = ctypes.CDLL("libpulse-simple.so.0")
+pa.pa_simple_new.restype = ctypes.c_void_p
+err = ctypes.c_int(0)
+spec = Spec(3, 48000, 2)
+s = pa.pa_simple_new(None, b"ruya-check-tone", 1, None, b"tone", ctypes.byref(spec), None, None, ctypes.byref(err))
+if not s:
+    sys.exit("pa_simple_new failed: %d" % err.value)
+buf = bytes(48000 * 4 // 10)
+while pa.pa_simple_write(ctypes.c_void_p(s), buf, len(buf), ctypes.byref(err)) >= 0:
+    pass
+'
+# tone_scope <user> <unit>: the client above in scope <unit> of that user's manager, on the profile's own
+# sound server (PULSE_SERVER, as ruya-session gives an app).
+tone_scope() {
+    xuid="$(id -u "$1")"
+    runuser -u "$1" -- env XDG_RUNTIME_DIR="/run/user/$xuid" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$xuid/bus" \
+        PULSE_SERVER="unix:/run/ruya-pulse/$1/native" \
+        systemd-run --user --scope --quiet --unit="$2" python3 -I -c "$tone_py" </dev/null >/dev/null 2>&1 &
+}
+# audio_probe <pulse server pid>: the shell's PipeWire graph as one line per fact: the output streams of
+# that profile's sound server (by the client's pipewire.sec.pid), each stream's target.object, whether it
+# carries ruya.parked and the sinks it is linked to; whether the ruya-parked sink exists; every other
+# sink with its state (the sound cards). Empty when pw-dump fails.
+probe_py='
+import json, sys
+objs = json.load(open(sys.argv[1], encoding="utf-8"))
+pid = sys.argv[2]
+props = lambda o: (o.get("info") or {}).get("props") or {}
+by = {o.get("id"): o for o in objs}
+clients = {str(o.get("id")) for o in objs if o.get("type") == "PipeWire:Interface:Client" and str(props(o).get("pipewire.sec.pid")) == pid}
+streams = [o.get("id") for o in objs if o.get("type") == "PipeWire:Interface:Node" and props(o).get("media.class") == "Stream/Output/Audio" and str(props(o).get("client.id")) in clients]
+meta = {}
+for o in objs:
+    if o.get("type") == "PipeWire:Interface:Metadata" and (o.get("props") or {}).get("metadata.name") == "default":
+        for e in o.get("metadata") or []:
+            meta[(e.get("subject"), e.get("key"))] = e.get("value")
+name = lambda i: props(by.get(i) or {}).get("node.name", "?")
+print("streams=" + ",".join(str(s) for s in streams))
+for s in streams:
+    links = sorted({name((l.get("info") or {}).get("input-node-id")) for l in objs if l.get("type") == "PipeWire:Interface:Link" and (l.get("info") or {}).get("output-node-id") == s})
+    print("stream=%s target=%s parked=%s links=%s" % (s, meta.get((s, "target.object"), ""), "yes" if (s, "ruya.parked") in meta else "no", ",".join(links)))
+sinks = [o for o in objs if o.get("type") == "PipeWire:Interface:Node" and props(o).get("media.class") == "Audio/Sink"]
+print("parked_sink=" + ("yes" if any(props(o).get("node.name") == "ruya-parked" for o in sinks) else "no"))
+print("cards=" + ",".join("%s:%s" % (props(o).get("node.name"), (o.get("info") or {}).get("state")) for o in sinks if props(o).get("node.name") != "ruya-parked"))
+'
+audio_probe() {
+    runuser -u ruya-shell -- env XDG_RUNTIME_DIR="/run/user/$uid" pw-dump > "$work/pw-audio.json" 2>/dev/null \
+        && python3 -I -c "$probe_py" "$work/pw-audio.json" "$1"
+}
+# wait_audio <pid> <extended regex> <seconds>: waits until audio_probe prints a line matching it.
+wait_audio() {
+    n=0
+    while [ "$n" -lt "$3" ]; do
+        audio_probe "$1" | grep -E -q "$2" && return 0
+        sleep 1; n=$((n + 1))
+    done
+    return 1
+}
+# The anon bytes of the cgroup the process $1 is in.
+anon_of() { awk '$1 == "anon" { print $2 }' "/sys/fs/cgroup$(cut -d: -f3 "/proc/$1/cgroup" 2>/dev/null)/memory.stat" 2>/dev/null; }
 # The unit name out of 'ss "ok" "ruya-app-..."'.
 unit_of() { sed -n 's/^ss "ok" "\(.*\)"$/\1/p'; }
 # Waits for a line of the signal log (an extended-regex pattern), up to $2 seconds.
@@ -550,6 +621,30 @@ check)
     # otherwise thaw every Freeze below; it starts again after the Stop section.
     systemctl stop ruya-compositor@tty1 && ok "the shell is stopped for the Freeze checks" || bad "systemctl stop ruya-compositor@tty1"
     sleep 1; : > "$work/signals.log"   # the sweep's FrozenChanged lines must not satisfy the waits below
+    # T-466: a sound client in a third scope of the app plays (silence) through the profile's own sound
+    # server, so the Freeze below has a stream to park; its anon memory is the reclaim's yardstick.
+    echo "--- the sound and the memory of a frozen app (T-466)"
+    audio=0
+    ppid="$(systemctl --user -M ruya-shell@.host show -p MainPID --value "ruya-pulse@$user.service" </dev/null 2>&1 | cat)"
+    if ! command -v pw-dump >/dev/null 2>&1 || ! command -v python3 >/dev/null 2>&1; then
+        echo "UNVERIFIED: pw-dump or python3 is missing: the parking of the sound was not checked"
+    elif [ -z "$(audio_probe "${ppid:-0}")" ]; then
+        echo "UNVERIFIED: the shell's PipeWire did not answer pw-dump with the shell stopped: the parking of the sound was not checked"
+    else
+        tone_scope "$user" "app-flatpak-$sleeper-4444.scope"
+        if wait_audio "$ppid" '^streams=[0-9]' 15; then
+            audio=1
+            tpid="$(pgrep -u "$user" -f ruya-check-tone | head -1)"
+            ok "the app's sound client plays through ruya-pulse@$user (pid $ppid): $(audio_probe "$ppid" | grep '^stream=' | head -1)"
+            audio_probe "$ppid" | grep -E '^(cards|parked_sink)=' | sed 's/^/    /'
+        else
+            pgrep -u "$user" -f ruya-check-tone >/dev/null 2>&1 \
+                && bad "the sound client runs but no output stream of ruya-pulse@$user (pid $ppid) is in the graph" \
+                || echo "UNVERIFIED: the sound client did not start (no libpulse-simple.so.0?): the parking of the sound was not checked"
+        fi
+    fi
+    anon0="$( [ "$audio" = 1 ] && anon_of "$tpid")"
+    tfrozen="$(date +%s)"
     case "$(freeze_app "$inst")" in 's "ok"') ok "Freeze answered ok";; *) bad "Freeze";; esac
     for u in "$inst" $scopes; do
         [ "$(fstate "$user" "$u")" = frozen ] && ok "$u is frozen" || bad "$u: FreezerState $(fstate "$user" "$u") after Freeze"
@@ -561,11 +656,58 @@ check)
     [ -n "$spid" ] && grep -q '^frozen 1$' "/sys/fs/cgroup$(cut -d: -f3 "/proc/$spid/cgroup")/cgroup.events" 2>/dev/null \
         && ok "the app's process is in a frozen cgroup (cgroup.events: frozen 1)" || bad "the app's process is not in a frozen cgroup"
     case "$(freeze_app "$inst")" in 's "ok"') ok "a second Freeze is ok";; *) bad "second Freeze";; esac
+    slog() { journalctl -u ruya-session -b --no-pager -o cat --since "@$tfrozen" 2>/dev/null; }
+    if [ "$audio" = 1 ]; then
+        # ruya-session runs `ruya-devices --park-audio` in ruya-shell's manager; the stream points at the
+        # ruya-parked null sink and is linked to it alone, so the sound card has nothing to play.
+        n=0; until slog | grep -a -q "park-audio $user frozen=\[$sleeper\].*: done" || [ "$n" -ge 20 ]; do sleep 1; n=$((n + 1)); done
+        slog | grep -a "park-audio $user" | tail -1 | sed 's/^/    /'
+        [ "$n" -lt 20 ] && ok "ruya-session parked the sound of $user (journal: park-audio ... done)" || bad "no 'park-audio $user frozen=[$sleeper] ... done' line in ruya-session's journal"
+        wait_audio "$ppid" '^stream=[0-9]+ target=ruya-parked parked=yes links=ruya-parked$' 15 \
+            && ok "the frozen app's stream targets ruya-parked and is linked to it alone" \
+            || bad "the frozen app's stream is not parked: $(audio_probe "$ppid" | tr '\n' ' ')"
+        cards="$(audio_probe "$ppid" | sed -n 's/^cards=//p')"
+        if [ -z "$cards" ]; then
+            echo "UNVERIFIED: this VM has no sound card (boot with -Audio): the card's suspend was not seen"
+        else
+            # WirePlumber suspends an idle sink after 5 s.
+            wait_audio "$ppid" '^cards=([^,]*:suspended,?)+$' 15 \
+                && ok "the sound card suspends with the frozen app's stream parked ($cards before)" \
+                || bad "the sound card does not suspend: $(audio_probe "$ppid" | grep '^cards=')"
+        fi
+    fi
+    # The memory: 30 s after the Freeze (RECLAIM_AFTER) the service asks for memory.reclaim, when swap
+    # is active (T-465's zram); without swap it says so and leaves the memory.
+    n=0; until slog | grep -a -q "$inst: memory reclaim\|$inst: no swap is active" || [ "$n" -ge 50 ]; do sleep 1; n=$((n + 1)); done
+    line="$(slog | grep -a "$inst: memory reclaim\|$inst: no swap is active" | head -1)"; echo "    $line"
+    if systemctl list-units --type=swap --state=active --plain --no-legend </dev/null 2>/dev/null | grep -q '[.]swap'; then
+        case "$line" in *"memory reclaim done"*) ok "the frozen app's memory was reclaimed (swap active)";; *) bad "no 'memory reclaim done' for $inst within 50 s: $line";; esac
+        # The line is logged when the reclaim ends, so its time is at least the reclaim's start.
+        rt="$(journalctl -u ruya-session -b --no-pager -o short-unix --since "@$tfrozen" 2>/dev/null | grep -a "$inst: memory reclaim" | head -1 | cut -d. -f1)"
+        [ -n "$rt" ] && [ "$(( rt - tfrozen ))" -ge 30 ] && ok "not before RECLAIM_AFTER: $(( rt - tfrozen )) s after the Freeze" || bad "the reclaim came ${rt:+$(( rt - tfrozen )) s }after the Freeze (expected at least 30 s)"
+        if [ "$audio" = 1 ] && [ -n "$anon0" ]; then
+            anon1="$(anon_of "$tpid")"
+            [ -n "$anon1" ] && [ "$anon1" -lt "$anon0" ] && ok "the frozen sound client's anon memory dropped: $anon0 -> $anon1 bytes" \
+                || bad "the frozen sound client's anon memory did not drop: $anon0 -> ${anon1:-?} bytes"
+        fi
+    else
+        case "$line" in *"no swap is active"*) ok "no swap: the service leaves the memory (journal: no swap is active)";; *) bad "no swap, and no 'no swap is active' line for $inst: $line";; esac
+    fi
     case "$(thaw_app "$inst")" in 's "ok"') ok "Thaw answered ok";; *) bad "Thaw";; esac
     for u in "$inst" $scopes; do
         [ "$(fstate "$user" "$u")" = running ] && ok "$u runs again" || bad "$u: FreezerState $(fstate "$user" "$u") after Thaw"
     done
     wait_sig "\"member\":\"FrozenChanged\".*$inst.*false" 10 && ok "FrozenChanged(false) arrived" || bad "no FrozenChanged(false)"
+    if [ "$audio" = 1 ]; then
+        # The Thaw puts the stream back where it was (no target before: it follows the default again) and
+        # the null sink goes with the last parked stream.
+        wait_audio "$ppid" '^stream=[0-9]+ target= parked=no links=' 15 \
+            && ok "the thawed app's stream is back: no target, no ruya.parked" \
+            || bad "the thawed app's stream was not put back: $(audio_probe "$ppid" | tr '\n' ' ')"
+        audio_probe "$ppid" | grep '^stream=' | grep -q 'links=.*ruya-parked' && bad "the thawed stream is still linked to ruya-parked" || ok "the thawed stream is not linked to ruya-parked"
+        wait_audio "$ppid" '^parked_sink=no$' 15 && ok "the ruya-parked sink is gone with the last parked stream" || bad "the ruya-parked sink is still there after the Thaw"
+        audio_probe "$ppid" | grep '^stream=' | sed 's/^/    /'
+    fi
     busctl --system call "$psvc" "$ppath" "$psvc" Lock >/dev/null
     case "$(freeze_app "$inst")" in 's "not-allowed"') ok "Freeze with nobody signed in: not-allowed";; *) bad "Freeze while locked";; esac
     [ "$(fstate "$user" "$inst")" = running ] && ok "and nothing was frozen" || bad "frozen while locked"

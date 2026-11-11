@@ -108,8 +108,9 @@
     <!-- Freezes a running app of the signed-in profile (T-457, the Ruya Hub pauses the game): the
          cgroup freezer (`systemctl --user freeze`) of the app's unit and of every active Flatpak
          scope of the app, named exactly (never a sibling app whose id starts with this one's). Its
-         processes stop where they are (no CPU; their sound streams run dry); the last frame stays
-         with the compositor. A frozen app is frozen already: "ok", nothing is done. When the
+         processes stop where they are (no CPU; their sound streams run dry and, T-466, are parked on a
+         null sink so the sound card can suspend, unless another app of the profile still runs); the
+         last frame stays with the compositor. A frozen app is frozen already: "ok", nothing is done. When the
          freezer fails or does not answer in time, what was frozen is thawed again and the status is
          "failed": the app keeps running. Synchronous: the answer comes when the freeze is done (each
          systemctl is bounded to 5 s). Freeze and Thaw calls are served one at a time, in the order
@@ -122,7 +123,10 @@
 
     <!-- Thaws the app again (the same unit and scopes as Freeze); "ok" also when it was not frozen
          (the freezer is asked anyway, so a state the service did not see is repaired). Stop thaws a frozen app before it asks it to quit, so it can handle the SIGTERM.
-         FrozenChanged(instance, false) follows a change. Statuses as Freeze. -->
+         FrozenChanged(instance, false) follows a change. Statuses as Freeze. The Thaw puts a parked
+         sound stream back where it was (T-466); an app that stayed frozen for 30 s, with swap active,
+         had part of its memory moved to swap, so it may fault some of it back in. Neither changes
+         this interface. -->
     <method name="Thaw">
       <arg name="instance" type="s" direction="in"/>
       <arg name="status" type="s" direction="out"/>

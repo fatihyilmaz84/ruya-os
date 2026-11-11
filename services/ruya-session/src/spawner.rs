@@ -8,7 +8,7 @@ use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use async_channel::Sender;
 
@@ -80,6 +80,22 @@ pub trait Spawner {
     fn user_name(&self, _uid: u32) -> Option<String> {
         None
     }
+    /// Parks the sound of `user`'s frozen apps and puts back the rest (T-466): `frozen` are its
+    /// frozen apps, `running` all its apps that are not stopping (both sorted). Returns at once;
+    /// the work is queued, in order, and only the newest request per user is carried out.
+    fn app_audio(&self, _user: &str, _frozen: &[String], _running: &[String]) {}
+    /// Is any swap active (T-466)? A reclaim without swap only drops clean cache.
+    fn swap_active(&self) -> bool {
+        false
+    }
+    /// Starts moving the memory of the unit's app (the unit and every active scope) out to swap
+    /// with `memory.reclaim` (T-466). Returns at once; the reclaim runs on.
+    fn reclaim(&self, unit: &str) -> Result<(), String> {
+        Err(format!("cannot reclaim {unit} here"))
+    }
+    /// Ends a reclaim of the unit's app that may still run (a thaw must not be slowed by it).
+    /// Returns at once.
+    fn cancel_reclaim(&self, _unit: &str) {}
 }
 
 impl<T: Spawner + ?Sized> Spawner for Box<T> {
@@ -112,6 +128,18 @@ impl<T: Spawner + ?Sized> Spawner for Box<T> {
     }
     fn user_name(&self, uid: u32) -> Option<String> {
         (**self).user_name(uid)
+    }
+    fn app_audio(&self, user: &str, frozen: &[String], running: &[String]) {
+        (**self).app_audio(user, frozen, running)
+    }
+    fn swap_active(&self) -> bool {
+        (**self).swap_active()
+    }
+    fn reclaim(&self, unit: &str) -> Result<(), String> {
+        (**self).reclaim(unit)
+    }
+    fn cancel_reclaim(&self, unit: &str) {
+        (**self).cancel_reclaim(unit)
     }
 }
 
@@ -420,6 +448,198 @@ pub fn pulse_start_command(user: &str) -> Result<Vec<String>, String> {
         "start".to_owned(),
         format!("ruya-pulse@{user}.service"),
     ])
+}
+
+/// Where `ruya-devices` is installed: `--park-audio` runs it in `ruya-shell`'s manager (T-466).
+pub const DEVICES_PROGRAM: &str = "/usr/bin/ruya-devices";
+
+fn checked_user(user: &str) -> Result<(), String> {
+    if user.strip_prefix("ruya-").is_some_and(valid_profile_id) {
+        Ok(())
+    } else {
+        Err(format!("not a profile user: {user:?}"))
+    }
+}
+
+fn checked_apps(ids: &[String]) -> Result<String, String> {
+    match ids.iter().find(|id| !valid_app_id(id)) {
+        Some(bad) => Err(format!("not an application id: {bad:?}")),
+        None => Ok(ids.join(",")),
+    }
+}
+
+/// The argument list that parks the sound of `user`'s frozen apps and puts back the others
+/// (T-466): `ruya-devices --park-audio` as a transient unit of `ruya-shell`'s manager, the only
+/// place that reaches the console's PipeWire (ADR-010; this service runs as root with no
+/// capability and no access to `/run/user`). Waited for and bounded (`RuntimeMaxSec`). Pure;
+/// every name is validated again.
+pub fn park_audio_command(
+    user: &str,
+    frozen: &[String],
+    running: &[String],
+) -> Result<Vec<String>, String> {
+    checked_user(user)?;
+    let frozen = checked_apps(frozen)?;
+    let running = checked_apps(running)?;
+    let mut args: Vec<String> = [
+        "systemd-run",
+        "--machine=ruya-shell@.host",
+        "--user",
+        "--wait",
+        "--quiet",
+        "--collect",
+        "--no-ask-password",
+        "--property=RuntimeMaxSec=15",
+        "--",
+        DEVICES_PROGRAM,
+        "--park-audio",
+    ]
+    .into_iter()
+    .map(str::to_owned)
+    .collect();
+    args.push(user.to_owned());
+    args.push(format!("--frozen={frozen}"));
+    args.push(format!("--running={running}"));
+    Ok(args)
+}
+
+/// The share of a frozen app's `memory.current` that `memory.reclaim` is asked for (T-466): the
+/// kernel takes the coldest pages first, and what stays is what the game touches first when it is
+/// thawed. A starting value; the Dell numbers decide (task T-466 Outcome).
+pub const RECLAIM_PERCENT: u64 = 50;
+
+/// The bytes to ask `memory.reclaim` for, for a cgroup with `current` bytes charged.
+pub fn reclaim_amount(current: u64) -> u64 {
+    current / 100 * RECLAIM_PERCENT
+}
+
+/// The transient unit a reclaim of `app_id` runs as, in the profile user's manager.
+pub fn reclaim_unit(app_id: &str) -> String {
+    format!("ruya-reclaim-{app_id}.service")
+}
+
+/// The script of the reclaim unit: writes each amount to its `memory.reclaim`. A write that the
+/// kernel could not satisfy in full fails (EAGAIN) and the next one still runs.
+pub const RECLAIM_SCRIPT: &str =
+    "while [ \"$#\" -ge 2 ]; do echo \"$1\" > \"$2\"; shift 2; done; exit 0";
+
+/// A cgroup of a profile user's manager, as `systemctl show -p ControlGroup` gives it: absolute,
+/// under `/user.slice/`, no `..`, only the characters unit names use.
+pub fn valid_user_cgroup(path: &str) -> bool {
+    path.starts_with("/user.slice/user-")
+        && !path.split('/').any(|part| part == "..")
+        && path
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '/' | '.' | '-' | '_' | '@' | '\\'))
+}
+
+/// The argument list that reclaims `targets` (bytes, cgroup path as `ControlGroup` gives it) as
+/// `user`, in that user's manager (T-466): the user owns the cgroups of its own apps (systemd
+/// delegates the manager's subtree to it), while this service may not write the cgroup tree at
+/// all (`ProtectControlGroups=`, no capability). Waited for; bounded by `RuntimeMaxSec`. Pure;
+/// every name and path is validated again.
+pub fn reclaim_command(
+    user: &str,
+    app_id: &str,
+    targets: &[(u64, String)],
+) -> Result<Vec<String>, String> {
+    checked_user(user)?;
+    if !valid_app_id(app_id) {
+        return Err(format!("not an application id: {app_id:?}"));
+    }
+    if targets.is_empty() {
+        return Err(format!("nothing of {app_id} to reclaim"));
+    }
+    let mut args: Vec<String> = vec![
+        "systemd-run".to_owned(),
+        format!("--machine={user}@.host"),
+        "--user".to_owned(),
+        "--wait".to_owned(),
+        "--quiet".to_owned(),
+        "--collect".to_owned(),
+        "--no-ask-password".to_owned(),
+        format!("--unit={}", reclaim_unit(app_id)),
+        "--property=RuntimeMaxSec=30".to_owned(),
+        "--".to_owned(),
+        "/usr/bin/sh".to_owned(),
+        "-c".to_owned(),
+        RECLAIM_SCRIPT.to_owned(),
+        "ruya-reclaim".to_owned(),
+    ];
+    for (bytes, cgroup) in targets {
+        if !valid_user_cgroup(cgroup) {
+            return Err(format!("not a cgroup of a user's manager: {cgroup:?}"));
+        }
+        args.push(bytes.to_string());
+        args.push(format!("/sys/fs/cgroup{cgroup}/memory.reclaim"));
+    }
+    Ok(args)
+}
+
+/// `systemctl --user -M <user>@.host stop --no-block ruya-reclaim-<app>.service`: a running
+/// reclaim ends (its write is interrupted by the signal). Pure.
+pub fn cancel_reclaim_command(user: &str, app_id: &str) -> Result<Vec<String>, String> {
+    let mut args = user_systemctl(user)?;
+    if !valid_app_id(app_id) {
+        return Err(format!("not an application id: {app_id:?}"));
+    }
+    args.extend([
+        "stop".to_owned(),
+        "--no-block".to_owned(),
+        reclaim_unit(app_id),
+    ]);
+    Ok(args)
+}
+
+/// `systemctl --user -M <user>@.host show -p ControlGroup --value <unit>...`. Pure.
+pub fn control_groups_command(user: &str, units: &[String]) -> Result<Vec<String>, String> {
+    let mut args = user_systemctl(user)?;
+    if units.is_empty()
+        || units.iter().any(|u| {
+            u.is_empty()
+                || !u
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || "._-@".contains(c))
+        })
+    {
+        return Err(format!("not unit names: {units:?}"));
+    }
+    args.extend(["show", "-p", "ControlGroup", "--value"].map(str::to_owned));
+    args.extend(units.iter().cloned());
+    Ok(args)
+}
+
+/// The cgroups `control_groups_command` printed: one per unit, blank lines between units. Only
+/// valid user cgroups (`valid_user_cgroup`); no duplicates.
+pub fn parse_control_groups(text: &str) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for line in text.lines().map(str::trim) {
+        if valid_user_cgroup(line) && !out.iter().any(|o| o == line) {
+            out.push(line.to_owned());
+        }
+    }
+    out
+}
+
+/// The active swap devices, in the system manager (systemd follows every swap in /proc/swaps
+/// as a `.swap` unit; this service's `ProcSubset=pid` hides /proc/swaps itself).
+pub const SWAP_COMMAND: [&str; 7] = [
+    "systemctl",
+    "list-units",
+    "--type=swap",
+    "--state=active",
+    "--plain",
+    "--no-legend",
+    "--no-pager",
+];
+
+/// Does the listing of `SWAP_COMMAND` name an active swap unit?
+pub fn any_swap(listing: &str) -> bool {
+    listing.lines().any(|line| {
+        line.split_whitespace()
+            .next()
+            .is_some_and(|unit| unit.ends_with(".swap"))
+    })
 }
 
 /// The environment of one app of `user`: `base`, with `WAYLAND_DISPLAY` set to the user's own
@@ -846,7 +1066,7 @@ impl UnitWatch {
 /// OS: `start` is followed by `Started`, `stop` by a normal exit, `kill` by a signal exit.
 #[derive(Default)]
 pub struct FakeSpawner {
-    state: Mutex<FakeState>,
+    state: Arc<Mutex<FakeState>>,
     events: Option<Sender<UnitEvent>>,
 }
 
@@ -857,6 +1077,10 @@ struct FakeState {
     fail_sound: bool,
     fail_freeze: bool,
     calls: Vec<String>,
+    /// `app_audio` requests, as "user frozen=a,b running=a,b,c" (T-466).
+    audio: Vec<String>,
+    /// `swap_active` answers this.
+    swap: bool,
     running: Vec<RunningUnit>,
     last_env: Vec<(String, String)>,
     /// pid -> cgroup file (`process_cgroup`, T-459).
@@ -933,10 +1157,30 @@ impl FakeSpawner {
         self
     }
 
-    /// "sound user", "start user app", "stop unit", "kill unit", "freeze unit", "thaw unit", in
-    /// order.
+    /// Swap is active (T-466).
+    pub fn with_swap(self) -> Self {
+        self.lock().swap = true;
+        self
+    }
+
+    /// The same fake (its calls and its state), without the events: for a test that looks at the
+    /// calls from inside a call (a clock, T-466).
+    pub fn observer(&self) -> FakeSpawner {
+        FakeSpawner {
+            state: Arc::clone(&self.state),
+            events: None,
+        }
+    }
+
+    /// "sound user", "start user app", "stop unit", "kill unit", "freeze unit", "thaw unit",
+    /// "reclaim unit", "cancel-reclaim unit", in order.
     pub fn calls(&self) -> Vec<String> {
         self.lock().calls.clone()
+    }
+
+    /// The `app_audio` requests, in order: "user frozen=a,b running=a,b,c" (T-466).
+    pub fn audio_calls(&self) -> Vec<String> {
+        self.lock().audio.clone()
     }
 
     /// The environment the last `start` was given.
@@ -1029,6 +1273,27 @@ impl Spawner for FakeSpawner {
 
     fn user_name(&self, uid: u32) -> Option<String> {
         self.lock().users.get(&uid).cloned()
+    }
+
+    fn app_audio(&self, user: &str, frozen: &[String], running: &[String]) {
+        self.lock().audio.push(format!(
+            "{user} frozen={} running={}",
+            frozen.join(","),
+            running.join(",")
+        ));
+    }
+
+    fn swap_active(&self) -> bool {
+        self.lock().swap
+    }
+
+    fn reclaim(&self, unit: &str) -> Result<(), String> {
+        self.lock().calls.push(format!("reclaim {unit}"));
+        Ok(())
+    }
+
+    fn cancel_reclaim(&self, unit: &str) {
+        self.lock().calls.push(format!("cancel-reclaim {unit}"));
     }
 }
 
@@ -1225,6 +1490,127 @@ mod tests {
         for bad in ["root", "ruya-", "ruya-p1;x", "ruya-p1 x", "../ruya-p1"] {
             assert!(pulse_start_command(bad).is_err(), "{bad:?}");
         }
+    }
+
+    fn ids(v: &[&str]) -> Vec<String> {
+        v.iter().map(|s| (*s).to_owned()).collect()
+    }
+
+    #[test]
+    fn park_audio_runs_ruya_devices_in_the_shells_manager_with_the_whole_state() {
+        let args = park_audio_command(
+            "ruya-p1",
+            &ids(&["org.x.Game"]),
+            &ids(&["org.x.Game", "org.y.Other"]),
+        )
+        .expect("valid");
+        assert_eq!(args[0], "systemd-run");
+        assert!(args.contains(&"--machine=ruya-shell@.host".to_owned()));
+        assert!(args.contains(&"--wait".to_owned()));
+        assert!(args
+            .iter()
+            .any(|a| a.starts_with("--property=RuntimeMaxSec=")));
+        let tail = &args[args.iter().position(|a| a == "--").expect("--") + 1..];
+        assert_eq!(
+            tail,
+            ids(&[
+                DEVICES_PROGRAM,
+                "--park-audio",
+                "ruya-p1",
+                "--frozen=org.x.Game",
+                "--running=org.x.Game,org.y.Other"
+            ])
+        );
+        let none = park_audio_command("ruya-p1", &[], &[]).expect("valid");
+        assert!(none.ends_with(&ids(&["--frozen=", "--running="])));
+        assert!(park_audio_command("root", &[], &[]).is_err());
+        assert!(park_audio_command("ruya-p1", &ids(&["a;b"]), &[]).is_err());
+        assert!(park_audio_command("ruya-p1", &[], &ids(&["--x"])).is_err());
+    }
+
+    #[test]
+    fn a_reclaim_writes_each_cgroup_as_the_profile_user_and_names_only_its_cgroups() {
+        let cg = "/user.slice/user-1001.slice/user@1001.service/app.slice/ruya-app-ruya-p1-org.x.Game.service";
+        let scope = "/user.slice/user-1001.slice/user@1001.service/app.slice/app-flatpak-org.x.Game-42.scope";
+        let args = reclaim_command(
+            "ruya-p1",
+            "org.x.Game",
+            &[(100, cg.to_owned()), (2048, scope.to_owned())],
+        )
+        .expect("valid");
+        assert!(args.contains(&"--machine=ruya-p1@.host".to_owned()));
+        assert!(args.contains(&"--unit=ruya-reclaim-org.x.Game.service".to_owned()));
+        let tail = &args[args.iter().position(|a| a == "--").expect("--") + 1..];
+        assert_eq!(
+            tail,
+            [
+                "/usr/bin/sh".to_owned(),
+                "-c".to_owned(),
+                RECLAIM_SCRIPT.to_owned(),
+                "ruya-reclaim".to_owned(),
+                "100".to_owned(),
+                format!("/sys/fs/cgroup{cg}/memory.reclaim"),
+                "2048".to_owned(),
+                format!("/sys/fs/cgroup{scope}/memory.reclaim"),
+            ]
+        );
+        for bad in [
+            "/system.slice/ruya-session.service",
+            "/user.slice/user-1001.slice/../../system.slice",
+            "/user.slice/user-1001.slice/x;y",
+            "user.slice/user-1001.slice/x",
+        ] {
+            assert!(
+                reclaim_command("ruya-p1", "org.x.Game", &[(1, bad.to_owned())]).is_err(),
+                "{bad:?}"
+            );
+        }
+        assert!(reclaim_command("ruya-p1", "org.x.Game", &[]).is_err());
+        assert!(reclaim_command("root", "org.x.Game", &[(1, cg.to_owned())]).is_err());
+        assert!(cancel_reclaim_command("ruya-p1", "org.x.Game")
+            .expect("valid")
+            .ends_with(&ids(&[
+                "stop",
+                "--no-block",
+                "ruya-reclaim-org.x.Game.service"
+            ])));
+    }
+
+    #[test]
+    fn half_of_the_charged_memory_is_asked_for() {
+        assert_eq!(reclaim_amount(0), 0);
+        assert_eq!(reclaim_amount(1_000_000_000), 500_000_000);
+    }
+
+    #[test]
+    fn the_cgroups_of_the_units_are_read_from_systemctl_show() {
+        let args = control_groups_command("ruya-p1", &ids(&["a.service", "app-flatpak-x-1.scope"]))
+            .expect("valid");
+        assert!(args.ends_with(&ids(&[
+            "show",
+            "-p",
+            "ControlGroup",
+            "--value",
+            "a.service",
+            "app-flatpak-x-1.scope"
+        ])));
+        assert!(control_groups_command("ruya-p1", &[]).is_err());
+        assert!(control_groups_command("ruya-p1", &ids(&["a b"])).is_err());
+        let text = "/user.slice/user-1001.slice/user@1001.service/app.slice/a.service\n\n\
+                    /user.slice/user-1001.slice/user@1001.service/app.slice/b.scope\n\n\n\
+                    /user.slice/user-1001.slice/user@1001.service/app.slice/a.service\n";
+        assert_eq!(parse_control_groups(text).len(), 2);
+        // A unit that is gone has an empty ControlGroup: nothing.
+        assert!(parse_control_groups("\n\n").is_empty());
+    }
+
+    #[test]
+    fn swap_is_an_active_swap_unit() {
+        assert!(any_swap(
+            "dev-zram0.swap loaded active active Compressed Swap on /dev/zram0\n"
+        ));
+        assert!(!any_swap(""));
+        assert!(!any_swap("\n"));
     }
 
     #[test]
