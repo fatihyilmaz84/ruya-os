@@ -842,6 +842,7 @@ Item {
                             readonly property var row: menu.rowOf(modelData)
                             readonly property bool isPanelRow: row !== null && !isVolume
                             readonly property bool isChoice: row !== null && row.kind === "choice"
+                            readonly property bool isInfo: row !== null && row.kind === "info"
                             readonly property string rowText: isPanelRow && row.value ? row.value() : ""
                             readonly property bool rowDim: isPanelRow && row.dim ? row.dim() : false
                             readonly property int line: isTiles ? parseInt(modelData.substring(6)) : 0
@@ -879,7 +880,7 @@ Item {
                             }
                             Text {
                                 id: itemLabel
-                                visible: !action.isTiles
+                                visible: !action.isTiles && !action.isInfo
                                 // Volume and Recent rows start at the left edge; the others are centred.
                                 readonly property real leftEdge: action.isRecent ? thumb.x + thumb.width + Theme.spaceS * menu.u
                                                                                   : Theme.spaceL * menu.u
@@ -926,7 +927,7 @@ Item {
                             Row {
                                 id: panelValue
                                 objectName: "hubRowValue"
-                                visible: action.isPanelRow
+                                visible: action.isPanelRow && !action.isInfo
                                 anchors { right: parent.right; rightMargin: Theme.spaceL * menu.u; verticalCenter: parent.verticalCenter }
                                 spacing: Theme.spaceXs * menu.u
                                 readonly property bool arrows: action.isChoice && action.row.choices().length > 1
@@ -955,6 +956,34 @@ Item {
                                     text: "›"
                                     color: Theme.text
                                     font.pixelSize: Theme.typeBody * menu.u
+                                }
+                            }
+                            // A reading (an info row, T-452): the label small above, the value under it at the full width, so
+                            // "Not available on this console" is never cut off. The value is `textDim` only when the console
+                            // has no such source.
+                            Column {
+                                id: infoRow
+                                visible: action.isInfo
+                                x: Theme.spaceL * menu.u
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: action.width - 2 * Theme.spaceL * menu.u
+                                Text {
+                                    width: parent.width
+                                    textFormat: Text.PlainText
+                                    text: action.label
+                                    color: Theme.text
+                                    font.pixelSize: Theme.typeCaption * menu.u
+                                    font.weight: Theme.weightDemiBold
+                                    elide: Text.ElideRight
+                                }
+                                Text {
+                                    objectName: "hubInfoValue"
+                                    width: parent.width
+                                    textFormat: Text.PlainText
+                                    text: action.rowText
+                                    color: action.rowDim ? Theme.textDim : Theme.text
+                                    font.pixelSize: Theme.typeBody * menu.u
+                                    elide: Text.ElideRight
                                 }
                             }
                             // A line of quick tiles: three across the panel, `spaceS` apart.

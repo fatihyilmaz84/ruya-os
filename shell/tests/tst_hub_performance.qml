@@ -146,7 +146,8 @@ Item {
 
         function rowName(key) { return find("quickMenuItem_" + key).Accessible.name }
         // The value part of a row (the accessible name is "<label>, <value>").
-        function valueOf(key) { return findChild(find("quickMenuItem_" + key), "hubValueText").text }
+        function valueText(key) { return findChild(find("quickMenuItem_" + key), "hubInfoValue") }
+        function valueOf(key) { return valueText(key).text }
 
         // ---- the entry, the rows and Back ---------------------------------------------------------------
 
@@ -247,7 +248,7 @@ Item {
             tryVerify(() => rowName("performance:gpu") === "GPU, 41 %", 3000)
             tryVerify(() => rowName("performance:ram") === "RAM, 3.2 GB of 8 GB", 3000)
             verify(valueOf("performance:cputemp") !== "")
-            compare(findChild(find("quickMenuItem_performance:cputemp"), "hubValueText").color, Theme.text)
+            compare(valueText("performance:cputemp").color, Theme.text)
             keyClick(Qt.Key_Escape)
         }
 
@@ -258,7 +259,9 @@ Item {
             tryVerify(() => Performance.valid && Performance.fresh, 3000)
             compare(rowName("performance:vram"), "VRAM, Not available on this console")
             compare(rowName("performance:gputemp"), "GPU temperature, Not available on this console")
-            compare(findChild(find("quickMenuItem_performance:vram"), "hubValueText").color, Theme.textDim)
+            verify(!valueText("performance:vram").truncated, "the whole sentence is shown, not cut off")
+            verify(!valueText("performance:gputemp").truncated)
+            compare(valueText("performance:vram").color, Theme.textDim)
             // The frame meter without a compositor window (this host) is unsupported too.
             compare(Performance.frameState, "unsupported")
             compare(rowName("performance:frames"), "Frames, Not available on this console")
@@ -275,7 +278,7 @@ Item {
             compare(rowName("performance:gpu"), "GPU, Measuring...")
             compare(rowName("performance:power"), "Power, Measuring...")
             compare(rowName("performance:cputemp"), "CPU temperature, 52 °C", "a temperature has a number at once")
-            compare(findChild(find("quickMenuItem_performance:cpu"), "hubValueText").color, Theme.text)
+            compare(valueText("performance:cpu").color, Theme.text)
             keyClick(Qt.Key_Escape)
         }
 
@@ -321,6 +324,7 @@ Item {
             Performance.fakeFrameClockMs(t + 5)
             Performance.updateFrames()
             tryVerify(() => rowName("performance:frames") === "Frames, 60 FPS · 17 ms, slowest 17 ms", 2000, rowName("performance:frames"))
+            verify(!valueText("performance:frames").truncated, "the whole line is shown")
             keyClick(Qt.Key_Escape)
         }
 
