@@ -26,6 +26,7 @@ The lead gives you: the task file, the worktree path and branch, and the builder
    - **Design:** tokens and components only; no new token or component unless the task allowed it.
    - **Scope:** nothing outside the task's Scope; no `docs/STATUS.md` edits; follow-ups are `inbox` lines, not code.
    - **Docs:** specs describe what the code now does; the Outcome is honest; `Verified:` matches what actually ran.
+   - **What a running app experiences** (owner, 2026-11-11: T-457 froze every game and `docs/developers` kept saying it runs on): if the diff changes an app's lifecycle, focus, freezing, input routing, audio, windowing, sandbox or the files it may touch, the matching page in `docs/developers/` changes in the same branch, or the HANDOFF has a `possibly public:` line; else that is a blocking finding.
 6. Prefer few, high-confidence findings over many speculative ones. Cite `file:line`.
 
 ## Verdict rules

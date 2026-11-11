@@ -1,6 +1,6 @@
 # T-466 — Frozen apps release their audio stream and, after a while, their memory
 
-Status: todo · Phase: 2 · Depends: T-465 · Area: services (ruya-session) · Size: M · Owner: builder · Complexity: complex · Developer surface: none
+Status: todo · Phase: 2 · Depends: T-465 · Area: services (ruya-session) · Size: M · Owner: builder · Complexity: complex · Developer surface: public-format
 
 ## Goal
 A frozen game costs no CPU or GPU, but it still keeps the audio graph busy and holds all its memory. Make a frozen app as cheap as it can be without making Resume slow or noisy.
@@ -15,6 +15,7 @@ A frozen game costs no CPU or GPU, but it still keeps the audio graph busy and h
 3. Contract: if the shell needs to know (e.g. a "Paused" state that now also means "memory released"), extend `Session1` first (CLAUDE.md); otherwise say why not.
 
 ## Acceptance criteria
+- [ ] Developer guide (lead-11 rule: it changes what a running app experiences): `docs/developers/fullscreen-and-lifecycle.md` (with T-468): a frozen game's audio stream is detached and its memory may be swapped out; `ruya-api-reviewer` at merge
 - [ ] Rust unit tests for the audio detach/restore and the reclaim timing (pure core, as in `services/CLAUDE.md`)
 - [ ] VM (lead run): `vm-session-check.sh` frozen app: its stream is not linked and the sink suspends; after the delay its cgroup's anon memory drops; Thaw restores the stream; `Verified: host (vm pending: <check>)`
 - [ ] Dell numbers in the Outcome later (lead): idle power with a frozen game, Resume time

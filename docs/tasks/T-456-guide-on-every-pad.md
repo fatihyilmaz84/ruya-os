@@ -1,6 +1,6 @@
 # T-456 — Guide on every pad: long press for Power, Guide never reaches the game, a keyboard shortcut
 
-Status: todo · Phase: 2 · Depends: T-367, T-396 · Area: shell, services (Ruya Input) · Size: S · Owner: builder · Complexity: normal · Developer surface: none
+Status: todo · Phase: 2 · Depends: T-367, T-396 · Area: shell, services (Ruya Input) · Size: S · Owner: builder · Complexity: normal · Developer surface: public-format
 
 ## Goal
 Any connected pad's Guide/Home button opens and closes the Hub, a long press opens Power, the game never sees that press, and a keyboard opens the Hub too.
@@ -15,6 +15,7 @@ Any connected pad's Guide/Home button opens and closes the Hub, a long press ope
 4. Configurable shortcuts are not here (a later task after T-366's design).
 
 ## Acceptance criteria
+- [ ] Developer guide (lead-11 rule: it changes what a running app experiences): `docs/developers/controller-input.md` and `fullscreen-and-lifecycle.md`: the Guide button and its long press never reach the game; `ruya-api-reviewer` at merge
 - [ ] Short and long press from two pads on the mock open the Hub and Power (tests)
 - [ ] The game's virtual pad sees no Guide event (test in the input service or the VM)
 - [ ] VM (lead run): extend `vm-app-check.sh` or the input check: Guide over the test client opens the Hub and the client logs no Guide key
