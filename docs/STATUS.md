@@ -15,7 +15,7 @@ Verification legend: **host** = built and tested on Windows · **host (vm pendin
 
 ## Board
 
-**NEXT → T-463** (faster test run; T-453 in flight). T-462, T-458, T-452 merged. Owner, 2026-11-10: Ruya Hub first, then Ruya Input. Builders, in order: T-463, then T-454, T-455 (each edits QuickMenu.qml or Shell.qml: **one at a time**); a second lane takes T-427, T-431, T-433, then the first rows of `STATUS-backlog.md`. Lead: T-461 (XWayland spike), T-366 (Ruya Input spike; then T-367, T-456, T-381, T-380), the Dell pass T-355. T-283, T-284, T-287, T-288 wait for T-282; T-397..T-399 wait for T-366 and T-396. The Depends column lists only dependencies that are not `done`.
+**NEXT → T-464** (a frozen game thawed behind another game; T-453 in flight), then T-463 (faster test run). T-462, T-458, T-452 merged. Owner, 2026-11-10: Ruya Hub first, then Ruya Input. Builders, in order: T-464, T-463, T-465 (image; a second lane may take it), T-466, then T-454, T-455 (each edits QuickMenu.qml or Shell.qml: **one at a time**); a second lane takes T-427, T-431, T-433, then the first rows of `STATUS-backlog.md`. Lead: T-461 (XWayland spike), T-366 (Ruya Input spike; then T-367, T-456, T-381, T-380), the Dell pass T-355. T-283, T-284, T-287, T-288 wait for T-282; T-397..T-399 wait for T-366 and T-396. The Depends column lists only dependencies that are not `done`.
 
 **How work runs (owner, 2026-11-04):** the lead dispatches `ruya-builder` agents (at most two at a time, own worktrees, different areas), has each branch reviewed by `ruya-reviewer` and merges it (`docs/LEAD.md`). Dispatched builders never edit this file; one "VM (this task)" runs at a time. A builder the owner starts directly takes NEXT alone in the main checkout and does the bookkeeping (`CLAUDE.md`).
 
@@ -54,6 +54,9 @@ Triaged 2026-11-10 (lead-9): the lines before are verbatim in [`STATUS-parked.md
 - (T-452 review) Hub Performance follow-ups: a test that RAM/VRAM take the worse state when used and total differ; `pendingChoice` keeps its target until close if an ok SetOutput lands elsewhere; a `listBox` height binding loop at QuickMenu.qml:750 (seen in tst_hub_pause); the interval as a Settings row if wanted; confirm the copy "(last reading)".
 - (T-452 UX) Quick-menu panel text size and contrast at 10 ft (readings are small, as in the other panels); reading rows take focus but do nothing.
 - (T-452 design) Gate `textDim` on the Hub pill fill and `focusFill` in `tst_theme_contrast`, so "textDim only on opaque surfaces" is checked for Hub rows.
+- (lead-11 Dell study) Superfluous Returnz segfaults at start on 0.0.64 (status 139 after 5 s): was it running before?
+- (lead-11 Dell study) The compositor takes 4-11 % of a core while a game is in front; BombSquad and Asteroid Shooter busy-loop at their menus (116 %, 100 %): measure with T-455.
+- (lead-11) T-453 round 1 reviewers: Hub reading rows take focus but do nothing (UX); the listBox height binding loop (QuickMenu.qml ~811) shows in tst_hub_performance and tst_hub_pause.
 - (lead-10) Untriaged follow-ups from T-434, T-435, T-449, T-451, T-448, T-429, T-457, T-450, T-459, T-460, T-428 and the Dell launch test are verbatim in `STATUS-parked.md`, "Inbox lines lead-10 (untriaged)": plan them at the next planning pass (some feed T-452..T-455, T-461, T-462).
 
 - (lead-9, second triage) The lines from T-423, T-421 and T-424 are verbatim in `STATUS-parked.md`, "Inbox triage 2026-11-10 (lead-9, second)"; they became T-431 (image hardening), T-432 (SELinux domains), T-433 (quick-xml, zbus 6, CI actions), T-434 (glass cost, Performance rows), T-435 (ACBR window, orphaned scopes), T-430 and T-282 additions, T-425 (release profile) and the next-image list.
@@ -77,6 +80,7 @@ The long form of each, with options and recommendations: `STATUS-parked.md`, "Op
 - **Release security (T-426, later):** signing key holder, disk encryption, refused Flathub permissions.
 - **Ludusavi manifest licence (ADR-028, T-400)**; **telemetry backend and notice (T-224/T-225)**; **parked:** `.play` (T-228), Epic (T-270, ADR-018).
 - **Pad art and glyph licence (T-199)**; **brand/logo (T-269)**; **drive formats (T-332)**.
+- **A cap on frozen games (T-464..T-466, lead-11 Dell study):** a frozen game costs no CPU but 0.2-1.3 GB (an STK race 1.0 GB); 8 GB fits two frozen heavy games plus one running. Recommended: no cap now, zram (T-465) first; revisit with Proton titles.
 - **Small ones:** CPU per game (T-363), Dolby/DTS names (T-219), update size (T-195), HDR/VRR (T-218/T-222), Flatpak runtime in a dev image (T-214), dev ISO erases disks (B-002), preinstalled apps (T-248), a spare low-tier PC, one admin, Turkish review, WSL VHD off C:.
 
 ## Session log (newest first, the latest five; older entries in `STATUS-log.md`)
