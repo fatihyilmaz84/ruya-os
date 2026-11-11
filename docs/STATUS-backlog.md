@@ -4,7 +4,6 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 
 | ID | Title | Status | Depends |
 |---|---|---|---|
-| [T-452](tasks/T-452-hub-performance-panel.md) | Hub Performance panel | in-progress | — |
 | [T-453](tasks/T-453-hub-controllers-panel.md) | Hub Controllers panel | todo | — |
 | [T-454](tasks/T-454-hub-display-tiles.md) | Hub display: mode, resolution and refresh rate, brightness where supported | todo | — |
 | [T-455](tasks/T-455-hub-latency-and-idle-cost.md) | Hub budgets: activation latency, idle cost, game FPS with the Hub open (Dell) | todo | — |
