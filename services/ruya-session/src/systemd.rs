@@ -50,11 +50,13 @@ use crate::follow::{
 };
 use crate::scope::{RunScopes, Sweep};
 use crate::spawner::{
-    active_app_scopes, app_scopes, control_command, flatpak_app_installed, launch_command,
-    list_scopes_command, parse_profile_users, parse_show, pulse_start_command, sweep_commands,
-    unit_app_id, unit_name, LineTail, RunFollower, RunningUnit, ShowUnit, SHOW_PROPERTIES,
+    active_app_scopes, any_swap, app_scopes, cancel_reclaim_command, control_command,
+    control_groups_command, flatpak_app_installed, launch_command, list_scopes_command,
+    park_audio_command, parse_control_groups, parse_profile_users, parse_show, pulse_start_command,
+    reclaim_amount, reclaim_command, sweep_commands, unit_app_id, unit_name, LineTail, RunFollower,
+    RunningUnit, ShowUnit, SHOW_PROPERTIES, SWAP_COMMAND,
 };
-use crate::spawner::{Spawner, UnitEvent};
+use crate::spawner::{AudioJob, AudioQueue, Spawner, UnitEvent, PARK_RETRY};
 use std::ffi::OsString;
 use zbus::address::transport::{Transport, Unixexec};
 use zbus::Address;
@@ -210,10 +212,148 @@ fn sweep(sweeps: Vec<Sweep>) {
     }
 }
 
+/// How long one `ruya-devices --park-audio` run may take (its unit has `RuntimeMaxSec=15`).
+const PARK_LIMIT: Duration = Duration::from_secs(20);
+/// How long one reclaim may take (its unit has `RuntimeMaxSec=30`).
+const RECLAIM_LIMIT: Duration = Duration::from_secs(40);
+/// How often the swap state is read again (`swap_active` answers from the last reading).
+const SWAP_EVERY: Duration = Duration::from_secs(60);
+
+/// Runs the sound requests one after the other, so a Thaw's request is never overtaken by the
+/// Freeze's before it; a newer request of a user replaces a queued one, and a failed one is tried
+/// again `PARK_RETRY` later, up to `PARK_TRIES` in all, unless a newer one of that user came in
+/// meanwhile (`AudioQueue`). Each request is the whole state of that user (`park.rs` in
+/// ruya-devices), so the newest is all that matters.
+fn park_audio_worker(jobs: std::sync::mpsc::Receiver<AudioJob>) {
+    use std::sync::mpsc::RecvTimeoutError;
+    let mut queue = AudioQueue::default();
+    loop {
+        if queue.is_empty() {
+            match jobs.recv() {
+                Ok(job) => queue.push(job),
+                Err(_) => return,
+            }
+        }
+        while let Ok(job) = jobs.try_recv() {
+            queue.push(job);
+        }
+        let Some((job, tries)) = queue.pop() else {
+            continue;
+        };
+        if tries > 0 {
+            // The pause before a retry still takes in new requests; a newer one of this user
+            // replaces the retry.
+            let until = Instant::now() + PARK_RETRY;
+            while let Some(left) = until.checked_duration_since(Instant::now()) {
+                match jobs.recv_timeout(left) {
+                    Ok(newer) => queue.push(newer),
+                    Err(RecvTimeoutError::Timeout) => break,
+                    Err(RecvTimeoutError::Disconnected) => return,
+                }
+            }
+            if queue.has(&job.0) {
+                continue;
+            }
+        }
+        let (user, frozen, running) = &job;
+        let args = match park_audio_command(user, frozen, running) {
+            Ok(args) => args,
+            Err(err) => {
+                eprintln!("ruya-session: no park-audio for {user}: {err}");
+                continue;
+            }
+        };
+        let started = Instant::now();
+        let done = run_bounded(&args, PARK_LIMIT).is_some();
+        eprintln!(
+            "ruya-session: park-audio {user} frozen=[{}] running=[{}]: {} in {} ms (try {})",
+            frozen.join(","),
+            running.join(","),
+            if done { "done" } else { "failed" },
+            started.elapsed().as_millis(),
+            tries + 1
+        );
+        if !done && !queue.failed(job.clone(), tries) {
+            eprintln!("ruya-session: park-audio {user}: given up (or a newer request is queued)");
+        }
+    }
+}
+
+/// Reads the swap state every `SWAP_EVERY` into `swap` (T-466), so `swap_active` never blocks the
+/// core's tick (it runs under the session lock).
+fn watch_swap(swap: Arc<std::sync::atomic::AtomicBool>) {
+    let args: Vec<String> = SWAP_COMMAND.iter().map(|s| (*s).to_owned()).collect();
+    loop {
+        let on = run_bounded(&args, SYSTEMCTL_LIMIT).is_some_and(|out| any_swap(&out));
+        swap.store(on, std::sync::atomic::Ordering::Relaxed);
+        std::thread::sleep(SWAP_EVERY);
+    }
+}
+
+/// `memory.current` of a cgroup (a path as `ControlGroup` gives it), in bytes.
+fn memory_current(cgroup: &str) -> Option<u64> {
+    std::fs::read_to_string(format!("/sys/fs/cgroup{cgroup}/memory.current"))
+        .ok()
+        .and_then(|s| s.trim().parse().ok())
+}
+
+/// The reclaim of one frozen app (T-466), on its own thread: the unit and the app's active scopes,
+/// their cgroups from the manager, `reclaim_amount` of each one's `memory.current`, written by a
+/// transient unit of the profile user (`reclaim_command`). Logs what it asked and what moved.
+fn reclaim_app(unit: String, user: String, app_id: String) {
+    let Some(listing) = list_scopes_command(&user, &app_id)
+        .ok()
+        .and_then(|args| run_bounded(&args, SYSTEMCTL_LIMIT))
+    else {
+        return eprintln!("ruya-session: {unit}: no reclaim, the scopes could not be listed");
+    };
+    let mut units = vec![unit.clone()];
+    units.extend(active_app_scopes(&app_id, &listing));
+    let Some(text) = control_groups_command(&user, &units)
+        .ok()
+        .and_then(|args| run_bounded(&args, SYSTEMCTL_LIMIT))
+    else {
+        return eprintln!("ruya-session: {unit}: no reclaim, the cgroups could not be read");
+    };
+    let cgroups = parse_control_groups(&text);
+    let before: Vec<(String, u64)> = cgroups
+        .iter()
+        .filter_map(|cg| memory_current(cg).map(|bytes| (cg.clone(), bytes)))
+        .collect();
+    let targets: Vec<(u64, String)> = before
+        .iter()
+        .map(|(cg, bytes)| (reclaim_amount(*bytes), cg.clone()))
+        .filter(|(amount, _)| *amount > 0)
+        .collect();
+    let args = match reclaim_command(&user, &app_id, &targets) {
+        Ok(args) => args,
+        Err(err) => return eprintln!("ruya-session: {unit}: no reclaim: {err}"),
+    };
+    let started = Instant::now();
+    let done = run_bounded(&args, RECLAIM_LIMIT).is_some();
+    let mib = |b: u64| b / (1024 * 1024);
+    let was: u64 = before.iter().map(|(_, b)| b).sum();
+    let now: u64 = before.iter().filter_map(|(cg, _)| memory_current(cg)).sum();
+    let asked: u64 = targets.iter().map(|(a, _)| a).sum();
+    eprintln!(
+        "ruya-session: {unit}: memory reclaim {} in {} ms: asked {} MiB of {} cgroups, memory.current {} -> {} MiB",
+        if done { "done" } else { "failed" },
+        started.elapsed().as_millis(),
+        mib(asked),
+        targets.len(),
+        mib(was),
+        mib(now)
+    );
+}
+
 pub struct SystemdSpawner {
     flatpak_root: PathBuf,
     log_dir: PathBuf,
     gate: Gate,
+    /// The sound requests, to `park_audio_worker` (T-466).
+    audio: Mutex<std::sync::mpsc::Sender<AudioJob>>,
+    /// Is swap active, as `watch_swap` last read it (T-466).
+    swap: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl SystemdSpawner {
@@ -230,10 +370,27 @@ impl SystemdSpawner {
         {
             eprintln!("ruya-session: cannot watch the Flatpak scopes: {err}");
         }
+        let (audio, jobs) = std::sync::mpsc::channel();
+        if let Err(err) = std::thread::Builder::new()
+            .name("park-audio".to_owned())
+            .spawn(move || park_audio_worker(jobs))
+        {
+            eprintln!("ruya-session: cannot park the sound of frozen apps: {err}");
+        }
+        let swap = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let watched = Arc::clone(&swap);
+        if let Err(err) = std::thread::Builder::new()
+            .name("swap".to_owned())
+            .spawn(move || watch_swap(watched))
+        {
+            eprintln!("ruya-session: cannot watch the swap: no memory is reclaimed: {err}");
+        }
         SystemdSpawner {
             flatpak_root: PathBuf::from(FLATPAK_ROOT),
             log_dir: PathBuf::from(LOG_DIR),
             gate,
+            audio: Mutex::new(audio),
+            swap,
         }
     }
 
@@ -384,6 +541,57 @@ impl Spawner for SystemdSpawner {
 
     fn thaw(&self, unit: &str) -> Result<(), String> {
         self.freezer(unit, "thaw")
+    }
+
+    fn app_audio(&self, user: &str, frozen: &[String], running: &[String]) {
+        let job = (user.to_owned(), frozen.to_vec(), running.to_vec());
+        let sent = self
+            .audio
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .send(job);
+        if sent.is_err() {
+            eprintln!(
+                "ruya-session: the park-audio worker is gone: the sound of {user} stays as it is"
+            );
+        }
+    }
+
+    /// `systemctl list-units --type=swap --state=active` in the system manager, bounded.
+    /// The last reading of `watch_swap` (at most `SWAP_EVERY` old); never blocks.
+    fn swap_active(&self) -> bool {
+        self.swap.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    fn reclaim(&self, unit: &str) -> Result<(), String> {
+        let (user, app_id) = self.owner_of(unit)?;
+        let unit = unit.to_owned();
+        std::thread::Builder::new()
+            .name("reclaim".to_owned())
+            .spawn(move || reclaim_app(unit, user, app_id))
+            .map(|_| ())
+            .map_err(|err| format!("cannot start a thread for the reclaim: {err}"))
+    }
+
+    /// `systemctl --user -M <user>@.host stop --no-block ruya-reclaim-<app>.service`, on its own
+    /// thread (the thaw must not wait for it).
+    fn cancel_reclaim(&self, unit: &str) {
+        let Ok((user, app_id)) = self.owner_of(unit) else {
+            return;
+        };
+        match cancel_reclaim_command(&user, &app_id) {
+            Ok(args) => {
+                let spawned = std::thread::Builder::new()
+                    .name("reclaim-stop".to_owned())
+                    .spawn(move || {
+                        run_bounded(&args, SYSTEMCTL_LIMIT);
+                    });
+                if let Err(err) = spawned {
+                    eprintln!("ruya-session: cannot stop the reclaim of {unit}: {err}");
+                }
+            }
+            Err(err) => eprintln!("ruya-session: cannot stop the reclaim of {unit}: {err}"),
+        }
     }
 
     /// `/proc/<pid>/cgroup` (T-459). Root reads it for every user's process under this unit's

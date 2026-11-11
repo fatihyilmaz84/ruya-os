@@ -5,6 +5,7 @@
 //! An instance goes `starting -> running -> stopping`, and `exited` is the end: an exited
 //! instance is reported once (a `Notice::Exited`) and removed, so it never shows in `list`.
 
+use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
 use crate::directory::ProfileDirectory;
@@ -13,8 +14,42 @@ use crate::spawner::{
     with_pulse_server, Spawner, UnitEvent,
 };
 
-/// After `Stop`, the app has this long to quit before it is killed.
+/// After `Stop`, the app has this long to quit before it is killed. It counts from the stop
+/// itself, after the thaw of a frozen app (which can take up to two bounded `systemctl` calls).
 pub const STOP_GRACE: Duration = Duration::from_secs(5);
+
+/// A frozen app's memory is moved out to swap once it has been frozen this long (T-466): never
+/// at the Freeze itself, which is when the Hub opens and must stay instant.
+pub const RECLAIM_AFTER: Duration = Duration::from_secs(30);
+
+/// Where the time of a call comes from: an `Instant` (tests) or a clock read when the core needs
+/// it (`Instant::now`), so `stop` can take the time after a slow thaw.
+pub trait Clock {
+    fn now(&self) -> Instant;
+}
+
+impl Clock for Instant {
+    fn now(&self) -> Instant {
+        *self
+    }
+}
+
+impl<F: Fn() -> Instant> Clock for F {
+    fn now(&self) -> Instant {
+        self()
+    }
+}
+
+/// The memory reclaim of one freeze (T-466).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Reclaim {
+    /// Not due yet (or not frozen).
+    Waiting,
+    /// Started: a thaw cancels it in case it still runs.
+    Sent,
+    /// Not done for this freeze (no swap, or it could not start).
+    Skipped,
+}
 
 /// The status strings of `org.ruyaos.Session1` (stable API).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -125,6 +160,8 @@ pub struct FrozenChange {
 #[derive(Debug)]
 struct Instance {
     unit: String,
+    /// The profile's Unix user ("ruya-p1").
+    user: String,
     app_id: String,
     profile: String,
     started: i64,
@@ -138,6 +175,9 @@ struct Instance {
     hidden: bool,
     /// Frozen by `freeze` and not thawed since (T-457).
     frozen: bool,
+    /// When this freeze began (T-466; an adopted frozen app: when it was adopted).
+    frozen_at: Option<Instant>,
+    reclaim: Reclaim,
 }
 
 pub struct Session<S, D> {
@@ -149,6 +189,9 @@ pub struct Session<S, D> {
     instances: Vec<Instance>,
     /// `frozen` changes not yet taken by the adapter (`take_frozen_changes`).
     frozen_changes: Vec<FrozenChange>,
+    /// The last sound request per profile user (`app_audio`: frozen apps, running apps), kept
+    /// while it has a frozen app (T-466).
+    audio_sent: HashMap<String, (Vec<String>, Vec<String>)>,
 }
 
 impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
@@ -162,6 +205,7 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
             pulse_dir: None,
             instances: Vec::new(),
             frozen_changes: Vec::new(),
+            audio_sent: HashMap::new(),
         }
     }
 
@@ -224,6 +268,7 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
             Ok(unit) => {
                 self.instances.push(Instance {
                     unit: unit.clone(),
+                    user: user.clone(),
                     app_id: app_id.to_owned(),
                     profile: profile.to_owned(),
                     started: unix,
@@ -233,7 +278,11 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
                     kill_sent: false,
                     hidden: false,
                     frozen: false,
+                    frozen_at: None,
+                    reclaim: Reclaim::Waiting,
                 });
+                // A new app of a profile with a frozen one may play: its sound must not be parked.
+                self.sync_audio(&user, false);
                 (Status::Ok, unit)
             }
             Err(err) => {
@@ -251,8 +300,9 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
     }
 
     /// Asks the app to quit; `tick` kills it if it does not. Stopping an instance that is
-    /// already stopping is `Ok` and changes nothing.
-    pub fn stop(&mut self, instance: &str, now: Instant) -> Status {
+    /// already stopping is `Ok` and changes nothing. The grace time starts when the stop is sent:
+    /// `clock` is read after the thaw of a frozen app, so a slow thaw does not eat it.
+    pub fn stop(&mut self, instance: &str, clock: impl Clock) -> Status {
         let Some(inst) = self.instances.iter_mut().find(|i| i.unit == instance) else {
             return Status::UnknownInstance;
         };
@@ -262,6 +312,11 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
         if inst.frozen {
             // A frozen app cannot handle the SIGTERM of the stop: thaw it first (T-457). A failed
             // thaw still stops it; the kill after the grace time ends even a frozen process.
+            if inst.reclaim == Reclaim::Sent {
+                self.spawner.cancel_reclaim(&inst.unit);
+            }
+            inst.frozen_at = None;
+            inst.reclaim = Reclaim::Waiting;
             if let Err(err) = self.spawner.thaw(&inst.unit) {
                 eprintln!(
                     "ruya-session: thawing {} before its stop failed: {err}",
@@ -274,17 +329,20 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
                 frozen: false,
             });
         }
-        match self.spawner.stop(&inst.unit) {
+        let user = inst.user.clone();
+        let status = match self.spawner.stop(&inst.unit) {
             Ok(()) => {
                 inst.state = State::Stopping;
-                inst.stop_asked = Some(now);
+                inst.stop_asked = Some(clock.now());
                 Status::Ok
             }
             Err(err) => {
                 eprintln!("ruya-session: stopping {} failed: {err}", inst.unit);
                 Status::Failed
             }
-        }
+        };
+        self.sync_audio(&user, false);
+        status
     }
 
     /// The running, listed instance named `instance`, checked for Freeze and Thaw: it must be
@@ -311,7 +369,10 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
     /// Freezes a running app of the signed-in profile (`active`; `None` in development mode, no
     /// check), T-457. A frozen app is left as it is (`Ok`, the OS is not asked again). A failed
     /// freeze is undone (a thaw of the same units) so the app keeps running: `Failed`.
-    pub fn freeze(&mut self, instance: &str, active: Option<&str>) -> Status {
+    ///
+    /// T-466: a frozen app's sound is parked (`app_audio`) and, after `RECLAIM_AFTER`, its memory
+    /// is moved to swap (`tick`); `now` is when this freeze begins.
+    pub fn freeze(&mut self, instance: &str, active: Option<&str>, now: Instant) -> Status {
         let at = match self.freezable(instance, active) {
             Ok(at) => at,
             Err(status) => return status,
@@ -323,10 +384,14 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
         match self.spawner.freeze(&inst.unit) {
             Ok(()) => {
                 inst.frozen = true;
+                inst.frozen_at = Some(now);
+                inst.reclaim = Reclaim::Waiting;
                 self.frozen_changes.push(FrozenChange {
                     instance: inst.unit.clone(),
                     frozen: true,
                 });
+                let user = inst.user.clone();
+                self.sync_audio(&user, false);
                 Status::Ok
             }
             Err(err) => {
@@ -352,14 +417,23 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
             Err(status) => return status,
         };
         let inst = &mut self.instances[at];
+        if inst.reclaim == Reclaim::Sent {
+            // A reclaim still running would page the game out while it plays again (T-466).
+            self.spawner.cancel_reclaim(&inst.unit);
+            inst.reclaim = Reclaim::Skipped;
+        }
         match self.spawner.thaw(&inst.unit) {
             Ok(()) => {
                 if inst.frozen {
                     inst.frozen = false;
+                    inst.frozen_at = None;
+                    inst.reclaim = Reclaim::Waiting;
                     self.frozen_changes.push(FrozenChange {
                         instance: inst.unit.clone(),
                         frozen: false,
                     });
+                    let user = inst.user.clone();
+                    self.sync_audio(&user, false);
                 }
                 Status::Ok
             }
@@ -394,6 +468,7 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
             let orphan = profiles_known && self.directory.unix_user(profile).is_none();
             let mut inst = Instance {
                 unit: found.unit,
+                user: found.user.clone(),
                 app_id: found.app_id,
                 profile: profile.to_owned(),
                 started: if found.started > 0 {
@@ -409,6 +484,8 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
                 // Left frozen by a Freeze before the restart: listed as frozen, so a Stop thaws it
                 // first and a Thaw announces the change (T-457).
                 frozen: found.frozen,
+                frozen_at: found.frozen.then_some(now),
+                reclaim: Reclaim::Waiting,
             };
             if orphan {
                 match self.spawner.stop(&inst.unit) {
@@ -423,6 +500,14 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
                 }
             }
             self.instances.push(inst);
+        }
+        // Whatever was parked before the restart is set right: frozen apps parked, the rest put
+        // back (T-466).
+        let mut users: Vec<String> = self.instances.iter().map(|i| i.user.clone()).collect();
+        users.sort();
+        users.dedup();
+        for user in users {
+            self.sync_audio(&user, true);
         }
         self.list()
     }
@@ -495,6 +580,7 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
             } => {
                 let at = self.instances.iter().position(|i| i.unit == unit)?;
                 let inst = self.instances.remove(at);
+                self.sync_audio(&inst.user, false);
                 if inst.hidden {
                     return None;
                 }
@@ -509,6 +595,7 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
             UnitEvent::ExecFailed { unit } => {
                 let at = self.instances.iter().position(|i| i.unit == unit)?;
                 let inst = self.instances.remove(at);
+                self.sync_audio(&inst.user, false);
                 if inst.hidden {
                     return None;
                 }
@@ -529,8 +616,9 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
         }
     }
 
-    /// Kills the apps that did not quit within `STOP_GRACE` of their `Stop`. Call about once a
-    /// second.
+    /// Kills the apps that did not quit within `STOP_GRACE` of their `Stop`, and starts the
+    /// memory reclaim of the apps frozen for `RECLAIM_AFTER` (T-466; only when swap is active,
+    /// since without it a reclaim only drops clean cache). Call about once a second.
     pub fn tick(&mut self, now: Instant) {
         for inst in &mut self.instances {
             let overdue = inst
@@ -542,6 +630,71 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
                     eprintln!("ruya-session: killing {} failed: {err}", inst.unit);
                 }
             }
+        }
+        let due = |i: &Instance| {
+            i.frozen
+                && !i.hidden
+                && i.state == State::Running
+                && i.reclaim == Reclaim::Waiting
+                && i.frozen_at
+                    .is_some_and(|t| now.saturating_duration_since(t) >= RECLAIM_AFTER)
+        };
+        if !self.instances.iter().any(due) {
+            return;
+        }
+        let swap = self.spawner.swap_active();
+        for inst in self.instances.iter_mut().filter(|i| due(i)) {
+            inst.reclaim = if !swap {
+                eprintln!(
+                    "ruya-session: {}: no swap is active, its memory stays",
+                    inst.unit
+                );
+                Reclaim::Skipped
+            } else {
+                match self.spawner.reclaim(&inst.unit) {
+                    Ok(()) => Reclaim::Sent,
+                    Err(err) => {
+                        eprintln!("ruya-session: reclaiming {} failed: {err}", inst.unit);
+                        Reclaim::Skipped
+                    }
+                }
+            };
+        }
+    }
+
+    /// Asks for the sound of `user`'s apps to match what is frozen (T-466): its frozen apps are
+    /// parked, the rest put back. Only a change is sent, and only while the user has a frozen app
+    /// or had one at the last request; `force` sends it anyway (after a restart of this service,
+    /// when what is parked is not known).
+    fn sync_audio(&mut self, user: &str, force: bool) {
+        let mine: Vec<&Instance> = self
+            .instances
+            .iter()
+            .filter(|i| i.user == user && !i.hidden)
+            .collect();
+        let mut frozen: Vec<String> = mine
+            .iter()
+            .filter(|i| i.frozen)
+            .map(|i| i.app_id.clone())
+            .collect();
+        let mut running: Vec<String> = mine
+            .iter()
+            .filter(|i| i.state != State::Stopping)
+            .map(|i| i.app_id.clone())
+            .collect();
+        for list in [&mut frozen, &mut running] {
+            list.sort();
+            list.dedup();
+        }
+        let before = self.audio_sent.get(user);
+        let changed = before != Some(&(frozen.clone(), running.clone()));
+        if force || (changed && (!frozen.is_empty() || before.is_some())) {
+            self.spawner.app_audio(user, &frozen, &running);
+        }
+        if frozen.is_empty() {
+            self.audio_sent.remove(user);
+        } else {
+            self.audio_sent.insert(user.to_owned(), (frozen, running));
         }
     }
 }
@@ -732,7 +885,7 @@ mod tests {
         let mut s = session();
         let unit = running(&mut s);
         assert!(!frozen_of(&s, &unit));
-        assert_eq!(s.freeze(&unit, Some("p1")), Status::Ok);
+        assert_eq!(s.freeze(&unit, Some("p1"), Instant::now()), Status::Ok);
         assert!(frozen_of(&s, &unit));
         assert_eq!(
             s.take_frozen_changes(),
@@ -742,7 +895,7 @@ mod tests {
             }]
         );
         // A second freeze is a no-op: the OS is not asked again, nothing is announced.
-        assert_eq!(s.freeze(&unit, Some("p1")), Status::Ok);
+        assert_eq!(s.freeze(&unit, Some("p1"), Instant::now()), Status::Ok);
         assert!(s.take_frozen_changes().is_empty());
         assert_eq!(s.thaw(&unit, Some("p1")), Status::Ok);
         assert!(!frozen_of(&s, &unit));
@@ -773,26 +926,39 @@ mod tests {
         let mut s = session();
         let unit = running(&mut s); // p1's
         for active in [Some("p2"), Some("")] {
-            assert_eq!(s.freeze(&unit, active), Status::NotAllowed, "{active:?}");
+            assert_eq!(
+                s.freeze(&unit, active, Instant::now()),
+                Status::NotAllowed,
+                "{active:?}"
+            );
             assert_eq!(s.thaw(&unit, active), Status::NotAllowed, "{active:?}");
         }
         assert!(!frozen_of(&s, &unit));
         assert_eq!(s.spawner.calls(), [format!("start ruya-p1 {APP}")]);
         // Development mode (no active profile known) does not check.
-        assert_eq!(s.freeze(&unit, None), Status::Ok);
+        assert_eq!(s.freeze(&unit, None, Instant::now()), Status::Ok);
     }
 
     #[test]
     fn only_a_running_app_is_frozen() {
         let mut s = session();
-        assert_eq!(s.freeze("", Some("p1")), Status::Invalid);
-        assert_eq!(s.freeze("nope.service", Some("p1")), Status::NotRunning);
+        assert_eq!(s.freeze("", Some("p1"), Instant::now()), Status::Invalid);
+        assert_eq!(
+            s.freeze("nope.service", Some("p1"), Instant::now()),
+            Status::NotRunning
+        );
         assert_eq!(s.thaw("nope.service", Some("p1")), Status::NotRunning);
         let (_, unit) = s.launch(APP, "p1", 0); // still starting
-        assert_eq!(s.freeze(&unit, Some("p1")), Status::NotRunning);
+        assert_eq!(
+            s.freeze(&unit, Some("p1"), Instant::now()),
+            Status::NotRunning
+        );
         s.on_event(UnitEvent::Started { unit: unit.clone() });
         assert_eq!(s.stop(&unit, Instant::now()), Status::Ok); // stopping
-        assert_eq!(s.freeze(&unit, Some("p1")), Status::NotRunning);
+        assert_eq!(
+            s.freeze(&unit, Some("p1"), Instant::now()),
+            Status::NotRunning
+        );
         assert!(!s.spawner.calls().iter().any(|c| c.starts_with("freeze")));
     }
 
@@ -802,7 +968,7 @@ mod tests {
         let dir = ProfileSnapshot::new(["p1".to_owned()]);
         let mut s = Session::new(spawner, dir, Vec::new());
         let unit = running(&mut s);
-        assert_eq!(s.freeze(&unit, Some("p1")), Status::Failed);
+        assert_eq!(s.freeze(&unit, Some("p1"), Instant::now()), Status::Failed);
         assert!(!frozen_of(&s, &unit));
         assert!(s.take_frozen_changes().is_empty());
         assert_eq!(
@@ -815,7 +981,7 @@ mod tests {
     fn a_frozen_app_is_thawed_before_its_stop() {
         let mut s = session();
         let unit = running(&mut s);
-        assert_eq!(s.freeze(&unit, Some("p1")), Status::Ok);
+        assert_eq!(s.freeze(&unit, Some("p1"), Instant::now()), Status::Ok);
         s.take_frozen_changes();
         assert_eq!(s.stop(&unit, Instant::now()), Status::Ok);
         assert_eq!(
@@ -842,6 +1008,218 @@ mod tests {
         assert_eq!(s.stop(&other, Instant::now()), Status::Ok);
         assert_eq!(s.spawner.calls().last(), Some(&format!("stop {other}")));
         assert!(!s.spawner.calls().contains(&format!("thaw {other}")));
+    }
+
+    #[test]
+    fn the_grace_of_a_frozen_apps_stop_starts_after_its_thaw() {
+        // The clock is read only once the thaw is done (a slow thaw, up to two bounded systemctl
+        // calls, must not eat the 5 s the app has to quit).
+        let mut s = session();
+        let unit = running(&mut s);
+        let t0 = Instant::now();
+        assert_eq!(s.freeze(&unit, Some("p1"), t0), Status::Ok);
+        let spy = s.spawner.observer();
+        let thawed = format!("thaw {unit}");
+        let t1 = t0 + Duration::from_secs(9);
+        let clock = move || {
+            assert!(
+                spy.calls().contains(&thawed),
+                "the clock was read before the thaw"
+            );
+            t1
+        };
+        assert_eq!(s.stop(&unit, clock), Status::Ok);
+        s.tick(t1 + STOP_GRACE - Duration::from_millis(1));
+        assert!(!s.spawner.calls().contains(&format!("kill {unit}")));
+        s.tick(t1 + STOP_GRACE);
+        assert_eq!(s.spawner.calls().last(), Some(&format!("kill {unit}")));
+    }
+
+    // ---- The sound of a frozen app (T-466) ----------------------------------------------------
+
+    #[test]
+    fn a_frozen_apps_sound_is_parked_and_put_back_on_the_thaw() {
+        let mut s = session();
+        let unit = running(&mut s);
+        // Running alone asks nothing.
+        assert!(s.spawner.audio_calls().is_empty());
+        assert_eq!(s.freeze(&unit, Some("p1"), Instant::now()), Status::Ok);
+        assert_eq!(
+            s.spawner.audio_calls(),
+            [format!("ruya-p1 frozen={APP} running={APP}")]
+        );
+        // A second Freeze changes nothing and asks nothing.
+        assert_eq!(s.freeze(&unit, Some("p1"), Instant::now()), Status::Ok);
+        assert_eq!(s.spawner.audio_calls().len(), 1);
+        assert_eq!(s.thaw(&unit, Some("p1")), Status::Ok);
+        assert_eq!(
+            s.spawner.audio_calls()[1..],
+            [format!("ruya-p1 frozen= running={APP}")]
+        );
+        // A thaw of an app that is not frozen, a stop and the end ask nothing more.
+        assert_eq!(s.thaw(&unit, Some("p1")), Status::Ok);
+        assert_eq!(s.stop(&unit, Instant::now()), Status::Ok);
+        assert!(s.on_event(exited(&unit, 0, false)).is_some());
+        assert_eq!(s.spawner.audio_calls().len(), 2);
+    }
+
+    #[test]
+    fn every_change_of_a_profile_with_a_frozen_app_is_sent_and_no_other() {
+        let mut s = session();
+        let racer = running(&mut s);
+        assert_eq!(s.freeze(&racer, Some("p1"), Instant::now()), Status::Ok);
+        // Another app of the profile starts: it may play, so the request says it runs.
+        let (_, puzzle) = s.launch("org.ruyaos.Puzzle", "p1", 0);
+        // Another profile's app changes nothing for p1 and, frozen nothing, asks nothing.
+        let (_, p2) = s.launch(APP, "p2", 0);
+        assert!(s.on_event(exited(&p2, 0, false)).is_some());
+        assert!(s.on_event(exited(&puzzle, 0, false)).is_some());
+        // The frozen app is closed: thawed and stopping, so nothing of p1 is frozen or running.
+        assert_eq!(s.stop(&racer, Instant::now()), Status::Ok);
+        assert!(s.on_event(exited(&racer, 0, false)).is_some());
+        assert_eq!(
+            s.spawner.audio_calls(),
+            [
+                format!("ruya-p1 frozen={APP} running={APP}"),
+                format!("ruya-p1 frozen={APP} running=org.ruyaos.Puzzle,{APP}"),
+                format!("ruya-p1 frozen={APP} running={APP}"),
+                "ruya-p1 frozen= running=".to_owned(),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_restart_sets_the_sound_of_every_profile_with_apps_right() {
+        // Before the restart a stream may have been parked (or put back) behind this service's
+        // back: one request per profile user, frozen or not.
+        let spawner = FakeSpawner::new()
+            .with_frozen_running("ruya-p1", APP, 50)
+            .with_running("ruya-p2", APP, 60);
+        let dir = ProfileSnapshot::new(["p1".to_owned(), "p2".to_owned()]);
+        let mut s = Session::new(spawner, dir, Vec::new());
+        s.adopt(100, Instant::now(), true);
+        assert_eq!(
+            s.spawner.audio_calls(),
+            [
+                format!("ruya-p1 frozen={APP} running={APP}"),
+                format!("ruya-p2 frozen= running={APP}"),
+            ]
+        );
+    }
+
+    // ---- The memory of a frozen app (T-466) ---------------------------------------------------
+
+    fn swap_session() -> Session<FakeSpawner, ProfileSnapshot> {
+        let spawner = FakeSpawner::new().with_app(APP).with_swap();
+        let dir = ProfileSnapshot::new(["p1".to_owned()]);
+        Session::new(spawner, dir, Vec::new())
+    }
+
+    fn reclaims(s: &Session<FakeSpawner, ProfileSnapshot>) -> Vec<String> {
+        s.spawner
+            .calls()
+            .into_iter()
+            .filter(|c| c.contains("reclaim"))
+            .collect()
+    }
+
+    #[test]
+    fn a_frozen_apps_memory_is_reclaimed_once_after_30_s_never_at_the_freeze() {
+        let mut s = swap_session();
+        let unit = running(&mut s);
+        let t0 = Instant::now();
+        assert_eq!(s.freeze(&unit, Some("p1"), t0), Status::Ok);
+        s.tick(t0);
+        s.tick(t0 + RECLAIM_AFTER - Duration::from_millis(1));
+        assert!(reclaims(&s).is_empty(), "{:?}", s.spawner.calls());
+        s.tick(t0 + RECLAIM_AFTER);
+        assert_eq!(reclaims(&s), [format!("reclaim {unit}")]);
+        // Once per freeze.
+        s.tick(t0 + RECLAIM_AFTER * 3);
+        assert_eq!(reclaims(&s).len(), 1);
+        // The thaw ends a reclaim that may still run, before it thaws.
+        assert_eq!(s.thaw(&unit, Some("p1")), Status::Ok);
+        let calls = s.spawner.calls();
+        assert_eq!(
+            calls[calls.len() - 2..],
+            [format!("cancel-reclaim {unit}"), format!("thaw {unit}")]
+        );
+        // The next freeze counts from its own start.
+        let t1 = t0 + RECLAIM_AFTER * 4;
+        assert_eq!(s.freeze(&unit, Some("p1"), t1), Status::Ok);
+        s.tick(t1 + RECLAIM_AFTER - Duration::from_millis(1));
+        assert_eq!(reclaims(&s).len(), 2);
+        s.tick(t1 + RECLAIM_AFTER);
+        assert_eq!(reclaims(&s).len(), 3);
+    }
+
+    #[test]
+    fn a_thaw_within_the_delay_means_no_reclaim_and_a_new_freeze_starts_it_again() {
+        let mut s = swap_session();
+        let unit = running(&mut s);
+        let t0 = Instant::now();
+        assert_eq!(s.freeze(&unit, Some("p1"), t0), Status::Ok);
+        s.tick(t0 + Duration::from_secs(20));
+        assert_eq!(s.thaw(&unit, Some("p1")), Status::Ok);
+        let t1 = t0 + Duration::from_secs(25);
+        assert_eq!(s.freeze(&unit, Some("p1"), t1), Status::Ok);
+        s.tick(t0 + RECLAIM_AFTER + Duration::from_secs(1));
+        assert!(reclaims(&s).is_empty(), "{:?}", s.spawner.calls());
+        s.tick(t1 + RECLAIM_AFTER);
+        assert_eq!(reclaims(&s), [format!("reclaim {unit}")]);
+    }
+
+    #[test]
+    fn without_swap_no_memory_is_reclaimed() {
+        let mut s = session();
+        let unit = running(&mut s);
+        let t0 = Instant::now();
+        assert_eq!(s.freeze(&unit, Some("p1"), t0), Status::Ok);
+        s.tick(t0 + RECLAIM_AFTER * 2);
+        assert!(reclaims(&s).is_empty(), "{:?}", s.spawner.calls());
+        // Nothing to cancel at the thaw either.
+        assert_eq!(s.thaw(&unit, Some("p1")), Status::Ok);
+        assert!(reclaims(&s).is_empty());
+    }
+
+    #[test]
+    fn a_running_app_is_never_reclaimed_and_a_stopped_frozen_one_cancels_its_reclaim() {
+        let mut s = swap_session();
+        let unit = running(&mut s);
+        let t0 = Instant::now();
+        s.tick(t0 + RECLAIM_AFTER * 2);
+        assert!(reclaims(&s).is_empty());
+        assert_eq!(s.freeze(&unit, Some("p1"), t0), Status::Ok);
+        s.tick(t0 + RECLAIM_AFTER);
+        assert_eq!(reclaims(&s), [format!("reclaim {unit}")]);
+        assert_eq!(s.stop(&unit, t0 + RECLAIM_AFTER), Status::Ok);
+        let calls = s.spawner.calls();
+        assert_eq!(
+            calls[calls.len() - 3..],
+            [
+                format!("cancel-reclaim {unit}"),
+                format!("thaw {unit}"),
+                format!("stop {unit}")
+            ]
+        );
+    }
+
+    #[test]
+    fn an_adopted_frozen_app_is_reclaimed_30_s_after_its_adoption() {
+        let spawner = FakeSpawner::new()
+            .with_frozen_running("ruya-p1", APP, 50)
+            .with_swap();
+        let dir = ProfileSnapshot::new(["p1".to_owned()]);
+        let mut s = Session::new(spawner, dir, Vec::new());
+        let t0 = Instant::now();
+        s.adopt(100, t0, true);
+        s.tick(t0 + RECLAIM_AFTER - Duration::from_millis(1));
+        assert!(reclaims(&s).is_empty());
+        s.tick(t0 + RECLAIM_AFTER);
+        assert_eq!(
+            reclaims(&s),
+            [format!("reclaim {}", unit_name("ruya-p1", APP))]
+        );
     }
 
     #[test]

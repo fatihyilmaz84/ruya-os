@@ -265,7 +265,7 @@ impl SessionIface {
         let (status, changes) = {
             let mut session = lock(&self.session);
             let status = if freeze {
-                session.freeze(instance, active.as_deref())
+                session.freeze(instance, active.as_deref(), Instant::now())
             } else {
                 session.thaw(instance, active.as_deref())
             };
@@ -318,7 +318,7 @@ impl SessionIface {
     ) -> String {
         let (status, changes): (Status, Vec<FrozenChange>) = {
             let mut session = lock(&self.session);
-            let status = session.stop(instance, Instant::now());
+            let status = session.stop(instance, Instant::now);
             (status, session.take_frozen_changes())
         };
         emit_frozen(&emitter, changes).await;

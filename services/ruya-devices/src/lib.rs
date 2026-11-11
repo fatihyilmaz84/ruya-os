@@ -29,6 +29,7 @@ pub mod network;
 pub mod networkmanager;
 pub mod output_policy;
 pub mod pairing;
+pub mod park;
 pub mod performance;
 pub mod pipewire;
 pub mod report;

@@ -7,6 +7,7 @@ use serde_json::Value;
 
 use crate::audio::{Kind, Sink, Source, SourceKind};
 use crate::output_policy::{Avail, OutKind, Output};
+use crate::park::PARKED_SINK;
 
 /// The outputs and the default node name from a `pw-dump` document. `node.name` is the id (it
 /// survives reboots), `node.description` the display name.
@@ -27,6 +28,10 @@ pub fn parse_dump(json: &str) -> Result<(Vec<Sink>, Option<String>), String> {
                 let Some(id) = props["node.name"].as_str() else {
                     continue;
                 };
+                // Where a frozen game's sound is parked (T-466): never an output to choose.
+                if id == PARKED_SINK {
+                    continue;
+                }
                 let name = props["node.description"]
                     .as_str()
                     .or_else(|| props["node.nick"].as_str())
@@ -53,7 +58,8 @@ pub fn parse_dump(json: &str) -> Result<(Vec<Sink>, Option<String>), String> {
             _ => {}
         }
     }
-    Ok((sinks, default.or(configured)))
+    let default = default.or(configured).filter(|d| d != PARKED_SINK);
+    Ok((sinks, default))
 }
 
 /// The microphones and the default one from a `pw-dump` document (T-449). Only real capture
@@ -796,6 +802,22 @@ mod tests {
             default.as_deref(),
             Some("alsa_output.pci-0000_00_1b.0.analog-stereo")
         );
+    }
+
+    #[test]
+    fn the_parked_sink_is_never_an_output_nor_the_default() {
+        // T-466: the null sink a frozen game's stream is parked in, made the default by
+        // WirePlumber when it is the only sink (a console with no sound card).
+        let dump = r#"[
+          {"id":70,"type":"PipeWire:Interface:Node","info":{"props":{
+             "media.class":"Audio/Sink","node.name":"ruya-parked","node.description":"Paused game sound"}}},
+          {"id":30,"type":"PipeWire:Interface:Metadata","props":{"metadata.name":"default"},
+           "metadata":[{"subject":0,"key":"default.audio.sink","type":"Spa:String:JSON","value":{"name":"ruya-parked"}}]}
+        ]"#;
+        let (sinks, default) = parse_dump(dump).unwrap();
+        assert!(sinks.is_empty(), "{sinks:?}");
+        assert_eq!(default, None);
+        assert!(parse_outputs(dump, &sinks).is_empty());
     }
 
     /// A Dell-like card: the internal speaker is the active route, the headphones jack is
