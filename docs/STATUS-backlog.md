@@ -4,7 +4,6 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 
 | ID | Title | Status | Depends |
 |---|---|---|---|
-| [T-463](tasks/T-463-faster-qml-test-run.md) | A faster Qt Quick test run: shards, a test motion scale, condition waits (owner: test time) | in-progress | — |
 | [T-468](tasks/T-468-developer-docs-the-hub-pauses-your-game.md) | Developer docs: the Hub pauses (freezes) your game (owner question) | in-progress | — |
 | [T-466](tasks/T-466-frozen-apps-release-audio-and-memory.md) | Frozen apps release their audio stream and, after a while, their memory | todo | T-465 |
 | [T-454](tasks/T-454-hub-display-tiles.md) | Hub display: mode, resolution and refresh rate, brightness where supported | todo | — |
