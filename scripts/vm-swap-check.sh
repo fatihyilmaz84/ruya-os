@@ -77,9 +77,15 @@ reclaim_check() {
     if [ "$cur" -le 200000000 ]; then bad "the holder never reached 200 MB (memory.current=$cur)"; return; fi
     if [ ! -w "$cg/memory.reclaim" ]; then echo "UNVERIFIED: $cg/memory.reclaim is missing (kernel older than 5.19?), the reclaim part was skipped"; return; fi
     before="$(awk '{print $3}' /sys/block/zram0/mm_stat)"
-    echo 200M > "$cg/memory.reclaim" 2>/dev/null || true
-    sleep 1
-    swapped="$(cat "$cg/memory.swap.current" 2>/dev/null || echo 0)"
+    # One write can stop short (reclaim takes clean file pages first and may return EAGAIN early;
+    # 0.0.65: 87 MB after a single write): ask up to three times until the holder has 100 MB swapped.
+    swapped=0
+    for _ in 1 2 3; do
+        echo 200M > "$cg/memory.reclaim" 2>/dev/null || true
+        sleep 1
+        swapped="$(cat "$cg/memory.swap.current" 2>/dev/null || echo 0)"
+        [ "$swapped" -gt 100000000 ] && break
+    done
     read -r orig compr used _ < /sys/block/zram0/mm_stat
     echo "info: swapped out $((swapped / 1048576)) MiB; zram holds $((orig / 1048576)) MiB as $((compr / 1048576)) MiB (mem used $((used / 1048576)) MiB); before: $before"
     if [ "$swapped" -gt 100000000 ]; then ok "memory.reclaim moved $((swapped / 1048576)) MiB of the holder into swap"; else bad "only $swapped bytes in swap after memory.reclaim 200M"; fi

@@ -106,11 +106,13 @@ events_check() {
         # the monitor for 3 s in a row, at most 15 s.
         monitor="$(pgrep -x pw-dump | head -1)"
         quiet=0; waited=0
-        while [ "$quiet" -lt 30 ] && [ "$waited" -lt 150 ]; do
+        # 8 s, longer than PipeWire's idle suspend of the nodes the check's own volume change woke
+        # (0.0.65: one pw-dump by ruya-devices itself after 3 s of quiet, an event, not a poll).
+        while [ "$quiet" -lt 80 ] && [ "$waited" -lt 250 ]; do
             if pgrep -x 'pw-dump|wpctl' | grep -v -x "$monitor" | grep -q .; then quiet=0; else quiet=$((quiet + 1)); fi
             sleep 0.1; waited=$((waited + 1))
         done
-        echo "quiet for 3 s after $((waited / 10)) s"
+        echo "quiet for 8 s after $((waited / 10)) s"
         # Idle: sample the process list ten times a second; the 1 s poll started a pw-dump and a
         # wpctl every second (each lives some tens of ms), so it would be caught many times.
         cpu0="$(as_shell systemctl --user show ruya-devices -p CPUUsageNSec --value)"
