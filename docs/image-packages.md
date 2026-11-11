@@ -89,7 +89,7 @@ that is not NVIDIA, and by the VM (software rendering).
 | `nvme-cli`, `sg3_utils` | disk tools for support and `udisks2`'s SMART/NVMe plugins |
 | `ethtool`, `net-tools`, `iproute-tc`, `iptables-utils`, `bind-utils` | network debugging |
 | `fwupd`, `fwupd-plugin-modem-manager`, `fwupd-plugin-uefi-capsule-data` | firmware updates from the LVFS (UEFI capsules; no shell UI yet). Not enabled, D-Bus activated |
-| `zram-generator` | compressed swap in RAM (Fedora's default) |
+| `zram-generator` | compressed swap in RAM; configured by `image/rootfs/usr/lib/systemd/zram-generator.conf` (T-465, `01` §1.4); `zram-generator-defaults` is deliberately not installed |
 | `efibootmgr`, `shim-x64`, `grub2-pc` | boot loader tools (`bootupd`, UEFI and BIOS installs) |
 
 ### Base and bootc
