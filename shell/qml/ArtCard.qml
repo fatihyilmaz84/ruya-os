@@ -14,10 +14,12 @@ Item {
     property string picture      // path or URL, may be empty
     property bool focused: false
     property bool running: false
+    property bool closing: false         // Close game was asked and the game has not ended yet (T-458)
     property bool installing: false
     property int installPercent: 0
 
-    readonly property string stateText: running ? qsTr("Running")
+    readonly property string stateText: closing ? qsTr("Closing")
+                                      : running ? qsTr("Running")
                                       : installing ? qsTr("Installing %1 %").arg(installPercent) : ""
 
     implicitWidth: Theme.cardWidthShelf * u
@@ -104,7 +106,7 @@ Item {
             visible: card.stateText.length > 0
             solid: true             // its own opaque fill: readable over any art tint (04 §5)
             text: card.stateText
-            kind: card.running ? "success" : "info"
+            kind: card.closing ? "neutral" : card.running ? "success" : "info"
         }
     }
 

@@ -53,6 +53,10 @@ public:
     Q_INVOKABLE void mockFailThaw(bool fail);
     // InstanceOfPid answers after `ms` from now on (0 again after mockReset), T-459.
     Q_INVOKABLE void mockDelayPidAnswers(int ms);
+    // Stop ends the app after `ms` from now on (a negative number: the default, 0 again after mockReset), T-458.
+    Q_INVOKABLE void mockStopDelay(int ms);
+    // Stop reports AppExited "killed" but leaves the record listed, from now on (T-458).
+    Q_INVOKABLE void mockStubbornStop(bool stubborn);
     // The process id the mock gives a launched instance's window client (0 when unknown), T-459.
     Q_INVOKABLE int mockPidOf(const QString &instance) const;
     // "freeze <instance>", "thaw <instance>", "stop <instance>" in the order they were asked.

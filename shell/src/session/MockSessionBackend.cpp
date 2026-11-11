@@ -38,6 +38,8 @@ void MockSessionBackend::reset()
     m_failFreeze = false;
     m_failThaw = false;
     m_pidDelayMs = 0;
+    m_stopDelayMs = -1;
+    m_stubbornStop = false;
     emit runningListed(m_running);
 }
 
@@ -123,7 +125,17 @@ void MockSessionBackend::stop(const QString &instance)
     }
     m_calls.append(QStringLiteral("stop ") + instance);
     m_running[i].state = QStringLiteral("stopping");
-    QTimer::singleShot(m_startMs / 3, this, [this, instance] { exitApp(instance, 0, QStringLiteral("quit")); });
+    const int delay = m_stopDelayMs >= 0 ? m_stopDelayMs : m_startMs / 3;
+    QTimer::singleShot(delay, this, [this, instance] {
+        if (!m_stubbornStop) {
+            exitApp(instance, 0, QStringLiteral("quit"));
+            return;
+        }
+        // Killed after the grace, and still listed (T-458): the service said "killed" but the record stays.
+        const int j = indexOf(instance);
+        if (j >= 0)
+            emit appExited(instance, m_running.at(j).appId, 137, QStringLiteral("killed"));
+    });
 }
 
 QString MockSessionBackend::freezable(const QString &instance) const

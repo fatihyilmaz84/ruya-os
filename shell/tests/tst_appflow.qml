@@ -351,6 +351,123 @@ Item {
             verify(!tc.shell.appRunning)
         }
 
+        // ---- the closing screen (T-458) ---------------------------------------------------------
+
+        // Guide, down to Close game, Accept: the game is asked to stop and the closing screen comes up.
+        function closeGameFromHub() {
+            keyClick(Qt.Key_HomePage)
+            tryVerify(() => find("quickMenuItem_resume").focused)
+            keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Down)
+            verify(find("quickMenuItem_closeGame").focused)
+            keyClick(Qt.Key_Return)
+        }
+
+        function test_close_game_shows_the_closing_screen_until_the_game_has_exited() {
+            start()
+            const app = playRacer()
+            Session.mockStopDelay(700)
+            closeGameFromHub()
+            const splash = find("launchSplash")
+            tryVerify(() => tc.shell.closingScreen, 2000)
+            tryCompare(splash, "opacity", 1, 2000)
+            verify(splash.closing)
+            compare(find("launchStatus").text, "Closing Turbo Racer…")
+            compare(find("launchTitle").text, "Turbo Racer")
+            verify(splash.activeFocus, "the closing screen holds the focus")
+            verify(!find("launchClose").visible, "nothing to press")
+            compare(hintVerbs(), "")
+            verify(find("launchDots").visible)
+            compare(find(tc.racerCard).stateText, "Closing", "the card never says Running while it closes")
+            // Back and the other keys cannot leave it; Guide still opens the Hub and Back returns to the screen.
+            keyClick(Qt.Key_Escape)
+            keyClick(Qt.Key_Return)
+            keyClick(Qt.Key_Down)
+            verify(splash.activeFocus && splash.shown, "Back, Accept and Down are taken")
+            compare(app.keys.length, 0, "no key reaches the game")
+            keyClick(Qt.Key_HomePage)
+            tryVerify(() => find("systemActions").activeFocus, 2000, "Guide opens the Hub over the closing screen")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => splash.activeFocus, 2000, "Back from the Hub returns to the closing screen")
+            // It ends on AppExited: Home in front, the focus on the game's card.
+            tryCompare(exitedSpy, "count", 1)
+            tryVerify(() => !tc.shell.closingScreen, 2000)
+            tryCompare(splash, "shown", false)
+            tryVerify(() => find("recentRow").activeFocus, 2000, "the focus is where Close left it")
+            tryVerify(() => find(tc.racerCard).stateText === "", 2000, "no pill after AppExited")
+            compare(Session.running.length, 0)
+            compare(Notifications.model.count, 0)
+        }
+
+        function test_a_slow_exit_brings_home_back_with_a_closing_pill_and_play_only_toasts() {
+            start()
+            const app = playRacer()
+            tc.shell.closeSplashMs = 250
+            Session.mockStopDelay(3000)
+            closeGameFromHub()
+            tryVerify(() => tc.shell.closingScreen, 2000)
+            tryVerify(() => !tc.shell.closingScreen, 2000, "Home comes back after the wait")
+            tryVerify(() => find("recentRow").activeFocus, 2000)
+            const card = find(tc.racerCard)
+            verify(card.focused)
+            compare(card.stateText, "Closing")
+            verify(!card.running, "not Running")
+            compare(Session.running.length, 1, "the game is still listed")
+            // Accept on the card: only a toast, no resume and no launch.
+            keyClick(Qt.Key_Return)
+            tryVerify(() => toastTexts().includes("Turbo Racer is still closing."), 2000)
+            verify(!app.activeFocus, "the window was not brought back")
+            verify(!tc.shell.appOpen)
+            compare(launchedSpy.count, 1, "no new launch")
+            // The hero's Play does the same.
+            while (Notifications.model.count > 0)
+                Notifications.dismiss(Notifications.model.get(0).toastId)
+            Notifications.pending = []
+            keyClick(Qt.Key_Up)
+            tryVerify(() => find("homePlay").activeFocus)
+            compare(find("heroBlock").primaryText, "Closing…")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => toastTexts().includes("Turbo Racer is still closing."), 2000)
+            verify(!tc.shell.appOpen)
+            compare(launchedSpy.count, 1)
+            // AppExited: the pill becomes nothing.
+            tryCompare(exitedSpy, "count", 1, 5000)
+            tryVerify(() => find(tc.racerCard).stateText === "", 2000, "no pill after AppExited")
+            compare(find("heroBlock").primaryText, "Play")
+        }
+
+        function test_a_game_still_listed_after_the_kill_gets_a_warning_and_is_running_again() {
+            start()
+            const app = playRacer()
+            tc.shell.closeSplashMs = 150
+            tc.shell.killCheckMs = 200
+            Session.mockStubbornStop(true)
+            Session.mockStopDelay(100)
+            closeGameFromHub()
+            tryCompare(exitedSpy, "count", 1, 3000)
+            compare(exitedSpy.signalArguments[0][3], "killed")
+            tryVerify(() => toastTexts().includes("Turbo Racer did not close. Restart the console if it keeps running."), 3000)
+            compare(Notifications.model.get(0).kind, "warning")
+            tryVerify(() => find(tc.racerCard).stateText === "Running", 2000, "it is listed, so the card says Running again")
+            verify(!tc.shell.closingScreen)
+            verify(app)
+        }
+
+        function test_the_closing_screen_has_no_motion_under_reduced_motion() {
+            start()
+            DeviceSettings.reducedMotion = true
+            playRacer()
+            Session.mockStopDelay(500)
+            closeGameFromHub()
+            const splash = find("launchSplash")
+            tryVerify(() => tc.shell.closingScreen, 2000)
+            tryCompare(splash, "opacity", 1, 2000)
+            compare(splash.animating, false, "the dots stand still, nothing slides or scales")
+            compare(splash.zoom, 1.04, "the art is at its final scale")
+            compare(find("launchStatus").text, "Closing Turbo Racer…")
+            tryVerify(() => !tc.shell.closingScreen, 3000)
+        }
+
         function test_switch_to_another_running_app() {
             start()
             const racer = playRacer()
@@ -643,6 +760,23 @@ Item {
             wait(900)
             grabImage(tc.shell).save(shotsDir + "/appflow-6-home-running-card.png")
             verify(app)
+        }
+
+        function test_zz_screenshots_closing() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            start()
+            playRacer()
+            tc.shell.closeSplashMs = 2500
+            Session.mockStopDelay(60000)
+            closeGameFromHub()
+            tryVerify(() => tc.shell.closingScreen, 2000)
+            wait(900)
+            grabImage(tc.shell).save(shotsDir + "/appflow-7-closing-screen.png")
+            tryVerify(() => !tc.shell.closingScreen, 4000)
+            tryVerify(() => find("recentRow").activeFocus, 2000)
+            wait(500)
+            grabImage(tc.shell).save(shotsDir + "/appflow-8-home-closing-pill.png")
         }
 
         function test_the_splash_animates_with_full_motion() {

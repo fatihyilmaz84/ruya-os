@@ -283,8 +283,8 @@ FocusScope {
     function focusCurrent() {
         if (!signedIn)
             return
-        if (launchState)
-            launchSplash.forceActiveFocus()         // input to the shell is locked while an app starts
+        if (launchState || closeState)
+            launchSplash.forceActiveFocus()         // input to the shell is locked while an app starts or closes
         else if (focusedApp)
             focusedApp.forceActiveFocus()
         else if (pageOpen)
@@ -332,6 +332,7 @@ FocusScope {
     onSignedInChanged: {
         if (!signedIn) {
             endLaunch(false)     // nobody to start it for; the app, if it starts, waits hidden (T-164)
+            dropCloseScreen()
             dropAllPages()       // the next sign-in starts at home
             homeSavedFocus = null
         }
@@ -601,6 +602,11 @@ FocusScope {
     function launchApp(appId, title, picture) {
         if (!signedIn || launchState)
             return
+        if (closingAppIds.includes(appId)) {        // T-458: nothing to resume or start until it has ended
+            Notifications.show(qsTr("%1 is still closing.").arg(Notifications.named(title)), "info")
+            return
+        }
+        dropCloseScreen()               // another game is started from the Hub while one closes: its splash takes over
         const open = windowOf(appId)
         if (open) {                     // already on screen behind Home or the menu: bring it back
             focusApp(open.item)
@@ -677,6 +683,14 @@ FocusScope {
         function onStopFinished(instance, status) {
             if (status !== "ok" && status !== "unknown-instance")
                 Notifications.show(qsTr("The game could not be closed. Try again."), "error")
+            if (status !== "ok")                // nothing is closing (T-458): "unknown-instance" is that nothing runs
+                root.stopRefused(instance)
+        }
+        function onRunningChanged() {
+            // An instance that is no longer listed has ended: it is not closing any more.
+            const listed = root.closingInstances.filter(i => Session.running.some(r => r.instance === i))
+            if (listed.length !== root.closingInstances.length)
+                root.closingInstances = listed
         }
         // An app that crashed or never got to run is the only exit the user hears about; a normal
         // quit (including a Stop from the shell) is silent. A launch that was waiting for it ends.
@@ -686,6 +700,7 @@ FocusScope {
             const title = waiting ? st.title : root.titleOfApp(appId)
             if (waiting)
                 root.endLaunch(true)
+            root.closeEnded(instance, appId, reason)
             if (reason !== "crashed" && reason !== "launch-failed")
                 return
             const name = Notifications.named(title)
@@ -806,8 +821,81 @@ FocusScope {
                                : qsTr("Could not close the running app."), "warning")
             return
         }
+        const run = Session.running.find(r => r.instance === instance)
+        const app = quickMenuApp
+        closeState = { instance: instance, appId: run ? run.appId : (app ? app.appId : ""), title: app ? app.title : "",
+                       picture: app ? app.picture : "" }
+        closingInstances = closingInstances.includes(instance) ? closingInstances : closingInstances.concat([instance])
+        closeSplashTimer.restart()
         Session.stop(instance)          // a frozen game: the service thaws it first, so it can quit (T-457)
-        sendAppsHome()
+        sendAppsHome()                  // Home behind the closing screen, the focus held by the screen
+    }
+
+    // ---- The closing screen (T-458, 02 §1.5) ----
+    // Close game shows the splash in its closing mode over Home until the instance has ended
+    // (AppExited, or Stop answering that nothing runs); after `closeSplashMs` Home comes back anyway
+    // and the game's card says Closing (not Running) until the service has dropped the instance.
+    // `closingInstances` are the instances Close asked to stop. A game the service reports "killed"
+    // that is still listed after `killCheckMs` did not close: a warning, and the card is Running again.
+    property var closeState: null                  // { instance, appId, title, picture } while the screen is up
+    property var closingInstances: []
+    property var killChecks: []                    // [{ instance, title }] waiting for the list to be refreshed
+    property int closeSplashMs: 5000
+    property int killCheckMs: 1000
+    readonly property bool closingScreen: closeState !== null
+    readonly property var closingAppIds: Session.running
+        .filter(r => r.profile === Profiles.activeProfile && closingInstances.includes(r.instance)).map(r => r.appId)
+
+    Timer {
+        id: closeSplashTimer
+        interval: root.closeSplashMs
+        onTriggered: root.endClose()
+    }
+    Timer {
+        id: killCheckTimer
+        interval: root.killCheckMs
+        onTriggered: {
+            const checks = root.killChecks
+            root.killChecks = []
+            for (const c of checks) {
+                if (!Session.running.some(r => r.instance === c.instance))
+                    continue
+                root.closingInstances = root.closingInstances.filter(i => i !== c.instance)
+                Notifications.show(qsTr("%1 did not close. Restart the console if it keeps running.").arg(Notifications.named(c.title)), "warning")
+            }
+        }
+    }
+
+    function dropCloseScreen() {
+        closeSplashTimer.stop()
+        closeState = null
+    }
+
+    // Home in front again with the focus where Close left it (unless the Hub is open: it keeps the focus).
+    function endClose() {
+        if (!closeState)
+            return
+        dropCloseScreen()
+        if (!systemPanel.open)
+            focusCurrent()
+    }
+
+    // The service refused or could not Stop `instance`: it is not closing.
+    function stopRefused(instance) {
+        closingInstances = closingInstances.filter(i => i !== instance)
+        if (closeState && closeState.instance === instance)
+            endClose()
+    }
+
+    // AppExited for an instance Close asked to stop ends the screen; "killed" is checked once the list has
+    // been refreshed (the kill itself needs no message, an instance still listed after it does).
+    function closeEnded(instance, appId, reason) {
+        if (closeState && closeState.instance === instance)
+            endClose()
+        if (reason === "killed" && closingInstances.includes(instance)) {
+            killChecks = killChecks.concat([{ instance: instance, title: titleOfApp(appId) }])
+            killCheckTimer.restart()
+        }
     }
 
     // The running app of the signed-in profile a window that names none could be (T-459): the only one
@@ -851,7 +939,7 @@ FocusScope {
     Binding {
         target: Notifications
         property: "appInFront"
-        value: root.appOpen || root.launching
+        value: root.appOpen || root.launching || root.closingScreen
     }
 
     // A screen mode waiting for the owner (T-198): after the restart on a new mode the shell finds
@@ -1249,7 +1337,7 @@ FocusScope {
             eyebrow: root.libraryEmpty ? "" : (root.recentIsFallback ? qsTr("Installed") : qsTr("Continue playing"))
             title: root.libraryEmpty ? qsTr("Your library is empty") : (root.heroItem.title ?? "")
             meta: root.libraryEmpty ? "" : root.sourceLabel(root.heroItem.source ?? "")
-            primaryText: root.libraryEmpty ? qsTr("Open Store") : (root.heroRunning ? qsTr("Resume") : qsTr("Play"))
+            primaryText: root.libraryEmpty ? qsTr("Open Store") : (root.heroClosing ? qsTr("Closing…") : root.heroRunning ? qsTr("Resume") : qsTr("Play"))
             primaryShown: root.libraryEmpty || Library.sessionAppId(root.heroItem.id ?? "") !== ""
             secondaryText: root.libraryEmpty ? "" : qsTr("Details")
 
@@ -1300,6 +1388,8 @@ FocusScope {
                 picture: entry.art ? (entry.art.tile ?? "") : ""
                 focused: ListView.isCurrentItem && ListView.view.activeFocus
                 running: root.runningAppIds.includes(Library.sessionAppId(modelData))
+                         && !root.closingAppIds.includes(Library.sessionAppId(modelData))
+                closing: root.closingAppIds.includes(Library.sessionAppId(modelData))
             }
 
             onCurrentIndexChanged: if (activeFocus) Sfx.navigate()
@@ -1325,7 +1415,8 @@ FocusScope {
         const extra = runningItemKey === "" ? [] : runningItemKey.split("|").filter(id => !base.includes(id))
         return extra.concat(base).slice(0, 8)
     }
-    readonly property bool heroRunning: !libraryEmpty && runningAppIds.includes(Library.sessionAppId(heroItem.id ?? ""))
+    readonly property bool heroClosing: !libraryEmpty && closingAppIds.includes(Library.sessionAppId(heroItem.id ?? ""))
+    readonly property bool heroRunning: !libraryEmpty && !heroClosing && runningAppIds.includes(Library.sessionAppId(heroItem.id ?? ""))
     readonly property bool libraryEmpty: recentIds.length === 0
     readonly property var heroItem: libraryEmpty ? ({}) : Library.item(recentIds[Math.max(0, Math.min(recentRow.currentIndex, recentIds.length - 1))])
     onHeroItemChanged: heroArt.show(libraryEmpty ? null : heroItem)
@@ -1722,7 +1813,7 @@ FocusScope {
             return modeConfirm.modalHints
         if (systemPanel.open)
             return systemPanel.hints
-        if (launching)
+        if (launching || closingScreen)
             return launchSplash.hints
         if (appOpen)
             return []
@@ -1760,10 +1851,11 @@ FocusScope {
         anchors.fill: parent
         z: 6
         u: root.u
-        shown: root.launching
-        appId: root.launchState ? root.launchState.appId : ""
-        title: root.launchState ? root.launchState.title : ""
-        picture: root.launchState ? root.launchState.picture : ""
+        shown: root.launching || root.closingScreen
+        closing: !root.launching && root.closingScreen
+        appId: root.launchState ? root.launchState.appId : (root.closeState ? root.closeState.appId : "")
+        title: root.launchState ? root.launchState.title : (root.closeState ? root.closeState.title : "")
+        picture: root.launchState ? root.launchState.picture : (root.closeState ? root.closeState.picture : "")
         started: root.launchState ? root.launchState.ok : false
         slow: root.launchState ? root.launchState.slow : false
         guideKey: key => root.isGuideKey(key)
@@ -1793,7 +1885,7 @@ FocusScope {
 
         onOpenChanged: {
             if (open) {
-                if (home.shown)
+                if (home.shown && !root.closingScreen)      // the closing screen holds the focus: keep where Close left it
                     root.rememberHomeFocus()
                 Power.refresh()
                 present()
