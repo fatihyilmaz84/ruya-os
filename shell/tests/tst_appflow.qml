@@ -426,6 +426,7 @@ Item {
             keyClick(Qt.Key_Up)
             tryVerify(() => find("homePlay").activeFocus)
             compare(find("heroBlock").primaryText, "Closing…")
+            verify(find("homePlay").dimmed, "Closing… looks unavailable (dimmed), yet keeps the focus")
             keyClick(Qt.Key_Return)
             tryVerify(() => toastTexts().includes("Turbo Racer is still closing."), 2000)
             verify(!tc.shell.appOpen)
@@ -434,6 +435,7 @@ Item {
             tryCompare(exitedSpy, "count", 1, 5000)
             tryVerify(() => find(tc.racerCard).stateText === "", 2000, "no pill after AppExited")
             compare(find("heroBlock").primaryText, "Play")
+            verify(!find("homePlay").dimmed, "Play is not dimmed once the game has exited")
         }
 
         function test_a_game_still_listed_after_the_kill_gets_a_warning_and_is_running_again() {

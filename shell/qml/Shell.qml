@@ -1339,6 +1339,7 @@ FocusScope {
             meta: root.libraryEmpty ? "" : root.sourceLabel(root.heroItem.source ?? "")
             primaryText: root.libraryEmpty ? qsTr("Open Store") : (root.heroClosing ? qsTr("Closing…") : root.heroRunning ? qsTr("Resume") : qsTr("Play"))
             primaryShown: root.libraryEmpty || Library.sessionAppId(root.heroItem.id ?? "") !== ""
+            primaryDimmed: root.heroClosing
             secondaryText: root.libraryEmpty ? "" : qsTr("Details")
 
             onPrimaryAccepted: root.playHero()

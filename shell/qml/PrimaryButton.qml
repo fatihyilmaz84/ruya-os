@@ -9,6 +9,9 @@ FocusScope {
 
     property real u: 1
     property string text
+    // Its action is unavailable for now (a game still closing, T-458): the fill and label dim to
+    // disabledOpacity, the focus ring does not, and Accept still fires so the screen can say why.
+    property bool dimmed: false
 
     signal accepted()
 
@@ -24,6 +27,7 @@ FocusScope {
         anchors.fill: parent
         radius: height / 2
         color: Theme.primaryFill
+        opacity: button.dimmed ? Theme.disabledOpacity : 1
 
         Text {
             id: label

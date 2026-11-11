@@ -14,6 +14,7 @@ FocusScope {
     property string primaryText
     property string secondaryText      // empty: no secondary button
     property bool primaryShown: true   // false: no Play (an item with no launch path, T-147); Details takes the focus
+    property bool primaryDimmed: false // the primary's action is unavailable for now (PrimaryButton.dimmed)
     readonly property alias playButton: play
 
     signal primaryAccepted()
@@ -75,6 +76,7 @@ FocusScope {
                 focus: hero.primaryShown
                 u: hero.u
                 text: hero.primaryText
+                dimmed: hero.primaryDimmed
                 onAccepted: hero.primaryAccepted()
             }
             SecondaryButton {
