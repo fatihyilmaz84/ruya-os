@@ -24,6 +24,15 @@ struct BtDevice
     QString adapter;
 };
 
+// A game controller present now (Devices1.Bluetooth.ListGamepads, T-453).
+struct BtGamepad
+{
+    QString id;        // stable per pad: the Bluetooth address when it has one, else the USB port, else the name
+    QString name;
+    QString family;    // "playstation" | "xbox" | "nintendo" | "8bitdo" | ""
+    QString transport; // "usb" | "bluetooth" | "other"
+};
+
 // Transport behind the Bluetooth QML singleton: org.ruyaos.Devices1.Bluetooth over D-Bus
 // (api/dbus/org.ruyaos.Devices1.xml), or an in-memory mock. Results arrive asynchronously
 // through signals.
@@ -68,6 +77,9 @@ signals:
     // the service is a new baseline.
     void gamepadsReset();
     void devicesListed(const QList<BtDevice> &devices);
+    // The controllers present now (ListGamepads): after every refresh and after every
+    // gamepadConnected / gamepadDisconnected.
+    void gamepadsListed(const QList<BtGamepad> &pads);
     // op: "power" | "scan" | "pair" | "forget" | "connect" | "disconnect" | "rename" | "controller-pairing";
     // id: "" for power and scan, "start" or "stop" for controller-pairing; status: see the XML ("ok", "pairing-failed", "timeout", ...).
     void finished(const QString &op, const QString &id, const QString &status);
@@ -91,7 +103,15 @@ protected:
             emit devicesListed(devices);
     }
 
+    quint64 beginGamepadsRequest() { return m_gamepadsSeq.begin(); }
+    void deliverGamepads(quint64 request, const QList<BtGamepad> &pads)
+    {
+        if (m_gamepadsSeq.accept(request))
+            emit gamepadsListed(pads);
+    }
+
 private:
     RequestSequence m_stateSeq;
     RequestSequence m_devicesSeq;
+    RequestSequence m_gamepadsSeq;
 };

@@ -83,6 +83,7 @@ void MockBatteryBackend::reset()
     c.name = QStringLiteral("Ruya Pad Pro");
     c.percent = 60;
     c.state = QStringLiteral("discharging");
+    c.address = QStringLiteral("bt-pad-main");   // the Bluetooth mock's connected pad: one pad, one row (T-453)
     m_list.append(c);
     publish();
 }

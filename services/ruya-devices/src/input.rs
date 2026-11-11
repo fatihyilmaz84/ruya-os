@@ -259,6 +259,16 @@ impl<S: InputSource> InputPresence<S> {
         std::mem::take(&mut *self.events.lock().unwrap_or_else(|e| e.into_inner()))
     }
 
+    /// The controllers present at the last `refresh` (`ListGamepads`), one per pad, in the order
+    /// the kernel lists them. Empty before the first read.
+    pub fn pads(&self) -> Vec<Gamepad> {
+        self.pads
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+            .unwrap_or_default()
+    }
+
     fn follow_gamepads(&self, devices: &[InputDevice]) {
         let mut pads: Vec<Gamepad> = Vec::new();
         for pad in devices.iter().filter_map(gamepad_of) {
@@ -488,6 +498,46 @@ mod tests {
             matches!(events.as_slice(), [GamepadEvent::Disconnected(p)] if p.family == "playstation"),
             "{events:?}"
         );
+    }
+
+    #[test]
+    fn pads_lists_what_is_there_now_baseline_included() {
+        let presence = InputPresence::new(FakeInput::new(vec![
+            pad("Wireless Controller", "usb-1", "", 3, 0x054c),
+            FakeInput::keyboard(),
+            pad(
+                "Xbox Wireless Controller",
+                "bt-phys",
+                "e4:17:d8:00:00:01",
+                5,
+                0x045e,
+            ),
+        ]));
+        assert!(presence.pads().is_empty(), "nothing before the first read");
+        presence.refresh();
+        let pads = presence.pads();
+        assert_eq!(pads.len(), 2, "the keyboard is no pad: {pads:?}");
+        assert_eq!(
+            (pads[0].id.as_str(), pads[0].family, pads[0].transport),
+            ("usb-1", "playstation", "usb")
+        );
+        assert_eq!(
+            (pads[1].id.as_str(), pads[1].family, pads[1].transport),
+            ("e4:17:d8:00:00:01", "xbox", "bluetooth")
+        );
+        assert!(
+            presence.take_gamepad_events().is_empty(),
+            "the baseline is not news, but the list has it"
+        );
+        presence.source.set(vec![pad(
+            "Xbox Wireless Controller",
+            "usb-2",
+            "",
+            3,
+            0x045e,
+        )]);
+        presence.refresh();
+        assert_eq!(presence.pads().len(), 1, "a pad that left is gone");
     }
 
     #[test]

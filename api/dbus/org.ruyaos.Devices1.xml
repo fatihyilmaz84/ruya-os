@@ -533,6 +533,24 @@
     </method>
 
     <!--
+      The game controllers present now (T-453), over USB or Bluetooth, from the last read of the
+      kernel's input devices (every two seconds, the same read as InputPresent and the signals below;
+      a pad that was already there when the service started is listed, the signals never announce it).
+      One dictionary per pad, one entry per pad even when it has several input nodes, in the kernel's
+      order; empty when there is none, or before the first read. The keys are those of GamepadConnected:
+        id         s   stable per pad (the Bluetooth address when it has one, else the USB port, else the name)
+        name       s   made fit to show, plain text only
+        family     s   "playstation" | "xbox" | "nintendo" | "8bitdo" | ""
+        transport  s   "usb" | "bluetooth" | "other"
+      A pad's battery is not here: Batteries.ListBatteries has it (the pad's `address` is its Bluetooth
+      address, which is the `id` of a Bluetooth pad here, compared without regard to case). Read-only,
+      no statuses; the bus policy is that of the interface (the shell and root).
+    -->
+    <method name="ListGamepads">
+      <arg name="gamepads" type="aa{sv}" direction="out"/>
+    </method>
+
+    <!--
       A game controller appeared or went away (T-260), over USB or Bluetooth, read from the kernel's
       input devices every two seconds (the same read as InputPresent): a device with a button in the
       gamepad range, not the console's own virtual keyboard, not a keyboard or mouse. The first read
@@ -547,6 +565,8 @@
                        USB vendor id the device reports (the same table, families.rs)
         transport  s   "usb" | "bluetooth" | "other"
       The shell debounces a cable that flaps; nothing here says whether the pad is "in use".
+      Since T-453 the two signals also mean "the list changed": ListGamepads has the pads present now,
+      baseline included (a client that connects or reconnects asks it once, then again after a signal).
     -->
     <signal name="GamepadConnected">
       <arg name="id" type="s"/>

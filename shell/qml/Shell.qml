@@ -777,6 +777,21 @@ FocusScope {
         systemPanel.open = false        // -> focusCurrent(): Home
     }
 
+    // A Hub panel's link to Settings (02 §1.6, level 3: it leaves the Hub): over an app it is Home's
+    // route (the apps keep running behind), then the Settings page opens on `category`; Back from it
+    // lands on Home. Pages already open are closed first, so Settings is never stacked on itself.
+    function openSettingsFromHub(category) {
+        if (quickMenuApp) {
+            sendAppsHome()
+        } else {
+            while (pageOpen)
+                closePage()
+            systemPanel.open = false
+        }
+        Sfx.page()
+        openPage("settings", { category: category })
+    }
+
     // Close game: ask the service to stop the app in front and go Home; the card's pill goes when the
     // service reports AppExited. The instance is the window's own (its process's, T-459), else that of
     // the app id it gives itself (one already stopping is asked again, the service says "ok"). A window
@@ -1909,6 +1924,7 @@ FocusScope {
             open = false                     // first, so the game's Thaw goes out while the profile is signed in (T-457)
             Profiles.lock()                  // signedIn -> false; routeFocus() shows the picker
         }
+        onSettingsRequested: category => root.openSettingsFromHub(category)
         onPowerRequested: action => powerConfirm.open(action)    // focus returns here if cancelled
     }
 

@@ -59,6 +59,24 @@ QList<BtDevice> parseDevices(const QDBusArgument &arg)
     arg.endArray();
     return out;
 }
+
+// aa{sv} of ListGamepads
+QList<BtGamepad> parseGamepads(const QDBusArgument &arg)
+{
+    QList<BtGamepad> out;
+    arg.beginArray();
+    while (!arg.atEnd()) {
+        const QVariantMap d = parseDict(arg);
+        BtGamepad pad;
+        pad.id = d.value(QStringLiteral("id")).toString();
+        pad.name = d.value(QStringLiteral("name")).toString();
+        pad.family = d.value(QStringLiteral("family")).toString();
+        pad.transport = d.value(QStringLiteral("transport"), QStringLiteral("other")).toString();
+        out.append(pad);
+    }
+    arg.endArray();
+    return out;
+}
 } // namespace
 
 DBusBluetoothBackend::DBusBluetoothBackend(QObject *parent)
@@ -86,6 +104,7 @@ void DBusBluetoothBackend::refresh()
 {
     refreshState();
     refreshDevices();
+    refreshGamepads();
 }
 
 void DBusBluetoothBackend::refreshState()
@@ -122,6 +141,22 @@ void DBusBluetoothBackend::refreshDevices()
             return;
         }
         deliverDevices(request, parseDevices(reply.arguments().constFirst().value<QDBusArgument>()));
+    });
+}
+
+void DBusBluetoothBackend::refreshGamepads()
+{
+    auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("ListGamepads"));
+    const quint64 request = beginGamepadsRequest();
+    auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, request](QDBusPendingCallWatcher *w) {
+        w->deleteLater();
+        const QDBusMessage reply = w->reply();
+        if (reply.type() != QDBusMessage::ReplyMessage || reply.arguments().isEmpty()) {
+            qWarning("ruya-shell: Devices1.Bluetooth ListGamepads failed: %s", qPrintable(reply.errorMessage()));
+            return;
+        }
+        deliverGamepads(request, parseGamepads(reply.arguments().constFirst().value<QDBusArgument>()));
     });
 }
 
@@ -226,12 +261,14 @@ void DBusBluetoothBackend::onGamepadConnected(const QString &id, const QString &
                                               const QString &transport)
 {
     emit gamepadConnected(id, name, family, transport);
+    refreshGamepads();      // the signal means "the list changed"
 }
 
 void DBusBluetoothBackend::onGamepadDisconnected(const QString &id, const QString &name, const QString &family,
                                                  const QString &transport)
 {
     emit gamepadDisconnected(id, name, family, transport);
+    refreshGamepads();
 }
 
 void DBusBluetoothBackend::onDevicesChanged()
