@@ -324,6 +324,7 @@ Item {
         // Store to Settings (RB): the Store page is destroyed after the Settings page has finished its
         // glide and that frame is on screen, not in the glide's last frame.
         function test_a_replaced_page_goes_after_the_glide() {
+            Theme.motionFactor = 1.0           // real time: the subject is an order relative to the glide's duration (T-463; flaked at 0.1)
             keyClick(Qt.Key_Up)
             for (let i = 0; i < 3; ++i)
                 keyClick(Qt.Key_Right)

@@ -390,7 +390,7 @@ Item {
             verify(recordOf(run.instance).frozen, "still frozen")
             Session.mockFailThaw(false)
             openHub()
-            verify(find("quickMenuPaused").visible)
+            tryVerify(() => find("quickMenuPaused").visible, 2000, "the header says Paused again")   // a reply, not an instant (T-463: flaky at the short motion scale)
             keyClick(Qt.Key_Escape)
             tryVerify(() => recordOf(run.instance).frozen === false, 2000, "the second close thaws it")
             compare(Session.mockCalls(), ["freeze " + run.instance, "thaw " + run.instance, "thaw " + run.instance],

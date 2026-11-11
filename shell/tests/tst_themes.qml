@@ -181,6 +181,7 @@ Item {
         }
 
         function test_switch_cross_fades_over_tintMs() {
+            Theme.motionFactor = 1.0           // real time: the subject is the 700 ms cross-fade (T-463)
             DeviceSettings.reducedMotion = false
             compare(Theme.tintMs, 700)
             const from = Theme.background
@@ -276,6 +277,7 @@ Item {
         // The new blob tokens cross-fade with the rest (700 ms, T-209): mid-fade between two themes the
         // share and the palette are between the two, and the Backdrop's blob colour follows.
         function test_blob_tokens_cross_fade() {
+            Theme.motionFactor = 1.0           // real time: the test samples the fade half way (T-463)
             DeviceSettings.reducedMotion = false
             const tint = Qt.color("#e8833a")
             const backdrop = createTemporaryObject(backdropComponent, host, { tint: tint })

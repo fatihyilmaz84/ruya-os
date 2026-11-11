@@ -31,6 +31,7 @@ Item {
 
         function init() {
             verify(windowGuard.ensureActive() === "", windowGuard.ensureActive())
+            Theme.motionFactor = 1.0           // real time for the whole file: the duration tokens are the subject (T-463)
             Profiles.lock()
             tryCompare(Profiles, "activeProfile", "")
             tc.shell = createTemporaryObject(shellComponent, host)
