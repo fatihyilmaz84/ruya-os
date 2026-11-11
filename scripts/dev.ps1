@@ -81,7 +81,8 @@ function Test-DisplayPresentsFrames([switch]$NoFrames, [switch]$Offscreen) {
     if ($Offscreen) { $env:QT_QPA_PLATFORM = "offscreen" } else { $env:QSG_RENDER_LOOP = "basic" }
     try {
         & $exe | Out-Null
-        return ($LASTEXITCODE -eq 0)
+        return $LASTEXITCODE   # 0 frames presented, 3 none (asleep), anything else: the probe failed
+
     } finally {
         Remove-Item Env:\RUYA_PROBE_FRAMES, Env:\RUYA_PROBE_NO_FRAMES, Env:\QSG_RENDER_LOOP, Env:\QT_QPA_PLATFORM -ErrorAction SilentlyContinue
     }
@@ -650,7 +651,7 @@ function Do-Shell {
     # T-462: the probe path of `shots` (a window that presents no frames stops it), without a display:
     # the window is never shown, so the probe must report "no frames" even though offscreen draws.
     Step "Display probe self-check (no frames -> asleep)"
-    Record "display probe self-check (a window that presents no frames is reported)" (-not (Test-DisplayPresentsFrames -NoFrames -Offscreen))
+    Record "display probe self-check (a window that presents no frames is reported)" ((Test-DisplayPresentsFrames -NoFrames -Offscreen) -eq 3)
     Step "Qt Quick tests (offscreen)"
     Run-QmlTests $null
 }
@@ -747,7 +748,10 @@ switch ($Command) {
             if (-not $got) { Stop-SessionLocked } else {
                 try {
                     Step "Display presents frames?"
-                    if (-not (Test-DisplayPresentsFrames -NoFrames:$NoFramesProbe)) { Stop-DisplayAsleep } else {
+                    $probe = Test-DisplayPresentsFrames -NoFrames:$NoFramesProbe
+                    if ($probe -eq 3) { Stop-DisplayAsleep }
+                    elseif ($probe -ne 0) { Record "shots (the display probe failed: exit $probe)" $false }
+                    else {
                         # Start empty: a screenshot no test writes any more must not be reviewed as current.
                         Remove-Item (Join-Path $Repo "output\shell-shots\*.png") -ErrorAction SilentlyContinue
                         Step "Qt Quick tests with screenshots"
