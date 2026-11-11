@@ -508,7 +508,12 @@ Bu geri alınamaz.</translation>
 <context>
     <name>ArtCard</name>
     <message>
-        <location filename="../qml/ArtCard.qml" line="+20"/>
+        <location filename="../qml/ArtCard.qml" line="+21"/>
+        <source>Closing</source>
+        <translation>Kapanıyor</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Running</source>
         <translation>Çalışıyor</translation>
     </message>
@@ -1499,13 +1504,13 @@ Bu geri alınamaz.</translation>
 <context>
     <name>LaunchSplash</name>
     <message>
-        <location filename="../qml/LaunchSplash.qml" line="+27"/>
-        <location line="+165"/>
+        <location filename="../qml/LaunchSplash.qml" line="+30"/>
+        <location line="+166"/>
         <source>Close</source>
         <translation>Kapat</translation>
     </message>
     <message>
-        <location line="-135"/>
+        <location line="-136"/>
         <source>Still starting %1</source>
         <translation>%1 hâlâ başlıyor</translation>
     </message>
@@ -1515,7 +1520,17 @@ Bu geri alınamaz.</translation>
         <translation>%1 başlıyor</translation>
     </message>
     <message>
+        <location line="+0"/>
+        <source>Closing %1</source>
+        <translation>%1 kapanıyor</translation>
+    </message>
+    <message>
         <location line="+101"/>
+        <source>Closing %1…</source>
+        <translation>%1 kapanıyor…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Still starting…</source>
         <translation>Hâlâ başlıyor…</translation>
     </message>
@@ -2829,7 +2844,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+539"/>
+        <location filename="../qml/Shell.qml" line="+540"/>
         <source>Could not %1.</source>
         <translation>%1 işlemi yapılamadı.</translation>
     </message>
@@ -2864,7 +2879,12 @@ Bu geri alınamaz.</translation>
         <translation>Güncellemeyi bitirmek için 2 dakika içinde yeniden başlatılıyor. Beklemek için herhangi bir düğmeye bas.</translation>
     </message>
     <message>
-        <location line="+237"/>
+        <location line="+37"/>
+        <source>%1 is still closing.</source>
+        <translation>%1 hâlâ kapanıyor.</translation>
+    </message>
+    <message>
+        <location line="+214"/>
         <source>Could not close %1.</source>
         <translation>%1 kapatılamadı.</translation>
     </message>
@@ -2874,7 +2894,12 @@ Bu geri alınamaz.</translation>
         <translation>Çalışan uygulama kapatılamadı.</translation>
     </message>
     <message>
-        <location line="+68"/>
+        <location line="+43"/>
+        <source>%1 did not close. Restart the console if it keeps running.</source>
+        <translation>%1 kapanmadı. Çalışmaya devam ederse konsolu yeniden başlatın.</translation>
+    </message>
+    <message>
+        <location line="+98"/>
         <source>The screen did not answer, so the previous resolution is back.</source>
         <translation>Ekran yanıt vermedi, bu yüzden önceki çözünürlük geri geldi.</translation>
     </message>
@@ -2915,6 +2940,11 @@ Bu geri alınamaz.</translation>
         <translation>Devam et</translation>
     </message>
     <message>
+        <location line="+0"/>
+        <source>Closing…</source>
+        <translation>Kapanıyor…</translation>
+    </message>
+    <message>
         <location line="+2"/>
         <source>Details</source>
         <translation>Ayrıntılar</translation>
@@ -2925,40 +2955,40 @@ Bu geri alınamaz.</translation>
         <translation>Son oynananlar</translation>
     </message>
     <message>
-        <location line="+458"/>
+        <location line="+472"/>
         <location line="+3"/>
         <source>Select</source>
         <translation>Seç</translation>
     </message>
     <message>
-        <location line="+140"/>
+        <location line="+141"/>
         <source>The chosen sound theme can&apos;t be used. The standard one plays instead.</source>
         <translation>Seçilen ses teması kullanılamıyor. Bunun yerine standart tema çalıyor.</translation>
     </message>
     <message>
-        <location line="-162"/>
+        <location line="-163"/>
         <location line="+17"/>
         <source>Cancel</source>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="-1055"/>
+        <location line="-1151"/>
         <source>%1 is already running</source>
         <translation>%1 zaten çalışıyor</translation>
     </message>
     <message>
         <location line="+3"/>
-        <location line="+21"/>
+        <location line="+30"/>
         <source>%1 could not be started. Try again.</source>
         <translation>%1 başlatılamadı. Tekrar dene.</translation>
     </message>
     <message>
-        <location line="-14"/>
+        <location line="-23"/>
         <source>The game could not be closed. Try again.</source>
         <translation>Oyun kapatılamadı. Tekrar dene.</translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+22"/>
         <source>%1 stopped unexpectedly. Try again.</source>
         <translation>%1 beklenmedik şekilde durdu. Tekrar dene.</translation>
     </message>
@@ -2969,12 +2999,12 @@ Bu geri alınamaz.</translation>
         <translation>Çalışan uygulama</translation>
     </message>
     <message>
-        <location line="+926"/>
+        <location line="+1013"/>
         <source>Sections</source>
         <translation>Bölümler</translation>
     </message>
     <message>
-        <location line="+123"/>
+        <location line="+124"/>
         <source>mock services</source>
         <translation>sahte hizmetler</translation>
     </message>
@@ -3212,7 +3242,7 @@ Bu geri alınamaz.</translation>
         <translation>Mağaza</translation>
     </message>
     <message>
-        <location line="+27"/>
+        <location line="+29"/>
         <source>Featured</source>
         <translation>Öne çıkanlar</translation>
     </message>
@@ -3228,7 +3258,7 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+140"/>
+        <location line="+163"/>
         <location line="+70"/>
         <source>Installed</source>
         <translation>Kurulu</translation>
@@ -3255,7 +3285,7 @@ Bu geri alınamaz.</translation>
         <translation>Güncelleme var</translation>
     </message>
     <message>
-        <location line="+109"/>
+        <location line="+126"/>
         <source>Search</source>
         <translation>Ara</translation>
     </message>

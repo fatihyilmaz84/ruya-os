@@ -20,11 +20,14 @@ FocusScope {
     property string picture       // hero or tile path, may be empty (then the generated art)
     property bool started: false  // Session1 said ok: "Starting..."
     property bool slow: false     // 20 s without a window: "Still starting" and Close
+    // Closing mode (T-458): Close game was chosen. The line says "Closing <title>…", the dots run, there
+    // is nothing to press (Back does not leave it; the shell ends it when the game has ended).
+    property bool closing: false
     // Keys the shell keeps for itself (Guide): a function key -> bool.
     property var guideKey: function (key) { return false }
 
     // What the hint bar says while the splash is up: nothing to press until it offers Close.
-    readonly property var hints: slow ? [{ button: "A", text: qsTr("Close") }, { button: "B", text: qsTr("Close") }] : []
+    readonly property var hints: slow && !closing ? [{ button: "A", text: qsTr("Close") }, { button: "B", text: qsTr("Close") }] : []
     // Any of its animations is running (tests: none under reduced motion).
     readonly property bool animating: dotsAnimation.running || zoomAnimation.running
                                       || fadeAnimation.running || blurAnimation.running
@@ -54,7 +57,7 @@ FocusScope {
     }
 
     Accessible.role: Accessible.Pane
-    Accessible.name: slow ? qsTr("Still starting %1").arg(title) : qsTr("Starting %1").arg(title)
+    Accessible.name: closing ? qsTr("Closing %1").arg(title) : slow ? qsTr("Still starting %1").arg(title) : qsTr("Starting %1").arg(title)
 
     Rectangle {
         anchors.fill: parent
@@ -155,7 +158,8 @@ FocusScope {
             objectName: "launchStatus"
             width: parent.width
             textFormat: Text.PlainText
-            text: splash.slow ? qsTr("Still starting…") : (splash.started ? qsTr("Starting…") : "")
+            text: splash.closing ? qsTr("Closing %1…").arg(splash.title)
+                              : splash.slow ? qsTr("Still starting…") : (splash.started ? qsTr("Starting…") : "")
             visible: text.length > 0
             color: Theme.text
             font.pixelSize: Theme.typeBody * splash.u
@@ -168,7 +172,7 @@ FocusScope {
             id: dotRow
             objectName: "launchDots"
             spacing: Theme.spaceS * splash.u
-            visible: !splash.slow
+            visible: !splash.slow || splash.closing
             Repeater {
                 model: 3
                 Rectangle {
@@ -188,7 +192,7 @@ FocusScope {
             id: closeButton
             objectName: "launchClose"
             u: splash.u
-            visible: splash.slow
+            visible: splash.slow && !splash.closing
             text: qsTr("Close")
             onAccepted: splash.closeRequested()
         }
@@ -202,7 +206,7 @@ FocusScope {
         to: 3
         duration: Theme.tintMs * 2
         loops: Animation.Infinite
-        running: !Theme.reducedMotion && splash.shown && !splash.slow && splash.visible
+        running: !Theme.reducedMotion && splash.shown && (!splash.slow || splash.closing) && splash.visible
     }
 
     Keys.onPressed: event => {
@@ -210,7 +214,7 @@ FocusScope {
             event.accepted = false          // the shell opens the quick menu
             return
         }
-        if (splash.slow && !event.isAutoRepeat && BackKey.isBackOrBackspace(event.key))
+        if (splash.slow && !splash.closing && !event.isAutoRepeat && BackKey.isBackOrBackspace(event.key))
             splash.closeRequested()         // once it offers Close, Back closes too (the hint bar says so)
         event.accepted = true               // locked: nothing reaches the shell underneath
     }

@@ -120,6 +120,18 @@ void Session::mockDelayPidAnswers(int ms)
         mock->setPidAnswerDelay(ms);
 }
 
+void Session::mockStopDelay(int ms)
+{
+    if (auto *mock = qobject_cast<MockSessionBackend *>(m_backend.get()))
+        mock->setStopDelay(ms);
+}
+
+void Session::mockStubbornStop(bool stubborn)
+{
+    if (auto *mock = qobject_cast<MockSessionBackend *>(m_backend.get()))
+        mock->setStubbornStop(stubborn);
+}
+
 int Session::mockPidOf(const QString &instance) const
 {
     if (auto *mock = qobject_cast<MockSessionBackend *>(m_backend.get()))

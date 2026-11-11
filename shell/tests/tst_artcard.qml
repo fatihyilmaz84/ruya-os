@@ -34,6 +34,11 @@ Item {
             card.running = true
             verify(findChild(card, "artCardPill").visible)
             compare(card.stateText, "Running")
+            card.closing = true                  // T-458: Close game was asked, the game has not ended
+            compare(card.stateText, "Closing", "closing wins over running")
+            compare(findChild(card, "artCardPill").kind, "neutral")
+            compare(card.Accessible.name, "Portal 2, Closing")
+            card.closing = false
             card.running = false
             card.installing = true
             card.installPercent = 40

@@ -510,7 +510,12 @@ This can&apos;t be undone.</translation>
 <context>
     <name>ArtCard</name>
     <message>
-        <location filename="../qml/ArtCard.qml" line="+20"/>
+        <location filename="../qml/ArtCard.qml" line="+21"/>
+        <source>Closing</source>
+        <translation>Closing</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Running</source>
         <translation>Running</translation>
     </message>
@@ -1503,13 +1508,13 @@ This can&apos;t be undone.</translation>
 <context>
     <name>LaunchSplash</name>
     <message>
-        <location filename="../qml/LaunchSplash.qml" line="+27"/>
-        <location line="+165"/>
+        <location filename="../qml/LaunchSplash.qml" line="+30"/>
+        <location line="+166"/>
         <source>Close</source>
         <translation>Close</translation>
     </message>
     <message>
-        <location line="-135"/>
+        <location line="-136"/>
         <source>Still starting %1</source>
         <translation>Still starting %1</translation>
     </message>
@@ -1519,7 +1524,17 @@ This can&apos;t be undone.</translation>
         <translation>Starting %1</translation>
     </message>
     <message>
+        <location line="+0"/>
+        <source>Closing %1</source>
+        <translation>Closing %1</translation>
+    </message>
+    <message>
         <location line="+101"/>
+        <source>Closing %1…</source>
+        <translation>Closing %1…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Still starting…</source>
         <translation>Still starting…</translation>
     </message>
@@ -2838,7 +2853,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+539"/>
+        <location filename="../qml/Shell.qml" line="+540"/>
         <source>Could not %1.</source>
         <translation>Could not %1.</translation>
     </message>
@@ -2873,7 +2888,12 @@ This can&apos;t be undone.</translation>
         <translation>Restarting to finish the update in 2 minutes. Press any button to wait.</translation>
     </message>
     <message>
-        <location line="+237"/>
+        <location line="+37"/>
+        <source>%1 is still closing.</source>
+        <translation>%1 is still closing.</translation>
+    </message>
+    <message>
+        <location line="+214"/>
         <source>Could not close %1.</source>
         <translation>Could not close %1.</translation>
     </message>
@@ -2883,7 +2903,12 @@ This can&apos;t be undone.</translation>
         <translation>Could not close the running app.</translation>
     </message>
     <message>
-        <location line="+68"/>
+        <location line="+43"/>
+        <source>%1 did not close. Restart the console if it keeps running.</source>
+        <translation>%1 did not close. Restart the console if it keeps running.</translation>
+    </message>
+    <message>
+        <location line="+98"/>
         <source>The screen did not answer, so the previous resolution is back.</source>
         <translation>The screen did not answer, so the previous resolution is back.</translation>
     </message>
@@ -2924,6 +2949,11 @@ This can&apos;t be undone.</translation>
         <translation>Resume</translation>
     </message>
     <message>
+        <location line="+0"/>
+        <source>Closing…</source>
+        <translation>Closing…</translation>
+    </message>
+    <message>
         <location line="+2"/>
         <source>Details</source>
         <translation>Details</translation>
@@ -2934,40 +2964,40 @@ This can&apos;t be undone.</translation>
         <translation>Recent</translation>
     </message>
     <message>
-        <location line="+458"/>
+        <location line="+472"/>
         <location line="+3"/>
         <source>Select</source>
         <translation>Select</translation>
     </message>
     <message>
-        <location line="+140"/>
+        <location line="+141"/>
         <source>The chosen sound theme can&apos;t be used. The standard one plays instead.</source>
         <translation>The chosen sound theme can&apos;t be used. The standard one plays instead.</translation>
     </message>
     <message>
-        <location line="-162"/>
+        <location line="-163"/>
         <location line="+17"/>
         <source>Cancel</source>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location line="-1055"/>
+        <location line="-1151"/>
         <source>%1 is already running</source>
         <translation>%1 is already running</translation>
     </message>
     <message>
         <location line="+3"/>
-        <location line="+21"/>
+        <location line="+30"/>
         <source>%1 could not be started. Try again.</source>
         <translation>%1 could not be started. Try again.</translation>
     </message>
     <message>
-        <location line="-14"/>
+        <location line="-23"/>
         <source>The game could not be closed. Try again.</source>
         <translation>The game could not be closed. Try again.</translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+22"/>
         <source>%1 stopped unexpectedly. Try again.</source>
         <translation>%1 stopped unexpectedly. Try again.</translation>
     </message>
@@ -2978,12 +3008,12 @@ This can&apos;t be undone.</translation>
         <translation>Running app</translation>
     </message>
     <message>
-        <location line="+926"/>
+        <location line="+1013"/>
         <source>Sections</source>
         <translation>Sections</translation>
     </message>
     <message>
-        <location line="+123"/>
+        <location line="+124"/>
         <source>mock services</source>
         <translation>mock services</translation>
     </message>
@@ -3221,7 +3251,7 @@ This can&apos;t be undone.</translation>
         <translation>Store</translation>
     </message>
     <message>
-        <location line="+27"/>
+        <location line="+29"/>
         <source>Featured</source>
         <translation>Featured</translation>
     </message>
@@ -3237,7 +3267,7 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+140"/>
+        <location line="+163"/>
         <location line="+70"/>
         <source>Installed</source>
         <translation>Installed</translation>
@@ -3264,7 +3294,7 @@ This can&apos;t be undone.</translation>
         <translation>Update available</translation>
     </message>
     <message>
-        <location line="+109"/>
+        <location line="+126"/>
         <source>Search</source>
         <translation>Search</translation>
     </message>
