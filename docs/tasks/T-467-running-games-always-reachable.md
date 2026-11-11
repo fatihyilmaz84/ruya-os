@@ -31,6 +31,7 @@ From a running game the player goes Home and can always get back to it: the Hub 
 
 ## Outcome
 Verified: host (vm pending: vm-app-check.sh reachable)
+possibly public (lead, from the review): what a running app experiences changes. A game whose window Session1 could not map (pygame/SDL: a window app id that is not its Flatpak id, or no pid) used to keep running under the Hub (`quickMenuApp.instance` was empty, so HubPause froze nothing); now the Hub freezes it, Home leaves it frozen and Play thaws it, like every other game. T-468 documents this for developers.
 
 UX notes: no new screen; the Hub gains rows. States reached in tests: Home with a game behind it (window naming itself `python3.12`, Session1 could not map its process; frozen by the Hub's Home): Running card with the focus, Play brings the window back and the game is thawed, no toast, no second launch. The Hub opened from Home (no app part) now lists a "Switch to <game>" row per running game of the profile, first in the list, with the focus on the first; Accept on a game with a window opens it and closes the Hub (focus in the game, thawed); Accept on one with no window yet toasts "<game> has no window yet." (`info`), the Hub stays with the focus on that row; Back leaves the Hub as before. Doubts: the wording "(no window yet)" is mine; focusing the first Switch to row (rather than Recent) when the Hub opens from Home with a game running is my reading of "always reachable" and is a one-line change in `QuickMenu.present()`.
 
