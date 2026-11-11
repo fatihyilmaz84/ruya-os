@@ -1,6 +1,6 @@
 # T-466 — Frozen apps release their audio stream and, after a while, their memory
 
-Status: todo · Phase: 2 · Depends: T-465 · Area: services (ruya-session) · Size: M · Owner: builder · Complexity: complex · Developer surface: public-format
+Status: in-progress · Phase: 2 · Depends: T-465 · Area: services (ruya-session) · Size: M · Owner: builder · Complexity: complex · Developer surface: public-format
 
 ## Goal
 A frozen game costs no CPU or GPU, but it still keeps the audio graph busy and holds all its memory. Make a frozen app as cheap as it can be without making Resume slow or noisy.

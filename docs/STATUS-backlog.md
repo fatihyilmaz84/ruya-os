@@ -4,8 +4,8 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 
 | ID | Title | Status | Depends |
 |---|---|---|---|
-| [T-466](tasks/T-466-frozen-apps-release-audio-and-memory.md) | Frozen apps release their audio stream and, after a while, their memory | todo | T-465 |
-| [T-454](tasks/T-454-hub-display-tiles.md) | Hub display: mode, resolution and refresh rate, brightness where supported | todo | — |
+| [T-466](tasks/T-466-frozen-apps-release-audio-and-memory.md) | Frozen apps release their audio stream and, after a while, their memory | in-progress | T-465 |
+| [T-454](tasks/T-454-hub-display-tiles.md) | Hub display: mode, resolution and refresh rate, brightness where supported | in-progress | — |
 | [T-455](tasks/T-455-hub-latency-and-idle-cost.md) | Hub budgets: activation latency, idle cost, game FPS with the Hub open (Dell) | todo | — |
 | [T-456](tasks/T-456-guide-on-every-pad.md) | Guide on every pad: long press for Power, never reaching the game, a keyboard shortcut | todo | T-367, T-396 |
 | [T-362](tasks/T-362-compositor-xdg-output-and-socket-follow-ups.md) | Compositor: xdg-output for games, profile-socket and log follow-ups | todo | — |
