@@ -66,6 +66,7 @@ Item {
     signal launchRequested(string id) // a Recent row: the shell starts it (and the Hub closes)
     signal switchProfileRequested()
     signal powerRequested(string action)
+    signal settingsRequested(string category) // a panel's link to Settings: the shell leaves the Hub and opens it
 
     // The quick tiles whose backend exists, in order, and the lines of three they wrap into. A tile
     // whose backend is missing or "unsupported" is absent, never greyed (02 §1.6).
@@ -127,6 +128,15 @@ Item {
             if (menu.open && status !== "ok")
                 Notifications.show(qsTr("Could not change Wi-Fi."), "warning")
         }
+    }
+    // A pad came or went (the Controllers panel's rows): the list follows and the focus stays in the panel.
+    Connections {
+        target: Batteries
+        function onDevicesChanged() { menu.rebuild() }
+    }
+    Connections {
+        target: Bluetooth
+        function onDevicesChanged() { menu.rebuild() }
     }
     Connections {
         target: Audio
@@ -193,10 +203,12 @@ Item {
         const next = keysNow()
         if (JSON.stringify(next) === JSON.stringify(itemKeys))
             return
-        const current = actions.currentIndex >= 0 && actions.currentIndex < itemKeys.length ? itemKeys[actions.currentIndex] : ""
+        const was = actions.currentIndex             // read before the new model resets it
+        const current = was >= 0 && was < itemKeys.length ? itemKeys[was] : ""
         itemKeys = next
         const at = next.indexOf(current)
-        actions.currentIndex = at >= 0 ? at : Math.min(Math.max(0, actions.currentIndex), next.length - 1)
+        // A row that vanished (a pad unplugged) hands the focus to the row that took its place.
+        actions.currentIndex = at >= 0 ? at : Math.min(Math.max(0, was), next.length - 1)
     }
     onHasAppChanged: rebuild()
     onOthersChanged: rebuild()
@@ -210,12 +222,13 @@ Item {
 
     // ---- panels (T-450, T-452): a panel replaces the Quick Hub's rows in this same list ---------------------
     // The panels that exist, in the order of their entries (02 §1.6); an entry appears only when its panel is built.
-    readonly property var panelIds: ["audio", "performance"]
+    readonly property var panelIds: ["audio", "controllers", "performance"]
 
     // A panel is a table of row descriptors (T-452), the one place a row's behaviour is written:
-    //   { key, label, kind: "toggle" | "choice" | "slider" | "info",
-    //     value(): the text at the right (toggle, choice, info),
-    //     activate(): Accept (toggle, slider),
+    //   { key, label, kind: "toggle" | "choice" | "slider" | "info" | "action",
+    //     value(): the text at the right (toggle, choice) or under the label (info; none: the label alone),
+    //     icon: an icon name before an info row's text (optional),
+    //     activate(): Accept (toggle, slider, action),
     //     adjust(delta): Left/Right, delta -1 or +1 (slider),
     //     choices(): [{ id, name, current }] and select(id) (choice; `async` when the answer comes later) }
     // The hint bar, the delegate, Accept and Left/Right all derive from `kind`. To add a panel: list it in
@@ -243,6 +256,18 @@ Item {
                       value: () => Audio.inputMuted ? qsTr("On") : qsTr("Off"),
                       activate: () => Audio.toggleInputMute() }
                 ] : [])
+            ] }
+        }
+        if (id === "controllers") {
+            const pads = controllerPads()
+            return { title: qsTr("Controllers"), rows: [
+                ...(pads.length === 0 ? [
+                    { key: "controllers:none", label: qsTr("No controllers connected."), kind: "info" }
+                ] : pads.map(p => ({ key: "controllers:pad:" + p.id, label: p.name, kind: "info",
+                                     icon: DeviceIcons.iconFor("controller", p.family),
+                                     value: () => padText(p) }))),
+                { key: "controllers:settings", label: qsTr("Controller settings"), kind: "action",
+                  activate: () => menu.settingsRequested("bluetooth") }
             ] }
         }
         if (id === "performance") {
@@ -279,6 +304,42 @@ Item {
     function panelKeys(id) {
         const def = panelDef(id)
         return def ? def.rows.map(r => r.key) : []
+    }
+
+    // ---- the Controllers panel (T-453, 02 §1.6) ---------------------------------------------------------
+    // The connected pads, read from what the shell already knows: the batteries the service lists for
+    // controllers (a wired or dongle pad has no Bluetooth address: USB) and the connected Bluetooth
+    // controllers it does not list there. Sorted by name, so a battery that changes never moves a row.
+    // [{ id, name, family, transport: "usb" | "bluetooth", percent (-1: not reported), state }]
+    function controllerPads() {
+        const pads = []
+        const tied = ({})
+        for (const b of Batteries.devices) {
+            if (b.kind !== "controller")
+                continue
+            const address = String(b.address ?? "").toLowerCase()
+            if (address !== "")
+                tied[address] = true
+            pads.push({ id: address !== "" ? address : b.id, name: DeviceIcons.batteryName(b), family: b.family ?? "",
+                        transport: address !== "" ? "bluetooth" : "usb", percent: b.percent, state: b.state })
+        }
+        for (const d of Bluetooth.devices) {
+            const address = String(d.id).toLowerCase()
+            if (d.kind !== "controller" || !d.connected || tied[address])
+                continue
+            pads.push({ id: address, name: DeviceIcons.shownName(Bluetooth.devices, d), family: d.family ?? "",
+                        transport: "bluetooth", percent: d.battery >= 0 ? d.battery : -1, state: "" })
+        }
+        pads.sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+        return pads
+    }
+    // "Battery 62 %, charging · Bluetooth": every word in `text` (04 §7), the words carry the state.
+    function padText(p) {
+        const battery = p.percent < 0 ? qsTr("Battery not reported")
+                      : p.state === "full" ? qsTr("Battery full")
+                      : p.state === "charging" ? qsTr("Battery %1 %, charging").arg(p.percent)
+                      : qsTr("Battery %1 %").arg(p.percent)
+        return qsTr("%1 · %2").arg(battery).arg(p.transport === "usb" ? qsTr("USB") : qsTr("Bluetooth"))
     }
 
     // ---- the Performance panel's texts (02 §1.6) -------------------------------------------------------
@@ -392,6 +453,7 @@ Item {
             case "choice": return row.choices().length < 2 ? [back]
                                   : [{ button: "A", text: qsTr("Next") }, { button: "Left/Right", text: qsTr("Change") }, back]
             case "toggle": return [{ button: "A", text: qsTr("Toggle") }, back]
+            case "action": return [{ button: "A", text: qsTr("Open") }, back]
             }
             return [back]               // info: nothing to press
         }
@@ -842,6 +904,7 @@ Item {
                             readonly property bool isPanelRow: row !== null && !isVolume
                             readonly property bool isChoice: row !== null && row.kind === "choice"
                             readonly property bool isInfo: row !== null && row.kind === "info"
+                            readonly property bool isAction: row !== null && row.kind === "action"
                             readonly property string rowText: isPanelRow && row.value ? row.value() : ""
                             readonly property int line: isTiles ? parseInt(modelData.substring(6)) : 0
                             readonly property string label: menu.labelOf(modelData)
@@ -882,7 +945,7 @@ Item {
                                 // Volume and Recent rows start at the left edge; the others are centred.
                                 readonly property real leftEdge: action.isRecent ? thumb.x + thumb.width + Theme.spaceS * menu.u
                                                                                   : Theme.spaceL * menu.u
-                                x: action.isVolume || action.isRecent || action.isPanelRow ? leftEdge : (action.width - width) / 2
+                                x: action.isVolume || action.isRecent || (action.isPanelRow && !action.isAction) ? leftEdge : (action.width - width) / 2
                                 anchors.verticalCenter: parent.verticalCenter
                                 width: Math.min(implicitWidth, action.width - leftEdge - Theme.spaceL * menu.u
                                                 - (action.isPanelRow ? panelValue.width + Theme.spaceM * menu.u : 0))
@@ -959,23 +1022,36 @@ Item {
                             // A reading (an info row, T-452): the label small above, the value under it at the full width, so
                             // "Not available on this console" is never cut off. The value is always `text` (contrast, 04 §7):
                             // the words carry the state.
+                            // An info row's glyph (a pad's family, T-453).
+                            Icon {
+                                id: infoIcon
+                                objectName: "hubInfoIcon"
+                                visible: action.isInfo && action.row.icon !== undefined
+                                x: Theme.spaceL * menu.u
+                                anchors.verticalCenter: parent.verticalCenter
+                                u: menu.u
+                                name: action.isInfo && action.row.icon ? action.row.icon : ""
+                            }
                             Column {
                                 id: infoRow
                                 visible: action.isInfo
-                                x: Theme.spaceL * menu.u
+                                x: Theme.spaceL * menu.u + (infoIcon.visible ? infoIcon.width + Theme.spaceS * menu.u : 0)
                                 anchors.verticalCenter: parent.verticalCenter
-                                width: action.width - 2 * Theme.spaceL * menu.u
+                                width: action.width - x - Theme.spaceL * menu.u
                                 Text {
+                                    objectName: "hubInfoLabel"
                                     width: parent.width
-                                    textFormat: Text.PlainText
+                                    textFormat: Text.PlainText      // a device's name comes from outside
                                     text: action.label
                                     color: Theme.text
-                                    font.pixelSize: Theme.typeCaption * menu.u
+                                    // A row with no value is one line of body text ("No controllers connected.").
+                                    font.pixelSize: (action.rowText === "" ? Theme.typeBody : Theme.typeCaption) * menu.u
                                     font.weight: Theme.weightDemiBold
                                     elide: Text.ElideRight
                                 }
                                 Text {
                                     objectName: "hubInfoValue"
+                                    visible: action.rowText !== ""
                                     width: parent.width
                                     textFormat: Text.PlainText
                                     text: action.rowText
@@ -1022,7 +1098,7 @@ Item {
 
                     Rectangle {
                         objectName: "hubMoreAbove"
-                        readonly property bool needed: actions.contentY > 1
+                        readonly property bool needed: actions.contentY > actions.originY + 1
                         visible: needed
                         anchors { left: parent.left; right: parent.right; top: parent.top }
                         height: Theme.spaceL * menu.u
@@ -1033,7 +1109,7 @@ Item {
                     }
                     Rectangle {
                         objectName: "hubMoreBelow"
-                        readonly property bool needed: actions.contentY + actions.height < actions.contentHeight - 1
+                        readonly property bool needed: actions.contentY + actions.height < actions.originY + actions.contentHeight - 1
                         visible: needed
                         anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
                         height: Theme.spaceL * menu.u
