@@ -1,6 +1,6 @@
 # T-452 — Hub Performance panel
 
-Status: todo · Phase: 2 · Depends: — · Area: shell · Size: S · Owner: builder · Complexity: normal · Developer surface: none
+Status: in-progress · Phase: 2 · Depends: — · Area: shell · Size: S · Owner: builder · Complexity: normal · Developer surface: none
 
 ## Goal
 From the Hub over a game the player opens Performance and reads FPS, frame time, CPU, GPU, RAM, VRAM, temperatures and power, with each unsupported value said plainly.
