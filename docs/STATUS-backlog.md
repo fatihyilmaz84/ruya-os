@@ -4,7 +4,7 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 
 | ID | Title | Status | Depends |
 |---|---|---|---|
-| [T-458](tasks/T-458-closing-screen.md) | "Closing" screen: closing a game shows that it is closing, not Running (owner, 2026-11-10) | todo | — |
+| [T-458](tasks/T-458-closing-screen.md) | "Closing" screen: closing a game shows that it is closing, not Running (owner, 2026-11-10) | in-progress | — |
 | [T-452](tasks/T-452-hub-performance-panel.md) | Hub Performance panel | todo | — |
 | [T-453](tasks/T-453-hub-controllers-panel.md) | Hub Controllers panel | todo | — |
 | [T-454](tasks/T-454-hub-display-tiles.md) | Hub display: mode, resolution and refresh rate, brightness where supported | todo | — |
