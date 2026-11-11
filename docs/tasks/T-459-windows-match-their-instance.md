@@ -42,7 +42,7 @@ Close game, the Hub's title, the Running pill, Switch to and the pause work for 
 - Planned by lead-10 on 2026-11-10 from the owner's report and a Dell run. QtWaylandCompositor: `QWaylandClient::processId()`.
 
 ## Outcome
-Verified: host (vm pending: vm-session-check)
+Verified: vm (0.0.64, 2026-11-11, lead-11: `vm-session-check.sh check` and `display` ALL PASS; the display check's window pattern now allows the new `pid` field of the compositor log line) (hw pending: Close of Asteroid Shooter on the Dell)
 UX notes: no new screen. Over a `python3.12` window the Hub shows the game's title and art, Close game stops it and goes Home with the focus on its Running card; Accept there brings the same window back (no launch); "Switch to" names it by its game; the Hub pauses it. With no instance at all, Close game shows the `warning` toast "Could not close <title>." and the Hub stays open with the focus on Close game. Doubt: the toast names the window's own id when nothing else is known (e.g. "Could not close python3.12.").
 
 **Built.**

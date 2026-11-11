@@ -41,7 +41,7 @@ Opening Ruya Hub over a game pauses it (no CPU, no sound, its last frame under t
 - Planned by lead-10 on 2026-11-10 from the owner's request. Electron apps have two scopes (T-435): freeze all of them. Frozen PipeWire clients stop their stream; check that thaw does not leave the game muted.
 
 ## Outcome
-Verified: host (vm pending: `vm-session-check.sh` check; hw pending: the Hub UI over a frozen SuperTuxKart on the Dell and its KMS capture)
+Verified: vm (0.0.64, 2026-11-11, lead-11: `vm-session-check.sh check` ALL PASS after a check fix: the running shell's sweep thawed the check's own Freeze, so the check now asserts that sweep and stops `ruya-compositor@tty1` for the rest of Freeze/Thaw and Stop; and it Locks before DeleteProfile) (hw pending: the Hub UI over a frozen SuperTuxKart on the Dell and its KMS capture)
 UX notes: states reached in tests: Hub open over a running game ("Paused" under the running time once the service says frozen), Hub open after a failed freeze (no "Paused", focus on Resume), Home with the game frozen behind it, Settings -> System row. Back (B) and Guide close the Hub and thaw the game; the game has the focus again (asserted) in the same handler that closes the Hub; Resume does the same. Home leaves the focus on the game's card (asserted) and the game frozen; Accept on that card resumes and thaws it. Close game lands on Home. In Settings -> System the new toggle is reached with Down, Accept flips it and keeps the focus on the row, Back returns to the categories (asserted). Doubt: "Paused" is plain body-size demi-bold text, readable at 10 ft in the shot but not more prominent than the running time; a pause glyph would need a new icon (inbox).
 
 **Built.**

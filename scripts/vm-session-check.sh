@@ -337,7 +337,7 @@ display)
     t1="$(date +%s)"
     out="$(launch "$wclient" "$me")"; inst="$(echo "$out" | unit_of)"; echo "$inst" > /root/vm-display-instance
     [ -n "$inst" ] && ok "Launch as $me: $inst" || { bad "Launch: $out"; exit 1; }
-    wait_shell "ruya-compositor: app .* uid $muid profile $me" "$t1" 60 && ok "the window of $user is in the app layer" || bad "no window of $user within 60 s"
+    wait_shell "ruya-compositor: app .* uid $muid pid [0-9]+ profile $me" "$t1" 60 && ok "the window of $user is in the app layer" || bad "no window of $user within 60 s"
     shell_log_since "$t1" | grep -a -E "ruya-compositor: (app|refused|socket)" | head -3
     line="$(journalctl -b _UID="$muid" --since "@$t1" --no-pager -o cat | grep -a "test-wayland-client:" | head -1)"; echo "$line"
     echo "$line" | grep -q "WAYLAND_DISPLAY=wayland-0 socket=yes" && ok "inside the sandbox: WAYLAND_DISPLAY=wayland-0, the socket is there" || bad "sandbox display: $line"
@@ -539,6 +539,17 @@ check)
     scopes="$(app_scope_names "$user")"
     [ "$(echo "$scopes" | grep -c .)" -ge 2 ] && ok "the app has two active scopes: $(echo $scopes)" || bad "expected two active scopes, found: $scopes"
     case "$(freeze_app nope.service)" in 's "not-running"') ok "Freeze of an unknown instance: not-running";; *) bad "Freeze of an unknown instance";; esac
+    # The shell's sweep (HubPause.qml) thaws a frozen game of the signed-in profile that it did not
+    # freeze itself: a Freeze from this check is undone by the running shell, with no Thaw from here.
+    case "$(freeze_app "$inst")" in 's "ok"') ok "Freeze behind the shell's back answered ok";; *) bad "Freeze (sweep)";; esac
+    wait_sig "\"member\":\"FrozenChanged\".*$inst.*false" 15 && ok "the shell's sweep thawed it (FrozenChanged(false), no Thaw from the check)" || bad "the shell's sweep did not thaw a game it had not frozen"
+    for u in "$inst" $scopes; do
+        [ "$(fstate "$user" "$u")" = running ] && ok "$u runs again after the sweep" || bad "$u: FreezerState $(fstate "$user" "$u") after the sweep"
+    done
+    # The rest of Freeze/Thaw and the Stop of a frozen app run without the shell, whose sweep would
+    # otherwise thaw every Freeze below; it starts again after the Stop section.
+    systemctl stop ruya-compositor@tty1 && ok "the shell is stopped for the Freeze checks" || bad "systemctl stop ruya-compositor@tty1"
+    sleep 1; : > "$work/signals.log"   # the sweep's FrozenChanged lines must not satisfy the waits below
     case "$(freeze_app "$inst")" in 's "ok"') ok "Freeze answered ok";; *) bad "Freeze";; esac
     for u in "$inst" $scopes; do
         [ "$(fstate "$user" "$u")" = frozen ] && ok "$u is frozen" || bad "$u: FreezerState $(fstate "$user" "$u") after Freeze"
@@ -576,6 +587,7 @@ check)
         && bad "an app-flatpak-$sleeper scope is still listed after Stop (active or failed)" || ok "no app-flatpak-$sleeper scope is left after Stop, not even a failed one"
     running | grep -q "$inst" && bad "ListRunning still lists it" || ok "ListRunning is empty again"
     grep -a -q "session-probe: appExited $sleeper 0 quit\|session-probe: appExited $sleeper -\?[0-9]* quit" "$work/probe.log" && ok "the shell saw appExited quit" || bad "the shell did not see appExited quit"
+    systemctl start ruya-compositor@tty1 && ok "the shell is started again" || bad "systemctl start ruya-compositor@tty1"
 
     echo "--- an app that exits non-zero"
     out="$(launch "$crasher" "$pid")"; inst2="$(echo "$out" | unit_of)"
@@ -614,6 +626,8 @@ check)
 
     echo "--- deleting a profile whose manager lingers and whose app runs"
     if [ "$created" = 1 ]; then
+        # The Freeze section signed this profile in; the active profile cannot be deleted.
+        busctl --system call "$psvc" "$ppath" "$psvc" Lock >/dev/null
         out="$(busctl --system call "$psvc" "$ppath" "$psvc" DeleteProfile sss "$admin" 1234 "$pid")"
         echo "$out"
         case "$out" in 'suu "ok"'*) ok "DeleteProfile answered ok";; *) bad "DeleteProfile: $out";; esac

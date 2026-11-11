@@ -102,16 +102,24 @@ events_check() {
     if [ "$idle" -gt 0 ]; then
         # The outside change makes the service re-read PipeWire once or twice within ~0.5 s (debounced
         # events, T-133); let that settle before counting (0.0.63: a trailing pw-dump landed in the window).
-        sleep 2
+        # Wait for quiet (0.0.64: one trailing pw-dump after a fixed 2 s): no pw-dump or wpctl besides
+        # the monitor for 3 s in a row, at most 15 s.
+        monitor="$(pgrep -x pw-dump | head -1)"
+        quiet=0; waited=0
+        while [ "$quiet" -lt 30 ] && [ "$waited" -lt 150 ]; do
+            if pgrep -x 'pw-dump|wpctl' | grep -v -x "$monitor" | grep -q .; then quiet=0; else quiet=$((quiet + 1)); fi
+            sleep 0.1; waited=$((waited + 1))
+        done
+        echo "quiet for 3 s after $((waited / 10)) s"
         # Idle: sample the process list ten times a second; the 1 s poll started a pw-dump and a
         # wpctl every second (each lives some tens of ms), so it would be caught many times.
-        monitor="$(pgrep -x pw-dump | head -1)"
         cpu0="$(as_shell systemctl --user show ruya-devices -p CPUUsageNSec --value)"
         seen=" "; samples=$((idle * 10)); i=0
         while [ "$i" -lt "$samples" ]; do
             for p in $(pgrep -x 'pw-dump|wpctl'); do
                 [ "$p" = "$monitor" ] && continue
-                case "$seen" in *" $p "*) ;; *) seen="$seen$p ";; esac
+                case "$seen" in *" $p "*) ;; *) seen="$seen$p "
+                    echo "spawned: $(ps -o pid=,ppid=,etimes=,args= -p "$p" 2>/dev/null) parent: $(ps -o args= -p "$(ps -o ppid= -p "$p" 2>/dev/null | tr -d ' ')" 2>/dev/null)";; esac
             done
             sleep 0.1; i=$((i + 1))
         done
