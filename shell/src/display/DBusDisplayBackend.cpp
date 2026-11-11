@@ -77,6 +77,7 @@ DBusDisplayBackend::DBusDisplayBackend(QObject *parent)
     // that dropped an unconfirmed mode left (the first ask may have found nobody to answer).
     connect(&m_watcher, &QDBusServiceWatcher::serviceRegistered, this, [this] {
         refresh();
+        refreshBrightness();
         takeFallbackNotice();
     });
     // UiScale changes as a property.
@@ -179,6 +180,48 @@ void DBusDisplayBackend::takeFallbackNotice()
         w->deleteLater();
         const QDBusPendingReply<bool> reply = *w;
         emit fallbackNoticeReported(reply.isValid() && reply.value());
+    });
+}
+
+void DBusDisplayBackend::refreshBrightness()
+{
+    // (su): the state and the percent. A failed ask is an outcome as well: no control.
+    const quint64 request = beginBrightnessRequest();
+    auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("GetBrightness"));
+    auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, request](QDBusPendingCallWatcher *w) {
+        w->deleteLater();
+        const QDBusMessage reply = w->reply();
+        QString state = QStringLiteral("unsupported");
+        int percent = 0;
+        if (reply.type() == QDBusMessage::ReplyMessage && !reply.arguments().isEmpty()) {
+            const QDBusArgument arg = reply.arguments().constFirst().value<QDBusArgument>();
+            QString s;
+            uint p = 0;
+            arg.beginStructure();
+            arg >> s >> p;
+            arg.endStructure();
+            state = s;
+            percent = static_cast<int>(p);
+        } else {
+            qWarning("ruya-shell: Devices1.Display GetBrightness failed: %s", qPrintable(reply.errorMessage()));
+        }
+        deliverBrightness(request, state, percent);
+    });
+}
+
+void DBusDisplayBackend::setBrightness(int percent)
+{
+    auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("SetBrightness"));
+    msg.setArguments({static_cast<uint>(percent)});
+    auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this](QDBusPendingCallWatcher *w) {
+        w->deleteLater();
+        const QDBusPendingReply<QString> reply = *w;
+        if (!reply.isValid())
+            qWarning("ruya-shell: Devices1.Display SetBrightness failed: %s", qPrintable(reply.error().message()));
+        emit setBrightnessFinished(reply.isValid() ? reply.value() : QStringLiteral("failed"));
+        refreshBrightness();
     });
 }
 

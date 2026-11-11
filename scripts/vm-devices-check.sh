@@ -43,7 +43,7 @@
 # 0-100 "supported" share at the next, ram_total is MemTotal and ram_used within 5 % of MemTotal - MemAvailable, two
 # calls inside 250 ms answer the same, cpu_temp follows whether /sys has a processor sensor, the GPU load, VRAM, the
 # GPU temperature and power are "unsupported" as the service runs as ruya-shell on virtio-gpu (no amdgpu sysfs, RAPL
-# root-only or absent), another user is refused. `system` runs only these parts. The hardware part (the Dell: compare the
+# root-only or absent), another user is refused. T-454: GetBrightness answers (su) "unsupported" 0 (QEMU has no backlight device), SetBrightness 50 is "unsupported", 0 is "invalid", another user is refused. `system` runs only these parts. The hardware part (the Dell: compare the
 # page with `lscpu`, `free`, `lspci`) is done by eye on the machine, see the T-226 Outcome.
 # inputd (T-337, not part of check): virtual gamepads from /dev/uinput; a pad destroyed while holding Down and A leaves KEY_DOWN and KEY_ENTER up on
 # "RuyaOS Navigation" (read with EVIOCGKEY); two pads hold Down, one lets go, Down stays down, the other lets go, Down is up; the journal line
@@ -871,6 +871,32 @@ performance_check() {
     fi
 }
 
+# T-454: Devices1.Display.GetBrightness / SetBrightness. QEMU's virtual GPU has no backlight device, so the
+# service must answer (su) "unsupported" 0 and refuse a set with "unsupported" (a laptop panel is by hand, see the T-454 Outcome).
+brightness_check() {
+    echo "--- brightness (T-454): Devices1.Display.GetBrightness"
+    local disp=org.ruyaos.Devices1.Display out
+    if ls /sys/class/backlight/* >/dev/null 2>&1; then
+        echo "WARN: this machine has a backlight device (/sys/class/backlight); the unsupported check applies to QEMU"
+        out="$(busctl --system call "$svc" "$path" "$disp" GetBrightness)" || { bad "GetBrightness failed: $out"; return; }
+        echo "GetBrightness: $out"
+        case "$out" in '(su) "supported" '*) ok "GetBrightness is supported with a backlight";; *) bad "a backlight is there but GetBrightness says: $out";; esac
+        return
+    fi
+    if ! out="$(busctl --system call "$svc" "$path" "$disp" GetBrightness)"; then bad "GetBrightness failed: $out"; return; fi
+    echo "GetBrightness: $out"
+    case "$out" in '(su) "unsupported" 0') ok "Brightness is unsupported in QEMU (no backlight device)";; *) bad "Brightness in QEMU: $out, want (su) \"unsupported\" 0";; esac
+    out="$(busctl --system call "$svc" "$path" "$disp" SetBrightness u 50)" || { bad "SetBrightness failed: $out"; return; }
+    case "$out" in 's "unsupported"') ok "SetBrightness 50 is refused as unsupported";; *) bad "SetBrightness 50 answered: $out";; esac
+    out="$(busctl --system call "$svc" "$path" "$disp" SetBrightness u 0)" || { bad "SetBrightness 0 failed: $out"; return; }
+    case "$out" in 's "invalid"') ok "SetBrightness 0 is invalid";; *) bad "SetBrightness 0 answered: $out";; esac
+    if out="$(runuser -u nobody -- busctl --system call "$svc" "$path" "$disp" GetBrightness 2>&1)"; then
+        bad "nobody could call GetBrightness: $out"
+    else
+        echo "$out"; ok "GetBrightness from nobody refused"
+    fi
+}
+
 # T-296: the first removable, mounted, writable volume of a `busctl --json=short call ... ListVolumes`
 # reply on stdin, printed as two lines (the id, then the mount point); nothing when there is none, exit 1
 # when the input is not that JSON. {"type":"aa{sv}","data":[[{"id":{"type":"s","data":".."}, ...}, ...]]}
@@ -1362,6 +1388,7 @@ time)
 system)
     sysinfo_check
     performance_check
+    brightness_check
     ;;
 events)
     events_check "${IDLE:-0}"

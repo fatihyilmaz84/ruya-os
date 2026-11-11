@@ -54,11 +54,22 @@ DisplayControl::DisplayControl(std::unique_ptr<DisplayBackend> backend, QObject 
             m_backend->restartShell();
         emit resetFinished(status);
     });
+    connect(m_backend.get(), &DisplayBackend::brightnessChanged, this, [this](const QString &state, int percent) {
+        const bool supported = state == QLatin1String("supported");
+        const int level = supported ? std::clamp(percent, 1, 100) : 0;
+        if (supported == m_brightnessSupported && level == m_brightness)
+            return;
+        m_brightnessSupported = supported;
+        m_brightness = level;
+        emit brightnessChanged();
+    });
+    connect(m_backend.get(), &DisplayBackend::setBrightnessFinished, this, &DisplayControl::setBrightnessFinished);
     connect(m_backend.get(), &DisplayBackend::fallbackNoticeReported, this, [this](bool happened) {
         if (happened)
             emit modeReset();
     });
     m_backend->refresh();
+    m_backend->refreshBrightness();
     m_backend->takeFallbackNotice();
 }
 
@@ -253,6 +264,16 @@ void DisplayControl::refresh()
     m_backend->refresh();
 }
 
+void DisplayControl::refreshBrightness()
+{
+    m_backend->refreshBrightness();
+}
+
+void DisplayControl::setBrightness(int percent)
+{
+    m_backend->setBrightness(percent);
+}
+
 void DisplayControl::setCountdownTickMs(int ms)
 {
     if (ms < 1 || ms == m_tickMs)
@@ -295,6 +316,24 @@ void DisplayControl::mockSetCrowded(bool crowded)
 {
     if (auto *mock = qobject_cast<MockDisplayBackend *>(m_backend.get()))
         mock->setCrowded(crowded);
+}
+
+void DisplayControl::mockFailBrightnessNext()
+{
+    if (auto *mock = qobject_cast<MockDisplayBackend *>(m_backend.get()))
+        mock->setFailBrightnessNext(true);
+}
+
+void DisplayControl::mockBacklightKey(int percent)
+{
+    if (auto *mock = qobject_cast<MockDisplayBackend *>(m_backend.get()))
+        mock->backlightKey(percent);
+}
+
+int DisplayControl::mockBrightnessCalls() const
+{
+    auto *mock = qobject_cast<MockDisplayBackend *>(m_backend.get());
+    return mock ? mock->brightnessCalls() : 0;
 }
 
 int DisplayControl::mockResetCalls() const

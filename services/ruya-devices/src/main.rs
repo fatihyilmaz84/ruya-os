@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use ruya_devices::audio::{Audio, FakePipeWire};
+use ruya_devices::backlight::Backlight;
 use ruya_devices::battery::{Batteries, FakeUPower, RawDevice, KIND_GAMING_INPUT};
 use ruya_devices::bluetooth::{AgentHandler, AgentSlot, Bluetooth, FakeBluez};
 #[cfg(target_os = "linux")]
@@ -530,7 +531,10 @@ fn run() -> Result<(), Box<dyn Error>> {
             )?
             .serve_at(OBJECT_PATH, ThermalIface::new(monitor.clone()))?
             .serve_at(OBJECT_PATH, TimeIface::new(time.clone(), session))?
-            .serve_at(OBJECT_PATH, DisplayIface::new(display.clone()))?
+            .serve_at(
+                OBJECT_PATH,
+                DisplayIface::new(display.clone(), Arc::new(Backlight::system())),
+            )?
             .serve_at(
                 OBJECT_PATH,
                 SystemIface::new(system.clone(), performance.clone()),

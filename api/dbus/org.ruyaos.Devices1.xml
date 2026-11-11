@@ -96,7 +96,8 @@
                       started so often in the last two minutes that another restart (and the one to put
                       it back) could trip the unit's start limit (SetMode, Reset). Try again in a minute
     "no-pending"      nothing is waiting (Keep, Revert)
-    "invalid"         malformed argument (SetUiScale: not one of 0, 100, 125, 150, 200)
+    "invalid"         malformed argument (SetUiScale: not one of 0, 100, 125, 150, 200; SetBrightness: 0 or above 100)
+    "unsupported"     the screen has no backlight (SetBrightness; GetBrightness says it in its state)
     (Reset: "ok" the mode will change at the next start so the shell restarts, "unchanged" only the stored
     values were reset)
     "failed"          internal error (the state or the config could not be written)
@@ -998,6 +999,34 @@
     <property name="UiScale" type="u" access="read">
       <annotation name="org.freedesktop.DBus.Property.EmitsChangedSignal" value="true"/>
     </property>
+
+    <!--
+      The screen's backlight (T-454), for a screen that has one (a laptop panel, an all-in-one): the
+      kernel's /sys/class/backlight, read at every call. A TV or a monitor on HDMI or DisplayPort has no
+      backlight device (DDC/CI is not used), so it answers "unsupported" and the shell shows no control.
+      Of several devices the service takes the one the kernel calls "firmware", else "platform", else
+      "raw" (the order systemd-backlight uses); a device whose maximum is 0 is ignored.
+        state    s   "supported"    a backlight is there; `percent` is its level
+                     "unsupported"  none is there, or it cannot be read
+        percent  u   1..100, the level as a share of the device's maximum (rounded; a level of 0, or
+                     below 1 %, shows as 1); 0 when the state is not "supported"
+      A level of 0 is never set, because on many panels it means a black screen the player cannot undo
+      with a controller.
+    -->
+    <method name="GetBrightness">
+      <arg name="brightness" type="(su)" direction="out"/>
+    </method>
+
+    <!--
+      Sets the backlight to `percent` (1..100) of the device's maximum. The service writes it through
+      logind (Session.SetBrightness), because it does not run as root. No admin rule, like the other
+      Display methods. Statuses: "ok", "unsupported" (no backlight), "invalid" (0 or above 100), "failed"
+      (logind refused or the device went away).
+    -->
+    <method name="SetBrightness">
+      <arg name="percent" type="u" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
 
   </interface>
   <interface name="org.ruyaos.Devices1.System">

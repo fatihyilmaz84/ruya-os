@@ -24,6 +24,10 @@ bool MockDisplayBackend::useScenario(const QString &name)
         m_screen = {QStringLiteral("DP-1"), QStringLiteral("DELL U3223QE"), 698, 393,
                     {{3840, 2160, 60000, true}, {2560, 1440, 60000, false}, {1920, 1080, 60000, false},
                      {1920, 1080, 30000, false}}};
+    } else if (name == QLatin1String("laptop")) {
+        m_screen = {QStringLiteral("eDP-1"), QStringLiteral("Built-in display"), 344, 194,
+                    {{1920, 1080, 60000, true}, {1920, 1080, 48000, false}, {1366, 768, 60000, false},
+                     {1280, 720, 60000, false}}};
     } else if (name == QLatin1String("none")) {
         m_screen = {};      // nothing connected, or the service is not there: the screen rows go away
     } else {
@@ -32,7 +36,9 @@ bool MockDisplayBackend::useScenario(const QString &name)
     m_stored = -1;
     m_candidate = {};
     m_fallback = false;
+    m_backlight = name == QLatin1String("laptop") ? 60 : -1;
     publish();
+    refreshBrightness();
     return true;
 }
 
@@ -43,6 +49,8 @@ void MockDisplayBackend::reset()
     m_failRevertNext = false;
     m_failKeepNext = false;
     m_crowded = false;
+    m_failBrightnessNext = false;
+    m_brightnessCalls = 0;
     m_resetCalls = 0;
     m_restarts = 0;
     m_setModeCalls = 0;
@@ -225,6 +233,33 @@ void MockDisplayBackend::takeFallbackNotice()
         const bool happened = m_fallback;
         m_fallback = false;
         emit fallbackNoticeReported(happened);
+    });
+}
+
+void MockDisplayBackend::refreshBrightness()
+{
+    const quint64 request = beginBrightnessRequest();
+    deliverBrightness(request, m_backlight >= 0 ? QStringLiteral("supported") : QStringLiteral("unsupported"),
+                      m_backlight >= 0 ? m_backlight : 0);
+}
+
+void MockDisplayBackend::setBrightness(int percent)
+{
+    ++m_brightnessCalls;
+    QTimer::singleShot(0, this, [this, percent] {
+        QString status = QStringLiteral("ok");
+        if (percent < 1 || percent > 100) {
+            status = QStringLiteral("invalid");
+        } else if (m_backlight < 0) {
+            status = QStringLiteral("unsupported");
+        } else if (m_failBrightnessNext) {
+            m_failBrightnessNext = false;
+            status = QStringLiteral("failed");
+        } else {
+            m_backlight = percent;
+        }
+        emit setBrightnessFinished(status);
+        refreshBrightness();
     });
 }
 

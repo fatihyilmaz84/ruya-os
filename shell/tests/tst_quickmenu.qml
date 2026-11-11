@@ -133,10 +133,10 @@ Item {
             verify(find("quickMenuItem_resume").focused, "Resume has the focus on every open")
             compare(find("systemPanel").itemKeys, ["resume", "home", "closeGame",
                 "recent:flatpak:org.example.Player", "recent:flatpak:org.example.Puzzle",
-                "volume", "tiles:0", "tiles:1", "panel:audio", "panel:controllers", "panel:performance", "power", "switch"], "the Hub's order; the running game is not repeated under Recent, and over an app there are two; the microphone tile wraps to a second line")
+                "volume", "tiles:0", "tiles:1", "panel:audio", "panel:controllers", "panel:performance", "panel:display", "power", "switch"], "the Hub's order; the running game is not repeated under Recent, and over an app there are two; the microphone tile wraps to a second line")
             // Down reaches every row in that order, one key press each.
             for (const key of ["home", "closeGame", "recent:flatpak:org.example.Player", "recent:flatpak:org.example.Puzzle",
-                               "volume", "tiles:0", "tiles:1", "panel:audio", "panel:controllers", "panel:performance", "power", "switch"]) {
+                               "volume", "tiles:0", "tiles:1", "panel:audio", "panel:controllers", "panel:performance", "panel:display", "power", "switch"]) {
                 keyClick(Qt.Key_Down)
                 compare(focusedKey(), key)
                 verify(find("systemActions").activeFocus)
@@ -163,7 +163,7 @@ Item {
             compare(find("systemPanel").itemKeys, [
                 "recent:flatpak:org.example.Racer", "recent:flatpak:org.example.Player",
                 "recent:flatpak:org.example.Puzzle", "recent:flatpak:org.example.Platformer",
-                "volume", "tiles:0", "tiles:1", "panel:audio", "panel:controllers", "panel:performance", "power", "switch", "close"])
+                "volume", "tiles:0", "tiles:1", "panel:audio", "panel:controllers", "panel:performance", "panel:display", "power", "switch", "close"])
             verify(!find("quickMenuItem_resume") && !find("quickMenuItem_home") && !find("quickMenuItem_closeGame"))
             compare(focusedKey(), "recent:flatpak:org.example.Racer", "focus starts on the first Recent row")
             verify(find("quickMenuItem_recent:flatpak:org.example.Racer").focused)
