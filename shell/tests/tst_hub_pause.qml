@@ -397,6 +397,131 @@ Item {
                     "the second Freeze is a no-op (the game is frozen already), two Thaws")
         }
 
+        // ---- A frozen game stays frozen behind another one (T-464) ------------------------------------
+
+        // The Racer frozen by the Hub and left behind Home: returns { app, instance }.
+        function racerFrozenBehindHome() {
+            const run = playRacer()
+            openHubAndPause(run.instance)
+            goTo("home")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => !tc.shell.appOpen, 2000, "Home is in front")
+            tryVerify(() => find("recentRow").activeFocus, 2000, "the focus is on the game card")
+            verify(recordOf(run.instance).frozen, "the game stays frozen behind Home")
+            return run
+        }
+
+        // Launches `appId` through Play's path; returns the instance once it runs.
+        function launchOther(appId, title) {
+            const n = launchedSpy.count
+            tc.shell.launchApp(appId, title, "")
+            tryCompare(launchedSpy, "count", n + 1)
+            const instance = launchedSpy.signalArguments[n][3]
+            verify(instance !== "")
+            tryVerify(() => recordOf(instance) !== undefined && recordOf(instance).state === "running")
+            return instance
+        }
+
+        // The study on the Dell: pygame closes its first window and opens a second. The frozen game
+        // behind Home was the last shown app, so it became the front app, was thawed, and ran on unseen.
+        function test_a_recreated_window_does_not_thaw_the_frozen_game_behind_it() {
+            start()
+            const racer = racerFrozenBehindHome()
+            const puzzleInstance = launchOther("org.example.Puzzle", "Block Puzzle")
+            const first = createTemporaryObject(appComponent, host, { appId: "org.example.Puzzle" })
+            tc.shell.addApp(first, "p2")
+            tryVerify(() => first.activeFocus, 2000, "the first window is in front")
+            tc.shell.removeApp(first)                        // the window goes before the second one opens
+            first.destroy()
+            tryVerify(() => !tc.shell.appOpen, 2000, "the frozen game is not the front app: Home shows")
+            verify(tc.shell.focusedApp === null)
+            verify(!racer.app.activeFocus, "the frozen game has no focus")
+            tryVerify(() => find("recentRow").activeFocus || find("homePlay").activeFocus, 2000, "the focus is on Home")
+            wait(100)
+            verify(recordOf(racer.instance).frozen, "the game is still frozen")
+            compare(Session.mockCalls(), ["freeze " + racer.instance], "no Thaw was sent")
+
+            const second = createTemporaryObject(appComponent, host, { appId: "org.example.Puzzle" })
+            tc.shell.addApp(second, "p2")
+            tryVerify(() => second.activeFocus, 2000, "the second window is in front")
+            verify(tc.shell.appOpen)
+            wait(100)
+            verify(recordOf(racer.instance).frozen, "the game is still frozen behind it")
+            compare(Session.mockCalls(), ["freeze " + racer.instance])
+            verify(recordOf(puzzleInstance) !== undefined)
+        }
+
+        function test_a_game_that_crashes_at_start_leaves_the_frozen_game_frozen_and_shows_home() {
+            start()
+            const racer = racerFrozenBehindHome()
+            tc.shell.launchApp("crashy", "Crashy", "")
+            const app = createTemporaryObject(appComponent, host, { appId: "crashy" })
+            tc.shell.addApp(app, "p2")                       // its window comes, and the game dies
+            tryVerify(() => toastTexts().includes("crashy stopped unexpectedly. Try again."), 3000)
+            tc.shell.removeApp(app)
+            app.destroy()
+            tryVerify(() => !tc.shell.appOpen, 2000, "Home shows, not the frozen game")
+            tryVerify(() => find("recentRow").activeFocus || find("homePlay").activeFocus, 2000)
+            wait(100)
+            verify(recordOf(racer.instance).frozen, "the game is still frozen")
+            compare(Session.mockCalls(), ["freeze " + racer.instance], "no Thaw was sent")
+        }
+
+        function test_a_game_that_cannot_start_leaves_the_frozen_game_frozen_and_shows_home() {
+            start()
+            const racer = racerFrozenBehindHome()
+            tc.shell.launchApp("nolaunch", "No Launch", "")
+            tryVerify(() => find("launchSplash").shown)
+            tryCompare(find("launchSplash"), "shown", false)
+            tryVerify(() => toastTexts().includes("No Launch could not be started. Try again."), 2000)
+            verify(!tc.shell.appOpen, "Home shows")
+            wait(100)
+            verify(recordOf(racer.instance).frozen, "the game is still frozen")
+            compare(Session.mockCalls(), ["freeze " + racer.instance])
+        }
+
+        function test_the_player_can_still_resume_the_frozen_game_from_its_card() {
+            start()
+            const racer = racerFrozenBehindHome()
+            launchOther("org.example.Puzzle", "Block Puzzle")
+            const first = createTemporaryObject(appComponent, host, { appId: "org.example.Puzzle" })
+            tc.shell.addApp(first, "p2")
+            tc.shell.removeApp(first)
+            first.destroy()
+            tryVerify(() => !tc.shell.appOpen, 2000)
+            tc.shell.focusApp(racer.app)                     // what Accept on the Running card does
+            tryVerify(() => racer.app.activeFocus, 2000, "the card brings the game back")
+            tryVerify(() => recordOf(racer.instance).frozen === false, 2000, "and it runs again")
+            compare(Session.mockCalls(), ["freeze " + racer.instance, "thaw " + racer.instance])
+        }
+
+        // The belt: something else thaws the frozen game while another game is in front.
+        function test_a_frozen_game_thawed_by_something_else_is_frozen_again_while_another_is_in_front() {
+            start()
+            const racer = racerFrozenBehindHome()
+            launchOther("org.example.Puzzle", "Block Puzzle")
+            const puzzle = createTemporaryObject(appComponent, host, { appId: "org.example.Puzzle" })
+            tc.shell.addApp(puzzle, "p2")
+            tryVerify(() => puzzle.activeFocus, 2000, "Block Puzzle is in front")
+            Session.thaw(racer.instance)                     // not HubPause: a stray Thaw
+            tryVerify(() => Session.mockCalls().filter(c => c === "freeze " + racer.instance).length === 2, 2000,
+                      "frozen again")
+            tryVerify(() => recordOf(racer.instance).frozen === true, 2000)
+            verify(puzzle.activeFocus)
+            compare(Session.mockCalls(), ["freeze " + racer.instance, "thaw " + racer.instance, "freeze " + racer.instance])
+        }
+
+        // The belt does not undo a Thaw HubPause sends itself (the Running card's Resume).
+        function test_the_belt_leaves_a_resumed_game_alone() {
+            start()
+            const racer = racerFrozenBehindHome()
+            keyClick(Qt.Key_Return)                          // the Running card resumes it
+            tryVerify(() => racer.app.activeFocus, 2000)
+            tryVerify(() => recordOf(racer.instance).frozen === false, 2000)
+            wait(100)
+            compare(Session.mockCalls(), ["freeze " + racer.instance, "thaw " + racer.instance])
+        }
+
         // The setting survives a restart (tst_main.cpp, an ini file in a temporary directory).
         function test_the_setting_survives_a_restart() {
             compare(pausePersistence, "")
