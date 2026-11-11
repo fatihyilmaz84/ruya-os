@@ -131,12 +131,8 @@ Item {
     }
     // A pad came or went (the Controllers panel's rows): the list follows and the focus stays in the panel.
     Connections {
-        target: Batteries
-        function onDevicesChanged() { menu.rebuild() }
-    }
-    Connections {
         target: Bluetooth
-        function onDevicesChanged() { menu.rebuild() }
+        function onGamepadsChanged() { menu.rebuild() }
     }
     Connections {
         target: Audio
@@ -307,28 +303,40 @@ Item {
     }
 
     // ---- the Controllers panel (T-453, 02 §1.6) ---------------------------------------------------------
-    // The connected pads, read from what the shell already knows: the batteries the service lists for
-    // controllers (a wired or dongle pad has no Bluetooth address: USB) and the connected Bluetooth
-    // controllers it does not list there. Sorted by name, so a battery that changes never moves a row.
-    // [{ id, name, family, transport: "usb" | "bluetooth", percent (-1: not reported), state }]
+    // The pads present now are the service's (`Bluetooth.gamepads`, ListGamepads: USB or Bluetooth, the
+    // transport is its word). Each pad's battery is looked up: by Bluetooth address in `Batteries` (UPower),
+    // else the paired device's own level; a wired pad takes the one address-less controller battery of its
+    // family when the match is unambiguous. No reading: "Battery not reported". Sorted by name, then id, so
+    // a battery change never moves a row.
+    // [{ id, name, family, transport: "usb" | "bluetooth" | "other", percent (-1: not reported), state }]
     function controllerPads() {
+        const batteries = Batteries.devices.filter(b => b.kind === "controller")
+        const used = ({})
         const pads = []
-        const tied = ({})
-        for (const b of Batteries.devices) {
-            if (b.kind !== "controller")
-                continue
-            const address = String(b.address ?? "").toLowerCase()
-            if (address !== "")
-                tied[address] = true
-            pads.push({ id: address !== "" ? address : b.id, name: DeviceIcons.batteryName(b), family: b.family ?? "",
-                        transport: address !== "" ? "bluetooth" : "usb", percent: b.percent, state: b.state })
+        for (const g of Bluetooth.gamepads) {
+            const bt = g.transport === "bluetooth"
+            const id = bt ? String(g.id).toLowerCase() : g.id
+            const paired = bt ? Bluetooth.devices.find(d => String(d.id).toLowerCase() === id) : undefined
+            const battery = bt ? batteries.find(b => String(b.address ?? "").toLowerCase() === id) : undefined
+            if (battery)
+                used[battery.id] = true
+            pads.push({ id: id,
+                        name: paired ? DeviceIcons.shownName(Bluetooth.devices, paired) : DeviceIcons.plain(g.name),
+                        family: g.family !== "" ? g.family : (paired ? paired.family : ""),
+                        transport: g.transport,
+                        percent: battery ? battery.percent : (paired && paired.battery >= 0 ? paired.battery : -1),
+                        state: battery ? battery.state : "" })
         }
-        for (const d of Bluetooth.devices) {
-            const address = String(d.id).toLowerCase()
-            if (d.kind !== "controller" || !d.connected || tied[address])
+        for (const p of pads) {
+            if (p.transport === "bluetooth" || p.percent >= 0 || p.family === "")
                 continue
-            pads.push({ id: address, name: DeviceIcons.shownName(Bluetooth.devices, d), family: d.family ?? "",
-                        transport: "bluetooth", percent: d.battery >= 0 ? d.battery : -1, state: "" })
+            const alike = pads.filter(q => q.transport !== "bluetooth" && q.percent < 0 && q.family === p.family)
+            const spare = batteries.filter(b => !used[b.id] && String(b.address ?? "") === "" && b.family === p.family)
+            if (alike.length === 1 && spare.length === 1) {
+                used[spare[0].id] = true
+                p.percent = spare[0].percent
+                p.state = spare[0].state
+            }
         }
         pads.sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
         return pads
@@ -339,6 +347,8 @@ Item {
                       : p.state === "full" ? qsTr("Battery full")
                       : p.state === "charging" ? qsTr("Battery %1 %, charging").arg(p.percent)
                       : qsTr("Battery %1 %").arg(p.percent)
+        if (p.transport !== "usb" && p.transport !== "bluetooth")
+            return battery
         return qsTr("%1 · %2").arg(battery).arg(p.transport === "usb" ? qsTr("USB") : qsTr("Bluetooth"))
     }
 

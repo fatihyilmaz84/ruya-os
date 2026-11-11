@@ -56,6 +56,8 @@ public:
     void serviceRestart() { emit gamepadsReset(); }
     // A game controller appears or goes away (USB or Bluetooth), announced a moment later like the
     // service's signal (T-260). Returns nothing; the shell reacts to gamepadConnected/Disconnected.
+    // The list (ListGamepads, T-453) follows: the pads given here, plus every connected controller of
+    // the device list (a Bluetooth pad is a gamepad with its address as id), without duplicates.
     void gamepadEvent(bool connected, const QString &id, const QString &name, const QString &family,
                       const QString &transport);
     // Adds one paired, connected device of every kind and every controller family the shell
@@ -89,6 +91,7 @@ private:
     void initState();
     void doPair(const QString &id);
     void publish(int delayMs = 0);
+    QList<BtGamepad> gamepadList() const;
     void answer(const QString &op, const QString &id, const QString &status);
     int indexOf(const QString &id) const;
     void endScan();
@@ -104,6 +107,7 @@ private:
     int m_pending = 0;
     int m_scans = 0;
     QList<Entry> m_entries;
+    QList<BtGamepad> m_gamepads;    // pads announced with gamepadEvent (USB ones, mostly)
     QTimer m_scanTimer;
     QTimer m_pairingTimer;
     QString m_pairing = QStringLiteral("idle");

@@ -50,6 +50,21 @@ Bluetooth::Bluetooth(std::unique_ptr<BluetoothBackend> backend, QObject *parent)
         m_devices = out;
         emit devicesChanged();
     });
+    connect(m_backend.get(), &BluetoothBackend::gamepadsListed, this, [this](const QList<BtGamepad> &list) {
+        QVariantList out;
+        for (const BtGamepad &p : list) {
+            out.append(QVariantMap{
+                {QStringLiteral("id"), p.id},
+                {QStringLiteral("name"), p.name},
+                {QStringLiteral("family"), p.family},
+                {QStringLiteral("transport"), p.transport},
+            });
+        }
+        if (out == m_gamepads)
+            return;
+        m_gamepads = out;
+        emit gamepadsChanged();
+    });
     connect(m_backend.get(), &BluetoothBackend::finished, this, &Bluetooth::finished);
     m_backend->refresh();
 }

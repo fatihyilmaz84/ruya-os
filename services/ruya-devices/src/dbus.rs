@@ -805,6 +805,24 @@ pub type SharedInput = Arc<InputPresence<crate::input::DynInputSource>>;
 #[cfg(target_os = "linux")]
 const INPUT_POLL: Duration = Duration::from_secs(2);
 
+/// `ListGamepads`: one dictionary per pad, `{ id, name, family, transport }`.
+fn gamepad_dicts(pads: &[crate::input::Gamepad]) -> Vec<HashMap<String, OwnedValue>> {
+    pads.iter()
+        .map(|p| {
+            let own = |v: Value<'_>| OwnedValue::try_from(v).ok();
+            [
+                ("id", own(Value::from(p.id.clone()))),
+                ("name", own(Value::from(p.name.clone()))),
+                ("family", own(Value::from(p.family))),
+                ("transport", own(Value::from(p.transport))),
+            ]
+            .into_iter()
+            .filter_map(|(k, v)| v.map(|v| (k.to_owned(), v)))
+            .collect()
+        })
+        .collect()
+}
+
 pub struct BluetoothIface {
     bt: SharedBluetooth,
     input: SharedInput,
@@ -1025,6 +1043,12 @@ impl BluetoothIface {
 
     #[zbus(signal)]
     async fn devices_changed(emitter: &SignalEmitter<'_>) -> zbus::Result<()>;
+
+    /// The game controllers present now (T-453), over USB or Bluetooth, from the same read as
+    /// `InputPresent` and `GamepadConnected`. See `Devices1.xml`.
+    fn list_gamepads(&self) -> Vec<HashMap<String, OwnedValue>> {
+        gamepad_dicts(&self.input.pads())
+    }
 
     /// A game controller appeared (T-260). See `Devices1.xml`.
     #[zbus(signal)]
@@ -2300,6 +2324,44 @@ mod tests {
             })
             .collect();
         assert_eq!(addresses, ["AA:00:00:00:00:04", "AA:00:00:00:00:05"]);
+    }
+
+    /// T-453: `ListGamepads` answers the pads of the last read, a wired pad with no battery and no
+    /// Bluetooth entry included, with the four keys of the contract.
+    #[test]
+    fn list_gamepads_answers_every_pad_with_the_contract_keys() {
+        use crate::input::{DynInputSource, FakeInput, InputDevice};
+        let (_upower, batteries, bluetooth) = rig(Vec::new());
+        let wired = InputDevice {
+            name: "Xbox 360 Controller".to_owned(),
+            keys: "7cdb000000000000 0 0 0 0".to_owned(),
+            phys: "usb-0000:00:14.0-2/input0".to_owned(),
+            bustype: 3,
+            vendor: 0x045e,
+            product: 0x028e,
+            ..InputDevice::default()
+        };
+        let input: SharedInput =
+            Arc::new(InputPresence::new(
+                Box::new(FakeInput::new(vec![wired, FakeInput::keyboard()])) as DynInputSource,
+            ));
+        let iface = BluetoothIface::new(bluetooth, input.clone(), batteries);
+        assert!(
+            iface.list_gamepads().is_empty(),
+            "nothing before the first read"
+        );
+        input.refresh();
+        let listed = iface.list_gamepads();
+        assert_eq!(listed.len(), 1, "the keyboard is no pad: {listed:?}");
+        let text = |key: &str| match listed[0].get(key).map(|v| &**v) {
+            Some(Value::Str(s)) => s.as_str().to_owned(),
+            other => panic!("{key}: {other:?}"),
+        };
+        assert_eq!(text("id"), "usb-0000:00:14.0-2/input0");
+        assert_eq!(text("name"), "Xbox 360 Controller");
+        assert_eq!(text("family"), "xbox");
+        assert_eq!(text("transport"), "usb");
+        assert_eq!(listed[0].len(), 4, "exactly the contract's keys");
     }
 
     #[test]

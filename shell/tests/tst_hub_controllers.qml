@@ -86,7 +86,13 @@ Item {
         // No controller connected: the mock's one paired pad goes, the batteries are empty.
         function noPads() {
             Bluetooth.disconnectDevice("bt-pad-main")
-            tryVerify(() => Bluetooth.devices.filter(d => d.kind === "controller" && d.connected).length === 0)
+            tryVerify(() => Bluetooth.gamepads.length === 0)
+        }
+
+        // A wired pad, as the service lists it (ListGamepads).
+        function plugIn(id, name, family) {
+            Bluetooth.mockGamepad(true, id, name, family, "usb")
+            tryVerify(() => Bluetooth.gamepads.some(g => g.id === id))
         }
 
         function playRacer() {
@@ -172,7 +178,8 @@ Item {
             start()
             noPads()
             Bluetooth.mockTwoPads()                                    // two connected Bluetooth pads, 80 % and 55 %
-            Batteries.mockSet("usb-1", 100, "full", "controller", "Xbox Controller", "xbox")   // a wired pad
+            plugIn("usb-1", "Xbox Controller", "xbox")                 // a wired pad
+            Batteries.mockSet("up-usb", 100, "full", "controller", "Xbox Wireless Controller", "xbox")   // UPower: no address
             tryVerify(() => Batteries.devices.length === 1)
             openControllers()
             compare(padKeys().length, 3)
@@ -196,15 +203,41 @@ Item {
         function test_charging_and_an_unreported_battery_say_so_in_words() {
             start()
             noPads()
-            Batteries.mockSet("usb-2", 40, "charging", "controller", "DualSense", "playstation")
-            Batteries.mockSet("usb-3", 70, "discharging", "headset", "Headset")      // not a pad: not listed
+            plugIn("usb-2", "DualSense", "playstation")
+            Batteries.mockSet("up-2", 40, "charging", "controller", "DualSense Wireless Controller", "playstation")
+            Batteries.mockSet("up-3", 70, "discharging", "headset", "Headset")      // not a pad: not listed
             Bluetooth.mockSetBattery("bt-pad-old", -1)
             Bluetooth.connectDevice("bt-pad-old")
-            tryVerify(() => Bluetooth.devices.some(d => d.id === "bt-pad-old" && d.connected))
+            tryVerify(() => Bluetooth.gamepads.length === 2)
             openControllers()
             compare(padKeys().length, 2)
             compare(rowName("controllers:pad:usb-2"), "DualSense, Battery 40 %, charging · USB")
             compare(rowName("controllers:pad:bt-pad-old"), "Retro Pad, Battery not reported · Bluetooth")
+            keyClick(Qt.Key_Escape)
+        }
+
+        // A wired pad that has neither a UPower battery nor a Bluetooth entry is still a pad: one row, USB, no reading.
+        function test_a_wired_pad_with_no_battery_and_no_bluetooth_entry_is_listed() {
+            start()
+            noPads()
+            plugIn("usb-9", "Generic USB Pad", "")
+            compare(Batteries.devices.length, 0)
+            verify(!Bluetooth.devices.some(d => d.connected && d.kind === "controller"))
+            openControllers()
+            compare(padKeys(), ["controllers:pad:usb-9"])
+            compare(rowName("controllers:pad:usb-9"), "Generic USB Pad, Battery not reported · USB")
+            compare(findChild(find("quickMenuItem_controllers:pad:usb-9"), "hubInfoIcon").name, "sports_esports")
+            keyClick(Qt.Key_Escape)
+        }
+
+        // The mock's default state is one pad and one row (the battery and the paired device share an address).
+        function test_the_default_mock_state_shows_one_row_per_pad() {
+            start()
+            Batteries.mockReset()
+            tryVerify(() => Bluetooth.gamepads.length === 1)
+            openControllers()
+            compare(padKeys().length, 1)
+            compare(rowName(padKeys()[0]), "Ruya Pad Pro, Battery 60 % · Bluetooth")
             keyClick(Qt.Key_Escape)
         }
 
@@ -256,13 +289,12 @@ Item {
             start()
             noPads()
             Bluetooth.mockTwoPads()
-            Batteries.mockSet("usb-1", 90, "discharging", "controller", "Xbox Controller", "xbox")
-            tryVerify(() => Batteries.devices.length === 1)
+            plugIn("usb-1", "Xbox Controller", "xbox")
             openControllers()
             compare(padKeys().length, 3)
             // Focus the wired pad (the last pad row: sorted by name, "Wireless" before "Xbox"), then pull it out.
             goTo("controllers:pad:usb-1")
-            Batteries.mockRemove("usb-1")
+            Bluetooth.mockGamepad(false, "usb-1", "Xbox Controller", "xbox", "usb")
             tryVerify(() => padKeys().length === 2, 2000, "the pad's row is gone")
             verify(find("systemActions").activeFocus, "the list still has the focus")
             compare(find("systemPanel").panelId, "controllers", "still in the panel")
@@ -293,7 +325,7 @@ Item {
             openControllers()
             keyClick(Qt.Key_Down)
             compare(focusedKey(), "controllers:settings")
-            Batteries.mockSet("usb-1", 55, "discharging", "controller", "Xbox Controller", "xbox")
+            Bluetooth.mockGamepad(true, "usb-1", "Xbox Controller", "xbox", "usb")
             tryVerify(() => padKeys().length === 1, 2000)
             compare(focusedKey(), "controllers:settings", "the focus stays on the row it was on")
             verify(find("quickMenuItem_controllers:settings").focused)
@@ -304,10 +336,11 @@ Item {
         function test_a_battery_reading_follows_the_pad() {
             start()
             noPads()
-            Batteries.mockSet("usb-1", 55, "discharging", "controller", "Xbox Controller", "xbox")
+            plugIn("usb-1", "Xbox Controller", "xbox")
+            Batteries.mockSet("up-1", 55, "discharging", "controller", "Xbox Wireless Controller", "xbox")
             openControllers()
             compare(rowName("controllers:pad:usb-1"), "Xbox Controller, Battery 55 % · USB")
-            Batteries.mockSet("usb-1", 14, "discharging")
+            Batteries.mockSet("up-1", 14, "discharging")
             tryCompare(find("quickMenuItem_controllers:pad:usb-1"), "objectName", "quickMenuItem_controllers:pad:usb-1")
             tryVerify(() => rowName("controllers:pad:usb-1") === "Xbox Controller, Battery 14 % · USB", 2000)
             compare(focusedKey(), "controllers:pad:usb-1")
@@ -355,7 +388,8 @@ Item {
             start()
             noPads()
             Bluetooth.mockTwoPads()
-            Batteries.mockSet("usb-1", 100, "full", "controller", "Xbox Controller", "xbox")
+            plugIn("usb-1", "Xbox Controller", "xbox")
+            Batteries.mockSet("up-usb", 100, "full", "controller", "Xbox Wireless Controller", "xbox")
             Batteries.mockSet("up-1", 14, "discharging", "controller", "Wireless Controller", "playstation", "AA:00:00:00:00:04")
             keyClick(Qt.Key_Return)
             tryCompare(launchedSpy, "count", 1)

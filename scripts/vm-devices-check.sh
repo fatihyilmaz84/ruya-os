@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Checks the Devices service (audio T-128, network T-132, controller batteries T-161, Bluetooth T-173) inside a running VM booted with sound. Copy and run as root:
 #   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-devices-check.sh root@127.0.0.1:/root/
-#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-devices-check.sh [check|events|security|state|batteries|bluetooth|storage|thermal|thermal-fake|time|system|inputd]
+#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-devices-check.sh [check|events|security|state|batteries|bluetooth|gamepads|storage|thermal|thermal-fake|time|system|inputd]
 # check (default): unit active, name owned by ruya-shell, ListSinks, a MasterVolume write reaches
 # PipeWire, a call from another user is refused; then the network part: State is connected, Primary is
 # the ethernet link with an IPv4 address, ListWifi and Scan answer, unknown ids are refused, another
@@ -197,6 +197,15 @@ bluetooth_check() {
             echo "$out"; ok "$m from nobody refused"
         fi
     done
+    # T-453: ListGamepads answers a list (QEMU's keyboard is no pad, so it is empty here), and nobody else may call it.
+    r="$(busctl --system call "$svc" "$path" "$bt" ListGamepads)"
+    echo "ListGamepads: $r"
+    case "$r" in 'aa{sv} 0') ok "ListGamepads answers an empty list (no controller in the VM; the keyboard is no pad)";; *) bad "ListGamepads did not answer an empty aa{sv}: $r";; esac
+    if out="$(runuser -u nobody -- busctl --system call "$svc" "$path" "$bt" ListGamepads 2>&1)"; then
+        bad "nobody could call ListGamepads: $out"
+    else
+        echo "$out"; ok "ListGamepads from nobody refused"
+    fi
     as_shell systemctl --user is-active ruya-devices >/dev/null && ok "ruya-devices still active after the Bluetooth calls" || bad "ruya-devices not active"
     bluetooth_fake_check
     bluetooth_two_adapters_check
@@ -340,6 +349,80 @@ else:
         bad "the service's log lacks:$missing"
     fi
     rm -f "$log"
+}
+
+# T-453: ListGamepads with a pad that exists. A virtual gamepad is made through /dev/uinput (root; USB bus, Microsoft's
+# vendor id, BTN_SOUTH and BTN_EAST: what the service takes for a pad, input.rs). The service reads the kernel's input
+# devices every two seconds, so the check waits up to 8 s: the pad must then be in ListGamepads once (id and name
+# "Ruya Test Pad", family xbox, transport usb, exactly the four keys, the baseline included: the service did not
+# start with it), and gone again up to 8 s after the device is destroyed. No uinput in the image: reported, not a failure.
+gamepads_check() {
+    local verdict
+    echo "--- gamepads (T-453): ListGamepads with a virtual pad (/dev/uinput)"
+    if ! command -v python3 >/dev/null; then
+        bad "python3 is needed for the gamepads check"
+        return
+    fi
+    if [ ! -e /dev/uinput ]; then
+        modprobe uinput 2>/dev/null || true
+    fi
+    if [ ! -e /dev/uinput ]; then
+        echo "SKIP: no /dev/uinput in this image; ListGamepads with a real pad is not checked here"
+        return
+    fi
+    verdict="$(python3 -I - "$svc" "$path" "$bt" <<'PY'
+import fcntl, json, os, struct, subprocess, sys, time
+svc, path, iface = sys.argv[1:4]
+UI_SET_EVBIT, UI_SET_KEYBIT, UI_DEV_SETUP = 0x40045564, 0x40045565, 0x405C5503
+UI_DEV_CREATE, UI_DEV_DESTROY = 0x5501, 0x5502
+def pads():
+    out = subprocess.run(["busctl", "--system", "--json=short", "call", svc, path, iface, "ListGamepads"],
+                         capture_output=True, text=True, check=True).stdout
+    return json.loads(out)["data"][0]
+def wait(want, seconds):
+    end = time.time() + seconds
+    while True:
+        got = pads()
+        if len(got) == want or time.time() > end:
+            return got
+        time.sleep(0.5)
+try:
+    if pads():
+        print("wrong: the VM already has a pad:", pads())
+        sys.exit(0)
+    fd = os.open("/dev/uinput", os.O_WRONLY | os.O_NONBLOCK)
+    fcntl.ioctl(fd, UI_SET_EVBIT, 1)
+    for code in (0x130, 0x131):
+        fcntl.ioctl(fd, UI_SET_KEYBIT, code)
+    fcntl.ioctl(fd, UI_DEV_SETUP, struct.pack("<HHHH80sI", 3, 0x045E, 0x028E, 1, b"Ruya Test Pad", 0))
+    fcntl.ioctl(fd, UI_DEV_CREATE)
+    try:
+        got = wait(1, 8)
+        if len(got) != 1:
+            print("wrong: the virtual pad is not in ListGamepads after 8 s:", got)
+            sys.exit(0)
+        pad = {k: v["data"] for k, v in got[0].items()}
+        want = {"id": "Ruya Test Pad", "name": "Ruya Test Pad", "family": "xbox", "transport": "usb"}
+        if pad != want:
+            print("wrong: the pad is", pad, "not", want)
+            sys.exit(0)
+    finally:
+        fcntl.ioctl(fd, UI_DEV_DESTROY)
+        os.close(fd)
+    if wait(0, 8):
+        print("wrong: the pad is still listed 8 s after it was destroyed")
+        sys.exit(0)
+    print("VERDICT ok")
+except Exception as err:
+    print("wrong:", err)
+PY
+)"
+    echo "$verdict"
+    case "$verdict" in
+        *"VERDICT ok"*) ok "ListGamepads lists a virtual USB pad (id, name, xbox, usb) within 8 s and drops it within 8 s of its removal";;
+        *) bad "ListGamepads with a virtual pad: $verdict";;
+    esac
+    as_shell systemctl --user is-active ruya-devices >/dev/null && ok "ruya-devices still active after the gamepads check" || bad "ruya-devices not active"
 }
 
 # T-334: two pads of one model at once (RUYA_DEVICES_FAKE_BLUETOOTH=two-pads, FakeBluez::with_two_pads) on
@@ -1239,6 +1322,8 @@ check)
 
     bluetooth_check
 
+    gamepads_check
+
     storage_usage_check
 
     thermal_check
@@ -1255,6 +1340,9 @@ bluetooth)
     ;;
 twopads)
     bluetooth_two_pads_check
+    ;;
+gamepads)
+    gamepads_check
     ;;
 storage)
     storage_usage_check

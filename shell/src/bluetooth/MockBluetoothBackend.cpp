@@ -311,6 +311,10 @@ void MockBluetoothBackend::gamepadEvent(bool connected, const QString &id, const
                                         const QString &transport)
 {
     QTimer::singleShot(0, this, [this, connected, id, name, family, transport] {
+        m_gamepads.removeIf([&id](const BtGamepad &p) { return p.id.compare(id, Qt::CaseInsensitive) == 0; });
+        if (connected)
+            m_gamepads.append({id, name, family, transport});
+        deliverGamepads(beginGamepadsRequest(), gamepadList());
         if (connected)
             emit gamepadConnected(id, name, family, transport);
         else
@@ -400,6 +404,7 @@ void MockBluetoothBackend::reset()
 void MockBluetoothBackend::initState()
 {
     m_holdPairing = false;
+    m_gamepads.clear();
     m_heldPairs.clear();
     m_pairCalls = 0;
     m_scanTimer.stop();
@@ -471,17 +476,36 @@ void MockBluetoothBackend::publish(int delayMs)
     const bool discovering = m_discovering;
     const QString pairing = m_pairing;
     const bool inputPresent = m_inputPresent;
-    // Two requests, as on the bus: the state and the list.
+    const QList<BtGamepad> pads = gamepadList();
+    // Three requests, as on the bus: the state, the list and the pads.
     const quint64 stateRequest = beginStateRequest();
     const quint64 devicesRequest = beginDevicesRequest();
+    const quint64 gamepadsRequest = beginGamepadsRequest();
     if (delayMs > 0)
         ++m_pending;
-    QTimer::singleShot(delayMs, this, [this, stateRequest, devicesRequest, powered, discovering, pairing, inputPresent, list, delayMs] {
+    QTimer::singleShot(delayMs, this, [this, stateRequest, devicesRequest, gamepadsRequest, powered, discovering, pairing, inputPresent, list, pads, delayMs] {
         if (delayMs > 0)
             --m_pending;
         deliverState(stateRequest, powered, discovering, pairing, inputPresent);
         deliverDevices(devicesRequest, list);
+        deliverGamepads(gamepadsRequest, pads);
     });
+}
+
+// ListGamepads: the pads announced by hand, then the connected controllers of the device list.
+QList<BtGamepad> MockBluetoothBackend::gamepadList() const
+{
+    QList<BtGamepad> pads = m_gamepads;
+    for (const Entry &e : m_entries) {
+        if (!m_powered || !e.listed || !e.dev.connected || e.dev.kind != QLatin1String("controller"))
+            continue;
+        const bool known = std::any_of(pads.begin(), pads.end(), [&e](const BtGamepad &p) {
+            return p.id.compare(e.dev.id, Qt::CaseInsensitive) == 0;
+        });
+        if (!known)
+            pads.append({e.dev.id, e.dev.name, e.dev.family, QStringLiteral("bluetooth")});
+    }
+    return pads;
 }
 
 void MockBluetoothBackend::answer(const QString &op, const QString &id, const QString &status)

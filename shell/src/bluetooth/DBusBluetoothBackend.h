@@ -39,6 +39,7 @@ private slots:
 private:
     void refreshState();
     void refreshDevices();
+    void refreshGamepads();     // ListGamepads (T-453)
     // Every command answers one status string; op names the finished() signal's operation.
     void startCommand(const QString &method, const QString &op, const QString &id, const QVariantList &args);
 

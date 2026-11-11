@@ -27,6 +27,10 @@ class Bluetooth : public QObject
     // kind: "controller" | "headset" | "speaker" | "keyboard" | "mouse" | "phone" | "other";
     // family: "playstation" | "xbox" | "nintendo" | "8bitdo" for a controller, else ""
     Q_PROPERTY(QVariantList devices READ devices NOTIFY devicesChanged)
+    // The game controllers present now, USB or Bluetooth (Devices1.Bluetooth.ListGamepads, T-453):
+    // [{ id, name, family, transport }]; transport: "usb" | "bluetooth" | "other"; id: the Bluetooth address
+    // (any case) for a Bluetooth pad, else the USB port or the name. Empty until the service answered.
+    Q_PROPERTY(QVariantList gamepads READ gamepads NOTIFY gamepadsChanged)
     // The controller pairing window (T-203): "idle" | "open" | "paired" | "timeout".
     Q_PROPERTY(QString controllerPairing READ controllerPairing NOTIFY controllerStateChanged)
     // A keyboard or gamepad is connected. True until the service says otherwise, so a screen
@@ -49,6 +53,7 @@ public:
     bool powered() const { return m_powered; }
     bool discovering() const { return m_discovering; }
     QVariantList devices() const { return m_devices; }
+    QVariantList gamepads() const { return m_gamepads; }
     bool isMock() const { return m_backend->isMock(); }
     QString controllerPairing() const { return m_controllerPairing; }
     bool inputPresent() const { return m_inputPresent; }
@@ -116,6 +121,7 @@ public:
 signals:
     void stateChanged();
     void devicesChanged();
+    void gamepadsChanged();
     void controllerStateChanged();
     // A device that is not a controller tried to pair while the window was open.
     void controllerRejected();
@@ -141,5 +147,6 @@ private:
     bool m_inputPresent = true;
     bool m_inputKnown = false;
     QVariantList m_devices;
+    QVariantList m_gamepads;
     QSet<QString> m_lowReported;
 };
