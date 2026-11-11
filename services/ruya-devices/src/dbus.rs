@@ -17,6 +17,7 @@ use zbus::{fdo, interface, Connection, MatchRule, MessageStream};
 use crate::audio::Audio;
 #[cfg(target_os = "linux")]
 use crate::audio::Changes;
+use crate::backlight::{Backlight, Change};
 use crate::battery::{Batteries, UPower};
 use crate::bluetooth::{self, Bluetooth, Bluez, BtError};
 use crate::debounce;
@@ -1991,12 +1992,31 @@ pub type SharedDisplay = Arc<Display<DynDrm>>;
 
 pub struct DisplayIface {
     display: SharedDisplay,
+    backlight: Arc<Backlight>,
 }
 
 impl DisplayIface {
-    pub fn new(display: SharedDisplay) -> Self {
-        DisplayIface { display }
+    pub fn new(display: SharedDisplay, backlight: Arc<Backlight>) -> Self {
+        DisplayIface { display, backlight }
     }
+}
+
+/// logind's Session.SetBrightness for the caller's own session ("auto": for a user unit, the user's
+/// display session). The service is not root, and logind may change a backlight for the session's owner.
+async fn logind_set_brightness(
+    connection: &Connection,
+    change: &Change,
+) -> Result<(), zbus::Error> {
+    connection
+        .call_method(
+            Some("org.freedesktop.login1"),
+            "/org/freedesktop/login1/session/auto",
+            Some("org.freedesktop.login1.Session"),
+            "SetBrightness",
+            &("backlight", change.name.as_str(), change.level),
+        )
+        .await
+        .map(|_| ())
 }
 
 fn dict(pairs: Vec<(&str, Value<'static>)>) -> BTreeMap<String, OwnedValue> {
@@ -2123,6 +2143,44 @@ impl DisplayIface {
     fn ui_scale(&self) -> u32 {
         // A small file read; the service's own state, never the kernel's.
         self.display.ui_scale()
+    }
+
+    /// The backlight's level (T-454), read from the kernel now: (state, percent).
+    async fn get_brightness(&self) -> (String, u32) {
+        let backlight = self.backlight.clone();
+        let got = unblock(move || backlight.get()).await;
+        (got.state().to_owned(), got.percent)
+    }
+
+    async fn set_brightness(
+        &self,
+        percent: u32,
+        #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
+    ) -> String {
+        let backlight = self.backlight.clone();
+        let plan = unblock(move || backlight.plan(percent)).await;
+        let change = match plan {
+            Ok(change) => change,
+            Err(refusal) => return refusal.as_str().to_owned(),
+        };
+        let done = if self.backlight.is_direct() {
+            let backlight = self.backlight.clone();
+            let change = change.clone();
+            unblock(move || backlight.write_direct(&change))
+                .await
+                .map_err(|e| e.to_string())
+        } else {
+            logind_set_brightness(emitter.connection(), &change)
+                .await
+                .map_err(|e| e.to_string())
+        };
+        match done {
+            Ok(()) => "ok".to_owned(),
+            Err(err) => {
+                eprintln!("ruya-devices: setting the brightness failed: {err}");
+                "failed".to_owned()
+            }
+        }
     }
 }
 

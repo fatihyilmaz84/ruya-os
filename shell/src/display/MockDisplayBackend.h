@@ -24,11 +24,14 @@ public:
     void setUiScale(int percent) override;
     void resetSettings() override;
     void takeFallbackNotice() override;
+    void refreshBrightness() override;
+    void setBrightness(int percent) override;
     void restartShell() override;
 
     // Test hooks (reached through Display.mock*).
     void reset();
-    // "tv4k" | "tv1080" | "monitor" | "none" (nothing connected); false for another name.
+    // "tv4k" | "tv1080" | "monitor" | "laptop" (the only one with a backlight, at 60 %) | "none" (nothing
+    // connected); false for another name.
     bool useScenario(const QString &name);
     // The console came back from a restart a second time with the change still unconfirmed: the
     // service's guard drops the choice and the preferred mode is back.
@@ -39,6 +42,11 @@ public:
     void setFailKeepNext(bool fail) { m_failKeepNext = fail; }
     // SetMode, Reset answer "busy" while this is set (the service's start-limit refusal).
     void setCrowded(bool crowded) { m_crowded = crowded; }
+    // The next SetBrightness answers "failed" and changes nothing.
+    void setFailBrightnessNext(bool fail) { m_failBrightnessNext = fail; }
+    int brightnessCalls() const { return m_brightnessCalls; }
+    // The laptop's own brightness keys: the level changes and nobody is told (the shell asks again when it looks).
+    void backlightKey(int percent) { if (m_backlight >= 0) m_backlight = percent; }
     int resetCalls() const { return m_resetCalls; }
     int restartCount() const { return m_restarts; }
     int setModeCalls() const { return m_setModeCalls; }
@@ -84,6 +92,10 @@ private:
     bool m_failRevertNext = false;
     bool m_failKeepNext = false;
     bool m_crowded = false;
+    // The backlight's level in percent; -1: the screen has none (a TV, a monitor).
+    int m_backlight = -1;
+    bool m_failBrightnessNext = false;
+    int m_brightnessCalls = 0;
     int m_resetCalls = 0;
     bool m_fallback = false;
     int m_restarts = 0;

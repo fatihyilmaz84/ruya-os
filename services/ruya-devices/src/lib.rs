@@ -11,6 +11,7 @@
 //! from `/sys/class/drm`, and a chosen mode reaches the next compositor start as a KMS config file.
 
 pub mod audio;
+pub mod backlight;
 pub mod battery;
 pub mod bluetooth;
 #[cfg(target_os = "linux")]

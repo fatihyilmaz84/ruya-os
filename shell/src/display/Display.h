@@ -65,6 +65,10 @@ class DisplayControl : public QObject
     Q_PROPERTY(qreal autoScale READ autoScale NOTIFY uiScaleChanged)
     // The factor `Theme.uiScale` applies to the 1080p unit: the owner's percent, else the auto scale.
     Q_PROPERTY(qreal uiScaleFactor READ uiScaleFactor NOTIFY uiScaleChanged)
+    // The backlight (T-454): only a screen that has one (a laptop panel) is "supported"; a TV or a monitor
+    // answers "unsupported" and the shell offers no control. `brightness` is 1..100 (0 while unsupported).
+    Q_PROPERTY(bool brightnessSupported READ brightnessSupported NOTIFY brightnessChanged)
+    Q_PROPERTY(int brightness READ brightness NOTIFY brightnessChanged)
     Q_PROPERTY(bool mock READ isMock CONSTANT)
 
 public:
@@ -99,6 +103,8 @@ public:
     qreal autoScale() const { return m_autoScale; }
     qreal uiScaleFactor() const { return m_uiScale == 0 ? m_autoScale : m_uiScale / 100.0; }
     bool isMock() const { return m_backend->isMock(); }
+    bool brightnessSupported() const { return m_brightnessSupported; }
+    int brightness() const { return m_brightness; }
 
     // The refresh rates of one size, in the service's order: [{ refreshMhz, preferred, current }].
     Q_INVOKABLE QVariantList refreshRates(int width, int height) const;
@@ -118,14 +124,22 @@ public:
     // Mode and UI size back to the defaults; the shell restarts when the mode changes.
     Q_INVOKABLE void resetSettings();
     Q_INVOKABLE void refresh();
+    // Asks the backlight again (the Hub's Display panel does when it opens: a laptop's keys change it too).
+    Q_INVOKABLE void refreshBrightness();
+    // Sets the backlight to `percent` (1..100). The answer is setBrightnessFinished; the level follows
+    // the service's answer, never the request.
+    Q_INVOKABLE void setBrightness(int percent);
 
     // Tests only, and only with the mock backend (otherwise no-ops).
     Q_INVOKABLE void mockReset();
-    Q_INVOKABLE bool mockUseScenario(const QString &name);   // "tv4k" | "tv1080" | "monitor" | "none"
+    Q_INVOKABLE bool mockUseScenario(const QString &name);   // "tv4k" | "tv1080" | "monitor" | "laptop" (has a backlight) | "none"
     Q_INVOKABLE void mockFailNext();                         // the next SetMode answers "failed"
     Q_INVOKABLE void mockFailRevertNext();                   // the next Revert answers "failed" and changes nothing
     Q_INVOKABLE void mockFailKeepNext();                     // the next Keep answers "failed" and changes nothing
     Q_INVOKABLE void mockSetCrowded(bool crowded);           // SetMode and Reset answer "busy" (start limit)
+    Q_INVOKABLE void mockFailBrightnessNext();               // the next SetBrightness answers "failed"
+    Q_INVOKABLE int mockBrightnessCalls() const;
+    Q_INVOKABLE void mockBacklightKey(int percent);          // changed behind the shell's back (a laptop's keys)
     Q_INVOKABLE int mockResetCalls() const;
     Q_INVOKABLE void mockSimulateFallback();                 // the console came back without the change
     Q_INVOKABLE int mockRestartCount() const;
@@ -137,6 +151,7 @@ signals:
     void outputsChanged();
     void pendingChanged();
     void uiScaleChanged();
+    void brightnessChanged();
     void countdownTickMsChanged();
     void acceptGraceMsChanged();
     // status: "ok" | "unchanged" | "unknown-output" | "unknown-mode" | "busy" | "failed"
@@ -147,6 +162,8 @@ signals:
     void resetFinished(const QString &status);
     // A compositor start dropped a change nobody confirmed (the screen did not answer).
     void modeReset();
+    // status: "ok" | "unsupported" | "invalid" | "failed"
+    void setBrightnessFinished(const QString &status);
 
 private:
     void applyState(const QVariantList &outputs, const QVariantMap &pending, int uiScale);
@@ -169,6 +186,8 @@ private:
     int m_pendingRefresh = 0;
     int m_pendingStarts = 0;
     int m_uiScale = 0;
+    bool m_brightnessSupported = false;
+    int m_brightness = 0;
     qreal m_autoScale = 1.0;
     int m_tickMs = 1000;
     int m_graceMs = 1000;

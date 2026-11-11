@@ -24,6 +24,8 @@ public:
     void setUiScale(int percent) override;
     void resetSettings() override;
     void takeFallbackNotice() override;
+    void refreshBrightness() override;
+    void setBrightness(int percent) override;
     void restartShell() override;
 
 private slots:

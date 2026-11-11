@@ -14,7 +14,9 @@ import RuyaShell
 // Holding Guide (or choosing Power) swaps the list for the power choices (Suspend, Restart, Power off
 // as logind allows, Back); a choice asks the shell to open its confirmation (`powerRequested`).
 // Modal: every key is taken here. Up/Down move, Left/Right change the volume on its row or move
-// along the tiles, Accept acts, Back or Guide closes (Back leaves the power choices first). The list
+// along the tiles, Accept acts, Back or Guide closes (Back leaves the power choices first). The Display panel
+// (T-454) changes the resolution and the refresh rate through the mode list of Settings (ModePicker; the
+// keep-or-revert dialog is the shell's ModeConfirm) and sets the backlight where the screen has one. The list
 // model holds keys only; the text is a binding in the delegate (translations rule). The fill is
 // `glassOpaque` on every tier until the blurred glass of the quick menu is built (B-003, 04 §3.6).
 Item {
@@ -220,15 +222,20 @@ Item {
 
     // ---- panels (T-450, T-452): a panel replaces the Quick Hub's rows in this same list ---------------------
     // The panels that exist, in the order of their entries (02 §1.6); an entry appears only when its panel is built.
-    readonly property var panelIds: ["audio", "controllers", "performance"]
+    // The Display panel is there while the screen is known or has a backlight: with neither it would be empty.
+    readonly property var panelIds: ["audio", "controllers", "performance",
+                                     ...(Display.available || Display.brightnessSupported ? ["display"] : [])]
+    onPanelIdsChanged: rebuild()
 
     // A panel is a table of row descriptors (T-452), the one place a row's behaviour is written:
-    //   { key, label, kind: "toggle" | "choice" | "slider" | "info" | "action",
-    //     value(): the text at the right (toggle, choice) or under the label (info; none: the label alone),
+    //   { key, label, kind: "toggle" | "choice" | "pick" | "slider" | "info" | "action",
+    //     value(): the text at the right (toggle, choice, pick, slider) or under the label (info; none: the label alone),
     //     icon: an icon name before an info row's text (optional),
-    //     activate(): Accept (toggle, slider, action),
+    //     fraction(): 0..1, how far a slider's bar is full (slider),
+    //     activate(): Accept (toggle, pick, action; a slider's is optional: Volume mutes, Brightness has none),
     //     adjust(delta): Left/Right, delta -1 or +1 (slider),
-    //     choices(): [{ id, name, current }] and select(id) (choice; `async` when the answer comes later) }
+//     choices(): [{ id, name, current }] and select(id) (choice; `async` when the answer comes later);
+    //     a pick row shows its value and Accept opens a list (the Display panel's modes), Left/Right do nothing }
     // The hint bar, the delegate, Accept and Left/Right all derive from `kind`. To add a panel: list it in
     // `panelIds`, give it a table in `panelDef`; nothing else in this file changes. Keys are "<id>:<row>"
     // (the shared "volume" row may also sit in a panel). Descriptors are built on demand, so a row that
@@ -253,6 +260,28 @@ Item {
                     { key: "audio:micmute", label: qsTr("Mute microphone"), kind: "toggle",
                       value: () => Audio.inputMuted ? qsTr("On") : qsTr("Off"),
                       activate: () => Audio.toggleInputMute() }
+                ] : [])
+            ] }
+        }
+        if (id === "display") {
+            return { title: qsTr("Display"), rows: [
+                ...(Display.available ? [
+                    { key: "display:resolution", label: qsTr("Resolution"), kind: "pick",
+                      value: () => DisplayText.resolutionLabel(Display.currentWidth, Display.currentHeight),
+                      activate: () => openModePicker("resolution") },
+                    // one rate, or none known: nothing to choose
+                    ...(refreshEntries.length > 1 ? [
+                        { key: "display:refresh", label: qsTr("Refresh rate"), kind: "pick",
+                          value: () => DisplayText.refreshLabel(Display.currentRefreshMhz),
+                          activate: () => openModePicker("refresh") }
+                    ] : [])
+                ] : []),
+                // only a screen with a backlight (a TV or a monitor has none: no control, not a greyed one)
+                ...(Display.brightnessSupported ? [
+                    { key: "display:brightness", label: qsTr("Brightness"), kind: "slider",
+                      fraction: () => Display.brightness / 100,
+                      value: () => qsTr("%1 %").arg(Display.brightness),
+                      adjust: delta => stepBrightness(delta) }
                 ] : [])
             ] }
         }
@@ -290,6 +319,8 @@ Item {
     // The Hub's Volume row, also the first row of the Audio panel: Left/Right by 5, Accept mutes.
     function volumeRow() {
         return { key: "volume", label: qsTr("Volume"), kind: "slider",
+                 fraction: () => Audio.muted ? 0 : Audio.volume / 100,
+                 value: () => Audio.muted ? qsTr("Muted") : String(Audio.volume),
                  adjust: delta => Audio.stepVolume(5 * delta), activate: () => Audio.toggleMute() }
     }
     // The descriptor of a row of the panel now open (or the Volume row anywhere); null for the Hub's other rows.
@@ -302,6 +333,102 @@ Item {
     function panelKeys(id) {
         const def = panelDef(id)
         return def ? def.rows.map(r => r.key) : []
+    }
+
+    // ---- the Display panel (T-454, 02 §1.6) -------------------------------------------------------------
+    // The mode lists are Settings' (DisplayPane): [{ key, label, note }], the recommended and the current one noted.
+    readonly property var resolutionEntries: {
+        const list = []
+        for (const r of Display.resolutions) {
+            const notes = []
+            if (r.preferred)
+                notes.push(qsTr("Recommended"))
+            if (r.current)
+                notes.push(qsTr("Current"))
+            list.push({ key: r.width + "x" + r.height, label: DisplayText.resolutionLabel(r.width, r.height),
+                        note: notes.join(" · ") })
+        }
+        return list
+    }
+    readonly property var refreshEntries: {
+        const list = []
+        Display.currentRefreshMhz     // the rates follow the mode in use
+        for (const r of Display.refreshRates(Display.currentWidth, Display.currentHeight)) {
+            if (r.refreshMhz <= 0)
+                continue
+            const notes = []
+            if (r.preferred)
+                notes.push(qsTr("Recommended"))
+            if (r.current)
+                notes.push(qsTr("Current"))
+            list.push({ key: String(r.refreshMhz), label: DisplayText.refreshLabel(r.refreshMhz), note: notes.join(" · ") })
+        }
+        return list
+    }
+    // Which list the one picker shows: "resolution" | "refresh".
+    property string modePickerKind: "resolution"
+    readonly property alias modePickerSlot: modePickerSlot
+    readonly property ModePicker modePicker: modePickerSlot.item as ModePicker
+    function openModePicker(kind) {
+        modePickerKind = kind
+        modePickerSlot.active = true            // built when first needed (T-349)
+        modePicker.open()
+    }
+    // A mode change restarts the shell, and a running game or app goes with it: ask the player to close them
+    // first (as Settings does) instead of losing their unsaved progress.
+    property bool modeAsked: false              // a change asked from here is on its way
+    function applyMode(apply) {
+        if (Session.running.length > 0) {
+            Notifications.show(qsTr("Close running games and apps first: changing the screen mode restarts the console."), "warning")
+            return
+        }
+        modeAsked = true
+        apply()
+    }
+    Connections {
+        target: Display
+        function onSetModeFinished(status) {
+            if (!menu.modeAsked)
+                return
+            menu.modeAsked = false
+            if (status === "ok")
+                menu.closeRequested()           // the console restarts to show the mode; the shell asks "Keep this resolution?"
+            else if (status === "busy")
+                Notifications.show(qsTr("Try again in a minute: the console has just restarted several times."), "warning")
+            else if (status !== "unchanged")
+                Notifications.show(qsTr("The screen mode could not be changed."), "error")
+        }
+        function onSetBrightnessFinished(status) {
+            menu.brightnessInFlight = Math.max(0, menu.brightnessInFlight - 1)
+            if (status !== "ok") {
+                menu.brightnessTarget = -1
+                if (menu.open && menu.panelId === "display")
+                    Notifications.show(qsTr("Could not change the brightness."), "warning")
+            } else {
+                menu.settleBrightness()
+            }
+        }
+        function onBrightnessChanged() { menu.settleBrightness(); menu.rebuild() }    // the Brightness row comes and goes with the backlight
+        function onOutputsChanged() { menu.rebuild() }                                 // so do the mode rows with the screen
+    }
+    // Brightness changes by 5 on Left/Right (1..100 is the service's range, 5 the lowest step: a controller cannot
+    // undo a black screen). The level follows the service's answer, so presses that come before it step from the
+    // target of the last press (as an async choice does) until the answers are in.
+    property int brightnessTarget: -1
+    property int brightnessInFlight: 0
+    function stepBrightness(delta) {
+        const base = brightnessTarget >= 0 ? brightnessTarget : Display.brightness
+        const next = Math.max(5, Math.min(100, Math.round(base / 5) * 5 + 5 * delta))
+        if (next === base)
+            return                              // at an end: nothing to ask
+        Sfx.navigate()
+        brightnessTarget = next
+        brightnessInFlight += 1
+        Display.setBrightness(next)
+    }
+    function settleBrightness() {
+        if (brightnessInFlight === 0 && (brightnessTarget < 0 || Display.brightness === brightnessTarget))
+            brightnessTarget = -1
     }
 
     // ---- the Controllers panel (T-453, 02 §1.6) ---------------------------------------------------------
@@ -439,6 +566,8 @@ Item {
         row.select(next.id)
     }
     function openPanel(id) {
+        if (id === "display")
+            Display.refreshBrightness()         // the laptop's own keys may have changed it
         panelId = id
         actions.currentIndex = 0               // the panel's first row
         actions.positionViewAtBeginning()
@@ -456,12 +585,16 @@ Item {
     readonly property var hints: {
         const key = currentKey
         const back = { button: "B", text: powerMode || panelId !== "" ? qsTr("Back") : (hasApp ? qsTr("Resume") : qsTr("Close")) }
+        if (modePicker && modePicker.shown)
+            return modePicker.modalHints
         if (powerMode)
             return [{ button: "A", text: qsTr("Select") }, back]
         const row = rowOf(key)
         if (row) {
             switch (row.kind) {
-            case "slider": return [{ button: "A", text: qsTr("Mute") }, { button: "Left/Right", text: qsTr("Adjust") }, back]
+            case "slider": return [...(row.activate ? [{ button: "A", text: qsTr("Mute") }] : []),
+                                   { button: "Left/Right", text: qsTr("Adjust") }, back]
+            case "pick": return [{ button: "A", text: qsTr("Choose") }, back]
             case "choice": return row.choices().length < 2 ? [back]
                                   : [{ button: "A", text: qsTr("Next") }, { button: "Left/Right", text: qsTr("Change") }, back]
             case "toggle": return [{ button: "A", text: qsTr("Toggle") }, back]
@@ -551,7 +684,7 @@ Item {
         } else if (row) {
             if (row.kind === "choice")
                 stepChoice(key, 1)
-            else
+            else if (row.activate)
                 row.activate()
         } else if (key.startsWith("panel:")) {
             openPanel(key.substring(6))
@@ -918,8 +1051,11 @@ Item {
                             readonly property bool isPanelRow: row !== null && !isVolume
                             readonly property bool isChoice: row !== null && row.kind === "choice"
                             readonly property bool isInfo: row !== null && row.kind === "info"
+                            readonly property bool isSlider: row !== null && row.kind === "slider"
                             readonly property bool isAction: row !== null && row.kind === "action"
-                            readonly property string rowText: isPanelRow && row.value ? row.value() : ""
+                            // (each reads `row` itself: the flags above may not have followed a changed `row` yet)
+                            readonly property string rowText: row !== null && !isVolume && row.kind !== "slider" && row.value ? row.value() : ""
+                            readonly property string sliderText: row !== null && row.kind === "slider" && row.value ? row.value() : ""
                             readonly property int line: isTiles ? parseInt(modelData.substring(6)) : 0
                             readonly property string label: menu.labelOf(modelData)
                             readonly property var game: isRecent ? menu.recent.find(r => r.id === modelData.substring(7)) : undefined
@@ -927,6 +1063,7 @@ Item {
                             objectName: "quickMenuItem_" + modelData
                             Accessible.role: Accessible.MenuItem
                             Accessible.name: isVolume ? (Audio.muted ? qsTr("Volume, muted") : qsTr("Volume %1").arg(Audio.volume))
+                                             : isSlider ? qsTr("%1, %2").arg(label).arg(sliderText)
                                              : isTiles ? tilesRow.focusedName
                                              : isPanelRow && rowText !== "" ? qsTr("%1, %2").arg(label).arg(rowText) : label
                             width: actions.width
@@ -959,10 +1096,10 @@ Item {
                                 // Volume and Recent rows start at the left edge; the others are centred.
                                 readonly property real leftEdge: action.isRecent ? thumb.x + thumb.width + Theme.spaceS * menu.u
                                                                                   : Theme.spaceL * menu.u
-                                x: action.isVolume || action.isRecent || (action.isPanelRow && !action.isAction) ? leftEdge : (action.width - width) / 2
+                                x: action.isSlider || action.isRecent || (action.isPanelRow && !action.isAction) ? leftEdge : (action.width - width) / 2
                                 anchors.verticalCenter: parent.verticalCenter
                                 width: Math.min(implicitWidth, action.width - leftEdge - Theme.spaceL * menu.u
-                                                - (action.isPanelRow ? panelValue.width + Theme.spaceM * menu.u : 0))
+                                                - (action.isPanelRow && !action.isSlider ? panelValue.width + Theme.spaceM * menu.u : 0))
                                 textFormat: Text.PlainText
                                 text: action.label
                                 color: Theme.text
@@ -970,17 +1107,18 @@ Item {
                                 font.weight: Theme.weightDemiBold
                                 elide: Text.ElideRight
                             }
-                            // The volume row: a bar and the number (the same as the volume OSD).
+                            // A slider row (Volume, Brightness): a bar and the number (the same as the volume OSD).
                             Rectangle {
                                 id: track
-                                objectName: "quickMenuVolumeTrack"
-                                visible: action.isVolume
+                                objectName: action.isVolume ? "quickMenuVolumeTrack" : "quickMenuSliderTrack"
+                                visible: action.isSlider
                                 anchors { left: itemLabel.right; leftMargin: Theme.spaceM * menu.u; right: valueText.left; rightMargin: Theme.spaceM * menu.u; verticalCenter: parent.verticalCenter }
                                 height: 12 * menu.u
                                 radius: height / 2
                                 color: Theme.glass
                                 Rectangle {
-                                    width: parent.width * (Audio.muted ? 0 : Audio.volume) / 100
+                                    objectName: "quickMenuSliderFill"
+                                    width: parent.width * (action.row !== null && action.row.fraction ? action.row.fraction() : 0)
                                     height: parent.height
                                     radius: parent.radius
                                     color: Theme.text
@@ -988,12 +1126,12 @@ Item {
                             }
                             Text {
                                 id: valueText
-                                objectName: "quickMenuVolumeValue"
-                                visible: action.isVolume
+                                objectName: action.isVolume ? "quickMenuVolumeValue" : "quickMenuSliderValue"
+                                visible: action.isSlider
                                 anchors { right: parent.right; rightMargin: Theme.spaceL * menu.u; verticalCenter: parent.verticalCenter }
                                 width: 70 * menu.u
                                 horizontalAlignment: Text.AlignRight
-                                text: Audio.muted ? qsTr("Muted") : String(Audio.volume)
+                                text: action.sliderText
                                 color: Theme.text
                                 font.pixelSize: Theme.typeBody * menu.u
                             }
@@ -1002,7 +1140,7 @@ Item {
                             Row {
                                 id: panelValue
                                 objectName: "hubRowValue"
-                                visible: action.isPanelRow && !action.isInfo
+                                visible: action.isPanelRow && !action.isInfo && !action.isSlider
                                 anchors { right: parent.right; rightMargin: Theme.spaceL * menu.u; verticalCenter: parent.verticalCenter }
                                 spacing: Theme.spaceXs * menu.u
                                 readonly property bool arrows: action.isChoice && action.row.choices().length > 1
@@ -1131,6 +1269,32 @@ Item {
                             GradientStop { position: 0.0; color: Qt.alpha(Theme.glassOpaque, 0) }
                             GradientStop { position: 1.0; color: Theme.glassOpaque }
                         }
+                    }
+                }
+            }
+        }
+    }
+
+    // The Display panel's mode list (T-454): Settings' ModePicker over the whole screen, built when first opened.
+    // It is modal (every key) and gives the focus back to the Hub's list when it closes.
+    Loader {
+        id: modePickerSlot
+        anchors.fill: parent
+        active: false
+        sourceComponent: Component {
+            ModePicker {
+                objectName: "hubModePicker"
+                u: menu.u
+                title: menu.modePickerKind === "resolution" ? qsTr("Resolution") : qsTr("Refresh rate")
+                entries: menu.modePickerKind === "resolution" ? menu.resolutionEntries : menu.refreshEntries
+                currentKey: menu.modePickerKind === "resolution" ? Display.currentWidth + "x" + Display.currentHeight
+                                                                 : String(Display.currentRefreshMhz)
+                onChosen: key => {
+                    if (menu.modePickerKind === "resolution") {
+                        const parts = key.split("x")
+                        menu.applyMode(() => Display.chooseResolution(parseInt(parts[0]), parseInt(parts[1])))
+                    } else {
+                        menu.applyMode(() => Display.chooseRefresh(parseInt(key)))
                     }
                 }
             }

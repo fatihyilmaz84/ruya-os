@@ -15,6 +15,8 @@
 //   outputs  [{ id, name, widthMm, heightMm, modes: [{ width, height, refreshMhz, preferred, current }] }]
 //   pending  {} when nothing waits, else { output, width, height, refreshMhz, starts }
 //   uiScale  0 (Auto), 100, 125, 150 or 200
+// The backlight (T-454) is a fourth thing, asked separately: state "supported" | "unsupported" and a
+// percent (1..100; 0 when unsupported).
 class DisplayBackend : public QObject
 {
     Q_OBJECT
@@ -31,6 +33,8 @@ public:
     // Back to the defaults: the preferred mode and UI size Auto (Devices1.Display.Reset).
     virtual void resetSettings() = 0;
     virtual void takeFallbackNotice() = 0;
+    virtual void refreshBrightness() = 0;              // reports brightnessChanged
+    virtual void setBrightness(int percent) = 0;       // answers setBrightnessFinished, then reports brightnessChanged
     // Makes the compositor start again so that a written mode takes effect. The real backend ends
     // the process (the compositor unit has Restart=always); the mock only counts.
     virtual void restartShell() = 0;
@@ -46,11 +50,22 @@ signals:
     // status: "ok" (the mode changes at the next start) | "unchanged" | "busy" | "failed"
     void resetFinished(const QString &status);
     void fallbackNoticeReported(bool happened);
+    // state: "supported" | "unsupported" (Devices1.Display.GetBrightness)
+    void brightnessChanged(const QString &state, int percent);
+    // status: "ok" | "unsupported" | "invalid" | "failed"
+    void setBrightnessFinished(const QString &status);
 
 protected:
     // A reply to an older refresh must never replace a newer snapshot (RequestSequence).
     quint64 beginStateRequest() { return m_stateSeq.begin(); }
     bool acceptState(quint64 request) { return m_stateSeq.accept(request); }
+    quint64 beginBrightnessRequest() { return m_brightnessSeq.begin(); }
+    bool acceptBrightness(quint64 request) { return m_brightnessSeq.accept(request); }
+    void deliverBrightness(quint64 request, const QString &state, int percent)
+    {
+        if (acceptBrightness(request))
+            emit brightnessChanged(state, percent);
+    }
     void deliverState(quint64 request, const QVariantList &outputs, const QVariantMap &pending, int uiScale)
     {
         if (acceptState(request))
@@ -59,4 +74,5 @@ protected:
 
 private:
     RequestSequence m_stateSeq;
+    RequestSequence m_brightnessSeq;
 };
