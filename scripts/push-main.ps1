@@ -36,37 +36,9 @@ if ($branch -ne "main") {
 if (& $git status --porcelain) { Stop-Push "the working tree is not clean" }
 $head = "$(& $git rev-parse HEAD)".Trim()
 
-# What the marker proves, if anything: Mode "same", "docs" (only docs\*.md differ) or $null, and Why.
-function Proof($Mode, [string]$Why) { return [pscustomobject]@{ Mode = $Mode; Why = $Why } }
-function Read-GreenMarker {
-    if (-not (Test-Path -LiteralPath $marker)) { return (Proof $null "no green marker ($marker)") }
-    $fields = @{}
-    foreach ($line in [IO.File]::ReadAllLines($marker)) {
-        if ($line -match '^(\w+) (\S+)$') { $fields[$Matches[1]] = $Matches[2] }
-    }
-    $sha = $fields["commit"]
-    if (-not ($sha -match '^[0-9a-f]{40}$')) { return (Proof $null "the green marker names no commit") }
-    $when = [DateTime]::MinValue
-    $styles = [Globalization.DateTimeStyles]::AssumeUniversal -bor [Globalization.DateTimeStyles]::AdjustToUniversal
-    if (-not [DateTime]::TryParse($fields["time"], [Globalization.CultureInfo]::InvariantCulture, $styles, [ref]$when)) {
-        return (Proof $null "the green marker has no valid time")
-    }
-    $age = ((Get-Date).ToUniversalTime() - $when).TotalHours
-    if ($age -lt 0 -or $age -gt $maxAgeHours) { return (Proof $null "the green marker is older than $maxAgeHours hours ($($fields['time']))") }
-    & $git cat-file -e "$sha^{commit}" 2>$null
-    if ($LASTEXITCODE -ne 0) { return (Proof $null "the green marker's commit $sha is not in this repository") }
-    $changed = @(& $git diff --name-only --no-renames $sha $head)
-    if ($LASTEXITCODE -ne 0) { return (Proof $null "git diff from the marker's commit failed") }
-    $short = $sha.Substring(0, 10)
-    if ($changed.Count -eq 0) { return (Proof "same" "$short passed dev.ps1 test at $($fields['time']) and HEAD has the same content") }
-    $other = @($changed | Where-Object { $_ -notmatch '^docs/.+\.md$' })
-    if ($other.Count -eq 0) {
-        return (Proof "docs" "$short passed dev.ps1 test at $($fields['time']); since then only docs\*.md changed ($($changed.Count) files)")
-    }
-    return (Proof $null "since the green $short, $($other.Count) files outside docs\*.md changed (first: $($other[0]))")
-}
-
-$proof = Read-GreenMarker
+# What the marker proves, if anything (green-marker.ps1): Mode "same", "docs" or $null, and Why.
+. (Join-Path $PSScriptRoot "green-marker.ps1")
+$proof = Read-GreenMarker -Marker $marker -Head $head -Git $git -MaxAgeHours $maxAgeHours
 $mode = $proof.Mode
 Say $proof.Why
 if ($mode -eq "same") {
