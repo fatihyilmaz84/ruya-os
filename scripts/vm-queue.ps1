@@ -10,7 +10,7 @@ param(
     [string[]]$Checks = @(
         "vm-session-check.sh check", "vm-session-check.sh display", "vm-session-check.sh restart",
         "vm-sounds-check.sh",
-        "vm-security-check.sh",
+        "vm-security-check.sh", "vm-swap-check.sh",
         "vm-devices-check.sh bluetooth", "vm-devices-check.sh twopads", "vm-devices-check.sh inputd", "vm-devices-check.sh system",
         "vm-audio-check.sh",
         "vm-storage-check.ps1 scan",
