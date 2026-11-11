@@ -248,7 +248,8 @@ One small set of card sizes. Design px at 1080p, multiplied by `u`; corner radiu
 - A name from outside (game, app, device) in a toast is capped at 30 characters (§5); a toast about a failed launch or a crash ends with "Try again."
 - Buttons and actions are verbs ("Restart", "Add profile"); a confirm repeats the verb of the question ("Restart now?" → Restart / Cancel).
 - Errors say what happened and what the user can do, in at most two short sentences ("Wrong PIN. 2 tries left."). No "please", no codes, no blame.
-- Row labels stay under about 28 characters in English so the Turkish fits.
+- Row labels stay under about 28 characters in English so the Turkish fits. A row label may carry one short parenthesised state after a name ("Switch to X (no window yet)", T-467): the name is capped at 30 characters (`Notifications.named`) and, on the narrow quick menu, the label elides the name, never the state.
+- An information toast states the fact in one sentence ("X has no window yet.") and needs no next step; an error toast follows the rule above.
 
 ## 7. Accessibility
 

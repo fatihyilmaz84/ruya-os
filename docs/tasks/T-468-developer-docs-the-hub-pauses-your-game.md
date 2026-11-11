@@ -19,5 +19,7 @@ A developer making a game for RuyaOS knows exactly what happens to it when the p
 ## Hints
 - Planned by lead-11 on the owner's question. The Close path (thaw, then SIGTERM, grace, kill: T-457, T-458) belongs in the same page's "Stopping" section: check it is still right.
 
+- Since T-467 every Session1 game is frozen by the Hub, including pygame/SDL ones whose window Session1 cannot map (before, those kept running under the Hub).
+
 ## Outcome
 _Filled in by the implementer._

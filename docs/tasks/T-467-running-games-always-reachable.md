@@ -1,6 +1,6 @@
 # T-467 — Running games are always reachable: the Hub lists them, Play opens that instance
 
-Status: in-progress · Phase: 2 · Depends: — · Area: shell · Size: S · Owner: builder · Complexity: normal · Developer surface: none
+Status: done · Phase: 2 · Depends: — · Area: shell · Size: S · Owner: builder · Complexity: normal · Developer surface: none
 
 ## Goal
 From a running game the player goes Home and can always get back to it: the Hub lists every running game, and Play (or Accept) on a running game's card opens that very instance. Today (owner, 2026-11-11, on the Dell): after Home, the Hub no longer shows the game, and its card says Running but Play only toasts "<game> is already running".
