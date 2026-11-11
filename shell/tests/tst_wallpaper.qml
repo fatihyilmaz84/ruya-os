@@ -822,6 +822,7 @@ Item {
         }
 
         function test_the_theme_fade_moves_the_dim_colour_with_it() {
+            Theme.motionFactor = 1.0           // real time: the subject is a sample while the cross-fade runs (T-463; red on CI at 0.1)
             DeviceSettings.wallpaper = "dusk"
             const layer = find("wallpaperLayer")
             tryCompare(layer, "covering", true, 5000)
