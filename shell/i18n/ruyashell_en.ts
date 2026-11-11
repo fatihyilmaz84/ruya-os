@@ -2318,13 +2318,13 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+146"/>
+        <location line="+145"/>
         <location line="+162"/>
         <source>Mute</source>
         <translation>Mute</translation>
     </message>
     <message>
-        <location line="-307"/>
+        <location line="-306"/>
         <source>Mute mic</source>
         <translation>Mute mic</translation>
     </message>
@@ -2333,26 +2333,26 @@ This can&apos;t be undone.</translation>
         <location line="+4"/>
         <location line="+1"/>
         <location line="+1"/>
-        <location line="+122"/>
+        <location line="+121"/>
         <location line="+13"/>
         <source>Off</source>
         <translation>Off</translation>
     </message>
     <message>
-        <location line="-139"/>
-        <location line="+519"/>
+        <location line="-138"/>
+        <location line="+518"/>
         <source>Not connected</source>
         <translation>Not connected</translation>
     </message>
     <message>
-        <location line="-517"/>
-        <location line="+124"/>
+        <location line="-516"/>
+        <location line="+123"/>
         <location line="+13"/>
         <source>On</source>
         <translation>On</translation>
     </message>
     <message>
-        <location line="-116"/>
+        <location line="-115"/>
         <source>Could not change Wi-Fi.</source>
         <translation>Could not change Wi-Fi.</translation>
     </message>
@@ -2372,7 +2372,7 @@ This can&apos;t be undone.</translation>
         <translation>Could not change Bluetooth.</translation>
     </message>
     <message>
-        <location line="+78"/>
+        <location line="+77"/>
         <source>Audio</source>
         <translation>Audio</translation>
     </message>
@@ -2445,18 +2445,18 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+10"/>
+        <location line="+9"/>
         <source>Not available on this console</source>
         <translation>Not available on this console</translation>
     </message>
     <message>
-        <location line="-10"/>
+        <location line="-9"/>
         <location line="+12"/>
         <source>Measuring...</source>
         <translation>Measuring...</translation>
     </message>
     <message>
-        <location line="-8"/>
+        <location line="-9"/>
         <source>%1 %</source>
         <translation>%1 %</translation>
     </message>
@@ -2481,7 +2481,12 @@ This can&apos;t be undone.</translation>
         <translation>%1 FPS · %2, slowest %3</translation>
     </message>
     <message>
-        <location line="+66"/>
+        <location line="+4"/>
+        <source>No game in front</source>
+        <translation>No game in front</translation>
+    </message>
+    <message>
+        <location line="+63"/>
         <location line="+25"/>
         <source>Resume</source>
         <translation>Resume</translation>
@@ -2634,7 +2639,7 @@ This can&apos;t be undone.</translation>
         <translation>Volume %1</translation>
     </message>
     <message>
-        <location line="+117"/>
+        <location line="+145"/>
         <source>%1, on</source>
         <translation>%1, on</translation>
     </message>
@@ -2644,9 +2649,9 @@ This can&apos;t be undone.</translation>
         <translation>%1, off</translation>
     </message>
     <message>
-        <location line="-862"/>
+        <location line="-889"/>
         <location line="+1"/>
-        <location line="+811"/>
+        <location line="+810"/>
         <source>Muted</source>
         <translation>Muted</translation>
     </message>

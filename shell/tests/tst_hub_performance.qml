@@ -252,8 +252,8 @@ Item {
             keyClick(Qt.Key_Escape)
         }
 
-        // unsupported: said plainly, in textDim.
-        function test_an_unsupported_value_says_so_in_the_dim_colour() {
+        // unsupported: said plainly, in `text` like every reading (textDim is under the contrast floor on the pill).
+        function test_an_unsupported_value_says_so_in_the_normal_colour() {
             start()
             openPerformance()
             tryVerify(() => Performance.valid && Performance.fresh, 3000)
@@ -261,7 +261,8 @@ Item {
             compare(rowName("performance:gputemp"), "GPU temperature, Not available on this console")
             verify(!valueText("performance:vram").truncated, "the whole sentence is shown, not cut off")
             verify(!valueText("performance:gputemp").truncated)
-            compare(valueText("performance:vram").color, Theme.textDim)
+            compare(valueText("performance:vram").color, Theme.text, "not textDim: 04 section 7 contrast")
+            compare(valueText("performance:gputemp").color, Theme.text)
             // The frame meter without a compositor window (this host) is unsupported too.
             compare(Performance.frameState, "unsupported")
             compare(rowName("performance:frames"), "Frames, Not available on this console")
@@ -293,6 +294,20 @@ Item {
             openPerformance()
             compare(Performance.frameState, "unavailable")
             compare(rowName("performance:frames"), "Frames, Measuring...")
+            keyClick(Qt.Key_Escape)
+        }
+
+        // No app surface in front: nothing to count, and the row says so.
+        function test_frames_say_no_game_in_front_without_an_app_surface() {
+            start()
+            const win = createTemporaryObject(windowComponent, host)
+            Performance.frameWindow = win                    // a compositor window, but no app in front
+            openPerformance()
+            compare(Performance.frameState, "unavailable")
+            compare(rowName("performance:frames"), "Frames, No game in front")
+            const surface = createTemporaryObject(surfaceComponent, host)
+            Performance.frameSource = surface                // a game comes to the front
+            tryVerify(() => rowName("performance:frames") === "Frames, Measuring...", 2000, rowName("performance:frames"))
             keyClick(Qt.Key_Escape)
         }
 

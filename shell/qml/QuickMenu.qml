@@ -215,7 +215,6 @@ Item {
     // A panel is a table of row descriptors (T-452), the one place a row's behaviour is written:
     //   { key, label, kind: "toggle" | "choice" | "slider" | "info",
     //     value(): the text at the right (toggle, choice, info),
-    //     dim(): true draws the value in textDim (info, optional),
     //     activate(): Accept (toggle, slider),
     //     adjust(delta): Left/Right, delta -1 or +1 (slider),
     //     choices(): [{ id, name, current }] and select(id) (choice; `async` when the answer comes later) }
@@ -249,7 +248,7 @@ Item {
         if (id === "performance") {
             return { title: qsTr("Performance"), rows: [
                 { key: "performance:frames", label: qsTr("Frames"), kind: "info",
-                  value: () => framesText(), dim: () => Performance.frameState === "unsupported" },
+                  value: () => framesText() },
                 perfRow("cpu", qsTr("CPU"), ["cpu_percent"], v => percentText(v[0])),
                 perfRow("gpu", qsTr("GPU"), ["gpu_percent"], v => percentText(v[0])),
                 perfRow("ram", qsTr("RAM"), ["ram_used", "ram_total"], v => qsTr("%1 of %2").arg(Storage.formatBytes(v[0])).arg(Storage.formatBytes(v[1]))),
@@ -309,8 +308,7 @@ Item {
                          return state === "stale" ? qsTr("%1 (last reading)").arg(text) : text
                      }
                      return state === "unsupported" ? qsTr("Not available on this console") : qsTr("Measuring...")
-                 },
-                 dim: () => perfState(names) === "unsupported" }
+                 } }
     }
     function percentText(v) { return qsTr("%1 %").arg(Math.round(v)) }
     function msText(ms) { return qsTr("%1 ms").arg(ms < 10 ? ms.toFixed(1) : Math.round(ms)) }
@@ -320,7 +318,8 @@ Item {
         case "supported": return qsTr("%1 FPS · %2, slowest %3").arg(Performance.fps).arg(msText(Performance.frameTimeMs)).arg(msText(Performance.frameTimeP99Ms))
         case "unsupported": return qsTr("Not available on this console")
         }
-        return qsTr("Measuring...")
+        // No app surface in front (the panel opened from Home): nothing to count, say so instead of "Measuring..." for ever.
+        return Performance.frameSource === null ? qsTr("No game in front") : qsTr("Measuring...")
     }
 
     // ---- choice rows -----------------------------------------------------------------------------------
@@ -844,7 +843,6 @@ Item {
                             readonly property bool isChoice: row !== null && row.kind === "choice"
                             readonly property bool isInfo: row !== null && row.kind === "info"
                             readonly property string rowText: isPanelRow && row.value ? row.value() : ""
-                            readonly property bool rowDim: isPanelRow && row.dim ? row.dim() : false
                             readonly property int line: isTiles ? parseInt(modelData.substring(6)) : 0
                             readonly property string label: menu.labelOf(modelData)
                             readonly property var game: isRecent ? menu.recent.find(r => r.id === modelData.substring(7)) : undefined
@@ -947,7 +945,7 @@ Item {
                                     width: Math.min(implicitWidth, panelValue.room - (panelValue.arrows ? 2 * (leftArrow.implicitWidth + panelValue.spacing) : 0))
                                     textFormat: Text.PlainText      // a device's name comes from outside
                                     text: action.rowText
-                                    color: action.rowDim ? Theme.textDim : Theme.text
+                                    color: Theme.text
                                     font.pixelSize: Theme.typeBody * menu.u
                                     elide: Text.ElideRight
                                 }
@@ -959,8 +957,8 @@ Item {
                                 }
                             }
                             // A reading (an info row, T-452): the label small above, the value under it at the full width, so
-                            // "Not available on this console" is never cut off. The value is `textDim` only when the console
-                            // has no such source.
+                            // "Not available on this console" is never cut off. The value is always `text` (contrast, 04 §7):
+                            // the words carry the state.
                             Column {
                                 id: infoRow
                                 visible: action.isInfo
@@ -981,7 +979,7 @@ Item {
                                     width: parent.width
                                     textFormat: Text.PlainText
                                     text: action.rowText
-                                    color: action.rowDim ? Theme.textDim : Theme.text
+                                    color: Theme.text
                                     font.pixelSize: Theme.typeBody * menu.u
                                     elide: Text.ElideRight
                                 }

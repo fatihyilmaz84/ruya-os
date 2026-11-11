@@ -2309,13 +2309,13 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+146"/>
+        <location line="+145"/>
         <location line="+162"/>
         <source>Mute</source>
         <translation>Sessiz</translation>
     </message>
     <message>
-        <location line="-307"/>
+        <location line="-306"/>
         <source>Mute mic</source>
         <translation>Mikrofonu sustur</translation>
     </message>
@@ -2324,26 +2324,26 @@ Bu geri alınamaz.</translation>
         <location line="+4"/>
         <location line="+1"/>
         <location line="+1"/>
-        <location line="+122"/>
+        <location line="+121"/>
         <location line="+13"/>
         <source>Off</source>
         <translation>Kapalı</translation>
     </message>
     <message>
-        <location line="-139"/>
-        <location line="+519"/>
+        <location line="-138"/>
+        <location line="+518"/>
         <source>Not connected</source>
         <translation>Bağlı değil</translation>
     </message>
     <message>
-        <location line="-517"/>
-        <location line="+124"/>
+        <location line="-516"/>
+        <location line="+123"/>
         <location line="+13"/>
         <source>On</source>
         <translation>Açık</translation>
     </message>
     <message>
-        <location line="-116"/>
+        <location line="-115"/>
         <source>Could not change Wi-Fi.</source>
         <translation>Wi-Fi değiştirilemedi.</translation>
     </message>
@@ -2363,7 +2363,7 @@ Bu geri alınamaz.</translation>
         <translation>Bluetooth değiştirilemedi.</translation>
     </message>
     <message>
-        <location line="+78"/>
+        <location line="+77"/>
         <source>Audio</source>
         <translation>Ses</translation>
     </message>
@@ -2436,18 +2436,18 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+10"/>
+        <location line="+9"/>
         <source>Not available on this console</source>
         <translation>Bu konsolda kullanılamıyor</translation>
     </message>
     <message>
-        <location line="-10"/>
+        <location line="-9"/>
         <location line="+12"/>
         <source>Measuring...</source>
         <translation>Ölçülüyor...</translation>
     </message>
     <message>
-        <location line="-8"/>
+        <location line="-9"/>
         <source>%1 %</source>
         <translation>%%1</translation>
     </message>
@@ -2472,7 +2472,12 @@ Bu geri alınamaz.</translation>
         <translation>%1 FPS · %2, en yavaş %3</translation>
     </message>
     <message>
-        <location line="+66"/>
+        <location line="+4"/>
+        <source>No game in front</source>
+        <translation>Önde oyun yok</translation>
+    </message>
+    <message>
+        <location line="+63"/>
         <location line="+25"/>
         <source>Resume</source>
         <translation>Devam et</translation>
@@ -2625,7 +2630,7 @@ Bu geri alınamaz.</translation>
         <translation>Ses %1</translation>
     </message>
     <message>
-        <location line="+117"/>
+        <location line="+145"/>
         <source>%1, on</source>
         <translation>%1, açık</translation>
     </message>
@@ -2635,9 +2640,9 @@ Bu geri alınamaz.</translation>
         <translation>%1, kapalı</translation>
     </message>
     <message>
-        <location line="-862"/>
+        <location line="-889"/>
         <location line="+1"/>
-        <location line="+811"/>
+        <location line="+810"/>
         <source>Muted</source>
         <translation>Sessiz</translation>
     </message>
