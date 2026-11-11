@@ -1,6 +1,6 @@
 # T-465 — zram swap in the image, so frozen games can give memory back
 
-Status: in-progress · Phase: 2 · Depends: — · Area: image · Size: S · Owner: builder · Complexity: normal · Developer surface: none
+Status: done · Phase: 2 · Depends: — · Area: image · Size: S · Owner: builder · Complexity: normal · Developer surface: none
 
 ## Goal
 The image has no swap at all: `zram-generator` is installed but has no config (`zram-generator-defaults` is missing). A frozen game keeps all its memory (a frozen SuperTuxKart race: about 1.0 GB, of which 680 MB i915 GPU buffers), and a third or fourth game can only end in the OOM killer. Compressed swap in RAM lets the kernel push a frozen game's memory out.
