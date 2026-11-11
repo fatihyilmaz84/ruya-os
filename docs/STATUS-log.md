@@ -3,6 +3,8 @@
 Older entries of the `docs/STATUS.md` session log, newest first. STATUS keeps only the latest five; the lead moves the rest here at each review. Nobody needs to read this file to start a task.
 
 
+- 2026-11-09 · Opus 5.5 · Lead (lead-7: T-340, T-348, T-376, T-361, T-360 merged; lead T-365 profile sound, T-375 BlueZ kernel HID; plans ADR-024 Ruya Input T-366..T-374, T-359..T-364, T-376, T-377; Hub analysis) · test 1012 QML ALL GREEN; VM 0.0.59 check/display PASS, restart FAIL then fixed (zbus unixexec); Dell 0.0.59: STK sound as ruya-p1, bluetoothd 10-12 % to 0. Process: lints refuse conflict markers and jq; stalled-builder rule.
+
 - 2026-11-09 · Opus 5.5 · Lead (lead-6: T-164 per-profile Wayland sockets, T-322 output policy, T-347 card profiles, T-285 hint bar merged; T-358 GPU buffers by the lead; T-355 first pass; T-357 written) · `test` 1001 QML + 77 skips ALL GREEN; VM 0.0.57/0.0.58 PASS; Dell 0.0.58: STK through the shell on the UHD 630 at 15 % CPU (was llvmpipe 563 %) via our patched Qt linux-dmabuf v4 plugin. Process: `image-chain.sh`; builders run `test` in the foreground (two stalled).
 
 - 2026-11-09 · Sonnet 5.5 · Lead (lead-5 part 2: T-356 focus-loss dead end, T-349 lazy Settings, T-331 drive scan merged after a checkpoint; T-164 open) · `test` 987 QML + 77 skips ALL GREEN; ISO built only when needed (owner rule), lead efficiency rules in LEAD.md. Found with the owner: covered pages stole the window focus (T-356). Process: reviewers must run the revert check; waits stay inside one turn.
