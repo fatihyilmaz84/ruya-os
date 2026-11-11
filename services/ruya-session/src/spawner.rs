@@ -9,6 +9,7 @@ use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use async_channel::Sender;
 
@@ -501,6 +502,56 @@ pub fn park_audio_command(
     args.push(format!("--frozen={frozen}"));
     args.push(format!("--running={running}"));
     Ok(args)
+}
+
+/// One sound request (`Spawner::app_audio`, T-466): a profile user, its frozen apps, its running ones.
+pub type AudioJob = (String, Vec<String>, Vec<String>);
+
+/// How often a sound request is tried in all (a failed restore would leave a thawed game playing
+/// into the null sink until its next Freeze).
+pub const PARK_TRIES: u32 = 3;
+/// The pause before a failed request is tried again.
+pub const PARK_RETRY: Duration = Duration::from_secs(2);
+
+/// The sound requests waiting for the worker, in order (T-466). Each request is the whole state of
+/// its user, so a newer one replaces a queued one of the same user, and a failed one is tried
+/// again only while no newer one of that user is queued. Pure.
+#[derive(Debug, Default)]
+pub struct AudioQueue {
+    /// The request and how often it was tried.
+    jobs: Vec<(AudioJob, u32)>,
+}
+
+impl AudioQueue {
+    /// Queues `job`, replacing a queued request (or a pending retry) of the same user.
+    pub fn push(&mut self, job: AudioJob) {
+        self.jobs.retain(|(queued, _)| queued.0 != job.0);
+        self.jobs.push((job, 0));
+    }
+
+    /// The next request to run and how often it was tried before.
+    pub fn pop(&mut self) -> Option<(AudioJob, u32)> {
+        (!self.jobs.is_empty()).then(|| self.jobs.remove(0))
+    }
+
+    /// `job` failed after `tries` earlier tries: queued again (true) unless it has had
+    /// `PARK_TRIES` or a newer request of its user is queued.
+    pub fn failed(&mut self, job: AudioJob, tries: u32) -> bool {
+        if tries + 1 >= PARK_TRIES || self.jobs.iter().any(|(queued, _)| queued.0 == job.0) {
+            return false;
+        }
+        self.jobs.push((job, tries + 1));
+        true
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.jobs.is_empty()
+    }
+
+    /// Is a request of `user` queued (a newer one than a retry being waited for)?
+    pub fn has(&self, user: &str) -> bool {
+        self.jobs.iter().any(|(queued, _)| queued.0 == user)
+    }
 }
 
 /// The share of a frozen app's `memory.current` that `memory.reclaim` is asked for (T-466): the
@@ -1602,6 +1653,60 @@ mod tests {
         assert_eq!(parse_control_groups(text).len(), 2);
         // A unit that is gone has an empty ControlGroup: nothing.
         assert!(parse_control_groups("\n\n").is_empty());
+    }
+
+    fn job(user: &str, frozen: &[&str]) -> AudioJob {
+        (user.to_owned(), ids(frozen), ids(&["org.x.Game"]))
+    }
+
+    #[test]
+    fn a_newer_sound_request_of_a_user_replaces_the_queued_one() {
+        let mut q = AudioQueue::default();
+        q.push(job("ruya-p1", &["org.x.Game"]));
+        q.push(job("ruya-p2", &["org.x.Game"]));
+        q.push(job("ruya-p1", &[]));
+        assert_eq!(q.pop(), Some((job("ruya-p2", &["org.x.Game"]), 0)));
+        assert_eq!(q.pop(), Some((job("ruya-p1", &[]), 0)));
+        assert_eq!(q.pop(), None);
+    }
+
+    #[test]
+    fn a_failed_sound_request_is_tried_three_times_in_all() {
+        let mut q = AudioQueue::default();
+        q.push(job("ruya-p1", &[]));
+        let (first, tries) = q.pop().expect("queued");
+        assert!(q.failed(first, tries));
+        let (second, tries) = q.pop().expect("retry");
+        assert_eq!(tries, 1);
+        assert!(q.failed(second, tries));
+        let (third, tries) = q.pop().expect("retry");
+        assert_eq!(tries, 2);
+        // The third failure is the last.
+        assert!(!q.failed(third, tries));
+        assert!(q.is_empty());
+        assert_eq!(PARK_TRIES, 3);
+    }
+
+    #[test]
+    fn a_retry_gives_way_to_a_newer_request_of_its_user() {
+        // A newer request queued before the failure: no retry.
+        let mut q = AudioQueue::default();
+        q.push(job("ruya-p1", &[]));
+        let (old, tries) = q.pop().expect("queued");
+        q.push(job("ruya-p1", &["org.x.Game"]));
+        assert!(!q.failed(old, tries));
+        assert_eq!(q.pop(), Some((job("ruya-p1", &["org.x.Game"]), 0)));
+        // A newer request after the retry was queued replaces it (and starts from try 0); another
+        // user's request does not.
+        q.push(job("ruya-p1", &[]));
+        let (old, tries) = q.pop().expect("queued");
+        assert!(q.failed(old.clone(), tries));
+        q.push(job("ruya-p2", &[]));
+        assert!(q.has("ruya-p1"));
+        q.push(job("ruya-p1", &["org.x.Game"]));
+        assert_eq!(q.pop(), Some((job("ruya-p2", &[]), 0)));
+        assert_eq!(q.pop(), Some((job("ruya-p1", &["org.x.Game"]), 0)));
+        assert!(!q.has("ruya-p1"));
     }
 
     #[test]

@@ -56,7 +56,7 @@ use crate::spawner::{
     reclaim_amount, reclaim_command, sweep_commands, unit_app_id, unit_name, LineTail, RunFollower,
     RunningUnit, ShowUnit, SHOW_PROPERTIES, SWAP_COMMAND,
 };
-use crate::spawner::{Spawner, UnitEvent};
+use crate::spawner::{AudioJob, AudioQueue, Spawner, UnitEvent, PARK_RETRY};
 use std::ffi::OsString;
 use zbus::address::transport::{Transport, Unixexec};
 use zbus::Address;
@@ -212,42 +212,81 @@ fn sweep(sweeps: Vec<Sweep>) {
     }
 }
 
-/// One sound request (`Spawner::app_audio`, T-466): a profile user, its frozen apps, its running ones.
-type AudioJob = (String, Vec<String>, Vec<String>);
-
 /// How long one `ruya-devices --park-audio` run may take (its unit has `RuntimeMaxSec=15`).
 const PARK_LIMIT: Duration = Duration::from_secs(20);
 /// How long one reclaim may take (its unit has `RuntimeMaxSec=30`).
 const RECLAIM_LIMIT: Duration = Duration::from_secs(40);
+/// How often the swap state is read again (`swap_active` answers from the last reading).
+const SWAP_EVERY: Duration = Duration::from_secs(60);
 
 /// Runs the sound requests one after the other, so a Thaw's request is never overtaken by the
-/// Freeze's before it; of the requests that queued up meanwhile only the newest per user runs
-/// (each is the whole state of that user, `park.rs` in ruya-devices).
+/// Freeze's before it; a newer request of a user replaces a queued one, and a failed one is tried
+/// again `PARK_RETRY` later, up to `PARK_TRIES` in all, unless a newer one of that user came in
+/// meanwhile (`AudioQueue`). Each request is the whole state of that user (`park.rs` in
+/// ruya-devices), so the newest is all that matters.
 fn park_audio_worker(jobs: std::sync::mpsc::Receiver<AudioJob>) {
-    while let Ok(first) = jobs.recv() {
-        let mut batch: Vec<AudioJob> = vec![first];
-        while let Ok(more) = jobs.try_recv() {
-            batch.retain(|(user, _, _)| *user != more.0);
-            batch.push(more);
+    use std::sync::mpsc::RecvTimeoutError;
+    let mut queue = AudioQueue::default();
+    loop {
+        if queue.is_empty() {
+            match jobs.recv() {
+                Ok(job) => queue.push(job),
+                Err(_) => return,
+            }
         }
-        for (user, frozen, running) in batch {
-            let args = match park_audio_command(&user, &frozen, &running) {
-                Ok(args) => args,
-                Err(err) => {
-                    eprintln!("ruya-session: no park-audio for {user}: {err}");
-                    continue;
+        while let Ok(job) = jobs.try_recv() {
+            queue.push(job);
+        }
+        let Some((job, tries)) = queue.pop() else {
+            continue;
+        };
+        if tries > 0 {
+            // The pause before a retry still takes in new requests; a newer one of this user
+            // replaces the retry.
+            let until = Instant::now() + PARK_RETRY;
+            while let Some(left) = until.checked_duration_since(Instant::now()) {
+                match jobs.recv_timeout(left) {
+                    Ok(newer) => queue.push(newer),
+                    Err(RecvTimeoutError::Timeout) => break,
+                    Err(RecvTimeoutError::Disconnected) => return,
                 }
-            };
-            let started = Instant::now();
-            let done = run_bounded(&args, PARK_LIMIT).is_some();
-            eprintln!(
-                "ruya-session: park-audio {user} frozen=[{}] running=[{}]: {} in {} ms",
-                frozen.join(","),
-                running.join(","),
-                if done { "done" } else { "failed" },
-                started.elapsed().as_millis()
-            );
+            }
+            if queue.has(&job.0) {
+                continue;
+            }
         }
+        let (user, frozen, running) = &job;
+        let args = match park_audio_command(user, frozen, running) {
+            Ok(args) => args,
+            Err(err) => {
+                eprintln!("ruya-session: no park-audio for {user}: {err}");
+                continue;
+            }
+        };
+        let started = Instant::now();
+        let done = run_bounded(&args, PARK_LIMIT).is_some();
+        eprintln!(
+            "ruya-session: park-audio {user} frozen=[{}] running=[{}]: {} in {} ms (try {})",
+            frozen.join(","),
+            running.join(","),
+            if done { "done" } else { "failed" },
+            started.elapsed().as_millis(),
+            tries + 1
+        );
+        if !done && !queue.failed(job.clone(), tries) {
+            eprintln!("ruya-session: park-audio {user}: given up (or a newer request is queued)");
+        }
+    }
+}
+
+/// Reads the swap state every `SWAP_EVERY` into `swap` (T-466), so `swap_active` never blocks the
+/// core's tick (it runs under the session lock).
+fn watch_swap(swap: Arc<std::sync::atomic::AtomicBool>) {
+    let args: Vec<String> = SWAP_COMMAND.iter().map(|s| (*s).to_owned()).collect();
+    loop {
+        let on = run_bounded(&args, SYSTEMCTL_LIMIT).is_some_and(|out| any_swap(&out));
+        swap.store(on, std::sync::atomic::Ordering::Relaxed);
+        std::thread::sleep(SWAP_EVERY);
     }
 }
 
@@ -313,6 +352,8 @@ pub struct SystemdSpawner {
     gate: Gate,
     /// The sound requests, to `park_audio_worker` (T-466).
     audio: Mutex<std::sync::mpsc::Sender<AudioJob>>,
+    /// Is swap active, as `watch_swap` last read it (T-466).
+    swap: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl SystemdSpawner {
@@ -336,11 +377,20 @@ impl SystemdSpawner {
         {
             eprintln!("ruya-session: cannot park the sound of frozen apps: {err}");
         }
+        let swap = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let watched = Arc::clone(&swap);
+        if let Err(err) = std::thread::Builder::new()
+            .name("swap".to_owned())
+            .spawn(move || watch_swap(watched))
+        {
+            eprintln!("ruya-session: cannot watch the swap: no memory is reclaimed: {err}");
+        }
         SystemdSpawner {
             flatpak_root: PathBuf::from(FLATPAK_ROOT),
             log_dir: PathBuf::from(LOG_DIR),
             gate,
             audio: Mutex::new(audio),
+            swap,
         }
     }
 
@@ -508,9 +558,9 @@ impl Spawner for SystemdSpawner {
     }
 
     /// `systemctl list-units --type=swap --state=active` in the system manager, bounded.
+    /// The last reading of `watch_swap` (at most `SWAP_EVERY` old); never blocks.
     fn swap_active(&self) -> bool {
-        let args: Vec<String> = SWAP_COMMAND.iter().map(|s| (*s).to_owned()).collect();
-        run_bounded(&args, SYSTEMCTL_LIMIT).is_some_and(|out| any_swap(&out))
+        self.swap.load(std::sync::atomic::Ordering::Relaxed)
     }
 
     fn reclaim(&self, unit: &str) -> Result<(), String> {

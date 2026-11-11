@@ -279,8 +279,14 @@ fn owned(args: &[&str]) -> Vec<String> {
 /// target before it moves the stream, so a run cut short leaves a stream that a later run can
 /// still put back.
 pub fn commands(steps: &[Step]) -> Vec<Vec<String>> {
+    // `--` ends the options: a value that starts with `-` is never read as one.
     let meta = |rest: &[&str]| {
-        let mut args = owned(&["pw-metadata", "-n", "default"]);
+        let mut args = owned(&["pw-metadata", "-n", "default", "--"]);
+        args.extend(rest.iter().map(|s| (*s).to_owned()));
+        args
+    };
+    let delete = |rest: &[&str]| {
+        let mut args = owned(&["pw-metadata", "-n", "default", "-d", "--"]);
         args.extend(rest.iter().map(|s| (*s).to_owned()));
         args
     };
@@ -315,9 +321,9 @@ pub fn commands(steps: &[Step]) -> Vec<Vec<String>> {
                         out.push(meta(&[&node, TARGET_KEY, &t.value]));
                     }
                     Some(t) => out.push(meta(&[&node, TARGET_KEY, &t.value, &t.kind])),
-                    None => out.push(meta(&["-d", &node, TARGET_KEY])),
+                    None => out.push(delete(&[&node, TARGET_KEY])),
                 }
-                out.push(meta(&["-d", &node, PARKED_KEY]));
+                out.push(delete(&[&node, PARKED_KEY]));
             }
             Step::DropSink { id } => out.push(owned(&["pw-cli", "destroy", &id.to_string()])),
         }
@@ -339,8 +345,8 @@ pub fn summary(user: &str, steps: &[Step]) -> String {
 }
 
 /// Runs one reconcile (Linux): the pulse server's pid from `ruya-shell`'s own manager, `pw-dump`,
-/// then every command of the plan. A failed command is reported and the rest still run (a stream
-/// left half-parked is put back by the next run).
+/// then every command of the plan. A failed command is reported, the rest still run, and the run
+/// is an error, so the caller tries again (a stream left half-parked is put back by the next run).
 #[cfg(target_os = "linux")]
 pub fn apply(req: &Request) -> Result<String, String> {
     use std::process::{Command, Stdio};
@@ -375,10 +381,20 @@ pub fn apply(req: &Request) -> Result<String, String> {
     .unwrap_or(0);
     let dump = run(&owned(&["pw-dump"]))?;
     let steps = plan(&dump, pid, req)?;
+    let mut failed = 0;
     for args in commands(&steps) {
         if let Err(err) = run(&args) {
             eprintln!("ruya-devices: park-audio: {err}");
+            failed += 1;
         }
+    }
+    // A failed step fails the run (exit 1), so ruya-session tries again: a stream left on the null
+    // sink after a thaw would play unheard until the next Freeze.
+    if failed > 0 {
+        return Err(format!(
+            "{failed} step(s) failed ({})",
+            summary(&req.user, &steps)
+        ));
     }
     Ok(summary(&req.user, &steps))
 }
@@ -483,6 +499,7 @@ mod tests {
                 "pw-metadata",
                 "-n",
                 "default",
+                "--",
                 "60",
                 "ruya.parked",
                 r#"{"target":null}"#,
@@ -495,6 +512,7 @@ mod tests {
                 "pw-metadata",
                 "-n",
                 "default",
+                "--",
                 "60",
                 "target.object",
                 "ruya-parked",
@@ -524,7 +542,7 @@ mod tests {
             }
         );
         assert_eq!(
-            commands(&steps)[1][5],
+            commands(&steps)[1][6],
             r#"{"target":"alsa_output.usb","type":"Spa:Id"}"#
         );
         // The thaw: pw-dump shows the JSON value as JSON; the target goes back with its type, then
@@ -554,12 +572,21 @@ mod tests {
                     "pw-metadata",
                     "-n",
                     "default",
+                    "--",
                     "60",
                     "target.object",
                     "alsa_output.usb",
                     "Spa:Id"
                 ]),
-                s(&["pw-metadata", "-n", "default", "-d", "60", "ruya.parked"]),
+                s(&[
+                    "pw-metadata",
+                    "-n",
+                    "default",
+                    "-d",
+                    "--",
+                    "60",
+                    "ruya.parked"
+                ]),
                 s(&["pw-cli", "destroy", "70"]),
             ]
         );
@@ -584,8 +611,24 @@ mod tests {
         assert_eq!(
             commands(&steps)[..2],
             [
-                s(&["pw-metadata", "-n", "default", "-d", "60", "target.object"]),
-                s(&["pw-metadata", "-n", "default", "-d", "60", "ruya.parked"]),
+                s(&[
+                    "pw-metadata",
+                    "-n",
+                    "default",
+                    "-d",
+                    "--",
+                    "60",
+                    "target.object"
+                ]),
+                s(&[
+                    "pw-metadata",
+                    "-n",
+                    "default",
+                    "-d",
+                    "--",
+                    "60",
+                    "ruya.parked"
+                ]),
             ]
         );
     }
@@ -673,6 +716,58 @@ mod tests {
         assert_eq!(
             plan(&dump(&gone), PULSE, &req(&[], &[])).unwrap(),
             vec![Step::DropSink { id: 70 }]
+        );
+    }
+
+    #[test]
+    fn an_app_that_moved_itself_onto_the_parked_sink_is_neither_restored_nor_left_silent() {
+        // The app set `target.object` to ruya-parked itself (no `ruya.parked` of ours).
+        let own = |extra: &[String]| {
+            let mut v = base(&[
+                sink(70, PARKED_SINK),
+                meta(&[entry(60, "target.object", "Spa:String", r#""ruya-parked""#)]),
+            ]);
+            v.extend_from_slice(extra);
+            v
+        };
+        // Not frozen: nothing is "put back" (it was never parked by us), and the sink, holding no
+        // stream of ours, goes, so the stream falls back to the default output.
+        let steps = plan(&dump(&own(&[])), PULSE, &req(&[], &["org.x.Game"])).unwrap();
+        assert_eq!(steps, vec![Step::DropSink { id: 70 }]);
+        // Frozen: parked with no saved target (never "ruya-parked"), so the thaw removes the target
+        // and the stream follows the default instead of staying on the null sink.
+        let steps = plan(
+            &dump(&own(&[])),
+            PULSE,
+            &req(&["org.x.Game"], &["org.x.Game"]),
+        )
+        .unwrap();
+        assert_eq!(
+            steps,
+            vec![Step::Park {
+                node: 60,
+                saved: None
+            }]
+        );
+        let parked = base(&[
+            sink(70, PARKED_SINK),
+            meta(&[
+                entry(60, "target.object", "Spa:String", r#""ruya-parked""#),
+                entry(60, "ruya.parked", "Spa:String:JSON", r#"{"target":null}"#),
+            ]),
+        ]);
+        let cmds = commands(&plan(&dump(&parked), PULSE, &req(&[], &["org.x.Game"])).unwrap());
+        assert_eq!(
+            cmds[0],
+            s(&[
+                "pw-metadata",
+                "-n",
+                "default",
+                "-d",
+                "--",
+                "60",
+                "target.object"
+            ])
         );
     }
 
