@@ -136,7 +136,9 @@ FocusScope {
             appsBehindHome = false
         if (shownApps.some(r => r.item === focusedApp))
             return
-        const next = shownApps.length > 0 && !appsBehindHome ? shownApps[shownApps.length - 1].item : null
+        const next = appsBehindHome ? null : fallbackFront()
+        if (next === null && shownApps.length > 0)
+            appsBehindHome = true               // only frozen apps left: Home, their Running cards bring them back (T-464)
         if (next !== focusedApp) {
             focusedApp = next
             if (!systemPanel.open)
@@ -169,6 +171,28 @@ FocusScope {
             return ""
         const run = record.instance !== "" ? Session.running.find(r => r.instance === record.instance) : undefined
         return run ? run.appId : record.appId
+    }
+
+    // An app the Hub froze (or any frozen one) stays frozen until the player resumes it (T-464): it is
+    // never the front app by itself, or HubPause would thaw it behind the window that took the screen.
+    function appFrozen(record) {
+        if (!record)
+            return false
+        // The running instance of the window: by its process, else by the application id it gives itself.
+        const run = record.instance !== "" ? Session.running.find(r => r.instance === record.instance)
+                  : record.appId !== "" ? Session.running.find(r => r.appId === record.appId && (record.profile === "" || r.profile === record.profile))
+                  : undefined
+        return run ? (run.frozen === true || hubPause.asked.includes(run.instance)) : false
+    }
+
+    // The app that takes the screen when the front one goes away: the newest shown app that is not
+    // frozen, else none (Home).
+    function fallbackFront() {
+        for (let i = shownApps.length - 1; i >= 0; --i) {
+            if (!appFrozen(shownApps[i]))
+                return shownApps[i].item
+        }
+        return null
     }
 
     function addApp(item, profile) {
@@ -248,7 +272,7 @@ FocusScope {
         const wasFront = focusedApp === record.item || (!focusedApp && !appsBehindHome)
         apps = apps.filter(r => r.id !== id)
         if (!focusedApp || wasFront)
-            focusedApp = shownApps.length > 0 && !appsBehindHome ? shownApps[shownApps.length - 1].item : null
+            focusedApp = appsBehindHome ? null : fallbackFront()
         // An app that was behind Home going away leaves the focus where the user put it.
         if (!systemPanel.open && (wasFront || focusedApp !== null))
             focusCurrent()              // the next app, else the page or Home

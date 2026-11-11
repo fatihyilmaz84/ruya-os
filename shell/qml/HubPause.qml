@@ -20,6 +20,9 @@ import RuyaShell
 // object's back (a shell restart while a game was frozen, a Thaw the service refused because the
 // profile was switched as the Hub closed, a Freeze served after its Thaw): it is thawed. It runs on
 // every change of the running list and of the signed-in profile.
+//
+// The belt (T-464): an app in `asked` that runs again while another app or Home is in front is frozen
+// again (`rebelt`). Shell never makes a frozen app the front app by itself (Shell.fallbackFront).
 QtObject {
     id: pause
 
@@ -34,6 +37,8 @@ QtObject {
 
     property var asked: []
     property var thawing: []
+    // The Freezes on their way (the Hub's and the belt's, below); an instance leaves it with the answer.
+    property var freezing: []
 
     function forget(instance) {
         if (asked.includes(instance))
@@ -68,10 +73,28 @@ QtObject {
         }
     }
 
+    // The belt (T-464): an app this object froze that runs again while another app (or Home) is in
+    // front was thawed by something else, and would run unseen: it is frozen again. This lives here,
+    // not in Shell, because `asked` is this object's state and the Thaws it sends itself leave `asked`
+    // first (a Resume, Switch to and B are never undone). Only a running instance is frozen again: a
+    // game being closed (Close game, a thermal stop) is thawed on purpose so that it can quit.
+    function rebelt() {
+        if (profile === "")
+            return
+        for (const r of Session.running) {
+            if (r.profile === profile && r.frozen !== true && r.state === "running" && r.instance !== front
+                    && asked.includes(r.instance) && !freezing.includes(r.instance)) {
+                freezing = freezing.concat([r.instance])
+                Session.freeze(r.instance)
+            }
+        }
+    }
+
     onHubOpenChanged: {
         if (hubOpen) {
             if (pauseOn && front !== "" && !asked.includes(front)) {
                 asked = asked.concat([front])
+                freezing = freezing.concat([front])
                 Session.freeze(front)
             }
         } else {
@@ -85,8 +108,10 @@ QtObject {
         target: Session
         function onRunningChanged() {
             pause.sweep()
+            pause.rebelt()
         }
         function onFreezeFinished(instance, status) {
+            pause.freezing = pause.freezing.filter(i => i !== instance)
             if (status !== "ok")
                 pause.forget(instance)          // the game keeps running: no Thaw will be needed
         }
@@ -103,6 +128,7 @@ QtObject {
         function onAppExited(instance) {
             pause.forget(instance)
             pause.thawing = pause.thawing.filter(i => i !== instance)
+            pause.freezing = pause.freezing.filter(i => i !== instance)
         }
     }
 }

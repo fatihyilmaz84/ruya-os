@@ -8,6 +8,7 @@
 #   vm-app-check.sh kill     # end the client (the shell takes the screen back)
 #   vm-app-check.sh log [n]  # what the compositor and the client saw
 #   vm-app-check.sh state    # the session: no cage, the socket, the input ACLs
+#   vm-app-check.sh recreate # a frozen game stays frozen when the window in front is recreated (T-464)
 #   vm-app-check.sh flow     # after Guide, Back, Guide, Resume, Guide, Home was driven: did the quick menu take the focus and give it back (T-147)
 #
 # Drive it from the host with vm-keys.ps1 (letters reach the client; meta_l is Guide) and
@@ -56,6 +57,34 @@ flow)
     exit 1
   fi
   ;;
+recreate)
+  # T-464. Drive first: sign in, start a Session1 game with a window (Play, or Launch over D-Bus),
+  # Guide (the Hub freezes it), Home. Then run this: it starts the test client (its window is the front
+  # app), ends it and starts it again, as pygame does when it closes its first window and opens a second
+  # (on the Dell, BombSquad kept running unseen at 116 % of a core behind the second window). The
+  # count of frozen games must be the same afterwards (the frozen game was the last window left when the first
+  # client window went, so the old shell made it the front app and thawed it).
+  # The number of games ListRunning says are frozen (the form vm-session-check.sh greps for).
+  frozen() {
+    runuser -u ruya-shell -- busctl --system --json=short call org.ruyaos.Session1 /org/ruyaos/Session1 org.ruyaos.Session1 ListRunning       | grep -o '"frozen":{"type":"b","data":true}' | wc -l
+  }
+  before=$(frozen)
+  if [ "$before" -lt 1 ]; then
+    echo "recreate: FAILED (no frozen game: freeze one with the Hub and press Home first)"
+    exit 1
+  fi
+  "$0" client; "$0" kill; "$0" client
+  sleep 3
+  after=$(frozen)
+  "$0" kill
+  echo "frozen games before: $before, after: $after"
+  if [ "$before" = "$after" ]; then
+    echo "recreate: ok (the frozen game stayed frozen)"
+  else
+    echo "recreate: FAILED (the frozen game was thawed behind the window)"
+    exit 1
+  fi
+  ;;
 state)
   echo "cage processes: $(pgrep -c cage)"
   echo "ruya-shell processes: $(pgrep -u ruya-shell -c -x ruya-shell)"
@@ -65,7 +94,7 @@ state)
   loginctl list-sessions --no-legend
   ;;
 *)
-  sed -n '2,14p' "$0"
+  sed -n '2,15p' "$0"
   exit 2
   ;;
 esac
