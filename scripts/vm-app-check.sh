@@ -9,6 +9,7 @@
 #   vm-app-check.sh log [n]  # what the compositor and the client saw
 #   vm-app-check.sh state    # the session: no cage, the socket, the input ACLs
 #   vm-app-check.sh recreate # a frozen game stays frozen when the window in front is recreated (T-464)
+#   vm-app-check.sh reachable # a game behind Home whose window has another app id comes back, thawed, with Play on its card (T-467)
 #   vm-app-check.sh flow     # after Guide, Back, Guide, Resume, Guide, Home was driven: did the quick menu take the focus and give it back (T-147)
 #
 # Drive it from the host with vm-keys.ps1 (letters reach the client; meta_l is Guide) and
@@ -82,6 +83,22 @@ recreate)
     echo "recreate: ok (the frozen game stayed frozen)"
   else
     echo "recreate: FAILED (the frozen game was thawed behind the window)"
+    exit 1
+  fi
+  ;;
+reachable)
+  # T-467. Drive first: sign in, start a Session1 game (Play, or Launch over D-Bus; one game running),
+  # `client` (its window names itself something else and its process is in no instance, like the pygame
+  # games on the Dell), Guide (the Hub freezes the game), Home (the Hub's Home row), then Accept on the
+  # game's Running card. Then run this: no game may be frozen any more (Play thawed the one it brought
+  # back) and the last focus the compositor logged is the client window's, not Home's.
+  frozen=$(runuser -u ruya-shell -- busctl --system --json=short call org.ruyaos.Session1 /org/ruyaos/Session1 org.ruyaos.Session1 ListRunning     | grep -o '"frozen":{"type":"b","data":true}' | wc -l)
+  last=$(journalctl -b -o short-precise _UID=$U --no-pager | grep -E "ruya-compositor: app focus" | tail -n 1)
+  echo "frozen games: $frozen, last focus line: ${last:-none}"
+  if [ "$frozen" = 0 ] && grep -q "app focus .* true" <<<"$last"; then
+    echo "reachable: ok (Play brought the window back, thawed)"
+  else
+    echo "reachable: FAILED (a game is still frozen, or the window did not get the focus back)"
     exit 1
   fi
   ;;

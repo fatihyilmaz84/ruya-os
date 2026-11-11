@@ -373,7 +373,7 @@ Item {
             compare(pidSpy.signalArguments[n][1], "not-found")
             compare(windowRecord(app).instance, "")
             openHub()
-            compare(tc.shell.quickMenuApp.instance, "", "the window names no running app")
+            compare(tc.shell.quickMenuApp.instance, instance, "the lone game no other window claims is the window's (T-467)")
             goTo("closeGame")
             keyClick(Qt.Key_Return)
             tryVerify(() => !tc.shell.appOpen, 2000, "Home is in front")

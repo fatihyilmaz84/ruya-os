@@ -9,7 +9,8 @@ import RuyaShell
 //   Switch to <other running app> ...; then the recent games that are not running (Accept starts one
 //   and the Hub closes), Volume, the quick tiles (Wi-Fi, Bluetooth, Mute: Left/Right inside the row,
 //   Accept flips what the backend says, the tile shows the backend's answer), Power, Switch profile.
-//   Without an app: the same panel without the app part, plus Close (Resume's job when there is no app).
+//   Without an app: the same panel without the app part, with a Switch to row for every running app
+//   first (a game behind Home, T-467), plus Close (Resume's job when there is no app).
 // Holding Guide (or choosing Power) swaps the list for the power choices (Suspend, Restart, Power off
 // as logind allows, Back); a choice asks the shell to open its confirmation (`powerRequested`).
 // Modal: every key is taken here. Up/Down move, Left/Right change the volume on its row or move
@@ -47,7 +48,8 @@ Item {
     // The app in front, or null: { appId, title, picture, started, frozen } (started: unix seconds;
     // frozen: Session1 froze it, T-457, so the header says "Paused").
     property var app: null
-    // Other running apps with a window: [{ appId, title }].
+    // The other running apps (T-467): [{ appId, title, hasWindow }]. Over an app they follow its Close game row;
+    // from Home they come first. One with no window yet (hasWindow false) says so in its label.
     property var others: []
     // Recent games that can be started and are not running, newest first, at most four (two over an app):
     // [{ id, title, picture }] (the shell filters them, T-448).
@@ -178,9 +180,9 @@ Item {
         const keys = []
         if (hasApp) {
             keys.push("resume", "home", "closeGame")
-            for (const o of others)
-                keys.push("to:" + o.appId)
         }
+        for (const o of others)
+            keys.push("to:" + o.appId)
         for (const r of recent)
             keys.push("recent:" + r.id)
         keys.push("volume")
@@ -496,7 +498,8 @@ Item {
         }
         if (key.startsWith("to:")) {
             const found = others.find(o => o.appId === key.substring(3))
-            return qsTr("Switch to %1").arg(Notifications.named(found ? found.title : key.substring(3)))
+            const name = Notifications.named(found ? found.title : key.substring(3))
+            return found && found.hasWindow === false ? qsTr("Switch to %1 (no window yet)").arg(name) : qsTr("Switch to %1").arg(name)
         }
         if (key.startsWith("recent:")) {
             const game = recent.find(r => r.id === key.substring(7))
@@ -505,8 +508,8 @@ Item {
         return key
     }
 
-    // Opens the menu on its first row: Resume over an app, else the first Recent row, else Switch
-    // profile (the volume row is an adjustment, not an action). Nothing of an earlier visit is
+    // Opens the menu on its first row: Resume over an app, else the first running app's Switch to row,
+    // else the first Recent row, else Switch profile (the volume row is an adjustment, not an action). Nothing of an earlier visit is
     // remembered. Called by the shell after it has noted where the focus was.
     function present() {
         powerMode = false
@@ -514,7 +517,8 @@ Item {
         tileCol = 0
         itemKeys = []
         rebuild()
-        const first = hasApp ? "resume" : (recent.length > 0 ? "recent:" + recent[0].id : "switch")
+        const first = hasApp ? "resume" : (others.length > 0 ? "to:" + others[0].appId
+                                          : (recent.length > 0 ? "recent:" + recent[0].id : "switch"))
         actions.currentIndex = Math.max(0, itemKeys.indexOf(first))
         actions.positionViewAtBeginning()
         actions.forceActiveFocus()
