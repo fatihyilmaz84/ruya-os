@@ -53,3 +53,5 @@ The first run gave the same (23 / 27 ms, 0 ms, 60.0 / 60.0). Not tested: the bud
 
 Files: scripts/dell-hub-check.sh (new), scripts/dell-update.sh, shell/qml/Shell.qml, shell/qml/QuickMenu.qml, shell/src/performance/Performance.{cpp,h}, shell/tests/tst_hub_pause.qml, docs/specs/02-shell.md, docs/dev-setup.md. No test removed or weakened.
 
+
+Lead-12, image 0.0.67 on the Dell (no overlay, after the reboot): `dell-hub-check.sh` PASS 4 of 4: showing a game 11 % GPU and 10 % of a core (budget 20 %), first Hub frame 22 ms median (budget 100), open Hub over a frozen game 0 ms in 10 s, game FPS drop 0 % (budget 10 %). The picker right after an update: 0 % GPU.

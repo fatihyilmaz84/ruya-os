@@ -45,7 +45,6 @@ One line each: `- (source) what, and why it matters`. Dispatched builders put th
 Triaged 2026-11-10 (lead-9): the lines before are verbatim in [`STATUS-parked.md`](STATUS-parked.md), "Inbox triage 2026-11-10 (lead-9)"; they became T-427 (Bluetooth leftovers), T-428 (Store follow-ups), T-429 (test harness), T-430 (GlassShadow/AppArt masks, L0 memory), T-147 item 6 (launch follow-ups), T-282 item 12 (keyboard over glass), or owner questions (CPU per game, `core.hooksPath`).
 
 - (owner, 2026-11-12) Paper Plane ticketing pilot is running beside the `.md` board (361 tickets mirrored, RUY-177 done end to end): next lead continues it, see `LEAD-NOTES.md` "Next" item 4 and `PAPERPLANE-PILOT.md`. The `.md` files stay the truth until the owner says otherwise.
-- (T-455) On the next image run `dell-hub-check.sh` once without the builder's overlay, then reboot the Dell (the bind-mounted shell goes away).
 - (T-455) Log the thaw (Resume) time with the Hub probe, so the "sound back and Resume time" Dell check stops being manual.
 - (T-455 review) Prove the hidden Hub draws no frame of its own (A/B with the Hub item disabled or a render count) instead of the 20 % guard rail.
 - (T-470) The card-suspend half of the T-466 check cannot pass while the check stops the shell (the card belongs to the seat session): needs the shell running with its sweep held off, or a Dell check.

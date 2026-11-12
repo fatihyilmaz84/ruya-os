@@ -1,6 +1,6 @@
 # T-471 — Ruya Hub redesign: five focus stops, game art for running apps, fewer options
 
-Status: todo · Phase: 2 · Depends: T-470 · Area: shell · Size: M · Owner: builder · Complexity: complex · Developer surface: none
+Status: in-progress · Phase: 2 · Depends: T-470 · Area: shell · Size: M · Owner: builder · Complexity: complex · Developer surface: none
 
 ## Goal
 Owner, 2026-11-12: the Hub is "too crowded, too many options"; running games should show their **art, not just names**; and decide what can go. Over a game the Quick Hub has about 18 full-width rows that scroll (status, header, Resume, Home, Close game, one row per running app, two Recent rows, Volume, three tiles, six panel entries, Switch profile): the tiles and every panel entry are below the fold. Layout A was chosen (owner, 2026-11-12): **one screen, no scroll, five focus stops at most**. The Hub is an interruption: get back to the game, leave or switch it, change what matters mid-game. Everything else is one Home press away.
