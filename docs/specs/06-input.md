@@ -88,9 +88,9 @@ Every transition releases on the side being left whatever is held (the `KeyBoard
 ### 5.4 Grabs
 In `managed` the service never grabs a pad: apps cannot open physical nodes (no ACL), so there is nothing to hide. It grabs (`EVIOCGRAB`, proven non-root) only in the cases of §5.3.
 
-## 6. Bluetooth pairing as an attack surface *(planned, RUY-411; T-397)*
-- Only bonded devices connect: BlueZ `ClassicBondedOnly=true` (the BlueZ default; the image must not change it; a VM check asserts it), and HID goes through the kernel (`UserspaceHID=false`, T-375).
-- Pairing is possible only while the shell's pairing screen is open (the pairable timeout, T-299), and the screen shows the new device's name and **class**; a device that announces itself as a keyboard needs a second confirmation ("This is a keyboard. Pair it?"), because a keyboard can type anywhere the shell can.
+## 6. Bluetooth pairing as an attack surface *(built, RUY-411; T-397 open)*
+- Only bonded devices connect: BlueZ `ClassicBondedOnly=true` (the BlueZ default; the image must not change it), and HID goes through the kernel (`UserspaceHID=false`, T-375). `scripts/vm-devices-check.sh bluetooth` asserts both from the image's config files: no `ClassicBondedOnly=false` in `/etc/bluetooth/*.conf`, `UserspaceHID=false` in `input.conf` (RUY-411).
+- Pairing is possible only while the shell's pairing screen is open (the pairable timeout, T-299), and the screen shows the new device's name and **class**; a device that announces itself as a keyboard needs a second confirmation ("This is a keyboard. Pair it?", with its name; Cancel has focus, Back cancels), because a keyboard can type anywhere the shell can. The service tells it in `Devices1.Bluetooth.ListDevices` as `keyboard` (Class of Device major Peripheral with the keyboard bit, which a keyboard/pointer combo has too; a LE device without a class by its HID keyboard appearance; BlueZ's `Icon` `input-keyboard`). Pads, headsets and mice pair as before. **The controller pairing window never pairs a keyboard** (RUY-411: the agent and the sweep treat a keyboard-class device as a stranger, refuse it and remove it if it bonded); a keyboard pairs only from Settings > Bluetooth, also when it is paired again after Forget. If the device leaves the list while the confirmation is open, the confirmation closes. The class is told by the remote device, so this is a speed bump for the user, not a defence against a spoofing device. The guided controller screen lists controllers only and is unchanged; the confirmation is on Settings > Bluetooth's device rows.
 - **What a new pad may do before a profile owns it** (ADR-017, ADR-027): navigate the profile picker and the "Who's playing?" dialog; inside a session it drives nothing until it is assigned (T-397 decides takeover rules). It never reaches a game as anything but a player slot of the signed-in profile. **Until T-264 and T-397** every connected pad counts as the signed-in profile's (today's behaviour), and RUY-3 gives each one a virtual pad for that profile; the ownership rules of §11.3 narrow that.
 
 ## 7. Profiles *(planned, T-369 global, T-370 game and platform)*
@@ -156,7 +156,7 @@ The **Confirm button** row lives in **Settings > Controllers** (the one Settings
 | T-367 / RUY-3 | `ruya-input` user and udev rules (§3), one Xbox 360-style virtual pad per physical pad for the signed-in profile, the ACL re-assert, routing states and `SetRoute` (§5.1-5.2), restart settings (§8.1), `Input1` devices and routing part, mock and client, a VM check and the Dell SuperTuxKart check |
 | RUY-409 | the shell calls `SetRoute` (§5.1-5.2); the Dell SuperTuxKart race |
 | RUY-410 | the compositor's emergency reader (§8.2) |
-| RUY-411 | Bluetooth: the bonded-only VM check and the keyboard-class confirmation (§6) |
+| RUY-411 | done: Bluetooth bonded-only VM check and the keyboard-class confirmation (§6) |
 | T-368 / RUY-39 | device list, capabilities (§4.3), the live button test; Settings > Controllers |
 | T-369 / RUY-42 | profiles v1: schema, validation, global profile, import/export, dead zones and curves |
 | T-370 / RUY-43 | game and platform profiles, resolution chain, the game page's Controller entry |

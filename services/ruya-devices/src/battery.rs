@@ -402,6 +402,7 @@ mod tests {
             name: name.to_owned(),
             device_name: name.to_owned(),
             kind,
+            keyboard: false,
             family,
             paired: true,
             bonded: true,

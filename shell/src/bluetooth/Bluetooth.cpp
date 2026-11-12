@@ -37,6 +37,7 @@ Bluetooth::Bluetooth(std::unique_ptr<BluetoothBackend> backend, QObject *parent)
                 {QStringLiteral("name"), d.name},
                 {QStringLiteral("deviceName"), d.deviceName},
                 {QStringLiteral("kind"), d.kind},
+                {QStringLiteral("keyboard"), d.keyboard},
                 {QStringLiteral("family"), d.family},
                 {QStringLiteral("paired"), d.paired},
                 {QStringLiteral("bonded"), d.bonded},

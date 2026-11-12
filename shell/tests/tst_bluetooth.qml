@@ -215,6 +215,87 @@ Item {
             tryVerify(() => find("btForget_bt-pad-new").visible, 2000, "it can be forgotten now")
         }
 
+        function inKeyboardConfirm(name) { return findChild(find("btKeyboardConfirm"), name) }
+
+        function scanForKeyboard() {
+            openBluetoothPane()
+            scan()
+            scan()
+            verify(!device("bt-keys-new"), "the keyboard needs a third scan")
+            scan()
+            tryVerify(() => device("bt-keys-new") !== undefined, 2000, "third scan finds the keyboard")
+            verify(device("bt-keys-new").keyboard, "it announces a keyboard class")
+            verify(!device("bt-pad-new").keyboard, "a pad does not")
+            verify(!device("bt-buds").keyboard, "a headset does not")
+            goTo("btDev_bt-keys-new")
+        }
+
+        // RUY-411: a keyboard-class device asks a second time; Cancel has focus, Back cancels.
+        function test_keyboard_asks_twice_back_cancels() {
+            scanForKeyboard()
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("btKeyboardConfirm").shown, 2000, "the second confirmation is up")
+            compare(inKeyboardConfirm("powerConfirmTitle").text, "This is a keyboard. Pair it?")
+            compare(inKeyboardConfirm("powerConfirmDetail").text, "Slim Keyboard could type anywhere on this console.")
+            tryVerify(() => inKeyboardConfirm("powerCancel").activeFocus, 2000, "Cancel has focus first")
+            compare(Bluetooth.mockPairCalls(), 0, "nothing paired yet")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !find("btKeyboardConfirm").shown, 2000)
+            tryVerify(() => find("btDev_bt-keys-new").activeFocus, 2000, "focus is back on the row")
+            compare(Bluetooth.mockPairCalls(), 0, "Back did not pair")
+            verify(!device("bt-keys-new").paired)
+        }
+
+        function test_keyboard_accept_pairs() {
+            scanForKeyboard()
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("btKeyboardConfirm").shown, 2000)
+            keyClick(Qt.Key_Right)
+            tryVerify(() => inKeyboardConfirm("powerConfirm").activeFocus)
+            compare(inKeyboardConfirm("powerConfirm").Accessible.name, "Pair Slim Keyboard")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => device("bt-keys-new").paired, 2000, "Accept pairs it")
+            tryVerify(() => find("btDev_bt-keys-new").activeFocus, 2000, "focus stays on the paired device")
+        }
+
+        // A keyboard bonded before the confirmation existed was never confirmed: Pair again asks too.
+        function test_pair_again_asks_for_a_keyboard() {
+            Bluetooth.mockPopulate()
+            tryVerify(() => device("bt-gallery-keyboard") !== undefined, 2000)
+            Bluetooth.mockSetBonded("bt-gallery-keyboard", false)
+            openBluetoothPane()
+            tryVerify(() => find("btRepair_bt-gallery-keyboard").visible, 2000)
+            goTo("btRepair_bt-gallery-keyboard")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("btKeyboardConfirm") !== null && find("btKeyboardConfirm").shown, 4000, "the repair asks")
+            compare(Bluetooth.mockPairCalls(), 0, "nothing paired before the answer")
+            tryVerify(() => inKeyboardConfirm("powerCancel").activeFocus)
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !find("btKeyboardConfirm").shown, 2000)
+            compare(Bluetooth.mockPairCalls(), 0, "Back did not pair")
+        }
+
+        function test_keyboard_confirmation_closes_when_the_device_leaves() {
+            scanForKeyboard()
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("btKeyboardConfirm").shown, 2000)
+            Bluetooth.setPowered(false)                  // the list empties
+            tryVerify(() => !find("btKeyboardConfirm").shown, 2000, "the confirmation closed")
+            tryVerify(() => find("paneBluetooth").activeFocus, 2000, "focus is back in the pane")
+            compare(Bluetooth.mockPairCalls(), 0)
+        }
+
+        function test_pad_pairs_without_a_second_confirmation() {
+            openBluetoothPane()
+            scan()
+            scan()
+            tryVerify(() => device("bt-pad-new") !== undefined, 2000)
+            goTo("btDev_bt-pad-new")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => device("bt-pad-new").paired, 2000)
+            verify(find("btKeyboardConfirm") === null || !find("btKeyboardConfirm").shown)
+        }
+
         function test_failed_pairing_keeps_focus() {
             openBluetoothPane()
             scan()
@@ -967,6 +1048,18 @@ Item {
             grabImage(tc.shell)                          // the first grab of a window makes it lay the pane out
             wait(600)
             grabImage(tc.shell).save(shotsDir + "/bt-pair-again.png")
+        }
+
+        function test_zz_keyboard_confirmation_screenshot() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            scanForKeyboard()
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("btKeyboardConfirm").shown, 2000)
+            wait(600)
+            grabImage(tc.shell)                          // the first grab of a window makes it lay the pane out
+            wait(600)
+            grabImage(tc.shell).save(shotsDir + "/bt-keyboard-confirm.png")
         }
 
         // T-199: the pane with a device of every kind and family, and a toast that names a device.

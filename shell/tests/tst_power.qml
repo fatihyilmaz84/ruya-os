@@ -148,10 +148,17 @@ Item {
             tryVerify(() => !dialog.shown)
             dialog.customConfirmName = "Roll back now"
             dialog.open("custom")
+            compare(find("powerConfirm").color, Theme.dangerFill, "a custom confirm is danger-red by default")
             compare(label.text, "Roll back now")
             compare(find("powerConfirm").Accessible.name, "Roll back now")
             dialog.cancel()
             tryVerify(() => !dialog.shown)
+            dialog.customDestructive = false
+            dialog.open("custom")
+            compare(find("powerConfirm").color, Theme.glass, "a non-destructive custom confirm is the neutral pill")
+            dialog.cancel()
+            tryVerify(() => !dialog.shown)
+            dialog.customDestructive = true
         }
 
         // The Turkish labels are the action too; the same text is the name.

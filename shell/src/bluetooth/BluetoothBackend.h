@@ -13,6 +13,8 @@ struct BtDevice
     QString deviceName; // what it calls itself (BlueZ's Name, the model); "" when it told none (T-300)
     // "controller" | "headset" | "speaker" | "keyboard" | "mouse" | "phone" | "other"
     QString kind = QStringLiteral("other");
+    // The device announces a keyboard class (RUY-411): pairing it needs a second confirmation.
+    bool keyboard = false;
     // "playstation" | "xbox" | "nintendo" | "8bitdo" for a controller the service can place, else ""
     QString family;
     bool paired = false;
