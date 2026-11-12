@@ -405,6 +405,8 @@ Item {
             card.focused = true         // the glare and the halo exist on the focused card only (T-428)
             smoothEdge(findChild(card, "glareEffect"), "the glare")
             const shadow = findChild(card, "cardLiftShadow")
+            // The effects exist only while the shadow is drawn (T-430): once it starts to fade in.
+            tryVerify(() => shadow.visible, 2000, "the lift shadow is drawn")
             for (const name of ["shadowEffect", "haloEffect"]) {
                 const cut = findChild(shadow, name)
                 smoothEdge(cut, name)

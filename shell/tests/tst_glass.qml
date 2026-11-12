@@ -24,6 +24,7 @@ Item {
             Rectangle { anchors.fill: parent; radius: 32; color: Theme.glass }
         }
     }
+    Component { id: holderComponent; Item { width: 400; height: 225 } }
     Component { id: sheetComponent; GlassSheet { width: 400; height: 240; shown: true } }
     Component { id: rowComponent; SettingControl { width: 600; label: "Row" } }
     Component { id: placeholderComponent; Item { width: 800; height: 400; ComingSoon {} } }
@@ -149,7 +150,10 @@ Item {
             const s = createTemporaryObject(shadowComponent, host)
             compare(s.shown, data.shown)
             tryCompare(s, "visible", data.shown)
-            compare(findChild(s, "shadowEffect").visible, data.shown)
+            // The effect exists only while the shadow is drawn (T-430): none on Performance.
+            compare(findChild(s, "shadowEffect") !== null, data.shown)
+            if (data.shown)
+                compare(findChild(s, "shadowEffect").visible, true)
         }
 
         function test_shadow_numbers_follow_the_kind() {
@@ -334,6 +338,44 @@ Item {
                 compare(mask.layer.enabled, false)
                 compare(blur.maskSource, null, "opening " + opening + ": the blur lets go of the layer with it")
             }
+        }
+
+        // T-430: the T-387 class in GlassShadow. Its layers (`box`, `cutout`) are on only while the
+        // shadow is drawn; a pill hidden behind an app and shown again turned them off and on under the
+        // same MultiEffect with an unchanged `source`/`maskSource`, and on a GPU the shadow was gone
+        // (owner report 2026-11-12; the Dell logs "Texture t7 is not assigned a valid texture provider").
+        // Now the effects exist only while the layers are on: every showing makes them anew over the
+        // new layers. The pixels are in `shots` (TopBarShadow::test_zz_pill_shadow_comes_back).
+        function test_shadow_effects_are_made_anew_on_every_showing() {
+            const holder = createTemporaryObject(translucentComponent, host)
+            const shadow = holder.children[0]
+            let previous = null
+            for (let round = 1; round <= 2; ++round) {
+                tryVerify(() => shadow.visible, 2000, "round " + round + ": drawn")
+                const fx = findChild(shadow, "shadowEffect")
+                verify(fx !== null, "round " + round + ": the effect exists while the shadow is drawn")
+                verify(fx !== previous, "round " + round + ": a new effect, not the one from before the hide")
+                verify(fx.maskSource.layer.enabled, "round " + round + ": the cutout's layer is on")
+                verify(fx.source.layer.enabled, "round " + round + ": the box's layer is on")
+                previous = fx
+                holder.visible = false
+                compare(fx.maskSource.layer.enabled, false, "round " + round + ": hidden, the layers are off")
+                verify(!findChild(shadow, "shadowLoader").active, "round " + round + ": and no effect samples them")
+                tryVerify(() => findChild(shadow, "shadowEffect") === null, 2000, "round " + round + ": the effect is gone")
+                holder.visible = true
+            }
+            // The halo of a focused card's lift shadow (High tier) goes and comes back the same way.
+            const card = createTemporaryObject(cardComponent, host, { picture: artFixtures + "/red.png" })
+            card.focused = true
+            tryVerify(() => findChild(card, "haloEffect") !== null, 3000, "the focused card has a halo")
+            const halo = findChild(card, "haloEffect")
+            card.visible = false
+            verify(!findChild(card, "haloLoader").active, "a hidden card holds no halo")
+            tryVerify(() => findChild(card, "haloEffect") === null, 2000)
+            card.visible = true
+            tryVerify(() => findChild(card, "haloEffect") !== null, 2000, "shown again: a halo")
+            verify(findChild(card, "haloEffect") !== halo, "a new one, over the new layers")
+            verify(findChild(card, "haloEffect").maskSource.layer.enabled)
         }
 
         // --- card focus ------------------------------------------------------------------------
@@ -559,6 +601,111 @@ Item {
             const gleam = findChild(art, "artShimmer")
             tryVerify(() => gleam.x > art.width * 0.3 && gleam.x < art.width * 0.6, 3000)
             grabImage(stage).save(shotsDir + "/glass-placeholder.png")
+            stage.visible = false
+        }
+
+        // T-430 probe of the T-387 class for AppArt (GPU): a rounded picture whose card is hidden (an
+        // app in front, a page closed) and shown again turns both its layers off and on. The picture's
+        // own layer makes its SmoothMask anew each time, so the mask is handed over fresh: the picture
+        // must come back exactly as it was (the centre is the picture, the corner outside the rounding
+        // is the stage).
+        function artSamples(art) {
+            const img = grabImage(stage)
+            const at = art.mapToItem(stage, 0, 0)
+            const pick = (x, y) => [img.red(Math.round(x), Math.round(y)), img.green(Math.round(x), Math.round(y)),
+                                    img.blue(Math.round(x), Math.round(y))]
+            const out = [[0.5, 0.5], [0.2, 0.3], [0.8, 0.7], [0.5, 0.95]].map(p => pick(at.x + art.width * p[0], at.y + art.height * p[1]))
+            const c = art.radius * 0.25       // inside the rounded-off corner: the stage
+            out.push(pick(at.x + c, at.y + c))
+            out.push(pick(at.x + art.width - c, at.y + art.height - c))
+            return { img: img, samples: out }
+        }
+
+        function test_zz_art_mask_after_a_hide() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            stage.visible = true
+            const holder = createTemporaryObject(holderComponent, stage, { x: 60, y: 120 })
+            const art = createTemporaryObject(artComponent, holder, { width: 400, height: 225, appId: "white",
+                                                                     appName: "White", picture: artFixtures + "/white.png" })
+            verify(art.masked, "the GPU path: the picture is drawn through the mask")
+            tryCompare(art, "imageStatus", Image.Ready, 3000)
+            waitForRendering(stage)
+            wait(200)
+            const fresh = artSamples(art)
+            fresh.img.save(shotsDir + "/glass-art-mask-fresh.png")
+            verify(fresh.samples[0][0] > 200 && fresh.samples[0][1] > 200, "the white picture shows: " + JSON.stringify(fresh.samples[0]))
+            for (let round = 1; round <= 2; ++round) {
+                holder.visible = false
+                waitForRendering(stage)
+                wait(300)
+                holder.visible = true
+                waitForRendering(stage)
+                wait(200)
+                const again = artSamples(art)
+                if (round === 2)
+                    again.img.save(shotsDir + "/glass-art-mask-again.png")
+                let d = 0
+                for (let i = 0; i < again.samples.length; ++i)
+                    for (let ch = 0; ch < 3; ++ch)
+                        d = Math.max(d, Math.abs(again.samples[i][ch] - fresh.samples[i][ch]))
+                verify(d <= 2, "round " + round + ": the picture is as before (max channel difference " + d + "): "
+                       + JSON.stringify(fresh.samples) + " vs " + JSON.stringify(again.samples))
+            }
+            stage.visible = false
+        }
+
+        // T-430 (GPU): a focused card's lift shadow and its halo after the card was hidden and shown
+        // again (a page behind an app, then back): the same pixels around the card as before. The
+        // samples lie left of and below the card, outside it, where only the shadow and halo draw.
+        function cardShadowSamples(card) {
+            const img = grabImage(stage)
+            const at = card.mapToItem(stage, 0, 0)
+            const out = []
+            for (const p of [[-12, 0.5], [-30, 0.5], [-50, 0.3]])
+                out.push([Math.round(at.x + p[0]), Math.round(at.y + card.height * p[1])])
+            for (const p of [[0.3, 10], [0.5, 25], [0.7, 45]])
+                out.push([Math.round(at.x + card.width * p[0]), Math.round(at.y + card.height + p[1])])
+            return { img: img, samples: out.map(q => [img.red(q[0], q[1]), img.green(q[0], q[1]), img.blue(q[0], q[1])]) }
+        }
+
+        function test_zz_card_shadow_after_a_hide() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            failOnWarning(/is not assigned a valid texture provider/)
+            stage.visible = true
+            const holder = createTemporaryObject(holderComponent, stage, { x: 300, y: 150 })
+            const card = createTemporaryObject(cardComponent, holder, { width: 400, picture: artFixtures + "/red.png" })
+            card.focused = true
+            const shadow = findChild(card, "cardLiftShadow")
+            tryVerify(() => findChild(card, "haloEffect") !== null && shadow.opacity === 1 && shadow.glowMix === 1, 3000,
+                      "the glowing shadow and its halo are up")
+            tryCompare(glareAnim(card), "running", false, 2000)
+            waitForRendering(stage)
+            wait(300)
+            const fresh = cardShadowSamples(card)
+            fresh.img.save(shotsDir + "/glass-card-shadow-fresh.png")
+            holder.visible = false
+            waitForRendering(stage)
+            wait(300)
+            const none = cardShadowSamples(card)
+            holder.visible = true
+            tryVerify(() => findChild(card, "haloEffect") !== null, 2000)
+            waitForRendering(stage)
+            wait(300)
+            const again = cardShadowSamples(card)
+            again.img.save(shotsDir + "/glass-card-shadow-again.png")
+            let seen = 0
+            let d = 0
+            for (let i = 0; i < fresh.samples.length; ++i) {
+                for (let ch = 0; ch < 3; ++ch) {
+                    seen = Math.max(seen, Math.abs(none.samples[i][ch] - fresh.samples[i][ch]))
+                    d = Math.max(d, Math.abs(again.samples[i][ch] - fresh.samples[i][ch]))
+                }
+            }
+            verify(seen >= 8, "the samples lie in the shadow and halo (difference to no card " + seen + ")")
+            verify(d <= 3, "the shadow and halo are back as before (max channel difference " + d + "): "
+                   + JSON.stringify(fresh.samples) + " vs " + JSON.stringify(again.samples))
             stage.visible = false
         }
     }
