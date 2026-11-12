@@ -150,7 +150,7 @@ Item {
             compare(sessionSpy.signalArguments[0][2], "unknown-app")
             tryCompare(Notifications, "shownCount", shown + 1)
             const toast = Notifications.model.get(Notifications.model.count - 1)
-            compare(toast.text, "Portal 2 could not be started. Try again.")
+            compare(toast.text, "Portal 2 could not start")
             compare(toast.kind, "error")
             compare(Session.running.length, 0)
         }

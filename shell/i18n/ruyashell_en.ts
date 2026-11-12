@@ -1181,17 +1181,27 @@ This can&apos;t be undone.</translation>
 <context>
     <name>ControllerToasts</name>
     <message>
-        <location filename="../qml/ControllerToasts.qml" line="+120"/>
-        <source>%1 connected · battery %2%</source>
-        <translation>%1 connected · battery %2%</translation>
+        <location filename="../qml/ControllerToasts.qml" line="+123"/>
+        <source>Battery %1%</source>
+        <translation>Battery %1%</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+2"/>
+        <source>Bluetooth</source>
+        <translation>Bluetooth</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>USB</source>
+        <translation>USB</translation>
+    </message>
+    <message>
+        <location line="+2"/>
         <source>%1 connected</source>
         <translation>%1 connected</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+7"/>
         <source>%1 disconnected</source>
         <translation>%1 disconnected</translation>
     </message>
@@ -3076,17 +3086,29 @@ This can&apos;t be undone.</translation>
         <translation>Sound moved to %1</translation>
     </message>
     <message>
-        <location line="+19"/>
-        <source>Restarting to finish the update in 2 minutes. Press any button to wait.</source>
-        <translation>Restarting to finish the update in 2 minutes. Press any button to wait.</translation>
-    </message>
-    <message>
-        <location line="+37"/>
+        <location line="+56"/>
         <source>%1 is still closing.</source>
         <translation>%1 is still closing.</translation>
     </message>
     <message>
-        <location line="+248"/>
+        <location line="+72"/>
+        <location line="+30"/>
+        <source>%1 could not start</source>
+        <translation>%1 could not start</translation>
+    </message>
+    <message>
+        <location line="-30"/>
+        <location line="+30"/>
+        <source>Try again.</source>
+        <translation>Try again.</translation>
+    </message>
+    <message>
+        <location line="-1"/>
+        <source>%1 stopped unexpectedly</source>
+        <translation>%1 stopped unexpectedly</translation>
+    </message>
+    <message>
+        <location line="+147"/>
         <source>Could not close %1.</source>
         <translation>Could not close %1.</translation>
     </message>
@@ -3179,28 +3201,32 @@ This can&apos;t be undone.</translation>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location line="-1189"/>
+        <location line="-1296"/>
+        <source>Restarting in 2 minutes</source>
+        <translation>Restarting in 2 minutes</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>To finish the update</source>
+        <translation>To finish the update</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Press any button to wait</source>
+        <translation>Press any button to wait</translation>
+    </message>
+    <message>
+        <location line="+106"/>
         <source>%1 is already running</source>
         <translation>%1 is already running</translation>
     </message>
     <message>
-        <location line="+3"/>
-        <location line="+30"/>
-        <source>%1 could not be started. Try again.</source>
-        <translation>%1 could not be started. Try again.</translation>
-    </message>
-    <message>
-        <location line="-23"/>
+        <location line="+10"/>
         <source>The game could not be closed. Try again.</source>
         <translation>The game could not be closed. Try again.</translation>
     </message>
     <message>
-        <location line="+22"/>
-        <source>%1 stopped unexpectedly. Try again.</source>
-        <translation>%1 stopped unexpectedly. Try again.</translation>
-    </message>
-    <message>
-        <location line="+39"/>
+        <location line="+61"/>
         <location line="+107"/>
         <source>Running app</source>
         <translation>Running app</translation>
@@ -4411,24 +4437,37 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+10"/>
-        <source>Controller battery low (%1%)</source>
-        <translation>Controller battery low (%1%)</translation>
-    </message>
-    <message numerus="yes">
-        <location line="+12"/>
-        <source>Drive inserted: %1 (and %n more)</source>
-        <translation>
-            <numerusform>Drive inserted: %1 (and %n more)</numerusform>
-            <numerusform>Drive inserted: %1 (and %n more)</numerusform>
-        </translation>
+        <source>Controller battery low</source>
+        <translation>Controller battery low</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>Drive inserted: %1</source>
-        <translation>Drive inserted: %1</translation>
+        <source>%1 · %2%</source>
+        <translation>%1 · %2%</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+10"/>
+        <source>Drive inserted</source>
+        <translation>Drive inserted</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+1"/>
+        <source>%1 (and %n more)</source>
+        <translation>
+            <numerusform>%1 (and %n more)</numerusform>
+            <numerusform>%1 (and %n more)</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+244"/>
+        <source>%n more</source>
+        <translation>
+            <numerusform>%n more</numerusform>
+            <numerusform>%n more</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="-239"/>
         <source>Safe to remove</source>
         <translation>Safe to remove</translation>
     </message>

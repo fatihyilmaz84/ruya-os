@@ -29,6 +29,14 @@ lan eb2f
 smartphone e7ba
 monitoring f190
 power_settings_new f8c7
+info e88e
+check_circle f0be
+warning f083
+error f8b6
+usb e1e0
+restart_alt f053
+system_update f2cd
+notifications e7f5
 # Our own glyphs (T-199, scripts/add-pad-glyphs.py): the name, a private-use code point Material does
 # not use, and the word ruya. They are drawn, not downloaded.
 pad_playstation e005 ruya

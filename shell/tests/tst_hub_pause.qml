@@ -646,7 +646,7 @@ Item {
             tc.shell.launchApp("crashy", "Crashy", "")
             const app = createTemporaryObject(appComponent, host, { appId: "crashy" })
             tc.shell.addApp(app, "p2")                       // its window comes, and the game dies
-            tryVerify(() => toastTexts().includes("crashy stopped unexpectedly. Try again."), 3000)
+            tryVerify(() => toastTexts().includes("crashy stopped unexpectedly"), 3000)
             tc.shell.removeApp(app)
             app.destroy()
             tryVerify(() => !tc.shell.appOpen, 2000, "Home shows, not the frozen game")
@@ -662,7 +662,7 @@ Item {
             tc.shell.launchApp("nolaunch", "No Launch", "")
             tryVerify(() => find("launchSplash").shown)
             tryCompare(find("launchSplash"), "shown", false)
-            tryVerify(() => toastTexts().includes("No Launch could not be started. Try again."), 2000)
+            tryVerify(() => toastTexts().includes("No Launch could not start"), 2000)
             verify(!tc.shell.appOpen, "Home shows")
             wait(100)
             verify(recordOf(racer.instance).frozen, "the game is still frozen")

@@ -12,7 +12,7 @@ QtObject {
     readonly property int maxVisible: 3
     property int durationMs: Theme.toastMs          // overridable (tests use a short one)
 
-    // Toasts on screen, oldest first: { toastId, text, kind, iconText, iconName, sticky, key }.
+    // Toasts on screen, oldest first: { toastId, text, kind, iconText, iconName, detail, footer, footerButton, sticky, key }.
     readonly property ListModel model: ListModel {}
     readonly property int pendingCount: pending.length
     readonly property int shownCount: shown        // toasts that have appeared, ever
@@ -36,6 +36,7 @@ QtObject {
             if (eligible(t.kind))
                 continue
             back.unshift({ text: t.text, kind: t.kind, iconText: t.iconText, iconName: t.iconName,
+                           detail: t.detail, footer: t.footer, footerButton: t.footerButton,
                            sticky: t.sticky, key: t.key })
             model.remove(i)
         }
@@ -56,20 +57,25 @@ QtObject {
 
     // kind: "info" | "success" | "warning" | "error". iconText is a character drawn in the toast's colour;
     // iconName (T-199) is the name of a glyph of the icon font (Icon.qml) drawn instead, e.g. the
-    // icon of the device the toast is about (DeviceIcons.iconFor).
-    function show(text, kind, iconText, iconName) {
+    // icon of the device the toast is about (DeviceIcons.iconFor). `text` is the title (one line, the
+    // fact); `detail` (RUY-412) is an optional second line. Both are drawn as plain text.
+    function show(text, kind, iconText, iconName, detail) {
         const k = ["info", "success", "warning", "error"].includes(kind) ? kind : "info"
         pending = pending.concat([{ text: text, kind: k, iconText: iconText ?? "", iconName: iconName ?? "",
+                                    detail: detail ?? "", footer: "", footerButton: "",
                                     sticky: false, key: "" }])
         promote()
     }
 
     // A toast that does not dismiss itself; it stays until remove(key). One per key: showing
-    // the same key again replaces the earlier one.
-    function showSticky(key, text, kind, iconText) {
+    // the same key again replaces the earlier one. `footer` is an instruction line under the text;
+    // `footerButton` ("A", "B", ...) draws that button's glyph before it.
+    function showSticky(key, text, kind, iconText, detail, footer, footerButton) {
         remove(key)
         const k = ["info", "success", "warning", "error"].includes(kind) ? kind : "info"
-        pending = pending.concat([{ text: text, kind: k, iconText: iconText ?? "", iconName: "", sticky: true, key: key }])
+        pending = pending.concat([{ text: text, kind: k, iconText: iconText ?? "", iconName: "",
+                                    detail: detail ?? "", footer: footer ?? "", footerButton: footerButton ?? "",
+                                    sticky: true, key: key }])
         promote()
     }
 
@@ -103,7 +109,8 @@ QtObject {
             const next = pending[at]
             pending = pending.slice(0, at).concat(pending.slice(at + 1))
             model.append({ toastId: nextId++, text: next.text, kind: next.kind, iconText: next.iconText,
-                           iconName: next.iconName, sticky: next.sticky, key: next.key })
+                           iconName: next.iconName, detail: next.detail, footer: next.footer,
+                           footerButton: next.footerButton, sticky: next.sticky, key: next.key })
             shown += 1
             // The cue says how much attention it wants: a sticky or warning toast has its own.
             if (next.sticky || next.kind === "warning" || next.kind === "error")
