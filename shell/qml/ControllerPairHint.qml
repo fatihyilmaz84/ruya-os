@@ -44,6 +44,10 @@ Item {
           steps: qsTr("Hold its pairing button until the light blinks. Pick the Bluetooth mode if it has several.") }
     ]
 
+    // An Xbox 360 pad with its wireless receiver (RUY-154) pairs by the buttons, not by Bluetooth:
+    // the pad then shows up as an ordinary Xbox controller. Shown under the Xbox steps.
+    readonly property string receiverSteps: qsTr("Xbox 360 pad with a wireless receiver: press the sync button on the receiver, then on the controller.")
+
     function titleFor(family) {
         return family === "" ? qsTr("Other controller") : DeviceIcons.kindText("controller", family)
     }
@@ -242,6 +246,17 @@ Item {
                     }
                 }
             }
+        }
+        Text {
+            objectName: hint.objectName + "Receiver"
+            width: hint.width
+            visible: hint.showFamilies && !hint.succeeded
+            wrapMode: Text.Wrap
+            text: hint.receiverSteps
+            color: Theme.textDim
+            font.pixelSize: Theme.typeCaption * hint.u
+            Accessible.role: Accessible.StaticText
+            Accessible.name: text
         }
         Text {
             objectName: hint.objectName + "Ignored"

@@ -1016,7 +1016,7 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+36"/>
-        <location line="+166"/>
+        <location line="+178"/>
         <source>Other</source>
         <translation>Diğer</translation>
     </message>
@@ -1109,7 +1109,12 @@ Bu geri alınamaz.</translation>
         <translation>Işık yanıp sönene kadar eşleştirme düğmesini basılı tutun. Birkaç kipi varsa Bluetooth kipini seçin.</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+5"/>
+        <source>Xbox 360 pad with a wireless receiver: press the sync button on the receiver, then on the controller.</source>
+        <translation>Kablosuz alıcılı Xbox 360 kontrolcüsü: önce alıcıdaki, sonra kontrolcüdeki eşleştirme düğmesine basın.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
         <source>Other controller</source>
         <translation>Diğer kontrolcü</translation>
     </message>
@@ -1149,7 +1154,7 @@ Bu geri alınamaz.</translation>
         <translation>Kontrolcü ya da klavye bulunamadı. Kontrolcünüzün ışığı yanıp sönene kadar eşleştirme düğmesini basılı tutun (DualSense&apos;te: PS + Create).</translation>
     </message>
     <message>
-        <location line="+173"/>
+        <location line="+184"/>
         <source>A device that is not a controller tried to connect and was ignored.</source>
         <translation>Kontrolcü olmayan bir cihaz bağlanmaya çalıştı ve yok sayıldı.</translation>
     </message>

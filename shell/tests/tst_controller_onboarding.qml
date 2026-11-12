@@ -265,6 +265,56 @@ Item {
             compare(onb.modalHints.length, 2)
         }
 
+        // RUY-154: the sync-button guidance for an Xbox 360 pad with its wireless receiver shows
+        // with the Xbox steps only, and follows the language.
+        function test_the_xbox_360_receiver_guidance_shows_with_the_xbox_steps() {
+            onb.open()
+            tryVerify(() => onb.shown)
+            tryCompare(onb, "opacity", 1)
+            verify(chip("playstation").activeFocus)
+            verify(find("onboardingSteps").visible)
+            verify(!find("onboardingReceiverSteps").visible, "not under the PlayStation steps")
+            keyClick(Qt.Key_Right)
+            verify(chip("xbox").activeFocus)
+            compare(onb.family, "xbox")
+            verify(find("onboardingReceiverSteps").visible)
+            compare(find("onboardingReceiverSteps").text, "Xbox 360 pad with a wireless receiver: press the sync button on the receiver, then on the controller.")
+            keyClick(Qt.Key_Right)
+            verify(chip("nintendo").activeFocus)
+            verify(!find("onboardingReceiverSteps").visible)
+            keyClick(Qt.Key_Left)
+            DeviceSettings.language = "tr"
+            compare(find("onboardingReceiverSteps").text, "Kablosuz alıcılı Xbox 360 kontrolcüsü: önce alıcıdaki, sonra kontrolcüdeki eşleştirme düğmesine basın.")
+        }
+
+        // RUY-154: two Xbox 360 pads behind one receiver are announced one by one under the
+        // driver's plain name; unplugging the receiver removes both, and the receiver itself is
+        // never announced (the service sends one event per pad and none for the dongle).
+        function test_pads_behind_an_xbox_360_receiver_come_and_go_without_a_receiver_toast() {
+            usb(true, "usb-1/input0", "Xbox 360 Controller", "xbox")
+            usb(true, "usb-1/input2", "Xbox 360 Controller", "xbox")
+            tryCompare(toasts, "connectedShown", 2)
+            const texts = toastTexts()
+            compare(texts.length, 2)
+            for (const t of texts) {
+                verify(t.indexOf("Xbox 360 Controller") >= 0 || t.indexOf("Xbox controller") >= 0, t)
+                verify(t.indexOf("connected") >= 0 && t.indexOf("battery 60%") >= 0, t)
+                verify(t.toLowerCase().indexOf("receiver") < 0, "no toast for the receiver: " + t)
+            }
+            compare(Notifications.model.get(0).iconName, "pad_xbox")
+            clearToasts()
+            toasts.noteInput()
+            usb(false, "usb-1/input2", "Xbox 360 Controller", "xbox")
+            tryCompare(toasts, "disconnectedShown", 1)
+            verify("usb-1/input0" in toasts.shown, "the other pad stays known")
+            // The receiver unplugged: the last pad goes, one toast, not a toast per dongle.
+            clearToasts()
+            usb(false, "usb-1/input0", "Xbox 360 Controller", "xbox")
+            tryCompare(toasts, "disconnectedShown", 2)
+            compare(toastTexts().length, 1)
+            verify(!("usb-1/input0" in toasts.shown) && !("usb-1/input2" in toasts.shown), "no stale pads")
+        }
+
         function test_B_closes_the_screen_and_the_window_and_gives_the_focus_back() {
             Bluetooth.mockPairingScript("wait")
             opener.forceActiveFocus()
