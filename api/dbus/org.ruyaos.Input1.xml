@@ -111,6 +111,33 @@
       <arg name="instance" type="s"/>
     </signal>
 
+    <!-- UI ownership and the active input (T-397..T-399, 06 §11). A foreign pad's press while a
+         profile is signed in: `kind` is "press" (first press per pad and session, for the toast),
+         "guide" (switch / Who's playing) or "takeover" (every owner pad is gone). -->
+    <signal name="ForeignInput">
+      <arg name="device_id" type="s"/>
+      <arg name="kind" type="s"/>
+    </signal>
+    <!-- Make a pad an owner pad of the console profile ("" releases it). -->
+    <method name="AssignPad">
+      <arg name="device_id" type="s" direction="in"/>
+      <arg name="profile" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
+    <!-- The device of the last press among the owner pads (06 §11.4); family as in the device
+         record. The keyboard is the shell's own knowledge, not reported here. -->
+    <signal name="ActiveInputChanged">
+      <arg name="device_id" type="s"/>
+      <arg name="family" type="s"/>
+    </signal>
+    <!-- mode: "family" (as on the controller, default) | "south" | "east" (06 §11.2). -->
+    <method name="SetConfirmButton">
+      <arg name="profile" type="s" direction="in"/>
+      <arg name="mode" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
+    <property name="ConfirmButton" type="s" access="read"/>
+
     <!-- Controller profiles (T-369, T-370), stored per console profile. -->
     <method name="ListProfiles">
       <arg name="profile" type="s" direction="in"/>

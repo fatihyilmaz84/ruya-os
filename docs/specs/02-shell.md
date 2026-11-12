@@ -160,14 +160,16 @@ Token values per tier (`Theme.qml`): `blurMax` is 64 / 32 / 0, and the glass `Mu
 Physical pad → input daemon (ADR-003) → shell. While the shell has input focus, the daemon emits navigation as key events (Up/Down/Left/Right, Accept, Back, Menu, Guide, LB/RB, LT/RT) to the compositor's seat. While an app is focused, only **Guide** (and the volume keys) reach the shell. As built (T-150): the C++ `KeyRouter` (event filter on the window, `shell/src/input/`) takes the Guide keys, including Super and the Guide hold, from a focused app item and hands them to the shell; the volume keys are application shortcuts matched before any key event; every other key reaches the app by normal focus delivery (the router counts focus on the app item or any item inside it). In the image (T-130) the app items are `ShellSurfaceItem`s, one per xdg toplevel, which forward the keys they get to their Wayland client. `KeyRouter.isGuideKey` is the one definition of which keys are Guide. Keyboard and mouse go through libinput and the compositor as normal.
 
 ### 4.2 Mapping
-| Action | Xbox | PlayStation | Keyboard |
-|---|---|---|---|
-| Accept | A | ✕ (configurable to ○ for JP layout) | Enter |
-| Back | B | ○ | Esc / Backspace |
-| Context menu | Menu (☰) | Options | `M` / context key |
-| Guide / overlay | Xbox | PS | `Super` (left or right; holding it opens the power choices) |
-| Tab switch | LB/RB | L1/R1 | `Q`/`E`, PgUp/PgDn |
-| Fast scroll | LT/RT, stick held | L2/R2 | Home/End |
+| Action | Xbox / generic | PlayStation | Nintendo | Keyboard |
+|---|---|---|---|---|
+| Accept | A | ✕ (○ with "Confirm button: right", the JP layout) | A (right) | Enter |
+| Back | B | ○ | B (bottom) | Esc / Backspace |
+| Context menu | Menu (☰) | Options | + | `M` / context key |
+| Guide / overlay | Xbox | PS | Home | `Super` (left or right; holding it opens the power choices) |
+| Tab switch | LB/RB | L1/R1 | L/R | `Q`/`E`, PgUp/PgDn |
+| Fast scroll | LT/RT, stick held | L2/R2 | ZL/ZR | Home/End |
+
+**Target (ADR-027, T-398; the full table, the action names and the Settings > Controllers "Confirm button" row are [06 §11](06-input.md)).** The family decides Accept and Back, per event in the input service, never in QML. **As built today** `ruya-inputd` maps by position for every family (south = Accept, east = Back), so a Nintendo pad's A is Back until T-398.
 
 As built (T-179): the singleton `BackKey` (`shell/qml/BackKey.qml`) is the one definition of which keys are Back. `BackKey.isBackOrBackspace(key)` (Back, Esc, Backspace) is what pages, Settings panes, the section nav, the setup wizard, the Guide overlay and the confirm dialogs use. The text fields (`TextEntry`, `PinPad`) use `BackKey.isBack(key)` (Back, Esc) only, because there Backspace deletes a character and never goes back. Back acts on every key event, as Esc always did; it does not filter auto-repeat.
 
@@ -180,7 +182,7 @@ As built (T-179): the singleton `BackKey` (`shell/qml/BackKey.qml`) is the one d
 - Key repeat on hold: 400 ms delay, then accelerating repeat. The analog stick maps to the same, with speed proportional to deflection.
 - Long-press (≥ 500 ms) on Accept opens the context menu, with a visible progress ring.
 - Modal dialogs trap focus. The PIN pad accepts only digits, Back and Accept. While its profile is locked out the digits, Del and OK are dimmed and ignored, and the only message is the countdown; the pad works again when it reaches 0.
-- On the profile picker, any controller may act. After login, the logged-in profile's controller is "player 1".
+- On the profile picker, any controller may act. After login, the logged-in profile's controller is "player 1". **Target (ADR-027, T-397):** after sign-in only the active profile's **owner pads** and the keyboard navigate; another pad's press does nothing but a one-time toast, its Guide offers "Switch to <profile>?" or "Who's playing?", and when every owner pad is gone the next pad's press offers the takeover (Accept; the PIN first on a PIN-protected profile; never by an idle timeout). The states table is [06 §11.3](06-input.md). As built, every pad navigates.
 - **Hint bar (T-158).** One `HintBar` in the shell's top layer says what the buttons do on the screen on top. The screen supplies the hints: a page through `Page.hints` (default `A` Select, `B` Back; a page may override it), Home `A` Select and one `LB RB` Sections hint (two glyphs, one verb), the setup wizard its own hints (`Setup.hints`: `A` Next, or Select on the profile step, `B` Back except on the first and last step; `B` Cancel over its PIN pad (its keyboard supplies its own hint, below); `B` Skip, with `A` Try again after a timeout, on the controller pairing stage), a page with nothing to select (placeholder pages and categories without a pane) only `B` Back (`Page.backOnlyHints`); Settings > About and System information show `B` Back only while a read-only row has focus and `A` Select on the rows that act (the System information row, Save report, Include network addresses), the quick menu `A` Select and `B` Resume over an app, `B` Close without one (`B` Back in the power choices), the launch splash nothing (`A` Close, `B` Close once it offers Close), a modal whose focus is in the modal layer or the picker's PIN pad `B` Cancel (the on-screen keyboard supplies its own hints as `TextEntry.entryHints`, T-194, T-285: `A` Type, `B` Delete while a controller's Back would delete a letter and `B` Cancel when the field is empty, `Start` Done; after typing on a physical keyboard `A` goes, since Enter finishes), the picker `A` Select. A modal in the modal layer that takes Accept declares `modalHints` (`A` Select, `B` Cancel): the wallpaper and mode pickers, the zone chooser, `PowerConfirm` and the uninstall confirmation; the Power saving pane (all `ChoiceRow`s) says `Left/Right` Change, and the Activity charts `Left/Right` Browse while a chart row has focus (the glyph is a pill with that word, as the bar has no D-pad glyph). It is hidden while an app is focused (a Guide overlay over an app still shows its own), never takes focus, and on Home sits under the Recent row.
 - The pointer is shown only after mouse movement and hidden after 3 s idle.
 

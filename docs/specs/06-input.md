@@ -104,9 +104,43 @@ The spike proved the restart path (§1); the emergency reader is not built yet, 
 The input path stays event-driven (one thread per source node, no polling). The service counts, per device, events in and out and the time from the kernel timestamp of the source event to the write of the output event (`CLOCK_MONOTONIC` on both sides), and logs `ruya-inputd: latency <device> n=<n> p50=<us> p99=<us> max=<us>` every 60 s while `RUYA_INPUT_TRACE=1`. Budget: added latency p99 ≤ 1 ms (measured today: p90 126 µs).
 
 ## 10. The contract
-`org.ruyaos.Input1` (draft, [`api/dbus/org.ruyaos.Input1.xml`](../../api/dbus/org.ruyaos.Input1.xml)): devices and capabilities (T-367/T-368), the live button test (T-368), routing (T-367), profiles and assignments (T-369/T-370), ownership modes (T-371). Internal (shell and root): apps reach input only as evdev virtual devices (the public raw surface, `docs/developers/controller-input.md`) and, later, semantic actions through `Platform1` (T-374, ADR-022).
+`org.ruyaos.Input1` (draft, [`api/dbus/org.ruyaos.Input1.xml`](../../api/dbus/org.ruyaos.Input1.xml)): devices and capabilities (T-367/T-368), the live button test (T-368), routing (T-367), UI ownership and the active input (T-397..T-399, §11), profiles and assignments (T-369/T-370), ownership modes (T-371). Internal (shell and root): apps reach input only as evdev virtual devices (the public raw surface, `docs/developers/controller-input.md`) and, later, semantic actions through `Platform1` (T-374, ADR-022).
 
-## 11. Task map
+## 11. UI ownership, the family's buttons and glyphs (ADR-027; T-396 / RUY-5) *(planned, T-397..T-399)*
+
+### 11.1 Actions (one vocabulary)
+The shell, the hint bar, `Platform1` (T-374) and the development tools (T-418) name buttons by **action**, never by letter: `up down left right` (the D-pad or the left stick), `accept`, `back`, `options` (context menu), `view`, `guide`, `tabPrev` / `tabNext` (shoulders), `pagePrev` / `pageNext` (triggers: fast scroll), `done` (finish a text entry), `dpad` (any direction, for hints). The service turns pad events into these actions; today they reach the shell as the Phase 0 keys (`accept` = Enter, `back` = Esc, `options` = Menu, `guide` = HomePage, `tabPrev/Next` = PgUp/PgDn), which stay the keyboard's keys too.
+
+### 11.2 The family's own confirm button
+**Decided per event in the input service** (`ruya-inputd`, T-398), from the device's family (§4.1: the service's device table, T-261, then the driver, then `generic`); never in QML. Per family, by position:
+
+| Action | Xbox / generic | PlayStation | Nintendo | Keyboard |
+|---|---|---|---|---|
+| `accept` | A (south) | Cross (south); Circle (east) with "Confirm button: right" | A (east) | Enter |
+| `back` | B (east) | Circle (east); Cross with "right" | B (south) | Esc / Backspace |
+| `options` | Menu | Options | + | M / context key |
+| `view` | View | Create | − | Tab |
+| `guide` | Guide | PS | Home | Super |
+| `tabPrev` / `tabNext` | LB / RB | L1 / R1 | L / R | Q / E, PgUp / PgDn |
+| `pagePrev` / `pageNext` | LT / RT | L2 / R2 | ZL / ZR | Home / End |
+
+The **Confirm button** row lives in **Settings > Controllers** (the one Settings home for controllers, with T-368's list): "As on the controller" (default) / "Bottom" / "Right", per console profile, stored by the service (`Input1.SetConfirmButton`). It swaps `accept` and `back` only; a game never sees it (games get positional buttons on the virtual pad).
+
+### 11.3 Who drives the UI
+| State | Pads that navigate the shell | Another pad's press | Guide on another pad |
+|---|---|---|---|
+| Picker, PIN pad, "Who's playing?" dialog, first boot | any pad, the keyboard | (it navigates) | opens the Guide menu as usual |
+| Signed in | the **owner pads** of the active profile and the keyboard | nothing in the UI; the first press of each foreign pad per session shows one toast: "This controller isn't <profile>'s. Press Guide to switch or join." | a pad with a default owner (T-267): "Switch to <its profile>?"; an unknown pad: "Who's playing?" (ADR-017) |
+| Every owner pad gone (disconnected or battery dead) | the keyboard | "Use this controller for <profile>?": Accept makes it an owner pad; **a PIN-protected profile asks its PIN first**; no idle timeout ever starts a takeover | as the row above |
+| App in front | owner pads drive the app (slot 1, ADR-017); other pads reach the app only as assigned player slots; unassigned pads nothing | — | an owner pad opens the Hub; an assigned non-owner player's Guide opens the Hub without Settings and Power (ADR-017 point 3); an unassigned pad: "Who's playing?" |
+
+**Owner pads** are the active profile's pads: with ADR-017's registry (T-264) its assigned slots; before it, the pad that sent the input that signed the profile in, plus any pad that took over or was assigned. The service keeps the set (it sees which pad sent an event; the keys the shell receives carry no source), publishes it in the device record (`profile`), turns only owner-pad events into navigation keys while the route is `shell` or `overlay`, and reports a foreign pad's press as `ForeignInput` for the toast and the prompts; the shell answers with `AssignPad`. Lock clears the set.
+
+### 11.4 Glyphs follow the active input
+- **Active input** = the device that sent the last **press** among the owner pads and the keyboard; it changes on the first press of another device, never on connect, a battery report, stick or trigger noise below the navigation threshold, or mouse motion (no flicker). The service sends `ActiveInputChanged(device_id, family)`; the shell tells the keyboard apart by the event's source device (not "RuyaOS Navigation").
+- **Glyph of an action** = the label of the button that performs it **after** the Confirm setting (with "Right" on a PlayStation pad, `accept` shows Circle). One set per family, all our own drawings (no vendor artwork; the T-199 question stays open): Xbox letters, PlayStation shapes, Nintendo letters, keyboard key caps, and a **generic** set of position diamonds (four dots, the pressed one filled) for unknown pads. Guide is one home glyph for every pad. Drawing and sizes: `04` §3.7.
+
+## 12. Task map
 | Task | What, after this design |
 |---|---|
 | T-367 / RUY-3 | `ruya-input` user and udev rules (§3), one Xbox 360-style virtual pad per physical pad for the signed-in profile, the ACL re-assert, routing states and `SetRoute` (§5.1-5.2), restart settings (§8.1), `Input1` devices and routing part, mock and client, a VM check and the Dell SuperTuxKart check |
@@ -117,4 +151,8 @@ The input path stays event-driven (one thread per source node, no polling). The 
 | T-371 / RUY-44 | ownership modes (§5.3) |
 | T-372 / RUY-45 | keyboard and mouse output, layers, chords, shortcuts |
 | T-373 / RUY-46 | motion, touchpad (the nodes leave the shell, §3), rumble back to the pad, hidraw |
-| T-374 / RUY-47 | semantic actions and glyphs through `Platform1` |
+| T-374 / RUY-47 | semantic actions and glyphs through `Platform1` (the vocabulary of §11.1) |
+| T-397 / RUY-38 | owner pads, foreign-pad toast, takeover, Guide on a foreign pad (§11.3; `ForeignInput`, `AssignPad`) |
+| T-398 / RUY-40 | the family mapping in the service and the Confirm button row (§11.2; `SetConfirmButton`) |
+| T-399 / RUY-41 | active input and action glyphs (§11.4; `ActiveInputChanged`; 04 §3.7) |
+| T-263 / RUY-120 | the registry and slots spec: owner pads are the slots of §11.3 |
