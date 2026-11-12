@@ -346,6 +346,17 @@ Item {
             compare(name.text, "Turbo Racer")
             compare(find("quickMenuItem_to:org.example.Racer").Accessible.name, "Switch to Turbo Racer")
             compare(hintVerbs(), "A Switch|B Resume")
+            // The focused tile's scale and ring stay inside the strip's view (its clip would cut them off).
+            const view = findChild(strip, "hubRunningView")
+            const card = findChild(find("quickMenuItem_to:org.example.Racer"), "hubRunningTile")
+            tryCompare(card, "scale", Theme.focusScale)
+            const ring = findChild(find("quickMenuItem_to:org.example.Racer"), "hubRunningRing")
+            verify(ring.visible)
+            const topLeft = ring.mapToItem(view, 0, 0)
+            const bottomRight = ring.mapToItem(view, ring.width, ring.height)
+            verify(topLeft.x >= -0.5 && topLeft.y >= -0.5, "the ring starts inside the strip: " + topLeft.x + ", " + topLeft.y)
+            verify(bottomRight.x <= view.width + 0.5 && bottomRight.y <= view.height + 0.5,
+                   "and ends inside it: " + bottomRight.x + ", " + bottomRight.y + " of " + view.width + " x " + view.height)
             keyClick(Qt.Key_Right)
             compare(name.text, "Block Puzzle", "the name follows the focus")
             const tile = find("quickMenuItem_to:org.example.Puzzle")

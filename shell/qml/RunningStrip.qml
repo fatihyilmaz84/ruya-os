@@ -45,6 +45,8 @@ Item {
         onCurrentIndexChanged: positionViewAtIndex(currentIndex, ListView.Contain)
         onCountChanged: positionViewAtIndex(currentIndex, ListView.Contain)
 
+        // A horizontal ListView places its delegates at y 0: the delegate is the strip's full height and the
+        // tile sits `edgeY` down inside it, so the focused tile's scale and ring have room above it too.
         delegate: Item {
             id: tile
             required property int index
@@ -55,34 +57,41 @@ Item {
             objectName: "quickMenuItem_to:" + modelData.appId
             Accessible.role: Accessible.Button
             Accessible.name: label
-            y: strip.edgeY
             width: strip.tileWidth
-            height: strip.tileHeight
+            height: view.height
             z: focused ? 1 : 0
-            scale: focused ? Theme.focusScale : 1.0
-            Behavior on scale { NumberAnimation { duration: Theme.focusMs; easing.type: Easing.Bezier; easing.bezierCurve: Theme.easeGlide } }
 
-            AppArt {
-                id: art
-                objectName: "hubRunningArt"
-                anchors.fill: parent
-                u: strip.u
-                appId: tile.modelData.appId
-                appName: tile.modelData.title
-                picture: tile.modelData.picture
-                monogramSize: Theme.typeDisplay
-                shimmer: false
-            }
-            // The card focus ring (04 §4): outside the art at `focusRingOffset`.
-            Rectangle {
-                objectName: "hubRunningRing"
-                anchors.fill: parent
-                anchors.margins: -Theme.focusRingOffset * strip.u
-                radius: art.radius + Theme.focusRingOffset * strip.u
-                color: "transparent"
-                visible: tile.focused
-                border.width: Theme.focusRingWidth * strip.u
-                border.color: Theme.focusRing
+            Item {
+                id: card
+                objectName: "hubRunningTile"
+                y: strip.edgeY
+                width: parent.width
+                height: strip.tileHeight
+                scale: tile.focused ? Theme.focusScale : 1.0
+                Behavior on scale { NumberAnimation { duration: Theme.focusMs; easing.type: Easing.Bezier; easing.bezierCurve: Theme.easeGlide } }
+
+                AppArt {
+                    id: art
+                    objectName: "hubRunningArt"
+                    anchors.fill: parent
+                    u: strip.u
+                    appId: tile.modelData.appId
+                    appName: tile.modelData.title
+                    picture: tile.modelData.picture
+                    monogramSize: Theme.typeDisplay
+                    shimmer: false
+                }
+                // The card focus ring (04 §4): outside the art at `focusRingOffset`.
+                Rectangle {
+                    objectName: "hubRunningRing"
+                    anchors.fill: parent
+                    anchors.margins: -Theme.focusRingOffset * strip.u
+                    radius: art.radius + Theme.focusRingOffset * strip.u
+                    color: "transparent"
+                    visible: tile.focused
+                    border.width: Theme.focusRingWidth * strip.u
+                    border.color: Theme.focusRing
+                }
             }
         }
     }

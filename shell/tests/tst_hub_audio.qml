@@ -500,7 +500,9 @@ Item {
             Audio.toggleInputMute()
             tryCompare(Audio, "inputMuted", true)
             wait(500)
-            grabImage(tc.shell).save(shotsDir + "/hub-audio-1-mic-muted.png")
+            grabImage(tc.shell).save(shotsDir + "/hub-audio-1-status-mic-muted.png")
+            Audio.toggleInputMute()                          // unmuted again: the panel's row mutes it below
+            tryCompare(Audio, "inputMuted", false)
             goTo("panel:audio")
             keyClick(Qt.Key_Return)
             tryCompare(find("systemPanel"), "panelId", "audio")
