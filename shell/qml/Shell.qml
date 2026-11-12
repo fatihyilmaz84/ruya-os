@@ -443,6 +443,16 @@ FocusScope {
         onActivity: IdleClock.noteInput()
     }
 
+    // Ruya Input is gone for 3 s: the shell reads the physical pads itself and navigates with the same
+    // keys, until the service is back (RUY-410, 06 §8). KeyRouter hands an app only the Guide key.
+    EmergencyReader {
+        id: emergencyReader
+        objectName: "emergencyReader"
+        serviceOwned: Input.serviceOwned
+        readDevices: !Input.mock
+        onKey: (key, pressed) => keyRouter.injectKey(key, pressed)
+    }
+
     // The one idle clock (T-202): every receiver that used to watch the input itself hears it from here.
     Connections {
         target: IdleClock

@@ -7,7 +7,8 @@
 
 // Client of org.ruyaos.Input1 (api/dbus/org.ruyaos.Input1.xml) on the system bus, or the session
 // bus when RUYA_DBUS=session. The service may start after the shell or restart under it (systemd
-// restarts it within 100 ms, 06 §8): every new owner of the name is reported as serviceAppeared.
+// restarts it within 100 ms, 06 §8): every new owner of the name is reported as serviceAppeared, and
+// whether the name has an owner at all as serviceOwned (RUY-410, the emergency reader).
 class DBusInputBackend final : public InputBackend
 {
     Q_OBJECT
@@ -22,4 +23,5 @@ public:
 private:
     QDBusConnection m_bus;
     QDBusServiceWatcher m_watcher;
+    bool m_ownerSeen = false;
 };

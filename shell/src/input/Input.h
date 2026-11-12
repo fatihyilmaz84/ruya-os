@@ -28,6 +28,9 @@ class Input : public QObject
     // The service's answer to the newest call: "" while it is on its way, else a status string of
     // api/dbus/org.ruyaos.Input1.xml, or "failed" when the call failed.
     Q_PROPERTY(QString status READ status NOTIFY statusChanged)
+    // org.ruyaos.Input1 has an owner on the bus (RUY-410). EmergencyReader reads the pads itself
+    // when it has been false for 3 s. True until the bus has answered.
+    Q_PROPERTY(bool serviceOwned READ serviceOwned NOTIFY serviceOwnedChanged)
     Q_PROPERTY(bool mock READ isMock CONSTANT)
 
 public:
@@ -42,6 +45,7 @@ public:
     QString profile() const { return m_profile; }
     QString status() const { return m_status; }
     bool isMock() const { return m_backend->isMock(); }
+    bool serviceOwned() const { return m_backend->serviceOwned(); }
 
     // Sends the route unless it is the one already asked for and that call did not fail.
     Q_INVOKABLE void setRoute(const QString &route, const QString &instance, const QString &appId,
@@ -61,10 +65,13 @@ public:
     Q_INVOKABLE void mockFail(bool fail);
     // The service restarts (route "shell", no pads) and its name gets a new owner.
     Q_INVOKABLE void mockRestart();
+    // The service's name loses or regains its owner (RUY-410: the service is gone, or masked).
+    Q_INVOKABLE void mockNameOwned(bool owned);
 
 signals:
     void routeChanged();
     void statusChanged();
+    void serviceOwnedChanged();
 
 private:
     void send();
