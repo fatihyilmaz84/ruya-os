@@ -53,6 +53,7 @@ Item {
         function cleanup() {
             DeviceSettings.pauseGamesInHub = true
             Input.mockFail(false)
+            Session.mockFailThaw(false)
         }
 
         // What the mock service holds now, as one comparable line.
@@ -168,17 +169,35 @@ Item {
             tryVerify(() => recordOf(run.instance).frozen === true, 2000, "the Hub froze the game")
             expectRoute("overlay", "", "", "p2", "the Hub over the frozen game")
             verify(!Input.mockPads(), "a frozen game has no pad")
+            const frozenFrom = Input.mockCalls().length
             // (Before the Freeze's answer the overlay names the game and keeps its pads; the mock
             // answers within the same turn, so that step is coalesced away here: the pause-off test
             // below covers the overlay with the instance.)
 
-            // Resume (B): the Thaw, then "app" with fresh pads.
+            // Resume (B) with a Thaw that fails: the game has the focus but stays frozen, so the
+            // route stays overlay with "" and no pad is made for it.
+            Session.mockFailThaw(true)
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => run.app.activeFocus, 2000, "the game has the focus again")
+            tryVerify(() => !find("systemPanel").open, 2000, "the Hub is closed")
+            tryVerify(() => Session.mockCalls().filter(c => c === "thaw " + run.instance).length === 1, 2000,
+                      "the Thaw was sent (and failed)")
+            verify(recordOf(run.instance).frozen, "the game is still frozen")
+            expectRoute("overlay", "", "", "p2", "a frozen game in front")
+            verify(Input.mockCalls().slice(frozenFrom).every(c => c.route !== "app"),
+                   "no app route was sent while the game was frozen")
+            verify(!Input.mockPads(), "a frozen game in front has no pad")
+            compare(Input.mockPadGeneration(), firstPads, "no pad was made for the frozen game")
+            Session.mockFailThaw(false)
+
+            // The Hub again, then Resume: the Thaw works, then "app" with a new pad generation.
+            openHub()
             keyClick(Qt.Key_Escape)
             tryVerify(() => run.app.activeFocus, 2000, "the game has the focus again")
             tryVerify(() => recordOf(run.instance).frozen === false, 2000, "the game runs again")
             expectRoute("app", run.instance, "org.example.Racer", "p2", "back in the game")
             verify(Input.mockPads(), "the game has pads again")
-            verify(Input.mockPadGeneration() > firstPads, "they are new pads (made after the Thaw)")
+            verify(Input.mockPadGeneration() > firstPads, "pads were made again (a new generation)")
 
             // Home from the Hub: the game stays frozen behind Home, the route is the shell's.
             openHub()
@@ -271,6 +290,31 @@ Item {
             compare(Input.mockServiceProfile(), "p3", "the failed route was sent again")
             Input.setRoute("shell", "", "", "p2")          // back to what the shell says
             tryCompare(Input, "status", "ok")
+        }
+
+        // A profile with a PIN: the PIN pad is still "locked", and no call carries a profile before the
+        // PIN is accepted (wrong PIN first, then the right one).
+        function test_no_profile_before_the_pin_is_verified() {
+            start()
+            for (let i = 0; i < 3; ++i)
+                keyClick(Qt.Key_Left)                    // Player One (p1, PIN 1234)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("pinPad").shown, 2000, "the PIN pad opens")
+            for (const digit of "9999")
+                keyClick(digit)
+            keyClick(Qt.Key_Enter)
+            wait(50)                                     // a negative check: the wrong PIN signs nobody in
+            compare(Profiles.activeProfile, "", "a wrong PIN signs nobody in")
+            compare(Input.route, "locked", "the PIN pad is locked")
+            verify(Input.mockCalls().every(c => c.profile === ""), "no call carried a profile before the PIN")
+            tryVerify(() => find("pinPad").shown && find("pinPad").entered === "", 3000, "the PIN pad is ready again")
+            for (const digit of "1234")
+                keyClick(digit)
+            keyClick(Qt.Key_Enter)
+            tryCompare(Profiles, "activeProfile", "p1")
+            tryVerify(() => find("homePlay").activeFocus, 2000, "Home after the PIN")
+            expectRoute("shell", "", "", "p1", "Player One at Home")
+            checkCalls()
         }
 
         // A restarted service is in "shell" with no profile: the new owner gets the current route.
