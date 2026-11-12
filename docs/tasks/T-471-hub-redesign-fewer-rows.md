@@ -17,7 +17,7 @@ Owner, 2026-11-12: the Hub is "too crowded, too many options"; running games sho
 
 **Without a game** (Hub over Home): status row, the running strip (if any), Volume, Panel icons. Focus starts on the first of these that exists.
 
-**Removed from the Hub** (the reason in brackets; each stays in Settings or Home):
+**Removed from the Hub** (owner approved this list, 2026-11-12; the reason in brackets; each stays in Settings or Home):
 - **Recent games** (Home is one press away; launching a new game mid-game is rare and the rows pushed the tiles off screen).
 - **Wi-Fi and Bluetooth tiles** (turning them off mid-game drops an online session or every Bluetooth pad: a dangerous toggle one press from the game; Settings keeps them).
 - **Mute tile** (duplicate: A on Volume mutes). **Mute mic tile** moves into the Audio panel as its Mute microphone row; the status row shows the muted-mic glyph while muted.
