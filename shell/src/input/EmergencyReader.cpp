@@ -17,6 +17,12 @@ EmergencyReader::EmergencyReader(QObject *parent)
     connect(&m_devices, &PadDevices::gone, this, &EmergencyReader::padGone);
 }
 
+EmergencyReader::~EmergencyReader()
+{
+    // A device source closing under us must not call back into members that are being destroyed.
+    disconnect(&m_devices, nullptr, this, nullptr);
+}
+
 void EmergencyReader::setServiceOwned(bool owned)
 {
     if (m_serviceOwned == owned)

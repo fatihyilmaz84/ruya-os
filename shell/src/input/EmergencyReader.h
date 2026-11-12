@@ -34,6 +34,7 @@ class EmergencyReader : public QObject
 
 public:
     explicit EmergencyReader(QObject *parent = nullptr);
+    ~EmergencyReader() override;
 
     bool serviceOwned() const { return m_serviceOwned; }
     void setServiceOwned(bool owned);
@@ -69,8 +70,9 @@ private:
     bool m_readDevices = true;
     bool m_active = false;
     QTimer m_grace;
-    PadDevices m_devices;
     QHash<int, PadMapper *> m_pads;
     // How many pads hold each key.
     QHash<int, int> m_down;
+    // Declared last: destroyed first, while the state its signals reach is still alive.
+    PadDevices m_devices;
 };

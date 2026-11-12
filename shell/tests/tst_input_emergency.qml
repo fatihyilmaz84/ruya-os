@@ -28,6 +28,7 @@ Item {
     readonly property int dpadRight: 0x223
 
     Component { id: mapperComponent; PadMapper { } }
+    Component { id: devicesComponent; PadDevices { } }
     // The type's own defaults.
     Component { id: plainReader; EmergencyReader { } }
 
@@ -39,6 +40,17 @@ Item {
             readDevices: false
             graceMs: 40
             onKey: (key, pressed) => log = log.concat([key + (pressed ? "+" : "-")])
+        }
+    }
+
+    // The same, logging to the host, which outlives it.
+    property var observed: []
+    Component {
+        id: observedReaderComponent
+        EmergencyReader {
+            readDevices: false
+            graceMs: 40
+            onKey: (key, pressed) => host.observed = host.observed.concat([key + (pressed ? "+" : "-")])
         }
     }
 
@@ -66,6 +78,9 @@ Item {
         when: windowShown
 
         property Shell shell: null
+        // A QtObject property reads null once its object is deleted (a var keeps the wrapper).
+        property QtObject subject: null
+        property PadDevices devices: null
 
         function find(name) { return findChild(tc.shell, name) }
 
@@ -177,6 +192,66 @@ Item {
             compare(m.heldKeys(), [])
             compare(m.releaseAll(), [], "nothing left to release")
             compare(pressed(m.feed(evKey, btnSouth, 1)), [Qt.Key_Return + "+"], "a fresh pad starts clean")
+        }
+
+        function test_a_full_state_read_after_dropped_events_releases_what_is_no_longer_down() {
+            // SYN_DROPPED: the pad's state is read again and fed as events (PadDevices.resync).
+            const m = mapper()
+            m.feed(evKey, btnSouth, 1)
+            m.feed(evAbs, hatX, -1)
+            m.feed(evAbs, absY, 30000)
+            // The releases were lost; the state read says South is up, the hat centred, the stick centred,
+            // and Start newly down.
+            const state = [[evKey, btnSouth, 0], [evKey, btnEast, 0], [evKey, btnStart, 1], [evKey, btnMode, 0],
+                           [evAbs, hatX, 0], [evAbs, hatY, 0], [evAbs, absX, 0], [evAbs, absY, 0]]
+            const out = []
+            for (const e of state)
+                for (const k of m.feed(e[0], e[1], e[2]))
+                    out.push(k.key + (k.pressed ? "+" : "-"))
+            compare(out.sort(), [Qt.Key_Return + "-", Qt.Key_Left + "-", Qt.Key_Down + "-", Qt.Key_Menu + "+"].sort())
+            compare(m.heldKeys(), [Qt.Key_Menu])
+        }
+
+        // ---- PadDevices and EmergencyReader teardown (a use-after-free once, review of round 1) ----
+
+        function test_stop_reports_every_pad_gone() {
+            const gones = []
+            tc.devices = devicesComponent.createObject(host)
+            verify(tc.devices)
+            tc.devices.gone.connect(id => gones.push(id))
+            tc.devices.mockPad(5)
+            tc.devices.mockPad(6)
+            compare(tc.devices.padCount(), 2)
+            tc.devices.stop()
+            compare(gones.sort(), [5, 6], "stop() tells who listens")
+            compare(tc.devices.padCount(), 0)
+            tc.devices.destroy()
+        }
+
+        // The destructor closes the pads and emits nothing (a listener may be half destroyed: the
+        // use-after-free of round 1). QML drops its own connections when an object is destroyed, so a
+        // test cannot observe a signal from the destructor, so these two are smoke tests of the teardown
+        // with a pad open and with a key held (they do not fail if the fix is undone).
+        function test_destroying_a_device_source_with_a_pad_open_is_safe() {
+            tc.devices = devicesComponent.createObject(host)
+            tc.devices.mockPad(7)
+            tc.subject = tc.devices
+            tc.devices.destroy()
+            tryVerify(() => tc.subject === null, 2000, "the object is deleted")
+        }
+
+        function test_destroying_an_active_reader_with_a_key_held_is_clean() {
+            host.observed = []
+            let r = createTemporaryObject(observedReaderComponent, host)
+            verify(r)
+            r.serviceOwned = false
+            tryCompare(r, "active", true)
+            r.mockPadEvent(1, evAbs, hatY, 1)
+            compare(host.observed, [Qt.Key_Down + "+"])
+            tc.subject = r
+            r.destroy()
+            tryVerify(() => tc.subject === null, 2000, "the object is deleted")
+            compare(host.observed, [Qt.Key_Down + "+"], "no release was sent by the time it is gone")
         }
 
         // ---- EmergencyReader: the 3 s rule, several pads ----------------------------------------
