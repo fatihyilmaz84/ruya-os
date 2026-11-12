@@ -304,6 +304,25 @@ Item {
 
         // One set of toast shots: the stack with the chip, a compact error over an app, and the sticky
         // restart notice (its footer and A glyph) in front and over an app.
+        // True when the list shows exactly `titles`, in order: every delegate at rest (opacity 1, x 0, y in
+        // its place), none of a removed toast left behind, and the title text on screen.
+        function listSettled(titles) {
+            const list = find("toastList")
+            const delegates = list.contentItem.children.filter(c => c.toastId !== undefined)
+            if (list.count !== titles.length || delegates.length !== titles.length)
+                return false
+            let y = 0
+            for (let i = 0; i < titles.length; ++i) {
+                const t = list.itemAtIndex(i)
+                if (!t || t.opacity !== 1 || t.x !== 0 || Math.abs(t.y - y) > 1)
+                    return false
+                if (findChild(t, "toastText").text !== titles[i])
+                    return false
+                y += t.height + list.spacing
+            }
+            return true
+        }
+
         function toastStack(texts) {
             Notifications.durationMs = 60000
             Notifications.show(texts[0], "success", "", "pad_playstation", texts[1])
@@ -311,23 +330,28 @@ Item {
             Notifications.show(texts[4], "warning", "", "pad_xbox", texts[5])
             Notifications.show(texts[6], "info")
             keyClick(Qt.Key_VolumeUp)
-            wait(800)
+            tryCompare(Audio, "volume", 55)
+            tryVerify(() => listSettled([texts[0], texts[2], texts[4]]), 5000, "the three toasts are at rest")
+            tryVerify(() => find("toastOverflow").visible && find("volumeOsd").shown, 5000, "the chip and the OSD are up")
         }
 
         function toastRest(suffix, texts) {
             tc.clearToasts()
+            tryVerify(() => listSettled([]), 5000, "the stack is gone")
             Notifications.show(texts[7], "error", "", "", texts[8])
             Notifications.appInFront = true
-            wait(800)
+            tryVerify(() => listSettled([texts[7]]) && find("toastList").width === 480 * find("toastLayer").u, 5000, "the compact error is at rest")
             grabImage(tc.shell).save(shotsDir + "/14b-toast-over-app" + suffix + ".png")
             tc.clearToasts()
             Notifications.appInFront = false
+            tryVerify(() => listSettled([]), 5000, "the error is gone")
             Update.mockAnnounceRestart(Math.floor(Date.now() / 1000) + 120)
-            tryVerify(() => Notifications.model.count === 1)
-            wait(800)
+            tryVerify(() => Notifications.model.count === 1 && Notifications.model.get(0).key === "update-restart")
+            const restart = Notifications.model.get(0).text
+            tryVerify(() => listSettled([restart]) && find("toastList").width === 600 * find("toastLayer").u, 5000, "the restart notice is at rest")
             grabImage(tc.shell).save(shotsDir + "/14c-toast-restart-notice" + suffix + ".png")
             Notifications.appInFront = true
-            wait(800)
+            tryVerify(() => listSettled([restart]) && find("toastList").width === 480 * find("toastLayer").u, 5000, "the compact restart notice is at rest")
             grabImage(tc.shell).save(shotsDir + "/14d-toast-restart-notice-over-app" + suffix + ".png")
             Notifications.appInFront = false
             Update.mockAnnounceRestart(0)

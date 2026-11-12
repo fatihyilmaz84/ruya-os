@@ -219,7 +219,7 @@ Item {
                 objectName: "toastFooter"
                 visible: toast.hasFooter
                 x: toast.fullSticky ? toast.pad : texts.x
-                y: texts.y + texts.height + 24 * layer.u      // the footer starts 24 u under the text column
+                y: texts.y + texts.height + Theme.spaceM * layer.u      // the footer starts 24 u under the text column
                 width: toast.width - x - toast.pad
                 spacing: Theme.spaceS * layer.u
                 ButtonGlyph {
