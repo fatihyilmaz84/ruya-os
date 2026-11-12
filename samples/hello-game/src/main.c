@@ -255,7 +255,7 @@ int main(int argc, char **argv)
 
         float dx = 0, dy = 0;
         const bool *keys = SDL_GetKeyboardState(NULL);
-        if (!pad) { /* with a controller, ignore the keys: today the console also sends the pad as arrow keys */
+        if (!pad) { /* with a controller, ignore the keys (rule 6): outside the game the pad also types arrow keys */
             if (keys[SDL_SCANCODE_LEFT] || keys[SDL_SCANCODE_A]) dx -= 1;
             if (keys[SDL_SCANCODE_RIGHT] || keys[SDL_SCANCODE_D]) dx += 1;
             if (keys[SDL_SCANCODE_UP] || keys[SDL_SCANCODE_W]) dy -= 1;
