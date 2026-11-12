@@ -21,6 +21,11 @@ Paper Plane (`D:\dev\PaperPlane`, running at http://192.168.178.164:8687, projec
 - A split-off item gets its own ticket with the next letter (`T-341a`) and a line in the parent task file saying so.
 - Builders get a token with role `builder` and project `RUY` (the owner creates it, or a lead with the `tokens` permission once that is deployed). Tokens never go in the repo, a commit or a log.
 
+## MCP servers and usage per ticket (lead-12, 2026-11-12, owner's go-ahead)
+
+- Three MCP servers in the **local** scope of this checkout (`~/.claude.json`, not the repo; added with `~/.local/bin/claude.exe mcp add --scope local --transport http paperplane-<role> http://192.168.178.164:8687/mcp --header "Authorization: Bearer <token>"`): `paperplane-lead`, `paperplane-builder`, `paperplane-reviewer`, each with its own role's token, so a builder acts as the builder (`mcp__paperplane-builder__claim`), a reviewer as the reviewer. They load at **session start**: a session older than them still uses curl.
+- Usage hooks in `.claude/settings.local.json` (git-ignored; the token is read from `C:\Users\FSYY\.paperplane\ruy-lead.token`): SessionStart registers the session for RUY, PostToolUse on `mcp__paperplane.*` opens and closes the per-ticket windows (claim, a reviewer's `get`, a verdict), Stop posts the token rows (`D:\dev\PaperPlane\scripts\paperplane_usage_hook.py`). **Only MCP calls attribute usage to a ticket**: dispatch builders and reviewers with the MCP tools, not curl. Check with `summary usage=true`.
+
 ## Known gaps (to decide before the files go away)
 
 - No Outcome slot; no custom fields (the header is labels); ticket keys are `RUY-n`, not `T-nnn`.
