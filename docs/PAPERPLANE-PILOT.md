@@ -32,6 +32,6 @@ Paper Plane (`D:\dev\PaperPlane`, running at http://192.168.178.164:8687, projec
 ## Known gaps (to decide before the files go away)
 
 - No Outcome slot; no custom fields (the header is labels); ticket keys are `RUY-n`, not `T-nnn`.
-- CI (`lint-board.ps1`) cannot see Paper Plane; the public repo no longer shows the open backlog to contributors.
+- The open backlog is in Paper Plane only: the public repo does not show it and it is not exported (owner, 2026-11-12). The board lint is gone (no board file left to check).
 - About 4,600 `T-nnn` mentions in specs and docs link to task files.
 - Paper Plane creating a ticket with a duplicate label returned a 500 (the importer de-duplicates).

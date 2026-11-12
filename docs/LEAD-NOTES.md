@@ -18,7 +18,7 @@ The procedure is in [`LEAD.md`](LEAD.md) (**Budgets and "Lead efficiency": hand 
 
 ## Concerns (ranked)
 1. The cutover is untested by a fresh session: the agent files now say "use MCP tools, else curl"; watch the first builder through it.
-2. `docs/tasks/T-nnn` links (about 4,600) stay valid only because the archive stays; never delete it. The public repo no longer shows the open backlog (owner's call, not decided explicitly: ask).
+2. `docs/tasks/T-nnn` links (about 4,600) stay valid only because the archive stays; never delete it. The open backlog lives in Paper Plane only; the public repo does not show it and is not exported (owner, 2026-11-12).
 3. T-466's park/restore on real hardware is still unseen (RUY-369).
 4. Root `CLAUDE.md` is 12.4 KB (budget 10): prune at the next lead session.
 
