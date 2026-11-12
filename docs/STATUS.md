@@ -15,7 +15,7 @@ Verification legend: **host** = built and tested on Windows · **host (vm pendin
 
 ## Board
 
-**NEXT → T-470** (thawed app's sound; then T-471 Hub redesign, owner; one lane while the weekly plan is above 70 %). T-469, T-455 merged (lead-12, through the Paper Plane pilot). T-465, T-467, T-463, T-468, T-466, T-454 merged (the Qt step about 115 s instead of 345 s). T-464 merged. T-462, T-458, T-452, T-453 merged. Owner, 2026-11-10: Ruya Hub first, then Ruya Input. Builders, in order: T-470, T-471; a second lane takes T-427, T-431, T-433, then the first rows of `STATUS-backlog.md`. Lead: T-461 (XWayland spike), T-366 (Ruya Input spike; then T-367, T-456, T-381, T-380), the Dell pass T-355. T-283, T-284, T-287, T-288 wait for T-282; T-397..T-399 wait for T-366 and T-396. The Depends column lists only dependencies that are not `done`.
+**NEXT → T-472** (sound survives a shell restart; then T-471 Hub redesign, owner; one lane while the weekly plan is above 70 %). T-469, T-455, T-470 merged (lead-12, through the Paper Plane pilot). T-465, T-467, T-463, T-468, T-466, T-454 merged (the Qt step about 115 s instead of 345 s). T-464 merged. T-462, T-458, T-452, T-453 merged. Owner, 2026-11-10: Ruya Hub first, then Ruya Input. Builders, in order: T-472, T-471; a second lane takes T-427, T-431, T-433, then the first rows of `STATUS-backlog.md`. Lead: T-461 (XWayland spike), T-366 (Ruya Input spike; then T-367, T-456, T-381, T-380), the Dell pass T-355. T-283, T-284, T-287, T-288 wait for T-282; T-397..T-399 wait for T-366 and T-396. The Depends column lists only dependencies that are not `done`.
 
 **How work runs (owner, 2026-11-04):** the lead dispatches `ruya-builder` agents (at most two at a time, own worktrees, different areas), has each branch reviewed by `ruya-reviewer` and merges it (`docs/LEAD.md`). Dispatched builders never edit this file; one "VM (this task)" runs at a time. A builder the owner starts directly takes NEXT alone in the main checkout and does the bookkeeping (`CLAUDE.md`).
 
@@ -48,6 +48,8 @@ Triaged 2026-11-10 (lead-9): the lines before are verbatim in [`STATUS-parked.md
 - (T-455) On the next image run `dell-hub-check.sh` once without the builder's overlay, then reboot the Dell (the bind-mounted shell goes away).
 - (T-455) Log the thaw (Resume) time with the Hub probe, so the "sound back and Resume time" Dell check stops being manual.
 - (T-455 review) Prove the hidden Hub draws no frame of its own (A/B with the Hub item disabled or a render count) instead of the 20 % guard rail.
+- (T-470) The card-suspend half of the T-466 check cannot pass while the check stops the shell (the card belongs to the seat session): needs the shell running with its sweep held off, or a Dell check.
+- (T-470 review) vm-session-check.sh: an EXIT trap that restarts the compositor and takes the linger back when a run aborts in the Freeze part; an ok/bad on the wait for the seat session; print the last park-audio line on a FAIL.
 - (lead-12) No test compares the D-Bus signatures a Rust service serves with its XML: GetBrightness went out as `su` instead of `(su)` and passed every host gate (T-454, fixed 7597ee7); T-453 had a contract mismatch too. An introspection-vs-XML test per service would catch both.
 - (T-469) The performance overlay shows only over a game in front; whether it should also show on Home is undecided (the spec hides it there).
 - (T-469, T-456) A keyboard or pad shortcut to toggle the performance overlay belongs to Ruya Input's shortcuts.
