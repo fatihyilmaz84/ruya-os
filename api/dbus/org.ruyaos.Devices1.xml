@@ -37,6 +37,8 @@
     "ok"              success (Pair: paired, trusted and connected; the list follows by DevicesChanged)
     "unknown-device"  no device with that id in the list (Pair, Forget, Connect, Disconnect)
     "pairing-failed"  the device refused or the pairing was rejected
+    "not-confirmed"   Pair of a device with the `keyboard` flag of ListDevices without keyboard_confirmed
+                      (RUY-422): nothing was paired, trusted or connected, and the refusal is logged
     "timeout"         the device did not answer in time (Pair, Connect). The service answers it
                       itself after 20 s, before the D-Bus default call timeout (25 s), so clients
                       keep the default timeout and Pair/Connect always get a status, never a
@@ -373,8 +375,9 @@
                        the keyboard bit (a keyboard or a keyboard/pointer combo), or, without a class,
                        its Bluetooth LE appearance is the HID keyboard, or its Icon is "input-keyboard".
                        The shell asks "This is a keyboard. Pair it?" before pairing such a device from
-                       the device list. Told by the remote device, so a hint, not a defence. Clients
-                       treat a missing key as false
+                       the device list, and Pair refuses such a device unless it is told the user
+                       said yes (keyboard_confirmed, RUY-422). Told by the remote device, so a hint,
+                       not a defence. Clients treat a missing key as false
         family     s   the controller family, for kind "controller" only: "playstation" | "xbox" |
                        "nintendo" | "8bitdo", or "" when it cannot be told (every other kind, an unknown maker, a
                        third-party pad). From the Modalias BlueZ reports (the vendor id of the device's
@@ -412,9 +415,20 @@
       <arg name="status" type="s" direction="out"/>
     </method>
 
-    <!-- Pair, trust and connect (spec 03 §2.1). Answers when done or failed. -->
+    <!--
+      Pair, trust and connect (spec 03 §2.1). Answers when done or failed.
+        keyboard_confirmed  true when the user has answered "This is a keyboard. Pair it?" for this
+                            device (RUY-422). The service is the gate: a device that announces a
+                            keyboard (`keyboard` of ListDevices) is paired, trusted or connected by
+                            Pair only when this is true; otherwise Pair answers "not-confirmed" and
+                            logs the refusal. For any other device it is ignored (a pad, headset or
+                            mouse pairs as before). It is an argument of Pair itself, not a method of
+                            its own, so a confirmation cannot arrive late, expire or be used for
+                            another call: it belongs to exactly this call for this id.
+    -->
     <method name="Pair">
       <arg name="id" type="s" direction="in"/>
+      <arg name="keyboard_confirmed" type="b" direction="in"/>
       <arg name="status" type="s" direction="out"/>
     </method>
 
@@ -480,6 +494,9 @@
           accepts a just-works pairing by itself and BlueZ never asks the agent.
       Residual risk: the class and the appearance are told by the remote device, so a device that
       claims a pad's or mouse's class inside the window can bond, be trusted and act as a keyboard or pad.
+      The keyboard gate of Pair (RUY-422) has the same limit: a keyboard that announces no keyboard class
+      (or a pointing class) is not asked about, and the confirmation is the shell's word, not the user's
+      proof. It closes only the case of a keyboard-class device that Pair is called for without the question.
       The window is short, never open by default, not discoverable, capped when the shell reopens
       it by itself, and sweeps strangers; it is not a defence against a spoofing device in range.
       The window closes by itself when a controller has paired, when its seconds are up, or on

@@ -128,9 +128,9 @@ void Bluetooth::stopScan()
     m_backend->stopScan();
 }
 
-void Bluetooth::pair(const QString &id)
+void Bluetooth::pair(const QString &id, bool keyboardConfirmed)
 {
-    m_backend->pair(id);
+    m_backend->pair(id, keyboardConfirmed);
 }
 
 void Bluetooth::forget(const QString &id)
@@ -289,6 +289,13 @@ int Bluetooth::mockPairCalls() const
     if (auto *mock = qobject_cast<MockBluetoothBackend *>(m_backend.get()))
         return mock->pairCalls();
     return 0;
+}
+
+QStringList Bluetooth::mockPairLog() const
+{
+    if (auto *mock = qobject_cast<MockBluetoothBackend *>(m_backend.get()))
+        return mock->pairLog();
+    return {};
 }
 
 void Bluetooth::mockReset()

@@ -978,9 +978,14 @@ impl BluetoothIface {
         status.as_str().to_owned()
     }
 
-    async fn pair(&self, id: &str, #[zbus(signal_emitter)] emitter: SignalEmitter<'_>) -> String {
+    async fn pair(
+        &self,
+        id: &str,
+        keyboard_confirmed: bool,
+        #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
+    ) -> String {
         let (bt, id) = (self.bt.clone(), id.to_owned());
-        let status = unblock(move || bt.pair(&id, Instant::now)).await;
+        let status = unblock(move || bt.pair_with(&id, keyboard_confirmed, Instant::now)).await;
         self.settle(&emitter).await;
         status.as_str().to_owned()
     }

@@ -147,6 +147,10 @@ Item {
             tryVerify(() => device("bt-flaky") !== undefined && device("bt-sleepy") !== undefined)
             compare(run("pair", "bt-flaky", () => Bluetooth.pair("bt-flaky")), "pairing-failed")
             compare(run("pair", "bt-sleepy", () => Bluetooth.pair("bt-sleepy")), "timeout")
+            compare(run("scan", "", () => Bluetooth.startScan()), "ok")
+            compare(run("scan", "", () => Bluetooth.startScan()), "ok")
+            tryVerify(() => device("bt-keys-new") !== undefined, 2000, "the third scan lists the keyboard")
+            compare(run("pair", "bt-keys-new", () => Bluetooth.pair("bt-keys-new")), "not-confirmed")
             compare(run("connect", "bt-flaky", () => Bluetooth.connectDevice("bt-flaky")), "failed")
             compare(run("pair", "bt-buds", () => Bluetooth.pair("bt-buds")), "ok")
             compare(run("disconnect", "bt-buds", () => Bluetooth.disconnectDevice("bt-buds")), "ok")
@@ -154,9 +158,9 @@ Item {
             tryCompare(Bluetooth, "powered", false)
             compare(run("scan", "", () => Bluetooth.startScan()), "unavailable")
             compare(run("pair", "bt-buds", () => Bluetooth.pair("bt-buds")), "unavailable")
-            for (const s of ["ok", "unknown-device", "pairing-failed", "timeout", "unavailable", "invalid", "failed"])
+            for (const s of ["ok", "unknown-device", "pairing-failed", "not-confirmed", "timeout", "unavailable", "invalid", "failed"])
                 verify(seen.has(s), "status " + s + " exercised")
-            compare(seen.size, 7, "no status outside the contract")
+            compare(seen.size, 8, "no status outside the contract")
         }
 
         function test_power_off_hides_and_stops_scan() {
@@ -256,6 +260,33 @@ Item {
             keyClick(Qt.Key_Return)
             tryVerify(() => device("bt-keys-new").paired, 2000, "Accept pairs it")
             tryVerify(() => find("btDev_bt-keys-new").activeFocus, 2000, "focus stays on the paired device")
+        }
+
+        // RUY-422: the service is the gate, so Accept on the keyboard question sends the confirmation for
+        // that device with Pair, and the service (here the mock) refuses the same Pair without it.
+        function test_keyboard_accept_sends_the_confirmation_for_that_address() {
+            scanForKeyboard()
+            compare(Bluetooth.mockPairLog(), [], "nothing sent before the answer")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("btKeyboardConfirm").shown, 2000)
+            compare(Bluetooth.mockPairLog(), [], "the question itself sends nothing")
+            keyClick(Qt.Key_Right)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => device("bt-keys-new").paired, 2000, "Accept pairs it")
+            compare(Bluetooth.mockPairLog(), ["bt-keys-new:confirmed"], "Pair carried the confirmation")
+        }
+
+        function test_an_unconfirmed_pair_of_a_keyboard_is_refused_but_a_pad_is_not() {
+            scanForKeyboard()
+            const seen = new Set()
+            const run = (op, id, call) => runCommand(seen, op, id, call)
+            compare(run("pair", "bt-keys-new", () => Bluetooth.pair("bt-keys-new")), "not-confirmed")
+            verify(!device("bt-keys-new").paired, "nothing was paired")
+            compare(run("pair", "bt-keys-new", () => Bluetooth.pair("bt-keys-new", true)), "ok")
+            verify(device("bt-keys-new").paired)
+            // A pad is paired without any confirmation, with or without the flag.
+            compare(run("pair", "bt-pad-new", () => Bluetooth.pair("bt-pad-new")), "ok")
+            compare(Bluetooth.mockPairLog(), ["bt-keys-new:plain", "bt-keys-new:confirmed", "bt-pad-new:plain"])
         }
 
         // A keyboard bonded before the confirmation existed was never confirmed: Pair again asks too.

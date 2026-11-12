@@ -179,9 +179,11 @@ SettingsPane {
         return parts.join(" · ")
     }
 
-    function startPairing(id) {
+    // keyboardConfirmed: only the keyboard question's Accept says true (RUY-422); the service refuses
+    // a keyboard-class device without it.
+    function startPairing(id, keyboardConfirmed) {
         busyId = id
-        Bluetooth.pair(id)
+        Bluetooth.pair(id, keyboardConfirmed === true)
     }
 
     // "This is a keyboard. Pair it?": Cancel has focus, Back cancels, Accept on "Pair <name>" pairs.
@@ -359,7 +361,7 @@ SettingsPane {
                 objectName: "btKeyboardConfirm"
                 customDestructive: false
                 u: pane.u
-                onConfirmed: pane.startPairing(pane.keyboardId)
+                onConfirmed: pane.startPairing(pane.keyboardId, true)
             }
         }
     }

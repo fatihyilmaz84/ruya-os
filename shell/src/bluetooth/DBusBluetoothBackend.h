@@ -20,7 +20,7 @@ public:
     void setPowered(bool on) override;
     void startScan() override;
     void stopScan() override;
-    void pair(const QString &id) override;
+    void pair(const QString &id, bool keyboardConfirmed) override;
     void forget(const QString &id) override;
     void connectDevice(const QString &id) override;
     void disconnectDevice(const QString &id) override;

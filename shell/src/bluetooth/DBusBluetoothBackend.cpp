@@ -202,9 +202,9 @@ void DBusBluetoothBackend::stopScan()
     startCommand(QStringLiteral("StopScan"), QStringLiteral("scan"), QString(), {});
 }
 
-void DBusBluetoothBackend::pair(const QString &id)
+void DBusBluetoothBackend::pair(const QString &id, bool keyboardConfirmed)
 {
-    startCommand(QStringLiteral("Pair"), QStringLiteral("pair"), id, {id});
+    startCommand(QStringLiteral("Pair"), QStringLiteral("pair"), id, {id, keyboardConfirmed});
 }
 
 void DBusBluetoothBackend::forget(const QString &id)
