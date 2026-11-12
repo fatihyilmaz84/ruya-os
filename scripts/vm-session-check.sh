@@ -13,7 +13,10 @@
 # libpulse-simple, through the profile's own sound server) and checks that the Freeze parks it (the
 # ruya-parked null sink; the card suspends when the VM has one: boot with -Audio), that the memory is
 # reclaimed 30 s after the Freeze when swap is active (T-465's zram), and that the Thaw puts the stream
-# back; this adds about 45 s. It also (T-472) keeps the shell down for 20 s without linger and checks
+# back; this adds about 45 s. A second client in a fourth scope plays like OpenAL-soft (prebuf 0, writes
+# all it is asked for, 8 channels at 192 kHz): in the 3 s after that freeze it must be asked for no
+# more than 12 s of sound, keep playing and not abort (RUY-425; about 15 s more). It also (T-472)
+# keeps the shell down for 20 s without linger and checks
 # that ruya-shell's manager ends and that the next Launch has its profile's sound server again (about 25 s).
 # `restart` (T-290) needs a profile (run `check` once on an empty store, or create one) and
 # installs the test apps itself when they are missing.
@@ -84,6 +87,104 @@ tone_scope() {
     runuser -u "$1" -- env XDG_RUNTIME_DIR="/run/user/$xuid" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$xuid/bus" \
         PULSE_SERVER="unix:/run/ruya-pulse/$1/native" \
         systemd-run --user --scope --quiet --unit="$2" python3 -I -c "$tone_py" </dev/null >/dev/null 2>&1 &
+}
+# RUY-425: a PulseAudio client that plays like OpenAL-soft's pulse backend (SuperTuxKart's): prebuf 0,
+# and its write callback writes all the server asks for (begin_write/write in a loop). After a gap in
+# its loop (the freeze) it prints "gap=<s> catchup=<bytes asked in the 3 s after it> per_s=<bytes a
+# second>", then "alive asked=<n>" every 5 s. Unpaused, the server asked a frozen stream for one more
+# quantum every quantum: the catch-up grew with the freeze (2 h: about 2.6 GB of float stereo, and
+# libpulse aborted in memblock.c stat_remove).
+catchup_py='
+import ctypes, os, sys, time
+rate, channels = int(sys.argv[1]), int(sys.argv[2])
+frame = 4 * channels
+pa = ctypes.CDLL("libpulse.so.0")
+class Spec(ctypes.Structure):
+    _fields_ = [("format", ctypes.c_int), ("rate", ctypes.c_uint32), ("channels", ctypes.c_uint8)]
+class Attr(ctypes.Structure):
+    _fields_ = [(n, ctypes.c_uint32) for n in ("maxlength", "tlength", "prebuf", "minreq", "fragsize")]
+vp = ctypes.c_void_p
+for name, res, args in [
+    ("pa_mainloop_new", vp, []), ("pa_mainloop_get_api", vp, [vp]),
+    ("pa_mainloop_iterate", ctypes.c_int, [vp, ctypes.c_int, vp]),
+    ("pa_context_new", vp, [vp, ctypes.c_char_p]),
+    ("pa_context_connect", ctypes.c_int, [vp, ctypes.c_char_p, ctypes.c_int, vp]),
+    ("pa_context_get_state", ctypes.c_int, [vp]),
+    ("pa_stream_new", vp, [vp, ctypes.c_char_p, vp, vp]),
+    ("pa_channel_map_init_extend", vp, [vp, ctypes.c_uint, ctypes.c_int]),
+    ("pa_stream_set_write_callback", None, [vp, vp, vp]),
+    ("pa_stream_connect_playback", ctypes.c_int, [vp, ctypes.c_char_p, vp, ctypes.c_int, vp, vp]),
+    ("pa_stream_get_state", ctypes.c_int, [vp]),
+    ("pa_stream_begin_write", ctypes.c_int, [vp, ctypes.POINTER(vp), ctypes.POINTER(ctypes.c_size_t)]),
+    ("pa_stream_write", ctypes.c_int, [vp, vp, ctypes.c_size_t, vp, ctypes.c_int64, ctypes.c_int]),
+]:
+    f = getattr(pa, name); f.restype = res; f.argtypes = args
+def say(line):
+    sys.stdout.write(line + "\n"); sys.stdout.flush()
+m = pa.pa_mainloop_new()
+c = pa.pa_context_new(pa.pa_mainloop_get_api(m), b"ruya-check-catchup")
+pa.pa_context_connect(c, None, 0, None)
+while pa.pa_context_get_state(c) not in (4, 5, 6):
+    pa.pa_mainloop_iterate(m, 1, None)
+if pa.pa_context_get_state(c) != 4:
+    say("error=context"); sys.exit(1)
+spec = Spec(5, rate, channels)
+tl = rate * frame // 20
+attr = Attr(0xFFFFFFFF, tl, 0, tl // 3, 0xFFFFFFFF)
+class Map(ctypes.Structure):
+    _fields_ = [("channels", ctypes.c_uint8), ("map", ctypes.c_int * 32)]
+cmap = Map()
+pa.pa_channel_map_init_extend(ctypes.byref(cmap), channels, 2)
+s = pa.pa_stream_new(c, b"catchup", ctypes.byref(spec), ctypes.byref(cmap))
+if not s:
+    say("error=stream_new"); sys.exit(1)
+zero = ctypes.create_string_buffer(65536)
+asked = [0]
+WCB = ctypes.CFUNCTYPE(None, vp, ctypes.c_size_t, vp)
+def on_write(stream, nbytes, _):
+    asked[0] += nbytes
+    while nbytes > 0:
+        buf = vp(); n = ctypes.c_size_t(nbytes)
+        if pa.pa_stream_begin_write(stream, ctypes.byref(buf), ctypes.byref(n)) == 0 and buf.value:
+            n = min(n.value, nbytes)
+            ctypes.memset(buf, 0, n)
+            r = pa.pa_stream_write(stream, buf, n, None, 0, 0)
+        else:
+            n = min(nbytes, len(zero))
+            r = pa.pa_stream_write(stream, zero, n, None, 0, 0)
+        if r != 0:
+            say("write_failed=%d" % r)
+            return
+        nbytes -= n
+cb = WCB(on_write)
+pa.pa_stream_set_write_callback(s, cb, None)
+pa.pa_stream_connect_playback(s, None, ctypes.byref(attr), 0x2000 | 0x8 | 0x2, None, None)
+while pa.pa_stream_get_state(s) not in (2, 3, 4):
+    pa.pa_mainloop_iterate(m, 1, None)
+if pa.pa_stream_get_state(s) != 2:
+    say("error=stream"); sys.exit(1)
+say("ready per_s=%d pid=%d" % (rate * frame, os.getpid()))
+last = time.monotonic(); gap_at = None; base = 0; gap = 0.0; beat = last
+while True:
+    pre = asked[0]
+    pa.pa_mainloop_iterate(m, 1, None)
+    now = time.monotonic()
+    if now - last > 3 and gap_at is None:
+        gap_at, gap, base = now, now - last, pre
+    if gap_at is not None and now - gap_at > 3:
+        say("gap=%.1f catchup=%d per_s=%d" % (gap, asked[0] - base, rate * frame))
+        gap_at = None; beat = now
+    if now - beat > 5:
+        say("alive asked=%d" % asked[0]); beat = now
+    last = now
+'
+# catchup_scope <user> <unit> <log>: the client above (8 channels at 192 kHz, 6.1 MB a second, so a
+# freeze of the check's length asks for hundreds of MB unpaused) in scope <unit>, its output in <log>.
+catchup_scope() {
+    xuid="$(id -u "$1")"
+    runuser -u "$1" -- env XDG_RUNTIME_DIR="/run/user/$xuid" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$xuid/bus" \
+        PULSE_SERVER="unix:/run/ruya-pulse/$1/native" \
+        systemd-run --user --scope --quiet --unit="$2" python3 -I -c "$catchup_py" 192000 8 </dev/null >"$3" 2>&1 &
 }
 # audio_probe <pulse server pid>: the shell's PipeWire graph as one line per fact: the output streams of
 # that profile's sound server (by the client's pipewire.sec.pid), each stream's target.object, whether it
@@ -432,6 +533,8 @@ display)
     tr '\0' ' ' < "/proc/$ppid/cmdline" 2>/dev/null | grep -q -- "-c ruya-profile-pulse.conf" \
         && grep -q "pulse.allow-module-loading = false" /usr/share/pipewire/ruya-profile-pulse.conf \
         && ok "the server runs ruya-profile-pulse.conf, which refuses module loading" || bad "the sound server's config (pid $ppid)"
+    grep -q "^ *pulse.idle.timeout = 5$" /usr/share/pipewire/ruya-profile-pulse.conf \
+        && ok "the server pauses a stream after 5 s of underrun (pulse.idle.timeout, RUY-425)" || bad "ruya-profile-pulse.conf has no 'pulse.idle.timeout = 5'"
 
     echo "--- nothing of the shell sounds behind the app (T-376)"
     # The ambient bed fades out over 800 ms and then stops its players, so the PipeWire output closes; a
@@ -648,6 +751,12 @@ check)
             tpid="$(pgrep -u "$user" -f ruya-check-tone | head -1)"
             ok "the app's sound client plays through ruya-pulse@$user (pid $ppid): $(audio_probe "$ppid" | grep '^stream=' | head -1)"
             audio_probe "$ppid" | grep -E '^(cards|parked_sink)=' | sed 's/^/    /'
+            # RUY-425: the OpenAL-like client in a fourth scope, frozen with the app.
+            catchup_scope "$user" "app-flatpak-$sleeper-4445.scope" "$work/catchup.log"
+            n=0; until grep -q '^ready' "$work/catchup.log" 2>/dev/null || [ "$n" -ge 15 ]; do sleep 1; n=$((n + 1)); done
+            cpid="$(sed -n 's/^ready .*pid=\([0-9]*\)$/\1/p' "$work/catchup.log")"
+            [ -n "$cpid" ] && ok "the OpenAL-like sound client plays too: $(head -1 "$work/catchup.log")" \
+                || bad "the OpenAL-like sound client did not start: $(head -3 "$work/catchup.log" | tr '\n' ' ')"
         else
             pgrep -u "$user" -f ruya-check-tone >/dev/null 2>&1 \
                 && bad "the sound client runs but no output stream of ruya-pulse@$user (pid $ppid) is in the graph" \
@@ -723,6 +832,36 @@ check)
         audio_probe "$ppid" | grep '^stream=' | grep -q 'links=.*ruya-parked' && bad "the thawed stream is still linked to ruya-parked" || ok "the thawed stream is not linked to ruya-parked"
         wait_audio "$ppid" '^parked_sink=no$' 15 && ok "the ruya-parked sink is gone with the last parked stream" || bad "the ruya-parked sink is still there after the Thaw"
         audio_probe "$ppid" | grep '^stream=' | sed 's/^/    /'
+        # RUY-425: frozen far longer than the server's 5 s idle limit, the OpenAL-like client is asked for
+        # about 5 s of sound for the freeze, and with the 3 s it counts after the thaw and some slack at most
+        # 12 s; it keeps playing and libpulse does not abort. Unpaused it was asked for the whole freeze's
+        # worth plus those 3 s (0.0.70 in the VM: 34 s of sound for a 31 s freeze unpaused, 8.0 s paused).
+        if [ -n "${cpid:-}" ]; then
+            n=0; until grep -q '^gap=' "$work/catchup.log" || [ "$n" -ge 20 ]; do sleep 1; n=$((n + 1)); done
+            line="$(grep '^gap=' "$work/catchup.log" | head -1)"; echo "    $line"
+            gap="$(echo "$line" | sed -n 's/^gap=\([0-9]*\).*/\1/p')"
+            got="$(echo "$line" | sed -n 's/.* catchup=\([0-9]*\) .*/\1/p')"
+            per="$(echo "$line" | sed -n 's/.* per_s=\([0-9]*\)$/\1/p')"
+            if [ -z "$gap" ] || [ -z "$got" ] || [ -z "$per" ]; then
+                bad "the OpenAL-like client reported no catch-up after the Thaw: $(tail -3 "$work/catchup.log" | tr '\n' ' ')"
+            else
+                [ "$gap" -ge 20 ] && ok "the OpenAL-like client was frozen for $gap s (more than the 5 s idle limit)" || bad "the OpenAL-like client's gap was only $gap s"
+                [ "$got" -le $(( per * 12 )) ] \
+                    && ok "in the 3 s after the thaw it was asked for $got bytes ($(( got * 10 / per / 10 )).$(( got * 10 / per % 10 )) s of sound; unpaused about $(( (gap + 3) * per )))" \
+                    || bad "at the thaw it was asked for $got bytes: $(( got / per )) s of sound for a $gap s freeze (the stream was not paused)"
+            fi
+            sleep 7
+            kill -0 "$cpid" 2>/dev/null && ok "the OpenAL-like client still runs after the thaw" \
+                || bad "the OpenAL-like client is gone after the thaw: $(tail -3 "$work/catchup.log" | tr '\n' ' ')"
+            grep -a -q -e "Assertion" -e "write_failed" "$work/catchup.log" \
+                && bad "libpulse complained: $(grep -a -e "Assertion" -e "write_failed" "$work/catchup.log" | head -2 | tr '\n' ' ')" \
+                || ok "no write failure and no libpulse assertion"
+            a1="$(sed -n 's/^alive asked=//p' "$work/catchup.log" | tail -1)"; sleep 6
+            a2="$(sed -n 's/^alive asked=//p' "$work/catchup.log" | tail -1)"
+            [ -n "$a1" ] && [ -n "$a2" ] && [ "$a2" -gt "$a1" ] && ok "and it keeps being asked for sound (it plays): $a1 -> $a2 bytes" \
+                || bad "the OpenAL-like client is not asked for sound after the thaw: ${a1:-?} -> ${a2:-?}"
+            kill "$cpid" 2>/dev/null
+        fi
     fi
     busctl --system call "$psvc" "$ppath" "$psvc" Lock >/dev/null
     case "$(freeze_app "$inst")" in 's "not-allowed"') ok "Freeze with nobody signed in: not-allowed";; *) bad "Freeze while locked";; esac
