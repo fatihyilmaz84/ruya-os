@@ -13,6 +13,7 @@ Rectangle {
     property string appName
     property string picture      // path from the app record (tile or hero), may be empty
     property bool monogram: true // the letter; off for full-screen art (the Home hero)
+    property real monogramSize: Theme.typeHero   // the letter's size (a type token); smaller art takes a smaller one (the Hub's running strip)
     property bool shimmer: true  // the gleam while loading; off for the Home hero (it fades in over the backdrop)
     property bool bare: false    // no fallback fill: the Home hero over a wallpaper shows the wallpaper until the picture is there (T-208)
 
@@ -82,7 +83,7 @@ Rectangle {
         text: art.appName.charAt(0).toUpperCase()
         color: Theme.text
         opacity: 0.85
-        font.pixelSize: Theme.typeHero * art.u
+        font.pixelSize: art.monogramSize * art.u
         font.weight: Theme.weightLight
     }
 

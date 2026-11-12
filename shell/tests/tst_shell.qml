@@ -32,10 +32,20 @@ Item {
         // Down until the Quick Hub's row `key` has the focus (T-448: the rows above it depend on the
         // library, the tiles and the recent games).
         function hubGoTo(key) {
+            const menu = find("systemPanel")
             const list = find("systemActions")
-            for (let i = 0; i < 20 && list.model[list.currentIndex] !== key; ++i)
-                keyClick(Qt.Key_Down)
-            compare(list.model[list.currentIndex], key)
+            if (key === "switch" && !menu.powerMode) {
+                // Switch profile is the last choice of the Power panel (T-471)
+                hubGoTo("panel:power")
+                keyClick(Qt.Key_Return)
+                tryCompare(menu, "powerMode", true)
+            }
+            // Up/Down to the control's row, then Left/Right along it (T-471: a row may hold several controls).
+            for (let i = 0; i < 30 && menu.currentKey !== key; ++i)
+                keyClick(menu.itemKeys.indexOf(menu.rowKeyOf(key)) > list.currentIndex ? Qt.Key_Down
+                         : menu.itemKeys.indexOf(menu.rowKeyOf(key)) < list.currentIndex ? Qt.Key_Up
+                         : menu.columnOf(key) > menu.currentColumn ? Qt.Key_Right : Qt.Key_Left)
+            compare(menu.currentKey, key)
         }
 
         function typePin(pin) {

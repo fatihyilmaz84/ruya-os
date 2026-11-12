@@ -128,13 +128,23 @@ Item {
         }
 
         function focusedKey() {
-            const list = find("systemActions")
-            return list.model[list.currentIndex]
+            return find("systemPanel").currentKey
         }
 
         function goTo(key) {
-            for (let i = 0; i < 20 && focusedKey() !== key; ++i)
-                keyClick(Qt.Key_Down)
+            const menu = find("systemPanel")
+            const list = find("systemActions")
+            if (key === "switch" && !menu.powerMode) {
+                // Switch profile is the last choice of the Power panel (T-471)
+                goTo("panel:power")
+                keyClick(Qt.Key_Return)
+                tryCompare(menu, "powerMode", true)
+            }
+            // Up/Down to the control's row, then Left/Right along it (T-471: a row may hold several controls).
+            for (let i = 0; i < 30 && menu.currentKey !== key; ++i)
+                keyClick(menu.itemKeys.indexOf(menu.rowKeyOf(key)) > list.currentIndex ? Qt.Key_Down
+                         : menu.itemKeys.indexOf(menu.rowKeyOf(key)) < list.currentIndex ? Qt.Key_Up
+                         : menu.columnOf(key) > menu.currentColumn ? Qt.Key_Right : Qt.Key_Left)
             compare(focusedKey(), key)
             verify(find("quickMenuItem_" + key).focused, key + " has the focus ring")
         }
@@ -161,9 +171,9 @@ Item {
             start()
             const run = playRacer()
             openHub()
-            compare(find("quickMenuTitle").text, tc.shell.titleOfApp("org.example.Racer"),
+            compare(find("hubCardTitle").text, tc.shell.titleOfApp("org.example.Racer"),
                     "the Hub's title is the game's, not python3.12")
-            verify(find("quickMenuTitle").text !== "python3.12")
+            verify(find("hubCardTitle").text !== "python3.12")
             compare(tc.shell.quickMenuApp.instance, run.instance)
             tryVerify(() => recordOf(run.instance).frozen === true, 2000, "the Hub pauses the game")
             compare(Session.mockCalls(), ["freeze " + run.instance])

@@ -112,13 +112,23 @@ Item {
         }
 
         function focusedKey() {
-            const list = find("systemActions")
-            return list.model[list.currentIndex]
+            return find("systemPanel").currentKey
         }
 
         function goTo(key) {
-            for (let i = 0; i < 20 && focusedKey() !== key; ++i)
-                keyClick(Qt.Key_Down)
+            const menu = find("systemPanel")
+            const list = find("systemActions")
+            if (key === "switch" && !menu.powerMode) {
+                // Switch profile is the last choice of the Power panel (T-471)
+                goTo("panel:power")
+                keyClick(Qt.Key_Return)
+                tryCompare(menu, "powerMode", true)
+            }
+            // Up/Down to the control's row, then Left/Right along it (T-471: a row may hold several controls).
+            for (let i = 0; i < 30 && menu.currentKey !== key; ++i)
+                keyClick(menu.itemKeys.indexOf(menu.rowKeyOf(key)) > list.currentIndex ? Qt.Key_Down
+                         : menu.itemKeys.indexOf(menu.rowKeyOf(key)) < list.currentIndex ? Qt.Key_Up
+                         : menu.columnOf(key) > menu.currentColumn ? Qt.Key_Right : Qt.Key_Left)
             compare(focusedKey(), key)
             verify(find("quickMenuItem_" + key).focused, key + " has the focus ring")
         }
@@ -153,7 +163,7 @@ Item {
             start()
             const app = playRacer()
             openHub()
-            const keys = find("systemPanel").itemKeys
+            const keys = find("systemPanel").controlsOf("panels")       // the panel icons (T-471)
             verify(keys.indexOf("panel:audio") < keys.indexOf("panel:controllers"))
             verify(keys.indexOf("panel:controllers") < keys.indexOf("panel:performance"))
             goTo("panel:controllers")
@@ -161,7 +171,7 @@ Item {
             keyClick(Qt.Key_Return)
             tryCompare(find("systemPanel"), "panelId", "controllers")
             compare(find("hubPanelTitle").text, "Controllers")
-            verify(!find("quickMenuApp").visible, "the panel replaces the app part")
+            verify(!find("hubGameCard"), "the panel replaces the game card")
             // Back: the Quick Hub again, the focus on the entry that was opened; the Hub stays open.
             keyClick(Qt.Key_Escape)
             tryCompare(find("systemPanel"), "panelId", "")

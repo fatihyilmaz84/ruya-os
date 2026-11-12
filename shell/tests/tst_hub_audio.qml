@@ -100,13 +100,23 @@ Item {
         }
 
         function focusedKey() {
-            const list = find("systemActions")
-            return list.model[list.currentIndex]
+            return find("systemPanel").currentKey
         }
 
         function goTo(key) {
-            for (let i = 0; i < 20 && focusedKey() !== key; ++i)
-                keyClick(Qt.Key_Down)
+            const menu = find("systemPanel")
+            const list = find("systemActions")
+            if (key === "switch" && !menu.powerMode) {
+                // Switch profile is the last choice of the Power panel (T-471)
+                goTo("panel:power")
+                keyClick(Qt.Key_Return)
+                tryCompare(menu, "powerMode", true)
+            }
+            // Up/Down to the control's row, then Left/Right along it (T-471: a row may hold several controls).
+            for (let i = 0; i < 30 && menu.currentKey !== key; ++i)
+                keyClick(menu.itemKeys.indexOf(menu.rowKeyOf(key)) > list.currentIndex ? Qt.Key_Down
+                         : menu.itemKeys.indexOf(menu.rowKeyOf(key)) < list.currentIndex ? Qt.Key_Up
+                         : menu.columnOf(key) > menu.currentColumn ? Qt.Key_Right : Qt.Key_Left)
             compare(focusedKey(), key)
             verify(find("quickMenuItem_" + key).focused, key + " has the focus ring")
         }
@@ -148,7 +158,7 @@ Item {
             const title = find("hubPanelTitle")
             verify(title.visible)
             compare(title.text, "Audio")
-            verify(!find("quickMenuApp").visible, "the panel replaces the app part")
+            verify(!find("hubGameCard"), "the panel replaces the game card")
             compare(find("systemPanel").itemKeys, ["volume", "audio:mute", "audio:output", "audio:mic", "audio:micmute"])
             compare(focusedKey(), "volume")
             verify(find("systemActions").activeFocus)
@@ -159,7 +169,7 @@ Item {
             compare(focusedKey(), "panel:audio", "the focus is on the entry")
             verify(find("quickMenuItem_panel:audio").focused)
             verify(!title.visible)
-            verify(find("quickMenuApp").visible)
+            tryVerify(() => find("hubGameCard") !== null, 2000, "the game card is back")
             // Back in the Quick Hub resumes the game.
             keyClick(Qt.Key_Escape)
             tryVerify(() => app.activeFocus && !find("systemPanel").open, 2000, "Back leaves the Hub")
@@ -346,6 +356,31 @@ Item {
             tryVerify(() => rowValue("audio:micmute") === "Mute microphone, Off")
         }
 
+        // The status row shows the muted microphone while it is muted (T-471: the Mute mic tile went into this panel).
+        function test_the_status_row_shows_the_muted_microphone() {
+            start()
+            const app = playRacer()
+            openHub()
+            const glyph = find("hubMicMuted")
+            verify(!glyph.visible, "not muted: no glyph")
+            compare(find("hubStatus").Accessible.name.indexOf("microphone muted"), -1)
+            goTo("panel:audio")
+            keyClick(Qt.Key_Return)
+            tryCompare(find("systemPanel"), "panelId", "audio")
+            goTo("audio:micmute")
+            keyClick(Qt.Key_Return)
+            tryCompare(Audio, "inputMuted", true)
+            tryVerify(() => glyph.visible, 2000, "the status row shows the muted microphone")
+            compare(glyph.name, "mic_off")
+            verify(find("hubStatus").Accessible.name.indexOf("microphone muted") > 0, "and says so")
+            keyClick(Qt.Key_Return)
+            tryCompare(Audio, "inputMuted", false)
+            tryVerify(() => !glyph.visible, 2000, "and no longer when it is not")
+            keyClick(Qt.Key_Escape)
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => app.activeFocus, 2000)
+        }
+
         // ---- without a microphone -----------------------------------------------------------------------
 
         function test_without_a_microphone_there_is_no_row_and_no_tile() {
@@ -353,9 +388,7 @@ Item {
             Audio.mockUnplugInput("mic-0")
             tryVerify(() => Audio.inputs.length === 0)
             openHub()
-            compare(find("systemPanel").tileIds, ["wifi", "bluetooth", "mute"])
-            compare(find("quickTile_mic"), null, "no microphone tile")
-            compare(find("systemPanel").itemKeys.indexOf("tiles:1"), -1, "and no second line of tiles")
+            verify(!find("hubMicMuted").visible, "no microphone: no muted glyph in the status row")
             goTo("panel:audio")
             keyClick(Qt.Key_Return)
             tryCompare(find("systemPanel"), "panelId", "audio")
@@ -382,51 +415,16 @@ Item {
             keyClick(Qt.Key_Escape)
         }
 
-        function test_the_microphone_tile_mutes_the_microphone_and_shows_the_answer() {
-            start()
-            openHub()
-            goTo("tiles:1")
-            const tile = find("quickTile_mic")
-            verify(tile, "the tile is there with a microphone")
-            verify(tile.focused)
-            verify(!tile.on)
-            compare(tile.label, "Mute mic")
-            compare(tile.detail, "Off")
-            compare(tile.Accessible.name, "Mute mic, off")
-            compare(hintVerbs(), "A Toggle|B Close")
-            keyClick(Qt.Key_Return)
-            tryCompare(Audio, "inputMuted", true)
-            tryVerify(() => tile.on, 2000, "the tile shows the answer")
-            compare(tile.detail, "Muted")
-            compare(tile.Accessible.name, "Mute mic, on")
-            compare(Audio.muted, false, "the output is not muted")
-            verify(find("systemPanel").open, "the Hub stays open")
-            keyClick(Qt.Key_Return)
-            tryCompare(Audio, "inputMuted", false)
-            tryVerify(() => !tile.on)
-            keyClick(Qt.Key_Escape)
-        }
-
-        function test_the_microphone_tile_appears_when_a_microphone_is_plugged_in() {
-            start()
-            Audio.mockUnplugInput("mic-0")
-            tryVerify(() => Audio.inputs.length === 0)
-            openHub()
-            compare(find("quickTile_mic"), null)
-            Audio.mockPlugInput("usb-mic")
-            tryVerify(() => find("quickTile_mic") !== null, 2000, "the tile appears")
-            Audio.mockUnplugInput("usb-mic")
-            tryVerify(() => find("quickTile_mic") === null, 2000, "and goes")
-            verify(find("systemActions").activeFocus)
-            keyClick(Qt.Key_Escape)
-        }
-
         // ---- the list's edge fade ------------------------------------------------------------------------
 
         // The focused row is never under the fade at the edge that hides rows (T-448 review).
         function test_the_focused_row_stays_clear_of_the_fade() {
             start()
+            playRacer()
+            // The Quick Hub fits without scrolling (T-471): a tall reserve makes the list scroll, as a long panel does.
+            find("systemPanel").bottomReserve = 300
             openHub()
+            const menu = find("systemPanel")
             const list = find("systemActions")
             const box = list.parent
             const fade = find("hubMoreBelow").height
@@ -435,28 +433,28 @@ Item {
             let sawBelow = false
             let sawAbove = false
             for (let i = 0; i < 30; ++i) {
-                const row = find("quickMenuItem_" + focusedKey())
+                const row = find("quickMenuItem_" + menu.currentRow)
                 const top = row.mapToItem(box, 0, 0).y
                 const bottom = top + row.height
                 if (find("hubMoreBelow").needed) {
                     sawBelow = true
-                    verify(bottom <= box.height - fade + 1, focusedKey() + " ends above the lower fade: " + bottom + " of " + box.height)
+                    verify(bottom <= box.height - fade + 1, menu.currentRow + " ends above the lower fade: " + bottom + " of " + box.height)
                 }
                 if (find("hubMoreAbove").needed) {
                     sawAbove = true
-                    verify(top >= fade - 1, focusedKey() + " starts below the upper fade: " + top)
+                    verify(top >= fade - 1, menu.currentRow + " starts below the upper fade: " + top)
                 }
-                if (focusedKey() === "close")
+                if (menu.currentRow === "panels")
                     break
                 keyClick(Qt.Key_Down)
             }
             verify(sawBelow && sawAbove, "both fades were checked")
-            for (let i = 0; i < 30 && focusedKey() !== "volume"; ++i) {
+            for (let i = 0; i < 30 && menu.currentRow !== "resume"; ++i) {
                 keyClick(Qt.Key_Up)
-                const row = find("quickMenuItem_" + focusedKey())
+                const row = find("quickMenuItem_" + menu.currentRow)
                 const top = row.mapToItem(box, 0, 0).y
                 if (find("hubMoreAbove").needed)
-                    verify(top >= fade - 1, focusedKey() + " going up starts below the upper fade: " + top)
+                    verify(top >= fade - 1, menu.currentRow + " going up starts below the upper fade: " + top)
             }
             keyClick(Qt.Key_Escape)
         }
@@ -465,15 +463,19 @@ Item {
         // hint bar changes): the row is moved clear of the fade again.
         function test_the_row_is_moved_clear_of_the_fade_when_the_list_gets_shorter() {
             start()
+            playRacer()
             openHub()
-            goTo("tiles:1")
+            goTo("volume")                                   // the row before the icons
             const panel = find("systemPanel")
             const box = find("systemActions").parent
             const fade = find("hubMoreBelow").height
-            const row = find("quickMenuItem_tiles:1")
+            const row = find("quickMenuItem_volume")
             const bottomOf = () => row.mapToItem(box, 0, 0).y + row.height
-            verify(bottomOf() <= box.height - fade + 1, "set up: the row is clear")
-            panel.bottomReserve += 2 * fade                  // the list is shorter by two fades: the row is under the fade
+            verify(!find("hubMoreBelow").needed && bottomOf() <= box.height - fade + 1, "set up: the Hub fits, the row is clear")
+            // The Hub fits with room to spare (T-471): take that room, then four fades more, so the row is under the fade.
+            const slack = panel.height - 2 * panel.marginY - panel.bottomReserve - find("guidePanel").height
+            verify(slack >= 0)
+            panel.bottomReserve += slack + 4 * fade
             tryVerify(() => find("hubMoreBelow").needed && bottomOf() <= box.height - fade + 1, 2000, "the row is clear of the lower fade: " + bottomOf() + " of " + box.height)
             verify(find("systemActions").activeFocus)
             keyClick(Qt.Key_Escape)
@@ -495,9 +497,10 @@ Item {
             tryVerify(() => Audio.inputs.length === 2)
             keyClick(Qt.Key_HomePage)
             tryVerify(() => find("quickMenuItem_resume").focused, 2000)
-            goTo("tiles:1")
+            Audio.toggleInputMute()
+            tryCompare(Audio, "inputMuted", true)
             wait(500)
-            grabImage(tc.shell).save(shotsDir + "/hub-audio-1-mic-tile.png")
+            grabImage(tc.shell).save(shotsDir + "/hub-audio-1-mic-muted.png")
             goTo("panel:audio")
             keyClick(Qt.Key_Return)
             tryCompare(find("systemPanel"), "panelId", "audio")

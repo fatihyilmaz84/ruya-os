@@ -61,10 +61,20 @@ Item {
         // Down until the Quick Hub's row `key` has the focus (T-448: the rows above it depend on the
         // library, the tiles and the recent games).
         function hubGoTo(key) {
+            const menu = find("systemPanel")
             const list = find("systemActions")
-            for (let i = 0; i < 20 && list.model[list.currentIndex] !== key; ++i)
-                keyClick(Qt.Key_Down)
-            compare(list.model[list.currentIndex], key)
+            if (key === "switch" && !menu.powerMode) {
+                // Switch profile is the last choice of the Power panel (T-471)
+                hubGoTo("panel:power")
+                keyClick(Qt.Key_Return)
+                tryCompare(menu, "powerMode", true)
+            }
+            // Up/Down to the control's row, then Left/Right along it (T-471: a row may hold several controls).
+            for (let i = 0; i < 30 && menu.currentKey !== key; ++i)
+                keyClick(menu.itemKeys.indexOf(menu.rowKeyOf(key)) > list.currentIndex ? Qt.Key_Down
+                         : menu.itemKeys.indexOf(menu.rowKeyOf(key)) < list.currentIndex ? Qt.Key_Up
+                         : menu.columnOf(key) > menu.currentColumn ? Qt.Key_Right : Qt.Key_Left)
+            compare(menu.currentKey, key)
         }
 
         function start() {
@@ -178,10 +188,10 @@ Item {
             verify(!app.activeFocus)
             compare(find("systemActions").currentIndex, 0)
             verify(find("quickMenuItem_resume").focused, "Resume has the focus")
-            tryVerify(() => find("quickMenuApp").visible, 2000, "the app part is there")
-            compare(find("quickMenuTitle").text, "Turbo Racer")
-            compare(find("quickMenuTime").text, "Just started")
-            compare(hintVerbs(), "A Select|B Resume")
+            tryVerify(() => find("hubGameCard") !== null, 2000, "the game card is there")
+            compare(find("hubCardTitle").text, "Turbo Racer")
+            compare(find("hubCardState").text, "Just started")
+            compare(hintVerbs(), "A Resume|B Resume")
             keyClick(Qt.Key_Down)
             keyClick(Qt.Key_Up)
             keyClick(Qt.Key_Right)
@@ -203,14 +213,13 @@ Item {
             keyClick(Qt.Key_HomePage)
             tryVerify(() => find("systemActions").activeFocus)
             compare(find("systemPanel").hasApp, false)
-            tryVerify(() => find("quickMenuSystem").visible)
-            verify(!find("quickMenuApp").visible)
+            verify(!find("hubGameCard"), "no game card")
             verify(!find("quickMenuItem_resume"))
             verify(!find("quickMenuItem_home"))
             verify(find("quickMenuItem_volume"), "the volume row is there")
-            // T-448: the first Recent row has the focus (Switch profile only when there is no recent game).
-            verify(find("quickMenuItem_recent:flatpak:org.example.Racer").focused, "the first action has the focus, not the volume row")
-            compare(hintVerbs(), "A Start|B Close", "T-448: a Recent row says what A does")
+            // T-471: nothing runs, so the first row is Volume and it has the focus.
+            verify(find("quickMenuItem_volume").focused, "the first row has the focus")
+            compare(hintVerbs(), "A Mute|B Close")
             keyClick(Qt.Key_Escape)
             tryVerify(() => !find("systemPanel").open)
             tryVerify(() => find("homePlay").activeFocus, 2000, "Back returns to Play")
@@ -303,7 +312,7 @@ Item {
             keyClick(Qt.Key_HomePage)
             tryVerify(() => find("quickMenuItem_resume").focused)
             keyClick(Qt.Key_Down)
-            keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Right)                           // Home | Close game is one row (T-471)
             verify(find("quickMenuItem_closeGame").focused)
             keyClick(Qt.Key_Return)
             tryCompare(stoppedSpy, "count", 1)
@@ -332,7 +341,7 @@ Item {
             keyClick(Qt.Key_HomePage)
             tryVerify(() => find("quickMenuItem_resume").focused)
             keyClick(Qt.Key_Down)
-            keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Right)                           // Home | Close game is one row (T-471)
             verify(find("quickMenuItem_closeGame").focused)
             keyClick(Qt.Key_Return)
             tryCompare(stoppedSpy, "count", 1)
@@ -358,7 +367,7 @@ Item {
             keyClick(Qt.Key_HomePage)
             tryVerify(() => find("quickMenuItem_resume").focused)
             keyClick(Qt.Key_Down)
-            keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Right)                           // Home | Close game is one row (T-471)
             verify(find("quickMenuItem_closeGame").focused)
             keyClick(Qt.Key_Return)
         }
@@ -478,14 +487,13 @@ Item {
             tryVerify(() => puzzle.activeFocus, 2000, "the newest window is in front")
             keyClick(Qt.Key_HomePage)
             tryVerify(() => find("systemActions").activeFocus)
-            compare(find("quickMenuTitle").text, "Block Puzzle")
+            compare(find("hubCardTitle").text, "Block Puzzle")
             const item = find("quickMenuItem_to:org.example.Racer")
             verify(item, "the other running app is listed")
             compare(item.label, "Switch to Turbo Racer")
             verify(!find("quickMenuItem_to:org.example.Puzzle"), "the app in front is not")
-            keyClick(Qt.Key_Down)
-            keyClick(Qt.Key_Down)
-            keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Down)                            // Home | Close game
+            keyClick(Qt.Key_Down)                            // the running strip (T-471)
             verify(item.focused)
             keyClick(Qt.Key_Return)
             tryVerify(() => racer.activeFocus, 2000, "Turbo Racer is in front")
@@ -731,10 +739,7 @@ Item {
             tryVerify(() => find("quickMenuItem_resume").focused, 2000)
             wait(800)
             grabImage(tc.shell).save(shotsDir + "/appflow-3-quick-menu-over-app.png")
-            keyClick(Qt.Key_Down)
-            keyClick(Qt.Key_Down)
-            keyClick(Qt.Key_Down)
-            keyClick(Qt.Key_Down)
+            hubGoTo("volume")
             keyClick(Qt.Key_Left)
             wait(300)
             grabImage(tc.shell).save(shotsDir + "/appflow-4-quick-menu-volume-row.png")
@@ -745,7 +750,7 @@ Item {
                 skip("set RUYA_SHOTS_DIR to save screenshots")
             start()
             keyClick(Qt.Key_HomePage)
-            tryVerify(() => find("quickMenuItem_recent:flatpak:org.example.Racer").focused, 2000)
+            tryVerify(() => find("quickMenuItem_volume").focused, 2000)
             wait(800)
             grabImage(tc.shell).save(shotsDir + "/appflow-5-quick-menu-no-app.png")
         }
