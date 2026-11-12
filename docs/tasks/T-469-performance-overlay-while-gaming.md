@@ -1,6 +1,6 @@
 # T-469 — Performance overlay while gaming, switched on from the Hub
 
-Status: in-progress · Phase: 2 · Depends: — · Area: shell · Size: M · Owner: builder · Complexity: normal · Developer surface: none
+Status: done · Phase: 2 · Depends: — · Area: shell · Size: M · Owner: builder · Complexity: normal · Developer surface: none
 
 ## Goal
 Owner, 2026-11-11: "the performance metrics are unusable since the game is frozen. Instead of showing them there, add a toggle to turn them on as an overlay while gaming. Put them in the top corners." The Hub's Performance panel (T-452) reads FPS, frame time, CPU, GPU and the rest while the Hub is open, but opening the Hub freezes the game (T-457), so every number shows a paused game. The numbers belong over the running game.

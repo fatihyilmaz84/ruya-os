@@ -15,7 +15,7 @@ Verification legend: **host** = built and tested on Windows · **host (vm pendin
 
 ## Board
 
-**NEXT → T-469** (performance overlay while gaming, owner; then T-455 Hub budgets; two lanes: owner, 2026-11-11). T-465, T-467, T-463, T-468, T-466, T-454 merged (the Qt step about 115 s instead of 345 s). T-464 merged. T-462, T-458, T-452, T-453 merged. Owner, 2026-11-10: Ruya Hub first, then Ruya Input. Builders, in order: T-469, T-455 (each edits QuickMenu.qml or Shell.qml: **one at a time**); a second lane takes T-427, T-431, T-433, then the first rows of `STATUS-backlog.md`. Lead: T-461 (XWayland spike), T-366 (Ruya Input spike; then T-367, T-456, T-381, T-380), the Dell pass T-355. T-283, T-284, T-287, T-288 wait for T-282; T-397..T-399 wait for T-366 and T-396. The Depends column lists only dependencies that are not `done`.
+**NEXT → T-455** (Hub budgets; one lane while the weekly plan is above 70 %). T-469 merged (lead-12, through the Paper Plane pilot). T-465, T-467, T-463, T-468, T-466, T-454 merged (the Qt step about 115 s instead of 345 s). T-464 merged. T-462, T-458, T-452, T-453 merged. Owner, 2026-11-10: Ruya Hub first, then Ruya Input. Builders, in order: T-455; a second lane takes T-427, T-431, T-433, then the first rows of `STATUS-backlog.md`. Lead: T-461 (XWayland spike), T-366 (Ruya Input spike; then T-367, T-456, T-381, T-380), the Dell pass T-355. T-283, T-284, T-287, T-288 wait for T-282; T-397..T-399 wait for T-366 and T-396. The Depends column lists only dependencies that are not `done`.
 
 **How work runs (owner, 2026-11-04):** the lead dispatches `ruya-builder` agents (at most two at a time, own worktrees, different areas), has each branch reviewed by `ruya-reviewer` and merges it (`docs/LEAD.md`). Dispatched builders never edit this file; one "VM (this task)" runs at a time. A builder the owner starts directly takes NEXT alone in the main checkout and does the bookkeeping (`CLAUDE.md`).
 
@@ -45,6 +45,9 @@ One line each: `- (source) what, and why it matters`. Dispatched builders put th
 Triaged 2026-11-10 (lead-9): the lines before are verbatim in [`STATUS-parked.md`](STATUS-parked.md), "Inbox triage 2026-11-10 (lead-9)"; they became T-427 (Bluetooth leftovers), T-428 (Store follow-ups), T-429 (test harness), T-430 (GlassShadow/AppArt masks, L0 memory), T-147 item 6 (launch follow-ups), T-282 item 12 (keyboard over glass), or owner questions (CPU per game, `core.hooksPath`).
 
 - (owner, 2026-11-12) Paper Plane ticketing pilot is running beside the `.md` board (361 tickets mirrored, RUY-177 done end to end): next lead continues it, see `LEAD-NOTES.md` "Next" item 4 and `PAPERPLANE-PILOT.md`. The `.md` files stay the truth until the owner says otherwise.
+- (T-469) The performance overlay shows only over a game in front; whether it should also show on Home is undecided (the spec hides it there).
+- (T-469, T-456) A keyboard or pad shortcut to toggle the performance overlay belongs to Ruya Input's shortcuts.
+- (T-469, Dell) SuperTuxKart FPS with the performance overlay on vs off, within 2 % (hw pending).
 - (lead-11) Untriaged follow-ups from T-147's reviews, T-452..T-468, the Dell study, the 0.0.64/0.0.65 VM runs and the reviews are verbatim in `STATUS-parked.md`, "Inbox lines lead-11 (untriaged)": plan them at the next planning pass with lead-10's.
 - (lead-10) Untriaged follow-ups from T-434, T-435, T-449, T-451, T-448, T-429, T-457, T-450, T-459, T-460, T-428 and the Dell launch test are verbatim in `STATUS-parked.md`, "Inbox lines lead-10 (untriaged)": plan them at the next planning pass (some feed T-452..T-455, T-461, T-462).
 
