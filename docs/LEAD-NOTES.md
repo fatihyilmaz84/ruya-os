@@ -14,19 +14,20 @@ The procedure is in [`LEAD.md`](LEAD.md) (**Budgets and "Lead efficiency": hand 
   - RUY-428 and RUY-427: Dell checks.
   - RUY-1 (lead spike): XWayland through `xwayland-satellite`, one per app instance; ADR-034 updated; build tickets RUY-434..437.
   - Lead fix 07d86bf: ruya-devices no longer treats `ruya-input/` virtual pads as connected controllers. The owner saw "Xbox 360 controller connected" toasts on every game launch and Hub close.
-- **Merged, not Done:**
-  - RUY-430 (vm-input-check beside the shell's routing) and RUY-22 (GlassShadow in Loaders): their merge gate was running at handoff; check `output\merge-gate-22.log` and move RUY-430 to Done if it is green.
-  - RUY-22 also waits for its Dell criteria (pills after display sleep, L0 VRAM; RUY-450).
-- **In flight (builders in their own worktrees; this session's agents end with it):**
-  - RUY-434 (image: patched satellite, Xwayland): `D:\dev\RuyaOS-worktrees\RUY-434`; it owns WSL and the VM for its image build.
-  - RUY-435 (ruya-session X11 mode): `D:\dev\RuyaOS-worktrees\RUY-435`.
-  - Look at each worktree's last commit and the ticket state. In Review means a reviewer; otherwise resume the work with a new builder on the same branch.
-  - Then RUY-436 (vm-x11-check and baseline). Alien Arena on the Dell needs all three.
+- RUY-430 is Done too (gate green, 1313 QML).
+- **Merged, still In Review:**
+  - RUY-22 (GlassShadow in Loaders): its Dell criteria are owed (pills after display sleep, L0 VRAM; RUY-450).
+  - RUY-435 (ruya-session X11 mode, x11.rs): its VM run (RUY-436) and Dell run need RUY-434's image. Until then X11-only games end `launch-failed` with a clear journal line. Follow-ups are in RUY-457.
+- **In flight:** RUY-434 (image: patched satellite, Xwayland), `D:\dev\RuyaOS-worktrees\RUY-434`, branch t/RUY-434-xwayland-satellite. Its builder was still working at handoff: uncommitted changes to the Containerfile, 20-base.sh, 98-guard.sh, image-packages.md and 01. It owns WSL and the VM for its image build.
+  - If it has reported: review it (ruya-reviewer, Opus).
+  - Otherwise: look at the worktree. If nothing is committed and nothing runs (`wsl -- pgrep -f build.sh`), resume with a new builder on the same branch and tell it what is in the worktree.
+  - Then RUY-436 (vm-x11-check and baseline; RUY-457 lists the cases), then Alien Arena and AAAAXY on the Dell.
 - **Images:**
   - 0.0.71: VM queue 11 PASS, 3 FAIL, all three check-script problems (fixed by RUY-430).
-  - 0.0.72 (main 07d86bf): CHAIN OK; the Dell update was started at handoff, so check `output\dell-update-0.0.72.log`.
-  - 0.0.72 has 07d86bf and RUY-422, but not RUY-430 or RUY-22.
-  - Owed in the VM on 0.0.72: `vm-devices-check.sh bluetooth` (RUY-422) and the input checks with RUY-430's scripts.
+  - **The Dell runs 0.0.72** (main 07d86bf: the virtual-pad toast fix and RUY-422; rollback 0.0.71). The owner is asked to confirm that the toasts are gone.
+  - Owed in the VM: `vm-devices-check.sh bluetooth` (RUY-422) and the input checks with RUY-430's scripts.
+- **The owner works in this checkout too** (they committed ADR-018 Epic and RUY-452..456 during lead-15). Check `git status` before every lead commit.
+- RUY-458 (inbox, lead): Library art from Flatpak metadata (icon, first screenshot as hero, brand colours). The owner asked; plan it.
 
 ## Owner decisions this session (recorded in specs and tickets)
 1. ADR-017/027 amendment: a new pad asks "Who's playing?" on connect and pauses the game; one controller per profile (a new pad takes it over); every player signed in, PIN if set; several temporary guests, wiped on leave. RUY-121, 122, 38, 124 and 125 are back in Backlog; **RUY-448 (lead) replans them, design canvas first**.
@@ -59,4 +60,4 @@ The procedure is in [`LEAD.md`](LEAD.md) (**Budgets and "Lead efficiency": hand 
 | Date | Range reviewed | Tasks | Findings (fixed / filed) | `dev.ps1 test` | VM |
 |---|---|---|---|---|---|
 | 2026-11-12 (lead-14) | 182d99f..b99ad4a | RUY-2, RUY-5 (lead); 401, 154, 411, 412, 3 | round 2+ for every ticket; joydev js leak found and closed | 1277 QML + 107 skips | 0.0.69-xpad OK |
-| 2026-11-12 (lead-15) | 7a46c55..HEAD | RUY-1 (lead); 409, 410, 425, 421, 415, 422, 424, 430, 22 | round 2 for 409 (thaw test gap) and 410 (use-after-free); virtual-pad toast bug fixed by the lead; 0.0.71 input checks failing on script problems (RUY-430) | 1310 QML + 107 skips | 0.0.71 queue 11/14 (3 script fails); Dell 0.0.71 hw: 428, 409 route, 410, 427 PASS |
+| 2026-11-12/13 (lead-15) | 7a46c55..HEAD | RUY-1 (lead); 409, 410, 425, 421, 415, 422, 424, 430, 22, 435 | round 2 for 409 (thaw test gap) and 410 (use-after-free); virtual-pad toast bug fixed by the lead; 0.0.71 input checks failing on script problems (RUY-430) | 1310 QML + 107 skips | 0.0.71 queue 11/14 (3 script fails); Dell 0.0.71 hw: 428, 409 route, 410, 427 PASS |
