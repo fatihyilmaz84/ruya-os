@@ -21,6 +21,7 @@ Item {
     SignalSpy { id: keepSpy; target: Display; signalName: "keepFinished" }
     SignalSpy { id: revertSpy; target: Display; signalName: "revertFinished" }
     SignalSpy { id: resetSpy; target: Display; signalName: "resetFinished" }
+    SignalSpy { id: brightnessSpy; target: Display; signalName: "setBrightnessFinished" }
 
     TestCase {
         id: tc
@@ -43,6 +44,7 @@ Item {
             keepSpy.clear()
             revertSpy.clear()
             resetSpy.clear()
+            brightnessSpy.clear()
             Profiles.lock()
             tryCompare(Profiles, "activeProfile", "")
             tc.shell = createTemporaryObject(shellComponent, host)
@@ -110,6 +112,93 @@ Item {
             for (let i = 0; i < 12 && !find(name).activeFocus; ++i)
                 keyClick(Qt.Key_Down)
             verify(find(name).activeFocus, name + " has focus")
+        }
+
+        // ---- Brightness (T-471: moved here from the Hub's Display panel, T-454) ----
+
+        function brightnessText() { return findChild(find("rowBrightness"), "value").text }
+
+        function test_brightness_is_a_slider_row_only_with_a_backlight() {
+            compare(Display.brightnessSupported, false, "the default mock screen is a TV")
+            openDisplayPane()
+            verify(!find("rowBrightness").visible, "a TV has no backlight: no row, not a greyed one")
+            verify(Display.mockUseScenario("laptop"))
+            tryCompare(Display, "brightnessSupported", true)
+            tryVerify(() => find("rowBrightness").visible, 2000, "the row comes with the backlight")
+            downTo("rowBrightness")
+            compare(Display.brightness, 60)
+            compare(brightnessText(), "60%")
+            // The screen loses its backlight (a monitor was plugged in): the row goes.
+            Display.mockUseScenario("tv4k")
+            tryVerify(() => !find("rowBrightness").visible)
+        }
+
+        function test_left_and_right_step_brightness_by_five_and_follow_the_answer() {
+            Display.mockUseScenario("laptop")
+            tryCompare(Display, "brightnessSupported", true)
+            openDisplayPane()
+            downTo("rowBrightness")
+            keyClick(Qt.Key_Left)
+            tryCompare(Display, "brightness", 55)
+            tryCompare(brightnessSpy, "count", 1)
+            compare(brightnessSpy.signalArguments[0][0], "ok")
+            tryCompare(findChild(find("rowBrightness"), "value"), "text", "55%")
+            keyClick(Qt.Key_Right)
+            keyClick(Qt.Key_Right)
+            tryCompare(Display, "brightness", 65, 5000)
+            compare(Display.mockBrightnessCalls(), 3)
+            // Presses that come before the answer step on from the last press, not from the old level.
+            for (let i = 0; i < 3; ++i)
+                keyClick(Qt.Key_Left)
+            tryCompare(Display, "brightness", 50, 5000)
+            compare(Display.mockBrightnessCalls(), 6)
+            verify(find("rowBrightness").activeFocus, "the focus stays on the row")
+        }
+
+        function test_brightness_stops_at_the_ends() {
+            Display.mockUseScenario("laptop")
+            tryCompare(Display, "brightnessSupported", true)
+            openDisplayPane()
+            downTo("rowBrightness")
+            for (let i = 0; i < 9; ++i)
+                keyClick(Qt.Key_Right)             // 60 -> 100 is eight steps
+            tryCompare(Display, "brightness", 100, 5000)
+            const calls = Display.mockBrightnessCalls()
+            compare(calls, 8, "the ninth press at the top asks nothing")
+            for (let i = 0; i < 25; ++i)
+                keyClick(Qt.Key_Left)              // 100 -> 5 is nineteen steps; the rest ask nothing
+            tryCompare(Display, "brightness", 5, 5000)
+            compare(Display.mockBrightnessCalls(), calls + 19, "never below 5 %: a black screen cannot be undone with a pad")
+        }
+
+        function test_a_refused_brightness_toasts_and_keeps_the_level() {
+            Display.mockUseScenario("laptop")
+            tryCompare(Display, "brightnessSupported", true)
+            openDisplayPane()
+            downTo("rowBrightness")
+            Display.mockFailBrightnessNext()
+            keyClick(Qt.Key_Right)
+            tryCompare(brightnessSpy, "count", 1)
+            compare(brightnessSpy.signalArguments[0][0], "failed")
+            tryVerify(() => Notifications.model.count > 0)
+            compare(Notifications.model.get(0).kind, "warning")
+            compare(Notifications.model.get(0).text, "Could not change the brightness.")
+            compare(Display.brightness, 60)
+            tryCompare(findChild(find("rowBrightness"), "value"), "text", "60%", 2000, "the row shows what the service has")
+            // The next press starts from the level the service has, not from the refused target.
+            keyClick(Qt.Key_Right)
+            tryCompare(Display, "brightness", 65)
+        }
+
+        function test_the_panel_asks_for_the_level_again_when_it_opens() {
+            Display.mockUseScenario("laptop")
+            tryCompare(Display, "brightnessSupported", true)
+            Display.mockBacklightKey(30)             // the laptop's own keys: nobody tells the shell
+            wait(50)
+            compare(Display.brightness, 60, "the shell has not heard of it")
+            openDisplayPane()
+            tryCompare(Display, "brightness", 30)    // the pane asked when it was shown
+            tryCompare(findChild(find("rowBrightness"), "value"), "text", "30%")
         }
 
         // ---- the mock follows the contract ----
@@ -686,6 +775,17 @@ Item {
             compare(find("resolutionPickerEntry_3840x2160").value, "Önerilen · Geçerli")
             keyClick(Qt.Key_Escape)
             tryVerify(() => !find("resolutionPicker").shown)
+        }
+
+        function test_zz_screenshots_brightness() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            Display.mockUseScenario("laptop")
+            tryCompare(Display, "brightnessSupported", true)
+            openDisplayPane()
+            downTo("rowBrightness")
+            wait(500)
+            grabImage(tc.shell).save(shotsDir + "/display-4-brightness.png")
         }
 
         function test_zz_screenshots() {

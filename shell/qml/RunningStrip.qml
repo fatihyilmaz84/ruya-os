@@ -101,16 +101,13 @@ Item {
         id: name
         objectName: "hubRunningName"
         readonly property var current: strip.apps[strip.currentIndex]
-        readonly property Item tileItem: view.itemAtIndex(strip.currentIndex)
         visible: strip.focused && current !== undefined
         y: view.height + Theme.spaceXs * strip.u
         width: Math.min(implicitWidth, strip.width)
-        x: {
-            if (!tileItem)
-                return 0
-            const centre = tileItem.x - view.contentX + tileItem.width / 2
-            return Math.max(0, Math.min(strip.width - width, centre - width / 2))
-        }
+        // From the index, as the tiles are laid out (index * (tile + spacing), less the view's scroll), not from
+        // itemAtIndex: on the first focus the delegates may not exist yet and the name would sit at the left.
+        readonly property real tileCentre: strip.currentIndex * (strip.tileWidth + view.spacing) - view.contentX + strip.tileWidth / 2
+        x: Math.max(0, Math.min(strip.width - width, tileCentre - width / 2))
         textFormat: Text.PlainText          // an app's name comes from outside
         text: current ? current.name : ""
         color: Theme.text

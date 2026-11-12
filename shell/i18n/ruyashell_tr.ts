@@ -1301,18 +1301,28 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+11"/>
-        <location line="+75"/>
+        <location line="+118"/>
         <source>Resolution</source>
         <translation>Çözünürlük</translation>
     </message>
     <message>
-        <location line="-62"/>
-        <location line="+84"/>
+        <location line="-105"/>
+        <location line="+127"/>
         <source>Refresh rate</source>
         <translation>Yenileme hızı</translation>
     </message>
     <message>
-        <location line="-71"/>
+        <location line="-101"/>
+        <source>Could not change the brightness.</source>
+        <translation>Parlaklık değiştirilemedi.</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Brightness</source>
+        <translation>Parlaklık</translation>
+    </message>
+    <message>
+        <location line="+18"/>
         <source>UI size</source>
         <translation>Arayüz boyutu</translation>
     </message>
@@ -2433,12 +2443,12 @@ Bu geri alınamaz.</translation>
         <translation>Kapalı</translation>
     </message>
     <message>
-        <location line="+430"/>
+        <location line="+432"/>
         <source>Not connected</source>
         <translation>Bağlı değil</translation>
     </message>
     <message>
-        <location line="-464"/>
+        <location line="-466"/>
         <location line="+13"/>
         <location line="+21"/>
         <source>On</source>
@@ -2527,18 +2537,18 @@ Bu geri alınamaz.</translation>
     <message>
         <location line="+67"/>
         <location line="+16"/>
-        <location line="+14"/>
+        <location line="+16"/>
         <source>Resume</source>
         <translation>Devam et</translation>
     </message>
     <message>
-        <location line="-28"/>
-        <location line="+19"/>
+        <location line="-30"/>
+        <location line="+21"/>
         <source>Select</source>
         <translation>Seç</translation>
     </message>
     <message>
-        <location line="-14"/>
+        <location line="-16"/>
         <source>Adjust</source>
         <translation>Ayarla</translation>
     </message>
@@ -2559,7 +2569,7 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+9"/>
+        <location line="+11"/>
         <source>Open</source>
         <translation>Aç</translation>
     </message>
@@ -2574,28 +2584,28 @@ Bu geri alınamaz.</translation>
         <translation>Oyunu kapat</translation>
     </message>
     <message>
-        <location line="-169"/>
+        <location line="-171"/>
         <source>Volume</source>
         <translation>Ses</translation>
     </message>
     <message>
-        <location line="+170"/>
+        <location line="+172"/>
         <source>Switch profile</source>
         <translation>Profil değiştir</translation>
     </message>
     <message>
-        <location line="-176"/>
-        <location line="+432"/>
+        <location line="-178"/>
+        <location line="+434"/>
         <source>Power</source>
         <translation>Güç</translation>
     </message>
     <message>
-        <location line="-289"/>
+        <location line="-291"/>
         <source>Close</source>
         <translation>Kapat</translation>
     </message>
     <message>
-        <location line="+34"/>
+        <location line="+36"/>
         <source>Suspend</source>
         <translation>Askıya al</translation>
     </message>
@@ -2610,13 +2620,13 @@ Bu geri alınamaz.</translation>
         <translation>Kapat</translation>
     </message>
     <message>
-        <location line="-36"/>
-        <location line="+37"/>
+        <location line="-38"/>
+        <location line="+39"/>
         <source>Back</source>
         <translation>Geri</translation>
     </message>
     <message>
-        <location line="-234"/>
+        <location line="-236"/>
         <source>Output</source>
         <translation>Çıkış</translation>
     </message>
@@ -2636,7 +2646,7 @@ Bu geri alınamaz.</translation>
         <translation>Performans göstergesi</translation>
     </message>
     <message>
-        <location line="+184"/>
+        <location line="+186"/>
         <source>Switch</source>
         <translation>Geç</translation>
     </message>
@@ -2708,13 +2718,10 @@ Bu geri alınamaz.</translation>
         <translation>Ses %1</translation>
     </message>
     <message>
-        <location line="-546"/>
+        <location line="-548"/>
         <source>Muted</source>
         <translation>Sessiz</translation>
     </message>
-</context>
-<context>
-    <name>QuickTile</name>
 </context>
 <context>
     <name>ScreenSaver</name>

@@ -441,6 +441,8 @@ Item {
         }
         if (key === "resume")
             return [{ button: "A", text: qsTr("Resume") }, back]
+        if (key === "home" || key === "closeGame")      // the hint names the button (UX review, T-471)
+            return [{ button: "A", text: labelOf(key) }, back]
         if (key.startsWith("to:"))
             return [{ button: "A", text: qsTr("Switch") }, back]
         if (key.startsWith("panel:"))

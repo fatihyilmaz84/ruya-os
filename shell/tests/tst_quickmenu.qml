@@ -151,6 +151,14 @@ Item {
             verify(find("quickMenuItem_" + key).focused, key + " has the focus ring")
         }
 
+        // How far the name under the strip is from the centre of the focused tile (0 when it is under it).
+        function nameOffsetFrom(appId) {
+            const strip = find("hubRunningStrip")
+            const tile = find("quickMenuItem_to:" + appId)
+            const name = find("hubRunningName")
+            return Math.abs(name.mapToItem(strip, name.width / 2, 0).x - tile.mapToItem(strip, tile.width / 2, 0).x)
+        }
+
         function hintVerbs() {
             const bar = find("hintBar")
             const parts = []
@@ -182,6 +190,10 @@ Item {
                 compare(focusedKey(), key)
                 verify(find("quickMenuItem_" + key).focused, key + " has the focus ring")
                 verify(find("systemActions").activeFocus)
+                if (key === "to:org.example.Racer") {
+                    verify(find("hubRunningName").visible)
+                    verify(nameOffsetFrom("org.example.Racer") < 2, "on the first focus the name is under the tile: " + nameOffsetFrom("org.example.Racer"))
+                }
             }
             keyClick(Qt.Key_Down)
             compare(focusedKey(), "panel:audio", "the last row stays")
@@ -318,6 +330,12 @@ Item {
             compare(find("systemPanel").itemKeys, ["running", "volume", "panels"])
             compare(focusedKey(), "to:org.example.Racer", "the focus starts on the strip")
             verify(find("quickMenuItem_to:org.example.Racer").focused)
+            verify(nameOffsetFrom("org.example.Racer") < 2, "the name is under the tile on the first open: " + nameOffsetFrom("org.example.Racer"))
+            // No picture in this library: the tile is the tint and the initial, as every AppArt without one.
+            const tile = find("quickMenuItem_to:org.example.Racer")
+            compare(findChild(tile, "hubRunningArt").picture, "")
+            verify(findChild(tile, "artMonogram").visible)
+            compare(findChild(tile, "artMonogram").text, "T")
             keyClick(Qt.Key_Return)
             tryVerify(() => app.activeFocus && !find("systemPanel").open, 2000, "A switches to it")
         }
@@ -502,9 +520,9 @@ Item {
             openHub()
             compare(hintVerbs(), "A Resume|B Resume")
             goTo("home")
-            compare(hintVerbs(), "A Select|B Resume")
+            compare(hintVerbs(), "A Home|B Resume", "the hint names the button")
             goTo("closeGame")
-            compare(hintVerbs(), "A Select|B Resume")
+            compare(hintVerbs(), "A Close game|B Resume")
             goTo("to:org.example.Racer")
             compare(hintVerbs(), "A Switch|B Resume")
             goTo("volume")
@@ -538,6 +556,22 @@ Item {
             tryCompare(find("systemPanel"), "powerMode", true)
             wait(600)
             grabImage(tc.shell).save(shotsDir + "/hub-5-power-panel.png")
+        }
+
+        // A game behind Home, no pictures in the library: the strip's tile is the tint and the initial.
+        function test_zz_screenshots_hub_strip_without_art() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            start()
+            playRacer(pictureAppComponent)
+            openHub()
+            goTo("home")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => !tc.shell.appOpen && !find("systemPanel").open, 2000)
+            keyClick(Qt.Key_HomePage)
+            tryVerify(() => find("quickMenuItem_to:org.example.Racer").focused, 2000)
+            wait(800)
+            grabImage(tc.shell).save(shotsDir + "/hub-7-strip-no-art.png")
         }
 
         function test_zz_screenshots_hub_without_an_app() {

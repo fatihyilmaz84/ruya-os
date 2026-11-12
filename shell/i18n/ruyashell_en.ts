@@ -1305,18 +1305,28 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+11"/>
-        <location line="+75"/>
+        <location line="+118"/>
         <source>Resolution</source>
         <translation>Resolution</translation>
     </message>
     <message>
-        <location line="-62"/>
-        <location line="+84"/>
+        <location line="-105"/>
+        <location line="+127"/>
         <source>Refresh rate</source>
         <translation>Refresh rate</translation>
     </message>
     <message>
-        <location line="-71"/>
+        <location line="-101"/>
+        <source>Could not change the brightness.</source>
+        <translation>Could not change the brightness.</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Brightness</source>
+        <translation>Brightness</translation>
+    </message>
+    <message>
+        <location line="+18"/>
         <source>UI size</source>
         <translation>UI size</translation>
     </message>
@@ -2442,12 +2452,12 @@ This can&apos;t be undone.</translation>
         <translation>Off</translation>
     </message>
     <message>
-        <location line="+430"/>
+        <location line="+432"/>
         <source>Not connected</source>
         <translation>Not connected</translation>
     </message>
     <message>
-        <location line="-464"/>
+        <location line="-466"/>
         <location line="+13"/>
         <location line="+21"/>
         <source>On</source>
@@ -2536,18 +2546,18 @@ This can&apos;t be undone.</translation>
     <message>
         <location line="+67"/>
         <location line="+16"/>
-        <location line="+14"/>
+        <location line="+16"/>
         <source>Resume</source>
         <translation>Resume</translation>
     </message>
     <message>
-        <location line="-28"/>
-        <location line="+19"/>
+        <location line="-30"/>
+        <location line="+21"/>
         <source>Select</source>
         <translation>Select</translation>
     </message>
     <message>
-        <location line="-14"/>
+        <location line="-16"/>
         <source>Adjust</source>
         <translation>Adjust</translation>
     </message>
@@ -2568,7 +2578,7 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+9"/>
+        <location line="+11"/>
         <source>Open</source>
         <translation>Open</translation>
     </message>
@@ -2583,28 +2593,28 @@ This can&apos;t be undone.</translation>
         <translation>Close game</translation>
     </message>
     <message>
-        <location line="-169"/>
+        <location line="-171"/>
         <source>Volume</source>
         <translation>Volume</translation>
     </message>
     <message>
-        <location line="+170"/>
+        <location line="+172"/>
         <source>Switch profile</source>
         <translation>Switch profile</translation>
     </message>
     <message>
-        <location line="-176"/>
-        <location line="+432"/>
+        <location line="-178"/>
+        <location line="+434"/>
         <source>Power</source>
         <translation>Power</translation>
     </message>
     <message>
-        <location line="-289"/>
+        <location line="-291"/>
         <source>Close</source>
         <translation>Close</translation>
     </message>
     <message>
-        <location line="+34"/>
+        <location line="+36"/>
         <source>Suspend</source>
         <translation>Suspend</translation>
     </message>
@@ -2619,13 +2629,13 @@ This can&apos;t be undone.</translation>
         <translation>Power off</translation>
     </message>
     <message>
-        <location line="-36"/>
-        <location line="+37"/>
+        <location line="-38"/>
+        <location line="+39"/>
         <source>Back</source>
         <translation>Back</translation>
     </message>
     <message>
-        <location line="-234"/>
+        <location line="-236"/>
         <source>Output</source>
         <translation>Output</translation>
     </message>
@@ -2645,7 +2655,7 @@ This can&apos;t be undone.</translation>
         <translation>Performance overlay</translation>
     </message>
     <message>
-        <location line="+184"/>
+        <location line="+186"/>
         <source>Switch</source>
         <translation>Switch</translation>
     </message>
@@ -2717,13 +2727,10 @@ This can&apos;t be undone.</translation>
         <translation>Volume %1</translation>
     </message>
     <message>
-        <location line="-546"/>
+        <location line="-548"/>
         <source>Muted</source>
         <translation>Muted</translation>
     </message>
-</context>
-<context>
-    <name>QuickTile</name>
 </context>
 <context>
     <name>ScreenSaver</name>
