@@ -75,15 +75,20 @@ unit_check() {
 routing_check() {
     echo "--- routing, ACLs, conformance and rumble (vm-input-probe.py)"
     [ -f "$probe" ] || { bad "$probe is missing: copy it next to this script"; return; }
-    local since line
+    local since line dir
     since="$(date '+%Y-%m-%d %H:%M:%S')"
+    # The probe runs again as the profile users (the game, the refused opens): /root is 0700.
+    dir="$(mktemp -d /var/tmp/ruya-input-check.XXXXXX)"
+    chmod 0755 "$dir"
+    install -m 0644 "$probe" "$dir/vm-input-probe.py"
     while IFS= read -r line; do
         case "$line" in
         PASS:*) ok "${line#PASS: }" ;;
         FAIL:*) bad "${line#FAIL: }" ;;
         *) echo "$line"; bad "the probe printed an unexpected line (traceback?)" ;;
         esac
-    done < <(python3 "$probe" check --user "ruya-$me" --profile "$me" --other "ruya-$other" 2>&1)
+    done < <(cd "$dir" && python3 "$dir/vm-input-probe.py" check --user "ruya-$me" --profile "$me" --other "ruya-$other" 2>&1)
+    rm -rf "$dir"
     local log
     log="$(journalctl -u ruya-inputd --since "$since" --no-pager -o cat)"
     echo "$log" | grep -q "ready for ruya-$me (/dev/input/event[0-9]*, udev add)" \
@@ -102,23 +107,17 @@ routing_check() {
 
 restart_check() {
     echo "--- kill -9: the navigation keyboard is back within 0.5 s, the shell opens it"
-    local i before pid start now ms after spid fds worst=0
+    [ -f "$probe" ] || { bad "$probe is missing: copy it next to this script"; return; }
+    local i out ms spid fds node worst=0
     for i in 1 2 3; do
-        before="$(nav_input)"
-        pid="$(systemctl show -p MainPID --value ruya-inputd)"
-        start="$(date +%s%N)"
-        kill -9 "$pid"
-        after=""
-        while :; do
-            after="$(nav_input)"
-            now="$(date +%s%N)"
-            [ -n "$after" ] && [ "$after" != "$before" ] && break
-            [ $(( (now - start) / 1000000 )) -gt 5000 ] && break
-            sleep 0.01
-        done
-        ms=$(( (now - start) / 1000000 ))
+        # vm-input-probe.py restart: kill -9, then polls sysfs every 5 ms for a new navigation node.
+        out="$(python3 "$probe" restart)"
+        ms="${out##* }"
+        case "$out" in
+        *" none "*|no-pid) bad "run $i: $out"; ms=5000 ;;
+        *) echo "run $i: ${out% *} in $ms ms" ;;
+        esac
         [ "$ms" -gt "$worst" ] && worst="$ms"
-        if [ -n "$after" ] && [ "$after" != "$before" ]; then echo "run $i: $before -> $after in $ms ms"; else bad "run $i: no new navigation keyboard within 5 s"; fi
         sleep 2
     done
     [ "$worst" -le 500 ] && ok "navigation keyboard back after at most $worst ms (target 0.5 s)" || bad "navigation keyboard back after $worst ms (target 0.5 s)"

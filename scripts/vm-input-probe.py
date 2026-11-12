@@ -7,6 +7,7 @@
       runs a game process as the profile user on the virtual pad, and prints PASS:/FAIL: lines.
   python3 vm-input-probe.py game <node>      (as the profile user; driven by `check` over stdin)
   python3 vm-input-probe.py open <node>      prints "open ok" or "open refused <errno name>"
+  python3 vm-input-probe.py restart          (root) kill -9 ruya-inputd; prints "<old> <new> <ms>"
 """
 import argparse
 import errno
@@ -399,6 +400,26 @@ def cmd_open(args):
         print(f"open refused {errno.errorcode.get(e.errno, e.errno)}")
 
 
+def cmd_restart(args):
+    """kill -9 the service; prints the ms until a new RuyaOS Navigation device exists."""
+    _, before = node_by("name", NAV)
+    out = subprocess.run(["systemctl", "show", "-p", "MainPID", "--value", "ruya-inputd"],
+                         capture_output=True, text=True).stdout.strip()
+    pid = int(out or 0)
+    if not pid:
+        print("no-pid")
+        return
+    start = time.monotonic()
+    os.kill(pid, 9)
+    while time.monotonic() - start < 5:
+        _, now = node_by("name", NAV)
+        if now and now != before:
+            print(f"{before} {now} {int((time.monotonic() - start) * 1000)}")
+            return
+        time.sleep(0.005)
+    print(f"{before} none 5000")
+
+
 def cmd_check(args):
     fails = 0
 
@@ -553,10 +574,11 @@ def main():
     g.add_argument("node")
     o = sub.add_parser("open")
     o.add_argument("node")
+    sub.add_parser("restart")
     args = ap.parse_args()
     if args.cmd == "check":
         sys.exit(1 if cmd_check(args) else 0)
-    {"game": cmd_game, "open": cmd_open}[args.cmd](args)
+    {"game": cmd_game, "open": cmd_open, "restart": cmd_restart}[args.cmd](args)
 
 
 if __name__ == "__main__":

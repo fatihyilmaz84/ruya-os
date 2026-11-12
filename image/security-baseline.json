@@ -18,8 +18,8 @@
       "reason": "root oneshot that writes the GRUB custom.cfg on /boot; measured 0.0.61"
     },
     "ruya-inputd.service": {
-      "max_exposure": 3.5,
-      "reason": "reads /dev/input, uinput; measured 0.0.61"
+      "max_exposure": 1.2,
+      "reason": "own user ruya-input, no caps, no IP; reads /dev/input, uinput; no PrivateNetwork (the udev monitor, 06-input.md section 3); measured 0.0.69-input (RUY-3)"
     },
     "ruya-library.service": {
       "max_exposure": 0.8,
