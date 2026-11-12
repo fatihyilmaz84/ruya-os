@@ -109,6 +109,7 @@ Item {
 
         function cleanup() {
             DeviceSettings.reducedMotion = false
+            DeviceSettings.pauseGamesInHub = true
         }
 
         // Play on the hero, the answer, and the app's window: the app item is returned focused.
@@ -182,6 +183,9 @@ Item {
 
         function test_guide_opens_the_quick_menu_with_resume_first_and_back_returns() {
             start()
+            // The Hub freezes the game and the mock answers a tick later: the card line turns from "Just
+            // started" to "Paused" at a moment the test does not control (RUY-421). Pausing is tst_hub_pause's.
+            DeviceSettings.pauseGamesInHub = false
             const app = playRacer()
             keyClick(Qt.Key_HomePage)
             tryVerify(() => find("systemActions").activeFocus, 2000, "the quick menu opens over the app")
