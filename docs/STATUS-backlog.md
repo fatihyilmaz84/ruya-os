@@ -4,6 +4,7 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 
 | ID | Title | Status | Depends |
 |---|---|---|---|
+| [T-470](tasks/T-470-thawed-app-sound-not-restored.md) | A thawed app's sound is not put back (T-466 restore fails in VM 0.0.66) | todo | — |
 | [T-455](tasks/T-455-hub-latency-and-idle-cost.md) | Hub budgets: activation latency, idle cost, game FPS with the Hub open (Dell) | in-progress | — |
 | [T-456](tasks/T-456-guide-on-every-pad.md) | Guide on every pad: long press for Power, never reaching the game, a keyboard shortcut | todo | T-367, T-396 |
 | [T-362](tasks/T-362-compositor-xdg-output-and-socket-follow-ups.md) | Compositor: xdg-output for games, profile-socket and log follow-ups | todo | — |

@@ -45,6 +45,7 @@ One line each: `- (source) what, and why it matters`. Dispatched builders put th
 Triaged 2026-11-10 (lead-9): the lines before are verbatim in [`STATUS-parked.md`](STATUS-parked.md), "Inbox triage 2026-11-10 (lead-9)"; they became T-427 (Bluetooth leftovers), T-428 (Store follow-ups), T-429 (test harness), T-430 (GlassShadow/AppArt masks, L0 memory), T-147 item 6 (launch follow-ups), T-282 item 12 (keyboard over glass), or owner questions (CPU per game, `core.hooksPath`).
 
 - (owner, 2026-11-12) Paper Plane ticketing pilot is running beside the `.md` board (361 tickets mirrored, RUY-177 done end to end): next lead continues it, see `LEAD-NOTES.md` "Next" item 4 and `PAPERPLANE-PILOT.md`. The `.md` files stay the truth until the owner says otherwise.
+- (lead-12) No test compares the D-Bus signatures a Rust service serves with its XML: GetBrightness went out as `su` instead of `(su)` and passed every host gate (T-454, fixed 7597ee7); T-453 had a contract mismatch too. An introspection-vs-XML test per service would catch both.
 - (T-469) The performance overlay shows only over a game in front; whether it should also show on Home is undecided (the spec hides it there).
 - (T-469, T-456) A keyboard or pad shortcut to toggle the performance overlay belongs to Ruya Input's shortcuts.
 - (T-469, Dell) SuperTuxKart FPS with the performance overlay on vs off, within 2 % (hw pending).
