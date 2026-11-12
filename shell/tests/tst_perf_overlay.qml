@@ -151,6 +151,16 @@ Item {
             compare(overlayPersistence, "")
         }
 
+        function test_a_deleted_profile_loses_its_switch() {
+            start()
+            DeviceSettings.setPerformanceOverlay("p3", true)
+            Profiles.deleteProfile("p1", "1234", "p3")
+            tryVerify(() => !DeviceSettings.performanceOverlay("p3"), 2000, "the Guest profile is gone, so is its switch")
+            tryVerify(() => Profiles.profiles.length === 2)
+            Profiles.resetMockForTests("")
+            tryVerify(() => Profiles.profiles.length === 3)
+        }
+
         // ---- when it is drawn ---------------------------------------------------------------------------------
 
         function test_off_nothing_is_drawn_and_nothing_is_asked() {

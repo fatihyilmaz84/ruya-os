@@ -1966,6 +1966,15 @@ FocusScope {
         rightBlocked: toasts.visibleCount > 0
     }
 
+    // A deleted profile loses its overlay switch, so a profile created later with the same id starts with it off.
+    Connections {
+        target: Profiles
+        function onDeleteFinished(id, status) {
+            if (status === "ok")
+                DeviceSettings.setPerformanceOverlay(id, false)
+        }
+    }
+
     // The quick menu (T-147; Guide opens it from Home, a page, a launch or over a running app; it
     // replaced the centred Guide card). Also shows the image version, which the update tests read.
     QuickMenu {
