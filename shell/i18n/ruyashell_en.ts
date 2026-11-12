@@ -724,7 +724,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>BluetoothPane</name>
     <message>
-        <location filename="../qml/BluetoothPane.qml" line="+93"/>
+        <location filename="../qml/BluetoothPane.qml" line="+100"/>
         <source>Forget %1?</source>
         <translation>Forget %1?</translation>
     </message>
@@ -734,12 +734,12 @@ This can&apos;t be undone.</translation>
         <translation>It will have to be paired again to be used.</translation>
     </message>
     <message>
-        <location line="+135"/>
+        <location line="+140"/>
         <source>Bluetooth is off.</source>
         <translation>Bluetooth is off.</translation>
     </message>
     <message>
-        <location line="-70"/>
+        <location line="-72"/>
         <source>Pairing…</source>
         <translation>Pairing…</translation>
     </message>
@@ -759,12 +759,12 @@ This can&apos;t be undone.</translation>
         <translation>Connected</translation>
     </message>
     <message>
-        <location line="+120"/>
+        <location line="+122"/>
         <source>Pair a new controller</source>
         <translation>Pair a new controller</translation>
     </message>
     <message>
-        <location line="+109"/>
+        <location line="+110"/>
         <source>Pair again %1</source>
         <translation>Pair again %1</translation>
     </message>
@@ -779,7 +779,7 @@ This can&apos;t be undone.</translation>
         <translation>Rename %1</translation>
     </message>
     <message>
-        <location line="-247"/>
+        <location line="-250"/>
         <source>Paired</source>
         <translation>Paired</translation>
     </message>
@@ -799,7 +799,7 @@ This can&apos;t be undone.</translation>
         <translation>Battery %1%</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+16"/>
         <source>This is a keyboard. Pair it?</source>
         <translation>This is a keyboard. Pair it?</translation>
     </message>
@@ -854,8 +854,8 @@ This can&apos;t be undone.</translation>
         <translation>Scanning…</translation>
     </message>
     <message>
-        <location line="-183"/>
-        <location line="+331"/>
+        <location line="-188"/>
+        <location line="+337"/>
         <source>Forget %1</source>
         <translation>Forget %1</translation>
     </message>
@@ -886,6 +886,11 @@ This can&apos;t be undone.</translation>
         <location line="+2"/>
         <source>Bluetooth is off.</source>
         <translation>Bluetooth is off.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>That keyboard was not confirmed.</source>
+        <translation>That keyboard was not confirmed.</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -2121,7 +2126,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>PowerConfirm</name>
     <message>
-        <location filename="../qml/PowerConfirm.qml" line="+31"/>
+        <location filename="../qml/PowerConfirm.qml" line="+34"/>
         <source>Suspend now?</source>
         <translation>Suspend now?</translation>
     </message>
@@ -3056,7 +3061,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+587"/>
+        <location filename="../qml/Shell.qml" line="+612"/>
         <source>Could not %1.</source>
         <translation>Could not %1.</translation>
     </message>
@@ -4459,7 +4464,7 @@ This can&apos;t be undone.</translation>
         </translation>
     </message>
     <message numerus="yes">
-        <location line="+244"/>
+        <location line="+254"/>
         <source>%n more</source>
         <translation>
             <numerusform>%n more</numerusform>
@@ -4467,7 +4472,7 @@ This can&apos;t be undone.</translation>
         </translation>
     </message>
     <message>
-        <location line="-239"/>
+        <location line="-249"/>
         <source>Safe to remove</source>
         <translation>Safe to remove</translation>
     </message>

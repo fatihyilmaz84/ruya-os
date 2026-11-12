@@ -34,6 +34,8 @@ pub enum Status {
     Ok,
     UnknownDevice,
     PairingFailed,
+    /// `Pair` of a keyboard-class device without the shell's confirmation (RUY-422).
+    NotConfirmed,
     Timeout,
     Unavailable,
     Invalid,
@@ -48,6 +50,7 @@ impl Status {
             Status::Ok => "ok",
             Status::UnknownDevice => "unknown-device",
             Status::PairingFailed => "pairing-failed",
+            Status::NotConfirmed => "not-confirmed",
             Status::Timeout => "timeout",
             Status::Unavailable => "unavailable",
             Status::Invalid => "invalid",
@@ -1013,16 +1016,32 @@ impl<B: Bluez> Bluetooth<B> {
     /// Pair (just works), trust and connect. One budget of `CALL_TIMEOUT` (counted by `clock`)
     /// covers the whole call: connecting gets what pairing left, so the answer comes before the
     /// D-Bus default timeout.
-    pub fn pair(&self, id: &str, clock: impl Fn() -> Instant) -> Status {
+    ///
+    /// A device that announces a keyboard (`Device::keyboard`) is paired, trusted and connected only
+    /// when `keyboard_confirmed` says the user answered "This is a keyboard. Pair it?" for this call
+    /// (RUY-422); otherwise it is refused with `Status::NotConfirmed` and the refusal is logged. The
+    /// flag is ignored for every other device.
+    pub fn pair_with(
+        &self,
+        id: &str,
+        keyboard_confirmed: bool,
+        clock: impl Fn() -> Instant,
+    ) -> Status {
         // While it runs, `refresh` must not close the `Pairable` it opens.
         self.lock().manual_pairs += 1;
-        let status = self.pair_one(id, clock);
+        let status = self.pair_one(id, keyboard_confirmed, clock);
         let mut st = self.lock();
         st.manual_pairs = st.manual_pairs.saturating_sub(1);
         status
     }
 
-    fn pair_one(&self, id: &str, clock: impl Fn() -> Instant) -> Status {
+    /// `pair_with` for a caller that has asked no question: a keyboard-class device is refused.
+    #[cfg(test)]
+    pub fn pair(&self, id: &str, clock: impl Fn() -> Instant) -> Status {
+        self.pair_with(id, false, clock)
+    }
+
+    fn pair_one(&self, id: &str, keyboard_confirmed: bool, clock: impl Fn() -> Instant) -> Status {
         if id.is_empty() {
             return Status::Invalid;
         }
@@ -1033,6 +1052,15 @@ impl<B: Bluez> Bluetooth<B> {
             Ok(d) => d,
             Err(s) => return s,
         };
+        if dev.keyboard && !keyboard_confirmed {
+            // The service is the gate for the shell's second question (RUY-422): a keyboard types
+            // anywhere the shell can, so it is never paired, trusted or connected unasked.
+            log::info(&format!(
+                "refused to pair {}: it announces a keyboard and the shell did not confirm it",
+                self.label(&dev.id)
+            ));
+            return Status::NotConfirmed;
+        }
         let end = clock() + CALL_TIMEOUT;
         let left = || end.saturating_duration_since(clock());
         if !dev.paired {
@@ -1765,6 +1793,31 @@ impl FakeBluez {
             trusted: true,
             battery: None,
             class: Some(0x2508),
+            appearance: None,
+            adapter: HCI0.to_owned(),
+        });
+        fake.set_raw(raw);
+        fake
+    }
+
+    /// `with_devices` and a keyboard in range, not paired (`AA:00:00:00:00:06`, Class of Device
+    /// 0x2540, icon `input-keyboard`; RUY-422). `--session` serves this one when
+    /// `RUYA_DEVICES_FAKE_BLUETOOTH` is `keyboard` (`vm-devices-check.sh bluetooth` reads it).
+    pub fn with_keyboard() -> Self {
+        let fake = Self::with_devices();
+        let mut raw = fake.inner().raw.clone();
+        raw.devices.push(RawDevice {
+            address: "AA:00:00:00:00:06".to_owned(),
+            alias: "Slim Keys".to_owned(),
+            name: "Slim Keys".to_owned(),
+            icon: "input-keyboard".to_owned(),
+            modalias: String::new(),
+            paired: false,
+            bonded: false,
+            connected: false,
+            trusted: false,
+            battery: None,
+            class: Some(0x2540),
             appearance: None,
             adapter: HCI0.to_owned(),
         });
@@ -3108,6 +3161,42 @@ mod tests {
     }
 
     #[test]
+    fn the_sweep_removes_a_keyboard_that_bonded_by_itself_in_the_window() {
+        // RUY-424: the sweep (`pump`) is a second user of `window_accepts`, next to the agent. A
+        // keyboard-class device that bonds without asking the agent (the kernel accepts a just-works
+        // pairing by itself) is a stranger there too: removed, not trusted, and it does not end the
+        // window the way a pad that bonds does.
+        let bt = Bluetooth::new(FakeBluez::new(Raw::single(
+            RawAdapter {
+                powered: true,
+                discovering: false,
+                pairable: false,
+                discoverable: false,
+            },
+            vec![near(KEYS, "Slim Keys", "input-keyboard", Some(0x2540))],
+        )));
+        bt.refresh().expect("reads");
+        open(&bt, Instant::now());
+        bt.bluez.bond(KEYS);
+        bt.refresh().expect("reads");
+        assert_eq!(bt.pump(), None);
+        let calls = bt.bluez.calls();
+        assert!(
+            calls.contains(&format!("remove {KEYS}")),
+            "removed as a stranger: {calls:?}"
+        );
+        assert!(
+            !calls.iter().any(|c| c.starts_with("trust")),
+            "never trusted: {calls:?}"
+        );
+        assert_eq!(
+            bt.pairing_state(),
+            PairingState::Open,
+            "a keyboard does not end the window"
+        );
+    }
+
+    #[test]
     fn a_controller_that_bonds_without_asking_the_agent_ends_the_window() {
         let bt = window_bt();
         let t0 = Instant::now();
@@ -3147,6 +3236,142 @@ mod tests {
         bt.refresh().expect("reads");
         bt.pump();
         assert!(!bt.bluez.calls().iter().any(|c| c.starts_with("remove")));
+    }
+
+    const KEYS: &str = "AA:00:00:00:00:50";
+
+    /// `window_bt` with a keyboard in range, unpaired.
+    fn keyboard_bt() -> Bluetooth<FakeBluez> {
+        let bt = window_bt();
+        bt.bluez
+            .add_device(near(KEYS, "Slim Keys", "input-keyboard", Some(0x2540)));
+        bt.refresh().expect("reads");
+        bt
+    }
+
+    fn pairing_calls(bt: &Bluetooth<FakeBluez>) -> Vec<String> {
+        bt.bluez
+            .calls()
+            .into_iter()
+            .filter(|c| {
+                ["pair", "trust", "connect"]
+                    .iter()
+                    .any(|w| c.starts_with(w))
+            })
+            .collect()
+    }
+
+    #[test]
+    fn an_unconfirmed_keyboard_is_refused_and_logged_and_nothing_is_touched() {
+        let bt = keyboard_bt();
+        log::take();
+        assert_eq!(
+            bt.pair_with(KEYS, false, Instant::now),
+            Status::NotConfirmed
+        );
+        assert_eq!(Status::NotConfirmed.as_str(), "not-confirmed");
+        assert!(
+            bt.bluez.calls().is_empty(),
+            "no pairing, no trust, no connect, not even Pairable: {:?}",
+            bt.bluez.calls()
+        );
+        let lines = log::take();
+        assert!(
+            lines
+                .iter()
+                .any(|l| l.contains("refused to pair") && l.contains(KEYS)),
+            "the refusal is logged: {lines:?}"
+        );
+    }
+
+    #[test]
+    fn the_session_keyboard_fake_lists_an_unpaired_keyboard_and_refuses_it_unconfirmed() {
+        let bt = Bluetooth::new(FakeBluez::with_keyboard());
+        bt.refresh().expect("reads");
+        let keys = bt.list().into_iter().find(|d| d.id == "AA:00:00:00:00:06");
+        assert!(keys.is_some_and(|d| d.keyboard && !d.paired));
+        assert_eq!(
+            bt.pair_with("AA:00:00:00:00:06", false, Instant::now),
+            Status::NotConfirmed
+        );
+        assert_eq!(
+            bt.pair_with("AA:00:00:00:00:06", true, Instant::now),
+            Status::Ok
+        );
+    }
+
+    #[test]
+    fn a_confirmed_keyboard_pairs_trusts_and_connects() {
+        let bt = keyboard_bt();
+        assert_eq!(bt.pair_with(KEYS, true, Instant::now), Status::Ok);
+        assert_eq!(
+            pairing_calls(&bt),
+            [
+                "pairable true".to_owned(),
+                format!("pair {KEYS}"),
+                "pairable false".to_owned(),
+                format!("trust {KEYS}"),
+                format!("connect {KEYS}")
+            ]
+        );
+    }
+
+    #[test]
+    fn a_keyboard_that_is_paired_already_is_not_trusted_or_connected_unconfirmed_either() {
+        let bt = window_bt();
+        let mut keys = near(KEYS, "Slim Keys", "input-keyboard", Some(0x2540));
+        keys.paired = true;
+        bt.bluez.add_device(keys);
+        bt.refresh().expect("reads");
+        assert_eq!(
+            bt.pair_with(KEYS, false, Instant::now),
+            Status::NotConfirmed
+        );
+        assert!(pairing_calls(&bt).is_empty());
+        assert_eq!(bt.pair_with(KEYS, true, Instant::now), Status::Ok);
+        assert_eq!(
+            pairing_calls(&bt),
+            [format!("trust {KEYS}"), format!("connect {KEYS}")]
+        );
+    }
+
+    #[test]
+    fn the_confirmation_changes_nothing_for_a_pad_or_any_other_device() {
+        for confirmed in [false, true] {
+            for address in [PAD, HEADSET] {
+                let bt = window_bt();
+                assert_eq!(
+                    bt.pair_with(address, confirmed, Instant::now),
+                    Status::Ok,
+                    "{address} confirmed={confirmed}"
+                );
+                assert_eq!(
+                    pairing_calls(&bt),
+                    [
+                        "pairable true".to_owned(),
+                        format!("pair {address}"),
+                        "pairable false".to_owned(),
+                        format!("trust {address}"),
+                        format!("connect {address}")
+                    ]
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_confirmed_keyboard_paired_by_hand_in_the_window_is_kept() {
+        let bt = keyboard_bt();
+        open(&bt, Instant::now());
+        assert_eq!(bt.pair_with(KEYS, true, Instant::now), Status::Ok);
+        bt.refresh().expect("reads");
+        bt.pump();
+        assert!(!bt.bluez.calls().iter().any(|c| c.starts_with("remove")));
+        assert_eq!(
+            bt.pairing_state(),
+            PairingState::Open,
+            "a keyboard never ends the window"
+        );
     }
 
     #[test]

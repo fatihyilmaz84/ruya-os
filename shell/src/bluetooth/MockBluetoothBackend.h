@@ -20,7 +20,7 @@ public:
     void setPowered(bool on) override;
     void startScan() override;
     void stopScan() override;
-    void pair(const QString &id) override;
+    void pair(const QString &id, bool keyboardConfirmed) override;
     void forget(const QString &id) override;
     void connectDevice(const QString &id) override;
     void disconnectDevice(const QString &id) override;
@@ -70,6 +70,7 @@ public:
     // While held, pair() is counted but unanswered (a pairing that takes a while) until released.
     void holdPairing(bool hold);
     int pairCalls() const { return m_pairCalls; }
+    QStringList pairLog() const { return m_pairLog; }
     int refreshCalls() const { return m_refreshCalls; } // refresh() calls since the start (tests)
     // Replies to refresh() arrive after `ms` (0: at once), with the state as it was when asked;
     // the number of replies still on their way. Lets a test play an old reply landing after a
@@ -89,7 +90,7 @@ private:
     };
 
     void initState();
-    void doPair(const QString &id);
+    void doPair(const QString &id, bool keyboardConfirmed);
     void publish(int delayMs = 0);
     QList<BtGamepad> gamepadList() const;
     void answer(const QString &op, const QString &id, const QString &status);
@@ -100,7 +101,8 @@ private:
     bool m_powered = true;
     bool m_discovering = false;
     bool m_holdPairing = false;
-    QStringList m_heldPairs;
+    QList<QPair<QString, bool>> m_heldPairs; // id, keyboardConfirmed
+    QStringList m_pairLog;
     int m_pairCalls = 0;
     int m_refreshCalls = 0;
     int m_delay = 0;

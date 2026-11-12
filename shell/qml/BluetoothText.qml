@@ -8,7 +8,7 @@ import QtQuick
 // noun and nothing else.
 //
 // The statuses are the ones of api/dbus/org.ruyaos.Devices1.xml: "pairing-failed", "timeout",
-// "unavailable", "unknown-device"; anything else (including "failed") gets the plain "could not ..."
+// "unavailable", "unknown-device", "not-confirmed"; anything else (including "failed") gets the plain "could not ..."
 // of the operation.
 QtObject {
     id: text
@@ -23,6 +23,8 @@ QtObject {
             return pad ? qsTr("The controller did not answer.") : qsTr("The device did not answer.")
         case "unavailable":
             return qsTr("Bluetooth is off.")
+        case "not-confirmed":
+            return qsTr("That keyboard was not confirmed.")
         case "unknown-device":
             return pad ? qsTr("The controller went away.") : qsTr("That device is no longer available.")
         }

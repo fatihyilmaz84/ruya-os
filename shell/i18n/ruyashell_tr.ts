@@ -720,7 +720,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>BluetoothPane</name>
     <message>
-        <location filename="../qml/BluetoothPane.qml" line="+93"/>
+        <location filename="../qml/BluetoothPane.qml" line="+100"/>
         <source>Forget %1?</source>
         <translation>%1 unutulsun mu?</translation>
     </message>
@@ -730,12 +730,12 @@ Bu geri alınamaz.</translation>
         <translation>Kullanılması için yeniden eşleştirilmesi gerekir.</translation>
     </message>
     <message>
-        <location line="+135"/>
+        <location line="+140"/>
         <source>Bluetooth is off.</source>
         <translation>Bluetooth kapalı.</translation>
     </message>
     <message>
-        <location line="-70"/>
+        <location line="-72"/>
         <source>Pairing…</source>
         <translation>Eşleştiriliyor…</translation>
     </message>
@@ -755,12 +755,12 @@ Bu geri alınamaz.</translation>
         <translation>Bağlı</translation>
     </message>
     <message>
-        <location line="+120"/>
+        <location line="+122"/>
         <source>Pair a new controller</source>
         <translation>Yeni kontrolcü eşleştir</translation>
     </message>
     <message>
-        <location line="+109"/>
+        <location line="+110"/>
         <source>Pair again %1</source>
         <translation>%1 cihazını yeniden eşleştir</translation>
     </message>
@@ -775,7 +775,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 adını değiştir</translation>
     </message>
     <message>
-        <location line="-247"/>
+        <location line="-250"/>
         <source>Paired</source>
         <translation>Eşleşti</translation>
     </message>
@@ -795,7 +795,7 @@ Bu geri alınamaz.</translation>
         <translation>Pil %1%</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+16"/>
         <source>This is a keyboard. Pair it?</source>
         <translation>Bu bir klavye. Eşleştirilsin mi?</translation>
     </message>
@@ -850,8 +850,8 @@ Bu geri alınamaz.</translation>
         <translation>Taranıyor…</translation>
     </message>
     <message>
-        <location line="-183"/>
-        <location line="+331"/>
+        <location line="-188"/>
+        <location line="+337"/>
         <source>Forget %1</source>
         <translation>%1 cihazını unut</translation>
     </message>
@@ -882,6 +882,11 @@ Bu geri alınamaz.</translation>
         <location line="+2"/>
         <source>Bluetooth is off.</source>
         <translation>Bluetooth kapalı.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>That keyboard was not confirmed.</source>
+        <translation>Bu klavye onaylanmadı.</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -2115,7 +2120,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>PowerConfirm</name>
     <message>
-        <location filename="../qml/PowerConfirm.qml" line="+31"/>
+        <location filename="../qml/PowerConfirm.qml" line="+34"/>
         <source>Suspend now?</source>
         <translation>Şimdi askıya alınsın mı?</translation>
     </message>
@@ -3047,7 +3052,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+587"/>
+        <location filename="../qml/Shell.qml" line="+612"/>
         <source>Could not %1.</source>
         <translation>%1 işlemi yapılamadı.</translation>
     </message>
@@ -4448,14 +4453,14 @@ Bu geri alınamaz.</translation>
         </translation>
     </message>
     <message numerus="yes">
-        <location line="+244"/>
+        <location line="+254"/>
         <source>%n more</source>
         <translation>
             <numerusform>%n tane daha</numerusform>
         </translation>
     </message>
     <message>
-        <location line="-239"/>
+        <location line="-249"/>
         <source>Safe to remove</source>
         <translation>Çıkarmak güvenli</translation>
     </message>

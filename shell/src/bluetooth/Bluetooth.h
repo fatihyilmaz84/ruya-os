@@ -62,7 +62,9 @@ public:
     Q_INVOKABLE void setPowered(bool on);
     Q_INVOKABLE void startScan();
     Q_INVOKABLE void stopScan();
-    Q_INVOKABLE void pair(const QString &id);
+    // keyboardConfirmed: the user answered "This is a keyboard. Pair it?" for this id (RUY-422); the service
+    // refuses a keyboard-class device ("not-confirmed") without it and ignores it for any other.
+    Q_INVOKABLE void pair(const QString &id, bool keyboardConfirmed = false);
     Q_INVOKABLE void forget(const QString &id);
     Q_INVOKABLE void connectDevice(const QString &id);
     Q_INVOKABLE void disconnectDevice(const QString &id);
@@ -95,6 +97,8 @@ public:
     // since the last reset.
     Q_INVOKABLE void mockHoldPairing(bool hold);
     Q_INVOKABLE int mockPairCalls() const;
+    // Every pair() the mock got, in order, as "<id>:confirmed" or "<id>:plain" (RUY-422).
+    Q_INVOKABLE QStringList mockPairLog() const;
     // How many times the backend was asked for the state and the devices (T-349).
     Q_INVOKABLE int mockRefreshCalls() const;
     // How the window ends ("wait", "success", "timeout", "rejected"); whether an input device is

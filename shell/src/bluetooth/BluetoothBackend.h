@@ -50,7 +50,8 @@ public:
     virtual void setPowered(bool on) = 0;
     virtual void startScan() = 0;
     virtual void stopScan() = 0;
-    virtual void pair(const QString &id) = 0;
+    // keyboardConfirmed: the user confirmed a keyboard-class device (Devices1 Pair, RUY-422).
+    virtual void pair(const QString &id, bool keyboardConfirmed) = 0;
     virtual void forget(const QString &id) = 0;
     virtual void connectDevice(const QString &id) = 0;
     virtual void disconnectDevice(const QString &id) = 0;

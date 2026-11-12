@@ -92,6 +92,8 @@ fn bluez(session: bool) -> Result<(DynBluez, AgentSlot), Box<dyn Error>> {
         Ok("two-adapters") => FakeBluez::with_two_adapters(),
         // Two pads with the same name, one connected and one in pairing mode (T-334).
         Ok("two-pads") => FakeBluez::with_two_pads(),
+        // The default fake devices and a keyboard in range, to see the keyboard gate of Pair (RUY-422).
+        Ok("keyboard") => FakeBluez::with_keyboard(),
         _ => FakeBluez::with_old_pad(),
     };
     Ok((Box::new(fake), AgentSlot::default()))

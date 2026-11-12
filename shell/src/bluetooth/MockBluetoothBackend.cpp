@@ -137,14 +137,15 @@ void MockBluetoothBackend::setInputPresent(bool present)
     publish();
 }
 
-void MockBluetoothBackend::pair(const QString &id)
+void MockBluetoothBackend::pair(const QString &id, bool keyboardConfirmed)
 {
     ++m_pairCalls;
+    m_pairLog.append(id + (keyboardConfirmed ? QStringLiteral(":confirmed") : QStringLiteral(":plain")));
     if (m_holdPairing) {
-        m_heldPairs.append(id);
+        m_heldPairs.append({id, keyboardConfirmed});
         return;
     }
-    doPair(id);
+    doPair(id, keyboardConfirmed);
 }
 
 void MockBluetoothBackend::holdPairing(bool hold)
@@ -152,12 +153,12 @@ void MockBluetoothBackend::holdPairing(bool hold)
     m_holdPairing = hold;
     if (hold)
         return;
-    const QStringList held = std::exchange(m_heldPairs, {});
-    for (const QString &id : held)
-        doPair(id);
+    const auto held = std::exchange(m_heldPairs, {});
+    for (const auto &h : held)
+        doPair(h.first, h.second);
 }
 
-void MockBluetoothBackend::doPair(const QString &id)
+void MockBluetoothBackend::doPair(const QString &id, bool keyboardConfirmed)
 {
     const int at = indexOf(id);
     QString status = QStringLiteral("ok");
@@ -167,6 +168,8 @@ void MockBluetoothBackend::doPair(const QString &id)
         status = QStringLiteral("unavailable");
     else if (at < 0 || !m_entries.at(at).listed)
         status = QStringLiteral("unknown-device");
+    else if (m_entries.at(at).dev.keyboard && !keyboardConfirmed)
+        status = QStringLiteral("not-confirmed"); // the service is the gate (RUY-422)
     else if (!m_entries.at(at).dev.paired)
         status = m_entries.at(at).pairResult;
     if (status == QLatin1String("ok")) {
@@ -408,6 +411,7 @@ void MockBluetoothBackend::initState()
     m_gamepads.clear();
     m_heldPairs.clear();
     m_pairCalls = 0;
+    m_pairLog.clear();
     m_scanTimer.stop();
     m_pairingTimer.stop();
     m_pairing = QStringLiteral("idle");

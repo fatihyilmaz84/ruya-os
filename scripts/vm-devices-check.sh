@@ -162,9 +162,9 @@ bluetooth_check() {
     scan="$(busctl --system call "$svc" "$path" "$bt" StartScan)"
     echo "StartScan: $scan"
     case "$scan" in 's "unavailable"') ok "StartScan answers unavailable";; *) bad "StartScan did not answer unavailable";; esac
-    r="$(busctl --system call "$svc" "$path" "$bt" Pair s AA:BB:CC:DD:EE:FF)"
+    r="$(busctl --system call "$svc" "$path" "$bt" Pair sb AA:BB:CC:DD:EE:FF false)"
     case "$r" in 's "unavailable"') ok "Pair answers unavailable";; *) bad "Pair answered: $r";; esac
-    r="$(busctl --system call "$svc" "$path" "$bt" Pair s "")"
+    r="$(busctl --system call "$svc" "$path" "$bt" Pair sb "" false)"
     case "$r" in 's "invalid"') ok "Pair with an empty id is invalid";; *) bad "Pair('') answered: $r";; esac
     r="$(busctl --system call "$svc" "$path" "$bt" Forget s AA:BB:CC:DD:EE:FF)"
     case "$r" in 's "unknown-device"') ok "Forget of an unknown device is refused";; *) bad "Forget answered: $r";; esac
@@ -229,6 +229,7 @@ bluetooth_check() {
     bluetooth_fake_check
     bluetooth_two_adapters_check
     bluetooth_two_pads_check
+    bluetooth_keyboard_check
 }
 
 # T-300: the VM has no Bluetooth adapter, so ListDevices is empty on the system bus. `bonded` and
@@ -471,7 +472,7 @@ bluetooth_two_pads_check() {
         call() { busctl --user --json=short call org.ruyaos.Devices1 /org/ruyaos/Devices1 '"$bt_user"' "$@"; }
         echo "LIST0 $(call ListDevices)"
         echo "START $(call StartControllerPairing u 0)"
-        echo "PAIR $(call Pair s AA:00:00:00:00:05)"
+        echo "PAIR $(call Pair sb AA:00:00:00:00:05 false)"
         echo "STOP $(call StopControllerPairing)"
         echo "LIST $(call ListDevices)"
         echo "FORGET $(call Forget s AA:00:00:00:00:05)"
@@ -530,6 +531,78 @@ else:
     else
         echo "--- log:"; cat "$log" 2>/dev/null
         bad "the service's log lacks the removal of the second pad"
+    fi
+    rm -f "$log"
+}
+
+# RUY-422: the service is the gate for the shell's "This is a keyboard. Pair it?" question. A third instance on
+# ruya-shell's user bus serves the fake BlueZ with a keyboard in range (RUYA_DEVICES_FAKE_BLUETOOTH=keyboard,
+# AA:..:06): Pair without keyboard_confirmed must answer not-confirmed, leave the keyboard unpaired and say so in
+# the log; with it the keyboard pairs; a pad (AA:..:02) pairs without it. The VM has no radio, so this covers the
+# service's D-Bus signature (sb), the status string and the log line as the image builds them, not a real keyboard.
+bluetooth_keyboard_check() {
+    local out verdict ubus="unix:path=/run/user/$uid/bus" bt_user=org.ruyaos.Devices1.Bluetooth
+    local log="/run/user/$uid/ruya-devices-keyboard.log"
+    echo "--- bluetooth (RUY-422): the keyboard gate of Pair (ruya-shell's user bus, FakeBluez::with_keyboard)"
+    if ! command -v python3 >/dev/null; then
+        bad "python3 is needed for the keyboard-gate check"
+        return
+    fi
+    if as_shell env DBUS_SESSION_BUS_ADDRESS="$ubus" busctl --user status org.ruyaos.Devices1 >/dev/null 2>&1; then
+        bad "org.ruyaos.Devices1 is already on ruya-shell's user bus: the keyboard-gate check needs the name free"
+        return
+    fi
+    out="$(as_shell env DBUS_SESSION_BUS_ADDRESS="$ubus" RUYA_DEVICES_FAKE_BLUETOOTH=keyboard bash -c '
+        /usr/bin/ruya-devices --session >/dev/null 2>'"$log"' &
+        pid=$!
+        n=0
+        until busctl --user status org.ruyaos.Devices1 >/dev/null 2>&1 || [ "$n" -ge 50 ]; do sleep 0.2; n=$((n + 1)); done
+        call() { busctl --user --json=short call org.ruyaos.Devices1 /org/ruyaos/Devices1 '"$bt_user"' "$@"; }
+        echo "LIST0 $(call ListDevices)"
+        echo "PLAIN $(call Pair sb AA:00:00:00:00:06 false)"
+        echo "LIST1 $(call ListDevices)"
+        echo "CONFIRMED $(call Pair sb AA:00:00:00:00:06 true)"
+        echo "LIST2 $(call ListDevices)"
+        kill "$pid" 2>/dev/null
+        wait "$pid" 2>/dev/null
+    ' 2>&1)"
+    verdict="$(printf '%s' "$out" | python3 -I -c '
+import json, sys
+rows = {}
+for line in sys.stdin.read().splitlines():
+    key, _, body = line.partition(" ")
+    try:
+        rows[key] = json.loads(body)["data"]
+    except Exception:
+        pass
+K = "AA:00:00:00:00:06"
+try:
+    first = {d["id"]["data"]: d for d in rows["LIST0"][0]}
+    refused = {d["id"]["data"]: d for d in rows["LIST1"][0]}
+    done = {d["id"]["data"]: d for d in rows["LIST2"][0]}
+except Exception as err:
+    print("unparsable: %r" % (err,)); sys.exit(0)
+if K not in first or first[K]["keyboard"]["data"] is not True or first[K]["paired"]["data"] is not False:
+    print("wrong: the keyboard should be listed, flagged keyboard and not paired")
+elif rows.get("PLAIN") != ["not-confirmed"]:
+    print("wrong: Pair without the confirmation answered %r" % (rows.get("PLAIN"),))
+elif K not in refused or refused[K]["paired"]["data"] is not False:
+    print("wrong: the refused keyboard must stay unpaired")
+elif rows.get("CONFIRMED") != ["ok"] or K not in done or done[K]["paired"]["data"] is not True:
+    print("wrong: Pair with the confirmation answered %r" % (rows.get("CONFIRMED"),))
+else:
+    print("VERDICT ok")
+' 2>&1)"
+    echo "$verdict"
+    case "$verdict" in
+    *"VERDICT ok"*) ok "Pair of a keyboard: not-confirmed without keyboard_confirmed (still unpaired), ok with it";;
+    *) bad "Pair of the keyboard fake: $verdict $out";;
+    esac
+    if grep -qF -- "refused to pair AA:00:00:00:00:06" "$log" 2>/dev/null; then
+        ok "the service's log says it refused to pair the unconfirmed keyboard"
+    else
+        echo "--- log:"; cat "$log" 2>/dev/null
+        bad "the service's log lacks the refusal of the unconfirmed keyboard"
     fi
     rm -f "$log"
 }
