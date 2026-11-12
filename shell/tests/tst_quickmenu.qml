@@ -334,7 +334,7 @@ Item {
             // No picture in this library: the tile is the tint and the initial, as every AppArt without one.
             const tile = find("quickMenuItem_to:org.example.Racer")
             compare(findChild(tile, "hubRunningArt").picture, "")
-            verify(findChild(tile, "artMonogram").visible)
+            tryVerify(() => findChild(tile, "artMonogram").visible, 2000, "the initial is drawn (once the Hub has started to fade in)")
             compare(findChild(tile, "artMonogram").text, "T")
             keyClick(Qt.Key_Return)
             tryVerify(() => app.activeFocus && !find("systemPanel").open, 2000, "A switches to it")
