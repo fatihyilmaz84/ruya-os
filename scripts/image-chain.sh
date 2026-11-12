@@ -53,6 +53,8 @@ if [ "${SKIP_BUILD:-}" = "1" ]; then
 else
     step build scripts/build.sh "$version" || { say "CHAIN FAILED"; exit 1; }
 fi
+# The pad drivers are in the image (RUY-154: xpad comes only with kernel-modules-extra).
+step drivers bash scripts/check-image-input-drivers.sh || { say "CHAIN FAILED"; exit 1; }
 step disk scripts/make-disk.sh qcow2 || { say "CHAIN FAILED"; exit 1; }
 if [ "$want_oci" = "oci" ]; then
     mkdir -p /mnt/f/RuyaOS-tmp
