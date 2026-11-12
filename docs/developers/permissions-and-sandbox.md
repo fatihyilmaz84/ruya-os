@@ -25,7 +25,7 @@ Your game runs in a Flatpak sandbox as the profile's own Unix user. What it may 
 | `--socket=pulseaudio` | sound; this is the route RuyaOS provides for audio ([Audio and video](audio-and-video.md)) | "Plays sound" |
 | `--share=network` | online play, downloads, cloud saves of your own. **Only if you need it** | "Uses the network" |
 
-Do not add `--socket=x11` or `--socket=fallback-x11`: there is no X server in the console's compositor (Xwayland is not part of the product yet). Do not add `--share=ipc` unless a library demands it.
+Use `--socket=wayland`. An X11-only game (`--socket=x11` or `--socket=fallback-x11` and no `--socket=wayland`) runs on a private X server of its own (*experimental*, [fullscreen-and-lifecycle.md](fullscreen-and-lifecycle.md)); do not add X11 next to Wayland, the console never uses it then. Do not add `--share=ipc` unless a library demands it.
 
 ## What the Store shows, and what is "High risk"
 
@@ -78,7 +78,7 @@ The first prints your final permissions as Flatpak sees them (the Store derives 
 - [ ] No `--device=all`, `--filesystem=host` (or `host-os`, `host-etc`, absolute paths), `--socket=session-bus` or `--talk-name=org.freedesktop.Flatpak`.
 - [ ] No `--filesystem=home` and no `xdg-*` filesystem access for saves.
 - [ ] Network is requested only if the game uses it, and you can say what for.
-- [ ] No X11 socket.
+- [ ] `--socket=wayland`, or X11 only if the game cannot do Wayland.
 - [ ] An update does not add a permission without a reason; if it must, your release notes say why.
 
 ## Sources

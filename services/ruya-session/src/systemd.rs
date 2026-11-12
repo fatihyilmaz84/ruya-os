@@ -34,7 +34,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
 use std::os::unix::process::ExitStatusExt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -51,12 +51,13 @@ use crate::follow::{
 use crate::scope::{RunScopes, Sweep};
 use crate::spawner::{
     active_app_scopes, any_swap, app_scopes, cancel_reclaim_command, control_command,
-    control_groups_command, flatpak_app_installed, launch_command, list_scopes_command,
+    control_groups_command, flatpak_app_installed, launch_command_in, list_scopes_command,
     park_audio_command, parse_control_groups, parse_profile_users, parse_show, pulse_start_command,
     reclaim_amount, reclaim_command, sweep_commands, unit_app_id, unit_name, LineTail, RunFollower,
     RunningUnit, ShowUnit, SHOW_PROPERTIES, SWAP_COMMAND,
 };
-use crate::spawner::{AudioJob, AudioQueue, Spawner, UnitEvent, PARK_RETRY};
+use crate::spawner::{AudioJob, AudioQueue, DisplayMode, Spawner, UnitEvent, PARK_RETRY};
+use crate::x11::{display_mode_x11, X11_OVERRIDES};
 use std::ffi::OsString;
 use zbus::address::transport::{Transport, Unixexec};
 use zbus::Address;
@@ -489,7 +490,14 @@ impl Spawner for SystemdSpawner {
     }
 
     fn start(&self, user: &str, app_id: &str, env: &[(String, String)]) -> Result<String, String> {
-        let args = launch_command(user, app_id, env)?;
+        // X11-only apps get a private X server inside their unit (ADR-034, RUY-435).
+        let mode = if display_mode_x11(&self.flatpak_root, app_id, Path::new(X11_OVERRIDES)) {
+            eprintln!("ruya-session: {app_id} of {user} runs in X11 mode");
+            DisplayMode::X11
+        } else {
+            DisplayMode::Wayland
+        };
+        let args = launch_command_in(user, app_id, env, mode)?;
         let unit = unit_name(user, app_id);
         self.gate
             .units

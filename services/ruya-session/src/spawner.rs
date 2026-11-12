@@ -719,6 +719,30 @@ pub fn launch_command(
     app_id: &str,
     env: &[(String, String)],
 ) -> Result<Vec<String>, String> {
+    launch_command_in(user, app_id, env, DisplayMode::Wayland)
+}
+
+/// How an app reaches the screen (ADR-034): on the profile's Wayland socket, or through a private
+/// X server that the unit's helper starts first (`x11::needs_x11`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DisplayMode {
+    Wayland,
+    X11,
+}
+
+/// This binary in the image; in X11 mode it is the unit's main process (`x11-run`) and its
+/// `ExecStopPost` (`x11-cleanup`).
+pub const SESSION_PROGRAM: &str = "/usr/bin/ruya-session";
+
+/// `launch_command` for either display mode. In X11 mode the unit runs
+/// `ruya-session x11-run <app_id>` (which starts the X server and then `flatpak run`) and cleans
+/// up with `ruya-session x11-cleanup <app_id>` after any end, a Stop included.
+pub fn launch_command_in(
+    user: &str,
+    app_id: &str,
+    env: &[(String, String)],
+    mode: DisplayMode,
+) -> Result<Vec<String>, String> {
     if !user.strip_prefix("ruya-").is_some_and(valid_profile_id) {
         return Err(format!("not a profile user: {user:?}"));
     }
@@ -754,7 +778,15 @@ pub fn launch_command(
         }
         args.push(format!("--setenv={key}={value}"));
     }
-    args.extend(["--", "flatpak", "run"].map(str::to_owned));
+    match mode {
+        DisplayMode::Wayland => args.extend(["--", "flatpak", "run"].map(str::to_owned)),
+        DisplayMode::X11 => {
+            args.push(format!(
+                "--property=ExecStopPost={SESSION_PROGRAM} x11-cleanup {app_id}"
+            ));
+            args.extend(["--", SESSION_PROGRAM, "x11-run"].map(str::to_owned));
+        }
+    }
     args.push(app_id.to_owned());
     Ok(args)
 }
@@ -1467,6 +1499,38 @@ mod tests {
                 "org.ruyaos.Racer",
             ]
         );
+    }
+
+    #[test]
+    fn an_x11_launch_runs_the_helper_and_cleans_up_after_it() {
+        let app = "io.github.divVerent.aaaaxy";
+        let args = launch_command_in("ruya-p1", app, &env(), DisplayMode::X11).expect("valid");
+        assert_eq!(
+            args,
+            [
+                "systemd-run",
+                "--user",
+                "--wait",
+                "--collect",
+                "--property=Type=exec",
+                "--property=KillMode=control-group",
+                "--machine=ruya-p1@.host",
+                "--unit=ruya-app-ruya-p1-io.github.divVerent.aaaaxy.service",
+                "--setenv=WAYLAND_DISPLAY=wayland-0",
+                "--property=ExecStopPost=/usr/bin/ruya-session x11-cleanup io.github.divVerent.aaaaxy",
+                "--",
+                "/usr/bin/ruya-session",
+                "x11-run",
+                "io.github.divVerent.aaaaxy",
+            ]
+        );
+        // No PrivateTmp: Flatpak binds the host's /tmp/.X11-unix/X<n> into the sandbox.
+        assert!(!args.iter().any(|a| a.contains("PrivateTmp")));
+        assert_eq!(
+            launch_command_in("ruya-p1", app, &env(), DisplayMode::Wayland),
+            launch_command("ruya-p1", app, &env())
+        );
+        assert!(launch_command_in("ruya-p1", "../x", &env(), DisplayMode::X11).is_err());
     }
 
     #[test]
