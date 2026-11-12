@@ -4,7 +4,7 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 
 | ID | Title | Status | Depends |
 |---|---|---|---|
-| [T-472](tasks/T-472-sound-survives-a-shell-restart.md) | Running apps keep their sound when the shell is down for more than 10 s (found by T-470) | todo | — |
+| [T-472](tasks/T-472-sound-survives-a-shell-restart.md) | Running apps keep their sound when the shell is down for more than 10 s (found by T-470) | in-progress | — |
 | [T-471](tasks/T-471-hub-redesign-fewer-rows.md) | Ruya Hub redesign: five focus stops, game art for running apps, fewer options (owner, layout A) | todo | — |
 | [T-456](tasks/T-456-guide-on-every-pad.md) | Guide on every pad: long press for Power, never reaching the game, a keyboard shortcut | todo | T-367, T-396 |
 | [T-362](tasks/T-362-compositor-xdg-output-and-socket-follow-ups.md) | Compositor: xdg-output for games, profile-socket and log follow-ups | todo | — |

@@ -1,6 +1,6 @@
 # T-472 — Running apps keep their sound when the shell is down for more than 10 s
 
-Status: todo · Phase: 2 · Depends: — · Area: image, services (ruya-session) · Size: S · Owner: builder · Complexity: complex · Developer surface: none
+Status: in-progress · Phase: 2 · Depends: — · Area: image, services (ruya-session) · Size: S · Owner: builder · Complexity: complex · Developer surface: none
 
 ## Goal
 Found by T-470 (lead-12, 2026-11-12; reproduced on the Dell): `ruya-shell` does not linger, so when the shell (`ruya-compositor@tty1`) is down for more than logind's `UserStopDelaySec` (10 s: a crash loop, a slow restart, an update of the shell), logind stops `ruya-shell`'s user manager. That takes down PipeWire and **every profile's `ruya-pulse@` sound server**. ruya-session starts a profile's sound server only at Launch, so the running games stay silent after the shell comes back, until each is relaunched. A shell restart must never cost a running game its sound.
