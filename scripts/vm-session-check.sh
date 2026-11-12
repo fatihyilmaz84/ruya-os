@@ -13,7 +13,8 @@
 # libpulse-simple, through the profile's own sound server) and checks that the Freeze parks it (the
 # ruya-parked null sink; the card suspends when the VM has one: boot with -Audio), that the memory is
 # reclaimed 30 s after the Freeze when swap is active (T-465's zram), and that the Thaw puts the stream
-# back; this adds about 45 s.
+# back; this adds about 45 s. It also (T-472) keeps the shell down for 20 s without linger and checks
+# that ruya-shell's manager ends and that the next Launch has its profile's sound server again (about 25 s).
 # `restart` (T-290) needs a profile (run `check` once on an empty store, or create one) and
 # installs the test apps itself when they are missing.
 # On an empty profile store the check creates the admin "Check Admin" (PIN 1234) and a standard
@@ -779,10 +780,36 @@ check)
     systemctl --user -M "$user@.host" list-units --all --no-legend "app-flatpak-$sleeper-*.scope" </dev/null 2>&1 | grep -q scope \
         && bad "an app-flatpak-$sleeper scope is still listed after the run ended" || ok "no app-flatpak-$sleeper scope is listed after the run ended, not even a failed one"
 
+    # T-472 (decided, 03 "Launch", Sound): ruya-shell does not linger. With the shell down past logind's
+    # UserStopDelaySec (10 s) its manager ends, and with it PipeWire and every profile's ruya-pulse@
+    # server; a game ends with the compositor anyway (it is a Wayland client of it), and its relaunch
+    # must have its sound server again. No app runs here: the sleeper is no Wayland client and would
+    # outlive the shell.
+    echo "--- the shell down for 20 s: its manager ends, a relaunch gets its sound server back (T-472)"
+    [ "$(loginctl show-user ruya-shell -p Linger --value 2>/dev/null)" = no ] && ok "ruya-shell does not linger" \
+        || bad "ruya-shell lingers ($(loginctl show-user ruya-shell -p Linger 2>&1)): its WirePlumber would probe the card while logind writes its ACL"
+    t0="$(date +%s)"
+    systemctl stop ruya-compositor@tty1 && ok "the shell is stopped" || bad "systemctl stop ruya-compositor@tty1"
+    n=0; while systemctl is-active --quiet "user@$uid.service" && [ "$n" -lt 25 ]; do sleep 1; n=$((n + 1)); done
+    systemctl is-active --quiet "user@$uid.service" && bad "ruya-shell's manager still runs 25 s after the shell stopped" \
+        || ok "ruya-shell's manager ended $(( $(date +%s) - t0 )) s after the shell stopped (UserStopDelaySec)"
+    [ -e "/run/ruya-pulse/$user/native" ] && bad "ruya-pulse@$user's socket outlived the manager" || ok "ruya-pulse@$user ended with the manager"
+    n="$(( $(date +%s) - t0 ))"; [ "$n" -lt 20 ] && sleep "$(( 20 - n ))"
+    systemctl start ruya-compositor@tty1 && ok "the shell is started again after $(( $(date +%s) - t0 )) s" || bad "systemctl start ruya-compositor@tty1"
+    n=0; until loginctl list-sessions --no-legend 2>/dev/null | grep -E -q "ruya-shell +seat0" || [ "$n" -ge 10 ]; do sleep 1; n=$((n + 1)); done
+    systemctl is-active --quiet "user@$uid.service" && ok "ruya-shell's manager is back with the shell's seat session" || bad "ruya-shell's manager did not come back with the shell"
+
     echo "--- Launch while the unit of an earlier run is gone: a fresh launch works again"
     out="$(launch "$sleeper" "$pid")"; inst4="$(echo "$out" | unit_of)"
     [ -n "$inst4" ] && ok "Launch again: $inst4" || bad "Launch again: $out"
     wait_sig "\"member\":\"AppStarted\".*$sleeper.*" 30 >/dev/null
+    # T-472: the Launch after the manager came back started the profile's sound server again.
+    n=0; until [ "$(systemctl --user -M ruya-shell@.host is-active "ruya-pulse@$user.service" </dev/null 2>&1 | cat)" = active ] \
+        && [ -S "/run/ruya-pulse/$user/native" ] || [ "$n" -ge 10 ]; do sleep 1; n=$((n + 1)); done
+    [ "$n" -lt 10 ] && ok "the relaunch started ruya-pulse@$user again and its socket listens" \
+        || bad "no ruya-pulse@$user after the relaunch: $(systemctl --user -M ruya-shell@.host is-active "ruya-pulse@$user.service" </dev/null 2>&1 | cat)"
+    systemctl --user -M "$user@.host" show -p Environment "$inst4" </dev/null 2>&1 | cat | grep -q "PULSE_SERVER=unix:/run/ruya-pulse/$user/native" \
+        && ok "the relaunched app got PULSE_SERVER for it" || bad "the relaunched app has no PULSE_SERVER"
 
     echo "--- deleting a profile whose manager lingers and whose app runs"
     if [ "$created" = 1 ]; then
