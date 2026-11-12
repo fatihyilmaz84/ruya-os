@@ -12,17 +12,16 @@ The procedure is in [`LEAD.md`](LEAD.md) (**Budgets and "Lead efficiency": hand 
   - RUY-412: Toasts v2. 4 rounds; its merge gate first went red on RUY-154's test, fixed in 8be2889.
 - **Owner reported a SuperTuxKart crash on the Dell:** an abort in libpulse 11 s after a 1 h 53 min Hub freeze and the park-audio restore. Filed as **RUY-425** (high, `dell`), with the diagnosis.
 - **Lead work, Done:** RUY-2 (Ruya Input spike on the Dell, engine decision: grow `ruya-inputd`, not InputPlumber; `docs/specs/06-input.md`, `schemas/input-profile-v1.json` with a test, draft `api/dbus/org.ruyaos.Input1.xml`, ADR-003/024 amended) and RUY-5 (ADR-027 written into 06 §11, 02 §4.2-4.3, 04 §3.7).
-- **In flight (worktrees under `D:\dev\RuyaOS-worktrees\`):**
-  - **RUY-3** (input service half, Opus builder, ~360k tokens).
-    - Round 1 was done: VM 0.0.69-input RUYA_BOOT_OK, `vm-input-check.sh` 57 PASS.
-    - The code review found the code sound and asked only for 06 fixes. The API review found a **real leak**, confirmed on the Dell: `joydev` is loaded, and Fedora makes `/dev/input/js*` mode 0664, so every profile can read every pad's js node, the physical DualSense too (RUY-428).
-    - **Round 2 is running:** blacklist joydev plus a VM check, the 06 §5.1 `shell` row ("no virtual pad"), merging main into the branch (a 06 conflict), GetNameOwner after SetRoute, and two doc gaps. Then a delta review by fresh reviewers (code and API), and the merge.
-  - **Design session** "Design the controller screens in Claude Design" (started by the owner): the RuyaOS design system plus RUY-39 / RUY-42 / RUY-38 numbers as ticket comments. Read its result before dispatching those tickets.
+- **RUY-3 merged and Done** (b99ad4a): the input service half, 2 rounds, ~390k builder tokens.
+  - The API review found a **real leak**, confirmed on the Dell: `joydev` is loaded and Fedora makes `/dev/input/js*` mode 0664, so every profile could read every pad's js node, the physical DualSense too. joydev is now blacklisted in modprobe.d and dracut, and the build fails if it is in the initramfs. RUY-428 is the Dell confirmation.
+  - VM 0.0.69-input2 RUYA_BOOT_OK; `vm-input-check.sh` 61 PASS.
+  - The Dell still runs 0.0.68, **so the js leak is open there until the next image**.
+- **Nothing in flight.** The design session is done: the design system and three canvases are posted on RUY-39, RUY-40, RUY-42 and RUY-38 (the owner should give the canvases a visual look first).
 - **Planning done this session:** input chain re-checked and wired in Paper Plane: RUY-3 → RUY-409 (shell route) / RUY-410 (emergency reader) → RUY-42 → RUY-45 (split: 416 layers, 417 shortcuts) → RUY-46; RUY-43; RUY-47 split (418 actions, 419 haptics, 47 rebinding); RUY-411 and RUY-422 (Bluetooth). Owner's Claude Design request filed as RUY-412 (Toasts v2), RUY-413 and RUY-414 (notification centre, split by the lead), comment on RUY-88. Inbox: RUY-415, 420, 421, 423.
 
 ## Next, in this order
-1. **RUY-3 round 2:** look at `D:\dev\RuyaOS-worktrees\RUY-3` (round 1 was 9706215). If no HANDOFF arrived, check the worktree's last commit and send the branch to a fresh `ruya-reviewer` (Opus) and `ruya-api-reviewer`: a delta from 9706215, "verify everything yourself", with the joydev blacklist and the js check as the key items. Then merge, the gate, and RUY-428 on the Dell.
-2. The VM queue (RUY-390): `vm-input-check.sh` (RUY-3), `vm-devices-check.sh bluetooth` (RUY-411), and the drivers step of the next image chain (RUY-154). Then RUY-409 and RUY-410, the first Dell proof: SuperTuxKart races with the DualSense.
+1. **Build an image of main and update the Dell** (`image-chain.sh <ver> oci`, then `dell-update.sh`). This closes the js leak there (RUY-428) and carries xpad (RUY-154), the Bluetooth hardening (RUY-411) and the input service (RUY-3). Run the VM queue (RUY-390) on it: `vm-input-check.sh`, `vm-devices-check.sh bluetooth`, the chain's drivers step.
+2. RUY-409 (the shell route) and RUY-410 (the emergency reader): the first Dell proof, SuperTuxKart racing with the DualSense. RUY-409 must re-send SetRoute whenever Input1's name owner changes.
 2b. RUY-425 (the STK crash) is the top `dell` bug, and a good second lane next to the input chain.
 3. **Design first** (new owner rule, LEAD.md §5): the proposed session "Design the controller screens in Claude Design" (design system from 04 + `Theme.qml`, then RUY-39, RUY-42, RUY-38) should run before those builders start.
 4. RUY-421 (tst_appflow flaky on Linux CI) is high priority: CI now prints Actual/Expected/Loc.
@@ -53,4 +52,4 @@ The procedure is in [`LEAD.md`](LEAD.md) (**Budgets and "Lead efficiency": hand 
 | Date | Range reviewed | Tasks | Findings (fixed / filed) | `dev.ps1 test` | VM |
 |---|---|---|---|---|---|
 | 2026-11-12 (lead-13) | cbf4a4e..f7bf080 (docs only) | none (planning only) | inbox 22 → 0 | not run | none |
-| 2026-11-12 (lead-14) | 182d99f..8be2889 | RUY-2, RUY-5 (lead); RUY-401, RUY-154, RUY-411, RUY-412 merged; RUY-3 in flight | round 2+ for every ticket (401 tie, 154 no xpad in image, 412 TR cut-off and shots, 411 window and red confirm, RUY-2 passthrough leak); one merge gate red (semantic conflict 154/412, fixed); rustix RUSTSEC fix; STK crash diagnosed (RUY-425) | 1277 QML + 107 skips | builder image 0.0.69-xpad RUYA_BOOT_OK; Dell spike on 0.0.68 |
+| 2026-11-12 (lead-14) | 182d99f..b99ad4a | RUY-2, RUY-5 (lead); RUY-401, RUY-154, RUY-411, RUY-412, RUY-3 merged | round 2+ for every ticket (401 tie, 154 no xpad in image, 412 TR cut-off and shots, 411 window and red confirm, RUY-2 passthrough leak); one merge gate red (semantic conflict 154/412, fixed); rustix RUSTSEC fix; STK crash diagnosed (RUY-425); joydev js leak found and closed (RUY-3, RUY-428) | 1277 QML + 107 skips | builder image 0.0.69-xpad RUYA_BOOT_OK; Dell spike on 0.0.68 |
