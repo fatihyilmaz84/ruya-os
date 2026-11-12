@@ -40,7 +40,7 @@ The procedure is in [`LEAD.md`](LEAD.md) (**Budgets and "Lead efficiency": hand 
 - Builder and reviewer agents list their `mcp__paperplane-<role>__*` tools, so usage reaches tickets (was 283.5M unattributed).
 - `run-qml-tests.sh` prints Actual/Expected/Loc of a failure (CI keeps no logs).
 - `image-chain.sh` runs the pad driver check after every build.
-- Not done: GitHub issues on Paper Plane (the permission check refused `gh issue create`): (1) `update` has no `sort_order`; (2) `summary`'s Blocked list is uncapped. File them when allowed.
+- Paper Plane issues filed (the owner allowed `gh issue create`): EnigmaNL/PaperPlane#7 (`update` has no `sort_order`) and #8 (`summary`'s Blocked list is uncapped).
 
 ## Host facts learned
 - Never put backslashes in a Bash heredoc, `sed` or `python -c`: use Write/Edit. `pkill -f`/`pgrep -f` over SSH match the SSH command line itself: use a pid file.
