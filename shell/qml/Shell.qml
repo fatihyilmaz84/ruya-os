@@ -482,6 +482,21 @@ FocusScope {
         instance: root.foregroundInstance
     }
 
+    // Tells Ruya Input who is in front (RUY-409, Input1.SetRoute): the app in front gets the profile's
+    // virtual pads, the Hub or a system dialog over it holds them in neutral, Lock and a frozen app
+    // have none. The app is the focused window's own instance (quickMenuApp: instanceOfWindow).
+    InputRoute {
+        id: inputRoute
+        objectName: "inputRoute"
+        signedIn: root.signedIn
+        profile: Profiles.activeProfile
+        appInFront: root.appOpen && root.focusedApp !== null
+        instance: root.quickMenuApp ? root.quickMenuApp.instance : ""
+        appId: root.quickMenuApp ? root.quickMenuApp.appId : ""
+        frozen: root.quickMenuApp ? root.quickMenuApp.frozen : false
+        overlay: systemPanel.open || modeConfirm.shown || IdleClock.covered
+    }
+
     // The liquid pill's specular clock runs only with no app in front, the window shown and input
     // within the idle period (LiquidGate, 04 §3.8): nothing keeps redrawing a still screen.
     Binding {

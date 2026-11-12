@@ -110,6 +110,10 @@ qt_add_qml_module(ruyashell
         src/power/MonotonicClock.h src/power/MonotonicClock.cpp
         src/power/ScreenPower.h src/power/ScreenPower.cpp
         src/input/KeyRouter.h src/input/KeyRouter.cpp
+        src/input/InputBackend.h
+        src/input/MockInputBackend.h src/input/MockInputBackend.cpp
+        src/input/DBusInputBackend.h src/input/DBusInputBackend.cpp
+        src/input/Input.h src/input/Input.cpp
         src/probe/PageProbe.h src/probe/PageProbe.cpp
         src/wallpaper/Wallpapers.h src/wallpaper/Wallpapers.cpp
         src/art/ArtPalette.h src/art/ArtPalette.cpp src/art/MockArt.h
@@ -225,6 +229,7 @@ qt_add_qml_module(ruyashell
         qml/BarChart.qml
         qml/DurationText.qml
         qml/UsagePresence.qml
+        qml/InputRoute.qml
         qml/controls/ChartRow.qml
         qml/controls/SettingControl.qml
         qml/controls/SettingRow.qml

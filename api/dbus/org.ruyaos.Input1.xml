@@ -103,7 +103,8 @@
     </signal>
 
     <!-- Routing (T-367, built). The shell calls it on every focus, overlay, sign-in, switch, lock
-         and freeze change (06 §5.1-5.2).
+         and freeze change (06 §5.1-5.2; RUY-409, shell/qml/InputRoute.qml), and again whenever the
+         name gets a new owner (a restarted service starts in "shell").
            route     "shell" | "app" | "overlay" | "locked"
            instance  Session1's instance of the app in front for "app" and "overlay" (opaque: never
                      parsed), else ""; "overlay" with "" is an overlay over a frozen app

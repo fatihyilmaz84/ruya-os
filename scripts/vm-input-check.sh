@@ -6,8 +6,13 @@
 # so vm-input-probe.py holds its own bus connection), rumble is forwarded, and a killed service
 # is back within 0.5 s. Copy and run (boot with plain smoke-test.ps1 -Keep):
 #   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-input-check.sh scripts/vm-input-probe.py root@127.0.0.1:/root/
-#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-input-check.sh [check|restart|security]
-# `check` runs all three. On an empty profile store it creates the admin "Check Admin" (PIN 1234)
+#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-input-check.sh [check|restart|security|shell]
+# `check` runs the first three. `shell` (RUY-409) checks that the running shell drives the route:
+# sign-in routes `shell`, launching the Wayland test app (org.ruyaos.TestWaylandClient, which
+# `vm-session-check.sh display` installs) routes `app` and makes a virtual pad for a test pad, the
+# Guide opens the Hub and routes `overlay`, a kill -9 of the service gets the route again from the
+# shell, and Lock routes `locked` and destroys the virtual pad. It also needs vm-inject-key.py in
+# /root. Run it after `check` or alone; it signs in the first profile (no PIN, or PIN 1234). On an empty profile store it creates the admin "Check Admin" (PIN 1234)
 # and a standard "Check Kid"; with one profile it adds "Check Other" with that admin's PIN 1234.
 # Profiles that were there are used as they are; the ones the check made stay (a fresh disk).
 set -u
@@ -141,6 +146,95 @@ security_check() {
     [ -n "$level" ] && ok "exposure $level (baseline in image/security-baseline.json, vm-security-check.sh)" || bad "no exposure level"
 }
 
+# The route as the service holds it: shell | app | overlay | locked.
+route_now() { busctl --system get-property "$svc" "$path" "$ifc" Route 2>/dev/null | cut -d'"' -f2; }
+# Waits up to $2 seconds for the Route property to read $1.
+wait_route() {
+    local n=0
+    while [ "$n" -lt "$(( $2 * 10 ))" ]; do
+        [ "$(route_now)" = "$1" ] && return 0
+        sleep 0.1; n=$((n + 1))
+    done
+    return 1
+}
+# The event node of a virtual pad (phys ruya-input/pad<n>), or "".
+virtual_pad() {
+    local d
+    for d in /sys/class/input/input*; do
+        case "$(cat "$d/phys" 2>/dev/null)" in ruya-input/pad*) basename "$(ls -d "$d"/event* 2>/dev/null | head -1)"; return;; esac
+    done
+}
+wait_pad() {   # $1: present | gone, $2: seconds
+    local n=0
+    while [ "$n" -lt "$(( $2 * 10 ))" ]; do
+        if [ -n "$(virtual_pad)" ]; then [ "$1" = present ] && return 0; else [ "$1" = gone ] && return 0; fi
+        sleep 0.1; n=$((n + 1))
+    done
+    return 1
+}
+
+shell_check() {
+    echo "--- the shell drives the route (RUY-409)"
+    local wclient=org.ruyaos.TestWaylandClient ssvc=org.ruyaos.Session1 spath=/org/ruyaos/Session1
+    local suid since out inst padpid line
+    suid="$(id -u ruya-shell)"
+    pgrep -u ruya-shell -x ruya-shell >/dev/null || { bad "the shell is not running"; return; }
+    [ -f "$probe" ] || { bad "$probe is missing: copy it next to this script"; return; }
+    [ -f /root/vm-inject-key.py ] || { bad "/root/vm-inject-key.py is missing: copy it there"; return; }
+    flatpak info --system "$wclient" >/dev/null 2>&1 || { bad "$wclient is not installed: run 'vm-session-check.sh display' (then display-clean) first"; return; }
+    since="$(date '+%Y-%m-%d %H:%M:%S')"
+    python3 "$probe" pad 300 > /var/tmp/ruya-input-pad.log 2>&1 &
+    padpid=$!
+    local n=0; until grep -q "^pad " /var/tmp/ruya-input-pad.log || [ "$n" -ge 50 ]; do sleep 0.1; n=$((n + 1)); done
+    grep -q "^pad ready" /var/tmp/ruya-input-pad.log && ok "a test pad is connected ($(cat /var/tmp/ruya-input-pad.log))" || { bad "no test pad: $(cat /var/tmp/ruya-input-pad.log)"; kill "$padpid"; return; }
+
+    busctl --system call "$psvc" "$ppath" "$psvc" Lock >/dev/null
+    wait_route locked 5 && ok "Lock: the shell routes locked" || bad "after Lock the route reads '$(route_now)'"
+    out="$(busctl --system call "$psvc" "$ppath" "$psvc" SwitchTo ss "$me" "")"
+    case "$out" in 'suu "ok"'*) ;; *) out="$(busctl --system call "$psvc" "$ppath" "$psvc" SwitchTo ss "$me" 1234)";; esac
+    case "$out" in 'suu "ok"'*) ok "$me signed in";; *) bad "SwitchTo $me: $out"; kill "$padpid"; return;; esac
+    wait_route shell 5 && ok "signed in at Home: the route is shell" || bad "after sign-in the route reads '$(route_now)'"
+    [ -z "$(virtual_pad)" ] && ok "no virtual pad at Home" || bad "a virtual pad exists at Home: $(virtual_pad)"
+
+    out="$(runuser -u ruya-shell -- busctl --system call "$ssvc" "$spath" "$ssvc" Launch ss "$wclient" "$me")"
+    inst=""; case "$out" in 'ss "ok" '*) inst="$(echo "$out" | cut -d'"' -f4)";; esac
+    [ -n "$inst" ] && ok "Launch $wclient as $me: $inst" || { bad "Launch: $out"; kill "$padpid"; return; }
+    wait_route app 60 && ok "the test app in front: the route is app" || bad "with the app in front the route reads '$(route_now)'"
+    wait_pad present 5 && ok "the test pad has a virtual pad for $me ($(virtual_pad))" || bad "no virtual pad with the app in front"
+
+    python3 /root/vm-inject-key.py guide >/dev/null 2>&1
+    wait_route overlay 10 && ok "Guide opened the Hub: the route is overlay" || bad "with the Hub open the route reads '$(route_now)'"
+    wait_pad gone 5 && ok "the Hub froze the app: its virtual pad is gone" || echo "NOTE: the virtual pad stays under the Hub (pause off?)"
+    python3 /root/vm-inject-key.py guide >/dev/null 2>&1
+    wait_route app 10 && ok "Guide closed the Hub: the route is app again" || bad "after the Hub the route reads '$(route_now)'"
+    wait_pad present 5 && ok "after the Thaw the app has a virtual pad again" || bad "no virtual pad after the Hub closed"
+
+    # A restarted service starts in shell: the shell sends its route again (QDBusServiceWatcher).
+    kill -9 "$(systemctl show -p MainPID --value ruya-inputd)"
+    wait_route app 10 && ok "after kill -9 the shell routed app again" || bad "after kill -9 the route reads '$(route_now)'"
+    wait_pad present 5 && ok "... and the app has a virtual pad again" || bad "no virtual pad after the restart"
+
+    busctl --system call "$psvc" "$ppath" "$psvc" Lock >/dev/null
+    wait_route locked 5 && ok "Lock with the app in front: the route is locked" || bad "after Lock the route reads '$(route_now)'"
+    wait_pad gone 5 && ok "Lock destroyed the virtual pad" || bad "a virtual pad still exists after Lock: $(virtual_pad)"
+
+    runuser -u ruya-shell -- busctl --system call "$ssvc" "$spath" "$ssvc" Stop s "$inst" >/dev/null 2>&1
+    kill "$padpid" 2>/dev/null
+    line="$(journalctl -u ruya-inputd --since "$since" --no-pager -o cat | grep -E "^ruya-inputd: route (shell|app|overlay|locked) ")"
+    echo "$line" | head -8
+    if echo "$line" | grep -q "^ruya-inputd: route app instance '$inst' app '$wclient' profile '$me'"; then
+        ok "journal: the shell routed app with Session1's instance, the app id and $me"
+    else
+        bad "journal: no route app line for $inst, $wclient and $me"
+    fi
+    if journalctl -b _UID="$suid" --since "$since" --no-pager -o cat | grep -a -q "ruya-shell: Input1 SetRoute"; then
+        journalctl -b _UID="$suid" --since "$since" --no-pager -o cat | grep -a "ruya-shell: Input1 SetRoute" | head -3
+        bad "the shell logged a failed or refused SetRoute"
+    else
+        ok "the shell logged no failed SetRoute"
+    fi
+}
+
 case "${1:-check}" in
 check)
     two_profiles
@@ -151,6 +245,11 @@ check)
     ;;
 restart) restart_check ;;
 security) security_check ;;
+shell)
+    two_profiles
+    [ -n "$me" ] && ok "profile $me signs in" || { bad "need a profile"; exit 1; }
+    shell_check
+    ;;
 esac
 [ "$fail" = 0 ] && echo "ALL CHECKS PASSED" || echo "SOME CHECKS FAILED"
 exit "$fail"

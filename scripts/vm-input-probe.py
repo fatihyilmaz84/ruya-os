@@ -8,6 +8,8 @@
   python3 vm-input-probe.py game <node>      (as the profile user; driven by `check` over stdin)
   python3 vm-input-probe.py open <node>      prints "open ok" or "open refused <errno name>"
   python3 vm-input-probe.py restart          (root) kill -9 ruya-inputd; prints "<old> <new> <ms>"
+  python3 vm-input-probe.py pad <seconds>    (root) holds a uinput "physical" pad for that long
+      (RUY-409: the shell's route makes its virtual pad); prints "pad ready <node>" once it has a node
 """
 import argparse
 import errno
@@ -400,6 +402,17 @@ def cmd_open(args):
         print(f"open refused {errno.errorcode.get(e.errno, e.errno)}")
 
 
+def cmd_pad(args):
+    """Holds a "physical" test pad, so the shell's route (not this probe) decides its virtual pad."""
+    pad = FakePad()
+    try:
+        node = wait_for(lambda: node_by("phys", PHYS)[0], 3)
+        print(f"pad ready {node}" if node else "pad has no node", flush=True)
+        time.sleep(args.seconds)
+    finally:
+        pad.close()
+
+
 def cmd_restart(args):
     """kill -9 the service; prints the ms until a new RuyaOS Navigation device exists."""
     _, before = node_by("name", NAV)
@@ -586,10 +599,12 @@ def main():
     o = sub.add_parser("open")
     o.add_argument("node")
     sub.add_parser("restart")
+    p = sub.add_parser("pad")
+    p.add_argument("seconds", type=float)
     args = ap.parse_args()
     if args.cmd == "check":
         sys.exit(1 if cmd_check(args) else 0)
-    {"game": cmd_game, "open": cmd_open, "restart": cmd_restart}[args.cmd](args)
+    {"game": cmd_game, "open": cmd_open, "restart": cmd_restart, "pad": cmd_pad}[args.cmd](args)
 
 
 if __name__ == "__main__":
