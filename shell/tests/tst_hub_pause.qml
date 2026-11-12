@@ -408,6 +408,10 @@ Item {
 
         // RUY-401: where even the smallest art does not make the rows fit, the art is at its smallest and the
         // list scrolls as before: the focused row is reachable (the game with two other apps at 150 %).
+        function currentRowInView(list) {
+            const r = list.itemAtIndex(list.currentIndex)
+            return r && r.mapToItem(list, 0, 0).y + r.height <= list.height + 0.5
+        }
         function test_the_art_is_at_its_smallest_where_the_rows_do_not_fit() {
             const menu = hubAt(1.5, 2)
             const list = findChild(menu, "systemActions")
@@ -415,8 +419,7 @@ Item {
             for (let step = 0; step < 4; ++step)
                 keyClick(Qt.Key_Down)
             compare(menu.currentRow, "panels")
-            tryVerify(() => { const r = list.itemAtIndex(list.currentIndex); return r && r.mapToItem(list, 0, 0).y + r.height <= list.height + 0.5 },
-                      3000, "the icon row is in view")
+            tryVerify(() => currentRowInView(list), 3000, "the icon row is in view")
         }
 
         // RUY-401: the line for the focused item's name takes no height while neither row has the focus.
