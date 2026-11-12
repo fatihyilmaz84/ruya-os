@@ -106,7 +106,8 @@ Before the handoff, ask what made this range slower or worse than it needed to b
 - **Builders:** from the Outcome comments, Paper Plane's usage per ticket and the diffs: re-runs, hung or unjudged checks, steps skipped, a ticket misread or too vague, the same question asked twice, rules ignored. Fix the cause (task template, `PLANNING.md` Lessons, area `CLAUDE.md`, `dev.ps1`).
 - **Lead:** your own session: what you re-did, read without need, or couldn't finish, and which step of this file cost the most for the least. Fix `LEAD.md` or `LEAD-NOTES.md`.
 - **Tests:** each gate runs only what it needs. Time `dev.ps1 test` and `shots`; look for checks that duplicate another gate, run where they can't pass (a locked desktop), or check nothing a criterion needs. Trim or speed up those, but never drop the only check of a criterion or weaken one (`CLAUDE.md`, Hard rules).
-- Record each change as "Process:" in the session-log entry and in the quality-signal row; say "Process: none" when there was nothing.
+- **Paper Plane itself (owner, 2026-11-12):** every bug or problem you, a builder or a reviewer hits in Paper Plane (a 500, a wrong answer, a confusing tool, a missing argument name) and every feature it lacks becomes a GitHub issue on `EnigmaNL/PaperPlane` (`gh issue create --repo EnigmaNL/PaperPlane --label bug|enhancement`, body: what was called, what came back, what was expected; never a token). Search the open issues first (`gh issue list --repo EnigmaNL/PaperPlane --search ...`) and add a comment instead of a duplicate. Builders and reviewers report such problems in their HANDOFF or REVIEW (`paper plane:` line); the lead files them.
+- Record each change as "Process:" in `LEAD-NOTES.md` and in the quality-signal row; say "Process: none" when there was nothing.
 
 ### 7. Handoff
 - **Rewrite** `LEAD-NOTES.md` (don't append forever):
@@ -156,7 +157,7 @@ Every turn re-reads the whole context, and the owner-facing relay session reads 
 
 | The lead may | The lead may not |
 |---|---|
-| Reorder, write, split, rescope or drop tickets; push `main` after a passing secret scan | Force-push, push other branches or tags, or publish anything else (releases, images) without the owner's request |
+| Reorder, write, split, rescope or drop tickets; push `main` after a passing secret scan; file and comment on issues in `EnigmaNL/PaperPlane` | Force-push, push other branches or tags, or publish anything else (releases, images) without the owner's request |
 | Edit any code, test, spec or instruction file (`CLAUDE.md`s, `PLANNING.md`, this file) | Make owner-level decisions (legal, licence, product scope, spending, publishing) |
 | Accept technical ADRs inside the accepted architecture | Change an *Accepted* owner ADR without asking |
 | Reopen a builder's task, or revert a commit with a reason | Weaken the security invariants or any test gate |
