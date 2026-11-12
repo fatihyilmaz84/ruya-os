@@ -13,7 +13,7 @@ Four small review findings that each weaken a check or a guide silently. Close t
 1. `lint-dev-docs.ps1`: fail when a fenced xml block whose root is `<component>` has no sample metainfo path in the 3 lines before it (today the comparison with the sample is skipped without a word).
 2. The shipped filled icon cut has a zero-area spike contour in glyph 2: find out whether `remove-overlaps` (or a cleanup) in `subset-icons.sh` removes it, fix it, and add a check to the script's output that counts zero-area contours (0 expected). The script needs WSL: if it cannot run here, mark the fix **unverified** and list `subset-icons.sh` in the VM queue line of the Outcome.
 3. `shell/PATTERNS.md`: a note that a `const` declared inside a block-bodied arrow function blinds the QML member lint for the whole test file (T-300 review), with the workaround; and the lint should warn instead of going blind if that is simple.
-4. `docs/specs/04-design-system.md` §7: the sentence "Settings -> Profiles add and manage flows (T-186)" is stale since T-324 (My profile / Manage profiles): fix the names.
+4. `docs/specs/04-design-system.md` §7: the sentence "Settings -> Profiles add and manage flows (T-186)" is stale since T-324 (My profile / Manage profiles): fix the names. **Done in 6ffcd85** (split out as ticket RUY-177 in Paper Plane, the pilot, 2026-11-12); the other four items remain.
 5. `scripts/vm-goto.ps1`: its targets changed with T-324 (Settings My profile / Manage profiles) and were not run: check each target against the shell, fix, and say which were run.
 
 ## Out of scope
