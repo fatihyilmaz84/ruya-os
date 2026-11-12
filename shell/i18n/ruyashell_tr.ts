@@ -1301,18 +1301,28 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+11"/>
-        <location line="+75"/>
+        <location line="+118"/>
         <source>Resolution</source>
         <translation>Çözünürlük</translation>
     </message>
     <message>
-        <location line="-62"/>
-        <location line="+84"/>
+        <location line="-105"/>
+        <location line="+127"/>
         <source>Refresh rate</source>
         <translation>Yenileme hızı</translation>
     </message>
     <message>
-        <location line="-71"/>
+        <location line="-101"/>
+        <source>Could not change the brightness.</source>
+        <translation>Parlaklık değiştirilemedi.</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Brightness</source>
+        <translation>Parlaklık</translation>
+    </message>
+    <message>
+        <location line="+18"/>
         <source>UI size</source>
         <translation>Arayüz boyutu</translation>
     </message>
@@ -2415,60 +2425,37 @@ Bu geri alınamaz.</translation>
 <context>
     <name>QuickMenu</name>
     <message>
-        <location filename="../qml/QuickMenu.qml" line="+87"/>
-        <source>Wi-Fi</source>
-        <translation>Wi-Fi</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <location line="+385"/>
+        <location filename="../qml/QuickMenu.qml" line="+354"/>
         <source>Bluetooth</source>
         <translation>Bluetooth</translation>
     </message>
     <message>
-        <location line="-384"/>
-        <location line="+155"/>
-        <location line="+307"/>
+        <location line="-127"/>
+        <location line="+206"/>
         <source>Mute</source>
         <translation>Sessiz</translation>
     </message>
     <message>
-        <location line="-461"/>
-        <source>Mute mic</source>
-        <translation>Mikrofonu sustur</translation>
-    </message>
-    <message>
-        <location line="+18"/>
-        <location line="+4"/>
-        <location line="+1"/>
-        <location line="+1"/>
-        <location line="+131"/>
+        <location line="-205"/>
         <location line="+13"/>
-        <location line="+43"/>
+        <location line="+21"/>
         <source>Off</source>
         <translation>Kapalı</translation>
     </message>
     <message>
-        <location line="-191"/>
-        <location line="+678"/>
+        <location line="+432"/>
         <source>Not connected</source>
         <translation>Bağlı değil</translation>
     </message>
     <message>
-        <location line="-676"/>
-        <location line="+133"/>
+        <location line="-466"/>
         <location line="+13"/>
-        <location line="+43"/>
+        <location line="+21"/>
         <source>On</source>
         <translation>Açık</translation>
     </message>
     <message>
-        <location line="-168"/>
-        <source>Could not change Wi-Fi.</source>
-        <translation>Wi-Fi değiştirilemedi.</translation>
-    </message>
-    <message>
-        <location line="+15"/>
+        <location line="-179"/>
         <source>Could not switch the audio output.</source>
         <translation>Ses çıkışı değiştirilemedi.</translation>
     </message>
@@ -2478,39 +2465,12 @@ Bu geri alınamaz.</translation>
         <translation>Mikrofon değiştirilemedi.</translation>
     </message>
     <message>
-        <location line="+7"/>
-        <source>Could not change Bluetooth.</source>
-        <translation>Bluetooth değiştirilemedi.</translation>
-    </message>
-    <message>
-        <location line="+82"/>
+        <location line="+137"/>
         <source>Audio</source>
         <translation>Ses</translation>
     </message>
     <message>
-        <location line="+22"/>
-        <source>Display</source>
-        <translation>Ekran</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <location line="+978"/>
-        <source>Resolution</source>
-        <translation>Çözünürlük</translation>
-    </message>
-    <message>
-        <location line="-973"/>
-        <location line="+973"/>
-        <source>Refresh rate</source>
-        <translation>Yenileme hızı</translation>
-    </message>
-    <message>
-        <location line="-966"/>
-        <source>Brightness</source>
-        <translation>Parlaklık</translation>
-    </message>
-    <message>
-        <location line="+9"/>
+        <location line="+23"/>
         <source>Controllers</source>
         <translation>Kontrolcüler</translation>
     </message>
@@ -2535,39 +2495,7 @@ Bu geri alınamaz.</translation>
         <translation>Yenileme aralığı</translation>
     </message>
     <message>
-        <location line="+34"/>
-        <location line="+16"/>
-        <source>Recommended</source>
-        <translation>Önerilen</translation>
-    </message>
-    <message>
-        <location line="-14"/>
-        <location line="+16"/>
-        <source>Current</source>
-        <translation>Geçerli</translation>
-    </message>
-    <message>
-        <location line="+19"/>
-        <source>Close running games and apps first: changing the screen mode restarts the console.</source>
-        <translation>Önce çalışan oyunları ve uygulamaları kapatın: ekran modunu değiştirmek konsolu yeniden başlatır.</translation>
-    </message>
-    <message>
-        <location line="+15"/>
-        <source>Try again in a minute: the console has just restarted several times.</source>
-        <translation>Bir dakika sonra yeniden deneyin: konsol az önce birkaç kez yeniden başladı.</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>The screen mode could not be changed.</source>
-        <translation>Ekran modu değiştirilemedi.</translation>
-    </message>
-    <message>
-        <location line="+7"/>
-        <source>Could not change the brightness.</source>
-        <translation>Parlaklık değiştirilemedi.</translation>
-    </message>
-    <message>
-        <location line="+69"/>
+        <location line="+84"/>
         <source>Battery not reported</source>
         <translation>Pil düzeyi bildirilmiyor</translation>
     </message>
@@ -2597,12 +2525,7 @@ Bu geri alınamaz.</translation>
         <translation>USB</translation>
     </message>
     <message>
-        <location line="-193"/>
-        <source>%1 %</source>
-        <translation>%%1</translation>
-    </message>
-    <message>
-        <location line="+199"/>
+        <location line="+6"/>
         <source>0.5 s</source>
         <translation>0,5 sn</translation>
     </message>
@@ -2612,26 +2535,22 @@ Bu geri alınamaz.</translation>
         <translation>%1 sn</translation>
     </message>
     <message>
-        <location line="+64"/>
-        <location line="+30"/>
+        <location line="+67"/>
+        <location line="+16"/>
+        <location line="+16"/>
         <source>Resume</source>
         <translation>Devam et</translation>
     </message>
     <message>
-        <location line="-26"/>
-        <location line="+18"/>
+        <location line="-30"/>
+        <location line="+21"/>
         <source>Select</source>
         <translation>Seç</translation>
     </message>
     <message>
-        <location line="-13"/>
+        <location line="-16"/>
         <source>Adjust</source>
         <translation>Ayarla</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Choose</source>
-        <translation>Seç</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -2645,22 +2564,17 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+6"/>
         <source>Toggle</source>
         <translation>Aç/Kapat</translation>
     </message>
     <message>
-        <location line="-5"/>
+        <location line="+1"/>
+        <location line="+11"/>
         <source>Open</source>
         <translation>Aç</translation>
     </message>
     <message>
-        <location line="+7"/>
-        <source>Start</source>
-        <translation>Başlat</translation>
-    </message>
-    <message>
-        <location line="+10"/>
+        <location line="+11"/>
         <source>Home</source>
         <translation>Ana sayfa</translation>
     </message>
@@ -2670,28 +2584,28 @@ Bu geri alınamaz.</translation>
         <translation>Oyunu kapat</translation>
     </message>
     <message>
-        <location line="-262"/>
+        <location line="-171"/>
         <source>Volume</source>
         <translation>Ses</translation>
     </message>
     <message>
-        <location line="+263"/>
+        <location line="+172"/>
         <source>Switch profile</source>
         <translation>Profil değiştir</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-178"/>
+        <location line="+434"/>
         <source>Power</source>
         <translation>Güç</translation>
     </message>
     <message>
-        <location line="-34"/>
-        <location line="+35"/>
+        <location line="-291"/>
         <source>Close</source>
         <translation>Kapat</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+36"/>
         <source>Suspend</source>
         <translation>Askıya al</translation>
     </message>
@@ -2712,7 +2626,7 @@ Bu geri alınamaz.</translation>
         <translation>Geri</translation>
     </message>
     <message>
-        <location line="-335"/>
+        <location line="-236"/>
         <source>Output</source>
         <translation>Çıkış</translation>
     </message>
@@ -2727,12 +2641,17 @@ Bu geri alınamaz.</translation>
         <translation>Mikrofonu sustur</translation>
     </message>
     <message>
-        <location line="+43"/>
+        <location line="+21"/>
         <source>Performance overlay</source>
         <translation>Performans göstergesi</translation>
     </message>
     <message>
-        <location line="+291"/>
+        <location line="+186"/>
+        <source>Switch</source>
+        <translation>Geç</translation>
+    </message>
+    <message>
+        <location line="+26"/>
         <source>Switch to %1</source>
         <translation>%1 uygulamasına geç</translation>
     </message>
@@ -2742,40 +2661,54 @@ Bu geri alınamaz.</translation>
         <translation>%1 uygulamasına geç (henüz pencere yok)</translation>
     </message>
     <message>
-        <location line="+144"/>
-        <location line="+287"/>
-        <location line="+2"/>
+        <location line="+7"/>
+        <source>%1 (no window yet)</source>
+        <translation>%1 (henüz pencere yok)</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Paused · %1</source>
+        <translation>Duraklatıldı · %1</translation>
+    </message>
+    <message>
+        <location line="+137"/>
+        <source>%1, %2, microphone muted</source>
+        <translation>%1, %2, mikrofon susturuldu</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+216"/>
+        <location line="+1"/>
         <source>%1, %2</source>
         <translation>%1, %2</translation>
     </message>
     <message>
-        <location line="-182"/>
+        <location line="-100"/>
+        <source>Ruya Hub</source>
+        <translation>Ruya Hub</translation>
+    </message>
+    <message>
+        <location line="+97"/>
+        <source>Resume %1, %2</source>
+        <translation>Devam et: %1, %2</translation>
+    </message>
+    <message>
+        <location line="-351"/>
         <source>Just started</source>
         <translation>Yeni başladı</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+0"/>
         <source>Running for %1</source>
         <translation>%1 süredir çalışıyor</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="-1"/>
         <source>Paused</source>
         <translation>Duraklatıldı</translation>
     </message>
     <message>
-        <location line="+19"/>
-        <location line="+51"/>
-        <source>System</source>
-        <translation>Sistem</translation>
-    </message>
-    <message>
-        <location line="-44"/>
-        <source>Image version %1</source>
-        <translation>Sistem sürümü %1</translation>
-    </message>
-    <message>
-        <location line="+140"/>
+        <location line="+351"/>
         <source>Volume, muted</source>
         <translation>Ses, sessiz</translation>
     </message>
@@ -2785,34 +2718,9 @@ Bu geri alınamaz.</translation>
         <translation>Ses %1</translation>
     </message>
     <message>
-        <location line="+160"/>
-        <source>%1, on</source>
-        <translation>%1, açık</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>%1, off</source>
-        <translation>%1, kapalı</translation>
-    </message>
-    <message>
-        <location line="-1068"/>
-        <location line="+1"/>
-        <location line="+201"/>
+        <location line="-548"/>
         <source>Muted</source>
         <translation>Sessiz</translation>
-    </message>
-</context>
-<context>
-    <name>QuickTile</name>
-    <message>
-        <location filename="../qml/QuickTile.qml" line="+24"/>
-        <source>%1, on</source>
-        <translation>%1, açık</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>%1, off</source>
-        <translation>%1, kapalı</translation>
     </message>
 </context>
 <context>
@@ -3109,7 +3017,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+583"/>
+        <location filename="../qml/Shell.qml" line="+587"/>
         <source>Could not %1.</source>
         <translation>%1 işlemi yapılamadı.</translation>
     </message>
@@ -3149,7 +3057,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 hâlâ kapanıyor.</translation>
     </message>
     <message>
-        <location line="+249"/>
+        <location line="+248"/>
         <source>Could not close %1.</source>
         <translation>%1 kapatılamadı.</translation>
     </message>
@@ -3231,18 +3139,18 @@ Bu geri alınamaz.</translation>
         <translation>Seç</translation>
     </message>
     <message>
-        <location line="+159"/>
+        <location line="+166"/>
         <source>The chosen sound theme can&apos;t be used. The standard one plays instead.</source>
         <translation>Seçilen ses teması kullanılamıyor. Bunun yerine standart tema çalıyor.</translation>
     </message>
     <message>
-        <location line="-181"/>
+        <location line="-188"/>
         <location line="+17"/>
         <source>Cancel</source>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="-1190"/>
+        <location line="-1189"/>
         <source>%1 is already running</source>
         <translation>%1 zaten çalışıyor</translation>
     </message>
@@ -3264,7 +3172,7 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+39"/>
-        <location line="+108"/>
+        <location line="+107"/>
         <source>Running app</source>
         <translation>Çalışan uygulama</translation>
     </message>
@@ -3274,7 +3182,7 @@ Bu geri alınamaz.</translation>
         <translation>Bölümler</translation>
     </message>
     <message>
-        <location line="+142"/>
+        <location line="+149"/>
         <source>mock services</source>
         <translation>sahte hizmetler</translation>
     </message>

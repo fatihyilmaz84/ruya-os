@@ -39,6 +39,8 @@ Item {
         "wifi_off": 0xe648,
         "lan": 0xeb2f,
         "smartphone": 0xe7ba,
+        "monitoring": 0xf190,
+        "power_settings_new": 0xf8c7,
         "pad_playstation": 0xe005,
         "pad_xbox": 0xe006,
         "pad_switch": 0xe007

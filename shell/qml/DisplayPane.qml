@@ -191,6 +191,49 @@ SettingsPane {
         }
     }
 
+    // Brightness (T-471, moved here from the Hub's Display panel of T-454): only a screen with a backlight
+    // has it (a TV or a monitor has none: no row, not a greyed one). Left/Right by 5, never below 5 (a pad
+    // cannot undo a black screen). The level follows the service's answer; presses that come before it step
+    // from the target of the last press. A refusal toasts and the row shows what the service has.
+    property int brightnessTarget: -1
+    property int brightnessInFlight: 0
+    function settleBrightness() {
+        if (brightnessInFlight === 0 && (brightnessTarget < 0 || Display.brightness === brightnessTarget))
+            brightnessTarget = -1
+    }
+    // The laptop's own keys may have changed it: ask again whenever the pane is shown.
+    onVisibleChanged: if (visible && Display.brightnessSupported) Display.refreshBrightness()
+    Connections {
+        target: Display
+        function onSetBrightnessFinished(status) {
+            pane.brightnessInFlight = Math.max(0, pane.brightnessInFlight - 1)
+            if (status !== "ok") {
+                pane.brightnessTarget = -1
+                Notifications.show(qsTr("Could not change the brightness."), "warning")
+            } else {
+                pane.settleBrightness()
+            }
+        }
+        function onBrightnessChanged() { pane.settleBrightness() }
+    }
+    SliderRow {
+        id: brightness
+        objectName: "rowBrightness"
+        u: pane.u
+        visible: Display.brightnessSupported
+        label: qsTr("Brightness")
+        from: 5
+        to: 100
+        stepSize: 5
+        unit: "%"
+        onEdited: v => {
+            pane.brightnessTarget = v
+            pane.brightnessInFlight += 1
+            Display.setBrightness(v)
+        }
+    }
+    Binding { target: brightness; property: "value"; value: pane.brightnessTarget >= 0 ? pane.brightnessTarget : Display.brightness }
+
     ChoiceRow {
         id: uiSize
         objectName: "rowUiSize"

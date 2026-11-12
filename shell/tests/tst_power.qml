@@ -27,10 +27,20 @@ Item {
         // Down until the Quick Hub's row `key` has the focus (T-448: the rows above it depend on the
         // library, the tiles and the recent games).
         function hubGoTo(key) {
+            const menu = find("systemPanel")
             const list = find("systemActions")
-            for (let i = 0; i < 20 && list.model[list.currentIndex] !== key; ++i)
-                keyClick(Qt.Key_Down)
-            compare(list.model[list.currentIndex], key)
+            if (key === "switch" && !menu.powerMode) {
+                // Switch profile is the last choice of the Power panel (T-471)
+                hubGoTo("panel:power")
+                keyClick(Qt.Key_Return)
+                tryCompare(menu, "powerMode", true)
+            }
+            // Up/Down to the control's row, then Left/Right along it (T-471: a row may hold several controls).
+            for (let i = 0; i < 30 && menu.currentKey !== key; ++i)
+                keyClick(menu.itemKeys.indexOf(menu.rowKeyOf(key)) > list.currentIndex ? Qt.Key_Down
+                         : menu.itemKeys.indexOf(menu.rowKeyOf(key)) < list.currentIndex ? Qt.Key_Up
+                         : menu.columnOf(key) > menu.currentColumn ? Qt.Key_Right : Qt.Key_Left)
+            compare(menu.currentKey, key)
         }
 
         function init() {
@@ -310,7 +320,7 @@ Item {
             keyRelease(data.key)
             wait(100)
             verify(find("systemPanel").open, "releasing after the hold does not close it")
-            compare(find("systemActions").count, 4)
+            compare(find("systemActions").count, 5)    // Suspend, Restart, Power off, Switch profile, Back (T-471)
         }
 
         function test_super_short_press_does_not_open_power_choices() {
@@ -330,7 +340,7 @@ Item {
             keyRelease(Qt.Key_HomePage)
             wait(100)
             verify(find("systemPanel").open, "releasing after the hold does not close it")
-            compare(find("systemActions").count, 4)    // Suspend, Restart, Power off, Back
+            compare(find("systemActions").count, 5)    // Suspend, Restart, Power off, Switch profile, Back (T-471)
             keyClick(Qt.Key_Down)
             keyClick(Qt.Key_Return)                    // Restart
             tryVerify(() => find("overlayPowerConfirm").shown)
@@ -346,9 +356,9 @@ Item {
         function test_overlay_power_choices_by_menu() {
             keyClick(Qt.Key_HomePage)
             tryVerify(() => find("systemActions").activeFocus)
-            // The Hub's last rows (T-448: the recent games, Volume and the tiles come before them)
-            compare(find("systemPanel").itemKeys.slice(-3), ["power", "switch", "close"])
-            hubGoTo("power")
+            // Power is the last of the panel icons, the Hub's last row (T-471)
+            compare(find("systemPanel").controlsOf("panels").slice(-1), ["panel:power"])
+            hubGoTo("panel:power")
             keyClick(Qt.Key_Return)                    // Power
             tryCompare(find("systemPanel"), "powerMode", true)
             compare(find("systemActions").currentIndex, 0)
@@ -361,7 +371,8 @@ Item {
             compare(Power.actionCount, 0)
             keyClick(Qt.Key_Escape)                    // Back: the system actions again, on "Power"
             tryCompare(find("systemPanel"), "powerMode", false)
-            compare(find("systemActions").currentIndex, find("systemPanel").itemKeys.indexOf("power"))
+            compare(find("systemActions").currentIndex, find("systemPanel").itemKeys.indexOf("panels"))
+            compare(find("systemPanel").currentKey, "panel:power", "on the Power icon")
             keyClick(Qt.Key_Escape)                    // closes the overlay
             tryVerify(() => !find("systemPanel").open)
             tryVerify(() => find("homePlay").activeFocus)
@@ -372,14 +383,15 @@ Item {
         function test_overlay_backspace_is_back() {
             keyClick(Qt.Key_HomePage)
             tryVerify(() => find("systemActions").activeFocus)
-            hubGoTo("power")
+            hubGoTo("panel:power")
             keyClick(Qt.Key_Return)                    // Power
             tryCompare(find("systemPanel"), "powerMode", true)
             verify(find("systemActions").activeFocus)
             keyClick(Qt.Key_Backspace)                 // Back: the system actions again, on "Power"
             tryCompare(find("systemPanel"), "powerMode", false)
             compare(find("systemPanel").open, true, "the first Backspace only leaves the power choices")
-            compare(find("systemActions").currentIndex, find("systemPanel").itemKeys.indexOf("power"))
+            compare(find("systemActions").currentIndex, find("systemPanel").itemKeys.indexOf("panels"))
+            compare(find("systemPanel").currentKey, "panel:power", "on the Power icon")
             verify(find("systemActions").activeFocus)
             keyClick(Qt.Key_Backspace)                 // closes the overlay
             tryVerify(() => !find("systemPanel").open)
@@ -392,17 +404,17 @@ Item {
             tryVerify(() => !Power.canRestart)
             keyClick(Qt.Key_HomePage)
             tryVerify(() => find("systemActions").activeFocus)
-            hubGoTo("power")
+            hubGoTo("panel:power")
             keyClick(Qt.Key_Return)
             tryCompare(find("systemPanel"), "powerMode", true)
-            compare(find("systemActions").count, 3)    // Suspend, Power off, Back
+            compare(find("systemActions").count, 4)    // Suspend, Power off, Switch profile, Back
         }
 
         function test_overlay_power_choices_over_page() {
             openPowerPage()
             keyClick(Qt.Key_HomePage)
             tryVerify(() => find("systemActions").activeFocus)
-            hubGoTo("power")
+            hubGoTo("panel:power")
             keyClick(Qt.Key_Return)
             tryCompare(find("systemPanel"), "powerMode", true)
             keyClick(Qt.Key_Down)
@@ -457,7 +469,7 @@ Item {
             DeviceSettings.theme = "dreamglass"
             keyClick(Qt.Key_HomePage)
             tryVerify(() => find("systemActions").activeFocus)
-            hubGoTo("power")
+            hubGoTo("panel:power")
             keyClick(Qt.Key_Return)
             tryCompare(find("systemPanel"), "powerMode", true)
             wait(500)

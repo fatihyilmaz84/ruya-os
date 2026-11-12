@@ -17,7 +17,7 @@
 #   4. Settings, a key 2 s before (informational): the blobs drift, the page blur and the pills
 #      redraw. T-421: about 40 %.
 #   5. Settings, 40 s without input. PASS under 3 %: the blobs rest after 30 s too (LiquidGate).
-#   6. The profile picker (Guide, then Accept on "Switch profile"), a key 2 s before
+#   6. The profile picker (Guide, Power, then Accept on "Switch profile"), a key 2 s before
 #      (informational: the blobs drift, the page blur's texture is idle off pages, T-434), then
 #      40 s without input, PASS under 3 %. Accept signs the focused profile in again; with RUYA_PIN
 #      set its digits are typed into the PIN pad. The captures are copied to [out-dir] (default
@@ -148,7 +148,9 @@ keys esc esc
 sleep 2
 keys guide
 sleep 1
-keys enter
+# Switch profile is the Power panel's last choice before Back (T-471): down to the panel icons, right to
+# Power, open it, down to Back, up one.
+keys down down down right right right enter down down down down down down up enter
 sleep 2
 cap picker
 keys right left

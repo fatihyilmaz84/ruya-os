@@ -123,15 +123,23 @@ Item {
         }
 
         function focusedKey() {
-            const list = find("systemActions")
-            return list.model[list.currentIndex]
+            return find("systemPanel").currentKey
         }
 
         function goTo(key) {
-            for (let i = 0; i < 20 && focusedKey() !== key; ++i)
-                keyClick(Qt.Key_Down)
-            for (let i = 0; i < 20 && focusedKey() !== key; ++i)
-                keyClick(Qt.Key_Up)
+            const menu = find("systemPanel")
+            const list = find("systemActions")
+            if (key === "switch" && !menu.powerMode) {
+                // Switch profile is the last choice of the Power panel (T-471)
+                goTo("panel:power")
+                keyClick(Qt.Key_Return)
+                tryCompare(menu, "powerMode", true)
+            }
+            // Up/Down to the control's row, then Left/Right along it (T-471: a row may hold several controls).
+            for (let i = 0; i < 30 && menu.currentKey !== key; ++i)
+                keyClick(menu.itemKeys.indexOf(menu.rowKeyOf(key)) > list.currentIndex ? Qt.Key_Down
+                         : menu.itemKeys.indexOf(menu.rowKeyOf(key)) < list.currentIndex ? Qt.Key_Up
+                         : menu.columnOf(key) > menu.currentColumn ? Qt.Key_Right : Qt.Key_Left)
             compare(focusedKey(), key)
             verify(find("quickMenuItem_" + key).focused, key + " has the focus ring")
         }
@@ -197,10 +205,11 @@ Item {
             compare(tc.shell.quickMenuOthers.map(o => o.appId).sort(), ["org.example.Puzzle", "org.example.Racer"])
             compare(tc.shell.quickMenuOthers.find(o => o.appId === "org.example.Racer").hasWindow, true)
             compare(tc.shell.quickMenuOthers.find(o => o.appId === "org.example.Puzzle").hasWindow, false)
-            const keys = find("systemActions").model
-            verify(keys.includes("to:org.example.Racer"), "a Switch to row for the game with a window")
+            const keys = find("systemPanel").controlsOf("running")      // the running strip (T-471)
+            verify(keys.includes("to:org.example.Racer"), "a tile for the game with a window")
             verify(keys.includes("to:org.example.Puzzle"), "and one for the game without")
-            verify(focusedKey().startsWith("to:"), "the first row is a running game")
+            compare(find("systemPanel").currentRow, "running", "the first row is the running strip")
+            verify(focusedKey().startsWith("to:"), "on a running game")
 
             goTo("to:org.example.Puzzle")                    // no window yet: says so, the Hub stays
             keyClick(Qt.Key_Return)

@@ -111,13 +111,23 @@ Item {
         }
 
         function focusedKey() {
-            const list = find("systemActions")
-            return list.model[list.currentIndex]
+            return find("systemPanel").currentKey
         }
 
         function goTo(key) {
-            for (let i = 0; i < 20 && focusedKey() !== key; ++i)
-                keyClick(Qt.Key_Down)
+            const menu = find("systemPanel")
+            const list = find("systemActions")
+            if (key === "switch" && !menu.powerMode) {
+                // Switch profile is the last choice of the Power panel (T-471)
+                goTo("panel:power")
+                keyClick(Qt.Key_Return)
+                tryCompare(menu, "powerMode", true)
+            }
+            // Up/Down to the control's row, then Left/Right along it (T-471: a row may hold several controls).
+            for (let i = 0; i < 30 && menu.currentKey !== key; ++i)
+                keyClick(menu.itemKeys.indexOf(menu.rowKeyOf(key)) > list.currentIndex ? Qt.Key_Down
+                         : menu.itemKeys.indexOf(menu.rowKeyOf(key)) < list.currentIndex ? Qt.Key_Up
+                         : menu.columnOf(key) > menu.currentColumn ? Qt.Key_Right : Qt.Key_Left)
             compare(focusedKey(), key)
             verify(find("quickMenuItem_" + key).focused, key + " has the focus ring")
         }
@@ -162,7 +172,7 @@ Item {
             const title = find("hubPanelTitle")
             verify(title.visible)
             compare(title.text, "Performance")
-            verify(!find("quickMenuApp").visible, "the panel replaces the app part")
+            verify(!find("hubGameCard"), "the panel replaces the game card")
             compare(find("systemPanel").itemKeys, ["performance:overlay", "performance:interval"])
             compare(focusedKey(), "performance:overlay")
             compare(find("quickMenuItem_performance:overlay").Accessible.name.indexOf("Performance overlay, "), 0)
@@ -180,9 +190,9 @@ Item {
         function test_the_entries_come_in_the_order_of_the_spec() {
             start()
             openHub()
-            const keys = find("systemPanel").itemKeys
+            const keys = find("systemPanel").controlsOf("panels")       // the panel icons (T-471)
             verify(keys.indexOf("panel:audio") >= 0 && keys.indexOf("panel:audio") < keys.indexOf("panel:performance"))
-            verify(keys.indexOf("panel:performance") < keys.indexOf("power"), "before Power")
+            verify(keys.indexOf("panel:performance") < keys.indexOf("panel:power"), "before Power")
             keyClick(Qt.Key_Escape)
         }
 

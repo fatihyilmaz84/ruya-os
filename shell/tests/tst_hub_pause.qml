@@ -51,7 +51,7 @@ Item {
             marginY: 40
             open: true
             app: ({ appId: "org.example.Racer", title: "Turbo Racer Championship Edition: The Long Road Home",
-                    picture: "", started: Date.now() / 1000, instance: "x", frozen: true })
+                    picture: "", started: Date.now() / 1000 - 12 * 60, instance: "x", frozen: true })
         }
     }
 
@@ -149,19 +149,29 @@ Item {
         function openHubAndPause(instance) {
             openHub()
             tryVerify(() => recordOf(instance).frozen === true, 2000, "the game is frozen")
-            tryVerify(() => find("quickMenuPaused").visible, 2000, "the header says Paused")
+            tryVerify(() => find("hubCardState").text.startsWith("Paused"), 2000, "the game card says Paused")
             compare(Session.mockCalls(), ["freeze " + instance])
             verify(find("quickMenuItem_resume").focused, "the focus starts on Resume")
         }
 
         function focusedKey() {
-            const list = find("systemActions")
-            return list.model[list.currentIndex]
+            return find("systemPanel").currentKey
         }
 
         function goTo(key) {
-            for (let i = 0; i < 20 && focusedKey() !== key; ++i)
-                keyClick(Qt.Key_Down)
+            const menu = find("systemPanel")
+            const list = find("systemActions")
+            if (key === "switch" && !menu.powerMode) {
+                // Switch profile is the last choice of the Power panel (T-471)
+                goTo("panel:power")
+                keyClick(Qt.Key_Return)
+                tryCompare(menu, "powerMode", true)
+            }
+            // Up/Down to the control's row, then Left/Right along it (T-471: a row may hold several controls).
+            for (let i = 0; i < 30 && menu.currentKey !== key; ++i)
+                keyClick(menu.itemKeys.indexOf(menu.rowKeyOf(key)) > list.currentIndex ? Qt.Key_Down
+                         : menu.itemKeys.indexOf(menu.rowKeyOf(key)) < list.currentIndex ? Qt.Key_Up
+                         : menu.columnOf(key) > menu.currentColumn ? Qt.Key_Right : Qt.Key_Left)
             compare(focusedKey(), key)
             verify(find("quickMenuItem_" + key).focused, key + " has the focus ring")
         }
@@ -188,7 +198,8 @@ Item {
             const run = playRacer()
             verify(!recordOf(run.instance).frozen)
             openHubAndPause(run.instance)
-            compare(find("quickMenuPaused").text, "Paused")
+            compare(find("hubCardState").text, "Paused", "under a minute: Paused alone")
+            verify(find("hubGameCard").paused)
             keyClick(Qt.Key_Return)                          // Resume
             tryVerify(() => run.app.activeFocus, 2000, "Resume gives the game the focus back")
             verify(!find("systemPanel").open)
@@ -279,7 +290,7 @@ Item {
             openHub()
             wait(50)                                         // a freeze would be asked synchronously
             compare(Session.mockCalls(), [])
-            verify(!find("quickMenuPaused").visible)
+            verify(!find("hubCardState").text.startsWith("Paused"))
             keyClick(Qt.Key_Escape)
             tryVerify(() => run.app.activeFocus, 2000, "B returns to the game")
             compare(Session.mockCalls(), [], "no Thaw either")
@@ -301,7 +312,7 @@ Item {
             verify(find("systemPanel").open, "the Hub stays open")
             verify(find("systemActions").activeFocus, "with the focus")
             verify(find("quickMenuItem_resume").focused)
-            verify(!find("quickMenuPaused").visible, "nothing is shown as paused")
+            compare(find("hubCardState").text, "Just started", "nothing is shown as paused")
             verify(!recordOf(run.instance).frozen, "the game keeps running")
             compare(frozenSpy.count, 0)
             keyClick(Qt.Key_Escape)
@@ -341,24 +352,31 @@ Item {
             tryVerify(() => list.activeFocus, 2000, "Back returns to the categories")
         }
 
-        // A two-line title over "Paused" is taller than the art: the header grows, so "Paused" never runs
-        // into the first row below it.
+        // A two-line title over "Paused · 12 min" is taller than the art: the game card grows (T-471), so its text
+        // never runs into the next row (Home | Close game).
         function test_a_long_title_and_paused_fit_in_the_header() {
             const menu = createTemporaryObject(menuComponent, host)
             verify(menu)
-            const header = findChild(menu, "quickMenuApp")
-            const info = findChild(menu, "quickMenuAppInfo")
-            const title = findChild(menu, "quickMenuTitle")
-            const paused = findChild(menu, "quickMenuPaused")
-            const list = findChild(menu, "systemActions")
+            menu.present()
+            const card = findChild(menu, "hubGameCard")
+            verify(card, "the game card is the first row")
+            const info = findChild(menu, "hubCardInfo")
+            const title = findChild(menu, "hubCardTitle")
+            const state = findChild(menu, "hubCardState")
+            const art = findChild(menu, "hubCardArt")
             tryVerify(() => title.lineCount === 2, 2000, "the title takes two lines")
-            verify(paused.visible)
-            const art = findChild(menu, "quickMenuArt")
-            tryVerify(() => info.height > art.height, 2000, "the text is taller than the art here")   // the Column lays out on the next polish
-            verify(header.height >= info.height, "the header holds all of its text")
-            const pausedBottom = paused.mapToItem(menu, 0, paused.height).y
-            const listTop = list.mapToItem(menu, 0, 0).y
-            verify(pausedBottom <= listTop, "Paused ends above the first row (" + pausedBottom + " > " + listTop + ")")
+            compare(state.text, "Paused · 12 min")
+            tryVerify(() => info.height >= title.height + state.height, 2000, "the text is laid out")   // the Column lays out on the next polish
+            verify(card.height >= info.height + 2 * card.pad, "the card holds all of its text")
+            verify(card.height >= art.height + 2 * card.pad, "and its art")
+            verify(art.width > 200 * menu.u, "the art is larger than the old header's (200 u)")
+            tryVerify(() => findChild(menu, "quickMenuItem_leave") !== null, 2000, "the list has built its next row")
+            const next = findChild(menu, "quickMenuItem_leave")
+            // The panel centres itself again as its rows are built: compare both positions at the same moment.
+            tryVerify(() => menu.settled && next.mapToItem(menu, 0, 0).y >= state.mapToItem(menu, 0, state.height).y, 2000,
+                      "the state ends above Home | Close game")
+            verify(next.mapToItem(menu, 0, 0).y >= state.mapToItem(menu, 0, state.height).y,
+                   "the state ends above Home | Close game (" + state.mapToItem(menu, 0, state.height).y + " > " + next.mapToItem(menu, 0, 0).y + ")")
         }
 
         // Review (T-457 round 2): Switch profile from the Hub over a frozen game, then the same profile
@@ -407,7 +425,7 @@ Item {
             verify(recordOf(run.instance).frozen, "still frozen")
             Session.mockFailThaw(false)
             openHub()
-            tryVerify(() => find("quickMenuPaused").visible, 2000, "the header says Paused again")   // a reply, not an instant (T-463: flaky at the short motion scale)
+            tryVerify(() => find("hubCardState").text.startsWith("Paused"), 2000, "the game card says Paused again")   // a reply, not an instant (T-463: flaky at the short motion scale)
             keyClick(Qt.Key_Escape)
             tryVerify(() => recordOf(run.instance).frozen === false, 2000, "the second close thaws it")
             compare(Session.mockCalls(), ["freeze " + run.instance, "thaw " + run.instance, "thaw " + run.instance],

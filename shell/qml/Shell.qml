@@ -796,9 +796,9 @@ FocusScope {
                  instance: run ? run.instance : "",
                  frozen: run ? (run.frozen ?? false) : false }
     }
-    // The Hub's Switch to rows (T-467): every running app of the signed-in profile except the one in
+    // The Hub's running strip (T-467, T-471): every running app of the signed-in profile except the one in
     // front (frozen or not, with or without a window yet), then any other window whose app Session1 does
-    // not list (a client of a test). { appId, title, hasWindow }.
+    // not list (a client of a test). { appId, title, picture (the Library card's art), hasWindow }.
     readonly property var quickMenuOthers: {
         if (!signedIn)
             return []
@@ -808,22 +808,21 @@ FocusScope {
         for (const run of Session.running) {
             if (run.profile !== Profiles.activeProfile || run.state === "stopping" || run.instance === frontRun)
                 continue
-            rows.push({ appId: run.appId, title: titleOfApp(run.appId), hasWindow: windowOf(run.appId) !== undefined })
+            rows.push({ appId: run.appId, title: titleOfApp(run.appId), picture: cardArtOfApp(run.appId), hasWindow: windowOf(run.appId) !== undefined })
         }
         for (const r of shownApps) {
             const id = appIdOf(r)
             if (r.item !== focusedApp && id !== "" && id !== frontId && !rows.some(x => x.appId === id))
-                rows.push({ appId: id, title: titleOfApp(id), hasWindow: true })
+                rows.push({ appId: id, title: titleOfApp(id), picture: cardArtOfApp(id), hasWindow: true })
         }
         return rows
     }
-    // The Hub's Recent rows (T-448, 02 §1.6): up to four of `Library.recent` that Session1 can start and
-    // that are not running (the running ones are the app header and the Switch to rows); over an app
-    // only two, so the tiles stay near the top.
-    readonly property var quickMenuRecent: Library.recent
-        .filter(i => Library.sessionAppId(i.id) !== "" && !runningAppIds.includes(Library.sessionAppId(i.id)))
-        .slice(0, quickMenuApp ? 2 : 4)
-        .map(i => ({ id: i.id, title: i.title ?? i.id, picture: i.art ? (i.art.tile ?? i.art.hero ?? "") : "" }))
+    // A running app's picture in the Hub's strip: its Library card's art (the tile, else the hero), "" when
+    // the Library does not know it (the strip shows the tint and the initial).
+    function cardArtOfApp(appId) {
+        const found = Library.items.find(i => appId !== "" && Library.sessionAppId(i.id) === appId)
+        return found && found.art ? (found.art.tile ?? found.art.hero ?? "") : ""
+    }
 
     // Home from the quick menu: the apps keep running behind it and lose the focus; Home shows the
     // card of the one that was in front, with its Running pill, and the focus is on it.
@@ -1980,7 +1979,7 @@ FocusScope {
     }
 
     // The quick menu (T-147; Guide opens it from Home, a page, a launch or over a running app; it
-    // replaced the centred Guide card). Also shows the image version, which the update tests read.
+    // replaced the centred Guide card). (The image version is the always-on tag below and About; T-471 took it out of the Hub.)
     QuickMenu {
         id: systemPanel
         objectName: "systemPanel"
@@ -1989,10 +1988,8 @@ FocusScope {
         marginX: root.marginX
         marginY: root.marginY
         bottomReserve: hintBar.height + Theme.spaceM * root.u
-        version: root.version
         app: root.quickMenuApp
         others: root.quickMenuOthers
-        recent: root.quickMenuRecent
         guideKey: key => root.isGuideKey(key)
         onSettledChanged: {
             if (settled)
@@ -2016,12 +2013,6 @@ FocusScope {
         onHomeRequested: root.sendAppsHome()
         onCloseGameRequested: root.closeFrontGame(false)
         onSwitchToRequested: appId => root.switchToApp(appId)
-        // A Recent row: close the Hub first (focus goes to the app or the page), then start the game
-        // as Home's Play does (Library.launch -> launchApp: the splash).
-        onLaunchRequested: id => {
-            open = false
-            Library.launch(id)
-        }
         onSwitchProfileRequested: {
             open = false                     // first, so the game's Thaw goes out while the profile is signed in (T-457)
             Profiles.lock()                  // signedIn -> false; routeFocus() shows the picker
