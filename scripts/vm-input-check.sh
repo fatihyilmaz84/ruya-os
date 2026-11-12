@@ -7,7 +7,12 @@
 # is back within 0.5 s. Copy and run (boot with plain smoke-test.ps1 -Keep):
 #   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-input-check.sh scripts/vm-input-probe.py root@127.0.0.1:/root/
 #   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-input-check.sh [check|restart|security|shell|fallback]
-# `check` runs the first three. `shell` (RUY-409) checks that the running shell drives the route:
+# `check` runs the first three. Since RUY-409 the shell drives the route itself, so `check` and `shell`
+# first make their own state (RUY-430): they stop every running app through Session1, lock and sign
+# $me in again, and wait for the route `shell` (Home). The probe takes the route over with its own bus
+# connection and leaves the bus, which locks the route (that is part of the check); `check` then gives
+# the route back by Lock and a new sign-in, so the shell sends its own route again. Where the shell is
+# not running, `check` skips this and works as before. `shell` (RUY-409) checks that the running shell drives the route:
 # sign-in routes `shell`, launching the Wayland test app (org.ruyaos.TestWaylandClient, which
 # `vm-session-check.sh display` installs) routes `app` and makes a virtual pad for a test pad, the
 # Guide opens the Hub and routes `overlay`, a kill -9 of the service gets the route again from the
@@ -180,6 +185,58 @@ wait_pad() {   # $1: present | gone, $2: seconds
     return 1
 }
 
+# Stops every running app through Session1 (as ruya-shell) and waits until ListRunning is empty.
+stop_all_apps() {
+    local ssvc=org.ruyaos.Session1 spath=/org/ruyaos/Session1 list i n=0
+    list="$(runuser -u ruya-shell -- busctl --system call "$ssvc" "$spath" "$ssvc" ListRunning 2>/dev/null | grep -o 'ruya-app-[^"]*\.service' | sort -u)"
+    for i in $list; do
+        echo "stopping the running app $i"
+        runuser -u ruya-shell -- busctl --system call "$ssvc" "$spath" "$ssvc" Stop s "$i" >/dev/null 2>&1
+    done
+    while [ "$n" -lt 200 ]; do
+        runuser -u ruya-shell -- busctl --system call "$ssvc" "$spath" "$ssvc" ListRunning 2>/dev/null | grep -q 'ruya-app-' || return 0
+        sleep 0.1; n=$((n + 1))
+    done
+    return 1
+}
+# Signs $me in with the PIN it has (none, or 1234). Returns 1 with a FAIL line when that fails.
+sign_in_me() {
+    local out
+    out="$(busctl --system call "$psvc" "$ppath" "$psvc" SwitchTo ss "$me" "")"
+    case "$out" in 'suu "ok"'*) ;; *) out="$(busctl --system call "$psvc" "$ppath" "$psvc" SwitchTo ss "$me" 1234)";; esac
+    case "$out" in 'suu "ok"'*) return 0;; *) bad "SwitchTo $me: $out"; return 1;; esac
+}
+# Lock, then sign $me in: the shell sends Input1.SetRoute for each step, so the route ends as `shell`.
+# Needs the shell. Returns 1 with a FAIL line when the route does not settle.
+settle_route() {
+    local n=0
+    busctl --system call "$psvc" "$ppath" "$psvc" Lock >/dev/null
+    # The route may read `locked` already (the probe left the bus), so wait for the picker instead, and
+    # give the shell a second to send: it sends on changes only, and a sign-in right behind the Lock
+    # would leave its last sent route (shell) unchanged and send nothing.
+    until [ -z "$(active_profile)" ] || [ "$n" -ge 50 ]; do sleep 0.1; n=$((n + 1)); done
+    [ -z "$(active_profile)" ] || { bad "Lock left $(active_profile) signed in"; return 1; }
+    sleep 1
+    wait_route locked 5 || { bad "after Lock the route reads '$(route_now)'"; return 1; }
+    sign_in_me || return 1
+    wait_route shell 10 || { bad "signed in at Home: the route reads '$(route_now)', not shell"; return 1; }
+}
+# Own state for `check` (RUY-430): no app in front, $me at Home, the route shell.
+prepare_state() {
+    echo "--- own state: no running app, $me at Home, the route shell (RUY-430)"
+    if ! pgrep -u ruya-shell -x ruya-shell >/dev/null; then
+        echo "NOTE: the shell is not running: the route is left as it is"
+        return
+    fi
+    stop_all_apps && ok "no app is running" || bad "an app is still running after Stop"
+    settle_route && ok "$me is at Home and the route is shell"
+}
+# After the probe left the bus the route is locked; the shell does not know (it sends on changes only).
+restore_state() {
+    pgrep -u ruya-shell -x ruya-shell >/dev/null || return
+    settle_route && ok "the route is given back: the shell routes shell again"
+}
+
 shell_check() {
     echo "--- the shell drives the route (RUY-409)"
     local wclient=org.ruyaos.TestWaylandClient ssvc=org.ruyaos.Session1 spath=/org/ruyaos/Session1
@@ -195,11 +252,11 @@ shell_check() {
     local n=0; until grep -q "^pad " /var/tmp/ruya-input-pad.log || [ "$n" -ge 50 ]; do sleep 0.1; n=$((n + 1)); done
     grep -q "^pad ready" /var/tmp/ruya-input-pad.log && ok "a test pad is connected ($(cat /var/tmp/ruya-input-pad.log))" || { bad "no test pad: $(cat /var/tmp/ruya-input-pad.log)"; kill "$padpid"; return; }
 
+    # An app left by an earlier check (vm-session-check.sh display) would make Launch answer already-running.
+    stop_all_apps && ok "no app is running before the test app starts" || { bad "an app is still running after Stop"; kill "$padpid"; return; }
     busctl --system call "$psvc" "$ppath" "$psvc" Lock >/dev/null
     wait_route locked 5 && ok "Lock: the shell routes locked" || bad "after Lock the route reads '$(route_now)'"
-    out="$(busctl --system call "$psvc" "$ppath" "$psvc" SwitchTo ss "$me" "")"
-    case "$out" in 'suu "ok"'*) ;; *) out="$(busctl --system call "$psvc" "$ppath" "$psvc" SwitchTo ss "$me" 1234)";; esac
-    case "$out" in 'suu "ok"'*) ok "$me signed in";; *) bad "SwitchTo $me: $out"; kill "$padpid"; return;; esac
+    sign_in_me && ok "$me signed in" || { kill "$padpid"; return; }
     wait_route shell 5 && ok "signed in at Home: the route is shell" || bad "after sign-in the route reads '$(route_now)'"
     [ -z "$(virtual_pad)" ] && ok "no virtual pad at Home" || bad "a virtual pad exists at Home: $(virtual_pad)"
 
@@ -332,7 +389,9 @@ case "${1:-check}" in
 check)
     two_profiles
     [ -n "$me" ] && [ -n "$other" ] && ok "profiles: $me signs in, $other is the other user" || { bad "need two profiles"; exit 1; }
+    prepare_state
     unit_check && routing_check
+    restore_state
     restart_check
     security_check
     ;;
