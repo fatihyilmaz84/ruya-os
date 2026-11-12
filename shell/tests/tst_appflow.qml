@@ -191,7 +191,7 @@ Item {
             tryVerify(() => find("hubGameCard") !== null, 2000, "the game card is there")
             compare(find("hubCardTitle").text, "Turbo Racer")
             compare(find("hubCardState").text, "Just started")
-            compare(hintVerbs(), "A Resume|B Resume")
+            compare(hintVerbs(), "A Resume")
             keyClick(Qt.Key_Down)
             keyClick(Qt.Key_Up)
             keyClick(Qt.Key_Right)
