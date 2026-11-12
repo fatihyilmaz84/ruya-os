@@ -37,7 +37,7 @@ The probe after the Thaw printed nothing at all (no `stream=`/`target=` line), a
 - Planned by lead-12 from the 0.0.66 VM queue.
 
 ## Outcome
-Verified: host (vm pending: vm-session-check.sh check)
+Verified: vm (lead-12, image 0.0.67: `vm-session-check.sh check` ALL CHECKS PASSED after the review fix 57c61cd accepting a null target; the manager lingers line PASS; card suspend UNVERIFIED by design, Inbox)
 
 **Cause: a check bug, not ruya-session.** The check stops `ruya-compositor@tty1` for the Freeze part (so the shell's sweep does not thaw its Freezes). `ruya-shell` does not linger, so logind stops `user@<ruya-shell uid>.service` 10 s later (`UserStopDelaySec=10`, the Fedora default), and with it PipeWire, WirePlumber and every profile's `ruya-pulse@` server. The Freeze's park ran about 1 s after the stop and passed; the Thaw came after the 30 s reclaim wait, when the manager was gone:
 - the three `systemd-run[...]: Failed to start transient service unit: Transport endpoint is not connected` warnings at 08:49:11, :13 and :15 in the run's journal tail are, by their 2 s spacing and their time (16 s before the next section's `reset-failed`), the Thaw's `park-audio` request and its two retries (`PARK_TRIES` 3, `PARK_RETRY` 2 s); its `park-audio ... failed` lines were not printed because the check greps only `... done`;
