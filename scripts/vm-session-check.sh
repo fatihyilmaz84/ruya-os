@@ -713,8 +713,10 @@ check)
     wait_sig "\"member\":\"FrozenChanged\".*$inst.*false" 10 && ok "FrozenChanged(false) arrived" || bad "no FrozenChanged(false)"
     if [ "$audio" = 1 ]; then
         # The Thaw puts the stream back where it was (no target before: it follows the default again) and
-        # the null sink goes with the last parked stream.
-        wait_audio "$ppid" '^stream=[0-9]+ target= parked=no links=' 15 \
+        # the null sink goes with the last parked stream. "No target" is the key deleted (target=) or a
+        # null value (target=null): ruya-devices deletes it, yet 0.0.67 showed target=null after the Thaw
+        # (who writes it is not known yet: Inbox); both make the stream follow the default sink.
+        wait_audio "$ppid" '^stream=[0-9]+ target=(null)? parked=no links=' 15 \
             && ok "the thawed app's stream is back: no target, no ruya.parked" \
             || bad "the thawed app's stream was not put back: $(audio_probe "$ppid" | tr '\n' ' ')"
         audio_probe "$ppid" | grep '^stream=' | grep -q 'links=.*ruya-parked' && bad "the thawed stream is still linked to ruya-parked" || ok "the thawed stream is not linked to ruya-parked"
