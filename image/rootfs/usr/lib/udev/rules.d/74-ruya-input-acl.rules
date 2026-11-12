@@ -1,0 +1,14 @@
+# ruya-inputd (user ruya-input) reads the physical pads (06-input.md section 3). A RUN program,
+# in a file after 73-seat-late.rules: logind's uaccess builtin there flushes named ACL entries,
+# so this entry is added after it, at every event, and both entries stay.
+ACTION=="remove", GOTO="ruya_input_acl_end"
+SUBSYSTEM!="input", GOTO="ruya_input_acl_end"
+KERNEL!="event*", GOTO="ruya_input_acl_end"
+ATTRS{phys}=="ruya-input/*", GOTO="ruya_input_acl_end"
+
+# 2. Physical pads, and a pad's motion and touchpad nodes.
+ENV{ID_INPUT_JOYSTICK}=="1", RUN+="/usr/bin/setfacl -m u:ruya-input:rw $devnode", GOTO="ruya_input_acl_end"
+ENV{ID_INPUT_TOUCHPAD}=="1", DRIVERS=="playstation|sony|nintendo", RUN+="/usr/bin/setfacl -m u:ruya-input:rw $devnode", GOTO="ruya_input_acl_end"
+ENV{ID_INPUT_ACCELEROMETER}=="1", DRIVERS=="playstation|sony|nintendo", RUN+="/usr/bin/setfacl -m u:ruya-input:rw $devnode"
+
+LABEL="ruya_input_acl_end"

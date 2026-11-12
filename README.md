@@ -15,7 +15,7 @@ An immutable, Fedora-bootc-based console OS for living-room PCs. It boots straig
 | `CLAUDE.md` | Rules for AI contributors (also read by humans) |
 | `api/dbus/` | D-Bus contracts between the shell and services |
 | `shell/` | `ruya-shell`: Qt 6 / QML console UI, with Qt Quick tests in `shell/tests/` |
-| `services/` | Rust services: `ruya-inputd` (gamepad bridge), `ruya-profiles` (profiles/PINs) |
+| `services/` | Rust services: `ruya-inputd` (Ruya Input: pads, routing, virtual pads), `ruya-profiles` (profiles/PINs) |
 | `image/` | bootc Containerfile, build steps, rootfs overlay |
 | `scripts/` | `dev.ps1` (Windows dev loop); build, disk image, VM and smoke test (Linux) |
 | `docs/REVIEW.md`, `docs/archive/` | Review of the original research docs |

@@ -1,6 +1,31 @@
-# ruya-shell is the compositor on KMS (Qt eglfs, T-130) and opens /dev/input/event* itself: Qt
-# has no logind TakeDevice support (cage used libseat). Tag the input devices uaccess, so logind
-# gives the active seat session, the shell's, an ACL on them, as it already does for the DRM card.
-# Only the active session gets access: a login on another VT that becomes active takes it over.
-# Must sort before 73-seat-late.rules, which applies the uaccess ACLs.
-SUBSYSTEM=="input", KERNEL=="event*", TAG+="uaccess"
+# Input device access (06-input.md section 3). Must sort before 73-seat-late.rules, which applies
+# the uaccess ACLs; the ruya-input ACLs on physical pads are added later, in
+# 74-ruya-input-acl.rules (after logind's uaccess builtin, which flushes named ACL entries).
+
+# 1. Only root and ruya-input can create input devices, so only they can claim the ruya-input/
+#    phys prefix below.
+KERNEL=="uinput", SUBSYSTEM=="misc", GROUP="ruya-input", MODE="0660", OPTIONS+="static_node=uinput"
+
+SUBSYSTEM!="input", GOTO="ruya_input_end"
+KERNEL!="event*", GOTO="ruya_input_end"
+
+# 3. Virtual pads (ruya-inputd, phys ruya-input/pad<n>): owned by ruya-input, no uaccess. The
+#    service gives each node one ACL entry, for the signed-in profile's user, after every udev
+#    event on it (systemd's 70-uaccess.rules still tags joysticks, and logind then rewrites the
+#    ACL). Other ruya-input/ devices (a keyboard or mouse for the compositor, RUY-45) keep uaccess.
+ATTRS{phys}=="ruya-input/pad*", OWNER="ruya-input", MODE="0600", GOTO="ruya_input_end"
+
+# 2. A pad's motion and touchpad nodes (hid-playstation, hid-sony, hid-nintendo): read by
+#    ruya-inputd only (T-373), not by the shell's libinput, which would hand the touchpad's
+#    motion to the focused surface, a game included.
+ENV{ID_INPUT_TOUCHPAD}=="1", DRIVERS=="playstation|sony|nintendo", GOTO="ruya_input_end"
+ENV{ID_INPUT_ACCELEROMETER}=="1", DRIVERS=="playstation|sony|nintendo", GOTO="ruya_input_end"
+
+# The shell's session: ruya-shell is the compositor on KMS (Qt eglfs, T-130) and opens
+# /dev/input/event* itself (Qt has no logind TakeDevice support). Tag the input devices uaccess,
+# so logind gives the active seat session, the shell's, an ACL on them, as it does for the DRM
+# card. Physical pads keep it too: the compositor's emergency reader (06 section 8) opens them
+# when ruya-inputd is gone.
+TAG+="uaccess"
+
+LABEL="ruya_input_end"

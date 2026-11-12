@@ -2,7 +2,7 @@
 
 A console game is played with a controller from the sofa. This chapter says what your game receives, what the console keeps for itself (the Guide button), and what is not finished: **a game running as a profile does not yet get access to the pads** (see "What is built"). The input code in the sample game works on any Linux desktop today.
 
-*Checked against the code as of 2026-11-06. Items marked **planned** are not built yet.*
+*Checked against the code as of 2026-11-12. Items marked **planned** are not built yet.*
 
 ## The rules
 
@@ -74,11 +74,25 @@ The Xbox 360 Wireless Gaming Receiver for Windows (Microsoft's, or a clone with 
 | LB / RB | Page Up / Page Down |
 | Guide (Mode) | the `HomePage` key, which the shell takes |
 
-What this means for a game, **until InputPlumber replaces the daemon (planned, B-006, ADR-003)**:
+What this means for a game **today** (until the virtual pads above are switched on, RUY-409):
 
 - **Every pad press can reach your window twice**: as the pad's own events and as a key press. If you read both, a held stick moves the player twice as fast and A fires twice. Read the pad when there is one (rule 6).
 - **B arrives as Esc** (rule 7).
 - **The Guide key never reaches you as a key.** The shell's `KeyRouter` takes it first while an app is in front (Ruya Hub opens and, by default, freezes the app; the app gets nothing while the Hub is open and receives input again when it closes). The real pad still reports its Guide button through evdev, because nothing grabs it yet: ignore it.
+
+## What your game will see: a virtual pad of its own (planned)
+
+The console's input service (`ruya-inputd`) has the parts below since RUY-3, but the shell does not tell it yet which app is in front (RUY-409). Until then the service stays in its "shell" route and **creates no virtual pad**: everything in this section is **planned**, and the description is what the code does once the shell drives it.
+
+- **One virtual pad per connected controller**, while your game is in front: an Xbox 360 wired pad as far as your game can tell. Name `Ruya Xbox 360 Pad`, USB, vendor `045e`, product `028e`, version `0114`; the buttons A, B, X, Y, LB, RB, Back, Start, the Guide button (declared, never pressed), the two stick clicks; both sticks (-32768..32767), both triggers (0..255), the D-pad as a hat. SDL picks its built-in "Xbox 360 Controller" mapping for it, so you do not need a mapping line. Buttons follow their **position**: whatever the player holds (a DualSense, a Switch pad), the bottom button is A.
+- **Only your game's profile can open it.** The node gets one access entry, for the Unix user of the profile your game runs as; another profile's game and the shell are refused. The physical pads stay closed to every game.
+- **The pad comes and goes**: it is destroyed when the player locks the console, switches profile, ends your game, or Ruya Hub freezes it, and a new one is made when your game is in front again. Your open descriptor then reads `ENODEV` and SDL reports the pad as removed: rule 2 (hot-plug) is what keeps your game working. The new pad is a new device to SDL: its instance id (`SDL_JoystickID`) and its player index are new each time, so never cache them, a device path or a node name across a removal; keep your own per-player state and give it to whichever pad is added next.
+- **How soon it is back.** Under an overlay that leaves your game running, the pad stays (held in neutral) and nothing comes or goes. After a Freeze, the lock or a profile switch, the new pad is made the moment your game is in front again and can be opened as soon as the console has set its access entry, typically well under a second (measured in the VM, `scripts/vm-input-check.sh`); SDL's hot-plug sees it then.
+- **While an overlay is open** over your game (Ruya Hub, a system dialog), the pad is held in neutral: sticks centred, nothing pressed. When your game is back in front, a button the player still holds (the A that closed the Hub) does not reach you until it is let go.
+- **Guide never reaches you**, and while your game is in front the pads produce **no keyboard keys** any more (only Guide, for the shell): the double input of the table above ends.
+- **No legacy joystick API.** There are no `/dev/input/js*` nodes on RuyaOS (the `joydev` module is never loaded: those nodes would be readable by every user). Read pads through evdev, as SDL, Wine and Proton do.
+- **Without `--device=input` (or `all`) there is no pad at all**: the sandbox then has no `/dev/input`, and your game sees no controller even while the virtual pad exists (see "Flatpak permission" below).
+- **Rumble**: the basic left and right motors (`FF_RUMBLE`), forwarded to the physical pad while your game is in front, when that pad can rumble. Gyro, touchpad, lights and adaptive triggers are not there (T-373).
 
 ## What is built, and what is not
 
@@ -86,9 +100,9 @@ What this means for a game, **until InputPlumber replaces the daemon (planned, B
 
 **Not built, so not verified:**
 
-- **Pad access for a game running as a profile.** The device rule (`70-ruya-input.rules`, spec 01 section 2.1) gives the *shell's session* an access control entry on `/dev/input/event*`; profile users are not in the `input` group. So a game that `ruya-session` starts as `ruya-p<N>` cannot open the pads today, even with `--device=input` in its Flatpak. How profile games will get pads is part of the InputPlumber work (B-006), which exposes **virtual controllers to games** and routes input to the shell while the overlay is open. Until then, the controller code in your game can be tested on a desktop, and on a RuyaOS machine only through the key events above.
+- **Pad access for a game running as a profile.** The device rules (`70-ruya-input.rules`, spec 01 section 2.1) give the *shell's session* an access control entry on the physical pads; profile users are not in the `input` group. So a game that `ruya-session` starts as `ruya-p<N>` cannot open a pad today, even with `--device=input` in its Flatpak. The virtual pad of the section above is the way in (**planned**: the service is built and checked in the VM with a test pad, `scripts/vm-input-check.sh`; the shell's half is RUY-409). Until then, the controller code in your game can be tested on a desktop, and on a RuyaOS machine only through the key events above.
 - **A game window at all** (T-164). Without it no input path can be tested end to end.
-- **Steam Input.** Steam grabs controllers too; with InputPlumber exposing virtual Xbox-style pads Steam consumes them normally (spec 03 section 5). **Planned**, together with the check that nothing is handled twice.
+- **Steam Input.** Steam grabs controllers too; it will consume the virtual Xbox-style pads normally (spec 03 section 5) or own the pads in its own mode (06-input.md section 5.3). **Planned**, together with the check that nothing is handled twice.
 - Rumble, gyro, touchpad, LEDs, battery of a pad from inside a game: not tested. The console shows each pad's battery itself (spec 03 section 2.1).
 - Player assignment: the first pad that presses Accept on the profile picker is "player 1" for that profile (spec 03); a game gets no player-number API yet.
 
@@ -106,4 +120,4 @@ What this means for a game, **until InputPlumber replaces the daemon (planned, B
 
 ## Sources
 
-Checked on 2026-11-06 against: `man flatpak-build-finish` (Flatpak 1.18.4); `services/ruya-inputd/src/linux.rs` and `mapping.rs` (the key map; "does NOT grab" in `main.rs`); `image/rootfs/usr/lib/udev/rules.d/70-ruya-input.rules`; `services/ruya-profiles/src/accounts.rs` (`useradd` with no extra groups); `shell/src/input/KeyRouter.h`; `docs/specs/00-overview.md` ADR-003; `docs/specs/01-platform.md` section 2.1; `docs/specs/03-services-and-apps.md` sections 2.1, 5; `services/ruya-store/src/appstream.rs` (`--device=input` is "gamepad", `all` is "all-devices"); `scripts/vm-app-check.sh`; `docs/STATUS.md` (B-006); the sample's input code, built against SDL 3.4 in the freedesktop 26.08 runtime and exercised headless (hot-plug and the pad paths were not run: no pad in the test environment).
+Checked on 2026-11-12 against: `man flatpak-build-finish` (Flatpak 1.18.4); `services/ruya-inputd/src/mapping.rs` (the key map), `routing.rs` (routes, virtual pads, rumble), `pad.rs` (the virtual pad's identity, keys and axes); `image/rootfs/usr/lib/udev/rules.d/70-ruya-input.rules` and `74-ruya-input-acl.rules`, `image/rootfs/usr/lib/modprobe.d/ruya-no-joydev.conf`; `scripts/vm-input-check.sh` and `vm-input-probe.py` (what a profile user can open and read); `docs/specs/06-input.md` sections 1, 3, 5; `services/ruya-profiles/src/accounts.rs` (`useradd` with no extra groups); `shell/src/input/KeyRouter.h`; `docs/specs/00-overview.md` ADR-003; `docs/specs/01-platform.md` section 2.1; `docs/specs/03-services-and-apps.md` sections 2.1, 5; `services/ruya-store/src/appstream.rs` (`--device=input` is "gamepad", `all` is "all-devices"); `scripts/vm-app-check.sh`; `docs/STATUS.md` (B-006); the sample's input code, built against SDL 3.4 in the freedesktop 26.08 runtime and exercised headless (hot-plug and the pad paths were not run: no pad in the test environment).

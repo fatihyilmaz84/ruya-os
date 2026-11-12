@@ -1,25 +1,38 @@
-//! ruya-inputd (Phase 0): reads every connected gamepad and re-emits navigation as
-//! keyboard events on a virtual uinput device, so the shell only has to handle keys.
-//!
-//! Deliberately does NOT grab the physical devices: games still see the real pad.
-//! Shell/game input arbitration is ADR-003 (InputPlumber) and replaces this in Phase 1.
+//! ruya-inputd: the Ruya Input service (06-input.md). On Linux it reads every gamepad, makes the
+//! navigation keys and the profile's virtual pads, and serves org.ruyaos.Input1 on the system
+//! bus as the system user `ruya-input`. With `--session` (development, any OS) it serves the
+//! contract on the session bus with no devices and the profiles p1..p3.
 
-#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
-mod mapping;
+use ruya_inputd::accounts::FixedAccounts;
+use ruya_inputd::dbus::{serve, DynBackend, Shared};
+use ruya_inputd::routing::{NullBackend, Router};
 
-#[cfg(target_os = "linux")]
-mod linux;
-
-#[cfg(target_os = "linux")]
 fn main() {
-    if let Err(err) = linux::run() {
+    let session = std::env::args().any(|a| a == "--session");
+    if !session {
+        #[cfg(target_os = "linux")]
+        {
+            if let Err(err) = ruya_inputd::linux::run() {
+                eprintln!("ruya-inputd: fatal: {err}");
+                std::process::exit(1);
+            }
+            return;
+        }
+        #[cfg(not(target_os = "linux"))]
+        {
+            eprintln!("ruya-inputd only runs on Linux (or with --session)");
+            std::process::exit(1);
+        }
+    }
+    let accounts = FixedAccounts(vec![
+        ("p1".into(), 1001),
+        ("p2".into(), 1002),
+        ("p3".into(), 1003),
+    ]);
+    let backend: DynBackend = Box::new(NullBackend);
+    let (shared, notices) = Shared::new(Router::new(backend, Box::new(accounts)));
+    if let Err(err) = futures_lite::future::block_on(serve(false, shared, notices)) {
         eprintln!("ruya-inputd: fatal: {err}");
         std::process::exit(1);
     }
-}
-
-#[cfg(not(target_os = "linux"))]
-fn main() {
-    eprintln!("ruya-inputd only runs on Linux");
-    std::process::exit(1);
 }
