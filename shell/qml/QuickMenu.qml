@@ -217,9 +217,6 @@ Item {
     onPowerModeChanged: rebuild()
     onPanelIdChanged: { pendingChoice = ({}); rebuild() }
 
-    // The Performance panel asks the service and counts frames only while it is open (T-452).
-    PerformanceConsumer { active: menu.open && menu.panelId === "performance" }
-
     // ---- panels (T-450, T-452): a panel replaces the Quick Hub's rows in this same list ---------------------
     // The panels that exist, in the order of their entries (02 §1.6); an entry appears only when its panel is built.
     // The Display panel is there while the screen is known or has a backlight: with neither it would be empty.
@@ -299,15 +296,10 @@ Item {
         }
         if (id === "performance") {
             return { title: qsTr("Performance"), rows: [
-                { key: "performance:frames", label: qsTr("Frames"), kind: "info",
-                  value: () => framesText() },
-                perfRow("cpu", qsTr("CPU"), ["cpu_percent"], v => percentText(v[0])),
-                perfRow("gpu", qsTr("GPU"), ["gpu_percent"], v => percentText(v[0])),
-                perfRow("ram", qsTr("RAM"), ["ram_used", "ram_total"], v => qsTr("%1 of %2").arg(Storage.formatBytes(v[0])).arg(Storage.formatBytes(v[1]))),
-                perfRow("vram", qsTr("VRAM"), ["vram_used", "vram_total"], v => qsTr("%1 of %2").arg(Storage.formatBytes(v[0])).arg(Storage.formatBytes(v[1]))),
-                perfRow("cputemp", qsTr("CPU temperature"), ["cpu_temp"], v => qsTr("%1 °C").arg(Math.round(v[0]))),
-                perfRow("gputemp", qsTr("GPU temperature"), ["gpu_temp"], v => qsTr("%1 °C").arg(Math.round(v[0]))),
-                perfRow("power", qsTr("Power"), ["power_w"], v => qsTr("%1 W").arg(v[0].toFixed(1))),
+                // The numbers are drawn over the game by PerformanceReadout (T-469), not here: the Hub freezes the game.
+                { key: "performance:overlay", label: qsTr("Performance overlay"), kind: "toggle",
+                  value: () => perfOverlayOn() ? qsTr("On") : qsTr("Off"),
+                  activate: () => DeviceSettings.setPerformanceOverlay(Profiles.activeProfile, !perfOverlayOn()) },
                 { key: "performance:interval", label: qsTr("Update every"), kind: "choice",
                   choices: () => [500, 1000, 2000, 5000].map(ms => ({ id: ms, name: intervalText(ms), current: ms === DeviceSettings.performanceIntervalMs })),
                   value: () => intervalText(DeviceSettings.performanceIntervalMs),
@@ -482,45 +474,9 @@ Item {
     }
 
     // ---- the Performance panel's texts (02 §1.6) -------------------------------------------------------
-    // One metric (or the pair RAM and VRAM are): the number when measured, else why there is none. "Worst"
-    // state of the names wins: unsupported, then unavailable, then stale. Reads `Performance.metrics`, so the
-    // row follows every answer.
-    function perfState(names) {
-        const all = Performance.metrics
-        let state = "supported"
-        for (const n of names) {
-            const s = all[n] ? all[n].state : "unavailable"
-            if (s === "unsupported")
-                return s
-            if (s === "unavailable")
-                state = s
-            else if (s === "stale" && state === "supported")
-                state = s
-        }
-        return state
-    }
-    function perfRow(name, label, names, format) {
-        return { key: "performance:" + name, label: label, kind: "info",
-                 value: () => {
-                     const state = perfState(names)
-                     if (state === "supported" || state === "stale") {
-                         const text = format(names.map(n => Performance.metrics[n].value))
-                         return state === "stale" ? qsTr("%1 (last reading)").arg(text) : text
-                     }
-                     return state === "unsupported" ? qsTr("Not available on this console") : qsTr("Measuring...")
-                 } }
-    }
-    function percentText(v) { return qsTr("%1 %").arg(Math.round(v)) }
-    function msText(ms) { return qsTr("%1 ms").arg(ms < 10 ? ms.toFixed(1) : Math.round(ms)) }
+    // The switch is per profile (DeviceSettings.performanceOverlayProfiles); the readings are PerformanceReadout's.
+    function perfOverlayOn() { return DeviceSettings.performanceOverlayProfiles[Profiles.activeProfile] === true }
     function intervalText(ms) { return ms === 500 ? qsTr("0.5 s") : qsTr("%1 s").arg(ms / 1000) }
-    function framesText() {
-        switch (Performance.frameState) {
-        case "supported": return qsTr("%1 FPS · %2, slowest %3").arg(Performance.fps).arg(msText(Performance.frameTimeMs)).arg(msText(Performance.frameTimeP99Ms))
-        case "unsupported": return qsTr("Not available on this console")
-        }
-        // No app surface in front (the panel opened from Home): nothing to count, say so instead of "Measuring..." for ever.
-        return Performance.frameSource === null ? qsTr("No game in front") : qsTr("Measuring...")
-    }
 
     // ---- choice rows -----------------------------------------------------------------------------------
     // A choice that asks the service (`async`) changes the row only with the answer, so presses that come

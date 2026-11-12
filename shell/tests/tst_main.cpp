@@ -288,6 +288,45 @@ static QString checkPausePersistence()
     return problem.trimmed();
 }
 
+// DeviceSettings.performanceOverlay is per profile and survives a restart (T-469): off by default, one
+// profile's switch does not touch another's, off is forgotten again, and an id that is not a plain
+// name is refused. Same hermetic store. Returns "" or what went wrong; tst_perf_overlay.qml asserts it
+// (`overlayPersistence`).
+static QString checkOverlayPersistence()
+{
+    QTemporaryDir dir;
+    if (!dir.isValid())
+        return QStringLiteral("no temporary directory");
+    const QString path = dir.filePath(QStringLiteral("shell.ini"));
+    QString problem;
+    {
+        DeviceSettings first(path);
+        if (first.performanceOverlay(QStringLiteral("p2")))
+            problem = QStringLiteral("the overlay is not off by default");
+        first.setPerformanceOverlay(QStringLiteral("p2"), true);
+        first.setPerformanceOverlay(QStringLiteral("p1"), true);
+        first.setPerformanceOverlay(QStringLiteral("a/b"), true);
+    }
+    {
+        DeviceSettings second(path);
+        if (!second.performanceOverlay(QStringLiteral("p2")) || !second.performanceOverlay(QStringLiteral("p1")))
+            problem += QStringLiteral(" a restart lost a profile's overlay");
+        if (second.performanceOverlay(QStringLiteral("p3")))
+            problem += QStringLiteral(" the overlay is on for a profile that never set it");
+        if (second.performanceOverlay(QStringLiteral("a/b")) || second.performanceOverlayProfiles().size() != 2)
+            problem += QStringLiteral(" a bad profile id was accepted");
+        second.setPerformanceOverlay(QStringLiteral("p2"), false);
+    }
+    {
+        DeviceSettings third(path);
+        if (third.performanceOverlay(QStringLiteral("p2")))
+            problem += QStringLiteral(" a restart brought back a switched-off overlay");
+        if (!third.performanceOverlay(QStringLiteral("p1")))
+            problem += QStringLiteral(" switching one profile off turned another off");
+    }
+    return problem.trimmed();
+}
+
 class Setup : public QObject
 {
     Q_OBJECT
@@ -360,6 +399,8 @@ public slots:
         engine->rootContext()->setContextProperty(QStringLiteral("wallpaperPersistence"), wallpaperCheck);
         static const QString pauseCheck = checkPausePersistence();
         engine->rootContext()->setContextProperty(QStringLiteral("pausePersistence"), pauseCheck);
+        static const QString overlayCheck = checkOverlayPersistence();
+        engine->rootContext()->setContextProperty(QStringLiteral("overlayPersistence"), overlayCheck);
         static QTemporaryDir artDir;
         static const QString artPath = writeArtFixtures(artDir);
         engine->rootContext()->setContextProperty(QStringLiteral("artFixtures"), artPath);

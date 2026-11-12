@@ -6,6 +6,7 @@
 #include <QSettings>
 #include <QString>
 #include <QStringList>
+#include <QVariantMap>
 #include <QTranslator>
 
 #include <memory>
@@ -58,6 +59,10 @@ class DeviceSettings : public QObject
     // How often the Ruya Hub's Performance view asks for new numbers (T-451), ms, 500-5000 (the
     // panel offers 0.5, 1, 2 and 5 s); 1000 by default. Stored per device.
     Q_PROPERTY(int performanceIntervalMs READ performanceIntervalMs WRITE setPerformanceIntervalMs NOTIFY performanceIntervalMsChanged)
+    // The performance overlay over a game (T-469), per profile (the one setting here that is): a map
+    // { "<profile id>": true } of the profiles that switched it on; off is absent. Read
+    // `performanceOverlayProfiles[Profiles.activeProfile] === true` in a binding.
+    Q_PROPERTY(QVariantMap performanceOverlayProfiles READ performanceOverlayProfiles NOTIFY performanceOverlayChanged)
     // Opening the Ruya Hub over a game freezes it, closing it thaws it (T-457, 02 §1.6): Settings ->
     // System, "Pause games when Ruya Hub opens". On by default; stored per device.
     Q_PROPERTY(bool pauseGamesInHub READ pauseGamesInHub WRITE setPauseGamesInHub NOTIFY pauseGamesInHubChanged)
@@ -92,6 +97,11 @@ public:
     int padIdleMinutes() const { return m_padIdleMinutes; }
     int performanceIntervalMs() const { return m_performanceIntervalMs; }
     bool pauseGamesInHub() const { return m_pauseGamesInHub; }
+    QVariantMap performanceOverlayProfiles() const { return m_overlayProfiles; }
+    // A profile id of letters, digits, dots, dashes and underscores (at most 64); others are refused.
+    static bool isValidProfileKey(const QString &id);
+    Q_INVOKABLE bool performanceOverlay(const QString &profile) const;
+    Q_INVOKABLE void setPerformanceOverlay(const QString &profile, bool on);
     QString soundTheme() const { return m_soundTheme; }
     bool ambientSound() const { return m_ambientSound; }
 
@@ -144,6 +154,7 @@ signals:
     void padIdleMinutesChanged();
     void performanceIntervalMsChanged();
     void pauseGamesInHubChanged();
+    void performanceOverlayChanged();
     void soundThemeChanged();
     void ambientSoundChanged();
 
@@ -165,6 +176,7 @@ private:
     int m_padIdleMinutes = 15;
     int m_performanceIntervalMs = 1000;
     bool m_pauseGamesInHub = true;
+    QVariantMap m_overlayProfiles;
     QString m_soundTheme = QStringLiteral("dreamglass");
     bool m_ambientSound = true;
     std::optional<bool> m_forcedMotion;

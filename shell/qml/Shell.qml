@@ -1949,6 +1949,23 @@ FocusScope {
         }
     }
 
+    // The performance overlay (T-469): the Hub's switch for the signed-in profile, a game in front (not Home,
+    // not a page: appOpen), and nothing covering it: not the Hub, the launch or closing splash, the screen
+    // saver or the dark screen. Above the game, below the toasts; the right corner also gives way to a toast.
+    PerformanceReadout {
+        id: perfReadout
+        objectName: "perfOverlay"
+        anchors.fill: parent
+        z: 7
+        u: root.u
+        marginX: root.marginX
+        marginY: root.marginY
+        shown: root.signedIn && DeviceSettings.performanceOverlayProfiles[Profiles.activeProfile] === true
+               && root.appOpen && root.focusedApp !== null && !systemPanel.open && !root.launching
+               && !root.closingScreen && !IdleClock.covered
+        rightBlocked: toasts.visibleCount > 0
+    }
+
     // The quick menu (T-147; Guide opens it from Home, a page, a launch or over a running app; it
     // replaced the centred Guide card). Also shows the image version, which the update tests read.
     QuickMenu {
