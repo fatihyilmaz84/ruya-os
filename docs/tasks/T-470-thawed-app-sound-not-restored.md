@@ -1,6 +1,6 @@
 # T-470 — A thawed app's sound is not put back (T-466 restore, VM 0.0.66)
 
-Status: todo · Phase: 2 · Depends: — · Area: services (ruya-session), scripts · Size: S · Owner: builder · Complexity: complex · Developer surface: public-format
+Status: in-progress · Phase: 2 · Depends: — · Area: services (ruya-session), scripts · Size: S · Owner: builder · Complexity: complex · Developer surface: public-format
 
 ## Goal
 T-466 parks a frozen app's playback streams on the `ruya-parked` null sink and restores them on Thaw. On image 0.0.66 (lead-12 VM queue, 2026-11-12) the Freeze half passes, the Thaw half fails: after `Thaw` answered ok and the app runs again, `vm-session-check.sh check` printed
