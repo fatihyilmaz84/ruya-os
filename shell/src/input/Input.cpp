@@ -16,6 +16,7 @@ Input::Input(std::unique_ptr<InputBackend> backend, QObject *parent)
         m_status = status;
         emit statusChanged();
     });
+    connect(m_backend.get(), &InputBackend::serviceOwnedChanged, this, &Input::serviceOwnedChanged);
     // A restarted service is in "shell" with no profile (06 §8): tell it again who is in front.
     connect(m_backend.get(), &InputBackend::serviceAppeared, this, [this] {
         if (!m_route.isEmpty())
@@ -121,4 +122,10 @@ void Input::mockRestart()
 {
     if (auto *mock = qobject_cast<MockInputBackend *>(m_backend.get()))
         mock->restart();
+}
+
+void Input::mockNameOwned(bool owned)
+{
+    if (auto *mock = qobject_cast<MockInputBackend *>(m_backend.get()))
+        mock->setNameOwned(owned);
 }

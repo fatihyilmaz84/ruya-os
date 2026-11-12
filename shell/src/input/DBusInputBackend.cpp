@@ -1,5 +1,6 @@
 #include "DBusInputBackend.h"
 
+#include <QDBusConnectionInterface>
 #include <QDBusMessage>
 #include <QDBusPendingCallWatcher>
 #include <QDBusPendingReply>
@@ -24,9 +25,21 @@ DBusInputBackend::DBusInputBackend(QObject *parent)
     // An owner change straight from one owner to the next (no gap) is a new service too.
     connect(&m_watcher, &QDBusServiceWatcher::serviceOwnerChanged, this,
             [this](const QString &, const QString &, const QString &newOwner) {
+                m_ownerSeen = true;
+                setServiceOwned(!newOwner.isEmpty());
                 if (!newOwner.isEmpty())
                     emit serviceAppeared();
             });
+    // Who owns the name now, asked without blocking; a change that arrives first wins.
+    if (auto *busInterface = m_bus.interface()) {
+        auto *asked = new QDBusPendingCallWatcher(busInterface->asyncCall(QStringLiteral("NameHasOwner"), Service), this);
+        connect(asked, &QDBusPendingCallWatcher::finished, this, [this](QDBusPendingCallWatcher *w) {
+            w->deleteLater();
+            QDBusPendingReply<bool> reply = *w;
+            if (reply.isValid() && !m_ownerSeen)
+                setServiceOwned(reply.value());
+        });
+    }
 }
 
 void DBusInputBackend::setRoute(const QString &route, const QString &instance, const QString &appId,

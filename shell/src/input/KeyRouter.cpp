@@ -1,5 +1,6 @@
 #include "KeyRouter.h"
 
+#include <QCoreApplication>
 #include <QKeyEvent>
 
 namespace {
@@ -53,6 +54,20 @@ bool KeyRouter::appHasFocus() const
         return false;
     QQuickItem *focused = m_window->activeFocusItem();
     return focused && (focused == m_appItem || m_appItem->isAncestorOf(focused));
+}
+
+void KeyRouter::injectKey(int key, bool pressed)
+{
+    if (!m_window)
+        return;
+    QKeyEvent event(pressed ? QEvent::KeyPress : QEvent::KeyRelease, key, Qt::NoModifier);
+    if (appHasFocus()) {
+        // The filter reports the Guide key and eats it; any other key would reach the app.
+        if (isGuideKey(key))
+            eventFilter(m_window, &event);
+        return;
+    }
+    QCoreApplication::sendEvent(m_window, &event);
 }
 
 bool KeyRouter::eventFilter(QObject *watched, QEvent *event)

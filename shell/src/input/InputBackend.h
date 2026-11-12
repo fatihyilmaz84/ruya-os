@@ -16,6 +16,10 @@ public:
     using QObject::QObject;
 
     virtual bool isMock() const = 0;
+    // Whether org.ruyaos.Input1 has an owner now (RUY-410): the emergency pad reader starts when it
+    // has had none for 3 s (06 section 8). True until the first answer, so a slow bus start-up
+    // does not read as a dead service.
+    bool serviceOwned() const { return m_serviceOwned; }
     // Input1.SetRoute(route, instance, app_id, profile); the answer arrives as routeFinished.
     virtual void setRoute(const QString &route, const QString &instance, const QString &appId,
                           const QString &profile) = 0;
@@ -27,8 +31,18 @@ signals:
     // org.ruyaos.Input1 has a (new) owner: a restarted service starts in the route "shell", so the
     // shell sends its route again.
     void serviceAppeared();
+    // The name gained or lost its owner.
+    void serviceOwnedChanged(bool owned);
 
 protected:
+    void setServiceOwned(bool owned)
+    {
+        if (owned == m_serviceOwned)
+            return;
+        m_serviceOwned = owned;
+        emit serviceOwnedChanged(owned);
+    }
+
     // Replies can arrive out of order: number each SetRoute when it is sent, report only the newest
     // outcome so far (RequestSequence.h, T-181; a failure counts, T-191).
     quint64 beginRoute() { return m_seq.begin(); }
@@ -40,4 +54,5 @@ protected:
 
 private:
     RequestSequence m_seq;
+    bool m_serviceOwned = true;
 };

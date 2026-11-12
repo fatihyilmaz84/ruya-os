@@ -10,6 +10,10 @@
   python3 vm-input-probe.py restart          (root) kill -9 ruya-inputd; prints "<old> <new> <ms>"
   python3 vm-input-probe.py pad <seconds>    (root) holds a uinput "physical" pad for that long
       (RUY-409: the shell's route makes its virtual pad); prints "pad ready <node>" once it has a node
+  python3 vm-input-probe.py navpad [--settle S] [--lefts N] [--rights M]
+      (root; RUY-410) a uinput pad that, S seconds after it is ready, taps the D-pad left N times and
+      right M times, then A (the emergency reader's keys: Left, Right, Return); prints "pad ready <node>"
+      and then "sent"
 """
 import argparse
 import errno
@@ -413,6 +417,31 @@ def cmd_pad(args):
         pad.close()
 
 
+def cmd_navpad(args):
+    """A "physical" pad that taps the D-pad and A once the shell's emergency reader has found it."""
+    pad = FakePad()
+    try:
+        node = wait_for(lambda: node_by("phys", PHYS)[0], 3)
+        print(f"pad ready {node}" if node else "pad has no node", flush=True)
+        time.sleep(args.settle)
+
+        def tap(kind, code, value):
+            pad.emit(kind, code, value)
+            time.sleep(0.15)
+            pad.emit(kind, code, 0)
+            time.sleep(0.3)
+
+        for _ in range(args.lefts):
+            tap(EV_ABS, ABS_HAT0X, -1)
+        for _ in range(args.rights):
+            tap(EV_ABS, ABS_HAT0X, 1)
+        tap(EV_KEY, BTN_SOUTH, 1)
+        print("sent", flush=True)
+        time.sleep(1)
+    finally:
+        pad.close()
+
+
 def cmd_restart(args):
     """kill -9 the service; prints the ms until a new RuyaOS Navigation device exists."""
     _, before = node_by("name", NAV)
@@ -601,10 +630,14 @@ def main():
     sub.add_parser("restart")
     p = sub.add_parser("pad")
     p.add_argument("seconds", type=float)
+    n = sub.add_parser("navpad")
+    n.add_argument("--settle", type=float, default=2.5)
+    n.add_argument("--lefts", type=int, default=0)
+    n.add_argument("--rights", type=int, default=0)
     args = ap.parse_args()
     if args.cmd == "check":
         sys.exit(1 if cmd_check(args) else 0)
-    {"game": cmd_game, "open": cmd_open, "restart": cmd_restart, "pad": cmd_pad}[args.cmd](args)
+    {"game": cmd_game, "open": cmd_open, "restart": cmd_restart, "pad": cmd_pad, "navpad": cmd_navpad}[args.cmd](args)
 
 
 if __name__ == "__main__":

@@ -34,6 +34,8 @@ public:
     // The service restarts: the route is "shell" with no profile and no pads, then the name has
     // a new owner (serviceAppeared, asynchronously).
     void restart();
+    // Tests (RUY-410): the name loses (false) or gets back (true) its owner, with no other change.
+    void setNameOwned(bool owned);
 
 private:
     QVariantList m_calls;

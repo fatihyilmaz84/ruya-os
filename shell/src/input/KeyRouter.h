@@ -42,6 +42,12 @@ public:
     // Windows key as Meta on the Windows host). Menu is the context-menu key, not Guide.
     Q_INVOKABLE static bool isGuideKey(int key);
 
+    // A key the shell makes itself (the emergency pad reader, RUY-410): sent to the window like a
+    // keyboard's, so the filter below, the idle rule and the screen saver's swallow see it. With an
+    // app focused only the Guide key is taken (as for a real keyboard); every other key is dropped,
+    // so the reader never feeds an app.
+    Q_INVOKABLE void injectKey(int key, bool pressed);
+
     bool eventFilter(QObject *watched, QEvent *event) override;
 
 signals:

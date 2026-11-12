@@ -6,7 +6,7 @@
 # so vm-input-probe.py holds its own bus connection), rumble is forwarded, and a killed service
 # is back within 0.5 s. Copy and run (boot with plain smoke-test.ps1 -Keep):
 #   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-input-check.sh scripts/vm-input-probe.py root@127.0.0.1:/root/
-#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-input-check.sh [check|restart|security|shell]
+#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-input-check.sh [check|restart|security|shell|fallback]
 # `check` runs the first three. `shell` (RUY-409) checks that the running shell drives the route:
 # sign-in routes `shell`, launching the Wayland test app (org.ruyaos.TestWaylandClient, which
 # `vm-session-check.sh display` installs) routes `app` and makes a virtual pad for a test pad, the
@@ -15,6 +15,13 @@
 # /root. Run it after `check` or alone; it signs in the first profile (no PIN, or PIN 1234). On an empty profile store it creates the admin "Check Admin" (PIN 1234)
 # and a standard "Check Kid"; with one profile it adds "Check Other" with that admin's PIN 1234.
 # Profiles that were there are used as they are; the ones the check made stay (a fresh disk).
+# `fallback` (RUY-410) checks the compositor's emergency pad reader: it masks ruya-inputd
+# (systemctl mask --runtime --now), waits for the shell's journal line "ruya-shell: input fallback on"
+# (3 s without an owner of org.ruyaos.Input1), locks to the picker and lets a uinput pad
+# (vm-input-probe.py navpad) tap the D-pad and A until the profile without a PIN is signed in
+# (Profiles1 ActiveProfile), then unmasks and checks "input fallback off" and the service back. It
+# needs the shell running and the probe next to this script; it creates the standard profile
+# "Check Pad" (no PIN) when every profile has one.
 set -u
 svc=org.ruyaos.Input1
 path=/org/ruyaos/Input1
@@ -235,6 +242,92 @@ shell_check() {
     fi
 }
 
+# The first profile without a PIN, as "<index> <id>" in picker order (ListProfiles), or "".
+profile_without_pin() {
+    busctl --system call "$psvc" "$ppath" "$psvc" ListProfiles | python3 -c '
+import re, sys
+text = sys.stdin.read().split(" ", 2)[2]
+rows = re.findall(r"\"([^\"]*)\" \"[^\"]*\" \"[^\"]*\" \"[^\"]*\" (true|false)", text)
+for i, (pid, has_pin) in enumerate(rows):
+    if has_pin == "false":
+        print(i, pid, len(rows))
+        break
+'
+}
+
+active_profile() { busctl --system get-property "$psvc" "$ppath" "$psvc" ActiveProfile 2>/dev/null | cut -d'"' -f2; }
+
+name_owned() { busctl --system status "$svc" >/dev/null 2>&1; }
+
+# Waits up to $2 seconds for the shell's journal (since $since) to hold a line matching $1.
+wait_shell_log() {
+    local n=0
+    while [ "$n" -lt "$(( $2 * 5 ))" ]; do
+        journalctl -b _UID="$suid" --since "$since" --no-pager -o cat | grep -a -q "$1" && return 0
+        sleep 0.2; n=$((n + 1))
+    done
+    return 1
+}
+
+fallback_restore() {
+    systemctl unmask --runtime ruya-inputd >/dev/null 2>&1
+    systemctl start ruya-inputd >/dev/null 2>&1
+}
+
+fallback_check() {
+    echo "--- the emergency pad reader (RUY-410)"
+    local row idx pid total ids padpid
+    suid="$(id -u ruya-shell)"
+    pgrep -u ruya-shell -x ruya-shell >/dev/null || { bad "the shell is not running"; return; }
+    [ -f "$probe" ] || { bad "$probe is missing: copy it next to this script"; return; }
+    systemctl is-active ruya-inputd >/dev/null || { bad "ruya-inputd is not active before the check"; return; }
+    row="$(profile_without_pin)"
+    if [ -z "$row" ]; then
+        ids="$(profiles)"
+        busctl --system call "$psvc" "$ppath" "$psvc" CreateProfile sssss "$(echo "$ids" | head -1)" 1234 "Check Pad" standard "" >/dev/null
+        row="$(profile_without_pin)"
+    fi
+    [ -n "$row" ] || { bad "no profile without a PIN to sign in with"; return; }
+    set -- $row; idx=$1; pid=$2; total=$3
+    ok "the pad will sign in $pid (picker position $((idx + 1)) of $total)"
+
+    since="$(date '+%Y-%m-%d %H:%M:%S')"
+    trap fallback_restore EXIT
+    systemctl mask --runtime --now ruya-inputd >/dev/null 2>&1
+    sleep 0.5
+    if name_owned; then bad "org.ruyaos.Input1 still has an owner after the mask"; fallback_restore; return; fi
+    ok "ruya-inputd is masked and stopped: the name has no owner"
+    if journalctl -b _UID="$suid" --since "$since" --no-pager -o cat | grep -a -q "ruya-shell: input fallback on"; then
+        bad "the fallback was on at once (it waits 3 s)"
+    else
+        ok "not at once"
+    fi
+    wait_shell_log "ruya-shell: input fallback on" 6 && ok "journal: ruya-shell: input fallback on (within 6 s)" || bad "no 'input fallback on' line within 6 s"
+
+    busctl --system call "$psvc" "$ppath" "$psvc" Lock >/dev/null
+    local n=0; until [ -z "$(active_profile)" ] || [ "$n" -ge 50 ]; do sleep 0.1; n=$((n + 1)); done
+    [ -z "$(active_profile)" ] && ok "Lock: the picker is up" || bad "Lock left $(active_profile) signed in"
+    sleep 1
+    python3 "$probe" navpad --settle 3 --lefts "$total" --rights "$idx" > /var/tmp/ruya-input-navpad.log 2>&1 &
+    padpid=$!
+    n=0; until [ "$(active_profile)" = "$pid" ] || [ "$n" -ge 150 ]; do sleep 0.1; n=$((n + 1)); done
+    if [ "$(active_profile)" = "$pid" ]; then
+        ok "a uinput pad's D-pad and A moved the picker's focus and signed in $pid, with ruya-inputd masked"
+    else
+        bad "the pad did not sign in $pid (active '$(active_profile)'); probe: $(cat /var/tmp/ruya-input-navpad.log)"
+    fi
+    wait "$padpid" 2>/dev/null
+
+    since="$(date '+%Y-%m-%d %H:%M:%S')"
+    fallback_restore
+    trap - EXIT
+    n=0; until name_owned || [ "$n" -ge 50 ]; do sleep 0.1; n=$((n + 1)); done
+    name_owned && ok "unmask: ruya-inputd is back and owns org.ruyaos.Input1" || bad "the name has no owner after the unmask"
+    wait_shell_log "ruya-shell: input fallback off" 5 && ok "journal: ruya-shell: input fallback off" || bad "no 'input fallback off' line within 5 s of the service's return"
+    [ -n "$(nav_input)" ] && ok "the service's navigation keyboard is back" || bad "no RuyaOS Navigation device after the unmask"
+    busctl --system call "$psvc" "$ppath" "$psvc" Lock >/dev/null
+}
+
 case "${1:-check}" in
 check)
     two_profiles
@@ -245,6 +338,7 @@ check)
     ;;
 restart) restart_check ;;
 security) security_check ;;
+fallback) fallback_check ;;
 shell)
     two_profiles
     [ -n "$me" ] && ok "profile $me signs in" || { bad "need a profile"; exit 1; }

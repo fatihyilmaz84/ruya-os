@@ -81,5 +81,14 @@ void MockInputBackend::restart()
     m_instance.clear();
     m_profile.clear();
     m_pads = false;
+    setServiceOwned(true);
     QTimer::singleShot(0, this, [this] { emit serviceAppeared(); });
+}
+
+void MockInputBackend::setNameOwned(bool owned)
+{
+    const bool appeared = owned && !serviceOwned();
+    setServiceOwned(owned);
+    if (appeared)
+        QTimer::singleShot(0, this, [this] { emit serviceAppeared(); });
 }
