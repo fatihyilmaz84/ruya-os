@@ -1,6 +1,6 @@
 # T-472 — Running apps keep their sound when the shell is down for more than 10 s
 
-Status: in-progress · Phase: 2 · Depends: — · Area: image, services (ruya-session) · Size: S · Owner: builder · Complexity: complex · Developer surface: none
+Status: done · Phase: 2 · Depends: — · Area: image, services (ruya-session) · Size: S · Owner: builder · Complexity: complex · Developer surface: none
 
 ## Goal
 Found by T-470 (lead-12, 2026-11-12; reproduced on the Dell): `ruya-shell` does not linger, so when the shell (`ruya-compositor@tty1`) is down for more than logind's `UserStopDelaySec` (10 s: a crash loop, a slow restart, an update of the shell), logind stops `ruya-shell`'s user manager. That takes down PipeWire and **every profile's `ruya-pulse@` sound server**. ruya-session starts a profile's sound server only at Launch, so the running games stay silent after the shell comes back, until each is relaunched. A shell restart must never cost a running game its sound.
@@ -27,7 +27,7 @@ Found by T-470 (lead-12, 2026-11-12; reproduced on the Dell): `ruya-shell` does 
 - Planned by lead-12 from T-470's review. The Dell may be used (CLAUDE.md Dell rule) for the hardware look: stop the compositor 20 s with STK playing.
 
 ## Outcome
-Verified: host (vm pending: vm-session-check.sh check)
+Verified: vm (lead-12, image 0.0.67: `vm-session-check.sh check` ALL CHECKS PASSED incl. the T-472 part: the relaunch started ruya-pulse@ruya-p2 again, its socket listens, PULSE_SERVER set) and hw (the Dell runs in the Outcome)
 
 **Decision: neither (a) nor (b); `ruya-shell` keeps not lingering** (recorded in `03`, Launch, the Sound sentence; the Freeze paragraph points to it). The task's own rule ("prefer (a) unless it breaks the seat-session device access") decided it, and its premise does not hold for games. Dell (0.0.66 plus the T-455 shell overlay), by hand:
 - **A game does not outlive the compositor.** SuperTuxKart launched for p2 had a running stream through `ruya-pulse@ruya-p2`; at `systemctl stop ruya-compositor@tty1` it logged `Error reading events from display: Broken pipe` and its unit ended `status=1/FAILURE` within 50 ms, linger or not. A game outliving a shell crash is not in V1 (ADR-033, owner answer 6(b)). So there is no running game whose sound a linger could save, and (b) has nothing to give the restarted servers to.
