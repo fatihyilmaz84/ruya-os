@@ -466,6 +466,7 @@ def cmd_check(args):
         expect(status == "invalid", "SetRoute app without an instance is invalid", f"SetRoute app without instance: {status}")
         status = bus.call(SVC, PATH, IFC, "SetRoute", ["app", "vm-check-1", "org.ruyaos.VmCheck", "shell"])
         expect(status == "unknown-profile", "SetRoute for ruya-shell is unknown-profile", f"SetRoute for shell: {status}")
+        t_route = time.monotonic()
         status = bus.call(SVC, PATH, IFC, "SetRoute", ["app", "vm-check-1", "org.ruyaos.VmCheck", args.profile])
         expect(status == "ok", f"SetRoute app for {args.profile}: ok", f"SetRoute app: {status}")
         expect(route_prop() == "app", "the Route property reads app", f"Route reads {route_prop()}")
@@ -475,10 +476,20 @@ def cmd_check(args):
             return fails
         ok(f"virtual pad ruya-input/pad1 is {vnode} ({vsys})")
         routed = wait_for(lambda: any(d.get("routed") for d in (devices() or [])), 3)
-        expect(routed, "ListDevices says routed after the ACL is set", "the pad never became routed")
+        ms = int((time.monotonic() - t_route) * 1000)
+        expect(routed, f"ListDevices says routed after the ACL is set ({ms} ms after SetRoute app, busctl polling included)",
+               "the pad never became routed")
         owner, named = acl_users(vnode)
         expect(owner == "ruya-input", "the virtual node is owned by ruya-input", f"virtual node owner: {owner}")
         expect(named == [args.user], f"its ACL names only {args.user}", f"its ACL names {named}")
+
+        # No legacy joystick API (06 section 3): joydev would make world-readable js nodes.
+        js = sorted(glob.glob("/dev/input/js*"))
+        expect(not js, "no /dev/input/js* node with a physical and a virtual pad up", f"js nodes exist: {js}")
+        for node in js:
+            out = subprocess.run(["runuser", "-u", args.other, "--", sys.executable, os.path.abspath(__file__), "open", node],
+                                 capture_output=True, text=True).stdout.strip()
+            expect(out.startswith("open refused"), f"{args.other} cannot open {node}", f"{args.other} opens {node}: {out}")
 
         for who in (args.other, "ruya-shell"):
             out = subprocess.run(["runuser", "-u", who, "--", sys.executable, os.path.abspath(__file__), "open", vnode],

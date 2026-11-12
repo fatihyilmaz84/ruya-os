@@ -11,7 +11,7 @@ use zbus::object_server::SignalEmitter;
 use zbus::zvariant::{OwnedValue, Value};
 use zbus::{interface, Connection, MatchRule, MessageStream};
 
-use crate::routing::{Backend, DeviceRecord, Notice, Router};
+use crate::routing::{Backend, DeviceRecord, Notice, Router, Status};
 
 pub const BUS_NAME: &str = "org.ruyaos.Input1";
 pub const OBJECT_PATH: &str = "/org/ruyaos/Input1";
@@ -124,6 +124,21 @@ fn record(d: &DeviceRecord) -> Dict {
         .collect()
 }
 
+/// Whether `name` still has an owner on the bus. Only a definite "no owner" answer counts as
+/// gone; any other error keeps the route (the NameOwnerChanged follower still covers it).
+async fn caller_present(connection: &Connection, name: &str) -> bool {
+    let Ok(bus) = zbus::fdo::DBusProxy::new(connection).await else {
+        return true;
+    };
+    let Ok(bus_name) = zbus::names::BusName::try_from(name) else {
+        return false;
+    };
+    !matches!(
+        bus.get_name_owner(bus_name).await,
+        Err(zbus::fdo::Error::NameHasNoOwner(_))
+    )
+}
+
 pub struct InputIface {
     shared: Arc<Shared>,
 }
@@ -141,19 +156,25 @@ impl InputIface {
             .with(|r| r.devices().iter().map(record).collect())
     }
 
-    fn set_route(
+    async fn set_route(
         &self,
         route: &str,
         instance: &str,
         app_id: &str,
         profile: &str,
         #[zbus(header)] header: Header<'_>,
+        #[zbus(connection)] connection: &Connection,
     ) -> String {
         let caller = header.sender().map(|s| s.to_string()).unwrap_or_default();
-        self.shared
-            .with(|r| r.set_route(route, instance, app_id, profile, &caller, Instant::now()))
-            .as_str()
-            .to_owned()
+        let status = self
+            .shared
+            .with(|r| r.set_route(route, instance, app_id, profile, &caller, Instant::now()));
+        // The caller may have left the bus before we followed it (its NameOwnerChanged came
+        // first): ask the bus, and lock the route if it is gone.
+        if status == Status::Ok && !caller_present(connection, &caller).await {
+            self.shared.with(|r| r.caller_left(&caller, Instant::now()));
+        }
+        status.as_str().to_owned()
     }
 
     #[zbus(property)]

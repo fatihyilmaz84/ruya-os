@@ -31,3 +31,5 @@ list="$(lsinitrd "/usr/lib/modules/${kver}/initramfs.img")"
 for f in themes/ruyaos/ruyaos.script themes/ruyaos/wordmark.png plymouth/script.so; do
     grep -q "$f" <<<"$list" || { echo "90-initramfs: $f is not in the initramfs"; exit 1; }
 done
+# No legacy joystick API (06-input.md section 3): joydev is not in the initramfs.
+if grep -q 'joydev\.ko' <<<"$list"; then echo "90-initramfs: joydev is in the initramfs"; exit 1; fi
