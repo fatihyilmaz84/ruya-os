@@ -4,7 +4,7 @@ RuyaOS is an open-source, immutable (Fedora bootc) console OS for living-room PC
 
 ## Where the truth lives
 
-**Paper Plane is the source of truth for all work (owner, 2026-11-12):** http://192.168.178.164:8687, project `RUY`. Tickets `RUY-n` hold the tasks (description = goal, scope, acceptance criteria), their state (Backlog, Ready, In Progress, In Review, Changes Requested, Blocked, Done), the order (`next` / board order), the Outcome (handover `evidence` + an `Outcome:` comment), review verdicts, the inbox (label `inbox`), blockers (`blocker`), owner decisions (`owner-decision`), the VM queue (`vm-queue`) and the Dell list (`dell`). **Never create or edit `docs/tasks/*.md` or `docs/STATUS*.md`**: they are a frozen archive (tasks up to T-472; a ticket's title starts with its old `T-nnn` id). Access: the `mcp__paperplane-<role>__*` tools, else curl with `C:\Users\FSYY\.paperplane\ruy-<role>.token` (never print or commit a token). Telemetry (OpenTelemetry to Paper Plane) is on for every session on this PC.
+**Paper Plane is the source of truth for all work (owner, 2026-11-12):** http://192.168.178.164:8687, project `RUY`. Tickets `RUY-n` hold the tasks, their state, order (`next`), Outcome and review verdicts; labels mark the lists (`inbox`, `blocker`, `owner-decision`, `vm-queue`, `dell`). **Never create or edit `docs/tasks/*.md` or `docs/STATUS*.md`**: they are a frozen archive (tasks up to T-472; a ticket's title starts with its old `T-nnn` id). Access: the `mcp__paperplane-<role>__*` tools, else curl with `C:\Users\FSYY\.paperplane\ruy-<role>.token` (never print or commit a token). Telemetry (OpenTelemetry to Paper Plane) is on for every session on this PC.
 
 | What | Where |
 |---|---|
@@ -15,7 +15,6 @@ RuyaOS is an open-source, immutable (Fedora bootc) console OS for living-room PC
 | Shell ↔ service contracts | `api/dbus/*.xml` |
 | How to build/run on this machine | `docs/dev-setup.md`, `scripts/dev.ps1` |
 | Shell how-tos (pages, settings rows, modals, text input, translations) | `shell/PATTERNS.md` |
-| Archives, **never needed to start a task, never edited** | `docs/STATUS.md`, `docs/STATUS-*.md`, `docs/tasks/T-*.md` |
 
 ## Session workflow (do every step, in order)
 
@@ -31,13 +30,12 @@ RuyaOS is an open-source, immutable (Fedora bootc) console OS for living-room PC
    - **Contracts are drafts until the first release.** If the task can't be done cleanly within the contract, extend it in the same commit (XML, Rust service and tests, mock, D-Bus client) and explain it in the Outcome; no workarounds such as extra calls to recover missing data. "Don't change the contract" in a task means "no unnecessary changes". Never break behaviour other code relies on.
 5. **Verify.**
    - `.\scripts\dev.ps1 test` must end with `ALL GREEN`. Its Qt Quick tests run **offscreen**, independent of the desktop. A red `test` is a real failure.
-   - UI change: also `.\scripts\dev.ps1 shots` (real GPU windows, screenshot tests only; waits for another `shots`). Read the changed screenshots in `output\shell-shots\review\` (half size) against the criteria and `04` §8; full-size PNGs only for small text. Fix what you see.
-   - `shots` needs an unlocked, undisturbed desktop: red while `test` is green (`TEST WINDOW LOST ACTIVATION`) → re-run. Never edit a test to suit the desktop.
+   - UI change: also `.\scripts\dev.ps1 shots` (real GPU windows; needs an unlocked, undisturbed desktop: `TEST WINDOW LOST ACTIVATION` → re-run, never edit a test to suit the desktop). Read the changed screenshots in `output\shell-shots\review\` (half size) against the criteria and `04` §8, and fix what you see.
    - Image builds: see Hard rules, **Host**.
 6. **Document.**
    - Update every spec section whose behaviour changed (specs describe what the code does) and `docs/dev-setup.md` if commands changed.
    - The Outcome goes to the ticket: `move` it to **In Review** with `branch`, `commit` and `evidence` (a `Verified:` line: host / host (vm pending: <check>) / vm / unverified / hw = built and tested on Windows / on the VM queue / booted in QEMU / not run / real hardware), then a `comment` starting `Outcome:` (what was built, files, deviations). Blocked: `move` to Blocked with the reason. Only the lead moves a ticket to Done, after a recorded `approve`.
-7. **Commit.** One commit per ticket (a small series is fine), format below, naming `RUY-n`. Dispatched builders commit on their branch; the lead merges. **Builders never push.** The lead pushes `main` to `origin` (https://github.com/fatihyilmaz84/ruya-os.git) at the end of every lead session, only after `scripts\scan-secrets.ps1` passes (owner, 2026-10-28). `image/bib/config.toml` holds the dev SSH key and stays git-ignored.
+7. **Commit.** One commit per ticket (a small series is fine), format below, naming `RUY-n`. Dispatched builders commit on their branch; the lead merges. **Builders never push**; the lead pushes `main` with `scripts\push-main.ps1` (`LEAD.md`). `image/bib/config.toml` holds the dev SSH key and stays git-ignored.
 
 ## Definition of done (all must hold)
 
@@ -51,9 +49,9 @@ RuyaOS is an open-source, immutable (Fedora bootc) console OS for living-room PC
 
 - **Decisions.** ADRs marked *Accepted* in `00-overview.md` are binding. If a task seems to need a different decision, or a new owner-level one (legal, licensing, product scope, spending, publishing), don't decide: add a *Proposed* ADR, move the ticket to Blocked with the question (the lead files an `owner-decision` ticket), and stop.
 - **Host.** Windows, with a Fedora 44 WSL distribution for image builds and QEMU (WHPX) for boot tests (`docs/dev-setup.md`). Never install system software or change system settings; `dnf` inside the WSL distribution is fine.
-  - **Image builds (owner, 2026-11-03).** Risk in the image (Containerfile, `image/`, units, bus policies, packaging, hardening) → a **"VM (this task)"** criterion: `scripts/build.sh` + `make-disk.sh` in WSL, then `scripts\smoke-test.ps1`; not `done` until `RUYA_BOOT_OK`. Service or shell logic → **"VM (lead run)"**: write or extend its `scripts/vm-*-check.sh`, Outcome `Verified: host (vm pending: <check>)`; the lead runs the VM queue. One image build at a time; every build, passed or failed, ends with `scripts\free-space.ps1` after its VM checks. Builds take 3–30 minutes: run them in the background.
+  - **Image builds (owner, 2026-11-03).** Risk in the image (Containerfile, `image/`, units, bus policies, packaging, hardening) → **"VM (this task)"**: `scripts/build.sh` + `make-disk.sh` in WSL, then `scripts\smoke-test.ps1`, until `RUYA_BOOT_OK`. Service or shell logic → **"VM (lead run)"**: write or extend its `scripts/vm-*-check.sh`, Outcome `Verified: host (vm pending: <check>)`. One build at a time, in the background; each ends with `scripts\free-space.ps1`.
   - **Unverifiable here** (say so): real GPU/KPI numbers, controllers in the VM, VM audio output (none unless `-Audio`), the shell over D-Bus unless tested in the VM over SSH.
-  - **The Dell is a pure test machine (owner, 2026-11-05 and 2026-11-08, said directly).** The lead may do anything on it over SSH without asking: read, change settings, put files in `/etc`, restart services, reboot, wipe state and bonds, switch or reinstall the image. Report afterwards (`Dell: <what was done>`). Overlays vanish on reboot unless they are in the image, so the real fix goes into the code too. This covers only the Dell, not the owner's PC or any secret; the SSH key stays out of the repo; owner-level decisions stay the owner's.
+  - **The Dell is a pure test machine (owner, 2026-11-08).** The lead may do anything on it over SSH without asking (settings, `/etc`, services, reboot, wipe state and bonds, switch or reinstall the image) and reports afterwards (`Dell: <what was done>`). Overlays vanish on reboot: the real fix goes into the code. Only the Dell, never the owner's PC or a secret; the SSH key stays out of the repo.
 - **Tests are the spec's teeth.** Never weaken an assertion, add `skip()`, or delete a test to get green. If a test is wrong, fix it and say why in the Outcome.
 - **Security invariants:**
   - PIN hashes never leave `ruya-profiles`.
@@ -92,5 +90,4 @@ Areas: `shell`, `services`, `image`, `api`, `docs`, `scripts`, `ci`. Add the att
 - **Rendering.** Offscreen (tests, CI) is the software renderer, where `MultiEffect` draws nothing: assert properties (`visible`, `blurMax`, focus), never pixels. Only `shots` renders on the GPU.
 - **qmllint** needs the module response file and `--max-warnings 0`; `dev.ps1` does that.
 - **Line endings.** Files that reach the Linux image stay LF (`.gitattributes`). Shell scripts need the exec bit: `git update-index --chmod=+x <file>`.
-- **"X is not defined" for a new C++ QML type** (shouldn't happen since T-116): run `scripts\repro-first-build.ps1`, last resort delete `shell\build-win`. Never "fix" it in tests.
 - **Mock services.** Off Linux the shell uses mocks. Mock profiles: Player One (admin, PIN 1234), Ada (no PIN), Guest.

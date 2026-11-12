@@ -67,7 +67,7 @@ Every builder session pays to read these files again on every turn, so they have
 How-tos and catalogues belong in a reference file that a task links (`shell/PATTERNS.md`, `docs/dev-setup.md`), rules belong in `CLAUDE.md`, and a rule that a script can enforce belongs in a script (`scripts/lint-*.ps1`), not in prose. When you add a rule, delete or merge one.
 
 ### 4. Plan
-Run the planner procedure in [`docs/tasks/PLANNING.md`](tasks/PLANNING.md): turn the `inbox` tickets into Ready tickets (or close them), keep 8–12 Ready tickets, order them (`update sort_order`). The lead is the default planner. A builder-run planning session is acceptable for routine refills, but the lead re-checks its tasks at the next review.
+Run the planner procedure in [`docs/tasks/PLANNING.md`](tasks/PLANNING.md): turn the `inbox` tickets into Ready tickets (or close them), keep 8–12 Ready tickets, order them (`sort_order`, via REST `PATCH`: `PLANNING.md` step 5). The lead is the default planner. A builder-run planning session is acceptable for routine refills, but the lead re-checks its tasks at the next review.
 
 Lead tickets carry the label `owner:lead` and stay in Backlog, so a builder's `next` never offers them.
 
