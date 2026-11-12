@@ -26,8 +26,16 @@ Paper Plane (`D:\dev\PaperPlane`, running at http://192.168.178.164:8687, projec
 ## MCP servers and usage per ticket (lead-12, 2026-11-12, owner's go-ahead)
 
 - Three MCP servers in the **local** scope of this checkout (`~/.claude.json`, not the repo; added with `~/.local/bin/claude.exe mcp add --scope local --transport http paperplane-<role> http://192.168.178.164:8687/mcp --header "Authorization: Bearer <token>"`): `paperplane-lead`, `paperplane-builder`, `paperplane-reviewer`, each with its own role's token, so a builder acts as the builder (`mcp__paperplane-builder__claim`), a reviewer as the reviewer. They load at **session start**: a session older than them still uses curl. The desktop app looks them up under the project key `D:/dev/RuyaOS` (forward slashes), the CLI under `D:\dev\RuyaOS`: lead-13 found them missing for that reason and copied them to both keys.
-- Usage hooks in `.claude/settings.local.json` (git-ignored; the token is read from `C:\Users\FSYY\.paperplane\ruy-hooks.token`, role lead, made for the hooks): SessionStart registers the session for RUY, PostToolUse on `mcp__paperplane.*` opens and closes the per-ticket windows (claim, a reviewer's `get`, a verdict), Stop posts the token rows (`D:\dev\PaperPlane\scripts\paperplane_usage_hook.py`). **Only MCP calls attribute usage to a ticket**: dispatch builders and reviewers with the MCP tools, not curl. Check with `summary usage=true`.
+- Usage hooks in `.claude/settings.local.json` (git-ignored; the token is read from `C:\Users\FSYY\.paperplane\ruy-hooks.token`, role lead, made for the hooks): SessionStart registers the session for RUY, PostToolUse on `mcp__paperplane.*` opens and closes the per-ticket windows (claim, a reviewer's `get`, a verdict), Stop posts the token rows (`D:\dev\PaperPlane\scripts\paperplane_usage_hook.py`). **Only MCP calls attribute usage to a ticket**: dispatch builders and reviewers with the MCP tools, not curl. Check with `summary usage=true`. *Lead-14 (2026-11-12, Paper Plane 0.8.0):* the agent files listed no MCP tools in their `tools:` line, so every dispatched builder and reviewer used curl and 283.5M tokens stayed unattributed (1 ticket attributed). `ruya-builder.md` and `ruya-reviewer.md` now list their role's `mcp__paperplane-<role>__*` tools. Check the first ticket built after that commit: it should show its own tokens.
 - Telemetry (owner: always on): OpenTelemetry to Paper Plane is set in the user-level `~/.claude/settings.json` (`CLAUDE_CODE_ENABLE_TELEMETRY=1`, OTLP logs to the Paper Plane URL with the `telemetry` token), so every Claude Code session on this PC reports its token counts; the transcript hook runs as well (rows are keyed by request id, no double count).
+
+- **0.8.0 (deployed 2026-11-12):**
+  - `summary setup=true` prints the hook block for a repo; ours is already broader (matcher `mcp__paperplane.*`).
+  - `summary` says when no usage hooks have been seen; `GET /api/usage/health?project=RUY` gives the same as JSON.
+  - Telemetry no longer freezes the server (PP-20: the likely cause of lead-14's dropped MCP calls and timeouts).
+  - Typing an unknown label creates it only with the `labels` permission; other roles get a "did you mean" hint.
+  - A per-project auto-archive of Done and Cancelled tickets exists: search old tickets with `archived=true` if it is turned on.
+  - Still missing: `sort_order` in `update` (REST `PATCH` only), and a cap on `summary`'s Blocked list.
 
 ## Known gaps (to decide before the files go away)
 
