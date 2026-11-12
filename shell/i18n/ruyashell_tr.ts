@@ -807,7 +807,7 @@ Bu geri alınamaz.</translation>
     <message>
         <location line="+1"/>
         <source>Pair %1</source>
-        <translation>%1 eşleştir</translation>
+        <translation>%1 cihazını eşleştir</translation>
     </message>
     <message>
         <location line="+46"/>

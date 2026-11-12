@@ -50,6 +50,13 @@ SettingsPane {
                     deviceModel.move(at, i, 1)
             }
         }
+        // The keyboard confirmation's device left the list: close it, focus goes back to the list.
+        if (pane.keyboardId !== "" && keyboardSlot.active && keyboardConfirm.shown && !list.some(d => d.id === pane.keyboardId)) {
+            keyboardConfirm.cancel()
+            pane.keyboardId = ""
+            if (!pane.focusableRows().some(r => r.activeFocus))
+                pane.focusableRows()[0]?.forceActiveFocus()
+        }
         Qt.callLater(pane.refocus, before)
     }
 
@@ -145,7 +152,10 @@ SettingsPane {
             const id = repairId
             repairId = ""                      // the pair call below is an ordinary pairing now
             repairScanSeen = false
-            Bluetooth.pair(id)
+            if (d.keyboard === true)
+                askKeyboard(id, d.name)        // a keyboard always asks, a repair included
+            else
+                Bluetooth.pair(id)
         } else if (repairScanSeen && !Bluetooth.discovering) {
             endRepair()                        // the scan ended and it was not found
             Notifications.show(qsTr("Could not find it. Put the device in pairing mode and try again."), "warning")
@@ -347,6 +357,7 @@ SettingsPane {
         sourceComponent: Component {
             PowerConfirm {
                 objectName: "btKeyboardConfirm"
+                customDestructive: false
                 u: pane.u
                 onConfirmed: pane.startPairing(pane.keyboardId)
             }

@@ -258,6 +258,33 @@ Item {
             tryVerify(() => find("btDev_bt-keys-new").activeFocus, 2000, "focus stays on the paired device")
         }
 
+        // A keyboard bonded before the confirmation existed was never confirmed: Pair again asks too.
+        function test_pair_again_asks_for_a_keyboard() {
+            Bluetooth.mockPopulate()
+            tryVerify(() => device("bt-gallery-keyboard") !== undefined, 2000)
+            Bluetooth.mockSetBonded("bt-gallery-keyboard", false)
+            openBluetoothPane()
+            tryVerify(() => find("btRepair_bt-gallery-keyboard").visible, 2000)
+            goTo("btRepair_bt-gallery-keyboard")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("btKeyboardConfirm") !== null && find("btKeyboardConfirm").shown, 4000, "the repair asks")
+            compare(Bluetooth.mockPairCalls(), 0, "nothing paired before the answer")
+            tryVerify(() => inKeyboardConfirm("powerCancel").activeFocus)
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !find("btKeyboardConfirm").shown, 2000)
+            compare(Bluetooth.mockPairCalls(), 0, "Back did not pair")
+        }
+
+        function test_keyboard_confirmation_closes_when_the_device_leaves() {
+            scanForKeyboard()
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("btKeyboardConfirm").shown, 2000)
+            Bluetooth.setPowered(false)                  // the list empties
+            tryVerify(() => !find("btKeyboardConfirm").shown, 2000, "the confirmation closed")
+            tryVerify(() => find("paneBluetooth").activeFocus, 2000, "focus is back in the pane")
+            compare(Bluetooth.mockPairCalls(), 0)
+        }
+
         function test_pad_pairs_without_a_second_confirmation() {
             openBluetoothPane()
             scan()

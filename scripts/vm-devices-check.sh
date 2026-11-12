@@ -189,11 +189,13 @@ bluetooth_check() {
     else
         ok "ClassicBondedOnly is not turned off (BlueZ default true)"
     fi
-    if grep -hE '^[[:space:]]*UserspaceHID[[:space:]]*=[[:space:]]*false[[:space:]]*$' /etc/bluetooth/input.conf >/dev/null 2>&1 &&
+    # UserspaceHID must sit under [General]: awk prints the section of the key.
+    hid_section="$(awk '/^[[:space:]]*\[/ {s=$0} /^[[:space:]]*UserspaceHID[[:space:]]*=[[:space:]]*false[[:space:]]*$/ {print s}' /etc/bluetooth/input.conf 2>/dev/null | tr -d '[:space:]')"
+    if [ "$hid_section" = "[General]" ] &&
         ! grep -hEi '^[[:space:]]*UserspaceHID[[:space:]]*=[[:space:]]*(true|1|yes)' $cfgs; then
-        ok "UserspaceHID=false in /etc/bluetooth/input.conf"
+        ok "UserspaceHID=false under [General] in /etc/bluetooth/input.conf"
     else
-        bad "UserspaceHID is not false in /etc/bluetooth/input.conf"
+        bad "UserspaceHID=false is not under [General] in /etc/bluetooth/input.conf"
     fi
     # T-203: the controller pairing window. No adapter in the VM, so it cannot open; the rest is checked.
     ip="$(busctl --system get-property "$svc" "$path" "$bt" InputPresent)"
