@@ -2145,11 +2145,13 @@ impl DisplayIface {
         self.display.ui_scale()
     }
 
-    /// The backlight's level (T-454), read from the kernel now: (state, percent).
-    async fn get_brightness(&self) -> (String, u32) {
+    /// The backlight's level (T-454), read from the kernel now: one `(su)` struct (state, percent),
+    /// as the contract says. A bare tuple would go out as two arguments (`su`), which the shell's
+    /// client cannot read (found by the 0.0.66 VM queue).
+    async fn get_brightness(&self) -> ((String, u32),) {
         let backlight = self.backlight.clone();
         let got = unblock(move || backlight.get()).await;
-        (got.state().to_owned(), got.percent)
+        ((got.state().to_owned(), got.percent),)
     }
 
     async fn set_brightness(
