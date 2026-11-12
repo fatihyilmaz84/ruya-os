@@ -1111,7 +1111,7 @@ Bu geri alınamaz.</translation>
     <message>
         <location line="+5"/>
         <source>Xbox 360 pad with a wireless receiver: press the sync button on the receiver, then on the controller.</source>
-        <translation>Kablosuz alıcılı Xbox 360 kolu: önce alıcıdaki, sonra kontrolcüdeki eşleştirme düğmesine basın.</translation>
+        <translation>Kablosuz alıcılı Xbox 360 kontrolcüsü: önce alıcıdaki, sonra kontrolcüdeki eşleştirme düğmesine basın.</translation>
     </message>
     <message>
         <location line="+3"/>

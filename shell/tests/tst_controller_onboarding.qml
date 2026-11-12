@@ -284,7 +284,7 @@ Item {
             verify(!find("onboardingReceiverSteps").visible)
             keyClick(Qt.Key_Left)
             DeviceSettings.language = "tr"
-            compare(find("onboardingReceiverSteps").text, "Kablosuz alıcılı Xbox 360 kolu: önce alıcıdaki, sonra kontrolcüdeki eşleştirme düğmesine basın.")
+            compare(find("onboardingReceiverSteps").text, "Kablosuz alıcılı Xbox 360 kontrolcüsü: önce alıcıdaki, sonra kontrolcüdeki eşleştirme düğmesine basın.")
         }
 
         // RUY-154: two Xbox 360 pads behind one receiver are announced one by one under the

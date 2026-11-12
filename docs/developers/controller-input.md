@@ -59,7 +59,7 @@ In a Flatpak set it with `--env=SDL_GAMECONTROLLERCONFIG=...` in `finish-args`, 
 
 ## Xbox 360 wireless receiver
 
-The Xbox 360 Wireless Gaming Receiver for Windows (Microsoft's, or a clone with the same USB ids) works with the in-kernel `xpad` driver: no driver or firmware to install. The player pairs a pad with the sync button on the receiver and then the one on the controller; the console only explains this on its "no controller" screens. Your game sees each pad as an ordinary "Xbox 360 Controller" (one device per pad, up to four; the d-pad may be reported as four buttons), which SDL already maps, and pads come and go while the receiver stays plugged in. Nothing about the receiver reaches you. Not tested on real hardware yet (planned: the Dell). The Xbox One/Series Wireless Adapter is a different device and is not supported.
+The Xbox 360 Wireless Gaming Receiver for Windows (Microsoft's, or a clone with the same USB ids) works with the in-kernel `xpad` driver (the image installs Fedora's `kernel-modules-extra` for it): nothing for you or the player to install, no firmware. The player pairs a pad with the sync button on the receiver and then the one on the controller; the console only explains this on its "no controller" screens. Your game sees each pad as an ordinary "Xbox 360 Controller" (one device per pad, up to four; the d-pad may be reported as four buttons), which SDL already maps, and pads come and go while the receiver stays plugged in. Nothing about the receiver reaches you. Not tested on real hardware yet (planned: the Dell). The Xbox One/Series Wireless Adapter is a different device and is not supported.
 
 ## What the console does with the same controllers
 

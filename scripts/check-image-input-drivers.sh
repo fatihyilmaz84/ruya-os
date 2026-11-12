@@ -27,8 +27,10 @@ else
     # the receiver either by its product id or by Microsoft's vendor id with the Xbox 360 wireless
     # interface (class ff, subclass 5d, protocol 81): accept both forms, and say which one matched.
     for id in 0719 0291; do
-        hit="$(grep -E "^alias usb:v045Ep(${id}|\*)d.* xpad$" "$dir/modules.alias"             | grep -E "p${id}d|isc5Dip(81|\*)" | head -n1 || true)"
-        [ -n "$hit" ] && ok "modules.alias loads xpad for 045e:${id}: ${hit}"             || bad "modules.alias has no xpad entry that covers 045e:${id}"
+        hit="$(grep -E "^alias usb:v045Ep(${id}|\*)d.* xpad$" "$dir/modules.alias" \
+            | grep -E "p${id}d|isc5Dip(81|\*)" | head -n1 || true)"
+        [ -n "$hit" ] && ok "modules.alias loads xpad for 045e:${id}: ${hit}" \
+            || bad "modules.alias has no xpad entry that covers 045e:${id}"
     done
 fi
 for name in xone xpadneo xow; do

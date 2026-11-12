@@ -10,10 +10,14 @@ echo "building NVIDIA modules for kernel ${kver}"
 # kernel-devel must match the image kernel exactly; if the base image kernel is older than
 # the repos, move the image to the newest kernel first (initramfs is rebuilt in 90-*.sh).
 if ! dnf -y install "kernel-devel-${kver}"; then
-    dnf -y upgrade kernel kernel-core kernel-modules kernel-modules-core
+    dnf -y upgrade kernel kernel-core kernel-modules kernel-modules-core kernel-modules-extra
     kver="$(rpm -q kernel-core --qf '%{VERSION}-%{RELEASE}.%{ARCH}\n' | sort -V | tail -n1)"
     dnf -y install "kernel-devel-${kver}"
 fi
+
+# kernel-modules-extra (same version as the kernel) holds the gamepad drivers Fedora does not put
+# in kernel-modules: xpad for wired Xbox pads and the Xbox 360 wireless receiver (RUY-154).
+dnf -y install "kernel-modules-extra-${kver}"
 
 dnf -y install --setopt=install_weak_deps=False \
     akmod-nvidia xorg-x11-drv-nvidia xorg-x11-drv-nvidia-power libva-nvidia-driver
