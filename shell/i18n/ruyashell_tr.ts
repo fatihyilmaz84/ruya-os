@@ -1903,6 +1903,123 @@ Bu geri alınamaz.</translation>
     </message>
 </context>
 <context>
+    <name>PerformanceReadout</name>
+    <message>
+        <location filename="../qml/PerformanceReadout.qml" line="+57"/>
+        <location line="+2"/>
+        <source>%1: %2</source>
+        <translation>%1: %2</translation>
+    </message>
+    <message>
+        <location line="-2"/>
+        <source>%1 (last reading)</source>
+        <translation>%1 (son okuma)</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <location line="+9"/>
+        <location line="+7"/>
+        <source>Not available on this console</source>
+        <translation>Bu konsolda kullanılamıyor</translation>
+    </message>
+    <message>
+        <location line="-16"/>
+        <location line="+11"/>
+        <location line="+7"/>
+        <source>Measuring...</source>
+        <translation>Ölçülüyor...</translation>
+    </message>
+    <message>
+        <location line="-16"/>
+        <source>%1 %</source>
+        <translation>%%1</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>%1 of %2</source>
+        <translation>%1 / %2</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>%1 ms</source>
+        <translation>%1 ms</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>%1 FPS</source>
+        <translation>%1 FPS</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+2"/>
+        <source>FPS: %1</source>
+        <translation>FPS: %1</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <location line="+7"/>
+        <source>No game in front</source>
+        <translation>Önde oyun yok</translation>
+    </message>
+    <message>
+        <location line="-3"/>
+        <source>%1, slowest %2</source>
+        <translation>%1, en yavaş %2</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+2"/>
+        <source>Frame time: %1</source>
+        <translation>Kare süresi: %1</translation>
+    </message>
+    <message>
+        <location line="+41"/>
+        <source>CPU</source>
+        <translation>İşlemci</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>GPU</source>
+        <translation>Ekran kartı</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>RAM</source>
+        <translation>RAM</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>VRAM</source>
+        <translation>VRAM</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>CPU temperature</source>
+        <translation>İşlemci sıcaklığı</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <location line="+1"/>
+        <source>%1 °C</source>
+        <translation>%1 °C</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>GPU temperature</source>
+        <translation>Ekran kartı sıcaklığı</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Power</source>
+        <translation>Güç</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>%1 W</source>
+        <translation>%1 W</translation>
+    </message>
+</context>
+<context>
     <name>PinPad</name>
     <message>
         <location filename="../qml/PinPad.qml" line="+139"/>
@@ -2304,19 +2421,19 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+393"/>
+        <location line="+385"/>
         <source>Bluetooth</source>
         <translation>Bluetooth</translation>
     </message>
     <message>
-        <location line="-392"/>
-        <location line="+158"/>
-        <location line="+348"/>
+        <location line="-384"/>
+        <location line="+155"/>
+        <location line="+307"/>
         <source>Mute</source>
         <translation>Sessiz</translation>
     </message>
     <message>
-        <location line="-505"/>
+        <location line="-461"/>
         <source>Mute mic</source>
         <translation>Mikrofonu sustur</translation>
     </message>
@@ -2325,26 +2442,28 @@ Bu geri alınamaz.</translation>
         <location line="+4"/>
         <location line="+1"/>
         <location line="+1"/>
-        <location line="+134"/>
+        <location line="+131"/>
         <location line="+13"/>
+        <location line="+43"/>
         <source>Off</source>
         <translation>Kapalı</translation>
     </message>
     <message>
-        <location line="-151"/>
-        <location line="+722"/>
+        <location line="-191"/>
+        <location line="+678"/>
         <source>Not connected</source>
         <translation>Bağlı değil</translation>
     </message>
     <message>
-        <location line="-720"/>
-        <location line="+136"/>
+        <location line="-676"/>
+        <location line="+133"/>
         <location line="+13"/>
+        <location line="+43"/>
         <source>On</source>
         <translation>Açık</translation>
     </message>
     <message>
-        <location line="-128"/>
+        <location line="-168"/>
         <source>Could not change Wi-Fi.</source>
         <translation>Wi-Fi değiştirilemedi.</translation>
     </message>
@@ -2364,7 +2483,7 @@ Bu geri alınamaz.</translation>
         <translation>Bluetooth değiştirilemedi.</translation>
     </message>
     <message>
-        <location line="+85"/>
+        <location line="+82"/>
         <source>Audio</source>
         <translation>Ses</translation>
     </message>
@@ -2375,18 +2494,18 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+1019"/>
+        <location line="+978"/>
         <source>Resolution</source>
         <translation>Çözünürlük</translation>
     </message>
     <message>
-        <location line="-1014"/>
-        <location line="+1014"/>
+        <location line="-973"/>
+        <location line="+973"/>
         <source>Refresh rate</source>
         <translation>Yenileme hızı</translation>
     </message>
     <message>
-        <location line="-1007"/>
+        <location line="-966"/>
         <source>Brightness</source>
         <translation>Parlaklık</translation>
     </message>
@@ -2411,59 +2530,7 @@ Bu geri alınamaz.</translation>
         <translation>Performans</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Frames</source>
-        <translation>Kareler</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>CPU</source>
-        <translation>İşlemci</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>GPU</source>
-        <translation>Ekran kartı</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>RAM</source>
-        <translation>RAM</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <location line="+1"/>
-        <source>%1 of %2</source>
-        <translation>%1 / %2</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>VRAM</source>
-        <translation>VRAM</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>CPU temperature</source>
-        <translation>İşlemci sıcaklığı</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <location line="+1"/>
-        <source>%1 °C</source>
-        <translation>%1 °C</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>GPU temperature</source>
-        <translation>Ekran kartı sıcaklığı</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>%1 W</source>
-        <translation>%1 W</translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+5"/>
         <source>Update every</source>
         <translation>Yenileme aralığı</translation>
     </message>
@@ -2530,35 +2597,12 @@ Bu geri alınamaz.</translation>
         <translation>USB</translation>
     </message>
     <message>
-        <location line="+27"/>
-        <source>%1 (last reading)</source>
-        <translation>%1 (son okuma)</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <location line="+9"/>
-        <source>Not available on this console</source>
-        <translation>Bu konsolda kullanılamıyor</translation>
-    </message>
-    <message>
-        <location line="-9"/>
-        <location line="+12"/>
-        <source>Measuring...</source>
-        <translation>Ölçülüyor...</translation>
-    </message>
-    <message>
-        <location line="-239"/>
-        <location line="+230"/>
+        <location line="-193"/>
         <source>%1 %</source>
         <translation>%%1</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>%1 ms</source>
-        <translation>%1 ms</translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+199"/>
         <source>0.5 s</source>
         <translation>0,5 sn</translation>
     </message>
@@ -2568,17 +2612,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 sn</translation>
     </message>
     <message>
-        <location line="+3"/>
-        <source>%1 FPS · %2, slowest %3</source>
-        <translation>%1 FPS · %2, en yavaş %3</translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>No game in front</source>
-        <translation>Önde oyun yok</translation>
-    </message>
-    <message>
-        <location line="+65"/>
+        <location line="+64"/>
         <location line="+30"/>
         <source>Resume</source>
         <translation>Devam et</translation>
@@ -2636,18 +2670,17 @@ Bu geri alınamaz.</translation>
         <translation>Oyunu kapat</translation>
     </message>
     <message>
-        <location line="-298"/>
+        <location line="-262"/>
         <source>Volume</source>
         <translation>Ses</translation>
     </message>
     <message>
-        <location line="+299"/>
+        <location line="+263"/>
         <source>Switch profile</source>
         <translation>Profil değiştir</translation>
     </message>
     <message>
-        <location line="-310"/>
-        <location line="+311"/>
+        <location line="+1"/>
         <source>Power</source>
         <translation>Güç</translation>
     </message>
@@ -2679,7 +2712,7 @@ Bu geri alınamaz.</translation>
         <translation>Geri</translation>
     </message>
     <message>
-        <location line="-376"/>
+        <location line="-335"/>
         <source>Output</source>
         <translation>Çıkış</translation>
     </message>
@@ -2694,7 +2727,12 @@ Bu geri alınamaz.</translation>
         <translation>Mikrofonu sustur</translation>
     </message>
     <message>
-        <location line="+375"/>
+        <location line="+43"/>
+        <source>Performance overlay</source>
+        <translation>Performans göstergesi</translation>
+    </message>
+    <message>
+        <location line="+291"/>
         <source>Switch to %1</source>
         <translation>%1 uygulamasına geç</translation>
     </message>
@@ -2757,9 +2795,9 @@ Bu geri alınamaz.</translation>
         <translation>%1, kapalı</translation>
     </message>
     <message>
-        <location line="-1112"/>
+        <location line="-1068"/>
         <location line="+1"/>
-        <location line="+209"/>
+        <location line="+201"/>
         <source>Muted</source>
         <translation>Sessiz</translation>
     </message>
@@ -3193,12 +3231,12 @@ Bu geri alınamaz.</translation>
         <translation>Seç</translation>
     </message>
     <message>
-        <location line="+142"/>
+        <location line="+159"/>
         <source>The chosen sound theme can&apos;t be used. The standard one plays instead.</source>
         <translation>Seçilen ses teması kullanılamıyor. Bunun yerine standart tema çalıyor.</translation>
     </message>
     <message>
-        <location line="-164"/>
+        <location line="-181"/>
         <location line="+17"/>
         <source>Cancel</source>
         <translation>İptal</translation>
@@ -3236,7 +3274,7 @@ Bu geri alınamaz.</translation>
         <translation>Bölümler</translation>
     </message>
     <message>
-        <location line="+125"/>
+        <location line="+142"/>
         <source>mock services</source>
         <translation>sahte hizmetler</translation>
     </message>

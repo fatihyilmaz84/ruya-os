@@ -27,7 +27,7 @@ Your game is a Wayland client (xdg-shell). The console's compositor is the shell
 
 - Do not try to be windowed, maximise, set a size or position yourself, or open extra top-level windows.
 - Draw at whatever size you are told. The display is a TV: 1280x720, 1920x1080 or 3840x2160. Render at a fixed logical size and let the toolkit scale (SDL: `SDL_SetRenderLogicalPresentation`), or lay out relative to the window, and handle a resize. Picking the resolution and refresh rate in Settings is **planned** (T-198); the game follows whatever mode the output has.
-- Do not draw your own close or home button. The shell draws nothing over a running game except Ruya Hub (which pauses it, next section), the volume indicator and urgent notices.
+- Do not draw your own close or home button. The shell draws nothing over a running game except Ruya Hub (which pauses it, next section), the volume indicator, urgent notices and, only when the player switches it on in Ruya Hub > Performance, the performance overlay: small blocks of numbers (FPS, frame time, CPU, GPU, memory, temperatures, power) in both top corners inside the safe area. The overlay takes no input and no focus; your game keeps every key. (Built, T-469.)
 
 ## The Guide button and Ruya Hub: your game is paused
 

@@ -140,6 +140,7 @@ qt_add_qml_module(ruyashell
         qml/ModeConfirm.qml
         qml/ModePicker.qml
         qml/Setup.qml
+        qml/PerformanceReadout.qml
         qml/ToastLayer.qml
         qml/VolumeOsd.qml
         qml/Badge.qml

@@ -129,7 +129,7 @@ Item {
             keyClick(Qt.Key_Return)
             tryCompare(find("systemPanel"), "panelId", "performance")
             tryCompare(find("systemPanel"), "swap", 1)
-            compare(focusedKey(), "performance:frames", "the focus lands on the first row")
+            compare(focusedKey(), "performance:overlay", "the focus lands on the first row")
             verify(find("systemActions").activeFocus)
         }
 
@@ -163,11 +163,9 @@ Item {
             verify(title.visible)
             compare(title.text, "Performance")
             verify(!find("quickMenuApp").visible, "the panel replaces the app part")
-            compare(find("systemPanel").itemKeys, ["performance:frames", "performance:cpu", "performance:gpu", "performance:ram",
-                                                   "performance:vram", "performance:cputemp", "performance:gputemp",
-                                                   "performance:power", "performance:interval"])
-            compare(focusedKey(), "performance:frames")
-            compare(find("quickMenuItem_performance:frames").Accessible.name.indexOf("Frames, "), 0)
+            compare(find("systemPanel").itemKeys, ["performance:overlay", "performance:interval"])
+            compare(focusedKey(), "performance:overlay")
+            compare(find("quickMenuItem_performance:overlay").Accessible.name.indexOf("Performance overlay, "), 0)
             // Back: the Quick Hub again, on the entry that was opened; the Hub stays open.
             keyClick(Qt.Key_Escape)
             tryCompare(find("systemPanel"), "panelId", "")
@@ -185,193 +183,6 @@ Item {
             const keys = find("systemPanel").itemKeys
             verify(keys.indexOf("panel:audio") >= 0 && keys.indexOf("panel:audio") < keys.indexOf("panel:performance"))
             verify(keys.indexOf("panel:performance") < keys.indexOf("power"), "before Power")
-            keyClick(Qt.Key_Escape)
-        }
-
-        // ---- polling only while the panel is open --------------------------------------------------------
-
-        function test_polling_starts_when_the_panel_opens_and_stops_when_it_closes() {
-            start()
-            openHub()
-            verify(!Performance.polling, "the Quick Hub does not ask for numbers")
-            const before = Performance.pollCount
-            goTo("panel:performance")
-            keyClick(Qt.Key_Return)
-            tryCompare(find("systemPanel"), "panelId", "performance")
-            verify(Performance.polling, "the panel is a consumer")
-            compare(Performance.consumers, 1)
-            tryVerify(() => Performance.pollCount >= before + 3, 3000, "asked at once and then every 500 ms")
-            // Back to the Quick Hub: nothing is asked any more.
-            keyClick(Qt.Key_Escape)
-            tryCompare(find("systemPanel"), "panelId", "")
-            verify(!Performance.polling)
-            const stopped = Performance.pollCount
-            wait(1200)
-            compare(Performance.pollCount, stopped, "nothing asked after Back")
-            // Open again, then Guide closes the whole Hub: nothing is asked either.
-            goTo("panel:performance")
-            keyClick(Qt.Key_Return)
-            tryCompare(find("systemPanel"), "panelId", "performance")
-            verify(Performance.polling)
-            keyClick(Qt.Key_HomePage)
-            tryVerify(() => !find("systemPanel").open, 2000)
-            verify(!Performance.polling, "closing the Hub stops it")
-            compare(Performance.consumers, 0)
-        }
-
-        function test_the_frames_are_counted_only_while_the_panel_is_open() {
-            start()
-            const surface = createTemporaryObject(surfaceComponent, host)
-            const win = createTemporaryObject(windowComponent, host)
-            Performance.frameWindow = win
-            Performance.frameSource = surface
-            openHub()
-            verify(!Performance.counting, "the Quick Hub does not count frames")
-            goTo("panel:performance")
-            keyClick(Qt.Key_Return)
-            tryCompare(find("systemPanel"), "panelId", "performance")
-            verify(Performance.counting)
-            keyClick(Qt.Key_Escape)
-            tryCompare(find("systemPanel"), "panelId", "")
-            verify(!Performance.counting, "Back disconnects the meter")
-            keyClick(Qt.Key_Escape)
-        }
-
-        // ---- the four states of a value ---------------------------------------------------------------------
-
-        // supported: the number.
-        function test_a_measured_value_shows_its_number() {
-            start()
-            openPerformance()
-            tryVerify(() => rowName("performance:cputemp") === "CPU temperature, 52 °C", 3000)
-            tryVerify(() => rowName("performance:cpu") === "CPU, 24 %", 3000, "the second answer has the load: " + rowName("performance:cpu"))
-            tryVerify(() => rowName("performance:gpu") === "GPU, 41 %", 3000)
-            tryVerify(() => rowName("performance:ram") === "RAM, 3.2 GB of 8 GB", 3000)
-            verify(valueOf("performance:cputemp") !== "")
-            compare(valueText("performance:cputemp").color, Theme.text)
-            keyClick(Qt.Key_Escape)
-        }
-
-        // unsupported: said plainly, in `text` like every reading (textDim is under the contrast floor on the pill).
-        function test_an_unsupported_value_says_so_in_the_normal_colour() {
-            start()
-            openPerformance()
-            tryVerify(() => Performance.valid && Performance.fresh, 3000)
-            compare(rowName("performance:vram"), "VRAM, Not available on this console")
-            compare(rowName("performance:gputemp"), "GPU temperature, Not available on this console")
-            verify(!valueText("performance:vram").truncated, "the whole sentence is shown, not cut off")
-            verify(!valueText("performance:gputemp").truncated)
-            compare(valueText("performance:vram").color, Theme.text, "not textDim: 04 section 7 contrast")
-            compare(valueText("performance:gputemp").color, Theme.text)
-            // The frame meter without a compositor window (this host) is unsupported too.
-            compare(Performance.frameState, "unsupported")
-            compare(rowName("performance:frames"), "Frames, Not available on this console")
-            keyClick(Qt.Key_Escape)
-        }
-
-        // unavailable: the first reading of a rate has nothing to compare with.
-        function test_a_value_without_a_number_yet_says_measuring() {
-            start()
-            DeviceSettings.performanceIntervalMs = 5000       // the second answer is not due while we look
-            openPerformance()
-            tryVerify(() => Performance.fresh, 2000, "the first answer")
-            compare(rowName("performance:cpu"), "CPU, Measuring...")
-            compare(rowName("performance:gpu"), "GPU, Measuring...")
-            compare(rowName("performance:power"), "Power, Measuring...")
-            compare(rowName("performance:cputemp"), "CPU temperature, 52 °C", "a temperature has a number at once")
-            compare(valueText("performance:cpu").color, Theme.text)
-            keyClick(Qt.Key_Escape)
-        }
-
-        // The frames with a window and an app in front, but less than a second counted.
-        function test_frames_say_measuring_before_a_whole_second() {
-            start()
-            const surface = createTemporaryObject(surfaceComponent, host)
-            const win = createTemporaryObject(windowComponent, host)
-            Performance.fakeFrameClockMs(1000)
-            Performance.frameWindow = win
-            Performance.frameSource = surface
-            openPerformance()
-            compare(Performance.frameState, "unavailable")
-            compare(rowName("performance:frames"), "Frames, Measuring...")
-            keyClick(Qt.Key_Escape)
-        }
-
-        // No app surface in front: nothing to count, and the row says so.
-        function test_frames_say_no_game_in_front_without_an_app_surface() {
-            start()
-            const win = createTemporaryObject(windowComponent, host)
-            Performance.frameWindow = win                    // a compositor window, but no app in front
-            openPerformance()
-            compare(Performance.frameState, "unavailable")
-            compare(rowName("performance:frames"), "Frames, No game in front")
-            const surface = createTemporaryObject(surfaceComponent, host)
-            Performance.frameSource = surface                // a game comes to the front
-            tryVerify(() => rowName("performance:frames") === "Frames, Measuring...", 2000, rowName("performance:frames"))
-            keyClick(Qt.Key_Escape)
-        }
-
-        // stale: the last good value, said to be old.
-        function test_a_failed_reading_shows_the_last_value_marked_as_old() {
-            start()
-            openPerformance()
-            tryVerify(() => rowName("performance:power") === "Power, 18.4 W (last reading)", 3000, "stale from the second answer: " + rowName("performance:power"))
-            keyClick(Qt.Key_Escape)
-        }
-
-        function test_the_frame_numbers_of_the_app_in_front() {
-            start()
-            const surface = createTemporaryObject(surfaceComponent, host)
-            const win = createTemporaryObject(windowComponent, host)
-            Performance.fakeFrameClockMs(1000)
-            Performance.frameWindow = win
-            Performance.frameSource = surface
-            openPerformance()
-            // Two seconds at 60 Hz on the meter's test clock.
-            let t = 1000
-            for (let i = 1; i <= 120; ++i) {
-                t = 1000 + i * 1000 / 60
-                Performance.fakeFrameClockMs(t - 4)
-                surface.redraw()
-                Performance.fakeFrameClockMs(t)
-                win.frameSwapped()
-            }
-            Performance.fakeFrameClockMs(t + 5)
-            Performance.updateFrames()
-            tryVerify(() => rowName("performance:frames") === "Frames, 60 FPS · 17 ms, slowest 17 ms", 2000, rowName("performance:frames"))
-            verify(!valueText("performance:frames").truncated, "the whole line is shown")
-            keyClick(Qt.Key_Escape)
-        }
-
-        // Held numbers are not shown as live (T-451 review).
-        function test_numbers_held_before_a_failed_reading_are_not_shown_as_live() {
-            start()
-            openPerformance()
-            tryVerify(() => rowName("performance:cputemp") === "CPU temperature, 52 °C", 3000)
-            Performance.mockFail(true)
-            tryVerify(() => rowName("performance:cputemp") === "CPU temperature, Measuring...", 3000, "the held 52 is gone: " + rowName("performance:cputemp"))
-            compare(rowName("performance:vram"), "VRAM, Not available on this console", "a console without a source stays without one")
-            Performance.mockFail(false)
-            tryVerify(() => rowName("performance:cputemp") === "CPU temperature, 52 °C", 3000, "and the next answer is live again")
-            keyClick(Qt.Key_Escape)
-        }
-
-        function test_the_first_open_after_idle_does_not_show_the_numbers_of_the_last_visit() {
-            start()
-            openPerformance()
-            tryVerify(() => rowName("performance:cputemp") === "CPU temperature, 52 °C", 3000)
-            keyClick(Qt.Key_Escape)
-            tryCompare(find("systemPanel"), "panelId", "")
-            verify(!Performance.polling)
-            Performance.mockSet("cpu_temp", "supported", 71)       // what the console reads now
-            Performance.mockReplyDelay(5000)                        // the answer is not here yet when the panel opens
-            goTo("panel:performance")
-            keyClick(Qt.Key_Return)
-            tryCompare(find("systemPanel"), "panelId", "performance")
-            compare(rowName("performance:cputemp"), "CPU temperature, Measuring...", "not the 52 of the visit before")
-            verify(!Performance.fresh)
-            Performance.mockReplyDelay(0)
-            tryVerify(() => rowName("performance:cputemp") === "CPU temperature, 71 °C", 3000, "the fresh answer")
             keyClick(Qt.Key_Escape)
         }
 
@@ -400,27 +211,41 @@ Item {
             keyClick(Qt.Key_Escape)
         }
 
-        function test_the_readings_take_focus_but_accept_does_nothing() {
+        function test_the_panel_has_the_switch_and_the_interval_and_no_readings() {
             start()
             openPerformance()
-            compare(hintVerbs(), "B Back", "nothing to press on a reading")
-            keyClick(Qt.Key_Right)
-            keyClick(Qt.Key_Return)
-            compare(focusedKey(), "performance:frames")
-            compare(find("systemPanel").panelId, "performance")
-            compare(DeviceSettings.performanceIntervalMs, 500)
-            keyClick(Qt.Key_Down)
-            compare(focusedKey(), "performance:cpu", "Down walks the rows")
-            verify(find("systemActions").activeFocus)
+            compare(find("systemPanel").itemKeys, ["performance:overlay", "performance:interval"])
+            verify(!find("quickMenuItem_performance:cpu"), "no reading rows")
+            verify(!Performance.polling, "the panel asks for nothing: the game is frozen, the overlay shows the numbers")
+            verify(!Performance.counting)
+            compare(hintVerbs(), "A Toggle|B Back")
+            compare(rowName("performance:overlay"), "Performance overlay, Off")
             keyClick(Qt.Key_Escape)
         }
+
+        function test_the_switch_is_stored_for_the_profile() {
+            start()
+            openPerformance()
+            verify(!DeviceSettings.performanceOverlay("p2"))
+            keyClick(Qt.Key_Return)
+            tryVerify(() => DeviceSettings.performanceOverlay("p2"), 2000, "Accept turns it on")
+            compare(rowName("performance:overlay"), "Performance overlay, On")
+            verify(!DeviceSettings.performanceOverlay("p1"), "another profile is not touched")
+            compare(focusedKey(), "performance:overlay")
+            verify(find("systemActions").activeFocus)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => !DeviceSettings.performanceOverlay("p2"), 2000, "and off again")
+            compare(rowName("performance:overlay"), "Performance overlay, Off")
+            keyClick(Qt.Key_Escape)
+        }
+
 
         function test_every_row_is_reachable_and_clear_of_the_fade() {
             start()
             openPerformance()
             const box = find("systemActions").parent
             const fade = find("hubMoreBelow").height
-            for (let i = 0; i < 9; ++i) {
+            for (let i = 0; i < 2; ++i) {
                 const row = find("quickMenuItem_" + focusedKey())
                 const top = row.mapToItem(box, 0, 0).y
                 verify(top >= -1 && top + row.height <= box.height + 1, focusedKey() + " is inside the list: " + top + " of " + box.height)
@@ -444,8 +269,6 @@ Item {
             const app = createTemporaryObject(pictureAppComponent, host)
             tc.shell.addApp(app, "p2")
             tryVerify(() => app.activeFocus, 2000)
-            // The first answer: the rates are not measurable yet, VRAM and GPU temperature are unsupported.
-            DeviceSettings.performanceIntervalMs = 5000
             keyClick(Qt.Key_HomePage)
             tryVerify(() => find("quickMenuItem_resume").focused, 2000)
             goTo("panel:performance")
@@ -454,32 +277,12 @@ Item {
             keyClick(Qt.Key_Return)
             tryCompare(find("systemPanel"), "panelId", "performance")
             tryCompare(find("systemPanel"), "swap", 1)
-            tryVerify(() => Performance.fresh, 2000)
             wait(500)
-            grabImage(tc.shell).save(shotsDir + "/hub-performance-2-measuring.png")
-            // Every state at once: frames measured, CPU and temperature supported, GPU measuring, VRAM and
-            // GPU temperature unsupported, power the last reading.
-            DeviceSettings.performanceIntervalMs = 500
-            const surface = createTemporaryObject(surfaceComponent, host)
-            const win = createTemporaryObject(windowComponent, host)
-            Performance.fakeFrameClockMs(1000)
-            Performance.frameWindow = win
-            Performance.frameSource = surface
-            let t = 1000
-            for (let i = 1; i <= 120; ++i) {
-                t = 1000 + i * 1000 / 60
-                Performance.fakeFrameClockMs(t - 4)
-                surface.redraw()
-                Performance.fakeFrameClockMs(t)
-                win.frameSwapped()
-            }
-            Performance.fakeFrameClockMs(t + 5)
-            Performance.updateFrames()
-            Performance.mockSet("gpu_percent", "unavailable", 0)
-            tryVerify(() => rowName("performance:cpu") === "CPU, 24 %" && rowName("performance:gpu") === "GPU, Measuring..."
-                            && rowName("performance:power") === "Power, 18.4 W (last reading)", 3000)
-            wait(500)
-            grabImage(tc.shell).save(shotsDir + "/hub-performance-3-states.png")
+            grabImage(tc.shell).save(shotsDir + "/hub-performance-2-off.png")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => DeviceSettings.performanceOverlay("p2"), 2000)
+            wait(300)
+            grabImage(tc.shell).save(shotsDir + "/hub-performance-3-on.png")
             goTo("performance:interval")
             keyClick(Qt.Key_Right)
             tryCompare(DeviceSettings, "performanceIntervalMs", 1000)

@@ -62,6 +62,12 @@ void DeviceSettings::init()
         if (isValidPerformanceInterval(interval))
             m_performanceIntervalMs = interval;
         m_pauseGamesInHub = m_store->value(QStringLiteral("hub/pauseGames"), m_pauseGamesInHub).toBool();
+        m_store->beginGroup(QStringLiteral("hub/performanceOverlay"));
+        for (const QString &id : m_store->childKeys()) {
+            if (isValidProfileKey(id) && m_store->value(id).toBool())
+                m_overlayProfiles.insert(id, true);
+        }
+        m_store->endGroup();
         const QString language = m_store->value(QStringLiteral("general/language")).toString();
         if (isValidLanguage(language)) {
             m_language = language;
@@ -337,6 +343,39 @@ void DeviceSettings::setSoundTheme(const QString &value)
     if (m_store)
         m_store->setValue(QStringLiteral("sound/theme"), value);
     emit soundThemeChanged();
+}
+
+bool DeviceSettings::isValidProfileKey(const QString &id)
+{
+    static const QRegularExpression valid(QStringLiteral("^[A-Za-z0-9._-]{1,64}$"));
+    return valid.match(id).hasMatch();
+}
+
+bool DeviceSettings::performanceOverlay(const QString &profile) const
+{
+    return m_overlayProfiles.value(profile).toBool();
+}
+
+void DeviceSettings::setPerformanceOverlay(const QString &profile, bool on)
+{
+    if (!isValidProfileKey(profile)) {
+        qWarning("ruya-shell: rejecting the performance overlay for profile id '%s'", qPrintable(profile));
+        return;
+    }
+    if (on == performanceOverlay(profile))
+        return;
+    if (on)
+        m_overlayProfiles.insert(profile, true);
+    else
+        m_overlayProfiles.remove(profile);
+    if (m_store) {
+        const QString key = QStringLiteral("hub/performanceOverlay/") + profile;
+        if (on)
+            m_store->setValue(key, true);
+        else
+            m_store->remove(key);
+    }
+    emit performanceOverlayChanged();
 }
 
 void DeviceSettings::setPauseGamesInHub(bool value)

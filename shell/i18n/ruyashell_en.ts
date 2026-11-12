@@ -1908,6 +1908,123 @@ This can&apos;t be undone.</translation>
     </message>
 </context>
 <context>
+    <name>PerformanceReadout</name>
+    <message>
+        <location filename="../qml/PerformanceReadout.qml" line="+57"/>
+        <location line="+2"/>
+        <source>%1: %2</source>
+        <translation>%1: %2</translation>
+    </message>
+    <message>
+        <location line="-2"/>
+        <source>%1 (last reading)</source>
+        <translation>%1 (last reading)</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <location line="+9"/>
+        <location line="+7"/>
+        <source>Not available on this console</source>
+        <translation>Not available on this console</translation>
+    </message>
+    <message>
+        <location line="-16"/>
+        <location line="+11"/>
+        <location line="+7"/>
+        <source>Measuring...</source>
+        <translation>Measuring...</translation>
+    </message>
+    <message>
+        <location line="-16"/>
+        <source>%1 %</source>
+        <translation>%1 %</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>%1 of %2</source>
+        <translation>%1 of %2</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>%1 ms</source>
+        <translation>%1 ms</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>%1 FPS</source>
+        <translation>%1 FPS</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+2"/>
+        <source>FPS: %1</source>
+        <translation>FPS: %1</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <location line="+7"/>
+        <source>No game in front</source>
+        <translation>No game in front</translation>
+    </message>
+    <message>
+        <location line="-3"/>
+        <source>%1, slowest %2</source>
+        <translation>%1, slowest %2</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+2"/>
+        <source>Frame time: %1</source>
+        <translation>Frame time: %1</translation>
+    </message>
+    <message>
+        <location line="+41"/>
+        <source>CPU</source>
+        <translation>CPU</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>GPU</source>
+        <translation>GPU</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>RAM</source>
+        <translation>RAM</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>VRAM</source>
+        <translation>VRAM</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>CPU temperature</source>
+        <translation>CPU temperature</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <location line="+1"/>
+        <source>%1 °C</source>
+        <translation>%1 °C</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>GPU temperature</source>
+        <translation>GPU temperature</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Power</source>
+        <translation>Power</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>%1 W</source>
+        <translation>%1 W</translation>
+    </message>
+</context>
+<context>
     <name>PinPad</name>
     <message>
         <location filename="../qml/PinPad.qml" line="+139"/>
@@ -2313,19 +2430,19 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+393"/>
+        <location line="+385"/>
         <source>Bluetooth</source>
         <translation>Bluetooth</translation>
     </message>
     <message>
-        <location line="-392"/>
-        <location line="+158"/>
-        <location line="+348"/>
+        <location line="-384"/>
+        <location line="+155"/>
+        <location line="+307"/>
         <source>Mute</source>
         <translation>Mute</translation>
     </message>
     <message>
-        <location line="-505"/>
+        <location line="-461"/>
         <source>Mute mic</source>
         <translation>Mute mic</translation>
     </message>
@@ -2334,26 +2451,28 @@ This can&apos;t be undone.</translation>
         <location line="+4"/>
         <location line="+1"/>
         <location line="+1"/>
-        <location line="+134"/>
+        <location line="+131"/>
         <location line="+13"/>
+        <location line="+43"/>
         <source>Off</source>
         <translation>Off</translation>
     </message>
     <message>
-        <location line="-151"/>
-        <location line="+722"/>
+        <location line="-191"/>
+        <location line="+678"/>
         <source>Not connected</source>
         <translation>Not connected</translation>
     </message>
     <message>
-        <location line="-720"/>
-        <location line="+136"/>
+        <location line="-676"/>
+        <location line="+133"/>
         <location line="+13"/>
+        <location line="+43"/>
         <source>On</source>
         <translation>On</translation>
     </message>
     <message>
-        <location line="-128"/>
+        <location line="-168"/>
         <source>Could not change Wi-Fi.</source>
         <translation>Could not change Wi-Fi.</translation>
     </message>
@@ -2373,7 +2492,7 @@ This can&apos;t be undone.</translation>
         <translation>Could not change Bluetooth.</translation>
     </message>
     <message>
-        <location line="+85"/>
+        <location line="+82"/>
         <source>Audio</source>
         <translation>Audio</translation>
     </message>
@@ -2384,18 +2503,18 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+1019"/>
+        <location line="+978"/>
         <source>Resolution</source>
         <translation>Resolution</translation>
     </message>
     <message>
-        <location line="-1014"/>
-        <location line="+1014"/>
+        <location line="-973"/>
+        <location line="+973"/>
         <source>Refresh rate</source>
         <translation>Refresh rate</translation>
     </message>
     <message>
-        <location line="-1007"/>
+        <location line="-966"/>
         <source>Brightness</source>
         <translation>Brightness</translation>
     </message>
@@ -2420,59 +2539,7 @@ This can&apos;t be undone.</translation>
         <translation>Performance</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Frames</source>
-        <translation>Frames</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>CPU</source>
-        <translation>CPU</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>GPU</source>
-        <translation>GPU</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>RAM</source>
-        <translation>RAM</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <location line="+1"/>
-        <source>%1 of %2</source>
-        <translation>%1 of %2</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>VRAM</source>
-        <translation>VRAM</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>CPU temperature</source>
-        <translation>CPU temperature</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <location line="+1"/>
-        <source>%1 °C</source>
-        <translation>%1 °C</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>GPU temperature</source>
-        <translation>GPU temperature</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>%1 W</source>
-        <translation>%1 W</translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+5"/>
         <source>Update every</source>
         <translation>Update every</translation>
     </message>
@@ -2539,35 +2606,12 @@ This can&apos;t be undone.</translation>
         <translation>USB</translation>
     </message>
     <message>
-        <location line="+27"/>
-        <source>%1 (last reading)</source>
-        <translation>%1 (last reading)</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <location line="+9"/>
-        <source>Not available on this console</source>
-        <translation>Not available on this console</translation>
-    </message>
-    <message>
-        <location line="-9"/>
-        <location line="+12"/>
-        <source>Measuring...</source>
-        <translation>Measuring...</translation>
-    </message>
-    <message>
-        <location line="-239"/>
-        <location line="+230"/>
+        <location line="-193"/>
         <source>%1 %</source>
         <translation>%1 %</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>%1 ms</source>
-        <translation>%1 ms</translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+199"/>
         <source>0.5 s</source>
         <translation>0.5 s</translation>
     </message>
@@ -2577,17 +2621,7 @@ This can&apos;t be undone.</translation>
         <translation>%1 s</translation>
     </message>
     <message>
-        <location line="+3"/>
-        <source>%1 FPS · %2, slowest %3</source>
-        <translation>%1 FPS · %2, slowest %3</translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>No game in front</source>
-        <translation>No game in front</translation>
-    </message>
-    <message>
-        <location line="+65"/>
+        <location line="+64"/>
         <location line="+30"/>
         <source>Resume</source>
         <translation>Resume</translation>
@@ -2645,18 +2679,17 @@ This can&apos;t be undone.</translation>
         <translation>Close game</translation>
     </message>
     <message>
-        <location line="-298"/>
+        <location line="-262"/>
         <source>Volume</source>
         <translation>Volume</translation>
     </message>
     <message>
-        <location line="+299"/>
+        <location line="+263"/>
         <source>Switch profile</source>
         <translation>Switch profile</translation>
     </message>
     <message>
-        <location line="-310"/>
-        <location line="+311"/>
+        <location line="+1"/>
         <source>Power</source>
         <translation>Power</translation>
     </message>
@@ -2688,7 +2721,7 @@ This can&apos;t be undone.</translation>
         <translation>Back</translation>
     </message>
     <message>
-        <location line="-376"/>
+        <location line="-335"/>
         <source>Output</source>
         <translation>Output</translation>
     </message>
@@ -2703,7 +2736,12 @@ This can&apos;t be undone.</translation>
         <translation>Mute microphone</translation>
     </message>
     <message>
-        <location line="+375"/>
+        <location line="+43"/>
+        <source>Performance overlay</source>
+        <translation>Performance overlay</translation>
+    </message>
+    <message>
+        <location line="+291"/>
         <source>Switch to %1</source>
         <translation>Switch to %1</translation>
     </message>
@@ -2766,9 +2804,9 @@ This can&apos;t be undone.</translation>
         <translation>%1, off</translation>
     </message>
     <message>
-        <location line="-1112"/>
+        <location line="-1068"/>
         <location line="+1"/>
-        <location line="+209"/>
+        <location line="+201"/>
         <source>Muted</source>
         <translation>Muted</translation>
     </message>
@@ -3202,12 +3240,12 @@ This can&apos;t be undone.</translation>
         <translation>Select</translation>
     </message>
     <message>
-        <location line="+142"/>
+        <location line="+159"/>
         <source>The chosen sound theme can&apos;t be used. The standard one plays instead.</source>
         <translation>The chosen sound theme can&apos;t be used. The standard one plays instead.</translation>
     </message>
     <message>
-        <location line="-164"/>
+        <location line="-181"/>
         <location line="+17"/>
         <source>Cancel</source>
         <translation>Cancel</translation>
@@ -3245,7 +3283,7 @@ This can&apos;t be undone.</translation>
         <translation>Sections</translation>
     </message>
     <message>
-        <location line="+125"/>
+        <location line="+142"/>
         <source>mock services</source>
         <translation>mock services</translation>
     </message>
