@@ -143,6 +143,7 @@ private:
     int m_intervalMs = 1000;
     QTimer m_pollTimer;
     QTimer m_frameTimer;
+    bool m_logFrames = false;   // RUYA_PERF_LOG (a measuring script): one journal line per frame update
     FrameMeter m_meter;
     FrameMeter::Stats m_stats;
 };

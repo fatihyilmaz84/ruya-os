@@ -39,7 +39,10 @@ if [ -n "$pid" ]; then
   echo "bluetoothd: $(( (b-a) )) ticks in 10 s (about $(( (b-a)/10 )) % of one core)"
 else echo "bluetoothd: not running"; fi
 sp=$(pgrep -x ruya-shell | head -1)
+# The picker's blobs drift for 30 s after the shell starts (LiquidGate): 16-40 % GPU. Measure the
+# resting picker, 40 s after the shell's start (T-455: 0.0.65/0.0.66 "regression" was this).
 if [ -n "$sp" ]; then
+  while [ "$(ps -o etimes= -p "$sp" | tr -d ' ')" -lt 40 ]; do sleep 2; done
   fd=$(grep -l drm-engine-render /proc/$sp/fdinfo/* 2>/dev/null | head -1)
   if [ -n "$fd" ]; then
     a=$(awk '/drm-engine-render/{print $2}' "$fd"); sleep 10; b=$(awk '/drm-engine-render/{print $2}' "$fd")

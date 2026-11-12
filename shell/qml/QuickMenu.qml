@@ -29,6 +29,8 @@ Item {
     property real bottomReserve: 0
     property string version: ""
     property bool open: false
+    // Open and at rest: the fade and the slide have ended (the open-time probe, T-455).
+    readonly property bool settled: open && opacity === 1 && slide.x === 0
     // The power choices instead of the actions.
     property bool powerMode: false
     // The panel shown in place of the Quick Hub's content ("" = the Quick Hub itself; T-450, 02 §1.6).

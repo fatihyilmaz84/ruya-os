@@ -24,7 +24,13 @@ Performance::Performance(std::unique_ptr<PerformanceBackend> backend, QObject *p
         emit countingChanged();
         updateFrames();
     });
-    // Nothing is asked for here: only a consumer starts the polling.
+    // Nothing is asked for here: only a consumer starts the polling. Except for the measuring
+    // scripts (scripts/dell-hub-check.sh, T-455): RUYA_PERF_LOG=1 holds a consumer for the whole
+    // run and writes the frame numbers to the journal once per update.
+    if (qEnvironmentVariableIsSet("RUYA_PERF_LOG")) {
+        m_logFrames = true;
+        acquire();
+    }
 }
 
 Performance::~Performance() = default;
@@ -179,6 +185,9 @@ QString Performance::frameState() const
 void Performance::updateFrames()
 {
     m_stats = m_meter.stats();
+    if (m_logFrames && m_meter.counting())
+        qInfo("ruya-shell: perf-frames fps=%d full=%d commits=%d meanMs=%.1f p99Ms=%.1f", m_stats.frames,
+              m_stats.full ? 1 : 0, m_stats.commits, m_stats.meanMs, m_stats.p99Ms);
     emit framesChanged();
 }
 
