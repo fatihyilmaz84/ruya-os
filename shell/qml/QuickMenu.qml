@@ -163,7 +163,6 @@ Item {
     property real artFit: 1
     readonly property real artFitMin: 0.35
     property real stripCentre: 0
-    property real iconCentre: 0
     readonly property real nameFull: Theme.spaceXs * u + nameProbe.implicitHeight
     // The text of the game card is as tall as it is (a two-line title and the state), whatever the art does.
     property real cardInfoHeight: 0
@@ -839,11 +838,13 @@ Item {
                             if (event.key === Qt.Key_Down) {
                                 incrementCurrentIndex()
                             } else if (event.key === Qt.Key_Up) {
-                                // Up into Home | Close game lands on the column nearest to where it came from.
-                                const centre = rowKey === "running" ? menu.stripCentre : rowKey === "panels" ? menu.iconCentre : -1
+                                // Up from the strip into Home | Close game lands on the column nearest to the tile it left:
+                                // Home only for a tile clearly in the left half (a tile in the middle slot, the rightmost of
+                                // two apps, goes to Close game: a tolerance of a pixel, so a tie is never decided by rounding).
+                                const left = rowKey === "running" && menu.stripCentre < actions.width / 2 - 1
                                 decrementCurrentIndex()
-                                if (centre >= 0 && menu.currentRow === "leave" && !menu.powerMode && menu.panelId === "")
-                                    menu.leaveCol = centre < actions.width / 2 ? 0 : 1
+                                if (rowKey === "running" && menu.currentRow === "leave" && !menu.powerMode && menu.panelId === "")
+                                    menu.leaveCol = left ? 0 : 1
                             } else if (row && row.kind === "slider" && sideways) {
                                 row.adjust(toRight ? 1 : -1)
                             } else if (row && row.kind === "choice" && sideways) {
@@ -994,8 +995,6 @@ Item {
                                     items: menu.iconIds.map(id => ({ key: "panel:" + id, icon: menu.iconOf(id), label: menu.titleOf(id) }))
                                     currentIndex: menu.iconCol
                                     focused: action.focused
-                                    onCurrentCentreChanged: menu.iconCentre = currentCentre
-                                    Component.onCompleted: menu.iconCentre = currentCentre
                                 }
                             }
 

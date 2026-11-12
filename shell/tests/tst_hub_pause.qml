@@ -453,31 +453,43 @@ Item {
             keyClick(Qt.Key_Escape)
         }
 
-        // RUY-401: Up from the strip into Home | Close game lands on the nearest column, not the remembered one.
-        function test_up_from_the_strip_lands_on_the_nearest_column() {
-            const menu = createTemporaryObject(menuComponent, host, {
-                others: [{ appId: "org.example.A", title: "Alpha", picture: "", hasWindow: true },
+        // RUY-401: Up from the strip into Home | Close game lands on the nearest column, not the remembered one:
+        // the leftmost tile on Home, the rightmost (of two or three) on Close game; with one app, Home. With
+        // two apps the rightmost tile is the middle slot of the three-slot grid (a tie of the half width).
+        function test_up_from_the_strip_lands_on_the_nearest_column_data() {
+            const rows = []
+            for (const scale of [0.667, 1, 1.5])
+                for (const n of [1, 2, 3])
+                    rows.push({ tag: n + " apps at u " + scale, scale: scale, n: n })
+            return rows
+        }
+        function test_up_from_the_strip_lands_on_the_nearest_column(data) {
+            const all = [{ appId: "org.example.A", title: "Alpha", picture: "", hasWindow: true },
                          { appId: "org.example.B", title: "Beta", picture: "", hasWindow: true },
-                         { appId: "org.example.C", title: "Gamma", picture: "", hasWindow: true }] })
+                         { appId: "org.example.C", title: "Gamma", picture: "", hasWindow: true }]
+            const menu = createTemporaryObject(menuComponent, bigHost, {
+                u: data.scale, marginX: 54, marginY: 54, bottomReserve: (Theme.glyphSize + Theme.spaceM) * data.scale,
+                others: all.slice(0, data.n) })
             verify(menu)
             menu.present()
             tryCompare(menu, "settled", true)
             tryVerify(() => findChild(menu, "hubRunningStrip") !== null, 2000)
+            const last = "to:org.example." + "ABC"[data.n - 1]
             keyClick(Qt.Key_Down)
             keyClick(Qt.Key_Right)                          // Close game is the remembered column
             compare(menu.currentKey, "closeGame")
             keyClick(Qt.Key_Down)
             compare(menu.currentRow, "running")
-            keyClick(Qt.Key_Left)
-            compare(menu.currentKey, "to:org.example.A")    // the leftmost tile
+            compare(menu.currentKey, "to:org.example.A")
             keyClick(Qt.Key_Up)
             compare(menu.currentKey, "home", "the leftmost tile goes up to Home")
             keyClick(Qt.Key_Down)
-            keyClick(Qt.Key_Right)
-            keyClick(Qt.Key_Right)
-            compare(menu.currentKey, "to:org.example.C")    // the rightmost tile
+            for (let i = 1; i < data.n; ++i)
+                keyClick(Qt.Key_Right)
+            compare(menu.currentKey, last)                  // the rightmost tile
             keyClick(Qt.Key_Up)
-            compare(menu.currentKey, "closeGame", "the rightmost tile goes up to Close game")
+            compare(menu.currentKey, data.n === 1 ? "home" : "closeGame",
+                    data.n === 1 ? "the only tile is the leftmost" : "the rightmost tile goes up to Close game")
             keyClick(Qt.Key_Escape)
         }
 
