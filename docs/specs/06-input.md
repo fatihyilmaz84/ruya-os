@@ -144,6 +144,8 @@ The shell, the hint bar, `Platform1` (T-374) and the development tools (T-418) n
 The **Confirm button** row lives in **Settings > Controllers** (the one Settings home for controllers, with T-368's list): "As on the controller" (default) / "Bottom" / "Right", per console profile, stored by the service (`Input1.SetConfirmButton`). It swaps `accept` and `back` only; a game never sees it (games get positional buttons on the virtual pad).
 
 ### 11.3 Who drives the UI
+
+> **Owner amendment, 2026-11-12 (ADR-017 amendment in 00):** a controller that connects without a player asks "Who's playing?" **when it connects**, and the app in front is paused while the prompt is open. A profile has **one** controller; picking a profile that has one moves it to the new pad. Every player is **signed in** (PIN if set). Guests can be picked several times and are wiped when they leave. The table below still describes the older rule (a toast on press, the prompt on Guide). It is rewritten when RUY-121, RUY-122 and RUY-38 are replanned.
 | State | Pads that navigate the shell | Another pad's press | Guide on another pad |
 |---|---|---|---|
 | Picker, PIN pad, "Who's playing?" dialog, first boot | any pad, the keyboard | (it navigates) | opens the Guide menu as usual |
