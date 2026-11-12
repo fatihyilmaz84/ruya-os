@@ -8,7 +8,8 @@ Paper Plane (`D:\dev\PaperPlane`, running at http://192.168.178.164:8687, projec
 - Labels from the header: `phase:N`, `area:x`, `size:S|M|epic`, `owner:lead|builder`, `complexity:x`, `surface:x`.
 - `Depends:` became `blocks` relations (237). Epics became parents of their children (48 links: T-228, T-248, T-263, T-273, T-302, T-314; T-270 and T-426 have no written children yet).
 - State: `Blocked` for blocked tasks, `Ready` for todo tasks with an `## Acceptance criteria` section, `Backlog` for the rest. **`owner:lead` tasks are kept in Backlog** so a builder's `next` never offers them (Paper Plane has no per-role label filter); a lead finds them with `list label=owner:lead`.
-- Not imported: the finished tasks (their files remain the only record). Re-running the importer needs an empty project.
+- The 184 finished task files (T-101 on) were imported afterwards as `Done` tickets `RUY-178..RUY-361`, with their Outcome in the description, so full-text search and the duplicate check cover them (`scripts/paperplane-import-done.py`, re-runnable: it skips ids that already have a ticket). Not imported: the work before T-132 that exists only in `STATUS-done.md` (no task files). The two or three "Dropped" outcomes are `Done`, not `Cancelled`, because their Outcome does not start with "Dropped".
+- Re-running the open-task importer needs an empty project.
 - The importer is `scripts/paperplane-import.py` (usage: `py -3.12 -I scripts/paperplane-import.py <base url> <token file>`; it refuses a non-empty `RUY`).
 - Pilot ticket: `RUY-177` (T-341a, a split-off of T-341 item 4), claimed, handed over, reviewed and merged as 6ffcd85.
 
