@@ -1023,6 +1023,18 @@ Item {
             grabImage(tc.shell).save(shotsDir + "/bt-pair-again.png")
         }
 
+        function test_zz_keyboard_confirmation_screenshot() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            scanForKeyboard()
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("btKeyboardConfirm").shown, 2000)
+            wait(600)
+            grabImage(tc.shell)                          // the first grab of a window makes it lay the pane out
+            wait(600)
+            grabImage(tc.shell).save(shotsDir + "/bt-keyboard-confirm.png")
+        }
+
         // T-199: the pane with a device of every kind and family, and a toast that names a device.
         function test_zz_device_icon_screenshots() {
             if (!shotsDir)
