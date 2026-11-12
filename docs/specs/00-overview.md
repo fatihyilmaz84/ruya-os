@@ -447,10 +447,18 @@ Shell icons come from Google's **Material Symbols Rounded** (Apache-2.0), bundle
 
 **Decision.**
 1. **Wayland stays the only display path.** The shell, the compositor and every app that offers Wayland use it; `SDL_VIDEODRIVER=wayland` and `XDG_SESSION_TYPE=wayland` stay. X11 exists only to run apps that cannot do Wayland.
-2. **On demand, per profile, rootless.** An X server is started only when an app that needs it is launched (its Flatpak metadata has `x11` but not `wayland`, or a per-app override says so), one per profile (X11 has no isolation between clients, so never shared across profiles), as a Wayland client of that profile's socket, and stopped when the profile's last X11 app ends. No X server at boot, none for the shell.
+2. **On demand, per app instance, rootless** (lead, 2026-11-12, from the RUY-1 spike; was "per profile"). An X server is started only when an app that needs it is launched (its Flatpak metadata `sockets` has `x11` or `fallback-x11` and not `wayland`, or a per-app override says so). There is one per app instance, inside that instance's own unit, as a Wayland client of the profile's socket, and it stops with the instance. X11 has no isolation between clients, so it is never shared, not even between two apps of one profile. A per-profile server would also put every X window behind one Wayland client, and the shell could no longer tell instances apart. No X server at boot, none for the shell.
 3. **X11 windows are ordinary app windows:** they reach the shell's app layer as xdg toplevels, so focus, the Hub, the pause, Close and the window ↔ instance match (T-459, by pid) work unchanged.
-4. **Mechanism (spike T-461 decides):** prefer a rootless XWayland bridge that runs as a normal Wayland client and acts as the X window manager (for example `xwayland-satellite`, if Fedora ships it), over building an X window manager into our Qt compositor.
-5. **Security:** the X server runs as the profile user in that profile's session, reachable only from that profile's sandboxes (`DISPLAY` set only for the app that needs it); the security baseline (T-424) and bus policies are unchanged.
+4. **Mechanism (decided by the spike T-461/RUY-1 on the Dell, lead, 2026-11-12): `xwayland-satellite` (Fedora 44 ships 0.8.3, with Xwayland 24.1.14).** A helper is the main process of the app's unit. It starts the satellite, which runs Xwayland rootless and acts as its X window manager, then runs `flatpak run` with `DISPLAY` and `XAUTHORITY`.
+   - The satellite is the X window manager, so X windows reach the app layer as xdg toplevels. It lives in the app's cgroup, so the window ↔ instance match by pid (T-459), the Hub's freeze, Close and Stop all work unchanged.
+   - Xwayland renders on the GPU (glamor).
+   - Measured cost on the Dell: idle about 35 MB private and 0 % CPU; SuperTuxKart had the same frame rate through it as on Wayland.
+   - Qt's compositor offers `xdg_wm_base` v1 and `wl_output` v2 (hard-coded in qtwayland), and Fedora's satellite panics on both. Our build carries two small satellite patches until upstream or Qt changes.
+   - No compositor protocol had to be added. Relative-pointer and pointer-constraints (X11 mouse-look) are not measured yet.
+   - Rejected: an X window manager in the shell; rootful Xwayland (a 640x480 screen, never full screen).
+5. **Security (as tested on the Dell):** the X server runs as the profile user inside the app's unit. It listens only on its path socket (`-nolisten local`: no abstract socket, no TCP), mode 0700, in a 0700 directory, and it requires a per-instance MIT cookie (`-auth`) that only that app gets (`XAUTHORITY`).
+   - With the defaults, a sandbox of the same profile that has network access but no `x11` permission could connect over the abstract socket. With these settings, other profiles and the profile's other sandboxes are refused.
+   - The VM check repeats that negative test, and the security baseline (T-424) asserts that no abstract X11 socket exists. Bus policies are unchanged.
 
 **Rejected:** a permanent X server (cost and attack surface for every profile); X11 for the shell; one X server shared by all profiles (X11 lets clients read each other's input).
 
