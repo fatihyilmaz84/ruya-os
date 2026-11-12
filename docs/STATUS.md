@@ -44,6 +44,7 @@ One line each: `- (source) what, and why it matters`. Dispatched builders put th
 
 Triaged 2026-11-10 (lead-9): the lines before are verbatim in [`STATUS-parked.md`](STATUS-parked.md), "Inbox triage 2026-11-10 (lead-9)"; they became T-427 (Bluetooth leftovers), T-428 (Store follow-ups), T-429 (test harness), T-430 (GlassShadow/AppArt masks, L0 memory), T-147 item 6 (launch follow-ups), T-282 item 12 (keyboard over glass), or owner questions (CPU per game, `core.hooksPath`).
 
+- (owner, 2026-11-12) Paper Plane ticketing pilot is running beside the `.md` board (361 tickets mirrored, RUY-177 done end to end): next lead continues it, see `LEAD-NOTES.md` "Next" item 4 and `PAPERPLANE-PILOT.md`. The `.md` files stay the truth until the owner says otherwise.
 - (lead-11) Untriaged follow-ups from T-147's reviews, T-452..T-468, the Dell study, the 0.0.64/0.0.65 VM runs and the reviews are verbatim in `STATUS-parked.md`, "Inbox lines lead-11 (untriaged)": plan them at the next planning pass with lead-10's.
 - (lead-10) Untriaged follow-ups from T-434, T-435, T-449, T-451, T-448, T-429, T-457, T-450, T-459, T-460, T-428 and the Dell launch test are verbatim in `STATUS-parked.md`, "Inbox lines lead-10 (untriaged)": plan them at the next planning pass (some feed T-452..T-455, T-461, T-462).
 
