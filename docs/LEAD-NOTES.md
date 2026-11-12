@@ -33,7 +33,7 @@ The procedure is in [`LEAD.md`](LEAD.md) (**Budgets and "Lead efficiency": hand 
 1. ADR-017/027 amendment: a new pad asks "Who's playing?" on connect and pauses the game; one controller per profile (a new pad takes it over); every player signed in, PIN if set; several temporary guests, wiped on leave. RUY-121, 122, 38, 124 and 125 are back in Backlog; **RUY-448 (lead) replans them, design canvas first**.
 2. ADR-024: the virtual pad matches the controller (virtual DualSense, Switch Pro, else Xbox 360; a per-game Xbox override). **RUY-449 (lead spike, Dell)**.
 3. RUY-1 got high priority; the 2 h STK freeze test (RUY-425's last evidence) is **planned for later**. Script it as `dell-freeze-check.sh` (RUY-390 comment).
-4. Owner question still open: may we offer the two satellite patches upstream (publishing)?
+4. The owner said yes (2026-11-13) to offering the two satellite patches upstream, after RUY-434's VM check; the lead files the PR (RUY-434 comment).
 
 ## Next, in this order
 1. Finish RUY-434 and RUY-435 (review, merge, image), then RUY-436, then Alien Arena and AAAAXY on the Dell (RUY-435 hw).
@@ -48,12 +48,12 @@ The procedure is in [`LEAD.md`](LEAD.md) (**Budgets and "Lead efficiency": hand 
 
 ## Process changes in lead-15
 - Inbox rule: lead-made inbox tickets need `## Acceptance criteria` before Ready (Paper Plane enforces it).
-- Paper Plane issue **not filed** (the auto-mode classifier blocked `gh issue create`): a `move` to the current state with `evidence` says "Already there" and does not say whether the evidence was stored. The owner may file it or allow the call.
+- Paper Plane is now 0.11.0: `update` takes `sort_order` (#7 fixed), `summary` caps its lists and has `list has_blocker=true` (#8), and a call with an unknown argument is refused. Filed in lead-15 with the owner's permission: #9 (a same-state `move` with evidence says only "Already there") and #10 (`update blocks=[]` does not remove block relations; override the claim or move meanwhile).
 
 ## Host facts learned
 - Never put backslashes in a Bash heredoc, `sed` or `python -c`: use Write/Edit. `pkill -f`/`pgrep -f` over SSH match the SSH command line itself: use a pid file.
 - The Dell's `bootloader-update.service` fails on every boot: Secure Boot db lacks the Microsoft UEFI CA 2023 (harmless today; RUY-24).
-- Paper Plane REST: `POST /api/tools/<tool>`; `PATCH /api/tickets/RUY-n {"sort_order": n}`.
+- Paper Plane REST: `POST /api/tools/<tool>`; ordering with `update sort_order=` (0.10+).
 
 ## Quality signals (one row per lead session)
 
