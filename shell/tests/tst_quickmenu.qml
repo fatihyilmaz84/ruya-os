@@ -289,7 +289,7 @@ Item {
             keyClick(Qt.Key_Escape)
         }
 
-        function test_the_hub_without_a_game() {
+        function test_the_hub_without_an_app_is_the_same_minus_the_app_part() {
             start()
             openHub()
             const menu = find("systemPanel")
