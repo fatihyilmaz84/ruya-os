@@ -151,6 +151,13 @@ if [ -z "${RUYA_HUB_NOFPS:-}" ]; then
     echo "== 4. The game's FPS with the Hub closed and open"
     conf=/var/lib/ruya-shell/.config/ruyaos/shell.conf
     D=/run/systemd/system/ruya-compositor@tty1.service.d
+    # Put shell.conf and the drop-in back however the script ends (exit 2 in stk(), a lost ssh, Ctrl-C).
+    restore() {
+        trap - EXIT INT TERM
+        r "systemctl stop ruya-compositor@tty1; [ -f /var/tmp/dell-hub/shell.conf.bak ] && cp -p /var/tmp/dell-hub/shell.conf.bak $conf; rm -f $D/hub-check.conf; rmdir $D 2>/dev/null; systemctl daemon-reload; systemctl start ruya-compositor@tty1; rm -rf /var/tmp/dell-hub"
+    }
+    trap restore EXIT
+    trap 'exit 130' INT TERM
     r "cp -p $conf /var/tmp/dell-hub/shell.conf.bak; mkdir -p $D; printf '[Service]\nEnvironment=RUYA_PERF_LOG=1\n' > $D/hub-check.conf; systemctl daemon-reload"
     # pauseGames=false while the shell is stopped (a running shell would not read it, and a settings write would undo it)
     r "systemctl stop ruya-compositor@tty1; grep -q '^\[hub\]' $conf && sed -i 's/^pauseGames=.*/pauseGames=false/' $conf || printf '\n[hub]\npauseGames=false\n' >> $conf; grep -q '^pauseGames=false' $conf || sed -i '/^\[hub\]/a pauseGames=false' $conf; systemctl start ruya-compositor@tty1"
@@ -178,7 +185,7 @@ if [ -z "${RUYA_HUB_NOFPS:-}" ]; then
         drop=$(awk -v b="$before" -v d="$during" 'BEGIN{ if (b <= 0) print 100; else printf "%d", (b - d) * 100 / b }')
         [ "$drop" -lt "$BUDGET_FPS_DROP" ] && ok "the game's FPS drops $drop % with the Hub open (budget $BUDGET_FPS_DROP %)" || bad "the game's FPS drops $drop % with the Hub open (budget $BUDGET_FPS_DROP %)"
     fi
-    r "systemctl stop ruya-compositor@tty1; cp -p /var/tmp/dell-hub/shell.conf.bak $conf; rm -f $D/hub-check.conf; rmdir $D 2>/dev/null; systemctl daemon-reload; systemctl start ruya-compositor@tty1"
+    restore
     sleep 12
     [ -n "$(active)" ] || signin || echo "note: could not sign in again"
 fi

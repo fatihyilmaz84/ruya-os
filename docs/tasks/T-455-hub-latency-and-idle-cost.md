@@ -49,5 +49,7 @@ The first run gave the same (23 / 27 ms, 0 ms, 60.0 / 60.0). Not tested: the bud
 
 **Dell.** Bind-mounted my build of `ruya-shell` (built in WSL from the Containerfile's shell-build stage) over `/usr/bin/ruya-shell` (copy in `/var/tmp/ruya-shell-t455`; gone at the next reboot), restarted the shell several times, signed in `p2` (tyx, no PIN) over D-Bus, stopped the apps of `p1` (STK, Cro-Mag Rally) and started STK as `p2` (still running). The script's FPS step edited `shell.conf` (`hub/pauseGames`) and added a volatile `/run` drop-in, both put back (checked). Profile is signed in as `p2`.
 
+**Round 2.** The FPS step's changes are taken back by a `restore` function under `trap ... EXIT` (also on exit 2, a lost ssh, INT/TERM). Exercised on the Dell: the script was killed with SIGTERM during step 4 (`Exit 124`); the journal shows the extra compositor stop/start, shell.conf has no `pauseGames` line, the drop-in is gone and the shell has no `RUYA_PERF_LOG`. 02 section 1.6 and this Outcome now give the open-over-frozen-game CPU as 0 ticks in 10 s (final run).
+
 Files: scripts/dell-hub-check.sh (new), scripts/dell-update.sh, shell/qml/Shell.qml, shell/qml/QuickMenu.qml, shell/src/performance/Performance.{cpp,h}, shell/tests/tst_hub_pause.qml, docs/specs/02-shell.md, docs/dev-setup.md. No test removed or weakened.
 

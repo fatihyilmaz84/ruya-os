@@ -72,7 +72,7 @@ Without an app: the status row, the "System" heading with the image version, the
 **Budgets** (T-455; `scripts/dell-hub-check.sh` measures them on the Dell, PASS/FAIL, `docs/dev-setup.md`). The shell writes `page-open hub create= firstSwap= afterAnim=` to the journal for every Hub open that settles (the same probe as a page's, T-349; ms from the Guide key reaching the shell). Budgets, with the first Dell numbers (image 0.0.66 plus the T-455 shell, UHD 630, 1080p, SuperTuxKart at 60 FPS):
 - **Open:** the median first frame after Guide under 100 ms (measured 23 ms, worst 47 ms in two runs of ten; the slide ends at 215 ms).
 - **Hidden:** the Hub draws no frame of its own; what a game costs the shell is its compositing, at most 20 % GPU and 20 % of a core at 60 FPS (measured 11 % and 11 %). A guard rail, not a proof of "no frame".
-- **Open over a frozen game** (the default): under 3 % GPU, the picture is still (measured 0 %, 1 tick of CPU in 10 s).
+- **Open over a frozen game** (the default): under 3 % GPU, the picture is still (measured 5 ms render and 0 ticks of CPU in 10 s).
 - **Game FPS** with the Hub open and the pause setting off: a drop under 10 % (measured 60 against 60). With the pause on (the default) the game is frozen by design and the FPS is 0.
 The compositor's frame meter logs `perf-frames` four times a second when the shell runs with `RUYA_PERF_LOG=1` (a measuring switch for that script, not a setting).
 
