@@ -42,6 +42,7 @@ Anything not on this list needs a new line in ADR-022 first (the owner's approva
 | Storage picker | choose a file or folder on the console or a USB drive | none (portal backend gap, `03` §4.4) | whole capability: unplanned |
 | Content provider (owner, 2026-11-10, ADR-031) | publish its own items (episodes, albums, slots) with progress for Home's "Continue watching" and the console search; open the app at an item | T-420 | whole capability: planned |
 | Game data hub | where ROMs, saves, states, captures live; identify a file; read now-playing/captures with a permission | T-302..T-308 (ADR-020) | re-seat as a `Platform1` interface; T-308 owns the chapter and sample |
+| Game settings (owner, 2026-11-12, ADR-035) | declare its settings in a file; publish their values; get the player's changes from the Ruya Hub on Resume | RUY-406, RUY-407, RUY-408 | whole capability: planned (the file format and the Hub panel first, the `Platform1` half after T-352) |
 
 The list is approved, so the lead may now plan the unplanned capabilities (text input, display information, theme accent, age rating, storage picker) as tasks inside the charter; each is `Developer surface: public-API` with the Definition of done below. Nothing outside the list is planned without a new ADR line.
 
@@ -57,6 +58,7 @@ No code, so no bus permission, and the safest way to extend the console. The for
 |---|---|---|
 | Save, state, config and cache layout under `~/.var/app/<id>/` | [Saves and data](saves-and-data.md), `03` §4.5a | public, written |
 | AppStream keys (`x-ruya-*`, content rating, controller support) | [AppStream metadata](appstream-metadata.md) | public, written |
+| Game settings schema (`/app/share/ruya/settings.json`, ADR-035) | `game-settings.md` (RUY-406) | planned |
 | Sound themes (cues, ambient bed) | [Sound themes](sound-themes.md) | public, written, checker built |
 | `.play` packages | `05-play-packages.md` (epic T-228) | parked by the owner |
 | Theme, wallpaper and icon packs | none | unplanned |

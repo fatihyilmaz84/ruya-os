@@ -451,3 +451,18 @@ Shell icons come from Google's **Material Symbols Rounded** (Apache-2.0), bundle
 **Rejected:** a permanent X server (cost and attack surface for every profile); X11 for the shell; one X server shared by all profiles (X11 lets clients read each other's input).
 
 **Consequences.** T-461 (spike: mechanism, package, per-profile start/stop, AAAAXY and Alien Arena on the Dell), then a build task from its result; ADR-023 point "otherwise Xwayland becomes its own task" is this ADR.
+
+### ADR-035 — Game settings in the Ruya Hub: the game declares them as a file, the shell draws them, changes reach the game on Resume — *Accepted (owner, 2026-11-12) for game settings; "show a system page" Proposed*
+**Question.** The owner's input "Ruya System Dialogs & Game Settings Integration" (refined and reviewed by the lead in `docs/archive/research/system-dialogs-and-game-settings-proposal.md`) asks that games hand their settings to the console, which shows them natively, and that apps can ask for trusted system dialogs. Neither is on ADR-022's tier-B list, and the input assumed a separate dialog service, live apply and an OS settings store.
+
+**Decision.**
+1. **New tier-B capability: game settings** (ADR-022 line, owner 2026-11-12). A game ships `/app/share/ruya/settings.json` (tier C: a versioned, validated schema of `bool`, `enum`, `int`, `float`, `action`, `info` rows, fixed categories, one-condition `visibleWhen`, a `restart` flag, length and count limits) and publishes its current values through `org.ruyaos.Platform1.GameSettings`. No runtime schema registration.
+2. **The shell draws them in the Ruya Hub:** a **Game** icon, first in the panel icon row, only for a game whose schema is valid and whose values arrived; the panel uses the existing rows (ToggleRow, ChoiceRow, SliderRow). Games without settings see no change.
+3. **Changes are staged and reach the game once on Resume** (thaw), because the Hub freezes the game (ADR-033 point 3); the game answers what it applied and what it refused, with a reason the Hub toasts. Close game drops staged changes. No live preview in V1.
+4. **The OS stores no game values:** the game keeps them in its own `config/` (tier C, `saves-and-data.md`).
+5. **No new service:** the delivery is an interface on `Platform1` (ADR-022), the drawing is shell UI (ADR-033 point 2). An app never writes a system setting (ADR-022 "never public").
+6. **Proposed, not decided:** "show a system page", where an app asks the shell to open a system panel (Audio, Controllers, Display & motion, Accessibility) over itself and learns only that it closed. Not added: app-requested confirmation and device-picker dialogs (no security gain; RuyaKit covers confirmation). The storage picker stays the tier-B line it already is.
+
+**Rejected:** a Ruya Dialog Service (a second door next to `Platform1`); runtime registration of schemas (an abuse surface with no gain over a file); live apply to a frozen game; an OS settings database for game values.
+
+**Consequences.** RUY-406 (schema, loader, mock game), RUY-407 (the Hub Game panel against the mock), RUY-408 (`Platform1.GameSettings`, after RUY-157 and RUY-158); `ruya-platform` and its prerequisites (T-351, T-352, T-353: RUY-156..158) move from phase 7 to phase 3 (owner, 2026-11-12).

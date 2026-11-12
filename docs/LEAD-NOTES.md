@@ -17,7 +17,8 @@ The procedure is in [`LEAD.md`](LEAD.md) (**Budgets and "Lead efficiency": hand 
 
 ## Next, in this order
 1. Check the `mcp__paperplane-lead__*` tools are present. If not, look in `~/.claude.json` for the project key the app uses.
-2. After the weekly reset: one builder lane while the plan is above 70 %. Start with RUY-401 (shell, Hub) and RUY-403 (services) as the two lanes once the plan allows two (different areas, no overlap).
+2. After the weekly reset: one builder lane while the plan is above 70 %. Order: RUY-401 (Hub at large UI sizes), then **game settings** (owner, late lead-13: ADR-035): RUY-406 schema and mock, then RUY-407 the Hub Game panel (both touch the Hub after RUY-401: run them one after another); RUY-403 (services) is the second lane once two are allowed.
+2b. **Platform1 moved forward** (owner, 2026-11-12): T-351 / RUY-156 and T-353 / RUY-158 are phase 3 and near the top; **T-352 / RUY-157 is lead work** (owner:lead, caller-identity spike first): take it as the lead task (LEAD.md step 6) once RUY-156 is merged. RUY-408 (`Platform1.GameSettings`) waits on it.
 3. Ask the owner how the new Hub feels on the TV (Dell 0.0.68).
 4. The board has **112 Ready** tickets against a target of 8-12 (the cutover moved the old STATUS order over as Ready). A planning pass should move everything beyond the top ~15 back to Backlog, keeping its order.
 5. Dell pass (RUY-391): overlay FPS on vs off, the speaker route mute, sound after Resume, the Hub's first frame.
