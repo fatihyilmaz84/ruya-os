@@ -40,6 +40,8 @@ The build runs `bootc container lint --fatal-warnings`: any lint warning fails i
 
 After a build, `scripts/check-image-manifest.sh` (in WSL, repo root, ~10 s) compares `dnf leaves` of `localhost/ruyaos:dev` with the packages named in `docs/image-packages.md` and fails for a leaf nobody gave a reason; add the row there when you add a package.
 
+`scripts/check-image-input-drivers.sh` (WSL, same image) checks the controller drivers (RUY-154): the in-kernel `xpad` is there and its `modules.alias` loads it for the Xbox 360 wireless receiver (`045e:0719`, `045e:0291`), and no `xone`/`xpadneo` module or Xbox adapter firmware is in the image. Not yet run on a built image.
+
 Then, on Windows:
 
 ```powershell

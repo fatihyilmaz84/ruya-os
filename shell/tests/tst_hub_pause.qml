@@ -13,6 +13,13 @@ Item {
     width: 1280
     height: 720
 
+    // A 1080p screen inside the 720p test window (the fit test): the menu sizes itself from its parent.
+    Item {
+        id: bigHost
+        width: 1920
+        height: 1080
+    }
+
     Component {
         id: shellComponent
         Shell { anchors.fill: parent; version: "test"; focus: true }
@@ -352,6 +359,153 @@ Item {
             tryVerify(() => list.activeFocus, 2000, "Back returns to the categories")
         }
 
+        // RUY-401: the Hub never scrolls at 100, 125 and 150 % UI size (u = the 1080p unit x the size): the game
+        // card's art and the strip's tiles shrink, the rows lie inside the list, with the focus on any row.
+        // At 150 % a game with two other apps is more than a 1080p screen holds at the UI size's text (the text
+        // and the pills keep their size): the art is at its smallest there and the list scrolls (the next test).
+        function test_fits_at_every_ui_size_data() {
+            return [{ tag: "100 %", scale: 1, others: 2 }, { tag: "125 %", scale: 1.25, others: 2 },
+                    { tag: "150 %", scale: 1.5, others: 0 }]
+        }
+        function hubAt(scale, others) {
+            const u = scale                                   // 1080p: the unit is 1 at 100 %
+            const list = [{ appId: "org.example.A", title: "Alpha", picture: "", hasWindow: true },
+                          { appId: "org.example.B", title: "Beta", picture: "", hasWindow: true }]
+            const menu = createTemporaryObject(menuComponent, bigHost, {
+                u: u, marginX: 54, marginY: 54, bottomReserve: (Theme.glyphSize + Theme.spaceM) * u,
+                app: ({ appId: "org.example.Racer", title: "Turbo Racer", picture: "", started: Date.now() / 1000 - 12 * 60,
+                        instance: "x", frozen: true }),
+                others: list.slice(0, others) })
+            verify(menu)
+            menu.present()
+            tryCompare(menu, "settled", true)
+            return menu
+        }
+        function test_fits_at_every_ui_size(data) {
+            const menu = hubAt(data.scale, data.others)
+            const list = findChild(menu, "systemActions")
+            const more = findChild(menu, "hubMoreBelow")
+            tryCompare(list, "count", data.others > 0 ? 5 : 4)
+            for (let step = 0; step < list.count; ++step) {     // the focus on every row: the name line is open in two of them
+                tryVerify(() => list.contentHeight <= list.height + 0.5, 3000,
+                          "the rows fit at row " + step + ": " + list.contentHeight + " in " + list.height)
+                verify(!more.needed, "no scroll cue at row " + step)
+                for (let i = 0; i < list.count; ++i) {
+                    const row = list.itemAtIndex(i)
+                    verify(row, "row " + i + " is built")
+                    // (the name line opens over focusMs: the row and the list settle together)
+                    tryVerify(() => row.mapToItem(list, 0, 0).y >= -0.5 && row.mapToItem(list, 0, 0).y + row.height <= list.height + 0.5,
+                              2000, menu.itemKeys[i] + " lies inside the list at row " + step)
+                }
+                keyClick(Qt.Key_Down)
+            }
+            if (data.scale > 1)
+                verify(menu.artFit < 1, "the art shrank at " + data.tag)
+            else
+                compare(menu.artFit, 1, "nothing changes at 100 %")
+            verify(findChild(menu, "hubCardArt").width <= 256 * data.scale + 0.5)
+        }
+
+        // RUY-401: where even the smallest art does not make the rows fit, the art is at its smallest and the
+        // list scrolls as before: the focused row is reachable (the game with two other apps at 150 %).
+        function currentRowInView(list) {
+            const r = list.itemAtIndex(list.currentIndex)
+            return r && r.mapToItem(list, 0, 0).y + r.height <= list.height + 0.5
+        }
+        function test_the_art_is_at_its_smallest_where_the_rows_do_not_fit() {
+            const menu = hubAt(1.5, 2)
+            const list = findChild(menu, "systemActions")
+            tryCompare(menu, "artFit", menu.artFitMin)
+            for (let step = 0; step < 4; ++step)
+                keyClick(Qt.Key_Down)
+            compare(menu.currentRow, "panels")
+            tryVerify(() => currentRowInView(list), 3000, "the icon row is in view")
+        }
+
+        // RUY-401: the line for the focused item's name takes no height while neither row has the focus.
+        function test_the_name_line_is_closed_until_a_row_has_focus() {
+            const menu = createTemporaryObject(menuComponent, host, {
+                others: [{ appId: "org.example.A", title: "Alpha", picture: "", hasWindow: true },
+                         { appId: "org.example.B", title: "Beta", picture: "", hasWindow: true }] })
+            verify(menu)
+            menu.present()
+            tryCompare(menu, "settled", true)
+            tryVerify(() => findChild(menu, "hubIconRow") !== null && findChild(menu, "hubRunningStrip") !== null, 2000)
+            const strip = findChild(menu, "hubRunningStrip")
+            const icons = findChild(menu, "hubIconRow")
+            compare(menu.currentKey, "resume", "the game card has the focus")
+            compare(strip.nameLine, 0)
+            compare(icons.nameLine, 0)
+            compare(strip.height, strip.view.height, "no gap under the tiles")
+            compare(icons.height, icons.button, "no gap under the icons")
+            keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Down)
+            compare(menu.currentRow, "running")
+            tryVerify(() => strip.nameLine > 0 && strip.nameLine === strip.nameFull, 2000, "the strip shows the name")
+            verify(findChild(menu, "hubRunningName").visible)
+            compare(icons.nameLine, 0)
+            keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Down)
+            compare(menu.currentRow, "panels")
+            tryCompare(icons, "nameLine", icons.nameFull, 2000)
+            tryCompare(strip, "nameLine", 0, 2000)
+            verify(findChild(menu, "hubIconName").visible)
+            keyClick(Qt.Key_Escape)
+        }
+
+        // RUY-401: Up from the strip into Home | Close game lands on the nearest column, not the remembered one:
+        // the leftmost tile on Home, the rightmost (of two or three) on Close game; with one app, Home. With
+        // two apps the rightmost tile is the middle slot of the three-slot grid (a tie of the half width).
+        function test_up_from_the_strip_lands_on_the_nearest_column_data() {
+            const rows = []
+            for (const scale of [0.667, 1, 1.5])
+                for (const n of [1, 2, 3])
+                    rows.push({ tag: n + " apps at u " + scale, scale: scale, n: n })
+            return rows
+        }
+        function test_up_from_the_strip_lands_on_the_nearest_column(data) {
+            const all = [{ appId: "org.example.A", title: "Alpha", picture: "", hasWindow: true },
+                         { appId: "org.example.B", title: "Beta", picture: "", hasWindow: true },
+                         { appId: "org.example.C", title: "Gamma", picture: "", hasWindow: true }]
+            const menu = createTemporaryObject(menuComponent, bigHost, {
+                u: data.scale, marginX: 54, marginY: 54, bottomReserve: (Theme.glyphSize + Theme.spaceM) * data.scale,
+                others: all.slice(0, data.n) })
+            verify(menu)
+            menu.present()
+            tryCompare(menu, "settled", true)
+            tryVerify(() => findChild(menu, "hubRunningStrip") !== null, 2000)
+            const last = "to:org.example." + "ABC"[data.n - 1]
+            keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Right)                          // Close game is the remembered column
+            compare(menu.currentKey, "closeGame")
+            keyClick(Qt.Key_Down)
+            compare(menu.currentRow, "running")
+            compare(menu.currentKey, "to:org.example.A")
+            keyClick(Qt.Key_Up)
+            compare(menu.currentKey, "home", "the leftmost tile goes up to Home")
+            keyClick(Qt.Key_Down)
+            for (let i = 1; i < data.n; ++i)
+                keyClick(Qt.Key_Right)
+            compare(menu.currentKey, last)                  // the rightmost tile
+            keyClick(Qt.Key_Up)
+            compare(menu.currentKey, data.n === 1 ? "home" : "closeGame",
+                    data.n === 1 ? "the only tile is the leftmost" : "the rightmost tile goes up to Close game")
+            keyClick(Qt.Key_Escape)
+        }
+
+        // RUY-401: B still resumes, but the hint bar over the game card names Resume once.
+        function test_the_game_card_hint_lists_resume_once() {
+            const menu = createTemporaryObject(menuComponent, host)
+            verify(menu)
+            menu.present()
+            compare(menu.currentKey, "resume")
+            compare(menu.hints.map(h => h.button + " " + h.text), ["A Resume"])
+            let closed = 0
+            menu.closeRequested.connect(() => ++closed)
+            keyClick(Qt.Key_Escape)
+            compare(closed, 1, "B still resumes")
+        }
+
         // A two-line title over "Paused · 12 min" is taller than the art: the game card grows (T-471), so its text
         // never runs into the next row (Home | Close game).
         function test_a_long_title_and_paused_fit_in_the_header() {
@@ -492,7 +646,7 @@ Item {
             tc.shell.launchApp("crashy", "Crashy", "")
             const app = createTemporaryObject(appComponent, host, { appId: "crashy" })
             tc.shell.addApp(app, "p2")                       // its window comes, and the game dies
-            tryVerify(() => toastTexts().includes("crashy stopped unexpectedly. Try again."), 3000)
+            tryVerify(() => toastTexts().includes("crashy stopped unexpectedly"), 3000)
             tc.shell.removeApp(app)
             app.destroy()
             tryVerify(() => !tc.shell.appOpen, 2000, "Home shows, not the frozen game")
@@ -508,7 +662,7 @@ Item {
             tc.shell.launchApp("nolaunch", "No Launch", "")
             tryVerify(() => find("launchSplash").shown)
             tryCompare(find("launchSplash"), "shown", false)
-            tryVerify(() => toastTexts().includes("No Launch could not be started. Try again."), 2000)
+            tryVerify(() => toastTexts().includes("No Launch could not start"), 2000)
             verify(!tc.shell.appOpen, "Home shows")
             wait(100)
             verify(recordOf(racer.instance).frozen, "the game is still frozen")
@@ -572,6 +726,26 @@ Item {
             openHubAndPause(run.instance)
             wait(800)
             grabImage(tc.shell).save(shotsDir + "/hub-5-paused.png")
+        }
+
+        // RUY-401: the Hub at 100 and 150 % (a game with two others; at 150 % a game alone, the strip's name open).
+        function test_zz_screenshots_hub_at_ui_sizes() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            bigHost.transformOrigin = Item.TopLeft
+            bigHost.scale = host.height / bigHost.height          // the 1080p screen, shown whole in the 720p window
+            const sizes = [{ name: "100", scale: 1, others: 2 }, { name: "125", scale: 1.25, others: 2 }, { name: "150", scale: 1.5, others: 0 }]
+            for (const size of sizes) {
+                const menu = hubAt(size.scale, size.others)
+                if (size.others > 0) {
+                    keyClick(Qt.Key_Down)
+                    keyClick(Qt.Key_Down)                     // the strip: its name line is open
+                }
+                wait(500)
+                grabImage(host).save(shotsDir + "/hub-6-ui-" + size.name + ".png")
+                menu.destroy()
+            }
+            bigHost.scale = 1
         }
 
         function test_zz_screenshots_settings_pause_row() {

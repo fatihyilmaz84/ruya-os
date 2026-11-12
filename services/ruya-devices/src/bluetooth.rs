@@ -364,6 +364,18 @@ fn adapter_changes(
         .collect()
 }
 
+/// Whether a device announces a keyboard (class, appearance or BlueZ's icon).
+fn announces_keyboard(d: &RawDevice) -> bool {
+    kind_of(&d.icon) == "keyboard" || crate::pairing::is_keyboard_class(d.class, d.appearance)
+}
+
+/// What the controller pairing window lets through (RUY-411): an input device that is not a
+/// keyboard. A keyboard types anywhere the shell can, so it pairs only from Settings > Bluetooth,
+/// behind its own confirmation; inside the window it is a stranger.
+fn window_accepts(d: &RawDevice) -> bool {
+    is_input_device(d.class, d.appearance) && !announces_keyboard(d)
+}
+
 /// A listed device (the contract's dictionary).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Device {
@@ -373,6 +385,8 @@ pub struct Device {
     /// BlueZ's `Name`, the model as the device advertises it; "" when it told none.
     pub device_name: String,
     pub kind: &'static str,
+    /// The device announces a keyboard class (RUY-411): the shell asks a second time before pairing.
+    pub keyboard: bool,
     /// "playstation" | "xbox" | "nintendo" | "" (`family_for`).
     pub family: &'static str,
     pub paired: bool,
@@ -395,6 +409,8 @@ pub fn list_of(raw: &[RawDevice]) -> Vec<Device> {
             name: d.alias.clone(),
             device_name: d.name.clone(),
             kind: kind_of(&d.icon),
+            keyboard: kind_of(&d.icon) == "keyboard"
+                || crate::pairing::is_keyboard_class(d.class, d.appearance),
             family: family_for(kind_of(&d.icon), &d.modalias, &d.name, &d.alias),
             paired: d.paired,
             bonded: d.bonded,
@@ -1390,7 +1406,7 @@ impl<B: Bluez> Bluetooth<B> {
                 if window.in_flight.as_deref() == Some(d.address.as_str()) {
                     continue; // `window_pair` is on it
                 }
-                if is_input_device(d.class, d.appearance) {
+                if window_accepts(d) {
                     input.get_or_insert_with(|| d.address.clone());
                 } else {
                     strangers.push(d.address.clone());
@@ -1404,7 +1420,7 @@ impl<B: Bluez> Bluetooth<B> {
                         !d.paired
                             && d.adapter == window.adapter
                             && kind_of(&d.icon) == "controller"
-                            && is_input_device(d.class, d.appearance)
+                            && window_accepts(d)
                             && window.attempts.get(&d.address).copied().unwrap_or(0) < MAX_ATTEMPTS
                     })
                     .map(|d| d.address.clone());
@@ -1521,7 +1537,7 @@ impl<B: Bluez> Bluetooth<B> {
             .raw_devices
             .iter()
             .find(|d| d.address == address)
-            .is_some_and(|d| is_input_device(d.class, d.appearance));
+            .is_some_and(window_accepts);
         if !input {
             // Not an input device, or BlueZ has not told us about it: refused, and if it has
             // bonded anyway (the kernel accepts some pairings itself) removed again.
@@ -2209,6 +2225,37 @@ mod tests {
     }
 
     #[test]
+    fn the_keyboard_flag_follows_the_class_the_appearance_and_the_icon() {
+        let mut combo = raw_dev("A1", "Combo", "input-mouse", false);
+        combo.class = Some(0x25C0);
+        let mut le = raw_dev("A2", "LE Keys", "", false);
+        le.appearance = Some(0x03C1);
+        let by_icon = raw_dev("A3", "Icon Keys", "input-keyboard", false);
+        let mut pad = raw_dev("A4", "Pad", "input-gaming", false);
+        pad.class = Some(0x2508);
+        let mut mouse = raw_dev("A5", "Mouse", "input-mouse", false);
+        mouse.class = Some(0x2580);
+        let mut headset = raw_dev("A6", "Buds", "audio-headset", false);
+        headset.class = Some(0x240404);
+        let flags: Vec<(String, bool)> = list_of(&[combo, le, by_icon, pad, mouse, headset])
+            .into_iter()
+            .map(|d| (d.id, d.keyboard))
+            .collect();
+        assert_eq!(
+            flags,
+            [
+                ("A6", false),
+                ("A1", true),
+                ("A3", true),
+                ("A2", true),
+                ("A5", false),
+                ("A4", false)
+            ]
+            .map(|(i, k)| (i.to_owned(), k))
+        );
+    }
+
+    #[test]
     fn kinds_and_batteries() {
         assert_eq!(kind_of("input-gaming"), "controller");
         assert_eq!(kind_of("audio-headset"), "headset");
@@ -2893,28 +2940,35 @@ mod tests {
     }
 
     #[test]
-    fn a_keyboard_or_an_le_gamepad_without_a_class_is_accepted_too() {
+    fn an_le_gamepad_without_a_class_is_accepted_but_a_keyboard_is_a_stranger() {
         let bt = window_bt();
         let mut keyboard = near("AA:00:00:00:00:50", "Keys", "input-keyboard", Some(0x2540));
         keyboard.paired = false;
+        let mut le_keys = near("AA:00:00:00:00:52", "LE Keys", "", None);
+        le_keys.appearance = Some(0x03C1);
+        le_keys.paired = false;
         let mut le_pad = near("AA:00:00:00:00:51", "LE Pad", "input-gaming", None);
         le_pad.appearance = Some(0x03C4);
         bt.bluez.add_device(keyboard);
+        bt.bluez.add_device(le_keys);
         bt.bluez.add_device(le_pad);
         bt.refresh().expect("reads");
         let t0 = Instant::now();
         open(&bt, t0);
-        for address in ["AA:00:00:00:00:50", "AA:00:00:00:00:51"] {
-            assert!(
-                bt.agent(
-                    AgentCall::Authorize {
-                        device: &path_of(address)
-                    },
-                    t0
-                ),
-                "{address}"
-            );
-        }
+        let call = |address: &str| {
+            bt.agent(
+                AgentCall::Authorize {
+                    device: &path_of(address),
+                },
+                t0,
+            )
+        };
+        assert!(call("AA:00:00:00:00:51"), "an LE gamepad without a class");
+        assert!(
+            !call("AA:00:00:00:00:50"),
+            "a keyboard pairs from Settings only"
+        );
+        assert!(!call("AA:00:00:00:00:52"), "an LE keyboard too");
     }
 
     #[test]

@@ -16,16 +16,29 @@ Item {
     property var apps: []
     property int currentIndex: 0
     property bool focused: false        // the row has the focus
+    // 1 = three tiles across the strip; less at a large UI size (RUY-401): the tiles shrink, centred, so the
+    // Hub fits without scrolling. The name and the focus ring keep the UI size.
+    property real fit: 1
 
     // Room round the tiles for the focused one's scale and ring: `spaceM` at the sides (a tile grows into it
     // by half its scale and the whole ring), `spaceS` above and below (a tile is shorter than it is wide).
     readonly property real edgeX: Theme.spaceM * u
     readonly property real edgeY: Theme.spaceS * u
-    readonly property real tileWidth: (width - 2 * edgeX - 2 * view.spacing) / 3
+    readonly property real fullTileWidth: (width - 2 * edgeX - 2 * view.spacing) / 3
+    readonly property real tileWidth: fullTileWidth * fit
     readonly property real tileHeight: Theme.cardArtHeight(tileWidth)
     readonly property alias view: view
 
-    implicitHeight: view.height + Theme.spaceXs * u + name.implicitHeight
+    // The line for the focused tile's name takes no height while the strip has no focus (RUY-401); it opens
+    // over `focusMs` when the focus enters. `nameFull` is its height when open.
+    readonly property real nameFull: Theme.spaceXs * u + name.implicitHeight
+    property real nameLine: focused && apps.length > 0 ? nameFull : 0
+    Behavior on nameLine { NumberAnimation { duration: Theme.focusMs; easing.type: Easing.Bezier; easing.bezierCurve: Theme.easeGlide } }
+    // The current tile's centre in the strip's own coordinates (Up into Home | Close game picks the nearest column).
+    readonly property real currentCentre: currentIndex * (tileWidth + view.spacing) - view.contentX + tileWidth / 2
+
+    clip: true
+    implicitHeight: view.height + nameLine
     height: implicitHeight
 
     ListView {
@@ -36,8 +49,8 @@ Item {
         orientation: ListView.Horizontal
         interactive: false
         clip: true
-        leftMargin: strip.edgeX
-        rightMargin: strip.edgeX
+        leftMargin: strip.edgeX + 1.5 * (strip.fullTileWidth - strip.tileWidth)
+        rightMargin: leftMargin
         spacing: Theme.spaceS * strip.u
         model: strip.apps
         currentIndex: strip.currentIndex

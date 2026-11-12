@@ -50,6 +50,13 @@ SettingsPane {
                     deviceModel.move(at, i, 1)
             }
         }
+        // The keyboard confirmation's device left the list: close it, focus goes back to the list.
+        if (pane.keyboardId !== "" && keyboardSlot.active && keyboardConfirm.shown && !list.some(d => d.id === pane.keyboardId)) {
+            keyboardConfirm.cancel()
+            pane.keyboardId = ""
+            if (!pane.focusableRows().some(r => r.activeFocus))
+                pane.focusableRows()[0]?.forceActiveFocus()
+        }
         Qt.callLater(pane.refocus, before)
     }
 
@@ -145,7 +152,10 @@ SettingsPane {
             const id = repairId
             repairId = ""                      // the pair call below is an ordinary pairing now
             repairScanSeen = false
-            Bluetooth.pair(id)
+            if (d.keyboard === true)
+                askKeyboard(id, d.name)        // a keyboard always asks, a repair included
+            else
+                Bluetooth.pair(id)
         } else if (repairScanSeen && !Bluetooth.discovering) {
             endRepair()                        // the scan ended and it was not found
             Notifications.show(qsTr("Could not find it. Put the device in pairing mode and try again."), "warning")
@@ -169,12 +179,32 @@ SettingsPane {
         return parts.join(" · ")
     }
 
+    function startPairing(id) {
+        busyId = id
+        Bluetooth.pair(id)
+    }
+
+    // "This is a keyboard. Pair it?": Cancel has focus, Back cancels, Accept on "Pair <name>" pairs.
+    property string keyboardId: ""
+
+    function askKeyboard(id, name) {
+        keyboardSlot.active = true
+        keyboardConfirm.customTitle = qsTr("This is a keyboard. Pair it?")
+        keyboardConfirm.detail = qsTr("%1 could type anywhere on this console.").arg(name)
+        keyboardConfirm.customConfirmName = qsTr("Pair %1").arg(name)
+        pane.keyboardId = id
+        keyboardConfirm.open("custom")
+    }
+
     function activate(id, paired, connected) {
         if (id === busyId)
             return                         // already pairing: a second Accept or a key repeat does nothing
         if (!paired) {
-            busyId = id
-            Bluetooth.pair(id)
+            const dev = Bluetooth.devices.find(d => d.id === id)
+            if (dev && dev.keyboard === true)
+                askKeyboard(id, dev.name)      // a keyboard types anywhere: a second confirmation (RUY-411)
+            else
+                startPairing(id)
         } else if (connected) {
             Bluetooth.disconnectDevice(id)
         } else {
@@ -318,6 +348,23 @@ SettingsPane {
             }
         }
     }
+    Loader {
+        id: keyboardSlot
+        parent: pane.overlay
+        width: parent ? parent.width : 0
+        height: parent ? parent.height : 0
+        active: false
+        sourceComponent: Component {
+            PowerConfirm {
+                objectName: "btKeyboardConfirm"
+                customDestructive: false
+                u: pane.u
+                onConfirmed: pane.startPairing(pane.keyboardId)
+            }
+        }
+    }
+    readonly property PowerConfirm keyboardConfirm: keyboardSlot.item as PowerConfirm
+
     readonly property PowerConfirm forgetConfirm: forgetSlot.item as PowerConfirm
 
     Repeater {

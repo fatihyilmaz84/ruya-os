@@ -1,47 +1,53 @@
 # Lead notes (handoff between lead sessions)
 
-The procedure is in [`LEAD.md`](LEAD.md) (**Budgets and "Lead efficiency": hand off at 50-60 % context; no no-op turns**). **Rewrite this file at the end of every lead session**; keep it under about 6 KB. **Since 2026-11-12 Paper Plane is the source of truth** (owner): http://192.168.178.164:8687, project `RUY`; `docs/STATUS*.md` and `docs/tasks/T-*.md` are a frozen archive. This file is the lead's session record.
+The procedure is in [`LEAD.md`](LEAD.md) (**Budgets and "Lead efficiency": hand off at 50-60 % context; no no-op turns**). **Rewrite this file at the end of every lead session**; keep it under about 6 KB. Paper Plane is the source of truth (http://192.168.178.164:8687, project `RUY`, **0.8.0 since 2026-11-12**); `docs/STATUS*.md` and `docs/tasks/T-*.md` are a frozen archive. This file is the lead's session record.
 
-## State at the end of lead-13 (Opus, 2026-11-12; weekly plan 90 %, planning only)
+## State at the end of lead-14 (Opus, 2026-11-12; owner: "full blast", Ruya Input first)
 
-- **Owner, this session:** weekly plan at 90 % (resets 2026-11-13 18:00): **plan only, no builders until the reset.**
-- **Review range:** cbf4a4e..f7bf080 was one docs commit; nothing to verify (no test, shots or VM run). Main is still the 0.0.68 image; **the Dell runs 0.0.68** (rollback 0.0.67).
-- **Paper Plane MCP tools were missing** in this session: `~/.claude.json` had them only under the project key `D:\dev\RuyaOS`; the desktop app reads `D:/dev/RuyaOS`. Copied to that key (backup `~/.claude.json.bak-lead13`). **They should load in the next session; check first.** Until they load, usage is not attributed to tickets (`summary` showed 0 tickets).
-- **Planning pass: the inbox is empty** (22 tickets):
-  - New Ready tickets at the top of `next` (sort 11500..11900): **RUY-401** Hub at large UI sizes and focus polish (from 394, 396, 399, 400; lead decision: the Hub never scrolls, the art and strip shrink above 100 %), **RUY-402** tidy after the Hub redesign (392, 393, 397, 398), **RUY-403** contract test: served D-Bus introspection vs `api/dbus` XML (372), **RUY-404** vm-session-check.sh trap and card-suspend half (367, 368), **RUY-405** Hub probe: Resume time and hidden-Hub frame count (365, 366).
-  - To the Dell list RUY-391 (comments): 369's Dell half, 370, 375, 395.
-  - Kept: RUY-369 (who writes `target.object = null`, lead, needs VM `-Audio`), RUY-371 (known limit, phase 3), RUY-374 (blocked by RUY-11). Cancelled: RUY-373 (lead decision: the overlay stays hidden on Home, as 02 says).
-  - RUY-376 / RUY-377 (whole lead-10 / lead-11 batches) are now parking lists titled "Parked follow-ups ..." (owner:lead): read the matching lines when working in an area; not ticketed while the board has 112 Ready.
-- **Root `CLAUDE.md`** pruned 12.4 → 11.3 KB (duplicated Paper Plane list, archive row, Dell and image-build bullets, the T-116 pitfall that `dev-setup.md` covers).
-- **Paper Plane issues not filed:** the permission check refused `gh issue create`. Drafts in the lead-13 scratchpad: (1) `update` has no `sort_order` (REST PATCH only); (2) `summary`'s "Blocked:" heading lists ~40 Ready tickets that wait on another ticket, uncapped. File them when `gh` is allowed (search first; #1..#6 exist).
+- **Review range:** 182d99f..8be2889 (pushed; CI was green at 3ad160d, later runs not checked). The Dell still runs 0.0.68; the builder image 0.0.69-xpad was built only in WSL (not the Dell).
+- **Merged and Done:**
+  - RUY-401: Hub at large UI sizes. Lead decision: it may scroll at 150 % and above (02 §1.6).
+  - RUY-154: Xbox 360 receiver. **The image had no `xpad` at all**; it now comes through `kernel-modules-extra`, ~3 MB, and `image-chain.sh` runs `check-image-input-drivers.sh`.
+  - RUY-411: Bluetooth pairing hardening. Keyboards pair only from Settings > Bluetooth; the neutral `customDestructive: false` confirm.
+  - RUY-412: Toasts v2. 4 rounds; its merge gate first went red on RUY-154's test, fixed in 8be2889.
+- **Owner reported a SuperTuxKart crash on the Dell:** an abort in libpulse 11 s after a 1 h 53 min Hub freeze and the park-audio restore. Filed as **RUY-425** (high, `dell`), with the diagnosis.
+- **Lead work, Done:** RUY-2 (Ruya Input spike on the Dell, engine decision: grow `ruya-inputd`, not InputPlumber; `docs/specs/06-input.md`, `schemas/input-profile-v1.json` with a test, draft `api/dbus/org.ruyaos.Input1.xml`, ADR-003/024 amended) and RUY-5 (ADR-027 written into 06 §11, 02 §4.2-4.3, 04 §3.7).
+- **In flight (worktrees under `D:\dev\RuyaOS-worktrees\`):**
+  - **RUY-3** (input service half, Opus builder, ~335k tokens in round 1; it was waiting for WSL to finish compacting before its "VM (this task)" image build). Told mid-build: `SetRoute` gains `app_id`; the virtual-pad udev rule must be pad-specific (`ruya-input/pad*`) because virtual keyboards and mice keep uaccess (06 §3).
+  - **Design session** "Design the controller screens in Claude Design" (started by the owner): the RuyaOS design system plus RUY-39 / RUY-42 / RUY-38 numbers as ticket comments. Read its result before dispatching those tickets.
+- **Planning done this session:** input chain re-checked and wired in Paper Plane: RUY-3 → RUY-409 (shell route) / RUY-410 (emergency reader) → RUY-42 → RUY-45 (split: 416 layers, 417 shortcuts) → RUY-46; RUY-43; RUY-47 split (418 actions, 419 haptics, 47 rebinding); RUY-411 and RUY-422 (Bluetooth). Owner's Claude Design request filed as RUY-412 (Toasts v2), RUY-413 and RUY-414 (notification centre, split by the lead), comment on RUY-88. Inbox: RUY-415, 420, 421, 423.
 
 ## Next, in this order
-1. Check the `mcp__paperplane-lead__*` tools are present. If not, look in `~/.claude.json` for the project key the app uses.
-2. After the weekly reset: one builder lane while the plan is above 70 %. Order: RUY-401 (Hub at large UI sizes), then **game settings** (owner, late lead-13: ADR-035): RUY-406 schema and mock, then RUY-407 the Hub Game panel (both touch the Hub after RUY-401: run them one after another); RUY-403 (services) is the second lane once two are allowed.
-2b. **Platform1 moved forward** (owner, 2026-11-12): T-351 / RUY-156 and T-353 / RUY-158 are phase 3 and near the top; **T-352 / RUY-157 is lead work** (owner:lead, caller-identity spike first): take it as the lead task (LEAD.md step 6) once RUY-156 is merged. RUY-408 (`Platform1.GameSettings`) waits on it.
-3. Ask the owner how the new Hub feels on the TV (Dell 0.0.68).
-4. The board has **112 Ready** tickets against a target of 8-12 (the cutover moved the old STATUS order over as Ready). A planning pass should move everything beyond the top ~15 back to Backlog, keeping its order.
-5. Dell pass (RUY-391): overlay FPS on vs off, the speaker route mute, sound after Resume, the Hub's first frame.
+1. **RUY-3:** look at `D:\dev\RuyaOS-worktrees\RUY-3` (last seen at 9706215). If the builder's HANDOFF never arrived, dispatch `ruya-reviewer` (Opus, complexity hard) with "verify everything yourself". A UI-free diff needs no design or UX review; it needs `ruya-api-reviewer` (surface public-API).
+2. The VM queue (RUY-390): `vm-input-check.sh` (RUY-3), `vm-devices-check.sh bluetooth` (RUY-411), and the drivers step of the next image chain (RUY-154). Then RUY-409 and RUY-410, the first Dell proof: SuperTuxKart races with the DualSense.
+2b. RUY-425 (the STK crash) is the top `dell` bug, and a good second lane next to the input chain.
+3. **Design first** (new owner rule, LEAD.md §5): the proposed session "Design the controller screens in Claude Design" (design system from 04 + `Theme.qml`, then RUY-39, RUY-42, RUY-38) should run before those builders start.
+4. RUY-421 (tst_appflow flaky on Linux CI) is high priority: CI now prints Actual/Expected/Loc.
+5. Usage attribution works for MCP-using agents: 3 tickets attributed (was 1). The lead session's own tokens stay unattributed (383.4M of 392.4M).
+6. RUY-413 (notification centre, part 1) is unblocked by RUY-412.
 
 ## Concerns (ranked)
-1. Usage per ticket is still unproven (no MCP in lead-13); watch the first builder dispatched with MCP tools.
-2. 112 Ready tickets make `next` and the board order the only real plan; stale ones get picked without a re-read (LEAD.md 4b says to re-read anything older than a week).
-3. T-466's park/restore on real hardware is still unseen (RUY-391, RUY-369).
-4. Root `CLAUDE.md` 11.3 KB (budget about 10).
-5. `docs/tasks/T-nnn` links (about 4,600) stay valid only because the archive stays; never delete it.
+1. RUY-3 is large (hard, image + service); watch the 500k two-round budget.
+2. CI flakes: tst_appflow (Linux CI), tst_perf_overlay GPU shot (RUY-423), tst_hub_controllers (RUY-415).
+3. Builders over-report evidence (RUY-412 "read" shots that showed the wrong step; RUY-154 claimed xpad present without an image check). Reviewers caught both.
+4. The board: 121 Ready, most blocked; `next` is the plan.
 
-## Process changes in lead-13
-- PLANNING.md step 5, LEAD.md step 4 and PAPERPLANE-PILOT.md: ordering is `PATCH /api/tickets/RUY-n {"sort_order": n}` (the `update` tool has none); PAPERPLANE-PILOT.md names the MCP project-key trap.
+## Process changes in lead-14
+- **Design first in Claude Design** for every new screen, flow, modal, panel or component (owner; LEAD.md §5, PLANNING.md quality bar).
+- Builder and reviewer agents list their `mcp__paperplane-<role>__*` tools, so usage reaches tickets (was 283.5M unattributed).
+- `run-qml-tests.sh` prints Actual/Expected/Loc of a failure (CI keeps no logs).
+- `image-chain.sh` runs the pad driver check after every build.
+- Not done: GitHub issues on Paper Plane (the permission check refused `gh issue create`): (1) `update` has no `sort_order`; (2) `summary`'s Blocked list is uncapped. File them when allowed.
 
 ## Host facts learned
-- Never put backslashes in a Bash heredoc, `sed` or a `python -c` string: use Write/Edit. `python -I` ignores `PYTHONIOENCODING`: call `sys.stdout.reconfigure(encoding="utf-8")`.
-- Paper Plane REST: `POST /api/tools/<tool>` with JSON; `PATCH /api/tickets/RUY-n`; `POST /api/tickets/RUY-n/relations {"kind":"blocks","ref":"RUY-m"}`. Tool argument names are in `D:\dev\PaperPlane\backend\paperplane\mcp.py`.
-- The Dell's host key changes with a reinstall; a builder may bind-mount a shell over `/usr/bin/ruya-shell` (gone at reboot).
+- Never put backslashes in a Bash heredoc, `sed` or `python -c`: use Write/Edit. `pkill -f`/`pgrep -f` over SSH match the SSH command line itself: use a pid file.
+- logind's `uaccess` builtin flushes foreign ACL entries on every udev event of a tagged node (06 §1).
+- WSL "Compacting" (free-space.ps1) blocks every `wsl` call for minutes (`E_ILLEGAL_STATE_CHANGE`).
+- Paper Plane REST: `POST /api/tools/<tool>`; `PATCH /api/tickets/RUY-n {"sort_order": n}`.
 
 ## Quality signals (one row per lead session)
 
 | Date | Range reviewed | Tasks | Findings (fixed / filed) | `dev.ps1 test` | VM |
 |---|---|---|---|---|---|
-| 2026-11-11 (lead-11) | 6cd6b20..main | T-462, T-458, T-452, T-453, T-464, T-465, T-467, T-463, T-468, T-466, T-454 | round 2 for 4; 6 stale VM checks fixed | 1232 QML + 100 skips | `0.0.64`, `0.0.65`; Dell 0.0.65 |
-| 2026-11-12 (lead-12) | 7b1e224..main | T-469, T-455, T-470, T-472, T-471 | round 2 for T-469, T-455, T-471; a contract mismatch found only in the VM (RUY-372); T-471 builder 416k tokens | 1249 QML + 103 skips | `0.0.66`, `0.0.67`, `0.0.68` PASS; Dell 0.0.68 |
-| 2026-11-12 (lead-13) | cbf4a4e..f7bf080 (docs only) | none (planning only, weekly plan 90 %) | inbox 22 → 0: 5 new Ready, 4 to the Dell list, 1 decided, 2 parked; MCP project-key trap fixed | not run (no code change) | none |
+| 2026-11-12 (lead-13) | cbf4a4e..f7bf080 (docs only) | none (planning only) | inbox 22 → 0 | not run | none |
+| 2026-11-12 (lead-14) | 182d99f..8be2889 | RUY-2, RUY-5 (lead); RUY-401, RUY-154, RUY-411, RUY-412 merged; RUY-3 in flight | round 2+ for every ticket (401 tie, 154 no xpad in image, 412 TR cut-off and shots, 411 window and red confirm, RUY-2 passthrough leak); one merge gate red (semantic conflict 154/412, fixed); rustix RUSTSEC fix; STK crash diagnosed (RUY-425) | 1277 QML + 107 skips | builder image 0.0.69-xpad RUYA_BOOT_OK; Dell spike on 0.0.68 |

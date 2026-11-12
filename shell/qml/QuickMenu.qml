@@ -155,6 +155,55 @@ Item {
         Sfx.navigate()
     }
 
+    // ---- the Hub at large UI sizes (RUY-401) ----------------------------------------------------------------
+    // The Hub never scrolls. Above 100 % UI size the game card's art and the running strip's tiles shrink to
+    // `artFit` (1 = full size) until the five rows fit the room; the text and the focus ring keep the UI size.
+    // The line under the strip and under the icon row for the focused item's name opens with the focus, so the
+    // fit counts it as open (`nameFull`): the art does not change when the focus moves.
+    property real artFit: 1
+    readonly property real artFitMin: 0.35
+    property real stripCentre: 0
+    readonly property real nameFull: Theme.spaceXs * u + nameProbe.implicitHeight
+    // The text of the game card is as tall as it is (a two-line title and the state), whatever the art does.
+    property real cardInfoHeight: 0
+    // The art's heights at full size: the card's, and a tile's.
+    readonly property real cardArtNominal: Theme.cardArtHeight(256 * u)
+    readonly property real tileNominal: Theme.cardArtHeight((listBox.width - 2 * Theme.spaceM * u - 2 * Theme.spaceS * u) / 3)
+    // What does not scale (the card's padding, the pills, the strip's margins, the name line, the gaps).
+    readonly property real fixedHeight: {
+        const pill = Theme.buttonHeight * u
+        return (hasApp ? 2 * Theme.spaceS * u + pill : 0) + (others.length > 0 ? 2 * Theme.spaceS * u : 0) + 2 * pill
+               + nameFull + Math.max(0, itemKeys.length - 1) * Theme.spaceS * u
+    }
+    // What changes the room or the rows: the fit is worked out again (a function of these alone, no loop).
+    readonly property string fitKey: [listBox.room, listBox.width, u, hasApp, others.length, powerMode, panelId, itemKeys.length,
+                                      Math.round(cardInfoHeight), Math.round(nameFull)].join("|")
+    onFitKeyChanged: refit()
+    function refit() {
+        if (powerMode || panelId !== "" || listBox.width <= 0)
+            return
+        const room = listBox.room - fixedHeight
+        const card = hasApp ? cardArtNominal : 0
+        const tiles = others.length > 0 ? tileNominal : 0
+        let fit = 1
+        if (card + tiles > room) {
+            fit = room / (card + tiles)
+            // The card is never shorter than its text: past that, the tiles take all that is left.
+            if (hasApp && fit * card < cardInfoHeight && tiles > 0)
+                fit = (room - cardInfoHeight) / tiles
+        }
+        fit = Math.max(artFitMin, Math.min(1, fit))
+        if (Math.abs(fit - artFit) > 0.001)
+            artFit = fit
+    }
+    Text {
+        id: nameProbe
+        visible: false
+        text: "Ag"
+        font.pixelSize: Theme.typeCaption * menu.u
+        font.weight: Theme.weightDemiBold
+    }
+
     // The rows of the list now (see rebuild()).
     property var itemKeys: []
     readonly property string currentRow: itemKeys[actions.currentIndex] ?? ""
@@ -439,8 +488,8 @@ Item {
             }
             return [back]               // info: nothing to press
         }
-        if (key === "resume")
-            return [{ button: "A", text: qsTr("Resume") }, back]
+        if (key === "resume")           // B resumes too, but the verb is shown once (RUY-401)
+            return [{ button: "A", text: qsTr("Resume") }]
         if (key === "home" || key === "closeGame")      // the hint names the button (UX review, T-471)
             return [{ button: "A", text: labelOf(key) }, back]
         if (key.startsWith("to:"))
@@ -730,8 +779,10 @@ Item {
                     id: listBox
                     objectName: "hubListBox"
                     width: parent.width
-                    height: Math.min(actions.contentHeight, panel.room - 2 * panel.pad - status.height
-                                     - (panelTitleText.visible ? panelTitleText.height + Theme.spaceM * menu.u : 0) - Theme.spaceM * menu.u)
+                    // The room under the status row and the title (gaps of the column).
+                    readonly property real room: panel.room - 2 * panel.pad - status.height
+                                                 - (panelTitleText.visible ? panelTitleText.height + Theme.spaceM * menu.u : 0) - Theme.spaceM * menu.u
+                    height: Math.min(actions.contentHeight, room)
                     // Changing from the Hub to a panel and back: the rows fade in and slide by `pageSlide`
                     // (both are 0 under reduced motion, so it is a cut).
                     opacity: menu.swap
@@ -787,7 +838,13 @@ Item {
                             if (event.key === Qt.Key_Down) {
                                 incrementCurrentIndex()
                             } else if (event.key === Qt.Key_Up) {
+                                // Up from the strip into Home | Close game lands on the column nearest to the tile it left:
+                                // Home only for a tile clearly in the left half (a tile in the middle slot, the rightmost of
+                                // two apps, goes to Close game: a tolerance of a pixel, so a tie is never decided by rounding).
+                                const left = rowKey === "running" && menu.stripCentre < actions.width / 2 - 1
                                 decrementCurrentIndex()
+                                if (rowKey === "running" && menu.currentRow === "leave" && !menu.powerMode && menu.panelId === "")
+                                    menu.leaveCol = left ? 0 : 1
                             } else if (row && row.kind === "slider" && sideways) {
                                 row.adjust(toRight ? 1 : -1)
                             } else if (row && row.kind === "choice" && sideways) {
@@ -869,6 +926,9 @@ Item {
                                     stateText: menu.appState
                                     paused: menu.paused
                                     focused: action.focused
+                                    fit: menu.artFit
+                                    onInfoHeightChanged: menu.cardInfoHeight = infoHeight
+                                    Component.onCompleted: menu.cardInfoHeight = infoHeight
                                 }
                             }
                             // Home | Close game: two pills of half the row, `spaceS` apart.
@@ -921,6 +981,9 @@ Item {
                                                                   name: menu.runningName(o), label: menu.labelOf("to:" + o.appId) }))
                                     currentIndex: menu.runningIndex
                                     focused: action.focused
+                                    fit: menu.artFit
+                                    onCurrentCentreChanged: menu.stripCentre = currentCentre
+                                    Component.onCompleted: menu.stripCentre = currentCentre
                                 }
                             }
                             Component {

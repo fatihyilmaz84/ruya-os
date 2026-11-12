@@ -29,6 +29,14 @@ pub fn kind_of(upower_kind: u32) -> Option<&'static str> {
     }
 }
 
+/// The power supply `xpad` creates for a pad behind an Xbox 360 wireless receiver is named
+/// `xpad_battery-<port>` and has no model. UPower may file it as a plain battery (2) instead of a
+/// gaming input (12): it is a controller either way (RUY-154; the real kind is unverified until a
+/// receiver is tried, hw pending).
+fn is_xpad_battery(d: &RawDevice) -> bool {
+    d.native_path.contains("xpad_battery")
+}
+
 /// What the contract says about a controller's charge.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ChargeState {
@@ -161,7 +169,8 @@ pub fn peripherals(devices: &[RawDevice]) -> Vec<Battery> {
     let mut out: Vec<Battery> = devices
         .iter()
         .filter_map(|d| {
-            let kind = kind_of(d.kind)?;
+            let xpad = is_xpad_battery(d);
+            let kind = if xpad { "controller" } else { kind_of(d.kind)? };
             let state = ChargeState::from_upower(d.state);
             let percent = if d.percentage.is_finite() {
                 d.percentage.round().clamp(0.0, 100.0) as u32
@@ -171,7 +180,12 @@ pub fn peripherals(devices: &[RawDevice]) -> Vec<Battery> {
             if state == ChargeState::Unknown && percent == 0 {
                 return None;
             }
-            let name = d.model.trim();
+            let model = if xpad && d.model.trim().is_empty() {
+                crate::input::XBOX360_PAD_NAME
+            } else {
+                &d.model
+            };
+            let name = model.trim();
             Some(Battery {
                 id: d.id.clone(),
                 name: if name.is_empty() {
@@ -183,7 +197,7 @@ pub fn peripherals(devices: &[RawDevice]) -> Vec<Battery> {
                 kind,
                 percent,
                 state,
-                family: family_of_battery(kind, "", &d.vendor, &d.model, &[]),
+                family: family_of_battery(kind, "", &d.vendor, model, &[]),
                 address: {
                     let found = address_in(&d.serial);
                     if found.is_empty() {
@@ -193,7 +207,7 @@ pub fn peripherals(devices: &[RawDevice]) -> Vec<Battery> {
                     }
                 },
                 vendor: d.vendor.clone(),
-                model: d.model.clone(),
+                model: model.to_owned(),
             })
         })
         .collect();
@@ -359,12 +373,36 @@ mod tests {
         );
     }
 
+    #[test]
+    fn an_xbox_360_pad_behind_the_receiver_has_its_battery_and_family() {
+        // xpad's power supply: no model, and UPower may call it a plain battery (2) or a gaming
+        // input (12). Both list as an Xbox controller; a laptop battery stays out.
+        for kind in [2, KIND_GAMING_INPUT] {
+            let mut d = dev("/xpad1", kind, "", 55.0, 2);
+            d.native_path =
+                "/sys/devices/pci0000:00/usb1/1-2/power_supply/xpad_battery-1-2".to_owned();
+            let list = peripherals(&[d]);
+            assert_eq!(list.len(), 1, "kind {kind}");
+            assert_eq!(list[0].kind, "controller");
+            assert_eq!(list[0].name, "Xbox 360 Controller");
+            assert_eq!(list[0].family, "xbox");
+            assert_eq!(
+                (list[0].percent, list[0].state),
+                (55, ChargeState::Discharging)
+            );
+        }
+        let mut laptop = dev("/bat", 2, "", 80.0, 2);
+        laptop.native_path = "/sys/devices/LNXSYSTM:00/power_supply/BAT0".to_owned();
+        assert!(peripherals(&[laptop]).is_empty());
+    }
+
     fn bt(id: &str, name: &str, kind: &'static str, family: &'static str) -> Device {
         Device {
             id: id.to_owned(),
             name: name.to_owned(),
             device_name: name.to_owned(),
             kind,
+            keyboard: false,
             family,
             paired: true,
             bonded: true,

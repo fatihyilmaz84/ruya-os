@@ -18,7 +18,14 @@ Item {
     readonly property real button: Theme.buttonHeight * u
     readonly property real gap: items.length > 1 ? (width - items.length * button) / (items.length - 1) : 0
 
-    implicitHeight: button + Theme.spaceXs * u + name.implicitHeight
+    // The line for the focused button's name takes no height while the row has no focus (RUY-401); it opens
+    // over `focusMs` when the focus enters. `nameFull` is its height when open.
+    readonly property real nameFull: Theme.spaceXs * u + name.implicitHeight
+    property real nameLine: focused && items.length > 0 ? nameFull : 0
+    Behavior on nameLine { NumberAnimation { duration: Theme.focusMs; easing.type: Easing.Bezier; easing.bezierCurve: Theme.easeGlide } }
+
+    clip: true
+    implicitHeight: button + nameLine
     height: implicitHeight
 
     Repeater {

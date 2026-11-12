@@ -320,6 +320,18 @@ FocusScope {
                 Accessible.role: Accessible.StaticText
                 Accessible.name: onb.pairHint.titleFor(onb.family) + ". " + text
             }
+            Text {
+                objectName: "onboardingReceiverSteps"
+                width: parent.width
+                visible: onb.family === "xbox"
+                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.Wrap
+                text: onb.pairHint.receiverSteps
+                color: Theme.textDim
+                font.pixelSize: Theme.typeCaption * onb.u
+                Accessible.role: Accessible.StaticText
+                Accessible.name: text
+            }
 
             // The pairing window (T-203) and its words: waiting, nothing found, a device ignored.
             ControllerPairHint {

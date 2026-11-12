@@ -82,6 +82,22 @@ pub enum GamepadEvent {
     Disconnected(Gamepad),
 }
 
+/// Microsoft's Xbox 360 Wireless Gaming Receiver for Windows (`045e:0719`, and `045e:0291` for the
+/// older revision), which clones copy. The in-kernel `xpad` driver (type "Xbox 360 wireless", no
+/// firmware) registers one input device per pad that is switched on, up to four, and names it
+/// after the receiver ("Xbox 360 Wireless Receiver"), so every pad would look alike and say
+/// "receiver". The receiver itself is a USB device only: with no pad on, it has no input device
+/// and so never counts as a pad (RUY-154). Other ids are never guessed.
+pub const XBOX360_RECEIVER_IDS: [(u16, u16); 2] = [(0x045e, 0x0719), (0x045e, 0x0291)];
+
+/// What a pad behind an Xbox 360 receiver is called.
+pub const XBOX360_PAD_NAME: &str = "Xbox 360 Controller";
+
+/// Whether an input device is a pad that talks through an Xbox 360 wireless receiver.
+pub fn is_behind_xbox360_receiver(device: &InputDevice) -> bool {
+    XBOX360_RECEIVER_IDS.contains(&(device.vendor, device.product))
+}
+
 /// The pad behind an input device, or `None` for anything that is not one (a keyboard, a mouse,
 /// a motion sensor, a touchpad, the console's own virtual keyboard).
 pub fn gamepad_of(device: &InputDevice) -> Option<Gamepad> {
@@ -95,7 +111,9 @@ pub fn gamepad_of(device: &InputDevice) -> Option<Gamepad> {
     // A pad names itself: control and format characters are dropped and the length is capped
     // before the name goes anywhere (T-260).
     let name = clean_name(&device.name, MAX_NAME_CHARS);
-    let name = if name.is_empty() {
+    let name = if is_behind_xbox360_receiver(device) {
+        XBOX360_PAD_NAME.to_owned()
+    } else if name.is_empty() {
         "Controller".to_owned()
     } else {
         name
@@ -432,6 +450,108 @@ mod tests {
         assert_eq!(clone.family, "");
         let guessed = gamepad_of(&pad("DualSense", "p", "", 0, 0)).expect("pad");
         assert_eq!(guessed.family, "playstation");
+    }
+
+    /// What `xpad` registers for a pad behind the receiver: named after the receiver, the
+    /// receiver's USB ids, one input device per pad (the port ends in the interface: input0, 2, 4, 6).
+    fn pad360(port: &str, product: u16) -> InputDevice {
+        InputDevice {
+            product,
+            ..pad("Xbox 360 Wireless Receiver", port, "", 3, 0x045e)
+        }
+    }
+
+    #[test]
+    fn the_xbox_360_receiver_itself_is_no_pad() {
+        // With no pad switched on the receiver has no input device at all; if a node with the
+        // receiver's name and ids shows up without any button, it is still not a pad.
+        for product in [0x0719, 0x0291] {
+            let receiver = InputDevice {
+                name: "Xbox 360 Wireless Receiver".to_owned(),
+                bustype: 3,
+                vendor: 0x045e,
+                product,
+                keys: "0 0 0 0 0".to_owned(),
+                ..InputDevice::default()
+            };
+            assert!(gamepad_of(&receiver).is_none());
+            assert!(!is_navigation_input(&receiver));
+        }
+    }
+
+    #[test]
+    fn a_pad_behind_the_xbox_360_receiver_is_an_xbox_controller_over_usb() {
+        // Both receiver revisions, and a clone with the same ids, are told alike.
+        for product in [0x0719, 0x0291] {
+            let p = gamepad_of(&pad360("usb-0000:00:14.0-2/input0", product)).expect("a pad");
+            assert_eq!(p.name, "Xbox 360 Controller", "not the receiver's name");
+            assert_eq!((p.family, p.transport), ("xbox", "usb"));
+            assert_eq!(p.id, "usb-0000:00:14.0-2/input0");
+        }
+    }
+
+    #[test]
+    fn an_unknown_dongle_with_a_similar_name_is_not_matched() {
+        // The name alone never makes a receiver pad: another vendor's "Xbox 360 Wireless
+        // Receiver" keeps its own name and has no family. Same vendor, other product: no rename.
+        let other = InputDevice {
+            vendor: 0x1234,
+            ..pad360("usb-1/input0", 0x0719)
+        };
+        let p = gamepad_of(&other).expect("a pad");
+        assert_eq!(p.name, "Xbox 360 Wireless Receiver");
+        assert_eq!(p.family, "");
+        let sibling = pad360("usb-1/input0", 0x0b13);
+        assert!(!is_behind_xbox360_receiver(&sibling));
+        assert_eq!(
+            gamepad_of(&sibling).expect("a pad").name,
+            "Xbox 360 Wireless Receiver"
+        );
+    }
+
+    #[test]
+    fn pads_behind_a_receiver_come_and_go_and_unplugging_it_removes_them_all() {
+        let input = InputPresence::new(FakeInput::new(vec![FakeInput::keyboard()]));
+        input.refresh();
+        let a = pad360("usb-1/input0", 0x0719);
+        let b = pad360("usb-1/input2", 0x0719);
+        input.source.set(vec![FakeInput::keyboard(), a.clone()]);
+        input.refresh();
+        input
+            .source
+            .set(vec![FakeInput::keyboard(), a.clone(), b.clone()]);
+        input.refresh();
+        let names: Vec<_> = input
+            .take_gamepad_events()
+            .into_iter()
+            .map(|e| match e {
+                GamepadEvent::Connected(p) => format!("+{}:{}", p.id, p.name),
+                GamepadEvent::Disconnected(p) => format!("-{}", p.id),
+            })
+            .collect();
+        assert_eq!(
+            names,
+            [
+                "+usb-1/input0:Xbox 360 Controller",
+                "+usb-1/input2:Xbox 360 Controller"
+            ]
+        );
+        // One pad switched off: only it goes. The receiver unplugged: the rest, one event each,
+        // and nothing for the receiver itself.
+        input.source.set(vec![FakeInput::keyboard(), a.clone()]);
+        input.refresh();
+        input.source.set(vec![FakeInput::keyboard()]);
+        input.refresh();
+        let gone: Vec<_> = input
+            .take_gamepad_events()
+            .into_iter()
+            .map(|e| match e {
+                GamepadEvent::Disconnected(p) => p.id,
+                GamepadEvent::Connected(_) => "unexpected".to_owned(),
+            })
+            .collect();
+        assert_eq!(gone, ["usb-1/input2", "usb-1/input0"]);
+        assert!(input.pads().is_empty());
     }
 
     #[test]

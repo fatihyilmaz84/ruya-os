@@ -15,6 +15,9 @@ FocusScope {
     // Confirm then only emits confirmed("custom") and the caller does the work.
     property string customTitle: ""
     property string detail: ""
+    // For action "custom": whether the confirm is destructive (danger-red, the default). A dialog
+    // whose action is not (pairing a keyboard, RUY-411) sets false and gets the neutral pill, like Suspend.
+    property bool customDestructive: true
     // Label and accessible name of the Confirm button for action "custom" (e.g. "Delete Ada").
     // Empty falls back to the generic "Confirm".
     property string customConfirmName: ""
@@ -176,7 +179,7 @@ FocusScope {
                 width: dialog.confirmWidth
                 height: Theme.buttonHeight * dialog.u
                 radius: height / 2
-                color: dialog.action === "suspend" ? (activeFocus ? Theme.focusFill : Theme.glass) : Theme.dangerFill
+                color: (dialog.action === "suspend" || (dialog.action === "custom" && !dialog.customDestructive)) ? (activeFocus ? Theme.focusFill : Theme.glass) : Theme.dangerFill
                 border.width: activeFocus ? Theme.focusRingWidth * dialog.u : Theme.hairlineAt(dialog.u)
                 border.color: activeFocus ? Theme.focusRing : Theme.glassBorder
                 Text {

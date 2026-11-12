@@ -369,6 +369,12 @@
                        "headset" (audio-headset, audio-headphones), "speaker" (audio-card,
                        audio-speakers), "keyboard", "mouse", "phone", "other" (anything else, and a
                        device that tells no Icon). The same words as Batteries' kind where both have one
+        keyboard   b   the device announces a keyboard (RUY-411): its Class of Device is Peripheral with
+                       the keyboard bit (a keyboard or a keyboard/pointer combo), or, without a class,
+                       its Bluetooth LE appearance is the HID keyboard, or its Icon is "input-keyboard".
+                       The shell asks "This is a keyboard. Pair it?" before pairing such a device from
+                       the device list. Told by the remote device, so a hint, not a defence. Clients
+                       treat a missing key as false
         family     s   the controller family, for kind "controller" only: "playstation" | "xbox" |
                        "nintendo" | "8bitdo", or "" when it cannot be told (every other kind, an unknown maker, a
                        third-party pad). From the Modalias BlueZ reports (the vendor id of the device's
@@ -462,8 +468,10 @@
       pages the console), a scan runs, and a BlueZ agent (capability NoInputNoOutput, "just works")
       is registered. The service then
         - accepts an incoming pairing only from an input device (Class of Device major class
-          Peripheral 0x05: gamepad, keyboard, mouse; for a device without a class, a Bluetooth LE
-          appearance in the HID category), marks it trusted and lets the HID connection through;
+          Peripheral 0x05: gamepad, mouse; for a device without a class, a Bluetooth LE
+          appearance in the HID category) that is not a keyboard (RUY-411: a device with the
+          `keyboard` flag of ListDevices is a stranger here, a keyboard pairs only from Settings >
+          Bluetooth behind its own confirmation), marks it trusted and lets the HID connection through;
         - pairs, trusts and connects, by itself, a gamepad that the scan finds in pairing mode;
         - rejects everything else (audio, phones, unknown classes), and every request for a PIN
           or passkey (PIN pairing is not part of this window);
@@ -471,7 +479,7 @@
           input device, and announces it with ControllerPairingRejected: with this agent the kernel
           accepts a just-works pairing by itself and BlueZ never asks the agent.
       Residual risk: the class and the appearance are told by the remote device, so a device that
-      claims an input class inside the window can bond, be trusted and act as a keyboard or pad.
+      claims a pad's or mouse's class inside the window can bond, be trusted and act as a keyboard or pad.
       The window is short, never open by default, not discoverable, capped when the shell reopens
       it by itself, and sweeps strangers; it is not a defence against a spoofing device in range.
       The window closes by itself when a controller has paired, when its seconds are up, or on

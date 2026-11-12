@@ -76,6 +76,7 @@ that is not NVIDIA, and by the VM (software rendering).
 
 | Leaf | Why |
 |---|---|
+| `kernel-modules-extra` | `xpad.ko` (wired Xbox 360/One pads and the Xbox 360 wireless receiver, RUY-154) lives only here in Fedora; installed in `40-nvidia.sh` at the kernel's version. It carries many other rarely used modules that load only for hardware that is plugged in |
 | `kernel`, `kmod-nvidia` | the kernel, and the NVIDIA module built for it in `40-nvidia.sh` (signed with an ephemeral key; the public cert is in `/usr/share/ruyaos/secureboot`) |
 | `xorg-x11-drv-nvidia` | NVIDIA user space: EGL/GL/Vulkan, **NVDEC/NVENC** (`libnvcuvid`, `libnvidia-encode`, inside `xorg-x11-drv-nvidia-cuda-libs`, 487 MB, which `libva-nvidia-driver` needs), suspend helpers. Not trimmed: it is one package set from RPM Fusion, and the `nvidia-settings` GUI is a hard dependency of it |
 | `xorg-x11-drv-nvidia-power` | NVIDIA suspend/resume/hibernate units (`nvidia-suspend.service` etc.) |
