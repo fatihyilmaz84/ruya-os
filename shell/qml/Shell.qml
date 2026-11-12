@@ -412,6 +412,10 @@ FocusScope {
 
     function guideDown(autoRepeat) {
         if (!autoRepeat) {
+            if (!systemPanel.open) {
+                pageProbe.begin("hub")          // the Hub's open time goes to the journal like a page's (T-455)
+                pageProbe.created("hub")
+            }
             systemPanel.open = true
             guideHeld = true
             guideHoldTimer.restart()
@@ -1990,8 +1994,14 @@ FocusScope {
         others: root.quickMenuOthers
         recent: root.quickMenuRecent
         guideKey: key => root.isGuideKey(key)
+        onSettledChanged: {
+            if (settled)
+                pageProbe.settled("hub")
+        }
 
         onOpenChanged: {
+            if (!open && pageProbe.pendingKey === "hub")
+                pageProbe.cancel()              // closed before it settled (T-455)
             if (open) {
                 if (home.shown && !root.closingScreen)      // the closing screen holds the focus: keep where Close left it
                     root.rememberHomeFocus()

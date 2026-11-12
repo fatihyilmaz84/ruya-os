@@ -166,6 +166,23 @@ Item {
             verify(find("quickMenuItem_" + key).focused, key + " has the focus ring")
         }
 
+        // The Hub's open time goes to the journal like a page's (T-455): one line per open that settles,
+        // none for an open that is closed before it has.
+        function test_the_hub_writes_its_open_time() {
+            start()
+            const probe = find("pageProbe")
+            const lines = probe.lineCount
+            keyClick(Qt.Key_HomePage)                        // Guide
+            tryCompare(probe, "lineCount", lines + 1, 3000, "the open settled and was written")
+            verify(probe.lastLine.indexOf("page-open hub ") === 0, probe.lastLine)
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !find("systemPanel").open)
+            keyClick(Qt.Key_HomePage)
+            keyClick(Qt.Key_Escape)                          // closed before the slide ended
+            tryVerify(() => !find("systemPanel").open)
+            compare(probe.pendingKey, "", "an open that did not settle is not measured")
+        }
+
         function test_opening_the_hub_freezes_the_game_and_resume_thaws_it() {
             start()
             const run = playRacer()
