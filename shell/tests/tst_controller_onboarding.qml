@@ -302,7 +302,8 @@ Item {
             compare(texts.length, 2)
             for (const t of texts) {
                 verify(t.indexOf("Xbox 360 Controller") >= 0 || t.indexOf("Xbox controller") >= 0, t)
-                verify(t.indexOf("connected") >= 0 && t.indexOf("battery 60%") >= 0, t)
+                // RUY-412 split the toast into title + detail ("... connected | Battery 60% · USB").
+                verify(t.indexOf("connected") >= 0 && t.toLowerCase().indexOf("battery 60%") >= 0, t)
                 verify(t.toLowerCase().indexOf("receiver") < 0, "no toast for the receiver: " + t)
             }
             compare(Notifications.model.get(0).iconName, "pad_xbox")
