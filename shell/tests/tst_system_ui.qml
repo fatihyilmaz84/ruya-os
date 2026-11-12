@@ -42,6 +42,9 @@ Item {
 
         function cleanup() {
             Notifications.durationMs = Theme.toastMs
+            Notifications.appInFront = false
+            DeviceSettings.reducedMotion = false
+            DeviceSettings.language = "en"
             while (Notifications.model.count > 0)
                 Notifications.dismiss(Notifications.model.get(0).toastId)
             Notifications.pending = []
@@ -196,6 +199,13 @@ Item {
             Notifications.appInFront = false
             compare(list.width, 600 * layer.u)
             tryCompare(Notifications.model, "count", 2)
+            tc.cleanup()
+            Notifications.showSticky("s", "Sticky", "warning", "", "detail", "Press any button to wait", "A")
+            Notifications.appInFront = true
+            tryCompare(Notifications.model, "count", 1)
+            tryVerify(() => child(toastItem(0), "toastFooter").visible, 2000, "a sticky toast keeps its footer over an app")
+            compare(child(toastItem(0), "toastDetail").visible, false)
+            Notifications.appInFront = false
         }
 
         function test_toast_overflow_chip() {
@@ -277,27 +287,80 @@ Item {
             tryCompare(Audio, "volume", 0)
         }
 
+        // One set of toast shots: the stack with the chip, a compact error over an app, and the sticky
+        // restart notice (its footer and A glyph) in front and over an app.
+        function toastStack(texts) {
+            Notifications.durationMs = 60000
+            Notifications.show(texts[0], "success", "", "pad_playstation", texts[1])
+            Notifications.show(texts[2], "info", "", "", texts[3])
+            Notifications.show(texts[4], "warning", "", "pad_xbox", texts[5])
+            Notifications.show(texts[6], "info")
+            keyClick(Qt.Key_VolumeUp)
+            wait(800)
+        }
+
+        function toastRest(suffix, texts) {
+            tc.clearToasts()
+            Notifications.show(texts[7], "error", "", "", texts[8])
+            Notifications.appInFront = true
+            wait(800)
+            grabImage(tc.shell).save(shotsDir + "/14b-toast-over-app" + suffix + ".png")
+            tc.clearToasts()
+            Notifications.appInFront = false
+            Update.mockAnnounceRestart(Math.floor(Date.now() / 1000) + 120)
+            tryVerify(() => Notifications.model.count === 1)
+            wait(800)
+            grabImage(tc.shell).save(shotsDir + "/14c-toast-restart-notice" + suffix + ".png")
+            Notifications.appInFront = true
+            wait(800)
+            grabImage(tc.shell).save(shotsDir + "/14d-toast-restart-notice-over-app" + suffix + ".png")
+            Notifications.appInFront = false
+            Update.mockAnnounceRestart(0)
+            tc.clearToasts()
+        }
+
+        function clearToasts() {
+            while (Notifications.model.count > 0)
+                Notifications.dismiss(Notifications.model.get(0).toastId)
+            Notifications.pending = []
+        }
+
         function test_zz_screenshots() {
             if (!shotsDir)
                 skip("set RUYA_SHOTS_DIR to save screenshots")
             signInAsAda()
-            Notifications.durationMs = 60000
-            Notifications.show("DualSense connected", "success", "", "pad_playstation", "Battery 62% · Bluetooth")
-            Notifications.show("Update ready", "info", "", "", "Restart to finish")
-            Notifications.show("Controller battery low", "warning", "", "pad_xbox", "Xbox controller · 12%")
-            Notifications.show("Fourth toast", "info")
-            keyClick(Qt.Key_VolumeUp)
-            tryCompare(Audio, "volume", 55)
-            wait(800)
+            const texts = ["DualSense connected", "Battery 62% · Bluetooth", "Update ready", "Restart to finish",
+                           "Controller battery low", "Xbox controller · 12%", "Fourth toast", "Crashy could not start", "Try again."]
+            toastStack(texts)
             grabImage(tc.shell).save(shotsDir + "/14-toast-and-osd.png")
-            while (Notifications.model.count > 0)
-                Notifications.dismiss(Notifications.model.get(0).toastId)
-            Notifications.pending = []
-            Notifications.show("Crashy could not start", "error", "", "", "Try again.")
-            Notifications.appInFront = true
-            wait(800)
-            grabImage(tc.shell).save(shotsDir + "/14b-toast-over-app.png")
-            Notifications.appInFront = false
+            toastRest("", texts)
+        }
+
+        function test_zz_screenshots_performance() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            signInAsAda()
+            const quality = DeviceSettings.effectsQuality
+            DeviceSettings.effectsQuality = "performance"
+            const texts = ["DualSense connected", "Battery 62% · Bluetooth", "Update ready", "Restart to finish",
+                           "Controller battery low", "Xbox controller · 12%", "Fourth toast", "Crashy could not start", "Try again."]
+            toastStack(texts)
+            grabImage(tc.shell).save(shotsDir + "/14-toast-and-osd-performance.png")
+            toastRest("-performance", texts)
+            DeviceSettings.effectsQuality = quality
+        }
+
+        function test_zz_screenshots_tr() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            signInAsAda()
+            DeviceSettings.language = "tr"
+            const texts = ["DualSense bağlandı", "Pil 62% · Bluetooth", "Güncelleme hazır", "Bitirmek için yeniden başlat",
+                           "Kumanda pili zayıf", "Xbox kumandası · 12%", "Dördüncü bildirim", "Crashy başlatılamadı", "Tekrar dene."]
+            toastStack(texts)
+            grabImage(tc.shell).save(shotsDir + "/14-toast-and-osd-tr.png")
+            toastRest("-tr", texts)
+            DeviceSettings.language = "en"
         }
     }
 }

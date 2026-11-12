@@ -333,6 +333,7 @@ Item {
             compare(levelIcon("pad-1"), "battery_charging_full")
             tryVerify(() => lowToasts().length === 1, 2000)
             compare(lowToasts()[0], "Controller battery low")
+            compare(Notifications.model.get(Notifications.model.count - 1).detail.slice(-3), "12%")
             compare(lowSpy.count, 1, "only the discharging pad was reported")
             compare(lowSpy.signalArguments[0][0], "pad-2")
         }

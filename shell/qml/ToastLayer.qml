@@ -103,7 +103,8 @@ Item {
             readonly property color accent: Theme.toastColor(kind)
             readonly property bool compact: layer.compact
             readonly property bool hasDetail: !compact && detail !== ""
-            readonly property bool hasFooter: !compact && footer !== ""
+            // A sticky toast keeps its footer over an app too: a title-only restart notice would not say how to wait.
+            readonly property bool hasFooter: footer !== "" && (!compact || sticky)
             readonly property real pad: Theme.spaceM * layer.u
             readonly property real badgeSize: (compact ? 48 : 64) * layer.u
             // The card: 112 u with a detail, 96 u without, 80 u compact; a footer adds its own line.
@@ -112,7 +113,7 @@ Item {
             property string badgeSource: ""
 
             width: list.width
-            height: baseHeight + (hasFooter ? footerRow.implicitHeight + Theme.spaceS * layer.u : 0)
+            height: hasFooter ? footerRow.y + footerRow.implicitHeight + Theme.spaceS * layer.u : baseHeight
 
             GlassShadow {
                 objectName: "toastShadow"
@@ -140,7 +141,7 @@ Item {
             Rectangle {
                 id: badge
                 objectName: "toastBadge"
-                x: toast.compact ? Theme.spaceM * layer.u : toast.pad
+                x: toast.pad
                 y: (toast.baseHeight - height) / 2
                 width: toast.badgeSize
                 height: width
@@ -175,7 +176,7 @@ Item {
             Column {
                 id: texts
                 x: badge.x + badge.width + toast.pad
-                width: toast.width - x - (toast.compact ? Theme.spaceL * layer.u : toast.pad)
+                width: toast.width - x - toast.pad
                 y: (toast.baseHeight - height) / 2
                 Item {
                     objectName: "toastTitle"      // the title line; its Text is "toastText" (the toast's own words)
@@ -214,7 +215,7 @@ Item {
                 objectName: "toastFooter"
                 visible: toast.hasFooter
                 x: texts.x
-                y: toast.baseHeight - Theme.spaceS * layer.u
+                y: texts.y + texts.height + 24 * layer.u      // the footer starts 24 u under the text column
                 width: texts.width
                 spacing: Theme.spaceS * layer.u
                 ButtonGlyph {
@@ -226,8 +227,6 @@ Item {
                 Text {
                     objectName: "toastFooterText"
                     width: parent.width - (footerGlyph.visible ? footerGlyph.width + parent.spacing : 0)
-                    height: footerGlyph.visible ? footerGlyph.height : implicitHeight
-                    verticalAlignment: Text.AlignVCenter
                     text: toast.footer
                     textFormat: Text.PlainText
                     color: Theme.text

@@ -3174,7 +3174,7 @@ Bu geri alınamaz.</translation>
     <message>
         <location line="-1296"/>
         <source>Restarting in 2 minutes</source>
-        <translation>2 dakika içinde yeniden başlatılıyor</translation>
+        <translation>2 dakikada yeniden başlıyor</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -3184,7 +3184,7 @@ Bu geri alınamaz.</translation>
     <message>
         <location line="+0"/>
         <source>Press any button to wait</source>
-        <translation>Beklemek için herhangi bir düğmeye bas</translation>
+        <translation>Beklemek için bir düğmeye bas</translation>
     </message>
     <message>
         <location line="+106"/>
