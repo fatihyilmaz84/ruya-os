@@ -4,21 +4,27 @@ The procedure is in [`LEAD.md`](LEAD.md) (**Budgets and "Lead efficiency": hand 
 
 ## State at the end of lead-14 (Opus, 2026-11-12; owner: "full blast", Ruya Input first)
 
-- **Review range:** 182d99f..HEAD. Main is pushed through 4402db0 (CI `ci` and `supply-chain` green at 3ad160d). The Dell still runs 0.0.68; the builder image 0.0.69-xpad was built only in WSL (not the Dell).
-- **Merged:** RUY-401 (Hub at large UI sizes; lead decision: it may scroll at 150 % and above, 02 §1.6) and RUY-154 (Xbox 360 receiver; **the image had no `xpad` at all**: now through `kernel-modules-extra`, ~3 MB, and `image-chain.sh` runs `check-image-input-drivers.sh`).
+- **Review range:** 182d99f..8be2889 (pushed; CI was green at 3ad160d, later runs not checked). The Dell still runs 0.0.68; the builder image 0.0.69-xpad was built only in WSL (not the Dell).
+- **Merged and Done:**
+  - RUY-401: Hub at large UI sizes. Lead decision: it may scroll at 150 % and above (02 §1.6).
+  - RUY-154: Xbox 360 receiver. **The image had no `xpad` at all**; it now comes through `kernel-modules-extra`, ~3 MB, and `image-chain.sh` runs `check-image-input-drivers.sh`.
+  - RUY-411: Bluetooth pairing hardening. Keyboards pair only from Settings > Bluetooth; the neutral `customDestructive: false` confirm.
+  - RUY-412: Toasts v2. 4 rounds; its merge gate first went red on RUY-154's test, fixed in 8be2889.
+- **Owner reported a SuperTuxKart crash on the Dell:** an abort in libpulse 11 s after a 1 h 53 min Hub freeze and the park-audio restore. Filed as **RUY-425** (high, `dell`), with the diagnosis.
 - **Lead work, Done:** RUY-2 (Ruya Input spike on the Dell, engine decision: grow `ruya-inputd`, not InputPlumber; `docs/specs/06-input.md`, `schemas/input-profile-v1.json` with a test, draft `api/dbus/org.ruyaos.Input1.xml`, ADR-003/024 amended) and RUY-5 (ADR-027 written into 06 §11, 02 §4.2-4.3, 04 §3.7).
 - **In flight (worktrees under `D:\dev\RuyaOS-worktrees\`):**
   - **RUY-3** (input service half, Opus builder, ~335k tokens in round 1; it was waiting for WSL to finish compacting before its "VM (this task)" image build). Told mid-build: `SetRoute` gains `app_id`; the virtual-pad udev rule must be pad-specific (`ruya-input/pad*`) because virtual keyboards and mice keep uaccess (06 §3).
-  - **RUY-412** (Toasts v2): code approved; round 4 only fixes the screenshot helpers (shots grabbed before the transitions ran; the builder had claimed to read them). Then a delta review and the merge.
-  - **RUY-411** (Bluetooth: bonded-only check, keyboard confirmation): round 2 (keyboards are strangers in the controller pairing window; PowerConfirm `customDestructive: false` neutral confirm; close the dialog when the device leaves).
+  - **Design session** "Design the controller screens in Claude Design" (started by the owner): the RuyaOS design system plus RUY-39 / RUY-42 / RUY-38 numbers as ticket comments. Read its result before dispatching those tickets.
 - **Planning done this session:** input chain re-checked and wired in Paper Plane: RUY-3 → RUY-409 (shell route) / RUY-410 (emergency reader) → RUY-42 → RUY-45 (split: 416 layers, 417 shortcuts) → RUY-46; RUY-43; RUY-47 split (418 actions, 419 haptics, 47 rebinding); RUY-411 and RUY-422 (Bluetooth). Owner's Claude Design request filed as RUY-412 (Toasts v2), RUY-413 and RUY-414 (notification centre, split by the lead), comment on RUY-88. Inbox: RUY-415, 420, 421, 423.
 
 ## Next, in this order
-1. Finish the three in-flight tickets (reviews: the agents' IDs are gone with this session; dispatch fresh reviewers on the worktree's branch with "verify everything yourself").
-2. After RUY-3: a VM lead run of `vm-input-check.sh`, then RUY-409 and RUY-410 (the first Dell proof: SuperTuxKart races with the DualSense), then RUY-411's VM check (`vm-devices-check.sh bluetooth`).
+1. **RUY-3:** look at `D:\dev\RuyaOS-worktrees\RUY-3` (last seen at 9706215). If the builder's HANDOFF never arrived, dispatch `ruya-reviewer` (Opus, complexity hard) with "verify everything yourself". A UI-free diff needs no design or UX review; it needs `ruya-api-reviewer` (surface public-API).
+2. The VM queue (RUY-390): `vm-input-check.sh` (RUY-3), `vm-devices-check.sh bluetooth` (RUY-411), and the drivers step of the next image chain (RUY-154). Then RUY-409 and RUY-410, the first Dell proof: SuperTuxKart races with the DualSense.
+2b. RUY-425 (the STK crash) is the top `dell` bug, and a good second lane next to the input chain.
 3. **Design first** (new owner rule, LEAD.md §5): the proposed session "Design the controller screens in Claude Design" (design system from 04 + `Theme.qml`, then RUY-39, RUY-42, RUY-38) should run before those builders start.
 4. RUY-421 (tst_appflow flaky on Linux CI) is high priority: CI now prints Actual/Expected/Loc.
-5. Check usage attribution: the first ticket built with the new agent tools (RUY-411) should show its own tokens in `summary usage=true`.
+5. Usage attribution works for MCP-using agents: 3 tickets attributed (was 1). The lead session's own tokens stay unattributed (383.4M of 392.4M).
+6. RUY-413 (notification centre, part 1) is unblocked by RUY-412.
 
 ## Concerns (ranked)
 1. RUY-3 is large (hard, image + service); watch the 500k two-round budget.
@@ -43,6 +49,5 @@ The procedure is in [`LEAD.md`](LEAD.md) (**Budgets and "Lead efficiency": hand 
 
 | Date | Range reviewed | Tasks | Findings (fixed / filed) | `dev.ps1 test` | VM |
 |---|---|---|---|---|---|
-| 2026-11-12 (lead-12) | 7b1e224..main | T-469, T-455, T-470, T-472, T-471 | round 2 for 3; a contract mismatch found only in the VM (RUY-372) | 1249 QML + 103 skips | `0.0.66`..`0.0.68` PASS; Dell 0.0.68 |
 | 2026-11-12 (lead-13) | cbf4a4e..f7bf080 (docs only) | none (planning only) | inbox 22 → 0 | not run | none |
-| 2026-11-12 (lead-14) | 182d99f..HEAD | RUY-2, RUY-5 (lead), RUY-401, RUY-154 merged; RUY-3, 411, 412 in flight | round 2+ for every ticket (401 tie, 154 no xpad in image, 412 TR cut-off and shots, 411 window and red confirm, RUY-2 passthrough leak); rustix RUSTSEC fix | 1266 QML + 104 skips | builder image 0.0.69-xpad RUYA_BOOT_OK; Dell spike on 0.0.68 |
+| 2026-11-12 (lead-14) | 182d99f..8be2889 | RUY-2, RUY-5 (lead); RUY-401, RUY-154, RUY-411, RUY-412 merged; RUY-3 in flight | round 2+ for every ticket (401 tie, 154 no xpad in image, 412 TR cut-off and shots, 411 window and red confirm, RUY-2 passthrough leak); one merge gate red (semantic conflict 154/412, fixed); rustix RUSTSEC fix; STK crash diagnosed (RUY-425) | 1277 QML + 107 skips | builder image 0.0.69-xpad RUYA_BOOT_OK; Dell spike on 0.0.68 |
