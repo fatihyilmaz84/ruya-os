@@ -90,6 +90,12 @@ Item {
         }
 
         function cleanup() {
+            // In cleanup, not in the test body: a failing test must not leave Guest deleted for the rest.
+            if (Profiles.profiles.length !== 3) {
+                Profiles.resetMockForTests("")
+                tryVerify(() => Profiles.profiles.length === 3)
+            }
+            DeviceSettings.setPerformanceOverlay("p3", false)
             DeviceSettings.reducedMotion = false
             DeviceSettings.performanceIntervalMs = 1000
             DeviceSettings.setPerformanceOverlay("p2", false)
@@ -157,8 +163,6 @@ Item {
             Profiles.deleteProfile("p1", "1234", "p3")
             tryVerify(() => !DeviceSettings.performanceOverlay("p3"), 2000, "the Guest profile is gone, so is its switch")
             tryVerify(() => Profiles.profiles.length === 2)
-            Profiles.resetMockForTests("")
-            tryVerify(() => Profiles.profiles.length === 3)
         }
 
         // ---- when it is drawn ---------------------------------------------------------------------------------
