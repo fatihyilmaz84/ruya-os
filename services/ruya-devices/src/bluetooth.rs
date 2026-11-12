@@ -3161,6 +3161,42 @@ mod tests {
     }
 
     #[test]
+    fn the_sweep_removes_a_keyboard_that_bonded_by_itself_in_the_window() {
+        // RUY-424: the sweep (`pump`) is a second user of `window_accepts`, next to the agent. A
+        // keyboard-class device that bonds without asking the agent (the kernel accepts a just-works
+        // pairing by itself) is a stranger there too: removed, not trusted, and it does not end the
+        // window the way a pad that bonds does.
+        let bt = Bluetooth::new(FakeBluez::new(Raw::single(
+            RawAdapter {
+                powered: true,
+                discovering: false,
+                pairable: false,
+                discoverable: false,
+            },
+            vec![near(KEYS, "Slim Keys", "input-keyboard", Some(0x2540))],
+        )));
+        bt.refresh().expect("reads");
+        open(&bt, Instant::now());
+        bt.bluez.bond(KEYS);
+        bt.refresh().expect("reads");
+        assert_eq!(bt.pump(), None);
+        let calls = bt.bluez.calls();
+        assert!(
+            calls.contains(&format!("remove {KEYS}")),
+            "removed as a stranger: {calls:?}"
+        );
+        assert!(
+            !calls.iter().any(|c| c.starts_with("trust")),
+            "never trusted: {calls:?}"
+        );
+        assert_eq!(
+            bt.pairing_state(),
+            PairingState::Open,
+            "a keyboard does not end the window"
+        );
+    }
+
+    #[test]
     fn a_controller_that_bonds_without_asking_the_agent_ends_the_window() {
         let bt = window_bt();
         let t0 = Instant::now();
