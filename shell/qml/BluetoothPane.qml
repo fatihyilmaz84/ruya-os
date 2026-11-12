@@ -169,12 +169,32 @@ SettingsPane {
         return parts.join(" · ")
     }
 
+    function startPairing(id) {
+        busyId = id
+        Bluetooth.pair(id)
+    }
+
+    // "This is a keyboard. Pair it?": Cancel has focus, Back cancels, Accept on "Pair <name>" pairs.
+    property string keyboardId: ""
+
+    function askKeyboard(id, name) {
+        keyboardSlot.active = true
+        keyboardConfirm.customTitle = qsTr("This is a keyboard. Pair it?")
+        keyboardConfirm.detail = qsTr("%1 could type anywhere on this console.").arg(name)
+        keyboardConfirm.customConfirmName = qsTr("Pair %1").arg(name)
+        pane.keyboardId = id
+        keyboardConfirm.open("custom")
+    }
+
     function activate(id, paired, connected) {
         if (id === busyId)
             return                         // already pairing: a second Accept or a key repeat does nothing
         if (!paired) {
-            busyId = id
-            Bluetooth.pair(id)
+            const dev = Bluetooth.devices.find(d => d.id === id)
+            if (dev && dev.keyboard === true)
+                askKeyboard(id, dev.name)      // a keyboard types anywhere: a second confirmation (RUY-411)
+            else
+                startPairing(id)
         } else if (connected) {
             Bluetooth.disconnectDevice(id)
         } else {
@@ -318,6 +338,22 @@ SettingsPane {
             }
         }
     }
+    Loader {
+        id: keyboardSlot
+        parent: pane.overlay
+        width: parent ? parent.width : 0
+        height: parent ? parent.height : 0
+        active: false
+        sourceComponent: Component {
+            PowerConfirm {
+                objectName: "btKeyboardConfirm"
+                u: pane.u
+                onConfirmed: pane.startPairing(pane.keyboardId)
+            }
+        }
+    }
+    readonly property PowerConfirm keyboardConfirm: keyboardSlot.item as PowerConfirm
+
     readonly property PowerConfirm forgetConfirm: forgetSlot.item as PowerConfirm
 
     Repeater {

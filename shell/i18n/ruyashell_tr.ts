@@ -730,12 +730,12 @@ Bu geri alınamaz.</translation>
         <translation>Kullanılması için yeniden eşleştirilmesi gerekir.</translation>
     </message>
     <message>
-        <location line="+115"/>
+        <location line="+135"/>
         <source>Bluetooth is off.</source>
         <translation>Bluetooth kapalı.</translation>
     </message>
     <message>
-        <location line="-50"/>
+        <location line="-70"/>
         <source>Pairing…</source>
         <translation>Eşleştiriliyor…</translation>
     </message>
@@ -755,12 +755,12 @@ Bu geri alınamaz.</translation>
         <translation>Bağlı</translation>
     </message>
     <message>
-        <location line="+100"/>
+        <location line="+120"/>
         <source>Pair a new controller</source>
         <translation>Yeni kontrolcü eşleştir</translation>
     </message>
     <message>
-        <location line="+93"/>
+        <location line="+109"/>
         <source>Pair again %1</source>
         <translation>%1 cihazını yeniden eşleştir</translation>
     </message>
@@ -775,7 +775,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 adını değiştir</translation>
     </message>
     <message>
-        <location line="-211"/>
+        <location line="-247"/>
         <source>Paired</source>
         <translation>Eşleşti</translation>
     </message>
@@ -795,7 +795,22 @@ Bu geri alınamaz.</translation>
         <translation>Pil %1%</translation>
     </message>
     <message>
-        <location line="+42"/>
+        <location line="+14"/>
+        <source>This is a keyboard. Pair it?</source>
+        <translation>Bu bir klavye. Eşleştirilsin mi?</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>%1 could type anywhere on this console.</source>
+        <translation>%1 bu konsolda her yere yazabilir.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Pair %1</source>
+        <translation>%1 eşleştir</translation>
+    </message>
+    <message>
+        <location line="+46"/>
         <source>Could not start looking for controllers.</source>
         <translation>Kontrolcü aramaya başlanamadı.</translation>
     </message>
@@ -835,8 +850,8 @@ Bu geri alınamaz.</translation>
         <translation>Taranıyor…</translation>
     </message>
     <message>
-        <location line="-163"/>
-        <location line="+295"/>
+        <location line="-183"/>
+        <location line="+331"/>
         <source>Forget %1</source>
         <translation>%1 cihazını unut</translation>
     </message>
@@ -2425,7 +2440,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>QuickMenu</name>
     <message>
-        <location filename="../qml/QuickMenu.qml" line="+354"/>
+        <location filename="../qml/QuickMenu.qml" line="+403"/>
         <source>Bluetooth</source>
         <translation>Bluetooth</translation>
     </message>
@@ -2455,7 +2470,7 @@ Bu geri alınamaz.</translation>
         <translation>Açık</translation>
     </message>
     <message>
-        <location line="-179"/>
+        <location line="-228"/>
         <source>Could not switch the audio output.</source>
         <translation>Ses çıkışı değiştirilemedi.</translation>
     </message>
@@ -2465,7 +2480,7 @@ Bu geri alınamaz.</translation>
         <translation>Mikrofon değiştirilemedi.</translation>
     </message>
     <message>
-        <location line="+137"/>
+        <location line="+186"/>
         <source>Audio</source>
         <translation>Ses</translation>
     </message>
@@ -2677,23 +2692,23 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+216"/>
+        <location line="+224"/>
         <location line="+1"/>
         <source>%1, %2</source>
         <translation>%1, %2</translation>
     </message>
     <message>
-        <location line="-100"/>
+        <location line="-106"/>
         <source>Ruya Hub</source>
         <translation>Ruya Hub</translation>
     </message>
     <message>
-        <location line="+97"/>
+        <location line="+103"/>
         <source>Resume %1, %2</source>
         <translation>Devam et: %1, %2</translation>
     </message>
     <message>
-        <location line="-351"/>
+        <location line="-359"/>
         <source>Just started</source>
         <translation>Yeni başladı</translation>
     </message>
@@ -2708,7 +2723,7 @@ Bu geri alınamaz.</translation>
         <translation>Duraklatıldı</translation>
     </message>
     <message>
-        <location line="+351"/>
+        <location line="+359"/>
         <source>Volume, muted</source>
         <translation>Ses, sessiz</translation>
     </message>
@@ -2718,7 +2733,7 @@ Bu geri alınamaz.</translation>
         <translation>Ses %1</translation>
     </message>
     <message>
-        <location line="-548"/>
+        <location line="-556"/>
         <source>Muted</source>
         <translation>Sessiz</translation>
     </message>

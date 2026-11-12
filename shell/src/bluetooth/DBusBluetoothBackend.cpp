@@ -47,6 +47,7 @@ QList<BtDevice> parseDevices(const QDBusArgument &arg)
         dev.name = d.value(QStringLiteral("name")).toString();
         dev.deviceName = d.value(QStringLiteral("device_name")).toString(); // an older service tells none
         dev.kind = d.value(QStringLiteral("kind"), dev.kind).toString();
+        dev.keyboard = d.value(QStringLiteral("keyboard"), false).toBool(); // an older service tells none
         dev.family = d.value(QStringLiteral("family")).toString();
         dev.paired = d.value(QStringLiteral("paired")).toBool();
         dev.bonded = d.value(QStringLiteral("bonded"), true).toBool();     // an older service tells none

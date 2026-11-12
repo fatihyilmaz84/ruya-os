@@ -734,12 +734,12 @@ This can&apos;t be undone.</translation>
         <translation>It will have to be paired again to be used.</translation>
     </message>
     <message>
-        <location line="+115"/>
+        <location line="+135"/>
         <source>Bluetooth is off.</source>
         <translation>Bluetooth is off.</translation>
     </message>
     <message>
-        <location line="-50"/>
+        <location line="-70"/>
         <source>Pairing…</source>
         <translation>Pairing…</translation>
     </message>
@@ -759,12 +759,12 @@ This can&apos;t be undone.</translation>
         <translation>Connected</translation>
     </message>
     <message>
-        <location line="+100"/>
+        <location line="+120"/>
         <source>Pair a new controller</source>
         <translation>Pair a new controller</translation>
     </message>
     <message>
-        <location line="+93"/>
+        <location line="+109"/>
         <source>Pair again %1</source>
         <translation>Pair again %1</translation>
     </message>
@@ -779,7 +779,7 @@ This can&apos;t be undone.</translation>
         <translation>Rename %1</translation>
     </message>
     <message>
-        <location line="-211"/>
+        <location line="-247"/>
         <source>Paired</source>
         <translation>Paired</translation>
     </message>
@@ -799,7 +799,22 @@ This can&apos;t be undone.</translation>
         <translation>Battery %1%</translation>
     </message>
     <message>
-        <location line="+42"/>
+        <location line="+14"/>
+        <source>This is a keyboard. Pair it?</source>
+        <translation>This is a keyboard. Pair it?</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>%1 could type anywhere on this console.</source>
+        <translation>%1 could type anywhere on this console.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Pair %1</source>
+        <translation>Pair %1</translation>
+    </message>
+    <message>
+        <location line="+46"/>
         <source>Could not start looking for controllers.</source>
         <translation>Could not start looking for controllers.</translation>
     </message>
@@ -839,8 +854,8 @@ This can&apos;t be undone.</translation>
         <translation>Scanning…</translation>
     </message>
     <message>
-        <location line="-163"/>
-        <location line="+295"/>
+        <location line="-183"/>
+        <location line="+331"/>
         <source>Forget %1</source>
         <translation>Forget %1</translation>
     </message>
@@ -2434,7 +2449,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>QuickMenu</name>
     <message>
-        <location filename="../qml/QuickMenu.qml" line="+354"/>
+        <location filename="../qml/QuickMenu.qml" line="+403"/>
         <source>Bluetooth</source>
         <translation>Bluetooth</translation>
     </message>
@@ -2464,7 +2479,7 @@ This can&apos;t be undone.</translation>
         <translation>On</translation>
     </message>
     <message>
-        <location line="-179"/>
+        <location line="-228"/>
         <source>Could not switch the audio output.</source>
         <translation>Could not switch the audio output.</translation>
     </message>
@@ -2474,7 +2489,7 @@ This can&apos;t be undone.</translation>
         <translation>Could not switch the microphone.</translation>
     </message>
     <message>
-        <location line="+137"/>
+        <location line="+186"/>
         <source>Audio</source>
         <translation>Audio</translation>
     </message>
@@ -2686,23 +2701,23 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+216"/>
+        <location line="+224"/>
         <location line="+1"/>
         <source>%1, %2</source>
         <translation>%1, %2</translation>
     </message>
     <message>
-        <location line="-100"/>
+        <location line="-106"/>
         <source>Ruya Hub</source>
         <translation>Ruya Hub</translation>
     </message>
     <message>
-        <location line="+97"/>
+        <location line="+103"/>
         <source>Resume %1, %2</source>
         <translation>Resume %1, %2</translation>
     </message>
     <message>
-        <location line="-351"/>
+        <location line="-359"/>
         <source>Just started</source>
         <translation>Just started</translation>
     </message>
@@ -2717,7 +2732,7 @@ This can&apos;t be undone.</translation>
         <translation>Paused</translation>
     </message>
     <message>
-        <location line="+351"/>
+        <location line="+359"/>
         <source>Volume, muted</source>
         <translation>Volume, muted</translation>
     </message>
@@ -2727,7 +2742,7 @@ This can&apos;t be undone.</translation>
         <translation>Volume %1</translation>
     </message>
     <message>
-        <location line="-548"/>
+        <location line="-556"/>
         <source>Muted</source>
         <translation>Muted</translation>
     </message>

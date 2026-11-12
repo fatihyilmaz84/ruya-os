@@ -44,6 +44,9 @@ const MAJOR_PERIPHERAL: u32 = 0x05;
 /// 6-15 of the appearance value.
 const APPEARANCE_HID: u16 = 0x0F;
 
+/// Bluetooth LE appearance "HID keyboard" (category 0x0F, subcategory 1).
+const APPEARANCE_HID_KEYBOARD: u16 = (APPEARANCE_HID << 6) | 1;
+
 /// The window's state as the contract's `ControllerPairingState` says it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PairingState {
@@ -72,6 +75,17 @@ pub fn is_input_device(class: Option<u32>, appearance: Option<u16>) -> bool {
     match class {
         Some(c) if c != 0 => (c >> 8) & 0x1F == MAJOR_PERIPHERAL,
         _ => appearance.is_some_and(|a| a >> 6 == APPEARANCE_HID),
+    }
+}
+
+/// Whether a device announces itself as a keyboard (RUY-411): its Class of Device is Peripheral
+/// with the keyboard bit of the minor class (0x40, set for a keyboard and for a keyboard/pointer
+/// combo), or, without a class, its Bluetooth LE appearance is the HID keyboard (0x03C1). A pointing-only, gamepad or joystick minor class is not.
+/// BlueZ's `Icon` "input-keyboard" counts too (`icon_is_keyboard`), as a second source.
+pub fn is_keyboard_class(class: Option<u32>, appearance: Option<u16>) -> bool {
+    match class {
+        Some(c) if c != 0 => (c >> 8) & 0x1F == MAJOR_PERIPHERAL && c & 0x40 != 0,
+        _ => appearance == Some(APPEARANCE_HID_KEYBOARD),
     }
 }
 
@@ -124,6 +138,43 @@ mod tests {
         assert!(
             !is_input_device(Some(0), None),
             "an empty class tells nothing"
+        );
+    }
+
+    #[test]
+    fn keyboard_class_decoding() {
+        assert!(is_keyboard_class(Some(0x2540), None), "keyboard");
+        assert!(
+            is_keyboard_class(Some(0x0540), None),
+            "service bits do not matter"
+        );
+        assert!(
+            is_keyboard_class(Some(0x25C0), None),
+            "combo keyboard/pointer"
+        );
+        assert!(
+            !is_keyboard_class(Some(0x2580), None),
+            "pointing device only"
+        );
+        assert!(!is_keyboard_class(Some(0x2508), None), "gamepad");
+        assert!(!is_keyboard_class(Some(0x2504), None), "joystick");
+        assert!(
+            !is_keyboard_class(Some(0x240440), None),
+            "headset: bit 0x40 of another major class"
+        );
+        assert!(!is_keyboard_class(Some(0x5A020C), None), "smartphone");
+        assert!(!is_keyboard_class(None, None), "unknown");
+        assert!(
+            !is_keyboard_class(Some(0), None),
+            "an empty class tells nothing"
+        );
+        assert!(is_keyboard_class(None, Some(0x03C1)), "LE HID keyboard");
+        assert!(is_keyboard_class(Some(0), Some(0x03C1)));
+        assert!(!is_keyboard_class(None, Some(0x03C4)), "LE gamepad");
+        assert!(!is_keyboard_class(None, Some(0x03C2)), "LE mouse");
+        assert!(
+            !is_keyboard_class(Some(0x2508), Some(0x03C1)),
+            "the class wins"
         );
     }
 

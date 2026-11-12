@@ -373,6 +373,8 @@ pub struct Device {
     /// BlueZ's `Name`, the model as the device advertises it; "" when it told none.
     pub device_name: String,
     pub kind: &'static str,
+    /// The device announces a keyboard class (RUY-411): the shell asks a second time before pairing.
+    pub keyboard: bool,
     /// "playstation" | "xbox" | "nintendo" | "" (`family_for`).
     pub family: &'static str,
     pub paired: bool,
@@ -395,6 +397,8 @@ pub fn list_of(raw: &[RawDevice]) -> Vec<Device> {
             name: d.alias.clone(),
             device_name: d.name.clone(),
             kind: kind_of(&d.icon),
+            keyboard: kind_of(&d.icon) == "keyboard"
+                || crate::pairing::is_keyboard_class(d.class, d.appearance),
             family: family_for(kind_of(&d.icon), &d.modalias, &d.name, &d.alias),
             paired: d.paired,
             bonded: d.bonded,
@@ -2206,6 +2210,37 @@ mod tests {
         ]);
         assert_eq!(list.len(), 1);
         assert_eq!(list[0].id, "AA:BB:CC:00:11:33");
+    }
+
+    #[test]
+    fn the_keyboard_flag_follows_the_class_the_appearance_and_the_icon() {
+        let mut combo = raw_dev("A1", "Combo", "input-mouse", false);
+        combo.class = Some(0x25C0);
+        let mut le = raw_dev("A2", "LE Keys", "", false);
+        le.appearance = Some(0x03C1);
+        let by_icon = raw_dev("A3", "Icon Keys", "input-keyboard", false);
+        let mut pad = raw_dev("A4", "Pad", "input-gaming", false);
+        pad.class = Some(0x2508);
+        let mut mouse = raw_dev("A5", "Mouse", "input-mouse", false);
+        mouse.class = Some(0x2580);
+        let mut headset = raw_dev("A6", "Buds", "audio-headset", false);
+        headset.class = Some(0x240404);
+        let flags: Vec<(String, bool)> = list_of(&[combo, le, by_icon, pad, mouse, headset])
+            .into_iter()
+            .map(|d| (d.id, d.keyboard))
+            .collect();
+        assert_eq!(
+            flags,
+            [
+                ("A6", false),
+                ("A1", true),
+                ("A3", true),
+                ("A2", true),
+                ("A5", false),
+                ("A4", false)
+            ]
+            .map(|(i, k)| (i.to_owned(), k))
+        );
     }
 
     #[test]

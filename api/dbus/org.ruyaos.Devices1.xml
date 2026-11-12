@@ -369,6 +369,12 @@
                        "headset" (audio-headset, audio-headphones), "speaker" (audio-card,
                        audio-speakers), "keyboard", "mouse", "phone", "other" (anything else, and a
                        device that tells no Icon). The same words as Batteries' kind where both have one
+        keyboard   b   the device announces a keyboard (RUY-411): its Class of Device is Peripheral with
+                       the keyboard bit (a keyboard or a keyboard/pointer combo), or, without a class,
+                       its Bluetooth LE appearance is the HID keyboard, or its Icon is "input-keyboard".
+                       The shell asks "This is a keyboard. Pair it?" before pairing such a device from
+                       the device list. Told by the remote device, so a hint, not a defence. Clients
+                       treat a missing key as false
         family     s   the controller family, for kind "controller" only: "playstation" | "xbox" |
                        "nintendo" | "8bitdo", or "" when it cannot be told (every other kind, an unknown maker, a
                        third-party pad). From the Modalias BlueZ reports (the vendor id of the device's

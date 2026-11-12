@@ -215,6 +215,60 @@ Item {
             tryVerify(() => find("btForget_bt-pad-new").visible, 2000, "it can be forgotten now")
         }
 
+        function inKeyboardConfirm(name) { return findChild(find("btKeyboardConfirm"), name) }
+
+        function scanForKeyboard() {
+            openBluetoothPane()
+            scan()
+            scan()
+            verify(!device("bt-keys-new"), "the keyboard needs a third scan")
+            scan()
+            tryVerify(() => device("bt-keys-new") !== undefined, 2000, "third scan finds the keyboard")
+            verify(device("bt-keys-new").keyboard, "it announces a keyboard class")
+            verify(!device("bt-pad-new").keyboard, "a pad does not")
+            verify(!device("bt-buds").keyboard, "a headset does not")
+            goTo("btDev_bt-keys-new")
+        }
+
+        // RUY-411: a keyboard-class device asks a second time; Cancel has focus, Back cancels.
+        function test_keyboard_asks_twice_back_cancels() {
+            scanForKeyboard()
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("btKeyboardConfirm").shown, 2000, "the second confirmation is up")
+            compare(inKeyboardConfirm("powerConfirmTitle").text, "This is a keyboard. Pair it?")
+            compare(inKeyboardConfirm("powerConfirmDetail").text, "Slim Keyboard could type anywhere on this console.")
+            tryVerify(() => inKeyboardConfirm("powerCancel").activeFocus, 2000, "Cancel has focus first")
+            compare(Bluetooth.mockPairCalls(), 0, "nothing paired yet")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !find("btKeyboardConfirm").shown, 2000)
+            tryVerify(() => find("btDev_bt-keys-new").activeFocus, 2000, "focus is back on the row")
+            compare(Bluetooth.mockPairCalls(), 0, "Back did not pair")
+            verify(!device("bt-keys-new").paired)
+        }
+
+        function test_keyboard_accept_pairs() {
+            scanForKeyboard()
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("btKeyboardConfirm").shown, 2000)
+            keyClick(Qt.Key_Right)
+            tryVerify(() => inKeyboardConfirm("powerConfirm").activeFocus)
+            compare(inKeyboardConfirm("powerConfirm").Accessible.name, "Pair Slim Keyboard")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => device("bt-keys-new").paired, 2000, "Accept pairs it")
+            tryVerify(() => find("btDev_bt-keys-new").activeFocus, 2000, "focus stays on the paired device")
+        }
+
+        function test_pad_pairs_without_a_second_confirmation() {
+            openBluetoothPane()
+            scan()
+            scan()
+            tryVerify(() => device("bt-pad-new") !== undefined, 2000)
+            goTo("btDev_bt-pad-new")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => device("bt-pad-new").paired, 2000)
+            verify(find("btKeyboardConfirm") === null || !find("btKeyboardConfirm").shown)
+        }
+
         function test_failed_pairing_keeps_focus() {
             openBluetoothPane()
             scan()

@@ -361,6 +361,7 @@ void MockBluetoothBackend::populate()
         e.dev.bonded = true;
         e.dev.kind = QString::fromLatin1(s.kind);
         e.dev.family = QString::fromLatin1(s.family);
+        e.dev.keyboard = e.dev.kind == QLatin1String("keyboard");
         e.dev.paired = true;
         e.dev.connected = true;
         e.dev.trusted = true;
@@ -446,7 +447,10 @@ void MockBluetoothBackend::initState()
         entry("bt-buds", "Sound Buds", "headset", false, false, 90, 1, "ok"),
         entry("bt-sleepy", "Old Headset", "headset", false, false, -1, 1, "timeout"),
         entry("bt-pad-new", "Ruya Pad", "controller", false, false, 64, 2, "ok"),
+        // Found by the third scan (RUY-411); announces a keyboard class, so pairing asks twice.
+        entry("bt-keys-new", "Slim Keyboard", "keyboard", false, false, -1, 3, "ok"),
     };
+    m_entries[indexOf(QStringLiteral("bt-keys-new"))].dev.keyboard = true;
     // One pad is bonded on a second adapter, like on the Dell (T-336).
     m_entries[indexOf(QStringLiteral("bt-pad-old"))].dev.adapter = QStringLiteral("hci1");
 }
