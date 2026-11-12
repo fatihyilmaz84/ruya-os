@@ -105,6 +105,9 @@ Item {
             readonly property bool hasDetail: !compact && detail !== ""
             // A sticky toast keeps its footer over an app too: a title-only restart notice would not say how to wait.
             readonly property bool hasFooter: footer !== "" && (!compact || sticky)
+            // A sticky toast over an app (the restart notice) is never cut off: its title may wrap to two
+            // lines and its footer spans the card's full inner width.
+            readonly property bool fullSticky: compact && sticky
             readonly property real pad: Theme.spaceM * layer.u
             readonly property real badgeSize: (compact ? 48 : 64) * layer.u
             // The card: 112 u with a detail, 96 u without, 80 u compact; a footer adds its own line.
@@ -177,7 +180,7 @@ Item {
                 id: texts
                 x: badge.x + badge.width + toast.pad
                 width: toast.width - x - toast.pad
-                y: (toast.baseHeight - height) / 2
+                y: toast.fullSticky ? Math.max(Theme.spaceS * layer.u, (toast.baseHeight - height) / 2) : (toast.baseHeight - height) / 2
                 Item {
                     objectName: "toastTitle"      // the title line; its Text is "toastText" (the toast's own words)
                     width: parent.width
@@ -193,7 +196,8 @@ Item {
                         font.pixelSize: Theme.typeBody * layer.u
                         font.weight: Theme.weightDemiBold
                         elide: Text.ElideRight
-                        maximumLineCount: 1
+                        wrapMode: toast.fullSticky ? Text.Wrap : Text.NoWrap
+                        maximumLineCount: toast.fullSticky ? 2 : 1
                     }
                 }
                 Text {
@@ -214,9 +218,9 @@ Item {
                 id: footerRow
                 objectName: "toastFooter"
                 visible: toast.hasFooter
-                x: texts.x
+                x: toast.fullSticky ? toast.pad : texts.x
                 y: texts.y + texts.height + 24 * layer.u      // the footer starts 24 u under the text column
-                width: texts.width
+                width: toast.width - x - toast.pad
                 spacing: Theme.spaceS * layer.u
                 ButtonGlyph {
                     id: footerGlyph

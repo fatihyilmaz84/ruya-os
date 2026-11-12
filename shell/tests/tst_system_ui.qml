@@ -208,6 +208,21 @@ Item {
             Notifications.appInFront = false
         }
 
+        function test_toast_turkish_restart_notice_is_whole_over_an_app() {
+            DeviceSettings.language = "tr"
+            Update.mockAnnounceRestart(Math.floor(Date.now() / 1000) + 120)
+            Notifications.appInFront = true
+            tryCompare(Notifications.model, "count", 1)
+            const t = toastItem(0)
+            tryVerify(() => child(t, "toastFooter").visible)
+            compare(child(t, "toastText").text, "2 dakikada yeniden başlıyor")
+            verify(!child(t, "toastText").truncated, "the title is not cut")
+            verify(!child(t, "toastFooterText").truncated, "the footer is not cut")
+            compare(child(t, "toastFooter").x, t.pad, "the footer spans the card")
+            Update.mockAnnounceRestart(0)
+            Notifications.appInFront = false
+        }
+
         function test_toast_overflow_chip() {
             const chip = find("toastOverflow")
             verify(!chip.visible)
