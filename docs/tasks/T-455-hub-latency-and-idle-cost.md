@@ -1,6 +1,6 @@
 # T-455 — Hub budgets: activation latency, idle cost and the game's FPS with the Hub open, measured on the Dell
 
-Status: todo · Phase: 2 · Depends: — · Area: scripts, shell (fixes only) · Size: S · Owner: builder · Complexity: normal · Developer surface: none
+Status: in-progress · Phase: 2 · Depends: — · Area: scripts, shell (fixes only) · Size: S · Owner: builder · Complexity: normal · Developer surface: none
 
 ## Goal
 We know, with numbers from the Dell, how fast Guide opens the Hub over a game, what the Hub costs while hidden and open, and how much the game's FPS drops while it is open; budgets are written down and a script repeats the measurement.
