@@ -716,6 +716,23 @@ Item {
             grabImage(tc.shell).save(shotsDir + "/hub-5-paused.png")
         }
 
+        // RUY-401: the Hub at 100 and 150 % (a game with two others; at 150 % a game alone, the strip's name open).
+        function test_zz_screenshots_hub_at_ui_sizes() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            const sizes = [{ name: "100", scale: 1, others: 2 }, { name: "125", scale: 1.25, others: 2 }, { name: "150", scale: 1.5, others: 0 }]
+            for (const size of sizes) {
+                const menu = hubAt(size.scale, size.others)
+                if (size.others > 0) {
+                    keyClick(Qt.Key_Down)
+                    keyClick(Qt.Key_Down)                     // the strip: its name line is open
+                }
+                wait(500)
+                grabImage(menu).save(shotsDir + "/hub-6-ui-" + size.name + ".png")
+                menu.destroy()
+            }
+        }
+
         function test_zz_screenshots_settings_pause_row() {
             if (!shotsDir)
                 skip("set RUYA_SHOTS_DIR to save screenshots")
