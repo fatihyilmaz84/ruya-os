@@ -720,6 +720,8 @@ Item {
         function test_zz_screenshots_hub_at_ui_sizes() {
             if (!shotsDir)
                 skip("set RUYA_SHOTS_DIR to save screenshots")
+            bigHost.transformOrigin = Item.TopLeft
+            bigHost.scale = host.height / bigHost.height          // the 1080p screen, shown whole in the 720p window
             const sizes = [{ name: "100", scale: 1, others: 2 }, { name: "125", scale: 1.25, others: 2 }, { name: "150", scale: 1.5, others: 0 }]
             for (const size of sizes) {
                 const menu = hubAt(size.scale, size.others)
@@ -728,9 +730,10 @@ Item {
                     keyClick(Qt.Key_Down)                     // the strip: its name line is open
                 }
                 wait(500)
-                grabImage(menu).save(shotsDir + "/hub-6-ui-" + size.name + ".png")
+                grabImage(host).save(shotsDir + "/hub-6-ui-" + size.name + ".png")
                 menu.destroy()
             }
+            bigHost.scale = 1
         }
 
         function test_zz_screenshots_settings_pause_row() {
