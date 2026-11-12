@@ -124,6 +124,9 @@ Item {
                 verify(row !== null && row.visible, family + " has its steps")
                 verify(findChild(row, "familyText").Accessible.name.startsWith(words), family + ": " + findChild(row, "familyText").Accessible.name)
             }
+            const receiver = find("pickerControllerHintReceiver")
+            verify(receiver !== null && receiver.visible, "the Xbox 360 receiver line shows")
+            compare(receiver.text, "Xbox 360 pad with a wireless receiver: press the sync button on the receiver, then on the controller.")
             verify(find("profileList").activeFocus, "the picker keeps focus")
         }
 

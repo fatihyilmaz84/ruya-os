@@ -1020,7 +1020,7 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+36"/>
-        <location line="+166"/>
+        <location line="+178"/>
         <source>Other</source>
         <translation>Other</translation>
     </message>
@@ -1113,7 +1113,12 @@ This can&apos;t be undone.</translation>
         <translation>Hold its pairing button until the light blinks. Pick the Bluetooth mode if it has several.</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+5"/>
+        <source>Xbox 360 pad with a wireless receiver: press the sync button on the receiver, then on the controller.</source>
+        <translation>Xbox 360 pad with a wireless receiver: press the sync button on the receiver, then on the controller.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
         <source>Other controller</source>
         <translation>Other controller</translation>
     </message>
@@ -1153,7 +1158,7 @@ This can&apos;t be undone.</translation>
         <translation>No controller or keyboard found. Hold the pairing button on your controller (on a DualSense: PS + Create) until its light blinks.</translation>
     </message>
     <message>
-        <location line="+173"/>
+        <location line="+184"/>
         <source>A device that is not a controller tried to connect and was ignored.</source>
         <translation>A device that is not a controller tried to connect and was ignored.</translation>
     </message>

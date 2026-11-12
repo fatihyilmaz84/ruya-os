@@ -57,6 +57,10 @@ export SDL_GAMECONTROLLERCONFIG='030000005e0400008e02000014010000,Xbox 360 Contr
 
 In a Flatpak set it with `--env=SDL_GAMECONTROLLERCONFIG=...` in `finish-args`, or call `SDL_AddGamepadMapping` from code. Unity, Godot, Unreal and SDL-based engines have the same idea in their own input settings.
 
+## Xbox 360 wireless receiver
+
+The Xbox 360 Wireless Gaming Receiver for Windows (Microsoft's, or a clone with the same USB ids) works with the in-kernel `xpad` driver: no driver or firmware to install. The player pairs a pad with the sync button on the receiver and then the one on the controller; the console only explains this on its "no controller" screens. Your game sees each pad as an ordinary "Xbox 360 Controller" (one device per pad, up to four; the d-pad may be reported as four buttons), which SDL already maps, and pads come and go while the receiver stays plugged in. Nothing about the receiver reaches you. Not tested on real hardware yet (planned: the Dell). The Xbox One/Series Wireless Adapter is a different device and is not supported.
+
 ## What the console does with the same controllers
 
 `ruya-inputd` is a small service that reads every gamepad and re-emits **navigation as keyboard keys** on a virtual keyboard, so that the shell (which only understands keys) can be driven by a pad. It does **not grab** the pads: your game sees the real device as well. The mapping:
