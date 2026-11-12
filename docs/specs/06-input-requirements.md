@@ -1,4 +1,4 @@
-> **Owner input, 2026-11-09.** Requirements for the input subsystem, drafted by the owner with ChatGPT and handed to the lead as the target. It is a requirements list, not a design: where it differs from an *Accepted* ADR, the ADR wins until changed. How RuyaOS meets each part, in which order, is [ADR-024](00-overview.md) and the tasks T-366..T-374; the design is written in `06-input.md` (T-366). Section 19 ("Instructions to Claude") is covered by the root `CLAUDE.md`.
+> **Appendix of [`06-input.md`](06-input.md)** (the design, T-366 / RUY-2, 2026-11-12). **Owner input, 2026-11-09.** Requirements for the input subsystem, drafted by the owner with ChatGPT and handed to the lead as the target. It is a requirements list, not a design: where it differs from an *Accepted* ADR, the ADR wins until changed. How RuyaOS meets each part, in which order, is [ADR-024](00-overview.md) and the tasks T-366..T-374; the design is written in `06-input.md` (T-366). Section 19 ("Instructions to Claude") is covered by the root `CLAUDE.md`.
 
 # Ruya Input
 ## Technical Architecture & Implementation Specification

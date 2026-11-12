@@ -1,0 +1,178 @@
+<!DOCTYPE node PUBLIC "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
+ "http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
+<!--
+  org.ruyaos.Input1 — Ruya Input: controllers, capabilities, routing, profiles (DRAFT).
+
+  DRAFT (T-366 / RUY-2, lead 2026-11-12): nothing serves this interface yet. The design is
+  docs/specs/06-input.md; T-367 builds Devices and Routing, T-368 the button test, T-369/T-370
+  Profiles, T-371 OwnershipMode. Each task may change what it builds here (contracts are drafts
+  until the first release, root CLAUDE.md), and RUY-403's served-vs-XML test skips this file until
+  ruya-inputd serves it.
+
+  To be served by ruya-inputd (system user ruya-input, not root: 06 §3) on the system bus at
+  /org/ruyaos/Input1. Bus policy: ruya-input owns the name; only ruya-shell and root may call.
+  Internal (tier A, ADR-022): apps never call it. They see input only as evdev virtual devices of
+  their own profile (docs/developers/controller-input.md) and, later, semantic actions through
+  Platform1 (T-374).
+
+  Trust: the `profile` argument of SetRoute is trusted (the shell passes the active profile, as with
+  Session1.Launch); the service refuses accounts that are not profile accounts ("unknown-profile").
+  When the caller that set the current route leaves the bus, the route falls back to "locked".
+
+  Status strings are stable API:
+    "ok"               success
+    "unknown-device"   no connected device with that id
+    "unknown-profile"  no such console profile (SetRoute), or no such controller profile
+    "unknown-app"      not an installed app id (assignments, ownership modes)
+    "invalid"          malformed argument, or a controller profile the schema refuses (errors says why)
+    "not-allowed"      the action does not fit the current state (a button test while an app is in
+                       front, deleting a built-in profile, a cycle in `inherits`)
+    "busy"             a button test already runs for that device
+    "failed"           internal error
+
+  Records are a{sv} so fields can be added later (unknown keys are ignored).
+
+  Device record (a{sv}), keys:
+    id          s   stable id, "<bus>-<vid>-<pid>-<key>" (06 §4.1; never an event node, no raw MAC)
+    instance    s   "<id>#<n>", one per connection
+    name        s   the driver's name ("DualSense Wireless Controller")
+    family      s   "xbox" | "playstation" | "nintendo" | "generic"
+    connection  s   "usb" | "bluetooth" | "receiver" | "virtual"
+    battery     i   0..100, or -1 when unknown or not on battery
+    charging    b
+    slot        u   ADR-017 player slot, 0 when none (T-264 fills it)
+    profile     s   the console profile that owns the pad ("" when none)
+
+  Capability (a(sbbbb)): name, hardware, driver, available, output (06 §4.3). Names:
+    buttons sticks analog_triggers dpad gyro accelerometer touchpad rumble trigger_rumble
+    adaptive_triggers lightbar player_leds speaker microphone battery
+
+  Routes: "shell" | "app" | "overlay" | "locked" (06 §5.1). Ownership modes: "managed" |
+  "passthrough" | "steam" | "semantic" (06 §5.3).
+
+  Controller profiles are JSON text, schema docs/specs/schemas/input-profile-v1.json (06 §7).
+  Profile summary (a{sv}), keys: id s, name s, scope s ("builtin" | "global" | "platform" |
+  "game"), scope_id s (the app id for platform and game, else ""), inherits s, builtin b.
+-->
+<node>
+  <interface name="org.ruyaos.Input1">
+
+    <!-- Devices (T-367, T-368) -->
+    <method name="ListDevices">
+      <arg name="devices" type="aa{sv}" direction="out"/>
+    </method>
+    <method name="GetCapabilities">
+      <arg name="device_id" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+      <arg name="capabilities" type="a(sbbbb)" direction="out"/>
+    </method>
+    <signal name="DeviceAdded">
+      <arg name="device" type="a{sv}"/>
+    </signal>
+    <!-- Battery, slot, owner or capabilities changed. -->
+    <signal name="DeviceChanged">
+      <arg name="device" type="a{sv}"/>
+    </signal>
+    <signal name="DeviceRemoved">
+      <arg name="device_id" type="s"/>
+      <arg name="instance" type="s"/>
+    </signal>
+
+    <!-- Live button test (T-368). Allowed only while the route is "shell"; ends by StopTest, by
+         a route change, or 120 s after the last input. TestInput carries normalised inputs
+         (06 §4.2) and, for inputs without a normal name, "raw:<node>:<type>:<code>"; axis values
+         are sent at most 30 times a second per axis. -->
+    <method name="StartTest">
+      <arg name="device_id" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
+    <method name="StopTest">
+      <arg name="device_id" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
+    <signal name="TestInput">
+      <arg name="device_id" type="s"/>
+      <arg name="input" type="s"/>
+      <arg name="value" type="i"/>
+    </signal>
+
+    <!-- Routing (T-367). The shell calls it on every focus, overlay, sign-in, switch, lock and
+         freeze change. `instance` is Session1's instance for "app" and "overlay", else "";
+         `profile` is the active console profile, "" for "locked". -->
+    <method name="SetRoute">
+      <arg name="route" type="s" direction="in"/>
+      <arg name="instance" type="s" direction="in"/>
+      <arg name="profile" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
+    <property name="Route" type="s" access="read"/>
+    <signal name="RouteChanged">
+      <arg name="route" type="s"/>
+      <arg name="instance" type="s"/>
+    </signal>
+
+    <!-- Controller profiles (T-369, T-370), stored per console profile. -->
+    <method name="ListProfiles">
+      <arg name="profile" type="s" direction="in"/>
+      <arg name="profiles" type="aa{sv}" direction="out"/>
+    </method>
+    <method name="GetProfile">
+      <arg name="profile" type="s" direction="in"/>
+      <arg name="profile_id" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+      <arg name="json" type="s" direction="out"/>
+    </method>
+    <!-- Creates or replaces (same id). Import is ValidateProfile, then SaveProfile. -->
+    <method name="SaveProfile">
+      <arg name="profile" type="s" direction="in"/>
+      <arg name="json" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+      <arg name="profile_id" type="s" direction="out"/>
+      <arg name="errors" type="as" direction="out"/>
+    </method>
+    <method name="ValidateProfile">
+      <arg name="json" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+      <arg name="errors" type="as" direction="out"/>
+    </method>
+    <method name="DeleteProfile">
+      <arg name="profile" type="s" direction="in"/>
+      <arg name="profile_id" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
+    <!-- scope: "global" (scope_id "") | "platform" | "game" (scope_id: the app id);
+         profile_id "" removes the assignment. -->
+    <method name="AssignProfile">
+      <arg name="profile" type="s" direction="in"/>
+      <arg name="scope" type="s" direction="in"/>
+      <arg name="scope_id" type="s" direction="in"/>
+      <arg name="profile_id" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
+    <!-- What would apply to this device in this app: the resolved profile and its chain,
+         most specific first (game, platform, global, builtin). -->
+    <method name="GetEffectiveProfile">
+      <arg name="profile" type="s" direction="in"/>
+      <arg name="device_id" type="s" direction="in"/>
+      <arg name="app_id" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+      <arg name="json" type="s" direction="out"/>
+      <arg name="chain" type="as" direction="out"/>
+    </method>
+    <signal name="ProfilesChanged">
+      <arg name="profile" type="s"/>
+    </signal>
+
+    <!-- Ownership modes (T-371), per app; applied at the next launch. -->
+    <method name="GetOwnershipMode">
+      <arg name="app_id" type="s" direction="in"/>
+      <arg name="mode" type="s" direction="out"/>
+    </method>
+    <method name="SetOwnershipMode">
+      <arg name="app_id" type="s" direction="in"/>
+      <arg name="mode" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+  </interface>
+</node>
