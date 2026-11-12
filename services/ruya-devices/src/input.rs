@@ -18,6 +18,16 @@ pub const MAX_NAME_CHARS: usize = 64;
 /// The name of the virtual keyboard `ruya-inputd` creates (`services/ruya-inputd`).
 pub const VIRTUAL_NAME: &str = "RuyaOS Navigation";
 
+/// The `phys` prefix of every device `ruya-inputd` creates (the virtual pads it routes to a
+/// game, `ruya-input/pad<n>`, and its keyboard and mouse, 06 §1). They are the console's own
+/// devices, never a controller the player connected.
+pub const VIRTUAL_PHYS_PREFIX: &str = "ruya-input/";
+
+/// Whether a device is one the console itself made (by name or by `phys`).
+fn is_console_virtual(device: &InputDevice) -> bool {
+    device.name == VIRTUAL_NAME || device.phys.starts_with(VIRTUAL_PHYS_PREFIX)
+}
+
 /// One input device as sysfs shows it.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct InputDevice {
@@ -55,7 +65,7 @@ fn parse_words(keys: &str) -> Vec<u64> {
 /// test; a gamepad has a button in the joystick/gamepad range (`BTN_JOYSTICK` 0x120 to
 /// `BTN_THUMBR` 0x13e). A mouse (0x110...) and a power button are neither.
 pub fn is_navigation_input(device: &InputDevice) -> bool {
-    if device.name == VIRTUAL_NAME {
+    if is_console_virtual(device) {
         return false;
     }
     let words = parse_words(&device.keys);
@@ -101,7 +111,7 @@ pub fn is_behind_xbox360_receiver(device: &InputDevice) -> bool {
 /// The pad behind an input device, or `None` for anything that is not one (a keyboard, a mouse,
 /// a motion sensor, a touchpad, the console's own virtual keyboard).
 pub fn gamepad_of(device: &InputDevice) -> Option<Gamepad> {
-    if device.name == VIRTUAL_NAME {
+    if is_console_virtual(device) {
         return None;
     }
     let words = parse_words(&device.keys);
@@ -577,6 +587,25 @@ mod tests {
         assert!(gamepad_of(&device("USB Mouse", "10000 0 0 0 0")).is_none());
         assert!(gamepad_of(&device("Wireless Controller Motion Sensors", "")).is_none());
         assert!(gamepad_of(&device(VIRTUAL_NAME, PAD_KEYS)).is_none());
+    }
+
+    /// The virtual Xbox 360 pad `ruya-inputd` makes for a game (RUY-3) is not a controller the
+    /// player connected: it must not raise "connected" toasts or appear in controller lists
+    /// (Dell, 0.0.71: one "connected" toast every time a game came to the front).
+    #[test]
+    fn the_virtual_pads_ruya_inputd_makes_are_not_pads_or_navigation_input() {
+        let virtual_pad = pad("Ruya Xbox 360 Pad", "ruya-input/pad1", "", 0x03, 0x045e);
+        assert!(gamepad_of(&virtual_pad).is_none());
+        assert!(!is_navigation_input(&virtual_pad));
+        // A real pad with the same name but a real phys still counts.
+        let real = pad(
+            "Ruya Xbox 360 Pad",
+            "usb-0000:00:14.0-2/input0",
+            "",
+            0x03,
+            0x045e,
+        );
+        assert!(gamepad_of(&real).is_some());
     }
 
     #[test]
