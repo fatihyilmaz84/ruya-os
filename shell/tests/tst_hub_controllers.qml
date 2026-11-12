@@ -192,6 +192,9 @@ Item {
             Batteries.mockSet("up-usb", 100, "full", "controller", "Xbox Wireless Controller", "xbox")   // UPower: no address
             tryVerify(() => Batteries.devices.length === 1)
             openControllers()
+            // The panel's rows are built a tick after the panel opens: wait for the last one.
+            tryVerify(() => find("quickMenuItem_controllers:settings") !== null, 2000, "the rows are built")
+            tryVerify(() => padKeys().every(k => find("quickMenuItem_" + k) !== null), 2000, "every pad row is built")
             compare(padKeys().length, 3)
             compare(find("systemPanel").itemKeys.length, 4, "three pads and Controller settings")
             compare(find("systemPanel").itemKeys[3], "controllers:settings")
