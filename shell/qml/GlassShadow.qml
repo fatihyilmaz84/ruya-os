@@ -53,6 +53,14 @@ Item {
     opacity: shown ? 1 : 0
     Behavior on opacity { NumberAnimation { duration: Theme.focusMs } }
 
+    // The layers of `box` and `cutout` are on only while the shadow is drawn, and the effects that
+    // sample them exist only then too (the Loaders below, `shadow.visible`: the shadow's own fade and
+    // its owner's visibility). A MultiEffect that outlived its layers being turned off and on again
+    // kept the old layers' texture providers under the same `source` and `maskSource` and drew
+    // nothing: a top bar pill hidden behind an app or the Performance tier came back without its
+    // shadow (T-430, the class of T-387). Each showing makes the effects anew, over the new layers;
+    // a hidden effect is never synced against a missing texture.
+
     // The shadow's source: the surface's shape. It is cut out again by the inverted mask below, so
     // only the shadow outside the surface is drawn and nothing can show through the surface.
     Item {
@@ -96,10 +104,10 @@ Item {
     // surface's antialiased edge instead of stopping a pixel short of it (a light seam at the corners).
     // Made only while it is wanted: a card whose halo is off (not focused, a lower tier) holds no
     // effect, so the Store's forty cards carry one halo, on the focused card (T-428). It stays
-    // through the fade-out (until the opacity is 0).
+    // through the fade-out (until the opacity is 0), and goes while the owner is hidden (T-430).
     Loader {
         objectName: "haloLoader"
-        active: shadow.haloShown && (shadow.shown || shadow.opacity > 0)
+        active: shadow.haloShown && shadow.visible && (shadow.shown || shadow.opacity > 0)
         sourceComponent: SmoothMask {
             objectName: "haloEffect"
             x: box.x
@@ -117,20 +125,24 @@ Item {
         }
     }
 
-    SmoothMask {
-        objectName: "shadowEffect"
-        x: box.x
-        y: box.y
-        width: box.width
-        height: box.height
-        source: box
-        maskInverted: true
-        maskSource: cutout
-        blurMax: shadow.effectBlurMax
-        shadowEnabled: true
-        shadowColor: shadow.tint
-        shadowOpacity: shadow.alpha
-        shadowBlur: Math.min(1, shadow.blurPx / shadow.effectBlurMax)
-        shadowVerticalOffset: shadow.offsetY
+    Loader {
+        objectName: "shadowLoader"
+        active: shadow.visible
+        sourceComponent: SmoothMask {
+            objectName: "shadowEffect"
+            x: box.x
+            y: box.y
+            width: box.width
+            height: box.height
+            source: box
+            maskInverted: true
+            maskSource: cutout
+            blurMax: shadow.effectBlurMax
+            shadowEnabled: true
+            shadowColor: shadow.tint
+            shadowOpacity: shadow.alpha
+            shadowBlur: Math.min(1, shadow.blurPx / shadow.effectBlurMax)
+            shadowVerticalOffset: shadow.offsetY
+        }
     }
 }
