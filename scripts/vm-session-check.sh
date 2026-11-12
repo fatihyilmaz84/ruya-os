@@ -619,6 +619,16 @@ check)
     done
     # The rest of Freeze/Thaw and the Stop of a frozen app run without the shell, whose sweep would
     # otherwise thaw every Freeze below; it starts again after the Stop section.
+    # T-470: ruya-shell does not linger, so logind stops its manager 10 s (UserStopDelaySec) after the
+    # compositor's session ends, and with it PipeWire and every profile's sound server (ruya-pulse@):
+    # the Thaw's park-audio then failed ("Transport endpoint is not connected") and pw-dump answered
+    # nothing. The manager lingers while the shell is stopped; the linger is taken back after the start.
+    # The card, though, is the seat session's alone (logind's uaccess ACL on /dev/snd): with the shell
+    # stopped its PipeWire sees only auto_null, so the card is read here, with the shell still running.
+    echo "    cards with the shell running: $(audio_probe 0 | sed -n 's/^cards=//p')"
+    shell_lingered=no
+    loginctl show-user ruya-shell -p Linger 2>/dev/null | grep -q yes && shell_lingered=yes
+    loginctl enable-linger ruya-shell
     systemctl stop ruya-compositor@tty1 && ok "the shell is stopped for the Freeze checks" || bad "systemctl stop ruya-compositor@tty1"
     sleep 1; : > "$work/signals.log"   # the sweep's FrozenChanged lines must not satisfy the waits below
     # T-466: a sound client in a third scope of the app plays (silence) through the profile's own sound
@@ -668,7 +678,7 @@ check)
             || bad "the frozen app's stream is not parked: $(audio_probe "$ppid" | tr '\n' ' ')"
         cards="$(audio_probe "$ppid" | sed -n 's/^cards=//p')"
         if [ -z "$cards" ]; then
-            echo "UNVERIFIED: this VM has no sound card (boot with -Audio): the card's suspend was not seen"
+            echo "UNVERIFIED: no sound card with the shell stopped (the card is the seat session's; see 'cards with the shell running' above): the card's suspend was not seen"
         else
             # WirePlumber suspends an idle sink after 5 s.
             wait_audio "$ppid" '^cards=([^,]*:suspended,?)+$' 15 \
@@ -693,6 +703,9 @@ check)
     else
         case "$line" in *"no swap is active"*) ok "no swap: the service leaves the memory (journal: no swap is active)";; *) bad "no swap, and no 'no swap is active' line for $inst: $line";; esac
     fi
+    # The Thaw's restore runs in ruya-shell's manager: it must still be there, 30 s after the shell stopped.
+    systemctl is-active --quiet "user@$uid.service" && ok "ruya-shell's manager still runs with the shell stopped (it lingers)" \
+        || bad "ruya-shell's manager is gone with the shell stopped: the restore below has nowhere to run"
     case "$(thaw_app "$inst")" in 's "ok"') ok "Thaw answered ok";; *) bad "Thaw";; esac
     for u in "$inst" $scopes; do
         [ "$(fstate "$user" "$u")" = running ] && ok "$u runs again" || bad "$u: FreezerState $(fstate "$user" "$u") after Thaw"
@@ -730,6 +743,9 @@ check)
     running | grep -q "$inst" && bad "ListRunning still lists it" || ok "ListRunning is empty again"
     grep -a -q "session-probe: appExited $sleeper 0 quit\|session-probe: appExited $sleeper -\?[0-9]* quit" "$work/probe.log" && ok "the shell saw appExited quit" || bad "the shell did not see appExited quit"
     systemctl start ruya-compositor@tty1 && ok "the shell is started again" || bad "systemctl start ruya-compositor@tty1"
+    # The linger goes back once the shell's seat session holds the manager again.
+    n=0; until loginctl list-sessions --no-legend 2>/dev/null | grep -E -q "ruya-shell +seat0" || [ "$n" -ge 10 ]; do sleep 1; n=$((n + 1)); done
+    [ "$shell_lingered" = yes ] || loginctl disable-linger ruya-shell
 
     echo "--- an app that exits non-zero"
     out="$(launch "$crasher" "$pid")"; inst2="$(echo "$out" | unit_of)"
