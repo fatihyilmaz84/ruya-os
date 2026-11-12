@@ -117,10 +117,17 @@ QtObject {
             const name = displayName(w.id, w.name, w.family)
             const deviceKind = w.deviceKind ?? "controller"
             const battery = batteryOf(w.id, deviceKind)
-            const text = battery >= 0 ? qsTr("%1 connected · battery %2%").arg(name).arg(battery)
-                                      : qsTr("%1 connected").arg(name)
+            // The fact is the title; the battery and the way it is connected are the detail (RUY-412).
+            const parts = []
+            if (battery >= 0)
+                parts.push(qsTr("Battery %1%").arg(battery))
+            if (w.transport === "bluetooth")
+                parts.push(qsTr("Bluetooth"))
+            else if (w.transport === "usb")
+                parts.push(qsTr("USB"))
             toasts.connectedShown += 1
-            Notifications.show(text, "success", "", DeviceIcons.iconFor(deviceKind, w.family))
+            Notifications.show(qsTr("%1 connected").arg(name), "success", "", DeviceIcons.iconFor(deviceKind, w.family),
+                               parts.join(" · "))
         } else {
             const used = shown[w.id] ? shown[w.id].used : false
             delete shown[w.id]

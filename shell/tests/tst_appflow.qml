@@ -513,7 +513,7 @@ Item {
             tryCompare(splash, "shown", false)
             tryCompare(Notifications.model, "count", 1)
             const toast = Notifications.model.get(0)
-            compare(toast.text, "Crashy stopped unexpectedly. Try again.")
+            compare(toast.text, "Crashy stopped unexpectedly")
             compare(toast.kind, "error")
             tryVerify(() => find("homePlay").activeFocus, 2000, "focus is back on Play")
             verify(!tc.shell.appOpen)
@@ -528,7 +528,7 @@ Item {
             tryCompare(exitedSpy, "count", 1, 3000)
             tryCompare(Notifications.model, "count", 1)
             // The launch is over, so the name is the app's own: the library or the store do not know "crashy".
-            compare(Notifications.model.get(0).text, "crashy stopped unexpectedly. Try again.")
+            compare(Notifications.model.get(0).text, "crashy stopped unexpectedly")
             compare(Notifications.model.get(0).kind, "error")
             verify(tc.shell.appOpen, "an error toast over the app does not take it away")
             tc.shell.removeApp(app)                          // the compositor drops the dead window
@@ -544,7 +544,7 @@ Item {
             compare(exitedSpy.signalArguments[0][3], "launch-failed")
             tryCompare(find("launchSplash"), "shown", false)
             tryCompare(Notifications.model, "count", 1)
-            compare(Notifications.model.get(0).text, "No Launch could not be started. Try again.")
+            compare(Notifications.model.get(0).text, "No Launch could not start")
             tryVerify(() => find("homePlay").activeFocus)
         }
 
@@ -559,7 +559,7 @@ Item {
             tryCompare(Notifications.model, "count", 1)
             const toast = Notifications.model.get(0)
             const capped = title.slice(0, 29) + "…"
-            compare(toast.text, capped + " could not be started. Try again.")
+            compare(toast.text, capped + " could not start")
             compare(toast.kind, "error")
             verify(capped.length <= 30)
             verify(!toast.text.includes("org.nope"), "never the raw spec")

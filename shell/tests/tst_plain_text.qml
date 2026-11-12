@@ -256,12 +256,12 @@ Item {
             tryVerify(() => Notifications.model.count > 0, 4000, "a toast announces the stick")
             let toast = ""
             for (let i = 0; i < Notifications.model.count; ++i) {
-                if (Notifications.model.get(i).text.indexOf(tc.hostile) >= 0)
-                    toast = Notifications.model.get(i).text
+                if (Notifications.model.get(i).detail.indexOf(tc.hostile) >= 0)
+                    toast = Notifications.model.get(i).detail
             }
             verify(toast.length > 0, "the toast carries the label")
             tryVerify(() => textsWith(find("toastList"), tc.hostile).length > 0, 3000, "the toast is on screen")
-            expectPlain(tc.shell, tc.hostile, 1, "drive toast", ["toastText"])
+            expectPlain(tc.shell, tc.hostile, 1, "drive toast", ["toastDetail"])
         }
 
         // --- network: the SSID in the pane's rows and the status row ---

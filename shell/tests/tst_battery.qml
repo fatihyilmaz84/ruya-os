@@ -302,7 +302,8 @@ Item {
             Batteries.mockSet("pad-1", 15)
             tryCompare(lowSpy, "count", 1)
             tryVerify(() => lowToasts().length === 1, 2000)
-            compare(lowToasts()[0], "Controller battery low (15%)")
+            compare(lowToasts()[0], "Controller battery low")
+            compare(Notifications.model.get(Notifications.model.count - 1).detail.slice(-3), "15%")
             tryCompare(inChip("pad-1", "batteryLevelIcon"), "name", "battery_alert")
             Batteries.mockSet("pad-1", 14)
             tryCompare(inChip("pad-1", "batteryPercent"), "text", "14%")
@@ -331,7 +332,7 @@ Item {
             tryCompare(inChip("pad-2", "batteryLevelIcon"), "name", "battery_alert", 2000, "warning state, like the toast")
             compare(levelIcon("pad-1"), "battery_charging_full")
             tryVerify(() => lowToasts().length === 1, 2000)
-            compare(lowToasts()[0], "Controller battery low (12%)")
+            compare(lowToasts()[0], "Controller battery low")
             compare(lowSpy.count, 1, "only the discharging pad was reported")
             compare(lowSpy.signalArguments[0][0], "pad-2")
         }

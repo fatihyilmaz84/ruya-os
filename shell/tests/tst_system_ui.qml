@@ -104,6 +104,114 @@ Item {
             compare(Notifications.model.get(0).kind, "info")
         }
 
+        // The card of the toast at `index` in the list.
+        function toastItem(index) {
+            const list = find("toastList")
+            tryVerify(() => list.itemAtIndex(index) !== null)
+            return list.itemAtIndex(index)
+        }
+        function child(item, name) { return findChild(item, name) }
+
+        function test_toast_title_detail_plain_text() {
+            const lng = "Wireless Controller of the Very Long Name Number 12345 <b>x</b>"
+            compare(lng.length >= 60, true)
+            Notifications.show(lng, "info", "", "", lng)
+            Notifications.showSticky("k", lng, "warning", "", lng, lng, "A")
+            tryCompare(Notifications.model, "count", 2)
+            for (const i of [0, 1]) {
+                const t = toastItem(i)
+                for (const n of ["toastText", "toastDetail"]) {
+                    const label = child(t, n)
+                    compare(label.textFormat, Text.PlainText)
+                    compare(label.maximumLineCount, 1)
+                    compare(label.elide, Text.ElideRight)
+                    verify(label.truncated, n + " is cut, not wrapped")
+                    compare(label.text, lng)
+                }
+            }
+            const sticky = toastItem(1)
+            verify(child(sticky, "toastFooter").visible)
+            const footer = child(sticky, "toastFooterText")
+            compare(footer.textFormat, Text.PlainText)
+            compare(footer.maximumLineCount, 1)
+            compare(footer.elide, Text.ElideRight)
+            verify(!child(toastItem(0), "toastFooter").visible)
+            const layer = find("toastLayer")
+            compare(toastItem(0).height, 112 * layer.u)
+            compare(toastItem(0).width, 600 * layer.u)
+            Notifications.show("No detail", "info")
+            Notifications.dismiss(Notifications.model.get(0).toastId)
+            Notifications.dismiss(Notifications.model.get(0).toastId)
+            tryCompare(Notifications.model, "count", 1)
+            tryVerify(() => toastItem(0).height === 96 * layer.u)
+            verify(!child(toastItem(0), "toastDetail").visible)
+        }
+
+        function test_toast_default_glyph_per_kind() {
+            const want = { info: "info", success: "check_circle", warning: "warning", error: "error" }
+            for (const kind of Object.keys(want))
+                Notifications.show(kind, kind)
+            Notifications.durationMs = 60000
+            tryCompare(Notifications.model, "count", 3)
+            compare(child(toastItem(0), "toastIcon").name, "info")
+            compare(child(toastItem(1), "toastIcon").name, "check_circle")
+            compare(child(toastItem(2), "toastIcon").name, "warning")
+            Notifications.dismiss(Notifications.model.get(0).toastId)
+            tryCompare(Notifications.model, "count", 3)
+            tryVerify(() => child(toastItem(2), "toastIcon").name === "error")
+            Notifications.dismiss(Notifications.model.get(0).toastId)
+            Notifications.show("pad", "success", "", "pad_xbox")
+            tryVerify(() => Notifications.model.count === 3)
+            tryVerify(() => child(toastItem(2), "toastIcon").name === "pad_xbox", 2000, "a device icon wins")
+            verify(child(toastItem(2), "toastBadge").width > 0)
+        }
+
+        function test_toast_timer_line() {
+            Notifications.show("Timed", "info")
+            Notifications.showSticky("s", "Sticky", "info")
+            tryCompare(Notifications.model, "count", 2)
+            verify(child(toastItem(0), "toastTimer").visible, "a timed toast has the line")
+            compare(child(toastItem(1), "toastTimer").visible, false, "a sticky one has none")
+            DeviceSettings.reducedMotion = true
+            compare(child(toastItem(0), "toastTimer").visible, false, "none under reduced motion")
+            DeviceSettings.reducedMotion = false
+            Notifications.remove("s")
+        }
+
+        function test_toast_compact_when_app_in_front() {
+            const layer = find("toastLayer")
+            const list = find("toastList")
+            Notifications.show("Info toast", "info")
+            Notifications.show("Warn toast", "warning", "", "", "with a detail")
+            compare(list.width, 600 * layer.u)
+            Notifications.appInFront = true
+            tryCompare(Notifications.model, "count", 1, 2000, "only the warning stays")
+            compare(Notifications.pendingCount, 1)
+            compare(list.width, 480 * layer.u)
+            const t = toastItem(0)
+            compare(t.height, 80 * layer.u)
+            compare(child(t, "toastBadge").width, 48 * layer.u)
+            verify(!child(t, "toastDetail").visible, "title only")
+            compare(find("toastOverflow").visible, false, "no chip over an app")
+            Notifications.appInFront = false
+            compare(list.width, 600 * layer.u)
+            tryCompare(Notifications.model, "count", 2)
+        }
+
+        function test_toast_overflow_chip() {
+            const chip = find("toastOverflow")
+            verify(!chip.visible)
+            for (let i = 1; i <= 5; ++i)
+                Notifications.show("Toast " + i, "info")
+            compare(Notifications.pendingCount, 2)
+            verify(chip.visible)
+            compare(find("toastOverflowText").text, "2 more")
+            Notifications.dismiss(Notifications.model.get(0).toastId)
+            compare(find("toastOverflowText").text, "1 more")
+            Notifications.dismiss(Notifications.model.get(0).toastId)
+            verify(!chip.visible, "hidden at 0")
+        }
+
         function test_volume_keys() {
             signInAsAda()
             const osd = find("volumeOsd")
@@ -173,13 +281,23 @@ Item {
             if (!shotsDir)
                 skip("set RUYA_SHOTS_DIR to save screenshots")
             signInAsAda()
-            Notifications.show("Controller connected", "success", "+")
-            Notifications.show("Update ready: restart to apply", "info")
-            Notifications.show("Controller battery low", "warning")
+            Notifications.durationMs = 60000
+            Notifications.show("DualSense connected", "success", "", "pad_playstation", "Battery 62% · Bluetooth")
+            Notifications.show("Update ready", "info", "", "", "Restart to finish")
+            Notifications.show("Controller battery low", "warning", "", "pad_xbox", "Xbox controller · 12%")
+            Notifications.show("Fourth toast", "info")
             keyClick(Qt.Key_VolumeUp)
             tryCompare(Audio, "volume", 55)
-            wait(500)
+            wait(800)
             grabImage(tc.shell).save(shotsDir + "/14-toast-and-osd.png")
+            while (Notifications.model.count > 0)
+                Notifications.dismiss(Notifications.model.get(0).toastId)
+            Notifications.pending = []
+            Notifications.show("Crashy could not start", "error", "", "", "Try again.")
+            Notifications.appInFront = true
+            wait(800)
+            grabImage(tc.shell).save(shotsDir + "/14b-toast-over-app.png")
+            Notifications.appInFront = false
         }
     }
 }

@@ -110,6 +110,13 @@ Item {
                 row(rows, "text on toast over " + name, t.text, toast, 4.5)
                 for (const kind of ["toastInfo", "toastSuccess", "toastWarning", "toastError"])
                     row(rows, kind + " (icon) on toast over " + name, t[kind], toast, 3)
+                row(rows, "textDim on toast over " + name, t.textDim, toast, 4.5)
+                // The round badge (RUY-412): the status colour's glyph on its 18 % fill over the toast.
+                for (const kind of ["toastInfo", "toastSuccess", "toastWarning", "toastError"]) {
+                    const tone = t[kind]
+                    row(rows, kind + " glyph on its badge fill over toast over " + name, tone,
+                        ThemeMath.over(Qt.rgba(tone.r, tone.g, tone.b, Theme.badgeFillAlpha), toast), 3)
+                }
             }
 
             row(rows, "onPrimary on primaryFill", t.onPrimary, t.primaryFill, 4.5)

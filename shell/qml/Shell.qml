@@ -612,8 +612,8 @@ FocusScope {
         target: Update
         function onRestartPendingChanged() {
             if (Update.restartPending)
-                Notifications.showSticky("update-restart",
-                    qsTr("Restarting to finish the update in 2 minutes. Press any button to wait."), "warning")
+                Notifications.showSticky("update-restart", qsTr("Restarting in 2 minutes"), "warning", "",
+                                         qsTr("To finish the update"), qsTr("Press any button to wait"), "A")
             else
                 Notifications.remove("update-restart")
         }
@@ -722,7 +722,7 @@ FocusScope {
                     Notifications.show(qsTr("%1 is already running").arg(name), "info")
                 return
             }
-            Notifications.show(qsTr("%1 could not be started. Try again.").arg(name), "error")
+            Notifications.show(qsTr("%1 could not start").arg(name), "error", "", "", qsTr("Try again."))
         }
         function onInstanceOfPidFinished(pid, status, instance) {
             root.instanceArrived(pid, status, instance)
@@ -751,8 +751,8 @@ FocusScope {
             if (reason !== "crashed" && reason !== "launch-failed")
                 return
             const name = Notifications.named(title)
-            Notifications.show(reason === "crashed" ? qsTr("%1 stopped unexpectedly. Try again.").arg(name)
-                                                    : qsTr("%1 could not be started. Try again.").arg(name), "error")
+            Notifications.show(reason === "crashed" ? qsTr("%1 stopped unexpectedly").arg(name)
+                                                    : qsTr("%1 could not start").arg(name), "error", "", "", qsTr("Try again."))
         }
     }
 

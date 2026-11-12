@@ -61,7 +61,7 @@ Item {
         function toastTexts() {
             const out = []
             for (let i = 0; i < Notifications.model.count; ++i)
-                out.push(Notifications.model.get(i).text)
+                out.push(Notifications.model.get(i).text + (Notifications.model.get(i).detail !== "" ? " | " + Notifications.model.get(i).detail : ""))
             return out
         }
 
@@ -74,7 +74,8 @@ Item {
         function test_a_pad_that_appears_is_announced_once_with_its_glyph_and_battery() {
             usb(true, "usb-1", "Wireless Controller", "playstation")
             tryCompare(Notifications.model, "count", 1)
-            compare(Notifications.model.get(0).text, "PlayStation controller connected · battery 60%")
+            compare(Notifications.model.get(0).text, "PlayStation controller connected")
+            compare(Notifications.model.get(0).detail, "Battery 60% · USB")
             compare(Notifications.model.get(0).iconName, "pad_playstation")
             compare(Notifications.model.get(0).kind, "success")
             usb(true, "usb-1", "Wireless Controller", "playstation")      // the same connection again
@@ -86,7 +87,8 @@ Item {
         function test_a_pad_of_no_known_family_is_named_by_the_system() {
             usb(true, "usb-2", "Generic USB Joystick", "")
             tryCompare(Notifications.model, "count", 1)
-            compare(Notifications.model.get(0).text, "Generic USB Joystick connected · battery 60%")
+            compare(Notifications.model.get(0).text, "Generic USB Joystick connected")
+            compare(Notifications.model.get(0).detail, "Battery 60% · USB")
             compare(Notifications.model.get(0).iconName, "sports_esports")
         }
 
@@ -97,7 +99,8 @@ Item {
             tryVerify(() => Bluetooth.devices.find(d => d.id === "bt-gallery-ps").battery === 55)
             Bluetooth.mockGamepad(true, "bt-gallery-ps", "Wireless Controller", "playstation", "bluetooth")
             tryCompare(Notifications.model, "count", 1)
-            compare(Notifications.model.get(0).text, "DualSense connected · battery 55%")
+            compare(Notifications.model.get(0).text, "DualSense connected")
+            compare(Notifications.model.get(0).detail, "Battery 55% · Bluetooth")
         }
 
         function test_a_flapping_cable_says_nothing() {
@@ -194,8 +197,8 @@ Item {
             // Two toasts, each with its own pad's name and battery: the same name would not tell
             // which one arrived.
             const texts = toastTexts()
-            verify(texts.includes("Wireless Controller (00:04) connected · battery 80%"), texts.join(" | "))
-            verify(texts.includes("Wireless Controller (00:05) connected · battery 55%"), texts.join(" | "))
+            verify(texts.includes("Wireless Controller (00:04) connected | Battery 80% · Bluetooth"), texts.join(" | "))
+            verify(texts.includes("Wireless Controller (00:05) connected | Battery 55% · Bluetooth"), texts.join(" | "))
             compare(Notifications.model.get(0).iconName, "pad_playstation")
             compare(Notifications.model.get(1).iconName, "pad_playstation")
             // The same connections again say nothing new.
@@ -230,7 +233,8 @@ Item {
             tryVerify(() => Bluetooth.devices.find(d => d.id === tc.padB).name === "Ada's pad")
             bt(true, tc.padA)
             tryCompare(Notifications.model, "count", 1)
-            compare(Notifications.model.get(0).text, "Wireless Controller connected · battery 80%", "no twin, no suffix")
+            compare(Notifications.model.get(0).text, "Wireless Controller connected", "no twin, no suffix")
+            compare(Notifications.model.get(0).detail, "Battery 80% · Bluetooth")
         }
 
         // ---- the guided pairing screen ----
@@ -510,7 +514,8 @@ Item {
             compare(find("onboardingTitle").text, "Kontrolcü eşleştir")
             usb(true, "usb-1", "Wireless Controller", "playstation")
             tryCompare(Notifications.model, "count", 1)
-            compare(Notifications.model.get(0).text, "PlayStation kontrolcüsü bağlandı · pil 60%")
+            compare(Notifications.model.get(0).text, "PlayStation kontrolcüsü bağlandı")
+            compare(Notifications.model.get(0).detail, "Pil 60% · USB")
             onb.close()
         }
 

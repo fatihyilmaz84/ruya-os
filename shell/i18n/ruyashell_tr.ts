@@ -1157,17 +1157,27 @@ Bu geri alınamaz.</translation>
 <context>
     <name>ControllerToasts</name>
     <message>
-        <location filename="../qml/ControllerToasts.qml" line="+120"/>
-        <source>%1 connected · battery %2%</source>
-        <translation>%1 bağlandı · pil %2%</translation>
+        <location filename="../qml/ControllerToasts.qml" line="+123"/>
+        <source>Battery %1%</source>
+        <translation>Pil %1%</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+2"/>
+        <source>Bluetooth</source>
+        <translation>Bluetooth</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>USB</source>
+        <translation>USB</translation>
+    </message>
+    <message>
+        <location line="+2"/>
         <source>%1 connected</source>
         <translation>%1 bağlandı</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+7"/>
         <source>%1 disconnected</source>
         <translation>%1 bağlantısı kesildi</translation>
     </message>
@@ -3047,17 +3057,29 @@ Bu geri alınamaz.</translation>
         <translation>Ses %1 cihazına taşındı</translation>
     </message>
     <message>
-        <location line="+19"/>
-        <source>Restarting to finish the update in 2 minutes. Press any button to wait.</source>
-        <translation>Güncellemeyi bitirmek için 2 dakika içinde yeniden başlatılıyor. Beklemek için herhangi bir düğmeye bas.</translation>
-    </message>
-    <message>
-        <location line="+37"/>
+        <location line="+56"/>
         <source>%1 is still closing.</source>
         <translation>%1 hâlâ kapanıyor.</translation>
     </message>
     <message>
-        <location line="+248"/>
+        <location line="+72"/>
+        <location line="+30"/>
+        <source>%1 could not start</source>
+        <translation>%1 başlatılamadı</translation>
+    </message>
+    <message>
+        <location line="-30"/>
+        <location line="+30"/>
+        <source>Try again.</source>
+        <translation>Tekrar dene.</translation>
+    </message>
+    <message>
+        <location line="-1"/>
+        <source>%1 stopped unexpectedly</source>
+        <translation>%1 beklenmedik şekilde durdu</translation>
+    </message>
+    <message>
+        <location line="+147"/>
         <source>Could not close %1.</source>
         <translation>%1 kapatılamadı.</translation>
     </message>
@@ -3150,28 +3172,32 @@ Bu geri alınamaz.</translation>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="-1189"/>
+        <location line="-1296"/>
+        <source>Restarting in 2 minutes</source>
+        <translation>2 dakika içinde yeniden başlatılıyor</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>To finish the update</source>
+        <translation>Güncellemeyi bitirmek için</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Press any button to wait</source>
+        <translation>Beklemek için herhangi bir düğmeye bas</translation>
+    </message>
+    <message>
+        <location line="+106"/>
         <source>%1 is already running</source>
         <translation>%1 zaten çalışıyor</translation>
     </message>
     <message>
-        <location line="+3"/>
-        <location line="+30"/>
-        <source>%1 could not be started. Try again.</source>
-        <translation>%1 başlatılamadı. Tekrar dene.</translation>
-    </message>
-    <message>
-        <location line="-23"/>
+        <location line="+10"/>
         <source>The game could not be closed. Try again.</source>
         <translation>Oyun kapatılamadı. Tekrar dene.</translation>
     </message>
     <message>
-        <location line="+22"/>
-        <source>%1 stopped unexpectedly. Try again.</source>
-        <translation>%1 beklenmedik şekilde durdu. Tekrar dene.</translation>
-    </message>
-    <message>
-        <location line="+39"/>
+        <location line="+61"/>
         <location line="+107"/>
         <source>Running app</source>
         <translation>Çalışan uygulama</translation>
@@ -4381,23 +4407,35 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+10"/>
-        <source>Controller battery low (%1%)</source>
-        <translation>Kumanda pili zayıf (%1%)</translation>
-    </message>
-    <message numerus="yes">
-        <location line="+12"/>
-        <source>Drive inserted: %1 (and %n more)</source>
-        <translation>
-            <numerusform>Sürücü takıldı: %1 (ve %n tane daha)</numerusform>
-        </translation>
+        <source>Controller battery low</source>
+        <translation>Kumanda pili zayıf</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>Drive inserted: %1</source>
-        <translation>Sürücü takıldı: %1</translation>
+        <source>%1 · %2%</source>
+        <translation>%1 · %2%</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+10"/>
+        <source>Drive inserted</source>
+        <translation>Sürücü takıldı</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+1"/>
+        <source>%1 (and %n more)</source>
+        <translation>
+            <numerusform>%1 (ve %n tane daha)</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+244"/>
+        <source>%n more</source>
+        <translation>
+            <numerusform>%n tane daha</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="-239"/>
         <source>Safe to remove</source>
         <translation>Çıkarmak güvenli</translation>
     </message>

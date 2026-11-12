@@ -250,6 +250,15 @@ QtObject {
     readonly property color toastWarning: tok("toastWarning")
     readonly property color toastError: tok("toastError")
     readonly property color toastBackground: tok("toastBackground")
+    // The status colour of a toast kind, and the round badge's fill behind its glyph (the colour at 18 %, derived,
+    // not themeable; RUY-412, 04 section 3.1).
+    function toastColor(kind) {
+        return kind === "success" ? toastSuccess : kind === "warning" ? toastWarning
+             : kind === "error" ? toastError : toastInfo
+    }
+    function toastBadgeFill(kind) { return badgeFill(toastColor(kind)) }
+    readonly property real toastTimerAlpha: 0.6      // the timer line: the status colour at this alpha
+    function toastTimerColor(kind) { const c = toastColor(kind); return Qt.rgba(c.r, c.g, c.b, toastTimerAlpha) }
 
     readonly property real pageSlide: 60 * motionScale   // design px the shelf/page slide during a page transition
 

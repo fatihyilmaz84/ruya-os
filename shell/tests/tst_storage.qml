@@ -71,7 +71,7 @@ Item {
         function toastTexts() {
             const out = []
             for (let i = 0; i < Notifications.model.count; ++i)
-                out.push(Notifications.model.get(i).text)
+                out.push(Notifications.model.get(i).text + (Notifications.model.get(i).detail !== "" ? ": " + Notifications.model.get(i).detail : ""))
             return out
         }
 

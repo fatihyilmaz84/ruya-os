@@ -34,8 +34,8 @@ Item {
     Connections {
         target: Batteries
         function onBatteryLow(id, name, percent, family) {
-            Notifications.show(qsTr("Controller battery low (%1%)").arg(percent), "warning", "",
-                               DeviceIcons.iconFor("controller", family))
+            Notifications.show(qsTr("Controller battery low"), "warning", "", DeviceIcons.iconFor("controller", family),
+                               qsTr("%1 · %2%").arg(DeviceIcons.padName(id, name, family)).arg(percent))
         }
     }
 
@@ -45,9 +45,9 @@ Item {
     Connections {
         target: Storage
         function onDriveAdded(drive, label, volumeCount) {
-            Notifications.show(volumeCount > 1
-                               ? qsTr("Drive inserted: %1 (and %n more)", "", volumeCount - 1).arg(label)
-                               : qsTr("Drive inserted: %1").arg(label), "info")
+            Notifications.show(qsTr("Drive inserted"), "info", "", "usb",
+                               volumeCount > 1 ? qsTr("%1 (and %n more)", "", volumeCount - 1).arg(label)
+                                               : label)
         }
         function onFinished(op, id, status) {
             if (op === "eject" && status === "ok")
@@ -55,15 +55,20 @@ Item {
         }
     }
 
+    // Over an app (02-shell 1.5) the toast is the compact variant: 480 u, title only, at the safe
+    // area (there is no top bar over an app).
+    readonly property bool compact: Notifications.appInFront
+    property bool gpu: GraphicsInfo.api !== GraphicsInfo.Software   // overridable, so tests reach the GPU path offscreen
+
     ListView {
         id: list
         objectName: "toastList"
         anchors {
             right: parent.right; rightMargin: layer.marginX
-            top: parent.top; topMargin: layer.marginY + Theme.spaceXxxl * layer.u
+            top: parent.top; topMargin: layer.marginY + (layer.compact ? 0 : Theme.spaceXxxl * layer.u)
         }
-        width: 560 * layer.u
-        height: Notifications.maxVisible * (92 + 14) * layer.u
+        width: (layer.compact ? 480 : 600) * layer.u
+        height: Notifications.maxVisible * 180 * layer.u
         spacing: Theme.spaceS * layer.u
         interactive: false
         keyNavigationEnabled: false
@@ -72,99 +77,229 @@ Item {
 
         add: Transition {
             ParallelAnimation {
-                NumberAnimation { property: "opacity"; from: 0; to: 1; duration: Theme.pageMs; easing.type: Easing.OutCubic }
-                NumberAnimation { property: "x"; from: Theme.pageSlide * layer.u; to: 0; duration: Theme.pageMs; easing.type: Easing.OutCubic }
+                NumberAnimation { property: "opacity"; from: 0; to: 1; duration: Theme.pageMs; easing.type: Easing.Bezier; easing.bezierCurve: Theme.easeSnap }
+                NumberAnimation { property: "x"; from: Theme.pageSlide * layer.u; to: 0; duration: Theme.pageMs; easing.type: Easing.Bezier; easing.bezierCurve: Theme.easeSnap }
             }
         }
         remove: Transition {
-            NumberAnimation { property: "opacity"; to: 0; duration: Theme.pageMs; easing.type: Easing.OutCubic }
+            NumberAnimation { property: "opacity"; to: 0; duration: Theme.pageMs; easing.type: Easing.Bezier; easing.bezierCurve: Theme.easeSnap }
         }
         displaced: Transition {
             NumberAnimation { property: "y"; duration: Theme.focusMs; easing.type: Easing.OutCubic }
         }
 
-        delegate: Rectangle {
+        delegate: Item {
             id: toast
             required property int toastId
             required property string text
             required property string kind
             required property string iconText
             required property string iconName
+            required property string detail
+            required property string footer
+            required property string footerButton
             required property bool sticky
 
-            readonly property color accent: kind === "success" ? Theme.toastSuccess
-                                          : kind === "warning" ? Theme.toastWarning
-                                          : kind === "error" ? Theme.toastError : Theme.toastInfo
+            readonly property color accent: Theme.toastColor(kind)
+            readonly property bool compact: layer.compact
+            readonly property bool hasDetail: !compact && detail !== ""
+            readonly property bool hasFooter: !compact && footer !== ""
+            readonly property real pad: Theme.spaceM * layer.u
+            readonly property real badgeSize: (compact ? 48 : 64) * layer.u
+            // The card: 112 u with a detail, 96 u without, 80 u compact; a footer adds its own line.
+            readonly property real baseHeight: (compact ? 80 : hasDetail ? 112 : 96) * layer.u
+            // The hook for a source's art as the badge (T-246, planned): nothing is built on it yet.
+            property string badgeSource: ""
 
             width: list.width
-            height: 92 * layer.u
-            radius: Theme.radiusM * layer.u
-            color: Theme.toastBackground
+            height: baseHeight + (hasFooter ? footerRow.implicitHeight + Theme.spaceS * layer.u : 0)
 
             GlassShadow {
                 objectName: "toastShadow"
                 z: -1                   // behind the toast's own fill
                 anchors.fill: parent
                 u: layer.u
-                radius: toast.radius
+                radius: card.radius
                 kind: "panel"
+            }
+            Rectangle {
+                id: card
+                objectName: "toastCard"
+                anchors.fill: parent
+                radius: Theme.radiusL * layer.u
+                color: Theme.toastBackground
             }
             GlassLayers {
                 objectName: "toastLayers"
                 anchors.fill: parent
                 u: layer.u
-                radius: toast.radius
+                radius: card.radius
                 grain: false            // a toast is not blurred
             }
 
             Rectangle {
-                id: bar
-                x: 0
-                width: 8 * layer.u
-                height: parent.height - 2 * parent.radius
-                anchors.verticalCenter: parent.verticalCenter
-                color: toast.accent
-            }
-            Icon {
-                id: glyph
-                objectName: "toastIcon"
-                anchors { left: bar.right; leftMargin: Theme.spaceM * layer.u; verticalCenter: parent.verticalCenter }
-                visible: toast.iconName !== ""
-                u: layer.u
-                name: toast.iconName
-                color: toast.accent
-            }
-            Text {
-                id: icon
-                anchors { left: bar.right; leftMargin: Theme.spaceM * layer.u; verticalCenter: parent.verticalCenter }
-                visible: toast.iconText !== "" && !glyph.visible
-                text: toast.iconText
-                color: toast.accent
-                font.pixelSize: Theme.typeHeadline * layer.u
-                font.weight: Theme.weightDemiBold
-            }
-            Text {
-                anchors {
-                    left: glyph.visible ? glyph.right : icon.visible ? icon.right : bar.right
-                    leftMargin: Theme.spaceM * layer.u
-                    right: parent.right; rightMargin: Theme.spaceM * layer.u
-                    verticalCenter: parent.verticalCenter
+                id: badge
+                objectName: "toastBadge"
+                x: toast.compact ? Theme.spaceM * layer.u : toast.pad
+                y: (toast.baseHeight - height) / 2
+                width: toast.badgeSize
+                height: width
+                radius: width / 2
+                color: Theme.toastBadgeFill(toast.kind)
+
+                Icon {
+                    id: glyph
+                    objectName: "toastIcon"
+                    anchors.centerIn: parent
+                    u: layer.u
+                    size: toast.compact ? 32 : Theme.iconM
+                    // A device icon wins over the kind's default; a text character (iconText) replaces both.
+                    visible: name !== ""
+                    name: toast.iconName !== "" ? toast.iconName
+                        : toast.iconText !== "" ? ""
+                        : toast.kind === "success" ? "check_circle"
+                        : toast.kind === "warning" ? "warning"
+                        : toast.kind === "error" ? "error" : "info"
+                    color: toast.accent
                 }
-                objectName: "toastText"
-                text: toast.text
-                // A toast may carry a name a device gave itself: never markup (T-260).
-                textFormat: Text.PlainText
-                color: Theme.text
-                font.pixelSize: Theme.typeBody * layer.u
-                elide: Text.ElideRight
-                maximumLineCount: 2
-                wrapMode: Text.Wrap
+                Text {
+                    anchors.centerIn: parent
+                    visible: toast.iconName === "" && toast.iconText !== ""
+                    text: toast.iconText
+                    color: toast.accent
+                    font.pixelSize: Theme.typeHeadline * layer.u
+                    font.weight: Theme.weightDemiBold
+                }
+            }
+
+            Column {
+                id: texts
+                x: badge.x + badge.width + toast.pad
+                width: toast.width - x - (toast.compact ? Theme.spaceL * layer.u : toast.pad)
+                y: (toast.baseHeight - height) / 2
+                Item {
+                    objectName: "toastTitle"      // the title line; its Text is "toastText" (the toast's own words)
+                    width: parent.width
+                    height: titleText.implicitHeight
+                    Text {
+                        id: titleText
+                        objectName: "toastText"
+                        width: parent.width
+                        // A toast may carry a name a device gave itself: never markup (T-260).
+                        text: toast.text
+                        textFormat: Text.PlainText
+                        color: Theme.text
+                        font.pixelSize: Theme.typeBody * layer.u
+                        font.weight: Theme.weightDemiBold
+                        elide: Text.ElideRight
+                        maximumLineCount: 1
+                    }
+                }
+                Text {
+                    objectName: "toastDetail"
+                    visible: toast.hasDetail
+                    width: parent.width
+                    text: toast.detail
+                    textFormat: Text.PlainText
+                    color: Theme.textDim
+                    font.pixelSize: Theme.typeCaption * layer.u
+                    elide: Text.ElideRight
+                    maximumLineCount: 1
+                }
+            }
+
+            // A sticky instruction ("Press any button to wait"), under the text column.
+            Row {
+                id: footerRow
+                objectName: "toastFooter"
+                visible: toast.hasFooter
+                x: texts.x
+                y: toast.baseHeight - Theme.spaceS * layer.u
+                width: texts.width
+                spacing: Theme.spaceS * layer.u
+                ButtonGlyph {
+                    id: footerGlyph
+                    visible: toast.footerButton !== ""
+                    button: toast.footerButton
+                    u: layer.u
+                }
+                Text {
+                    objectName: "toastFooterText"
+                    width: parent.width - (footerGlyph.visible ? footerGlyph.width + parent.spacing : 0)
+                    height: footerGlyph.visible ? footerGlyph.height : implicitHeight
+                    verticalAlignment: Text.AlignVCenter
+                    text: toast.footer
+                    textFormat: Text.PlainText
+                    color: Theme.text
+                    font.pixelSize: Theme.typeCaption * layer.u
+                    elide: Text.ElideRight
+                    maximumLineCount: 1
+                }
+            }
+
+            // The time left: a thin line along the bottom edge, cut to the rounded corners on a GPU.
+            // Not on a sticky toast, and not under reduced motion.
+            Item {
+                id: timerClip
+                anchors.fill: parent
+                visible: !toast.sticky && Theme.motionScale > 0
+                clip: true              // rectangular; the software renderer has no rounded mask
+                layer.enabled: visible && layer.gpu
+                layer.smooth: true
+                layer.effect: SmoothMask { maskSource: timerMask }
+                Rectangle {
+                    id: timerMask
+                    anchors.fill: parent
+                    radius: card.radius
+                    visible: false
+                    layer.enabled: timerClip.layer.enabled
+                    layer.smooth: true
+                }
+                Rectangle {
+                    objectName: "toastTimer"
+                    anchors { left: parent.left; bottom: parent.bottom }
+                    height: 3 * layer.u
+                    width: parent.width
+                    color: Theme.toastTimerColor(toast.kind)
+                    NumberAnimation on width {
+                        from: timerClip.width; to: 0
+                        duration: Notifications.durationMs
+                        running: timerClip.visible
+                    }
+                }
             }
 
             Timer {
                 interval: Notifications.durationMs
                 running: !toast.sticky
                 onTriggered: Notifications.dismiss(toast.toastId)
+            }
+        }
+    }
+
+    // The toasts waiting behind the ones on screen, while the shell is in front.
+    Rectangle {
+        id: overflow
+        objectName: "toastOverflow"
+        visible: Notifications.pendingCount > 0 && !Notifications.appInFront
+        anchors.right: list.right
+        y: list.y + list.contentHeight + Theme.spaceS * layer.u
+        height: 56 * layer.u
+        width: chipRow.implicitWidth + 2 * Theme.spaceM * layer.u
+        radius: height / 2
+        color: Theme.toastBackground
+        GlassShadow { z: -1; anchors.fill: parent; u: layer.u; radius: overflow.radius; kind: "pill" }
+        GlassLayers { anchors.fill: parent; u: layer.u; radius: overflow.radius; grain: false }
+        Row {
+            id: chipRow
+            anchors.centerIn: parent
+            spacing: Theme.spaceS * layer.u
+            Icon { name: "notifications"; size: 32; u: layer.u; color: Theme.textDim }
+            Text {
+                objectName: "toastOverflowText"
+                text: qsTr("%n more", "", Notifications.pendingCount)
+                color: Theme.text
+                font.pixelSize: Theme.typeCaption * layer.u
             }
         }
     }
