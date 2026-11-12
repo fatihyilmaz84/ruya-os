@@ -141,6 +141,7 @@
     <!-- Controller profiles (T-369, T-370), stored per console profile. -->
     <method name="ListProfiles">
       <arg name="profile" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
       <arg name="profiles" type="aa{sv}" direction="out"/>
     </method>
     <method name="GetProfile">
@@ -193,6 +194,7 @@
     <!-- Ownership modes (T-371), per app; applied at the next launch. -->
     <method name="GetOwnershipMode">
       <arg name="app_id" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
       <arg name="mode" type="s" direction="out"/>
     </method>
     <method name="SetOwnershipMode">

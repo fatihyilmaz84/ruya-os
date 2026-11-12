@@ -50,7 +50,7 @@ What we take from InputPlumber: an intercept mode for overlays (our route `overl
 - **Family** (`xbox`, `playstation`, `nintendo`, `generic`, ...): from the service's own device table by `vid:pid` (first entries: T-261's audit and RUY-154's 360 receiver), then the kernel driver, then `generic`. SDL's mapping database is a separate data file the service reads for unknown pads (requirements §4.2); it never decides capabilities.
 
 ### 4.2 Normalised input
-Buttons: `south east west north l1 r1 l3 r3 start select guide dpad_up dpad_down dpad_left dpad_right` plus `paddle1..4`, `misc1` (share/capture) and `touchpad_click`. Axes: `left_x left_y right_x right_y` as i16 (-32768..32767, up negative) and `left_trigger right_trigger` as 0..32767. Motion: `gyro_{x,y,z}` in deg/s ×16, `accel_{x,y,z}` in mg; touchpad contacts as (id, x, y) in 0..65535 of the pad's surface. Every event keeps its **raw source** (`<node kind>:<evtype>:<code>`) so a profile can map an input that has no normal name. Buttons are named by **position**, not label: Nintendo's A is `east` (the family's confirm button, ADR-027, is a mapping on top: T-398).
+Buttons: `south east west north l1 r1 l3 r3 start select guide dpad_up dpad_down dpad_left dpad_right` plus `paddle1..4`, `misc1` (share/capture) and `touchpad_click`. Axes: `left_x left_y right_x right_y` as i16 (-32768..32767, up negative) and `left_trigger right_trigger` as 0..32767. Motion: `gyro_{x,y,z}` in deg/s ×16, `accel_{x,y,z}` in mg; touchpad contacts as (id, x, y) in 0..65535 of the pad's surface; `touchpad` names the surface as a whole (for touchpad-as-mouse). Every event keeps its **raw source** (`<node kind>:<evtype>:<code>`) so a profile can map an input that has no normal name. Buttons are named by **position**, not label: Nintendo's A is `east` (the family's confirm button, ADR-027, is a mapping on top: T-398).
 
 ### 4.3 Capability descriptor
 Per device, per capability (`buttons`, `sticks`, `analog_triggers`, `dpad`, `gyro`, `accelerometer`, `touchpad`, `rumble`, `trigger_rumble`, `adaptive_triggers`, `lightbar`, `player_leds`, `speaker`, `microphone`, `battery`), four booleans:
@@ -80,18 +80,23 @@ Every transition releases on the side being left whatever is held (the `KeyBoard
 ### 5.3 Ownership modes *(planned, T-371)*
 `managed` (default; the routing above), `passthrough` (the running app's user gets an ACL on the physical event and hidraw nodes for that run; the service applies no mapping and creates no virtual pad, but keeps reading the pad without a grab for Guide and the shortcuts), `steam` (as passthrough; Steam Input does the rest; we never edit Steam's files), `semantic` (native Ruya apps receive actions through `Platform1`, T-374). The mode is a per-app setting stored by the service; switching mode takes effect at the next launch.
 
-### 5.4 Grabs
-The service never grabs a pad in `managed`: apps cannot open physical nodes (no ACL), so there is nothing to hide. It grabs (`EVIOCGRAB`, proven non-root) only where another reader would otherwise double the input, today none.
+**Leaks in `passthrough` and `steam` (RUY-2 review).** The app then holds descriptors on physical nodes that can be neither destroyed nor revoked (§5.2). Rules, built and tested by T-371:
+- **evdev:** in every route but `app` (overlay, Hub, PIN pad, picker, a frozen app), the service holds `EVIOCGRAB` on those pads' event nodes, so the app's descriptors receive nothing, also not as a backlog after a Thaw; it releases the grab when the route returns to `app` for that app. The service reads the grabbed node itself, so navigation keeps working.
+- **hidraw** cannot be grabbed: a reader keeps receiving reports (and a frozen reader finds them buffered after Thaw). So hidraw is granted in `steam` mode only, never in `passthrough`, and while an app holds a pad's hidraw that pad **enters no PIN**: the PIN pad takes digits from the keyboard and from other pads, and shows "Close <app> to use this controller here" for that pad. Acceptance test (T-371): no report from a grabbed node reaches the app's descriptor during an overlay or after a Thaw, and the PIN pad refuses a hidraw-held pad.
+- Steam Input creates its own uinput pads: `steam` mode needs `/dev/uinput` for the profile user for that run, which breaks §3.1's "only root and `ruya-input` create input devices". T-371 decides how (check the creating process of a `ruya-input/` node, not only its phys prefix, or keep Steam's pads outside the prefix); the same question applies to T-412 (phone) and T-418 (development pad).
 
-## 6. Bluetooth pairing as an attack surface *(planned, T-203 follow-up, T-397)*
+### 5.4 Grabs
+In `managed` the service never grabs a pad: apps cannot open physical nodes (no ACL), so there is nothing to hide. It grabs (`EVIOCGRAB`, proven non-root) only in the cases of §5.3.
+
+## 6. Bluetooth pairing as an attack surface *(planned, RUY-411; T-397)*
 - Only bonded devices connect: BlueZ `ClassicBondedOnly=true` (the BlueZ default; the image must not change it; a VM check asserts it), and HID goes through the kernel (`UserspaceHID=false`, T-375).
 - Pairing is possible only while the shell's pairing screen is open (the pairable timeout, T-299), and the screen shows the new device's name and **class**; a device that announces itself as a keyboard needs a second confirmation ("This is a keyboard. Pair it?"), because a keyboard can type anywhere the shell can.
-- **What a new pad may do before a profile owns it** (ADR-017, ADR-027): navigate the profile picker and the "Who's playing?" dialog; inside a session it drives nothing until it is assigned (T-397 decides takeover rules). It never reaches a game as anything but a player slot of the signed-in profile.
+- **What a new pad may do before a profile owns it** (ADR-017, ADR-027): navigate the profile picker and the "Who's playing?" dialog; inside a session it drives nothing until it is assigned (T-397 decides takeover rules). It never reaches a game as anything but a player slot of the signed-in profile. **Until T-264 and T-397** every connected pad counts as the signed-in profile's (today's behaviour), and RUY-3 gives each one a virtual pad for that profile; the ownership rules of §11.3 narrow that.
 
 ## 7. Profiles *(planned, T-369 global, T-370 game and platform)*
 - **Format**: JSON, `schema_version: 1`, described by [`schemas/input-profile-v1.json`](schemas/input-profile-v1.json); the service validates every profile on load, save and import, refuses unknown fields and reports errors as `path: message` lines. The requirements' example (§9.3) is valid. No scripts: macros are data.
 - **Precedence**: game → platform → global → the built-in default; a profile names its parent in `inherits` and lists only what differs. Resolution walks at most 8 levels and refuses cycles. Per controller: a profile may be limited to a family (`match.family`) or one stable id (`match.device`).
-- **Limits**: 256 mappings, 8 layers, 32 macro steps, 10 s total macro duration, delays ≥ 10 ms, turbo ≤ 30 Hz, a chord of at most 4 inputs, names ≤ 64 characters, 64 KiB per file. Imported profiles are untrusted data (requirements §15): validated, never executed.
+- **Limits**: 256 mappings per list (the top level and each layer), 8 layers, 32 macro steps, a macro step never targets a macro (no recursion; a service rule), `press`/`release`/`tap` steps need a `target` and `wait` a `ms` (service rules), 10 s total macro duration, delays ≥ 10 ms, turbo ≤ 30 Hz, a chord of at most 4 inputs, names ≤ 64 characters, 64 KiB per file. Imported profiles are untrusted data (requirements §15): validated, never executed.
 - **Storage**: per console profile, by the service, under `/var/lib/ruya-input/profiles/<profile id>/` (the unit's `StateDirectory`, owned by `ruya-input`, 0700; profile users cannot read it); export and import go through the shell's file picker as JSON text over `Input1`.
 
 ## 8. When the service fails *(planned, T-367 restart; emergency reader: its own task)*
@@ -144,11 +149,13 @@ The **Confirm button** row lives in **Settings > Controllers** (the one Settings
 | Task | What, after this design |
 |---|---|
 | T-367 / RUY-3 | `ruya-input` user and udev rules (§3), one Xbox 360-style virtual pad per physical pad for the signed-in profile, the ACL re-assert, routing states and `SetRoute` (§5.1-5.2), restart settings (§8.1), `Input1` devices and routing part, mock and client, a VM check and the Dell SuperTuxKart check |
-| new (lead files) | the compositor's emergency reader (§8.2) |
+| RUY-409 | the shell calls `SetRoute` (§5.1-5.2); the Dell SuperTuxKart race |
+| RUY-410 | the compositor's emergency reader (§8.2) |
+| RUY-411 | Bluetooth: the bonded-only VM check and the keyboard-class confirmation (§6) |
 | T-368 / RUY-39 | device list, capabilities (§4.3), the live button test; Settings > Controllers |
 | T-369 / RUY-42 | profiles v1: schema, validation, global profile, import/export, dead zones and curves |
 | T-370 / RUY-43 | game and platform profiles, resolution chain, the game page's Controller entry |
-| T-371 / RUY-44 | ownership modes (§5.3) |
+| T-371 / RUY-44 | ownership modes, the grab and hidraw rules and Steam's uinput (§5.3) |
 | T-372 / RUY-45 | keyboard and mouse output, layers, chords, shortcuts |
 | T-373 / RUY-46 | motion, touchpad (the nodes leave the shell, §3), rumble back to the pad, hidraw |
 | T-374 / RUY-47 | semantic actions and glyphs through `Platform1` (the vocabulary of §11.1) |
