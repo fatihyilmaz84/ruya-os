@@ -15,8 +15,12 @@ Rectangle {
     property string stateText
     property bool paused: false          // Session1 reports the game frozen (T-457)
     property bool focused: false
+    // 1 = the art at 256 u; less at a large UI size, so that the Hub fits without scrolling (RUY-401).
+    property real fit: 1
 
     readonly property real pad: Theme.spaceS * u
+    // The text's own height (the card is never shorter than it).
+    readonly property real infoHeight: info.implicitHeight
 
     implicitHeight: Math.max(art.height, info.implicitHeight) + 2 * pad
     height: implicitHeight
@@ -31,7 +35,7 @@ Rectangle {
         x: card.pad
         anchors.verticalCenter: parent.verticalCenter
         u: card.u
-        width: 256 * card.u
+        width: 256 * card.u * card.fit
         height: Theme.cardArtHeight(width)
         appId: card.appId
         appName: card.title

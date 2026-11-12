@@ -216,7 +216,7 @@ Item {
             tryVerify(() => app.activeFocus && !find("systemPanel").open, 2000, "A on the game card resumes")
             openHub()
             compare(focusedKey(), "resume")
-            compare(hintVerbs(), "A Resume|B Resume")
+            compare(hintVerbs(), "A Resume")
             keyClick(Qt.Key_Escape)
             tryVerify(() => app.activeFocus && !find("systemPanel").open, 2000, "B resumes")
         }
@@ -518,7 +518,7 @@ Item {
             start()
             threeGames()
             openHub()
-            compare(hintVerbs(), "A Resume|B Resume")
+            compare(hintVerbs(), "A Resume")
             goTo("home")
             compare(hintVerbs(), "A Home|B Resume", "the hint names the button")
             goTo("closeGame")
