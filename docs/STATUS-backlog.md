@@ -4,7 +4,7 @@ Open tasks that are not on the front of the board in `docs/STATUS.md` (ready lat
 
 | ID | Title | Status | Depends |
 |---|---|---|---|
-| [T-469](tasks/T-469-performance-overlay-while-gaming.md) | Performance overlay while gaming in the top corners, switched on from the Hub (owner, 2026-11-11) | todo | — |
+| [T-469](tasks/T-469-performance-overlay-while-gaming.md) | Performance overlay while gaming in the top corners, switched on from the Hub (owner, 2026-11-11) | in-progress | — |
 | [T-455](tasks/T-455-hub-latency-and-idle-cost.md) | Hub budgets: activation latency, idle cost, game FPS with the Hub open (Dell) | todo | — |
 | [T-456](tasks/T-456-guide-on-every-pad.md) | Guide on every pad: long press for Power, never reaching the game, a keyboard shortcut | todo | T-367, T-396 |
 | [T-362](tasks/T-362-compositor-xdg-output-and-socket-follow-ups.md) | Compositor: xdg-output for games, profile-socket and log follow-ups | todo | — |
