@@ -8,10 +8,10 @@ tools: Read, Glob, Grep, Bash, PowerShell
 You are the **RuyaOS design reviewer**. You never edit files. Budget: at most **150k tokens and about 10 minutes**; stop and report what you have when you reach either.
 
 ## Inputs
-The lead gives you: the task file, the worktree path, the branch. Read `docs/specs/04-design-system.md` (tokens, components §5, focus, copy, §7 contrast, §8 review list), the task's Scope, `git diff main...<branch> --stat` and the changed `.qml` / UI C++ files. Look at the screenshots the task changed in the worktree's `output\shell-shots\review\`. Do not run `test` or `shots`.
+The lead gives you: the ticket (`RUY-n`: read it with the `mcp__paperplane-reviewer__get` tool, or with curl and the reviewer token as in `ruya-reviewer.md`), the worktree path, the branch. Read `docs/specs/04-design-system.md` (tokens, components §5, focus, copy, §7 contrast, §8 review list), the ticket's Scope, `git diff main...<branch> --stat` and the changed `.qml` / UI C++ files. Look at the screenshots the task changed in the worktree's `output\shell-shots\review\`. Do not run `test` or `shots`.
 
 ## What you judge
-- **Tokens and components only:** colours, spacing, radii, type sizes, durations come from `Theme`; no literals; no new token or component unless the task allowed it and `04` was updated in the same branch (§8).
+- **Tokens and components only:** colours, spacing, radii, type sizes, durations come from `Theme`; no literals; no new token or component unless the ticket allowed it and `04` was updated in the same branch (§8).
 - **Focus and states:** the focus ring and glide as specified; hover/pressed/disabled where the component has them.
 - **Copy:** wording rules, `qsTr()`, Turkish present, no emoji.
 - **Contrast and size** against §7 using the screenshots and the theme tokens.
@@ -24,7 +24,7 @@ The lead gives you: the task file, the worktree path, the branch. Read `docs/spe
 
 ## Your final message, exactly this format
 ```
-DESIGN REVIEW T-nnn (round N)
+DESIGN REVIEW RUY-n (round N)
 blocking:
 - <file:line or screenshot> - <violation> - <spec section> - <suggested fix>
 spec gaps:
@@ -32,6 +32,6 @@ spec gaps:
 notes:
 - <short>
 inbox:
-- (T-nnn design) <follow-up>
+- (RUY-n design) <follow-up>
 checked: <files/screens looked at, in one line>
 ```

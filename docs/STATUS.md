@@ -1,4 +1,6 @@
-# RuyaOS — Status
+# RuyaOS — Status (frozen archive)
+
+> **Frozen on 2026-11-12 (lead-12): Paper Plane is the source of truth** (owner; http://192.168.178.164:8687, project `RUY`). The board, NEXT, Inbox (label `inbox`), blockers (`blocker`), owner decisions (`owner-decision`), the VM queue (`vm-queue`) and the Dell list (`dell`) are tickets now; the lead's handoff is `docs/LEAD-NOTES.md`. Nothing below is updated any more; never edit this file.
 
 **Read this first in every session; update it last.** Rules: root `CLAUDE.md`. Roles (Opus lead, Sonnet builders): `docs/LEAD.md`. Task format: `docs/tasks/README.md`. Finished work: each task's own file (`Status: done`, Outcome starting with `Verified:`); history before T-132 in [`STATUS-done.md`](STATUS-done.md), old sessions in [`STATUS-log.md`](STATUS-log.md), parked Inbox lines, the long form of owner decisions and decided records in [`STATUS-parked.md`](STATUS-parked.md). `scripts/lint-board.ps1` (part of `dev.ps1 test`) keeps this board and the task files in step.
 

@@ -591,13 +591,6 @@ function Test-VmChecks {
     Record "VM check lint" ($LASTEXITCODE -eq 0)
 }
 
-# The rules live in scripts\lint-board.ps1 (shared with CI).
-function Test-Board {
-    Step "board lint (docs\STATUS.md and the task files agree)"
-    & (Join-Path $PSScriptRoot "lint-board.ps1")
-    Record "board lint" ($LASTEXITCODE -eq 0)
-}
-
 # The rules live in scripts\lint-dev-docs.ps1 (shared with CI): the developer guide (T-214).
 function Test-DevDocs {
     Step "developer guide lint (docs\developers: links, code blocks, sources)"
@@ -796,11 +789,11 @@ function Do-Shell {
     Run-QmlTests $null
 }
 
-# Every check that reads docs\ (text lint: all tracked files; board lint: STATUS and tasks;
+# Every check that reads docs\ (text lint: all tracked files;
 # developer guide lint: docs\developers; spec lint: 04-design-system.md). A check that starts
 # reading docs\ belongs here too: push-main.ps1 and the reviewer's round 2 run only this group
 # when nothing but docs\*.md changed since a green `test`.
-function Do-Docs { Test-Text; Test-Board; Test-DevDocs; Test-SpecComponents }
+function Do-Docs { Test-Text; Test-DevDocs; Test-SpecComponents }
 
 # HEAD and whether the working tree is clean (no tracked change, no untracked file that is not ignored).
 function Get-TreeState {
@@ -867,7 +860,7 @@ switch ($Command) {
         # A stale marker must never outlive a run that did not finish green.
         Remove-Item $GreenMarker -ErrorAction SilentlyContinue
         $treeBefore = Get-TreeState
-        Test-Text; Test-Board; Test-Boot; Test-BusPolicies; Test-DevDocs; Test-VmChecks; Do-Rust; Do-Shell
+        Test-Text; Test-Boot; Test-BusPolicies; Test-DevDocs; Test-VmChecks; Do-Rust; Do-Shell
         if ($script:Failures.Count -eq 0) { Write-GreenMarker $treeBefore (Get-TreeState) }
     }
     "shots" {

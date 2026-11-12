@@ -4,27 +4,29 @@ RuyaOS is an open-source, immutable (Fedora bootc) console OS for living-room PC
 
 ## Where the truth lives
 
-| What | File |
+**Paper Plane is the source of truth for all work (owner, 2026-11-12):** http://192.168.178.164:8687, project `RUY`. Tickets `RUY-n` hold the tasks (description = goal, scope, acceptance criteria), their state (Backlog, Ready, In Progress, In Review, Changes Requested, Blocked, Done), the order (`next` / board order), the Outcome (handover `evidence` + an `Outcome:` comment), review verdicts, the inbox (label `inbox`), blockers (`blocker`), owner decisions (`owner-decision`), the VM queue (`vm-queue`) and the Dell list (`dell`). **Never create or edit `docs/tasks/*.md` or `docs/STATUS*.md`**: they are a frozen archive (tasks up to T-472; a ticket's title starts with its old `T-nnn` id). Access: the `mcp__paperplane-<role>__*` tools, else curl with `C:\Users\FSYY\.paperplane\ruy-<role>.token` (never print or commit a token). Telemetry (OpenTelemetry to Paper Plane) is on for every session on this PC.
+
+| What | Where |
 |---|---|
-| Board (open tasks, NEXT), Inbox, blockers, owner decisions, last five sessions. **Read first, update last.** | `docs/STATUS.md` |
-| Work items with acceptance criteria; a finished task is recorded in its own file | `docs/tasks/T-*.md` (format: `docs/tasks/README.md`) |
+| Open work, order, NEXT, inbox, blockers, owner decisions | Paper Plane (`summary`, `next`, `list label=...`) |
+| One task with its acceptance criteria; a finished task's Outcome | Its ticket (`get RUY-n`); old tasks also in the archive `docs/tasks/T-*.md` |
 | Roles (owner, Opus lead, Sonnet builder), the lead procedure, lead handoff | `docs/LEAD.md`, `docs/LEAD-NOTES.md` |
 | Product, architecture, decisions (ADRs) | `docs/specs/00-overview.md`; platform/image `01`, shell UX `02`, services/apps `03`, **design system `04`** (tokens, components, focus, copy) |
 | Shell ↔ service contracts | `api/dbus/*.xml` |
 | How to build/run on this machine | `docs/dev-setup.md`, `scripts/dev.ps1` |
 | Shell how-tos (pages, settings rows, modals, text input, translations) | `shell/PATTERNS.md` |
-| Archives, **never needed to start a task** | `docs/STATUS-done.md` (work before T-132), `docs/STATUS-log.md` (old sessions) |
+| Archives, **never needed to start a task, never edited** | `docs/STATUS.md`, `docs/STATUS-*.md`, `docs/tasks/T-*.md` |
 
 ## Session workflow (do every step, in order)
 
-0. **Which session?** Lead: `docs/LEAD.md`. Planning: `docs/tasks/PLANNING.md`. A dispatched builder is the `ruya-builder` agent in its own worktree (`.claude/agents/ruya-builder.md`); it never edits `docs/STATUS.md` or the task's `Status:`. A builder session the **owner starts directly** works in the main checkout and also does steps 3 and 6. Builders don't create tasks; follow-ups are Inbox lines (in the HANDOFF when dispatched).
-1. **Orient** (direct sessions). Read `docs/STATUS.md`. Take **NEXT**, or else the first `todo` whose dependencies are all `done` (the board continues in `docs/STATUS-backlog.md`). Skip **[lead]** tasks. **One task per session**, unless its file says it is small enough to pair.
+0. **Which session?** Lead: `docs/LEAD.md`. Planning: `docs/tasks/PLANNING.md`. A dispatched builder is the `ruya-builder` agent in its own worktree (`.claude/agents/ruya-builder.md`). A builder session the **owner starts directly** works in the main checkout with the builder token. Builders don't create tickets; follow-ups go to the lead (the HANDOFF's `inbox`), who files them.
+1. **Orient** (direct sessions). Paper Plane `next` (the best Ready ticket whose blockers are done; `owner:lead` tickets stay in Backlog, so a builder never gets them). **One ticket per session**, unless it says it is small enough to pair.
    - `git status` shows changes you didn't make? Another session may be running: stop and tell the user.
-   - Nothing qualifies? Stop and say the backlog needs a planning session. Don't invent work.
-2. **Read before coding.** The whole task file, every spec section it links, the `CLAUDE.md` of each area you touch, and the existing code you will change. Read the Outcome of a dependency only when the task's Hints point to it.
-3. **Claim it** (direct sessions; the lead does it for dispatched builders). Set `Status: in-progress` in the task file header **and** on the `docs/STATUS.md` board (`scripts/lint-board.ps1` fails if they differ).
-4. **Build within scope.** Implement exactly the task's Scope.
-   - **Every follow-up** you notice (debt, flaky build, missing feature, spec gap) is one Inbox line. A follow-up that exists only in prose is lost.
+   - Nothing Ready? Stop and say the backlog needs a planning session. Don't invent work.
+2. **Read before coding.** The whole ticket (`get`: description and latest comments), every spec section it links, the `CLAUDE.md` of each area you touch, and the existing code you will change.
+3. **Claim it:** `claim` the ticket (moves it to In Progress, assigns you).
+4. **Build within scope.** Implement exactly the ticket's Scope.
+   - **Every follow-up** you notice (debt, flaky build, missing feature, spec gap) is one `inbox` line in your handover (the lead files it as a ticket labelled `inbox`). A follow-up that exists only in prose is lost.
    - Crossing the shell/service boundary: **write or extend the D-Bus XML first**; the mock, the D-Bus client and the Rust service all follow it.
    - **Contracts are drafts until the first release.** If the task can't be done cleanly within the contract, extend it in the same commit (XML, Rust service and tests, mock, D-Bus client) and explain it in the Outcome; no workarounds such as extra calls to recover missing data. "Don't change the contract" in a task means "no unnecessary changes". Never break behaviour other code relies on.
 5. **Verify.**
@@ -33,22 +35,21 @@ RuyaOS is an open-source, immutable (Fedora bootc) console OS for living-room PC
    - `shots` needs an unlocked, undisturbed desktop: red while `test` is green (`TEST WINDOW LOST ACTIVATION`) → re-run. Never edit a test to suit the desktop.
    - Image builds: see Hard rules, **Host**.
 6. **Document.**
-   - Task file: fill **Outcome**, starting with a `Verified:` line (host / host (vm pending: <check>) / vm / unverified / hw, legend in STATUS), then what was built, files, deviations.
    - Update every spec section whose behaviour changed (specs describe what the code does) and `docs/dev-setup.md` if commands changed.
-   - Direct sessions only: set `Status: done` (or `blocked`, with the reason), **delete the task's board row**, move **NEXT**, add a session-log entry (at most 700 characters, linted) at the top.
-7. **Commit.** One commit per task (a small series is fine), format below. Dispatched builders commit on their branch; the lead merges. **Builders never push.** The lead pushes `main` to `origin` (https://github.com/fatihyilmaz84/ruya-os.git) at the end of every lead session, only after `scripts\scan-secrets.ps1` passes (owner, 2026-10-28). `image/bib/config.toml` holds the dev SSH key and stays git-ignored.
+   - The Outcome goes to the ticket: `move` it to **In Review** with `branch`, `commit` and `evidence` (a `Verified:` line: host / host (vm pending: <check>) / vm / unverified / hw = built and tested on Windows / on the VM queue / booted in QEMU / not run / real hardware), then a `comment` starting `Outcome:` (what was built, files, deviations). Blocked: `move` to Blocked with the reason. Only the lead moves a ticket to Done, after a recorded `approve`.
+7. **Commit.** One commit per ticket (a small series is fine), format below, naming `RUY-n`. Dispatched builders commit on their branch; the lead merges. **Builders never push.** The lead pushes `main` to `origin` (https://github.com/fatihyilmaz84/ruya-os.git) at the end of every lead session, only after `scripts\scan-secrets.ps1` passes (owner, 2026-10-28). `image/bib/config.toml` holds the dev SSH key and stays git-ignored.
 
 ## Definition of done (all must hold)
 
 - [ ] Every acceptance criterion is met **and** checked by a test or a reviewed screenshot.
 - [ ] `.\scripts\dev.ps1 test` → `ALL GREEN`. No test was weakened, skipped or deleted to get there.
-- [ ] New QML/C++ files are in `shell/CMakeLists.txt`; new strings use `qsTr()`; UI uses only existing design tokens and components (a missing one is an Inbox line, `04` §8).
+- [ ] New QML/C++ files are in `shell/CMakeLists.txt`; new strings use `qsTr()`; UI uses only existing design tokens and components (a missing one is an `inbox` line, `04` §8).
 - [ ] Contracts, mocks, D-Bus clients and services agree (method names, argument order, status strings).
-- [ ] Task Outcome, specs and STATUS are updated. Whatever couldn't run on this machine is marked **unverified**.
+- [ ] The ticket's evidence and `Outcome:` comment and the specs are updated. Whatever couldn't run on this machine is marked **unverified**.
 
 ## Hard rules
 
-- **Decisions.** ADRs marked *Accepted* in `00-overview.md` are binding. If a task seems to need a different decision, or a new owner-level one (legal, licensing, product scope, spending, publishing), don't decide: add a *Proposed* ADR, mark the task `blocked` with the question, and stop.
+- **Decisions.** ADRs marked *Accepted* in `00-overview.md` are binding. If a task seems to need a different decision, or a new owner-level one (legal, licensing, product scope, spending, publishing), don't decide: add a *Proposed* ADR, move the ticket to Blocked with the question (the lead files an `owner-decision` ticket), and stop.
 - **Host.** Windows, with a Fedora 44 WSL distribution for image builds and QEMU (WHPX) for boot tests (`docs/dev-setup.md`). Never install system software or change system settings; `dnf` inside the WSL distribution is fine.
   - **Image builds (owner, 2026-11-03).** Risk in the image (Containerfile, `image/`, units, bus policies, packaging, hardening) → a **"VM (this task)"** criterion: `scripts/build.sh` + `make-disk.sh` in WSL, then `scripts\smoke-test.ps1`; not `done` until `RUYA_BOOT_OK`. Service or shell logic → **"VM (lead run)"**: write or extend its `scripts/vm-*-check.sh`, Outcome `Verified: host (vm pending: <check>)`; the lead runs the VM queue. One image build at a time; every build, passed or failed, ends with `scripts\free-space.ps1` after its VM checks. Builds take 3–30 minutes: run them in the background.
   - **Unverifiable here** (say so): real GPU/KPI numbers, controllers in the VM, VM audio output (none unless `-Audio`), the shell over D-Bus unless tested in the VM over SSH.
@@ -61,7 +62,7 @@ RuyaOS is an open-source, immutable (Fedora bootc) console OS for living-room PC
   - Third-party apps run only in Flatpak sandboxes, never as root or as `ruya-shell`.
   - Services keep their systemd hardening.
   - D-Bus policies stay restrictive: the shell and root only, plus `ruya-link` under its per-method allow-list (ADR-029, owner 2026-11-10).
-- **Honesty in the log.** STATUS and Outcomes report what actually happened, including failures and anything left undone.
+- **Honesty in the log.** Tickets, their comments and the session handoffs report what actually happened, including failures and anything left undone.
 
 ## Working style
 
@@ -69,7 +70,7 @@ RuyaOS is an open-source, immutable (Fedora bootc) console OS for living-room PC
 - **Small steps.** Build and run the relevant check (`dev.ps1 shell` or `rust`) after each meaningful change.
 - **Copy existing patterns.** `ruya-profiles` (Rust), `shell/src/profiles` and `PinPad.qml` (shell) are the reference implementations; `shell/src/network` is the newest complete backend with a pane.
 - **Ambiguity.** If a criterion reads two ways, take the reading closest to the spec and say so in the Outcome. Don't ask for routine technical choices.
-- **Stuck** (the same failure after about 3 genuinely different attempts): get back to a green tree (`git stash` or revert), describe what you tried in the Outcome, set `blocked`, and commit only the docs. Never commit a red tree.
+- **Stuck** (the same failure after about 3 genuinely different attempts): get back to a green tree (`git stash` or revert), describe what you tried in a ticket comment, move it to Blocked, and commit nothing but docs if any. Never commit a red tree.
 - **Stay in scope.** No unrelated refactors, dependency upgrades or reformatting.
 
 ## Commit messages

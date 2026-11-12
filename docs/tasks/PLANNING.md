@@ -5,20 +5,22 @@ Roles are in [`docs/LEAD.md`](../LEAD.md). **The Opus lead is the default planne
 ## When to plan
 
 Any of these is true (builders check at session start and stop if they find nothing to do):
-- fewer than **3** `todo` tasks have all dependencies `done`;
-- the Inbox has **5 or more** items;
-- every task of the current roadmap phase (`docs/specs/00-overview.md` §6) is `done`;
+**Paper Plane is the source of truth (owner, 2026-11-12):** tasks are tickets in project `RUY` (http://192.168.178.164:8687); `docs/tasks/T-*.md` and `docs/STATUS*.md` are a frozen archive, never edited. A planner uses the lead token (`create`, `update`, `move`).
+
+- fewer than **3** Ready tickets (`next` offers nothing, or almost nothing);
+- **5 or more** tickets labelled `inbox`;
+- every ticket of the current roadmap phase (`docs/specs/00-overview.md` §6, label `phase:N`) is Done;
 - the owner asks, or answers a decision that unlocks work.
 
 ## Procedure
 
-1. **Read:** `docs/STATUS.md` (all of it is short now), the Outcomes of tasks finished since the last planning entry, `00-overview.md` §2 (MVP) and §6 (roadmap, exit criteria), and the spec sections of the current phase.
-2. **Empty the Inbox.** Each item becomes a task, is merged into a `todo` task's Scope, is dropped (one-line reason in the log entry), or is escalated to "Open owner decisions". Remove it from the Inbox.
-3. **Fill the queue** to **8–12 ready or nearly ready `todo` tasks** by comparing the phase exit criteria with what exists. Prefer work that can be built **and verified on this host**, contracts before the UI that depends on them, and small debt that upcoming tasks build on. Keep every mock-only UI task paired with the task that builds its real service.
-4. **Write each task from `TEMPLATE.md`** (quality bar below), numbered from the next free id. **Horizon (plan audit 2026-11-10: 159 open files, a third of them contradicting newer ADRs):** full task files only for work that can start within about two lead sessions; anything further is one line in its epic's child list and gets its file when its spike or spec is done. A spike or spec task lists, as a criterion, the task files it must rewrite.
-5. **Order the board** (dependencies first, then value), set **NEXT**, and re-check every existing `todo` task against what was actually built; fix stale scope and hints. Board rows list open tasks only (`scripts/lint-board.ps1`).
-6. **Never plan around an owner-level question** (legal, licence, product scope, publishing, spending): add it to "Open owner decisions" with options and a recommendation.
-7. **Log and commit:** a session-log entry (at most 700 characters: tasks added, Inbox items handled or dropped, decisions escalated), commit as `docs: plan <summary>`, `dev.ps1 test` green first.
+1. **Read:** `summary`, the `Outcome:` comments of tickets finished since the last planning pass (`changes`), `00-overview.md` §2 (MVP) and §6 (roadmap, exit criteria), and the spec sections of the current phase.
+2. **Empty the inbox** (`list label=inbox`). Each ticket becomes a Ready task (rewrite its description from the template, remove the `inbox` label), is merged into another ticket's Scope (comment there, Cancelled here), is dropped (Cancelled with a one-line reason), or becomes an `owner-decision` ticket.
+3. **Fill the queue** to **8–12 Ready tickets** by comparing the phase exit criteria with what exists. Prefer work that can be built **and verified on this host**, contracts before the UI that depends on them, and small debt that upcoming tasks build on. Keep every mock-only UI task paired with the task that builds its real service.
+4. **Write each ticket from `TEMPLATE.md`** (quality bar below; `create` shows similar tickets, so check for duplicates): the description holds Goal, Read first, Scope, Out of scope, Acceptance criteria, Hints; the header becomes labels (`phase:N`, `area:x`, `size:S|M|epic`, `owner:builder|lead`, `complexity:x`, `surface:x`); dependencies are `blocks` relations; an epic is the `parent` of its children. Titles are plain (no `T-nnn`: new tickets are known by `RUY-n`). **Horizon:** a full description only for work that can start within about two lead sessions; anything further is a short Backlog ticket under its epic. A spike or spec ticket lists, as a criterion, the tickets it must rewrite.
+5. **Order the queue** (dependencies first, then value; `update sort_order`; priority stays `none`), move what is ready to Ready (lead tickets stay in Backlog), and re-check every Ready ticket against what was actually built; fix stale scope and hints.
+6. **Never plan around an owner-level question** (legal, licence, product scope, publishing, spending): `create` an `owner-decision` ticket with options and a recommendation.
+7. **Record:** the planning pass goes into `LEAD-NOTES.md` (tickets added, inbox handled or dropped, decisions escalated); commit any spec changes as `docs: plan <summary>`.
 
 ## Quality bar for a task
 

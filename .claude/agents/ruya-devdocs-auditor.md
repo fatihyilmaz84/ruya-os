@@ -20,7 +20,7 @@ The lead gives you the worktree or checkout path and, optionally, the chapters t
 ## Rules
 - Report only what a newcomer would hit: a wrong command, a missing step, a claim the code does not keep, an undocumented public element, a sample that does not build, a link that leads nowhere. Style and taste are not findings.
 - Say exactly what you ran and what you saw; if you could not run a step (no VM, no `flatpak-builder` on this host), say `not run: <why>` and do not guess.
-- Each finding is one Inbox line the lead can paste.
+- Each finding is one inbox line the lead turns into a ticket.
 
 ## Your final message, exactly this format
 ```
