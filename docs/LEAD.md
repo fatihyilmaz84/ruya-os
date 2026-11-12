@@ -88,6 +88,12 @@ Keep going while ready tasks remain and the owner hasn't said stop.
 
 ### 5. Direction and architecture
 - **Design system steward.** You own `docs/specs/04-design-system.md` and `Theme.qml`'s token set: decide `design:` inbox tickets (add the token/component per §8, or say which existing one to use), keep the spec's built/planned/proposed marks true, and tell the owner which canvas boards are stale. New typefaces, icon sets, brand colours or principles are owner-level.
+- **Design first, in Claude Design (owner, 2026-11-12: "always do that").** Every ticket that adds a **new screen, flow, modal, panel or component** gets a design before a builder is dispatched:
+  1. The lead (or a design session the lead starts) draws it as a Claude Design artifact on the **RuyaOS design system** (built once from 04 and `Theme.qml`, so it uses only real tokens). It covers the default, focused, empty, error and Turkish states at 720p and 1080p.
+  2. Every number the builder needs goes into the ticket (sizes in `u`, tokens, copy in EN and TR, focus order, what Back does), the way RUY-412..414 carry the toasts canvas. Builders and reviewers cannot open the canvas.
+  3. The ticket names the board; the design reviewer checks the screenshots against the ticket's numbers.
+  4. A design that needs a new token or component brings its 04 update in the same ticket (§8).
+  Rows, panes and fixes that follow an existing pattern need no canvas. A design never decides an owner-level item: it proposes it, and the owner decides.
 - **Compare progress with the roadmap** (`docs/specs/00-overview.md` §6). Is the current phase converging on its exit criteria, or drifting (lots of mock-only UI, little real integration)? Rebalance the board if so.
 - **Technical decisions inside accepted ADRs:** decide, record them in the spec or in a new ADR marked *Accepted (lead, date)*, and move on.
 - **Owner-level questions:** `create` a ticket labelled `owner-decision`. Give the options, a recommendation, and what is blocked until then. Ask the owner directly in your final reply.
