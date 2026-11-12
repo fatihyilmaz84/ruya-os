@@ -18,3 +18,4 @@ pub mod systemd;
 pub mod usage;
 pub mod usage_store;
 pub mod usage_tracker;
+pub mod x11;

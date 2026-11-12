@@ -105,7 +105,7 @@ Engines have headless modes too (`--headless` in Godot). The sample game has `ma
 | `Launch` answers `unknown-profile` | The profile id is wrong; use an id from `Profiles1.ListProfiles` |
 | `Launch` answers `already-running` | One instance per profile and app; `Stop` it first |
 | `Launch` answers `invalid` | The app id is not a valid Flatpak id |
-| `AppExited` with `launch-failed` or `crashed` right after start | Read the journal. A frequent cause is no display: the app lacks `--socket=wayland` (an X11-only app finds no display: there is no Xwayland), or its window came while its profile was not the signed-in one (the shell's journal says `ruya-compositor: refused ... of uid N`) |
+| `AppExited` with `launch-failed` or `crashed` right after start | Read the journal. A frequent cause is no display: the app lacks `--socket=wayland` (an X11-only app gets a private X server: the journal of its unit says `ruya-session x11: <id> runs on display :N`, or why it did not start), or its window came while its profile was not the signed-in one (the shell's journal says `ruya-compositor: refused ... of uid N`) |
 | No window, no picture | The same causes: the app lacks `--socket=wayland`, or its profile is not the signed-in one (look for `ruya-compositor: refused` in the shell's journal) |
 | The game does not see the controller | Not built for profile games yet (B-006): [Controller input](controller-input.md) |
 | No sound | Not built for profile games yet (B-007): [Audio and video](audio-and-video.md) |
