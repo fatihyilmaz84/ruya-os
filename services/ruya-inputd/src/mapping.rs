@@ -233,6 +233,21 @@ impl KeyBoard {
         let released = mapper.release_all();
         self.route(&released)
     }
+
+    /// Navigation stops (an app has the focus): every key that is down goes up, except `keep`
+    /// (Guide, which still reaches the shell). The pads' mappers keep their state, so the release
+    /// a pad sends later finds nothing counted and is ignored: no key is released twice.
+    pub fn release_except(&mut self, keep: NavKey) -> Vec<KeyEvent> {
+        let mut out = Vec::new();
+        for key in ALL_KEYS {
+            let count = &mut self.pads[key_index(key)];
+            if key != keep && *count > 0 {
+                *count = 0;
+                out.push((key, false));
+            }
+        }
+        out
+    }
 }
 
 #[cfg(test)]
@@ -424,5 +439,22 @@ mod tests {
         );
         assert_eq!(m.button(Button::DpadDown, false), vec![]);
         assert_eq!(m.held_keys(), vec![NavKey::Down]);
+    }
+
+    #[test]
+    fn release_except_lifts_every_key_but_guide_and_later_releases_are_ignored() {
+        let (mut a, mut kb) = (Mapper::default(), KeyBoard::default());
+        kb.route(&a.button(Button::DpadDown, true));
+        kb.route(&a.button(Button::Mode, true));
+        assert_eq!(
+            kb.release_except(NavKey::Guide),
+            vec![(NavKey::Down, false)]
+        );
+        // The pad lets go later: nothing is released a second time; Guide still goes up.
+        assert_eq!(kb.route(&a.button(Button::DpadDown, false)), vec![]);
+        assert_eq!(
+            kb.route(&a.button(Button::Mode, false)),
+            vec![(NavKey::Guide, false)]
+        );
     }
 }

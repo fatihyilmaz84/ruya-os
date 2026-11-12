@@ -1,6 +1,6 @@
 # 06 — Ruya Input (design)
 
-**Status.** Design, from the spike T-366 / RUY-2 (lead, 2026-11-12). Built today: only `ruya-inputd`'s Phase 0 bridge (pads to navigation keys, ADR-003). Everything else here is the **target** that the tasks T-367..T-374 build, each marked *(planned, T-nnn)*. The owner's requirements are the appendix [`06-input-requirements.md`](06-input-requirements.md); where this file and an *Accepted* ADR differ, the ADR wins. Contract draft: [`api/dbus/org.ruyaos.Input1.xml`](../../api/dbus/org.ruyaos.Input1.xml); profile format: [`schemas/input-profile-v1.json`](schemas/input-profile-v1.json).
+**Status.** Design, from the spike T-366 / RUY-2 (lead, 2026-11-12). Built: `ruya-inputd`'s Phase 0 bridge (pads to navigation keys, ADR-003) and, since RUY-3 (T-367), the service half of §3, §4.1, §5.1-5.2 and §8.1, marked *(built, RUY-3)*: the service, its user and udev rules, the virtual pads, the routing core and `Input1`'s Devices and Routing members. Nobody calls `SetRoute` yet (the shell half is RUY-409), so the route stays `shell` and apps still see no pad. Everything else here is the **target** that the tasks T-367..T-374 build, each marked *(planned, T-nnn)*. The owner's requirements are the appendix [`06-input-requirements.md`](06-input-requirements.md); where this file and an *Accepted* ADR differ, the ADR wins. Contract draft: [`api/dbus/org.ruyaos.Input1.xml`](../../api/dbus/org.ruyaos.Input1.xml); profile format: [`schemas/input-profile-v1.json`](schemas/input-profile-v1.json).
 
 ## 1. Evidence from the spike (Dell OptiPlex 7080, image 0.0.68, 2026-11-12)
 
@@ -31,22 +31,23 @@ All probes are in `scripts/dell-input-spike.py` (root on the console; it changes
 
 What we take from InputPlumber: an intercept mode for overlays (our route `overlay`), a device database separate from user profiles, the generic-gamepad fallback, and its list of virtual targets as the long-term goal for §7 of the requirements. Revisit only if handheld-specific hardware (built-in pads exposed as keyboards, vendor HID buttons) becomes a target: InputPlumber's device configs are its real value there.
 
-## 3. Process, privilege and device access *(planned, T-367)*
+## 3. Process, privilege and device access *(built, RUY-3)*
 
-- **User.** `ruya-inputd` runs as the system user `ruya-input` (sysusers, no home, no login shell), not root. Unit hardening stays as today plus `User=ruya-input`, `DeviceAllow=char-input rw`, `DeviceAllow=/dev/uinput rw`, `DeviceAllow=char-hidraw rw` (T-373 only), `RestrictAddressFamilies=AF_UNIX AF_NETLINK` (the udev monitor).
-- **udev rules** (one file, `70-ruya-input.rules`, replacing today's single line):
+- **User.** `ruya-inputd` runs as the system user `ruya-input` (sysusers, no home, no login shell), not root. Unit hardening stays as today plus `User=ruya-input`, `DeviceAllow=char-input rw`, `DeviceAllow=/dev/uinput rw`, `DeviceAllow=char-hidraw rw` (T-373 only), `RestrictAddressFamilies=AF_UNIX AF_NETLINK` (the udev monitor). **As built:** `PrivateNetwork=` is off, because udevd broadcasts its monitor messages in the host's network namespace only; `IPAddressDeny=any` and the address families leave the service no IP at all. Its state (the id salt, §4.1) is the unit's `StateDirectory` `/var/lib/ruya-input` (0700).
+- **udev rules** (`70-ruya-input.rules`, replacing the old single line, and, as built, `74-ruya-input-acl.rules` for the `RUN` entries of rule 2: after `73-seat-late.rules`, whose uaccess builtin flushes named ACL entries, so `ruya-input`'s entry must be added after it on every event):
   1. `/dev/uinput`: `GROUP="ruya-input", MODE="0660"`. Only root and `ruya-input` can create input devices, so only they can claim the `ruya-input/` phys prefix below.
   2. **Physical pads** (`ENV{ID_INPUT_JOYSTICK}=="1"` and not ours): `RUN+="/usr/bin/setfacl -m u:ruya-input:rw $devnode"` (after logind's builtin, so both entries stay). The pad's **motion and touchpad nodes** (same HID parent, `ID_INPUT_ACCELEROMETER` / `ID_INPUT_TOUCHPAD` on a joystick's parent) get the same entry and **lose `uaccess`** (no ACL for the shell): the service reads them (T-373), libinput in the shell no longer does.
-  3. **Virtual nodes** (`ATTRS{phys}=="ruya-input/*"`): `OWNER="ruya-input", MODE="0600"`, and the uaccess tag is not set for them (the generic `uaccess` line gets `ATTRS{phys}!="ruya-input/*"`). systemd's own `70-uaccess.rules` still tags joysticks, so the service **re-asserts its ACL after every udev event on its own node** (it watches the udev monitor for its phys prefix) and only then announces the device as ready. The spike showed both halves: an ACL set after the `add` event holds, a `change` event wipes it.
+  3. **Virtual pads** (`ATTRS{phys}=="ruya-input/pad*"`; a pad's phys is `ruya-input/pad<n>`): `OWNER="ruya-input", MODE="0600"`, and the uaccess tag is not set for them. Other `ruya-input/` devices (the keyboard and mouse of T-372 / RUY-45, which the compositor reads, not a profile user) keep uaccess; the service never reads any `ruya-input/` device back as a physical pad. systemd's own `70-uaccess.rules` still tags joysticks, so the service **re-asserts its ACL after every udev event on its own node** (it watches the udev monitor for its phys prefix) and only then announces the device as ready. The spike showed both halves: an ACL set after the `add` event holds, a `change` event wipes it.
   4. **hidraw** of a known pad family (T-373: adaptive triggers, lightbar, gyro calibration): `ruya-input` only. Never a profile user, except in `steam` mode (§5.3) for the running app's user, and only for that run.
 - **The shell keeps its own path**: the physical pad nodes keep logind's `ruya-shell` entry (uaccess), so the emergency reader (§8) can open them without the service.
 
 ## 4. Device model
 
-### 4.1 Identity
+### 4.1 Identity *(stable and instance ids built, RUY-3; matching like pads is T-264)*
 - **Stable id**, `<bus>-<vid>-<pid>-<key>`, where `<key>` is a 12-hex-digit hash (SHA-256 of a machine salt kept in `/var/lib/ruya-input/salt` plus the identifying string): Bluetooth → the device address (`uniq`, measured on the Dell: the DualSense's MAC); USB with a serial (`ID_SERIAL_SHORT`) → the serial; USB without one → the USB port path (`ID_PATH`), so two identical serial-less pads are told apart by socket. Never `eventN`. The hash keeps MAC addresses and serials off the bus.
 - **Instance id**: a counter per connection (`<stable id>#<n>`). Signals carry both; the shell keys rows by the stable id.
 - **Like pads (ADR-017).** A serial-less USB pad plugged into another socket is a new stable id. The registry (T-264) matches it to a known one only when exactly one known pad of the same `vid:pid` is absent; otherwise the "Who's playing?" dialog asks. A pad that reconnects within 60 s gets its slot back (ADR-017).
+- **As built** (`identity.rs`): the salt is 32 random bytes, made once (a salt of the wrong size is reported and never overwritten: ids are then unstable until it is fixed); `<bus>` is `usb`, `bluetooth` or `virtual`; the identifying string is the address for Bluetooth, else the serial, else `ID_PATH`, else `uniq` or `phys`; the family goes by vendor (Microsoft, Sony, Nintendo), then by driver (`xpad`, `playstation`/`sony`, `nintendo`).
 - **Family** (`xbox`, `playstation`, `nintendo`, `generic`, ...): from the service's own device table by `vid:pid` (first entries: T-261's audit and RUY-154's 360 receiver), then the kernel driver, then `generic`. SDL's mapping database is a separate data file the service reads for unknown pads (requirements §4.2); it never decides capabilities.
 
 ### 4.2 Normalised input
@@ -60,7 +61,7 @@ Per device, per capability (`buttons`, `sticks`, `analog_triggers`, `dpad`, `gyr
 - `output` — the virtual device the pad is routed to can carry it (an Xbox 360 virtual pad: rumble yes, gyro no).
 Only what is detected is reported (`rumble` never implies `adaptive_triggers`). `GetCapabilities` returns them as `a(sbbbb)`.
 
-## 5. Routing *(planned, T-367; ownership modes T-371)*
+## 5. Routing *(built in the service, RUY-3; the shell's calls RUY-409; ownership modes T-371)*
 
 ### 5.1 States
 | Route | Set when | Pads produce |
@@ -70,7 +71,9 @@ Only what is detected is reported (`rumble` never implies `adaptive_triggers`). 
 | `overlay` | an overlay over a running app (Hub, Guide menu, a system dialog: ADR-033) | navigation keys; the virtual pads are held in neutral (sticks centred, nothing pressed) |
 | `locked` | the picker or the PIN pad after Lock, or no profile signed in | navigation keys; **no virtual pad exists** |
 
-Every transition releases on the side being left whatever is held (the `KeyBoard` count of T-337, extended to pad buttons and axes), then switches: no stuck button and no double input. The shell is the only source of the route: the compositor knows the focus first (`KeyRouter`), and the shell calls `Input1.SetRoute(route, instance, profile)` on every change, exactly as it reports presence to `Session1` today. The service trusts the shell's argument (the bus policy lets only `ruya-shell` and root call it, like `Session1.Launch`), refuses profiles that are not profile accounts, and **falls back to `locked` when the caller that set the route leaves the bus** (`NameOwnerChanged`), so a dead shell never leaves a game owning the pads.
+Every transition releases on the side being left whatever is held (the `KeyBoard` count of T-337, extended to pad buttons and axes), then switches: no stuck button and no double input. The shell is the only source of the route: the compositor knows the focus first (`KeyRouter`), and the shell calls `Input1.SetRoute(route, instance, app_id, profile)` on every change (`app_id`, the Flatpak id of the app in front, lets the service pick a game or platform profile, RUY-43; `instance` stays opaque), exactly as it reports presence to `Session1` today. The service trusts the shell's argument (the bus policy lets only `ruya-shell` and root call it, like `Session1.Launch`), refuses profiles that are not profile accounts, and **falls back to `locked` when the caller that set the route leaves the bus** (`NameOwnerChanged`), so a dead shell never leaves a game owning the pads.
+
+**As built (RUY-3, `routing.rs`).** The service starts in `shell` with no profile. Virtual pads (`Ruya Xbox 360 Pad`, `045e:028e` version `0x0114`, the 11 xpad keys with `BTN_MODE` declared so that SDL's "Xbox 360 Controller" mapping applies, sticks, 0..255 triggers, the hat, `FF_RUMBLE` when the physical pad has it) exist only while the route is `app`, and stay, held in neutral once, for `overlay` with the same instance and profile; `shell`, `locked`, an `overlay` with another or no instance (a frozen app) and an `app` with another instance or profile destroy them. Entering `app`, every navigation key but Guide is released, and a button or axis already held (a quarter of its range or more) is not forwarded until it is let go, so the press that closed an overlay never reaches the game. Pads are numbered `pad1`, `pad2`, ... in connection order (the lowest free number); a pad connected while an app is in front gets its virtual pad at once. Rumble: the app's `FF_RUMBLE` uploads, plays and erases go to the physical pad while the route is `app`; the overlay stops what plays, and a destroyed pad's effects are erased. `SetRoute` answers `invalid` for an unknown route, an `app` without instance or app id, an `overlay` whose instance and app id are not both set or both empty, a `shell` or `locked` with an instance and a `locked` with a profile, and `unknown-profile` for a profile that is not an account `ruya-profiles` made (`ruya-<id>`, a regular uid, home `/var/home/ruya-<id>`, comment "RuyaOS profile").
 
 ### 5.2 Sign-in, switch, lock, run end, Quick Resume
 - **Who tells whom.** The shell, through `SetRoute`: it already learns sign-in, switch and lock from `Profiles1` (`SwitchTo`, `Lock`, `ActiveProfile`) and freezing from `Session1`. No new call from `ruya-profiles` or `ruya-session` to the input service and no new bus-policy line on their interfaces; the one new policy is `org.ruyaos.Input1`'s own (owner `ruya-input`; `ruya-shell` and root may call; `ruya-link` nothing until ADR-029's allow-list names a method).
@@ -99,9 +102,9 @@ In `managed` the service never grabs a pad: apps cannot open physical nodes (no 
 - **Limits**: 256 mappings per list (the top level and each layer), 8 layers, 32 macro steps, a macro step never targets a macro (no recursion; a service rule), `press`/`release`/`tap` steps need a `target` and `wait` a `ms` (service rules), 10 s total macro duration, delays ≥ 10 ms, turbo ≤ 30 Hz, a chord of at most 4 inputs, names ≤ 64 characters, 64 KiB per file. Imported profiles are untrusted data (requirements §15): validated, never executed.
 - **Storage**: per console profile, by the service, under `/var/lib/ruya-input/profiles/<profile id>/` (the unit's `StateDirectory`, owned by `ruya-input`, 0700; profile users cannot read it); export and import go through the shell's file picker as JSON text over `Input1`.
 
-## 8. When the service fails *(planned, T-367 restart; emergency reader: its own task)*
+## 8. When the service fails *(restart built, RUY-3; emergency reader: RUY-410)*
 Chosen path: **both**, because each covers what the other cannot.
-1. **Fast restart**: `RestartSec=100ms`, `StartLimitIntervalSec=0` (never give up), `WatchdogSec=5s` with `sd_notify` from the event loop. Target: navigation back within 0.5 s of a crash (today 2.2-2.4 s, §1).
+1. **Fast restart**: `RestartSec=100ms`, `StartLimitIntervalSec=0` (never give up), `WatchdogSec=5s` with `sd_notify` from the event loop (as built: `Type=notify`, `READY=1` once the navigation keyboard exists, `WATCHDOG=1` every 2.5 s from the loop that also takes the router lock). Target: navigation back within 0.5 s of a crash (today 2.2-2.4 s, §1).
 2. **The compositor's emergency reader**: when `org.ruyaos.Input1` has had no owner for 3 s (a crash loop, a failed start, a broken image), the compositor opens the physical pads itself (it keeps logind's ACL on them, §3) and maps D-pad, left stick, south, east, start and guide to the same keys as `ruya-inputd`'s Phase 0 table, until the name has an owner again. It never feeds a game. A journal line names both transitions.
 The spike proved the restart path (§1); the emergency reader is not built yet, and its acceptance test is the Dell drill: mask the service, the shell still navigates.
 
@@ -148,8 +151,8 @@ The **Confirm button** row lives in **Settings > Controllers** (the one Settings
 ## 12. Task map
 | Task | What, after this design |
 |---|---|
-| T-367 / RUY-3 | `ruya-input` user and udev rules (§3), one Xbox 360-style virtual pad per physical pad for the signed-in profile, the ACL re-assert, routing states and `SetRoute` (§5.1-5.2), restart settings (§8.1), `Input1` devices and routing part, mock and client, a VM check and the Dell SuperTuxKart check |
-| RUY-409 | the shell calls `SetRoute` (§5.1-5.2); the Dell SuperTuxKart race |
+| T-367 / RUY-3 | `ruya-input` user and udev rules (§3), one Xbox 360-style virtual pad per physical pad for the signed-in profile, the ACL re-assert, routing states and `SetRoute` (§5.1-5.2), restart settings (§8.1), `Input1` devices and routing part, `scripts/vm-input-check.sh` (built) |
+| RUY-409 | the shell calls `SetRoute` (§5.1-5.2), with `Input1`'s mock and client; the Dell SuperTuxKart race |
 | RUY-410 | the compositor's emergency reader (§8.2) |
 | RUY-411 | Bluetooth: the bonded-only VM check and the keyboard-class confirmation (§6) |
 | T-368 / RUY-39 | device list, capabilities (§4.3), the live button test; Settings > Controllers |

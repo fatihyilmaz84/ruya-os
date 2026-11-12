@@ -1,30 +1,58 @@
 [Unit]
-Description=RuyaOS gamepad navigation bridge
+Description=RuyaOS input service (org.ruyaos.Input1)
 Documentation=file:///usr/share/doc/ruyaos/
 Before=ruya-compositor@tty1.service
+Wants=dbus.socket
+After=dbus.socket
+# Never give up restarting (06-input.md section 8.1): the shell navigates through this service.
+StartLimitIntervalSec=0
 
 [Service]
+Type=notify
+NotifyAccess=main
 ExecStart=/usr/bin/ruya-inputd
 Restart=always
-RestartSec=2
-# Root only for owner access to /dev/input/event* and /dev/uinput; no capabilities.
+RestartSec=100ms
+WatchdogSec=5s
+# Its own unprivileged account (sysusers.d/ruyaos.conf, 06-input.md section 3): /dev/uinput by
+# group (70-ruya-input.rules), physical pads by an ACL entry (74-ruya-input-acl.rules), and the
+# virtual pads it makes are its own (phys ruya-input/pad*). No capability is needed.
+User=ruya-input
+Group=ruya-input
+StateDirectory=ruya-input
+StateDirectoryMode=0700
 CapabilityBoundingSet=
+AmbientCapabilities=
 NoNewPrivileges=yes
 DevicePolicy=closed
-DeviceAllow=char-input r
+DeviceAllow=char-input rw
 DeviceAllow=/dev/uinput rw
-PrivateNetwork=yes
+# No PrivateNetwork: udevd broadcasts its monitor messages in the host's network namespace, and
+# the service re-asserts its virtual pads' ACL after each of them. AF_NETLINK is that monitor;
+# AF_UNIX the system bus; no IP family at all.
+RestrictAddressFamilies=AF_UNIX AF_NETLINK
+IPAddressDeny=any
 PrivateTmp=yes
+PrivateIPC=yes
 ProtectSystem=strict
 ProtectHome=yes
+ProtectProc=invisible
+ProtectClock=yes
+ProtectHostname=yes
+ProtectKernelLogs=yes
 ProtectKernelTunables=yes
 ProtectKernelModules=yes
 ProtectControlGroups=yes
-RestrictAddressFamilies=AF_UNIX
 RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
 LockPersonality=yes
 MemoryDenyWriteExecute=yes
+RemoveIPC=yes
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
 SystemCallArchitectures=native
+UMask=0077
 
 [Install]
 WantedBy=multi-user.target

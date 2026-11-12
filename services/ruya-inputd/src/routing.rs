@@ -1,0 +1,1535 @@
+//! The routing core (06-input.md §5.1-5.2): who receives the pads, the shell as navigation keys
+//! or the focused app's profile as virtual pads. Pure: every device side effect goes through
+//! `Backend`, time is passed in, and what the D-Bus adapter must announce comes out as `Notice`s.
+//!
+//! Rules:
+//! - Routes `shell`, `overlay` and `locked` produce navigation keys; `app` produces only Guide
+//!   (`KEY_HOMEPAGE`, always the shell's) and feeds the virtual pads.
+//! - Virtual pads (one per physical pad, phys `ruya-input/pad<n>`) exist only while the route is
+//!   `app` or `overlay` over the same app instance and profile. Any other route, another instance
+//!   or another profile destroys them (lock, switch, run end, Freeze): a descriptor the app opened
+//!   reads `ENODEV`, so nothing reaches it afterwards (an ACL change would not close it).
+//! - `overlay` over the pads' instance holds them in neutral (once); no input reaches them.
+//! - Entering `app`, a button or axis already held is not forwarded until it is let go (no
+//!   double input from the press that closed the overlay); leaving `shell`, every navigation key
+//!   but Guide is released.
+//! - A virtual pad's node gets one ACL entry, for the profile's user, after every udev event on
+//!   it (logind's uaccess flushes it on a `change`), and is announced (`routed`) only then.
+//! - The caller that set the route leaving the bus means `locked`.
+
+use std::collections::{BTreeMap, BTreeSet};
+use std::time::{Duration, Instant};
+
+use crate::accounts::{valid_app_id, valid_profile_id, Accounts};
+use crate::acl;
+use crate::mapping::{Axis, Button, KeyBoard, KeyEvent, Mapper, NavKey};
+use crate::pad::{
+    diff, OutEvent, PadAxis, PadButton, PadInput, PadState, Rumble, ALL_AXES, PAD_PHYS_PREFIX,
+    STICK_MAX, STICK_MIN, TRIGGER_MAX,
+};
+use crate::udev::UdevEvent;
+
+pub type PadKey = u64;
+pub type VirtualId = u64;
+
+/// When no udev event arrives for a new virtual pad (the monitor is not working), the ACL is set
+/// this long after creation anyway, and the journal says so.
+pub const UDEV_FALLBACK: Duration = Duration::from_secs(2);
+
+const ENODEV: i32 = 19;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Route {
+    Shell,
+    App,
+    Overlay,
+    Locked,
+}
+
+impl Route {
+    pub fn parse(s: &str) -> Option<Route> {
+        Some(match s {
+            "shell" => Route::Shell,
+            "app" => Route::App,
+            "overlay" => Route::Overlay,
+            "locked" => Route::Locked,
+            _ => return None,
+        })
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Route::Shell => "shell",
+            Route::App => "app",
+            Route::Overlay => "overlay",
+            Route::Locked => "locked",
+        }
+    }
+}
+
+/// Status strings of `Input1` (stable API, the XML header).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Status {
+    Ok,
+    Invalid,
+    UnknownProfile,
+}
+
+impl Status {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Status::Ok => "ok",
+            Status::Invalid => "invalid",
+            Status::UnknownProfile => "unknown-profile",
+        }
+    }
+}
+
+/// A physical pad as the Linux side found it.
+#[derive(Debug, Clone, Default)]
+pub struct PadInfo {
+    pub id: String,
+    pub name: String,
+    pub family: String,
+    pub connection: String,
+    /// The pad takes `FF_RUMBLE`: only then does its virtual pad declare it.
+    pub rumble: bool,
+}
+
+/// One row of `ListDevices` and the device signals.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeviceRecord {
+    pub id: String,
+    pub instance: String,
+    pub name: String,
+    pub family: String,
+    pub connection: String,
+    pub battery: i32,
+    pub charging: bool,
+    pub slot: u32,
+    pub profile: String,
+    pub routed: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Notice {
+    DeviceAdded(DeviceRecord),
+    DeviceChanged(DeviceRecord),
+    DeviceRemoved {
+        id: String,
+        instance: String,
+    },
+    RouteChanged {
+        route: String,
+        instance: String,
+    },
+    /// A journal line (without the "ruya-inputd: " prefix).
+    Journal(String),
+}
+
+/// What a virtual pad is made as.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VirtualSpec {
+    pub phys: String,
+    pub rumble: bool,
+}
+
+/// A created virtual pad: its id and the input device's sysfs name (`input23`), which the udev
+/// events of its node name in their `DEVPATH`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Created {
+    pub id: VirtualId,
+    pub sysname: String,
+}
+
+/// The device side effects. Linux: `linux.rs`; tests: a fake that records every call.
+pub trait Backend {
+    /// Writes key transitions on the "RuyaOS Navigation" keyboard.
+    fn nav_keys(&mut self, events: &[KeyEvent]);
+    fn create_virtual(&mut self, pad: PadKey, spec: &VirtualSpec) -> Result<Created, String>;
+    /// `UI_DEV_DESTROY`: every descriptor on the node reads `ENODEV` from now on.
+    fn destroy_virtual(&mut self, id: VirtualId);
+    fn write_virtual(&mut self, id: VirtualId, events: &[OutEvent]);
+    /// The event node of an input device (`input23` -> `/dev/input/event17`), if it exists.
+    fn node_of(&mut self, sysname: &str) -> Option<String>;
+    fn read_acl(&mut self, node: &str) -> Option<Vec<u8>>;
+    fn write_acl(&mut self, node: &str, acl: &[u8]) -> Result<(), String>;
+    /// Uploads a rumble effect to the physical pad (`physical_id` -1: a new one); its id there.
+    fn ff_upload(&mut self, pad: PadKey, physical_id: i16, rumble: &Rumble) -> Result<i16, i32>;
+    fn ff_play(&mut self, pad: PadKey, physical_id: i16, value: i32);
+    fn ff_erase(&mut self, pad: PadKey, physical_id: i16);
+}
+
+/// No devices at all: `--session` development, where the bus contract is what is tried out.
+pub struct NullBackend;
+
+impl Backend for NullBackend {
+    fn nav_keys(&mut self, _: &[KeyEvent]) {}
+    fn create_virtual(&mut self, _: PadKey, _: &VirtualSpec) -> Result<Created, String> {
+        Err("no uinput in --session".into())
+    }
+    fn destroy_virtual(&mut self, _: VirtualId) {}
+    fn write_virtual(&mut self, _: VirtualId, _: &[OutEvent]) {}
+    fn node_of(&mut self, _: &str) -> Option<String> {
+        None
+    }
+    fn read_acl(&mut self, _: &str) -> Option<Vec<u8>> {
+        None
+    }
+    fn write_acl(&mut self, _: &str, _: &[u8]) -> Result<(), String> {
+        Err("no devices in --session".into())
+    }
+    fn ff_upload(&mut self, _: PadKey, _: i16, _: &Rumble) -> Result<i16, i32> {
+        Err(ENODEV)
+    }
+    fn ff_play(&mut self, _: PadKey, _: i16, _: i32) {}
+    fn ff_erase(&mut self, _: PadKey, _: i16) {}
+}
+
+/// The app instance and profile the virtual pads are made for.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Owner {
+    instance: String,
+    profile: String,
+    uid: u32,
+}
+
+#[derive(Debug)]
+struct Virtual {
+    id: VirtualId,
+    sysname: String,
+    phys: String,
+    n: u32,
+    created: Instant,
+    ready: bool,
+    fallback_tried: bool,
+    /// What the virtual pad shows now.
+    sent: PadState,
+    /// Held when the route entered `app`: not forwarded until let go.
+    masked_buttons: Vec<PadButton>,
+    masked_axes: Vec<PadAxis>,
+    /// The app's effect id -> the physical pad's.
+    ff: BTreeMap<i16, i16>,
+    playing: BTreeSet<i16>,
+}
+
+#[derive(Debug)]
+struct Pad {
+    info: PadInfo,
+    instance: String,
+    mapper: Mapper,
+    state: PadState,
+    virt: Option<Virtual>,
+}
+
+/// An axis this far from neutral when the route enters `app` counts as held.
+fn axis_held(axis: PadAxis, value: i32) -> bool {
+    let full = match axis {
+        PadAxis::LeftTrigger | PadAxis::RightTrigger => TRIGGER_MAX,
+        _ => STICK_MAX,
+    };
+    value.abs() >= full / 4
+}
+
+fn mapper_events(mapper: &mut Mapper, input: PadInput) -> Vec<KeyEvent> {
+    let button = |b| -> Option<Button> {
+        Some(match b {
+            PadButton::South => Button::South,
+            PadButton::East => Button::East,
+            PadButton::Start => Button::Start,
+            PadButton::Guide => Button::Mode,
+            PadButton::L1 => Button::ShoulderLeft,
+            PadButton::R1 => Button::ShoulderRight,
+            PadButton::DpadUp => Button::DpadUp,
+            PadButton::DpadDown => Button::DpadDown,
+            PadButton::DpadLeft => Button::DpadLeft,
+            PadButton::DpadRight => Button::DpadRight,
+            _ => return None,
+        })
+    };
+    match input {
+        PadInput::Button(b, pressed) => match button(b) {
+            Some(b) => mapper.button(b, pressed),
+            None => Vec::new(),
+        },
+        PadInput::Axis(PadAxis::LeftX, v) => {
+            mapper.stick(Axis::Horizontal, v, STICK_MIN, STICK_MAX)
+        }
+        PadInput::Axis(PadAxis::LeftY, v) => mapper.stick(Axis::Vertical, v, STICK_MIN, STICK_MAX),
+        PadInput::Axis(..) => Vec::new(),
+    }
+}
+
+impl Virtual {
+    /// What the app may see of `state`: held-at-entry inputs and Guide masked out.
+    fn target(&self, state: &PadState) -> PadState {
+        let mut t = state.clone();
+        for &b in &self.masked_buttons {
+            t.apply(PadInput::Button(b, false));
+        }
+        for &a in &self.masked_axes {
+            t.apply(PadInput::Axis(a, 0));
+        }
+        t.apply(PadInput::Button(PadButton::Guide, false));
+        t
+    }
+
+    fn mask_held(&mut self, state: &PadState) {
+        self.masked_buttons = state.buttons().to_vec();
+        self.masked_axes = ALL_AXES
+            .into_iter()
+            .filter(|&a| axis_held(a, state.axis(a)))
+            .collect();
+    }
+
+    fn unmask(&mut self, input: PadInput) {
+        match input {
+            PadInput::Button(b, false) => self.masked_buttons.retain(|&x| x != b),
+            PadInput::Axis(a, v) if !axis_held(a, v) => self.masked_axes.retain(|&x| x != a),
+            _ => {}
+        }
+    }
+}
+
+pub struct Router<B: Backend> {
+    backend: B,
+    accounts: Box<dyn Accounts>,
+    route: Route,
+    instance: String,
+    app_id: String,
+    profile: String,
+    /// The bus name that set the route.
+    caller: Option<String>,
+    owner: Option<Owner>,
+    pads: BTreeMap<PadKey, Pad>,
+    board: KeyBoard,
+    next_key: PadKey,
+    next_instance: u64,
+    notices: Vec<Notice>,
+}
+
+impl<B: Backend> Router<B> {
+    /// Starts in `shell` with no profile: navigation keys, no virtual pad (as before Input1).
+    pub fn new(backend: B, accounts: Box<dyn Accounts>) -> Self {
+        Router {
+            backend,
+            accounts,
+            route: Route::Shell,
+            instance: String::new(),
+            app_id: String::new(),
+            profile: String::new(),
+            caller: None,
+            owner: None,
+            pads: BTreeMap::new(),
+            board: KeyBoard::default(),
+            next_key: 1,
+            next_instance: 1,
+            notices: Vec::new(),
+        }
+    }
+
+    pub fn backend(&self) -> &B {
+        &self.backend
+    }
+
+    pub fn backend_mut(&mut self) -> &mut B {
+        &mut self.backend
+    }
+
+    pub fn take_notices(&mut self) -> Vec<Notice> {
+        std::mem::take(&mut self.notices)
+    }
+
+    pub fn route(&self) -> Route {
+        self.route
+    }
+
+    pub fn route_instance(&self) -> &str {
+        &self.instance
+    }
+
+    pub fn route_app_id(&self) -> &str {
+        &self.app_id
+    }
+
+    fn journal(&mut self, line: String) {
+        self.notices.push(Notice::Journal(line));
+    }
+
+    fn record(&self, pad: &Pad) -> DeviceRecord {
+        DeviceRecord {
+            id: pad.info.id.clone(),
+            instance: pad.instance.clone(),
+            name: pad.info.name.clone(),
+            family: pad.info.family.clone(),
+            connection: pad.info.connection.clone(),
+            battery: -1,
+            charging: false,
+            slot: 0,
+            profile: self.profile.clone(),
+            routed: pad.virt.as_ref().is_some_and(|v| v.ready),
+        }
+    }
+
+    pub fn devices(&self) -> Vec<DeviceRecord> {
+        self.pads.values().map(|p| self.record(p)).collect()
+    }
+
+    fn changed(&mut self, key: PadKey) {
+        if let Some(pad) = self.pads.get(&key) {
+            let rec = self.record(pad);
+            self.notices.push(Notice::DeviceChanged(rec));
+        }
+    }
+
+    // ---- pads -------------------------------------------------------------------------------
+
+    pub fn add_pad(&mut self, info: PadInfo, now: Instant) -> PadKey {
+        let key = self.next_key;
+        self.next_key += 1;
+        let instance = format!("{}#{}", info.id, self.next_instance);
+        self.next_instance += 1;
+        let pad = Pad {
+            info,
+            instance,
+            mapper: Mapper::default(),
+            state: PadState::default(),
+            virt: None,
+        };
+        self.notices.push(Notice::DeviceAdded(self.record(&pad)));
+        self.pads.insert(key, pad);
+        if self.route == Route::App && self.owner.is_some() {
+            self.create_virtual(key, now);
+        }
+        key
+    }
+
+    /// The pad is gone: its navigation keys are released (the keys it held are returned for the
+    /// journal) and its virtual pad is destroyed.
+    pub fn remove_pad(&mut self, key: PadKey) -> Vec<NavKey> {
+        let Some(mut pad) = self.pads.remove(&key) else {
+            return Vec::new();
+        };
+        let held = pad.mapper.held_keys();
+        let keys = self.board.pad_gone(&mut pad.mapper);
+        self.backend.nav_keys(&keys);
+        if let Some(v) = pad.virt.take() {
+            self.drop_virtual(key, v);
+        }
+        self.notices.push(Notice::DeviceRemoved {
+            id: pad.info.id,
+            instance: pad.instance,
+        });
+        held
+    }
+
+    /// One batch of a pad's input (one evdev `SYN_REPORT`).
+    pub fn input(&mut self, key: PadKey, inputs: &[PadInput]) {
+        let app = self.route == Route::App;
+        let Some(pad) = self.pads.get_mut(&key) else {
+            return;
+        };
+        let mut nav = Vec::new();
+        for &input in inputs {
+            pad.state.apply(input);
+            let events = mapper_events(&mut pad.mapper, input);
+            if app {
+                // Navigation stops while an app has the focus; Guide always reaches the shell.
+                nav.extend(events.into_iter().filter(|&(k, _)| k == NavKey::Guide));
+            } else {
+                nav.extend(events);
+            }
+            if let Some(v) = pad.virt.as_mut() {
+                v.unmask(input);
+            }
+        }
+        let keys = self.board.route(&nav);
+        self.backend.nav_keys(&keys);
+        if !app {
+            return;
+        }
+        if let Some(v) = pad.virt.as_mut() {
+            let target = v.target(&pad.state);
+            let events = diff(&v.sent, &target);
+            v.sent = target;
+            if !events.is_empty() {
+                self.backend.write_virtual(v.id, &events);
+            }
+        }
+    }
+
+    // ---- virtual pads -----------------------------------------------------------------------
+
+    fn create_virtual(&mut self, key: PadKey, now: Instant) {
+        let Some(owner) = self.owner.clone() else {
+            return;
+        };
+        let used: BTreeSet<u32> = self
+            .pads
+            .values()
+            .filter_map(|p| p.virt.as_ref().map(|v| v.n))
+            .collect();
+        let n = (1..).find(|n| !used.contains(n)).unwrap_or(1);
+        let Some(pad) = self.pads.get(&key) else {
+            return;
+        };
+        let spec = VirtualSpec {
+            phys: format!("{PAD_PHYS_PREFIX}{n}"),
+            rumble: pad.info.rumble,
+        };
+        let pad_id = pad.info.id.clone();
+        match self.backend.create_virtual(key, &spec) {
+            Ok(created) => {
+                let mut v = Virtual {
+                    id: created.id,
+                    sysname: created.sysname,
+                    phys: spec.phys.clone(),
+                    n,
+                    created: now,
+                    ready: false,
+                    fallback_tried: false,
+                    sent: PadState::default(),
+                    masked_buttons: Vec::new(),
+                    masked_axes: Vec::new(),
+                    ff: BTreeMap::new(),
+                    playing: BTreeSet::new(),
+                };
+                if let Some(pad) = self.pads.get_mut(&key) {
+                    v.mask_held(&pad.state);
+                    pad.virt = Some(v);
+                }
+                self.journal(format!(
+                    "virtual pad {} created for ruya-{} ({pad_id})",
+                    spec.phys, owner.profile
+                ));
+            }
+            Err(err) => self.journal(format!("creating a virtual pad for {pad_id} failed: {err}")),
+        }
+    }
+
+    /// Destroys a virtual pad: its rumble effects are erased on the physical pad first.
+    fn drop_virtual(&mut self, key: PadKey, v: Virtual) {
+        for &physical in v.ff.values() {
+            self.backend.ff_erase(key, physical);
+        }
+        self.backend.destroy_virtual(v.id);
+        self.journal(format!("virtual pad {} destroyed", v.phys));
+    }
+
+    fn destroy_all(&mut self) {
+        let keys: Vec<PadKey> = self.pads.keys().copied().collect();
+        for key in keys {
+            let taken = self.pads.get_mut(&key).and_then(|p| p.virt.take());
+            if let Some(v) = taken {
+                let was_ready = v.ready;
+                self.drop_virtual(key, v);
+                if was_ready {
+                    self.changed(key);
+                }
+            }
+        }
+        self.owner = None;
+    }
+
+    /// Sticks centred, nothing pressed, rumble stopped: the overlay is in front.
+    fn neutral_all(&mut self) {
+        for (&key, pad) in self.pads.iter_mut() {
+            let Some(v) = pad.virt.as_mut() else {
+                continue;
+            };
+            let events = diff(&v.sent, &PadState::default());
+            v.sent = PadState::default();
+            if !events.is_empty() {
+                self.backend.write_virtual(v.id, &events);
+            }
+            for effect in std::mem::take(&mut v.playing) {
+                if let Some(&physical) = v.ff.get(&effect) {
+                    self.backend.ff_play(key, physical, 0);
+                }
+            }
+        }
+    }
+
+    /// Sets the one-entry ACL on a virtual pad's node unless it is already exactly that.
+    fn assert_acl(&mut self, key: PadKey, node: &str, why: &str) {
+        let Some(owner) = self.owner.clone() else {
+            return;
+        };
+        let current = self.backend.read_acl(node);
+        let fine = current
+            .as_deref()
+            .is_some_and(|a| acl::is_only_user(a, owner.uid));
+        let result = if fine {
+            Ok(())
+        } else {
+            self.backend.write_acl(node, &acl::only_user(owner.uid))
+        };
+        let Some(v) = self.pads.get_mut(&key).and_then(|p| p.virt.as_mut()) else {
+            return;
+        };
+        let phys = v.phys.clone();
+        let was_ready = v.ready;
+        if result.is_ok() {
+            v.ready = true;
+        }
+        match result {
+            Err(err) => {
+                self.journal(format!("setting the ACL of {phys} ({node}) failed: {err}"));
+            }
+            Ok(()) if !was_ready => {
+                self.journal(format!(
+                    "virtual pad {phys} ready for ruya-{} ({node}, {why})",
+                    owner.profile
+                ));
+                self.changed(key);
+            }
+            Ok(()) if !fine => {
+                self.journal(format!("ACL of {phys} ({node}) re-asserted after {why}"));
+            }
+            Ok(()) => {}
+        }
+    }
+
+    /// A processed udev event (the monitor): an `add` or `change` on one of our nodes sets the
+    /// ACL again, because logind's uaccess builtin rewrites it on every event.
+    pub fn udev_event(&mut self, ev: &UdevEvent) {
+        if !ev.is_event_node() || !matches!(ev.action.as_str(), "add" | "change") {
+            return;
+        }
+        let Some(sysname) = ev.parent_sysname() else {
+            return;
+        };
+        let key = self.pads.iter().find_map(|(&k, p)| {
+            p.virt
+                .as_ref()
+                .is_some_and(|v| v.sysname == sysname)
+                .then_some(k)
+        });
+        if let Some(key) = key {
+            let why = format!("udev {}", ev.action);
+            self.assert_acl(key, &ev.devname, &why);
+        }
+    }
+
+    /// Timers: a virtual pad with no udev event after `UDEV_FALLBACK` gets its ACL anyway.
+    pub fn tick(&mut self, now: Instant) {
+        let due: Vec<(PadKey, String)> = self
+            .pads
+            .iter_mut()
+            .filter_map(|(&k, p)| {
+                let v = p.virt.as_mut()?;
+                if v.ready || v.fallback_tried || now.duration_since(v.created) < UDEV_FALLBACK {
+                    return None;
+                }
+                v.fallback_tried = true;
+                Some((k, v.sysname.clone()))
+            })
+            .collect();
+        for (key, sysname) in due {
+            match self.backend.node_of(&sysname) {
+                Some(node) => self.assert_acl(key, &node, "no udev event in 2 s"),
+                None => self.journal(format!("virtual pad {sysname} has no event node")),
+            }
+        }
+    }
+
+    // ---- routing ----------------------------------------------------------------------------
+
+    /// `Input1.SetRoute`. `caller` is the bus name of the caller (the route falls back to
+    /// `locked` when it leaves the bus).
+    pub fn set_route(
+        &mut self,
+        route: &str,
+        instance: &str,
+        app_id: &str,
+        profile: &str,
+        caller: &str,
+        now: Instant,
+    ) -> Status {
+        let Some(r) = Route::parse(route) else {
+            return Status::Invalid;
+        };
+        let instance_ok = instance.len() <= 255 && !instance.chars().any(char::is_control);
+        let app_ok = app_id.is_empty() || valid_app_id(app_id);
+        let shape_ok = match r {
+            Route::App => !instance.is_empty() && !app_id.is_empty() && !profile.is_empty(),
+            Route::Overlay => !profile.is_empty() && (instance.is_empty() == app_id.is_empty()),
+            Route::Shell => instance.is_empty() && app_id.is_empty(),
+            Route::Locked => instance.is_empty() && app_id.is_empty() && profile.is_empty(),
+        };
+        if !instance_ok || !app_ok || !shape_ok {
+            return Status::Invalid;
+        }
+        let uid = if profile.is_empty() {
+            None
+        } else {
+            if !valid_profile_id(profile) {
+                return Status::UnknownProfile;
+            }
+            match self.accounts.profile_uid(profile) {
+                Some(uid) => Some(uid),
+                None => return Status::UnknownProfile,
+            }
+        };
+        self.caller = Some(caller.to_owned());
+        self.apply(r, instance, app_id, profile, uid, now);
+        Status::Ok
+    }
+
+    /// The bus name `name` has left the bus (`NameOwnerChanged` with no new owner).
+    pub fn caller_left(&mut self, name: &str, now: Instant) {
+        if self.caller.as_deref() != Some(name) {
+            return;
+        }
+        self.caller = None;
+        if self.route != Route::Locked {
+            self.journal(format!(
+                "the route's caller {name} left the bus: route locked"
+            ));
+            self.apply(Route::Locked, "", "", "", None, now);
+        }
+    }
+
+    fn apply(
+        &mut self,
+        r: Route,
+        instance: &str,
+        app_id: &str,
+        profile: &str,
+        uid: Option<u32>,
+        now: Instant,
+    ) {
+        let old = self.route;
+        // Leaving navigation: every key but Guide goes up now.
+        if old != Route::App && r == Route::App {
+            let keys = self.board.release_except(NavKey::Guide);
+            self.backend.nav_keys(&keys);
+        }
+        let same_owner = self.owner.as_ref().is_some_and(|o| {
+            !instance.is_empty() && o.instance == instance && o.profile == profile
+        });
+        match r {
+            Route::App if same_owner => {
+                if old != Route::App {
+                    // Back from the overlay: what is held now waits for its release.
+                    for pad in self.pads.values_mut() {
+                        let state = pad.state.clone();
+                        if let Some(v) = pad.virt.as_mut() {
+                            v.mask_held(&state);
+                        }
+                    }
+                }
+            }
+            Route::App => {
+                self.destroy_all();
+                self.owner = uid.map(|uid| Owner {
+                    instance: instance.to_owned(),
+                    profile: profile.to_owned(),
+                    uid,
+                });
+                let keys: Vec<PadKey> = self.pads.keys().copied().collect();
+                for key in keys {
+                    self.create_virtual(key, now);
+                }
+            }
+            Route::Overlay if same_owner => self.neutral_all(),
+            Route::Overlay | Route::Shell | Route::Locked => self.destroy_all(),
+        }
+        let profile_changed = self.profile != profile;
+        let changed = self.route != r
+            || self.instance != instance
+            || self.app_id != app_id
+            || profile_changed;
+        self.route = r;
+        self.instance = instance.to_owned();
+        self.app_id = app_id.to_owned();
+        self.profile = profile.to_owned();
+        if profile_changed {
+            let keys: Vec<PadKey> = self.pads.keys().copied().collect();
+            for key in keys {
+                self.changed(key);
+            }
+        }
+        if changed {
+            self.journal(format!(
+                "route {} instance '{instance}' app '{app_id}' profile '{profile}'",
+                r.as_str()
+            ));
+            self.notices.push(Notice::RouteChanged {
+                route: r.as_str().to_owned(),
+                instance: instance.to_owned(),
+            });
+        }
+    }
+
+    // ---- rumble -----------------------------------------------------------------------------
+
+    fn virtual_pad(&mut self, id: VirtualId) -> Option<(PadKey, &mut Virtual)> {
+        self.pads
+            .iter_mut()
+            .find_map(|(&k, p)| p.virt.as_mut().filter(|v| v.id == id).map(|v| (k, v)))
+    }
+
+    /// The app uploaded (or updated) rumble effect `effect` on virtual pad `id`.
+    pub fn ff_upload(&mut self, id: VirtualId, effect: i16, rumble: &Rumble) -> Result<(), i32> {
+        let Some((key, v)) = self.virtual_pad(id) else {
+            return Err(ENODEV);
+        };
+        let physical = v.ff.get(&effect).copied().unwrap_or(-1);
+        let new = self.backend.ff_upload(key, physical, rumble)?;
+        if let Some((_, v)) = self.virtual_pad(id) {
+            v.ff.insert(effect, new);
+        }
+        Ok(())
+    }
+
+    /// The app plays (`value` > 0, the repeat count) or stops (0) an effect: forwarded only while
+    /// the route is `app`.
+    pub fn ff_play(&mut self, id: VirtualId, effect: i16, value: i32) {
+        if self.route != Route::App {
+            return;
+        }
+        let Some((key, v)) = self.virtual_pad(id) else {
+            return;
+        };
+        let Some(&physical) = v.ff.get(&effect) else {
+            return;
+        };
+        if value > 0 {
+            v.playing.insert(effect);
+        } else {
+            v.playing.remove(&effect);
+        }
+        self.backend.ff_play(key, physical, value);
+    }
+
+    pub fn ff_erase(&mut self, id: VirtualId, effect: i16) {
+        let Some((key, v)) = self.virtual_pad(id) else {
+            return;
+        };
+        v.playing.remove(&effect);
+        if let Some(physical) = v.ff.remove(&effect) {
+            self.backend.ff_erase(key, physical);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::accounts::FixedAccounts;
+    use crate::pad::code;
+    use std::collections::HashMap;
+
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    enum Call {
+        Nav(Vec<KeyEvent>),
+        Create(PadKey, VirtualSpec),
+        Destroy(VirtualId),
+        Write(VirtualId, Vec<OutEvent>),
+        WriteAcl(String),
+        FfUpload(PadKey, i16, Rumble),
+        FfPlay(PadKey, i16, i32),
+        FfErase(PadKey, i16),
+    }
+
+    /// A fake uinput and filesystem: records every call, keeps one ACL per node.
+    #[derive(Default)]
+    struct Fake {
+        calls: Vec<Call>,
+        next: VirtualId,
+        alive: BTreeSet<VirtualId>,
+        acls: HashMap<String, Vec<u8>>,
+        acl_fails: bool,
+        next_ff: i16,
+    }
+
+    impl Fake {
+        fn take(&mut self) -> Vec<Call> {
+            std::mem::take(&mut self.calls)
+        }
+    }
+
+    impl Backend for Fake {
+        fn nav_keys(&mut self, events: &[KeyEvent]) {
+            if !events.is_empty() {
+                self.calls.push(Call::Nav(events.to_vec()));
+            }
+        }
+        fn create_virtual(&mut self, pad: PadKey, spec: &VirtualSpec) -> Result<Created, String> {
+            self.next += 1;
+            self.alive.insert(self.next);
+            self.calls.push(Call::Create(pad, spec.clone()));
+            Ok(Created {
+                id: self.next,
+                sysname: format!("input{}", 100 + self.next),
+            })
+        }
+        fn destroy_virtual(&mut self, id: VirtualId) {
+            self.alive.remove(&id);
+            self.calls.push(Call::Destroy(id));
+        }
+        fn write_virtual(&mut self, id: VirtualId, events: &[OutEvent]) {
+            assert!(self.alive.contains(&id), "write to a destroyed pad {id}");
+            self.calls.push(Call::Write(id, events.to_vec()));
+        }
+        fn node_of(&mut self, sysname: &str) -> Option<String> {
+            Some(format!("/dev/input/event-{sysname}"))
+        }
+        fn read_acl(&mut self, node: &str) -> Option<Vec<u8>> {
+            self.acls.get(node).cloned()
+        }
+        fn write_acl(&mut self, node: &str, acl: &[u8]) -> Result<(), String> {
+            if self.acl_fails {
+                return Err("Operation not permitted".into());
+            }
+            self.acls.insert(node.to_owned(), acl.to_vec());
+            self.calls.push(Call::WriteAcl(node.to_owned()));
+            Ok(())
+        }
+        fn ff_upload(&mut self, pad: PadKey, physical: i16, r: &Rumble) -> Result<i16, i32> {
+            self.calls.push(Call::FfUpload(pad, physical, *r));
+            if physical >= 0 {
+                return Ok(physical);
+            }
+            self.next_ff += 1;
+            Ok(self.next_ff)
+        }
+        fn ff_play(&mut self, pad: PadKey, physical: i16, value: i32) {
+            self.calls.push(Call::FfPlay(pad, physical, value));
+        }
+        fn ff_erase(&mut self, pad: PadKey, physical: i16) {
+            self.calls.push(Call::FfErase(pad, physical));
+        }
+    }
+
+    const P1_UID: u32 = 1001;
+    const P2_UID: u32 = 1002;
+    const STK: &str = "net.supertuxkart.SuperTuxKart";
+    const RACER: &str = "org.ruyaos.Racer";
+    const SHELL: &str = ":1.5";
+
+    fn router() -> Router<Fake> {
+        Router::new(
+            Fake::default(),
+            Box::new(FixedAccounts(vec![
+                ("p1".into(), P1_UID),
+                ("p2".into(), P2_UID),
+            ])),
+        )
+    }
+
+    fn pad(id: &str) -> PadInfo {
+        PadInfo {
+            id: id.into(),
+            name: "DualSense Wireless Controller".into(),
+            family: "playstation".into(),
+            connection: "bluetooth".into(),
+            rumble: true,
+        }
+    }
+
+    fn t0() -> Instant {
+        Instant::now()
+    }
+
+    fn press(b: PadButton) -> PadInput {
+        PadInput::Button(b, true)
+    }
+
+    fn release(b: PadButton) -> PadInput {
+        PadInput::Button(b, false)
+    }
+
+    fn app(r: &mut Router<Fake>, instance: &str, app_id: &str, profile: &str) {
+        assert_eq!(
+            r.set_route("app", instance, app_id, profile, SHELL, t0()),
+            Status::Ok
+        );
+    }
+
+    fn created(calls: &[Call]) -> Vec<VirtualSpec> {
+        calls
+            .iter()
+            .filter_map(|c| match c {
+                Call::Create(_, s) => Some(s.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    fn destroyed(calls: &[Call]) -> Vec<VirtualId> {
+        calls
+            .iter()
+            .filter_map(|c| match c {
+                Call::Destroy(id) => Some(*id),
+                _ => None,
+            })
+            .collect()
+    }
+
+    fn writes(calls: &[Call]) -> Vec<(VirtualId, Vec<OutEvent>)> {
+        calls
+            .iter()
+            .filter_map(|c| match c {
+                Call::Write(id, e) => Some((*id, e.clone())),
+                _ => None,
+            })
+            .collect()
+    }
+
+    fn nav(calls: &[Call]) -> Vec<KeyEvent> {
+        calls
+            .iter()
+            .filter_map(|c| match c {
+                Call::Nav(e) => Some(e.clone()),
+                _ => None,
+            })
+            .flatten()
+            .collect()
+    }
+
+    fn udev(action: &str, sysname: &str) -> UdevEvent {
+        UdevEvent {
+            action: action.into(),
+            subsystem: "input".into(),
+            devpath: format!("/devices/virtual/input/{sysname}/event17"),
+            devname: "/dev/input/event17".into(),
+        }
+    }
+
+    fn journal(r: &mut Router<Fake>) -> Vec<String> {
+        r.take_notices()
+            .into_iter()
+            .filter_map(|n| match n {
+                Notice::Journal(l) => Some(l),
+                _ => None,
+            })
+            .collect()
+    }
+
+    // ---- the route -------------------------------------------------------------------------
+
+    #[test]
+    fn the_route_starts_as_shell() {
+        let r = router();
+        assert_eq!(r.route(), Route::Shell);
+        assert_eq!(r.route_instance(), "");
+    }
+
+    #[test]
+    fn set_route_validates_its_arguments() {
+        let mut r = router();
+        let mut s = |route, inst, app, prof| r.set_route(route, inst, app, prof, SHELL, t0());
+        assert_eq!(s("game", "", "", ""), Status::Invalid);
+        assert_eq!(s("app", "", STK, "p1"), Status::Invalid); // no instance
+        assert_eq!(s("app", "i1", "", "p1"), Status::Invalid); // no app id
+        assert_eq!(s("app", "i1", "supertuxkart", "p1"), Status::Invalid); // not an app id
+        assert_eq!(s("app", "i1", STK, ""), Status::Invalid); // nobody signed in
+        assert_eq!(s("app", "i\n1", STK, "p1"), Status::Invalid);
+        assert_eq!(s("overlay", "i1", "", "p1"), Status::Invalid);
+        assert_eq!(s("shell", "i1", "", "p1"), Status::Invalid);
+        assert_eq!(s("locked", "", "", "p1"), Status::Invalid);
+        assert_eq!(s("app", "i1", STK, "shell"), Status::UnknownProfile);
+        assert_eq!(s("app", "i1", STK, "../p1"), Status::UnknownProfile);
+        assert_eq!(s("shell", "", "", "p9"), Status::UnknownProfile);
+        assert_eq!(s("overlay", "", "", "p1"), Status::Ok); // over a frozen app
+        assert_eq!(s("shell", "", "", ""), Status::Ok);
+        assert_eq!(s("locked", "", "", ""), Status::Ok);
+        assert_eq!(s("app", "i1", STK, "p1"), Status::Ok);
+    }
+
+    #[test]
+    fn a_refused_route_changes_nothing() {
+        let mut r = router();
+        r.add_pad(pad("a"), t0());
+        r.take_notices();
+        assert_eq!(
+            r.set_route("app", "i1", STK, "p9", SHELL, t0()),
+            Status::UnknownProfile
+        );
+        assert_eq!(r.route(), Route::Shell);
+        assert!(r.backend_mut().take().is_empty());
+        assert!(r.take_notices().is_empty());
+    }
+
+    #[test]
+    fn route_changes_are_announced_once() {
+        let mut r = router();
+        app(&mut r, "i1", STK, "p1");
+        let n = r.take_notices();
+        assert!(n.contains(&Notice::RouteChanged {
+            route: "app".into(),
+            instance: "i1".into()
+        }));
+        app(&mut r, "i1", STK, "p1");
+        assert!(!r
+            .take_notices()
+            .iter()
+            .any(|n| matches!(n, Notice::RouteChanged { .. })));
+        assert_eq!(r.route_app_id(), STK);
+    }
+
+    // ---- navigation keys -------------------------------------------------------------------
+
+    #[test]
+    fn the_shell_gets_navigation_keys() {
+        let mut r = router();
+        let a = r.add_pad(pad("a"), t0());
+        r.input(a, &[press(PadButton::South)]);
+        assert_eq!(nav(&r.backend_mut().take()), vec![(NavKey::Accept, true)]);
+    }
+
+    #[test]
+    fn no_navigation_key_while_an_app_has_the_focus_except_guide() {
+        let mut r = router();
+        let a = r.add_pad(pad("a"), t0());
+        app(&mut r, "i1", STK, "p1");
+        r.backend_mut().take();
+        r.input(a, &[press(PadButton::South), press(PadButton::DpadDown)]);
+        r.input(a, &[PadInput::Axis(PadAxis::LeftX, STICK_MIN)]);
+        r.input(a, &[press(PadButton::Guide)]);
+        let calls = r.backend_mut().take();
+        assert_eq!(nav(&calls), vec![(NavKey::Guide, true)]);
+        // Guide is never forwarded to the virtual pad.
+        for (_, events) in writes(&calls) {
+            assert!(!events.iter().any(|e| e.1 == code::BTN_MODE), "{events:?}");
+        }
+        r.input(a, &[release(PadButton::Guide)]);
+        assert_eq!(nav(&r.backend_mut().take()), vec![(NavKey::Guide, false)]);
+    }
+
+    #[test]
+    fn entering_an_app_releases_held_navigation_keys_once() {
+        let mut r = router();
+        let a = r.add_pad(pad("a"), t0());
+        r.input(a, &[press(PadButton::DpadDown), press(PadButton::South)]);
+        r.backend_mut().take();
+        app(&mut r, "i1", STK, "p1");
+        assert_eq!(
+            nav(&r.backend_mut().take()),
+            vec![(NavKey::Down, false), (NavKey::Accept, false)]
+        );
+        // The release that follows in the app changes nothing on the keyboard.
+        r.input(a, &[release(PadButton::DpadDown)]);
+        assert!(nav(&r.backend_mut().take()).is_empty());
+        // Back in the shell, a fresh press navigates once.
+        r.set_route("shell", "", "", "p1", SHELL, t0());
+        r.input(a, &[press(PadButton::DpadDown)]);
+        assert_eq!(nav(&r.backend_mut().take()), vec![(NavKey::Down, true)]);
+    }
+
+    #[test]
+    fn a_held_key_does_not_move_the_shell_again_after_the_app() {
+        // Down held from inside the game through the switch back to the shell: no extra move.
+        let mut r = router();
+        let a = r.add_pad(pad("a"), t0());
+        app(&mut r, "i1", STK, "p1");
+        r.input(a, &[press(PadButton::DpadDown)]);
+        r.set_route("overlay", "i1", STK, "p1", SHELL, t0());
+        r.backend_mut().take();
+        r.input(a, &[release(PadButton::DpadDown)]);
+        assert!(nav(&r.backend_mut().take()).is_empty());
+    }
+
+    // ---- virtual pads ----------------------------------------------------------------------
+
+    #[test]
+    fn a_virtual_pad_per_pad_exists_only_in_app() {
+        let mut r = router();
+        r.add_pad(pad("a"), t0());
+        r.add_pad(pad("b"), t0());
+        assert!(created(&r.backend_mut().take()).is_empty());
+        r.set_route("shell", "", "", "p1", SHELL, t0());
+        r.set_route("overlay", "", "", "p1", SHELL, t0());
+        assert!(created(&r.backend_mut().take()).is_empty());
+        app(&mut r, "i1", STK, "p1");
+        let specs = created(&r.backend_mut().take());
+        assert_eq!(
+            specs,
+            vec![
+                VirtualSpec {
+                    phys: "ruya-input/pad1".into(),
+                    rumble: true
+                },
+                VirtualSpec {
+                    phys: "ruya-input/pad2".into(),
+                    rumble: true
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn a_pad_press_reaches_the_virtual_pad_only_while_the_app_has_the_focus() {
+        let mut r = router();
+        let a = r.add_pad(pad("a"), t0());
+        r.input(a, &[press(PadButton::South), release(PadButton::South)]);
+        assert!(writes(&r.backend_mut().take()).is_empty());
+        app(&mut r, "i1", STK, "p1");
+        r.backend_mut().take();
+        r.input(a, &[press(PadButton::South)]);
+        assert_eq!(
+            writes(&r.backend_mut().take()),
+            vec![(1, vec![(code::EV_KEY, code::BTN_SOUTH, 1)])]
+        );
+        r.input(a, &[release(PadButton::South)]);
+        r.set_route("overlay", "i1", STK, "p1", SHELL, t0());
+        r.backend_mut().take();
+        r.input(
+            a,
+            &[
+                press(PadButton::South),
+                PadInput::Axis(PadAxis::LeftX, 9000),
+            ],
+        );
+        assert!(writes(&r.backend_mut().take()).is_empty());
+    }
+
+    #[test]
+    fn the_overlay_sends_neutral_once() {
+        let mut r = router();
+        let a = r.add_pad(pad("a"), t0());
+        app(&mut r, "i1", STK, "p1");
+        r.input(
+            a,
+            &[
+                press(PadButton::East),
+                PadInput::Axis(PadAxis::RightTrigger, TRIGGER_MAX),
+            ],
+        );
+        r.backend_mut().take();
+        r.set_route("overlay", "i1", STK, "p1", SHELL, t0());
+        let calls = r.backend_mut().take();
+        assert_eq!(
+            writes(&calls),
+            vec![(
+                1,
+                vec![
+                    (code::EV_KEY, code::BTN_EAST, 0),
+                    (code::EV_ABS, code::ABS_RZ, 0)
+                ]
+            )]
+        );
+        assert!(destroyed(&calls).is_empty(), "the overlay keeps the pads");
+        // Again: nothing more to send.
+        r.set_route("overlay", "i1", STK, "p1", SHELL, t0());
+        assert!(writes(&r.backend_mut().take()).is_empty());
+    }
+
+    #[test]
+    fn a_press_held_through_the_overlay_does_not_reach_the_app() {
+        let mut r = router();
+        let a = r.add_pad(pad("a"), t0());
+        app(&mut r, "i1", STK, "p1");
+        r.set_route("overlay", "i1", STK, "p1", SHELL, t0());
+        // A closes the overlay ("Resume") and is still down when the app is back in front.
+        r.input(a, &[press(PadButton::South)]);
+        r.input(a, &[PadInput::Axis(PadAxis::LeftTrigger, TRIGGER_MAX)]);
+        app(&mut r, "i1", STK, "p1");
+        r.backend_mut().take();
+        r.input(a, &[PadInput::Axis(PadAxis::LeftTrigger, TRIGGER_MAX - 5)]);
+        r.input(a, &[release(PadButton::South)]);
+        assert!(writes(&r.backend_mut().take()).is_empty());
+        // The next press is the app's.
+        r.input(a, &[press(PadButton::South)]);
+        r.input(a, &[PadInput::Axis(PadAxis::LeftTrigger, 0)]);
+        r.input(a, &[PadInput::Axis(PadAxis::LeftTrigger, TRIGGER_MAX)]);
+        assert_eq!(
+            writes(&r.backend_mut().take()),
+            vec![
+                (1, vec![(code::EV_KEY, code::BTN_SOUTH, 1)]),
+                (1, vec![(code::EV_ABS, code::ABS_Z, 255)])
+            ]
+        );
+    }
+
+    #[test]
+    fn lock_switch_run_end_and_freeze_destroy_the_virtual_pads() {
+        // Lock.
+        let mut r = router();
+        r.add_pad(pad("a"), t0());
+        app(&mut r, "i1", STK, "p1");
+        r.backend_mut().take();
+        r.set_route("locked", "", "", "", SHELL, t0());
+        assert_eq!(destroyed(&r.backend_mut().take()), vec![1]);
+        // Profile switch: p1's pad goes, p2 gets a new one.
+        app(&mut r, "i1", STK, "p1");
+        r.backend_mut().take();
+        app(&mut r, "i9", STK, "p2");
+        let calls = r.backend_mut().take();
+        assert_eq!(destroyed(&calls), vec![2]);
+        assert_eq!(created(&calls).len(), 1);
+        // Another app of the same profile: the first app's descriptor must go dead too.
+        app(&mut r, "i10", RACER, "p2");
+        assert_eq!(destroyed(&r.backend_mut().take()), vec![3]);
+        // Run end: the shell is in front.
+        r.set_route("shell", "", "", "p2", SHELL, t0());
+        assert_eq!(destroyed(&r.backend_mut().take()), vec![4]);
+        // Freeze under the overlay: the shell passes the overlay with no instance.
+        app(&mut r, "i11", RACER, "p2");
+        r.backend_mut().take();
+        r.set_route("overlay", "", "", "p2", SHELL, t0());
+        assert_eq!(destroyed(&r.backend_mut().take()), vec![5]);
+        // The Thaw: back in the app, fresh pads.
+        app(&mut r, "i11", RACER, "p2");
+        assert_eq!(created(&r.backend_mut().take()).len(), 1);
+    }
+
+    #[test]
+    fn another_profile_never_inherits_a_pad_even_with_the_same_instance() {
+        let mut r = router();
+        r.add_pad(pad("a"), t0());
+        app(&mut r, "i1", STK, "p1");
+        r.udev_event(&udev("add", "input101"));
+        r.backend_mut().take();
+        app(&mut r, "i1", STK, "p2");
+        let calls = r.backend_mut().take();
+        assert_eq!(destroyed(&calls), vec![1]);
+        assert_eq!(created(&calls).len(), 1);
+        // Back to p1's overlay with p2's pads: the profile differs, so they go too.
+        r.set_route("overlay", "i1", STK, "p1", SHELL, t0());
+        assert_eq!(destroyed(&r.backend_mut().take()), vec![2]);
+    }
+
+    #[test]
+    fn nothing_is_written_to_a_destroyed_pad() {
+        // The fake asserts on a write to a destroyed id; drive input around every destroy.
+        let mut r = router();
+        let a = r.add_pad(pad("a"), t0());
+        app(&mut r, "i1", STK, "p1");
+        r.input(a, &[press(PadButton::South)]);
+        r.set_route("locked", "", "", "", SHELL, t0());
+        r.input(a, &[release(PadButton::South), press(PadButton::North)]);
+        let calls = r.backend_mut().take();
+        assert!(writes(&calls)
+            .iter()
+            .all(|(id, _)| *id == 1 && calls.contains(&Call::Destroy(1))));
+        assert!(writes(&calls).len() == 1, "only the press before the lock");
+    }
+
+    #[test]
+    fn a_vanished_pad_removes_its_virtual_pad() {
+        let mut r = router();
+        let a = r.add_pad(pad("a"), t0());
+        let b = r.add_pad(pad("b"), t0());
+        app(&mut r, "i1", STK, "p1");
+        r.backend_mut().take();
+        r.take_notices();
+        r.remove_pad(a);
+        assert_eq!(destroyed(&r.backend_mut().take()), vec![1]);
+        assert!(r.take_notices().contains(&Notice::DeviceRemoved {
+            id: "a".into(),
+            instance: "a#1".into()
+        }));
+        // A pad connected while the app is in front gets the free phys number.
+        r.add_pad(pad("c"), t0());
+        assert_eq!(created(&r.backend_mut().take())[0].phys, "ruya-input/pad1");
+        assert_eq!(r.devices().len(), 2);
+        let _ = b;
+    }
+
+    #[test]
+    fn a_vanished_pad_releases_its_navigation_keys() {
+        let mut r = router();
+        let a = r.add_pad(pad("a"), t0());
+        r.input(a, &[press(PadButton::DpadDown)]);
+        r.backend_mut().take();
+        assert_eq!(r.remove_pad(a), vec![NavKey::Down]);
+        assert_eq!(nav(&r.backend_mut().take()), vec![(NavKey::Down, false)]);
+    }
+
+    // ---- the ACL ---------------------------------------------------------------------------
+
+    #[test]
+    fn the_acl_names_the_profile_user_after_udev_and_then_the_pad_is_routed() {
+        let mut r = router();
+        r.add_pad(pad("a"), t0());
+        app(&mut r, "i1", STK, "p1");
+        assert!(!r.devices()[0].routed, "not announced before udev");
+        r.take_notices();
+        r.udev_event(&udev("add", "input101"));
+        let acl = r.backend_mut().acls["/dev/input/event17"].clone();
+        assert!(acl::is_only_user(&acl, P1_UID));
+        assert!(r.devices()[0].routed);
+        let n = r.take_notices();
+        assert!(n
+            .iter()
+            .any(|n| matches!(n, Notice::DeviceChanged(d) if d.routed)));
+        assert!(n
+            .iter()
+            .any(|n| matches!(n, Notice::Journal(l) if l.contains("ready for ruya-p1"))));
+    }
+
+    #[test]
+    fn an_acl_wiped_by_a_change_event_is_reasserted() {
+        let mut r = router();
+        r.add_pad(pad("a"), t0());
+        app(&mut r, "i1", STK, "p1");
+        r.udev_event(&udev("add", "input101"));
+        r.backend_mut().take();
+        // logind's uaccess builtin on a `change`: the seat user only.
+        r.backend_mut()
+            .acls
+            .insert("/dev/input/event17".into(), acl::only_user(990));
+        r.udev_event(&udev("change", "input101"));
+        assert!(acl::is_only_user(
+            &r.backend_mut().acls["/dev/input/event17"],
+            P1_UID
+        ));
+        assert!(journal(&mut r).iter().any(|l| l.contains("re-asserted")));
+        // An event that left the ACL alone writes nothing.
+        r.backend_mut().take();
+        r.udev_event(&udev("change", "input101"));
+        assert!(r.backend_mut().take().is_empty());
+    }
+
+    #[test]
+    fn the_acl_target_follows_the_profile_switch() {
+        let mut r = router();
+        r.add_pad(pad("a"), t0());
+        app(&mut r, "i1", STK, "p1");
+        r.udev_event(&udev("add", "input101"));
+        app(&mut r, "i2", STK, "p2");
+        // The new pad (input102) is p2's; an event on p1's old node does nothing.
+        r.backend_mut().acls.clear();
+        r.udev_event(&udev("change", "input101"));
+        assert!(r.backend_mut().acls.is_empty());
+        r.udev_event(&udev("add", "input102"));
+        assert!(acl::is_only_user(
+            &r.backend_mut().acls["/dev/input/event17"],
+            P2_UID
+        ));
+    }
+
+    #[test]
+    fn udev_events_of_other_devices_are_ignored() {
+        let mut r = router();
+        r.add_pad(pad("a"), t0());
+        app(&mut r, "i1", STK, "p1");
+        r.udev_event(&udev("add", "input7"));
+        r.udev_event(&udev("remove", "input101"));
+        assert!(r.backend_mut().acls.is_empty());
+        assert!(!r.devices()[0].routed);
+    }
+
+    #[test]
+    fn without_a_udev_event_the_acl_is_set_after_the_fallback_time() {
+        let mut r = router();
+        let start = t0();
+        r.add_pad(pad("a"), start);
+        r.set_route("app", "i1", STK, "p1", SHELL, start);
+        r.tick(start + Duration::from_millis(500));
+        assert!(r.backend_mut().acls.is_empty());
+        r.tick(start + UDEV_FALLBACK);
+        assert!(acl::is_only_user(
+            &r.backend_mut().acls["/dev/input/event-input101"],
+            P1_UID
+        ));
+        assert!(r.devices()[0].routed);
+        assert!(journal(&mut r).iter().any(|l| l.contains("no udev event")));
+    }
+
+    #[test]
+    fn a_failed_acl_write_is_not_routed() {
+        let mut r = router();
+        r.add_pad(pad("a"), t0());
+        app(&mut r, "i1", STK, "p1");
+        r.backend_mut().acl_fails = true;
+        r.udev_event(&udev("add", "input101"));
+        assert!(!r.devices()[0].routed);
+        assert!(journal(&mut r).iter().any(|l| l.contains("failed")));
+    }
+
+    // ---- the caller ------------------------------------------------------------------------
+
+    #[test]
+    fn the_route_falls_back_to_locked_when_its_caller_leaves() {
+        let mut r = router();
+        r.add_pad(pad("a"), t0());
+        app(&mut r, "i1", STK, "p1");
+        r.backend_mut().take();
+        r.caller_left(":1.99", t0()); // someone else
+        assert_eq!(r.route(), Route::App);
+        r.caller_left(SHELL, t0());
+        assert_eq!(r.route(), Route::Locked);
+        assert_eq!(destroyed(&r.backend_mut().take()), vec![1]);
+        assert!(r.take_notices().contains(&Notice::RouteChanged {
+            route: "locked".into(),
+            instance: "".into()
+        }));
+    }
+
+    // ---- records ---------------------------------------------------------------------------
+
+    #[test]
+    fn records_carry_the_owner_profile_and_instances_count_up() {
+        let mut r = router();
+        r.add_pad(pad("a"), t0());
+        assert_eq!(r.devices()[0].profile, "");
+        assert_eq!(r.devices()[0].instance, "a#1");
+        r.set_route("shell", "", "", "p1", SHELL, t0());
+        assert_eq!(r.devices()[0].profile, "p1");
+        assert!(r
+            .take_notices()
+            .iter()
+            .any(|n| matches!(n, Notice::DeviceChanged(d) if d.profile == "p1")));
+        let a2 = r.add_pad(pad("a"), t0());
+        r.remove_pad(a2);
+        let a3 = r.add_pad(pad("a"), t0());
+        let _ = a3;
+        assert_eq!(r.devices()[1].instance, "a#3");
+    }
+
+    // ---- rumble ----------------------------------------------------------------------------
+
+    const RUMBLE: Rumble = Rumble {
+        strong: 40000,
+        weak: 20000,
+        length_ms: 500,
+        delay_ms: 0,
+    };
+
+    #[test]
+    fn rumble_is_forwarded_to_the_physical_pad() {
+        let mut r = router();
+        let a = r.add_pad(pad("a"), t0());
+        app(&mut r, "i1", STK, "p1");
+        r.backend_mut().take();
+        assert_eq!(r.ff_upload(1, 0, &RUMBLE), Ok(()));
+        r.ff_play(1, 0, 1);
+        // An update keeps the physical effect id.
+        assert_eq!(r.ff_upload(1, 0, &RUMBLE), Ok(()));
+        r.ff_play(1, 0, 0);
+        r.ff_erase(1, 0);
+        assert_eq!(
+            r.backend_mut().take(),
+            vec![
+                Call::FfUpload(a, -1, RUMBLE),
+                Call::FfPlay(a, 1, 1),
+                Call::FfUpload(a, 1, RUMBLE),
+                Call::FfPlay(a, 1, 0),
+                Call::FfErase(a, 1),
+            ]
+        );
+        assert_eq!(r.ff_upload(77, 0, &RUMBLE), Err(ENODEV));
+    }
+
+    #[test]
+    fn rumble_stops_at_the_overlay_and_its_effects_go_with_the_pad() {
+        let mut r = router();
+        let a = r.add_pad(pad("a"), t0());
+        app(&mut r, "i1", STK, "p1");
+        r.ff_upload(1, 0, &RUMBLE).expect("uploaded");
+        r.ff_play(1, 0, 1);
+        r.backend_mut().take();
+        r.set_route("overlay", "i1", STK, "p1", SHELL, t0());
+        assert_eq!(r.backend_mut().take(), vec![Call::FfPlay(a, 1, 0)]);
+        r.ff_play(1, 0, 1); // the app plays again under the overlay: not forwarded
+        assert!(r.backend_mut().take().is_empty());
+        r.set_route("locked", "", "", "", SHELL, t0());
+        let calls = r.backend_mut().take();
+        assert_eq!(calls[0], Call::FfErase(a, 1));
+        assert_eq!(destroyed(&calls), vec![1]);
+    }
+}

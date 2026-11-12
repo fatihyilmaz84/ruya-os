@@ -7,13 +7,13 @@
 #   2. `allow` appears only in `user="root"` and `user="ruya-shell"` policies, plus:
 #      - `user="ruya-link"` (ADR-029): every allow names `send_destination` AND `send_member`
 #        (never a whole destination or interface), and never `own`;
-#      - a service user (ruya-library) may `allow own` only.
+#      - a service user (ruya-library, ruya-input) may `allow own` only.
 #   3. No other policy kind (group, at_console, mandatory, other users).
 param([string]$Root, [switch]$SelfTest)
 $ErrorActionPreference = "Stop"
 $Repo = Split-Path -Parent $PSScriptRoot
 if (-not $Root) { $Root = $Repo }
-$ownerOnlyUsers = @("ruya-library")
+$ownerOnlyUsers = @("ruya-library", "ruya-input")
 
 function Test-BusPolicyFile([string]$Path) {
     $errs = New-Object System.Collections.Generic.List[string]

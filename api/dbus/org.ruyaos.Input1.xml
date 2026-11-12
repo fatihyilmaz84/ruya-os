@@ -3,13 +3,15 @@
 <!--
   org.ruyaos.Input1 — Ruya Input: controllers, capabilities, routing, profiles (DRAFT).
 
-  DRAFT (T-366 / RUY-2, lead 2026-11-12): nothing serves this interface yet. The design is
-  docs/specs/06-input.md; T-367 builds Devices and Routing, T-368 the button test, T-369/T-370
-  Profiles, T-371 OwnershipMode. Each task may change what it builds here (contracts are drafts
-  until the first release, root CLAUDE.md), and RUY-403's served-vs-XML test skips this file until
-  ruya-inputd serves it.
+  DRAFT (T-366 / RUY-2, lead 2026-11-12), partly built. ruya-inputd serves the Devices members
+  ListDevices, DeviceAdded, DeviceChanged, DeviceRemoved and the Routing members SetRoute, Route,
+  RouteChanged since RUY-3 (T-367); every other member below is still DRAFT and not served
+  (GetCapabilities T-368, the button test T-368, UI ownership T-397..T-399, Profiles T-369/T-370,
+  OwnershipMode T-371). The design is docs/specs/06-input.md. Each task may change what it builds
+  here (contracts are drafts until the first release, root CLAUDE.md); RUY-403's served-vs-XML
+  test must check only the built members.
 
-  To be served by ruya-inputd (system user ruya-input, not root: 06 §3) on the system bus at
+  Served by ruya-inputd (system user ruya-input, not root: 06 §3) on the system bus at
   /org/ruyaos/Input1. Bus policy: ruya-input owns the name; only ruya-shell and root may call.
   Internal (tier A, ADR-022): apps never call it. They see input only as evdev virtual devices of
   their own profile (docs/developers/controller-input.md) and, later, semantic actions through
@@ -41,7 +43,10 @@
     battery     i   0..100, or -1 when unknown or not on battery
     charging    b
     slot        u   ADR-017 player slot, 0 when none (T-264 fills it)
-    profile     s   the console profile that owns the pad ("" when none)
+    profile     s   the console profile that owns the pad ("" when none); until T-264 every pad
+                    is the route's profile's
+    routed      b   the pad has a virtual pad for that profile and its node's ACL is set (after
+                    udev's last event on it): an app of the profile can open it now
 
   Capability (a(sbbbb)): name, hardware, driver, available, output (06 §4.3). Names:
     buttons sticks analog_triggers dpad gyro accelerometer touchpad rumble trigger_rumble
@@ -57,7 +62,8 @@
 <node>
   <interface name="org.ruyaos.Input1">
 
-    <!-- Devices (T-367, T-368) -->
+    <!-- Devices (T-367 built: ListDevices and the three signals; GetCapabilities is T-368, DRAFT).
+         Only physical pads are listed, never the service's own virtual devices. -->
     <method name="ListDevices">
       <arg name="devices" type="aa{sv}" direction="out"/>
     </method>
@@ -96,12 +102,26 @@
       <arg name="value" type="i"/>
     </signal>
 
-    <!-- Routing (T-367). The shell calls it on every focus, overlay, sign-in, switch, lock and
-         freeze change. `instance` is Session1's instance for "app" and "overlay", else "";
-         `profile` is the active console profile, "" for "locked". -->
+    <!-- Routing (T-367, built). The shell calls it on every focus, overlay, sign-in, switch, lock
+         and freeze change (06 §5.1-5.2).
+           route     "shell" | "app" | "overlay" | "locked"
+           instance  Session1's instance of the app in front for "app" and "overlay" (opaque: never
+                     parsed), else ""; "overlay" with "" is an overlay over a frozen app
+           app_id    the Flatpak id of that app (the service picks the game or platform profile by
+                     it, RUY-43), "" exactly when instance is ""; only its form is checked (the
+                     rule of Session1: three dot-separated parts or more), it is not looked up
+           profile   the active console profile id ("p1"), "" only for "shell" before a sign-in
+                     and always for "locked"
+         Status: "ok", "invalid" (unknown route, a malformed or missing instance or app_id, a
+         profile for "locked"), "unknown-profile" (not a profile account: root, system users and
+         ruya-shell never are). Virtual pads exist only for "app", and stay (held in neutral) for
+         "overlay" with the same instance and profile; anything else destroys them, so an app's
+         open descriptor reads ENODEV. When the caller that set the route leaves the bus, the route
+         becomes "locked". At start the route is "shell" with no profile. -->
     <method name="SetRoute">
       <arg name="route" type="s" direction="in"/>
       <arg name="instance" type="s" direction="in"/>
+      <arg name="app_id" type="s" direction="in"/>
       <arg name="profile" type="s" direction="in"/>
       <arg name="status" type="s" direction="out"/>
     </method>

@@ -1,0 +1,265 @@
+//! Thin zbus adapter for `org.ruyaos.Input1` (api/dbus/org.ruyaos.Input1.xml): the Devices and
+//! Routing members. Converts types, calls the core and emits what the core announces. No rules.
+
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex, MutexGuard};
+use std::time::Instant;
+
+use futures_lite::StreamExt;
+use zbus::message::Header;
+use zbus::object_server::SignalEmitter;
+use zbus::zvariant::{OwnedValue, Value};
+use zbus::{interface, Connection, MatchRule, MessageStream};
+
+use crate::routing::{Backend, DeviceRecord, Notice, Router};
+
+pub const BUS_NAME: &str = "org.ruyaos.Input1";
+pub const OBJECT_PATH: &str = "/org/ruyaos/Input1";
+
+type Dict = HashMap<String, OwnedValue>;
+
+pub type DynBackend = Box<dyn Backend + Send>;
+
+impl Backend for DynBackend {
+    fn nav_keys(&mut self, events: &[crate::mapping::KeyEvent]) {
+        (**self).nav_keys(events)
+    }
+    fn create_virtual(
+        &mut self,
+        pad: crate::routing::PadKey,
+        spec: &crate::routing::VirtualSpec,
+    ) -> Result<crate::routing::Created, String> {
+        (**self).create_virtual(pad, spec)
+    }
+    fn destroy_virtual(&mut self, id: crate::routing::VirtualId) {
+        (**self).destroy_virtual(id)
+    }
+    fn write_virtual(&mut self, id: crate::routing::VirtualId, events: &[crate::pad::OutEvent]) {
+        (**self).write_virtual(id, events)
+    }
+    fn node_of(&mut self, sysname: &str) -> Option<String> {
+        (**self).node_of(sysname)
+    }
+    fn read_acl(&mut self, node: &str) -> Option<Vec<u8>> {
+        (**self).read_acl(node)
+    }
+    fn write_acl(&mut self, node: &str, acl: &[u8]) -> Result<(), String> {
+        (**self).write_acl(node, acl)
+    }
+    fn ff_upload(
+        &mut self,
+        pad: crate::routing::PadKey,
+        physical_id: i16,
+        rumble: &crate::pad::Rumble,
+    ) -> Result<i16, i32> {
+        (**self).ff_upload(pad, physical_id, rumble)
+    }
+    fn ff_play(&mut self, pad: crate::routing::PadKey, physical_id: i16, value: i32) {
+        (**self).ff_play(pad, physical_id, value)
+    }
+    fn ff_erase(&mut self, pad: crate::routing::PadKey, physical_id: i16) {
+        (**self).ff_erase(pad, physical_id)
+    }
+}
+
+pub type SharedRouter = Router<DynBackend>;
+
+/// The router, shared by the pad threads, the udev monitor and the bus. Every call drains the
+/// router's notices: journal lines are printed, the rest go to the signal task.
+pub struct Shared {
+    router: Mutex<SharedRouter>,
+    notices: async_channel::Sender<Notice>,
+}
+
+impl Shared {
+    pub fn new(router: SharedRouter) -> (Arc<Shared>, async_channel::Receiver<Notice>) {
+        let (tx, rx) = async_channel::unbounded();
+        (
+            Arc::new(Shared {
+                router: Mutex::new(router),
+                notices: tx,
+            }),
+            rx,
+        )
+    }
+
+    /// A poisoned lock (a thread panicked) must not stop the others from releasing keys.
+    fn lock(&self) -> MutexGuard<'_, SharedRouter> {
+        self.router
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    pub fn with<R>(&self, f: impl FnOnce(&mut SharedRouter) -> R) -> R {
+        let mut router = self.lock();
+        let out = f(&mut router);
+        for notice in router.take_notices() {
+            match notice {
+                Notice::Journal(line) => eprintln!("ruya-inputd: {line}"),
+                other => {
+                    let _ = self.notices.try_send(other);
+                }
+            }
+        }
+        out
+    }
+}
+
+fn record(d: &DeviceRecord) -> Dict {
+    let entries = vec![
+        ("id", Value::from(d.id.clone())),
+        ("instance", Value::from(d.instance.clone())),
+        ("name", Value::from(d.name.clone())),
+        ("family", Value::from(d.family.clone())),
+        ("connection", Value::from(d.connection.clone())),
+        ("battery", Value::from(d.battery)),
+        ("charging", Value::from(d.charging)),
+        ("slot", Value::from(d.slot)),
+        ("profile", Value::from(d.profile.clone())),
+        ("routed", Value::from(d.routed)),
+    ];
+    entries
+        .into_iter()
+        .filter_map(|(k, v)| OwnedValue::try_from(v).ok().map(|v| (k.to_owned(), v)))
+        .collect()
+}
+
+pub struct InputIface {
+    shared: Arc<Shared>,
+}
+
+impl InputIface {
+    pub fn new(shared: Arc<Shared>) -> Self {
+        InputIface { shared }
+    }
+}
+
+#[interface(name = "org.ruyaos.Input1")]
+impl InputIface {
+    fn list_devices(&self) -> Vec<Dict> {
+        self.shared
+            .with(|r| r.devices().iter().map(record).collect())
+    }
+
+    fn set_route(
+        &self,
+        route: &str,
+        instance: &str,
+        app_id: &str,
+        profile: &str,
+        #[zbus(header)] header: Header<'_>,
+    ) -> String {
+        let caller = header.sender().map(|s| s.to_string()).unwrap_or_default();
+        self.shared
+            .with(|r| r.set_route(route, instance, app_id, profile, &caller, Instant::now()))
+            .as_str()
+            .to_owned()
+    }
+
+    #[zbus(property)]
+    fn route(&self) -> String {
+        self.shared.with(|r| r.route().as_str().to_owned())
+    }
+
+    #[zbus(signal)]
+    async fn device_added(emitter: &SignalEmitter<'_>, device: Dict) -> zbus::Result<()>;
+
+    #[zbus(signal)]
+    async fn device_changed(emitter: &SignalEmitter<'_>, device: Dict) -> zbus::Result<()>;
+
+    #[zbus(signal)]
+    async fn device_removed(
+        emitter: &SignalEmitter<'_>,
+        device_id: &str,
+        instance: &str,
+    ) -> zbus::Result<()>;
+
+    /// `RouteChanged` (named apart from the `Route` property's own change helper).
+    #[zbus(signal, name = "RouteChanged")]
+    async fn route_switched(
+        emitter: &SignalEmitter<'_>,
+        route: &str,
+        instance: &str,
+    ) -> zbus::Result<()>;
+}
+
+/// Emits what the router announced, in order.
+pub async fn announce(connection: Connection, notices: async_channel::Receiver<Notice>) {
+    let iface = match connection
+        .object_server()
+        .interface::<_, InputIface>(OBJECT_PATH)
+        .await
+    {
+        Ok(iface) => iface,
+        Err(err) => return eprintln!("ruya-inputd: no Input1 object to signal from: {err}"),
+    };
+    while let Ok(notice) = notices.recv().await {
+        let emitter = iface.signal_emitter();
+        let result = match &notice {
+            Notice::DeviceAdded(d) => InputIface::device_added(emitter, record(d)).await,
+            Notice::DeviceChanged(d) => InputIface::device_changed(emitter, record(d)).await,
+            Notice::DeviceRemoved { id, instance } => {
+                InputIface::device_removed(emitter, id, instance).await
+            }
+            Notice::RouteChanged { route, instance } => {
+                let props = iface.get().await.route_changed(emitter).await;
+                let sig = InputIface::route_switched(emitter, route, instance).await;
+                props.and(sig)
+            }
+            Notice::Journal(_) => Ok(()),
+        };
+        if let Err(err) = result {
+            eprintln!("ruya-inputd: emitting {notice:?} failed: {err}");
+        }
+    }
+}
+
+/// Owns the name, serves the object and runs the signal and caller tasks until the connection
+/// ends. `system` false: the session bus (`--session`).
+pub async fn serve(
+    system: bool,
+    shared: Arc<Shared>,
+    notices: async_channel::Receiver<Notice>,
+) -> zbus::Result<()> {
+    let builder = if system {
+        zbus::connection::Builder::system()?
+    } else {
+        zbus::connection::Builder::session()?
+    };
+    let connection = builder
+        .name(BUS_NAME)?
+        .serve_at(OBJECT_PATH, InputIface::new(shared.clone()))?
+        .build()
+        .await?;
+    eprintln!("ruya-inputd: serving {BUS_NAME}");
+    futures_lite::future::zip(
+        announce(connection.clone(), notices),
+        follow_callers(connection, shared),
+    )
+    .await;
+    Ok(())
+}
+
+/// Follows `NameOwnerChanged`: a unique name that leaves the bus may be the route's caller.
+pub async fn follow_callers(connection: Connection, shared: Arc<Shared>) {
+    let rule = MatchRule::builder()
+        .msg_type(zbus::message::Type::Signal)
+        .sender("org.freedesktop.DBus")
+        .and_then(|b| b.member("NameOwnerChanged"))
+        .map(|b| b.build());
+    let Ok(rule) = rule else {
+        return eprintln!("ruya-inputd: cannot follow callers");
+    };
+    let mut stream = match MessageStream::for_match_rule(rule, &connection, None).await {
+        Ok(s) => s,
+        Err(err) => return eprintln!("ruya-inputd: cannot follow callers: {err}"),
+    };
+    while let Some(Ok(message)) = stream.next().await {
+        let Ok((name, _old, new)) = message.body().deserialize::<(String, String, String)>() else {
+            continue;
+        };
+        if new.is_empty() && name.starts_with(':') {
+            shared.with(|r| r.caller_left(&name, Instant::now()));
+        }
+    }
+}
