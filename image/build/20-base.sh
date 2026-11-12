@@ -13,6 +13,12 @@ dnf -y install --setopt=install_weak_deps=False \
     plymouth plymouth-theme-spinner plymouth-plugin-script \
     google-noto-sans-fonts
 
+# X11-only apps (ADR-034, RUY-434): Xwayland, started per app instance by xwayland-satellite
+# (built in the Containerfile's xwayland-satellite stage). The satellite needs libxcb-cursor and
+# the Open Sans font. Nothing starts them at boot; 98-guard allows exactly xorg-x11-server-Xwayland.
+dnf -y install --setopt=install_weak_deps=False \
+    xorg-x11-server-Xwayland xcb-util-cursor open-sans-fonts
+
 # Firmware for the radios and sound chips a living-room PC has. linux-firmware only recommends
 # part of it and this image installs without weak dependencies: before this, an Intel Bluetooth
 # dongle (ibt-*.sfi) never initialised and Intel Wi-Fi would not have worked either (found on the

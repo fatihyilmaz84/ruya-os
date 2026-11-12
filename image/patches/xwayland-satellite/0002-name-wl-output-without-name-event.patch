@@ -1,0 +1,35 @@
+RuyaOS patch for xwayland-satellite (RUY-434, ADR-034). Written against 0.8.3.
+
+What: when an output has no name (wl_output before version 4 has no name
+event), call it "WL-<n>", n being its wl_registry global name, instead of
+unwrapping a name that never arrives.
+
+Why: QtWaylandCompositor offers wl_output version 2 (hard-coded in qtwayland).
+Unpatched, the satellite panics with MissingComponent(OutputName) as soon as
+an X window takes keyboard focus or enters an output (RUY-1, Dell). The name
+is only used to pick the X primary output; with no name event Xwayland names
+its RandR output itself, so the satellite logs "Couldn't find output WL-<n>,
+primary output will be wrong" and keeps the primary output it has, which is
+the only output on a console.
+
+Upstream state: not offered upstream (owner decision). Drop this patch once
+qtwayland offers wl_output >= 4 or upstream stops unwrapping the name.
+
+--- a/src/server/event.rs
++++ b/src/server/event.rs
+@@ -1005,7 +1005,14 @@
+ pub(super) struct OnOutput(pub Entity);
+ struct OutputName(String);
+ fn get_output_name(output: Option<&OnOutput>, world: &World) -> Option<String> {
+-    output.map(|o| world.get::<&OutputName>(o.0).unwrap().0.clone())
++    output.map(|o| match world.get::<&OutputName>(o.0) {
++        Ok(name) => name.0.clone(),
++        // wl_output before version 4 has no name event: name the output after its global.
++        Err(_) => format!(
++            "WL-{}",
++            world.get::<&GlobalName>(o.0).map(|g| g.0).unwrap_or(0)
++        ),
++    })
+ }
+
+ #[derive(Copy, Clone, PartialEq, Debug)]

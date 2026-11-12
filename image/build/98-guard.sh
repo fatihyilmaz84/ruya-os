@@ -18,7 +18,9 @@ banned=(
 )
 # Allowed although they match: ffmpeg's libavformat links libsmbclient, which needs these.
 # (samba-client-libs etc. cannot go without removing ffmpeg and Qt Multimedia, see 50-slim.sh.)
-exceptions=(samba-client-libs samba-common samba-core-libs samba-ndr-libs)
+# xorg-x11-server-Xwayland: the rootless X server for X11-only apps, one per app instance and
+# only while that app runs (ADR-034); it is no display server of its own (Xorg stays banned).
+exceptions=(samba-client-libs samba-common samba-core-libs samba-ndr-libs xorg-x11-server-Xwayland)
 
 found=0
 while read -r name; do

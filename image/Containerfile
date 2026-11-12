@@ -58,6 +58,44 @@ RUN set -eux; \
         > /out/usr/share/ruyaos/qt-dmabuf-built-against; \
     dnf clean all
 
+# ---- xwayland-satellite for X11-only apps (RUY-434, ADR-034) -----------------------
+# The X window manager that turns an app's X windows into xdg toplevels on the profile's Wayland
+# socket. Fedora's build panics against our compositor (Qt offers xdg_wm_base v1 and wl_output
+# v2), so rebuild Fedora's current source RPM, with its vendored crates (no network fetch), plus our
+# patches from image/patches/xwayland-satellite/. They apply strictly (fuzz 0): a Fedora update
+# they no longer fit fails here, loudly (what to do then: docs/image-packages.md). Only the binary
+# and its licence texts reach the image; Fedora's RPM (and its user unit) is never installed.
+FROM registry.fedoraproject.org/fedora:${FEDORA_VERSION} AS xwayland-satellite
+COPY image/patches/xwayland-satellite /src/patches
+RUN set -eux; \
+    dnf -y install --setopt=install_weak_deps=False rpm-build cpio binutils; \
+    mkdir /w && cd /w; \
+    dnf -y --enablerepo=fedora-source --enablerepo=updates-source download --source xwayland-satellite; \
+    srpm="$(ls /w/xwayland-satellite-*.src.rpm)"; \
+    ver="$(rpm -qp --qf '%{VERSION}-%{RELEASE}' "$srpm")"; \
+    rpm -i --define '_topdir /w/rpmbuild' "$srpm"; \
+    spec=/w/rpmbuild/SPECS/xwayland-satellite.spec; \
+    n=100; for p in /src/patches/*.patch; do \
+        cp "$p" /w/rpmbuild/SOURCES/; \
+        sed -i "0,/^%description/s//Patch$n: $(basename "$p")\n\n%description/" "$spec"; \
+        n=$((n + 1)); \
+    done; \
+    test "$(grep -c '^Patch1[0-9][0-9]: ' "$spec")" = "$(ls /src/patches/*.patch | wc -l)"; \
+    dnf -y builddep --setopt=install_weak_deps=False "$srpm"; \
+    rpmbuild -bb --define '_topdir /w/rpmbuild' --define '_default_patch_fuzz 0' "$spec" > /tmp/rpmbuild.log 2>&1 \
+        || { tail -n 80 /tmp/rpmbuild.log; exit 1; }; \
+    grep -E -A1 'rpmuncompress .*\.patch$' /tmp/rpmbuild.log; \
+    for p in /src/patches/*.patch; do grep -q "rpmuncompress .*SOURCES/$(basename "$p")\$" /tmp/rpmbuild.log; done; \
+    mkdir /x && cd /x; \
+    rpm2cpio /w/rpmbuild/RPMS/*/xwayland-satellite-[0-9]*.rpm | cpio -idm --quiet; \
+    install -d /out/usr/bin /out/usr/share/ruyaos /out/usr/share/licenses; \
+    strip -o /out/usr/bin/xwayland-satellite usr/bin/xwayland-satellite; \
+    chmod 0755 /out/usr/bin/xwayland-satellite; \
+    cp -r usr/share/licenses/xwayland-satellite /out/usr/share/licenses/; \
+    test -s /out/usr/share/licenses/xwayland-satellite/LICENSE; \
+    printf 'xwayland-satellite-%s\n' "$ver" > /out/usr/share/ruyaos/xwayland-satellite-built-against; \
+    dnf clean all
+
 # ---- OS image -----------------------------------------------------------------------
 FROM quay.io/fedora/fedora-bootc:${FEDORA_VERSION}
 ARG RUYA_VERSION=0.0.0-dev
@@ -82,6 +120,11 @@ COPY --from=qt-dmabuf /out/ /
 RUN want="$(printf 'qt6-qtwayland-%s\nqt6-qtbase-%s' "$(rpm -q --qf '%{VERSION}-%{RELEASE}' qt6-qtwayland)" "$(rpm -q --qf '%{VERSION}-%{RELEASE}' qt6-qtbase)")" \
     && have="$(cat /usr/share/ruyaos/qt-dmabuf-built-against)" \
     && if [ "$want" != "$have" ]; then echo "qt-dmabuf plugin built against: $have; image has: $want" >&2; exit 1; fi
+COPY --from=xwayland-satellite /out/ /
+# The satellite's libraries (xcb-util-cursor, fontconfig, wayland) and Xwayland come from 20-base.sh.
+RUN cat /usr/share/ruyaos/xwayland-satellite-built-against \
+    && test -x /usr/bin/Xwayland \
+    && if ldd /usr/bin/xwayland-satellite | grep 'not found'; then echo "xwayland-satellite: missing libraries" >&2; exit 1; fi
 
 # image/rootfs is installed with cp, not COPY: a checkout on Windows has every file and directory
 # at mode 0777, COPY keeps that, and for a directory that a layer introduces (/usr/libexec/ruyaos)

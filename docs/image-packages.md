@@ -36,6 +36,21 @@ are in the order of the spec: UI, services, gaming and media, drivers and firmwa
 | `kmscon` | the base image's text console on tty2 and up; support only, `ruya-compositor@tty1` owns tty1 |
 | `ncurses`, `man-db`, `vim-minimal` | the support shell (`clear`, `man`, `vi`), over SSH or tty2 |
 
+### X11-only apps (ADR-034, RUY-434)
+
+| Leaf | Why |
+|---|---|
+| `xorg-x11-server-Xwayland` | the rootless X server for apps that have no Wayland support (ADR-034): one per app instance, inside the app's unit, only while that app runs; nothing starts it at boot. It matches the banned `xorg-x11-server*` pattern, so `98-guard.sh` allows **exactly this name** (Xorg itself stays banned). It is not setuid and runs as SELinux `xserver_t` |
+| `xcb-util-cursor` | `libxcb-cursor`, which `xwayland-satellite` links. Qt (`qt6-qtbase-gui`) already pulls it in; `20-base.sh` names it so the satellite does not depend on that |
+| `open-sans-fonts` | the font `xwayland-satellite` asks for (`font(opensans)` in Fedora's package) |
+
+With their dependencies (`libXdmcp`, `libXfont2`, `libei`, `liboeffis`, `libfontenc`, `libxcvt`, `libxkbfile`,
+`xkbcomp`) this adds 10 packages; with the satellite binary (4.8 MB) `/usr` grows by 10 MiB (0.0.72: 795 packages,
+3987 MiB; 0.0.72-ruy434: 805 packages, 3997 MiB). None of the dependencies matches a banned pattern (the guard checks
+every build).
+
+`xwayland-satellite` itself is **not** a Fedora package in the image: see "Built from source with our patches" below.
+
 ### Services (what the Rust services and the shell call)
 
 | Leaf | Why |
@@ -152,6 +167,39 @@ where something requires them) or removed with their package:
 | `rpm-ostree-countme.timer` | disabled | Fedora's usage counter makes a network call; not wanted |
 | `bootc-fetch-apply-updates.timer` | disabled | it runs `bootc upgrade --apply` (a reboot) on its own schedule; `ruya-update` owns the update policy (check, download, announce, restart at night when idle) |
 | `flatpak-add-fedora-repos.service` | masked | `ruya-flathub-remote.service` adds Flathub and deletes the `fedora` remote; this stock unit would add it back (T-140 documented it as masked; it was not) |
+
+## Built from source with our patches
+
+Two components are rebuilt in their own `image/Containerfile` stage from the Fedora source RPM of the version
+Fedora ships at build time, with a patch of ours; only the result is copied into the image, never the RPM.
+
+| Component | Stage | Patches | Built against (in the image) |
+|---|---|---|---|
+| Qt's linux-dmabuf compositor plugin (T-358) | `qt-dmabuf` | `image/qt/0001-linux-dmabuf-v4-feedback.patch` | `/usr/share/ruyaos/qt-dmabuf-built-against`; it uses private Qt API, so the build fails when the image's Qt differs |
+| `/usr/bin/xwayland-satellite` (RUY-434, ADR-034) | `xwayland-satellite` | `image/patches/xwayland-satellite/0001-accept-xdg-wm-base-v1.patch`, `0002-name-wl-output-without-name-event.patch` | `/usr/share/ruyaos/xwayland-satellite-built-against` |
+
+**xwayland-satellite.** The X window manager for X11-only apps (ADR-034): it runs Xwayland and shows each X window
+as an xdg toplevel on the profile's Wayland socket. Fedora's build (0.8.3) panics against `ruya-shell`, because
+QtWaylandCompositor offers `xdg_wm_base` version 1 and `wl_output` version 2 (both hard-coded in qtwayland; RUY-1):
+
+- `0001` binds `xdg_wm_base` at the offered version from 1 to 6 (upstream asks for 2..=6);
+- `0002` names an output that has no `name` event (`wl_output` < 4) `WL-<n>` instead of unwrapping the missing name.
+
+The stage builds Fedora's spec with `rpmbuild` and the crates Fedora vendors in its source RPM (no network fetch
+of crates or GitHub sources), the patches added to the spec and applied with fuzz 0, then ships the stripped
+binary and `/usr/share/licenses/xwayland-satellite/` (`LICENSE`, MPL-2.0, plus Fedora's list of the vendored
+crates' licences). Fedora's `xwayland-satellite` RPM and its user unit are not installed; nothing starts the
+satellite at boot (`ruya-session` starts one per X11 app instance, RUY-435).
+
+**When a patch fails** (a Fedora update to the satellite changed the lines it touches, so the stage stops with a
+rejected hunk): rebase the patch on the new source (inspect it with `dnf download --source xwayland-satellite`
+in a throw-away Fedora container) and keep its header up to date, or drop it when upstream or Qt has caught up.
+`0001` is harmless and can go once qtwayland offers `xdg_wm_base` >= 2; `0002` can go once qtwayland offers
+`wl_output` >= 4 or upstream stops unwrapping the name. No patch is offered upstream (owner decision).
+
+**Licence.** xwayland-satellite is MPL-2.0. The MPL makes the source of modified files available under the
+same licence: the repository carries the patches (and their source is Fedora's public source RPM), which
+covers the two modified files; the licence text ships in the image.
 
 ## Bundled assets that are not packages (licences)
 
