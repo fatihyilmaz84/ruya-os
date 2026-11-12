@@ -24,7 +24,9 @@ run_one() {
     return 1
   elif [ "$code" -ne 0 ]; then
     echo "SHARD FAILED: $base: failed (exit code $code) - log $log"
-    grep -a '^FAIL\|^XPASS\|failure location' "$log" | sed "s/^/    $base: /"
+    # -A3: Qt prints Actual, Expected and Loc on the lines after FAIL!; CI keeps no logs, so
+    # without them a red CI run does not say which comparison failed (lead-14).
+    grep -a -A3 '^FAIL\|^XPASS\|failure location' "$log" | grep -av '^--$' | sed "s/^/    $base: /"
     return 1
   fi
 }
