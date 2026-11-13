@@ -41,14 +41,16 @@ Page {
     }
 
     // The game under the cursor has an Options menu with at least one row: the hint bar offers Options
-    // (02 §1.7). An item with an empty menu gets no hint; its Menu key still opens the empty menu.
+    // (02 §1.7). An item with an empty menu gets no Options hint (the rest stays); its Menu key still opens the empty menu.
     readonly property bool optionsOffered: grid.activeFocus && grid.currentIndex >= 0 && page.optionRows !== null
         && page.optionRows("games", page.shownIds[grid.currentIndex] ?? "").length > 0
     hints: optionsOffered ? [{ button: "A", text: qsTr("Select") },
                              { button: "Start", text: qsTr("Options") },
                              { button: "B", text: qsTr("Back") },
                              { buttons: ["LB", "RB"], text: qsTr("Sections") }]
-                          : [{ button: "A", text: qsTr("Select") }, { button: "B", text: qsTr("Back") }]
+                          : [{ button: "A", text: qsTr("Select") },
+                             { button: "B", text: qsTr("Back") },
+                             { buttons: ["LB", "RB"], text: qsTr("Sections") }]
 
     function openOptions() {
         grid.forceLayout()

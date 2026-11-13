@@ -61,7 +61,7 @@ Item {
         }
 
         // profileSteps: Right presses on the picker (1: Ada, 2: Guest).
-        function start(profileSteps, profileId) {
+        function start(profileSteps, profileId, itemCount) {
             Profiles.lock()
             tryCompare(Profiles, "activeProfile", "")
             tc.shell = createTemporaryObject(shellComponent, host)
@@ -74,7 +74,7 @@ Item {
             keyClick(Qt.Key_Return)
             tryCompare(Profiles, "activeProfile", profileId ?? "p2")
             tryVerify(() => Library.available)
-            tryVerify(() => Library.items.length === 10)
+            tryVerify(() => Library.items.length === (itemCount ?? 10))
             tryVerify(() => Store.available)
             tryVerify(() => find("homePlay").activeFocus, 2000, "Play takes focus after sign-in")
             // the Return that signed in has been released
@@ -304,10 +304,6 @@ Item {
             verify(!ring.visible)
             verify(label.visible, "the label is back on release")
             tryCompare(launchSpy, "count", 1)
-            // a full hold: the label is back when the menu opens
-            launchSpy.clear()
-            while (Notifications.model.count > 0)
-                Notifications.dismiss(Notifications.model.get(0).toastId)
         }
 
         function test_a_full_hold_on_the_hero_opens_the_menu_and_brings_the_label_back() {
@@ -487,6 +483,16 @@ Item {
             compare(hintVerbs(), "A Select|B Back|Start Options|LBRB Sections", "a Steam game's activity row is a menu")
         }
 
+        // An item with an empty menu loses only the Options hint: Sections stays on Games.
+        function test_games_hints_keep_sections_for_an_empty_menu() {
+            start(2, "p3")
+            openGames()
+            compare(hintVerbs(), "A Select|B Back|Start Options|LBRB Sections")
+            keyClick(Qt.Key_Right)                   // Counter Strike: nothing for Guest
+            compare(find("gamesGrid").currentItem.itemId, "steam:730")
+            compare(hintVerbs(), "A Select|B Back|LBRB Sections")
+        }
+
         function test_the_store_down_leaves_out_details_and_shows_the_note() {
             start()
             toRecent()
@@ -500,16 +506,33 @@ Item {
             // it answers again while the menu is open: Details comes back in place
             Store.mockServiceRegained()
             tryVerify(() => Store.available)
-            tryCompare(menu().rows, "length", 3)
+            tryVerify(() => menu().rows.length === 3)
             compare(rowIds(), ["play", "details", "activity"])
             verify(!note.visible)
         }
 
+        // A Flatpak app with a Session1 id that the Store does not know: Play and Your activity, no Details.
         function test_no_store_record_leaves_out_details() {
+            Library.resetMockForTests("unlisted")
+            start(1, "p2", 11)
+            toRecent()
+            const row = find("recentRow")
+            for (let i = 0; i < 8 && row.currentItem.itemId !== "flatpak:org.example.Unlisted"; ++i)
+                keyClick(Qt.Key_Right)
+            compare(row.currentItem.itemId, "flatpak:org.example.Unlisted")
+            verify(Store.app("org.example.Unlisted").id === undefined, "the Store has no record")
+            keyClick(Qt.Key_Menu)
+            verify(menu().shown)
+            compare(rowIds(), ["play", "activity"])
+            compare(findChild(menu(), "optionsNote").visible, false, "the Store answers: no note")
+        }
+
+        // The record is there: Details is.
+        function test_a_store_record_gives_the_details_row() {
             start()
-            Store.mockSetAppText("org.example.Racer", "Turbo Racer", "x", "y")      // still a record
             toRecent()
             keyClick(Qt.Key_Menu)
+            verify(Store.app("org.example.Racer").id !== undefined)
             verify(rowIds().indexOf("details") >= 0)
         }
 
