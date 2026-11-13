@@ -416,6 +416,9 @@ pub struct Router<B: Backend> {
     book: Book,
     /// The stable id of the pad whose press was announced last (`ActiveInputChanged`).
     active_input: Option<String>,
+    /// The stable id of the signed-in profile's active controller: the pad that gave the last input
+    /// when the route first went to the profile (the sign-in). Kept until the profile changes (06 5.1).
+    profile_pad: Option<String>,
 }
 
 impl<B: Backend> Router<B> {
@@ -438,6 +441,7 @@ impl<B: Backend> Router<B> {
             tests: BTreeMap::new(),
             book: Book::default(),
             active_input: None,
+            profile_pad: None,
         }
     }
 
@@ -872,6 +876,14 @@ impl<B: Backend> Router<B> {
         let same_owner = self.owner.as_ref().is_some_and(|o| {
             !instance.is_empty() && o.instance == instance && o.profile == profile
         });
+        if self.profile != profile {
+            // A sign-in or switch: the pad that gave the last input is this profile's controller.
+            self.profile_pad = if profile.is_empty() {
+                None
+            } else {
+                self.active_input.clone()
+            };
+        }
         match r {
             Route::App if same_owner => {
                 if old != Route::App {
@@ -891,10 +903,10 @@ impl<B: Backend> Router<B> {
                     profile: profile.to_owned(),
                     uid,
                 });
-                // The pad the player uses (the last one that gave input) is created first, so it
-                // is `pad1` and SDL index 0; the others follow in key order (RUY-540).
+                // The profile's active controller (the pad that signed it in) is created first, so
+                // it is `pad1` and SDL index 0; the others follow in key order (RUY-540).
                 let mut keys: Vec<PadKey> = self.pads.keys().copied().collect();
-                if let Some(active) = self.active_input.as_deref() {
+                if let Some(active) = self.profile_pad.as_deref() {
                     if let Some(i) = keys.iter().position(|k| self.pads[k].info.id == active) {
                         let k = keys.remove(i);
                         keys.insert(0, k);
@@ -1705,8 +1717,11 @@ mod tests {
         let a = r.add_pad(pad("a"), t0());
         let b = r.add_pad(pad("b"), t0());
         let c = r.add_pad(pad("c"), t0());
-        // The second pad in key order is the one the player uses.
+        // The second pad in key order signs the profile in.
         r.input(b, &[press(PadButton::South)]);
+        r.set_route("shell", "", "", "p1", SHELL, t0());
+        // A later press on another pad does not move the profile's active controller.
+        r.input(c, &[press(PadButton::South)]);
         r.backend_mut().take();
         app(&mut r, "i1", STK, "p1");
         assert_eq!(
@@ -1723,7 +1738,7 @@ mod tests {
             creations(&r.backend_mut().take()),
             vec![(d, "ruya-input/pad4".to_owned())]
         );
-        // No active pad: key order, as before.
+        // No pad known at sign-in: key order, as before.
         let mut r = router();
         let a = r.add_pad(pad("a"), t0());
         let b = r.add_pad(pad("b"), t0());

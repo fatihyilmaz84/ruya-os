@@ -16,7 +16,7 @@
 # without the flag the left stick sends Right/Left, with it no arrow key (the D-pad still sends Right), a stick
 # held when the hold starts is released once, after StopTest a pushed stick stays quiet until it was neutral,
 # and the old one-argument StartTest is refused. Run it alone, not inside `check`.
-# `twopads` (RUY-540) checks the numbering of the virtual pads with two uinput pads: the pad that pressed last is
+# `twopads` (RUY-540) checks the numbering of the virtual pads with two uinput pads: the pad that signed the profile in is
 # ruya-input/pad1, created first (the lower event node, SDL index 0), whichever of the two it is; the profile user opens
 # pad1 and hears that pad's button and not the idle pad's. It routes by its own bus connection and ends on `shell`.
 # `check` runs the first four, then `caps` and `profiles`. `profiles` (RUY-42) checks the controller

@@ -605,7 +605,7 @@ def cmd_hold(args):
 
 
 def cmd_twopads(args):
-    """RUY-540: two pads, the player uses one of them; on entry to `app` that pad is ruya-input/pad1 (SDL
+    """RUY-540: two pads, one of them signs the profile in; on entry to `app` that pad is ruya-input/pad1 (SDL
     index 0). Run twice, once with each pad the active one, so the key order cannot decide it."""
     fails = 0
 
@@ -631,12 +631,21 @@ def cmd_twopads(args):
         bus = Bus()
         for active in (1, 0, 1):
             expect_pad, other_pad = pads[active], pads[1 - active]
+            # Locked (nobody signed in), the chosen pad gives the sign-in input, then the profile is signed in.
+            status = bus.call(SVC, PATH, IFC, "SetRoute", ["locked", "", "", ""])
+            if status != "ok":
+                bad(f"SetRoute locked: {status}")
+                return fails
+            expect_pad.emit(EV_KEY, BTN_SOUTH, 1)
+            expect_pad.emit(EV_KEY, BTN_SOUTH, 0)
+            time.sleep(0.3)
             status = bus.call(SVC, PATH, IFC, "SetRoute", ["shell", "", "", args.profile])
             if status != "ok":
                 bad(f"SetRoute shell: {status}")
                 return fails
-            expect_pad.emit(EV_KEY, BTN_SOUTH, 1)
-            expect_pad.emit(EV_KEY, BTN_SOUTH, 0)
+            # A later press on the other pad does not move the profile's active controller.
+            other_pad.emit(EV_KEY, BTN_SOUTH, 1)
+            other_pad.emit(EV_KEY, BTN_SOUTH, 0)
             time.sleep(0.3)
             status = bus.call(SVC, PATH, IFC, "SetRoute", ["app", "vm-check-2", "org.ruyaos.VmCheck", args.profile])
             if status != "ok":
@@ -649,7 +658,7 @@ def cmd_twopads(args):
                 return fails
             n1 = int(os.path.basename(v1).replace("event", ""))
             n2 = int(os.path.basename(v2).replace("event", ""))
-            ok(f"pad{active + 1} pressed last: pad1 is {v1}, pad2 is {v2}") if n1 < n2 else bad(f"pad1 ({v1}) was created after pad2 ({v2})")
+            ok(f"pad{active + 1} signed in: pad1 is {v1}, pad2 is {v2}") if n1 < n2 else bad(f"pad1 ({v1}) was created after pad2 ({v2})")
             wait_for(lambda: all(d.get("routed") for d in (devices() or []) if d.get("name") in (NAME, NAME + " 2")), 3)
             game = Game(args.user, v1)
             if not game.hello.startswith("OPEN ok"):
