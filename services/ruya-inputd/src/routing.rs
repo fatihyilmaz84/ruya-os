@@ -2273,6 +2273,16 @@ mod tests {
                 .any(|n| matches!(n, Notice::ConfirmButtonChanged)),
             "a switch announces the property"
         );
+        // A set for the signed-in profile announces the property.
+        assert_eq!(r.set_confirm_button("p2", "south"), Status::Ok);
+        assert!(
+            r.take_notices()
+                .iter()
+                .any(|n| matches!(n, Notice::ConfirmButtonChanged)),
+            "a set for the active profile announces the property"
+        );
+        assert_eq!(r.set_confirm_button("p2", "family"), Status::Ok);
+        r.take_notices();
         // Another profile's change is not the active profile's property.
         assert_eq!(r.set_confirm_button("p1", "south"), Status::Ok);
         assert!(
