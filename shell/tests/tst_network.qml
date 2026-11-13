@@ -47,6 +47,7 @@ Item {
 
         function cleanup() {
             clearToasts()
+            DeviceSettings.theme = "dreamglass"
         }
 
         function clearToasts() {
@@ -224,6 +225,17 @@ Item {
             keyClick(Qt.Key_Up)
             wait(800)
             grabImage(tc.shell).save(shotsDir + "/23-settings-network.png")
+        }
+
+        // RUY-512: the same pane in the light theme.
+        function test_zz_screenshots_daylight() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            DeviceSettings.theme = "daylight"
+            openNetworkPane()
+            clearToasts()
+            wait(800)
+            grabImage(tc.shell).save(shotsDir + "/23-settings-network-daylight.png")
         }
     }
 }

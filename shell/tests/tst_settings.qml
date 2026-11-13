@@ -81,6 +81,32 @@ Item {
         }
     }
 
+    // One row of every kind, for the screenshots (RUY-512); the strings go through qsTr so Turkish shows too.
+    Component {
+        id: sheetComponent
+        Rectangle {
+            width: 1280
+            height: 800
+            color: Theme.background
+            property real u: 720 / 1080
+            SettingsPane {
+                anchors { fill: parent; margins: 48 * parent.u }
+                u: parent.u
+                GroupLabel { u: parent.u; text: qsTr("Sound") }
+                SettingRow { u: parent.u; label: qsTr("Model"); value: "RuyaOS box"; kind: "info" }
+                SettingRow { u: parent.u; label: qsTr("Version"); value: "0.1"; kind: "info" }
+                SettingRow { u: parent.u; label: qsTr("Analog output"); value: qsTr("Current"); current: true }
+                SettingRow { u: parent.u; label: qsTr("Wallpaper"); value: qsTr("Default"); kind: "page" }
+                SettingRow { u: parent.u; label: qsTr("Scan for networks"); value: qsTr("Scanning…"); kind: "action" }
+                SettingRow { u: parent.u; label: qsTr("Create profile"); kind: "action"; emphasis: "primary" }
+                ToggleRow { u: parent.u; label: qsTr("Reduce motion"); checked: true }
+                ChoiceRow { u: parent.u; label: qsTr("Quality"); options: [{ value: "a", label: qsTr("Default") }, { value: "b", label: qsTr("Balanced") }]; value: "a" }
+                SliderRow { u: parent.u; label: qsTr("Brightness"); from: 0; to: 100; value: 50; unit: "%" }
+                SettingRow { u: parent.u; label: qsTr("Sleep is not available"); enabled: false }
+            }
+        }
+    }
+
     SignalSpy { id: spy }
 
     TestCase {
@@ -1264,6 +1290,33 @@ Item {
         }
 
         // A pane longer than the screen at the top, in the middle and at the end (T-185).
+        // RUY-512: Display & motion (a choice, toggles and sliders) on both looks and in Turkish, and a sheet with
+        // one row of every kind (a fact run, an item, the current item, a page, an action, the main action, the
+        // three controls, a message and a heading).
+        function test_zz_screenshots_row_kinds() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            for (const [theme, lang] of [["dreamglass", "en"], ["daylight", "en"], ["dreamglass", "tr"]]) {
+                DeviceSettings.theme = theme
+                DeviceSettings.language = lang
+                if (lang === "en") {                     // the sheet's strings are English
+                    const sheet = createTemporaryObject(sheetComponent, host)
+                    waitForRendering(sheet)
+                    wait(400)
+                    grabImage(sheet).save(shotsDir + "/512-row-kinds-" + theme + ".png")
+                    sheet.destroy()
+                }
+                openSettings()
+                selectCategory(tc.displayIndex)
+                keyClick(Qt.Key_Right)
+                tryVerify(() => find("rowQuality").activeFocus)
+                wait(600)
+                grabImage(tc.shell).save(shotsDir + "/512-settings-display-" + theme + "-" + lang + ".png")
+                tc.shell.destroy()
+                tc.init()
+            }
+        }
+
         function test_zz_screenshots_scroll_cue() {
             if (!shotsDir)
                 skip("set RUYA_SHOTS_DIR to save screenshots")

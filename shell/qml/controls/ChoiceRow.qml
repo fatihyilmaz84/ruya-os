@@ -90,8 +90,11 @@ SettingControl {
         }
     }
 
-    Keys.onReturnPressed: row.step(1)
-    Keys.onEnterPressed: row.step(1)
+    // Accept steps to the next option. A row whose screen uses Accept for something else (the Setup wizard's
+    // language step: "Press A to continue") sets this false, and Accept bubbles.
+    property bool acceptSteps: true
+    Keys.onReturnPressed: event => { if (row.acceptSteps) row.step(1); else event.accepted = false }
+    Keys.onEnterPressed: event => { if (row.acceptSteps) row.step(1); else event.accepted = false }
     Keys.onPressed: event => {
         if (event.key === Qt.Key_Left) {
             row.step(-1)

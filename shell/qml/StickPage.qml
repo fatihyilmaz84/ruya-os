@@ -317,8 +317,6 @@ Page {
                       { value: "aggressive", label: qsTr("Aggressive") }]
             onActiveFocusChanged: if (activeFocus) body.focusedKind = "choice"
             onEdited: v => GameControls.setStick(page.side, "curve", v, false)
-            Keys.onReturnPressed: step(1)
-            Keys.onEnterPressed: step(1)
         }
         Binding { target: curveRow; property: "value"; value: page.settings.curve }
 

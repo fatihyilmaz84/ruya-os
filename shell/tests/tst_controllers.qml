@@ -55,6 +55,7 @@ Item {
         function cleanup() {
             clearToasts()
             DeviceSettings.language = "en"
+            DeviceSettings.theme = "dreamglass"
         }
 
         function clearToasts() {
@@ -701,6 +702,18 @@ Item {
             settle()
             grabImage(tc.shell).save(shotsDir + "/27-button-test-720p-en.png")
             openPaneShot720(shotsDir + "/")
+        }
+
+        // RUY-512: the pane's rows in the light theme (the facts, the page rows and the choice arrows read against it).
+        function test_zz_screenshots_daylight() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            DeviceSettings.theme = "daylight"
+            host.width = 1280
+            host.height = 720
+            openPane()
+            settle()
+            grabImage(tc.shell).save(shotsDir + "/27-settings-controllers-720p-daylight.png")
         }
 
         function openPaneShot720(dir) {
