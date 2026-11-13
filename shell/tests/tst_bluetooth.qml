@@ -163,6 +163,17 @@ Item {
             compare(seen.size, 8, "no status outside the contract")
         }
 
+        // RUY-544: the model role "controller" / "headset" must not land in SettingRow.kind (the row kind).
+        function test_device_rows_have_a_valid_row_kind() {
+            openBluetoothPane()
+            const row = find("btDev_bt-pad-main")
+            verify(row !== null)
+            verify(["item", "action", "page", "info"].indexOf(row.kind) >= 0, "row kind is " + row.kind)
+            compare(row.deviceKind, "controller")
+            const rename = find("btRename_bt-pad-main")
+            verify(["item", "action", "page", "info"].indexOf(rename.kind) >= 0, "rename row kind is " + rename.kind)
+        }
+
         function test_power_off_hides_and_stops_scan() {
             openBluetoothPane()
             verify(find("rowBtAdd").visible)

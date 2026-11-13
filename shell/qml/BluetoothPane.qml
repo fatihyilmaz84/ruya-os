@@ -33,7 +33,7 @@ SettingsPane {
         }
         for (let i = 0; i < list.length; ++i) {
             const d = list[i]
-            const entry = { devId: d.id, name: d.name, shown: DeviceIcons.shownName(list, d), kind: d.kind, family: d.family ?? "", silhouette: d.model ?? "", paired: d.paired,
+            const entry = { devId: d.id, name: d.name, shown: DeviceIcons.shownName(list, d), deviceKind: d.kind, family: d.family ?? "", silhouette: d.model ?? "", paired: d.paired,
                             bonded: d.bonded ?? true, connected: d.connected, trusted: d.trusted ?? false, battery: d.battery }
             let at = -1
             for (let j = 0; j < deviceModel.count; ++j) {
@@ -381,7 +381,7 @@ SettingsPane {
             required property string devId
             required property string name
             required property string shown
-            required property string kind
+            required property string deviceKind
             required property string family
             required property string silhouette   // the controller model (not `model`: a delegate has one)
             required property bool paired
@@ -393,11 +393,11 @@ SettingsPane {
             visible: Bluetooth.powered
             u: pane.u
             label: shown
-            iconName: DeviceIcons.iconFor(kind, family, silhouette)
-            value: pane.deviceValue(pane.busyId === devId, paired, bonded, connected, battery, kind, trusted)
+            iconName: DeviceIcons.iconFor(deviceKind, family, silhouette)
+            value: pane.deviceValue(pane.busyId === devId, paired, bonded, connected, battery, deviceKind, trusted)
             // The screen reader says the name, what it is, then the state: "DualSense, PlayStation
             // controller, Connected".
-            accessibleValue: DeviceIcons.kindText(kind, family) + ", " + value
+            accessibleValue: DeviceIcons.kindText(deviceKind, family) + ", " + value
             onActivated: pane.activate(devId, paired, connected)
         }
     }
@@ -424,10 +424,10 @@ SettingsPane {
             required property string devId
             required property string name
             required property string shown
-            required property string kind
+            required property string deviceKind
             required property bool paired
             objectName: "btRename_" + devId
-            visible: paired && kind === "controller" && Bluetooth.powered
+            visible: paired && deviceKind === "controller" && Bluetooth.powered
             u: pane.u
             label: qsTr("Rename %1").arg(shown)
             onActivated: pane.askRename(devId, name, shown)

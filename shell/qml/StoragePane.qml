@@ -122,7 +122,7 @@ SettingsPane {
     // The rows of one volume's scan.
     function scanRows(id) {
         const e = Storage.scans[id]
-        const row = (sub, name, value) => ({ rowKey: "scan:" + id + ":" + sub, kind: "scan", sub: sub, volId: id,
+        const row = (sub, name, value) => ({ rowKey: "scan:" + id + ":" + sub, entryKind: "scan", sub: sub, volId: id,
                                              name: name, valueText: value, shown: true, removable: true, mounted: true })
         // A refusal other than "busy" (another scan runs; asked again soon) is final for now.
         const refused = e && e.status !== "" && e.status !== "busy"
@@ -151,12 +151,12 @@ SettingsPane {
         const out = []
         for (const v of Storage.volumes) {
             const usable = v.removable && v.mounted
-            out.push({ rowKey: "vol:" + v.id, kind: "volume", sub: "", volId: v.id, name: v.label,
+            out.push({ rowKey: "vol:" + v.id, entryKind: "volume", sub: "", volId: v.id, name: v.label,
                        valueText: volumeValue(v.filesystem, v.mounted, v.readOnly, v.freeBytes, v.sizeBytes),
                        shown: true, removable: v.removable, mounted: v.mounted })
             if (usable)
                 out.push(...scanRows(v.id))
-            out.push({ rowKey: "eject:" + v.id, kind: "eject", sub: "", volId: v.id, name: qsTr("Eject %1").arg(v.label),
+            out.push({ rowKey: "eject:" + v.id, entryKind: "eject", sub: "", volId: v.id, name: qsTr("Eject %1").arg(v.label),
                        valueText: "", shown: usable, removable: v.removable, mounted: v.mounted })
         }
         return out
@@ -431,7 +431,7 @@ SettingsPane {
         model: rowModel
         SettingRow {
             required property string rowKey
-            required property string kind          // "volume" | "scan" | "eject"
+            required property string entryKind         // "volume" | "scan" | "eject"
             required property string sub           // a scan row: "wait", "cat:games", "other", ...
             required property string volId
             required property string name
@@ -439,22 +439,22 @@ SettingsPane {
             required property bool shown
             required property bool removable
             required property bool mounted
-            objectName: kind === "volume" ? "storageVol_" + volId
-                      : kind === "eject" ? "storageEject_" + volId
+            objectName: entryKind === "volume" ? "storageVol_" + volId
+                      : entryKind === "eject" ? "storageEject_" + volId
                       : "storageScan_" + volId + "_" + sub
             visible: shown
-            inert: kind === "scan"
-            onActiveFocusChanged: if (activeFocus) pane.actionFocused = kind !== "scan"
+            inert: entryKind === "scan"
+            onActiveFocusChanged: if (activeFocus) pane.actionFocused = entryKind !== "scan"
             u: pane.u
             // What was found on a drive sits a step in from the drive's own row.
-            x: kind === "scan" ? Theme.spaceL * pane.u : 0
+            x: entryKind === "scan" ? Theme.spaceL * pane.u : 0
             width: parent ? parent.width - x : 0
             label: name
             value: valueText
             onActivated: {
-                if (kind === "volume")
+                if (entryKind === "volume")
                     pane.activate(volId, removable, mounted)
-                else if (kind === "eject")
+                else if (entryKind === "eject")
                     pane.ejectVolume(volId)
             }
         }

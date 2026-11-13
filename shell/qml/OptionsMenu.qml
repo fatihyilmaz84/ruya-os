@@ -58,7 +58,8 @@ FocusScope {
     // instead of `spaceXs` (9 u today). Computed, never written as 9.
     readonly property real dividerDelta: 2 * Theme.spaceXs * u - Theme.spaceXs * u + Theme.hairlineAt(u)
     readonly property int rowCount: rows.length
-    readonly property real titleHeight: titleText.implicitHeight
+    // A fixed line box (typeHeadline x 1.2, 41 u at 1080p), not the font's metrics: Windows and Fedora's fonts differ by 1 px.
+    readonly property real titleHeight: Math.round(Theme.typeHeadline * 1.2 * u)
     readonly property real bodyTop: Theme.spaceL * u + titleHeight + Theme.spaceS * u     // where the rows (or the note) start
 
     // y of every row inside the rows layer, from the first row's top, dividers included.
@@ -271,6 +272,8 @@ FocusScope {
             y: Theme.spaceL * menu.u
             maxWidth: menu.sheetWidth - 2 * (Theme.spaceS + Theme.spaceL) * menu.u
             width: Math.min(implicitWidth, maxWidth)
+            height: menu.titleHeight
+            verticalAlignment: Text.AlignVCenter
             name: menu.title
             color: Theme.text
             font.pixelSize: Theme.typeHeadline * menu.u
