@@ -254,8 +254,13 @@ fn valid_app_id(s: &str) -> bool {
     )
 }
 
+/// One of the families a `match.family` may name.
+pub fn valid_family(s: &str) -> bool {
+    FAMILIES.contains(&s)
+}
+
 /// `^[a-z0-9:-]{1,64}$`
-fn valid_device(s: &str) -> bool {
+pub fn valid_device(s: &str) -> bool {
     let ok = |c: char| c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, ':' | '-');
     chars_ok(s, ok, ok, 64)
 }

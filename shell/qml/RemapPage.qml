@@ -20,7 +20,7 @@ Page {
     title: qsTr("Remap buttons")
     hints: [{ button: "A", text: qsTr("Change") }, { button: "B", text: qsTr("Back") }]
 
-    Component.onCompleted: GameControls.refresh()
+    Component.onCompleted: GameControls.show(padId)
 
     // The toasts of the changes on their way, by GameControls' tag: { title, detail }.
     property var pendingToasts: ({})

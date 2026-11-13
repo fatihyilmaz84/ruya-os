@@ -90,7 +90,10 @@
     scope_id            s   the app id for platform and game, else ""
     inherits            s   its parent as the file says ("" means "default")
     builtin             b
-    assigned            b   the console profile's global assignment names it
+    assigned            b   the console profile's global assignment of its global_slot names it
+    global_slot         s   the AssignProfile "global" scope_id its match names (RUY-545): "device:<id>"
+                            when it has match.device, else "family:<f>" with match.family, else ""
+                            (all controllers; every built-in)
     match_family        s   its own match.family, "" when none
     match_device        s   its own match.device (a stable device id), "" when none
     layout              s   "nintendo" when its chain holds the built-in "nintendo", else "standard"
@@ -237,8 +240,9 @@
     <!-- Controller profiles (T-369 built; platform and game assignments T-370), stored per console
          profile (`profile`, which must be a profile account, else "unknown-profile"). Every change
          (save, delete, assign) is one ProfilesChanged and reaches the virtual pads of that console
-         profile at once: what a pad emits is the resolved global profile when its own match fits
-         the pad (family, stable id), else "default" (06 §7). -->
+         profile at once: what each pad emits is the global profile that applies to it (RUY-545,
+         06 §7): the one assigned to its device's slot, else its family's, else all controllers',
+         else "default". A held button is released and its new target pressed. -->
     <method name="ListProfiles">
       <arg name="profile" type="s" direction="in"/>
       <arg name="status" type="s" direction="out"/>
@@ -278,10 +282,16 @@
       <arg name="profile_id" type="s" direction="in"/>
       <arg name="status" type="s" direction="out"/>
     </method>
-    <!-- scope: "global" (scope_id "") | "platform" | "game" (scope_id: the app id);
-         profile_id "" removes the assignment. Built today: "global", which names a built-in or a
-         global profile ("invalid" for one of scope platform or game, "unknown-profile" for an id
-         that does not exist); "platform" and "game" answer "invalid" until T-370 / RUY-43. -->
+    <!-- scope: "global" | "platform" | "game" (scope_id: the app id). Built today: "global" (RUY-545
+         slots): a console profile has up to one global profile per slot, scope_id "" (all
+         controllers), "family:<f>" (f one of xbox, playstation, nintendo, generic) or "device:<id>"
+         (a stable device id); a pad takes its device's slot, else its family's, else "", else
+         "default". The profile is a built-in or a global profile whose global_slot (its match) is
+         this scope_id; "invalid" for another slot, a malformed scope_id, or a profile of scope
+         platform or game; "unknown-profile" for an id that does not exist. profile_id "" empties
+         that slot only; assigning one slot never touches another. A SaveProfile that changes an
+         assigned profile's match takes it out of its old slot. "platform" and "game" answer
+         "invalid" until T-370 / RUY-43. ListProfiles' assigned and global_slot read the slots. -->
     <method name="AssignProfile">
       <arg name="profile" type="s" direction="in"/>
       <arg name="scope" type="s" direction="in"/>

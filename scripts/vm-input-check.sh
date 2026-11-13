@@ -19,6 +19,9 @@
 # `twopads` (RUY-540) checks the numbering of the virtual pads with two uinput pads: the pad that signed the profile in is
 # ruya-input/pad1, created first (the lower event node, SDL index 0), whichever of the two it is; the profile user opens
 # pad1 and hears that pad's button and not the idle pad's. It routes by its own bus connection and ends on `shell`.
+# Then (RUY-545, probe `twoprofiles`) two slots assigned over Input1, the device's of one pad and the Nintendo family's
+# for a pad with Nintendo's vendor id: each virtual pad emits its own pad's profile, and emptying the family's slot
+# changes only that pad; a slot the profile's match does not name is refused. Its profiles and slots are removed after.
 # `check` runs the first four, then `caps` and `profiles`. `profiles` (RUY-42) checks the controller
 # profiles over busctl: the built-ins, validation (a bad file, 64 KiB + 1), storage in
 # /var/lib/ruya-input/profiles/<profile>/ (0700 / 0600, ruya-input's, unreadable to the profile
@@ -557,6 +560,14 @@ twopads)
         *) echo "$line"; bad "the probe printed an unexpected line (traceback?)" ;;
         esac
     done < <(cd "$dir" && python3 "$dir/vm-input-probe.py" twopads --user "ruya-$me" --profile "$me" 2>&1)
+    echo "--- a profile per pad (RUY-545)"
+    while IFS= read -r line; do
+        case "$line" in
+        PASS:*) ok "${line#PASS: }" ;;
+        FAIL:*) bad "${line#FAIL: }" ;;
+        *) echo "$line"; bad "the probe printed an unexpected line (traceback?)" ;;
+        esac
+    done < <(cd "$dir" && python3 "$dir/vm-input-probe.py" twoprofiles --user "ruya-$me" --profile "$me" 2>&1)
     rm -rf "$dir"
     ;;
 hold)

@@ -268,14 +268,21 @@ void Input::onProfileReply(quint64 token, const QString &method, const QVariantM
         m_import.profileId = reply.value(QStringLiteral("profile_id")).toString();
         if (status != QLatin1String("ok"))
             return finishImport(status, errors);
-        // A global profile replaces the console profile's controls in games: it is assigned.
+        // A global profile replaces the console profile's controls in games: it is assigned, to the
+        // slot its match names (RUY-545: the device's, else the family's, else all controllers').
         const QJsonObject doc = QJsonDocument::fromJson(m_import.text.toUtf8()).object();
         if (doc.value(QStringLiteral("scope")).toObject().value(QStringLiteral("type")).toString() != QLatin1String("global"))
             return finishImport(status);
+        const QJsonObject match = doc.value(QStringLiteral("match")).toObject();
+        const QString slot = match.contains(QStringLiteral("device"))
+                                 ? QStringLiteral("device:") + match.value(QStringLiteral("device")).toString()
+                             : match.contains(QStringLiteral("family"))
+                                 ? QStringLiteral("family:") + match.value(QStringLiteral("family")).toString()
+                                 : QString();
         callProfile(QStringLiteral("AssignProfile"),
                     {{QStringLiteral("profile"), m_import.profile},
                      {QStringLiteral("scope"), QStringLiteral("global")},
-                     {QStringLiteral("scope_id"), QString()},
+                     {QStringLiteral("scope_id"), slot},
                      {QStringLiteral("profile_id"), m_import.profileId}},
                     Purpose::ImportAssign);
         return;

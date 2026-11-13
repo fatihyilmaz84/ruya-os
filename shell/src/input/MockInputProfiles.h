@@ -12,7 +12,8 @@
 
 // The controller profile members of org.ruyaos.Input1 in memory (RUY-42), for MockInputBackend:
 // the service's rules in brief (services/ruya-inputd/src/book.rs and profile.rs). The built-ins
-// "default" and "nintendo"; per console profile the stored profiles and the global assignment;
+// "default" and "nintendo"; per console profile the stored profiles and the global assignments by
+// slot (RUY-545: "" all controllers, "family:<f>", "device:<id>"; a pad takes the most specific);
 // SaveProfile's refusals (a built-in id or scope, a missing parent, a cycle, more than 8 links, a
 // 65th profile); DeleteProfile re-parents; the summary keys of the XML. Validation covers the
 // top level, ids, names, scope, inherits, match, output, mappings (inputs, targets, button and axis
@@ -36,8 +37,14 @@ private:
     struct Shelf
     {
         QMap<QString, QJsonObject> profiles;
-        QString global;
+        // The global assignments by slot: AssignProfile's scope_id -> profile id.
+        QMap<QString, QString> global;
     };
+
+    // The slot a profile's match names: "device:<id>", else "family:<f>", else "".
+    static QString slotOf(const QJsonObject &p);
+    // A scope_id of the global scope: "", "family:<one of the families>", "device:<a device id>".
+    static bool validSlot(const QString &scopeId);
 
     static QStringList validate(const QString &text, QJsonObject *out);
     const QJsonObject *profile(const QString &console, const QString &id) const;

@@ -33,7 +33,7 @@ Page {
     onBackRequested: gone = true
 
     Component.onCompleted: {
-        GameControls.refresh()
+        GameControls.show(padId)
         followPad()
     }
     Component.onDestruction: stopStream()

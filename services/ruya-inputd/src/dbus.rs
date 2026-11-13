@@ -140,6 +140,7 @@ fn summary(s: &Summary) -> Dict {
         ("inherits", Value::from(s.inherits.clone())),
         ("builtin", Value::from(s.builtin)),
         ("assigned", Value::from(s.assigned)),
+        ("global_slot", Value::from(s.global_slot.clone())),
         ("match_family", Value::from(s.match_family.clone())),
         ("match_device", Value::from(s.match_device.clone())),
         ("layout", Value::from(s.layout.clone())),

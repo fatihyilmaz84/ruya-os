@@ -138,9 +138,22 @@ Item {
         function test_the_builtins_and_the_summary_keys() {
             const rows = list()
             compare(rows.map(r => r.id), ["default", "nintendo"])
-            const keys = ["assigned", "builtin", "changed", "id", "inherits", "layout", "left_stick_changed", "match_device",
-                          "match_family", "name", "remapped", "right_stick_changed", "scope", "scope_id"]
+            const keys = ["assigned", "builtin", "changed", "global_slot", "id", "inherits", "layout", "left_stick_changed",
+                          "match_device", "match_family", "name", "remapped", "right_stick_changed", "scope", "scope_id"]
             compare(Object.keys(rows[0]).sort(), keys)
+            // The XML header lists the same keys (RUY-545 added global_slot).
+            const xhr = new XMLHttpRequest()
+            xhr.open("GET", Qt.resolvedUrl("../../api/dbus/org.ruyaos.Input1.xml"), false)
+            xhr.send()
+            const header = /Profile summary \(a\{sv\}\), keys:([\s\S]*?)ListProfiles lists/.exec(xhr.responseText)
+            verify(header, "the summary keys are in the XML header")
+            const listed = []
+            const re = /^ {4}([a-z_]+) +[sbu]( |$)/gm
+            let k
+            while ((k = re.exec(header[1])) !== null)
+                listed.push(k[1])
+            compare(listed.sort(), keys)
+            compare(rows[0].global_slot, "", "a built-in: all controllers' slot")
             compare(rows[0].builtin, true)
             compare(rows[0].changed, false)
             compare(rows[1].layout, "nintendo")
@@ -185,6 +198,54 @@ Item {
             verify(flat.inherits === undefined, "flattened")
             compare(flat.settings.left_stick.inner_deadzone, 0.12)
             compare(flat.settings.left_stick.outer_deadzone, 0.02, "defaults filled in")
+        }
+
+        // RUY-545, the cases of book.rs: one global profile per slot ("" all controllers,
+        // "family:<f>", "device:<id>"); a pad takes its device's, else its family's, else all's.
+        function test_each_pad_takes_the_profile_of_its_most_specific_slot() {
+            const ds = "bluetooth-054c-0ce6-3f2a9c41d0b7"
+            const pro = "bluetooth-057e-2009-b7c0e1f2a3d4"
+            const xbox = "usb-045e-0b12-8e01c2d4a9f3"
+            Input.mockResetDevices()
+            tryVerify(() => Input.devicesState === "ok" && Input.devices.length === 3)
+            const south = to => [{ from: "south", to: { type: "button", code: to } }]
+            compare(save(profile("a", { match: { device: ds }, mappings: south("east") }))[1], "ok")
+            compare(save(profile("n", { match: { family: "nintendo" }, mappings: south("west") }))[1], "ok")
+            compare(save(profile("every", { mappings: south("north") }))[1], "ok")
+            let n = 0
+            const assign = (slot, id) => {
+                Input.assignProfile(tc.me, "global", slot, id)
+                return answer(assignedSpy, ++n)[4]
+            }
+            let e = 0
+            const chainOf = device => {
+                Input.getEffectiveProfile(tc.me, device, "")
+                return answer(effectiveSpy, ++e)[5]
+            }
+            compare(assign("device:" + ds, "a"), "ok")
+            compare(assign("family:nintendo", "n"), "ok")
+            compare(chainOf(ds), ["a", "default"], "the DualSense: its own")
+            compare(chainOf(pro), ["n", "default"], "the Pro Controller: its family's")
+            compare(chainOf(xbox), ["default"], "the Xbox pad: nothing applies")
+            compare(assign("", "every"), "ok")
+            compare(chainOf(xbox), ["every", "default"])
+            compare(chainOf(ds), ["a", "default"], "the device's slot over all's")
+            const slots = list().filter(r => r.assigned).map(r => r.global_slot + "=" + r.id).sort()
+            compare(slots, ["=every", "device:" + ds + "=a", "family:nintendo=n"])
+            compare(assign("family:nintendo", ""), "ok")
+            compare(chainOf(pro), ["every", "default"], "emptying the family's slot leaves the others")
+            compare(chainOf(ds), ["a", "default"])
+            // A slot takes only a profile whose match names it; a malformed scope_id is invalid.
+            for (const [slot, id] of [["", "a"], ["", "n"], ["family:xbox", "n"], ["family:nintendo", "a"],
+                                      ["family:nintendo", "every"], ["device:" + pro, "a"], ["family:nintendo", "nintendo"]])
+                compare(assign(slot, id), "invalid", id + " in '" + slot + "'")
+            for (const slot of ["all", "family:", "family:sega", "device:", "device:USB", "game:x"])
+                compare(assign(slot, ""), "invalid", "'" + slot + "' is no slot")
+            // A save that changes an assigned profile's match takes it out of its old slot.
+            compare(save(profile("a", { match: { family: "playstation" }, mappings: south("east") }))[1], "ok")
+            const a = list().find(r => r.id === "a")
+            compare([a.assigned, a.global_slot], [false, "family:playstation"])
+            compare(chainOf(ds), ["every", "default"])
         }
 
         function test_the_status_strings() {
@@ -277,6 +338,15 @@ Item {
             compare(row.assigned, true, "a global profile applies once imported")
             const calls = Input.mockProfileCalls().map(c => c.method)
             compare(calls.slice(0, 3), ["ValidateProfile", "SaveProfile", "AssignProfile"])
+            // A file for one family goes to that family's slot (RUY-545).
+            Storage.mockSetFile("vol-stick", "nin.json", profile("for-nintendo", { match: { family: "nintendo" } }), 1001)
+            Input.importProfile(tc.me, "vol-stick", "nin.json")
+            compare(answer(importSpy, 2)[3], "ok")
+            const assigns = Input.mockProfileCalls().filter(c => c.method === "AssignProfile")
+            compare(assigns[assigns.length - 1].args.scope_id, "family:nintendo")
+            const rows = list()
+            verify(rows.find(r => r.id === "for-nintendo").assigned, "assigned to its slot")
+            verify(rows.find(r => r.id === "from-usb").assigned, "the other slot keeps its profile")
         }
 
         function test_import_refusals() {
