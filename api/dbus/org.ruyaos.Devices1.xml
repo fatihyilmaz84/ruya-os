@@ -735,7 +735,8 @@
       file name as ListFiles gives it: no "/" or "\", no NUL or other control character, not "."
       or "..", not hidden, at most 255 bytes. The file is opened read-only without following a
       symlink (O_NOFOLLOW, O_NONBLOCK) and must be a regular file; its size is compared with
-      max_bytes (1 to 1048576) before anything is read, and at most max_bytes are read. text is
+      max_bytes (1 to 1048576) before anything is read, and at most max_bytes + 1 bytes are read (a
+      file that grew past max_bytes meanwhile is "too-large" too). text is
       the content when it is UTF-8 ("" otherwise). Nothing is executed. See the status strings in
       the header.
     -->
