@@ -116,6 +116,7 @@ fn record(d: &DeviceRecord) -> Dict {
         ("name", Value::from(d.name.clone())),
         ("family", Value::from(d.family.clone())),
         ("connection", Value::from(d.connection.clone())),
+        ("layout", Value::from(d.layout.clone())),
         ("battery", Value::from(d.battery)),
         ("charging", Value::from(d.charging)),
         ("slot", Value::from(d.slot)),

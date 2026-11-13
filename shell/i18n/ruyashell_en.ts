@@ -999,7 +999,7 @@ This can&apos;t be undone.</translation>
         <translation>No input for 2 minutes.</translation>
     </message>
     <message>
-        <location line="+106"/>
+        <location line="+107"/>
         <source>%1 · %2</source>
         <translation>%1 · %2</translation>
     </message>
@@ -1333,7 +1333,7 @@ This can&apos;t be undone.</translation>
         <translation>Bluetooth</translation>
     </message>
     <message>
-        <location line="+68"/>
+        <location line="+69"/>
         <source>%1 · %2</source>
         <translation>%1 · %2</translation>
     </message>
@@ -1624,12 +1624,12 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+36"/>
-        <location line="+20"/>
+        <location line="+22"/>
         <source>Confirm button</source>
         <translation>Confirm button</translation>
     </message>
     <message>
-        <location line="-18"/>
+        <location line="-20"/>
         <source>As on the controller</source>
         <translation>As on the controller</translation>
     </message>
@@ -1644,7 +1644,7 @@ This can&apos;t be undone.</translation>
         <translation>Right</translation>
     </message>
     <message>
-        <location line="+24"/>
+        <location line="+26"/>
         <source>Could not change the confirm button</source>
         <translation>Could not change the confirm button</translation>
     </message>
@@ -2920,12 +2920,39 @@ This can&apos;t be undone.</translation>
 <context>
     <name>PadDiagram</name>
     <message>
-        <location filename="../qml/PadDiagram.qml" line="+129"/>
+        <location filename="../qml/PadDiagram.qml" line="+42"/>
+        <location line="+1"/>
         <source>Guide</source>
         <translation>Guide</translation>
     </message>
     <message>
-        <location line="+25"/>
+        <location line="-1"/>
+        <source>Create</source>
+        <translation>Create</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Options</source>
+        <translation>Options</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>View</source>
+        <translation>View</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Menu</source>
+        <translation>Menu</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+1"/>
+        <source>Home</source>
+        <translation>Home</translation>
+    </message>
+    <message>
+        <location line="+150"/>
         <source>Touchpad</source>
         <translation>Touchpad</translation>
     </message>

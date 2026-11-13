@@ -995,7 +995,7 @@ Bu geri alınamaz.</translation>
         <translation>2 dakikadır giriş yok.</translation>
     </message>
     <message>
-        <location line="+106"/>
+        <location line="+107"/>
         <source>%1 · %2</source>
         <translation>%1 · %2</translation>
     </message>
@@ -1329,7 +1329,7 @@ Bu geri alınamaz.</translation>
         <translation>Bluetooth</translation>
     </message>
     <message>
-        <location line="+68"/>
+        <location line="+69"/>
         <source>%1 · %2</source>
         <translation>%1 · %2</translation>
     </message>
@@ -1620,12 +1620,12 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+36"/>
-        <location line="+20"/>
+        <location line="+22"/>
         <source>Confirm button</source>
         <translation>Onay düğmesi</translation>
     </message>
     <message>
-        <location line="-18"/>
+        <location line="-20"/>
         <source>As on the controller</source>
         <translation>Kontrolcüdeki gibi</translation>
     </message>
@@ -1640,7 +1640,7 @@ Bu geri alınamaz.</translation>
         <translation>Sağdaki</translation>
     </message>
     <message>
-        <location line="+24"/>
+        <location line="+26"/>
         <source>Could not change the confirm button</source>
         <translation>Onay düğmesi değiştirilemedi</translation>
     </message>
@@ -2909,12 +2909,39 @@ Bu geri alınamaz.</translation>
 <context>
     <name>PadDiagram</name>
     <message>
-        <location filename="../qml/PadDiagram.qml" line="+129"/>
+        <location filename="../qml/PadDiagram.qml" line="+42"/>
+        <location line="+1"/>
         <source>Guide</source>
         <translation>Rehber</translation>
     </message>
     <message>
-        <location line="+25"/>
+        <location line="-1"/>
+        <source>Create</source>
+        <translation>Oluştur</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Options</source>
+        <translation>Seçenekler</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>View</source>
+        <translation>Görünüm</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Menu</source>
+        <translation>Menü</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+1"/>
+        <source>Home</source>
+        <translation>Ana ekran</translation>
+    </message>
+    <message>
+        <location line="+150"/>
         <source>Touchpad</source>
         <translation>Dokunmatik yüzey</translation>
     </message>

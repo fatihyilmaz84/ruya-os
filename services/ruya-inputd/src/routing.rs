@@ -111,6 +111,8 @@ pub struct PadInfo {
     pub name: String,
     pub family: String,
     pub connection: String,
+    /// The drawing of the pad for the Button test (`identity::layout`); "" = the family's default.
+    pub layout: String,
     /// The pad takes `FF_RUMBLE`: only then does its virtual pad declare it.
     pub rumble: bool,
     /// Its capability descriptor (`caps::describe`), as found when it connected.
@@ -125,6 +127,7 @@ pub struct DeviceRecord {
     pub name: String,
     pub family: String,
     pub connection: String,
+    pub layout: String,
     pub battery: i32,
     pub charging: bool,
     pub slot: u32,
@@ -450,6 +453,7 @@ impl<B: Backend> Router<B> {
             name: pad.info.name.clone(),
             family: pad.info.family.clone(),
             connection: pad.info.connection.clone(),
+            layout: pad.info.layout.clone(),
             battery: -1,
             charging: false,
             slot: 0,
@@ -1403,6 +1407,7 @@ mod tests {
             name: "DualSense Wireless Controller".into(),
             family: "playstation".into(),
             connection: "bluetooth".into(),
+            layout: String::new(),
             rumble: true,
             capabilities: Vec::new(),
         }

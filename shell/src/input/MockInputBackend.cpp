@@ -71,6 +71,7 @@ QVariantMap pad(const QString &id, const QString &name, const QString &family, c
         {QStringLiteral("name"), name},
         {QStringLiteral("family"), family},
         {QStringLiteral("connection"), connection},
+        {QStringLiteral("layout"), QString()},
         {QStringLiteral("battery"), battery},
         {QStringLiteral("charging"), charging},
         {QStringLiteral("slot"), 0u},

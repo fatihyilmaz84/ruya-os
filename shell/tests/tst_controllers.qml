@@ -343,6 +343,33 @@ Item {
             verify(find("buttonTestKeys").activeFocus, "the focus stayed on the test")
         }
 
+        function test_a_wii_u_pro_gets_its_layout_and_its_minus_plus_and_home_light() {
+            const wiiu = "bluetooth-057e-0330-c1d2e3f4a5b6"
+            Input.mockAddDevice({ id: wiiu, name: "Nintendo Wii Remote Pro Controller", family: "nintendo",
+                                  layout: "nintendo-wiiu", connection: "bluetooth", battery: 80 })
+            tryVerify(() => Input.devices.length === 4)
+            openTest(wiiu)
+            const d = find("padDiagram")
+            compare(d.kind, "nintendo-wiiu")
+            for (const [input, word] of [["select", "−"], ["start", "+"], ["guide", "Home"]]) {
+                const k = find("padCtl_" + input)
+                compare(k.children.filter(c => c.text !== undefined)[0].text, word)
+                Input.mockTestInput(wiiu, input, 1, "raw:pad:1:0")
+                tryCompare(k, "look", "held")
+            }
+            Input.mockTestInput(wiiu, "dpad_left", 1, "raw:pad:1:0")
+            tryCompare(find("padCtl_dpad_left"), "look", "held")
+            Input.mockTestInput(wiiu, "left_trigger", 32767, "raw:pad:1:0")
+            tryCompare(find("padCtl_left_trigger"), "look", "held")
+            compare(find("padTrackFill_left_trigger").height, 0, "ZL is a button: its track stays empty")
+        }
+
+        function test_a_switch_pro_takes_the_nintendo_drawing() {
+            openTest(pro)
+            compare(find("padDiagram").kind, "nintendo")
+            compare(find("padCtl_guide").children.filter(c => c.text !== undefined)[0].text, "Home")
+        }
+
         function test_back_twice_leaves_the_test() {
             openTest(ds)
             keyClick(Qt.Key_Escape)
@@ -602,6 +629,37 @@ Item {
                 skip("set RUYA_SHOTS_DIR to save screenshots")
             DeviceSettings.language = "tr"
             shots(shotsDir + "/", "tr")
+        }
+
+        // The Button test of one pad with a few inputs pressed, for the layout shots (RUY-486).
+        function layoutShot(dir, device, name, inputs) {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            if (device.id !== ds && device.id !== xbox && device.id !== pro) {
+                Input.mockAddDevice(device)
+                tryVerify(() => Input.devices.length === 4)
+            }
+            openTest(device.id)
+            for (const i of inputs) {
+                Input.mockTestInput(device.id, i, 1, "raw:pad:1:0")
+                Input.mockTestInput(device.id, i, 0, "raw:pad:1:0")
+            }
+            for (const i of inputs.slice(0, 3))
+                Input.mockTestInput(device.id, i, 1, "raw:pad:1:0")
+            settle()
+            grabImage(tc.shell).save(dir + "27-button-test-layout-" + name + "-en.png")
+        }
+
+        function test_zz_screenshots_layout_playstation() { layoutShot(shotsDir + "/", { id: ds }, "playstation", ["select", "dpad_left", "l3", "guide"]) }
+        function test_zz_screenshots_layout_xbox() { layoutShot(shotsDir + "/", { id: xbox }, "xbox", ["start", "dpad_down", "r3", "guide"]) }
+        function test_zz_screenshots_layout_nintendo() { layoutShot(shotsDir + "/", { id: pro }, "nintendo", ["select", "dpad_right", "l3", "guide"]) }
+        function test_zz_screenshots_layout_wiiu() {
+            layoutShot(shotsDir + "/", { id: "bluetooth-057e-0330-c1d2e3f4a5b6", name: "Nintendo Wii Remote Pro Controller", family: "nintendo",
+                         layout: "nintendo-wiiu", connection: "bluetooth", battery: 80 }, "nintendo-wiiu", ["select", "start", "dpad_up", "r3", "guide"])
+        }
+        function test_zz_screenshots_layout_generic() {
+            layoutShot(shotsDir + "/", { id: "usb-2dc8-3106-aabbccddeeff", name: "8BitDo Pro 2", family: "generic", connection: "usb", battery: -1 },
+                       "generic", ["select", "start", "dpad_down", "l3", "guide"])
         }
 
         function test_zz_screenshots_720p() {
