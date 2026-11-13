@@ -989,7 +989,7 @@ This can&apos;t be undone.</translation>
         <translation>Press twice or hold to leave</translation>
     </message>
     <message>
-        <location line="+92"/>
+        <location line="+93"/>
         <source>Button test ended</source>
         <translation>Button test ended</translation>
     </message>
@@ -999,19 +999,19 @@ This can&apos;t be undone.</translation>
         <translation>No input for 2 minutes.</translation>
     </message>
     <message>
-        <location line="+99"/>
-        <source>x %1  y %2</source>
-        <translation>x %1  y %2</translation>
-    </message>
-    <message>
-        <location line="+7"/>
+        <location line="+106"/>
         <source>%1 · %2</source>
         <translation>%1 · %2</translation>
     </message>
     <message>
-        <location line="+5"/>
-        <source>x %1  y %2  z %3 °/s</source>
-        <translation>x %1  y %2  z %3 °/s</translation>
+        <location line="-7"/>
+        <source>x&#xa0;%1  y&#xa0;%2</source>
+        <translation>x %1  y %2</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>x&#xa0;%1  y&#xa0;%2  z&#xa0;%3&#xa0;°/s</source>
+        <translation>x %1  y %2  z %3 °/s</translation>
     </message>
     <message>
         <location line="+6"/>
@@ -1070,18 +1070,18 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+60"/>
+        <location line="+61"/>
         <source>Left stick</source>
         <translation>Left stick</translation>
     </message>
     <message>
-        <location line="-58"/>
-        <location line="+59"/>
+        <location line="-59"/>
+        <location line="+60"/>
         <source>Right stick</source>
         <translation>Right stick</translation>
     </message>
     <message>
-        <location line="-58"/>
+        <location line="-59"/>
         <source>Create</source>
         <translation>Create</translation>
     </message>
@@ -1126,7 +1126,7 @@ This can&apos;t be undone.</translation>
         <translation>D-pad right</translation>
     </message>
     <message>
-        <location line="+40"/>
+        <location line="+41"/>
         <source> · </source>
         <translation> · </translation>
     </message>
@@ -1156,7 +1156,7 @@ This can&apos;t be undone.</translation>
         <translation>Source</translation>
     </message>
     <message>
-        <location line="+38"/>
+        <location line="+41"/>
         <source>Press %1 again to leave.</source>
         <translation>Press %1 again to leave.</translation>
     </message>
@@ -1426,12 +1426,12 @@ This can&apos;t be undone.</translation>
         <translation>Microphone</translation>
     </message>
     <message>
-        <location line="+37"/>
+        <location line="+39"/>
         <source>Controller disconnected</source>
         <translation>Controller disconnected</translation>
     </message>
     <message>
-        <location line="+57"/>
+        <location line="+58"/>
         <source>Open</source>
         <translation>Open</translation>
     </message>
@@ -1582,7 +1582,7 @@ This can&apos;t be undone.</translation>
         <translation>Select</translation>
     </message>
     <message>
-        <location line="+92"/>
+        <location line="+101"/>
         <source>No controllers connected.</source>
         <translation>No controllers connected.</translation>
     </message>
@@ -1592,7 +1592,7 @@ This can&apos;t be undone.</translation>
         <translation>Controllers can&apos;t be read right now.</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+8"/>
         <source>Try again</source>
         <translation>Try again</translation>
     </message>

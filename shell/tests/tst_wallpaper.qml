@@ -1143,8 +1143,8 @@ Item {
             keyClick(Qt.Key_Return)                      // the nav is on Settings
             tryCompare(tc.shell, "currentPage", "settings")
             tryVerify(() => find("categoryList").activeFocus)
-            for (let i = 0; i < 3; ++i)
-                keyClick(Qt.Key_Down)
+            for (let i = 0; i < 4; ++i)
+                keyClick(Qt.Key_Down)                    // Display & motion
             keyClick(Qt.Key_Right)
             tryVerify(() => find("rowQuality").activeFocus)
 

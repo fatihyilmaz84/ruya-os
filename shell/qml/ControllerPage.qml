@@ -89,8 +89,10 @@ Page {
         function onDevicesChanged() { page.checkGone() }
     }
 
-    // The pad disconnected: the page closes (once), with a toast that names it.
+    // The pad disconnected: the page closes (once), with a toast that names it. A page that is
+    // closing for any reason (Back too) never asks to close again: that would close the page below.
     property bool gone: false
+    onBackRequested: gone = true
     function checkGone() {
         if (gone || Input.devicesState !== "ok" || Input.devices.some(d => d.id === padId))
             return

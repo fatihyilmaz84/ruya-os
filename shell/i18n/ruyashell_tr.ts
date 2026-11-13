@@ -985,7 +985,7 @@ Bu geri alınamaz.</translation>
         <translation>Çıkmak için iki kez bas ya da basılı tut</translation>
     </message>
     <message>
-        <location line="+92"/>
+        <location line="+93"/>
         <source>Button test ended</source>
         <translation>Düğme testi sona erdi</translation>
     </message>
@@ -995,19 +995,19 @@ Bu geri alınamaz.</translation>
         <translation>2 dakikadır giriş yok.</translation>
     </message>
     <message>
-        <location line="+99"/>
-        <source>x %1  y %2</source>
-        <translation>x %1  y %2</translation>
-    </message>
-    <message>
-        <location line="+7"/>
+        <location line="+106"/>
         <source>%1 · %2</source>
         <translation>%1 · %2</translation>
     </message>
     <message>
-        <location line="+5"/>
-        <source>x %1  y %2  z %3 °/s</source>
-        <translation>x %1  y %2  z %3 °/s</translation>
+        <location line="-7"/>
+        <source>x&#xa0;%1  y&#xa0;%2</source>
+        <translation>x %1  y %2</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>x&#xa0;%1  y&#xa0;%2  z&#xa0;%3&#xa0;°/s</source>
+        <translation>x %1  y %2  z %3 °/s</translation>
     </message>
     <message>
         <location line="+6"/>
@@ -1066,18 +1066,18 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+60"/>
+        <location line="+61"/>
         <source>Left stick</source>
         <translation>Sol çubuk</translation>
     </message>
     <message>
-        <location line="-58"/>
-        <location line="+59"/>
+        <location line="-59"/>
+        <location line="+60"/>
         <source>Right stick</source>
         <translation>Sağ çubuk</translation>
     </message>
     <message>
-        <location line="-58"/>
+        <location line="-59"/>
         <source>Create</source>
         <translation>Create</translation>
     </message>
@@ -1122,7 +1122,7 @@ Bu geri alınamaz.</translation>
         <translation>Yön tuşu sağ</translation>
     </message>
     <message>
-        <location line="+40"/>
+        <location line="+41"/>
         <source> · </source>
         <translation> · </translation>
     </message>
@@ -1152,7 +1152,7 @@ Bu geri alınamaz.</translation>
         <translation>Kaynak</translation>
     </message>
     <message>
-        <location line="+38"/>
+        <location line="+41"/>
         <source>Press %1 again to leave.</source>
         <translation>Çıkmak için %1 düğmesine yeniden bas.</translation>
     </message>
@@ -1422,12 +1422,12 @@ Bu geri alınamaz.</translation>
         <translation>Mikrofon</translation>
     </message>
     <message>
-        <location line="+37"/>
+        <location line="+39"/>
         <source>Controller disconnected</source>
         <translation>Kontrolcü bağlantısı kesildi</translation>
     </message>
     <message>
-        <location line="+57"/>
+        <location line="+58"/>
         <source>Open</source>
         <translation>Aç</translation>
     </message>
@@ -1578,7 +1578,7 @@ Bu geri alınamaz.</translation>
         <translation>Seç</translation>
     </message>
     <message>
-        <location line="+92"/>
+        <location line="+101"/>
         <source>No controllers connected.</source>
         <translation>Bağlı kontrolcü yok.</translation>
     </message>
@@ -1588,7 +1588,7 @@ Bu geri alınamaz.</translation>
         <translation>Kontrolcüler şu an okunamıyor.</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+8"/>
         <source>Try again</source>
         <translation>Yeniden dene</translation>
     </message>

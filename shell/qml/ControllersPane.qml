@@ -80,6 +80,15 @@ SettingsPane {
     }
 
     Component.onCompleted: syncPads()
+    // The list could not be read: Try again takes the focus (the pad rows it was on are hidden).
+    onFailedChanged: {
+        if (!failed)
+            return
+        if (pane.activeFocus)
+            retryRow.forceActiveFocus()
+        else
+            retryRow.focus = true
+    }
     Connections {
         target: Input
         function onDevicesChanged() { pane.syncPads() }
@@ -127,6 +136,7 @@ SettingsPane {
     }
 
     SettingRow {
+        id: retryRow
         objectName: "rowPadsRetry"
         visible: pane.failed
         u: pane.u

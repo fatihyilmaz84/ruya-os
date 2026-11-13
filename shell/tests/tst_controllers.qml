@@ -204,6 +204,9 @@ Item {
 
         function test_a_failed_list_offers_try_again() {
             openPane()
+            for (let i = 0; i < 4; ++i)
+                keyClick(Qt.Key_Down)
+            verify(find("rowPadsPair").activeFocus, "on Pair, which stays")
             Input.mockListFail(true)
             Input.refreshDevices()
             tryCompare(Input, "devicesState", "failed")
@@ -278,6 +281,18 @@ Item {
             tryVerify(() => toastTexts().includes("Controller disconnected / Pro Controller"), 2000, toastTexts().join(";"))
         }
 
+        function test_a_pad_going_after_its_page_was_left_keeps_settings_open() {
+            openController(pro)
+            keyClick(Qt.Key_Escape)
+            tryCompare(tc.shell, "currentPage", "settings")
+            Input.mockRemoveDevice(pro)
+            tryVerify(() => padRow(pro) === null, 2000)
+            wait(Theme.pageMs + 100)
+            compare(tc.shell.currentPage, "settings", "the closed controller page does not close Settings")
+            verify(find("paneControllers").activeFocus, "the pane keeps the focus")
+            verify(!toastTexts().some(t => t.startsWith("Controller disconnected")), "no toast for a page that is gone")
+        }
+
         // ---- the button test ---------------------------------------------------------------------------------------
 
         function test_the_button_test_lights_the_pressed_control() {
@@ -301,11 +316,11 @@ Item {
             Input.mockTestInput(ds, "left_x", 32767, "raw:pad:3:0")
             Input.mockTestInput(ds, "left_y", -1204, "raw:pad:3:1")
             tryVerify(() => dot.x > rest + 40 * tc.shell.u, 2000, "the dot follows the axis")
-            compare(find("raw_left").text, "x 32 767  y −1 204")
+            compare(find("raw_left").text, "x 32 767  y −1 204")
             // A trigger fills its track.
             Input.mockTestInput(ds, "right_trigger", 24250, "raw:pad:3:5")
             tryVerify(() => find("padTrackFill_right_trigger").height > 0, 2000)
-            compare(find("raw_triggers").text, "0 · 24 250")
+            compare(find("raw_triggers").text, "0 · 24 250")
             compare(find("padCtl_right_trigger").look, "held")
             // A raw input without a normal name is shown by its source.
             Input.mockTestInput(ds, "raw:pad:1:704", 1, "raw:pad:1:704")
@@ -390,20 +405,20 @@ Item {
             wait(400)
         }
 
-        function shots(lang) {
+        function shots(dir, lang) {
             openPane()
             settle()
-            grabImage(tc.shell).save(shotsDir + "/27-settings-controllers-" + lang + ".png")
+            grabImage(tc.shell).save(dir + "27-settings-controllers-" + lang + ".png")
             keyClick(Qt.Key_Return)
             tryCompare(tc.shell, "currentPage", "controller")
             tryVerify(() => find("cap_buttons") !== null, 2000)
             settle()
-            grabImage(tc.shell).save(shotsDir + "/27-controller-page-" + lang + ".png")
+            grabImage(tc.shell).save(dir + "27-controller-page-" + lang + ".png")
             keyClick(Qt.Key_Return)
             tryCompare(tc.shell, "currentPage", "buttonTest")
             tryVerify(() => Input.mockTestRunning(ds), 2000)
             settle()
-            grabImage(tc.shell).save(shotsDir + "/27-button-test-idle-" + lang + ".png")
+            grabImage(tc.shell).save(dir + "27-button-test-idle-" + lang + ".png")
             Input.mockTestInput(ds, "south", 1, "raw:pad:1:304")
             Input.mockTestInput(ds, "east", 1, "raw:pad:1:305")
             Input.mockTestInput(ds, "east", 0, "raw:pad:1:305")
@@ -413,37 +428,41 @@ Item {
             Input.mockTestInput(ds, "left_y", 18090, "raw:pad:3:1")
             Input.mockTestInput(ds, "right_trigger", 24250, "raw:pad:3:5")
             Input.mockTestInput(ds, "south", 1, "raw:pad:1:304")
-            keyClick(Qt.Key_Escape)
             settle()
-            grabImage(tc.shell).save(shotsDir + "/27-button-test-pressed-" + lang + ".png")
+            keyClick(Qt.Key_Escape)                      // one Back press: the message asks for the second
+            wait(300)
+            verify(find("testMessage").text.startsWith(lang === "en" ? "Press B again" : "Çıkmak için B"))
+            grabImage(tc.shell).save(dir + "27-button-test-pressed-" + lang + ".png")
+            tryVerify(() => !find("page_buttonTest").awaitingSecondBack, 3000)
+            keyClick(Qt.Key_Escape)                      // the wait for the second press is over: two presses
             keyClick(Qt.Key_Escape)
             tryCompare(tc.shell, "currentPage", "controller")
             keyClick(Qt.Key_Escape)
             tryCompare(tc.shell, "currentPage", "settings")
             for (const id of [ds, xbox, pro])
                 Input.mockRemoveDevice(id)
-            tryVerify(() => find("rowPadsNone").visible, 2000)
+            tryVerify(() => find("rowPadsNone") !== null && find("rowPadsNone").visible, 2000)
             settle()
-            grabImage(tc.shell).save(shotsDir + "/27-settings-controllers-empty-" + lang + ".png")
+            grabImage(tc.shell).save(dir + "27-settings-controllers-empty-" + lang + ".png")
             Input.mockListFail(true)
             Input.refreshDevices()
             tryVerify(() => find("rowPadsFailed").visible, 2000)
             settle()
-            grabImage(tc.shell).save(shotsDir + "/27-settings-controllers-error-" + lang + ".png")
+            grabImage(tc.shell).save(dir + "27-settings-controllers-error-" + lang + ".png")
             Input.mockListFail(false)
         }
 
         function test_zz_screenshots() {
             if (!shotsDir)
                 skip("set RUYA_SHOTS_DIR to save screenshots")
-            shots("en")
+            shots(shotsDir + "/", "en")
         }
 
         function test_zz_screenshots_tr() {
             if (!shotsDir)
                 skip("set RUYA_SHOTS_DIR to save screenshots")
             DeviceSettings.language = "tr"
-            shots("tr")
+            shots(shotsDir + "/", "tr")
         }
 
         function test_zz_screenshots_720p() {
@@ -457,17 +476,17 @@ Item {
             Input.mockTestInput(ds, "north", 1, "raw:pad:1:307")
             settle()
             grabImage(tc.shell).save(shotsDir + "/27-button-test-720p-en.png")
-            openPaneShot720()
+            openPaneShot720(shotsDir + "/")
         }
 
-        function openPaneShot720() {
+        function openPaneShot720(dir) {
             keyClick(Qt.Key_Escape)
             keyClick(Qt.Key_Escape)
             tryCompare(tc.shell, "currentPage", "controller")
             keyClick(Qt.Key_Escape)
             tryCompare(tc.shell, "currentPage", "settings")
             settle()
-            grabImage(tc.shell).save(shotsDir + "/27-settings-controllers-720p-en.png")
+            grabImage(tc.shell).save(dir + "27-settings-controllers-720p-en.png")
         }
     }
 }

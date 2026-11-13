@@ -35,6 +35,7 @@ Page {
     // One Back press waits for the second (1000 ms).
     readonly property bool awaitingSecondBack: againTimer.running
     property bool gone: false
+    onBackRequested: gone = true         // closing: never ask to close again (that would close the page below)
 
     Component.onCompleted: {
         if (current)
@@ -193,13 +194,13 @@ Page {
     }
 
     // ---- the raw values ----------------------------------------------------------------------------
-    // "−1 204": a real minus and space-separated groups, the same in every language.
+    // "−1 204": a real minus and groups of three apart by a no-break space, the same in every language.
     function num(n) {
         const digits = String(Math.abs(Math.round(n)))
         let out = ""
         for (let i = 0; i < digits.length; ++i) {
             if (i > 0 && (digits.length - i) % 3 === 0)
-                out += " "
+                out += " "            // a no-break space: a number never breaks
             out += digits[i]
         }
         return (n < 0 ? "−" : "") + out
@@ -213,7 +214,7 @@ Page {
         const y = axes[side + "_y"]
         if (x === undefined && y === undefined)
             return "—"
-        return qsTr("x %1  y %2").arg(num(x ?? 0)).arg(num(y ?? 0))
+        return qsTr("x %1  y %2").arg(num(x ?? 0)).arg(num(y ?? 0))
     }
     function triggerText() {
         const l = axes.left_trigger
@@ -225,7 +226,7 @@ Page {
     function gyroText() {
         if (axes.gyro_x === undefined && axes.gyro_y === undefined && axes.gyro_z === undefined)
             return "—"
-        return qsTr("x %1  y %2  z %3 °/s").arg(dec(axes.gyro_x ?? 0)).arg(dec(axes.gyro_y ?? 0)).arg(dec(axes.gyro_z ?? 0))
+        return qsTr("x %1  y %2  z %3 °/s").arg(dec(axes.gyro_x ?? 0)).arg(dec(axes.gyro_y ?? 0)).arg(dec(axes.gyro_z ?? 0))
     }
     // "Cross (south)": the family's word for a face button, then its position.
     function inputText(input) {
@@ -334,6 +335,9 @@ Page {
                             color: Theme.text
                             font.pixelSize: Theme.typeBody * page.u
                             font.features: { "tnum": 1 }
+                            // A long value ("x −1 204  y 18 090") takes a second line rather than an ellipsis.
+                            wrapMode: Text.Wrap
+                            maximumLineCount: 2
                             elide: Text.ElideRight
                         }
                     }
