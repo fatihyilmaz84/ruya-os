@@ -440,6 +440,11 @@
                             its own, so a confirmation cannot arrive late, expire or be used for
                             another call: it belongs to exactly this call for this id.
     -->
+    <!--
+      (RUY-444) While a Pair holds the adapter Pairable (up to 20 s), any other device that bonds is
+      removed again; the removal is logged and announced like a refused controller
+      (ControllerPairingRejected).
+    -->
     <method name="Pair">
       <arg name="id" type="s" direction="in"/>
       <arg name="keyboard_confirmed" type="b" direction="in"/>
@@ -455,8 +460,6 @@
     <!--
       Connect / disconnect a paired device. Connect of a keyboard-class device that is not trusted
       (never confirmed through Pair) answers "not-confirmed" and connects nothing (RUY-444).
-      Pair also removes any other device that bonds while its manual pairing holds Pairable open
-      (RUY-444); the removal is logged and announced like a refused controller.
     -->
     <method name="Connect">
       <arg name="id" type="s" direction="in"/>

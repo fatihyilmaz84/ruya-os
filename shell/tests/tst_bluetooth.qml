@@ -881,7 +881,7 @@ Item {
             openBluetoothPane()
             goTo("rowBtPairController")
             keyClick(Qt.Key_Return)
-            tryVerify(() => toastTexts().indexOf("A device that is not a controller was ignored.") >= 0, 3000)
+            tryVerify(() => toastTexts().indexOf("Another device tried to pair and was turned away.") >= 0, 3000)
             tryVerify(() => find("onboardingHintIgnored").visible, 2000, "and the screen says so")
             compare(Bluetooth.controllerPairing, "open")
         }

@@ -553,7 +553,7 @@ struct State {
     starting: bool,
     /// Manual pairings (`pair`) in progress: they hold `Pairable` open themselves.
     manual_pairs: u32,
-    /// The devices those manual pairings are for: a bond to anything else that comes in while
+    /// The devices those manual pairings are for (kept until none is running): a bond to anything else that comes in while
     /// Pairable is open is swept (RUY-444).
     manual_targets: HashSet<String>,
     /// The adapters (object paths) made not pairable and not discoverable once (after a crash in a
@@ -1035,6 +1035,11 @@ impl<B: Bluez> Bluetooth<B> {
         let status = self.pair_one(id, keyboard_confirmed, clock);
         let mut st = self.lock();
         st.manual_pairs = st.manual_pairs.saturating_sub(1);
+        if st.manual_pairs == 0 {
+            // Targets stay until the last overlapping pairing is done: one pairing's sweep must
+            // not remove the device another one just paired (RUY-444).
+            st.manual_targets.clear();
+        }
         status
     }
 
@@ -1104,7 +1109,6 @@ impl<B: Bluez> Bluetooth<B> {
             };
             if !window {
                 if let Err(e) = self.set_pairable(&adapter, true, "manual pairing") {
-                    self.lock().manual_targets.remove(&dev.id);
                     return map_error(&e.0, false);
                 }
             }
@@ -1115,7 +1119,6 @@ impl<B: Bluez> Bluetooth<B> {
                 }
                 self.sweep_manual(&bonded_before);
             }
-            self.lock().manual_targets.remove(&dev.id);
             if let Err(e) = paired {
                 log::info(&format!(
                     "pairing {} via manual failed: {}",
@@ -3442,6 +3445,32 @@ mod tests {
         bt.bluez.add_device(buds);
         bt.refresh().expect("reads");
         assert_eq!(bt.connect(KEYS), Status::Ok);
+    }
+
+    #[test]
+    fn overlapping_manual_pairings_do_not_sweep_each_others_device() {
+        let bt = Arc::new(window_bt());
+        let b = bt.clone();
+        let hook_done = Arc::new(Mutex::new(false));
+        let h = hook_done.clone();
+        bt.bluez.set_hook(Box::new(move |what| {
+            let mut first = h.lock().unwrap();
+            if what == "pair" && !*first {
+                *first = true;
+                drop(first);
+                // while the first pairing runs, a second one pairs and finishes
+                assert_eq!(b.pair(HEADSET, Instant::now), Status::Ok);
+            }
+        }));
+        assert_eq!(bt.pair(PAD, Instant::now), Status::Ok);
+        let calls = bt.bluez.calls();
+        assert!(
+            !calls.iter().any(|c| c.starts_with("remove")),
+            "nothing swept: {calls:?}"
+        );
+        bt.refresh().expect("reads");
+        assert!(bt.list().iter().all(|d| d.id != HEADSET || d.paired));
+        assert!(bt.list().iter().any(|d| d.id == PAD && d.paired));
     }
 
     #[test]

@@ -259,7 +259,7 @@ SettingsPane {
         }
         function onControllerRejected() {
             if (pane.visible)
-                Notifications.show(qsTr("A device that is not a controller was ignored."), "info")
+                Notifications.show(qsTr("Another device tried to pair and was turned away."), "info")
         }
         function onDevicesChanged() {
             pane.syncDevices()

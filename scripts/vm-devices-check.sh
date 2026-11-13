@@ -281,10 +281,6 @@ elif old["name"]["data"] != "Living room pad" or old["device_name"]["data"] != "
     print("wrong: name is the alias and device_name the model")
 elif old["family"]["data"] != "playstation":
     print("wrong: a renamed DualSense keeps its family")
-elif rows.get("CONNECT_UNTRUSTED") != ["not-confirmed"]:
-    print("wrong: Connect of a bonded, untrusted keyboard answered %r" % (rows.get("CONNECT_UNTRUSTED"),))
-elif rows.get("CONNECT_CONFIRMED") != ["ok"]:
-    print("wrong: Connect of the keyboard confirmed through Pair answered %r" % (rows.get("CONNECT_CONFIRMED"),))
 else:
     print("VERDICT ok")
 ' 2>&1)"
@@ -324,8 +320,6 @@ bluetooth_two_adapters_check() {
         echo "CONNECT $(call Connect s AA:00:00:00:00:11)"
         echo "FORGET $(call Forget s AA:00:00:00:00:11)"
         echo "LIST2 $(call ListDevices)"
-        echo "CONNECT_UNTRUSTED $(call Connect s AA:00:00:00:00:07)"
-        echo "CONNECT_CONFIRMED $(call Connect s AA:00:00:00:00:06)"
         kill "$pid" 2>/dev/null
         wait "$pid" 2>/dev/null
     ' 2>&1)"
@@ -570,6 +564,8 @@ bluetooth_keyboard_check() {
         echo "LIST1 $(call ListDevices)"
         echo "CONFIRMED $(call Pair sb AA:00:00:00:00:06 true)"
         echo "LIST2 $(call ListDevices)"
+        echo "CONNECT_UNTRUSTED $(call Connect s AA:00:00:00:00:07)"
+        echo "CONNECT_CONFIRMED $(call Connect s AA:00:00:00:00:06)"
         kill "$pid" 2>/dev/null
         wait "$pid" 2>/dev/null
     ' 2>&1)"
@@ -597,6 +593,10 @@ elif K not in refused or refused[K]["paired"]["data"] is not False:
     print("wrong: the refused keyboard must stay unpaired")
 elif rows.get("CONFIRMED") != ["ok"] or K not in done or done[K]["paired"]["data"] is not True:
     print("wrong: Pair with the confirmation answered %r" % (rows.get("CONFIRMED"),))
+elif rows.get("CONNECT_UNTRUSTED") != ["not-confirmed"]:
+    print("wrong: Connect of a bonded, untrusted keyboard answered %r" % (rows.get("CONNECT_UNTRUSTED"),))
+elif rows.get("CONNECT_CONFIRMED") != ["ok"]:
+    print("wrong: Connect of the keyboard confirmed through Pair answered %r" % (rows.get("CONNECT_CONFIRMED"),))
 else:
     print("VERDICT ok")
 ' 2>&1)"
