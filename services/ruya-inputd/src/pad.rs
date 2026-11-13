@@ -6,6 +6,7 @@
 /// Linux event types and codes used here (linux/input-event-codes.h).
 pub mod code {
     pub const EV_SYN: u16 = 0x00;
+    pub const SYN_REPORT: u16 = 0x00;
     pub const EV_KEY: u16 = 0x01;
     pub const EV_ABS: u16 = 0x03;
     pub const EV_FF: u16 = 0x15;
@@ -422,6 +423,43 @@ pub fn test_events(ev_type: u16, ev_code: u16, value: i32, inputs: &[PadInput]) 
     }
 }
 
+/// What one evdev `SYN_REPORT` frame of a pad brings: the normalised input for the router and the
+/// events for a running button test.
+#[derive(Debug, Default, PartialEq)]
+pub struct Frame {
+    pub inputs: Vec<PadInput>,
+    pub tests: Vec<TestEvent>,
+}
+
+impl Normalizer {
+    /// Splits what one read of the node returned (`(type, code, value)`; a read can hold several
+    /// frames) into one `Frame` per `SYN_REPORT`, so the router sees every frame on its own: a
+    /// release and a press of one button in two frames both reach the virtual pad instead of
+    /// cancelling out in one batch. Events after the last `SYN_REPORT` form a final frame. Frames
+    /// without input are left out.
+    pub fn frames(&mut self, events: impl IntoIterator<Item = (u16, u16, i32)>) -> Vec<Frame> {
+        let mut out = Vec::new();
+        let mut frame = Frame::default();
+        for (ev_type, ev_code, value) in events {
+            if ev_type == code::EV_SYN && ev_code == code::SYN_REPORT {
+                if !frame.inputs.is_empty() || !frame.tests.is_empty() {
+                    out.push(std::mem::take(&mut frame));
+                }
+                continue;
+            }
+            let normal = self.event(ev_type, ev_code, value);
+            frame
+                .tests
+                .extend(test_events(ev_type, ev_code, value, &normal));
+            frame.inputs.extend(normal);
+        }
+        if !frame.inputs.is_empty() || !frame.tests.is_empty() {
+            out.push(frame);
+        }
+        out
+    }
+}
+
 /// One event for a virtual pad: (type, code, value). A batch ends with its own `SYN_REPORT`,
 /// added by the writer.
 pub type OutEvent = (u16, u16, i32);
@@ -595,6 +633,54 @@ mod tests {
         assert!(test_events(code::EV_KEY, 0x2c0, 2, &[]).is_empty());
         assert!(test_events(code::EV_ABS, code::ABS_HAT0X, 0, &[]).is_empty());
         assert!(test_events(code::EV_SYN, 0, 0, &[]).is_empty());
+    }
+
+    #[test]
+    fn one_read_with_several_frames_gives_one_frame_each() {
+        // A release and a press of South, each with its own SYN_REPORT, in one read (RUY-493):
+        // two frames, so the router sees both and the virtual pad is written twice.
+        let mut ps = dualsense();
+        let syn = (code::EV_SYN, code::SYN_REPORT, 0);
+        let frames = ps.frames([
+            (code::EV_KEY, code::BTN_SOUTH, 0),
+            syn,
+            (code::EV_KEY, code::BTN_SOUTH, 1),
+            syn,
+        ]);
+        let inputs: Vec<Vec<PadInput>> = frames.iter().map(|f| f.inputs.clone()).collect();
+        assert_eq!(
+            inputs,
+            vec![
+                vec![PadInput::Button(PadButton::South, false)],
+                vec![PadInput::Button(PadButton::South, true)]
+            ]
+        );
+        assert_eq!(frames[0].tests.len(), 1);
+        assert_eq!(frames[1].tests.len(), 1);
+        // Several events of one frame stay together; frames without input and a trailing frame
+        // without its SYN_REPORT are handled.
+        let frames = ps.frames([
+            syn,
+            (code::EV_KEY, code::BTN_EAST, 1),
+            (code::EV_KEY, 0x2c0, 2),
+            (code::EV_KEY, code::BTN_START, 1),
+            syn,
+            syn,
+            (code::EV_KEY, code::BTN_EAST, 0),
+        ]);
+        assert_eq!(frames.len(), 2);
+        assert_eq!(
+            frames[0].inputs,
+            vec![
+                PadInput::Button(PadButton::East, true),
+                PadInput::Button(PadButton::Start, true)
+            ]
+        );
+        assert_eq!(
+            frames[1].inputs,
+            vec![PadInput::Button(PadButton::East, false)]
+        );
+        assert!(ps.frames([syn, syn]).is_empty());
     }
 
     #[test]

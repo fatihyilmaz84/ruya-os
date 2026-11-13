@@ -344,6 +344,21 @@ class Game:
             return [tuple(e) for e in json.loads(answer[7:])]
         return answer
 
+    def events_until(self, want, timeout_ms=2000):
+        """Reads until `want(events so far)` holds or `timeout_ms` is up (so timing cannot fail a
+        check), then 100 ms more to catch a surplus event; what was read, or the error."""
+        got = []
+        end = time.monotonic() + timeout_ms / 1000
+        while True:
+            ev = self.events(100)
+            if not isinstance(ev, list):
+                return ev
+            got += ev
+            if want(got) or time.monotonic() >= end:
+                break
+        more = self.events(100)
+        return got + more if isinstance(more, list) else more
+
     def close(self):
         try:
             self.ask("quit")
@@ -651,18 +666,18 @@ def cmd_check(args):
         game.events(100)
         status = bus.call(SVC, PATH, IFC, "AssignProfile", [args.profile, "global", "", "vm-check-swap"])
         expect(status == "ok", "profiles: AssignProfile global: ok", f"profiles: AssignProfile answered {status}")
-        ev = game.events()
+        ev = game.events_until(lambda ev: (EV_KEY, BTN_SOUTH, 0) in ev and (EV_KEY, BTN_EAST, 1) in ev)
         expect(isinstance(ev, list) and (EV_KEY, BTN_SOUTH, 0) in ev and (EV_KEY, BTN_EAST, 1) in ev,
                "profiles: the held South turns into East on the virtual pad at once", f"profiles: virtual pad read {ev}")
         pad.emit(EV_KEY, BTN_SOUTH, 0)
         pad.emit(EV_KEY, BTN_SOUTH, 1)
-        ev = game.events()
+        ev = game.events_until(lambda ev: (EV_KEY, BTN_EAST, 0) in ev and (EV_KEY, BTN_EAST, 1) in ev)
         expect(isinstance(ev, list) and (EV_KEY, BTN_EAST, 0) in ev and (EV_KEY, BTN_EAST, 1) in ev
                and not any(c == BTN_SOUTH for _, c, _ in ev),
                "profiles: a press of South reaches the game as East (the remap changes the pad's output)",
                f"profiles: virtual pad read {ev}")
         status = bus.call(SVC, PATH, IFC, "AssignProfile", [args.profile, "global", "", ""])
-        ev = game.events()
+        ev = game.events_until(lambda ev: (EV_KEY, BTN_EAST, 0) in ev and (EV_KEY, BTN_SOUTH, 1) in ev)
         expect(status == "ok" and isinstance(ev, list) and (EV_KEY, BTN_EAST, 0) in ev and (EV_KEY, BTN_SOUTH, 1) in ev,
                "profiles: without the assignment the held button is South again", f"profiles: {status}, virtual pad read {ev}")
         status = bus.call(SVC, PATH, IFC, "DeleteProfile", [args.profile, "vm-check-swap"])

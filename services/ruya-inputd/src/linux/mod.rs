@@ -26,9 +26,7 @@ use crate::dbus::{serve, DynBackend, Shared};
 use crate::identity::{self, Hardware};
 use crate::mapping::{KeyEvent, NavKey};
 use crate::notify::{watchdog_interval, Notifier};
-use crate::pad::{
-    code, test_events, Normalizer, OutEvent, PadLayout, Range, Rumble, OWN_PHYS_PREFIX,
-};
+use crate::pad::{code, Normalizer, OutEvent, PadLayout, Range, Rumble, OWN_PHYS_PREFIX};
 use crate::routing::{Backend, Created, PadInfo, PadKey, Router, VirtualId, VirtualSpec};
 use crate::udev::{database_properties, parse_monitor_message};
 use sys::UinputPad;
@@ -460,20 +458,19 @@ fn pump(mut device: Device, mut normalizer: Normalizer, mut serving: Serving) {
                 return;
             }
         };
-        let mut inputs = Vec::new();
-        let mut tests = Vec::new();
-        for ev in events {
-            let (ev_type, ev_code, value) = (ev.event_type().0, ev.code(), ev.value());
-            let normal = normalizer.event(ev_type, ev_code, value);
-            tests.extend(test_events(ev_type, ev_code, value, &normal));
-            inputs.extend(normal);
-        }
-        if !inputs.is_empty() || !tests.is_empty() {
+        // One router call per SYN_REPORT frame: a read can hold several, and a release and a press
+        // of one button in one call would cancel out on the virtual pad (RUY-493).
+        let frames = normalizer.frames(
+            events
+                .into_iter()
+                .map(|ev| (ev.event_type().0, ev.code(), ev.value())),
+        );
+        for frame in frames {
             serving.shared.with(|r| {
-                if !inputs.is_empty() {
-                    r.input(serving.key, &inputs);
+                if !frame.inputs.is_empty() {
+                    r.input(serving.key, &frame.inputs);
                 }
-                r.test_input(serving.key, &tests, Instant::now());
+                r.test_input(serving.key, &frame.tests, Instant::now());
             });
         }
     }

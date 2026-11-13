@@ -2508,6 +2508,17 @@ mod tests {
             writes(&r.backend_mut().take()),
             vec![(1, vec![(code::EV_KEY, code::BTN_EAST, 0)])]
         );
+        // The next press on the same virtual pad follows the profile too (RUY-493).
+        r.input(a, &[press(PadButton::South)]);
+        assert_eq!(
+            writes(&r.backend_mut().take()),
+            vec![(1, vec![(code::EV_KEY, code::BTN_EAST, 1)])]
+        );
+        r.input(a, &[release(PadButton::South)]);
+        assert_eq!(
+            writes(&r.backend_mut().take()),
+            vec![(1, vec![(code::EV_KEY, code::BTN_EAST, 0)])]
+        );
         // Guide stays the console's whatever the profile says.
         r.input(a, &[press(PadButton::Guide)]);
         let calls = r.backend_mut().take();
@@ -2533,6 +2544,28 @@ mod tests {
         assert_eq!(
             writes(&r.backend_mut().take()),
             vec![(2, vec![(code::EV_KEY, code::BTN_SOUTH, 1)])]
+        );
+    }
+
+    #[test]
+    fn a_release_and_a_press_in_separate_frames_both_reach_the_virtual_pad() {
+        // The router sees one `input` call per evdev frame (`Normalizer::frames`): the release and
+        // the press of a held button after a profile swap are two calls, two writes.
+        let mut r = router();
+        let a = r.add_pad(pad("a"), t0());
+        app(&mut r, "i1", STK, "p1");
+        r.input(a, &[press(PadButton::South)]);
+        r.save_profile("p1", SWAP);
+        r.assign_profile("p1", "global", "", "swap");
+        r.backend_mut().take();
+        r.input(a, &[release(PadButton::South)]);
+        r.input(a, &[press(PadButton::South)]);
+        assert_eq!(
+            writes(&r.backend_mut().take()),
+            vec![
+                (1, vec![(code::EV_KEY, code::BTN_EAST, 0)]),
+                (1, vec![(code::EV_KEY, code::BTN_EAST, 1)])
+            ]
         );
     }
 
