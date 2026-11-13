@@ -200,6 +200,8 @@ Item {
             if (!shotsDir)
                 skip("set RUYA_SHOTS_DIR to save screenshots")
             DeviceSettings.language = "en"
+            host.width = 1500                    // the window must hold the biggest sheet: a grab is clipped to it
+            host.height = 820
             for (const theme of ["dreamglass", "daylight"]) {
                 DeviceSettings.theme = theme
                 for (const size of [160, 40, 32, 24]) {
@@ -212,6 +214,8 @@ Item {
                 }
             }
             DeviceSettings.theme = "dreamglass"
+            host.width = 800
+            host.height = 300
         }
 
         // Relative luminance (WCAG) of a colour, and the contrast ratio of two.
