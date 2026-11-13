@@ -1,0 +1,180 @@
+<!DOCTYPE node PUBLIC "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
+ "http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
+<!--
+  org.ruyaos.Notifications1 — the notification centre's history, per profile, and its settings.
+  DRAFT, shell-facing half only (RUY-413). The service, the per-profile store, the bridge that
+  receives notifications from apps on each profile's bus and the app-facing side (freedesktop
+  org.freedesktop.Notifications or Platform1, still to be decided) are RUY-88 (T-245). Until that
+  service exists the shell runs against its mock (MockNotificationsBackend), which follows this
+  contract. Bus name org.ruyaos.Notifications1 on the system bus at /org/ruyaos/Notifications1;
+  the bus policy will let only ruya-shell and root call it (CLAUDE.md, restrictive policies).
+  Contract between shell (Qt/QML) and services (Rust); see docs/specs/03-services-and-apps.md §1.4.
+
+  Stability: the interface is experimental (the annotation below). It is tagged on the interface
+  only, not per element, so nothing here is public to apps (docs/developers/api-surface.md: a tag
+  on an element makes it public); RUY-88 decides the app side.
+
+  One list, one entry point (T-245 scope 4): every notification the console shows is an item here.
+  The shell's own sources (system, updates, devices, store) Post their items; apps' items arrive
+  through the bridge (RUY-88) with source "app". The shell toasts what it posts itself at once and
+  toasts an Added item of source "app" when it arrives.
+
+  Item (the struct of List and Added), in this order:
+    id        u      unique on the console (never reused while the service runs), > 0
+    source    s      "system" | "updates" | "devices" | "store" | "app"
+    app_id    s      the Flatpak id of the app that sent it ("" for the console's own sources)
+    kind      s      "info" | "success" | "warning" | "error" (the toast's look)
+    title     s      one line, plain text (no markup is ever interpreted)
+    body      s      an optional second line, plain text ("" when none)
+    icon      s      an icon name of the shell's icon set ("" = the kind's own glyph)
+    actions   a(ss)  at most two (action id, label); the first is the main one
+    urgency   s      "low" | "normal" | "critical" (critical breaks through "Don't interrupt
+                     games": thermal critical, an imminent update restart, the low battery of the
+                     only controller)
+    pinned    b      kept on top until its source withdraws it: the user cannot clear it, the caps
+                     below never drop it
+    unread    b      not yet seen in the centre (MarkRead clears it)
+    time      x      when it was posted, unix milliseconds
+
+  Caps (per profile): at most 50 items and none older than 7 days; the oldest unpinned items go
+  first. Removed reports what a cap dropped (reason "expired").
+
+  Order of List: pinned items first, then newest first (by time, then by id).
+
+  Status strings (the reply of every method but List) are stable API:
+    "ok"         done
+    "unknown"    no item with that id (already cleared, or another profile's)
+    "pinned"     Dismiss of a pinned item: only its source can withdraw it
+    "invalid"    a malformed argument (empty title, unknown kind, source or urgency, more than two
+                 actions, an action id the item does not offer, a profile that does not exist)
+    "forbidden"  the caller may not do this (Post from anyone but ruya-shell or root)
+    "failed"     internal error
+
+  Profiles: `profile` is a Profiles1 id. Items are private to their profile. The settings
+  properties are the active profile's (Profiles1.ActiveProfile) and follow it.
+-->
+<node>
+  <interface name="org.ruyaos.Notifications1">
+    <annotation name="org.ruyaos.Stability" value="experimental"/>
+
+    <!-- The profile's items, in the order above. Fails with a D-Bus error only on an internal
+         error; an unknown profile has no items. -->
+    <method name="List">
+      <arg name="profile" type="s" direction="in"/>
+      <arg name="items" type="a(ussssssa(ss)sbbx)" direction="out"/>
+    </method>
+
+    <!-- Clears one item (X in the centre). A pinned item answers "pinned" and stays. Removed
+         follows (reason "dismissed"). -->
+    <method name="Dismiss">
+      <arg name="id" type="u" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <!-- Clears every item of the profile except the pinned ones (Clear all). Removed follows
+         (reason "cleared") when anything went; "ok" also when nothing was there. -->
+    <method name="DismissAll">
+      <arg name="profile" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <!-- Runs one of the item's actions (A on its pill). An app's item: the bridge hands the action
+         back to the app (RUY-88). The console's own items: the shell has already run it; the call
+         records it. Clears the item (Removed, reason "invoked") unless it is pinned: a pinned item
+         stays until its source withdraws it. -->
+    <method name="Invoke">
+      <arg name="id" type="u" direction="in"/>
+      <arg name="action" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <!-- Marks every item of the profile read (opening the centre). Changed follows when an item
+         changed. -->
+    <method name="MarkRead">
+      <arg name="profile" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <!-- The shell's own sources (RUY-413: the extension of the shell half, so its toasts and the
+         services' notices land in the same list). `key` ("" = none) names a lasting state, such as
+         "update-restart": a new Post with the same key replaces the profile's earlier item with it
+         (Removed, reason "replaced", then Added), and Withdraw ends it. Unread, time and id are the
+         service's. Only ruya-shell and root ("forbidden" otherwise). `id` is 0 unless "ok". -->
+    <method name="Post">
+      <arg name="profile" type="s" direction="in"/>
+      <arg name="key" type="s" direction="in"/>
+      <arg name="source" type="s" direction="in"/>
+      <arg name="app_id" type="s" direction="in"/>
+      <arg name="kind" type="s" direction="in"/>
+      <arg name="title" type="s" direction="in"/>
+      <arg name="body" type="s" direction="in"/>
+      <arg name="icon" type="s" direction="in"/>
+      <arg name="actions" type="a(ss)" direction="in"/>
+      <arg name="urgency" type="s" direction="in"/>
+      <arg name="pinned" type="b" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+      <arg name="id" type="u" direction="out"/>
+    </method>
+
+    <!-- A keyed state is over (the restart was called off, the console cooled down): the item with
+         this key goes from every profile (Removed, reason "withdrawn"), pinned or not. "ok" also when
+         no item had the key. Only ruya-shell and root. -->
+    <method name="Withdraw">
+      <arg name="key" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <!-- Quiet mode: no toast and no cue; items are still kept and counted unread. Default false. -->
+    <property name="Quiet" type="b" access="readwrite">
+      <annotation name="org.freedesktop.DBus.Property.EmitsChangedSignal" value="true"/>
+    </property>
+
+    <!-- While an app is in front only critical items show (as the compact toast). Default true. -->
+    <property name="DontInterruptGames" type="b" access="readwrite">
+      <annotation name="org.freedesktop.DBus.Property.EmitsChangedSignal" value="true"/>
+    </property>
+
+    <!-- Quiet mode on a schedule (RUY-414): (enabled, from, to), local "HH:MM" in the console's time
+         zone; `to` may be before `from` (over midnight). Default (false, "22:00", "07:00"). -->
+    <property name="QuietHours" type="(bss)" access="readwrite">
+      <annotation name="org.freedesktop.DBus.Property.EmitsChangedSignal" value="true"/>
+    </property>
+
+    <!-- How long a toast stays, in seconds (RUY-414), 2..15. Default 4. -->
+    <property name="ToastSeconds" type="u" access="readwrite">
+      <annotation name="org.freedesktop.DBus.Property.EmitsChangedSignal" value="true"/>
+    </property>
+
+    <!-- The notification cue (the UI sounds channel) on or off (RUY-414). Default true. -->
+    <property name="Sounds" type="b" access="readwrite">
+      <annotation name="org.freedesktop.DBus.Property.EmitsChangedSignal" value="true"/>
+    </property>
+
+    <!-- Per-source switches (RUY-414): source ("system", "updates", "devices", "store", or
+         "app:<app id>") -> on. A source that is not listed is on. An item of a source that is off
+         is not kept and not shown. -->
+    <property name="SourcesEnabled" type="a{sb}" access="readwrite">
+      <annotation name="org.freedesktop.DBus.Property.EmitsChangedSignal" value="true"/>
+    </property>
+
+    <!-- A new item (Post, an app's notification, a replacement). -->
+    <signal name="Added">
+      <arg name="profile" type="s"/>
+      <arg name="item" type="(ussssssa(ss)sbbx)"/>
+    </signal>
+
+    <!-- Items went. reason: "dismissed" | "cleared" | "invoked" | "withdrawn" | "replaced" |
+         "expired". -->
+    <signal name="Removed">
+      <arg name="profile" type="s"/>
+      <arg name="ids" type="au"/>
+      <arg name="reason" type="s"/>
+    </signal>
+
+    <!-- Items of the profile changed in place (read state): the client lists again. -->
+    <signal name="Changed">
+      <arg name="profile" type="s"/>
+    </signal>
+
+  </interface>
+</node>

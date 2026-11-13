@@ -48,6 +48,8 @@ Item {
             while (Notifications.model.count > 0)
                 Notifications.dismiss(Notifications.model.get(0).toastId)
             Notifications.pending = []
+            NotificationCentre.mockReset()
+            tryCompare(NotificationCentre, "dontInterruptGames", true)
         }
 
         // activeFocus is false everywhere when the OS deactivates the test window (another
@@ -181,9 +183,13 @@ Item {
             Notifications.remove("s")
         }
 
+        // The compact look, with "Don't interrupt games" off: then warnings and errors show over an app
+        // (with it on, the default, only critical items do: tst_notifications, RUY-413).
         function test_toast_compact_when_app_in_front() {
             const layer = find("toastLayer")
             const list = find("toastList")
+            NotificationCentre.setDontInterruptGames(false)
+            tryCompare(NotificationCentre, "dontInterruptGames", false)
             Notifications.show("Info toast", "info")
             Notifications.show("Warn toast", "warning", "", "", "with a detail")
             compare(list.width, 600 * layer.u)
@@ -200,6 +206,8 @@ Item {
             compare(list.width, 600 * layer.u)
             tryCompare(Notifications.model, "count", 2)
             tc.cleanup()
+            NotificationCentre.setDontInterruptGames(false)
+            tryCompare(NotificationCentre, "dontInterruptGames", false)
             Notifications.showSticky("s", "Sticky", "warning", "", "detail", "Press any button to wait", "A")
             Notifications.appInFront = true
             tryCompare(Notifications.model, "count", 1)
@@ -230,9 +238,9 @@ Item {
                 Notifications.show("Toast " + i, "info")
             compare(Notifications.pendingCount, 2)
             verify(chip.visible)
-            compare(find("toastOverflowText").text, "2 more")
+            compare(find("toastOverflowText").text, "2 more in Notifications")
             Notifications.dismiss(Notifications.model.get(0).toastId)
-            compare(find("toastOverflowText").text, "1 more")
+            compare(find("toastOverflowText").text, "1 more in Notifications")
             Notifications.dismiss(Notifications.model.get(0).toastId)
             verify(!chip.visible, "hidden at 0")
         }
@@ -338,12 +346,16 @@ Item {
         function toastRest(suffix, texts) {
             tc.clearToasts()
             tryVerify(() => listSettled([]), 5000, "the stack is gone")
+            NotificationCentre.setDontInterruptGames(false)       // the compact error: the rule with it off
+            tryCompare(NotificationCentre, "dontInterruptGames", false)
             Notifications.show(texts[7], "error", "", "", texts[8])
             Notifications.appInFront = true
             tryVerify(() => listSettled([texts[7]]) && find("toastList").width === 480 * find("toastLayer").u, 5000, "the compact error is at rest")
             grabImage(tc.shell).save(shotsDir + "/14b-toast-over-app" + suffix + ".png")
             tc.clearToasts()
             Notifications.appInFront = false
+            NotificationCentre.setDontInterruptGames(true)
+            tryCompare(NotificationCentre, "dontInterruptGames", true)
             tryVerify(() => listSettled([]), 5000, "the error is gone")
             Update.mockAnnounceRestart(Math.floor(Date.now() / 1000) + 120)
             tryVerify(() => Notifications.model.count === 1 && Notifications.model.get(0).key === "update-restart")

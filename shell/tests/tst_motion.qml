@@ -70,8 +70,10 @@ Item {
             if (!find("sectionNav").activeFocus)
                 keyClick(Qt.Key_Up)                    // the section nav
             tryVerify(() => find("sectionNav").activeFocus, 2000, "the section nav has focus")
-            for (let i = 0; i < 4; ++i)
+            // Right to the gear, the last pill, and no further: Right from the gear goes on to the bell (RUY-413).
+            for (let i = 0; i < 4 && find("sectionNav").currentIndex < 4; ++i)
                 keyClick(Qt.Key_Right)
+            tryCompare(find("sectionNav"), "currentIndex", 4)
             keyClick(Qt.Key_Return)
             tryVerify(() => find("page_settings") !== null && find("page_settings").activeFocus, 2000, "Settings has focus")
         }

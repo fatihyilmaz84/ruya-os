@@ -25,17 +25,19 @@ Item {
         target: Bluetooth
         function onBatteryLow(id, name, percent, kind, family) {
             Notifications.show(qsTr("%1: battery low (%2%)").arg(name).arg(percent), "warning", "",
-                               DeviceIcons.iconFor(kind, family))
+                               DeviceIcons.iconFor(kind, family), "", { source: "devices" })
         }
     }
 
     // A controller (UPower) is discharging at 15 % or less (once per crossing, Batteries.batteryLow).
-    // This is the only low-battery toast for controllers: Bluetooth.batteryLow skips them.
+    // This is the only low-battery toast for controllers: Bluetooth.batteryLow skips them. The low
+    // battery of the only controller is critical (RUY-413): it breaks through "Don't interrupt games".
     Connections {
         target: Batteries
         function onBatteryLow(id, name, percent, family) {
             Notifications.show(qsTr("Controller battery low"), "warning", "", DeviceIcons.iconFor("controller", family),
-                               qsTr("%1 · %2%").arg(DeviceIcons.padName(id, name, family)).arg(percent))
+                               qsTr("%1 · %2%").arg(DeviceIcons.padName(id, name, family)).arg(percent),
+                               { source: "devices", urgency: Bluetooth.gamepads.length <= 1 ? "critical" : "normal" })
         }
     }
 
@@ -47,11 +49,12 @@ Item {
         function onDriveAdded(drive, label, volumeCount) {
             Notifications.show(qsTr("Drive inserted"), "info", "", "usb",
                                volumeCount > 1 ? qsTr("%1 (and %n more)", "", volumeCount - 1).arg(label)
-                                               : label)
+                                               : label,
+                               { source: "devices", actions: [{ id: "settings:storage", label: qsTr("Open Settings") }] })
         }
         function onFinished(op, id, status) {
             if (op === "eject" && status === "ok")
-                Notifications.show(qsTr("Safe to remove"), "success")
+                Notifications.show(qsTr("Safe to remove"), "success", "", "usb", "", { source: "devices" })
         }
     }
 
@@ -98,6 +101,7 @@ Item {
             required property string detail
             required property string footer
             required property string footerButton
+            required property string footerIcon
             required property bool sticky
 
             readonly property color accent: Theme.toastColor(kind)
@@ -213,7 +217,8 @@ Item {
                 }
             }
 
-            // A sticky instruction ("Press any button to wait"), under the text column.
+            // A sticky instruction ("Press any button to wait"), or where the item's actions are ("Restart
+            // now is in Notifications", with the bell: RUY-413), under the text column.
             Row {
                 id: footerRow
                 objectName: "toastFooter"
@@ -228,9 +233,21 @@ Item {
                     button: toast.footerButton
                     u: layer.u
                 }
+                Icon {
+                    id: footerBell
+                    objectName: "toastFooterIcon"
+                    visible: toast.footerIcon !== "" && toast.footerButton === ""
+                    anchors.verticalCenter: parent.verticalCenter
+                    name: toast.footerIcon
+                    size: 32
+                    u: layer.u
+                    color: Theme.text
+                }
                 Text {
                     objectName: "toastFooterText"
+                    anchors.verticalCenter: parent.verticalCenter
                     width: parent.width - (footerGlyph.visible ? footerGlyph.width + parent.spacing : 0)
+                                        - (footerBell.visible ? footerBell.width + parent.spacing : 0)
                     text: toast.footer
                     textFormat: Text.PlainText
                     color: Theme.text
@@ -300,7 +317,7 @@ Item {
             Icon { name: "notifications"; size: 32; u: layer.u; color: Theme.textDim }
             Text {
                 objectName: "toastOverflowText"
-                text: qsTr("%n more", "", Notifications.pendingCount)
+                text: qsTr("%n more in Notifications", "", Notifications.pendingCount)
                 color: Theme.text
                 font.pixelSize: Theme.typeCaption * layer.u
             }

@@ -76,7 +76,8 @@ Item {
             return found
         }
 
-        // The pill is laid out when it is as wide as the row inside it plus its padding. The budget
+        // The pill is laid out when it is as wide as the row inside it plus the bell's slot on the left
+        // (RUY-413) and its padding on the right. The budget
         // that picks the chips is computed at once from the fonts, but the Row (and so the pill) follows
         // one frame later, and the clock text changes width (HH:mm in a proportional font) every
         // minute: right after either, the pill's edge is still the old one (the gap read 23 or 25 px
@@ -84,7 +85,7 @@ Item {
         function pillIsLaidOut() {
             const pill = find("statusGlass")
             const inner = find("batteryStatus").parent
-            return Math.abs(pill.width - (inner.width + 2 * Theme.spaceL * tc.shell.u)) < 0.5
+            return Math.abs(pill.width - (inner.width + pill.bellSlot + Theme.spaceL * tc.shell.u)) < 0.5
         }
         // "" when the cluster clears the nav and sits in the safe area, else what is wrong.
         function clusterProblem(size, what) {
@@ -162,8 +163,11 @@ Item {
                     tryCompare(find("activeProfileName"), "text", name)
                     checkCluster(size, "'" + name + "'", devices)
                     const chipsShown = chipIds().length
+                    // The bell (RUY-413) takes 64 u of the room: four full pads ("100%", three digits) now leave Ada
+                    // one or two chips and the rest in "N more", by a few pixels of the clock's width (two chips need
+                    // 11 px more at 720p with "07:59"); before the bell two always fitted.
                     if (name === "Ada")
-                        verify(chipsShown >= 2, "a short name leaves room for chips at " + size[1] + "p: " + chipsShown)
+                        verify(chipsShown >= 1, "a short name leaves room for a chip at " + size[1] + "p: " + chipsShown)
                     if (name === names[4] && size[1] === 720) {
                         verify(find("activeProfileName").truncated, "the 32-character name elides at 720p")
                         verify(chipsShown < 3 || find("batteryMore").visible, "fewer chips or a +N: " + chipsShown)
@@ -386,7 +390,7 @@ Item {
         function test_the_chip_shrinks_to_plus_n_in_a_narrow_room() {
             Batteries.mockPopulate()
             const compact = []
-            for (const width of [narrowestRoom(), 1320, 1400, 1920]) {
+            for (const width of [narrowestRoom(), 1384, 1464, 1920]) {
                 openShell(width, 1080)
                 tryVerify(() => find("batteryMore").visible, 2000, "the chip at " + width)
                 find("statusClock").text = "88:88"   // the widest time of day, not the minute the test runs in
@@ -403,12 +407,13 @@ Item {
             compare(compact[compact.length - 1], false, "wide: the words")
         }
 
-        // The narrowest 1080p window (from 1290 px, in 2 px steps) where the "+N" chip alone fits beside the
-        // shortest name with the widest clock. Below it the pill may reach into the nav's gap by design
+        // The narrowest 1080p window (from 1354 px, in 2 px steps) where the "+N" chip alone fits beside the
+        // shortest name with the widest clock (the range moved by the bell's 64 px at 1080p, RUY-413: the
+        // bell's slot, 8 + 76 + 16 u, less the 36 u of padding it replaces). Below it the pill may reach into the nav's gap by design
         // (Shell.qml, fitChips' last case), and where that starts depends on the host's font rendering: a
         // fixed 1290 fitted on Windows but not on Fedora (CI red whenever the clock read wide, lead-9).
         function narrowestRoom() {
-            for (let width = 1290; width <= 1320; width += 2) {
+            for (let width = 1354; width <= 1384; width += 2) {
                 openShell(width, 1080)
                 tryVerify(() => find("batteryMore").visible, 2000, "the chip at " + width)
                 find("statusClock").text = "88:88"
@@ -419,7 +424,7 @@ Item {
                 if (fits)
                     return width
             }
-            fail("the cluster fits in no 1080p window up to 1320 px")
+            fail("the cluster fits in no 1080p window up to 1384 px")
             return 0
         }
 
@@ -429,8 +434,10 @@ Item {
             for (let i = 0; i < 4; ++i)
                 keyClick(Qt.Key_Right)                             // ... to the last pill
             tryCompare(find("sectionNav"), "currentIndex", 4)
-            keyClick(Qt.Key_Right)                                 // ... and on to the cluster
-            tryVerify(() => find("batteryMore").activeFocus, 2000, "Right from the last pill reaches the +N chip")
+            keyClick(Qt.Key_Right)                                 // ... on to the cluster's bell (RUY-413)
+            tryVerify(() => find("notificationBell").activeFocus, 2000, "Right from the last pill reaches the bell")
+            keyClick(Qt.Key_Right)                                 // ... and on to the chip
+            tryVerify(() => find("batteryMore").activeFocus, 2000, "Right from the bell reaches the +N chip")
         }
 
         function test_plus_n_opens_the_hidden_list() {
@@ -462,9 +469,14 @@ Item {
             tryVerify(() => list.shown)
             keyClick(Qt.Key_Return)
             tryVerify(() => !list.shown && more.activeFocus, 2000, "Accept on Close closes too, focus on the chip")
-            // The chip leads back: Left to the last pill, and Right again; Down into the page; Back leaves Home alone.
+            // The chip leads back: Left to the bell, Left to the last pill, and Right twice again; Down into the
+            // page; Back leaves Home alone.
+            keyClick(Qt.Key_Left)
+            tryVerify(() => find("notificationBell").activeFocus, 2000, "Left: the bell")
             keyClick(Qt.Key_Left)
             tryVerify(() => find("sectionNav").activeFocus && find("sectionNav").currentIndex === 4, 2000, "Left: the last pill")
+            keyClick(Qt.Key_Right)
+            tryVerify(() => find("notificationBell").activeFocus)
             keyClick(Qt.Key_Right)
             tryVerify(() => more.activeFocus)
             keyClick(Qt.Key_Down)

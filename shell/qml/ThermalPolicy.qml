@@ -50,7 +50,8 @@ Item {
             DeviceSettings.thermalLimited = true
             if (!hotNotified) {
                 hotNotified = true
-                Notifications.show(qsTr("The console is running hot (%1). Effects are reduced.").arg(sensorName()), "warning")
+                Notifications.show(qsTr("The console is running hot (%1). Effects are reduced.").arg(sensorName()), "warning", "",
+                                   "device_thermostat")
             }
         } else if (level === "normal") {
             DeviceSettings.thermalLimited = false
@@ -68,6 +69,10 @@ Item {
         notice.sensorText = sensorText()
         tick()
         notice.open()
+        // Pinned in the notification centre until the console has cooled down (RUY-413); no toast,
+        // the notice above says it.
+        Notifications.keep("thermal-critical", qsTr("The console is too hot"), "error", "device_thermostat",
+                           sensorText(), { source: "system", urgency: "critical", pinned: true })
         stopApps()
         poweroffTimer.interval = poweroffMs
         poweroffTimer.restart()
@@ -82,6 +87,7 @@ Item {
         poweroffTimer.stop()
         countdown.stop()
         notice.close()
+        Notifications.remove("thermal-critical")
     }
 
     function stopApps() {
