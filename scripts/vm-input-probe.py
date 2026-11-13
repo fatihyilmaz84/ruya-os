@@ -305,6 +305,23 @@ def devices():
     return [{k: v["data"] for k, v in row.items()} for row in rows]
 
 
+def assigned_slots(profile):
+    """The console profile's global slots now ({scope_id: profile id}), from ListProfiles; None when
+    it cannot be read."""
+    out = subprocess.run(["busctl", "--system", "--json=short", "call", SVC, PATH, IFC, "ListProfiles", "s", profile],
+                         capture_output=True, text=True)
+    if out.returncode != 0:
+        return None
+    try:
+        status, rows = json.loads(out.stdout)["data"]
+    except (ValueError, KeyError, TypeError):
+        return None
+    if status != "ok":
+        return None
+    rows = [{k: v["data"] for k, v in row.items()} for row in rows]
+    return {r["global_slot"]: r["id"] for r in rows if r.get("assigned")}
+
+
 def route_prop():
     out = subprocess.run(["busctl", "--system", "get-property", SVC, PATH, IFC, "Route"],
                          capture_output=True, text=True).stdout.strip()
@@ -705,7 +722,8 @@ def cmd_twoprofiles(args):
     pad_a, pad_b = pads
     bus = None
     games = []
-    slots = []
+    slots = []      # the slots this check assigned; the cleanup gives each back what it held before
+    before = {}
     saved = []
     try:
         rows = wait_for(lambda: (lambda r: r if len(r) == 2 else None)(
@@ -717,6 +735,10 @@ def cmd_twoprofiles(args):
         b_row = next(d for d in rows if d["name"] == names[1])
         if b_row.get("family") != "nintendo":
             bad(f"the pad with vendor 0x057e has family '{b_row.get('family')}'")
+            return fails
+        before = assigned_slots(args.profile)
+        if before is None:
+            bad("ListProfiles cannot be read: the slots could not be restored afterwards")
             return fails
         bus = Bus()
 
@@ -779,7 +801,6 @@ def cmd_twoprofiles(args):
         tap(pad_b, game_b, BTN_TL, "pad B's South reaches its virtual pad as LB (its family's profile)")
         status = bus.call(SVC, PATH, IFC, "AssignProfile", [args.profile, "global", "family:nintendo", ""])
         ok("the family's slot emptied") if status == "ok" else bad(f"emptying the family's slot answered {status}")
-        slots.remove("family:nintendo")
         tap(pad_b, game_b, BTN_SOUTH, "pad B's South is South again")
         tap(pad_a, game_a, BTN_EAST, "pad A keeps its own profile")
     finally:
@@ -787,7 +808,7 @@ def cmd_twoprofiles(args):
             g.close()
         if bus:
             for slot in slots:
-                bus.call(SVC, PATH, IFC, "AssignProfile", [args.profile, "global", slot, ""])
+                bus.call(SVC, PATH, IFC, "AssignProfile", [args.profile, "global", slot, before.get(slot, "")])
             for pid in saved:
                 bus.call(SVC, PATH, IFC, "DeleteProfile", [args.profile, pid])
             bus.call(SVC, PATH, IFC, "SetRoute", ["shell", "", "", args.profile])

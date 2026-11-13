@@ -19,8 +19,8 @@ import RuyaShell
 //
 // Every change is shown at once (`doc`) and saved in the background: ValidateProfile, SaveProfile,
 // AssignProfile when it is not assigned to its slot yet, then the slots to empty; a slider's change
-// waits 300 ms for the next step first (`change(..., true)`). One save runs at a time and only the
-// newest change waits behind it. A refused save toasts "Could not save the change" and `doc` goes
+// waits 300 ms for the next step first (`change(..., true)`). One save runs at a time and the newest
+// change of each pad waits behind it, in order. A refused save toasts "Could not save the change" and `doc` goes
 // back to what the service has (`stored`). Reset gives the pad the default (`resetAll`).
 // Export and import go through Input.exportProfile / importProfile (Devices1.Storage).
 // Also the words the pages share: button names and glyphs by family, the short pad name.
@@ -66,11 +66,12 @@ QtObject {
     // The save on its way: "" | "validate" | "save" | "assign" | "clear" | "delete".
     property string phase: ""
     property var inFlight: null         // { doc, tag, clears, padKey }
-    property var queued: null           // { doc, tag, clears, padKey }: the newest change, waiting
+    // The changes waiting, oldest first: the newest one per pad ({ doc, tag, clears, padKey }).
+    property var queue: []
     property string exportVolume: ""    // an export waits for the save before it
     property bool importing: false
 
-    readonly property bool busy: phase !== "" || queued !== null
+    readonly property bool busy: phase !== "" || queue.length > 0
     // The pad's "Controls in games" value: the service's word for what applies to it.
     readonly property bool changed: summary !== null && summary.changed === true
     readonly property string layout: (doc ? doc.inherits === "nintendo"
@@ -93,7 +94,7 @@ QtObject {
         summary = null
         stored = null
         doc = null
-        queued = null
+        queue = []
         inFlight = null
         phase = ""
         loadState = "loading"
@@ -160,7 +161,7 @@ QtObject {
             return
         }
         stored = null
-        if (phase === "" && queued === null)
+        if (phase === "" && queue.length === 0)
             doc = null
         loadState = "ok"
     }
@@ -234,11 +235,13 @@ QtObject {
     }
 
     // ---- changes ---------------------------------------------------------------------------------
-    // What applies to the pad as a profile to change: the stored one, or a new one without an id
-    // (the layout of an assigned built-in kept).
+    // What applies to the pad as a profile to change: the newest change, else the stored one (also
+    // when it arrived while another pad's save was running), else a new one without an id (the
+    // layout of an assigned built-in kept).
     function current() {
-        if (doc)
-            return JSON.parse(JSON.stringify(doc))
+        const base = doc ?? stored
+        if (base)
+            return JSON.parse(JSON.stringify(base))
         const d = { schema_version: 1, id: "", name: "Controls in games", scope: { type: "global" } }
         if (summary && summary.builtin && summary.layout === "nintendo")
             d.inherits = "nintendo"
@@ -355,7 +358,8 @@ QtObject {
     // `clears`: the slots to empty once `d` is saved and assigned (Applies to).
     function change(d, tag, debounce, clears) {
         doc = d
-        queued = { doc: d, tag: tag, clears: clears ?? [], padKey: padKey }
+        // It replaces this pad's waiting change; another pad's waits on (RUY-545 round 2).
+        queue = queue.filter(q => q.padKey !== padKey).concat([{ doc: d, tag: tag, clears: clears ?? [], padKey: padKey }])
         if (debounce) {
             debounceTimer.restart()
         } else {
@@ -370,10 +374,10 @@ QtObject {
     }
 
     function flush() {
-        if (phase !== "" || queued === null || owner === "")
+        if (phase !== "" || queue.length === 0 || owner === "")
             return
-        inFlight = queued
-        queued = null
+        inFlight = queue[0]
+        queue = queue.slice(1)
         phase = "validate"
         Input.validateProfile(JSON.stringify(inFlight.doc))
     }
@@ -384,7 +388,7 @@ QtObject {
         inFlight = null
         saved(tag)
         refresh()
-        if (queued !== null)
+        if (queue.length > 0)
             flush()
         else if (exportVolume !== "")
             startExport()
@@ -406,7 +410,7 @@ QtObject {
         const tag = inFlight ? inFlight.tag : ""
         phase = ""
         inFlight = null
-        queued = null
+        queue = []
         debounceTimer.stop()
         doc = stored            // every row shows what the service has again
         if (exportVolume !== "") {
@@ -424,12 +428,13 @@ QtObject {
     // otherwise its own profile is saved with nothing in it (a copy for This <pad> when what applies
     // is not its own), so no other slot's pads are touched.
     function resetAll() {
-        debounceTimer.stop()
-        queued = null
+        queue = queue.filter(q => q.padKey !== padKey)
+        if (queue.length === 0)
+            debounceTimer.stop()
         if (phase !== "")
             return
         const d = editable()
-        const own = doc !== null && stored !== null && d.id === stored.id
+        const own = stored !== null && d.id === stored.id
         const below = applyingFor(pad, slotRank(slotOf(d.match)))
         if (own && !(below && below.changed === true)) {
             inFlight = { doc: null, tag: "reset", clears: [], padKey: padKey }
@@ -453,11 +458,11 @@ QtObject {
     // The profile goes to the volume as one file; one that is not stored yet is saved first.
     function exportTo(volumeId) {
         exportVolume = volumeId
-        if (!stored && phase === "" && queued === null) {
+        if (!stored && phase === "" && queue.length === 0) {
             change(editable(), "export", false)
             return
         }
-        if (phase === "" && queued === null)
+        if (phase === "" && queue.length === 0)
             startExport()
     }
     function startExport() {
@@ -501,7 +506,9 @@ QtObject {
                 return
             }
             games.stored = parsed
-            if (games.phase === "" && games.queued === null)
+            // Shown unless a change of this pad is on its way (`doc` is null after a pad switch,
+            // so another pad's save running does not hide this pad's profile).
+            if ((games.phase === "" && games.queue.length === 0) || games.doc === null)
                 games.doc = parsed
             games.loadState = "ok"
         }

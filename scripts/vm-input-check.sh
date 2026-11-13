@@ -21,7 +21,8 @@
 # pad1 and hears that pad's button and not the idle pad's. It routes by its own bus connection and ends on `shell`.
 # Then (RUY-545, probe `twoprofiles`) two slots assigned over Input1, the device's of one pad and the Nintendo family's
 # for a pad with Nintendo's vendor id: each virtual pad emits its own pad's profile, and emptying the family's slot
-# changes only that pad; a slot the profile's match does not name is refused. Its profiles and slots are removed after.
+# changes only that pad; a slot the profile's match does not name is refused. Afterwards each slot it used gets back the
+# profile it held before (ListProfiles read first) and its own profiles are deleted.
 # `check` runs the first four, then `caps` and `profiles`. `profiles` (RUY-42) checks the controller
 # profiles over busctl: the built-ins, validation (a bad file, 64 KiB + 1), storage in
 # /var/lib/ruya-input/profiles/<profile>/ (0700 / 0600, ruya-input's, unreadable to the profile

@@ -289,7 +289,8 @@
          "default". The profile is a built-in or a global profile whose global_slot (its match) is
          this scope_id; "invalid" for another slot, a malformed scope_id, or a profile of scope
          platform or game; "unknown-profile" for an id that does not exist. profile_id "" empties
-         that slot only; assigning one slot never touches another. A SaveProfile that changes an
+         that slot only ("ok" on a slot that is already empty: nothing changes, ProfilesChanged is
+         still sent); assigning one slot never touches another. A SaveProfile that changes an
          assigned profile's match takes it out of its old slot. "platform" and "game" answer
          "invalid" until T-370 / RUY-43. ListProfiles' assigned and global_slot read the slots. -->
     <method name="AssignProfile">

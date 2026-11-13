@@ -1229,6 +1229,10 @@ mod tests {
         assert_eq!(b.assign("p1", "global", "family:nintendo", ""), Status::Ok);
         assert_eq!(b.engine_for("p1", "playstation", A), ea, "A keeps its own");
         assert_eq!(b.engine_for("p1", "nintendo", B), every, "B falls to all");
+        // Emptying a slot that is already empty is "ok" and changes nothing.
+        assert_eq!(b.assign("p1", "global", "family:nintendo", ""), Status::Ok);
+        assert_eq!(b.engine_for("p1", "nintendo", B), every);
+        assert_eq!(b.engine_for("p1", "playstation", A), ea);
         assert_eq!(b.assign("p1", "global", "", ""), Status::Ok);
         assert_eq!(b.engine_for("p1", "nintendo", B), Engine::default());
         assert_eq!(b.engine_for("p1", "playstation", A), ea);
