@@ -479,6 +479,12 @@ mod tests {
         assert_eq!((wiiu.family, wiiu.model), ("nintendo", "wiiu_pro"));
         device.name = "Nintendo RVL-CNT-01-TR".to_owned();
         assert_eq!(gamepad_of(&device).expect("a pad").model, "wii_remote");
+        // The kernel's own (hid-wiimote evdev) names, which is what the service really reads.
+        device.name = "Nintendo Wii Remote Pro Controller".to_owned();
+        let wiiu = gamepad_of(&device).expect("a pad");
+        assert_eq!((wiiu.family, wiiu.model), ("nintendo", "wiiu_pro"));
+        device.name = "Nintendo Wii Remote".to_owned();
+        assert_eq!(gamepad_of(&device).expect("a pad").model, "wii_remote");
     }
 
     /// What `xpad` registers for a pad behind the receiver: named after the receiver, the

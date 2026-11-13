@@ -66,11 +66,12 @@ const SONY: u16 = 0x054c;
 const MICROSOFT: u16 = 0x045e;
 const NINTENDO: u16 = 0x057e;
 const VALVE: u16 = 0x28de;
+/// The makers whose family the shell has a silhouette for (DualSense, Xbox Series, Switch Pro).
+const FAMILY_MAKERS: [u16; 3] = [SONY, MICROSOFT, NINTENDO];
 
 /// Every model there is a silhouette for, one entry per file in `shell/art/pads/` (a test lists
-/// the folder). `keyboard` and `wii_remote_nunchuk` have no rule: a keyboard is a kind, not a pad
-/// (the shell keeps Material's glyph for it), and a Nunchuk is an extension `hid-wiimote` reports,
-/// not an id.
+/// the folder). `keyboard` has no rule: a keyboard is a kind, not a pad (the shell keeps Material's
+/// glyph for it). The Nunchuk is told by `hid-wiimote`'s name for the extension.
 pub const TABLE: &[Model] = &[
     named("8bitdo_pro2", &["8bitdo pro 2"]),
     named("8bitdo_sn30pro", &["sn30 pro"]),
@@ -149,6 +150,22 @@ pub const TABLE: &[Model] = &[
         &[(MICROSOFT, 0x0b0a)],
         &["adaptive controller"],
     ),
+    // hid-wiimote's evdev names: "Nintendo Wii Remote Pro Controller" (the Wii U Pro) and "Nintendo Wii
+    // Remote Nunchuk"; BlueZ's: "Nintendo RVL-CNT-01-UC". They come before the Switch Pro, whose
+    // "pro controller" is in the Wii U Pro's name, and before "wii remote".
+    Model {
+        name: "wii_remote_nunchuk",
+        maker: NINTENDO,
+        ids: &[],
+        names: &["wii remote nunchuk"],
+        name_first: true,
+    },
+    m(
+        "wiiu_pro",
+        NINTENDO,
+        &[],
+        &["rvl-cnt-01-uc", "wii remote pro controller"],
+    ),
     m(
         "switch_pro",
         NINTENDO,
@@ -167,14 +184,12 @@ pub const TABLE: &[Model] = &[
         &[(NINTENDO, 0x2007)],
         &["joy-con (r)", "joy-con r"],
     ),
-    m("wiiu_pro", NINTENDO, &[], &["rvl-cnt-01-uc"]),
     m(
         "wii_remote",
         NINTENDO,
         &[(NINTENDO, 0x0306)],
-        &["rvl-cnt-01"],
+        &["rvl-cnt-01", "wii remote"],
     ),
-    m("wii_remote_nunchuk", NINTENDO, &[], &[]),
     m("gamecube", NINTENDO, &[(NINTENDO, 0x0337)], &["gamecube"]),
     m("n64", NINTENDO, &[(NINTENDO, 0x2019)], &["nintendo 64"]),
     m("retro_pad", 0, &[(NINTENDO, 0x2017)], &["sn30", "snes"]),
@@ -200,6 +215,8 @@ fn by_name(lower: &str, first: bool, vendor: u16) -> Option<&'static str> {
         .iter()
         .filter(|model| model.name_first == first)
         .filter(|model| model.maker == 0 || vendor == 0 || vendor == model.maker)
+        // A pad of a maker that has a family silhouette keeps it: "gamepad" in its name is no model.
+        .filter(|model| model.name != "generic_pad" || !FAMILY_MAKERS.contains(&vendor))
         .find(|model| model.names.iter().any(|fragment| lower.contains(fragment)))
         .map(|model| model.name)
 }
@@ -212,10 +229,11 @@ pub fn model_of(vendor: u16, product: u16, name: &str) -> &'static str {
         return model;
     }
     if vendor == NINTENDO && product == 0x0330 {
-        // The Wii U Pro and the Wii Remote Plus share this id; only the name tells them apart.
-        return if lower.contains("-uc") {
+        // The Wii U Pro and the Wii Remote Plus share this id; only the name tells them apart: BlueZ's
+        // ends "-UC" or "-TR", hid-wiimote's evdev name says "Wii Remote Pro Controller" or "Wii Remote".
+        return if lower.contains("-uc") || lower.contains("pro controller") {
             "wiiu_pro"
-        } else if lower.contains("-tr") {
+        } else if lower.contains("-tr") || lower.contains("wii remote") {
             "wii_remote"
         } else {
             ""
@@ -327,6 +345,50 @@ mod tests {
     }
 
     #[test]
+    fn hid_wiimotes_evdev_names_tell_the_same_models_as_bluezs() {
+        // What ruya-inputd and ruya-devices pass for a pad: the kernel's evdev name (the RUY-486 fixture).
+        let wiiu = (0x057e, 0x0330);
+        assert_eq!(
+            model_of(wiiu.0, wiiu.1, "Nintendo Wii Remote Pro Controller"),
+            "wiiu_pro",
+            "not the Switch Pro, whose name is inside it"
+        );
+        assert_eq!(
+            model_of(wiiu.0, wiiu.1, "Nintendo Wii Remote"),
+            "wii_remote"
+        );
+        assert_eq!(
+            model_of(wiiu.0, 0x0306, "Nintendo Wii Remote Nunchuk"),
+            "wii_remote_nunchuk"
+        );
+        assert_eq!(
+            model_of(wiiu.0, wiiu.1, "Nintendo Wii Remote Nunchuk"),
+            "wii_remote_nunchuk"
+        );
+        // No ids (a name alone) gives the same.
+        assert_eq!(
+            model_of(0, 0, "Nintendo Wii Remote Pro Controller"),
+            "wiiu_pro"
+        );
+        assert_eq!(model_of(0, 0, "Nintendo Wii Remote"), "wii_remote");
+        // The Switch Pro is still the Switch Pro.
+        assert_eq!(model_of(0x057e, 0x2009, "Pro Controller"), "switch_pro");
+    }
+
+    #[test]
+    fn gamepad_in_a_name_does_not_beat_a_known_familys_silhouette() {
+        // A Sony or Nintendo or Microsoft pad of an unknown product: no model, so the shell draws the
+        // family's silhouette, not the generic pad.
+        assert_eq!(model_of(0x054c, 0x7777, "Wireless Gamepad"), "");
+        assert_eq!(model_of(0x057e, 0x7777, "Nintendo Gamepad"), "");
+        assert_eq!(model_of(0x045e, 0x7777, "USB Gamepad"), "");
+        // Any other maker, or none known, is the generic pad.
+        assert_eq!(model_of(0x1234, 0x0001, "USB Gamepad"), "generic_pad");
+        assert_eq!(model_of(0x2dc8, 0x0001, "USB Gamepad"), "generic_pad");
+        assert_eq!(model_of(0, 0, "USB Gamepad"), "generic_pad");
+    }
+
+    #[test]
     fn a_pad_without_ids_is_told_by_its_name_alone() {
         assert_eq!(model_of(0, 0, "DualSense Wireless Controller"), "dualsense");
         assert_eq!(
@@ -375,9 +437,9 @@ mod tests {
     }
 
     #[test]
-    fn every_entry_but_the_two_reserved_ones_has_a_rule_that_finds_it() {
+    fn every_entry_but_the_keyboard_has_a_rule_that_finds_it() {
         for model in TABLE {
-            if matches!(model.name, "keyboard" | "wii_remote_nunchuk") {
+            if model.name == "keyboard" {
                 assert!(
                     model.ids.is_empty() && model.names.is_empty(),
                     "{}",

@@ -248,6 +248,12 @@ mod tests {
         };
         assert_eq!(model(&wiiu, "Nintendo RVL-CNT-01-UC"), "wiiu_pro");
         assert_eq!(model(&wiiu, "Nintendo RVL-CNT-01-TR"), "wii_remote");
+        // What this service gets from evdev (`device.name()`): hid-wiimote's names, not BlueZ's.
+        assert_eq!(
+            model(&wiiu, "Nintendo Wii Remote Pro Controller"),
+            "wiiu_pro"
+        );
+        assert_eq!(model(&wiiu, "Nintendo Wii Remote"), "wii_remote");
         // An unknown pad has none, whatever family it is.
         let other = Hardware {
             vendor: 0x1234,

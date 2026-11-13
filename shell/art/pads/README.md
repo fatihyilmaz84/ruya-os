@@ -136,13 +136,14 @@ matches; the services report it as the `model` key (`Devices1`, `Input1`):
 1. **Names that beat ids** (8BitDo pads, whose ids vary with the mode and are Microsoft's in
    X-input mode; "Combined Joy-Cons"; arcade sticks).
 2. **(vendor, product)** from the table above. For 057E:0330 the device name decides
-   (`-UC` -> `wiiu_pro`, `-TR` -> `wii_remote`, neither -> no model).
+   (BlueZ's `-UC` or hid-wiimote's evdev "Wii Remote Pro Controller" -> `wiiu_pro`, `-TR` or "Wii
+   Remote" -> `wii_remote`, neither -> no model); "Wii Remote Nunchuk" -> `wii_remote_nunchuk`.
 3. **Name fragments** of the pad's own maker (or any name when no vendor id is known).
 4. No model: the shell draws the **family's** silhouette (playstation -> `dualsense`, xbox ->
    `xbox_series`, nintendo -> `switch_pro`), then Material's `sports_esports`.
 
-Left without a rule: `keyboard` (a kind, Material's glyph stays), `wii_remote_nunchuk` (the
-extension is reported by `hid-wiimote`, not by an id). The 8BitDo family and `generic` pads still
+Left without a rule: `keyboard` (a kind, Material's glyph stays). `generic_pad` ("gamepad" in a
+name) never beats the family silhouette of a Sony, Microsoft or Nintendo pad. The 8BitDo family and `generic` pads still
 fall back to `sports_esports` when no model is named.
 
 ## Drawing a new model (the method, owner 2026-11-13)
