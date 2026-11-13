@@ -5,9 +5,9 @@
 
   DRAFT (T-366 / RUY-2, lead 2026-11-12), partly built. ruya-inputd serves the Devices members
   ListDevices, DeviceAdded, DeviceChanged, DeviceRemoved and the Routing members SetRoute, Route,
-  RouteChanged since RUY-3 (T-367); every other member below is still DRAFT and not served
-  (GetCapabilities T-368, the button test T-368, UI ownership T-397..T-399, Profiles T-369/T-370,
-  OwnershipMode T-371). The design is docs/specs/06-input.md. Each task may change what it builds
+  RouteChanged since RUY-3 (T-367), and GetCapabilities and the button test (StartTest, StopTest,
+  TestInput, TestEnded) since RUY-39 (T-368); every other member below is still DRAFT and not
+  served (UI ownership T-397..T-399, Profiles T-369/T-370, OwnershipMode T-371). The design is docs/specs/06-input.md. Each task may change what it builds
   here (contracts are drafts until the first release, root CLAUDE.md); RUY-403's served-vs-XML
   test must check only the built members.
 
@@ -51,6 +51,9 @@
   Capability (a(sbbbb)): name, hardware, driver, available, output (06 §4.3). Names:
     buttons sticks analog_triggers dpad gyro accelerometer touchpad rumble trigger_rumble
     adaptive_triggers lightbar player_leds speaker microphone battery
+  GetCapabilities lists every name, in this order, as found when the device connected; hardware
+  false means the model does not have it. Nothing is inferred (rumble never implies
+  adaptive_triggers); a missing node is neither driver nor available (services/ruya-inputd/src/caps.rs).
 
   Routes: "shell" | "app" | "overlay" | "locked" (06 §5.1). Ownership modes: "managed" |
   "passthrough" | "steam" | "semantic" (06 §5.3).
@@ -62,7 +65,7 @@
 <node>
   <interface name="org.ruyaos.Input1">
 
-    <!-- Devices (T-367 built: ListDevices and the three signals; GetCapabilities is T-368, DRAFT).
+    <!-- Devices (T-367 built: ListDevices and the three signals; GetCapabilities built, T-368).
          Only physical pads are listed, never the service's own virtual devices. -->
     <method name="ListDevices">
       <arg name="devices" type="aa{sv}" direction="out"/>
@@ -84,10 +87,23 @@
       <arg name="instance" type="s"/>
     </signal>
 
-    <!-- Live button test (T-368). Allowed only while the route is "shell"; ends by StopTest, by
-         a route change, or 120 s after the last input. TestInput carries normalised inputs
-         (06 §4.2) and, for inputs without a normal name, "raw:<node>:<type>:<code>"; axis values
-         are sent at most 30 times a second per axis. -->
+    <!-- Live button test (T-368, built). StartTest: "ok", "unknown-device", "not-allowed" (the
+         route is not "shell"), "busy" (a test already runs for that device). StopTest: "ok" (also
+         when no test runs), "unknown-device". A test ends by StopTest, by a route other than
+         "shell", when its pad disconnects, when its caller leaves the bus, or 120 s after the
+         pad's last input; each end is one TestEnded.
+         TestInput, while a test runs, for every input of that pad:
+           input   the normalised name (06 §4.2: south east west north l1 r1 select start guide
+                   l3 r3 dpad_up dpad_down dpad_left dpad_right, left_x left_y right_x right_y
+                   left_trigger right_trigger), or, for an input without a normal name, its
+                   raw source
+           value   a button 1 (pressed) or 0; an axis its normalised value (sticks -32768..32767,
+                   up negative; triggers 0..32767); a raw input the kernel's value
+           source  the raw source, "raw:<node>:<type>:<code>" ("raw:pad:1:304"; node "pad" is the
+                   pad's main event node)
+         Buttons are sent at once; each axis at most 30 times a second, its newest value always
+         arriving (held back at most 1/30 s).
+         TestEnded reason: "stopped" | "idle" | "route" | "gone" | "caller". -->
     <method name="StartTest">
       <arg name="device_id" type="s" direction="in"/>
       <arg name="status" type="s" direction="out"/>
@@ -100,6 +116,11 @@
       <arg name="device_id" type="s"/>
       <arg name="input" type="s"/>
       <arg name="value" type="i"/>
+      <arg name="source" type="s"/>
+    </signal>
+    <signal name="TestEnded">
+      <arg name="device_id" type="s"/>
+      <arg name="reason" type="s"/>
     </signal>
 
     <!-- Routing (T-367, built). The shell calls it on every focus, overlay, sign-in, switch, lock

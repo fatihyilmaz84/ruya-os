@@ -85,9 +85,9 @@ Item {
             tryCompare(tc.shell, "currentPage", "settings")
             const list = find("categoryList")
             tryVerify(() => list.activeFocus, 2000, "category list has focus")
-            for (let i = 0; i < 5; ++i)
+            for (let i = 0; i < 6; ++i)
                 keyClick(Qt.Key_Down)                    // ... Storage
-            compare(list.currentIndex, 5)
+            compare(list.currentIndex, 6)
             keyClick(Qt.Key_Right)
             tryVerify(() => find("paneStorage").visible)
             tryVerify(() => find("storageInternal").activeFocus, 2000, "the first row (This console) takes focus")
@@ -331,7 +331,7 @@ Item {
             keyClick(Qt.Key_Escape)
             tryVerify(() => find("categoryList").activeFocus, 2000, "Back returns to the category list")
             tryCompare(tc.shell, "currentPage", "settings")
-            compare(find("categoryList").currentIndex, 5)
+            compare(find("categoryList").currentIndex, 6)
         }
 
         function test_unplugged_drive_while_focused() {

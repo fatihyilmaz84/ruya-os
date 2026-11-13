@@ -1,5 +1,5 @@
-//! Thin zbus adapter for `org.ruyaos.Input1` (api/dbus/org.ruyaos.Input1.xml): the Devices and
-//! Routing members. Converts types, calls the core and emits what the core announces. No rules.
+//! Thin zbus adapter for `org.ruyaos.Input1` (api/dbus/org.ruyaos.Input1.xml): the Devices,
+//! capabilities, button test and Routing members. Converts types, calls the core and emits what the core announces. No rules.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -17,6 +17,8 @@ pub const BUS_NAME: &str = "org.ruyaos.Input1";
 pub const OBJECT_PATH: &str = "/org/ruyaos/Input1";
 
 type Dict = HashMap<String, OwnedValue>;
+/// One capability of `GetCapabilities`, `(sbbbb)`: name, hardware, driver, available, output.
+type CapTuple = (String, bool, bool, bool, bool);
 
 pub type DynBackend = Box<dyn Backend + Send>;
 
@@ -156,6 +158,62 @@ impl InputIface {
             .with(|r| r.devices().iter().map(record).collect())
     }
 
+    fn get_capabilities(&self, device_id: &str) -> (String, Vec<CapTuple>) {
+        let (status, caps) = self.shared.with(|r| r.capabilities(device_id));
+        let caps = caps
+            .iter()
+            .map(|c| {
+                (
+                    c.name.to_owned(),
+                    c.hardware,
+                    c.driver,
+                    c.available,
+                    c.output,
+                )
+            })
+            .collect();
+        (status.as_str().to_owned(), caps)
+    }
+
+    async fn start_test(
+        &self,
+        device_id: &str,
+        #[zbus(header)] header: Header<'_>,
+        #[zbus(connection)] connection: &Connection,
+    ) -> String {
+        let caller = header.sender().map(|s| s.to_string()).unwrap_or_default();
+        let status = self
+            .shared
+            .with(|r| r.start_test(device_id, &caller, Instant::now()));
+        if status == Status::Ok && !caller_present(connection, &caller).await {
+            self.shared.with(|r| r.caller_left(&caller, Instant::now()));
+        }
+        status.as_str().to_owned()
+    }
+
+    fn stop_test(&self, device_id: &str) -> String {
+        self.shared
+            .with(|r| r.stop_test(device_id))
+            .as_str()
+            .to_owned()
+    }
+
+    #[zbus(signal)]
+    async fn test_input(
+        emitter: &SignalEmitter<'_>,
+        device_id: &str,
+        input: &str,
+        value: i32,
+        source: &str,
+    ) -> zbus::Result<()>;
+
+    #[zbus(signal)]
+    async fn test_ended(
+        emitter: &SignalEmitter<'_>,
+        device_id: &str,
+        reason: &str,
+    ) -> zbus::Result<()>;
+
     async fn set_route(
         &self,
         route: &str,
@@ -226,6 +284,15 @@ pub async fn announce(connection: Connection, notices: async_channel::Receiver<N
                 let props = iface.get().await.route_changed(emitter).await;
                 let sig = InputIface::route_switched(emitter, route, instance).await;
                 props.and(sig)
+            }
+            Notice::TestInput {
+                device_id,
+                input,
+                value,
+                source,
+            } => InputIface::test_input(emitter, device_id, input, *value, source).await,
+            Notice::TestEnded { device_id, reason } => {
+                InputIface::test_ended(emitter, device_id, reason).await
             }
             Notice::Journal(_) => Ok(()),
         };

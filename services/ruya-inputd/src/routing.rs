@@ -22,10 +22,11 @@ use std::time::{Duration, Instant};
 
 use crate::accounts::{valid_app_id, valid_profile_id, Accounts};
 use crate::acl;
+use crate::caps::Capability;
 use crate::mapping::{Axis, Button, KeyBoard, KeyEvent, Mapper, NavKey};
 use crate::pad::{
-    diff, OutEvent, PadAxis, PadButton, PadInput, PadState, Rumble, ALL_AXES, PAD_PHYS_PREFIX,
-    STICK_MAX, STICK_MIN, TRIGGER_MAX,
+    diff, OutEvent, PadAxis, PadButton, PadInput, PadState, Rumble, TestEvent, ALL_AXES,
+    PAD_PHYS_PREFIX, STICK_MAX, STICK_MIN, TRIGGER_MAX,
 };
 use crate::udev::UdevEvent;
 
@@ -35,6 +36,11 @@ pub type VirtualId = u64;
 /// When no udev event arrives for a new virtual pad (the monitor is not working), the ACL is set
 /// this long after creation anyway, and the journal says so.
 pub const UDEV_FALLBACK: Duration = Duration::from_secs(2);
+
+/// A button test ends this long after its pad's last input (`Input1.StartTest`).
+pub const TEST_IDLE: Duration = Duration::from_secs(120);
+/// A button test sends one axis at most this often: 30 times a second.
+pub const TEST_AXIS_INTERVAL: Duration = Duration::from_micros(33_334);
 
 const ENODEV: i32 = 19;
 
@@ -73,6 +79,9 @@ pub enum Status {
     Ok,
     Invalid,
     UnknownProfile,
+    UnknownDevice,
+    NotAllowed,
+    Busy,
 }
 
 impl Status {
@@ -81,6 +90,9 @@ impl Status {
             Status::Ok => "ok",
             Status::Invalid => "invalid",
             Status::UnknownProfile => "unknown-profile",
+            Status::UnknownDevice => "unknown-device",
+            Status::NotAllowed => "not-allowed",
+            Status::Busy => "busy",
         }
     }
 }
@@ -94,6 +106,8 @@ pub struct PadInfo {
     pub connection: String,
     /// The pad takes `FF_RUMBLE`: only then does its virtual pad declare it.
     pub rumble: bool,
+    /// Its capability descriptor (`caps::describe`), as found when it connected.
+    pub capabilities: Vec<Capability>,
 }
 
 /// One row of `ListDevices` and the device signals.
@@ -122,6 +136,18 @@ pub enum Notice {
     RouteChanged {
         route: String,
         instance: String,
+    },
+    /// One input of a running button test (`TestInput`).
+    TestInput {
+        device_id: String,
+        input: String,
+        value: i32,
+        source: String,
+    },
+    /// A button test ended (`TestEnded`): "stopped" | "idle" | "route" | "gone" | "caller".
+    TestEnded {
+        device_id: String,
+        reason: String,
     },
     /// A journal line (without the "ruya-inputd: " prefix).
     Journal(String),
@@ -211,6 +237,22 @@ struct Virtual {
     /// The app's effect id -> the physical pad's.
     ff: BTreeMap<i16, i16>,
     playing: BTreeSet<i16>,
+}
+
+/// One axis of a button test: when it was last sent, and the newest value not sent yet.
+#[derive(Debug)]
+struct AxisSend {
+    sent: Instant,
+    pending: Option<(i32, String)>,
+}
+
+/// A running button test of one pad.
+#[derive(Debug)]
+struct ButtonTest {
+    /// The bus name that started it: the test ends when it leaves the bus.
+    caller: String,
+    last_input: Instant,
+    axes: BTreeMap<String, AxisSend>,
 }
 
 #[derive(Debug)]
@@ -306,6 +348,8 @@ pub struct Router<B: Backend> {
     next_key: PadKey,
     next_instance: u64,
     notices: Vec<Notice>,
+    /// Running button tests, by stable device id.
+    tests: BTreeMap<String, ButtonTest>,
 }
 
 impl<B: Backend> Router<B> {
@@ -325,6 +369,7 @@ impl<B: Backend> Router<B> {
             next_key: 1,
             next_instance: 1,
             notices: Vec::new(),
+            tests: BTreeMap::new(),
         }
     }
 
@@ -416,6 +461,7 @@ impl<B: Backend> Router<B> {
         if let Some(v) = pad.virt.take() {
             self.drop_virtual(key, v);
         }
+        self.end_test(&pad.info.id, "gone");
         self.notices.push(Notice::DeviceRemoved {
             id: pad.info.id,
             instance: pad.instance,
@@ -611,8 +657,10 @@ impl<B: Backend> Router<B> {
         }
     }
 
-    /// Timers: a virtual pad with no udev event after `UDEV_FALLBACK` gets its ACL anyway.
+    /// Timers: a virtual pad with no udev event after `UDEV_FALLBACK` gets its ACL anyway; a
+    /// button test sends the axis values it held back and ends after `TEST_IDLE` without input.
     pub fn tick(&mut self, now: Instant) {
+        self.tick_tests(now);
         let due: Vec<(PadKey, String)> = self
             .pads
             .iter_mut()
@@ -678,6 +726,15 @@ impl<B: Backend> Router<B> {
 
     /// The bus name `name` has left the bus (`NameOwnerChanged` with no new owner).
     pub fn caller_left(&mut self, name: &str, now: Instant) {
+        let theirs: Vec<String> = self
+            .tests
+            .iter()
+            .filter(|(_, t)| t.caller == name)
+            .map(|(id, _)| id.clone())
+            .collect();
+        for id in theirs {
+            self.end_test(&id, "caller");
+        }
         if self.caller.as_deref() != Some(name) {
             return;
         }
@@ -735,6 +792,12 @@ impl<B: Backend> Router<B> {
             Route::Overlay if same_owner => self.neutral_all(),
             Route::Overlay | Route::Shell | Route::Locked => self.destroy_all(),
         }
+        if r != Route::Shell {
+            let running: Vec<String> = self.tests.keys().cloned().collect();
+            for id in running {
+                self.end_test(&id, "route");
+            }
+        }
         let profile_changed = self.profile != profile;
         let changed = self.route != r
             || self.instance != instance
@@ -760,6 +823,145 @@ impl<B: Backend> Router<B> {
                 instance: instance.to_owned(),
             });
         }
+    }
+
+    // ---- capabilities and the button test ---------------------------------------------------
+
+    /// `Input1.GetCapabilities`.
+    pub fn capabilities(&self, device_id: &str) -> (Status, Vec<Capability>) {
+        match self.pads.values().find(|p| p.info.id == device_id) {
+            Some(pad) => (Status::Ok, pad.info.capabilities.clone()),
+            None => (Status::UnknownDevice, Vec::new()),
+        }
+    }
+
+    /// Whether a button test runs (the Linux loop then ticks often enough for the axis rate).
+    pub fn testing(&self) -> bool {
+        !self.tests.is_empty()
+    }
+
+    /// `Input1.StartTest`: only while the route is `shell`, one test per device.
+    pub fn start_test(&mut self, device_id: &str, caller: &str, now: Instant) -> Status {
+        if !self.pads.values().any(|p| p.info.id == device_id) {
+            return Status::UnknownDevice;
+        }
+        if self.route != Route::Shell {
+            return Status::NotAllowed;
+        }
+        if self.tests.contains_key(device_id) {
+            return Status::Busy;
+        }
+        self.tests.insert(
+            device_id.to_owned(),
+            ButtonTest {
+                caller: caller.to_owned(),
+                last_input: now,
+                axes: BTreeMap::new(),
+            },
+        );
+        self.journal(format!("button test started for {device_id}"));
+        Status::Ok
+    }
+
+    /// `Input1.StopTest`: "ok" also when no test runs for a connected device.
+    pub fn stop_test(&mut self, device_id: &str) -> Status {
+        if self.tests.contains_key(device_id) {
+            self.end_test(device_id, "stopped");
+            return Status::Ok;
+        }
+        if self.pads.values().any(|p| p.info.id == device_id) {
+            Status::Ok
+        } else {
+            Status::UnknownDevice
+        }
+    }
+
+    fn end_test(&mut self, device_id: &str, reason: &str) {
+        if self.tests.remove(device_id).is_none() {
+            return;
+        }
+        self.journal(format!("button test for {device_id} ended: {reason}"));
+        self.notices.push(Notice::TestEnded {
+            device_id: device_id.to_owned(),
+            reason: reason.to_owned(),
+        });
+    }
+
+    /// The button test's view of one batch of a pad's input: buttons go out at once, an axis at
+    /// most every `TEST_AXIS_INTERVAL` (a newer value waits for `tick`).
+    pub fn test_input(&mut self, key: PadKey, events: &[TestEvent], now: Instant) {
+        if events.is_empty() {
+            return;
+        }
+        let Some(id) = self.pads.get(&key).map(|p| p.info.id.clone()) else {
+            return;
+        };
+        let Some(test) = self.tests.get_mut(&id) else {
+            return;
+        };
+        test.last_input = now;
+        let mut out = Vec::new();
+        for ev in events {
+            let (name, value, source) = (ev.name(), ev.test_value(), ev.source());
+            if ev.is_axis() {
+                match test.axes.get_mut(&name) {
+                    Some(axis) if now.duration_since(axis.sent) < TEST_AXIS_INTERVAL => {
+                        axis.pending = Some((value, source));
+                        continue;
+                    }
+                    Some(axis) => {
+                        axis.sent = now;
+                        axis.pending = None;
+                    }
+                    None => {
+                        test.axes.insert(
+                            name.clone(),
+                            AxisSend {
+                                sent: now,
+                                pending: None,
+                            },
+                        );
+                    }
+                }
+            }
+            out.push(Notice::TestInput {
+                device_id: id.clone(),
+                input: name,
+                value,
+                source,
+            });
+        }
+        self.notices.extend(out);
+    }
+
+    fn tick_tests(&mut self, now: Instant) {
+        let idle: Vec<String> = self
+            .tests
+            .iter()
+            .filter(|(_, t)| now.duration_since(t.last_input) >= TEST_IDLE)
+            .map(|(id, _)| id.clone())
+            .collect();
+        for id in idle {
+            self.end_test(&id, "idle");
+        }
+        let mut out = Vec::new();
+        for (id, test) in self.tests.iter_mut() {
+            for (name, axis) in test.axes.iter_mut() {
+                if now.duration_since(axis.sent) < TEST_AXIS_INTERVAL {
+                    continue;
+                }
+                if let Some((value, source)) = axis.pending.take() {
+                    axis.sent = now;
+                    out.push(Notice::TestInput {
+                        device_id: id.clone(),
+                        input: name.clone(),
+                        value,
+                        source,
+                    });
+                }
+            }
+        }
+        self.notices.extend(out);
     }
 
     // ---- rumble -----------------------------------------------------------------------------
@@ -926,6 +1128,7 @@ mod tests {
             family: "playstation".into(),
             connection: "bluetooth".into(),
             rumble: true,
+            capabilities: Vec::new(),
         }
     }
 
@@ -1458,6 +1661,199 @@ mod tests {
             route: "locked".into(),
             instance: "".into()
         }));
+    }
+
+    // ---- capabilities and the button test ----------------------------------------------------
+
+    fn tested(notices: &[Notice]) -> Vec<(String, i32)> {
+        notices
+            .iter()
+            .filter_map(|n| match n {
+                Notice::TestInput { input, value, .. } => Some((input.clone(), *value)),
+                _ => None,
+            })
+            .collect()
+    }
+
+    fn ended(notices: &[Notice]) -> Vec<(String, String)> {
+        notices
+            .iter()
+            .filter_map(|n| match n {
+                Notice::TestEnded { device_id, reason } => {
+                    Some((device_id.clone(), reason.clone()))
+                }
+                _ => None,
+            })
+            .collect()
+    }
+
+    fn ev(input: PadInput) -> TestEvent {
+        let (ev_type, c) = match input {
+            PadInput::Button(..) => (code::EV_KEY, code::BTN_SOUTH),
+            PadInput::Axis(..) => (code::EV_ABS, code::ABS_X),
+        };
+        TestEvent {
+            input: Some(input),
+            ev_type,
+            code: c,
+            value: 0,
+        }
+    }
+
+    #[test]
+    fn get_capabilities_returns_the_pads_descriptor() {
+        use crate::caps::{describe, model, Part, Probe};
+        let mut r = router();
+        let caps = describe(
+            model(0x054c, 0x0ce6),
+            &Probe {
+                buttons: true,
+                rumble: true,
+                motion: Part::Missing,
+                ..Probe::default()
+            },
+        );
+        r.add_pad(
+            PadInfo {
+                capabilities: caps.clone(),
+                ..pad("a")
+            },
+            t0(),
+        );
+        assert_eq!(r.capabilities("a"), (Status::Ok, caps));
+        assert_eq!(r.capabilities("nope"), (Status::UnknownDevice, Vec::new()));
+    }
+
+    #[test]
+    fn the_test_starts_only_in_the_shell_and_once_per_device() {
+        let mut r = router();
+        let now = t0();
+        r.add_pad(pad("a"), now);
+        assert_eq!(r.start_test("nope", SHELL, now), Status::UnknownDevice);
+        app(&mut r, "i1", STK, "p1");
+        assert_eq!(r.start_test("a", SHELL, now), Status::NotAllowed);
+        assert_eq!(r.set_route("shell", "", "", "p1", SHELL, now), Status::Ok);
+        assert_eq!(r.start_test("a", SHELL, now), Status::Ok);
+        assert!(r.testing());
+        assert_eq!(r.start_test("a", SHELL, now), Status::Busy);
+    }
+
+    #[test]
+    fn the_live_stream_starts_on_open_and_stops_on_close() {
+        let mut r = router();
+        let now = t0();
+        let a = r.add_pad(pad("a"), now);
+        // No test: input reaches no stream.
+        r.test_input(a, &[ev(press(PadButton::South))], now);
+        assert!(tested(&r.take_notices()).is_empty());
+        assert_eq!(r.start_test("a", SHELL, now), Status::Ok);
+        r.test_input(a, &[ev(press(PadButton::South))], now);
+        let notices = r.take_notices();
+        assert_eq!(tested(&notices), vec![("south".to_owned(), 1)]);
+        assert!(notices.contains(&Notice::TestInput {
+            device_id: "a".into(),
+            input: "south".into(),
+            value: 1,
+            source: "raw:pad:1:304".into(),
+        }));
+        assert_eq!(r.stop_test("a"), Status::Ok);
+        assert_eq!(
+            ended(&r.take_notices()),
+            vec![("a".to_owned(), "stopped".to_owned())]
+        );
+        assert!(!r.testing());
+        r.test_input(a, &[ev(release(PadButton::South))], now);
+        assert!(tested(&r.take_notices()).is_empty());
+        // Stopping again is fine; an unknown device is not.
+        assert_eq!(r.stop_test("a"), Status::Ok);
+        assert_eq!(r.stop_test("nope"), Status::UnknownDevice);
+    }
+
+    #[test]
+    fn axes_are_sent_at_most_30_times_a_second_and_the_last_value_arrives() {
+        let mut r = router();
+        let now = t0();
+        let a = r.add_pad(pad("a"), now);
+        r.start_test("a", SHELL, now);
+        r.take_notices();
+        // 100 stick values within one second (every 10 ms) and a button in the middle.
+        for i in 0..100u32 {
+            let t = now + Duration::from_millis(10 * u64::from(i));
+            r.test_input(a, &[ev(PadInput::Axis(PadAxis::LeftX, i as i32))], t);
+            if i == 50 {
+                r.test_input(a, &[ev(press(PadButton::East))], t);
+            }
+        }
+        let sent = tested(&r.take_notices());
+        let axis: Vec<i32> = sent
+            .iter()
+            .filter(|(n, _)| n == "left_x")
+            .map(|&(_, v)| v)
+            .collect();
+        assert!(axis.len() <= 30, "{} axis values in one second", axis.len());
+        assert!(axis.len() >= 25, "{} axis values in one second", axis.len());
+        // Buttons are never held back.
+        assert!(sent.contains(&("east".to_owned(), 1)));
+        // The newest value waits for the tick, then goes out once.
+        r.tick(now + Duration::from_millis(1100));
+        let flushed = tested(&r.take_notices());
+        assert_eq!(flushed, vec![("left_x".to_owned(), 99)]);
+        r.tick(now + Duration::from_millis(1200));
+        assert!(tested(&r.take_notices()).is_empty());
+    }
+
+    #[test]
+    fn the_test_ends_after_two_idle_minutes() {
+        let mut r = router();
+        let now = t0();
+        let a = r.add_pad(pad("a"), now);
+        r.start_test("a", SHELL, now);
+        r.test_input(
+            a,
+            &[ev(press(PadButton::South))],
+            now + Duration::from_secs(60),
+        );
+        r.take_notices();
+        r.tick(now + Duration::from_secs(179));
+        assert!(ended(&r.take_notices()).is_empty(), "input 119 s ago");
+        r.tick(now + Duration::from_secs(180));
+        assert_eq!(
+            ended(&r.take_notices()),
+            vec![("a".to_owned(), "idle".to_owned())]
+        );
+        assert!(!r.testing());
+    }
+
+    #[test]
+    fn the_test_ends_on_a_route_change_a_vanished_pad_and_a_vanished_caller() {
+        let mut r = router();
+        let now = t0();
+        let a = r.add_pad(pad("a"), now);
+        r.add_pad(pad("b"), now);
+        r.add_pad(pad("c"), now);
+        r.start_test("a", SHELL, now);
+        r.start_test("b", ":1.77", now);
+        r.take_notices();
+        r.caller_left(":1.77", now);
+        assert_eq!(
+            ended(&r.take_notices()),
+            vec![("b".to_owned(), "caller".to_owned())]
+        );
+        r.remove_pad(a);
+        assert_eq!(
+            ended(&r.take_notices()),
+            vec![("a".to_owned(), "gone".to_owned())]
+        );
+        r.start_test("c", SHELL, now);
+        // A sign-in keeps the route "shell": the test goes on.
+        assert_eq!(r.set_route("shell", "", "", "p1", SHELL, now), Status::Ok);
+        assert!(ended(&r.take_notices()).is_empty());
+        r.set_route("overlay", "", "", "p1", SHELL, now);
+        assert_eq!(
+            ended(&r.take_notices()),
+            vec![("c".to_owned(), "route".to_owned())]
+        );
+        assert!(!r.testing());
     }
 
     // ---- records ---------------------------------------------------------------------------

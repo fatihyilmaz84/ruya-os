@@ -26,7 +26,7 @@ Item {
         when: windowShown
 
         property Shell shell: null
-        readonly property int systemIndex: 8
+        readonly property int systemIndex: 9
 
         function find(name) { return findChild(tc.shell, name) }
 

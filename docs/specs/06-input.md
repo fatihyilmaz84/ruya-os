@@ -54,13 +54,18 @@ What we take from InputPlumber: an intercept mode for overlays (our route `overl
 ### 4.2 Normalised input
 Buttons: `south east west north l1 r1 l3 r3 start select guide dpad_up dpad_down dpad_left dpad_right` plus `paddle1..4`, `misc1` (share/capture) and `touchpad_click`. Axes: `left_x left_y right_x right_y` as i16 (-32768..32767, up negative) and `left_trigger right_trigger` as 0..32767. Motion: `gyro_{x,y,z}` in deg/s ×16, `accel_{x,y,z}` in mg; touchpad contacts as (id, x, y) in 0..65535 of the pad's surface; `touchpad` names the surface as a whole (for touchpad-as-mouse). Every event keeps its **raw source** (`<node kind>:<evtype>:<code>`) so a profile can map an input that has no normal name. Buttons are named by **position**, not label: Nintendo's A is `east` (the family's confirm button, ADR-027, is a mapping on top: T-398).
 
-### 4.3 Capability descriptor
+### 4.3 Capability descriptor *(built, RUY-39)*
 Per device, per capability (`buttons`, `sticks`, `analog_triggers`, `dpad`, `gyro`, `accelerometer`, `touchpad`, `rumble`, `trigger_rumble`, `adaptive_triggers`, `lightbar`, `player_leds`, `speaker`, `microphone`, `battery`), four booleans:
 - `hardware` — the model has it (device table);
 - `driver` — the kernel exposes it here (a motion node exists, `EV_FF` with `FF_RUMBLE` on the node, a power-supply entry);
 - `available` — usable now (the node opened, the battery reports, Bluetooth rumble acknowledged);
 - `output` — the virtual device the pad is routed to can carry it (an Xbox 360 virtual pad: rumble yes, gyro no).
 Only what is detected is reported (`rumble` never implies `adaptive_triggers`). `GetCapabilities` returns them as `a(sbbbb)`.
+
+**As built** (`caps.rs`, filled when the pad connects): every name is listed, in the order above, and `hardware` false means the model has no such part. `hardware` is the device table's entry (by `vid:pid`: DualSense and Edge, DualShock 4, Xbox 360 wired and receivers, Xbox One and Series, Switch Pro) or, for a model it does not know, only what the kernel shows; a part the kernel exposes counts even when the table lacks it. `driver` comes from the pad's own node (`BTN_SOUTH`; `ABS_X`/`ABS_Y`; `ABS_Z` or `ABS_RZ`; a hat or `BTN_DPAD_*`; `FF_RUMBLE`), its sibling nodes under the same HID parent (`ID_INPUT_ACCELEROMETER` for gyro and accelerometer, `ID_INPUT_TOUCHPAD`) and the parent's `power_supply/` entry. `available` needs that node to open (the ACL of §3 rule 2) or the battery to report a capacity: a node that is missing is neither `driver` nor `available`, one that does not open is `driver` only. The service has no kernel path yet for `trigger_rumble`, `adaptive_triggers`, `lightbar`, `player_leds`, `speaker` and `microphone` (hidraw, T-373): never `driver`. `output` is the Xbox 360-style virtual pad's set: buttons, sticks, analog triggers, D-pad and rumble. The descriptor is not refreshed while the pad stays connected (a battery that starts reporting later shows at the next connection).
+
+### 4.4 Button test *(built, RUY-39)*
+`StartTest(device_id)` streams one pad's input to the shell as `TestInput(device_id, input, value, source)`: `input` is the normalised name of §4.2, or the raw source for an input without one; `value` is 1/0 for a button, the normalised value for an axis, the kernel's value for a raw input; `source` is the raw source (`raw:pad:<type>:<code>`, `pad` being the pad's main node). Buttons go out at once; each axis at most 30 times a second, its newest value never lost (held back at most 1/30 s; the service then ticks every 16 ms instead of 500). A digital trigger next to its analog axis, a hat that did not move and key autorepeat send nothing. Only in the route `shell` (`not-allowed` otherwise), one test per device (`busy`). A test ends by `StopTest`, a route other than `shell`, the pad disconnecting, its caller leaving the bus, or 120 s after the pad's last input; every end is one `TestEnded(device_id, reason)` with `stopped`, `route`, `gone`, `caller` or `idle`. The navigation keys and the virtual pads are not touched by a test. Settings > Controllers > a controller > Button test is the client (02 §1.2).
 
 ## 5. Routing *(built: the service RUY-3, the shell's calls RUY-409; ownership modes T-371)*
 
@@ -166,7 +171,7 @@ The **Confirm button** row lives in **Settings > Controllers** (the one Settings
 | RUY-409 | the shell calls `SetRoute` (§5.1-5.2), with `Input1`'s mock and client; the Dell SuperTuxKart race |
 | RUY-410 | the compositor's emergency reader (§8.2) |
 | RUY-411 | done: Bluetooth bonded-only VM check and the keyboard-class confirmation (§6) |
-| T-368 / RUY-39 | device list, capabilities (§4.3), the live button test; Settings > Controllers |
+| T-368 / RUY-39 | done: capabilities (§4.3), the live button test (§4.4); Settings > Controllers (02 §1.2) |
 | T-369 / RUY-42 | profiles v1: schema, validation, global profile, import/export, dead zones and curves |
 | T-370 / RUY-43 | game and platform profiles, resolution chain, the game page's Controller entry |
 | T-371 / RUY-44 | ownership modes, the grab and hidraw rules and Steam's uinput (§5.3) |

@@ -2,7 +2,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import RuyaShell
 
-// Settings -> Bluetooth & controllers: the power switch, "Add a device" (a scan), "Pair a new
+// Settings -> Bluetooth (the controllers themselves: ControllersPane, RUY-39): the power switch, "Add a device" (a scan), "Pair a new
 // controller" (the guided screen, ControllerOnboarding, T-260), the devices found or paired, and for
 // each paired one a "Forget" row (after a confirmation that names it) and, for a controller, a
 // "Rename" row (the on-screen keyboard; BlueZ keeps the name). Accept on a device pairs it (not

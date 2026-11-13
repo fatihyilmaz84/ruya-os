@@ -24,7 +24,7 @@ Item {
         when: windowShown
 
         property Shell shell: null
-        readonly property int aboutIndex: 9
+        readonly property int aboutIndex: 10
         readonly property string txtName: "RuyaOS-system-report.txt"
         readonly property string jsonName: "RuyaOS-system-report.json"
 

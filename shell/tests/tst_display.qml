@@ -101,9 +101,9 @@ Item {
             keyClick(Qt.Key_Return)                      // Settings
             tryCompare(tc.shell, "currentPage", "settings")
             tryVerify(() => find("categoryList") !== null && find("categoryList").activeFocus, 2000, "category list has focus")
-            for (let i = 0; i < 3; ++i)
+            for (let i = 0; i < 4; ++i)
                 keyClick(Qt.Key_Down)
-            compare(find("categoryList").currentIndex, 3)
+            compare(find("categoryList").currentIndex, 4)
             keyClick(Qt.Key_Right)
             tryVerify(() => find("rowQuality").activeFocus)
         }
@@ -633,7 +633,7 @@ Item {
             chooseSize(1920, 1080)
             tryCompare(Display, "confirming", true)
             tryCompare(tc.shell, "currentPage", "settings")
-            tryCompare(find("categoryList"), "currentIndex", 3)
+            tryCompare(find("categoryList"), "currentIndex", 4)
             tryCompare(find("modeConfirm"), "shown", true)
             tryVerify(() => find("modeRevert").activeFocus, 2000, "focus lands on Revert")
             answerKeep()

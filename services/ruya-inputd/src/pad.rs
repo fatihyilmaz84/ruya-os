@@ -305,6 +305,123 @@ impl PadState {
     }
 }
 
+impl PadButton {
+    /// The normalised name (06-input.md §4.2), as the button test sends it.
+    pub fn name(self) -> &'static str {
+        match self {
+            PadButton::South => "south",
+            PadButton::East => "east",
+            PadButton::West => "west",
+            PadButton::North => "north",
+            PadButton::L1 => "l1",
+            PadButton::R1 => "r1",
+            PadButton::Select => "select",
+            PadButton::Start => "start",
+            PadButton::Guide => "guide",
+            PadButton::L3 => "l3",
+            PadButton::R3 => "r3",
+            PadButton::DpadUp => "dpad_up",
+            PadButton::DpadDown => "dpad_down",
+            PadButton::DpadLeft => "dpad_left",
+            PadButton::DpadRight => "dpad_right",
+        }
+    }
+}
+
+impl PadAxis {
+    /// The normalised name (06-input.md §4.2).
+    pub fn name(self) -> &'static str {
+        match self {
+            PadAxis::LeftX => "left_x",
+            PadAxis::LeftY => "left_y",
+            PadAxis::RightX => "right_x",
+            PadAxis::RightY => "right_y",
+            PadAxis::LeftTrigger => "left_trigger",
+            PadAxis::RightTrigger => "right_trigger",
+        }
+    }
+}
+
+/// One input of the button test (`Input1.TestInput`): what the normaliser made of one evdev event
+/// (`input`), or `None` for an input without a normal name, with the raw event it came from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TestEvent {
+    pub input: Option<PadInput>,
+    pub ev_type: u16,
+    pub code: u16,
+    pub value: i32,
+}
+
+impl TestEvent {
+    /// The raw source, `raw:pad:<type>:<code>` (06-input.md §4.2; `pad` is the pad's main node).
+    pub fn source(&self) -> String {
+        format!("raw:pad:{}:{}", self.ev_type, self.code)
+    }
+
+    /// The normal name, or the raw source for an input that has none.
+    pub fn name(&self) -> String {
+        match self.input {
+            Some(PadInput::Button(b, _)) => b.name().to_owned(),
+            Some(PadInput::Axis(a, _)) => a.name().to_owned(),
+            None => self.source(),
+        }
+    }
+
+    /// A button 1 or 0, an axis its normalised value, a raw input the kernel's value.
+    pub fn test_value(&self) -> i32 {
+        match self.input {
+            Some(PadInput::Button(_, pressed)) => i32::from(pressed),
+            Some(PadInput::Axis(_, v)) => v,
+            None => self.value,
+        }
+    }
+
+    /// Axes (normal or raw) are sent at most 30 times a second; buttons at once.
+    pub fn is_axis(&self) -> bool {
+        match self.input {
+            Some(PadInput::Axis(..)) => true,
+            Some(PadInput::Button(..)) => false,
+            None => self.ev_type == code::EV_ABS,
+        }
+    }
+}
+
+/// The button test's events for one evdev event, given what the normaliser made of it: one per
+/// normalised input, else one raw event for a key or axis that has no normal name. A digital
+/// trigger next to its analog axis (the axis carries it), a hat that did not move and key
+/// autorepeat give none.
+pub fn test_events(ev_type: u16, ev_code: u16, value: i32, inputs: &[PadInput]) -> Vec<TestEvent> {
+    let raw = |input| TestEvent {
+        input,
+        ev_type,
+        code: ev_code,
+        value,
+    };
+    if !inputs.is_empty() {
+        return inputs.iter().map(|&i| raw(Some(i))).collect();
+    }
+    let named = match ev_type {
+        code::EV_KEY => value == 2 || matches!(ev_code, code::BTN_TL2 | code::BTN_TR2),
+        code::EV_ABS => matches!(
+            ev_code,
+            code::ABS_X
+                | code::ABS_Y
+                | code::ABS_Z
+                | code::ABS_RX
+                | code::ABS_RY
+                | code::ABS_RZ
+                | code::ABS_HAT0X
+                | code::ABS_HAT0Y
+        ),
+        _ => true,
+    };
+    if named {
+        Vec::new()
+    } else {
+        vec![raw(None)]
+    }
+}
+
 /// One event for a virtual pad: (type, code, value). A batch ends with its own `SYN_REPORT`,
 /// added by the writer.
 pub type OutEvent = (u16, u16, i32);
@@ -436,6 +553,48 @@ mod tests {
                 (code::ABS_RZ, Range { min: 0, max: 255 }),
             ],
         })
+    }
+
+    #[test]
+    fn test_events_name_each_input_and_keep_its_raw_source() {
+        let mut ps = dualsense();
+        let ins = ps.event(code::EV_KEY, code::BTN_SOUTH, 1);
+        let evs = test_events(code::EV_KEY, code::BTN_SOUTH, 1, &ins);
+        assert_eq!(evs.len(), 1);
+        assert_eq!(evs[0].name(), "south");
+        assert_eq!(evs[0].test_value(), 1);
+        assert_eq!(evs[0].source(), "raw:pad:1:304");
+        assert!(!evs[0].is_axis());
+        // A hat move from left to right: two inputs from one raw event.
+        let _ = ps.event(code::EV_ABS, code::ABS_HAT0X, -1);
+        let ins = ps.event(code::EV_ABS, code::ABS_HAT0X, 1);
+        let evs = test_events(code::EV_ABS, code::ABS_HAT0X, 1, &ins);
+        let names: Vec<String> = evs.iter().map(|e| e.name()).collect();
+        assert_eq!(names, vec!["dpad_left", "dpad_right"]);
+        assert_eq!(evs[1].source(), "raw:pad:3:16");
+        // A trigger is an axis, sent at its normalised value.
+        let ins = ps.event(code::EV_ABS, code::ABS_Z, 255);
+        let evs = test_events(code::EV_ABS, code::ABS_Z, 255, &ins);
+        assert_eq!(evs[0].name(), "left_trigger");
+        assert_eq!(evs[0].test_value(), TRIGGER_MAX);
+        assert!(evs[0].is_axis());
+    }
+
+    #[test]
+    fn test_events_report_inputs_without_a_normal_name_raw() {
+        // A paddle (BTN_TRIGGER_HAPPY1): no normal name in v1, so its raw source is its name.
+        let evs = test_events(code::EV_KEY, 0x2c0, 1, &[]);
+        assert_eq!(evs.len(), 1);
+        assert_eq!(evs[0].name(), "raw:pad:1:704");
+        assert_eq!(evs[0].test_value(), 1);
+        // An unknown axis is rate-limited like the others.
+        let evs = test_events(code::EV_ABS, 0x12, 5, &[]);
+        assert!(evs[0].is_axis());
+        // The digital trigger next to its analog axis, autorepeat and a hat that stayed: nothing.
+        assert!(test_events(code::EV_KEY, code::BTN_TL2, 1, &[]).is_empty());
+        assert!(test_events(code::EV_KEY, 0x2c0, 2, &[]).is_empty());
+        assert!(test_events(code::EV_ABS, code::ABS_HAT0X, 0, &[]).is_empty());
+        assert!(test_events(code::EV_SYN, 0, 0, &[]).is_empty());
     }
 
     #[test]

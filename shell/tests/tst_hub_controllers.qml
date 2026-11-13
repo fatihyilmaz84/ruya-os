@@ -355,7 +355,7 @@ Item {
             compare(rowName("controllers:pad:usb-1"), "Xbox Controller, Battery 55 % · USB")
             Batteries.mockSet("up-1", 14, "discharging")
             tryCompare(find("quickMenuItem_controllers:pad:usb-1"), "objectName", "quickMenuItem_controllers:pad:usb-1")
-            tryVerify(() => rowName("controllers:pad:usb-1") === "Xbox Controller, Battery 14 % · USB", 2000)
+            tryVerify(() => rowName("controllers:pad:usb-1") === "Xbox Controller, Battery 14 %, low · USB", 2000)
             compare(focusedKey(), "controllers:pad:usb-1")
             keyClick(Qt.Key_Escape)
         }
@@ -371,7 +371,7 @@ Item {
             keyClick(Qt.Key_Return)
             tryVerify(() => !find("systemPanel").open, 2000, "the Hub closes")
             tryVerify(() => find("page_settings") !== null, 2000, "Settings opens")
-            compare(find("page_settings").current.key, "bluetooth", "on Bluetooth & controllers")
+            compare(find("page_settings").current.key, "controllers", "on Controllers (RUY-39)")
             verify(!app.activeFocus, "the game does not get the focus back; Settings has it")
             tryVerify(() => find("page_settings").activeFocus, 2000, "Settings has the focus")
             // Back leaves Settings for Home (the game keeps running behind it).
@@ -388,7 +388,7 @@ Item {
             keyClick(Qt.Key_Return)
             tryVerify(() => !find("systemPanel").open, 2000)
             tryVerify(() => find("page_settings") !== null, 2000)
-            compare(find("page_settings").current.key, "bluetooth")
+            compare(find("page_settings").current.key, "controllers")
             keyClick(Qt.Key_Escape)
             tryVerify(() => find("page_settings") === null, 2000)
         }

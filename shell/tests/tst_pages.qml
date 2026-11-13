@@ -179,9 +179,9 @@ Item {
         function test_nested_page_keeps_state() {
             openSection("settings")
             tryVerify(() => find("categoryList").activeFocus)
-            for (let i = 0; i < 9; ++i)
+            for (let i = 0; i < 10; ++i)
                 keyClick(Qt.Key_Down)
-            compare(find("categoryList").currentIndex, 9)
+            compare(find("categoryList").currentIndex, 10)
             keyClick(Qt.Key_Right)                      // into the About pane
             tryVerify(() => find("aboutVersion").activeFocus, 2000, "first About row has focus")
             keyClick(Qt.Key_Down)
@@ -193,7 +193,7 @@ Item {
             keyClick(Qt.Key_Escape)
             tryCompare(tc.shell, "currentPage", "settings")
             compare(find("page_settings"), settings)
-            compare(find("categoryList").currentIndex, 9)
+            compare(find("categoryList").currentIndex, 10)
             tryVerify(() => find("aboutQt").activeFocus, 2000, "same row has focus again")
         }
 
@@ -217,7 +217,7 @@ Item {
         function test_backspace_walks_the_stack() {
             openSection("settings")
             tryVerify(() => find("categoryList").activeFocus)
-            for (let i = 0; i < 9; ++i)
+            for (let i = 0; i < 10; ++i)
                 keyClick(Qt.Key_Down)
             keyClick(Qt.Key_Right)                      // into the About pane
             tryVerify(() => find("aboutVersion").activeFocus, 2000, "first About row has focus")
@@ -452,7 +452,7 @@ Item {
             Profiles.switchTo("p1", "1234")
             tryCompare(Profiles, "activeProfile", "p1")
             tryVerify(() => find("homePlay").activeFocus, 2000, "Play takes focus after the switch")
-            for (const category of ["myprofile", "profiles", "network", "bluetooth", "display", "audio", "storage",
+            for (const category of ["myprofile", "profiles", "network", "bluetooth", "controllers", "display", "audio", "storage",
                                     "accessibility", "power", "system", "about"]) {
                 openForFocus("settings", { category: category }, data.bad)
                 tryVerify(() => find("categoryList").activeFocus)
