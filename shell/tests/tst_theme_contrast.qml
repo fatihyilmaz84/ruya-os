@@ -78,6 +78,27 @@ Item {
             row(rows, "text on glass in the blob overlap", t.text, ThemeMath.over(t.glass, samples.overlap), 3)
             row(rows, "ring on glass in the blob overlap", t.focusRing, ThemeMath.over(t.glass, samples.overlap), 3)
 
+            // Control states (RUY-512, 04 §5 "Setting row kinds", §7): the parts that show a control's state are
+            // outlines and fills in `text` or `primaryFill`, never glass on glass. The switch and slider outline
+            // (`text`) on the row's glass and on the focused row (`focusFill` over that glass, the pessimistic
+            // stack); the choice arrow (`text`) on its `selectedFill` circle over the focused row; a fact's `text`
+            // on the bare backdrop (no pill): 4.5 on the strict samples, 3 in the blob overlap (large text, as
+            // the peek row); the on-switch knob (`onPrimary`) on `primaryFill`.
+            // The outline and the arrow are held on the strict samples (the gradient and each blob); in the blob
+            // overlap the stacked focused row reaches only 2.3 to 2.8:1 (04 §7).
+            for (let i = 0; i < all.length; ++i) {
+                if (i < samples.strict.length) {
+                    const base = ThemeMath.over(t.glass, all[i])
+                    const focused = ThemeMath.over(t.focusFill, base)
+                    row(rows, "switch and slider outline on glass over backdrop " + i, t.text, base, 3)
+                    row(rows, "switch and slider outline on a focused row over backdrop " + i, t.text, focused, 3)
+                    row(rows, "choice arrow on selectedFill in a focused row over backdrop " + i, t.text,
+                        ThemeMath.over(t.selectedFill, focused), 3)
+                }
+                row(rows, "fact text on the bare backdrop " + i, t.text, all[i], i === all.length - 1 ? 3 : 4.5)
+            }
+            row(rows, "on-switch knob (onPrimary) on primaryFill", t.onPrimary, t.primaryFill, 3)
+
             row(rows, "text on background", t.text, t.background, 4.5)
             row(rows, "textDim on background", t.textDim, t.background, 4.5)
             row(rows, "text on panel", t.text, t.panel, 4.5)
@@ -198,7 +219,18 @@ Item {
             faintRing.focusRing = Qt.color("#101626")
             verify(failures(faintRing).some(f => f.indexOf("ring") >= 0), "a ring that sits in the glass")
 
-            const lightOnLight = Themes.snapshot(Themes.byKey("daylight"))
+            // The control-state rows catch an arrow, an outline or a fact that sinks into its surface.
+            const faintArrow = Themes.snapshot(Themes.byKey("dreamglass"))
+            faintArrow.selectedFill = Qt.color("#e6ffffff")     // a near-white circle under white arrows
+            verify(failures(faintArrow).some(f => f.indexOf("choice arrow") >= 0), "an arrow on a circle as light as itself")
+            const faintOutline = Themes.snapshot(Themes.byKey("dreamglass"))
+            faintOutline.focusFill = Qt.color("#d0ffffff")      // a focus fill that swallows the outline
+            verify(failures(faintOutline).some(f => f.indexOf("outline") >= 0), "an outline on a focus fill as light as itself")
+            const unreadableFact = Themes.snapshot(Themes.byKey("dreamglass"))
+            unreadableFact.text = Qt.color("#586078")
+            verify(failures(unreadableFact).some(f => f.indexOf("fact text") >= 0), "a fact's text on the bare backdrop")
+
+            const lightOnLight =Themes.snapshot(Themes.byKey("daylight"))
             lightOnLight.glass = Qt.color("#08ffffff")      // Daylight with its frosted glass nearly clear
             lightOnLight.text = Qt.color("#f2f4f8")         // ... and light text left over from a dark theme
             verify(failures(lightOnLight).length > 0, "light text on a light theme")

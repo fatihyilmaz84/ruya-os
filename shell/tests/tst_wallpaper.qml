@@ -894,9 +894,10 @@ Item {
             verify(fill.width <= fill.parent.width, "the fill is " + fill.width + " of a track " + fill.parent.width)
             row.shownValue = 85
             compare(findChild(row, "value").text, "85%")
-            compare(fill.width, fill.parent.width, "a shown value past `to` fills the track and no more")
+            // RUY-512: the fill runs to the thumb's centre, which never leaves the track (a thumb radius in at each end).
+            fuzzyCompare(fill.width, fill.parent.width - row.thumbSize / 2, 0.01, "a shown value past `to` fills to the thumb at the end and no more")
             row.shownValue = -20
-            compare(fill.width, 0, "and one under `from` fills nothing")
+            fuzzyCompare(fill.width, row.thumbSize / 2, 0.01, "and one under `from` fills to the thumb at the start")
         }
 
         // True when no UTF-16 unit of the string is half of a pair.

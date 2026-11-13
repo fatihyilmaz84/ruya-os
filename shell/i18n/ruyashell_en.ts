@@ -484,6 +484,22 @@ This can&apos;t be undone.</translation>
         <source>An admin&apos;s PIN is needed to install this app.</source>
         <translation>An admin&apos;s PIN is needed to install this app.</translation>
     </message>
+    <message>
+        <source>Select</source>
+        <translation type="vanished">Select</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation type="vanished">Cancel</translation>
+    </message>
+    <message>
+        <source>Uninstall %1?</source>
+        <translation type="vanished">Uninstall %1?</translation>
+    </message>
+    <message>
+        <source>Also delete my data</source>
+        <translation type="vanished">Also delete my data</translation>
+    </message>
 </context>
 <context>
     <name>ArtCard</name>
@@ -640,7 +656,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>BatteryChip</name>
     <message>
-        <location filename="../qml/BatteryChip.qml" line="+52"/>
+        <location filename="../qml/BatteryChip.qml" line="+53"/>
         <source>%1 battery %2 percent, low</source>
         <translation>%1 battery %2 percent, low</translation>
     </message>
@@ -742,7 +758,7 @@ This can&apos;t be undone.</translation>
         <translation>Pair a new controller</translation>
     </message>
     <message>
-        <location line="+110"/>
+        <location line="+111"/>
         <source>Pair again %1</source>
         <translation>Pair again %1</translation>
     </message>
@@ -757,7 +773,7 @@ This can&apos;t be undone.</translation>
         <translation>Rename %1</translation>
     </message>
     <message>
-        <location line="-256"/>
+        <location line="-257"/>
         <source>Paired</source>
         <translation>Paired</translation>
     </message>
@@ -833,7 +849,7 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="-194"/>
-        <location line="+343"/>
+        <location line="+344"/>
         <source>Forget %1</source>
         <translation>Forget %1</translation>
     </message>
@@ -1208,12 +1224,12 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+36"/>
-        <location line="+178"/>
+        <location line="+179"/>
         <source>Other</source>
         <translation>Other</translation>
     </message>
     <message>
-        <location line="-129"/>
+        <location line="-130"/>
         <source>Press A to search again</source>
         <translation>Press A to search again</translation>
     </message>
@@ -1228,7 +1244,7 @@ This can&apos;t be undone.</translation>
         <translation>Nothing found yet</translation>
     </message>
     <message>
-        <location line="+41"/>
+        <location line="+42"/>
         <source>Pairing…</source>
         <translation>Pairing…</translation>
     </message>
@@ -1311,7 +1327,7 @@ This can&apos;t be undone.</translation>
         <translation>Bluetooth</translation>
     </message>
     <message>
-        <location line="+69"/>
+        <location line="+71"/>
         <source>%1 · %2</source>
         <translation>%1 · %2</translation>
     </message>
@@ -1531,7 +1547,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>ControllerToasts</name>
     <message>
-        <location filename="../qml/ControllerToasts.qml" line="+123"/>
+        <location filename="../qml/ControllerToasts.qml" line="+124"/>
         <source>Battery %1%</source>
         <translation>Battery %1%</translation>
     </message>
@@ -1601,13 +1617,13 @@ This can&apos;t be undone.</translation>
         <translation>Try again</translation>
     </message>
     <message>
-        <location line="+36"/>
-        <location line="+22"/>
+        <location line="+37"/>
+        <location line="+20"/>
         <source>Confirm button</source>
         <translation>Confirm button</translation>
     </message>
     <message>
-        <location line="-20"/>
+        <location line="-18"/>
         <source>As on the controller</source>
         <translation>As on the controller</translation>
     </message>
@@ -1622,7 +1638,7 @@ This can&apos;t be undone.</translation>
         <translation>Right</translation>
     </message>
     <message>
-        <location line="+26"/>
+        <location line="+24"/>
         <source>Could not change the confirm button</source>
         <translation>Could not change the confirm button</translation>
     </message>
@@ -1725,7 +1741,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>ControlsIntro</name>
     <message>
-        <location filename="../qml/ControlsIntro.qml" line="+25"/>
+        <location filename="../qml/ControlsIntro.qml" line="+26"/>
         <source>Changes here reach games only. Menus keep their buttons.</source>
         <translation>Changes here reach games only. Menus keep their buttons.</translation>
     </message>
@@ -1774,12 +1790,12 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+54"/>
+        <location line="+51"/>
         <source>Default</source>
         <translation>Default</translation>
     </message>
     <message>
-        <location line="-35"/>
+        <location line="-31"/>
         <source>Back</source>
         <translation>Back</translation>
     </message>
@@ -1809,12 +1825,12 @@ This can&apos;t be undone.</translation>
         <translation>Applies to</translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+11"/>
         <source>Button layout</source>
         <translation>Button layout</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+10"/>
         <source>Remap buttons</source>
         <translation>Remap buttons</translation>
     </message>
@@ -1875,7 +1891,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>DeviceIcons</name>
     <message>
-        <location filename="../qml/DeviceIcons.qml" line="+78"/>
+        <location filename="../qml/DeviceIcons.qml" line="+129"/>
         <source>%1 (%2)</source>
         <translation>%1 (%2)</translation>
     </message>
@@ -3116,7 +3132,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>PinPad</name>
     <message>
-        <location filename="../qml/PinPad.qml" line="+164"/>
+        <location filename="../qml/PinPad.qml" line="+166"/>
         <source>PINs don&apos;t match</source>
         <translation>PINs don&apos;t match</translation>
     </message>
@@ -3879,6 +3895,44 @@ This can&apos;t be undone.</translation>
     </message>
 </context>
 <context>
+    <name>SettingControl</name>
+    <message>
+        <location filename="../qml/controls/SettingControl.qml" line="+70"/>
+        <source>Back</source>
+        <translation>Back</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Open</source>
+        <translation>Open</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Toggle</source>
+        <translation>Toggle</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Change</source>
+        <translation>Change</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Next</source>
+        <translation>Next</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Adjust</source>
+        <translation>Adjust</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Select</source>
+        <translation>Select</translation>
+    </message>
+</context>
+<context>
     <name>SettingsPage</name>
     <message>
         <location filename="../qml/SettingsPage.qml" line="+13"/>
@@ -3965,7 +4019,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>SettingsPane</name>
     <message>
-        <location filename="../qml/SettingsPane.qml" line="+17"/>
+        <location filename="../qml/SettingsPane.qml" line="+19"/>
         <source>Select</source>
         <translation>Select</translation>
     </message>
@@ -4041,20 +4095,20 @@ This can&apos;t be undone.</translation>
         <translation>Use left and right to choose. You can change this later in Settings.</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+17"/>
         <location line="+63"/>
         <location line="+81"/>
         <source>Press A to continue</source>
         <translation>Press A to continue</translation>
     </message>
     <message>
-        <location line="-312"/>
-        <location line="+218"/>
+        <location line="-313"/>
+        <location line="+219"/>
         <source>Network</source>
         <translation>Network</translation>
     </message>
     <message>
-        <location line="-354"/>
+        <location line="-355"/>
         <source>Try again</source>
         <translation>Try again</translation>
     </message>
@@ -4077,7 +4131,7 @@ This can&apos;t be undone.</translation>
         <translation>Press A to try again</translation>
     </message>
     <message>
-        <location line="+80"/>
+        <location line="+81"/>
         <source>Where are you?</source>
         <translation>Where are you?</translation>
     </message>
@@ -4127,8 +4181,8 @@ This can&apos;t be undone.</translation>
         <translation>Creating…</translation>
     </message>
     <message>
-        <location line="-272"/>
-        <location line="+299"/>
+        <location line="-273"/>
+        <location line="+300"/>
         <source>You&apos;re all set</source>
         <translation>You&apos;re all set</translation>
     </message>
@@ -4141,7 +4195,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+617"/>
+        <location filename="../qml/Shell.qml" line="+618"/>
         <source>Could not %1.</source>
         <translation>Could not %1.</translation>
     </message>
@@ -4294,7 +4348,7 @@ This can&apos;t be undone.</translation>
         <translation>Your activity</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+6"/>
         <source>Uninstall…</source>
         <translation>Uninstall…</translation>
     </message>
@@ -4314,7 +4368,7 @@ This can&apos;t be undone.</translation>
         <translation>%1 was uninstalled.</translation>
     </message>
     <message>
-        <location line="+473"/>
+        <location line="+472"/>
         <location line="+4"/>
         <location line="+4"/>
         <source>Select</source>
@@ -4586,7 +4640,7 @@ This can&apos;t be undone.</translation>
         <translation>Aggressive</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+10"/>
         <source>Sensitivity</source>
         <translation>Sensitivity</translation>
     </message>
@@ -5772,12 +5826,12 @@ This can&apos;t be undone.</translation>
     <message>
         <location filename="../qml/UninstallConfirm.qml" line="+34"/>
         <location line="+1"/>
-        <location line="+199"/>
+        <location line="+220"/>
         <source>Cancel</source>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location line="-199"/>
+        <location line="-220"/>
         <source>Select</source>
         <translation>Select</translation>
     </message>
@@ -5792,13 +5846,13 @@ This can&apos;t be undone.</translation>
         <translation>Uninstall</translation>
     </message>
     <message>
-        <location line="+47"/>
+        <location line="+65"/>
         <source>Enter an admin&apos;s PIN</source>
         <translation>Enter an admin&apos;s PIN</translation>
     </message>
     <message>
-        <location line="+43"/>
-        <location line="+23"/>
+        <location line="+44"/>
+        <location line="+25"/>
         <location line="+5"/>
         <source>Uninstall %1?</source>
         <translation>Uninstall %1?</translation>

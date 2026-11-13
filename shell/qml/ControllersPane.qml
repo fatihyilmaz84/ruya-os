@@ -207,8 +207,6 @@ SettingsPane {
             confirmRow.value = Qt.binding(() => Input.confirmButton)
         }
         accessibleValue: currentLabel + ". " + confirmNote.sentence
-        Keys.onReturnPressed: step(1)         // Accept = Next (the hint says so)
-        Keys.onEnterPressed: step(1)
         onActiveFocusChanged: if (activeFocus) pane.focusedPad = false
     }
     SettingRow {

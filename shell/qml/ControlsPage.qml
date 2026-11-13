@@ -78,8 +78,6 @@ Page {
             options: page.appliesOptions
             onActiveFocusChanged: if (activeFocus) body.focusedKind = "choice"
             onEdited: v => GameControls.setAppliesTo(v)
-            Keys.onReturnPressed: step(1)
-            Keys.onEnterPressed: step(1)
         }
         Binding { target: appliesRow; property: "value"; value: GameControls.appliesValue }
 
@@ -91,8 +89,6 @@ Page {
             options: page.layoutOptions
             onActiveFocusChanged: if (activeFocus) body.focusedKind = "choice"
             onEdited: v => GameControls.setLayout(v)
-            Keys.onReturnPressed: step(1)
-            Keys.onEnterPressed: step(1)
         }
         Binding { target: layoutRow; property: "value"; value: GameControls.layout }
 

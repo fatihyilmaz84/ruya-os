@@ -13,8 +13,19 @@ FocusScope {
     property real u: 1
 
     // What the buttons do while this pane has focus (the hint bar, T-158): a list of
-    // { button, text }. A pane with nothing to select sets `hints: [{ button: "B", text: qsTr("Back") }]`.
-    property var hints: [{ button: "A", text: qsTr("Select") }, { button: "B", text: qsTr("Back") }]
+    // { button, text }. By default the focused row's own (`SettingControl.hints`, by its kind, RUY-512);
+    // a pane that sets `hints:` itself still wins (a pane with nothing to select sets
+    // `hints: [{ button: "B", text: qsTr("Back") }]`).
+    property var hints: focusedRow ? focusedRow.hints : [{ button: "A", text: qsTr("Select") }, { button: "B", text: qsTr("Back") }]
+
+    // The row of the column that holds the active focus now, or null. Read from the window, so it
+    // follows every move without a handler per row.
+    readonly property Item focusedRow: {
+        let item = Window.window ? Window.window.activeFocusItem : null
+        while (item && item.parent !== column)
+            item = item.parent
+        return item as SettingControl
+    }
 
     default property alias rows: column.data
 
@@ -29,6 +40,25 @@ FocusScope {
     // row) is drawn at Theme.peekOpacity. Never the focused row. Set by updatePeek().
     property Item peekAbove: null
     property Item peekBelow: null
+
+    // The facts of the column get their hairline (RUY-512): a fact whose next visible item is a fact too
+    // draws `ruleBelow`; the last fact of a run, a message and anything else never does. Called after
+    // every layout of the column.
+    function updateRules() {
+        let prev = null
+        for (let i = 0; i < column.children.length; ++i) {
+            const c = column.children[i]
+            if (!c || !c.visible || c.height <= 0)
+                continue
+            const row = c as SettingControl
+            const fact = row !== null && row.flat && row.enabled
+            if (prev)
+                prev.ruleBelow = fact
+            prev = fact ? row : null
+            if (row)
+                row.ruleBelow = false
+        }
+    }
 
     // Visible rows (and spacers) of the column in order, with a height.
     function laidOutRows() {
@@ -278,6 +308,7 @@ FocusScope {
                 width: flick.width
                 spacing: Theme.spaceS * pane.u
                 onHeightChanged: Qt.callLater(pane.relayout)
+                onPositioningComplete: pane.updateRules()
             }
         }
     }

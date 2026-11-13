@@ -15,7 +15,10 @@ FocusScope {
     // Optional icon before the label (a name from Icon.qml, e.g. a device's kind, T-199). Decorative:
     // what it shows is also in the label or the accessible value. Not together with a swatch.
     property string iconName
-    readonly property bool hasIcon: iconName !== "" && !hasSwatch
+    // The icon a kind brings when the row sets none (the message row's `info`, RUY-512).
+    property string defaultIconName
+    readonly property string shownIconName: iconName !== "" ? iconName : defaultIconName
+    readonly property bool hasIcon: shownIconName !== "" && !hasSwatch
     // Optional controller button in the icon slot (RUY-465, 04 §5): a `ButtonGlyph` at `glyphSize`
     // (the size of `iconM`) for a row about one button (Remap buttons). The button's name is the
     // label, so the glyph is decorative too. Not together with a swatch or an icon.
@@ -40,8 +43,46 @@ FocusScope {
     // name. With a detail the label is one line and elided too. `trailingWidth` is what a subtype draws
     // on the right (SettingRow's value), so the two lines end before it.
     property string detail
+    // A second line a kind supplies when `detail` is empty (an action's status, RUY-512).
+    property string detailFallback
+    readonly property string detailShown: detail !== "" ? detail : detailFallback
     property real trailingWidth: 0
-    readonly property bool hasDetail: detail !== ""
+    readonly property bool hasDetail: detailShown !== ""
+
+    // The row's look by kind (RUY-512, 04 §5 "Setting row kinds"). `flat`: a fact or a message, with no
+    // fill and no GlassLayers at rest (focus is the normal row focus). `ruleBelow`: a hairline along the
+    // bottom edge, set by the pane when the next visible row is a fact too. `centered`: label (and
+    // detail) centred in the row, the icon `spaceS` before the label (an action). `primary`: the
+    // `primaryFill` pill with its ring `focusRingOffset` outside. `labelWeight`: DemiBold for an action
+    // and the current item.
+    property bool flat: false
+    property bool ruleBelow: false
+    property bool centered: false
+    property bool primary: false
+    property int labelWeight: Font.Normal
+    // The label's colour (onPrimary on a primary action).
+    property color labelColor: Theme.text
+
+    // What the hint bar shows while this row has the focus (SettingsPane, 04 §5): a list of
+    // { button, text }. `hintKind` picks the default; a row names its own verb with `hints:`.
+    property string hintKind: "item"
+    property var hints: {
+        const back = { button: "B", text: qsTr("Back") }
+        switch (hintKind) {
+        case "info":
+            return [back]
+        case "page":
+            return [{ button: "A", text: qsTr("Open") }, back]
+        case "toggle":
+            return [{ button: "A", text: qsTr("Toggle") }, back]
+        case "choice":
+            return [{ button: "Left/Right", text: qsTr("Change") }, { button: "A", text: qsTr("Next") }, back]
+        case "slider":
+            return [{ button: "Left/Right", text: qsTr("Adjust") }, back]
+        default:
+            return [{ button: "A", text: qsTr("Select") }, back]
+        }
+    }
 
     // The pane navigates over children that set this.
     readonly property bool focusable: true
@@ -56,7 +97,7 @@ FocusScope {
     property string accessibleValue
     Accessible.role: Accessible.Button
     Accessible.name: (accessibleValue.length > 0 ? label + ", " + accessibleValue : label)
-                     + (hasDetail ? ", " + detail : "")
+                     + (detail !== "" ? ", " + detail : "")
     Accessible.focusable: true
 
     Rectangle {
@@ -66,8 +107,13 @@ FocusScope {
         radius: control.cornerRadius
         // A row lies straight on L0, which is blurred on pages (04 §3.6); with no blur (the Performance
         // tier) translucent glass would show the sharp blobs or picture through, so it is opaque (T-434).
-        color: control.activeFocus ? Theme.focusFill : (Theme.blurMax > 0 ? Theme.glass : Theme.glassOpaque)
-        border.width: control.activeFocus ? Theme.focusRingWidth * control.u : 0     // unfocused: the lit rim below
+        // A flat row (a fact, a message) has no fill at rest: the clear colour is focusFill's own, at alpha 0,
+        // so the focus fade does not pass through black. A primary action keeps its fill when focused.
+        color: control.primary ? Theme.primaryFill
+               : control.activeFocus ? Theme.focusFill
+               : control.flat ? Qt.alpha(Theme.focusFill, 0)
+               : (Theme.blurMax > 0 ? Theme.glass : Theme.glassOpaque)
+        border.width: control.activeFocus && !control.primary ? Theme.focusRingWidth * control.u : 0     // unfocused: the lit rim below
         border.color: Theme.focusRing
         Behavior on color { ColorAnimation { duration: Theme.focusMs } }
     }
@@ -76,8 +122,30 @@ FocusScope {
         anchors.fill: parent
         u: control.u
         radius: control.cornerRadius
+        visible: !control.primary && (!control.flat || control.activeFocus)
         grain: false                // a row is not blurred
         rim: !control.activeFocus   // the focus ring replaces the rim
+    }
+
+    // The focus ring of a primary action: outside the pill, a dark gap between (as PrimaryButton).
+    Rectangle {
+        objectName: "rowRingOutside"
+        visible: control.primary && control.activeFocus
+        anchors.fill: parent
+        anchors.margins: -Theme.focusRingOffset * control.u
+        radius: height / 2
+        color: "transparent"
+        border.width: Theme.focusRingWidth * control.u
+        border.color: Theme.focusRing
+    }
+
+    // Between two facts (the pane sets ruleBelow): a hairline along the bottom edge.
+    Rectangle {
+        objectName: "rowRule"
+        visible: control.ruleBelow && control.flat && !control.activeFocus
+        anchors { left: parent.left; leftMargin: Theme.spaceL * control.u; right: parent.right; rightMargin: Theme.spaceL * control.u; bottom: parent.bottom }
+        height: Theme.hairlineAt(control.u)
+        color: Theme.glassBorder
     }
 
     Rectangle {
@@ -94,9 +162,15 @@ FocusScope {
     Icon {
         objectName: "rowIcon"
         visible: control.hasIcon
-        anchors { left: parent.left; leftMargin: Theme.spaceL * control.u; verticalCenter: parent.verticalCenter }
+        anchors {
+            left: control.centered ? undefined : parent.left
+            leftMargin: Theme.spaceL * control.u
+            right: control.centered ? labelText.left : undefined
+            rightMargin: Theme.spaceS * control.u
+            verticalCenter: parent.verticalCenter
+        }
         u: control.u
-        name: control.hasIcon ? control.iconName : ""
+        name: control.hasIcon ? control.shownIconName : ""
         color: Qt.alpha(Theme.text, control.dimmed ? Theme.disabledOpacity : 1)
     }
 
@@ -111,14 +185,16 @@ FocusScope {
     }
 
     // Room for the label and the detail between their left edge and the trailing content.
-    readonly property real textWidth: Math.max(0, width - labelText.x - trailingWidth - Theme.spaceL * u)
+    readonly property real textWidth: control.centered ? Math.max(0, width - 2 * (Theme.spaceL + (hasIcon ? Theme.iconM + Theme.spaceS : 0)) * u)
+                                                       : Math.max(0, width - labelText.x - trailingWidth - Theme.spaceL * u)
 
     Text {
         id: labelText
         objectName: "label"
         visible: control.labelVisible
         anchors {
-            left: parent.left
+            left: control.centered ? undefined : parent.left
+            horizontalCenter: control.centered ? parent.horizontalCenter : undefined
             leftMargin: (control.hasSwatch ? Theme.spaceXxxl
                          : control.hasIcon || control.hasGlyph ? Theme.spaceL + Theme.iconM + Theme.spaceS
                          : Theme.spaceL) * control.u
@@ -126,24 +202,30 @@ FocusScope {
             // With a detail the pair is centred: the label moves up by half the detail and its gap.
             verticalCenterOffset: control.hasDetail ? -(detailText.height + Theme.spaceXxs * control.u) / 2 : 0
         }
-        width: control.hasDetail ? Math.min(implicitWidth, control.textWidth) : implicitWidth
-        elide: control.hasDetail ? Text.ElideRight : Text.ElideNone
+        width: control.hasDetail || control.centered ? Math.min(implicitWidth, control.textWidth) : implicitWidth
+        elide: control.hasDetail || control.centered ? Text.ElideRight : Text.ElideNone
         textFormat: Text.PlainText      // a label can be a device's own name (Bluetooth, UPower): never markup
         text: control.label
-        color: Qt.alpha(Theme.text, control.dimmed ? Theme.disabledOpacity : 1)
+        color: Qt.alpha(control.labelColor, control.dimmed ? Theme.disabledOpacity : 1)
         font.pixelSize: Theme.typeBody * control.u
+        font.weight: control.labelWeight
     }
 
     Text {
         id: detailText
         objectName: "detail"
         visible: control.hasDetail && control.labelVisible
-        anchors { left: labelText.left; top: labelText.bottom; topMargin: Theme.spaceXxs * control.u }
+        anchors {
+            left: control.centered ? undefined : labelText.left
+            horizontalCenter: control.centered ? parent.horizontalCenter : undefined
+            top: labelText.bottom
+            topMargin: Theme.spaceXxs * control.u
+        }
         width: Math.min(implicitWidth, control.textWidth)
         elide: Text.ElideRight
         textFormat: Text.PlainText      // a device's battery and connection: plain words
-        text: control.detail
-        color: Qt.alpha(Theme.text, control.dimmed ? Theme.disabledOpacity : 1)
+        text: control.detailShown
+        color: Qt.alpha(control.labelColor, control.dimmed ? Theme.disabledOpacity : 1)
         font.pixelSize: Theme.typeCaption * control.u
     }
 }

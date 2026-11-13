@@ -366,6 +366,7 @@ FocusScope {
             objectName: "setupLanguageRow"
             u: setup.u
             label: qsTr("Language")
+            acceptSteps: false          // A continues the wizard
             options: [
                 { value: "en", label: "English" },
                 { value: "tr", label: "Türkçe" },

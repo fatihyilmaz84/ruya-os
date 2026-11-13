@@ -445,7 +445,7 @@ Bu geri alınamaz.</translation>
     <message>
         <location line="+1"/>
         <source>Open</source>
-        <translation>Açık</translation>
+        <translation>Aç</translation>
     </message>
     <message>
         <location line="+10"/>
@@ -481,6 +481,22 @@ Bu geri alınamaz.</translation>
         <location line="+1"/>
         <source>An admin&apos;s PIN is needed to install this app.</source>
         <translation>Bu uygulamayı yüklemek için bir yöneticinin PIN&apos;i gerekir.</translation>
+    </message>
+    <message>
+        <source>Select</source>
+        <translation type="vanished">Seç</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation type="vanished">İptal</translation>
+    </message>
+    <message>
+        <source>Uninstall %1?</source>
+        <translation type="vanished">%1 kaldırılsın mı?</translation>
+    </message>
+    <message>
+        <source>Also delete my data</source>
+        <translation type="vanished">Verilerimi de sil</translation>
     </message>
 </context>
 <context>
@@ -638,7 +654,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>BatteryChip</name>
     <message>
-        <location filename="../qml/BatteryChip.qml" line="+52"/>
+        <location filename="../qml/BatteryChip.qml" line="+53"/>
         <source>%1 battery %2 percent, low</source>
         <translation>%1 pili yüzde %2, düşük</translation>
     </message>
@@ -738,7 +754,7 @@ Bu geri alınamaz.</translation>
         <translation>Yeni kontrolcü eşleştir</translation>
     </message>
     <message>
-        <location line="+110"/>
+        <location line="+111"/>
         <source>Pair again %1</source>
         <translation>%1 cihazını yeniden eşleştir</translation>
     </message>
@@ -753,7 +769,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 adını değiştir</translation>
     </message>
     <message>
-        <location line="-256"/>
+        <location line="-257"/>
         <source>Paired</source>
         <translation>Eşleşti</translation>
     </message>
@@ -829,7 +845,7 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="-194"/>
-        <location line="+343"/>
+        <location line="+344"/>
         <source>Forget %1</source>
         <translation>%1 cihazını unut</translation>
     </message>
@@ -1204,12 +1220,12 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+36"/>
-        <location line="+178"/>
+        <location line="+179"/>
         <source>Other</source>
         <translation>Diğer</translation>
     </message>
     <message>
-        <location line="-129"/>
+        <location line="-130"/>
         <source>Press A to search again</source>
         <translation>Yeniden aramak için A&apos;ya basın</translation>
     </message>
@@ -1224,7 +1240,7 @@ Bu geri alınamaz.</translation>
         <translation>Henüz bir şey bulunamadı</translation>
     </message>
     <message>
-        <location line="+41"/>
+        <location line="+42"/>
         <source>Pairing…</source>
         <translation>Eşleştiriliyor…</translation>
     </message>
@@ -1307,7 +1323,7 @@ Bu geri alınamaz.</translation>
         <translation>Bluetooth</translation>
     </message>
     <message>
-        <location line="+69"/>
+        <location line="+71"/>
         <source>%1 · %2</source>
         <translation>%1 · %2</translation>
     </message>
@@ -1527,7 +1543,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>ControllerToasts</name>
     <message>
-        <location filename="../qml/ControllerToasts.qml" line="+123"/>
+        <location filename="../qml/ControllerToasts.qml" line="+124"/>
         <source>Battery %1%</source>
         <translation>Pil %1%</translation>
     </message>
@@ -1597,13 +1613,13 @@ Bu geri alınamaz.</translation>
         <translation>Yeniden dene</translation>
     </message>
     <message>
-        <location line="+36"/>
-        <location line="+22"/>
+        <location line="+37"/>
+        <location line="+20"/>
         <source>Confirm button</source>
         <translation>Onay düğmesi</translation>
     </message>
     <message>
-        <location line="-20"/>
+        <location line="-18"/>
         <source>As on the controller</source>
         <translation>Kontrolcüdeki gibi</translation>
     </message>
@@ -1618,7 +1634,7 @@ Bu geri alınamaz.</translation>
         <translation>Sağdaki</translation>
     </message>
     <message>
-        <location line="+26"/>
+        <location line="+24"/>
         <source>Could not change the confirm button</source>
         <translation>Onay düğmesi değiştirilemedi</translation>
     </message>
@@ -1721,7 +1737,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>ControlsIntro</name>
     <message>
-        <location filename="../qml/ControlsIntro.qml" line="+25"/>
+        <location filename="../qml/ControlsIntro.qml" line="+26"/>
         <source>Changes here reach games only. Menus keep their buttons.</source>
         <translation>Buradaki değişiklikler yalnızca oyunlara uygulanır. Menüler kendi düğmelerini korur.</translation>
     </message>
@@ -1770,12 +1786,12 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+54"/>
+        <location line="+51"/>
         <source>Default</source>
         <translation>Varsayılan</translation>
     </message>
     <message>
-        <location line="-35"/>
+        <location line="-31"/>
         <source>Back</source>
         <translation>Geri</translation>
     </message>
@@ -1805,12 +1821,12 @@ Bu geri alınamaz.</translation>
         <translation>Uygulandığı kontrolcüler</translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+11"/>
         <source>Button layout</source>
         <translation>Düğme düzeni</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+10"/>
         <source>Remap buttons</source>
         <translation>Düğmeleri yeniden ata</translation>
     </message>
@@ -1870,7 +1886,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>DeviceIcons</name>
     <message>
-        <location filename="../qml/DeviceIcons.qml" line="+78"/>
+        <location filename="../qml/DeviceIcons.qml" line="+129"/>
         <source>%1 (%2)</source>
         <translation>%1 (%2)</translation>
     </message>
@@ -3105,7 +3121,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>PinPad</name>
     <message>
-        <location filename="../qml/PinPad.qml" line="+164"/>
+        <location filename="../qml/PinPad.qml" line="+166"/>
         <source>PINs don&apos;t match</source>
         <translation>PIN&apos;ler eşleşmiyor</translation>
     </message>
@@ -3864,6 +3880,44 @@ Bu geri alınamaz.</translation>
     </message>
 </context>
 <context>
+    <name>SettingControl</name>
+    <message>
+        <location filename="../qml/controls/SettingControl.qml" line="+70"/>
+        <source>Back</source>
+        <translation>Geri</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Open</source>
+        <translation>Aç</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Toggle</source>
+        <translation>Aç/Kapat</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Change</source>
+        <translation>Değiştir</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Next</source>
+        <translation>İleri</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Adjust</source>
+        <translation>Ayarla</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Select</source>
+        <translation>Seç</translation>
+    </message>
+</context>
+<context>
     <name>SettingsPage</name>
     <message>
         <location filename="../qml/SettingsPage.qml" line="+13"/>
@@ -3950,7 +4004,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>SettingsPane</name>
     <message>
-        <location filename="../qml/SettingsPane.qml" line="+17"/>
+        <location filename="../qml/SettingsPane.qml" line="+19"/>
         <source>Select</source>
         <translation>Seç</translation>
     </message>
@@ -4026,20 +4080,20 @@ Bu geri alınamaz.</translation>
         <translation>Seçmek için sola ve sağa basın. Bunu daha sonra Ayarlar&apos;dan değiştirebilirsiniz.</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+17"/>
         <location line="+63"/>
         <location line="+81"/>
         <source>Press A to continue</source>
         <translation>Devam etmek için A&apos;ya basın</translation>
     </message>
     <message>
-        <location line="-312"/>
-        <location line="+218"/>
+        <location line="-313"/>
+        <location line="+219"/>
         <source>Network</source>
         <translation>Ağ</translation>
     </message>
     <message>
-        <location line="-354"/>
+        <location line="-355"/>
         <source>Try again</source>
         <translation>Yeniden dene</translation>
     </message>
@@ -4062,7 +4116,7 @@ Bu geri alınamaz.</translation>
         <translation>Yeniden denemek için A&apos;ya basın</translation>
     </message>
     <message>
-        <location line="+80"/>
+        <location line="+81"/>
         <source>Where are you?</source>
         <translation>Neredesiniz?</translation>
     </message>
@@ -4112,8 +4166,8 @@ Bu geri alınamaz.</translation>
         <translation>Oluşturuluyor…</translation>
     </message>
     <message>
-        <location line="-272"/>
-        <location line="+299"/>
+        <location line="-273"/>
+        <location line="+300"/>
         <source>You&apos;re all set</source>
         <translation>Her şey hazır</translation>
     </message>
@@ -4126,7 +4180,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+617"/>
+        <location filename="../qml/Shell.qml" line="+618"/>
         <source>Could not %1.</source>
         <translation>%1 işlemi yapılamadı.</translation>
     </message>
@@ -4279,7 +4333,7 @@ Bu geri alınamaz.</translation>
         <translation>Etkinliğiniz</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+6"/>
         <source>Uninstall…</source>
         <translation>Kaldır…</translation>
     </message>
@@ -4299,7 +4353,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 kaldırıldı.</translation>
     </message>
     <message>
-        <location line="+473"/>
+        <location line="+472"/>
         <location line="+4"/>
         <location line="+4"/>
         <source>Select</source>
@@ -4571,7 +4625,7 @@ Bu geri alınamaz.</translation>
         <translation>Agresif</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+10"/>
         <source>Sensitivity</source>
         <translation>Duyarlılık</translation>
     </message>
@@ -5754,12 +5808,12 @@ Bu geri alınamaz.</translation>
     <message>
         <location filename="../qml/UninstallConfirm.qml" line="+34"/>
         <location line="+1"/>
-        <location line="+199"/>
+        <location line="+220"/>
         <source>Cancel</source>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="-199"/>
+        <location line="-220"/>
         <source>Select</source>
         <translation>Seç</translation>
     </message>
@@ -5774,13 +5828,13 @@ Bu geri alınamaz.</translation>
         <translation>Kaldır</translation>
     </message>
     <message>
-        <location line="+47"/>
+        <location line="+65"/>
         <source>Enter an admin&apos;s PIN</source>
         <translation>Bir yöneticinin PIN&apos;ini girin</translation>
     </message>
     <message>
-        <location line="+43"/>
-        <location line="+23"/>
+        <location line="+44"/>
+        <location line="+25"/>
         <location line="+5"/>
         <source>Uninstall %1?</source>
         <translation>%1 kaldırılsın mı?</translation>
