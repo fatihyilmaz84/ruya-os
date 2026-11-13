@@ -209,6 +209,13 @@ FocusScope {
         placedY = y
     }
 
+    // The sheet follows its anchor while it is on screen: a list that is still scrolling to the card when the
+    // menu opens (Home's Recent row) would otherwise leave it where the card was.
+    FrameAnimation {
+        running: menu.shown && menu.anchor !== null
+        onTriggered: menu.place()
+    }
+
     // ---- motion ----
     property real slide: 0
     ParallelAnimation {

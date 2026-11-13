@@ -232,6 +232,18 @@ Item {
             compare(menu.placedX + 560, 1920 - 96)
         }
 
+        // A list that is still scrolling to the card when the menu opens: the sheet goes where the card ends up.
+        function test_the_sheet_follows_a_moving_anchor() {
+            const menu = menuOf(1)
+            const anchor = anchorAt(548, 300, 400, 225)
+            menu.open(anchor, "card", "T", rowsOf(3, false), "")
+            compare(Math.round(menu.placedX), 999)
+            anchor.x = 96
+            tryVerify(() => Math.round(menu.placedX) === 96 + 400 + 16 + 35, 2000, "it follows the card")
+            anchor.x = 1396
+            tryVerify(() => menu.placedSide === "left", 2000, "and flips when the card reaches the last column")
+        }
+
         // ---- motion ----
 
         function test_it_fades_in_and_out() {

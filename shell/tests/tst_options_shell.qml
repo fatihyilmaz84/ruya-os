@@ -623,10 +623,7 @@ Item {
         }
         // ---- screenshots (dev.ps1 shots; English and Turkish) ----
 
-        function shot(name) {
-            wait(900)
-            grabImage(tc.shell).save(shotsDir + "/" + name + ".png")
-        }
+        function settle() { wait(900) }
 
         function test_zz_screenshots_games() {
             if (!shotsDir)
@@ -637,7 +634,8 @@ Item {
                 openGames()
                 keyClick(Qt.Key_Menu)                       // a card in column 1: the menu beside it
                 tryVerify(() => menu().opacity >= 1, 2000)
-                shot("60-options-games-card-" + lang)
+                settle()
+                grabImage(tc.shell).save(shotsDir + "/" + "60-options-games-card-" + lang + ".png")
                 keyClick(Qt.Key_Escape)
                 keyClick(Qt.Key_Right)
                 keyClick(Qt.Key_Right)
@@ -645,7 +643,8 @@ Item {
                 keyClick(Qt.Key_Menu)
                 tryVerify(() => menu().opacity >= 1, 2000)
                 compare(menu().placedSide, "left")
-                shot("61-options-games-flipped-" + lang)
+                settle()
+                grabImage(tc.shell).save(shotsDir + "/" + "61-options-games-flipped-" + lang + ".png")
                 keyClick(Qt.Key_Escape)
                 keyClick(Qt.Key_Left)
                 keyClick(Qt.Key_Left)
@@ -653,7 +652,7 @@ Item {
                 keyPress(Qt.Key_Return)                     // the Hold ring on a Games card, half way
                 tryVerify(() => find("gamesGrid").currentItem.holdShown, 2000)
                 wait(150)
-                shot("62-hold-ring-card-" + lang)
+                grabImage(tc.shell).save(shotsDir + "/" + "62-hold-ring-card-" + lang + ".png")
                 keyClick(Qt.Key_Right)                      // cancels the hold; the release is stray
                 keyRelease(Qt.Key_Return)
                 tc.shell.destroy()
@@ -670,13 +669,14 @@ Item {
                 // beside the hero's Play pill
                 keyClick(Qt.Key_Menu)
                 tryVerify(() => menu().opacity >= 1, 2000)
-                shot("63-options-hero-" + lang)
+                settle()
+                grabImage(tc.shell).save(shotsDir + "/" + "63-options-hero-" + lang + ".png")
                 keyClick(Qt.Key_Escape)
                 // the Hold ring on the hero's Play pill, half way
                 keyPress(Qt.Key_Return)
                 tryVerify(() => findChild(find("homePlay"), "buttonHoldRing").visible, 2000)
                 wait(150)
-                shot("64-hold-ring-hero-" + lang)
+                grabImage(tc.shell).save(shotsDir + "/" + "64-hold-ring-hero-" + lang + ".png")
                 keyClick(Qt.Key_Right)                      // cancels the hold; the release is stray
                 keyRelease(Qt.Key_Return)
                 keyClick(Qt.Key_Left)
@@ -685,7 +685,7 @@ Item {
                 keyPress(Qt.Key_Return)
                 tryVerify(() => find("recentRow").currentItem.holdShown, 2000)
                 wait(150)
-                shot("65-hold-ring-recent-" + lang)
+                grabImage(tc.shell).save(shotsDir + "/" + "65-hold-ring-recent-" + lang + ".png")
                 keyClick(Qt.Key_Right)
                 keyRelease(Qt.Key_Return)
                 // an empty menu (Guest, a Steam game) and a long title
@@ -706,7 +706,8 @@ Item {
                 goHome(app)
                 keyClick(Qt.Key_Menu)                       // Home's running card: Resume, Close game, Details, Your activity
                 tryVerify(() => menu().opacity >= 1, 2000)
-                shot("66-options-running-" + lang)
+                settle()
+                grabImage(tc.shell).save(shotsDir + "/" + "66-options-running-" + lang + ".png")
                 keyClick(Qt.Key_Escape)
                 tc.shell.removeApp(app)
                 tc.shell.destroy()
@@ -725,16 +726,19 @@ Item {
                 keyClick(Qt.Key_Right)                      // Counter Strike: nothing for Guest
                 keyClick(Qt.Key_Menu)
                 tryVerify(() => menu().opacity >= 1, 2000)
-                shot("67-options-empty-" + lang)
+                settle()
+                grabImage(tc.shell).save(shotsDir + "/" + "67-options-empty-" + lang + ".png")
                 keyClick(Qt.Key_Escape)
                 keyClick(Qt.Key_Left)                       // Turbo Racer with the Store down: the note
                 Store.mockServiceLost()
                 tryVerify(() => !Store.available)
                 keyClick(Qt.Key_Menu)
                 tryVerify(() => menu().opacity >= 1, 2000)
-                shot("68-options-error-" + lang)
+                settle()
+                grabImage(tc.shell).save(shotsDir + "/" + "68-options-error-" + lang + ".png")
                 menu().title = "The Extraordinarily Long Title of a Game That Does Not Fit"
-                shot("69-options-long-title-" + lang)
+                settle()
+                grabImage(tc.shell).save(shotsDir + "/" + "69-options-long-title-" + lang + ".png")
                 keyClick(Qt.Key_Escape)
                 Store.mockServiceRegained()
                 tc.shell.destroy()
