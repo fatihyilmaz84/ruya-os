@@ -10,8 +10,9 @@
 //!      starts `xwayland-satellite :<n> -nolisten local -auth <file>` with `XDG_RUNTIME_DIR` set to
 //!      that directory (so its `xwls-<n>` sockets land there) and the profile's `WAYLAND_DISPLAY`;
 //!      the satellite runs Xwayland rootless and is its X window manager;
-//!   3. once Xwayland is up (its socket exists and its lock names a child of the satellite) the
-//!      socket is made 0700; a display taken meanwhile by another launch is retried with the next
+//!   3. once Xwayland is up (the satellite sent `READY=1` to the private `NOTIFY_SOCKET` it was
+//!      given in the instance directory, the kernel-checked sender being the satellite itself, and
+//!      the display's socket exists) the socket is made 0700; a display taken meanwhile by another launch is retried with the next
 //!      number, a few times at most;
 //!   4. it runs `flatpak run <app id>` with `DISPLAY`, `XAUTHORITY`, `SDL_VIDEODRIVER=x11` and
 //!      `XDG_SESSION_TYPE=x11`, and without `WAYLAND_DISPLAY` (`app_env_x11`);
@@ -61,6 +62,10 @@ const COOKIE_NAME: &str = "MIT-MAGIC-COOKIE-1";
 /// The files in the instance directory.
 const AUTH_FILE: &str = "Xauthority";
 const DISPLAY_FILE: &str = "display";
+/// The satellite's pid, recorded so a later cleanup can tell a stale socket from a live one.
+const SATELLITE_FILE: &str = "satellite";
+/// The private datagram socket the satellite's `READY=1` (sd_notify) goes to.
+const NOTIFY_FILE: &str = "notify";
 
 /// The `[Context] sockets` list of a Flatpak metadata file (`a;b;!c;`); a `!` entry removes.
 pub fn context_sockets(metadata: &str) -> Vec<String> {
@@ -182,12 +187,19 @@ pub fn satellite_argv(display: u32, auth: &Path) -> Vec<String> {
 }
 
 /// What changes in the helper's environment for the satellite: its runtime directory is the
-/// instance directory (its `xwls-<n>` sockets land there). `WAYLAND_DISPLAY` stays the profile's.
+/// instance directory (its `xwls-<n>` sockets land there), its `NOTIFY_SOCKET` is our private
+/// datagram socket there. `WAYLAND_DISPLAY` stays the profile's.
 pub fn satellite_env(dir: &Path) -> Vec<(String, Option<String>)> {
-    vec![(
-        "XDG_RUNTIME_DIR".to_owned(),
-        Some(dir.to_string_lossy().into_owned()),
-    )]
+    vec![
+        (
+            "XDG_RUNTIME_DIR".to_owned(),
+            Some(dir.to_string_lossy().into_owned()),
+        ),
+        (
+            "NOTIFY_SOCKET".to_owned(),
+            Some(file_in(dir, NOTIFY_FILE).to_string_lossy().into_owned()),
+        ),
+    ]
 }
 
 /// What changes in the helper's environment for the app: the X display and its cookie, SDL and
@@ -239,6 +251,15 @@ pub trait X11Os {
     /// Runs a child and waits for it.
     fn run(&mut self, argv: &[String], env: &[(String, Option<String>)]) -> io::Result<End>;
     fn alive(&self, pid: u32) -> bool;
+    /// Binds the private datagram socket the satellite notifies (replacing an older one).
+    fn notify_bind(&mut self, path: &Path) -> io::Result<()>;
+    /// Reads what has arrived on that socket; true once a `READY=1` came whose sender (the
+    /// kernel's credentials, not the message) is `sender`. A message from another pid is dropped.
+    fn notify_ready(&mut self, sender: u32) -> bool;
+    /// The live children of `pid`.
+    fn children_of(&self, pid: u32) -> Vec<u32>;
+    /// Is the file owned by the user this helper runs as?
+    fn is_own(&self, path: &Path) -> bool;
     fn parent_of(&self, pid: u32) -> Option<u32>;
     /// SIGTERM (or SIGKILL with `hard`) to a process that is not our child.
     fn signal(&mut self, pid: u32, hard: bool);
@@ -246,7 +267,8 @@ pub trait X11Os {
     fn log(&mut self, line: &str);
 }
 
-/// The pid in an X lock file (`%10d\n`).
+/// The pid in an X lock file (`%10d\n`); the satellite's Xwayland does not write one, another
+/// X server might.
 fn lock_pid(os: &dyn X11Os, display: u32) -> Option<u32> {
     os.read(&lock_path(display))?.trim().parse().ok()
 }
@@ -261,24 +283,23 @@ pub fn free_display(os: &dyn X11Os, from: u32) -> Option<u32> {
 }
 
 enum Start {
-    /// Up; the pid of Xwayland.
-    Ready(u32),
+    /// Up; the live children of the satellite (Xwayland).
+    Ready(Vec<u32>),
     Failed,
 }
 
-/// Waits until Xwayland of the satellite `sat` serves `display`: its socket exists and its lock
-/// names a child of the satellite (a lock of another server does not count).
+/// Waits until the satellite `sat` has said `READY=1` on the notify socket and `display`'s socket
+/// exists. The satellite is our own child, so its word is the proof; a socket or lock file that
+/// another server could write is not.
 fn wait_ready(os: &mut dyn X11Os, sat: u32, display: u32) -> Start {
+    let mut said_ready = false;
     for _ in 0..READY_POLLS {
         if os.child_ended(sat) {
             return Start::Failed;
         }
-        if os.exists(&socket_path(display)) {
-            if let Some(pid) = lock_pid(os, display) {
-                if os.parent_of(pid) == Some(sat) {
-                    return Start::Ready(pid);
-                }
-            }
+        said_ready = os.notify_ready(sat) || said_ready;
+        if said_ready && os.exists(&socket_path(display)) {
+            return Start::Ready(os.children_of(sat));
         }
         os.sleep(READY_POLL);
     }
@@ -290,20 +311,31 @@ fn wait_ready(os: &mut dyn X11Os, sat: u32, display: u32) -> Start {
 /// Removes the instance directory and, when the display it recorded has no live server any more,
 /// that display's socket and lock. A display that another server holds now is left alone.
 pub fn cleanup(os: &mut dyn X11Os, dir: &Path) {
-    let display = os
-        .read(&file_in(dir, DISPLAY_FILE))
-        .and_then(|s| s.trim().parse::<u32>().ok());
+    let recorded = |os: &dyn X11Os, name: &str| {
+        os.read(&file_in(dir, name))
+            .and_then(|s| s.trim().parse::<u32>().ok())
+    };
+    let display = recorded(os, DISPLAY_FILE);
+    let satellite = recorded(os, SATELLITE_FILE);
     if let Some(n) = display {
-        clear_display(os, n);
+        clear_display(os, n, satellite);
     }
     os.remove_dir_all(dir);
 }
 
-fn clear_display(os: &mut dyn X11Os, n: u32) {
-    let live = lock_pid(os, n).is_some_and(|pid| os.alive(pid));
-    if !live {
-        os.remove_file(&socket_path(n));
-        os.remove_file(&lock_path(n));
+/// Clears display `n` unless a server holds it: the satellite recorded in our instance directory
+/// is still alive, or the lock names a live pid. A socket or lock goes only when it is ours (a
+/// file of another user is never removed).
+fn clear_display(os: &mut dyn X11Os, n: u32, satellite: Option<u32>) {
+    let live = satellite.is_some_and(|pid| os.alive(pid))
+        || lock_pid(os, n).is_some_and(|pid| os.alive(pid));
+    if live {
+        return;
+    }
+    for path in [socket_path(n), lock_path(n)] {
+        if os.is_own(&path) {
+            os.remove_file(&path);
+        }
     }
 }
 
@@ -381,6 +413,10 @@ pub fn run_helper(
             os.log(&format!("cannot write the X cookie: {err}"));
             break;
         }
+        if let Err(err) = os.notify_bind(&file_in(&dir, NOTIFY_FILE)) {
+            os.log(&format!("cannot bind the notify socket: {err}"));
+            break;
+        }
         let sat = match os.spawn(&satellite_argv(n, &auth), &satellite_env(&dir)) {
             Ok(pid) => pid,
             Err(err) => {
@@ -388,6 +424,14 @@ pub fn run_helper(
                 break;
             }
         };
+        if let Err(err) = os.write_private(
+            &file_in(&dir, SATELLITE_FILE),
+            format!("{sat}\n").as_bytes(),
+        ) {
+            os.log(&format!("cannot record the satellite: {err}"));
+            os.stop_child(sat, STOP_GRACE);
+            break;
+        }
         match wait_ready(os, sat, n) {
             Start::Ready(xwayland) => {
                 started = Some((n, sat, xwayland));
@@ -413,7 +457,9 @@ pub fn run_helper(
     if let Err(err) = os.set_private(&socket_path(n)) {
         os.log(&format!("cannot make the X socket private: {err}"));
         os.stop_child(sat, STOP_GRACE);
-        end_process(os, xwayland);
+        for pid in xwayland {
+            end_process(os, pid);
+        }
         cleanup(os, &dir);
         return fail;
     }
@@ -426,7 +472,9 @@ pub fn run_helper(
         }
     };
     os.stop_child(sat, STOP_GRACE);
-    end_process(os, xwayland);
+    for pid in xwayland {
+        end_process(os, pid);
+    }
     cleanup(os, &dir);
     end
 }
@@ -453,7 +501,9 @@ mod linux {
     use std::collections::HashMap;
     use std::fs::{DirBuilder, OpenOptions, Permissions};
     use std::io::{self, Read, Write};
-    use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
+    use std::os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt, PermissionsExt};
+    use std::os::unix::io::AsRawFd;
+    use std::os::unix::net::UnixDatagram;
     use std::os::unix::process::ExitStatusExt;
     use std::path::Path;
     use std::process::{Child, Command, ExitStatus, Stdio};
@@ -462,6 +512,7 @@ mod linux {
     #[derive(Default)]
     pub struct LinuxOs {
         children: HashMap<u32, Child>,
+        notify: Option<UnixDatagram>,
     }
 
     fn command(argv: &[String], env: &[(String, Option<String>)]) -> Command {
@@ -571,6 +622,89 @@ mod linux {
             };
             let state = stat.rsplit_once(')').map(|(_, rest)| rest.trim_start());
             !state.is_some_and(|s| s.starts_with('Z') || s.starts_with('X'))
+        }
+        fn notify_bind(&mut self, path: &Path) -> io::Result<()> {
+            let _ = std::fs::remove_file(path);
+            let sock = UnixDatagram::bind(path)?;
+            sock.set_nonblocking(true)?;
+            let on: libc::c_int = 1;
+            // SAFETY: setsockopt(2) on our own open socket with a c_int that outlives the call.
+            let rc = unsafe {
+                libc::setsockopt(
+                    sock.as_raw_fd(),
+                    libc::SOL_SOCKET,
+                    libc::SO_PASSCRED,
+                    &on as *const libc::c_int as *const libc::c_void,
+                    std::mem::size_of::<libc::c_int>() as libc::socklen_t,
+                )
+            };
+            if rc != 0 {
+                return Err(io::Error::last_os_error());
+            }
+            self.notify = Some(sock);
+            Ok(())
+        }
+        fn notify_ready(&mut self, sender: u32) -> bool {
+            let Some(sock) = &self.notify else {
+                return false;
+            };
+            let fd = sock.as_raw_fd();
+            let mut ready = false;
+            loop {
+                let mut data = [0u8; 512];
+                // 8-byte aligned room for one SCM_CREDENTIALS message.
+                let mut control = [0u64; 8];
+                let mut iov = libc::iovec {
+                    iov_base: data.as_mut_ptr() as *mut libc::c_void,
+                    iov_len: data.len(),
+                };
+                // SAFETY: an all-zero msghdr is a valid empty one.
+                let mut msg: libc::msghdr = unsafe { std::mem::zeroed() };
+                msg.msg_iov = &mut iov;
+                msg.msg_iovlen = 1;
+                msg.msg_control = control.as_mut_ptr() as *mut libc::c_void;
+                msg.msg_controllen = std::mem::size_of_val(&control) as _;
+                // SAFETY: msg points at buffers that live through the call.
+                let n = unsafe { libc::recvmsg(fd, &mut msg, libc::MSG_DONTWAIT) };
+                if n < 0 {
+                    break;
+                }
+                let mut from: Option<u32> = None;
+                // SAFETY: the cmsg walk stays inside `control`, as filled in by the kernel.
+                unsafe {
+                    let mut c = libc::CMSG_FIRSTHDR(&msg);
+                    while !c.is_null() {
+                        if (*c).cmsg_level == libc::SOL_SOCKET
+                            && (*c).cmsg_type == libc::SCM_CREDENTIALS
+                        {
+                            let cred =
+                                std::ptr::read_unaligned(libc::CMSG_DATA(c) as *const libc::ucred);
+                            from = Some(cred.pid as u32);
+                        }
+                        c = libc::CMSG_NXTHDR(&msg, c);
+                    }
+                }
+                let text = String::from_utf8_lossy(&data[..n as usize]).into_owned();
+                if from == Some(sender) && text.lines().any(|l| l == "READY=1") {
+                    ready = true;
+                }
+            }
+            ready
+        }
+        fn children_of(&self, pid: u32) -> Vec<u32> {
+            let Ok(entries) = std::fs::read_dir("/proc") else {
+                return Vec::new();
+            };
+            entries
+                .flatten()
+                .filter_map(|e| e.file_name().to_str()?.parse::<u32>().ok())
+                .filter(|&c| self.parent_of(c) == Some(pid) && self.alive(c))
+                .collect()
+        }
+        fn is_own(&self, path: &Path) -> bool {
+            // SAFETY: geteuid(2) cannot fail.
+            let me = unsafe { libc::geteuid() };
+            std::fs::symlink_metadata(path).is_ok_and(|m| m.uid() == me)
         }
         fn parent_of(&self, pid: u32) -> Option<u32> {
             let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
@@ -706,10 +840,16 @@ mod tests {
         );
         assert_eq!(
             satellite_env(&dir()),
-            [(
-                "XDG_RUNTIME_DIR".to_owned(),
-                Some("/run/user/1001/ruya-x11/io.github.divVerent.aaaaxy".to_owned())
-            )]
+            [
+                (
+                    "XDG_RUNTIME_DIR".to_owned(),
+                    Some("/run/user/1001/ruya-x11/io.github.divVerent.aaaaxy".to_owned())
+                ),
+                (
+                    "NOTIFY_SOCKET".to_owned(),
+                    Some("/run/user/1001/ruya-x11/io.github.divVerent.aaaaxy/notify".to_owned())
+                ),
+            ]
         );
         let s = |v: &str| Some(v.to_owned());
         assert_eq!(
@@ -745,6 +885,18 @@ mod tests {
         dying: Option<(u32, u32)>,
         /// Satellites that never come up.
         hang: bool,
+        /// Satellites that serve the socket but never say READY=1.
+        mute: bool,
+        /// Satellites whose READY=1 comes from another pid.
+        spoof: bool,
+        /// Satellites that say READY=1 but never make the socket.
+        no_socket: bool,
+        /// READY=1 messages waiting on the notify socket (sender pids).
+        notes: Vec<u32>,
+        /// Paths of the notify socket binds.
+        bound: Vec<PathBuf>,
+        /// Files owned by another user.
+        foreign: BTreeSet<PathBuf>,
         /// How the app ends.
         app_end: Option<End>,
         /// What happened, in order.
@@ -753,6 +905,7 @@ mod tests {
         app_saw_socket_mode: Option<u32>,
         auth_at_run: Option<(Vec<u8>, u32)>,
         dir_mode_at_run: Option<u32>,
+        sat_at_run: Option<Vec<u8>>,
     }
 
     impl Fake {
@@ -847,9 +1000,15 @@ mod tests {
             self.next_pid += 1;
             let xwl = self.next_pid;
             self.procs.insert(xwl, sat);
-            self.files
-                .insert(lock_path(n), (format!("{xwl:>10}\n").into_bytes(), 0o444));
-            self.files.insert(socket_path(n), (Vec::new(), 0o777));
+            // The satellite writes no lock file; it makes the socket itself and says READY=1.
+            if !self.no_socket {
+                self.files.insert(socket_path(n), (Vec::new(), 0o777));
+            }
+            if self.spoof {
+                self.notes.push(9999);
+            } else if !self.mute {
+                self.notes.push(sat);
+            }
             // The xwls sockets of the satellite land in its runtime directory.
             self.files
                 .insert(file_in(&dir(), &format!("xwls-{n}")), (Vec::new(), 0o755));
@@ -899,11 +1058,35 @@ mod tests {
             self.app_saw_socket_mode = self.files.get(&socket_path(display)).map(|f| f.1);
             self.auth_at_run = self.files.get(&file_in(&dir(), "Xauthority")).cloned();
             self.dir_mode_at_run = self.dirs.get(&dir()).copied();
+            self.sat_at_run = self
+                .files
+                .get(&file_in(&dir(), "satellite"))
+                .map(|f| f.0.clone());
             self.app_end
                 .ok_or_else(|| io::Error::from(io::ErrorKind::NotFound))
         }
         fn alive(&self, pid: u32) -> bool {
             self.procs.contains_key(&pid)
+        }
+        fn notify_bind(&mut self, path: &Path) -> io::Result<()> {
+            self.bound.push(path.to_path_buf());
+            self.notes.clear();
+            Ok(())
+        }
+        fn notify_ready(&mut self, sender: u32) -> bool {
+            let got = self.notes.contains(&sender);
+            self.notes.clear();
+            got
+        }
+        fn children_of(&self, pid: u32) -> Vec<u32> {
+            self.procs
+                .iter()
+                .filter(|(_, &p)| p == pid)
+                .map(|(&c, _)| c)
+                .collect()
+        }
+        fn is_own(&self, path: &Path) -> bool {
+            !self.foreign.contains(path)
         }
         fn parent_of(&self, pid: u32) -> Option<u32> {
             self.procs.get(&pid).copied()
@@ -1015,6 +1198,95 @@ mod tests {
                 assert!(os.procs.is_empty(), "the hanging satellite is stopped");
             }
         }
+    }
+
+    #[test]
+    fn ready_needs_the_satellites_own_ready_and_the_socket() {
+        // The socket without READY, READY from another pid, READY without the socket: none counts.
+        for mode in ["mute", "spoof", "no_socket"] {
+            let mut os = Fake::new();
+            match mode {
+                "mute" => os.mute = true,
+                "spoof" => os.spoof = true,
+                _ => os.no_socket = true,
+            }
+            assert_eq!(helper(&mut os), End::Code(EXIT_LAUNCH_FAILED), "{mode}");
+            assert!(os.events("run").is_empty(), "{mode}");
+            assert!(
+                os.log
+                    .contains(&"log display :0 did not come up in time".to_owned()),
+                "{mode}"
+            );
+            assert!(os.procs.is_empty(), "{mode}: the satellite is stopped");
+        }
+        // READY from the satellite plus the socket: up, no lock file needed.
+        let mut os = Fake::new();
+        assert_eq!(helper(&mut os), End::Code(0));
+        assert_eq!(os.events("run").len(), 1);
+        assert_eq!(os.bound, [file_in(&dir(), "notify")]);
+    }
+
+    #[test]
+    fn a_satellite_that_ends_before_ready_fails_the_launch() {
+        let mut os = Fake::new();
+        os.broken = true;
+        assert_eq!(helper(&mut os), End::Code(EXIT_LAUNCH_FAILED));
+        assert!(os.events("run").is_empty());
+    }
+
+    #[test]
+    fn the_satellite_is_recorded_while_the_app_runs() {
+        let mut os = Fake::new();
+        assert_eq!(helper(&mut os), End::Code(0));
+        assert_eq!(os.events("spawn").len(), 1);
+        // The first pid the fake hands out is 101.
+        assert_eq!(os.sat_at_run, Some(b"101\n".to_vec()));
+    }
+
+    #[test]
+    fn cleanup_removes_only_our_own_stale_socket() {
+        let d = dir();
+        let leftover = |os: &mut Fake, sat: &[u8]| {
+            os.make_private_dir(&d).expect("dir");
+            os.write_private(&file_in(&d, "display"), b"4\n")
+                .expect("w");
+            os.write_private(&file_in(&d, "satellite"), sat).expect("w");
+            os.files.insert(socket_path(4), (Vec::new(), 0o700));
+        };
+        // A dead satellite of ours, a socket and no lock at all: the socket goes.
+        let mut os = Fake::new();
+        leftover(&mut os, b"555\n");
+        cleanup(&mut os, &d);
+        assert!(!os.exists(&socket_path(4)) && !os.exists(&d));
+        // The socket belongs to another user: it stays, our directory goes.
+        let mut os = Fake::new();
+        leftover(&mut os, b"555\n");
+        os.foreign.insert(socket_path(4));
+        cleanup(&mut os, &d);
+        assert!(os.exists(&socket_path(4)) && !os.exists(&d));
+        // The satellite is alive: nothing of :4 is touched.
+        let mut os = Fake::new();
+        leftover(&mut os, b"555\n");
+        os.procs.insert(555, 1);
+        cleanup(&mut os, &d);
+        assert!(os.exists(&socket_path(4)) && !os.exists(&d));
+        // Another display's socket is never touched.
+        let mut os = Fake::new();
+        leftover(&mut os, b"555\n");
+        os.occupy(5);
+        cleanup(&mut os, &d);
+        assert!(os.exists(&socket_path(5)) && os.exists(&lock_path(5)));
+    }
+
+    #[test]
+    fn a_socket_without_a_lock_is_a_taken_display() {
+        let mut os = Fake::new();
+        os.files.insert(socket_path(0), (Vec::new(), 0o777));
+        os.files.insert(socket_path(1), (Vec::new(), 0o777));
+        assert_eq!(free_display(&os, 0), Some(2));
+        assert_eq!(helper(&mut os), End::Code(0));
+        assert!(os.events("spawn")[0].contains(" :2 "));
+        assert!(os.exists(&socket_path(0)) && os.exists(&socket_path(1)));
     }
 
     #[test]

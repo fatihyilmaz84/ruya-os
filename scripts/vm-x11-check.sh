@@ -315,15 +315,19 @@ check)
     [ "$(printf '%s' "$xcookie" | wc -c)" = 32 ] && ok "the cookie is 16 bytes" || bad "cookie: '$xcookie'"
     [ -n "$xsat" ] && ok "xwayland-satellite $xsat runs in the app's unit" || bad "no xwayland-satellite in the unit's cgroup"
     [ -n "$xwl" ] && ok "Xwayland $xwl runs in the app's unit" || bad "no Xwayland in the unit's cgroup"
-    # RUY-457 (2): the helper's readiness test wants the lock to name a child of the satellite.
-    if [ -n "$xlock" ]; then
-        lcomm="$(cat "/proc/$xlock/comm" 2>/dev/null)"; lppid="$(ps -o ppid= -p "$xlock" 2>/dev/null | tr -d ' ')"
-        echo "    lock names pid $xlock ($lcomm), parent $lppid"
-        [ "$lcomm" = Xwayland ] && [ -n "$xsat" ] && [ "$lppid" = "$xsat" ] \
-            && ok "the lock names Xwayland and its parent is the satellite (the helper's readiness test holds)" \
-            || bad "lock pid $xlock is '$lcomm' with parent $lppid, the satellite is $xsat: the helper's 'parent_of == satellite' assumption is wrong (RUY-457)"
+    # RUY-472: readiness is the satellite's READY=1, not a lock file; Xwayland is the satellite's child.
+    xwppid="$(ps -o ppid= -p "${xwl:-0}" 2>/dev/null | tr -d ' ')"
+    if [ -n "$xsat" ] && [ "$xwppid" = "$xsat" ]; then
+        ok "Xwayland's parent is the satellite"
     else
-        bad "no lock file /tmp/.X$xn-lock"
+        bad "Xwayland $xwl has parent '$xwppid', the satellite is '$xsat'"
+    fi
+    [ -S "$xdir/notify" ] && ok "the helper's notify socket $xdir/notify exists" || bad "no notify socket in $xdir"
+    xrec="$(tr -d ' \n' < "$xdir/satellite" 2>/dev/null)"
+    if [ -n "$xsat" ] && [ "$xrec" = "$xsat" ]; then
+        ok "the instance directory records the satellite pid"
+    else
+        bad "satellite record '$xrec' is not the satellite '$xsat'"
     fi
     echo "    Xwayland: $(tr '\0' ' ' < "/proc/${xwl:-0}/cmdline" 2>/dev/null)"
     tr '\0' ' ' < "/proc/${xwl:-0}/cmdline" 2>/dev/null | grep -q -- ' -auth ' && ok "Xwayland runs with -auth" || bad "Xwayland has no -auth"
