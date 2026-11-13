@@ -26,6 +26,7 @@ FocusScope {
     Accessible.focusable: true
 
     Rectangle {
+        objectName: "buttonFace"
         anchors.fill: parent
         radius: height / 2
         color: button.lit ? Theme.focusFill : Theme.glass
