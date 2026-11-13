@@ -1,5 +1,7 @@
 #include "MockInputBackend.h"
 
+#include "InputProfileCalls.h"
+
 #include <QStringList>
 #include <QTimer>
 #include <QVariantMap>
@@ -86,6 +88,19 @@ QVariantMap withoutCapabilities(QVariantMap d)
 
 MockInputBackend::MockInputBackend(QObject *parent)
     : InputBackend(parent)
+    , m_profiles(
+          [this](const QString &deviceId) {
+              for (const QVariant &d : std::as_const(m_devices)) {
+                  const QVariantMap record = d.toMap();
+                  if (record.value(QStringLiteral("id")).toString() != deviceId)
+                      continue;
+                  // Connected: never a null string, also without a family.
+                  const QString family = record.value(QStringLiteral("family")).toString();
+                  return family.isNull() ? QStringLiteral("") : family;
+              }
+              return QString();
+          },
+          validAppId)
 {
     setDefaultDevices();
 }
@@ -282,4 +297,25 @@ void MockInputBackend::setNameOwned(bool owned)
     setServiceOwned(owned);
     if (appeared)
         QTimer::singleShot(0, this, [this] { emit serviceAppeared(); });
+}
+
+void MockInputBackend::callProfile(quint64 token, const QString &method, const QVariantMap &args)
+{
+    m_profileCalls.append(QVariantMap{{QStringLiteral("method"), method}, {QStringLiteral("args"), args}});
+    QVariantMap reply;
+    QString changed;
+    if (m_fail) {
+        if (const InputProfileMethod *m = InputProfileCalls::find(method)) {
+            for (const QString &name : m->out)
+                reply.insert(name, QVariant());
+        }
+        reply.insert(QStringLiteral("status"), QStringLiteral("failed"));
+    } else {
+        reply = m_profiles.call(method, args, &changed);
+    }
+    QTimer::singleShot(0, this, [this, token, method, args, reply, changed] {
+        emit profileReply(token, method, args, reply);
+        if (!changed.isEmpty())
+            emit profilesChanged(changed);
+    });
 }

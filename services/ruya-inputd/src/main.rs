@@ -1,9 +1,11 @@
 //! ruya-inputd: the Ruya Input service (06-input.md). On Linux it reads every gamepad, makes the
 //! navigation keys and the profile's virtual pads, and serves org.ruyaos.Input1 on the system
 //! bus as the system user `ruya-input`. With `--session` (development, any OS) it serves the
-//! contract on the session bus with no devices and the profiles p1..p3.
+//! contract on the session bus with no devices and the profiles p1..p3; controller profiles are
+//! kept under `$STATE_DIRECTORY/profiles` (default: `ruya-inputd-session` in the temp directory).
 
 use ruya_inputd::accounts::FixedAccounts;
+use ruya_inputd::book::{Book, DirStore};
 use ruya_inputd::dbus::{serve, DynBackend, Shared};
 use ruya_inputd::routing::{NullBackend, Router};
 
@@ -30,7 +32,12 @@ fn main() {
         ("p3".into(), 1003),
     ]);
     let backend: DynBackend = Box::new(NullBackend);
-    let (shared, notices) = Shared::new(Router::new(backend, Box::new(accounts)));
+    let mut router = Router::new(backend, Box::new(accounts));
+    let state = std::env::var_os("STATE_DIRECTORY")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| std::env::temp_dir().join("ruya-inputd-session"));
+    router.set_book(Book::new(Box::new(DirStore::new(state.join("profiles")))));
+    let (shared, notices) = Shared::new(router);
     if let Err(err) = futures_lite::future::block_on(serve(false, shared, notices)) {
         eprintln!("ruya-inputd: fatal: {err}");
         std::process::exit(1);

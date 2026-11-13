@@ -1,5 +1,7 @@
 #include "DBusInputBackend.h"
 
+#include "InputProfileCalls.h"
+
 #include <QDBusArgument>
 #include <QDBusConnectionInterface>
 #include <QDBusMessage>
@@ -32,6 +34,19 @@ QVariantMap parseDict(const QDBusArgument &arg)
         out.insert(key, value.variant());
     }
     arg.endMap();
+    return out;
+}
+
+// One profile summary of ListProfiles with the keys and types of the XML (a missing key is its
+// empty value).
+QVariantMap summaryOf(const QVariantMap &d)
+{
+    QVariantMap out;
+    for (const char *key : {"id", "name", "scope", "scope_id", "inherits", "match_family", "match_device", "layout"})
+        out.insert(QLatin1String(key), d.value(QLatin1String(key)).toString());
+    for (const char *key : {"builtin", "assigned", "left_stick_changed", "right_stick_changed", "changed"})
+        out.insert(QLatin1String(key), d.value(QLatin1String(key)).toBool());
+    out.insert(QStringLiteral("remapped"), d.value(QStringLiteral("remapped")).toUInt());
     return out;
 }
 
@@ -74,6 +89,7 @@ DBusInputBackend::DBusInputBackend(QObject *parent)
     m_bus.connect(Service, Path, Interface, QStringLiteral("TestInput"), this,
                   SLOT(onTestInput(QString, QString, int, QString)));
     m_bus.connect(Service, Path, Interface, QStringLiteral("TestEnded"), this, SLOT(onTestEnded(QString, QString)));
+    m_bus.connect(Service, Path, Interface, QStringLiteral("ProfilesChanged"), this, SLOT(onProfilesChanged(QString)));
     // Who owns the name now, asked without blocking; a change that arrives first wins.
     if (auto *busInterface = m_bus.interface()) {
         auto *asked = new QDBusPendingCallWatcher(busInterface->asyncCall(QStringLiteral("NameHasOwner"), Service), this);
@@ -202,4 +218,60 @@ void DBusInputBackend::onTestInput(const QString &deviceId, const QString &input
 void DBusInputBackend::onTestEnded(const QString &deviceId, const QString &reason)
 {
     emit testEnded(deviceId, reason);
+}
+
+void DBusInputBackend::onProfilesChanged(const QString &profile)
+{
+    emit profilesChanged(profile);
+}
+
+// Every profile call is built from the table (InputProfileCalls.h): the in-arguments in the XML's
+// order, the reply read back by the XML's out-argument names.
+void DBusInputBackend::callProfile(quint64 token, const QString &method, const QVariantMap &args)
+{
+    const InputProfileMethod *m = InputProfileCalls::find(method);
+    const auto failed = [m]() {
+        QVariantMap reply;
+        if (m) {
+            for (const QString &name : m->out)
+                reply.insert(name, QVariant());
+        }
+        reply.insert(QStringLiteral("status"), QStringLiteral("failed"));
+        return reply;
+    };
+    if (!m) {
+        QMetaObject::invokeMethod(this, [this, token, method, args, failed] { emit profileReply(token, method, args, failed()); },
+                                  Qt::QueuedConnection);
+        return;
+    }
+    auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, method);
+    for (const QString &name : m->in)
+        msg << args.value(name).toString();
+    auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, token, method, args, m, failed](QDBusPendingCallWatcher *w) {
+        w->deleteLater();
+        const QDBusMessage reply = w->reply();
+        if (reply.type() != QDBusMessage::ReplyMessage || reply.arguments().size() != m->out.size()) {
+            qWarning("ruya-shell: Input1 %s failed: %s", qPrintable(method), qPrintable(reply.errorMessage()));
+            emit profileReply(token, method, args, failed());
+            return;
+        }
+        QVariantMap out;
+        for (int i = 0; i < m->out.size(); ++i) {
+            const QVariant value = reply.arguments().at(i);
+            if (value.canConvert<QDBusArgument>()) {
+                // aa{sv}: the profile summaries of ListProfiles.
+                QVariantList rows;
+                const QDBusArgument arg = value.value<QDBusArgument>();
+                arg.beginArray();
+                while (!arg.atEnd())
+                    rows.append(summaryOf(parseDict(arg)));
+                arg.endArray();
+                out.insert(m->out.at(i), rows);
+            } else {
+                out.insert(m->out.at(i), value);
+            }
+        }
+        emit profileReply(token, method, args, out);
+    });
 }

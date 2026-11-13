@@ -81,6 +81,17 @@
     "invalid"         an unsafe or unknown file name, more than 4 files, more than 1 MiB in all, or no file
     "failed"          internal error (the volume refused the write for another reason)
 
+  org.ruyaos.Devices1.Storage.ListFiles and ReadFile status strings (RUY-42; plain files at the top of a removable volume, nothing is run):
+    "ok"              success
+    "unknown-volume"  no volume with that id in the list
+    "unsupported"     the volume is not removable, or not mounted
+    "invalid"         an empty id, a suffix that is not "." and 1 to 8 of a-z 0-9 (ListFiles), an unsafe
+                      name or a max_bytes outside 1..1048576 (ReadFile)
+    "not-found"       (ReadFile) no such file, or not a regular file (a symlink, a directory, a device)
+    "too-large"       (ReadFile) the file is larger than max_bytes; nothing was read
+    "not-text"        (ReadFile) the content is not UTF-8
+    "failed"          internal error (the directory or the file could not be read)
+
   org.ruyaos.Devices1.Time status strings (systemd-timedated, org.freedesktop.timedate1, behind it):
     "ok"         success (SetTimezone: the zone is set; TimezoneChanged follows)
     "invalid"    malformed argument: a name that is not in ListTimezones (SetTimezone)
@@ -679,7 +690,8 @@
 
     <!--
       Writes plain text files onto a mounted removable volume (T-226: the System information report,
-      `RuyaOS-system-report.txt` and `.json`). The caller composes the content; the service only
+      `RuyaOS-system-report.txt` and `.json`; RUY-42: an exported controller profile,
+      `RuyaOS-controls-<profile>-<yyyy-mm-dd>.json`). The caller composes the content; the service only
       checks and writes, so what the caller left out of it (the shell leaves out MAC, IP and SSID
       unless the user said otherwise) never reaches this service. files maps a file name to its
       text (UTF-8). A name must be `RuyaOS-` followed by 1 to 64 of A-Z a-z 0-9 . _ - and end in
@@ -696,6 +708,44 @@
       <arg name="files" type="a{ss}" direction="in"/>
       <arg name="status" type="s" direction="out"/>
       <arg name="path" type="s" direction="out"/>
+    </method>
+
+    <!--
+      The files at the top of a mounted removable volume whose name ends in suffix (RUY-42: the
+      controller profiles a player can import, ".json"; SaveReport writes to the same place). Only
+      regular files are listed (lstat: a symlink, a directory or a device never is), not hidden ones
+      (a leading "."), names that are UTF-8; at most 256, the newest first (then by name). Nothing
+      is opened: readdir and lstat only, at most 4096 entries looked at. suffix is "." and 1 to 8 of
+      a-z 0-9, matched without regard to case (FAT). One dictionary per file:
+        name         s   the file name (no path)
+        size_bytes   x
+        modified     x   the modification time, seconds since 1970-01-01 UTC (0 when unknown)
+      See the status strings in the header.
+    -->
+    <method name="ListFiles">
+      <arg name="id" type="s" direction="in"/>
+      <arg name="suffix" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+      <arg name="files" type="aa{sv}" direction="out"/>
+    </method>
+
+    <!--
+      Reads one plain text file at the top of a mounted removable volume (RUY-42: importing a
+      controller profile; the caller checks the content, this service only reads it). name is a
+      file name as ListFiles gives it: no "/" or "\", no NUL or other control character, not "."
+      or "..", not hidden, at most 255 bytes. The file is opened read-only without following a
+      symlink (O_NOFOLLOW, O_NONBLOCK) and must be a regular file; its size is compared with
+      max_bytes (1 to 1048576) before anything is read, and at most max_bytes + 1 bytes are read (a
+      file that grew past max_bytes meanwhile is "too-large" too). text is
+      the content when it is UTF-8 ("" otherwise). Nothing is executed. See the status strings in
+      the header.
+    -->
+    <method name="ReadFile">
+      <arg name="id" type="s" direction="in"/>
+      <arg name="name" type="s" direction="in"/>
+      <arg name="max_bytes" type="u" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+      <arg name="text" type="s" direction="out"/>
     </method>
 
     <!--

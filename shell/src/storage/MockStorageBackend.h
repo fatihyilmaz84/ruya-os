@@ -36,6 +36,15 @@ public:
     void refreshUsage() override;
     void scanVolume(const QString &id) override;
     void cancelScan(const QString &id) override;
+    void listFiles(const QString &id, const QString &suffix) override;
+    void readFile(const QString &id, const QString &name, quint32 maxBytes) override;
+
+    // Files on a mock volume (RUY-42): a file at the top of it (`modified` in seconds since 1970);
+    // the files a saveReport() wrote are there too. setReadStatus makes later readFile() calls
+    // answer that status ("not-text", "failed", ...; "" = as the service would).
+    void setFile(const QString &id, const QString &name, const QString &text, qint64 modified);
+    void setReadStatus(const QString &status) { m_readStatus = status; }
+    QStringList readCalls() const { return m_readCalls; }
 
     // Tests only.
     // While held a scan stays "running" (a walk takes seconds); releasing finishes the running one.
@@ -104,6 +113,14 @@ private:
     QMap<QString, QString> m_saved;
     int m_saveCalls = 0;
     QString m_saveStatus;
+    struct MockFile
+    {
+        QString text;
+        qint64 modified = 0;
+    };
+    QHash<QString, QMap<QString, MockFile>> m_files; // by volume id, then name
+    QString m_readStatus;
+    QStringList m_readCalls; // "<id>/<name>"
     int m_delay = 0;
     int m_pending = 0;
     QHash<QString, VolumeScan> m_scans;

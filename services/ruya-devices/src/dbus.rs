@@ -35,6 +35,7 @@ use crate::sysinfo::SystemInfo;
 use crate::sysusage::{MonotonicClock, Refresh, SystemSource, SystemUsage};
 use crate::thermal::{self, Monitor, Source};
 use crate::time::{self, ProfileState, Time, Timedate};
+use crate::volume_files;
 
 /// Chosen at runtime: `wpctl` on Linux, a fake in `--session` development.
 pub type DynPipeWire = Box<dyn crate::audio::PipeWire>;
@@ -1510,6 +1511,42 @@ impl StorageIface {
         let (storage, id) = (self.storage.clone(), id.to_owned());
         let (status, path) = unblock(move || report::save(&storage, &id, &files)).await;
         (status.as_str().to_owned(), path)
+    }
+
+    /// The regular files at the top of a removable volume (`volume_files.rs` checks and reads
+    /// names and sizes, on the blocking pool; RUY-42).
+    #[zbus(out_args("status", "files"))]
+    async fn list_files(
+        &self,
+        id: &str,
+        suffix: &str,
+    ) -> (String, Vec<BTreeMap<String, OwnedValue>>) {
+        let (storage, id, suffix) = (self.storage.clone(), id.to_owned(), suffix.to_owned());
+        let (status, files) = unblock(move || volume_files::list(&storage, &id, &suffix)).await;
+        let rows = files
+            .into_iter()
+            .map(|f| {
+                dict(vec![
+                    ("name", Value::from(f.name)),
+                    (
+                        "size_bytes",
+                        Value::from(i64::try_from(f.size_bytes).unwrap_or(i64::MAX)),
+                    ),
+                    ("modified", Value::from(f.modified)),
+                ])
+            })
+            .collect();
+        (status.as_str().to_owned(), rows)
+    }
+
+    /// One plain text file of a removable volume, capped at `max_bytes` before it is read
+    /// (`volume_files.rs`, on the blocking pool; RUY-42).
+    #[zbus(out_args("status", "text"))]
+    async fn read_file(&self, id: &str, name: &str, max_bytes: u32) -> (String, String) {
+        let (storage, id, name) = (self.storage.clone(), id.to_owned(), name.to_owned());
+        let (status, text) =
+            unblock(move || volume_files::read(&storage, &id, &name, max_bytes)).await;
+        (status.as_str().to_owned(), text)
     }
 
     #[zbus(signal)]

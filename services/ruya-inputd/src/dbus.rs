@@ -1,5 +1,6 @@
 //! Thin zbus adapter for `org.ruyaos.Input1` (api/dbus/org.ruyaos.Input1.xml): the Devices,
-//! capabilities, button test and Routing members. Converts types, calls the core and emits what the core announces. No rules.
+//! capabilities, button test, Routing and controller profile members. Converts types, calls the
+//! core and emits what the core announces. No rules.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -11,6 +12,7 @@ use zbus::object_server::SignalEmitter;
 use zbus::zvariant::{OwnedValue, Value};
 use zbus::{interface, Connection, MatchRule, MessageStream};
 
+use crate::book::Summary;
 use crate::routing::{Backend, DeviceRecord, Notice, Router, Status};
 
 pub const BUS_NAME: &str = "org.ruyaos.Input1";
@@ -119,6 +121,30 @@ fn record(d: &DeviceRecord) -> Dict {
         ("slot", Value::from(d.slot)),
         ("profile", Value::from(d.profile.clone())),
         ("routed", Value::from(d.routed)),
+    ];
+    entries
+        .into_iter()
+        .filter_map(|(k, v)| OwnedValue::try_from(v).ok().map(|v| (k.to_owned(), v)))
+        .collect()
+}
+
+/// A profile summary of `ListProfiles` (the keys of the XML header).
+fn summary(s: &Summary) -> Dict {
+    let entries = vec![
+        ("id", Value::from(s.id.clone())),
+        ("name", Value::from(s.name.clone())),
+        ("scope", Value::from(s.scope.clone())),
+        ("scope_id", Value::from(s.scope_id.clone())),
+        ("inherits", Value::from(s.inherits.clone())),
+        ("builtin", Value::from(s.builtin)),
+        ("assigned", Value::from(s.assigned)),
+        ("match_family", Value::from(s.match_family.clone())),
+        ("match_device", Value::from(s.match_device.clone())),
+        ("layout", Value::from(s.layout.clone())),
+        ("remapped", Value::from(s.remapped)),
+        ("left_stick_changed", Value::from(s.left_stick_changed)),
+        ("right_stick_changed", Value::from(s.right_stick_changed)),
+        ("changed", Value::from(s.changed)),
     ];
     entries
         .into_iter()
@@ -235,6 +261,69 @@ impl InputIface {
         status.as_str().to_owned()
     }
 
+    #[zbus(out_args("status", "profiles"))]
+    fn list_profiles(&self, profile: &str) -> (String, Vec<Dict>) {
+        let (status, list) = self.shared.with(|r| r.list_profiles(profile));
+        (
+            status.as_str().to_owned(),
+            list.iter().map(summary).collect(),
+        )
+    }
+
+    #[zbus(out_args("status", "json"))]
+    fn get_profile(&self, profile: &str, profile_id: &str) -> (String, String) {
+        let (status, json) = self.shared.with(|r| r.get_profile(profile, profile_id));
+        (status.as_str().to_owned(), json)
+    }
+
+    #[zbus(out_args("status", "profile_id", "errors"))]
+    fn save_profile(&self, profile: &str, json: &str) -> (String, String, Vec<String>) {
+        let (status, id, errors) = self.shared.with(|r| r.save_profile(profile, json));
+        (status.as_str().to_owned(), id, errors)
+    }
+
+    #[zbus(out_args("status", "errors"))]
+    fn validate_profile(&self, json: &str) -> (String, Vec<String>) {
+        let (status, errors) = SharedRouter::validate_profile(json);
+        (status.as_str().to_owned(), errors)
+    }
+
+    fn delete_profile(&self, profile: &str, profile_id: &str) -> String {
+        self.shared
+            .with(|r| r.delete_profile(profile, profile_id))
+            .as_str()
+            .to_owned()
+    }
+
+    fn assign_profile(
+        &self,
+        profile: &str,
+        scope: &str,
+        scope_id: &str,
+        profile_id: &str,
+    ) -> String {
+        self.shared
+            .with(|r| r.assign_profile(profile, scope, scope_id, profile_id))
+            .as_str()
+            .to_owned()
+    }
+
+    #[zbus(out_args("status", "json", "chain"))]
+    fn get_effective_profile(
+        &self,
+        profile: &str,
+        device_id: &str,
+        app_id: &str,
+    ) -> (String, String, Vec<String>) {
+        let (status, json, chain) = self
+            .shared
+            .with(|r| r.effective_profile(profile, device_id, app_id));
+        (status.as_str().to_owned(), json, chain)
+    }
+
+    #[zbus(signal)]
+    async fn profiles_changed(emitter: &SignalEmitter<'_>, profile: &str) -> zbus::Result<()>;
+
     #[zbus(property)]
     fn route(&self) -> String {
         self.shared.with(|r| r.route().as_str().to_owned())
@@ -293,6 +382,9 @@ pub async fn announce(connection: Connection, notices: async_channel::Receiver<N
             } => InputIface::test_input(emitter, device_id, input, *value, source).await,
             Notice::TestEnded { device_id, reason } => {
                 InputIface::test_ended(emitter, device_id, reason).await
+            }
+            Notice::ProfilesChanged { profile } => {
+                InputIface::profiles_changed(emitter, profile).await
             }
             Notice::Journal(_) => Ok(()),
         };

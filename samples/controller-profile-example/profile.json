@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "id": "my-controls",
+  "name": "My controls",
+  "description": "Nintendo layout, jump on L1, a softer left stick, the right stick's up and down inverted.",
+  "scope": { "type": "global" },
+  "inherits": "nintendo",
+  "match": { "family": "playstation" },
+  "mappings": [
+    { "from": "l1", "to": { "type": "button", "code": "south" } },
+    { "from": "right_y", "to": { "type": "axis", "code": "right_y", "invert": true } }
+  ],
+  "settings": {
+    "left_stick": { "inner_deadzone": 0.12, "curve": "precise" },
+    "trigger_threshold": 0.1
+  }
+}

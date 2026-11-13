@@ -16,13 +16,18 @@
 //! - A virtual pad's node gets one ACL entry, for the profile's user, after every udev event on
 //!   it (logind's uaccess flushes it on a `change`), and is announced (`routed`) only then.
 //! - The caller that set the route leaving the bus means `locked`.
+//! - A virtual pad shows what the profile that applies to its pad makes of the physical pad
+//!   (`engine`, 06 §7): the console profile's global profile when its `match` fits, else the
+//!   built-in default. A change to the owner's profiles applies at once, to pads already made.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::{Duration, Instant};
 
 use crate::accounts::{valid_app_id, valid_profile_id, Accounts};
 use crate::acl;
+use crate::book::{Book, SaveAnswer, Summary};
 use crate::caps::Capability;
+use crate::engine::Engine;
 use crate::mapping::{Axis, Button, KeyBoard, KeyEvent, Mapper, NavKey};
 use crate::pad::{
     diff, OutEvent, PadAxis, PadButton, PadInput, PadState, Rumble, TestEvent, ALL_AXES,
@@ -82,6 +87,7 @@ pub enum Status {
     UnknownDevice,
     NotAllowed,
     Busy,
+    Failed,
 }
 
 impl Status {
@@ -93,6 +99,7 @@ impl Status {
             Status::UnknownDevice => "unknown-device",
             Status::NotAllowed => "not-allowed",
             Status::Busy => "busy",
+            Status::Failed => "failed",
         }
     }
 }
@@ -148,6 +155,10 @@ pub enum Notice {
     TestEnded {
         device_id: String,
         reason: String,
+    },
+    /// The controller profiles of a console profile changed (`ProfilesChanged`).
+    ProfilesChanged {
+        profile: String,
     },
     /// A journal line (without the "ruya-inputd: " prefix).
     Journal(String),
@@ -237,6 +248,8 @@ struct Virtual {
     /// The app's effect id -> the physical pad's.
     ff: BTreeMap<i16, i16>,
     playing: BTreeSet<i16>,
+    /// The profile that applies to this pad, compiled.
+    engine: Engine,
 }
 
 /// One axis of a button test: when it was last sent, and the newest value not sent yet.
@@ -303,7 +316,8 @@ fn mapper_events(mapper: &mut Mapper, input: PadInput) -> Vec<KeyEvent> {
 }
 
 impl Virtual {
-    /// What the app may see of `state`: held-at-entry inputs and Guide masked out.
+    /// What the app may see of `state`: held-at-entry inputs and Guide masked out, then the
+    /// profile's mapping (which never presses Guide either).
     fn target(&self, state: &PadState) -> PadState {
         let mut t = state.clone();
         for &b in &self.masked_buttons {
@@ -313,7 +327,9 @@ impl Virtual {
             t.apply(PadInput::Axis(a, 0));
         }
         t.apply(PadInput::Button(PadButton::Guide, false));
-        t
+        let mut out = self.engine.apply(&t);
+        out.apply(PadInput::Button(PadButton::Guide, false));
+        out
     }
 
     fn mask_held(&mut self, state: &PadState) {
@@ -350,6 +366,8 @@ pub struct Router<B: Backend> {
     notices: Vec<Notice>,
     /// Running button tests, by stable device id.
     tests: BTreeMap<String, ButtonTest>,
+    /// The controller profiles of every console profile.
+    book: Book,
 }
 
 impl<B: Backend> Router<B> {
@@ -370,7 +388,13 @@ impl<B: Backend> Router<B> {
             next_instance: 1,
             notices: Vec::new(),
             tests: BTreeMap::new(),
+            book: Book::default(),
         }
+    }
+
+    /// Where the controller profiles live (in memory until this is called).
+    pub fn set_book(&mut self, book: Book) {
+        self.book = book;
     }
 
     pub fn backend(&self) -> &B {
@@ -524,6 +548,9 @@ impl<B: Backend> Router<B> {
             rumble: pad.info.rumble,
         };
         let pad_id = pad.info.id.clone();
+        let family = pad.info.family.clone();
+        let engine = self.book.engine_for(&owner.profile, &family, &pad_id);
+        self.drain_book();
         match self.backend.create_virtual(key, &spec) {
             Ok(created) => {
                 let mut v = Virtual {
@@ -539,6 +566,7 @@ impl<B: Backend> Router<B> {
                     masked_axes: Vec::new(),
                     ff: BTreeMap::new(),
                     playing: BTreeSet::new(),
+                    engine,
                 };
                 if let Some(pad) = self.pads.get_mut(&key) {
                     v.mask_held(&pad.state);
@@ -822,6 +850,183 @@ impl<B: Backend> Router<B> {
                 route: r.as_str().to_owned(),
                 instance: instance.to_owned(),
             });
+        }
+    }
+
+    // ---- controller profiles (06 §7) --------------------------------------------------------
+
+    fn drain_book(&mut self) {
+        for line in self.book.take_journal() {
+            self.journal(line);
+        }
+    }
+
+    /// A console profile's controller profiles exist only for a profile account.
+    fn console_ok(&self, profile: &str) -> bool {
+        valid_profile_id(profile) && self.accounts.profile_uid(profile).is_some()
+    }
+
+    /// The profiles of `profile` changed: the signal, and the owner's pads take the new mapping
+    /// now (in `app`; held in neutral in `overlay`, they show it from the next input on).
+    fn profiles_changed(&mut self, profile: &str) {
+        self.notices.push(Notice::ProfilesChanged {
+            profile: profile.to_owned(),
+        });
+        if self.owner.as_ref().map(|o| o.profile.as_str()) != Some(profile) {
+            return;
+        }
+        let app = self.route == Route::App;
+        let keys: Vec<PadKey> = self.pads.keys().copied().collect();
+        let mut updated = 0;
+        for key in keys {
+            let Some(pad) = self.pads.get(&key) else {
+                continue;
+            };
+            if pad.virt.is_none() {
+                continue;
+            }
+            let (family, id) = (pad.info.family.clone(), pad.info.id.clone());
+            let engine = self.book.engine_for(profile, &family, &id);
+            let Some(pad) = self.pads.get_mut(&key) else {
+                continue;
+            };
+            let state = pad.state.clone();
+            let Some(v) = pad.virt.as_mut() else {
+                continue;
+            };
+            v.engine = engine;
+            updated += 1;
+            if app {
+                let target = v.target(&state);
+                let events = diff(&v.sent, &target);
+                v.sent = target;
+                if !events.is_empty() {
+                    self.backend.write_virtual(v.id, &events);
+                }
+            }
+        }
+        self.drain_book();
+        if updated > 0 {
+            self.journal(format!(
+                "controller profiles of ruya-{profile} changed: {updated} virtual pad(s) updated"
+            ));
+        }
+    }
+
+    /// `Input1.ListProfiles`.
+    pub fn list_profiles(&mut self, profile: &str) -> (Status, Vec<Summary>) {
+        if !self.console_ok(profile) {
+            return (Status::UnknownProfile, Vec::new());
+        }
+        let out = self.book.list(profile);
+        self.drain_book();
+        match out {
+            Ok(list) => (Status::Ok, list),
+            Err(status) => (status, Vec::new()),
+        }
+    }
+
+    /// `Input1.GetProfile`.
+    pub fn get_profile(&mut self, profile: &str, profile_id: &str) -> (Status, String) {
+        if !self.console_ok(profile) {
+            return (Status::UnknownProfile, String::new());
+        }
+        let out = self.book.get(profile, profile_id);
+        self.drain_book();
+        match out {
+            Ok(json) => (Status::Ok, json),
+            Err(status) => (status, String::new()),
+        }
+    }
+
+    /// `Input1.ValidateProfile`: the file alone (schema and service rules).
+    pub fn validate_profile(json: &str) -> (Status, Vec<String>) {
+        Book::validate(json)
+    }
+
+    /// `Input1.SaveProfile`.
+    pub fn save_profile(&mut self, profile: &str, json: &str) -> SaveAnswer {
+        if !self.console_ok(profile) {
+            return (Status::UnknownProfile, String::new(), Vec::new());
+        }
+        let answer = self.book.save(profile, json);
+        self.drain_book();
+        if answer.0 == Status::Ok {
+            self.journal(format!(
+                "controller profile {} of ruya-{profile} saved",
+                answer.1
+            ));
+            self.profiles_changed(profile);
+        }
+        answer
+    }
+
+    /// `Input1.DeleteProfile`.
+    pub fn delete_profile(&mut self, profile: &str, profile_id: &str) -> Status {
+        if !self.console_ok(profile) {
+            return Status::UnknownProfile;
+        }
+        let status = self.book.delete(profile, profile_id);
+        self.drain_book();
+        if status == Status::Ok {
+            self.journal(format!(
+                "controller profile {profile_id} of ruya-{profile} deleted"
+            ));
+            self.profiles_changed(profile);
+        }
+        status
+    }
+
+    /// `Input1.AssignProfile` (the global scope; platform and game are RUY-43).
+    pub fn assign_profile(
+        &mut self,
+        profile: &str,
+        scope: &str,
+        scope_id: &str,
+        profile_id: &str,
+    ) -> Status {
+        if !self.console_ok(profile) {
+            return Status::UnknownProfile;
+        }
+        let status = self.book.assign(profile, scope, scope_id, profile_id);
+        self.drain_book();
+        if status == Status::Ok {
+            self.journal(format!(
+                "ruya-{profile}'s {scope} controller profile is '{profile_id}'"
+            ));
+            self.profiles_changed(profile);
+        }
+        status
+    }
+
+    /// `Input1.GetEffectiveProfile`: what applies to a connected pad (`device_id`, or "" for a
+    /// pad that no `match` names) in `app_id` ("" or an app id; game and platform profiles are
+    /// RUY-43, so today it does not change the answer).
+    pub fn effective_profile(
+        &mut self,
+        profile: &str,
+        device_id: &str,
+        app_id: &str,
+    ) -> (Status, String, Vec<String>) {
+        if !self.console_ok(profile) {
+            return (Status::UnknownProfile, String::new(), Vec::new());
+        }
+        if !app_id.is_empty() && !valid_app_id(app_id) {
+            return (Status::Invalid, String::new(), Vec::new());
+        }
+        let family = if device_id.is_empty() {
+            String::new()
+        } else {
+            match self.pads.values().find(|p| p.info.id == device_id) {
+                Some(p) => p.info.family.clone(),
+                None => return (Status::UnknownDevice, String::new(), Vec::new()),
+            }
+        };
+        let out = self.book.effective(profile, &family, device_id);
+        self.drain_book();
+        match out {
+            Ok((json, chain)) => (Status::Ok, json, chain),
+            Err(status) => (status, String::new(), Vec::new()),
         }
     }
 
@@ -1927,5 +2132,182 @@ mod tests {
         let calls = r.backend_mut().take();
         assert_eq!(calls[0], Call::FfErase(a, 1));
         assert_eq!(destroyed(&calls), vec![1]);
+    }
+
+    // ---- controller profiles ----------------------------------------------------------------
+
+    const SWAP: &str = r#"{"schema_version":1,"id":"swap","name":"Swap","scope":{"type":"global"},
+        "mappings":[{"from":"south","to":{"type":"button","code":"east"}},
+                    {"from":"guide","to":{"type":"button","code":"south"}}]}"#;
+
+    fn profiles_changed(r: &mut Router<Fake>) -> Vec<String> {
+        r.take_notices()
+            .into_iter()
+            .filter_map(|n| match n {
+                Notice::ProfilesChanged { profile } => Some(profile),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_remap_changes_what_the_virtual_pad_emits_at_once() {
+        let mut r = router();
+        let a = r.add_pad(pad("a"), t0());
+        app(&mut r, "i1", STK, "p1");
+        r.input(a, &[press(PadButton::South)]);
+        r.backend_mut().take();
+        r.take_notices();
+        // South is held when the profile changes: the virtual pad lets go of South, presses East.
+        assert_eq!(r.save_profile("p1", SWAP).0, Status::Ok);
+        assert!(
+            writes(&r.backend_mut().take()).is_empty(),
+            "saved, not assigned yet"
+        );
+        assert_eq!(r.assign_profile("p1", "global", "", "swap"), Status::Ok);
+        assert_eq!(
+            writes(&r.backend_mut().take()),
+            vec![(
+                1,
+                vec![
+                    (code::EV_KEY, code::BTN_SOUTH, 0),
+                    (code::EV_KEY, code::BTN_EAST, 1)
+                ]
+            )]
+        );
+        assert_eq!(
+            profiles_changed(&mut r),
+            ["p1", "p1"],
+            "the save and the assignment"
+        );
+        r.input(a, &[release(PadButton::South)]);
+        assert_eq!(
+            writes(&r.backend_mut().take()),
+            vec![(1, vec![(code::EV_KEY, code::BTN_EAST, 0)])]
+        );
+        // Guide stays the console's whatever the profile says.
+        r.input(a, &[press(PadButton::Guide)]);
+        let calls = r.backend_mut().take();
+        assert!(
+            writes(&calls).is_empty(),
+            "Guide mapped to south reached the pad: {calls:?}"
+        );
+        assert_eq!(nav(&calls), vec![(NavKey::Guide, true)]);
+        r.input(a, &[release(PadButton::Guide)]);
+        // A new virtual pad (the next app) is made with the profile.
+        app(&mut r, "i2", STK, "p1");
+        r.backend_mut().take();
+        r.input(a, &[press(PadButton::South)]);
+        assert_eq!(
+            writes(&r.backend_mut().take()),
+            vec![(2, vec![(code::EV_KEY, code::BTN_EAST, 1)])]
+        );
+        // Removing the assignment gives the built-in default back.
+        r.input(a, &[release(PadButton::South)]);
+        r.assign_profile("p1", "global", "", "");
+        r.backend_mut().take();
+        r.input(a, &[press(PadButton::South)]);
+        assert_eq!(
+            writes(&r.backend_mut().take()),
+            vec![(2, vec![(code::EV_KEY, code::BTN_SOUTH, 1)])]
+        );
+    }
+
+    #[test]
+    fn another_profiles_change_does_not_touch_the_pads() {
+        let mut r = router();
+        let a = r.add_pad(pad("a"), t0());
+        app(&mut r, "i1", STK, "p1");
+        r.backend_mut().take();
+        r.save_profile("p2", SWAP);
+        r.assign_profile("p2", "global", "", "swap");
+        assert_eq!(profiles_changed(&mut r), ["p2", "p2"]);
+        r.input(a, &[press(PadButton::South)]);
+        assert_eq!(
+            writes(&r.backend_mut().take()),
+            vec![(1, vec![(code::EV_KEY, code::BTN_SOUTH, 1)])]
+        );
+    }
+
+    #[test]
+    fn the_stick_settings_reach_the_virtual_pad() {
+        let mut r = router();
+        let a = r.add_pad(pad("a"), t0());
+        app(&mut r, "i1", STK, "p1");
+        r.backend_mut().take();
+        // Inside the default 8 % dead zone: nothing moves.
+        r.input(a, &[PadInput::Axis(PadAxis::LeftX, 2000)]);
+        assert!(writes(&r.backend_mut().take()).is_empty());
+        let none = r#"{"schema_version":1,"id":"raw","name":"Raw","scope":{"type":"global"},
+            "settings":{"left_stick":{"inner_deadzone":0,"outer_deadzone":0,"invert_x":true}}}"#;
+        r.save_profile("p1", none);
+        r.assign_profile("p1", "global", "", "raw");
+        assert_eq!(
+            writes(&r.backend_mut().take()),
+            vec![(1, vec![(code::EV_ABS, code::ABS_X, -2000)])]
+        );
+    }
+
+    #[test]
+    fn under_the_overlay_a_profile_change_sends_nothing() {
+        let mut r = router();
+        let a = r.add_pad(pad("a"), t0());
+        app(&mut r, "i1", STK, "p1");
+        r.input(a, &[press(PadButton::South)]);
+        r.set_route("overlay", "i1", STK, "p1", SHELL, t0());
+        r.backend_mut().take();
+        r.save_profile("p1", SWAP);
+        r.assign_profile("p1", "global", "", "swap");
+        assert!(writes(&r.backend_mut().take()).is_empty());
+    }
+
+    #[test]
+    fn profile_calls_need_a_profile_account() {
+        let mut r = router();
+        assert_eq!(r.list_profiles("p9").0, Status::UnknownProfile);
+        assert_eq!(r.list_profiles("../etc").0, Status::UnknownProfile);
+        assert_eq!(r.get_profile("shell", "default").0, Status::UnknownProfile);
+        assert_eq!(r.save_profile("", SWAP).0, Status::UnknownProfile);
+        assert_eq!(r.delete_profile("p9", "swap"), Status::UnknownProfile);
+        assert_eq!(
+            r.assign_profile("p9", "global", "", "default"),
+            Status::UnknownProfile
+        );
+        assert_eq!(r.effective_profile("p9", "", "").0, Status::UnknownProfile);
+        assert_eq!(r.list_profiles("p1").0, Status::Ok);
+        assert_eq!(r.get_profile("p1", "nope").0, Status::UnknownProfile);
+        assert!(profiles_changed(&mut r).is_empty(), "nothing changed");
+    }
+
+    #[test]
+    fn the_effective_profile_follows_the_pad() {
+        let mut r = router();
+        r.add_pad(pad("a"), t0());
+        let ps = SWAP.replace(
+            r#""scope":{"type":"global"},"#,
+            r#""scope":{"type":"global"},"match":{"family":"playstation"},"#,
+        );
+        assert_eq!(r.save_profile("p1", &ps).0, Status::Ok);
+        r.assign_profile("p1", "global", "", "swap");
+        let (status, json, chain) = r.effective_profile("p1", "a", "");
+        assert_eq!(
+            (status, chain.as_slice()),
+            (
+                Status::Ok,
+                ["swap".to_owned(), "default".to_owned()].as_slice()
+            )
+        );
+        assert!(json.contains("\"east\""));
+        assert_eq!(
+            r.effective_profile("p1", "", "").2,
+            ["default"],
+            "no family: the match does not fit"
+        );
+        assert_eq!(r.effective_profile("p1", "b", "").0, Status::UnknownDevice);
+        assert_eq!(
+            r.effective_profile("p1", "a", "no spaces").0,
+            Status::Invalid
+        );
+        assert_eq!(r.effective_profile("p1", "a", RACER).0, Status::Ok);
     }
 }

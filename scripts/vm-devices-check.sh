@@ -38,7 +38,8 @@
 # every internal disk of lsblk is in storage.drives, the default route's interface and MAC match, no Bluetooth adapter: no chipset;
 # another user is refused. Then Storage.SaveReport: an unknown volume, unsafe file names and no files are refused, another user is
 # refused, and with a mounted removable volume (attach one to QEMU: -drive if=none,id=u,file=stick.img,format=raw -device usb-storage,drive=u)
-# the two report files are written there and read back. Then the performance part (T-451): Devices1.System.GetPerformance
+# the two report files are written there and read back, and Storage.ListFiles and ReadFile (RUY-42) list the JSON and read it
+# back, refuse more than max_bytes unread, a path and a symlink (on a filesystem that has them). Then the performance part (T-451): Devices1.System.GetPerformance
 # answers all nine metrics with a contract state, the rates are "unavailable" at a first reading and cpu_percent is a
 # 0-100 "supported" share at the next, ram_total is MemTotal and ram_used within 5 % of MemTotal - MemAvailable, two
 # calls inside 250 ms answer the same, cpu_temp follows whether /sys has a processor sensor, the GPU load, VRAM, the
@@ -905,6 +906,24 @@ sysinfo_check() {
             'ss "ok" '*)
                 [ "$(cat "$mp/RuyaOS-system-report.txt" 2>/dev/null)" = "report text" ] && ok "the report text is on the stick" || bad "no report text at $mp"
                 [ -f "$mp/RuyaOS-system-report.json" ] && ok "the JSON is on the stick" || bad "no JSON at $mp"
+                # RUY-42: ListFiles and ReadFile (importing a controller profile) on the same stick.
+                out="$(busctl --system call "$svc" "$path" "$stor" ListFiles ss "$id" .json)"
+                case "$out" in *'"ok"'*'"RuyaOS-system-report.json"'*) ok "ListFiles lists the JSON file";; *) bad "ListFiles: $out";; esac
+                case "$out" in *'RuyaOS-system-report.txt'*) bad "ListFiles .json listed the .txt";; *) ok "ListFiles keeps to the suffix";; esac
+                out="$(busctl --system call "$svc" "$path" "$stor" ReadFile ssu "$id" RuyaOS-system-report.json 65536)"
+                [ "$out" = 'ss "ok" "{}"' ] && ok "ReadFile reads it back" || bad "ReadFile: $out"
+                out="$(busctl --system call "$svc" "$path" "$stor" ReadFile ssu "$id" RuyaOS-system-report.json 1)"
+                [ "$out" = 'ss "too-large" ""' ] && ok "ReadFile refuses a file over max_bytes unread" || bad "ReadFile cap: $out"
+                ln -sf /etc/passwd "$mp/vm-check-link.json" 2>/dev/null
+                if [ -L "$mp/vm-check-link.json" ]; then
+                    out="$(busctl --system call "$svc" "$path" "$stor" ReadFile ssu "$id" vm-check-link.json 65536)"
+                    [ "$out" = 'ss "not-found" ""' ] && ok "ReadFile never follows a symlink" || bad "ReadFile of a symlink: $out"
+                    rm -f "$mp/vm-check-link.json"
+                else
+                    echo "SKIP: the stick's filesystem has no symlinks (vfat/exfat); ReadFile's O_NOFOLLOW is tested in Rust only"
+                fi
+                out="$(busctl --system call "$svc" "$path" "$stor" ReadFile ssu "$id" ../etc/passwd 65536)"
+                [ "$out" = 'ss "invalid" ""' ] && ok "ReadFile refuses a path" || bad "ReadFile ../etc/passwd: $out"
                 rm -f "$mp/RuyaOS-system-report.txt" "$mp/RuyaOS-system-report.json";;
             *) bad "SaveReport on a mounted stick answered $out";;
         esac

@@ -10,7 +10,7 @@ import RuyaShell
 // battery change never moves the focus; a focused row that goes hands the focus to the row before it,
 // else the next (04 §4). No pad: "No controllers connected." as an unavailable line. ListDevices
 // failed: "Controllers can't be read right now." and "Try again" instead of the pad rows. The Confirm button row is RUY-40's,
-// "Controls in games" RUY-42's.
+// "Controls in games" RUY-465's.
 SettingsPane {
     id: pane
 

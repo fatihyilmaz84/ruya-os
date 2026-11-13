@@ -2,7 +2,7 @@
 
 A console game is played with a controller from the sofa. This chapter says what your game receives (a virtual Xbox 360 pad per controller, while your game is in front), what the console keeps for itself (the Guide button), and what is not finished (see "What is built"). The input code in the sample game works on any Linux desktop as well.
 
-*Checked against the code as of 2026-11-12. Items marked **planned** are not built yet.*
+*Checked against the code as of 2026-11-13. Items marked **planned** are not built yet.*
 
 ## The rules
 
@@ -94,6 +94,45 @@ The console's input service (`ruya-inputd`, since RUY-3) makes the pads below, a
 - **Without `--device=input` (or `all`) there is no pad at all**: the sandbox then has no `/dev/input`, and your game sees no controller even while the virtual pad exists (see "Flatpak permission" below).
 - **Rumble**: the basic left and right motors (`FF_RUMBLE`), forwarded to the physical pad while your game is in front, when that pad can rumble. Gyro, touchpad, lights and adaptive triggers are not there (T-373).
 
+## The player's controls: what your game sees is already remapped
+
+> **Experimental.** The behaviour and the file format below are public ([tier C](api-surface.md#tier-c-data-only-formats), ADR-022) but may change without notice until the first release. Built in the service (RUY-42) and tested on the development machine; the run in the VM is pending (`scripts/vm-input-check.sh`), and the console's pages that edit these settings are not built yet (RUY-465).
+
+The player can change their controls for every game at once: a Nintendo button layout, any button moved to another, and per stick a dead zone, a response curve, a sensitivity and inverted axes. The console applies this **before** your game reads the virtual pad, so you receive the player's choice and must not undo it:
+
+- **The sticks arrive with a dead zone already applied** (by default 8 % in the middle and 2 % at the edge, round, rescaled so that the full range still reaches ±32767). Keep your own dead zone small (rule 5's 20 % is for pads that reach you raw); on RuyaOS a resting stick reads exactly 0.
+- **A button may not be where its label is.** With the Nintendo layout the bottom button (A on your Xbox-style pad) is what the player presses on the right. Show button hints by function and position ("A"), as rule 1 says; never print a physical label you guessed from the controller's name.
+- **Guide is never remapped onto your pad**, and the console's own screens keep their buttons whatever the player set for games.
+- **Changes apply at once**, also while your game is running: a pad's state can change between two frames without the player touching it (a button the player holds is released and the new one pressed). Treat it like any other input change.
+
+**The profile format** is the one the console stores and will export to a USB drive, so a player can keep and share their controls: JSON, `schema_version` 1, described by [`docs/specs/schemas/input-profile-v1.json`](../specs/schemas/input-profile-v1.json) (the design is `06-input.md` section 7). A profile lists only what differs from its parent (`inherits`; the console's built-ins are `default` and `nintendo`), may be limited to one controller family or one controller (`match`), and holds data only: nothing in it is ever run. The console checks every file on load, save and import, refuses unknown fields and says why in `path: message` lines; it also refuses what a schema cannot express: more than 64 KiB, macro waits over 10 s in all, a macro step without its target or `ms`, a macro inside a macro, a `button` or `axis` target that is not one of the pad's, inner and outer dead zones that leave nothing between them, a profile that inherits from itself, and names with control or text-direction characters. What the console applies today: buttons and sticks to buttons, sticks, triggers or nothing (with `invert`, `scale` and `threshold`), the stick settings and `trigger_threshold`. Keys, mouse, layers, chords, macros, turbo and the other modes, motion and `smoothing` are stored and checked but not applied yet (planned: T-372, T-373); the input then keeps its default.
+
+This file is also `samples/controller-profile-example/profile.json`, and the console's checks run on it (`services/ruya-inputd/tests/profile_schema.rs`):
+
+```json
+{
+  "schema_version": 1,
+  "id": "my-controls",
+  "name": "My controls",
+  "description": "Nintendo layout, jump on L1, a softer left stick, the right stick's up and down inverted.",
+  "scope": { "type": "global" },
+  "inherits": "nintendo",
+  "match": { "family": "playstation" },
+  "mappings": [
+    { "from": "l1", "to": { "type": "button", "code": "south" } },
+    { "from": "right_y", "to": { "type": "axis", "code": "right_y", "invert": true } }
+  ],
+  "settings": {
+    "left_stick": { "inner_deadzone": 0.12, "curve": "precise" },
+    "trigger_threshold": 0.1
+  }
+}
+```
+
+**Stick maths** (06-input.md section 7): with `r` the stick's distance from the centre (0..1), `r' = clamp((r - inner_deadzone) / (1 - inner_deadzone - outer_deadzone), 0, 1)`; the curve gives `c` = `r'` (linear), `r'²` (precise) or `√r'` (aggressive); the output is 0 when `r'` is 0, else `anti_deadzone + (1 - anti_deadzone) · c`, times `sensitivity`, at most 1, in the stick's own direction; `invert_x` and `invert_y` flip an axis afterwards. A trigger uses `trigger_threshold` as its dead zone.
+
+**To check a file off the console:** any JSON Schema 2020-12 validator with the schema above covers everything but the extra rules; `ruya-inputd --session` (on a Linux desktop) answers `org.ruyaos.Input1.ValidateProfile` on the session bus with the console's own verdict. Games do not read or write these files; the console's settings do.
+
 ## What is built, and what is not
 
 **Verified in the VM** (T-130, `scripts/vm-app-check.sh` with `vm-key-client.qml`): a Wayland client full screen in the shell receives keyboard events (letters from the keyboard), and the Guide key (Super, or the pad's `HomePage`) opens the overlay over the client instead of reaching it.
@@ -122,4 +161,4 @@ The console's input service (`ruya-inputd`, since RUY-3) makes the pads below, a
 
 ## Sources
 
-Checked on 2026-11-12 against: `man flatpak-build-finish` (Flatpak 1.18.4); `services/ruya-inputd/src/mapping.rs` (the key map), `routing.rs` (routes, virtual pads, rumble), `pad.rs` (the virtual pad's identity, keys and axes); `image/rootfs/usr/lib/udev/rules.d/70-ruya-input.rules` and `74-ruya-input-acl.rules`, `image/rootfs/usr/lib/modprobe.d/ruya-no-joydev.conf`; `scripts/vm-input-check.sh` and `vm-input-probe.py` (what a profile user can open and read); `docs/specs/06-input.md` sections 1, 3, 5; `services/ruya-profiles/src/accounts.rs` (`useradd` with no extra groups); `shell/src/input/KeyRouter.h`, `shell/qml/InputRoute.qml` and `shell/src/input/Input.cpp` (the route the shell sends), `shell/tests/tst_input_route.qml`; `docs/specs/00-overview.md` ADR-003; `docs/specs/01-platform.md` section 2.1; `docs/specs/03-services-and-apps.md` sections 2.1, 5; `services/ruya-store/src/appstream.rs` (`--device=input` is "gamepad", `all` is "all-devices"); `scripts/vm-app-check.sh`; `docs/STATUS.md` (B-006); the sample's input code, built against SDL 3.4 in the freedesktop 26.08 runtime and exercised headless (hot-plug and the pad paths were not run: no pad in the test environment).
+Checked on 2026-11-13 against: `man flatpak-build-finish` (Flatpak 1.18.4); `services/ruya-inputd/src/mapping.rs` (the key map), `routing.rs` (routes, virtual pads, rumble, the profile applied), `pad.rs` (the virtual pad's identity, keys and axes), `profile.rs`, `engine.rs` and `book.rs` (the profile format, the stick maths, the built-in profiles), `tests/profile_schema.rs`; `image/rootfs/usr/lib/udev/rules.d/70-ruya-input.rules` and `74-ruya-input-acl.rules`, `image/rootfs/usr/lib/modprobe.d/ruya-no-joydev.conf`; `scripts/vm-input-check.sh` and `vm-input-probe.py` (what a profile user can open and read); `docs/specs/06-input.md` sections 1, 3, 5; `services/ruya-profiles/src/accounts.rs` (`useradd` with no extra groups); `shell/src/input/KeyRouter.h`, `shell/qml/InputRoute.qml` and `shell/src/input/Input.cpp` (the route the shell sends), `shell/tests/tst_input_route.qml`; `docs/specs/00-overview.md` ADR-003; `docs/specs/01-platform.md` section 2.1; `docs/specs/03-services-and-apps.md` sections 2.1, 5; `services/ruya-store/src/appstream.rs` (`--device=input` is "gamepad", `all` is "all-devices"); `scripts/vm-app-check.sh`; `docs/STATUS.md` (B-006); the sample's input code, built against SDL 3.4 in the freedesktop 26.08 runtime and exercised headless (hot-plug and the pad paths were not run: no pad in the test environment).

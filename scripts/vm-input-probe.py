@@ -567,6 +567,34 @@ def cmd_check(args):
         expect((KEY_HOMEPAGE, 1) in keys, "app route: Guide reaches the shell as KEY_HOMEPAGE", f"nav keys {keys}")
         expect(isinstance(ev, list) and not any(c == BTN_MODE for _, c, _ in ev), "app route: Guide never reaches the virtual pad", f"virtual pad read {ev}")
 
+        # Controller profiles (RUY-42, 06 section 7). South is still held: a global profile that
+        # sends South as East takes effect at once, a new press follows it, and removing the
+        # assignment gives South back (still held, as the overlay check below expects).
+        swap = json.dumps({"schema_version": 1, "id": "vm-check-swap", "name": "VM check swap",
+                           "scope": {"type": "global"},
+                           "mappings": [{"from": "south", "to": {"type": "button", "code": "east"}}]})
+        status = bus.call(SVC, PATH, IFC, "SaveProfile", [args.profile, swap])
+        expect(status == "ok", "profiles: SaveProfile of a South-to-East profile: ok", f"profiles: SaveProfile answered {status}")
+        game.events(100)
+        status = bus.call(SVC, PATH, IFC, "AssignProfile", [args.profile, "global", "", "vm-check-swap"])
+        expect(status == "ok", "profiles: AssignProfile global: ok", f"profiles: AssignProfile answered {status}")
+        ev = game.events()
+        expect(isinstance(ev, list) and (EV_KEY, BTN_SOUTH, 0) in ev and (EV_KEY, BTN_EAST, 1) in ev,
+               "profiles: the held South turns into East on the virtual pad at once", f"profiles: virtual pad read {ev}")
+        pad.emit(EV_KEY, BTN_SOUTH, 0)
+        pad.emit(EV_KEY, BTN_SOUTH, 1)
+        ev = game.events()
+        expect(isinstance(ev, list) and (EV_KEY, BTN_EAST, 0) in ev and (EV_KEY, BTN_EAST, 1) in ev
+               and not any(c == BTN_SOUTH for _, c, _ in ev),
+               "profiles: a press of South reaches the game as East (the remap changes the pad's output)",
+               f"profiles: virtual pad read {ev}")
+        status = bus.call(SVC, PATH, IFC, "AssignProfile", [args.profile, "global", "", ""])
+        ev = game.events()
+        expect(status == "ok" and isinstance(ev, list) and (EV_KEY, BTN_EAST, 0) in ev and (EV_KEY, BTN_SOUTH, 1) in ev,
+               "profiles: without the assignment the held button is South again", f"profiles: {status}, virtual pad read {ev}")
+        status = bus.call(SVC, PATH, IFC, "DeleteProfile", [args.profile, "vm-check-swap"])
+        expect(status == "ok", "profiles: DeleteProfile: ok", f"profiles: DeleteProfile answered {status}")
+
         answer = game.ask("rumble")
         got = wait_for(lambda: pad.played, 2)
         expect(answer.startswith("RUMBLE ") and "failed" not in answer, f"the app uploads rumble ({answer})", f"rumble upload: {answer}")

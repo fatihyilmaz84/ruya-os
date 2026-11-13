@@ -22,6 +22,8 @@ public:
     void refreshUsage() override;
     void scanVolume(const QString &id) override;
     void cancelScan(const QString &id) override;
+    void listFiles(const QString &id, const QString &suffix) override;
+    void readFile(const QString &id, const QString &name, quint32 maxBytes) override;
 
 private slots:
     void onVolumesChanged();

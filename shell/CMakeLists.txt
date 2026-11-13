@@ -114,6 +114,8 @@ qt_add_qml_module(ruyashell
         src/input/PadDevices.h src/input/PadDevices.cpp
         src/input/EmergencyReader.h src/input/EmergencyReader.cpp
         src/input/InputBackend.h
+        src/input/InputProfileCalls.h src/input/InputProfileCalls.cpp
+        src/input/MockInputProfiles.h src/input/MockInputProfiles.cpp
         src/input/MockInputBackend.h src/input/MockInputBackend.cpp
         src/input/DBusInputBackend.h src/input/DBusInputBackend.cpp
         src/input/Input.h src/input/Input.cpp

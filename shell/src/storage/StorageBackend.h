@@ -7,6 +7,7 @@
 #include <QMap>
 #include <QObject>
 #include <QString>
+#include <QVariantList>
 
 struct StorageVolume
 {
@@ -73,6 +74,12 @@ public:
     // end of the scan is announced by the service and reported with scanListed again.
     virtual void scanVolume(const QString &id) = 0;
     virtual void cancelScan(const QString &id) = 0;
+    // Storage.ListFiles (RUY-42): the regular files at the top of a mounted removable volume whose
+    // name ends in `suffix` (".json"), newest first; reports filesListed.
+    virtual void listFiles(const QString &id, const QString &suffix) = 0;
+    // Storage.ReadFile (RUY-42): one plain text file there, refused unread when it is larger than
+    // maxBytes; reports fileRead. Nothing is ever run.
+    virtual void readFile(const QString &id, const QString &name, quint32 maxBytes) = 0;
 
 signals:
     void volumesListed(const QList<StorageVolume> &volumes);
@@ -85,6 +92,11 @@ signals:
     void volumeAdded(const QString &id);
     // op: "eject" | "saveReport"; status: see the XML ("ok", "busy", "read-only", ...).
     void finished(const QString &op, const QString &id, const QString &status);
+    // ListFiles answered: files are { name, sizeBytes, modified (seconds since 1970) }; status
+    // "failed" when the call itself failed.
+    void filesListed(const QString &id, const QString &suffix, const QString &status, const QVariantList &files);
+    // ReadFile answered: text is "" unless status is "ok".
+    void fileRead(const QString &id, const QString &name, const QString &status, const QString &text);
 
 protected:
     // Replies can arrive out of order: number each request when it is sent and report a reply only

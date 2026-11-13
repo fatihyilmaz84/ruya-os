@@ -72,6 +72,12 @@ public:
     Q_INVOKABLE void scan(const QString &id);
     // Stops the scan of a volume; its entry then says "cancelled".
     Q_INVOKABLE void cancelScan(const QString &id);
+    // The regular files at the top of a mounted removable volume whose name ends in `suffix`
+    // (".json"; case does not matter), newest first (RUY-42). The answer is filesListed.
+    Q_INVOKABLE void listFiles(const QString &id, const QString &suffix);
+    // One plain text file there, refused unread ("too-large") when it is larger than maxBytes
+    // (at most 1 MiB). The answer is fileRead. The caller checks the content; nothing is run.
+    Q_INVOKABLE void readFile(const QString &id, const QString &name, int maxBytes);
 
     // Tests only, and only with the mock backend (otherwise no-ops). mockReset puts the volumes
     // back with the USB stick not plugged in (plugStick starts the delayed insert, as a fresh
@@ -117,6 +123,12 @@ public:
     Q_INVOKABLE void mockSetScanPartial(bool partial);
     Q_INVOKABLE void mockSetScanFailed(bool failed);   // later scans end "failed" (the drive cannot be read)
     Q_INVOKABLE void mockRefreshScanDelayed(const QString &id, int ms);
+    // Files on a mock volume (RUY-42; reset by mockReset): put one at the top of it (`modified` in
+    // seconds since 1970; what saveReport() wrote is there too), make later readFile() calls answer
+    // `status` ("" = as the service would), and the "<id>/<name>" of every readFile() call.
+    Q_INVOKABLE void mockSetFile(const QString &id, const QString &name, const QString &text, double modified);
+    Q_INVOKABLE void mockSetReadStatus(const QString &status);
+    Q_INVOKABLE QStringList mockReadCalls() const;
 
 signals:
     void volumesChanged();
@@ -131,6 +143,11 @@ signals:
     void driveAdded(const QString &drive, const QString &label, int volumeCount);
     // op: "eject" | "saveReport"; status: see api/dbus/org.ruyaos.Devices1.xml
     void finished(const QString &op, const QString &id, const QString &status);
+    // listFiles answered: files are [{ name, sizeBytes, modified }]; status a string of the XML, or
+    // "failed" when the call failed.
+    void filesListed(const QString &id, const QString &suffix, const QString &status, const QVariantList &files);
+    // readFile answered: text is "" unless status is "ok".
+    void fileRead(const QString &id, const QString &name, const QString &status, const QString &text);
 
 private:
     // A volume that is in the list and was announced: held back for the group window so that

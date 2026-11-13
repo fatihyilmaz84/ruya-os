@@ -15,6 +15,8 @@ Storage::Storage(std::unique_ptr<StorageBackend> backend, QObject *parent)
     m_groupTimer.setSingleShot(true);
     m_groupTimer.setInterval(GroupWindowMs);
     connect(&m_groupTimer, &QTimer::timeout, this, &Storage::flushArrivals);
+    connect(m_backend.get(), &StorageBackend::filesListed, this, &Storage::filesListed);
+    connect(m_backend.get(), &StorageBackend::fileRead, this, &Storage::fileRead);
     connect(m_backend.get(), &StorageBackend::volumeAdded, this, [this](const QString &id) { m_pendingAdded.insert(id); });
     connect(m_backend.get(), &StorageBackend::volumesListed, this, [this](const QList<StorageVolume> &list) {
         QVariantList out;
@@ -228,6 +230,34 @@ void Storage::saveReport(const QString &id, const QVariantMap &files)
     for (auto it = files.cbegin(); it != files.cend(); ++it)
         texts.insert(it.key(), it.value().toString());
     m_backend->saveReport(id, texts);
+}
+
+void Storage::listFiles(const QString &id, const QString &suffix)
+{
+    m_backend->listFiles(id, suffix);
+}
+
+void Storage::readFile(const QString &id, const QString &name, int maxBytes)
+{
+    m_backend->readFile(id, name, maxBytes < 0 ? 0u : quint32(maxBytes));
+}
+
+void Storage::mockSetFile(const QString &id, const QString &name, const QString &text, double modified)
+{
+    if (auto *mock = qobject_cast<MockStorageBackend *>(m_backend.get()))
+        mock->setFile(id, name, text, qint64(modified));
+}
+
+void Storage::mockSetReadStatus(const QString &status)
+{
+    if (auto *mock = qobject_cast<MockStorageBackend *>(m_backend.get()))
+        mock->setReadStatus(status);
+}
+
+QStringList Storage::mockReadCalls() const
+{
+    auto *mock = qobject_cast<MockStorageBackend *>(m_backend.get());
+    return mock ? mock->readCalls() : QStringList();
 }
 
 QVariantMap Storage::mockSavedFiles() const

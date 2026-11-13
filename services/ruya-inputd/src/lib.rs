@@ -5,12 +5,15 @@
 
 pub mod accounts;
 pub mod acl;
+pub mod book;
 pub mod caps;
 pub mod dbus;
+pub mod engine;
 pub mod identity;
 pub mod mapping;
 pub mod notify;
 pub mod pad;
+pub mod profile;
 pub mod routing;
 pub mod udev;
 

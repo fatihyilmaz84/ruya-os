@@ -5,11 +5,12 @@
 #include <QObject>
 #include <QString>
 #include <QVariantList>
+#include <QVariantMap>
 
 // Transport behind the Input QML singleton (RUY-409): org.ruyaos.Input1 of ruya-inputd over D-Bus,
 // or an in-memory mock: the routing (SetRoute, 06 §5.1-5.2, RUY-409), the devices, their
-// capabilities and the button test (RUY-39 / T-368); profiles and UI ownership follow with their
-// tasks (T-369..T-371, T-397).
+// capabilities and the button test (RUY-39 / T-368), the controller profiles (RUY-42 / T-369);
+// UI ownership and ownership modes follow with their tasks (T-371, T-397).
 class InputBackend : public QObject
 {
     Q_OBJECT
@@ -32,6 +33,10 @@ public:
     // Input1.StartTest / StopTest; StartTest's answer arrives as testStartFinished.
     virtual void startTest(const QString &deviceId) = 0;
     virtual void stopTest(const QString &deviceId) = 0;
+    // A controller profile member (InputProfileCalls.h; RUY-42) with its in-arguments by the XML's
+    // names. The answer arrives as profileReply with the same token and the out-arguments by name
+    // (status "failed", the others empty, when the call itself failed).
+    virtual void callProfile(quint64 token, const QString &method, const QVariantMap &args) = 0;
 
 signals:
     // The newest SetRoute's answer: a status string of api/dbus/org.ruyaos.Input1.xml, or "failed"
@@ -53,6 +58,9 @@ signals:
     void testStartFinished(const QString &deviceId, const QString &status);
     void testInput(const QString &deviceId, const QString &input, int value, const QString &source);
     void testEnded(const QString &deviceId, const QString &reason);
+    void profileReply(quint64 token, const QString &method, const QVariantMap &args, const QVariantMap &reply);
+    // ProfilesChanged: the controller profiles of that console profile changed.
+    void profilesChanged(const QString &profile);
 
 protected:
     void setServiceOwned(bool owned)

@@ -46,5 +46,6 @@ pub mod timedate;
 pub mod udisks;
 #[cfg(target_os = "linux")]
 pub mod upower;
+pub mod volume_files;
 
 pub use audio::{Audio, Sink, Status};

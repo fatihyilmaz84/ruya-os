@@ -1,6 +1,7 @@
 #pragma once
 
 #include "InputBackend.h"
+#include "MockInputProfiles.h"
 
 #include <QSet>
 #include <QVariantList>
@@ -29,6 +30,14 @@ public:
     void getCapabilities(const QString &deviceId) override;
     void startTest(const QString &deviceId) override;
     void stopTest(const QString &deviceId) override;
+    // The controller profiles (RUY-42): MockInputProfiles answers, asynchronously, and a change is
+    // one ProfilesChanged after the reply.
+    void callProfile(quint64 token, const QString &method, const QVariantMap &args) override;
+    // Tests: every profile call as { method, args }, oldest first; the profiles back to the
+    // built-ins only.
+    QVariantList profileCalls() const { return m_profileCalls; }
+    void clearProfileCalls() { m_profileCalls.clear(); }
+    void resetProfiles() { m_profiles.reset(); }
 
     // Tests (RUY-39). A pad connects (a device record; `capabilities` a list of
     // { name, hardware, driver, available, output }, else none) or changes (same id), or goes.
@@ -75,4 +84,6 @@ private:
     bool m_listFail = false;
     QVariantList m_devices;
     QSet<QString> m_tests;
+    MockInputProfiles m_profiles;
+    QVariantList m_profileCalls;
 };
