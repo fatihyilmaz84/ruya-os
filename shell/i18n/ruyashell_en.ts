@@ -484,22 +484,6 @@ This can&apos;t be undone.</translation>
         <source>An admin&apos;s PIN is needed to install this app.</source>
         <translation>An admin&apos;s PIN is needed to install this app.</translation>
     </message>
-    <message>
-        <source>Select</source>
-        <translation type="vanished">Select</translation>
-    </message>
-    <message>
-        <source>Cancel</source>
-        <translation type="vanished">Cancel</translation>
-    </message>
-    <message>
-        <source>Uninstall %1?</source>
-        <translation type="vanished">Uninstall %1?</translation>
-    </message>
-    <message>
-        <source>Also delete my data</source>
-        <translation type="vanished">Also delete my data</translation>
-    </message>
 </context>
 <context>
     <name>ArtCard</name>

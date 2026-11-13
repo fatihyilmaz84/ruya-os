@@ -482,22 +482,6 @@ Bu geri alınamaz.</translation>
         <source>An admin&apos;s PIN is needed to install this app.</source>
         <translation>Bu uygulamayı yüklemek için bir yöneticinin PIN&apos;i gerekir.</translation>
     </message>
-    <message>
-        <source>Select</source>
-        <translation type="vanished">Seç</translation>
-    </message>
-    <message>
-        <source>Cancel</source>
-        <translation type="vanished">İptal</translation>
-    </message>
-    <message>
-        <source>Uninstall %1?</source>
-        <translation type="vanished">%1 kaldırılsın mı?</translation>
-    </message>
-    <message>
-        <source>Also delete my data</source>
-        <translation type="vanished">Verilerimi de sil</translation>
-    </message>
 </context>
 <context>
     <name>ArtCard</name>
