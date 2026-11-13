@@ -43,6 +43,44 @@ Item {
         }
     }
 
+    // The row kinds (RUY-512), standalone.
+    Component { id: factComponent; SettingRow { label: "Fact"; kind: "info"; width: 700; value: "x" } }
+    Component { id: pageComponent; SettingRow { label: "Page"; kind: "page"; width: 700; value: "Default" } }
+    Component { id: actionComponent; SettingRow { label: "Scan for networks"; kind: "action"; width: 700 } }
+    Component { id: currentComponent; SettingRow { label: "Analog output"; width: 700; value: "Current" } }
+    Component { id: messageComponent; SettingRow { label: "Sleep is not available"; width: 700; enabled: false } }
+    // A pane with one row of every kind and a group label (hints, hairlines, Up/Down).
+    Component {
+        id: kindsPaneComponent
+        SettingsPane {
+            width: 700
+            height: 1400
+            SettingRow { objectName: "k_fact1"; label: "Fact 1"; kind: "info"; value: "a" }
+            SettingRow { objectName: "k_fact2"; label: "Fact 2"; kind: "info"; value: "b" }
+            SettingRow { objectName: "k_item"; label: "Item" }
+            SettingRow { objectName: "k_page"; label: "Page"; kind: "page" }
+            SettingRow { objectName: "k_action"; label: "Action"; kind: "action" }
+            ToggleRow { objectName: "k_toggle"; label: "Toggle" }
+            ChoiceRow { objectName: "k_choice"; label: "Choice"; options: [{ value: "a", label: "A" }, { value: "b", label: "B" }]; value: "a" }
+            SliderRow { objectName: "k_slider"; label: "Slider"; from: 0; to: 10; value: 3 }
+            SettingRow { objectName: "k_verb"; label: "Verb"; hints: [{ button: "A", text: "Connect" }, { button: "B", text: "Back" }] }
+            SettingRow { objectName: "k_fact3"; label: "Fact 3"; kind: "info"; value: "c" }
+            SettingRow { objectName: "k_message"; label: "Message"; enabled: false }
+            SettingRow { objectName: "k_fact4"; label: "Fact 4"; kind: "info"; value: "d" }
+            GroupLabel { objectName: "k_group"; text: "Buttons" }
+            SettingRow { objectName: "k_last"; label: "Last" }
+        }
+    }
+    Component {
+        id: ownHintsPaneComponent
+        SettingsPane {
+            width: 700
+            height: 400
+            hints: [{ button: "B", text: "Mine" }]
+            ToggleRow { objectName: "o_toggle"; label: "T" }
+        }
+    }
+
     SignalSpy { id: spy }
 
     TestCase {
@@ -74,6 +112,7 @@ Item {
             host.height = 720
             Bluetooth.mockReset()
             DeviceSettings.reducedMotion = false
+            DeviceSettings.language = "en"
             DeviceSettings.theme = "dreamglass"
             DeviceSettings.effectsQuality = "high"
             DeviceSettings.overscan = 0.05
@@ -671,8 +710,10 @@ Item {
             const navs = Sfx.navigateCount
             compare(choice.value, "a")
             keyClick(Qt.Key_Return)
+            compare(choice.value, "b", "A steps to the next option (RUY-512)")
+            keyClick(Qt.Key_Left)
             keyClick(Qt.Key_Down)
-            compare(choice.value, "a")
+            compare(choice.value, "a", "Down changes nothing")
             keyClick(Qt.Key_Right)
             compare(choice.value, "b")
             keyClick(Qt.Key_Right)
@@ -680,8 +721,8 @@ Item {
             compare(choice.value, "a", "wraps past the last option")
             keyClick(Qt.Key_Left)
             compare(choice.value, "c", "wraps before the first option")
-            compare(spy.count, 4)
-            compare(Sfx.navigateCount, navs + 4, "changes take the navigate sound path")
+            compare(spy.count, 6)
+            compare(Sfx.navigateCount, navs + 6, "changes take the navigate sound path")
 
             // SliderRow: steps within the bounds and clamps.
             const slider = createTemporaryObject(sliderComponent, host)
@@ -714,6 +755,340 @@ Item {
             compare(spy.count, 0)
             keyClick(Qt.Key_Return)
             compare(spy.count, 1)
+        }
+
+        // Hints as "A Select|B Back" from a pane's `hints` (what Settings shows in the bar).
+        function hintsOf(pane) { return pane.hints.map(h => h.button + " " + h.text).join("|") }
+
+        // RUY-512: a fact has no pill at rest, a hairline only between two facts, the normal focus ring when
+        // focused, and A is silent.
+        function test_fact_row() {
+            const row = createTemporaryObject(factComponent, host)
+            const fill = findChild(row, "rowFill")
+            const layers = findChild(row, "rowLayers")
+            const rule = findChild(row, "rowRule")
+            compare(fill.color.a, 0, "no fill at rest")
+            compare(layers.visible, false, "no sheen, rim or grain at rest")
+            compare(rule.visible, false, "no hairline with no fact below")
+            row.ruleBelow = true
+            compare(rule.visible, true, "a hairline when the next row is a fact")
+            compare(rule.height, Theme.hairlineAt(1))
+            compare(rule.width, row.width - 2 * Theme.spaceL)
+            compare(findChild(row, "value").text, "x")
+            compare(row.Accessible.role, Accessible.StaticText)
+            compare(row.Accessible.name, "Fact, x")
+
+            row.forceActiveFocus()
+            verify(row.activeFocus, "a fact can be focused (it scrolls and is read)")
+            tryCompare(fill, "color", Theme.focusFill)
+            compare(fill.border.width, Theme.focusRingWidth, "the focus ring")
+            compare(fill.border.color, Theme.focusRing)
+            compare(layers.visible, true, "the focused row is the normal row")
+            compare(rule.visible, false, "hairline hidden while focused")
+
+            spy.target = row
+            spy.signalName = "activated"
+            spy.clear()
+            const selects = Sfx.selectCount
+            keyClick(Qt.Key_Return)
+            keyClick(Qt.Key_Enter)
+            compare(spy.count, 0, "A emits nothing")
+            compare(Sfx.selectCount, selects, "A makes no sound")
+
+            // `inert` is the same kind.
+            const old = createTemporaryObject(plainComponent, host, { inert: true })
+            compare(findChild(old, "rowFill").color.a, 0)
+            compare(findChild(old, "rowLayers").visible, false)
+            compare(old.hintKind, "info")
+        }
+
+        function test_pane_sets_the_hairline_between_facts_only() {
+            const pane = createTemporaryObject(kindsPaneComponent, host)
+            const rule = name => findChild(pane, name).ruleBelow
+            // Fact 1 meets fact 2; fact 2 is followed by the item, fact 3 by a message, fact 4 by a heading.
+            tryVerify(() => rule("k_fact1") === true)
+            for (const name of ["k_fact2", "k_item", "k_fact3", "k_message", "k_fact4", "k_last"])
+                compare(rule(name), false, name)
+            // Hide the rows between fact 2 and fact 3: they meet. Hide the message: fact 3 meets fact 4.
+            for (const name of ["k_item", "k_page", "k_action", "k_toggle", "k_choice", "k_slider", "k_verb"])
+                findChild(pane, name).visible = false
+            tryCompare(findChild(pane, "k_fact2"), "ruleBelow", true)
+            findChild(pane, "k_message").visible = false
+            tryCompare(findChild(pane, "k_fact3"), "ruleBelow", true)
+            compare(rule("k_fact4"), false, "never after the last fact of a run")
+        }
+
+        function test_page_row_has_a_chevron() {
+            const page = createTemporaryObject(pageComponent, host)
+            const chevron = findChild(page, "chevron")
+            const value = findChild(page, "value")
+            verify(chevron.visible)
+            compare(chevron.name, "chevron_right")
+            fuzzyCompare(chevron.mapToItem(page, chevron.width, 0).x, page.width - Theme.spaceS, 1, "the box ends 16 from the edge")
+            fuzzyCompare(value.mapToItem(page, value.width, 0).x, chevron.mapToItem(page, 0, 0).x - Theme.spaceXxs, 1, "the value ends 4 before it")
+            compare(page.hintKind, "page")
+            for (const other of [factComponent, actionComponent, plainComponent]) {
+                const r = createTemporaryObject(other, host)
+                compare(findChild(r, "chevron").visible, false)
+            }
+            page.dimmed = true
+            compare(chevron.color.a, Theme.disabledOpacity, "dimmed with the label")
+        }
+
+        function test_action_row() {
+            const row = createTemporaryObject(actionComponent, host)
+            const label = findChild(row, "label")
+            fuzzyCompare(label.mapToItem(row, label.width / 2, 0).x, row.width / 2, 1, "the label is centred")
+            compare(label.font.weight, Theme.weightDemiBold)
+            compare(findChild(row, "value").visible, false, "nothing at the right end")
+            compare(findChild(row, "detail").visible, false)
+            compare(findChild(row, "rowFill").color, Theme.glass, "an item's fill")
+
+            row.iconName = "settings"
+            const icon = findChild(row, "rowIcon")
+            verify(icon.visible)
+            fuzzyCompare(label.mapToItem(row, label.width / 2, 0).x, row.width / 2, 1, "still centred with an icon")
+            fuzzyCompare(icon.mapToItem(row, icon.width, 0).x, label.mapToItem(row, 0, 0).x - Theme.spaceS, 1, "the icon sits 16 before it")
+
+            row.value = "Scanning…"
+            const detail = findChild(row, "detail")
+            verify(detail.visible)
+            compare(detail.text, "Scanning…", "the status is the second line")
+            fuzzyCompare(detail.mapToItem(row, detail.width / 2, 0).x, row.width / 2, 1, "centred")
+            verify(detail.mapToItem(row, 0, 0).y > label.mapToItem(row, 0, label.height).y - 1, "under the label")
+            row.detail = "Other"
+            compare(detail.text, "Other", "detail wins over value")
+            row.detail = ""
+            compare(row.Accessible.name, "Scan for networks, Scanning…")
+        }
+
+        function test_primary_action_row() {
+            const row = createTemporaryObject(actionComponent, host, { emphasis: "primary" })
+            const fill = findChild(row, "rowFill")
+            const label = findChild(row, "label")
+            compare(fill.color, Theme.primaryFill)
+            compare(label.color, Theme.onPrimary)
+            compare(fill.border.width, 0, "no rim")
+            compare(findChild(row, "rowLayers").visible, false)
+            const ring = findChild(row, "rowRingOutside")
+            compare(ring.visible, false)
+            row.forceActiveFocus()
+            verify(row.activeFocus)
+            compare(ring.visible, true)
+            compare(fill.color, Theme.primaryFill, "focused: the fill stays")
+            compare(ring.border.width, Theme.focusRingWidth)
+            compare(ring.border.color, Theme.focusRing)
+            compare(ring.x, -Theme.focusRingOffset, "the ring is drawn outside the pill")
+            compare(ring.width, row.width + 2 * Theme.focusRingOffset)
+        }
+
+        function test_current_item() {
+            const row = createTemporaryObject(currentComponent, host)
+            const mark = findChild(row, "currentMark")
+            const label = findChild(row, "label")
+            compare(mark.visible, false, "only with current: true")
+            compare(label.font.weight, Font.Normal)
+            row.current = true
+            compare(mark.visible, true)
+            compare(mark.name, "check_circle")
+            compare(mark.filled, true)
+            fuzzyCompare(mark.mapToItem(row, mark.width, 0).x, row.width - Theme.spaceS, 1)
+            compare(label.font.weight, Theme.weightDemiBold)
+            compare(findChild(row, "value").text, "Current", "its word stays")
+            compare(row.Accessible.checked, true)
+            compare(findChild(row, "chevron").visible, false)
+            row.forceActiveFocus()
+            compare(label.font.weight, Theme.weightDemiBold, "focused: check and DemiBold stay")
+            compare(mark.visible, true)
+        }
+
+        function test_message_row() {
+            const row = createTemporaryObject(messageComponent, host)
+            const icon = findChild(row, "rowIcon")
+            verify(icon.visible)
+            compare(icon.name, "info")
+            compare(findChild(row, "rowFill").color.a, 0, "flat like a fact")
+            compare(findChild(row, "rowRule").visible, false)
+            row.forceActiveFocus()
+            compare(row.activeFocus, false, "never focused")
+            // The row's own icon wins.
+            row.iconName = "warning"
+            compare(icon.name, "warning")
+            // In a pane Down steps over it.
+            const pane = createTemporaryObject(kindsPaneComponent, host)
+            findChild(pane, "k_fact3").forceActiveFocus()
+            keyClick(Qt.Key_Down)
+            verify(findChild(pane, "k_fact4").activeFocus, "the message is skipped")
+        }
+
+        function test_toggle_look() {
+            const toggle = createTemporaryObject(toggleComponent, host)
+            const track = findChild(toggle, "switchTrack")
+            const knob = findChild(toggle, "switchKnob")
+            compare(track.width, 96)
+            compare(track.height, 48)
+            compare(track.radius, 24)
+            compare(track.border.width, 3)
+            compare(track.border.color, Theme.text)
+            compare(track.color.a, 0, "off: no fill")
+            compare(knob.width, 32)
+            compare(knob.x, 8)
+            compare(knob.y, 8)
+            compare(knob.color, Theme.text)
+            toggle.checked = true
+            tryCompare(track, "color", Theme.primaryFill)
+            tryCompare(knob, "x", 56)
+            tryCompare(knob, "color", Theme.onPrimary)
+            compare(track.border.width, 3)
+            compare(track.border.color, Theme.text, "the outline stays in both states")
+            toggle.dimmed = true
+            compare(track.opacity, Theme.disabledOpacity, "the whole switch dims")
+            compare(toggle.hintKind, "toggle")
+        }
+
+        function test_choice_look_and_accept() {
+            const choice = createTemporaryObject(choiceComponent, host)
+            const left = findChild(choice, "arrowLeft")
+            const right = findChild(choice, "arrowRight")
+            const value = findChild(choice, "value")
+            verify(left.visible && right.visible, "two or more options: both arrows")
+            compare(left.width, 48)
+            compare(left.color, Theme.selectedFill)
+            fuzzyCompare(right.mapToItem(choice, right.width, 0).x, choice.width - Theme.spaceS, 1, "the right circle ends 16 from the edge")
+            fuzzyCompare(value.mapToItem(choice, value.width, 0).x, right.mapToItem(choice, 0, 0).x - Theme.spaceXs, 1)
+            fuzzyCompare(left.mapToItem(choice, left.width, 0).x, value.mapToItem(choice, 0, 0).x - Theme.spaceXs, 1)
+            compare(value.text, "A", "the value alone, not wrapped in arrows")
+            compare(choice.leftArrow.objectName, "arrowLeft")
+
+            choice.dimmed = true
+            compare(left.visible, false, "dimmed: the value alone")
+            compare(right.visible, false)
+            fuzzyCompare(value.mapToItem(choice, value.width, 0).x, choice.width - Theme.spaceL, 1)
+            choice.dimmed = false
+            choice.options = [{ value: "a", label: "A" }]
+            compare(left.visible, false, "one option: the value alone")
+            compare(right.visible, false)
+            choice.options = [{ value: "a", label: "A" }, { value: "b", label: "B" }, { value: "c", label: "C" }]
+            compare(left.visible, true)
+
+            // A steps to the next option and wraps.
+            choice.forceActiveFocus()
+            spy.target = choice
+            spy.signalName = "edited"
+            spy.clear()
+            const navs = Sfx.navigateCount
+            keyClick(Qt.Key_Return)
+            compare(choice.value, "b", "A steps to the next")
+            keyClick(Qt.Key_Enter)
+            compare(choice.value, "c")
+            keyClick(Qt.Key_Return)
+            compare(choice.value, "a", "and wraps")
+            compare(spy.count, 3)
+            compare(Sfx.navigateCount, navs + 3)
+            compare(choice.hintKind, "choice")
+        }
+
+        function test_slider_look() {
+            const slider = createTemporaryObject(sliderComponent, host)
+            const track = findChild(slider, "sliderTrack")
+            const thumb = findChild(slider, "sliderThumb")
+            const fill = findChild(slider, "valueFill")
+            compare(track.height, 16)
+            compare(track.width, 320)
+            compare(track.border.width, 2)
+            compare(track.border.color, Theme.text)
+            compare(track.color.a, 0, "no fill: an outlined track")
+            compare(thumb.width, 32)
+            compare(thumb.color, Theme.text)
+            // Fractions 0, 0.5 and 1 of 0..3.
+            for (const [value, fraction] of [[0, 0], [1.5, 0.5], [3, 1]]) {
+                slider.value = value
+                const centre = thumb.x + thumb.width / 2
+                fuzzyCompare(centre, 16 + 288 * fraction, 0.01, "thumb centre at " + fraction)
+                fuzzyCompare(fill.width, centre, 0.01, "the fill runs to the thumb's centre")
+                verify(thumb.x >= 0 && thumb.x + thumb.width <= track.width, "the thumb never leaves the track")
+            }
+            compare(slider.hintKind, "slider")
+            // A does nothing.
+            slider.forceActiveFocus()
+            slider.value = 1
+            keyClick(Qt.Key_Return)
+            compare(slider.value, 1)
+        }
+
+        function test_group_label() {
+            const pane = createTemporaryObject(kindsPaneComponent, host)
+            const group = findChild(pane, "k_group")
+            const text = findChild(group, "groupLabelText")
+            compare(text.font.pixelSize, Theme.typeHeadline)
+            compare(text.font.weight, Theme.weightDemiBold)
+            compare(text.mapToItem(group, 0, 0).x, 0, "flush with the pills")
+            compare(text.y, Theme.spaceXl, "48 above its text")
+            compare(group.Accessible.role, Accessible.Heading)
+            compare(group.Accessible.name, "Buttons")
+            compare(group.focus, false)
+            compare(group.activeFocusOnTab, false, "never focusable")
+            // Up and Down skip it.
+            findChild(pane, "k_fact4").forceActiveFocus()
+            keyClick(Qt.Key_Down)
+            verify(findChild(pane, "k_last").activeFocus, "Down steps over the heading")
+            keyClick(Qt.Key_Up)
+            verify(findChild(pane, "k_fact4").activeFocus, "and Up")
+            // 8 between the heading's text and the next row: the column gap, overlapped.
+            const last = findChild(pane, "k_last")
+            tryVerify(() => Math.abs(last.y - (group.y + text.y + text.height + Theme.spaceXs)) < 1,
+                      2000, "8 between the text and the next row: " + (last.y - group.y - text.y - text.height))
+            // Long text elides at the width.
+            group.text = "A very long heading that cannot possibly fit in seven hundred design pixels of a pane column at all, never"
+            compare(text.truncated, true)
+            compare(text.width, group.width)
+        }
+
+        // RUY-512: the hint bar follows the focused row's kind.
+        function test_hints_follow_the_focused_kind() {
+            const pane = createTemporaryObject(kindsPaneComponent, host)
+            findChild(pane, "k_fact1").forceActiveFocus()
+            tryCompare(pane, "focusedRow", findChild(pane, "k_fact1"))
+            compare(hintsOf(pane), "B Back", "fact")
+            const cases = [["k_item", "A Select|B Back"], ["k_page", "A Open|B Back"], ["k_action", "A Select|B Back"],
+                           ["k_toggle", "A Toggle|B Back"], ["k_choice", "Left/Right Change|A Next|B Back"],
+                           ["k_slider", "Left/Right Adjust|B Back"], ["k_verb", "A Connect|B Back"], ["k_fact3", "B Back"]]
+            for (const [name, want] of cases) {
+                findChild(pane, name).forceActiveFocus()
+                tryCompare(pane, "focusedRow", findChild(pane, name))
+                compare(hintsOf(pane), want, name)
+            }
+            // A pane that sets its own hints keeps them.
+            const own = createTemporaryObject(ownHintsPaneComponent, host)
+            findChild(own, "o_toggle").forceActiveFocus()
+            compare(hintsOf(own), "B Mine")
+        }
+
+        // Shown in the real bar: Settings > Display opens on its Quality choice row.
+        function test_hint_bar_shows_the_row_kind() {
+            openSettings()
+            selectCategory(tc.displayIndex)
+            keyClick(Qt.Key_Right)
+            tryVerify(() => find("rowQuality").activeFocus)
+            const bar = find("hintBar")
+            tryVerify(() => findChild(bar, "hint_Left/Right") !== null, 2000, "a choice row offers Left/Right")
+            compare(findChild(bar, "hint_A").verb, "Next")
+            compare(findChild(bar, "hint_B").verb, "Back")
+            keyClick(Qt.Key_Escape)
+        }
+
+        // Turkish: the Open hint is the verb "Aç", not the adjective "Açık" (RUY-505).
+        function test_hint_verbs_are_turkish() {
+            DeviceSettings.language = "tr"
+            const pane = createTemporaryObject(kindsPaneComponent, host)
+            const cases = [["k_fact1", "B Geri"], ["k_item", "A Seç|B Geri"], ["k_page", "A Aç|B Geri"],
+                           ["k_toggle", "A Aç/Kapat|B Geri"], ["k_choice", "Left/Right Değiştir|A İleri|B Geri"],
+                           ["k_slider", "Left/Right Ayarla|B Geri"]]
+            for (const [name, want] of cases) {
+                findChild(pane, name).forceActiveFocus()
+                tryCompare(pane, "focusedRow", findChild(pane, name))
+                tryVerify(() => hintsOf(pane) === want, 2000, name + ": " + hintsOf(pane))
+            }
         }
 
         function test_choice_row_keeps_focus() {

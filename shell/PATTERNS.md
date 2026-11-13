@@ -19,12 +19,13 @@ Reusable settings rows. All extend `SettingControl` (a `FocusScope` with the lab
 
 | Control | Keys it consumes | Value and signal |
 |---|---|---|
-| `SettingRow` | Accept | `value` (text); `activated()` |
+| `SettingRow` | Accept (not on `kind: "info"`) | `value` (text), `kind` (`item`, `page`, `action`, `info`), `emphasis`, `current`; `activated()` |
 | `ToggleRow` | Accept toggles | `checked`; `toggled(checked)` |
-| `ChoiceRow` | Left/Right cycle `options` (`[{value, label}]`), wrapping | `value`; `edited(value)` |
+| `ChoiceRow` | Left/Right cycle `options` (`[{value, label}]`), wrapping; Accept steps to the next | `value`; `edited(value)` |
 | `SliderRow` | Left/Right step by `stepSize` within `from`..`to`, clamped | `value`; `edited(value)` |
+| `GroupLabel` | none (never focusable) | `text` |
 
-**Which row kind (planned, RUY-512..514; 04 §5 "Setting row kinds").** Pick the control by what A does, so the row's right end tells the player before they press it:
+**Which row kind (RUY-512 built the controls; RUY-513/514 move the panes; 04 §5 "Setting row kinds").** Pick the control by what A does, so the row's right end tells the player before they press it:
 
 | A does | Use | Looks like |
 |---|---|---|
@@ -39,6 +40,8 @@ Reusable settings rows. All extend `SettingControl` (a `FocusScope` with the lab
 | Sets a number in a range | `SliderRow` | Outlined track with a thumb |
 | Cannot be used and says why, with nothing to focus | `SettingRow { enabled: false }` | Flat line with an info icon |
 | Names the rows below it | `GroupLabel { text: ... }` | `typeHeadline` DemiBold heading, never focused |
+
+`SettingControl.flat` (no fill and no layers at rest) and `ruleBelow` (the hairline) are the fact look; `SettingRow` sets `flat` for `kind: "info"`, `inert` and `enabled: false`, and any other `SettingControl` can set it (System information's inline row). `SettingsPane` sets `ruleBelow` after each layout of its column: true on a fact whose next visible item is also a fact. `SettingControl.hints` defaults by kind (fact `B Back`; item and action `A Select`; page `A Open`; toggle `A Toggle`; choice `Left/Right Change`, `A Next`; slider `Left/Right Adjust`) and `SettingsPane.hints` shows the focused row's; a row names its own verb with `hints: [{ button: "A", text: qsTr("Connect") }, { button: "B", text: qsTr("Back") }]`, and a pane that sets `hints:` itself still wins.
 
 A label is a noun with a value (Wallpaper, Resolution) for `page`, `item` and `info`; a verb (Scan for networks, Forget %1) for `action`. A row that would be a verb *and* show a value is an action with a status line ("Add a device" / "Scanning…").
 

@@ -445,7 +445,7 @@ Bu geri alınamaz.</translation>
     <message>
         <location line="+1"/>
         <source>Open</source>
-        <translation>Açık</translation>
+        <translation>Aç</translation>
     </message>
     <message>
         <location line="+10"/>
@@ -660,7 +660,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>BatteryChip</name>
     <message>
-        <location filename="../qml/BatteryChip.qml" line="+52"/>
+        <location filename="../qml/BatteryChip.qml" line="+53"/>
         <source>%1 battery %2 percent, low</source>
         <translation>%1 pili yüzde %2, düşük</translation>
     </message>
@@ -760,7 +760,7 @@ Bu geri alınamaz.</translation>
         <translation>Yeni kontrolcü eşleştir</translation>
     </message>
     <message>
-        <location line="+110"/>
+        <location line="+111"/>
         <source>Pair again %1</source>
         <translation>%1 cihazını yeniden eşleştir</translation>
     </message>
@@ -775,7 +775,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 adını değiştir</translation>
     </message>
     <message>
-        <location line="-256"/>
+        <location line="-257"/>
         <source>Paired</source>
         <translation>Eşleşti</translation>
     </message>
@@ -851,7 +851,7 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="-194"/>
-        <location line="+343"/>
+        <location line="+344"/>
         <source>Forget %1</source>
         <translation>%1 cihazını unut</translation>
     </message>
@@ -1226,12 +1226,12 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+36"/>
-        <location line="+178"/>
+        <location line="+179"/>
         <source>Other</source>
         <translation>Diğer</translation>
     </message>
     <message>
-        <location line="-129"/>
+        <location line="-130"/>
         <source>Press A to search again</source>
         <translation>Yeniden aramak için A&apos;ya basın</translation>
     </message>
@@ -1246,7 +1246,7 @@ Bu geri alınamaz.</translation>
         <translation>Henüz bir şey bulunamadı</translation>
     </message>
     <message>
-        <location line="+41"/>
+        <location line="+42"/>
         <source>Pairing…</source>
         <translation>Eşleştiriliyor…</translation>
     </message>
@@ -1329,7 +1329,7 @@ Bu geri alınamaz.</translation>
         <translation>Bluetooth</translation>
     </message>
     <message>
-        <location line="+69"/>
+        <location line="+71"/>
         <source>%1 · %2</source>
         <translation>%1 · %2</translation>
     </message>
@@ -1549,7 +1549,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>ControllerToasts</name>
     <message>
-        <location filename="../qml/ControllerToasts.qml" line="+123"/>
+        <location filename="../qml/ControllerToasts.qml" line="+124"/>
         <source>Battery %1%</source>
         <translation>Pil %1%</translation>
     </message>
@@ -1619,7 +1619,7 @@ Bu geri alınamaz.</translation>
         <translation>Yeniden dene</translation>
     </message>
     <message>
-        <location line="+36"/>
+        <location line="+37"/>
         <location line="+22"/>
         <source>Confirm button</source>
         <translation>Onay düğmesi</translation>
@@ -1743,7 +1743,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>ControlsIntro</name>
     <message>
-        <location filename="../qml/ControlsIntro.qml" line="+25"/>
+        <location filename="../qml/ControlsIntro.qml" line="+26"/>
         <source>Changes here reach games only. Menus keep their buttons.</source>
         <translation>Buradaki değişiklikler yalnızca oyunlara uygulanır. Menüler kendi düğmelerini korur.</translation>
     </message>
@@ -1792,7 +1792,7 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+54"/>
+        <location line="+55"/>
         <source>Default</source>
         <translation>Varsayılan</translation>
     </message>
@@ -1892,7 +1892,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>DeviceIcons</name>
     <message>
-        <location filename="../qml/DeviceIcons.qml" line="+78"/>
+        <location filename="../qml/DeviceIcons.qml" line="+129"/>
         <source>%1 (%2)</source>
         <translation>%1 (%2)</translation>
     </message>
@@ -2332,12 +2332,12 @@ Bu geri alınamaz.</translation>
     <name>GamesPage</name>
     <message>
         <location filename="../qml/GamesPage.qml" line="+14"/>
-        <location line="+98"/>
+        <location line="+101"/>
         <source>Games</source>
         <translation>Oyunlar</translation>
     </message>
     <message>
-        <location line="-65"/>
+        <location line="-68"/>
         <location line="+4"/>
         <source>Select</source>
         <translation>Seç</translation>
@@ -2349,12 +2349,13 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+2"/>
+        <location line="+3"/>
         <source>Back</source>
         <translation>Geri</translation>
     </message>
     <message>
-        <location line="-1"/>
+        <location line="-2"/>
+        <location line="+3"/>
         <source>Sections</source>
         <translation>Bölümler</translation>
     </message>
@@ -2947,7 +2948,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 seçenekleri</translation>
     </message>
     <message>
-        <location line="+192"/>
+        <location line="+202"/>
         <source>No options for this yet.</source>
         <translation>Bunun için henüz seçenek yok.</translation>
     </message>
@@ -3885,6 +3886,44 @@ Bu geri alınamaz.</translation>
     </message>
 </context>
 <context>
+    <name>SettingControl</name>
+    <message>
+        <location filename="../qml/controls/SettingControl.qml" line="+70"/>
+        <source>Back</source>
+        <translation>Geri</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Open</source>
+        <translation>Aç</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Toggle</source>
+        <translation>Aç/Kapat</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Change</source>
+        <translation>Değiştir</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Next</source>
+        <translation>İleri</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Adjust</source>
+        <translation>Ayarla</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Select</source>
+        <translation>Seç</translation>
+    </message>
+</context>
+<context>
     <name>SettingsPage</name>
     <message>
         <location filename="../qml/SettingsPage.qml" line="+13"/>
@@ -3971,7 +4010,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>SettingsPane</name>
     <message>
-        <location filename="../qml/SettingsPane.qml" line="+17"/>
+        <location filename="../qml/SettingsPane.qml" line="+19"/>
         <source>Select</source>
         <translation>Seç</translation>
     </message>
@@ -4305,7 +4344,7 @@ Bu geri alınamaz.</translation>
         <translation>Mağaza seçenekleri şu anda kullanılamıyor.</translation>
     </message>
     <message>
-        <location line="+476"/>
+        <location line="+483"/>
         <location line="+4"/>
         <location line="+4"/>
         <source>Select</source>
@@ -4328,7 +4367,7 @@ Bu geri alınamaz.</translation>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="-1603"/>
+        <location line="-1610"/>
         <source>Restarting in 2 minutes</source>
         <translation>2 dakikada yeniden başlıyor</translation>
     </message>
@@ -4359,7 +4398,7 @@ Bu geri alınamaz.</translation>
         <translation>Çalışan uygulama</translation>
     </message>
     <message>
-        <location line="+1321"/>
+        <location line="+1328"/>
         <location line="+3"/>
         <source>Sections</source>
         <translation>Bölümler</translation>

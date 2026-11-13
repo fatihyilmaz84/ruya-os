@@ -102,7 +102,10 @@ Item {
 
     property bool warned: false
     function warnIfUnknown() {
-        if (name !== "" && !known && !warned) {
+        // Not `known`: on a change of `name` this handler can run before that binding has been re-evaluated
+        // (it warned about 'info' and 'settings', which are in the table). During construction the table
+        // is not set yet; Component.onCompleted asks again.
+        if (name !== "" && codePoints && !(name in codePoints) && !warned) {
             warned = true
             console.warn("Icon: unknown icon name '" + name + "'")
         }

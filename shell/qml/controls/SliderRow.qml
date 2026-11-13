@@ -23,6 +23,7 @@ SettingControl {
 
     accessibleValue: Math.round(shownValue) + unit + (caption.length > 0 ? ", " + caption : "")
     Accessible.role: Accessible.Slider
+    hintKind: "slider"
 
     function step(delta) {
         const next = Math.min(to, Math.max(from, value + delta * stepSize))
@@ -58,18 +59,35 @@ SettingControl {
         color: Theme.text
         font.pixelSize: Theme.typeCaption * row.u
     }
+    // An outlined track with a thumb (RUY-512, 04 §5): a thumb means adjustable. The thumb never leaves
+    // the track: its centre runs from one thumb radius to one thumb radius short of the far end.
+    readonly property real fraction: to > from ? Math.max(0, Math.min(1, (shownValue - from) / (to - from))) : 0
+    readonly property real thumbSize: 32 * u            // token-ok: slider thumb
     Rectangle {
         id: track
+        objectName: "sliderTrack"
         anchors { right: valueText.left; rightMargin: Theme.spaceM * row.u; verticalCenter: parent.verticalCenter }
-        width: 320 * row.u
-        height: 12 * row.u
+        width: 320 * row.u          // token-ok: slider track
+        height: Theme.spaceS * row.u
         radius: height / 2
-        color: Theme.glass
+        color: Qt.alpha(Theme.text, 0)
+        border.width: 2 * row.u     // token-ok: slider outline
+        border.color: Theme.text
+
         Rectangle {
             objectName: "valueFill"
-            width: row.to > row.from ? parent.width * Math.max(0, Math.min(1, (row.shownValue - row.from) / (row.to - row.from))) : 0
+            width: row.thumbSize / 2 + (parent.width - row.thumbSize) * row.fraction
             height: parent.height
             radius: parent.radius
+            color: Theme.text
+        }
+        Rectangle {
+            objectName: "sliderThumb"
+            width: row.thumbSize
+            height: width
+            radius: width / 2
+            x: (parent.width - width) * row.fraction
+            y: (parent.height - height) / 2
             color: Theme.text
         }
     }

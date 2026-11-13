@@ -14,7 +14,11 @@ ChoiceRow {
 
     Row {
         objectName: "themeChips"
-        anchors { right: row.valueText.left; rightMargin: Theme.spaceM * row.u; verticalCenter: parent.verticalCenter }
+        anchors {
+            right: row.arrowsShown ? row.leftArrow.left : row.valueText.left
+            rightMargin: Theme.spaceM * row.u
+            verticalCenter: parent.verticalCenter
+        }
         spacing: Theme.spaceXs * row.u
 
         Repeater {
