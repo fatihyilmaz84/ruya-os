@@ -2,6 +2,7 @@
 
 #include "InputProfileCalls.h"
 
+#include <QRegularExpression>
 #include <QStringList>
 #include <QTimer>
 #include <QVariantMap>
@@ -268,9 +269,12 @@ void MockInputBackend::setRoute(const QString &route, const QString &instance, c
         } else if (!(route == QLatin1String("overlay") && sameOwner)) {
             m_pads = false;
         }
+        const bool profileChanged = profile != m_profile;
         m_route = route;
         m_instance = instance;
         m_profile = profile;
+        if (profileChanged)
+            QTimer::singleShot(0, this, [this] { emit confirmButtonChanged(); });
         if (route != QLatin1String("shell")) {
             const QList<QString> running = m_tests.values();
             for (const QString &id : running)
@@ -278,6 +282,13 @@ void MockInputBackend::setRoute(const QString &route, const QString &instance, c
         }
     }
     QTimer::singleShot(0, this, [this, request, status] { deliverRoute(request, status); });
+}
+
+void MockInputBackend::readConfirmButton()
+{
+    const bool ok = !m_fail;
+    const QString mode = m_confirm.value(m_profile, QStringLiteral("family"));
+    QTimer::singleShot(0, this, [this, ok, mode] { emit confirmButtonRead(ok, ok ? mode : QString()); });
 }
 
 void MockInputBackend::restart()
@@ -310,6 +321,23 @@ void MockInputBackend::callProfile(quint64 token, const QString &method, const Q
                 reply.insert(name, QVariant());
         }
         reply.insert(QStringLiteral("status"), m_fail ? QStringLiteral("failed") : m_forcedStatus.value(method));
+    } else if (method == QLatin1String("SetConfirmButton")) {
+        // The service's rules (routing.rs): the mode first, then the profile account (the mock takes
+        // any id of the profile form); the answer is ok, invalid or unknown-profile.
+        static const QRegularExpression consoleId(QStringLiteral("^[A-Za-z0-9_-]{1,32}$"));
+        const QString profile = args.value(QStringLiteral("profile")).toString();
+        const QString mode = args.value(QStringLiteral("mode")).toString();
+        QString status = QStringLiteral("ok");
+        if (!consoleId.match(profile).hasMatch())
+            status = QStringLiteral("unknown-profile");
+        else if (mode != QLatin1String("family") && mode != QLatin1String("south") && mode != QLatin1String("east"))
+            status = QStringLiteral("invalid");
+        reply.insert(QStringLiteral("status"), status);
+        if (status == QLatin1String("ok")) {
+            m_confirm.insert(profile, mode);
+            if (profile == m_profile)
+                QTimer::singleShot(0, this, [this] { emit confirmButtonChanged(); });
+        }
     } else {
         reply = m_profiles.call(method, args, &changed);
     }

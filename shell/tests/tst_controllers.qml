@@ -35,6 +35,8 @@ Item {
             host.height = 1080
             DeviceSettings.language = "en"
             Input.mockResetDevices()
+            Input.mockResetProfiles()
+            Input.mockActiveInput("", "")
             tryVerify(() => Input.devicesState === "ok" && Input.devices.length === 3)
             Profiles.lock()
             tryCompare(Profiles, "activeProfile", "")
@@ -114,8 +116,8 @@ Item {
 
         function test_the_list_shows_every_connected_pad() {
             openPane()
-            compare(rowNames(), ["pad_" + ds, "pad_" + pro, "pad_" + xbox, "rowControlsInGames", "rowPadsPair"],
-                    "sorted by name, then Controls in games (RUY-465) and Pair")
+            compare(rowNames(), ["pad_" + ds, "pad_" + pro, "pad_" + xbox, "rowConfirmButton", "rowControlsInGames", "rowPadsPair"],
+                    "sorted by name, then the Confirm button (RUY-40), Controls in games (RUY-465) and Pair")
             verify(padRow(ds).activeFocus, "focus enters on the first row")
             compare(padRow(ds).label, "DualSense Wireless Controller")
             compare(padRow(ds).detail, "Bluetooth · Battery 62 %, charging")
@@ -130,6 +132,9 @@ Item {
             verify(padRow(pro).activeFocus)
             keyClick(Qt.Key_Down)
             verify(padRow(xbox).activeFocus)
+            keyClick(Qt.Key_Down)
+            verify(find("rowConfirmButton").activeFocus)
+            compare(hintVerbs(), "Left/Right Change|A Next|B Back", "the Confirm button is a choice row (RUY-40)")
             keyClick(Qt.Key_Down)
             verify(find("rowControlsInGames").activeFocus)
             compare(hintVerbs(), "A Open|B Back", "Controls in games opens a page")
@@ -208,7 +213,7 @@ Item {
 
         function test_a_failed_list_offers_try_again() {
             openPane()
-            for (let i = 0; i < 4; ++i)
+            for (let i = 0; i < 5; ++i)
                 keyClick(Qt.Key_Down)
             verify(find("rowPadsPair").activeFocus, "on Pair, which stays")
             Input.mockListFail(true)
@@ -218,7 +223,10 @@ Item {
             compare(find("rowPadsFailed").label, "Controllers can't be read right now.")
             verify(!padRow(ds).visible, "no stale pad rows")
             tryVerify(() => find("rowPadsRetry").activeFocus, 2000, "Try again has the focus")
-            compare(rowNames(), ["rowPadsRetry", "rowControlsInGames", "rowPadsPair"], "Controls in games stays, dimmed (RUY-465)")
+            compare(rowNames(), ["rowPadsRetry", "rowConfirmButtonUnavailable", "rowControlsInGames", "rowPadsPair"],
+                    "the Confirm button and Controls in games stay, dimmed (RUY-40, RUY-465)")
+            compare(find("rowConfirmButtonUnavailable").value, "Not available")
+            verify(find("rowConfirmButtonUnavailable").dimmed)
             keyClick(Qt.Key_Return)                      // still failing
             tryCompare(Input, "devicesState", "failed")
             verify(find("rowPadsRetry").activeFocus)
@@ -404,6 +412,112 @@ Item {
             tryVerify(() => Input.mockTestRunning(ds), 2000, "started again in the shell")
         }
 
+        // ---- the Confirm button (RUY-40) ---------------------------------------------------------------------------
+
+        function confirmRow() { return find("rowConfirmButton") }
+
+        function openConfirm() {
+            openPane()
+            for (let i = 0; i < 5 && !confirmRow().activeFocus; ++i)
+                keyClick(Qt.Key_Down)
+            verify(confirmRow().activeFocus, "on the Confirm button row")
+            return confirmRow()
+        }
+
+        function test_the_confirm_row_applies_at_once_and_keeps_the_focus() {
+            const row = openConfirm()
+            compare(row.label, "Confirm button")
+            compare(row.currentLabel, "As on the controller")
+            compare(hintVerbs(), "Left/Right Change|A Next|B Back")
+            Input.mockClearProfileCalls()
+            keyClick(Qt.Key_Right)
+            compare(row.currentLabel, "Bottom")
+            compare(Input.confirmButton, "south")
+            tryCompare(Input, "confirmButton", "south")
+            compare(Input.mockConfirmButton("p2"), "south", "the service holds it, per console profile")
+            const calls = Input.mockProfileCalls().filter(c => c.method === "SetConfirmButton")
+            compare(calls.length, 1)
+            compare(calls[0].args.profile, "p2")
+            compare(calls[0].args.mode, "south")
+            keyClick(Qt.Key_Right)
+            compare(row.currentLabel, "Right")
+            compare(Input.mockConfirmButton("p2"), "east")
+            keyClick(Qt.Key_Return)                      // Accept = Next, as on a ChoiceRow
+            compare(row.currentLabel, "As on the controller")
+            compare(Input.mockConfirmButton("p2"), "family")
+            verify(row.activeFocus, "the row keeps the focus while its value changes")
+            keyClick(Qt.Key_Left)
+            compare(row.currentLabel, "Right")
+            verify(row.activeFocus)
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => find("categoryList").activeFocus, 2000, "Back returns to the category list")
+        }
+
+        function test_the_note_names_the_buttons_of_the_active_pad() {
+            const row = openConfirm()
+            verify(find("confirmNoteKeyboard").visible, "no pad has pressed yet: the keyboard sentence")
+            compare(find("confirmNoteKeyboard").text, "On the keyboard: Enter confirms, Esc goes back.")
+            verify(!find("confirmNoteAccept").visible)
+            Input.mockActiveInput(ds, "playstation")
+            tryCompare(Input, "activeFamily", "playstation")
+            compare(Input.activeDevice, ds)
+            verify(find("confirmNoteAccept").visible && !find("confirmNoteKeyboard").visible)
+            compare(find("confirmNoteAccept").button, "A", "position letters: south")
+            compare(find("confirmNoteBack").button, "B")
+            compare(row.Accessible.name.indexOf("Confirm button"), 0)
+            verify(row.Accessible.name.endsWith("On this controller: A confirms, B goes back."), row.Accessible.name)
+            keyClick(Qt.Key_Right)
+            keyClick(Qt.Key_Right)                       // Right: Circle confirms on a PlayStation pad
+            compare(row.currentLabel, "Right")
+            compare(find("confirmNoteAccept").button, "B")
+            compare(find("confirmNoteBack").button, "A")
+            keyClick(Qt.Key_Left)                        // Bottom
+            keyClick(Qt.Key_Left)                        // As on the controller
+            Input.mockActiveInput(pro, "nintendo")
+            tryCompare(find("confirmNoteAccept"), "button", "B")   // A on a Pro Controller is east
+            compare(find("confirmNoteBack").button, "A")
+        }
+
+        function test_a_refused_change_puts_the_stored_value_back() {
+            const row = openConfirm()
+            Input.mockSetProfileStatus("SetConfirmButton", "failed")
+            keyClick(Qt.Key_Right)
+            tryVerify(() => toastTexts().some(t => t === "Could not change the confirm button / Try again."), 2000,
+                      toastTexts().join(" | "))
+            tryCompare(row, "currentLabel", "As on the controller")
+            compare(Input.confirmButton, "family")
+            compare(Input.mockConfirmButton("p2"), "family")
+            verify(row.activeFocus)
+            Input.mockResetProfiles()
+            keyClick(Qt.Key_Right)
+            tryCompare(Input, "confirmButton", "south")
+        }
+
+        function test_the_setting_follows_the_profile() {
+            const row = openConfirm()
+            keyClick(Qt.Key_Right)
+            keyClick(Qt.Key_Right)
+            tryCompare(Input, "confirmButton", "east")
+            Input.setRoute("shell", "", "", "p1")
+            tryCompare(Input, "confirmButton", "family")
+            tryCompare(row, "currentLabel", "As on the controller")
+            Input.setRoute("shell", "", "", "p2")
+            tryCompare(Input, "confirmButton", "east")
+        }
+
+        function test_the_service_failing_dims_the_row() {
+            openPane()
+            Input.mockFail(true)
+            Input.mockRestart()                          // the service is back, but every call fails
+            tryVerify(() => !Input.confirmButtonAvailable, 2000)
+            tryVerify(() => find("rowConfirmButtonUnavailable").visible, 2000)
+            verify(!confirmRow().visible)
+            compare(find("rowConfirmButtonUnavailable").value, "Not available")
+            Input.mockFail(false)
+            Input.mockRestart()
+            tryVerify(() => confirmRow().visible, 2000)
+        }
+
         // ---- screenshots --------------------------------------------------------------------------------------------
 
         function settle() {
@@ -416,6 +530,24 @@ Item {
             openPane()
             settle()
             grabImage(tc.shell).save(dir + "27-settings-controllers-" + lang + ".png")
+            for (let i = 0; i < 3; ++i)
+                keyClick(Qt.Key_Down)
+            verify(confirmRow().activeFocus)
+            settle()
+            grabImage(tc.shell).save(dir + "40-confirm-button-" + lang + ".png")
+            Input.mockActiveInput(ds, "playstation")      // Right on a PlayStation pad: Circle confirms
+            keyClick(Qt.Key_Right)
+            keyClick(Qt.Key_Right)
+            tryCompare(Input, "confirmButton", "east")
+            settle()
+            grabImage(tc.shell).save(dir + "40-confirm-button-right-playstation-" + lang + ".png")
+            keyClick(Qt.Key_Left)
+            keyClick(Qt.Key_Left)
+            tryCompare(Input, "confirmButton", "family")
+            Input.mockActiveInput("", "")
+            for (let i = 0; i < 3; ++i)
+                keyClick(Qt.Key_Up)
+            verify(padRow(ds).activeFocus)
             keyClick(Qt.Key_Return)
             tryCompare(tc.shell, "currentPage", "controller")
             tryVerify(() => find("cap_buttons") !== null, 2000)

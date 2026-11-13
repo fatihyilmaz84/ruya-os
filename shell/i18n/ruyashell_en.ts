@@ -1581,23 +1581,34 @@ This can&apos;t be undone.</translation>
 <context>
     <name>ControllersPane</name>
     <message>
-        <location filename="../qml/ControllersPane.qml" line="+28"/>
+        <location filename="../qml/ControllersPane.qml" line="+35"/>
         <source>Open</source>
         <translation>Open</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="-1"/>
+        <location line="+1"/>
         <location line="+1"/>
         <source>Back</source>
         <translation>Back</translation>
     </message>
     <message>
+        <location line="-3"/>
+        <source>Change</source>
+        <translation>Change</translation>
+    </message>
+    <message>
         <location line="+0"/>
+        <source>Next</source>
+        <translation>Next</translation>
+    </message>
+    <message>
+        <location line="+3"/>
         <source>Select</source>
         <translation>Select</translation>
     </message>
     <message>
-        <location line="+104"/>
+        <location line="+108"/>
         <source>No controllers connected.</source>
         <translation>No controllers connected.</translation>
     </message>
@@ -1612,13 +1623,70 @@ This can&apos;t be undone.</translation>
         <translation>Try again</translation>
     </message>
     <message>
-        <location line="+37"/>
+        <location line="+36"/>
+        <location line="+20"/>
+        <source>Confirm button</source>
+        <translation>Confirm button</translation>
+    </message>
+    <message>
+        <location line="-18"/>
+        <source>As on the controller</source>
+        <translation>As on the controller</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Bottom</source>
+        <translation>Bottom</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Right</source>
+        <translation>Right</translation>
+    </message>
+    <message>
+        <location line="+24"/>
+        <source>Could not change the confirm button</source>
+        <translation>Could not change the confirm button</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Try again.</source>
+        <translation>Try again.</translation>
+    </message>
+    <message>
+        <location line="+20"/>
+        <source>On this controller: %1 confirms, %2 goes back.</source>
+        <translation>On this controller: %1 confirms, %2 goes back.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>On the keyboard: Enter confirms, Esc goes back.</source>
+        <translation>On the keyboard: Enter confirms, Esc goes back.</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>On this controller:</source>
+        <translation>On this controller:</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>confirms,</source>
+        <translation>confirms,</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>goes back.</source>
+        <translation>goes back.</translation>
+    </message>
+    <message>
+        <location line="+22"/>
         <location line="+24"/>
         <source>Controls in games</source>
         <translation>Controls in games</translation>
     </message>
     <message>
-        <location line="-23"/>
+        <location line="-113"/>
+        <location line="+90"/>
         <source>Not available</source>
         <translation>Not available</translation>
     </message>
@@ -1640,7 +1708,8 @@ This can&apos;t be undone.</translation>
         <translation>Pair a new controller</translation>
     </message>
     <message>
-        <location line="+23"/>
+        <location line="-96"/>
+        <location line="+119"/>
         <source>%1: %2.</source>
         <translation>%1: %2.</translation>
     </message>
@@ -4319,12 +4388,12 @@ This can&apos;t be undone.</translation>
         <translation>Response</translation>
     </message>
     <message>
-        <location line="+19"/>
+        <location line="+21"/>
         <source>Stick →</source>
         <translation>Stick →</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+11"/>
         <source>↑ Game sees</source>
         <translation>↑ Game sees</translation>
     </message>

@@ -10,6 +10,9 @@
   python3 vm-input-probe.py restart          (root) kill -9 ruya-inputd; prints "<old> <new> <ms>"
   python3 vm-input-probe.py pad <seconds>    (root) holds a uinput "physical" pad for that long
       (RUY-409: the shell's route makes its virtual pad); prints "pad ready <node>" once it has a node
+  python3 vm-input-probe.py confirm --profile p1
+      (root; RUY-40) a uinput pad with Nintendo's vendor id: the Confirm button swaps Enter and Esc
+      for BTN_EAST and BTN_SOUTH by mode (vm-input-check.sh confirm stops the compositor first)
   python3 vm-input-probe.py navpad [--settle S] [--lefts N] [--rights M]
       (root; RUY-410) a uinput pad that, S seconds after it is ready, taps the D-pad left N times and
       right M times, then A (the emergency reader's keys: Left, Right, Return); prints "pad ready <node>"
@@ -191,7 +194,7 @@ class Bus:
 class FakePad:
     """A uinput gamepad that ruya-inputd takes as physical; it answers rumble uploads."""
 
-    def __init__(self):
+    def __init__(self, vendor=0x1234, product=0x5678):
         self.fd = os.open("/dev/uinput", os.O_RDWR | os.O_NONBLOCK)
         fcntl.ioctl(self.fd, UI_SET_PHYS, PHYS.encode() + b"\0")
         for ev in (EV_KEY, EV_ABS, EV_FF):
@@ -204,7 +207,7 @@ class FakePad:
             fcntl.ioctl(self.fd, UI_SET_ABSBIT, code)
             fcntl.ioctl(self.fd, UI_ABS_SETUP, struct.pack("HxxiiiiiI", code, 0, lo, hi, 0, 0, 0))
         fcntl.ioctl(self.fd, UI_SET_FFBIT, FF_RUMBLE)
-        fcntl.ioctl(self.fd, UI_DEV_SETUP, struct.pack("HHHH80sI", 0x03, 0x1234, 0x5678, 1, NAME.encode(), 8))
+        fcntl.ioctl(self.fd, UI_DEV_SETUP, struct.pack("HHHH80sI", 0x03, vendor, product, 1, NAME.encode(), 8))
         fcntl.ioctl(self.fd, UI_DEV_CREATE)
         self.rumble = []  # (strong, weak) uploads
         self.played = []  # (effect id, value)
@@ -442,6 +445,76 @@ def cmd_navpad(args):
         pad.close()
 
 
+def cmd_confirm(args):
+    """RUY-40: a uinput pad announcing Nintendo's vendor id (0x057e) turns BTN_EAST into Enter and
+    BTN_SOUTH into Esc; "south" swaps them back and "east" gives every family the right button. The
+    probe holds the route `shell` for the profile on its own bus connection (the shell must not
+    run, or its Home would act on the Enter); prints PASS:/FAIL: lines."""
+    fails = 0
+
+    def ok(msg):
+        print(f"PASS: {msg}", flush=True)
+
+    def bad(msg):
+        nonlocal fails
+        fails += 1
+        print(f"FAIL: {msg}", flush=True)
+
+    pad = FakePad(vendor=0x057E, product=0x2009)
+    bus = None
+    try:
+        row = wait_for(lambda: next((d for d in (devices() or []) if d.get("name") == NAME), None), 5)
+        if not row:
+            bad("ListDevices does not list the pad")
+            return fails
+        if row.get("family") == "nintendo":
+            ok(f"the pad with vendor 0x057e is family nintendo ({row['id']})")
+        else:
+            bad(f"the pad with vendor 0x057e has family '{row.get('family')}'")
+        bus = Bus()
+        status = bus.call(SVC, PATH, IFC, "SetRoute", ["shell", "", "", args.profile])
+        ok("route shell for the profile") if status == "ok" else bad(f"SetRoute answered {status}")
+        nav = Nav()
+        nav.keys(0.3)
+
+        def tap(button):
+            pad.emit(EV_KEY, button, 1)
+            time.sleep(0.1)
+            pad.emit(EV_KEY, button, 0)
+            return nav.keys(0.4)
+
+        def prop():
+            out = subprocess.run(["busctl", "--system", "get-property", SVC, PATH, IFC, "ConfirmButton"],
+                                 capture_output=True, text=True).stdout.strip()
+            return out.split(" ", 1)[1].strip('"') if " " in out else out
+
+        def expect(mode, east_key, south_key):
+            status = bus.call(SVC, PATH, IFC, "SetConfirmButton", [args.profile, mode])
+            ok(f"SetConfirmButton {mode}: ok") if status == "ok" else bad(f"SetConfirmButton {mode} answered {status}")
+            ok(f"ConfirmButton reads {mode}") if prop() == mode else bad(f"ConfirmButton reads '{prop()}', not {mode}")
+            for name, button, want in (("BTN_EAST", BTN_EAST, east_key), ("BTN_SOUTH", BTN_SOUTH, south_key)):
+                got = tap(button)
+                label = {KEY_ENTER: "KEY_ENTER", KEY_ESC: "KEY_ESC"}[want]
+                if got == [(want, 1), (want, 0)]:
+                    ok(f"mode {mode}: {name} gives {label}")
+                else:
+                    bad(f"mode {mode}: {name} gave {got}, wanted {label} down and up")
+
+        expect("family", KEY_ENTER, KEY_ESC)       # a Nintendo pad: A (east) confirms
+        expect("south", KEY_ESC, KEY_ENTER)        # Bottom: the south button confirms
+        expect("east", KEY_ENTER, KEY_ESC)         # Right
+        expect("family", KEY_ENTER, KEY_ESC)       # back to the default
+        status = bus.call(SVC, PATH, IFC, "SetConfirmButton", [args.profile, "sideways"])
+        ok("SetConfirmButton sideways: invalid") if status == "invalid" else bad(f"sideways answered {status}")
+        status = bus.call(SVC, PATH, IFC, "SetConfirmButton", ["root", "east"])
+        ok("SetConfirmButton for root: unknown-profile") if status == "unknown-profile" else bad(f"root answered {status}")
+    finally:
+        pad.close()
+        if bus:
+            bus.close()
+    return fails
+
+
 def cmd_restart(args):
     """kill -9 the service; prints the ms until a new RuyaOS Navigation device exists."""
     _, before = node_by("name", NAV)
@@ -658,6 +731,8 @@ def main():
     sub.add_parser("restart")
     p = sub.add_parser("pad")
     p.add_argument("seconds", type=float)
+    cf = sub.add_parser("confirm")
+    cf.add_argument("--profile", required=True)
     n = sub.add_parser("navpad")
     n.add_argument("--settle", type=float, default=2.5)
     n.add_argument("--lefts", type=int, default=0)
@@ -665,6 +740,8 @@ def main():
     args = ap.parse_args()
     if args.cmd == "check":
         sys.exit(1 if cmd_check(args) else 0)
+    if args.cmd == "confirm":
+        sys.exit(1 if cmd_confirm(args) else 0)
     {"game": cmd_game, "open": cmd_open, "restart": cmd_restart, "pad": cmd_pad, "navpad": cmd_navpad}[args.cmd](args)
 
 

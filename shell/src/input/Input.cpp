@@ -34,7 +34,25 @@ Input::Input(std::unique_ptr<InputBackend> backend, QObject *parent)
         if (!m_route.isEmpty())
             send();
         m_backend->refreshDevices();
+        m_backend->readConfirmButton();
     });
+    connect(m_backend.get(), &InputBackend::confirmButtonRead, this, [this](bool ok, const QString &mode) {
+        const QString next = ok ? mode : QStringLiteral("family");
+        if (ok == m_confirmAvailable && next == m_confirm)
+            return;
+        m_confirmAvailable = ok;
+        m_confirm = next;
+        emit confirmButtonChanged();
+    });
+    connect(m_backend.get(), &InputBackend::confirmButtonChanged, this, [this] { m_backend->readConfirmButton(); });
+    connect(m_backend.get(), &InputBackend::activeInputChanged, this,
+            [this](const QString &deviceId, const QString &family) {
+                if (deviceId == m_activeDevice && family == m_activeFamily)
+                    return;
+                m_activeDevice = deviceId;
+                m_activeFamily = family;
+                emit activeInputChanged();
+            });
     connect(m_backend.get(), &InputBackend::devicesListed, this, [this](bool ok, const QVariantList &devices) {
         if (ok && devices != m_devices) {
             m_devices = devices;
@@ -54,9 +72,21 @@ Input::Input(std::unique_ptr<InputBackend> backend, QObject *parent)
     connect(m_backend.get(), &InputBackend::profileReply, this, &Input::onProfileReply);
     connect(m_backend.get(), &InputBackend::profilesChanged, this, &Input::profilesChanged);
     m_backend->refreshDevices();
+    m_backend->readConfirmButton();
 }
 
 Input::~Input() = default;
+
+void Input::setConfirmButton(const QString &mode)
+{
+    if (mode == m_confirm && m_confirmAvailable)
+        return;
+    m_previousConfirm = m_confirm;
+    m_confirm = mode;                 // shown at once; the answer confirms or puts the old one back
+    emit confirmButtonChanged();
+    callProfile(QStringLiteral("SetConfirmButton"), {{QStringLiteral("profile"), m_profile}, {QStringLiteral("mode"), mode}},
+                Purpose::Plain);
+}
 
 Input *Input::create(QQmlEngine *qmlEngine, QJSEngine *)
 {
@@ -257,6 +287,15 @@ void Input::onProfileReply(quint64 token, const QString &method, const QVariantM
     case Purpose::Plain:
         break;
     }
+    if (method == QLatin1String("SetConfirmButton")) {
+        if (status != QLatin1String("ok")) {
+            qInfo("ruya-shell: Input1 SetConfirmButton answered %s", qPrintable(status));
+            m_confirm = m_previousConfirm;
+            emit confirmButtonChanged();
+            emit confirmButtonRefused(status);
+        }
+        return;
+    }
     if (method == QLatin1String("SaveProfile") && status != QLatin1String("ok"))
         qInfo("ruya-shell: Input1 SaveProfile for %s answered %s%s%s", qPrintable(profile), qPrintable(status),
               errors.isEmpty() ? "" : ": ", qPrintable(errors.join(QStringLiteral("; "))));
@@ -409,6 +448,18 @@ void Input::startTest(const QString &deviceId)
 void Input::stopTest(const QString &deviceId)
 {
     m_backend->stopTest(deviceId);
+}
+
+void Input::mockActiveInput(const QString &deviceId, const QString &family)
+{
+    if (auto *mock = qobject_cast<MockInputBackend *>(m_backend.get()))
+        mock->sendActiveInput(deviceId, family);
+}
+
+QString Input::mockConfirmButton(const QString &profile) const
+{
+    auto *mock = qobject_cast<MockInputBackend *>(m_backend.get());
+    return mock ? mock->confirmButtonOf(profile) : QString();
 }
 
 void Input::mockAddDevice(const QVariantMap &device)

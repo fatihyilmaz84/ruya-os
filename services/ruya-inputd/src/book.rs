@@ -25,6 +25,7 @@ use std::io::{self, Read, Write};
 use std::path::PathBuf;
 
 use crate::engine::{Engine, Resolved, StickSettings};
+use crate::mapping::Confirm;
 use crate::profile::{self, Input, Mapping, Profile, Scope, Target};
 use crate::routing::Status;
 
@@ -36,6 +37,9 @@ pub const MAX_LEVELS: usize = 8;
 pub const MAX_PROFILES: usize = 64;
 /// The file of the assignments; not a profile id (ids start with a letter or digit).
 pub const ASSIGNMENTS: &str = "_assignments.json";
+/// The file of the console profile's own input settings (the Confirm button, 06 section 11.2);
+/// not a profile id either.
+pub const SETTINGS: &str = "_settings.json";
 /// How many directory entries a load looks at.
 const MAX_ENTRIES: usize = 256;
 
@@ -207,6 +211,7 @@ pub type SaveAnswer = (Status, String, Vec<String>);
 struct Shelf {
     profiles: BTreeMap<String, Profile>,
     global: Option<String>,
+    confirm: Confirm,
 }
 
 fn builtins() -> BTreeMap<String, Profile> {
@@ -337,7 +342,25 @@ impl Book {
         };
         let mut shelf = Shelf::default();
         let mut global = None;
+        let mut confirm = Confirm::Family;
         for (name, text) in files {
+            if name == SETTINGS {
+                match serde_json::from_str::<serde_json::Value>(&text) {
+                    Ok(v) => match v.get("confirm_button").and_then(|m| m.as_str()) {
+                        None => {}
+                        Some(m) => match Confirm::parse(m) {
+                            Some(c) => confirm = c,
+                            None => self.journal.push(format!(
+                                "{console}/{name}: confirm_button \"{m}\" is not a mode: not used"
+                            )),
+                        },
+                    },
+                    Err(_) => self
+                        .journal
+                        .push(format!("{console}/{name} is not a settings file: not used")),
+                }
+                continue;
+            }
             if name == ASSIGNMENTS {
                 let parsed: Option<String> = serde_json::from_str::<serde_json::Value>(&text)
                     .ok()
@@ -394,8 +417,35 @@ impl Book {
             }
             known
         });
+        shelf.confirm = confirm;
         self.shelves.insert(console.to_owned(), shelf);
         Ok(())
+    }
+
+    /// The console profile's Confirm button (06 section 11.2): `Family` for an empty or unknown
+    /// profile or when the settings cannot be read.
+    pub fn confirm_button(&mut self, console: &str) -> Confirm {
+        if !profile::valid_id(console) || self.load(console).is_err() {
+            return Confirm::Family;
+        }
+        self.shelf(console).confirm
+    }
+
+    /// `SetConfirmButton`: written whole before it applies (a refused write changes nothing).
+    pub fn set_confirm_button(&mut self, console: &str, mode: Confirm) -> Status {
+        if let Err(status) = self.load(console) {
+            return status;
+        }
+        let text = serde_json::json!({ "confirm_button": mode.as_str() });
+        if let Err(e) = self.store.write(console, SETTINGS, &text.to_string()) {
+            self.journal
+                .push(format!("saving the settings of {console} failed: {e}"));
+            return Status::Failed;
+        }
+        if let Some(shelf) = self.shelves.get_mut(console) {
+            shelf.confirm = mode;
+        }
+        Status::Ok
     }
 
     fn shelf(&self, console: &str) -> &Shelf {

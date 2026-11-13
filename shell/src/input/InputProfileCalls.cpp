@@ -23,6 +23,10 @@ const QList<InputProfileMethod> &methods()
         {QStringLiteral("GetEffectiveProfile"),
          {QStringLiteral("profile"), QStringLiteral("device_id"), QStringLiteral("app_id")},
          {QStringLiteral("status"), QStringLiteral("json"), QStringLiteral("chain")}},
+        // Not a profile member, but a call of the same shape (strings in, a status out); the Confirm
+        // button row of Settings > Controllers (RUY-40).
+        {QStringLiteral("SetConfirmButton"), {QStringLiteral("profile"), QStringLiteral("mode")},
+         {QStringLiteral("status")}},
     };
     return table;
 }

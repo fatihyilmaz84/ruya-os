@@ -9,7 +9,12 @@ import RuyaShell
 // controller page (controllerRequested). Rows are keyed by the stable id and updated in place, so a
 // battery change never moves the focus; a focused row that goes hands the focus to the row before it,
 // else the next (04 §4). No pad: "No controllers connected." as an unavailable line. ListDevices
-// failed: "Controllers can't be read right now." and "Try again" instead of the pad rows. The Confirm button row is RUY-40's.
+// failed: "Controllers can't be read right now." and "Try again" instead of the pad rows. The Confirm button row (RUY-40, 06 §11.2) follows the pad rows (only while a pad
+// is connected; dimmed when the list failed)
+// and comes before Controls in games: a ChoiceRow "As on the controller" / "Bottom" / "Right" for the signed-in profile
+// (Input.confirmButton; Left/Right apply it at once through Input1.SetConfirmButton, a refusal puts the stored value
+// back and toasts), with a note under it that tells which button confirms on the active pad (position letters until
+// RUY-41's glyph sets; the keyboard sentence while no pad has pressed). Without Input1 the row is dimmed "Not available".
 // "Controls in games" (RUY-465; value "Default" / "Changed", GameControls) opens ControlsPage: after
 // the pad rows, after Pair when no pad is connected, dimmed with "Not available" when the list failed.
 SettingsPane {
@@ -25,11 +30,17 @@ SettingsPane {
     readonly property bool failed: Input.devicesState === "failed"
     readonly property bool loading: Input.devicesState === "loading"
 
-    hints: pane.focusedPad ? [{ button: "A", text: qsTr("Open") }, { button: "B", text: qsTr("Back") }]
+    hints: confirmRow.activeFocus ? [{ button: "Left/Right", text: qsTr("Change") }, { button: "A", text: qsTr("Next") },
+                                     { button: "B", text: qsTr("Back") }]
+         : pane.focusedPad ? [{ button: "A", text: qsTr("Open") }, { button: "B", text: qsTr("Back") }]
                            : [{ button: "A", text: qsTr("Select") }, { button: "B", text: qsTr("Back") }]
     property bool focusedPad: false
 
     ListModel { id: padModel }
+
+    // The Confirm button row needs a pad to be about (like the note under it); with none connected the
+    // pane starts on Pair as before. A failed list shows it dimmed, like Controls in games.
+    readonly property bool confirmShown: !pane.failed && !pane.loading && padModel.count > 0
 
     function syncPads() {
         const rows = focusableRows()
@@ -173,6 +184,117 @@ SettingsPane {
             accessibleValue: DeviceIcons.kindText("controller", family) + (player !== "" ? ", " + player : "")
             onActiveFocusChanged: if (activeFocus) pane.focusedPad = true
             onActivated: pane.controllerRequested(padId)
+        }
+    }
+
+    // The Confirm button (06 §11.2): visible once the list is not loading; dimmed "Not available" without Input1.
+    ChoiceRow {
+        id: confirmRow
+        objectName: "rowConfirmButton"
+        visible: pane.confirmShown && Input.confirmButtonAvailable
+        u: pane.u
+        label: qsTr("Confirm button")
+        options: [
+            { value: "family", label: qsTr("As on the controller") },
+            { value: "south", label: qsTr("Bottom") },
+            { value: "east", label: qsTr("Right") },
+        ]
+        value: Input.confirmButton
+        // The row shows the stored value: Input.confirmButton changes at once and goes back on a refusal.
+        onEdited: v => {
+            Input.setConfirmButton(v)
+            confirmRow.value = Qt.binding(() => Input.confirmButton)
+        }
+        accessibleValue: currentLabel + ". " + confirmNote.sentence
+        Keys.onReturnPressed: step(1)         // Accept = Next (the hint says so)
+        Keys.onEnterPressed: step(1)
+        onActiveFocusChanged: if (activeFocus) pane.focusedPad = false
+    }
+    SettingRow {
+        objectName: "rowConfirmButtonUnavailable"
+        visible: pane.failed || (pane.confirmShown && !Input.confirmButtonAvailable)
+        dimmed: true
+        u: pane.u
+        label: qsTr("Confirm button")
+        value: qsTr("Not available")
+        onActiveFocusChanged: if (activeFocus) pane.focusedPad = false
+        onActivated: Notifications.show(qsTr("%1: %2.").arg(label).arg(value), "info")
+    }
+    Connections {
+        target: Input
+        function onConfirmButtonRefused() {
+            Notifications.show(qsTr("Could not change the confirm button"), "error", "", "", qsTr("Try again."))
+        }
+    }
+
+    // The note under the row: which buttons confirm and go back on the active pad, after the setting.
+    Item {
+        id: confirmNote
+        objectName: "confirmNote"
+        visible: confirmRow.visible
+        width: parent ? parent.width : 0
+        height: visible ? noteRow.height : 0
+
+        readonly property bool pad: Input.activeFamily !== ""
+        // Accept is the right button (east) on a Nintendo pad as it is, and with "Right" on every pad.
+        readonly property bool acceptEast: Input.confirmButton === "east"
+                                           || (Input.confirmButton === "family" && Input.activeFamily === "nintendo")
+        // Position letters (A south, B east) until RUY-41's glyph sets.
+        readonly property string acceptLetter: acceptEast ? "B" : "A"
+        readonly property string backLetter: acceptEast ? "A" : "B"
+        readonly property string sentence: pad
+            ? qsTr("On this controller: %1 confirms, %2 goes back.").arg(acceptLetter).arg(backLetter)
+            : qsTr("On the keyboard: Enter confirms, Esc goes back.")
+
+        Row {
+            id: noteRow
+            objectName: "confirmNoteRow"
+            spacing: Theme.spaceXs * pane.u
+            leftPadding: Theme.spaceL * pane.u
+            y: -4 * pane.u                 // 4 u closer to its row than the row gap (04 §5)
+            Text {
+                visible: confirmNote.pad
+                anchors.verticalCenter: parent.verticalCenter
+                text: qsTr("On this controller:")
+                color: Theme.text
+                font.pixelSize: Theme.typeCaption * pane.u
+            }
+            ButtonGlyph {
+                visible: confirmNote.pad
+                objectName: "confirmNoteAccept"
+                anchors.verticalCenter: parent.verticalCenter
+                u: pane.u
+                button: confirmNote.acceptLetter
+            }
+            Text {
+                visible: confirmNote.pad
+                anchors.verticalCenter: parent.verticalCenter
+                text: qsTr("confirms,")
+                color: Theme.text
+                font.pixelSize: Theme.typeCaption * pane.u
+            }
+            ButtonGlyph {
+                visible: confirmNote.pad
+                objectName: "confirmNoteBack"
+                anchors.verticalCenter: parent.verticalCenter
+                u: pane.u
+                button: confirmNote.backLetter
+            }
+            Text {
+                visible: confirmNote.pad
+                anchors.verticalCenter: parent.verticalCenter
+                text: qsTr("goes back.")
+                color: Theme.text
+                font.pixelSize: Theme.typeCaption * pane.u
+            }
+            Text {
+                objectName: "confirmNoteKeyboard"
+                visible: !confirmNote.pad
+                anchors.verticalCenter: parent.verticalCenter
+                text: confirmNote.sentence
+                color: Theme.text
+                font.pixelSize: Theme.typeCaption * pane.u
+            }
         }
     }
 

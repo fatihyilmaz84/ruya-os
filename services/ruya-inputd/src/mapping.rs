@@ -61,10 +61,37 @@ fn key_index(key: NavKey) -> usize {
     ALL_KEYS.iter().position(|&k| k == key).unwrap_or(0)
 }
 
-fn button_key(button: Button) -> NavKey {
+fn button_index(button: Button) -> usize {
     match button {
-        Button::South => NavKey::Accept,
-        Button::East => NavKey::Back,
+        Button::South => 0,
+        Button::East => 1,
+        Button::Start => 2,
+        Button::Mode => 3,
+        Button::ShoulderLeft => 4,
+        Button::ShoulderRight => 5,
+        Button::DpadUp => 6,
+        Button::DpadDown => 7,
+        Button::DpadLeft => 8,
+        Button::DpadRight => 9,
+    }
+}
+
+/// The navigation key of `button` on a pad of `family` under `mode` (06 section 11.2): pure, the
+/// one place the family x setting table is applied. Only south and east change.
+pub fn nav_key(family: &str, mode: Confirm, button: Button) -> NavKey {
+    button_key(button, mode.accept_button(family))
+}
+
+/// `accept` is the button that confirms; the other of south and east goes back.
+fn button_key(button: Button, accept: Button) -> NavKey {
+    match button {
+        Button::South | Button::East => {
+            if button == accept {
+                NavKey::Accept
+            } else {
+                NavKey::Back
+            }
+        }
         Button::Start => NavKey::Menu,
         Button::Mode => NavKey::Guide,
         Button::ShoulderLeft => NavKey::PrevTab,
@@ -73,6 +100,51 @@ fn button_key(button: Button) -> NavKey {
         Button::DpadDown => NavKey::Down,
         Button::DpadLeft => NavKey::Left,
         Button::DpadRight => NavKey::Right,
+    }
+}
+
+/// The "Confirm button" setting of a console profile (06 section 11.2).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Confirm {
+    /// As on the controller: the family's own button (the default).
+    #[default]
+    Family,
+    /// The bottom button confirms, whatever the family.
+    South,
+    /// The right button confirms, whatever the family.
+    East,
+}
+
+impl Confirm {
+    pub fn parse(text: &str) -> Option<Confirm> {
+        match text {
+            "family" => Some(Confirm::Family),
+            "south" => Some(Confirm::South),
+            "east" => Some(Confirm::East),
+            _ => None,
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Confirm::Family => "family",
+            Confirm::South => "south",
+            Confirm::East => "east",
+        }
+    }
+
+    /// The button that confirms for a pad of `family` (`xbox`, `playstation`, `nintendo`,
+    /// `generic`, ...). The one table of 06 section 11.2; a family it does not know confirms
+    /// by position (south). Back is always the other of the two.
+    pub fn accept_button(self, family: &str) -> Button {
+        match self {
+            Confirm::South => Button::South,
+            Confirm::East => Button::East,
+            Confirm::Family => match family {
+                "nintendo" => Button::East,
+                _ => Button::South,
+            },
+        }
     }
 }
 
@@ -106,8 +178,9 @@ fn count_transitions(counts: &mut [u8; 10], events: &[KeyEvent]) -> Vec<KeyEvent
 pub struct Mapper {
     hat: [Option<NavKey>; 2],
     stick: [Option<NavKey>; 2],
-    /// Buttons currently down, by the key they map to (two buttons never share a key).
-    buttons: [bool; 10],
+    /// Buttons currently down, with the key each was pressed as: a setting that changes while a
+    /// button is held releases the key it pressed, not the one it would map to now.
+    buttons: [Option<NavKey>; 10],
     held: [u8; 10],
 }
 
@@ -145,18 +218,36 @@ fn transition(slot: &mut Option<NavKey>, new: Option<NavKey>) -> Vec<KeyEvent> {
 }
 
 impl Mapper {
+    /// A button by position (south confirms): the Phase 0 mapping.
     pub fn button(&mut self, button: Button, pressed: bool) -> Vec<KeyEvent> {
-        let key = button_key(button);
-        let down = &mut self.buttons[key_index(key)];
-        if pressed && *down {
-            return Vec::new(); // a repeated press is not a second hold
-        }
-        if !pressed && !*down {
+        self.button_as(button, pressed, "generic", Confirm::South)
+    }
+
+    /// A button of a pad of `family` under `mode` (`nav_key`). A release gives back the key its
+    /// press emitted, whatever the family or mode is by then.
+    pub fn button_as(
+        &mut self,
+        button: Button,
+        pressed: bool,
+        family: &str,
+        mode: Confirm,
+    ) -> Vec<KeyEvent> {
+        let slot = &mut self.buttons[button_index(button)];
+        let key = if pressed {
+            if slot.is_some() {
+                return Vec::new(); // a repeated press is not a second hold
+            }
+            let key = nav_key(family, mode, button);
+            *slot = Some(key);
+            key
+        } else {
             // Released without a press seen (the pad was opened with it held): it holds nothing
             // of this key here, so it must not take away what another source or pad holds.
-            return Vec::new();
-        }
-        *down = pressed;
+            match slot.take() {
+                Some(key) => key,
+                None => return Vec::new(),
+            }
+        };
         self.settle(vec![(key, pressed)])
     }
 
@@ -209,7 +300,7 @@ impl Mapper {
             .collect();
         self.hat = [None; 2];
         self.stick = [None; 2];
-        self.buttons = [false; 10];
+        self.buttons = [None; 10];
         self.held = [0; 10];
         out
     }
@@ -261,6 +352,130 @@ mod tests {
         assert_eq!(m.button(Button::East, true), vec![(NavKey::Back, true)]);
         assert_eq!(m.button(Button::East, false), vec![(NavKey::Back, false)]);
         assert_eq!(m.button(Button::Mode, true), vec![(NavKey::Guide, true)]);
+    }
+
+    #[test]
+    fn the_confirm_table_by_family_and_mode() {
+        use Confirm::{East, Family, South};
+        // (family, mode, key of south, key of east)
+        let table = [
+            ("xbox", Family, NavKey::Accept, NavKey::Back),
+            ("generic", Family, NavKey::Accept, NavKey::Back),
+            ("playstation", Family, NavKey::Accept, NavKey::Back),
+            ("nintendo", Family, NavKey::Back, NavKey::Accept),
+            ("something-new", Family, NavKey::Accept, NavKey::Back),
+            ("", Family, NavKey::Accept, NavKey::Back),
+            ("xbox", South, NavKey::Accept, NavKey::Back),
+            ("playstation", South, NavKey::Accept, NavKey::Back),
+            ("nintendo", South, NavKey::Accept, NavKey::Back),
+            ("something-new", South, NavKey::Accept, NavKey::Back),
+            ("xbox", East, NavKey::Back, NavKey::Accept),
+            ("generic", East, NavKey::Back, NavKey::Accept),
+            ("playstation", East, NavKey::Back, NavKey::Accept),
+            ("nintendo", East, NavKey::Back, NavKey::Accept),
+            ("something-new", East, NavKey::Back, NavKey::Accept),
+        ];
+        for (family, mode, south, east) in table {
+            assert_eq!(
+                nav_key(family, mode, Button::South),
+                south,
+                "{family} {mode:?}"
+            );
+            assert_eq!(
+                nav_key(family, mode, Button::East),
+                east,
+                "{family} {mode:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn only_south_and_east_depend_on_the_confirm_setting() {
+        for button in [
+            Button::Start,
+            Button::Mode,
+            Button::ShoulderLeft,
+            Button::ShoulderRight,
+            Button::DpadUp,
+            Button::DpadDown,
+            Button::DpadLeft,
+            Button::DpadRight,
+        ] {
+            let base = nav_key("xbox", Confirm::Family, button);
+            for family in ["nintendo", "playstation", "xbox", "generic"] {
+                for mode in [Confirm::Family, Confirm::South, Confirm::East] {
+                    assert_eq!(nav_key(family, mode, button), base);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn confirm_modes_parse_and_print() {
+        for text in ["family", "south", "east"] {
+            assert_eq!(Confirm::parse(text).map(Confirm::as_str), Some(text));
+        }
+        assert_eq!(Confirm::parse("Right"), None);
+        assert_eq!(Confirm::parse(""), None);
+    }
+
+    #[test]
+    fn a_release_gives_back_the_key_its_press_emitted() {
+        let mut m = Mapper::default();
+        let (f, e) = (Confirm::Family, Confirm::East);
+        // Pressed as Accept (Xbox, as on the controller); the setting changes while it is held.
+        assert_eq!(
+            m.button_as(Button::South, true, "xbox", f),
+            vec![(NavKey::Accept, true)]
+        );
+        assert_eq!(
+            m.button_as(Button::South, false, "xbox", e),
+            vec![(NavKey::Accept, false)]
+        );
+        // And the other way: pressed as Back under "east", released under "family".
+        assert_eq!(
+            m.button_as(Button::South, true, "xbox", e),
+            vec![(NavKey::Back, true)]
+        );
+        assert_eq!(
+            m.button_as(Button::South, false, "xbox", f),
+            vec![(NavKey::Back, false)]
+        );
+        assert!(m.held_keys().is_empty());
+    }
+
+    #[test]
+    fn two_buttons_on_one_key_after_a_change_release_together() {
+        let mut m = Mapper::default();
+        // Accept from south; then the setting flips, so east means Accept too.
+        m.button_as(Button::South, true, "xbox", Confirm::Family);
+        assert_eq!(
+            m.button_as(Button::East, true, "xbox", Confirm::East),
+            vec![]
+        );
+        assert_eq!(
+            m.button_as(Button::South, false, "xbox", Confirm::East),
+            vec![]
+        );
+        assert_eq!(
+            m.button_as(Button::East, false, "xbox", Confirm::East),
+            vec![(NavKey::Accept, false)]
+        );
+    }
+
+    #[test]
+    fn a_pad_that_vanishes_mid_press_releases_what_it_pressed() {
+        let mut m = Mapper::default();
+        let mut board = KeyBoard::default();
+        let down = m.button_as(Button::East, true, "nintendo", Confirm::Family);
+        assert_eq!(board.route(&down), vec![(NavKey::Accept, true)]);
+        assert_eq!(board.pad_gone(&mut m), vec![(NavKey::Accept, false)]);
+        // A stray release afterwards (the node is gone, but be sure) does nothing.
+        assert_eq!(
+            m.button_as(Button::East, false, "nintendo", Confirm::South),
+            vec![]
+        );
+        assert!(m.held_keys().is_empty());
     }
 
     #[test]

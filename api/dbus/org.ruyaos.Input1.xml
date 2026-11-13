@@ -198,18 +198,27 @@
       <arg name="profile" type="s" direction="in"/>
       <arg name="status" type="s" direction="out"/>
     </method>
-    <!-- The device of the last press among the owner pads (06 §11.4); family as in the device
-         record. The keyboard is the shell's own knowledge, not reported here. -->
+    <!-- The device of the last press (owner pads once T-264 has them: today every pad, 06 §11.4);
+         family as in the device record. Sent when the device differs from the last announced one,
+         not on every press. The keyboard is the shell's own knowledge, not reported here. -->
     <signal name="ActiveInputChanged">
       <arg name="device_id" type="s"/>
       <arg name="family" type="s"/>
     </signal>
-    <!-- mode: "family" (as on the controller, default) | "south" | "east" (06 §11.2). -->
+    <!-- mode: "family" (as on the controller, default) | "south" | "east" (06 §11.2). Per console
+         profile (`profile`, which must be a profile account), kept in ruya-input's state directory
+         and applied from the next press on; a button held now is released as it was pressed.
+         It changes the shell's navigation keys only (accept and back); the virtual pads stay
+         positional. Status: "ok", "invalid" (not one of the modes), "unknown-profile" (not a
+         profile account), "failed" (not written; nothing changed). -->
     <method name="SetConfirmButton">
       <arg name="profile" type="s" direction="in"/>
       <arg name="mode" type="s" direction="in"/>
       <arg name="status" type="s" direction="out"/>
     </method>
+    <!-- ConfirmButton: the mode of the signed-in profile (the route's), "family" with none; it
+         changes with PropertiesChanged on SetConfirmButton for that profile and on a profile
+         switch. -->
     <property name="ConfirmButton" type="s" access="read"/>
 
     <!-- Controller profiles (T-369 built; platform and game assignments T-370), stored per console

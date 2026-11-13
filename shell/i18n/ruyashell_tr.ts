@@ -1577,23 +1577,34 @@ Bu geri alınamaz.</translation>
 <context>
     <name>ControllersPane</name>
     <message>
-        <location filename="../qml/ControllersPane.qml" line="+28"/>
+        <location filename="../qml/ControllersPane.qml" line="+35"/>
         <source>Open</source>
         <translation>Aç</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="-1"/>
+        <location line="+1"/>
         <location line="+1"/>
         <source>Back</source>
         <translation>Geri</translation>
     </message>
     <message>
+        <location line="-3"/>
+        <source>Change</source>
+        <translation>Değiştir</translation>
+    </message>
+    <message>
         <location line="+0"/>
+        <source>Next</source>
+        <translation>İleri</translation>
+    </message>
+    <message>
+        <location line="+3"/>
         <source>Select</source>
         <translation>Seç</translation>
     </message>
     <message>
-        <location line="+104"/>
+        <location line="+108"/>
         <source>No controllers connected.</source>
         <translation>Bağlı kontrolcü yok.</translation>
     </message>
@@ -1608,13 +1619,70 @@ Bu geri alınamaz.</translation>
         <translation>Yeniden dene</translation>
     </message>
     <message>
-        <location line="+37"/>
+        <location line="+36"/>
+        <location line="+20"/>
+        <source>Confirm button</source>
+        <translation>Onay düğmesi</translation>
+    </message>
+    <message>
+        <location line="-18"/>
+        <source>As on the controller</source>
+        <translation>Kontrolcüdeki gibi</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Bottom</source>
+        <translation>Alttaki</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Right</source>
+        <translation>Sağdaki</translation>
+    </message>
+    <message>
+        <location line="+24"/>
+        <source>Could not change the confirm button</source>
+        <translation>Onay düğmesi değiştirilemedi</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Try again.</source>
+        <translation>Yeniden dene.</translation>
+    </message>
+    <message>
+        <location line="+20"/>
+        <source>On this controller: %1 confirms, %2 goes back.</source>
+        <translation>Bu kontrolcüde: %1 onaylar, %2 geri gider.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>On the keyboard: Enter confirms, Esc goes back.</source>
+        <translation>Klavyede: Enter onaylar, Esc geri gider.</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>On this controller:</source>
+        <translation>Bu kontrolcüde:</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>confirms,</source>
+        <translation>onaylar,</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>goes back.</source>
+        <translation>geri gider.</translation>
+    </message>
+    <message>
+        <location line="+22"/>
         <location line="+24"/>
         <source>Controls in games</source>
         <translation>Oyunlardaki kontroller</translation>
     </message>
     <message>
-        <location line="-23"/>
+        <location line="-113"/>
+        <location line="+90"/>
         <source>Not available</source>
         <translation>Kullanılamıyor</translation>
     </message>
@@ -1636,7 +1704,8 @@ Bu geri alınamaz.</translation>
         <translation>Yeni kontrolcü eşleştir</translation>
     </message>
     <message>
-        <location line="+23"/>
+        <location line="-96"/>
+        <location line="+119"/>
         <source>%1: %2.</source>
         <translation>%1: %2.</translation>
     </message>
@@ -4304,12 +4373,12 @@ Bu geri alınamaz.</translation>
         <translation>Tepki</translation>
     </message>
     <message>
-        <location line="+19"/>
+        <location line="+21"/>
         <source>Stick →</source>
         <translation>Çubuk →</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+11"/>
         <source>↑ Game sees</source>
         <translation>↑ Oyunun gördüğü</translation>
     </message>
