@@ -31,7 +31,13 @@ ifc=org.ruyaos.Session1
 psvc=org.ruyaos.Profiles1
 ppath=/org/ruyaos/Profiles1
 rt=org.ruyaos.TestRuntime
-sleeper=org.ruyaos.TestSleeper
+# RUY-546: a dash in the id, which systemd writes as \x2d in the Flatpak scope's name
+# (app-flatpak-org.ruyaos.Test\x2dSleeper-<n>.scope). Three spellings of that name part: as a unit
+# name, as a glob for systemctl (a backslash escapes in a glob, so ? stands for it) and as a regex.
+sleeper=org.ruyaos.Test-Sleeper
+sleeper_unit='org.ruyaos.Test\x2dSleeper'
+sleeper_glob='org.ruyaos.Test?x2dSleeper'
+sleeper_re='org[.]ruyaos[.]Test[\]x2dSleeper'
 crasher=org.ruyaos.TestCrasher
 wclient=org.ruyaos.TestWaylandClient
 remote=ruyaos-session-test
@@ -60,8 +66,8 @@ thaw_app() { as_shell busctl --system call "$svc" "$path" "$ifc" Thaw s "$1"; }
 fstate() { systemctl --user -M "$1@.host" show -p FreezerState --value "$2" </dev/null 2>&1 | cat; }
 # The app's loaded, active Flatpak scopes in user $1's manager (exact names).
 app_scope_names() {
-    systemctl --user -M "$1@.host" list-units --plain --no-legend "app-flatpak-$sleeper-*.scope" </dev/null 2>&1 | cat \
-        | awk '$3 == "active" { print $1 }' | grep -E "^app-flatpak-$sleeper-[0-9]+[.]scope$"
+    systemctl --user -M "$1@.host" list-units --plain --no-legend "app-flatpak-$sleeper_glob-*.scope" </dev/null 2>&1 | cat \
+        | awk '$3 == "active" { print $1 }' | grep -E "^app-flatpak-$sleeper_re-[0-9]+[.]scope$"
 }
 # T-466: a PulseAudio playback client (python3 + libpulse-simple, writing silence) for a frozen app's
 # stream. It runs in a scope of the app (tone_scope), so the Freeze freezes it with the app.
@@ -412,7 +418,7 @@ restart)
     pgrep -u "$user" -f systemd-stdio-bridge >/dev/null && ok "the bridge to the manager of $user is running" || bad "no systemd-stdio-bridge of $user: the service has no connection to the manager"
     [ "$spawned" -eq 0 ] && ok "no systemctl process while following the adopted app (6 s)" || bad "systemctl ran $spawned times in 6 s while following"
     journalctl -u ruya-session -b --no-pager | grep -a "no connection to the manager" | tail -2
-    systemctl --user -M "$user@.host" kill --signal=SIGKILL --kill-whom=all "app-flatpak-$sleeper-*.scope" </dev/null 2>&1 | cat
+    systemctl --user -M "$user@.host" kill --signal=SIGKILL --kill-whom=all "app-flatpak-$sleeper_glob-*.scope" </dev/null 2>&1 | cat
     wait_sig "\"member\":\"AppExited\".*$sleeper" 30 && ok "AppExited arrived for the adopted app that was killed" || bad "no AppExited for the killed adopted app"
     grep -E "\"member\":\"AppExited\".*$sleeper" "$work/signals.log" | head -1
     # The status comes from the manager's own signals now: a killed app is no clean `quit`.
@@ -674,14 +680,14 @@ check)
         && ok "the shell's Session.running follows the Launch (after about $n s)" || bad "the shell's Session did not show the running app"
 
     # T-363: the run follows the app's own Flatpak scope (the service logs the attach and the end).
-    n=0; while ! journalctl -u ruya-session -b --no-pager -o cat 2>/dev/null | grep -a -q "$inst: attached app-flatpak-$sleeper-[0-9]*[.]scope" && [ "$n" -lt 20 ]; do sleep 1; n=$((n + 1)); done
+    n=0; while ! journalctl -u ruya-session -b --no-pager -o cat 2>/dev/null | grep -a -q "$inst: attached app-flatpak-$sleeper_re-[0-9]*[.]scope" && [ "$n" -lt 20 ]; do sleep 1; n=$((n + 1)); done
     [ "$n" -lt 20 ] && ok "the run attached the app's Flatpak scope (after about $n s)" || bad "no 'attached app-flatpak-$sleeper-N.scope' line for $inst in the journal"
     # T-435: no X server on the console, so Electron/Chromium must be told it is a Wayland session.
     systemctl --user -M "$user@.host" show -p Environment "$inst" </dev/null 2>&1 | cat | tr ' ' '\n' | grep -q "^XDG_SESSION_TYPE=wayland$" \
         && ok "the app got XDG_SESSION_TYPE=wayland (Electron picks Wayland)" || bad "the app has no XDG_SESSION_TYPE=wayland"
     # T-435: a second scope of the same app (as the Flatpak portal makes for an Electron zygote),
     # entered after the run attached its own; Stop must reach it too.
-    extra_scope "$user" "app-flatpak-$sleeper-4242.scope" 3001
+    extra_scope "$user" "app-flatpak-$sleeper_unit-4242.scope" 3001
     pgrep -u "$user" -f "sleep 3001" >/dev/null 2>&1 && ok "a second scope of the app runs (app-flatpak-$sleeper-4242)" || bad "could not start a second app scope"
 
     # T-459: the compositor asks which instance a window's client process belongs to (a pygame game's
@@ -745,14 +751,14 @@ check)
     elif [ -z "$(audio_probe "${ppid:-0}")" ]; then
         echo "UNVERIFIED: the shell's PipeWire did not answer pw-dump with the shell stopped: the parking of the sound was not checked"
     else
-        tone_scope "$user" "app-flatpak-$sleeper-4444.scope"
+        tone_scope "$user" "app-flatpak-$sleeper_unit-4444.scope"
         if wait_audio "$ppid" '^streams=[0-9]' 15; then
             audio=1
             tpid="$(pgrep -u "$user" -f ruya-check-tone | head -1)"
             ok "the app's sound client plays through ruya-pulse@$user (pid $ppid): $(audio_probe "$ppid" | grep '^stream=' | head -1)"
             audio_probe "$ppid" | grep -E '^(cards|parked_sink)=' | sed 's/^/    /'
             # RUY-425: the OpenAL-like client in a fourth scope, frozen with the app.
-            catchup_scope "$user" "app-flatpak-$sleeper-4445.scope" "$work/catchup.log"
+            catchup_scope "$user" "app-flatpak-$sleeper_unit-4445.scope" "$work/catchup.log"
             n=0; until grep -q '^ready' "$work/catchup.log" 2>/dev/null || [ "$n" -ge 15 ]; do sleep 1; n=$((n + 1)); done
             cpid="$(sed -n 's/^ready .*pid=\([0-9]*\)$/\1/p' "$work/catchup.log")"
             [ -n "$cpid" ] && ok "the OpenAL-like sound client plays too: $(head -1 "$work/catchup.log")" \
@@ -880,7 +886,7 @@ check)
     journalctl -u ruya-session -b --no-pager -o cat 2>/dev/null | grep -a -q "$inst: scope gone" \
         && ok "the run ended with its scope (journal: scope gone)" || bad "no 'scope gone' line for $inst in the journal"
     gone "sleep 3001" && ok "Stop ended the app's second scope too (T-435)" || bad "the second app-flatpak-$sleeper scope survived Stop"
-    systemctl --user -M "$user@.host" list-units --all --no-legend "app-flatpak-$sleeper-*.scope" </dev/null 2>&1 | grep -q scope \
+    systemctl --user -M "$user@.host" list-units --all --no-legend "app-flatpak-$sleeper_glob-*.scope" </dev/null 2>&1 | grep -q scope \
         && bad "an app-flatpak-$sleeper scope is still listed after Stop (active or failed)" || ok "no app-flatpak-$sleeper scope is left after Stop, not even a failed one"
     running | grep -q "$inst" && bad "ListRunning still lists it" || ok "ListRunning is empty again"
     grep -a -q "session-probe: appExited $sleeper 0 quit\|session-probe: appExited $sleeper -\?[0-9]* quit" "$work/probe.log" && ok "the shell saw appExited quit" || bad "the shell did not see appExited quit"
@@ -897,7 +903,7 @@ check)
     echo "$line" | grep -q '"crashed"' && echo "$line" | grep -q ',3,' && ok "reason crashed, exit code 3" || bad "crasher exit: $line"
 
     echo "--- an app killed from outside (SIGKILL to its own scope; a second scope of it is left over)"
-    attached() { journalctl -u ruya-session -b --no-pager -o cat 2>/dev/null | grep -a "$1: attached app-flatpak-$sleeper-"; }
+    attached() { journalctl -u ruya-session -b --no-pager -o cat 2>/dev/null | grep -a "$1: attached app-flatpak-$sleeper_re-"; }
     a0="$(attached "ruya-app-$user-$sleeper.service" | wc -l)"
     out="$(launch "$sleeper" "$pid")"; inst3="$(echo "$out" | unit_of)"
     [ -n "$inst3" ] && ok "Launch: $inst3" || bad "Launch for the kill: $out"
@@ -907,8 +913,8 @@ check)
     n=0; until [ "$(attached "$inst3" | wc -l)" -gt "$a0" ] || [ "$n" -ge 20 ]; do sleep 1; n=$((n + 1)); done
     own="$(attached "$inst3" | tail -1 | sed 's/.*attached //')"
     echo "attached: $own"
-    case "$own" in "app-flatpak-$sleeper-"*.scope) ok "the run attached $own";; *) bad "no new attached scope for $inst3";; esac
-    extra_scope "$user" "app-flatpak-$sleeper-4343.scope" 3002
+    case "$own" in "app-flatpak-$sleeper_unit-"*.scope) ok "the run attached $own";; *) bad "no new attached scope for $inst3";; esac
+    extra_scope "$user" "app-flatpak-$sleeper_unit-4343.scope" 3002
     pgrep -u "$user" -f "sleep 3002" >/dev/null 2>&1 && ok "a second scope of the app runs (app-flatpak-$sleeper-4343)" || bad "could not start a second app scope"
     systemctl --user -M "$user@.host" kill --signal=SIGKILL --kill-whom=all "$own" </dev/null 2>&1 | cat
     n=0; while [ "$(grep -c "\"member\":\"AppExited\".*$sleeper" "$work/signals.log")" -lt 2 ] && [ "$n" -lt 20 ]; do sleep 1; n=$((n + 1)); done
@@ -916,7 +922,7 @@ check)
     echo "$line" | grep -q '"killed"' && ok "a SIGKILL from the system: reason killed" || bad "killed exit: $line"
     gone "sleep 3000" && ok "its process is gone" || bad "the process survived"
     gone "sleep 3002" && ok "the end of the run stopped the app's left-over scope (T-435 sweep)" || bad "the left-over app-flatpak-$sleeper-4343 scope survived the run's end"
-    systemctl --user -M "$user@.host" list-units --all --no-legend "app-flatpak-$sleeper-*.scope" </dev/null 2>&1 | grep -q scope \
+    systemctl --user -M "$user@.host" list-units --all --no-legend "app-flatpak-$sleeper_glob-*.scope" </dev/null 2>&1 | grep -q scope \
         && bad "an app-flatpak-$sleeper scope is still listed after the run ended" || ok "no app-flatpak-$sleeper scope is listed after the run ended, not even a failed one"
 
     # T-472 (decided, 03 "Launch", Sound): ruya-shell does not linger. With the shell down past logind's

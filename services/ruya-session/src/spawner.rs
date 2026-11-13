@@ -182,21 +182,43 @@ pub fn unit_name(user: &str, app_id: &str) -> String {
 /// in the user's manager). The processes of the app live there, not in our unit: `flatpak run`
 /// moves itself into the scope and the sandbox starts from it, so stopping the unit alone leaves
 /// the app running. `systemctl stop|kill` take this pattern next to the unit name. The id is
-/// checked again: only `[A-Za-z0-9_.-]` can be in it, so the only glob character is the `*`.
+/// checked again: only `[A-Za-z0-9_.-]` can be in it. systemd escapes the `-` of the id in the
+/// unit name (`unit_escape`: `\x2d`); a backslash would escape the next character in the glob, so
+/// it is written as `?` (the names that come back are checked with `is_app_scope` anyway).
 pub fn scope_pattern(app_id: &str) -> Result<String, String> {
     if !valid_app_id(app_id) {
         return Err(format!("not an application id: {app_id:?}"));
     }
-    Ok(format!("app-flatpak-{app_id}-*.scope"))
+    Ok(format!(
+        "app-flatpak-{}-*.scope",
+        unit_escape(app_id).replace('\\', "?")
+    ))
 }
 
-/// Is `name` a scope `flatpak run <app_id>` makes (`app-flatpak-<app_id>-<number>.scope`)? The
-/// part after the id must be digits only, so `org.x.App-Extra` is not taken for `org.x.App`.
+/// The id as systemd writes it in a unit name (`systemd-escape`): every byte outside
+/// `[A-Za-z0-9_.:]` becomes `\xNN`, so the `-` of `attack-vector-alpha` is `\x2d` (a leading `.`
+/// too, which an app id never has). Only valid app ids are expected; others get the same rule.
+pub fn unit_escape(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for (i, b) in s.bytes().enumerate() {
+        let plain = b.is_ascii_alphanumeric() || matches!(b, b'_' | b':') || (b == b'.' && i > 0);
+        if plain {
+            out.push(b as char);
+        } else {
+            out.push_str(&format!("\\x{b:02x}"));
+        }
+    }
+    out
+}
+
+/// Is `name` a scope `flatpak run <app_id>` makes (`app-flatpak-<escaped app_id>-<number>.scope`,
+/// the `-` of the id written `\x2d`)? The part after the id must be digits only, so
+/// `org.x.App-Extra` is not taken for `org.x.App`.
 pub fn is_app_scope(app_id: &str, name: &str) -> bool {
     valid_app_id(app_id)
         && name
             .strip_prefix("app-flatpak-")
-            .and_then(|rest| rest.strip_prefix(app_id))
+            .and_then(|rest| rest.strip_prefix(unit_escape(app_id).as_str()))
             .and_then(|rest| rest.strip_prefix('-'))
             .and_then(|rest| rest.strip_suffix(".scope"))
             .is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
@@ -2139,6 +2161,36 @@ ActiveState=failed
         ] {
             assert!(scope_pattern(bad).is_err(), "{bad:?}");
         }
+    }
+
+    #[test]
+    fn scope_names_use_systemd_escaping_for_a_dash_in_the_id() {
+        let id = "page.codeberg.jaerrib.attack-vector-alpha";
+        let scope =
+            "app-flatpak-page.codeberg.jaerrib.attack\\x2dvector\\x2dalpha-2797448864.scope";
+        assert_eq!(
+            unit_escape(id),
+            "page.codeberg.jaerrib.attack\\x2dvector\\x2dalpha"
+        );
+        assert!(is_app_scope(id, scope));
+        // The unescaped form is not what systemd writes; near misses stay false.
+        assert!(!is_app_scope(
+            id,
+            "app-flatpak-page.codeberg.jaerrib.attack-vector-alpha-1.scope"
+        ));
+        assert!(!is_app_scope(
+            id,
+            "app-flatpak-page.codeberg.jaerrib.attack\\x2dvector-1.scope"
+        ));
+        assert!(!is_app_scope(
+            id,
+            "app-flatpak-page.codeberg.jaerrib.attack\\x2dvector\\x2dalpha\\x2dextra-1.scope"
+        ));
+        assert!(!is_app_scope("page.codeberg.jaerrib.attack", scope));
+        assert_eq!(
+            scope_pattern(id).as_deref(),
+            Ok("app-flatpak-page.codeberg.jaerrib.attack?x2dvector?x2dalpha-*.scope")
+        );
     }
 
     #[test]
