@@ -33,7 +33,12 @@ The procedure is in [`LEAD.md`](LEAD.md) (**Budgets and "Lead efficiency": hand 
    **RUY-490 (lead)** writes the spec and contract and blocks RUY-43.
 
 ## Next, in this order
-1. **Dell, with the owner:** Alien Arena and AAAAXY (X11), a Nintendo pad confirms with A, the Controllers page. Then build the next image (RUY-486), and check the owner's Wii U Pro and DualSense in the Button test.
+1. **Dell, with the owner (0.0.74):**
+   - X11 hw: **Pong PASS** with the Wii U Pro.
+   - Alien Arena: has no controller code at all (RUY-435 comment; it needs RUY-45).
+   - **Attack Vector Alpha (Godot 3.6) crashes the satellite** (a wl_shm_pool protocol error): **RUY-494, high**.
+
+   Still to do: a Nintendo pad confirms with A, the Controllers page. Then build the next image (RUY-486), and check the owner's Wii U Pro and DualSense in the Button test.
 2. **RUY-493 (high):** after a live profile swap the next press is lost. A product bug or the probe's timing.
 3. RUY-41 (glyphs follow the controller; reads RUY-40's `activeFamily` and seam `routing.rs mapper_events`), RUY-479 (left-stick navigation in the stick editor), RUY-474 (GPU shots red on main), RUY-473 (VM check hygiene), RUY-441.
 4. Lead work:
