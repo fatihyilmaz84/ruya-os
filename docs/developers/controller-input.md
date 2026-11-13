@@ -96,7 +96,7 @@ The console's input service (`ruya-inputd`, since RUY-3) makes the pads below, a
 
 ## The player's controls: what your game sees is already remapped
 
-> **Experimental.** The behaviour and the file format below are public ([tier C](api-surface.md#tier-c-data-only-formats), ADR-022) but may change without notice until the first release. Built in the service (RUY-42) and tested on the development machine; the run in the VM is pending (`scripts/vm-input-check.sh`), and the console's pages that edit these settings are not built yet (RUY-465).
+> **Experimental.** The behaviour and the file format below are public ([tier C](api-surface.md#tier-c-data-only-formats), ADR-022) but may change without notice until the first release. Built in the service (RUY-42) and tested on the development machine; the run in the VM is pending (`scripts/vm-input-check.sh`), and the player edits these settings in Settings > Controllers > Controls in games (RUY-465).
 
 The player can change their controls for every game at once: a Nintendo button layout, any button moved to another, and per stick a dead zone, a response curve, a sensitivity and inverted axes. The console applies this **before** your game reads the virtual pad, so you receive the player's choice and must not undo it:
 

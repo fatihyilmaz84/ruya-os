@@ -304,12 +304,12 @@ void MockInputBackend::callProfile(quint64 token, const QString &method, const Q
     m_profileCalls.append(QVariantMap{{QStringLiteral("method"), method}, {QStringLiteral("args"), args}});
     QVariantMap reply;
     QString changed;
-    if (m_fail) {
+    if (m_fail || m_forcedStatus.contains(method)) {
         if (const InputProfileMethod *m = InputProfileCalls::find(method)) {
             for (const QString &name : m->out)
                 reply.insert(name, QVariant());
         }
-        reply.insert(QStringLiteral("status"), QStringLiteral("failed"));
+        reply.insert(QStringLiteral("status"), m_fail ? QStringLiteral("failed") : m_forcedStatus.value(method));
     } else {
         reply = m_profiles.call(method, args, &changed);
     }

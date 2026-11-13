@@ -449,17 +449,17 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+10"/>
-        <location line="+265"/>
+        <location line="+255"/>
         <source>Uninstall</source>
         <translation>Kaldır</translation>
     </message>
     <message>
-        <location line="-253"/>
+        <location line="-243"/>
         <source>Your activity</source>
         <translation>Etkinliğiniz</translation>
     </message>
     <message>
-        <location line="+103"/>
+        <location line="+93"/>
         <source>This app can</source>
         <translation>Bu uygulama şunları yapabilir</translation>
     </message>
@@ -755,7 +755,7 @@ Bu geri alınamaz.</translation>
         <translation>Bağlı</translation>
     </message>
     <message>
-        <location line="+122"/>
+        <location line="+128"/>
         <source>Pair a new controller</source>
         <translation>Yeni kontrolcü eşleştir</translation>
     </message>
@@ -775,7 +775,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 adını değiştir</translation>
     </message>
     <message>
-        <location line="-250"/>
+        <location line="-256"/>
         <source>Paired</source>
         <translation>Eşleşti</translation>
     </message>
@@ -825,7 +825,7 @@ Bu geri alınamaz.</translation>
         <translation>Kontrolcünün adı değiştirilemedi.</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+15"/>
         <source>Another device tried to pair and was turned away.</source>
         <translation>Başka bir cihaz eşleşmeyi denedi ve geri çevrildi.</translation>
     </message>
@@ -850,8 +850,8 @@ Bu geri alınamaz.</translation>
         <translation>Taranıyor…</translation>
     </message>
     <message>
-        <location line="-188"/>
-        <location line="+337"/>
+        <location line="-194"/>
+        <location line="+343"/>
         <source>Forget %1</source>
         <translation>%1 cihazını unut</translation>
     </message>
@@ -1342,7 +1342,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>ControllerPage</name>
     <message>
-        <location filename="../qml/ControllerPage.qml" line="+42"/>
+        <location filename="../qml/ControllerPage.qml" line="+44"/>
         <source>Works</source>
         <translation>Çalışıyor</translation>
     </message>
@@ -1441,6 +1441,21 @@ Bu geri alınamaz.</translation>
         <location line="+7"/>
         <source>Button test</source>
         <translation>Düğme testi</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Controls in games</source>
+        <translation>Oyunlardaki kontroller</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Changed</source>
+        <translation>Değiştirildi</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Default</source>
+        <translation>Varsayılan</translation>
     </message>
     <message>
         <location line="+13"/>
@@ -1562,7 +1577,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>ControllersPane</name>
     <message>
-        <location filename="../qml/ControllersPane.qml" line="+25"/>
+        <location filename="../qml/ControllersPane.qml" line="+28"/>
         <source>Open</source>
         <translation>Aç</translation>
     </message>
@@ -1578,7 +1593,7 @@ Bu geri alınamaz.</translation>
         <translation>Seç</translation>
     </message>
     <message>
-        <location line="+101"/>
+        <location line="+104"/>
         <source>No controllers connected.</source>
         <translation>Bağlı kontrolcü yok.</translation>
     </message>
@@ -1593,9 +1608,216 @@ Bu geri alınamaz.</translation>
         <translation>Yeniden dene</translation>
     </message>
     <message>
-        <location line="+33"/>
+        <location line="+37"/>
+        <location line="+24"/>
+        <source>Controls in games</source>
+        <translation>Oyunlardaki kontroller</translation>
+    </message>
+    <message>
+        <location line="-23"/>
+        <source>Not available</source>
+        <translation>Kullanılamıyor</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <location line="+24"/>
+        <source>Changed</source>
+        <translation>Değiştirildi</translation>
+    </message>
+    <message>
+        <location line="-24"/>
+        <location line="+24"/>
+        <source>Default</source>
+        <translation>Varsayılan</translation>
+    </message>
+    <message>
+        <location line="-16"/>
         <source>Pair a new controller</source>
         <translation>Yeni kontrolcü eşleştir</translation>
+    </message>
+    <message>
+        <location line="+23"/>
+        <source>%1: %2.</source>
+        <translation>%1: %2.</translation>
+    </message>
+</context>
+<context>
+    <name>ControlsImportPicker</name>
+    <message>
+        <location filename="../qml/ControlsImportPicker.qml" line="+28"/>
+        <location line="+1"/>
+        <source>Cancel</source>
+        <translation>İptal</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Import</source>
+        <translation>Al</translation>
+    </message>
+    <message>
+        <location line="+93"/>
+        <location line="+30"/>
+        <source>Import from USB drive</source>
+        <translation>USB bellekten al</translation>
+    </message>
+    <message>
+        <location line="-9"/>
+        <source>This drive can&apos;t be read right now.</source>
+        <translation>Bu bellek şu an okunamıyor.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>No controls files on this drive.</source>
+        <translation>Bu bellekte kontrol dosyası yok.</translation>
+    </message>
+</context>
+<context>
+    <name>ControlsIntro</name>
+    <message>
+        <location filename="../qml/ControlsIntro.qml" line="+25"/>
+        <source>Changes here reach games only. Menus keep their buttons.</source>
+        <translation>Buradaki değişiklikler yalnızca oyunlara uygulanır. Menüler kendi düğmelerini korur.</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Profile: %1</source>
+        <translation>Profil: %1</translation>
+    </message>
+</context>
+<context>
+    <name>ControlsPage</name>
+    <message>
+        <location filename="../qml/ControlsPage.qml" line="+24"/>
+        <source>Controls in games</source>
+        <translation>Oyunlardaki kontroller</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>All controllers</source>
+        <translation>Tüm kontrolcüler</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>This %1</source>
+        <translation>Bu %1</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Another controller</source>
+        <translation>Başka bir kontrolcü</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Standard</source>
+        <translation>Standart</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Nintendo</source>
+        <translation>Nintendo</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Changed</source>
+        <translation>Değiştirildi</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <location line="+54"/>
+        <source>Default</source>
+        <translation>Varsayılan</translation>
+    </message>
+    <message>
+        <location line="-35"/>
+        <source>Back</source>
+        <translation>Geri</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Change</source>
+        <translation>Değiştir</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Next</source>
+        <translation>İleri</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Open</source>
+        <translation>Aç</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Select</source>
+        <translation>Seç</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Applies to</source>
+        <translation>Uygulandığı kontrolcüler</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Button layout</source>
+        <translation>Düğme düzeni</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Remap buttons</source>
+        <translation>Düğmeleri yeniden ata</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+1"/>
+        <source>%n changed</source>
+        <translation>
+            <numerusform>%n değişiklik</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Left stick</source>
+        <translation>Sol çubuk</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Right stick</source>
+        <translation>Sağ çubuk</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Export to USB drive</source>
+        <translation>USB belleğe aktar</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Import from USB drive</source>
+        <translation>USB bellekten al</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Plug in a USB drive first.</source>
+        <translation>Önce bir USB bellek tak.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Reset to default</source>
+        <translation>Varsayılana sıfırla</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Reset controls in games?</source>
+        <translation>Oyunlardaki kontroller sıfırlansın mı?</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Every button, stick and curve goes back to the default.</source>
+        <translation>Tüm düğmeler, çubuklar ve eğriler varsayılana döner.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Reset controls</source>
+        <translation>Kontrolleri sıfırla</translation>
     </message>
 </context>
 <context>
@@ -1891,6 +2113,153 @@ Bu geri alınamaz.</translation>
     </message>
 </context>
 <context>
+    <name>GameControls</name>
+    <message>
+        <location filename="../qml/GameControls.qml" line="+273"/>
+        <location line="+153"/>
+        <source>Could not save to the USB drive</source>
+        <translation>USB belleğe kaydedilemedi</translation>
+    </message>
+    <message>
+        <location line="-153"/>
+        <location line="+2"/>
+        <location line="+151"/>
+        <location line="+26"/>
+        <source>Try again.</source>
+        <translation>Yeniden dene.</translation>
+    </message>
+    <message>
+        <location line="-177"/>
+        <source>Could not save the change</source>
+        <translation>Değişiklik kaydedilemedi</translation>
+    </message>
+    <message>
+        <location line="+149"/>
+        <source>Saved to the USB drive</source>
+        <translation>USB belleğe kaydedildi</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Controls imported</source>
+        <translation>Kontroller alındı</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>That file can&apos;t be used</source>
+        <translation>Bu dosya kullanılamıyor</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>It is larger than 64 KB.</source>
+        <translation>64 KB&apos;tan büyük.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>It isn&apos;t a RuyaOS controls file.</source>
+        <translation>Bir RuyaOS kontrol dosyası değil.</translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>PlayStation controllers</source>
+        <translation>PlayStation kontrolcüleri</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Xbox controllers</source>
+        <translation>Xbox kontrolcüleri</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Nintendo controllers</source>
+        <translation>Nintendo kontrolcüleri</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Nothing</source>
+        <translation>Hiçbiri</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Cross</source>
+        <translation>Çarpı</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Circle</source>
+        <translation>Daire</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Square</source>
+        <translation>Kare</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Triangle</source>
+        <translation>Üçgen</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Left stick click</source>
+        <translation>Sol çubuğa basma</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Right stick click</source>
+        <translation>Sağ çubuğa basma</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>D-pad up</source>
+        <translation>Yön tuşu yukarı</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>D-pad down</source>
+        <translation>Yön tuşu aşağı</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>D-pad left</source>
+        <translation>Yön tuşu sol</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>D-pad right</source>
+        <translation>Yön tuşu sağ</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Create</source>
+        <translation>Create</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Minus</source>
+        <translation>Eksi</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>View</source>
+        <translation>View</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Options</source>
+        <translation>Options</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Plus</source>
+        <translation>Artı</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Menu</source>
+        <translation>Menu</translation>
+    </message>
+</context>
+<context>
     <name>GamesPage</name>
     <message>
         <location filename="../qml/GamesPage.qml" line="+14"/>
@@ -1932,7 +2301,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>HubPause</name>
     <message>
-        <location filename="../qml/HubPause.qml" line="+123"/>
+        <location filename="../qml/HubPause.qml" line="+124"/>
         <source>Could not resume the game. Open Ruya Hub and choose Resume.</source>
         <translation>Oyun sürdürülemedi. Ruya Hub&apos;ı açıp Devam et&apos;i seçin.</translation>
     </message>
@@ -2344,7 +2713,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>NotificationRow</name>
     <message>
-        <location filename="../qml/NotificationRow.qml" line="+34"/>
+        <location filename="../qml/NotificationRow.qml" line="+38"/>
         <source>Pinned</source>
         <translation>Sabitlendi</translation>
     </message>
@@ -2357,18 +2726,18 @@ Bu geri alınamaz.</translation>
 <context>
     <name>NotificationSheet</name>
     <message>
-        <location filename="../qml/NotificationSheet.qml" line="+64"/>
+        <location filename="../qml/NotificationSheet.qml" line="+67"/>
         <source>Close</source>
         <translation>Kapat</translation>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+316"/>
+        <location line="+323"/>
         <source>Clear all</source>
         <translation>Tümünü temizle</translation>
     </message>
     <message>
-        <location line="-314"/>
+        <location line="-321"/>
         <source>Toggle</source>
         <translation>Aç/Kapat</translation>
     </message>
@@ -2417,20 +2786,20 @@ Bu geri alınamaz.</translation>
         </translation>
     </message>
     <message>
-        <location line="+264"/>
-        <location line="+51"/>
+        <location line="+265"/>
+        <location line="+57"/>
         <source>Notifications</source>
         <translation>Bildirimler</translation>
     </message>
     <message numerus="yes">
-        <location line="-40"/>
+        <location line="-43"/>
         <source>%n new</source>
         <translation>
             <numerusform>%n yeni</numerusform>
         </translation>
     </message>
     <message>
-        <location line="+22"/>
+        <location line="+25"/>
         <source>Quiet mode</source>
         <translation>Sessiz mod</translation>
     </message>
@@ -2463,7 +2832,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>Notifications</name>
     <message>
-        <location filename="../qml/Notifications.qml" line="+119"/>
+        <location filename="../qml/Notifications.qml" line="+143"/>
         <source>%1 is in Notifications</source>
         <translation>%1: Bildirimlerde</translation>
     </message>
@@ -3287,6 +3656,57 @@ Bu geri alınamaz.</translation>
     </message>
 </context>
 <context>
+    <name>RemapCapture</name>
+    <message>
+        <location filename="../qml/RemapCapture.qml" line="+42"/>
+        <source>Cancel</source>
+        <translation>İptal</translation>
+    </message>
+    <message>
+        <location line="+115"/>
+        <source>Controllers can&apos;t be read right now.</source>
+        <translation>Kontrolcüler şu an okunamıyor.</translation>
+    </message>
+    <message>
+        <location line="+38"/>
+        <source>Press the new button for %1</source>
+        <translation>%1 için yeni düğmeye bas</translation>
+    </message>
+    <message>
+        <location line="+58"/>
+        <source>Any button on the %1. Nothing for 5 seconds cancels.</source>
+        <translation>%1 üzerindeki herhangi bir düğme. 5 saniye basmazsan iptal olur.</translation>
+    </message>
+</context>
+<context>
+    <name>RemapPage</name>
+    <message>
+        <location filename="../qml/RemapPage.qml" line="+20"/>
+        <source>Remap buttons</source>
+        <translation>Düğmeleri yeniden ata</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Change</source>
+        <translation>Değiştir</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Back</source>
+        <translation>Geri</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Connect a controller first.</source>
+        <translation>Önce bir kontrolcü bağla.</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>%1 now acts as %2</source>
+        <translation>%1 artık %2 gibi davranır</translation>
+    </message>
+</context>
+<context>
     <name>ScreenSaver</name>
     <message>
         <location filename="../qml/ScreenSaver.qml" line="+56"/>
@@ -3401,7 +3821,7 @@ Bu geri alınamaz.</translation>
         <translation>Geri</translation>
     </message>
     <message>
-        <location line="+291"/>
+        <location line="+292"/>
         <source>Coming soon</source>
         <translation>Yakında</translation>
     </message>
@@ -3626,7 +4046,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 hâlâ kapanıyor.</translation>
     </message>
     <message>
-        <location line="+72"/>
+        <location line="+74"/>
         <location line="+30"/>
         <source>%1 could not start</source>
         <translation>%1 başlatılamadı</translation>
@@ -3643,7 +4063,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 beklenmedik şekilde durdu</translation>
     </message>
     <message>
-        <location line="+147"/>
+        <location line="+148"/>
         <source>Could not close %1.</source>
         <translation>%1 kapatılamadı.</translation>
     </message>
@@ -3663,12 +4083,12 @@ Bu geri alınamaz.</translation>
         <translation>%1 henüz bir pencere açmadı.</translation>
     </message>
     <message>
-        <location line="+64"/>
+        <location line="+76"/>
         <source>The screen did not answer, so the previous resolution is back.</source>
         <translation>Ekran yanıt vermedi, bu yüzden önceki çözünürlük geri geldi.</translation>
     </message>
     <message>
-        <location line="+59"/>
+        <location line="+62"/>
         <source>Wallpaper could not be loaded</source>
         <translation>Duvar kağıdı yüklenemedi</translation>
     </message>
@@ -3719,24 +4139,24 @@ Bu geri alınamaz.</translation>
         <translation>Son oynananlar</translation>
     </message>
     <message>
-        <location line="+488"/>
+        <location line="+494"/>
         <location line="+3"/>
         <source>Select</source>
         <translation>Seç</translation>
     </message>
     <message>
-        <location line="+166"/>
+        <location line="+176"/>
         <source>The chosen sound theme can&apos;t be used. The standard one plays instead.</source>
         <translation>Seçilen ses teması kullanılamıyor. Bunun yerine standart tema çalıyor.</translation>
     </message>
     <message>
-        <location line="-188"/>
-        <location line="+17"/>
+        <location line="-200"/>
+        <location line="+19"/>
         <source>Cancel</source>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="-1385"/>
+        <location line="-1409"/>
         <source>Restarting in 2 minutes</source>
         <translation>2 dakikada yeniden başlıyor</translation>
     </message>
@@ -3756,23 +4176,23 @@ Bu geri alınamaz.</translation>
         <translation>%1 zaten çalışıyor</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+12"/>
         <source>The game could not be closed. Try again.</source>
         <translation>Oyun kapatılamadı. Tekrar dene.</translation>
     </message>
     <message>
-        <location line="+61"/>
+        <location line="+62"/>
         <location line="+107"/>
         <source>Running app</source>
         <translation>Çalışan uygulama</translation>
     </message>
     <message>
-        <location line="+1104"/>
+        <location line="+1125"/>
         <source>Sections</source>
         <translation>Bölümler</translation>
     </message>
     <message>
-        <location line="+149"/>
+        <location line="+159"/>
         <source>mock services</source>
         <translation>sahte hizmetler</translation>
     </message>
@@ -3852,9 +4272,157 @@ Bu geri alınamaz.</translation>
     </message>
 </context>
 <context>
+    <name>StickPage</name>
+    <message>
+        <location filename="../qml/StickPage.qml" line="+21"/>
+        <source>Right stick</source>
+        <translation>Sağ çubuk</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Left stick</source>
+        <translation>Sol çubuk</translation>
+    </message>
+    <message>
+        <location line="+70"/>
+        <source>Right stick reset</source>
+        <translation>Sağ çubuk sıfırlandı</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Left stick reset</source>
+        <translation>Sol çubuk sıfırlandı</translation>
+    </message>
+    <message>
+        <location line="+37"/>
+        <source>Position</source>
+        <translation>Konum</translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>Response</source>
+        <translation>Tepki</translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>Stick →</source>
+        <translation>Çubuk →</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>↑ Game sees</source>
+        <translation>↑ Oyunun gördüğü</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>In %1 · Out %2</source>
+        <translation>Giriş %1 · Çıkış %2</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Stick</source>
+        <translation>Çubuk</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Game sees</source>
+        <translation>Oyunun gördüğü</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Dead zone</source>
+        <translation>Ölü bölge</translation>
+    </message>
+    <message>
+        <location line="+44"/>
+        <source>Connect a controller to see the stick move.</source>
+        <translation>Çubuğun hareketini görmek için bir kontrolcü bağla.</translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <source>Back</source>
+        <translation>Geri</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Adjust</source>
+        <translation>Ayarla</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Change</source>
+        <translation>Değiştir</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Next</source>
+        <translation>İleri</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Toggle</source>
+        <translation>Aç/Kapat</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Select</source>
+        <translation>Seç</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Inner dead zone</source>
+        <translation>İç ölü bölge</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Outer dead zone</source>
+        <translation>Dış ölü bölge</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Anti dead zone</source>
+        <translation>Ters ölü bölge</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Response curve</source>
+        <translation>Tepki eğrisi</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Linear</source>
+        <translation>Doğrusal</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Precise</source>
+        <translation>Hassas</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Aggressive</source>
+        <translation>Agresif</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Sensitivity</source>
+        <translation>Duyarlılık</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Invert up and down</source>
+        <translation>Yukarı ve aşağıyı ters çevir</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Reset this stick</source>
+        <translation>Bu çubuğu sıfırla</translation>
+    </message>
+</context>
+<context>
     <name>StoragePane</name>
     <message>
-        <location filename="../qml/StoragePane.qml" line="+311"/>
+        <location filename="../qml/StoragePane.qml" line="+301"/>
         <source>%1 is still in use. Close what uses it and try again.</source>
         <translation>%1 hâlâ kullanımda. Kullanan uygulamayı kapatıp tekrar deneyin.</translation>
     </message>
@@ -3879,13 +4447,13 @@ Bu geri alınamaz.</translation>
         <translation>Desteklenmiyor</translation>
     </message>
     <message>
-        <location line="-265"/>
-        <location line="+266"/>
+        <location line="-255"/>
+        <location line="+256"/>
         <source>%1 free of %2</source>
         <translation>%2 içinde %1 boş</translation>
     </message>
     <message>
-        <location line="-292"/>
+        <location line="-282"/>
         <source>Select</source>
         <translation>Seç</translation>
     </message>
@@ -3896,7 +4464,7 @@ Bu geri alınamaz.</translation>
         <translation>Geri</translation>
     </message>
     <message>
-        <location line="+82"/>
+        <location line="+72"/>
         <source>Games</source>
         <translation>Oyunlar</translation>
     </message>
@@ -4126,7 +4694,7 @@ Bu geri alınamaz.</translation>
         <translation>Rapor kaydedilemedi.</translation>
     </message>
     <message>
-        <location line="+166"/>
+        <location line="+156"/>
         <source>Select</source>
         <translation>Seç</translation>
     </message>

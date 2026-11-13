@@ -451,17 +451,17 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+10"/>
-        <location line="+265"/>
+        <location line="+255"/>
         <source>Uninstall</source>
         <translation>Uninstall</translation>
     </message>
     <message>
-        <location line="-253"/>
+        <location line="-243"/>
         <source>Your activity</source>
         <translation>Your activity</translation>
     </message>
     <message>
-        <location line="+103"/>
+        <location line="+93"/>
         <source>This app can</source>
         <translation>This app can</translation>
     </message>
@@ -759,7 +759,7 @@ This can&apos;t be undone.</translation>
         <translation>Connected</translation>
     </message>
     <message>
-        <location line="+122"/>
+        <location line="+128"/>
         <source>Pair a new controller</source>
         <translation>Pair a new controller</translation>
     </message>
@@ -779,7 +779,7 @@ This can&apos;t be undone.</translation>
         <translation>Rename %1</translation>
     </message>
     <message>
-        <location line="-250"/>
+        <location line="-256"/>
         <source>Paired</source>
         <translation>Paired</translation>
     </message>
@@ -829,7 +829,7 @@ This can&apos;t be undone.</translation>
         <translation>Could not rename the controller.</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+15"/>
         <source>Another device tried to pair and was turned away.</source>
         <translation>Another device tried to pair and was turned away.</translation>
     </message>
@@ -854,8 +854,8 @@ This can&apos;t be undone.</translation>
         <translation>Scanning…</translation>
     </message>
     <message>
-        <location line="-188"/>
-        <location line="+337"/>
+        <location line="-194"/>
+        <location line="+343"/>
         <source>Forget %1</source>
         <translation>Forget %1</translation>
     </message>
@@ -1346,7 +1346,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>ControllerPage</name>
     <message>
-        <location filename="../qml/ControllerPage.qml" line="+42"/>
+        <location filename="../qml/ControllerPage.qml" line="+44"/>
         <source>Works</source>
         <translation>Works</translation>
     </message>
@@ -1445,6 +1445,21 @@ This can&apos;t be undone.</translation>
         <location line="+7"/>
         <source>Button test</source>
         <translation>Button test</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Controls in games</source>
+        <translation>Controls in games</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Changed</source>
+        <translation>Changed</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Default</source>
+        <translation>Default</translation>
     </message>
     <message>
         <location line="+13"/>
@@ -1566,7 +1581,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>ControllersPane</name>
     <message>
-        <location filename="../qml/ControllersPane.qml" line="+25"/>
+        <location filename="../qml/ControllersPane.qml" line="+28"/>
         <source>Open</source>
         <translation>Open</translation>
     </message>
@@ -1582,7 +1597,7 @@ This can&apos;t be undone.</translation>
         <translation>Select</translation>
     </message>
     <message>
-        <location line="+101"/>
+        <location line="+104"/>
         <source>No controllers connected.</source>
         <translation>No controllers connected.</translation>
     </message>
@@ -1597,9 +1612,217 @@ This can&apos;t be undone.</translation>
         <translation>Try again</translation>
     </message>
     <message>
-        <location line="+33"/>
+        <location line="+37"/>
+        <location line="+24"/>
+        <source>Controls in games</source>
+        <translation>Controls in games</translation>
+    </message>
+    <message>
+        <location line="-23"/>
+        <source>Not available</source>
+        <translation>Not available</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <location line="+24"/>
+        <source>Changed</source>
+        <translation>Changed</translation>
+    </message>
+    <message>
+        <location line="-24"/>
+        <location line="+24"/>
+        <source>Default</source>
+        <translation>Default</translation>
+    </message>
+    <message>
+        <location line="-16"/>
         <source>Pair a new controller</source>
         <translation>Pair a new controller</translation>
+    </message>
+    <message>
+        <location line="+23"/>
+        <source>%1: %2.</source>
+        <translation>%1: %2.</translation>
+    </message>
+</context>
+<context>
+    <name>ControlsImportPicker</name>
+    <message>
+        <location filename="../qml/ControlsImportPicker.qml" line="+28"/>
+        <location line="+1"/>
+        <source>Cancel</source>
+        <translation>Cancel</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Import</source>
+        <translation>Import</translation>
+    </message>
+    <message>
+        <location line="+93"/>
+        <location line="+30"/>
+        <source>Import from USB drive</source>
+        <translation>Import from USB drive</translation>
+    </message>
+    <message>
+        <location line="-9"/>
+        <source>This drive can&apos;t be read right now.</source>
+        <translation>This drive can&apos;t be read right now.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>No controls files on this drive.</source>
+        <translation>No controls files on this drive.</translation>
+    </message>
+</context>
+<context>
+    <name>ControlsIntro</name>
+    <message>
+        <location filename="../qml/ControlsIntro.qml" line="+25"/>
+        <source>Changes here reach games only. Menus keep their buttons.</source>
+        <translation>Changes here reach games only. Menus keep their buttons.</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Profile: %1</source>
+        <translation>Profile: %1</translation>
+    </message>
+</context>
+<context>
+    <name>ControlsPage</name>
+    <message>
+        <location filename="../qml/ControlsPage.qml" line="+24"/>
+        <source>Controls in games</source>
+        <translation>Controls in games</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>All controllers</source>
+        <translation>All controllers</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>This %1</source>
+        <translation>This %1</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Another controller</source>
+        <translation>Another controller</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Standard</source>
+        <translation>Standard</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Nintendo</source>
+        <translation>Nintendo</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Changed</source>
+        <translation>Changed</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <location line="+54"/>
+        <source>Default</source>
+        <translation>Default</translation>
+    </message>
+    <message>
+        <location line="-35"/>
+        <source>Back</source>
+        <translation>Back</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Change</source>
+        <translation>Change</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Next</source>
+        <translation>Next</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Open</source>
+        <translation>Open</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Select</source>
+        <translation>Select</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Applies to</source>
+        <translation>Applies to</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Button layout</source>
+        <translation>Button layout</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Remap buttons</source>
+        <translation>Remap buttons</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+1"/>
+        <source>%n changed</source>
+        <translation>
+            <numerusform>%n changed</numerusform>
+            <numerusform>%n changed</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Left stick</source>
+        <translation>Left stick</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Right stick</source>
+        <translation>Right stick</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Export to USB drive</source>
+        <translation>Export to USB drive</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Import from USB drive</source>
+        <translation>Import from USB drive</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Plug in a USB drive first.</source>
+        <translation>Plug in a USB drive first.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Reset to default</source>
+        <translation>Reset to default</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Reset controls in games?</source>
+        <translation>Reset controls in games?</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Every button, stick and curve goes back to the default.</source>
+        <translation>Every button, stick and curve goes back to the default.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Reset controls</source>
+        <translation>Reset controls</translation>
     </message>
 </context>
 <context>
@@ -1895,6 +2118,153 @@ This can&apos;t be undone.</translation>
     </message>
 </context>
 <context>
+    <name>GameControls</name>
+    <message>
+        <location filename="../qml/GameControls.qml" line="+273"/>
+        <location line="+153"/>
+        <source>Could not save to the USB drive</source>
+        <translation>Could not save to the USB drive</translation>
+    </message>
+    <message>
+        <location line="-153"/>
+        <location line="+2"/>
+        <location line="+151"/>
+        <location line="+26"/>
+        <source>Try again.</source>
+        <translation>Try again.</translation>
+    </message>
+    <message>
+        <location line="-177"/>
+        <source>Could not save the change</source>
+        <translation>Could not save the change</translation>
+    </message>
+    <message>
+        <location line="+149"/>
+        <source>Saved to the USB drive</source>
+        <translation>Saved to the USB drive</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Controls imported</source>
+        <translation>Controls imported</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>That file can&apos;t be used</source>
+        <translation>That file can&apos;t be used</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>It is larger than 64 KB.</source>
+        <translation>It is larger than 64 KB.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>It isn&apos;t a RuyaOS controls file.</source>
+        <translation>It isn&apos;t a RuyaOS controls file.</translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>PlayStation controllers</source>
+        <translation>PlayStation controllers</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Xbox controllers</source>
+        <translation>Xbox controllers</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Nintendo controllers</source>
+        <translation>Nintendo controllers</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Nothing</source>
+        <translation>Nothing</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Cross</source>
+        <translation>Cross</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Circle</source>
+        <translation>Circle</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Square</source>
+        <translation>Square</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Triangle</source>
+        <translation>Triangle</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Left stick click</source>
+        <translation>Left stick click</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Right stick click</source>
+        <translation>Right stick click</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>D-pad up</source>
+        <translation>D-pad up</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>D-pad down</source>
+        <translation>D-pad down</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>D-pad left</source>
+        <translation>D-pad left</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>D-pad right</source>
+        <translation>D-pad right</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Create</source>
+        <translation>Create</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Minus</source>
+        <translation>Minus</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>View</source>
+        <translation>View</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Options</source>
+        <translation>Options</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Plus</source>
+        <translation>Plus</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Menu</source>
+        <translation>Menu</translation>
+    </message>
+</context>
+<context>
     <name>GamesPage</name>
     <message>
         <location filename="../qml/GamesPage.qml" line="+14"/>
@@ -1936,7 +2306,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>HubPause</name>
     <message>
-        <location filename="../qml/HubPause.qml" line="+123"/>
+        <location filename="../qml/HubPause.qml" line="+124"/>
         <source>Could not resume the game. Open Ruya Hub and choose Resume.</source>
         <translation>Could not resume the game. Open Ruya Hub and choose Resume.</translation>
     </message>
@@ -2351,7 +2721,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>NotificationRow</name>
     <message>
-        <location filename="../qml/NotificationRow.qml" line="+34"/>
+        <location filename="../qml/NotificationRow.qml" line="+38"/>
         <source>Pinned</source>
         <translation>Pinned</translation>
     </message>
@@ -2364,18 +2734,18 @@ This can&apos;t be undone.</translation>
 <context>
     <name>NotificationSheet</name>
     <message>
-        <location filename="../qml/NotificationSheet.qml" line="+64"/>
+        <location filename="../qml/NotificationSheet.qml" line="+67"/>
         <source>Close</source>
         <translation>Close</translation>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+316"/>
+        <location line="+323"/>
         <source>Clear all</source>
         <translation>Clear all</translation>
     </message>
     <message>
-        <location line="-314"/>
+        <location line="-321"/>
         <source>Toggle</source>
         <translation>Toggle</translation>
     </message>
@@ -2426,13 +2796,13 @@ This can&apos;t be undone.</translation>
         </translation>
     </message>
     <message>
-        <location line="+264"/>
-        <location line="+51"/>
+        <location line="+265"/>
+        <location line="+57"/>
         <source>Notifications</source>
         <translation>Notifications</translation>
     </message>
     <message numerus="yes">
-        <location line="-40"/>
+        <location line="-43"/>
         <source>%n new</source>
         <translation>
             <numerusform>%n new</numerusform>
@@ -2440,7 +2810,7 @@ This can&apos;t be undone.</translation>
         </translation>
     </message>
     <message>
-        <location line="+22"/>
+        <location line="+25"/>
         <source>Quiet mode</source>
         <translation>Quiet mode</translation>
     </message>
@@ -2473,7 +2843,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>Notifications</name>
     <message>
-        <location filename="../qml/Notifications.qml" line="+119"/>
+        <location filename="../qml/Notifications.qml" line="+143"/>
         <source>%1 is in Notifications</source>
         <translation>%1 is in Notifications</translation>
     </message>
@@ -3301,6 +3671,57 @@ This can&apos;t be undone.</translation>
     </message>
 </context>
 <context>
+    <name>RemapCapture</name>
+    <message>
+        <location filename="../qml/RemapCapture.qml" line="+42"/>
+        <source>Cancel</source>
+        <translation>Cancel</translation>
+    </message>
+    <message>
+        <location line="+115"/>
+        <source>Controllers can&apos;t be read right now.</source>
+        <translation>Controllers can&apos;t be read right now.</translation>
+    </message>
+    <message>
+        <location line="+38"/>
+        <source>Press the new button for %1</source>
+        <translation>Press the new button for %1</translation>
+    </message>
+    <message>
+        <location line="+58"/>
+        <source>Any button on the %1. Nothing for 5 seconds cancels.</source>
+        <translation>Any button on the %1. Nothing for 5 seconds cancels.</translation>
+    </message>
+</context>
+<context>
+    <name>RemapPage</name>
+    <message>
+        <location filename="../qml/RemapPage.qml" line="+20"/>
+        <source>Remap buttons</source>
+        <translation>Remap buttons</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Change</source>
+        <translation>Change</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Back</source>
+        <translation>Back</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Connect a controller first.</source>
+        <translation>Connect a controller first.</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>%1 now acts as %2</source>
+        <translation>%1 now acts as %2</translation>
+    </message>
+</context>
+<context>
     <name>ScreenSaver</name>
     <message>
         <location filename="../qml/ScreenSaver.qml" line="+56"/>
@@ -3415,7 +3836,7 @@ This can&apos;t be undone.</translation>
         <translation>Back</translation>
     </message>
     <message>
-        <location line="+291"/>
+        <location line="+292"/>
         <source>Coming soon</source>
         <translation>Coming soon</translation>
     </message>
@@ -3640,7 +4061,7 @@ This can&apos;t be undone.</translation>
         <translation>%1 is still closing.</translation>
     </message>
     <message>
-        <location line="+72"/>
+        <location line="+74"/>
         <location line="+30"/>
         <source>%1 could not start</source>
         <translation>%1 could not start</translation>
@@ -3657,7 +4078,7 @@ This can&apos;t be undone.</translation>
         <translation>%1 stopped unexpectedly</translation>
     </message>
     <message>
-        <location line="+147"/>
+        <location line="+148"/>
         <source>Could not close %1.</source>
         <translation>Could not close %1.</translation>
     </message>
@@ -3677,12 +4098,12 @@ This can&apos;t be undone.</translation>
         <translation>%1 has no window yet.</translation>
     </message>
     <message>
-        <location line="+64"/>
+        <location line="+76"/>
         <source>The screen did not answer, so the previous resolution is back.</source>
         <translation>The screen did not answer, so the previous resolution is back.</translation>
     </message>
     <message>
-        <location line="+59"/>
+        <location line="+62"/>
         <source>Wallpaper could not be loaded</source>
         <translation>Wallpaper could not be loaded</translation>
     </message>
@@ -3733,24 +4154,24 @@ This can&apos;t be undone.</translation>
         <translation>Recent</translation>
     </message>
     <message>
-        <location line="+488"/>
+        <location line="+494"/>
         <location line="+3"/>
         <source>Select</source>
         <translation>Select</translation>
     </message>
     <message>
-        <location line="+166"/>
+        <location line="+176"/>
         <source>The chosen sound theme can&apos;t be used. The standard one plays instead.</source>
         <translation>The chosen sound theme can&apos;t be used. The standard one plays instead.</translation>
     </message>
     <message>
-        <location line="-188"/>
-        <location line="+17"/>
+        <location line="-200"/>
+        <location line="+19"/>
         <source>Cancel</source>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location line="-1385"/>
+        <location line="-1409"/>
         <source>Restarting in 2 minutes</source>
         <translation>Restarting in 2 minutes</translation>
     </message>
@@ -3770,23 +4191,23 @@ This can&apos;t be undone.</translation>
         <translation>%1 is already running</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+12"/>
         <source>The game could not be closed. Try again.</source>
         <translation>The game could not be closed. Try again.</translation>
     </message>
     <message>
-        <location line="+61"/>
+        <location line="+62"/>
         <location line="+107"/>
         <source>Running app</source>
         <translation>Running app</translation>
     </message>
     <message>
-        <location line="+1104"/>
+        <location line="+1125"/>
         <source>Sections</source>
         <translation>Sections</translation>
     </message>
     <message>
-        <location line="+149"/>
+        <location line="+159"/>
         <source>mock services</source>
         <translation>mock services</translation>
     </message>
@@ -3866,9 +4287,157 @@ This can&apos;t be undone.</translation>
     </message>
 </context>
 <context>
+    <name>StickPage</name>
+    <message>
+        <location filename="../qml/StickPage.qml" line="+21"/>
+        <source>Right stick</source>
+        <translation>Right stick</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Left stick</source>
+        <translation>Left stick</translation>
+    </message>
+    <message>
+        <location line="+70"/>
+        <source>Right stick reset</source>
+        <translation>Right stick reset</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Left stick reset</source>
+        <translation>Left stick reset</translation>
+    </message>
+    <message>
+        <location line="+37"/>
+        <source>Position</source>
+        <translation>Position</translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>Response</source>
+        <translation>Response</translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>Stick →</source>
+        <translation>Stick →</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>↑ Game sees</source>
+        <translation>↑ Game sees</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>In %1 · Out %2</source>
+        <translation>In %1 · Out %2</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Stick</source>
+        <translation>Stick</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Game sees</source>
+        <translation>Game sees</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Dead zone</source>
+        <translation>Dead zone</translation>
+    </message>
+    <message>
+        <location line="+44"/>
+        <source>Connect a controller to see the stick move.</source>
+        <translation>Connect a controller to see the stick move.</translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <source>Back</source>
+        <translation>Back</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Adjust</source>
+        <translation>Adjust</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Change</source>
+        <translation>Change</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Next</source>
+        <translation>Next</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Toggle</source>
+        <translation>Toggle</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Select</source>
+        <translation>Select</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Inner dead zone</source>
+        <translation>Inner dead zone</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Outer dead zone</source>
+        <translation>Outer dead zone</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Anti dead zone</source>
+        <translation>Anti dead zone</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Response curve</source>
+        <translation>Response curve</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Linear</source>
+        <translation>Linear</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Precise</source>
+        <translation>Precise</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Aggressive</source>
+        <translation>Aggressive</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Sensitivity</source>
+        <translation>Sensitivity</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Invert up and down</source>
+        <translation>Invert up and down</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Reset this stick</source>
+        <translation>Reset this stick</translation>
+    </message>
+</context>
+<context>
     <name>StoragePane</name>
     <message>
-        <location filename="../qml/StoragePane.qml" line="+311"/>
+        <location filename="../qml/StoragePane.qml" line="+301"/>
         <source>%1 is still in use. Close what uses it and try again.</source>
         <translation>%1 is still in use. Close what uses it and try again.</translation>
     </message>
@@ -3893,13 +4462,13 @@ This can&apos;t be undone.</translation>
         <translation>Not supported</translation>
     </message>
     <message>
-        <location line="-265"/>
-        <location line="+266"/>
+        <location line="-255"/>
+        <location line="+256"/>
         <source>%1 free of %2</source>
         <translation>%1 free of %2</translation>
     </message>
     <message>
-        <location line="-292"/>
+        <location line="-282"/>
         <source>Select</source>
         <translation>Select</translation>
     </message>
@@ -3910,7 +4479,7 @@ This can&apos;t be undone.</translation>
         <translation>Back</translation>
     </message>
     <message>
-        <location line="+82"/>
+        <location line="+72"/>
         <source>Games</source>
         <translation>Games</translation>
     </message>
@@ -4140,7 +4709,7 @@ This can&apos;t be undone.</translation>
         <translation>The report could not be saved.</translation>
     </message>
     <message>
-        <location line="+166"/>
+        <location line="+156"/>
         <source>Select</source>
         <translation>Select</translation>
     </message>

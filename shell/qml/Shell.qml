@@ -1139,6 +1139,9 @@ FocusScope {
         systemInfo: systemInfoPage,
         controller: controllerPage,
         buttonTest: buttonTestPage,
+        controls: controlsPage,
+        controlsRemap: controlsRemapPage,
+        controlsStick: controlsStickPage,
         activity: activityPage,
         activityGame: activityGamePage,
         power: powerPage
@@ -1746,6 +1749,9 @@ FocusScope {
     Component { id: systemInfoPage; SystemInfoPage {} }
     Component { id: controllerPage; ControllerPage {} }
     Component { id: buttonTestPage; ButtonTestPage {} }
+    Component { id: controlsPage; ControlsPage {} }
+    Component { id: controlsRemapPage; RemapPage {} }
+    Component { id: controlsStickPage; StickPage {} }
     Component { id: activityPage; ActivityPage {} }
     Component { id: activityGamePage; ActivityGamePage {} }
     Component { id: powerPage; PowerPage {} }

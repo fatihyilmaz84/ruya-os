@@ -9,8 +9,9 @@ import RuyaShell
 // controller page (controllerRequested). Rows are keyed by the stable id and updated in place, so a
 // battery change never moves the focus; a focused row that goes hands the focus to the row before it,
 // else the next (04 §4). No pad: "No controllers connected." as an unavailable line. ListDevices
-// failed: "Controllers can't be read right now." and "Try again" instead of the pad rows. The Confirm button row is RUY-40's,
-// "Controls in games" RUY-465's.
+// failed: "Controllers can't be read right now." and "Try again" instead of the pad rows. The Confirm button row is RUY-40's.
+// "Controls in games" (RUY-465; value "Default" / "Changed", GameControls) opens ControlsPage: after
+// the pad rows, after Pair when no pad is connected, dimmed with "Not available" when the list failed.
 SettingsPane {
     id: pane
 
@@ -18,6 +19,8 @@ SettingsPane {
 
     // A pad row was accepted: the Settings page opens that controller's page.
     signal controllerRequested(string id)
+    // "Controls in games" was accepted: the Settings page opens it.
+    signal controlsRequested()
 
     readonly property bool failed: Input.devicesState === "failed"
     readonly property bool loading: Input.devicesState === "loading"
@@ -79,7 +82,10 @@ SettingsPane {
         ensureFocusedVisible()
     }
 
-    Component.onCompleted: syncPads()
+    Component.onCompleted: {
+        syncPads()
+        Qt.callLater(GameControls.refresh)      // the Controls in games value; not in the pane's key frame
+    }
     // The list could not be read: Try again takes the focus (the pad rows it was on are hidden).
     onFailedChanged: {
         if (!failed)
@@ -170,6 +176,19 @@ SettingsPane {
         }
     }
 
+    // Controls in games after the pads (or, dimmed, after Try again).
+    SettingRow {
+        id: controlsRow
+        objectName: "rowControlsInGames"
+        visible: pane.failed || (!pane.loading && padModel.count > 0)
+        dimmed: pane.failed
+        u: pane.u
+        label: qsTr("Controls in games")
+        value: pane.failed ? qsTr("Not available") : GameControls.changed ? qsTr("Changed") : qsTr("Default")
+        onActiveFocusChanged: if (activeFocus) pane.focusedPad = true     // it opens a page: A Open
+        onActivated: pane.openControls(controlsRow)
+    }
+
     SettingRow {
         objectName: "rowPadsPair"
         u: pane.u
@@ -180,6 +199,26 @@ SettingsPane {
             onboardingSlot.active = true
             pane.onboarding.open()
         }
+    }
+
+    // With no pad connected Controls in games comes after Pair (RUY-39 design §1.4).
+    SettingRow {
+        id: controlsLastRow
+        objectName: "rowControlsInGamesLast"
+        visible: !pane.failed && !pane.loading && padModel.count === 0
+        u: pane.u
+        label: qsTr("Controls in games")
+        value: GameControls.changed ? qsTr("Changed") : qsTr("Default")
+        onActiveFocusChanged: if (activeFocus) pane.focusedPad = true
+        onActivated: pane.openControls(controlsLastRow)
+    }
+
+    function openControls(row) {
+        if (row.dimmed) {
+            Notifications.show(qsTr("%1: %2.").arg(row.label).arg(row.value), "info")
+            return
+        }
+        pane.controlsRequested()
     }
 
     // The pairing screen is built when it first opens (T-349).

@@ -3,9 +3,10 @@ import QtQuick
 import RuyaShell
 
 // Settings -> Controllers -> a controller (RUY-39 / T-368): what the pad is and what it can do, and
-// the way to its Button test. Opened with params { id } (Input1's stable id). Left, not focusable:
+// the way to its Button test and to Controls in games (RUY-465). Opened with params { id } (Input1's stable id). Left, not focusable:
 // the family glyph at `cardIconSize`, the name, the kind in words, the connection, the battery and
-// the player (when the record has one). Right, a pane: "Button test" (focus first), then the group
+// the player (when the record has one). Right, a pane: "Button test" (focus first), "Controls in games"
+// (value "Default" / "Changed"; opens ControlsPage for this pad), then the group
 // "What it can do" with one read-only row per capability the model has (Input1.GetCapabilities, in
 // descriptor order; buttons, sticks and the D-pad are one row, the battery is in the left column),
 // each saying "Works", "Not passed to games", "Not available now" or "Not supported yet" (06 §4.3).
@@ -23,6 +24,7 @@ Page {
         if (current)
             pad = current
         Input.requestCapabilities(padId)
+        GameControls.refresh()
     }
 
     title: pad.name
@@ -155,7 +157,7 @@ Page {
         u: page.u
         focus: true
         // The capability rows are read-only: Back only while one has focus.
-        hints: testRow.activeFocus ? [{ button: "A", text: qsTr("Open") }, { button: "B", text: qsTr("Back") }]
+        hints: testRow.activeFocus || controlsRow.activeFocus ? [{ button: "A", text: qsTr("Open") }, { button: "B", text: qsTr("Back") }]
                                    : [{ button: "B", text: qsTr("Back") }]
         onExitRequested: page.backRequested()
 
@@ -165,6 +167,15 @@ Page {
             u: page.u
             label: qsTr("Button test")
             onActivated: page.openRequested("buttonTest", ({ id: page.padId }))
+        }
+
+        SettingRow {
+            id: controlsRow
+            objectName: "rowControlsInGames"
+            u: page.u
+            label: qsTr("Controls in games")
+            value: GameControls.changed ? qsTr("Changed") : qsTr("Default")
+            onActivated: page.openRequested("controls", ({ id: page.padId }))
         }
 
         // The group label (04 §5 "Pane group label"): not focusable, 8 u more above it than a row gap.

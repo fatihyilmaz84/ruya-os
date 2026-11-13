@@ -16,6 +16,11 @@ FocusScope {
     // what it shows is also in the label or the accessible value. Not together with a swatch.
     property string iconName
     readonly property bool hasIcon: iconName !== "" && !hasSwatch
+    // Optional controller button in the icon slot (RUY-465, 04 §5): a `ButtonGlyph` at `glyphSize`
+    // (the size of `iconM`) for a row about one button (Remap buttons). The button's name is the
+    // label, so the glyph is decorative too. Not together with a swatch or an icon.
+    property string glyph
+    readonly property bool hasGlyph: glyph !== "" && !hasSwatch && !hasIcon
 
     // The row is there but cannot be used now (an audio output that is not connected, T-348): its label
     // and icon are drawn at Theme.disabledOpacity (a value text, e.g. the reason, stays whole). It still takes
@@ -95,6 +100,16 @@ FocusScope {
         color: Qt.alpha(Theme.text, control.dimmed ? Theme.disabledOpacity : 1)
     }
 
+    ButtonGlyph {
+        objectName: "rowGlyph"
+        visible: control.hasGlyph
+        anchors { left: parent.left; leftMargin: Theme.spaceL * control.u; verticalCenter: parent.verticalCenter }
+        u: control.u
+        button: control.glyph
+        opacity: control.dimmed ? Theme.disabledOpacity : 1
+        Accessible.ignored: true
+    }
+
     // Room for the label and the detail between their left edge and the trailing content.
     readonly property real textWidth: Math.max(0, width - labelText.x - trailingWidth - Theme.spaceL * u)
 
@@ -105,7 +120,7 @@ FocusScope {
         anchors {
             left: parent.left
             leftMargin: (control.hasSwatch ? Theme.spaceXxxl
-                         : control.hasIcon ? Theme.spaceL + Theme.iconM + Theme.spaceS
+                         : control.hasIcon || control.hasGlyph ? Theme.spaceL + Theme.iconM + Theme.spaceS
                          : Theme.spaceL) * control.u
             verticalCenter: parent.verticalCenter
             // With a detail the pair is centred: the label moves up by half the detail and its gap.

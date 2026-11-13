@@ -182,26 +182,16 @@ Page {
             font.pixelSize: Theme.typeBody * info.u
         }
 
-        Rectangle {
+        ProgressBar {
             id: track
             objectName: "usageTrack"
+            fillName: "usageFill"
             visible: info.fraction >= 0
             anchors { right: valueText.left; rightMargin: Theme.spaceM * info.u; verticalCenter: parent.verticalCenter }
             width: 260 * info.u
-            height: Theme.spaceS * info.u
-            radius: height / 2
-            color: Theme.glass
-            border.width: Theme.hairlineAt(info.u)
-            border.color: Theme.glassBorder
-
-            Rectangle {
-                objectName: "usageFill"
-                width: parent.width * Math.max(0, info.fraction)
-                height: parent.height
-                radius: height / 2
-                color: info.fraction > 0.9 ? Theme.warningText : Theme.text
-                Behavior on width { NumberAnimation { duration: Theme.focusMs } }
-            }
+            u: info.u
+            value: Math.max(0, info.fraction)
+            fillColor: info.fraction > 0.9 ? Theme.warningText : Theme.text
         }
     }
 

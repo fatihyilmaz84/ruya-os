@@ -114,7 +114,8 @@ Item {
 
         function test_the_list_shows_every_connected_pad() {
             openPane()
-            compare(rowNames(), ["pad_" + ds, "pad_" + pro, "pad_" + xbox, "rowPadsPair"], "sorted by name, then Pair")
+            compare(rowNames(), ["pad_" + ds, "pad_" + pro, "pad_" + xbox, "rowControlsInGames", "rowPadsPair"],
+                    "sorted by name, then Controls in games (RUY-465) and Pair")
             verify(padRow(ds).activeFocus, "focus enters on the first row")
             compare(padRow(ds).label, "DualSense Wireless Controller")
             compare(padRow(ds).detail, "Bluetooth · Battery 62 %, charging")
@@ -129,6 +130,9 @@ Item {
             verify(padRow(pro).activeFocus)
             keyClick(Qt.Key_Down)
             verify(padRow(xbox).activeFocus)
+            keyClick(Qt.Key_Down)
+            verify(find("rowControlsInGames").activeFocus)
+            compare(hintVerbs(), "A Open|B Back", "Controls in games opens a page")
             keyClick(Qt.Key_Down)
             verify(find("rowPadsPair").activeFocus)
             compare(hintVerbs(), "A Select|B Back")
@@ -193,7 +197,7 @@ Item {
             compare(find("rowPadsNone").label, "No controllers connected.")
             verify(!find("rowPadsNone").enabled, "an unavailable line takes no focus")
             tryVerify(() => find("rowPadsPair").activeFocus, 2000, "Pair a new controller has the focus")
-            compare(rowNames(), ["rowPadsPair"])
+            compare(rowNames(), ["rowPadsPair", "rowControlsInGamesLast"], "Pair first, then Controls in games (RUY-465)")
             keyClick(Qt.Key_Return)
             tryVerify(() => find("controllerOnboardingControllers") !== null
                             && find("controllerOnboardingControllers").shown, 2000, "the pairing screen opens")
@@ -214,7 +218,7 @@ Item {
             compare(find("rowPadsFailed").label, "Controllers can't be read right now.")
             verify(!padRow(ds).visible, "no stale pad rows")
             tryVerify(() => find("rowPadsRetry").activeFocus, 2000, "Try again has the focus")
-            compare(rowNames(), ["rowPadsRetry", "rowPadsPair"])
+            compare(rowNames(), ["rowPadsRetry", "rowControlsInGames", "rowPadsPair"], "Controls in games stays, dimmed (RUY-465)")
             keyClick(Qt.Key_Return)                      // still failing
             tryCompare(Input, "devicesState", "failed")
             verify(find("rowPadsRetry").activeFocus)
@@ -253,6 +257,9 @@ Item {
             verify(find("cap_sticks") === null && find("cap_dpad") === null, "one row for buttons and sticks")
             verify(find("cap_trigger_rumble") === null, "what the model does not have has no row")
             verify(find("capsHeading").visible)
+            keyClick(Qt.Key_Down)
+            verify(findChild(find("page_controller"), "rowControlsInGames").activeFocus, "Controls in games after Button test (RUY-465)")
+            compare(find("page_controller").hints.map(h => h.button + " " + h.text).join("|"), "A Open|B Back")
             keyClick(Qt.Key_Down)
             verify(find("cap_buttons").activeFocus, "the capability rows take the focus, for scrolling")
             compare(find("page_controller").hints.map(h => h.button + " " + h.text).join("|"), "B Back")
