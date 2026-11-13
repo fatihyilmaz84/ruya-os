@@ -380,7 +380,7 @@ Item {
             verify(!Store.mockDataDeleted(tc.puzzleApp), "delete_data false")
         }
 
-        function test_the_toggle_on_deletes_the_data() {
+        function test_the_toggle_on_deletes_the_saves() {
             start()
             toRecentItem(tc.puzzle)
             keyClick(Qt.Key_Menu)

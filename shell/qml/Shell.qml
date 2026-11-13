@@ -1892,8 +1892,7 @@ FocusScope {
                 if (libraryEmpty) {
                     heroBlock.forceActiveFocus()                    // the empty Home's "Open Store"
                 } else if (run.surface === "hero") {
-                    recentRow.currentIndex = 0                      // the hero shows the row's first item
-                    heroBlock.forceActiveFocus()                    // on its primary button
+                    heroBlock.forceActiveFocus()                    // its primary button; the row, rebuilt, starts at its first card
                 } else {
                     recentRow.currentIndex = Math.max(0, Math.min(run.index, recentIds.length - 1))
                     recentRow.forceActiveFocus()
