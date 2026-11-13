@@ -10,8 +10,9 @@ UnsupportedVersion" (RUY-1, Dell). Version 2 only adds the tiled toplevel
 states; the requests of version 3 (popup reposition) stay behind the existing
 "version < 3" checks, so version 1 needs no other change.
 
-Upstream state: not offered upstream (owner decision). Drop this patch once
-qtwayland offers xdg_wm_base >= 2; it is harmless until then.
+Upstream state: to be offered upstream (owner, 2026-11-13); status: not yet
+filed. Drop this patch once upstream has it or qtwayland offers
+xdg_wm_base >= 2; it is harmless until then.
 
 --- a/src/server/mod.rs
 +++ b/src/server/mod.rs

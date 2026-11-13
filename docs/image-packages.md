@@ -195,7 +195,8 @@ satellite at boot (`ruya-session` starts one per X11 app instance, RUY-435).
 rejected hunk): rebase the patch on the new source (inspect it with `dnf download --source xwayland-satellite`
 in a throw-away Fedora container) and keep its header up to date, or drop it when upstream or Qt has caught up.
 `0001` is harmless and can go once qtwayland offers `xdg_wm_base` >= 2; `0002` can go once qtwayland offers
-`wl_output` >= 4 or upstream stops unwrapping the name. No patch is offered upstream (owner decision).
+`wl_output` >= 4 or upstream stops unwrapping the name. Both patches are to be offered upstream (owner, 2026-11-13;
+the lead files the PR); status: not yet filed.
 
 **Licence.** xwayland-satellite is MPL-2.0. The MPL makes the source of modified files available under the
 same licence: the repository carries the patches (and their source is Fedora's public source RPM), which

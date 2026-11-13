@@ -10,10 +10,13 @@ an X window takes keyboard focus or enters an output (RUY-1, Dell). The name
 is only used to pick the X primary output; with no name event Xwayland names
 its RandR output itself, so the satellite logs "Couldn't find output WL-<n>,
 primary output will be wrong" and keeps the primary output it has, which is
-the only output on a console.
+the only output on a console. The same fallback also covers a window that
+needs the name before the name event of a wl_output >= 4 has arrived: it
+logs that warning instead of panicking.
 
-Upstream state: not offered upstream (owner decision). Drop this patch once
-qtwayland offers wl_output >= 4 or upstream stops unwrapping the name.
+Upstream state: to be offered upstream (owner, 2026-11-13); status: not yet
+filed. Drop this patch once upstream has it, or once qtwayland offers
+wl_output >= 4 and upstream stops unwrapping the name.
 
 --- a/src/server/event.rs
 +++ b/src/server/event.rs
