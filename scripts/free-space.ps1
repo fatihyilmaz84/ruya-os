@@ -40,6 +40,19 @@ foreach ($f in Get-ChildItem $env:TEMP -Filter "vl.*" -File -ErrorAction Silentl
 }
 if ($freed -gt 0) { Write-Host ("  deleted stale QEMU overlays in %TEMP%: {0:N1} GiB" -f ($freed / 1GB)) }
 
+# Dell oci-archives (image-chain.sh oci) pile up on F: at 2.4 GB each: 14 of them filled the drive
+# and stopped make-disk on 2026-11-13 (lead-16). Keep the newest two (the Dell's booted image and
+# its rollback); older ones are rebuilt from git when needed.
+$ociDir = "F:\RuyaOS-tmp"
+if (Test-Path $ociDir) {
+    $ocis = Get-ChildItem $ociDir -Filter "ruyaos-*.oci" -File |
+        Sort-Object { try { [version]($_.BaseName -replace '^ruyaos-', '' -replace '-.*$', '') } catch { [version]"0.0" } }, LastWriteTime -Descending
+    foreach ($f in $ocis | Select-Object -Skip 2) {
+        Remove-Item $f.FullName -Force
+        Write-Host "  deleted old Dell archive F:\RuyaOS-tmp\$($f.Name)"
+    }
+}
+
 wsl --shutdown
 Start-Sleep -Seconds 5
 wsl --manage $Distro --compact | Out-Null
