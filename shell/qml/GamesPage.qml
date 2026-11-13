@@ -51,6 +51,7 @@ Page {
                           : [{ button: "A", text: qsTr("Select") }, { button: "B", text: qsTr("Back") }]
 
     function openOptions() {
+        grid.forceLayout()
         if (grid.currentIndex >= 0 && grid.currentItem)
             page.optionsRequested("games", page.shownIds[grid.currentIndex], grid.currentItem, "card")
     }

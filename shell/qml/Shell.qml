@@ -1801,8 +1801,10 @@ FocusScope {
     }
 
     function openRecentOptions() {
-        if (!libraryEmpty)
-            openOptions("recent", heroItem.id, recentRow.currentItem, "card", null)
+        if (libraryEmpty)
+            return
+        recentRow.forceLayout()             // the card the focus just moved to may not be laid out yet
+        openOptions("recent", heroItem.id, recentRow.currentItem, "card", null)
     }
 
     // A row was chosen (the menu has closed and the focus is on the item).

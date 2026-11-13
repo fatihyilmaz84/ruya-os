@@ -210,8 +210,11 @@ FocusScope {
     }
 
     // The sheet follows its anchor while it is on screen: a list that is still scrolling to the card when the
-    // menu opens (Home's Recent row) would otherwise leave it where the card was.
-    FrameAnimation {
+    // menu opens (Home's Recent row) would otherwise leave it where the card was. A Timer, not a
+    // FrameAnimation: it also runs in a window that presents no frames (PATTERNS.md, T-460).
+    Timer {
+        interval: 16        // token-ok: one frame at 60 Hz, a poll and not an animation
+        repeat: true
         running: menu.shown && menu.anchor !== null
         onTriggered: menu.place()
     }
