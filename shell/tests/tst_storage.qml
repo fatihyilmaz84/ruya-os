@@ -254,6 +254,15 @@ Item {
             compare(seen.size, 6, "no status outside the contract")
         }
 
+        // RUY-544: the entry kind ("volume" | "scan" | "eject") must not land in SettingRow.kind (the row kind).
+        function test_storage_rows_have_a_valid_row_kind() {
+            openStoragePane()
+            const row = find("storageVol_vol-internal")
+            verify(row !== null)
+            verify(["item", "action", "page", "info"].indexOf(row.kind) >= 0, "row kind is " + row.kind)
+            compare(row.entryKind, "volume")
+        }
+
         function test_volume_appears_toast_once_and_focus_stays() {
             openStoragePane()
             goTo("storageVol_vol-old")
