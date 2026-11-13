@@ -451,12 +451,11 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+10"/>
-        <location line="+255"/>
         <source>Uninstall</source>
         <translation>Uninstall</translation>
     </message>
     <message>
-        <location line="-243"/>
+        <location line="+12"/>
         <source>Your activity</source>
         <translation>Your activity</translation>
     </message>
@@ -484,27 +483,6 @@ This can&apos;t be undone.</translation>
         <location line="+1"/>
         <source>An admin&apos;s PIN is needed to install this app.</source>
         <translation>An admin&apos;s PIN is needed to install this app.</translation>
-    </message>
-    <message>
-        <location line="+22"/>
-        <source>Select</source>
-        <translation>Select</translation>
-    </message>
-    <message>
-        <location line="+42"/>
-        <source>Uninstall %1?</source>
-        <translation>Uninstall %1?</translation>
-    </message>
-    <message>
-        <location line="+11"/>
-        <source>Also delete my data</source>
-        <translation>Also delete my data</translation>
-    </message>
-    <message>
-        <location line="-53"/>
-        <location line="+65"/>
-        <source>Cancel</source>
-        <translation>Cancel</translation>
     </message>
 </context>
 <context>
@@ -2337,12 +2315,12 @@ This can&apos;t be undone.</translation>
     <name>GamesPage</name>
     <message>
         <location filename="../qml/GamesPage.qml" line="+14"/>
-        <location line="+98"/>
+        <location line="+118"/>
         <source>Games</source>
         <translation>Games</translation>
     </message>
     <message>
-        <location line="-65"/>
+        <location line="-85"/>
         <location line="+4"/>
         <source>Select</source>
         <translation>Select</translation>
@@ -2354,17 +2332,18 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+2"/>
+        <location line="+3"/>
         <source>Back</source>
         <translation>Back</translation>
     </message>
     <message>
-        <location line="-1"/>
+        <location line="-2"/>
+        <location line="+3"/>
         <source>Sections</source>
         <translation>Sections</translation>
     </message>
     <message>
-        <location line="+47"/>
+        <location line="+64"/>
         <source>Show</source>
         <translation>Show</translation>
     </message>
@@ -2958,7 +2937,7 @@ This can&apos;t be undone.</translation>
         <translation>Options for %1</translation>
     </message>
     <message>
-        <location line="+192"/>
+        <location line="+202"/>
         <source>No options for this yet.</source>
         <translation>No options for this yet.</translation>
     </message>
@@ -3137,7 +3116,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>PinPad</name>
     <message>
-        <location filename="../qml/PinPad.qml" line="+139"/>
+        <location filename="../qml/PinPad.qml" line="+164"/>
         <source>PINs don&apos;t match</source>
         <translation>PINs don&apos;t match</translation>
     </message>
@@ -3155,7 +3134,7 @@ This can&apos;t be undone.</translation>
         <translation>Could not sign in (%1).</translation>
     </message>
     <message>
-        <location line="+27"/>
+        <location line="+51"/>
         <location line="+6"/>
         <location line="+19"/>
         <source>Enter PIN for %1</source>
@@ -4162,7 +4141,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+616"/>
+        <location filename="../qml/Shell.qml" line="+617"/>
         <source>Could not %1.</source>
         <translation>Could not %1.</translation>
     </message>
@@ -4273,34 +4252,34 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+194"/>
+        <location line="+193"/>
         <source>Play</source>
         <translation>Play</translation>
     </message>
     <message>
-        <location line="-194"/>
-        <location line="+196"/>
+        <location line="-193"/>
+        <location line="+195"/>
         <source>Resume</source>
         <translation>Resume</translation>
     </message>
     <message>
-        <location line="-196"/>
+        <location line="-195"/>
         <source>Closing…</source>
         <translation>Closing…</translation>
     </message>
     <message>
         <location line="+3"/>
-        <location line="+197"/>
+        <location line="+196"/>
         <source>Details</source>
         <translation>Details</translation>
     </message>
     <message>
-        <location line="-178"/>
+        <location line="-177"/>
         <source>Recent</source>
         <translation>Recent</translation>
     </message>
     <message>
-        <location line="+176"/>
+        <location line="+175"/>
         <source>Close game</source>
         <translation>Close game</translation>
     </message>
@@ -4315,12 +4294,27 @@ This can&apos;t be undone.</translation>
         <translation>Your activity</translation>
     </message>
     <message>
+        <location line="+5"/>
+        <source>Uninstall…</source>
+        <translation>Uninstall…</translation>
+    </message>
+    <message>
         <location line="+6"/>
         <source>Store options are unavailable right now.</source>
         <translation>Store options are unavailable right now.</translation>
     </message>
     <message>
-        <location line="+476"/>
+        <location line="+90"/>
+        <source>Could not uninstall %1. Try again.</source>
+        <translation>Could not uninstall %1. Try again.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>%1 was uninstalled.</source>
+        <translation>%1 was uninstalled.</translation>
+    </message>
+    <message>
+        <location line="+473"/>
         <location line="+4"/>
         <location line="+4"/>
         <source>Select</source>
@@ -4343,7 +4337,7 @@ This can&apos;t be undone.</translation>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location line="-1603"/>
+        <location line="-1697"/>
         <source>Restarting in 2 minutes</source>
         <translation>Restarting in 2 minutes</translation>
     </message>
@@ -4374,7 +4368,7 @@ This can&apos;t be undone.</translation>
         <translation>Running app</translation>
     </message>
     <message>
-        <location line="+1321"/>
+        <location line="+1415"/>
         <location line="+3"/>
         <source>Sections</source>
         <translation>Sections</translation>
@@ -5771,6 +5765,58 @@ This can&apos;t be undone.</translation>
         <location line="-263"/>
         <source>Safe to remove</source>
         <translation>Safe to remove</translation>
+    </message>
+</context>
+<context>
+    <name>UninstallConfirm</name>
+    <message>
+        <location filename="../qml/UninstallConfirm.qml" line="+34"/>
+        <location line="+1"/>
+        <location line="+199"/>
+        <source>Cancel</source>
+        <translation>Cancel</translation>
+    </message>
+    <message>
+        <location line="-199"/>
+        <source>Select</source>
+        <translation>Select</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Uninstall and delete data</source>
+        <translation>Uninstall and delete data</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Uninstall</source>
+        <translation>Uninstall</translation>
+    </message>
+    <message>
+        <location line="+47"/>
+        <source>Enter an admin&apos;s PIN</source>
+        <translation>Enter an admin&apos;s PIN</translation>
+    </message>
+    <message>
+        <location line="+43"/>
+        <location line="+23"/>
+        <location line="+5"/>
+        <source>Uninstall %1?</source>
+        <translation>Uninstall %1?</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Saved data stays on this console.</source>
+        <translation>Saved data stays on this console.</translation>
+    </message>
+    <message>
+        <location line="+27"/>
+        <source>Saved data of every profile is deleted too. This can&apos;t be undone.</source>
+        <translation>Saved data of every profile is deleted too. This can&apos;t be undone.</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Also delete saved data</source>
+        <translation>Also delete saved data</translation>
     </message>
 </context>
 <context>

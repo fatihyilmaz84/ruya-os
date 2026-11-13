@@ -74,6 +74,23 @@ Page {
             filterRow.forceActiveFocus()
     }
 
+    function indexOfItem(itemId) {
+        return page.shownIds.indexOf(itemId)
+    }
+
+    // A game was uninstalled from its menu and has left the list (RUY-499): the focus goes to the card now at
+    // its place (the next one), else the last (the previous one), else the page's default (the Store button).
+    function focusAfterRemoval(index) {
+        if (Library.games.length === 0) {
+            storeButton.forceActiveFocus()
+        } else if (grid.count > 0) {
+            grid.currentIndex = Math.max(0, Math.min(index, grid.count - 1))
+            grid.forceActiveFocus()
+        } else {
+            filterRow.forceActiveFocus()
+        }
+    }
+
     // The library answers after the page opens: take focus once something can hold it.
     function settleFocus() {
         const holder = Window.activeFocusItem

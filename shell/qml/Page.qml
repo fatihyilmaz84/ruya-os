@@ -35,6 +35,12 @@ FocusScope {
     property string optionsOpenFor: ""
     signal optionsRequested(string surface, string itemId, Item anchor, string kind)
 
+    // Where an item with an Options menu sits in this page's list (-1: not a list); GamesPage answers.
+    function indexOfItem(itemId) { return -1 }
+
+    // The Shell's Uninstall dialog (02 §1.7, RUY-499): the Options menu and the app page share it.
+    property UninstallConfirm uninstallConfirm: null
+
     signal backRequested()
     // Ask the shell to push another page over this one (a detail page, T-111).
     signal openRequested(string key, var params)

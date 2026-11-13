@@ -103,6 +103,12 @@ void Library::mockListDelayed(int ms)
         mock->listItemsDelayed(ms);
 }
 
+void Library::mockRemoveItem(const QString &id)
+{
+    if (auto *mock = qobject_cast<MockLibraryBackend *>(m_backend.get()))
+        mock->removeItem(id);
+}
+
 int Library::mockPendingReplies() const
 {
     auto *mock = qobject_cast<MockLibraryBackend *>(m_backend.get());

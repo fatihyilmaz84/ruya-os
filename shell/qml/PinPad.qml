@@ -12,7 +12,11 @@ import RuyaShell
 //                      calls no service.
 //   "collect-confirm"  collect(prompt, true): asks twice; on a mismatch shows "PINs don't
 //                      match" and starts over.
-// In the collect modes Back on an empty pad also emits cancelled() (after closed()).
+//   "admin"            verifyAdmin(prompt, adminId): checks an admin's PIN with Profiles.verifyAdmin
+//                      (the same service lockout as a sign-in) and answers verified(); a wrong PIN
+//                      shows the attempts message, a lockout dims the pad and counts down, as in
+//                      "verify" (RUY-499).
+// In the collect and admin modes Back on an empty pad also emits cancelled() (after closed()).
 FocusScope {
     id: pad
 
@@ -23,7 +27,8 @@ FocusScope {
     property bool busy: false
     property int lockSecs: 0
     property bool shown: false
-    property string mode: "verify"     // "verify" | "collect" | "collect-confirm"
+    property string mode: "verify"     // "verify" | "collect" | "collect-confirm" | "admin"
+    property string adminId: ""        // admin mode: whose PIN is asked
     property string prompt: ""         // title in the collect modes
     property int stage: 0              // collect-confirm: 0 = first entry, 1 = confirmation
     property string firstEntry: ""
@@ -35,7 +40,8 @@ FocusScope {
 
     signal closed()
     signal collected(string pin)        // collect modes: the PIN the user entered (and confirmed)
-    signal cancelled()                  // collect modes: closed without a PIN
+    signal cancelled()                  // collect and admin modes: closed without a PIN
+    signal verified()                   // admin mode: the admin's PIN was right (the pad has closed)
 
     // The screen saver starts (T-202): a PIN pad never stays up, half typed, behind it.
     Connections {
@@ -52,6 +58,22 @@ FocusScope {
     function collect(promptText, confirm) {
         mode = confirm ? "collect-confirm" : "collect"
         prompt = promptText
+        profile = {}
+        stage = 0
+        firstEntry = ""
+        entered = ""
+        message = ""
+        lockSecs = 0
+        busy = false
+        shown = true
+        keys.currentIndex = 0
+        keys.forceActiveFocus()
+    }
+
+    function verifyAdmin(promptText, id) {
+        mode = "admin"
+        prompt = promptText
+        adminId = id
         profile = {}
         stage = 0
         firstEntry = ""
@@ -81,6 +103,8 @@ FocusScope {
 
     function close() {
         shown = false
+        entered = ""                   // a half-typed PIN never outlives the pad (sign-out, the screen saver)
+        firstEntry = ""
         closed()
     }
 
@@ -123,6 +147,9 @@ FocusScope {
         if (mode === "verify") {
             busy = true
             Profiles.switchTo(profile.id, entered)
+        } else if (mode === "admin") {
+            busy = true
+            Profiles.verifyAdmin(adminId, entered)
         } else if (mode === "collect") {
             Sfx.select()
             finishCollect()
@@ -171,6 +198,30 @@ FocusScope {
                 pad.shakeDots()
             } else {
                 pad.message = qsTr("Could not sign in (%1).").arg(status)
+            }
+        }
+    }
+
+    Connections {
+        target: Profiles
+        function onVerifyAdminFinished(id, status, attemptsLeft, retryAfterSecs) {
+            if (!pad.shown || pad.mode !== "admin" || id !== pad.adminId)
+                return
+            pad.busy = false
+            pad.entered = ""
+            if (status === "ok") {
+                Sfx.select()
+                pad.close()
+                pad.verified()
+            } else if (status === "locked-out") {
+                pad.lockSecs = retryAfterSecs
+                pad.message = ""
+                Sfx.error()
+                pad.shakeDots()
+            } else {
+                pad.message = ProfileStatus.describe(status, attemptsLeft, retryAfterSecs)
+                Sfx.error()
+                pad.shakeDots()
             }
         }
     }

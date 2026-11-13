@@ -68,6 +68,7 @@ FocusScope {
         page.backRequested.connect(root.closePage)
         page.openRequested.connect(root.openPage)
         page.optionRows = root.optionRows
+        page.uninstallConfirm = uninstallConfirm
         page.optionsOpenFor = Qt.binding(() => root.optionsOn && root.optionsPage === page ? root.optionsItemId : "")
         page.optionsRequested.connect((surface, itemId, anchor, kind) => root.openOptions(surface, itemId, anchor, kind, page))
         page.upFromTop.connect(root.focusNav)
@@ -378,6 +379,7 @@ FocusScope {
     onSignedInChanged: {
         if (!signedIn) {
             optionsMenu.dismiss()
+            uninstallConfirm.dismiss()
             endLaunch(false)     // nobody to start it for; the app, if it starts, waits hidden (T-164)
             dropCloseScreen()
             dropAllPages()       // the next sign-in starts at home
@@ -1737,7 +1739,7 @@ FocusScope {
     // menu closes by itself when the item goes.
     property string optionsSurface: ""
     property string optionsItemId: ""
-    property Item optionsPage: null
+    property Page optionsPage: null
     property bool optionsOn: false             // from the opening until it closes (not the fade-out)
     property int storeTick: 0                  // the Store's records changed (Store.app is a lookup, not a property)
     Connections {
@@ -1746,7 +1748,6 @@ FocusScope {
     }
 
     // The rows of a game or app card, in order; a false condition leaves its row out (never dimmed).
-    // Uninstall comes with RUY-499.
     function gameRows(id) {
         const tick = storeTick
         const item = Library.items.find(i => i.id === id)
@@ -1766,6 +1767,12 @@ FocusScope {
             rows.push({ id: "details", label: qsTr("Details"), icon: "info" })
         if (Profiles.activeProfile !== "" && (Profiles.active.role ?? "") !== "guest")
             rows.push({ id: "activity", label: qsTr("Your activity"), icon: "bar_chart" })
+        // Uninstall…: an installed Flatpak app the Store knows, that does not run and has no Store job
+        // on its card (a row that would start a job is hidden while one runs; one of ours counts from the moment
+        // it was asked, the Store lists a job only once it has made progress).
+        if (appId !== "" && item.source === "flatpak" && !running && !closing && Store.available
+                && Store.app(appId).id !== undefined && Store.jobs[appId] === undefined && uninstallRuns[appId] === undefined)
+            rows.push({ id: "uninstall", label: qsTr("Uninstall…"), icon: "delete", divider: rows.length > 0 })
         return rows
     }
 
@@ -1827,7 +1834,77 @@ FocusScope {
         case "activity":
             openPage("activityGame", { appId: appId !== "" ? appId : id })
             break
+        case "uninstall":
+            // The card's place in its list, kept for the focus after it has gone.
+            uninstallConfirm.open(appId, item.title, {
+                itemId: id, surface: surface, page: optionsPage, title: item.title,
+                index: surface === "games" && optionsPage ? optionsPage.indexOfItem(id) : recentIds.indexOf(id)
+            })
+            break
         }
+    }
+
+    // ---- Uninstall from a card (02 §1.7, RUY-499) ----
+    // The dialog (UninstallConfirm, also the app page's) asks the Store; the Shell follows the job of the
+    // apps it started: success toasts and moves the focus once the card has left the list (the Library
+    // service sees the removal a little later than the job's end), failure toasts and leaves the focus.
+    property var uninstallRuns: ({})            // appId -> { itemId, surface, page, title, index }
+    property var uninstallGone: []              // the runs that finished well and wait for their card to leave
+
+    function uninstallStarted(appId, context) {
+        if (!context)
+            return                              // the app page's own run: the page follows it
+        const runs = Object.assign({}, uninstallRuns)
+        runs[appId] = context
+        uninstallRuns = runs
+    }
+
+    function uninstallFinished(appId, status) {
+        const run = uninstallRuns[appId]
+        if (!run)
+            return
+        const runs = Object.assign({}, uninstallRuns)
+        delete runs[appId]
+        uninstallRuns = runs
+        if (status !== "ok") {
+            Sfx.error()
+            Notifications.show(qsTr("Could not uninstall %1. Try again.").arg(Notifications.named(run.title)), "error")
+            return
+        }
+        Notifications.show(qsTr("%1 was uninstalled.").arg(Notifications.named(run.title)), "success")
+        uninstallGone = uninstallGone.concat([run])
+        Qt.callLater(settleUninstalled)
+    }
+
+    // The card of a finished uninstall is gone from the Library: the focus goes to the next card, else the
+    // previous one, else the surface's own default. Only where the focus still is on that surface.
+    function settleUninstalled() {
+        const waiting = []
+        for (const run of uninstallGone) {
+            if (Library.items.some(i => i.id === run.itemId)) {
+                waiting.push(run)
+                continue
+            }
+            if (run.surface === "games") {
+                if (run.page && hasAncestor(activeItem, run.page))
+                    run.page.focusAfterRemoval(run.index)
+            } else if (home.shown && (heroBlock.activeFocus || recentRow.activeFocus)) {
+                if (libraryEmpty) {
+                    heroBlock.forceActiveFocus()                    // the empty Home's "Open Store"
+                } else if (run.surface === "hero") {
+                    heroBlock.forceActiveFocus()                    // its primary button; the row, rebuilt, starts at its first card
+                } else {
+                    recentRow.currentIndex = Math.max(0, Math.min(run.index, recentIds.length - 1))
+                    recentRow.forceActiveFocus()
+                }
+            }
+        }
+        uninstallGone = waiting
+    }
+
+    Connections {
+        target: Store
+        function onJobFinished(appId, status) { root.uninstallFinished(appId, status) }
     }
 
     // The item behind the open menu is gone: close it; the surface moves its own focus.
@@ -1836,6 +1913,8 @@ FocusScope {
         function onItemsChanged() {
             if (root.optionsOn && !Library.items.some(i => i.id === root.optionsItemId))
                 optionsMenu.dismiss()
+            if (root.uninstallGone.length > 0)
+                Qt.callLater(root.settleUninstalled)
         }
     }
 
@@ -2142,6 +2221,16 @@ FocusScope {
             root.optionsOn = false
             heroBlock.anchoredItem = null
         }
+    }
+    // Uninstall… (the Options menu's row and the app page's button): the one dialog, in the modal layer.
+    UninstallConfirm {
+        id: uninstallConfirm
+        objectName: "uninstallConfirm"
+        parent: modalLayer
+        width: parent ? parent.width : 0
+        height: parent ? parent.height : 0
+        u: root.u
+        onStarted: (appId, deleteData, context) => root.uninstallStarted(appId, context)
     }
     // While it is open its rows follow the item's state and the note follows the Store.
     Binding {

@@ -449,12 +449,11 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+10"/>
-        <location line="+255"/>
         <source>Uninstall</source>
         <translation>Kaldır</translation>
     </message>
     <message>
-        <location line="-243"/>
+        <location line="+12"/>
         <source>Your activity</source>
         <translation>Etkinliğiniz</translation>
     </message>
@@ -482,27 +481,6 @@ Bu geri alınamaz.</translation>
         <location line="+1"/>
         <source>An admin&apos;s PIN is needed to install this app.</source>
         <translation>Bu uygulamayı yüklemek için bir yöneticinin PIN&apos;i gerekir.</translation>
-    </message>
-    <message>
-        <location line="+22"/>
-        <source>Select</source>
-        <translation>Seç</translation>
-    </message>
-    <message>
-        <location line="+42"/>
-        <source>Uninstall %1?</source>
-        <translation>%1 kaldırılsın mı?</translation>
-    </message>
-    <message>
-        <location line="+11"/>
-        <source>Also delete my data</source>
-        <translation>Verilerimi de sil</translation>
-    </message>
-    <message>
-        <location line="-53"/>
-        <location line="+65"/>
-        <source>Cancel</source>
-        <translation>İptal</translation>
     </message>
 </context>
 <context>
@@ -2332,12 +2310,12 @@ Bu geri alınamaz.</translation>
     <name>GamesPage</name>
     <message>
         <location filename="../qml/GamesPage.qml" line="+14"/>
-        <location line="+98"/>
+        <location line="+118"/>
         <source>Games</source>
         <translation>Oyunlar</translation>
     </message>
     <message>
-        <location line="-65"/>
+        <location line="-85"/>
         <location line="+4"/>
         <source>Select</source>
         <translation>Seç</translation>
@@ -2349,17 +2327,18 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+2"/>
+        <location line="+3"/>
         <source>Back</source>
         <translation>Geri</translation>
     </message>
     <message>
-        <location line="-1"/>
+        <location line="-2"/>
+        <location line="+3"/>
         <source>Sections</source>
         <translation>Bölümler</translation>
     </message>
     <message>
-        <location line="+47"/>
+        <location line="+64"/>
         <source>Show</source>
         <translation>Göster</translation>
     </message>
@@ -2947,7 +2926,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 seçenekleri</translation>
     </message>
     <message>
-        <location line="+192"/>
+        <location line="+202"/>
         <source>No options for this yet.</source>
         <translation>Bunun için henüz seçenek yok.</translation>
     </message>
@@ -3126,7 +3105,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>PinPad</name>
     <message>
-        <location filename="../qml/PinPad.qml" line="+139"/>
+        <location filename="../qml/PinPad.qml" line="+164"/>
         <source>PINs don&apos;t match</source>
         <translation>PIN&apos;ler eşleşmiyor</translation>
     </message>
@@ -3143,7 +3122,7 @@ Bu geri alınamaz.</translation>
         <translation>Giriş yapılamadı (%1).</translation>
     </message>
     <message>
-        <location line="+27"/>
+        <location line="+51"/>
         <location line="+6"/>
         <location line="+19"/>
         <source>Enter PIN for %1</source>
@@ -4147,7 +4126,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+616"/>
+        <location filename="../qml/Shell.qml" line="+617"/>
         <source>Could not %1.</source>
         <translation>%1 işlemi yapılamadı.</translation>
     </message>
@@ -4258,34 +4237,34 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+194"/>
+        <location line="+193"/>
         <source>Play</source>
         <translation>Oyna</translation>
     </message>
     <message>
-        <location line="-194"/>
-        <location line="+196"/>
+        <location line="-193"/>
+        <location line="+195"/>
         <source>Resume</source>
         <translation>Devam et</translation>
     </message>
     <message>
-        <location line="-196"/>
+        <location line="-195"/>
         <source>Closing…</source>
         <translation>Kapanıyor…</translation>
     </message>
     <message>
         <location line="+3"/>
-        <location line="+197"/>
+        <location line="+196"/>
         <source>Details</source>
         <translation>Ayrıntılar</translation>
     </message>
     <message>
-        <location line="-178"/>
+        <location line="-177"/>
         <source>Recent</source>
         <translation>Son oynananlar</translation>
     </message>
     <message>
-        <location line="+176"/>
+        <location line="+175"/>
         <source>Close game</source>
         <translation>Oyunu kapat</translation>
     </message>
@@ -4300,12 +4279,27 @@ Bu geri alınamaz.</translation>
         <translation>Etkinliğiniz</translation>
     </message>
     <message>
+        <location line="+5"/>
+        <source>Uninstall…</source>
+        <translation>Kaldır…</translation>
+    </message>
+    <message>
         <location line="+6"/>
         <source>Store options are unavailable right now.</source>
         <translation>Mağaza seçenekleri şu anda kullanılamıyor.</translation>
     </message>
     <message>
-        <location line="+476"/>
+        <location line="+90"/>
+        <source>Could not uninstall %1. Try again.</source>
+        <translation>%1 kaldırılamadı. Yeniden deneyin.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>%1 was uninstalled.</source>
+        <translation>%1 kaldırıldı.</translation>
+    </message>
+    <message>
+        <location line="+473"/>
         <location line="+4"/>
         <location line="+4"/>
         <source>Select</source>
@@ -4328,7 +4322,7 @@ Bu geri alınamaz.</translation>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="-1603"/>
+        <location line="-1697"/>
         <source>Restarting in 2 minutes</source>
         <translation>2 dakikada yeniden başlıyor</translation>
     </message>
@@ -4359,7 +4353,7 @@ Bu geri alınamaz.</translation>
         <translation>Çalışan uygulama</translation>
     </message>
     <message>
-        <location line="+1321"/>
+        <location line="+1415"/>
         <location line="+3"/>
         <source>Sections</source>
         <translation>Bölümler</translation>
@@ -5753,6 +5747,58 @@ Bu geri alınamaz.</translation>
         <location line="-263"/>
         <source>Safe to remove</source>
         <translation>Çıkarmak güvenli</translation>
+    </message>
+</context>
+<context>
+    <name>UninstallConfirm</name>
+    <message>
+        <location filename="../qml/UninstallConfirm.qml" line="+34"/>
+        <location line="+1"/>
+        <location line="+199"/>
+        <source>Cancel</source>
+        <translation>İptal</translation>
+    </message>
+    <message>
+        <location line="-199"/>
+        <source>Select</source>
+        <translation>Seç</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Uninstall and delete data</source>
+        <translation>Kaldır ve verileri sil</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Uninstall</source>
+        <translation>Kaldır</translation>
+    </message>
+    <message>
+        <location line="+47"/>
+        <source>Enter an admin&apos;s PIN</source>
+        <translation>Bir yöneticinin PIN&apos;ini girin</translation>
+    </message>
+    <message>
+        <location line="+43"/>
+        <location line="+23"/>
+        <location line="+5"/>
+        <source>Uninstall %1?</source>
+        <translation>%1 kaldırılsın mı?</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Saved data stays on this console.</source>
+        <translation>Kayıtlı veriler bu konsolda kalır.</translation>
+    </message>
+    <message>
+        <location line="+27"/>
+        <source>Saved data of every profile is deleted too. This can&apos;t be undone.</source>
+        <translation>Tüm profillerin kayıtlı verileri de silinir. Bu geri alınamaz.</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Also delete saved data</source>
+        <translation>Kayıtlı verileri de sil</translation>
     </message>
 </context>
 <context>

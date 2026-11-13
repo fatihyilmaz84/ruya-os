@@ -406,6 +406,14 @@ Item {
             return parts.join("|")
         }
 
+        // The Uninstall confirm asks a Standard profile for an admin's PIN (Player One's, 1234).
+        function enterAdminPin() {
+            tryVerify(() => find("uninstallPinPad").shown, 2000, "the admin's PIN pad")
+            for (const d of [Qt.Key_1, Qt.Key_2, Qt.Key_3, Qt.Key_4])
+                keyClick(d)
+            keyClick(Qt.Key_Enter)
+        }
+
         function test_uninstall_confirm() {
             openStore()
             openApp("org.example.Puzzle")              // installed from the start
@@ -431,6 +439,7 @@ Item {
             keyClick(Qt.Key_Right)
             verify(find("uninstallGo").activeFocus)
             keyClick(Qt.Key_Return)
+            enterAdminPin()                            // Ada is a Standard profile (RUY-499)
             tryVerify(() => Store.app("org.example.Puzzle").installed === false)
             verify(Store.mockDataDeleted("org.example.Puzzle"))
             tryVerify(() => find("detailPrimary").text === "Install")
@@ -445,6 +454,7 @@ Item {
             tryVerify(() => find("uninstallCancel").activeFocus)
             keyClick(Qt.Key_Right)
             keyClick(Qt.Key_Return)
+            enterAdminPin()
             tryVerify(() => Store.app("org.example.Puzzle").installed === false)
             verify(!Store.mockDataDeleted("org.example.Puzzle"))
         }

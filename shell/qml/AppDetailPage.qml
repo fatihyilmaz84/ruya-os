@@ -150,11 +150,11 @@ Page {
         // "Open" waits for the session service (T-130).
     }
 
-    function confirmUninstall(deleteData) {
+    // The Uninstall dialog asked the Store (it closed, the focus is back on the button).
+    function uninstallStarted() {
         page.errorText = ""
         page.kind = "uninstall"
         page.requested = true
-        Store.uninstall(page.appId, deleteData)
     }
 
     Component.onCompleted: loadDetails()
@@ -308,7 +308,7 @@ Page {
                 objectName: "detailUninstall"
                 visible: page.installed && !page.working
                 text: qsTr("Uninstall")
-                onActivated: confirm.open()
+                onActivated: page.uninstallConfirm?.open(page.appId, page.app.name ?? "")
                 Keys.onUpPressed: { Sfx.navigate(); primary.forceActiveFocus() }
                 Keys.onDownPressed: if (activity.visible) { Sfx.navigate(); activity.forceActiveFocus() }
                 onVisibleChanged: if (!visible) page.buttonHidden()
@@ -471,115 +471,14 @@ Page {
         }
     }
 
-    // "Uninstall <app>?" with the data toggle. Cancel has focus when it opens.
-    FocusScope {
-        id: confirm
-        objectName: "uninstallConfirm"
-        parent: page.overlay
-        width: parent ? parent.width : 0
-        height: parent ? parent.height : 0
-        visible: opacity > 0
-        opacity: shown ? 1 : 0
-        enabled: shown
-        Behavior on opacity { NumberAnimation { duration: Theme.pageMs; easing.type: Easing.Bezier; easing.bezierCurve: Theme.easeSnap } }
-
-        property bool shown: false
-        property Item returnTo: null
-        // What the hint bar says while this is open (Shell.modalHintsOf).
-        readonly property var modalHints: [{ button: "A", text: qsTr("Select") }, { button: "B", text: qsTr("Cancel") }]
-
-        function open() {
-            returnTo = Window.activeFocusItem
-            deleteData.checked = false
-            shown = true
-            cancel.forceActiveFocus()
-        }
-
-        function close() {
-            shown = false
-            const target = returnTo
-            returnTo = null
-            if (target && target.visible && target.enabled)
-                target.forceActiveFocus()
-        }
-
-        Rectangle {
-            anchors.fill: parent
-            color: Theme.scrim
-        }
-
-        Rectangle {
-            anchors.centerIn: parent
-            width: 1000 * page.u
-            height: dialogColumn.height + 2 * Theme.spaceXl * page.u
-            radius: Theme.radiusL * page.u
-            color: Theme.panel
-            border.color: Theme.glassBorder
-        }
-
-        Column {
-            id: dialogColumn
-            anchors.centerIn: parent
-            width: 900 * page.u
-            spacing: Theme.spaceL * page.u
-
-            Text {
-                objectName: "uninstallTitle"
-                width: parent.width
-                horizontalAlignment: Text.AlignHCenter
-                textFormat: Text.PlainText
-                text: qsTr("Uninstall %1?").arg(page.app.name ?? "")
-                color: Theme.text
-                font.pixelSize: Theme.typeTitle * page.u
-                font.weight: Theme.weightDemiBold
-                elide: Text.ElideRight
-            }
-
-            ToggleRow {
-                id: deleteData
-                objectName: "uninstallDeleteData"
-                u: page.u
-                label: qsTr("Also delete my data")
-                Keys.onDownPressed: { Sfx.navigate(); cancel.forceActiveFocus() }
-            }
-
-            Row {
-                anchors.horizontalCenter: parent.horizontalCenter
-                spacing: Theme.spaceM * page.u
-
-                ActionButton {
-                    id: cancel
-                    objectName: "uninstallCancel"
-                    width: 300 * page.u
-                    text: qsTr("Cancel")
-                    onActivated: confirm.close()
-                    Keys.onUpPressed: { Sfx.navigate(); deleteData.forceActiveFocus() }
-                    Keys.onRightPressed: { Sfx.navigate(); go.forceActiveFocus() }
-                }
-
-                ActionButton {
-                    id: go
-                    objectName: "uninstallGo"
-                    width: 300 * page.u
-                    danger: true
-                    text: qsTr("Uninstall")
-                    onActivated: {
-                        const wipe = deleteData.checked
-                        confirm.close()
-                        page.confirmUninstall(wipe)
-                    }
-                    Keys.onUpPressed: { Sfx.navigate(); deleteData.forceActiveFocus() }
-                    Keys.onLeftPressed: { Sfx.navigate(); cancel.forceActiveFocus() }
-                }
-            }
-        }
-
-        Keys.onPressed: event => {
-            if (BackKey.isBackOrBackspace(event.key)) {
-                Sfx.back()
-                confirm.close()
-            }
-            event.accepted = true      // modal: nothing leaks to the page underneath
+    // The Uninstall dialog is the Shell's (the Options menu uses it too, RUY-499; `Page.uninstallConfirm`).
+    // It asks for an admin's PIN itself and starts the Store job; this page then follows the job as
+    // for an install.
+    Connections {
+        target: page.uninstallConfirm
+        function onStarted(id) {
+            if (id === page.appId)
+                page.uninstallStarted()
         }
     }
 }
