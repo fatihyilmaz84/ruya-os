@@ -20,7 +20,7 @@ The procedure is in [`LEAD.md`](LEAD.md) (**Budgets and "Lead efficiency": hand 
   - A gaming tuning audit (Opus): RUY-522, with RUY-525..531.
 - **Images:** 0.0.75 at aa1ad56 (RUY-486, RUY-493): 12/14 in the queue plus `vm-input-check check` PASS. The 2 FAILs are diagnosed and not regressions (RUY-473, RUY-521). **The Dell runs 0.0.75** (rollback 0.0.74).
 - **Nothing in flight; no builder worktrees.** The design sessions' worktrees (`.claude/worktrees/*`) are merged; archive them with the owner. `inspiring-chebyshev-c1c08c` (4402db0) is unknown; the owner was asked.
-- **Pushed:** ce7e315 mid-session; this handoff is pushed with push-main. CI was not checked.
+- **Pushed:** ce7e315 mid-session; this handoff is pushed with push-main. **CI is red on main since ce7e315**: `tst_options_menu` heights are 1 px off on Fedora's fonts (699 vs 698) → **RUY-544, urgent**. The runs for 2c83b80 were queued at the handoff and not checked.
 
 ## Owner decisions this session
 1. The silhouettes may ship (RUY-387, part answered).
@@ -30,6 +30,7 @@ The procedure is in [`LEAD.md`](LEAD.md) (**Budgets and "Lead efficiency": hand 
 5. "One active controller per profile" (RUY-540 comment). Check it against ADR-017 and local co-op before building.
 
 ## Next, in this order
+0. **RUY-544 (urgent): make CI green.** Dispatch a builder at once, then check `gh run list` after the push.
 1. **The owner's two reports (analyse first, owner's request):**
    - **RUY-538:** with two pads, a Controls in games change applies to both.
    - **RUY-539:** a Hub profile switch doesn't freeze the running game (see RUY-87).
