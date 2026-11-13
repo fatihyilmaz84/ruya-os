@@ -309,9 +309,9 @@ Item {
             tryCompare(tc.shell, "currentPage", "settings")
             const list = find("categoryList")
             tryVerify(() => list.activeFocus, 2000, "category list has focus")
-            for (let i = 0; i < 20 && list.currentIndex < 4; ++i)     // Audio
+            for (let i = 0; i < 20 && list.currentIndex < 5; ++i)     // Audio
                 keyClick(Qt.Key_Down)
-            compare(list.currentIndex, 4)
+            compare(list.currentIndex, 5)
             keyClick(Qt.Key_Right)
             tryVerify(() => find("paneAudio").visible)
             tryVerify(() => find("sink_hdmi-0").activeFocus, 2000, "the first output takes focus")

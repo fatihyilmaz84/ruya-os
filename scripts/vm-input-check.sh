@@ -6,8 +6,11 @@
 # so vm-input-probe.py holds its own bus connection), rumble is forwarded, and a killed service
 # is back within 0.5 s. Copy and run (boot with plain smoke-test.ps1 -Keep):
 #   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-input-check.sh scripts/vm-input-probe.py root@127.0.0.1:/root/
-#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-input-check.sh [check|restart|security|shell|fallback]
-# `check` runs the first three. Since RUY-409 the shell drives the route itself, so `check` and `shell`
+#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-input-check.sh [check|restart|security|caps|shell|fallback]
+# `check` runs the first four. `caps` (RUY-39 / T-368) lists the probe's uinput pad through ListDevices and
+# checks its GetCapabilities descriptor (an unknown model: what the kernel shows, nothing inferred) and
+# that StartTest answers; a test that busctl starts ends at once with reason "caller" (busctl leaves
+# the bus), which the journal says. Since RUY-409 the shell drives the route itself, so `check` and `shell`
 # first make their own state (RUY-430): they stop every running app through Session1, lock and sign
 # $me in again, and wait for the route `shell` (Home). The probe takes the route over with its own bus
 # connection and leaves the bus, which locks the route (that is part of the check); `check` then gives
@@ -385,6 +388,53 @@ fallback_check() {
     busctl --system call "$psvc" "$ppath" "$psvc" Lock >/dev/null
 }
 
+caps_check() {
+    echo "--- capabilities and the button test (RUY-39)"
+    [ -f "$probe" ] || { bad "$probe is missing: copy it next to this script"; return; }
+    local padpid id caps out since n=0
+    since="$(date '+%Y-%m-%d %H:%M:%S')"
+    python3 "$probe" pad 20 > /var/tmp/ruya-input-caps.log 2>&1 &
+    padpid=$!
+    until grep -q "^pad " /var/tmp/ruya-input-caps.log || [ "$n" -ge 50 ]; do sleep 0.1; n=$((n + 1)); done
+    grep -q "^pad ready" /var/tmp/ruya-input-caps.log || { bad "no test pad: $(cat /var/tmp/ruya-input-caps.log)"; kill "$padpid" 2>/dev/null; return; }
+    n=0
+    until id="$(busctl --system --json=short call "$svc" "$path" "$ifc" ListDevices 2>/dev/null | python3 -c '
+import json, sys
+for d in json.load(sys.stdin)["data"][0]:
+    if d.get("name", {}).get("data") == "Ruya VM Check Pad":
+        print(d["id"]["data"])
+')" && [ -n "$id" ] || [ "$n" -ge 30 ]; do sleep 0.1; n=$((n + 1)); done
+    if [ -z "$id" ]; then bad "ListDevices does not list the uinput pad"; kill "$padpid" 2>/dev/null; return; fi
+    ok "ListDevices lists the uinput pad as $id"
+    caps="$(busctl --system --json=short call "$svc" "$path" "$ifc" GetCapabilities s "$id" 2>&1)"
+    out="$(echo "$caps" | python3 -c '
+import json, sys
+status, caps = json.load(sys.stdin)["data"]
+c = {name: (hw, drv, av, outp) for name, hw, drv, av, outp in caps}
+want = {n: (True, True, True, True) for n in ("buttons", "sticks", "analog_triggers", "dpad", "rumble")}
+want.update({n: (False, False, False, False) for n in ("gyro", "accelerometer", "touchpad", "trigger_rumble",
+             "adaptive_triggers", "lightbar", "player_leds", "speaker", "microphone", "battery")})
+bad = [f"{n} {c.get(n)} != {w}" for n, w in want.items() if c.get(n) != w]
+print(status if not bad else status + ": " + "; ".join(bad))
+' 2>&1)"
+    [ "$out" = ok ] && ok "GetCapabilities: buttons, sticks, analog triggers, D-pad and rumble work and reach games; nothing else is claimed" || bad "GetCapabilities: $out ($caps)"
+    out="$(busctl --system call "$svc" "$path" "$ifc" GetCapabilities s nope 2>&1)"
+    case "$out" in *'"unknown-device"'*) ok "GetCapabilities of an unknown id: unknown-device" ;; *) bad "GetCapabilities nope: $out" ;; esac
+    out="$(busctl --system call "$svc" "$path" "$ifc" StartTest s "$id" 2>&1)"
+    case "$out" in
+    *'"ok"'*)
+        sleep 1
+        journalctl -u ruya-inputd --since "$since" --no-pager | grep -q "button test for $id ended: caller" \
+            && ok "StartTest ok; the test ended when busctl left the bus" || bad "no 'button test for $id ended: caller' in the journal"
+        ;;
+    *'"not-allowed"'*) ok "StartTest: not-allowed (the route is $(busctl --system get-property "$svc" "$path" "$ifc" Route | cut -d'"' -f2))" ;;
+    *) bad "StartTest: $out" ;;
+    esac
+    out="$(runuser -u nobody -- busctl --system call "$svc" "$path" "$ifc" StartTest s "$id" 2>&1)" && bad "nobody could call StartTest: $out" || ok "nobody cannot call StartTest"
+    kill "$padpid" 2>/dev/null
+    wait "$padpid" 2>/dev/null
+}
+
 case "${1:-check}" in
 check)
     two_profiles
@@ -394,8 +444,10 @@ check)
     restore_state
     restart_check
     security_check
+    caps_check
     ;;
 restart) restart_check ;;
+caps) caps_check ;;
 security) security_check ;;
 fallback) fallback_check ;;
 shell)

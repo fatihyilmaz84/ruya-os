@@ -367,7 +367,7 @@ SettingsPane {
         width: parent ? parent.width : 0
         visible: !TimeZone.ntpSynchronised
         text: qsTr("The clock has not been set from the internet yet, so the time may be wrong.")
-        color: Theme.textDim
+        color: Theme.text
         font.pixelSize: Theme.typeCaption * pane.u
         wrapMode: Text.Wrap
     }
@@ -420,7 +420,7 @@ SettingsPane {
         objectName: "pauseGamesNote"
         width: parent ? parent.width : 0
         text: qsTr("Online games can lose their connection while paused.")
-        color: Theme.textDim
+        color: Theme.text
         font.pixelSize: Theme.typeCaption * pane.u
         wrapMode: Text.Wrap
     }

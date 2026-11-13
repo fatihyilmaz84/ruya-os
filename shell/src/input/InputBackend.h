@@ -4,10 +4,12 @@
 
 #include <QObject>
 #include <QString>
+#include <QVariantList>
 
 // Transport behind the Input QML singleton (RUY-409): org.ruyaos.Input1 of ruya-inputd over D-Bus,
-// or an in-memory mock. Only the routing members are used today (SetRoute, 06 §5.1-5.2); the
-// devices, profiles and the button test follow with their tasks (T-368..T-371, T-397).
+// or an in-memory mock: the routing (SetRoute, 06 §5.1-5.2, RUY-409), the devices, their
+// capabilities and the button test (RUY-39 / T-368); profiles and UI ownership follow with their
+// tasks (T-369..T-371, T-397).
 class InputBackend : public QObject
 {
     Q_OBJECT
@@ -23,6 +25,13 @@ public:
     // Input1.SetRoute(route, instance, app_id, profile); the answer arrives as routeFinished.
     virtual void setRoute(const QString &route, const QString &instance, const QString &appId,
                           const QString &profile) = 0;
+    // Input1.ListDevices; the answer arrives as devicesListed (the newest request only).
+    virtual void refreshDevices() = 0;
+    // Input1.GetCapabilities(device_id); the answer arrives as capabilitiesFinished.
+    virtual void getCapabilities(const QString &deviceId) = 0;
+    // Input1.StartTest / StopTest; StartTest's answer arrives as testStartFinished.
+    virtual void startTest(const QString &deviceId) = 0;
+    virtual void stopTest(const QString &deviceId) = 0;
 
 signals:
     // The newest SetRoute's answer: a status string of api/dbus/org.ruyaos.Input1.xml, or "failed"
@@ -33,6 +42,17 @@ signals:
     void serviceAppeared();
     // The name gained or lost its owner.
     void serviceOwnedChanged(bool owned);
+    // ListDevices answered (ok) or failed: the device records as maps with the contract's keys
+    // (id, instance, name, family, connection, battery, charging, slot, profile, routed).
+    void devicesListed(bool ok, const QVariantList &devices);
+    // DeviceAdded, DeviceChanged or DeviceRemoved: the list is out of date.
+    void devicesChanged();
+    // GetCapabilities: maps { name, hardware, driver, available, output }, in descriptor order;
+    // status "failed" when the call itself failed.
+    void capabilitiesFinished(const QString &deviceId, const QString &status, const QVariantList &capabilities);
+    void testStartFinished(const QString &deviceId, const QString &status);
+    void testInput(const QString &deviceId, const QString &input, int value, const QString &source);
+    void testEnded(const QString &deviceId, const QString &reason);
 
 protected:
     void setServiceOwned(bool owned)
@@ -51,8 +71,15 @@ protected:
         if (m_seq.accept(request))
             emit routeFinished(status);
     }
+    quint64 beginDevicesRequest() { return m_devicesSeq.begin(); }
+    void deliverDevices(quint64 request, bool ok, const QVariantList &devices)
+    {
+        if (m_devicesSeq.accept(request))
+            emit devicesListed(ok, devices);
+    }
 
 private:
     RequestSequence m_seq;
+    RequestSequence m_devicesSeq;
     bool m_serviceOwned = true;
 };

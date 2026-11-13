@@ -30,6 +30,14 @@ FocusScope {
     // Where the label ends, so a subtype can place text after it (SliderRow's caption, T-312).
     readonly property real labelRight: labelText.x + labelText.width
 
+    // Optional second line under the label (RUY-39, 04 §5): `typeCaption` Regular in `text`, `spaceXxs`
+    // under the label, both centred in the row together; one line, elided; appended to the accessible
+    // name. With a detail the label is one line and elided too. `trailingWidth` is what a subtype draws
+    // on the right (SettingRow's value), so the two lines end before it.
+    property string detail
+    property real trailingWidth: 0
+    readonly property bool hasDetail: detail !== ""
+
     // The pane navigates over children that set this.
     readonly property bool focusable: true
 
@@ -42,7 +50,8 @@ FocusScope {
     // What a screen reader says after the label: the subtype sets it (a value, "on"/"off").
     property string accessibleValue
     Accessible.role: Accessible.Button
-    Accessible.name: accessibleValue.length > 0 ? label + ", " + accessibleValue : label
+    Accessible.name: (accessibleValue.length > 0 ? label + ", " + accessibleValue : label)
+                     + (hasDetail ? ", " + detail : "")
     Accessible.focusable: true
 
     Rectangle {
@@ -86,6 +95,9 @@ FocusScope {
         color: Qt.alpha(Theme.text, control.dimmed ? Theme.disabledOpacity : 1)
     }
 
+    // Room for the label and the detail between their left edge and the trailing content.
+    readonly property real textWidth: Math.max(0, width - labelText.x - trailingWidth - Theme.spaceL * u)
+
     Text {
         id: labelText
         objectName: "label"
@@ -96,10 +108,27 @@ FocusScope {
                          : control.hasIcon ? Theme.spaceL + Theme.iconM + Theme.spaceS
                          : Theme.spaceL) * control.u
             verticalCenter: parent.verticalCenter
+            // With a detail the pair is centred: the label moves up by half the detail and its gap.
+            verticalCenterOffset: control.hasDetail ? -(detailText.height + Theme.spaceXxs * control.u) / 2 : 0
         }
+        width: control.hasDetail ? Math.min(implicitWidth, control.textWidth) : implicitWidth
+        elide: control.hasDetail ? Text.ElideRight : Text.ElideNone
         textFormat: Text.PlainText      // a label can be a device's own name (Bluetooth, UPower): never markup
         text: control.label
         color: Qt.alpha(Theme.text, control.dimmed ? Theme.disabledOpacity : 1)
         font.pixelSize: Theme.typeBody * control.u
+    }
+
+    Text {
+        id: detailText
+        objectName: "detail"
+        visible: control.hasDetail && control.labelVisible
+        anchors { left: labelText.left; top: labelText.bottom; topMargin: Theme.spaceXxs * control.u }
+        width: Math.min(implicitWidth, control.textWidth)
+        elide: Text.ElideRight
+        textFormat: Text.PlainText      // a device's battery and connection: plain words
+        text: control.detail
+        color: Qt.alpha(Theme.text, control.dimmed ? Theme.disabledOpacity : 1)
+        font.pixelSize: Theme.typeCaption * control.u
     }
 }

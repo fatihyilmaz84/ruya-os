@@ -2,13 +2,19 @@
 
 #include "InputBackend.h"
 
+#include <QSet>
 #include <QVariantList>
+#include <QVariantMap>
 
 // In-memory stand-in for ruya-inputd's routing (RUY-409). It checks SetRoute's arguments by the
 // service's rules (services/ruya-inputd/src/routing.rs: the shape of each route and the app id's
 // form; any non-empty profile is taken), keeps the route and models the virtual pads: they exist
 // only for "app" and stay for "overlay" with the same instance and profile; anything else destroys
 // them (06 §5.1). Answers arrive asynchronously, like D-Bus replies. Every call is logged for tests.
+// Devices (RUY-39): three pads (a DualSense over Bluetooth, an Xbox pad over USB, a Pro Controller
+// over Bluetooth whose motion node does not open), each with the descriptor ruya-inputd's rules
+// (caps.rs) give that model; the button test follows the service: only in the route "shell", one
+// per device, ended by StopTest, a route other than "shell" or the pad going.
 class MockInputBackend final : public InputBackend
 {
     Q_OBJECT
@@ -19,6 +25,25 @@ public:
     bool isMock() const override { return true; }
     void setRoute(const QString &route, const QString &instance, const QString &appId,
                   const QString &profile) override;
+    void refreshDevices() override;
+    void getCapabilities(const QString &deviceId) override;
+    void startTest(const QString &deviceId) override;
+    void stopTest(const QString &deviceId) override;
+
+    // Tests (RUY-39). A pad connects (a device record; `capabilities` a list of
+    // { name, hardware, driver, available, output }, else none) or changes (same id), or goes.
+    void addDevice(const QVariantMap &device);
+    void removeDevice(const QString &id);
+    // While true ListDevices and GetCapabilities fail ("failed"), as with no service.
+    void setListFail(bool fail) { m_listFail = fail; }
+    // The pad sends an input: TestInput, only while a test runs for it (as the service does).
+    void sendTestInput(const QString &id, const QString &input, int value, const QString &source);
+    // The service ends a test by itself ("idle", "route"...).
+    void endTest(const QString &id, const QString &reason);
+    bool testRunning(const QString &id) const { return m_tests.contains(id); }
+    QVariantList devices() const { return m_devices; }
+    // The three pads again, no test, ListDevices working.
+    void resetDevices();
 
     // Tests: every SetRoute as { route, instance, appId, profile }, oldest first.
     QVariantList calls() const { return m_calls; }
@@ -38,6 +63,8 @@ public:
     void setNameOwned(bool owned);
 
 private:
+    void setDefaultDevices();
+
     QVariantList m_calls;
     QString m_route = QStringLiteral("shell");
     QString m_instance;
@@ -45,4 +72,7 @@ private:
     bool m_pads = false;
     int m_padGeneration = 0;
     bool m_fail = false;
+    bool m_listFail = false;
+    QVariantList m_devices;
+    QSet<QString> m_tests;
 };

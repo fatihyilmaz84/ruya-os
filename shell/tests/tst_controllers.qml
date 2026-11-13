@@ -1,0 +1,473 @@
+import QtQuick
+import QtTest
+import RuyaShell
+
+// Settings -> Controllers, the controller page and the Button test (RUY-39 / T-368) against the
+// Input mock's three pads (a DualSense over Bluetooth, an Xbox pad over USB, a Pro Controller over
+// Bluetooth whose motion node does not open). Signs in as "Ada" (p2, no PIN). Each test resets the
+// mock's pads.
+Item {
+    id: host
+    width: 1920
+    height: 1080
+
+    Component {
+        id: shellComponent
+        Shell { anchors.fill: parent; version: "test"; focus: true }
+    }
+
+    TestCase {
+        id: tc
+        name: "Controllers"
+        when: windowShown
+
+        property Shell shell: null
+
+        readonly property string ds: "bluetooth-054c-0ce6-3f2a9c41d0b7"
+        readonly property string xbox: "usb-045e-0b12-8e01c2d4a9f3"
+        readonly property string pro: "bluetooth-057e-2009-b7c0e1f2a3d4"
+
+        function find(name) { return findChild(tc.shell, name) }
+
+        function init() {
+            verify(windowGuard.ensureActive() === "", windowGuard.ensureActive())
+            host.width = 1920
+            host.height = 1080
+            DeviceSettings.language = "en"
+            Input.mockResetDevices()
+            tryVerify(() => Input.devicesState === "ok" && Input.devices.length === 3)
+            Profiles.lock()
+            tryCompare(Profiles, "activeProfile", "")
+            tc.shell = createTemporaryObject(shellComponent, host)
+            verify(tc.shell)
+            tc.shell.forceActiveFocus()
+            tryVerify(() => Profiles.profiles.length === 3)
+            tryVerify(() => find("profileList").activeFocus, 2000, "picker has focus on start")
+            keyClick(Qt.Key_Right)
+            keyClick(Qt.Key_Return)
+            tryCompare(Profiles, "activeProfile", "p2")
+            tryVerify(() => find("homePlay").activeFocus, 2000, "Play takes focus after sign-in")
+            clearToasts()
+        }
+
+        function cleanup() {
+            clearToasts()
+            DeviceSettings.language = "en"
+        }
+
+        function clearToasts() {
+            while (Notifications.model.count > 0)
+                Notifications.dismiss(Notifications.model.get(0).toastId)
+            Notifications.pending = []
+        }
+
+        function toastTexts() {
+            const out = []
+            for (let i = 0; i < Notifications.model.count; ++i)
+                out.push(Notifications.model.get(i).text + " / " + Notifications.model.get(i).detail)
+            return out
+        }
+
+        // Settings on Controllers, the focus in the pane.
+        function openPane() {
+            tc.shell.openPage("settings", { category: "controllers" })
+            tryCompare(tc.shell, "currentPage", "settings")
+            tryVerify(() => find("categoryList").activeFocus, 2000)
+            compare(find("page_settings").current.key, "controllers")
+            keyClick(Qt.Key_Right)
+            tryVerify(() => find("paneControllers").activeFocus, 2000, "the pane has the focus")
+            return find("paneControllers")
+        }
+
+        function padRow(id) { return find("pad_" + id) }
+
+        function hintVerbs() {
+            return find("page_settings").hints.map(h => h.button + " " + h.text).join("|")
+        }
+
+        // The pane's focusable rows, top to bottom, by objectName.
+        function rowNames() {
+            return find("paneControllers").focusableRows().map(r => r.objectName)
+        }
+
+        function openController(id) {
+            const pane = openPane()
+            for (let i = 0; i < 6 && !padRow(id).activeFocus; ++i)
+                keyClick(Qt.Key_Down)
+            verify(padRow(id).activeFocus, "on the pad row")
+            keyClick(Qt.Key_Return)
+            tryCompare(tc.shell, "currentPage", "controller")
+            tryVerify(() => find("rowButtonTest") !== null && find("rowButtonTest").activeFocus, 2000,
+                      "the Button test row has the focus")
+            return pane
+        }
+
+        function openTest(id) {
+            openController(id)
+            keyClick(Qt.Key_Return)
+            tryCompare(tc.shell, "currentPage", "buttonTest")
+            tryVerify(() => find("buttonTestKeys").activeFocus, 2000, "the test takes every key")
+            tryVerify(() => Input.mockTestRunning(id), 2000, "the stream starts when the page opens")
+        }
+
+        // ---- the pane ------------------------------------------------------------------------------------------
+
+        function test_the_list_shows_every_connected_pad() {
+            openPane()
+            compare(rowNames(), ["pad_" + ds, "pad_" + pro, "pad_" + xbox, "rowPadsPair"], "sorted by name, then Pair")
+            verify(padRow(ds).activeFocus, "focus enters on the first row")
+            compare(padRow(ds).label, "DualSense Wireless Controller")
+            compare(padRow(ds).detail, "Bluetooth · Battery 62 %, charging")
+            compare(padRow(pro).detail, "Bluetooth · Battery 12 %, low")
+            compare(padRow(xbox).detail, "USB · Battery not reported")
+            compare(padRow(ds).value, "", "no player in the record: no value")
+            compare(padRow(ds).iconName, DeviceIcons.iconFor("controller", "playstation"))
+            compare(padRow(ds).Accessible.name,
+                    "DualSense Wireless Controller, PlayStation controller, Bluetooth · Battery 62 %, charging")
+            compare(hintVerbs(), "A Open|B Back")
+            keyClick(Qt.Key_Down)
+            verify(padRow(pro).activeFocus)
+            keyClick(Qt.Key_Down)
+            verify(padRow(xbox).activeFocus)
+            keyClick(Qt.Key_Down)
+            verify(find("rowPadsPair").activeFocus)
+            compare(hintVerbs(), "A Select|B Back")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => find("categoryList").activeFocus, 2000, "Back returns to the category list")
+            compare(find("page_settings").current.key, "controllers", "on Controllers")
+        }
+
+        function test_the_detail_line_is_one_line_under_the_label() {
+            openPane()
+            const row = padRow(ds)
+            const label = findChild(row, "label")
+            const detail = findChild(row, "detail")
+            verify(detail.visible)
+            compare(detail.font.pixelSize, Theme.typeCaption * tc.shell.u)
+            verify(detail.y >= label.y + label.height, "under the label")
+            // The pair is centred in the row.
+            const top = label.y
+            const bottom = detail.y + detail.height
+            verify(Math.abs((top + bottom) / 2 - row.height / 2) <= 1, "centred: " + top + ".." + bottom + " in " + row.height)
+            verify(detail.x + detail.width <= row.width, "inside the row")
+        }
+
+        function test_a_player_shows_when_the_record_has_one() {
+            Input.mockAddDevice({ id: "usb-2dc8-6001-aaaaaaaaaaaa", name: "8BitDo Pro 2", family: "generic",
+                                  connection: "usb", slot: 2 })
+            openPane()
+            tryVerify(() => padRow("usb-2dc8-6001-aaaaaaaaaaaa") !== null, 2000)
+            compare(padRow("usb-2dc8-6001-aaaaaaaaaaaa").value, "Player 2")
+            compare(rowNames()[0], "pad_usb-2dc8-6001-aaaaaaaaaaaa", "a player sorts first")
+        }
+
+        function test_a_battery_change_updates_the_row_in_place() {
+            openPane()
+            keyClick(Qt.Key_Down)
+            verify(padRow(pro).activeFocus)
+            const before = padRow(pro)
+            Input.mockAddDevice({ id: pro, name: "Pro Controller", family: "nintendo", connection: "bluetooth", battery: 50 })
+            tryCompare(padRow(pro), "detail", "Bluetooth · Battery 50 %")
+            verify(padRow(pro) === before, "the same row")
+            verify(padRow(pro).activeFocus, "the focus did not move")
+        }
+
+        function test_a_focused_pad_that_goes_hands_the_focus_to_the_row_before() {
+            openPane()
+            keyClick(Qt.Key_Down)
+            verify(padRow(pro).activeFocus)
+            Input.mockRemoveDevice(pro)
+            tryVerify(() => padRow(pro) === null, 2000)
+            tryVerify(() => padRow(ds).activeFocus, 2000, "the row before it")
+            // The first row going: the next one.
+            Input.mockRemoveDevice(ds)
+            tryVerify(() => padRow(ds) === null, 2000)
+            tryVerify(() => padRow(xbox).activeFocus, 2000, "the row now at its place")
+        }
+
+        function test_no_pad_says_so_and_offers_pairing() {
+            openPane()
+            for (const id of [ds, xbox, pro])
+                Input.mockRemoveDevice(id)
+            tryVerify(() => find("rowPadsNone").visible, 2000)
+            compare(find("rowPadsNone").label, "No controllers connected.")
+            verify(!find("rowPadsNone").enabled, "an unavailable line takes no focus")
+            tryVerify(() => find("rowPadsPair").activeFocus, 2000, "Pair a new controller has the focus")
+            compare(rowNames(), ["rowPadsPair"])
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("controllerOnboardingControllers") !== null
+                            && find("controllerOnboardingControllers").shown, 2000, "the pairing screen opens")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !find("controllerOnboardingControllers").shown, 2000)
+            tryVerify(() => find("rowPadsPair").activeFocus, 2000, "back on Pair")
+        }
+
+        function test_a_failed_list_offers_try_again() {
+            openPane()
+            Input.mockListFail(true)
+            Input.refreshDevices()
+            tryCompare(Input, "devicesState", "failed")
+            tryVerify(() => find("rowPadsFailed").visible, 2000)
+            compare(find("rowPadsFailed").label, "Controllers can't be read right now.")
+            verify(!padRow(ds).visible, "no stale pad rows")
+            tryVerify(() => find("rowPadsRetry").activeFocus, 2000, "Try again has the focus")
+            compare(rowNames(), ["rowPadsRetry", "rowPadsPair"])
+            keyClick(Qt.Key_Return)                      // still failing
+            tryCompare(Input, "devicesState", "failed")
+            verify(find("rowPadsRetry").activeFocus)
+            Input.mockListFail(false)
+            keyClick(Qt.Key_Return)
+            tryCompare(Input, "devicesState", "ok")
+            tryVerify(() => padRow(ds).visible && !find("rowPadsFailed").visible, 2000)
+            tryVerify(() => find("paneControllers").focusableRows().some(r => r.activeFocus), 2000, "a row has the focus")
+        }
+
+        function test_the_hub_row_opens_controllers() {
+            // The Hub's "Controller settings" (tst_hub_controllers) asks for this category.
+            tc.shell.openPage("settings", { category: "controllers" })
+            tryCompare(tc.shell, "currentPage", "settings")
+            compare(find("page_settings").labelFor("bluetooth"), "Bluetooth")
+            compare(find("page_settings").labelFor("controllers"), "Controllers")
+            const keys = find("page_settings").categories.map(c => c.key)
+            compare(keys.indexOf("controllers"), keys.indexOf("bluetooth") + 1, "directly after Bluetooth")
+        }
+
+        // ---- the controller page ---------------------------------------------------------------------------------
+
+        function test_the_controller_page_lists_what_the_pad_can_do() {
+            openController(ds)
+            compare(find("page_controller").title, "DualSense Wireless Controller")
+            compare(find("page_controller").hints.map(h => h.button + " " + h.text).join("|"), "A Open|B Back")
+            tryVerify(() => find("cap_buttons") !== null, 2000, "the capabilities arrived")
+            compare(find("cap_buttons").value, "Works")
+            compare(find("cap_analog_triggers").value, "Works")
+            compare(find("cap_rumble").value, "Works")
+            compare(find("cap_gyro").value, "Not passed to games")
+            compare(find("cap_touchpad").value, "Not passed to games")
+            compare(find("cap_adaptive_triggers").value, "Not supported yet")
+            compare(find("cap_microphone").value, "Not supported yet")
+            verify(find("cap_battery") === null, "the battery is in the left column")
+            verify(find("cap_sticks") === null && find("cap_dpad") === null, "one row for buttons and sticks")
+            verify(find("cap_trigger_rumble") === null, "what the model does not have has no row")
+            verify(find("capsHeading").visible)
+            keyClick(Qt.Key_Down)
+            verify(find("cap_buttons").activeFocus, "the capability rows take the focus, for scrolling")
+            compare(find("page_controller").hints.map(h => h.button + " " + h.text).join("|"), "B Back")
+            keyClick(Qt.Key_Return)                      // read-only: nothing happens
+            compare(tc.shell.currentPage, "controller")
+            verify(find("cap_buttons").activeFocus)
+            keyClick(Qt.Key_Escape)
+            tryCompare(tc.shell, "currentPage", "settings")
+            tryVerify(() => padRow(ds).activeFocus, 2000, "Back lands on that pad's row")
+        }
+
+        function test_a_node_that_does_not_open_is_not_available_now() {
+            openController(pro)
+            tryVerify(() => find("cap_gyro") !== null, 2000)
+            compare(find("cap_gyro").value, "Not available now")
+            compare(find("cap_accelerometer").value, "Not available now")
+            verify(find("cap_analog_triggers") === null, "digital triggers: no analog row")
+            compare(find("cap_player_leds").value, "Not supported yet")
+        }
+
+        function test_the_pad_going_closes_the_controller_page() {
+            openController(pro)
+            Input.mockRemoveDevice(pro)
+            tryCompare(tc.shell, "currentPage", "settings")
+            tryVerify(() => padRow(ds).activeFocus, 2000, "focus on the nearest pad row")
+            tryVerify(() => toastTexts().includes("Controller disconnected / Pro Controller"), 2000, toastTexts().join(";"))
+        }
+
+        // ---- the button test ---------------------------------------------------------------------------------------
+
+        function test_the_button_test_lights_the_pressed_control() {
+            openTest(ds)
+            const south = find("padCtl_south")
+            compare(south.look, "idle")
+            compare(find("raw_last").text, "None")
+            compare(find("raw_source").text, "—")
+            Input.mockTestInput(ds, "south", 1, "raw:pad:1:304")
+            tryCompare(south, "look", "held")
+            compare(south.color, Theme.primaryFill)
+            compare(find("raw_last").text, "Cross (south)")
+            compare(find("raw_source").text, "raw:pad:1:304")
+            Input.mockTestInput(ds, "south", 0, "raw:pad:1:304")
+            tryCompare(south, "look", "tried")
+            compare(south.color, Theme.selectedFill)
+            compare(find("padCtl_north").look, "idle", "only what was pressed")
+            // A stick moves its dot and shows its raw values.
+            const dot = find("padStickDot_left")
+            const rest = dot.x
+            Input.mockTestInput(ds, "left_x", 32767, "raw:pad:3:0")
+            Input.mockTestInput(ds, "left_y", -1204, "raw:pad:3:1")
+            tryVerify(() => dot.x > rest + 40 * tc.shell.u, 2000, "the dot follows the axis")
+            compare(find("raw_left").text, "x 32 767  y −1 204")
+            // A trigger fills its track.
+            Input.mockTestInput(ds, "right_trigger", 24250, "raw:pad:3:5")
+            tryVerify(() => find("padTrackFill_right_trigger").height > 0, 2000)
+            compare(find("raw_triggers").text, "0 · 24 250")
+            compare(find("padCtl_right_trigger").look, "held")
+            // A raw input without a normal name is shown by its source.
+            Input.mockTestInput(ds, "raw:pad:1:704", 1, "raw:pad:1:704")
+            tryCompare(find("raw_last"), "text", "raw:pad:1:704")
+            verify(find("buttonTestKeys").activeFocus, "the focus stayed on the test")
+        }
+
+        function test_back_twice_leaves_the_test() {
+            openTest(ds)
+            keyClick(Qt.Key_Escape)
+            compare(tc.shell.currentPage, "buttonTest", "one Back press does not leave")
+            compare(find("testMessage").text, "Press B again to leave.")
+            verify(find("buttonTestKeys").activeFocus)
+            keyClick(Qt.Key_Escape)
+            tryCompare(tc.shell, "currentPage", "controller")
+            tryVerify(() => find("rowButtonTest").activeFocus, 2000, "back on Button test")
+            tryVerify(() => !Input.mockTestRunning(ds), 2000, "the stream stops when the page closes")
+        }
+
+        function test_two_slow_back_presses_do_not_leave() {
+            openTest(ds)
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => find("testMessage").text.startsWith("Press any button"), 3000, "the wait for the second press ends")
+            keyClick(Qt.Key_Escape)
+            compare(tc.shell.currentPage, "buttonTest", "the second press came after 1 s")
+            verify(find("buttonTestKeys").activeFocus)
+            keyClick(Qt.Key_Escape)
+            tryCompare(tc.shell, "currentPage", "controller")
+        }
+
+        function test_holding_back_for_a_second_leaves_the_test() {
+            openTest(ds)
+            keyPress(Qt.Key_Escape)
+            wait(500)
+            compare(tc.shell.currentPage, "buttonTest", "not before 1 s")
+            tryCompare(tc.shell, "currentPage", "controller", 2000)
+            keyRelease(Qt.Key_Escape)
+            tryVerify(() => find("rowButtonTest").activeFocus, 2000, "back on Button test")
+            tryVerify(() => !Input.mockTestRunning(ds), 2000)
+        }
+
+        function test_other_keys_do_not_leave() {
+            openTest(ds)
+            for (const key of [Qt.Key_Left, Qt.Key_Up, Qt.Key_Return, Qt.Key_PageDown, Qt.Key_Menu, Qt.Key_Backspace])
+                keyClick(key)
+            compare(tc.shell.currentPage, "buttonTest")
+            verify(find("buttonTestKeys").activeFocus)
+        }
+
+        function test_two_idle_minutes_end_the_test() {
+            openTest(ds)
+            Input.mockEndTest(ds, "idle")
+            tryCompare(tc.shell, "currentPage", "controller")
+            tryVerify(() => find("rowButtonTest").activeFocus, 2000)
+            tryVerify(() => toastTexts().includes("Button test ended / No input for 2 minutes."), 2000, toastTexts().join(";"))
+        }
+
+        function test_the_pad_going_closes_the_test_and_its_page() {
+            openTest(pro)
+            Input.mockRemoveDevice(pro)
+            tryCompare(tc.shell, "currentPage", "settings")
+            tryVerify(() => padRow(ds).activeFocus, 2000, "focus on the nearest pad row")
+            tryVerify(() => toastTexts().includes("Controller disconnected / Pro Controller"), 2000, toastTexts().join(";"))
+            compare(toastTexts().filter(t => t.startsWith("Controller disconnected")).length, 1, "one toast")
+        }
+
+        function test_the_test_needs_the_shell_route() {
+            // Another route (the Hub over a game): the service refuses; back in "shell" it starts again.
+            openTest(ds)
+            Input.setRoute("overlay", "", "", "p2")
+            tryVerify(() => !Input.mockTestRunning(ds), 2000, "a route change ends the test")
+            compare(tc.shell.currentPage, "buttonTest", "the page stays")
+            Input.setRoute("shell", "", "", "p2")
+            tryVerify(() => Input.mockTestRunning(ds), 2000, "started again in the shell")
+        }
+
+        // ---- screenshots --------------------------------------------------------------------------------------------
+
+        function settle() {
+            wait(600)
+            grabImage(tc.shell)                          // the first grab lays the pane out
+            wait(400)
+        }
+
+        function shots(lang) {
+            openPane()
+            settle()
+            grabImage(tc.shell).save(shotsDir + "/27-settings-controllers-" + lang + ".png")
+            keyClick(Qt.Key_Return)
+            tryCompare(tc.shell, "currentPage", "controller")
+            tryVerify(() => find("cap_buttons") !== null, 2000)
+            settle()
+            grabImage(tc.shell).save(shotsDir + "/27-controller-page-" + lang + ".png")
+            keyClick(Qt.Key_Return)
+            tryCompare(tc.shell, "currentPage", "buttonTest")
+            tryVerify(() => Input.mockTestRunning(ds), 2000)
+            settle()
+            grabImage(tc.shell).save(shotsDir + "/27-button-test-idle-" + lang + ".png")
+            Input.mockTestInput(ds, "south", 1, "raw:pad:1:304")
+            Input.mockTestInput(ds, "east", 1, "raw:pad:1:305")
+            Input.mockTestInput(ds, "east", 0, "raw:pad:1:305")
+            Input.mockTestInput(ds, "l1", 1, "raw:pad:1:310")
+            Input.mockTestInput(ds, "l1", 0, "raw:pad:1:310")
+            Input.mockTestInput(ds, "left_x", -1204, "raw:pad:3:0")
+            Input.mockTestInput(ds, "left_y", 18090, "raw:pad:3:1")
+            Input.mockTestInput(ds, "right_trigger", 24250, "raw:pad:3:5")
+            Input.mockTestInput(ds, "south", 1, "raw:pad:1:304")
+            keyClick(Qt.Key_Escape)
+            settle()
+            grabImage(tc.shell).save(shotsDir + "/27-button-test-pressed-" + lang + ".png")
+            keyClick(Qt.Key_Escape)
+            tryCompare(tc.shell, "currentPage", "controller")
+            keyClick(Qt.Key_Escape)
+            tryCompare(tc.shell, "currentPage", "settings")
+            for (const id of [ds, xbox, pro])
+                Input.mockRemoveDevice(id)
+            tryVerify(() => find("rowPadsNone").visible, 2000)
+            settle()
+            grabImage(tc.shell).save(shotsDir + "/27-settings-controllers-empty-" + lang + ".png")
+            Input.mockListFail(true)
+            Input.refreshDevices()
+            tryVerify(() => find("rowPadsFailed").visible, 2000)
+            settle()
+            grabImage(tc.shell).save(shotsDir + "/27-settings-controllers-error-" + lang + ".png")
+            Input.mockListFail(false)
+        }
+
+        function test_zz_screenshots() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            shots("en")
+        }
+
+        function test_zz_screenshots_tr() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            DeviceSettings.language = "tr"
+            shots("tr")
+        }
+
+        function test_zz_screenshots_720p() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            host.width = 1280
+            host.height = 720
+            openController(ds)
+            keyClick(Qt.Key_Return)
+            tryCompare(tc.shell, "currentPage", "buttonTest")
+            Input.mockTestInput(ds, "north", 1, "raw:pad:1:307")
+            settle()
+            grabImage(tc.shell).save(shotsDir + "/27-button-test-720p-en.png")
+            openPaneShot720()
+        }
+
+        function openPaneShot720() {
+            keyClick(Qt.Key_Escape)
+            keyClick(Qt.Key_Escape)
+            tryCompare(tc.shell, "currentPage", "controller")
+            keyClick(Qt.Key_Escape)
+            tryCompare(tc.shell, "currentPage", "settings")
+            settle()
+            grabImage(tc.shell).save(shotsDir + "/27-settings-controllers-720p-en.png")
+        }
+    }
+}

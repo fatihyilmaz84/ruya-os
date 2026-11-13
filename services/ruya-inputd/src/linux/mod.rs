@@ -20,17 +20,22 @@ use evdev::{AbsoluteAxisType, AttributeSet, Device, EventType, FFEffectType, Inp
 
 use crate::accounts::PasswdAccounts;
 use crate::acl;
+use crate::caps::{self, Part, Probe};
 use crate::dbus::{serve, DynBackend, Shared};
 use crate::identity::{self, Hardware};
 use crate::mapping::{KeyEvent, NavKey};
 use crate::notify::{watchdog_interval, Notifier};
-use crate::pad::{code, Normalizer, OutEvent, PadLayout, Range, Rumble, OWN_PHYS_PREFIX};
+use crate::pad::{
+    code, test_events, Normalizer, OutEvent, PadLayout, Range, Rumble, OWN_PHYS_PREFIX,
+};
 use crate::routing::{Backend, Created, PadInfo, PadKey, Router, VirtualId, VirtualSpec};
 use crate::udev::{database_properties, parse_monitor_message};
 use sys::UinputPad;
 
 const RESCAN_INTERVAL: Duration = Duration::from_secs(2);
 const TICK: Duration = Duration::from_millis(500);
+/// The tick while a button test runs: held-back axis values go out within half their interval.
+const TEST_TICK: Duration = Duration::from_millis(16);
 const NAV_NAME: &str = "RuyaOS Navigation";
 const STATE_DIR: &str = "/var/lib/ruya-input";
 
@@ -304,6 +309,84 @@ fn hardware(device: &Device, path: &Path) -> Hardware {
     }
 }
 
+/// The pad's HID parent in sysfs (`/sys/class/input/eventN/device/device`), whose `input/` holds
+/// the pad's sibling nodes and whose `power_supply/` its battery.
+fn hid_parent(path: &Path) -> Option<PathBuf> {
+    let node = path.file_name()?;
+    std::fs::canonicalize(
+        Path::new("/sys/class/input")
+            .join(node)
+            .join("device/device"),
+    )
+    .ok()
+}
+
+/// A sibling event node of the pad with the udev property `prop` (the motion sensors, the
+/// touchpad; 06 §3 rule 2 gives `ruya-input` their ACL): usable when it opens.
+fn sibling(parent: Option<&Path>, prop: &str) -> Part {
+    let Some(inputs) = parent.and_then(|p| std::fs::read_dir(p.join("input")).ok()) else {
+        return Part::Missing;
+    };
+    for input in inputs.flatten() {
+        let Ok(children) = std::fs::read_dir(input.path()) else {
+            continue;
+        };
+        for child in children.flatten() {
+            let name = child.file_name();
+            let Some(name) = name.to_str().filter(|n| n.starts_with("event")) else {
+                continue;
+            };
+            let node = Path::new("/dev/input").join(name);
+            if udev_properties(&node).get(prop).is_some_and(|v| v == "1") {
+                return if File::open(&node).is_ok() {
+                    Part::Usable
+                } else {
+                    Part::Present
+                };
+            }
+        }
+    }
+    Part::Missing
+}
+
+/// The pad's power-supply entry: usable when it reports a capacity.
+fn battery_part(parent: Option<&Path>) -> Part {
+    let Some(entries) = parent.and_then(|p| std::fs::read_dir(p.join("power_supply")).ok()) else {
+        return Part::Missing;
+    };
+    let mut found = Part::Missing;
+    for entry in entries.flatten() {
+        found = Part::Present;
+        let capacity = std::fs::read_to_string(entry.path().join("capacity"));
+        if capacity.is_ok_and(|c| c.trim().parse::<u8>().is_ok()) {
+            return Part::Usable;
+        }
+    }
+    found
+}
+
+/// What the kernel shows of a pad here (06 §4.3 `driver` and `available`).
+fn probe(device: &Device, path: &Path) -> Probe {
+    let abs = device.supported_absolute_axes();
+    let has_abs = |a| abs.is_some_and(|s| s.contains(a));
+    let parent = hid_parent(path);
+    Probe {
+        buttons: is_gamepad(device),
+        sticks: has_abs(AbsoluteAxisType::ABS_X) && has_abs(AbsoluteAxisType::ABS_Y),
+        analog_triggers: has_abs(AbsoluteAxisType::ABS_Z) || has_abs(AbsoluteAxisType::ABS_RZ),
+        dpad: has_abs(AbsoluteAxisType::ABS_HAT0X)
+            || device
+                .supported_keys()
+                .is_some_and(|k| k.contains(Key::BTN_DPAD_UP)),
+        rumble: device
+            .supported_ff()
+            .is_some_and(|ff| ff.contains(FFEffectType::FF_RUMBLE)),
+        motion: sibling(parent.as_deref(), "ID_INPUT_ACCELEROMETER"),
+        touchpad: sibling(parent.as_deref(), "ID_INPUT_TOUCHPAD"),
+        battery: battery_part(parent.as_deref()),
+    }
+}
+
 fn layout(device: &Device, hw: &Hardware) -> PadLayout {
     let mut ranges = Vec::new();
     if let (Some(axes), Ok(info)) = (device.supported_absolute_axes(), device.get_abs_state()) {
@@ -377,11 +460,20 @@ fn pump(mut device: Device, mut normalizer: Normalizer, mut serving: Serving) {
             }
         };
         let mut inputs = Vec::new();
+        let mut tests = Vec::new();
         for ev in events {
-            inputs.extend(normalizer.event(ev.event_type().0, ev.code(), ev.value()));
+            let (ev_type, ev_code, value) = (ev.event_type().0, ev.code(), ev.value());
+            let normal = normalizer.event(ev_type, ev_code, value);
+            tests.extend(test_events(ev_type, ev_code, value, &normal));
+            inputs.extend(normal);
         }
-        if !inputs.is_empty() {
-            serving.shared.with(|r| r.input(serving.key, &inputs));
+        if !inputs.is_empty() || !tests.is_empty() {
+            serving.shared.with(|r| {
+                if !inputs.is_empty() {
+                    r.input(serving.key, &inputs);
+                }
+                r.test_input(serving.key, &tests, Instant::now());
+            });
         }
     }
 }
@@ -432,7 +524,9 @@ impl Scanner {
     fn serve(&mut self, device: Device, path: PathBuf) {
         let hw = hardware(&device, &path);
         let name = device.name().unwrap_or("unknown").to_owned();
+        let probed = probe(&device, &path);
         let info = PadInfo {
+            capabilities: caps::describe(caps::model(hw.vendor, hw.product), &probed),
             id: identity::stable_id(&hw, &self.salt),
             name: name.clone(),
             family: identity::family(&hw).to_owned(),
@@ -609,7 +703,12 @@ pub fn run() -> io::Result<()> {
             notifier.send("WATCHDOG=1");
             last_ping = now;
         }
-        match wake_rx.recv_timeout(TICK) {
+        let tick = if shared.with(|r| r.testing()) {
+            TEST_TICK
+        } else {
+            TICK
+        };
+        match wake_rx.recv_timeout(tick) {
             // A new event node (udev has processed it, its ACL is set): scan now.
             Ok(()) => last_scan = None,
             Err(mpsc::RecvTimeoutError::Timeout) => {}

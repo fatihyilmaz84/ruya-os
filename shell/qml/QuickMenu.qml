@@ -301,7 +301,7 @@ Item {
                                      icon: DeviceIcons.iconFor("controller", p.family),
                                      value: () => padText(p) }))),
                 { key: "controllers:settings", label: qsTr("Controller settings"), kind: "action",
-                  activate: () => menu.settingsRequested("bluetooth") }
+                  activate: () => menu.settingsRequested("controllers") }
             ] }
         }
         if (id === "performance") {
@@ -360,44 +360,13 @@ Item {
     // family when the match is unambiguous. No reading: "Battery not reported". Sorted by name, then id, so
     // a battery change never moves a row.
     // [{ id, name, family, transport: "usb" | "bluetooth" | "other", percent (-1: not reported), state }]
+    // The pads and their battery: the shared lookup (ControllerPads, also used by Settings > Controllers).
     function controllerPads() {
-        const batteries = Batteries.devices.filter(b => b.kind === "controller")
-        const used = ({})
-        const pads = []
-        for (const g of Bluetooth.gamepads) {
-            const bt = g.transport === "bluetooth"
-            const id = bt ? String(g.id).toLowerCase() : g.id
-            const paired = bt ? Bluetooth.devices.find(d => String(d.id).toLowerCase() === id) : undefined
-            const battery = bt ? batteries.find(b => String(b.address ?? "").toLowerCase() === id) : undefined
-            if (battery)
-                used[battery.id] = true
-            pads.push({ id: id,
-                        name: paired ? DeviceIcons.shownName(Bluetooth.devices, paired) : DeviceIcons.plain(g.name),
-                        family: g.family !== "" ? g.family : (paired ? paired.family : ""),
-                        transport: g.transport,
-                        percent: battery ? battery.percent : (paired && paired.battery >= 0 ? paired.battery : -1),
-                        state: battery ? battery.state : "" })
-        }
-        for (const p of pads) {
-            if (p.transport === "bluetooth" || p.percent >= 0 || p.family === "")
-                continue
-            const alike = pads.filter(q => q.transport !== "bluetooth" && q.percent < 0 && q.family === p.family)
-            const spare = batteries.filter(b => !used[b.id] && String(b.address ?? "") === "" && b.family === p.family)
-            if (alike.length === 1 && spare.length === 1) {
-                used[spare[0].id] = true
-                p.percent = spare[0].percent
-                p.state = spare[0].state
-            }
-        }
-        pads.sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
-        return pads
+        return ControllerPads.hubPads()
     }
     // "Battery 62 %, charging · Bluetooth": every word in `text` (04 §7), the words carry the state.
     function padText(p) {
-        const battery = p.percent < 0 ? qsTr("Battery not reported")
-                      : p.state === "full" ? qsTr("Battery full")
-                      : p.state === "charging" ? qsTr("Battery %1 %, charging").arg(p.percent)
-                      : qsTr("Battery %1 %").arg(p.percent)
+        const battery = ControllerPads.batteryText(p.percent, p.state)
         if (p.transport !== "usb" && p.transport !== "bluetooth")
             return battery
         return qsTr("%1 · %2").arg(battery).arg(p.transport === "usb" ? qsTr("USB") : qsTr("Bluetooth"))

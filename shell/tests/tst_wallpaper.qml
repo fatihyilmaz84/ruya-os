@@ -90,9 +90,9 @@ Item {
             keyClick(Qt.Key_Return)                      // Settings
             tryCompare(tc.shell, "currentPage", "settings")
             tryVerify(() => find("categoryList") !== null && find("categoryList").activeFocus, 2000, "category list has focus")
-            for (let i = 0; i < 3; ++i)
+            for (let i = 0; i < 4; ++i)
                 keyClick(Qt.Key_Down)                    // Display & motion
-            compare(find("categoryList").currentIndex, 3)
+            compare(find("categoryList").currentIndex, 4)
             keyClick(Qt.Key_Right)
             tryVerify(() => find("rowQuality").activeFocus, 2000, "first row takes focus")
         }

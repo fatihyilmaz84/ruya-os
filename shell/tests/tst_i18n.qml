@@ -252,9 +252,9 @@ Item {
             tryCompare(tc.shell, "currentPage", "settings")
             const list = find("categoryList")
             tryVerify(() => list.activeFocus)
-            for (let i = 0; i < 20 && list.currentIndex < 3; ++i)   // Ekran ve hareket
+            for (let i = 0; i < 20 && list.currentIndex < 4; ++i)   // Ekran ve hareket
                 keyClick(Qt.Key_Down)
-            compare(list.currentIndex, 3)
+            compare(list.currentIndex, 4)
             keyClick(Qt.Key_Return)
             wait(600)
             grabImage(tc.shell).save(shotsDir + "/16-settings-tr.png")

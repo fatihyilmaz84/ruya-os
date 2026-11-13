@@ -5,6 +5,7 @@
 
 pub mod accounts;
 pub mod acl;
+pub mod caps;
 pub mod dbus;
 pub mod identity;
 pub mod mapping;

@@ -1086,6 +1086,8 @@ FocusScope {
         details: libraryDetailsPage,
         settings: settingsPage,
         systemInfo: systemInfoPage,
+        controller: controllerPage,
+        buttonTest: buttonTestPage,
         activity: activityPage,
         activityGame: activityGamePage,
         power: powerPage
@@ -1655,6 +1657,8 @@ FocusScope {
     Component { id: libraryDetailsPage; LibraryDetailsPage {} }
     Component { id: settingsPage; SettingsPage {} }
     Component { id: systemInfoPage; SystemInfoPage {} }
+    Component { id: controllerPage; ControllerPage {} }
+    Component { id: buttonTestPage; ButtonTestPage {} }
     Component { id: activityPage; ActivityPage {} }
     Component { id: activityGamePage; ActivityGamePage {} }
     Component { id: powerPage; PowerPage {} }

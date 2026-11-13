@@ -5,6 +5,7 @@
 #include <QObject>
 #include <QQmlEngine>
 #include <QVariantList>
+#include <QVariantMap>
 
 #include <memory>
 
@@ -13,6 +14,8 @@
 // the only source of the route; InputRoute.qml works it out and calls setRoute on every change.
 // A failed call is logged and sent again with the next change, never waited for; a new owner of the
 // name (the service restarted and is back in "shell") gets the current route again at once.
+// Since RUY-39 it also lists the connected controllers (ListDevices, asked again on every device
+// signal and every new owner of the name), their capabilities and the live button test.
 // Backend: RUYA_SERVICES=mock|dbus; the default is D-Bus on Linux and the mock elsewhere.
 class Input : public QObject
 {
@@ -32,6 +35,12 @@ class Input : public QObject
     // when it has been false for 3 s. True until the bus has answered.
     Q_PROPERTY(bool serviceOwned READ serviceOwned NOTIFY serviceOwnedChanged)
     Q_PROPERTY(bool mock READ isMock CONSTANT)
+    // The connected controllers (Input1.ListDevices): maps with the contract's keys (id, instance,
+    // name, family, connection, battery, charging, slot, profile, routed). The last good list
+    // stays while a newer request fails.
+    Q_PROPERTY(QVariantList devices READ devices NOTIFY devicesChanged)
+    // "loading" before the first answer, "ok", or "failed" (the last ListDevices failed).
+    Q_PROPERTY(QString devicesState READ devicesState NOTIFY devicesStateChanged)
 
 public:
     explicit Input(std::unique_ptr<InputBackend> backend, QObject *parent = nullptr);
@@ -51,6 +60,17 @@ public:
     Q_INVOKABLE void setRoute(const QString &route, const QString &instance, const QString &appId,
                               const QString &profile);
 
+    QVariantList devices() const { return m_devices; }
+    QString devicesState() const { return m_devicesState; }
+    // Asks ListDevices again (Settings > Controllers' "Try again").
+    Q_INVOKABLE void refreshDevices();
+    // GetCapabilities(device_id): the answer arrives as capabilitiesFinished.
+    Q_INVOKABLE void requestCapabilities(const QString &deviceId);
+    // The live button test: StartTest's answer arrives as testStartFinished, the inputs as
+    // testInput, its end (StopTest included) as testEnded.
+    Q_INVOKABLE void startTest(const QString &deviceId);
+    Q_INVOKABLE void stopTest(const QString &deviceId);
+
     // Tests only, and only with the mock backend (otherwise empty or no-ops).
     // Every SetRoute that reached the mock service: [{ route, instance, appId, profile }].
     Q_INVOKABLE QVariantList mockCalls() const;
@@ -67,11 +87,28 @@ public:
     Q_INVOKABLE void mockRestart();
     // The service's name loses or regains its owner (RUY-410: the service is gone, or masked).
     Q_INVOKABLE void mockNameOwned(bool owned);
+    // Devices (RUY-39): a pad connects or changes (a record; `capabilities` optional), or goes.
+    Q_INVOKABLE void mockAddDevice(const QVariantMap &device);
+    Q_INVOKABLE void mockRemoveDevice(const QString &id);
+    // While true ListDevices and GetCapabilities fail.
+    Q_INVOKABLE void mockListFail(bool fail);
+    // The pad sends an input during its test; the service ends a test by itself; is one running.
+    Q_INVOKABLE void mockTestInput(const QString &id, const QString &input, int value, const QString &source);
+    Q_INVOKABLE void mockEndTest(const QString &id, const QString &reason);
+    Q_INVOKABLE bool mockTestRunning(const QString &id) const;
+    // The mock's three pads again, no test running, ListDevices working.
+    Q_INVOKABLE void mockResetDevices();
 
 signals:
     void routeChanged();
     void statusChanged();
     void serviceOwnedChanged();
+    void devicesChanged();
+    void devicesStateChanged();
+    void capabilitiesFinished(const QString &deviceId, const QString &status, const QVariantList &capabilities);
+    void testStartFinished(const QString &deviceId, const QString &status);
+    void testInput(const QString &deviceId, const QString &input, int value, const QString &source);
+    void testEnded(const QString &deviceId, const QString &reason);
 
 private:
     void send();
@@ -82,4 +119,6 @@ private:
     QString m_appId;
     QString m_profile;
     QString m_status;
+    QVariantList m_devices;
+    QString m_devicesState = QStringLiteral("loading");
 };

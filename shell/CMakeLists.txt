@@ -30,7 +30,7 @@ qt_standard_project_setup(REQUIRES 6.8)
 # Everything except main() is a static QML module, so the app and the tests share it.
 qt_add_library(ruyashell STATIC)
 
-set_source_files_properties(qml/Theme.qml qml/Sfx.qml qml/Notifications.qml qml/DeviceIcons.qml qml/BluetoothText.qml qml/SoundThemeText.qml qml/ProfileStatus.qml qml/DurationText.qml qml/DisplayText.qml qml/BackKey.qml qml/ThermalText.qml qml/GlareGate.qml qml/LiquidGate.qml qml/IdleClock.qml qml/themes/Themes.qml qml/themes/ThemeMath.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
+set_source_files_properties(qml/Theme.qml qml/Sfx.qml qml/Notifications.qml qml/DeviceIcons.qml qml/ControllerPads.qml qml/BluetoothText.qml qml/SoundThemeText.qml qml/ProfileStatus.qml qml/DurationText.qml qml/DisplayText.qml qml/BackKey.qml qml/ThermalText.qml qml/GlareGate.qml qml/LiquidGate.qml qml/IdleClock.qml qml/themes/Themes.qml qml/themes/ThemeMath.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 
 qt_add_qml_module(ruyashell
     URI RuyaShell
@@ -140,6 +140,7 @@ qt_add_qml_module(ruyashell
         qml/ThermalText.qml
         qml/Notifications.qml
         qml/DeviceIcons.qml
+        qml/ControllerPads.qml
         qml/BluetoothText.qml
         qml/ProfileStatus.qml
         qml/SoundThemeText.qml
@@ -162,6 +163,8 @@ qt_add_qml_module(ruyashell
         qml/ControllerOnboarding.qml
         qml/ControllerToasts.qml
         qml/ButtonTest.qml
+        qml/ButtonTestPage.qml
+        qml/PadDiagram.qml
         qml/ProfileCard.qml
         qml/PinPad.qml
         qml/TextEntry.qml
@@ -220,6 +223,8 @@ qt_add_qml_module(ruyashell
         qml/AudioPane.qml
         qml/NetworkPane.qml
         qml/BluetoothPane.qml
+        qml/ControllersPane.qml
+        qml/ControllerPage.qml
         qml/StoragePane.qml
         qml/SystemPane.qml
         qml/ZoneChooser.qml

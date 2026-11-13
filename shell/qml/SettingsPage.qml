@@ -25,7 +25,7 @@ Page {
         const keys = ["myprofile"]
         if (withManage)
             keys.push("profiles")
-        keys.push("network", "bluetooth", "display", "audio", "storage", "accessibility", "power", "system", "about")
+        keys.push("network", "bluetooth", "controllers", "display", "audio", "storage", "accessibility", "power", "system", "about")
         return keys.map(k => ({ key: k }))
     }
     // The signed-in profile became (or stopped being) an admin, or Settings just opened: rebuild
@@ -48,7 +48,8 @@ Page {
         case "myprofile": return qsTr("My profile")
         case "profiles": return qsTr("Manage profiles")
         case "network": return qsTr("Network")
-        case "bluetooth": return qsTr("Bluetooth & controllers")
+        case "bluetooth": return qsTr("Bluetooth")
+        case "controllers": return qsTr("Controllers")
         case "display": return qsTr("Display & motion")
         case "audio": return qsTr("Audio")
         case "storage": return qsTr("Storage")
@@ -68,6 +69,7 @@ Page {
                                                : current.key === "display" ? displaySlot.item
                                                : current.key === "network" ? networkSlot.item
                                                : current.key === "bluetooth" ? bluetoothSlot.item
+                                               : current.key === "controllers" ? controllersSlot.item
                                                : current.key === "audio" ? audioSlot.item
                                                : current.key === "storage" ? storageSlot.item
                                                : current.key === "power" ? powerSlot.item
@@ -275,6 +277,20 @@ Page {
                     u: page.u
                     overlay: page.overlay
                     onExitRequested: page.leavePane()
+                }
+            }
+        }
+        PaneSlot {
+            id: controllersSlot
+            selected: page.ready && page.current.key === "controllers"
+            sourceComponent: Component {
+                ControllersPane {
+                    objectName: "paneControllers"
+                    anchors.fill: parent
+                    u: page.u
+                    overlay: page.overlay
+                    onExitRequested: page.leavePane()
+                    onControllerRequested: id => page.openRequested("controller", ({ id: id }))
                 }
             }
         }
